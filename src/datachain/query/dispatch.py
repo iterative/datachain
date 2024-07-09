@@ -374,7 +374,7 @@ class UDFWorker:
             self.udf.func.setup()
         while (batch := get_from_queue(self.task_queue)) != STOP_SIGNAL:
             n_rows = len(batch.rows) if isinstance(batch, RowBatch) else 1
-            udf_output = self.udf(
+            udf_output = self.udf.run_once(
                 self.catalog,
                 batch,
                 is_generator=self.is_generator,

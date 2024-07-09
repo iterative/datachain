@@ -108,7 +108,7 @@ class UDFBase:
         self.signal_names = properties.signal_names()
         self.output = properties.output
 
-    def __call__(
+    def run_once(
         self,
         catalog: "Catalog",
         arg: "BatchingResult",
