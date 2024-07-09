@@ -14,6 +14,8 @@ from datachain.lib.utils import AbstractUDF, DataChainError, DataChainParamsErro
 from datachain.query import udf
 
 if TYPE_CHECKING:
+    from typing_extensions import Self
+
     from datachain.query.udf import UDFWrapper
 
 
@@ -65,20 +67,19 @@ class UDFBase(AbstractUDF):
     @classmethod
     def _create(
         cls,
-        target_class: type["UDFBase"],
         sign: UdfSignature,
         params: SignalSchema,
-    ) -> "UDFBase":
+    ) -> "Self":
         if isinstance(sign.func, AbstractUDF):
-            if not isinstance(sign.func, target_class):  # type: ignore[unreachable]
+            if not isinstance(sign.func, cls):  # type: ignore[unreachable]
                 raise UdfError(
                     f"cannot create UDF: provided UDF '{sign.func.__name__}'"
-                    f" must be a child of target class '{target_class.__name__}'",
+                    f" must be a child of target class '{cls.__name__}'",
                 )
             result = sign.func
             func = None
         else:
-            result = target_class()
+            result = cls()
             func = sign.func
 
         result._init(sign, params, func)
