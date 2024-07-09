@@ -493,7 +493,7 @@ class DataChain(DatasetQuery):
 
         params_schema = self.signals_schema.slice(sign.params, self._setup)
 
-        return UDFBase._create(target_class, sign, params_schema)
+        return target_class._create(sign, params_schema)
 
     def _extend_features(self, method_name, *args, **kwargs):
         super_func = getattr(super(), method_name)
