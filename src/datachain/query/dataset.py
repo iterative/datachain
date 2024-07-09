@@ -58,7 +58,7 @@ from datachain.sql.functions import rand
 from datachain.storage import Storage, StorageURI
 from datachain.utils import batched, determine_processes, inside_notebook
 
-from .batch import RowBatch
+from .batch import BatchingResult, RowBatch
 from .metrics import metrics
 from .schema import C, UDFParamSpec, normalize_param
 from .session import Session
@@ -429,19 +429,25 @@ def get_generated_callback(is_generator: bool = False) -> Callback:
 
 
 def run_udf(
-    udf,
-    udf_inputs,
-    catalog,
-    is_generator,
-    cache,
+    udf: UDFBase,
+    udf_inputs: Iterable[BatchingResult],
+    catalog: "Catalog",
+    is_generator: bool,
+    cache: bool,
     download_cb: Callback = DEFAULT_CALLBACK,
     processed_cb: Callback = DEFAULT_CALLBACK,
 ) -> Iterator[Iterable["UDFResult"]]:
+    if hasattr(udf.func, "setup") and callable(udf.func.setup):
+        udf.func.setup()
+
     for batch in udf_inputs:
         n_rows = len(batch.rows) if isinstance(batch, RowBatch) else 1
         output = udf.run_once(catalog, batch, is_generator, cache, cb=download_cb)
         processed_cb.relative_update(n_rows)
         yield output
+
+    if hasattr(udf.func, "teardown") and callable(udf.func.teardown):
+        udf.func.teardown()
 
 
 @frozen
@@ -549,9 +555,6 @@ class UDF(Step, ABC):
                 else:
                     udf = self.udf
 
-                if hasattr(udf.func, "setup") and callable(udf.func.setup):
-                    udf.func.setup()
-
                 warehouse = self.catalog.warehouse
 
                 with contextlib.closing(
@@ -583,9 +586,6 @@ class UDF(Step, ABC):
                         generated_cb.close()
 
                 warehouse.insert_rows_done(udf_table)
-
-                if hasattr(udf.func, "teardown") and callable(udf.func.teardown):
-                    udf.func.teardown()
 
         except QueryScriptCancelError:
             self.catalog.warehouse.close()
