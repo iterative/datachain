@@ -439,7 +439,7 @@ def run_udf(
 ) -> Iterator[Iterable["UDFResult"]]:
     for batch in udf_inputs:
         n_rows = len(batch.rows) if isinstance(batch, RowBatch) else 1
-        output = udf(catalog, batch, is_generator, cache, cb=download_cb)
+        output = udf.run_once(catalog, batch, is_generator, cache, cb=download_cb)
         processed_cb.relative_update(n_rows)
         yield output
 
