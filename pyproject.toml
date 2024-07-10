@@ -23,7 +23,7 @@ dependencies = [
   "tomlkit",
   "tqdm",
   "numpy",
-  'numpy>=1,<2; sys_platform == "win32"',
+  'numpy>=2.0.0,<3; sys_platform == "win32"',
   "pandas>=2.0.0",
   "pyarrow",
   "typing-extensions",
