@@ -1,22 +1,29 @@
 import inspect
 import sys
 import traceback
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Iterable, Iterator
+from typing import TYPE_CHECKING, Callable, Optional
 
+from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 from pydantic import BaseModel
 
+from datachain.dataset import RowDict
 from datachain.lib.data_model import FileBasic
 from datachain.lib.feature import ModelUtil
 from datachain.lib.feature_registry import Registry
 from datachain.lib.signal_schema import SignalSchema
 from datachain.lib.udf_signature import UdfSignature
 from datachain.lib.utils import AbstractUDF, DataChainError, DataChainParamsError
-from datachain.query import udf
+from datachain.query.batch import RowBatch
+from datachain.query.schema import ColumnParameter
+from datachain.query.udf import UDFBase as _UDFBase
+from datachain.query.udf import UDFProperties, UDFResult
 
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-    from datachain.query.udf import UDFWrapper
+    from datachain.catalog import Catalog
+    from datachain.query.batch import BatchingResult
 
 
 class UdfError(DataChainParamsError):
@@ -24,10 +31,67 @@ class UdfError(DataChainParamsError):
         super().__init__(f"UDF error: {msg}")
 
 
+class UDFAdapter(_UDFBase):
+    def __init__(
+        self,
+        inner: "UDFBase",
+        properties: UDFProperties,
+    ):
+        self.inner = inner
+        super().__init__(properties)
+
+    def run(
+        self,
+        udf_inputs: "Iterable[BatchingResult]",
+        catalog: "Catalog",
+        is_generator: bool,
+        cache: bool,
+        download_cb: Callback = DEFAULT_CALLBACK,
+        processed_cb: Callback = DEFAULT_CALLBACK,
+    ) -> Iterator[Iterable["UDFResult"]]:
+        if hasattr(self.inner, "setup") and callable(self.inner.setup):
+            self.inner.setup()
+
+        for batch in udf_inputs:
+            n_rows = len(batch.rows) if isinstance(batch, RowBatch) else 1
+            output = self.run_once(catalog, batch, is_generator, cache, cb=download_cb)
+            processed_cb.relative_update(n_rows)
+            yield output
+
+        if hasattr(self.inner, "teardown") and callable(self.inner.teardown):
+            self.inner.teardown()
+
+    def run_once(
+        self,
+        catalog: "Catalog",
+        arg: "BatchingResult",
+        is_generator: bool = False,
+        cache: bool = False,
+        cb: Callback = DEFAULT_CALLBACK,
+    ) -> Iterable[UDFResult]:
+        self.inner._catalog = catalog
+        if isinstance(arg, RowBatch):
+            udf_inputs = [
+                self.bind_parameters(catalog, row, cache=cache, cb=cb)
+                for row in arg.rows
+            ]
+            udf_outputs = self.inner(udf_inputs)
+            return self._process_results(arg.rows, udf_outputs, is_generator)
+        if isinstance(arg, RowDict):
+            udf_inputs = self.bind_parameters(catalog, arg, cache=cache, cb=cb)
+            udf_outputs = self.inner(*udf_inputs)
+            if not is_generator:
+                # udf_outputs is generator already if is_generator=True
+                udf_outputs = [udf_outputs]
+            return self._process_results([arg], udf_outputs, is_generator)
+        raise ValueError(f"Unexpected UDF argument: {arg}")
+
+
 class UDFBase(AbstractUDF):
     is_input_batched = False
     is_output_batched = False
     is_input_grouped = False
+    params_spec: Optional[list[str]]
 
     def __init__(self):
         self.params = None
@@ -96,9 +160,12 @@ class UDFBase(AbstractUDF):
     def catalog(self):
         return self._catalog
 
-    def to_udf_wrapper(self, batch=1) -> "UDFWrapper":
-        udf_wrapper = udf(self.params_spec, self.output_spec, batch=batch)  # type: ignore[operator]
-        return udf_wrapper(self)
+    def to_udf_wrapper(self, batch: int = 1) -> UDFAdapter:
+        assert self.params_spec is not None
+        properties = UDFProperties(
+            [ColumnParameter(p) for p in self.params_spec], self.output_spec, batch
+        )
+        return UDFAdapter(self, properties)
 
     def validate_results(self, results, *args, **kwargs):
         return results
