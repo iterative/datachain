@@ -14,7 +14,6 @@ from typing import (
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 
 from datachain.dataset import RowDict
-from datachain.lib.utils import AbstractUDF
 
 from .batch import Batch, BatchingStrategy, NoBatching, Partition, RowBatch
 from .schema import (
@@ -100,10 +99,8 @@ class UDFBase:
 
     def __init__(
         self,
-        func: Callable,
         properties: UDFProperties,
     ):
-        self.func = func
         self.properties = properties
         self.signal_names = properties.signal_names()
         self.output = properties.output
@@ -117,17 +114,11 @@ class UDFBase:
         download_cb: Callback = DEFAULT_CALLBACK,
         processed_cb: Callback = DEFAULT_CALLBACK,
     ) -> Iterator[Iterable["UDFResult"]]:
-        if hasattr(self.func, "setup") and callable(self.func.setup):
-            self.func.setup()
-
         for batch in udf_inputs:
             n_rows = len(batch.rows) if isinstance(batch, RowBatch) else 1
             output = self.run_once(catalog, batch, is_generator, cache, cb=download_cb)
             processed_cb.relative_update(n_rows)
             yield output
-
-        if hasattr(self.func, "teardown") and callable(self.func.teardown):
-            self.func.teardown()
 
     def run_once(
         self,
@@ -137,24 +128,7 @@ class UDFBase:
         cache: bool = False,
         cb: Callback = DEFAULT_CALLBACK,
     ) -> Iterable[UDFResult]:
-        if isinstance(self.func, AbstractUDF):
-            self.func._catalog = catalog  # type: ignore[unreachable]
-
-        if isinstance(arg, RowBatch):
-            udf_inputs = [
-                self.bind_parameters(catalog, row, cache=cache, cb=cb)
-                for row in arg.rows
-            ]
-            udf_outputs = self.func(udf_inputs)
-            return self._process_results(arg.rows, udf_outputs, is_generator)
-        if isinstance(arg, RowDict):
-            udf_inputs = self.bind_parameters(catalog, arg, cache=cache, cb=cb)
-            udf_outputs = self.func(*udf_inputs)
-            if not is_generator:
-                # udf_outputs is generator already if is_generator=True
-                udf_outputs = [udf_outputs]
-            return self._process_results([arg], udf_outputs, is_generator)
-        raise ValueError(f"Unexpected UDF argument: {arg}")
+        raise NotImplementedError
 
     def bind_parameters(self, catalog: "Catalog", row: "RowDict", **kwargs) -> list:
         return [p.get_value(catalog, row, **kwargs) for p in self.properties.params]
@@ -215,11 +189,36 @@ class UDFWrapper(UDFBase):
         func: Callable,
         properties: UDFProperties,
     ):
-        super().__init__(func, properties)
+        self.func = func
+        super().__init__(properties)
         # This emulates the behavior of functools.wraps for a class decorator
         for attr in WRAPPER_ASSIGNMENTS:
             if hasattr(func, attr):
                 setattr(self, attr, getattr(func, attr))
+
+    def run_once(
+        self,
+        catalog: "Catalog",
+        arg: "BatchingResult",
+        is_generator: bool = False,
+        cache: bool = False,
+        cb: Callback = DEFAULT_CALLBACK,
+    ) -> Iterable[UDFResult]:
+        if isinstance(arg, RowBatch):
+            udf_inputs = [
+                self.bind_parameters(catalog, row, cache=cache, cb=cb)
+                for row in arg.rows
+            ]
+            udf_outputs = self.func(udf_inputs)
+            return self._process_results(arg.rows, udf_outputs, is_generator)
+        if isinstance(arg, RowDict):
+            udf_inputs = self.bind_parameters(catalog, arg, cache=cache, cb=cb)
+            udf_outputs = self.func(*udf_inputs)
+            if not is_generator:
+                # udf_outputs is generator already if is_generator=True
+                udf_outputs = [udf_outputs]
+            return self._process_results([arg], udf_outputs, is_generator)
+        raise ValueError(f"Unexpected UDF argument: {arg}")
 
     # This emulates the behavior of functools.wraps for a class decorator
     def __repr__(self):
