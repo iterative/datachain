@@ -51,6 +51,7 @@ from datachain.sql.types import (
 from tests.data import ENTRIES
 from tests.utils import (
     DEFAULT_TREE,
+    LARGE_TREE,
     NUM_TREE,
     SIMPLE_DS_QUERY_RECORDS,
     TARRED_TREE,
@@ -1012,8 +1013,8 @@ def test_udf_parallel_interrupt(cloud_test_catalog_tmpfile, capfd):
 
 
 @pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
+    "cloud_type,version_aware,tree",
+    [("s3", True, LARGE_TREE)],
     indirect=True,
 )
 @pytest.mark.parametrize("batch", [False, True])
@@ -1023,7 +1024,9 @@ def test_udf_parallel_interrupt(cloud_test_catalog_tmpfile, capfd):
     reason="Set the DATACHAIN_DISTRIBUTED environment variable "
     "to test distributed UDFs",
 )
-def test_udf_distributed(cloud_test_catalog_tmpfile, batch, workers, datachain_job_id):
+def test_udf_distributed(
+    cloud_test_catalog_tmpfile, batch, workers, tree, datachain_job_id
+):
     catalog = cloud_test_catalog_tmpfile.catalog
     sources = [cloud_test_catalog_tmpfile.src_uri]
     globs = [s.rstrip("/") + "/*" for s in sources]
@@ -1048,8 +1051,8 @@ def test_udf_distributed(cloud_test_catalog_tmpfile, batch, workers, datachain_j
 
     q = (
         DatasetQuery(name="animals", version=1, catalog=catalog)
-        .filter(C.size < 13)
-        .filter(C.parent.glob("cats*") | (C.size < 4))
+        .filter(C.size < 90)
+        .filter(C.parent.glob("cats*") | (C.size > 30))
         .add_signals(udf_func, parallel=2, workers=workers)
         .select(C.name, C.name_len, C.blank)
     )
