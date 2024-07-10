@@ -1,0 +1,254 @@
+[build-system]
+requires = ["setuptools>=48", "setuptools_scm[toml]>=6.3.1"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "datachain"
+description = "Wrangle unstructured AI data at scale"
+readme = "README.rst"
+license = {text = "Apache-2.0"}
+authors = [{name = "Dmitry Petrov", email = "support@dvc.org"}]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Development Status :: 2 - Pre-Alpha"
+]
+requires-python = ">=3.9"
+dynamic = ["version"]
+dependencies = [
+  "pyyaml",
+  "tomlkit",
+  "tqdm",
+  "numpy",
+  'numpy>=1,<2; sys_platform == "win32"',
+  "pandas>=2.0.0",
+  "pyarrow",
+  "typing-extensions",
+  "python-dateutil>=2",
+  "attrs>=21.3.0",
+  "s3fs>=2024.2.0",
+  "gcsfs>=2024.2.0",
+  "adlfs>=2024.2.0",
+  "dvc-data>=3.10,<4",
+  "dvc-objects>=4,<6",
+  "shtab>=1.3.4,<2",
+  "sqlalchemy>=2",
+  "multiprocess==0.70.16",
+  "dill==0.3.8",
+  "ujson>=5.9.0",
+  "pydantic>=2,<3",
+  "jmespath>=1.0",
+  "datamodel-code-generator>=0.25"
+]
+
+[project.optional-dependencies]
+docs = [
+  "mkdocs>=1.5.2",
+  "mkdocs-gen-files>=0.5.0",
+  "mkdocs-material>=9.3.1",
+  "mkdocs-section-index>=0.3.6",
+  "mkdocstrings-python>=1.6.3",
+  "mkdocs-literate-nav>=0.6.1"
+]
+cv = [
+  "Pillow>=10.0.0,<11",
+  "torch>=2.1.0",
+  "torchvision",
+  "transformers>=4.36.0"
+]
+remote = [
+  "datachain[pandas]",
+  "lz4",
+  "msgpack>=1.0.4,<2",
+  "requests>=2.22.0"
+]
+vector = [
+  "usearch"
+]
+tests = [
+  "datachain[cv,pandas,remote,vector]",
+  "pytest>=8,<9",
+  "pytest-sugar>=0.9.6",
+  "pytest-cov>=4.1.0",
+  "pytest-mock>=3.12.0",
+  "pytest-servers[all]>=0.5.4",
+  "pytest-benchmark[histogram]",
+  "pytest-asyncio>=0.23.2",
+  "pytest-xdist>=3.3.1",
+  "virtualenv",
+  "dulwich",
+  "hypothesis",
+  "open_clip_torch",
+  "aiotools>=1.7.0",
+  "requests-mock"
+]
+dev = [
+  "datachain[docs,tests]",
+  "mypy==1.10.1",
+  "types-python-dateutil",
+  "types-PyYAML",
+  "types-requests",
+  "types-ujson"
+]
+
+[project.urls]
+Documentation = "https://datachain.dvc.ai"
+Issues = "https://github.com/iterative/dvcx/issues"
+Source = "https://github.com/iterative/dvcx"
+
+[project.scripts]
+datachain = "datachain.cli:main"
+
+[tool.setuptools.packages.find]
+exclude = ["tests", "tests.*"]
+where = ["src"]
+namespaces = false
+
+[tool.setuptools_scm]
+
+[tool.pytest.ini_options]
+addopts = "-rfEs -m 'not benchmark'"
+markers = [
+  "benchmark: benchmarks.",
+  "e2e: End-to-end tests"
+]
+asyncio_mode = "auto"
+filterwarnings = [
+  "ignore:Field name .* shadows an attribute in parent:UserWarning"  # datachain.lib.feature
+]
+
+[tool.coverage.run]
+branch = true
+source = ["datachain", "tests"]
+
+[tool.coverage.paths]
+source = ["src", "*/site-packages"]
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = [
+  "pragma: no cover",
+  "if __name__ == .__main__.:",
+  "if typing.TYPE_CHECKING:",
+  "if TYPE_CHECKING:",
+  "raise NotImplementedError",
+  "raise AssertionError",
+  "@overload"
+]
+
+[tool.mypy]
+# Error output
+show_column_numbers = true
+show_error_codes = true
+show_error_context = true
+show_traceback = true
+pretty = true
+check_untyped_defs = false
+# Warnings
+warn_no_return = true
+warn_redundant_casts = true
+warn_unreachable = true
+ignore_missing_imports = true
+disable_error_code = "annotation-unchecked"
+files = ["src", "tests"]
+
+[tool.codespell]
+ignore-words-list = " "
+skip = ["CODE_OF_CONDUCT.rst", "examples/**/*.ipynb", "tests/examples/wds_data.py"]
+
+[tool.ruff]
+show-fixes = true
+
+[tool.ruff.lint]
+preview = true
+explicit-preview-rules = true
+ignore = [
+  "S101",  # assert
+  "PLR2004",  # magic-value-comparison
+  "PLW2901",  # redefined-loop-name
+  "ISC001",  # single-line-implicit-string-concatenation, incompatible with ruff format
+  "RET502",  # implicit-return-value
+  "RET503",  # implicit-return
+  "SIM105",  # suppressible-exception
+  "SIM108",  # if-else-block-instead-of-if-exp
+  "SIM117",  # multiple-with-statements
+  "PERF203"  # perflint - try-except-in-loop, irrelevant for Python>=3.11
+]
+select = [
+  "B",  # flake8-bugbear
+  "C4",  # flake8-comprehensions
+  "C90",  # mccabe
+  "W",  # pycodestyle - Warning
+  "E",  # pycodestyle - Error
+  "F",  # pyflakes
+  "I",  # isort
+  "T10",  # flake8-debugger
+  "S",  # flake8-bandit
+  "PL",  # pylint
+  "TCH",  # flake8-type-checking
+  "UP",  # pyupgrade
+  "N",  # pep8-naming
+  "YTT",  # flake8-2020
+  "ASYNC",  # flake8-async
+  "EXE",  # flake8-executable
+  "ISC",  # flake8-implicit-str-concat
+  "ICN",  # flake8-import-conventions
+  "PIE",  # flake8-pie
+  "LOG",  # flake8-logging
+  "G",  # flake8-logging-format
+  "PYI",  # flake8-pyi
+  "Q",  # flake8-quotes
+  "SLOT",  # flake8-slots
+  "PGH",  # pygrep-hooks
+  "FLY",  # flynt
+  "PERF",  # perflint
+  "TID",  # flake8-tidy-imports
+  "RSE",  # flake8-raise
+  "INP",  # flake8-no-pep420
+  "RUF",  # ruff rules
+  "BLE",  # flake8-blind-except
+  "SIM",  # flake8-simplify
+  "RSE",  # flake8-raise
+  "RET",  # flake8-return
+  "DTZ",  # flake8-datetimez
+  "FURB",  # refurb
+  "NPY",  # numpy
+  "TRY004",  # type-check-without-type-error
+  "TRY201",  # verbose-raise
+  "TRY302",  # useless-try-except
+  "TRY401",  # verbose-log-message
+  "RUF022",  # unsorted-dunder-all
+  "RUF023",  # unsorted-dunder-slots
+  "RUF025",  # unnecessary-dict-comprehension-for-iterable
+  "RUF027",  # missing-f-string-syntax
+  "RUF030",  # assert-with-print-message
+  "RUF101"  # redirected-noqa
+]
+
+[tool.ruff.lint.flake8-bugbear]
+# Allow default arguments like, e.g., `data: List[str] = fastapi.Query(None)`.
+extend-immutable-calls = ["datachain.storage.StorageURI"]
+
+[tool.ruff.lint.flake8-type-checking]
+strict = true
+
+[tool.ruff.lint.isort]
+known-first-party = ["datachain"]
+
+[tool.ruff.lint.pylint]
+max-args = 16
+max-branches = 16
+max-public-methods = 32
+max-statements = 64
+
+[tool.ruff.lint.mccabe]
+max-complexity = 15
+
+[tool.ruff.lint.per-file-ignores]
+"examples/**" = ["INP001"]
+"tests/scripts/**" = ["INP001"]
+"tests/**" = ["DTZ"]
+"tests/examples/wds_data.py" = ["E501"]

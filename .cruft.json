@@ -1,0 +1,23 @@
+{
+  "template": "https://github.com/iterative/py-template",
+  "commit": "867297aa15a0deaf5302edd01a2bc7ab87039627",
+  "checkout": null,
+  "context": {
+    "cookiecutter": {
+      "project_name": "datachain",
+      "package_name": "datachain",
+      "friendly_name": "DataChain",
+      "author": "Dmitry Petrov",
+      "email": "support@dvc.org",
+      "github_user": "iterative",
+      "version": "0.0.0",
+      "copyright_year": "2022",
+      "license": "Apache-2.0",
+      "docs": true,
+      "short_description": "Wrangle unstructured AI data at scale",
+      "development_status": "Development Status :: 2 - Pre-Alpha",
+      "_template": "https://github.com/iterative/py-template"
+    }
+  },
+  "directory": null
+}

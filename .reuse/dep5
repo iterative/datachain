@@ -1,0 +1,8 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: dvcx
+Upstream-Contact: Iterative, Inc. <support@iterative.ai>
+Source: https://github.com/iterative/dvcx
+
+Files: *
+Copyright: 2017-2021 Iterative, Inc.
+License: Apache-2.0

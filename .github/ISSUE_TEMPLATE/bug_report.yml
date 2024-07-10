@@ -1,0 +1,27 @@
+name: 🐛 Bug Report
+description: Report a bug to help us improve
+labels: bug
+
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description:
+    validations:
+      required: true
+
+  - type: textarea
+    id: version
+    attributes:
+      label: Version Info
+      description: |
+        Please run the following command and copy the output below:
+
+        ```bash
+        datachain -V; python -V
+        ```
+
+      render: Text
+    validations:
+      required: false

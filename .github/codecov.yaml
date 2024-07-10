@@ -1,0 +1,16 @@
+coverage:
+  status:
+    project:
+      default:
+        # auto compares coverage to the previous base commit
+        target: auto
+        # adjust accordingly based on how flaky your tests are
+        # this allows a 10% drop from the previous base commit coverage
+        threshold: 10%
+        # non-blocking status checks
+        informational: true
+
+flags:
+  datachain:
+    paths:
+      - src/datachain
