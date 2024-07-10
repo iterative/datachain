@@ -1,0 +1,12 @@
+name: 💡 Feature Request
+description: Suggest a new feature or share ideas
+labels: enhancement
+
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description:
+    validations:
+      required: true

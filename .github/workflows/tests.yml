@@ -1,0 +1,127 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  FORCE_COLOR: "1"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+
+      - name: Upgrade nox and uv
+        run: |
+          python -m pip install --upgrade 'nox[uv]'
+          nox --version
+          uv --version
+
+      - name: Cache mypy
+        uses: actions/cache@v4
+        with:
+          path: .mypy_cache
+          key: mypy-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('pyproject.toml') }}
+
+      - name: Cache pre-commit hooks
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-3|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Lint code
+        run: nox -s lint
+
+  tests:
+    timeout-minutes: 25
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest-8-cores]
+        pyv: ['3.9', '3.10', '3.11', '3.12']
+        include:
+          - os: macos-latest
+            pyv: '3.9'
+          - os: macos-latest
+            pyv: '3.12'
+          - os: windows-latest-8-cores
+            pyv: '3.9'
+          - os: windows-latest-8-cores
+            pyv: '3.12'
+
+    steps:
+
+      # https://github.com/iterative/pytest-servers/pull/122
+      # https://github.com/abiosoft/colima/issues/468
+      # https://github.com/abiosoft/colima/blob/main/docs/FAQ.md#cannot-connect-to-the-docker-daemon-at-unixvarrundockersock-is-the-docker-daemon-running
+      # colima v0.5.6 seems to run more stable than the latest - that has occasional network failures (ports are not open)
+      # see: https://github.com/abiosoft/colima/issues/962
+      - name: Use colima as default docker host on MacOS
+        if: runner.os == 'macOS'
+        run: |
+          brew install docker lima || true # avoid non-zero exit code if brew link fails
+          sudo curl -L -o /usr/local/bin/colima https://github.com/abiosoft/colima/releases/download/v0.5.6/colima-Darwin-x86_64
+          sudo chmod +x /usr/local/bin/colima
+          colima start
+          sudo ln -vsf "${HOME}"/.colima/default/docker.sock /var/run/docker.sock
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: true
+          HOMEBREW_NO_INSTALL_CLEANUP: true
+          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: true
+          HOMEBREW_NO_INSTALL_UPGRADE: true
+
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python ${{ matrix.pyv }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.pyv }}
+          cache: 'pip'
+
+      - name: Upgrade nox and uv
+        run: |
+          python -m pip install --upgrade 'nox[uv]'
+          nox --version
+          uv --version
+
+      - name: Skip flaky azure, gs remotes if unavailable on macos
+        if: runner.os == 'macOS'
+        run: echo 'DATACHAIN_TEST_SKIP_MISSING_REMOTES=azure,gs' >> "$GITHUB_ENV"
+
+      - name: Run tests
+        run: nox -s tests-${{ matrix.pyv }}
+
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.xml
+          flags: datachain
+
+      - name: Build package
+        run: nox -s build
+
+      - name: Build docs
+        run: nox -s docs

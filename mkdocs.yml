@@ -1,0 +1,136 @@
+site_name: DataChain
+site_url: https://datachain.dvc.ai
+site_description: Wrangle unstructured AI data at scale
+
+repo_url: "https://github.com/iterative/dvcx"
+repo_name: "iterative/dvcx"
+edit_uri: edit/main/docs/
+
+strict: true
+
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+
+theme:
+  name: material
+  logo: assets/datachain.png
+  favicon: assets/datachain.png
+  icon:
+    repo: fontawesome/brands/github
+  features:
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.path
+    - navigation.top
+    - navigation.prune
+    - navigation.footer
+    - toc.follow
+    - content.action.edit
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - content.tooltips
+    - search.highlight
+    - search.suggest
+    - navigation.sections
+
+  palette:
+    # Palette toggle for automatic mode
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to dark mode
+
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: lime
+      toggle:
+        icon: material/weather-night
+        name: Switch to system preference
+
+nav:
+  - Home: index.md
+  - Tutorials:
+      - Get started for computer vision: tutorials/cv_intro.md
+      - Writing DataChain UDFs: tutorials/udfs.md
+  - API reference:
+      - Datachain: references/datachain.md
+      - Catalog: references/catalog.md
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.critic
+  - pymdownx.caret
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.tilde
+  - tables
+  - toc:
+      permalink: true
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/iterative/dvcx
+    - icon: fontawesome/brands/twitter
+      link: https://twitter.com/DVCorg
+    - icon: fontawesome/brands/linkedin
+      link: https://www.linkedin.com/company/dvc-ai
+
+plugins:
+  - search
+  - section-index
+  - mkdocstrings:
+      handlers:
+        python:
+          rendering:
+            show_submodules: no
+          options:
+            docstring_options:
+              ignore_init_summary: true
+            docstring_section_style: list
+            merge_init_into_class: true
+            separate_signature: true
+            show_root_full_path: false
+            show_root_heading: true
+            show_signature_annotations: true
+            show_symbol_type_heading: true
+            signature_crossrefs: true
+          import:
+            - https://docs.python.org/3/objects.inv
+            - https://numpy.org/doc/stable/objects.inv
+            - https://pandas.pydata.org/docs/objects.inv
+            - https://arrow.apache.org/docs/objects.inv
+            - https://docs.sqlalchemy.org/objects.inv
+            - https://docs.pydantic.dev/latest/objects.inv
+
+watch:
+  - src/datachain
