@@ -1,5 +1,5 @@
 import typing
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from functools import WRAPPER_ASSIGNMENTS
 from inspect import isclass
@@ -107,6 +107,27 @@ class UDFBase:
         self.properties = properties
         self.signal_names = properties.signal_names()
         self.output = properties.output
+
+    def run(
+        self,
+        udf_inputs: "Iterable[BatchingResult]",
+        catalog: "Catalog",
+        is_generator: bool,
+        cache: bool,
+        download_cb: Callback = DEFAULT_CALLBACK,
+        processed_cb: Callback = DEFAULT_CALLBACK,
+    ) -> Iterator[Iterable["UDFResult"]]:
+        if hasattr(self.func, "setup") and callable(self.func.setup):
+            self.func.setup()
+
+        for batch in udf_inputs:
+            n_rows = len(batch.rows) if isinstance(batch, RowBatch) else 1
+            output = self.run_once(catalog, batch, is_generator, cache, cb=download_cb)
+            processed_cb.relative_update(n_rows)
+            yield output
+
+        if hasattr(self.func, "teardown") and callable(self.func.teardown):
+            self.func.teardown()
 
     def run_once(
         self,

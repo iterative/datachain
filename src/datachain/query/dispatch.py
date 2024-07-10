@@ -21,7 +21,6 @@ from datachain.query.dataset import (
     get_generated_callback,
     get_processed_callback,
     process_udf_outputs,
-    run_udf,
 )
 from datachain.query.udf import UDFBase, UDFFactory, UDFResult
 
@@ -380,8 +379,7 @@ class UDFWorker:
 
     def run(self) -> None:
         processed_cb = ProcessedCallback()
-        udf_results = run_udf(
-            self.udf,
+        udf_results = self.udf.run(
             self.get_inputs(),
             self.catalog,
             self.is_generator,
