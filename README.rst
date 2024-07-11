@@ -45,13 +45,13 @@ For example, let us consider a dataset from Karlsruhe Institute of Technology de
       from mistralai.client import MistralClient
       from mistralai.models.chat_completion import ChatMessage
       from datachain.lib.dc import Column, DataChain
-      
+
       source = "gs://datachain-demo/chatbot-KiT/"
       PROMPT = "Was this bot dialog successful? Describe the 'result' as 'Yes' or 'No' in a short JSON"
-      
+
       model = "mistral-large-latest"
       api_key = os.environ["MISTRAL_API_KEY"]
-      
+
       chain = (
           DataChain.from_storage(source)
           .limit(5)
@@ -68,18 +68,18 @@ For example, let us consider a dataset from Karlsruhe Institute of Technology de
           )
           .save()
       )
-      
+
       try:
          print(chain.select("mistral_response").results())
       except Exception as e:
-         print(f"do you have the right Mistral API key? {e}")	
-      
-      -> 
+         print(f"do you have the right Mistral API key? {e}")
+
+      ->
       [('{"result": "Yes"}',), ('{"result": "No"}',), ... , ('{"result": "Yes"}',)]
 
-Now we have parallel-processed an LLM API-based query over cloud data and persisted the results. 
+Now we have parallel-processed an LLM API-based query over cloud data and persisted the results.
 
-Vectorized analytics 
+Vectorized analytics
 --------------------
 
 Datachain internally represents datasets as tables, so analytical queries on the chain are automatically vectorized:
@@ -87,15 +87,15 @@ Datachain internally represents datasets as tables, so analytical queries on the
 .. code:: py
 
       failed_dialogs = chain.filter(Column("mistral_response") == '{"result": "No"}')
-      success_rate = failed_dialogs.count() / chain.count() 
+      success_rate = failed_dialogs.count() / chain.count()
       print(f"Chatbot dialog success rate: {100*success_rate:.2f}%")
-      
-      -> 
+
+      ->
       "40.00%" (results may vary)
 
 Note that DataChain represents file samples as pointers into their respective storage locations. This means a newly created dataset version does not duplicate files in storage, and storage remains the single source of truth for the original samples
 
-Handling Python objects 
+Handling Python objects
 -----------------------
 In addition to storing primitive Python data types, chain is also capable of using data models.
 
@@ -105,28 +105,28 @@ For example, instead of collecting just a text response from Mistral API, we mig
 
       import os
       from datachain.lib.feature import Feature
-      from datachain.lib.dc import Column, DataChain 
+      from datachain.lib.dc import Column, DataChain
       from mistralai.client import MistralClient
       from mistralai.models.chat_completion import ChatMessage
-      
-      source = "gs://datachain-demo/chatbot-KiT/"     
+
+      source = "gs://datachain-demo/chatbot-KiT/"
       PROMPT = "Was this dialog successful? Describe the 'result' as 'Yes' or 'No' in a short JSON"
-      
+
       model = "mistral-large-latest"
       api_key = os.environ["MISTRAL_API_KEY"]
-      
+
       ## define the data model ###
       class Usage(Feature):
           prompt_tokens: int = 0
           completion_tokens: int = 0
-      
+
       class MyChatMessage(Feature):
           role: str = ""
           content: str = ""
-      
+
       class CompletionResponseChoice(Feature):
           message: MyChatMessage = MyChatMessage()
-      
+
       class MistralModel(Feature):
           id: str = ""
           choices: list[CompletionResponseChoice]
@@ -161,7 +161,7 @@ After the chain execution, we can collect the objects:
       responses = chain.collect_one("mistral_response")
       for object in responses:
          print(type(object))
-         -> 
+         ->
          <class '__main__.MistralModel'>
          <class '__main__.MistralModel'>
          <class '__main__.MistralModel'>
@@ -169,7 +169,7 @@ After the chain execution, we can collect the objects:
          <class '__main__.MistralModel'>
 
       print(responses[0].usage.prompt_tokens)
-         -> 
+         ->
          610
 
 Dataset persistence
@@ -185,8 +185,8 @@ Persistent datasets are immutable and automatically versioned. Versions can be l
 
 .. code:: shell
 
-      $ datachain ls-datasets      
-      
+      $ datachain ls-datasets
+
       dialog-rate (v1)
       dialog-rate (v2)
 
@@ -194,12 +194,12 @@ By default, when a persistent dataset is loaded, the latest version is fetched b
 
 .. code:: py
 
-      ds = DataChain.from_dataset("dialog-eval", version = 1) 
+      ds = DataChain.from_dataset("dialog-eval", version = 1)
 
 Chain optimization and execution
 --------------------------------
 
-Datachain avoids redundant operations. Execution is triggered only when a downstream operation requests the processed results. However, it would be inefficient to run, say, LLM queries again every time you just want to collect several objects. 
+Datachain avoids redundant operations. Execution is triggered only when a downstream operation requests the processed results. However, it would be inefficient to run, say, LLM queries again every time you just want to collect several objects.
 
 “Save” operation nails execution results and automatically refers to them every time the downstream functions ask for data. Saving without an explicit name generates an auto-named dataset which serves the same purpose.
 
@@ -214,11 +214,11 @@ Here is an example of reading a CSV file where schema is heuristically derived f
 
 .. code:: py
 
-      from datachain.lib.dc import DataChain 
-      
-      uri="gs://datachain-demo/chatbot-csv/"  
+      from datachain.lib.dc import DataChain
+
+      uri="gs://datachain-demo/chatbot-csv/"
       csv_dataset = DataChain.from_csv(uri)
-      
+
       print(csv_dataset.to_pandas())
 
 Reading metadata from JSON format is a more complicated scenario because a JSON-annotated dataset typically references data samples (e.g. images) in annotation arrays somewhere within JSON files.
@@ -262,17 +262,17 @@ To deal with this layout, we can take the following steps:
 .. code:: python
 
 
-   from datachain.lib.dc import DataChain 
-   
+   from datachain.lib.dc import DataChain
+
    image_uri="gs://datachain-demo/coco2017/images/val/"
-   coco_json="gs://datachain-demo/coco2017/annotations_captions" 
-   
+   coco_json="gs://datachain-demo/coco2017/annotations_captions"
+
    images = DataChain.from_storage(image_uri)
    meta = DataChain.from_json(coco_json, jmespath = "images")
-                   
-   images_with_meta = images.merge(meta, on="file.name", right_on="images.file_name")                 
-   
-   
+
+   images_with_meta = images.merge(meta, on="file.name", right_on="images.file_name")
+
+
    print(images_with_meta.limit(1).results())
 
 
@@ -287,7 +287,7 @@ Chain results can be exported or passed directly to Pytorch dataloader. For exam
           transform=preprocess,
           tokenizer=clip.tokenize,
       )
-      
+
       loader = DataLoader(ds, batch_size=2)
       optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
       train(loader, model, optimizer)
