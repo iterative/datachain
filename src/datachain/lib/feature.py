@@ -4,6 +4,7 @@ import re
 import warnings
 from collections.abc import Iterable, Sequence
 from datetime import datetime
+from enum import Enum
 from functools import lru_cache
 from types import GenericAlias
 from typing import (
@@ -63,6 +64,7 @@ TYPE_TO_DATACHAIN = {
     str: String,
     Literal: String,
     LiteralEx: String,
+    Enum: String,
     float: Float,
     bool: Boolean,
     datetime: DateTime,  # Note, list of datetime is not supported yet
@@ -364,8 +366,11 @@ def _resolve(cls, name, field_info, prefix: list[str]):
 
 
 def convert_type_to_datachain(typ):  # noqa: PLR0911
-    if inspect.isclass(typ) and issubclass(typ, SQLType):
-        return typ
+    if inspect.isclass(typ):
+        if issubclass(typ, SQLType):
+            return typ
+        if issubclass(typ, Enum):
+            return str
 
     res = TYPE_TO_DATACHAIN.get(typ)
     if res:

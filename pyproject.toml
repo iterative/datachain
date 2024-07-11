@@ -60,7 +60,6 @@ cv = [
   "transformers>=4.36.0"
 ]
 remote = [
-  "datachain[pandas]",
   "lz4",
   "msgpack>=1.0.4,<2",
   "requests>=2.22.0"
@@ -69,7 +68,7 @@ vector = [
   "usearch"
 ]
 tests = [
-  "datachain[cv,pandas,remote,vector]",
+  "datachain[cv,remote,vector]",
   "pytest>=8,<9",
   "pytest-sugar>=0.9.6",
   "pytest-cov>=4.1.0",

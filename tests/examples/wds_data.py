@@ -7,7 +7,7 @@ WDS_TAR_SHARDS = [
         "url": "https://i.imgur.com/mXQrfNs.png",
         "key": "000000000000",
         "status": "success",
-        "error_message": None,
+        "error_message": "",
         "width": 512,
         "height": 270,
         "original_width": 1704,
@@ -29,7 +29,7 @@ WDS_TAR_SHARDS = [
         "url": "http://i.ytimg.com/vi/if2V1iszwuA/default.jpg",
         "key": "000000000001",
         "status": "success",
-        "error_message": None,
+        "error_message": "",
         "width": 120,
         "height": 90,
         "original_width": 120,
@@ -44,7 +44,7 @@ WDS_TAR_SHARDS = [
         "url": "http://t0.gstatic.com/images?q=tbn:ANd9GcScIHR33LnMpupkxbZRqnj1YMvOXsc9uUTj8Wa2v8bhSjWTxTRo1w",
         "key": "000000000002",
         "status": "success",
-        "error_message": None,
+        "error_message": "",
         "width": 275,
         "height": 183,
         "original_width": 275,
@@ -59,7 +59,7 @@ WDS_TAR_SHARDS = [
         "url": "http://thumbs.ebaystatic.com/images/g/5kAAAOSwc1FXcDFI/s-l225.jpg",
         "key": "000000000003",
         "status": "success",
-        "error_message": None,
+        "error_message": "",
         "width": 80,
         "height": 80,
         "original_width": 80,
@@ -74,7 +74,7 @@ WDS_TAR_SHARDS = [
         "url": "https://www.dhresource.com/600x600/f2/albu/g8/M00/78/73/rBVaV150TlWAcLR4AAHizzfChbU318.jpg",
         "key": "000000000004",
         "status": "success",
-        "error_message": None,
+        "error_message": "",
         "width": 512,
         "height": 384,
         "original_width": 600,
@@ -86,6 +86,8 @@ WDS_TAR_SHARDS = [
 
 
 # data that represents metadata and goes to webdataset parquet file of webdataset
+# TODO change float values to something other than 0.5 to test if double precision
+# works as expected when https://github.com/iterative/datachain/issues/12 is done
 WDS_META = {
     "uid": {
         "0": "d142ae70686e14ccc379c01a571501b5",
@@ -123,22 +125,22 @@ WDS_META = {
         "4": 450,
     },
     "clip_b32_similarity_score": {
-        "0": 0.2734375,
-        "1": 0.3813476562,
-        "2": 0.3312988281,
-        "3": 0.2091064453,
-        "4": 0.2038574219,
+        "0": 0.5,
+        "1": 0.5,
+        "2": 0.5,
+        "3": 0.5,
+        "4": 0.5,
     },
     "clip_l14_similarity_score": {
-        "0": 0.2553710938,
-        "1": 0.3391113281,
-        "2": 0.2318115234,
-        "3": 0.1966552734,
-        "4": 0.1300048828,
+        "0": 0.5,
+        "1": 0.5,
+        "2": 0.5,
+        "3": 0.5,
+        "4": 0.5,
     },
     "face_bboxes": {
         "0": [],
-        "1": [[0.5005972981, 0.1360414922, 0.8109994531, 0.7247588038]],
+        "1": [[0.5, 0.5, 0.5, 0.5]],
         "2": [],
         "3": [],
         "4": [],
