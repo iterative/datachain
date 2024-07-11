@@ -12,256 +12,290 @@
 .. |Tests| image:: https://github.com/iterative/dvcx/workflows/Tests/badge.svg
    :target: https://github.com/iterative/dvcx/actions?workflow=Tests
    :alt: Tests
-.. |License| image:: https://img.shields.io/pypi/l/datachain
-   :target: https://opensource.org/licenses/Apache-2.0
-   :alt: License
 
 AI 🔗 DataChain
 ----------------
 
 DataChain is an open-source Python data processing library for wrangling unstructured AI data at scale.
 
-It enables batch LLM API calls and local language and vision AI model inferences to run in parallel over many samples as chained operations resolving to table-like datasets. These datasets can be saved, versioned, and sent directly to PyTorch and TensorFlow for training. DataChain employs rigorous `Pydantic`_ data structures, promoting better data processing practices and enabling vectorized analytical operations normally found in databases.
+Datachain enables multimodal API calls and local AI inferences to run in parallel over many samples as chained operations. The resulting datasets can be saved, versioned, and sent directly to PyTorch and TensorFlow for training. Datachain can persist features of Python objects returned by AI models, and enables vectorized analytical operations over them.
 
-The DataChain fills the gap between dataframe libraries, data warehouses, and Python-based multimodal AI applications. Our primary use cases include massive data curation, LLM analytics and validation, batch image segmentation and pose detection, GenAI data alignment, etc.
+The typical use cases are data curation, LLM analytics and validation, image segmentation, pose detection, and GenAI alignment. Datachain is especially helpful if batch operations can be optimized – for instance, when synchronous API calls can be parallelized  or where an LLM API offers batch processing.
 
 .. code:: console
 
    $ pip install datachain
 
-Basic operation
----------------
+Operation basics
+----------------
 
 DataChain is built by composing wrangling operations.
 
-For example, it can be instructed to read files from the cloud, map them onto a modern AI service returning a Python object, parallelize API calls, save the result as a dataset, and export a column:
+For example, let us consider a dataset from Karlsruhe Institute of Technology detailing dialogs between users and customer service chatbots. We can use the chain to read data from the cloud, map it onto the parallel API calls for LLM evaluation, and organize the output into a dataset :
 
 .. code:: py
 
-         import os
-         import datachain as dc
+      # pip install mistralai
+      # this example requires a free Mistral API key, get yours at https://console.mistral.ai
+      # add the key to your shell environment: $ export MISTRAL_API_KEY= your key
 
-         from anthropic.types.message import Message
-         ClaudeModel = dc.pydantic_to_feature(Message)
-         PROMPT = "summarize this book in less than 200 words"
-         service = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-         source = "gs://datachain-demo/mybooks/"
+      import os
+      import pandas as pd
+      from datachain.lib.feature import Feature
+      from mistralai.client import MistralClient
+      from mistralai.models.chat_completion import ChatMessage
+      from datachain.lib.dc import Column, DataChain
 
-         chain = dc.DataChain(source)                          \
-                       .filter(File.name.glob("*.txt"))        \
-                       .settings(parallel=4)                   \
-                       .map(                                   \
-         		              claude = lambda file:                                         \
-         				        ClaudeModel(**service.messages.create(                        \
-                                                  model="claude-3-haiku-20240307",         \
-                                                  system=PROMPT,                           \
-                                                  messages=[{"role": "user",               \
-                                                             "content": file.get_value()}] \
-         								),  \
-         							).model_dump()  \
-         							)               \
-         							.save("mydataset")
+      source = "gs://datachain-demo/chatbot-KiT/"
+      PROMPT = "Was this bot dialog successful? Describe the 'result' as 'Yes' or 'No' in a short JSON"
 
-         dc.DataChain("mydataset").export("./", "claude.response") # export summaries
+      model = "mistral-large-latest"
+      api_key = os.environ["MISTRAL_API_KEY"]
 
-Dataset persistence
--------------------
+      chain = (
+          DataChain.from_storage(source)
+          .limit(5)
+          .settings(cache=True, parallel=5)
+          .map(
+              mistral_response=lambda file: MistralClient(api_key=api_key)
+              .chat(
+                  model=model,
+                  response_format={"type": "json_object"},
+                  messages=[
+                      ChatMessage(role="user", content=f"{PROMPT}: {file.get_value()}")
+                  ],
+              ).choices[0].message.content,
+          )
+          .save()
+      )
 
-In the example above, the chain resolves to a saved dataset  “mydataset”.  DataChain datasets are immutable and versioned. A saved dataset version can be used as a data source:
+      try:
+         print(chain.select("mistral_response").results())
+      except Exception as e:
+         print(f"do you have the right Mistral API key? {e}")
+
+      ->
+      [('{"result": "Yes"}',), ('{"result": "No"}',), ... , ('{"result": "Yes"}',)]
+
+Now we have parallel-processed an LLM API-based query over cloud data and persisted the results.
+
+Vectorized analytics
+--------------------
+
+Datachain internally represents datasets as tables, so analytical queries on the chain are automatically vectorized:
 
 .. code:: py
 
-   ds = dc.DataChain("mydataset", version = 1)
+      failed_dialogs = chain.filter(Column("mistral_response") == '{"result": "No"}')
+      success_rate = failed_dialogs.count() / chain.count()
+      print(f"Chatbot dialog success rate: {100*success_rate:.2f}%")
+
+      ->
+      "40.00%" (results may vary)
 
 Note that DataChain represents file samples as pointers into their respective storage locations. This means a newly created dataset version does not duplicate files in storage, and storage remains the single source of truth for the original samples
 
-Vectorized analytics
----------------------
-Since datasets are internally represented as tables, analytical queries can be vectorized:
+Handling Python objects
+-----------------------
+In addition to storing primitive Python data types, chain is also capable of using data models.
+
+For example, instead of collecting just a text response from Mistral API, we might be interested in more fields of the Mistral response object. For this task, we can define a Pydantic-like model and populate it from the API replies:
 
 .. code:: py
 
-         rate = ds.filter(chain.response == "Success").count() / chain.count() # ??
-         print(f"API class success rate: {100*rate:.2f}%")
-         >> 74.68%
+      import os
+      from datachain.lib.feature import Feature
+      from datachain.lib.dc import Column, DataChain
+      from mistralai.client import MistralClient
+      from mistralai.models.chat_completion import ChatMessage
 
-         price_input = 0.25
-         price_output = 1.25
-         price=(ds.sum(C.claude.usage.input_tokens)*price_input \
-                + ds.sum(C.claude.usage.output_tokens)*price_output)/1_000_000
-         print(f"Cost of API calls: ${price:.2f}")
-         >> Cost of API calls: $1.42
+      source = "gs://datachain-demo/chatbot-KiT/"
+      PROMPT = "Was this dialog successful? Describe the 'result' as 'Yes' or 'No' in a short JSON"
 
+      model = "mistral-large-latest"
+      api_key = os.environ["MISTRAL_API_KEY"]
 
-Importing metadata
-------------------------
+      ## define the data model ###
+      class Usage(Feature):
+          prompt_tokens: int = 0
+          completion_tokens: int = 0
 
-It is common for AI data to come together with metadata (annotations, classes, etc).
-DataChain understands many metadata formats, and can connect data samples in storage with external metadata (e.g. CSV columns) to form a single dataset:
+      class MyChatMessage(Feature):
+          role: str = ""
+          content: str = ""
 
-.. code:: py
+      class CompletionResponseChoice(Feature):
+          message: MyChatMessage = MyChatMessage()
 
-         from dc import parse_csv
-
-         files = dc.DataChain("gs://datachain-demo/myimages/")
-         metadata = dc.DataChain("gs://datachain-demo/myimagesmetadata.csv") \
-                        .gen(meta=parse_csv)  # TBD, also dependent on dropping file
-         dataset = chain1.merge(chain2, on = "file.name", right_on="name"])
-
-         print(dataset.select("file.name", "class", "prob").limit(5).to_pandas())
-         ....
-         ....
-         ....
-         ....
-         ....
-
-Nested annotations (like JSON) can be unrolled into rows and columns in the way that best fits the application. For example, the MS COCO dataset includes JSON annotations detailing segmentations. To build a dataset consisting of all segmented objects in all COCO images:
-
-.. code:: py
-
-      image_files = dc.DataChain("gs://datachain-demo/coco/images/")
-      image_meta  = dc.DataChain("gs://datachain-demo/coco.json")  \
-                     .gen(meta=parse_json, key="images")       # list of images
-      images = image_files.merge(image_meta, on = "file.name", right_on="file_name")
-      objects_meta = dc.DataChain("gs://datachain-demo/coco.json") \
-                     .gen(meta=parse_json, key="annotations")  # annotated objects
-
-      objects = image.full_merge(objects_meta, on = "id", right_on = "image_id")
-
-Generating metadata
----------------------
-
-A typical step in data curation is to create features from data samples for future selection. DataChain represents the newly created metadata as columns, which makes it easy to create new features and filter on them:
-
-.. code:: py
-
-      from fashion_clip.fashion_clip import FashionCLIP
-      from sqlalchemy import JSON
-      from tabulate import tabulate
-
-      from datachain.lib.param import Image
-      from datachain.query import C, DatasetQuery, udf
+      class MistralModel(Feature):
+          id: str = ""
+          choices: list[CompletionResponseChoice]
+          usage: Usage = Usage()
 
 
-      @udf(
-          params=(Image(),),
-          output={"fclip": JSON},
-          method="fashion_clip",
-          batch=10,
+      ## Populate model instances ###
+      chain = (
+          DataChain.from_storage(source)
+          .limit(5)
+          .settings(cache=True, parallel=5)
+          .map(
+              mistral_response=lambda file: MistralModel(
+                  **MistralClient(api_key=api_key)
+                  .chat(
+                      model=model,
+                      response_format={"type": "json_object"},
+                      messages=[
+                          ChatMessage(role="user", content=f"{PROMPT}: {file.get_value()}")
+                      ],
+                  ).dict()
+              ),
+              output=MistralModel,
+          )
+          .save("dialog-eval")
       )
-      class MyFashionClip:
-          def __init__(self):
-              self.fclip = FashionCLIP("fashion-clip")
 
-          def fashion_clip(self, inputs):
-              embeddings = self.fclip.encode_images(
-                  [input[0] for input in inputs], batch_size=1
-              )
-              return [(json.dumps(emb),) for emb in embeddings.tolist()]
-
-      chain = dc.DataChain("gs://datachain-demo/zalando/images/").filter(
-              C.name.glob("*.jpg")
-          ).limit(5).add_signals(MyFashionClip).save("zalando_hd_emb")
-
-      test_image = "cs://datachain-demo/zalando/test/banner.jpg"
-      test_embedding = MyFashionClip.fashion_clip.encode_images(Image(test_image))
-
-      best_matches = chain.filter(similarity_search(test_embeding)).limit(5)
-
-      print best_matches.to_result()
-
-
-Delta updates
--------------
-
-DataChain is capable of “delta updates” – that is, batch-processing only the newly added data samples. For example, let us copy some images into a local folder and run a chain to generate captions with a locally served captioning model from HuggingFace:
-
-.. code:: console
-
-      > mkdir demo-images/
-      > datachain cp gs://datachain-demo/images/ /tmp/demo-images
-
+After the chain execution, we can collect the objects:
 
 .. code:: py
 
-         import torch
+      responses = chain.collect_one("mistral_response")
+      for object in responses:
+         print(type(object))
+         ->
+         <class '__main__.MistralModel'>
+         <class '__main__.MistralModel'>
+         <class '__main__.MistralModel'>
+         <class '__main__.MistralModel'>
+         <class '__main__.MistralModel'>
 
-         from datachain.lib.hf_image_to_text import LLaVAdescribe
-         from datachain.query import C, DatasetQuery
+      print(responses[0].usage.prompt_tokens)
+         ->
+         610
 
-         source = "/tmp/demo-images"
+Dataset persistence
+--------------------
 
-         if torch.cuda.is_available():
-             device = "cuda"
-         else:
-             device = "cpu"
-
-         if __name__ == "__main__":
-             results = (
-                 DatasetQuery(
-                     source,
-                     anon=True,
-                 )
-                 .filter(C.name.glob("*.jpg"))
-                 .add_signals(
-                     LLaVAdescribe(
-                         device=device,
-                         model=model,
-                     ),
-                     parallel=False,
-                 )
-                 .save("annotated-images")
-             )
-
-Now let us add few more more images to the same folder:
-
-.. code:: console
-
-         > datachain cp gs://datachain-demo/extra-images/ /tmp/demo-images
-
-and calculate updates only for the delta:
+The “save” operation makes chain dataset persistent in the current (working) directory of the query. A hidden folder .datachain/ holds the records. A persistent dataset can be accessed later to start a derivative chain:
 
 .. code:: py
 
-      processed = dc.DataChain("annotated-images")
-      delta = dc.dataChain("/tmp/demo-images").subtract(processed)
+         DataChain.from_dataset("dialog-eval").limit(2).save("dialog-eval")
+
+Persistent datasets are immutable and automatically versioned. Versions can be listed from shell:
+
+.. code:: shell
+
+      $ datachain ls-datasets
+
+      dialog-rate (v1)
+      dialog-rate (v2)
+
+By default, when a persistent dataset is loaded, the latest version is fetched but another version can be requested:
+
+.. code:: py
+
+      ds = DataChain.from_dataset("dialog-eval", version = 1)
+
+Chain optimization and execution
+--------------------------------
+
+Datachain avoids redundant operations. Execution is triggered only when a downstream operation requests the processed results. However, it would be inefficient to run, say, LLM queries again every time you just want to collect several objects.
+
+“Save” operation nails execution results and automatically refers to them every time the downstream functions ask for data. Saving without an explicit name generates an auto-named dataset which serves the same purpose.
+
+
+Matching data with metadata
+----------------------------
+It is common for AI data to come with pre-computed metadata (annotations, classes, etc).
+
+DataChain library understands common metadata formats (JSON, CSV and parquet), and can unite data samples from storage with side-loaded metadata. The schema for metadata can be set explicitly or be inferred.
+
+Here is an example of reading a CSV file where schema is heuristically derived from the header:
+
+.. code:: py
+
+      from datachain.lib.dc import DataChain
+
+      uri="gs://datachain-demo/chatbot-csv/"
+      csv_dataset = DataChain.from_csv(uri)
+
+      print(csv_dataset.to_pandas())
+
+Reading metadata from JSON format is a more complicated scenario because a JSON-annotated dataset typically references data samples (e.g. images) in annotation arrays somewhere within JSON files.
+
+Here is an example from MS COCO “captions” JSON which employs separate sections for image meta and captions:
+
+.. code:: json
+
+
+      {
+        "images": [
+          {
+            "license": 4,
+            "file_name": "000000397133.jpg",
+            "coco_url": "http://images.cocodataset.org/val2017/000000397133.jpg",
+            "height": 427,
+            "width": 640,
+            "date_captured": "2013-11-14 17:02:52",
+            "flickr_url": "http://farm7.staticflickr.com/6116/6255196340_da26cf2c9e_z.jpg",
+            "id": 397133
+          },
+          ...
+        ],
+        "annotations": [
+          {
+            "image_id"	:	"179765",
+            "id"	:	38,
+            "caption"	:	"A black Honda motorcycle parked in front of a garage."
+          },
+          ...
+        ],
+        ...
+      }
+
+To deal with this layout, we can take the following steps:
+
+1. Generate a dataset of raw image files from storage
+2. Generate a meta-information dataset from the JSON section “images”
+3. Join these datasets via the matching id keys
+
+.. code:: python
+
+
+   from datachain.lib.dc import DataChain
+
+   image_uri="gs://datachain-demo/coco2017/images/val/"
+   coco_json="gs://datachain-demo/coco2017/annotations_captions"
+
+   images = DataChain.from_storage(image_uri)
+   meta = DataChain.from_json(coco_json, jmespath = "images")
+
+   images_with_meta = images.merge(meta, on="file.name", right_on="images.file_name")
+
+
+   print(images_with_meta.limit(1).results())
+
 
 Passing data to training
 ------------------------
 
-Datasets can be exported to CSV or webdataset formats. However, a much better way to pass data to training which avoids data copies and re-sharding is  to wrap a DataChain dataset into a PyTorch class, and let the library take care of file downloads and caching under the hood:
+Chain results can be exported or passed directly to Pytorch dataloader. For example, if we are interested in passing three columns to training, the following Pytorch code will do it:
 
 .. code:: py
 
-         ds = dc.DataChain("gs://datachain-demo/name-labeled/images/")
-                        .filter(C.name.glob("*.jpg"))
-                        .map(lambda name: (name[:3],), output={"label": str}, parallel=4)
-             )
+      ds = train.select("file", "caption_choices", "label_ind").to_pytorch(
+          transform=preprocess,
+          tokenizer=clip.tokenize,
+      )
 
-         train_loader = DataLoader(
-                 ds.to_pytorch(
-                     ImageReader(),
-                     LabelReader("label", classes=CLASSES),
-                     transform=transform,
-                 ),
-                 batch_size=16,
-                 parallel=2,
-             )
+      loader = DataLoader(ds, batch_size=2)
+      optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+      train(loader, model, optimizer)
 
 Tutorials
 ------------------
 
-* `Computer Vision <examples/computer_vision/fashion_product_images/1-quick-start.ipynb>`_ (try in `Colab <https://colab.research.google.com/github/iterative/dvcx/blob/main/examples/computer_vision/fashion_product_images/1-quick-start.ipynb>`__)
 * `Multimodal <examples/multimodal/clip_fine_tuning.ipynb>`_ (try in `Colab <https://colab.research.google.com/github/iterative/dvclive/blob/main/examples/multimodal/clip_fine_tuning.ipynb>`__)
-
-💻  More examples
-------------------
-
-* Curating images to train a custom CLIP model without re-sharding the Webdataset files
-* Batch-transforming and indexing images to create a searchable merchandise catalog
-* Evaluating an LLM application at scale
-* Ranking the LLM retrieval strategies
-* Delta updates in batch processing
 
 Contributions
 --------------------
