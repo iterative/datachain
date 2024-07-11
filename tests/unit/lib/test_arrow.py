@@ -74,7 +74,6 @@ def test_arrow_type_error():
 def test_schema_to_output():
     schema = pa.schema([("some_int", pa.int32()), ("some_string", pa.string())])
     assert schema_to_output(schema) == {
-        "source": IndexedFile,
         "some_int": int,
         "some_string": str,
     }
@@ -90,7 +89,6 @@ def test_parquet_convert_column_names():
         ]
     )
     assert list(schema_to_output(schema)) == [
-        "source",
         "uppercasecol",
         "dotnotationcol",
         "withdashes",
@@ -105,4 +103,4 @@ def test_parquet_missing_column_names():
             ("", pa.int32()),
         ]
     )
-    assert list(schema_to_output(schema)) == ["source", "c0", "c1"]
+    assert list(schema_to_output(schema)) == ["c0", "c1"]

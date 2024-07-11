@@ -38,7 +38,7 @@ class ArrowGenerator(Generator):
 def schema_to_output(schema: "pa.Schema"):
     """Generate UDF output schema from pyarrow schema."""
     default_column = 0
-    output = {"source": IndexedFile}
+    output = {}
     for field in schema:
         column = field.name.lower()
         column = re.sub("[^0-9a-z_]+", "", column)

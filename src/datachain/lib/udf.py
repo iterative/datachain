@@ -125,7 +125,11 @@ class UDFBase(AbstractUDF):
         else:
             # Generator expression is required, otherwise the value will be materialized
             res = (
-                obj._flatten() if isinstance(obj, Feature) else (obj,)
+                obj._flatten()
+                if isinstance(obj, Feature)
+                else obj
+                if isinstance(obj, tuple)
+                else (obj,)
                 for obj in result_objs
             )
 

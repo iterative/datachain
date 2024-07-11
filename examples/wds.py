@@ -18,12 +18,9 @@ meta_emd = (
     .map(stem=lambda file: file.get_file_stem(), params=["emd.file"], output=str)
 )
 
-meta_pq = (
-    DataChain.from_storage("gs://dvcx-datacomp-small/metadata")
-    .filter(C.name.glob("0020f*.parquet"))
-    .parse_parquet()
-    .map(stem=lambda file: file.get_file_stem(), params=["source.file"], output=str)
-)
+meta_pq = DataChain.from_parquet(
+    "gs://dvcx-datacomp-small/metadata/0020f*.parquet"
+).map(stem=lambda file: file.get_file_stem(), params=["source.file"], output=str)
 
 meta = meta_emd.merge(
     meta_pq, on=["stem", "emd.index"], right_on=["stem", "source.index"]
