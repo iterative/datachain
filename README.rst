@@ -1,4 +1,4 @@
-|PyPI| |Python Version| |Codecov| |Tests| 
+|PyPI| |Python Version| |Codecov| |Tests|
 
 .. |PyPI| image:: https://img.shields.io/pypi/v/datachain.svg
    :target: https://pypi.org/project/datachain/
@@ -42,19 +42,19 @@ For example, let us consider a dataset from Karlsruhe Institute of Technology de
       # pip install mistralai
       # this example requires a free Mistral API key, get yours at https://console.mistral.ai
       # add the key to your shell environment: $ export MISTRAL_API_KEY= your key
-      
+
       import os
-      
+
       from mistralai.client import MistralClient
       from mistralai.models.chat_completion import ChatMessage
-      
+
       from datachain.lib.dc import DataChain, Column
-      
+
       PROMPT = "Was this bot dialog successful? Describe the 'result' as 'Yes' or 'No' in a short JSON"
-      
+
       model = "mistral-large-latest"
       api_key = os.environ["MISTRAL_API_KEY"]
-      
+
       chain = (
           DataChain.from_storage("gs://datachain-demo/chatbot-KiT/")
           .limit(5)
@@ -100,7 +100,7 @@ Datachain internally represents datasets as tables, so analytical queries on the
 
 .. code:: shell
 
-      "40.00%" 
+      "40.00%"
 
 Note that DataChain represents file samples as pointers into their respective storage locations. This means a newly created dataset version does not duplicate files in storage, and storage remains the single source of truth for the original samples
 
@@ -113,43 +113,43 @@ For example, instead of collecting just a text response from Mistral API, we mig
 .. code:: py
 
       import os
-      
+
       from mistralai.client import MistralClient
       from mistralai.models.chat_completion import ChatMessage
-      
+
       from datachain.lib.dc import DataChain
       from datachain.lib.feature import Feature
-      
-      
+
+
       PROMPT = (
           "Was this dialog successful? Describe the 'result' as 'Yes' or 'No' in a short JSON"
       )
-      
+
       model = "mistral-large-latest"
       api_key = os.environ["MISTRAL_API_KEY"]
-      
-      
+
+
       ## define the data model ###
       class Usage(Feature):
           prompt_tokens: int = 0
           completion_tokens: int = 0
-      
-      
+
+
       class MyChatMessage(Feature):
           role: str = ""
           content: str = ""
-      
-      
+
+
       class CompletionResponseChoice(Feature):
           message: MyChatMessage = MyChatMessage()
-      
-      
+
+
       class MistralModel(Feature):
           id: str = ""
           choices: list[CompletionResponseChoice]
           usage: Usage = Usage()
-      
-      
+
+
       ## Populate model instances ###
       chain = (
           DataChain.from_storage("gs://datachain-demo/chatbot-KiT/")
@@ -181,7 +181,7 @@ After the chain execution, we can collect the objects:
           print(obj.dict())
 
 .. code:: shell
-      
+
       {'choices': [{'message': {'role': 'assistant', 'content': '{"result": "Yes"}'}}], 'usage': {'prompt_tokens': 610, 'completion_tokens': 6}}
       {'choices': [{'message': {'role': 'assistant', 'content': '{"result": "No"}'}}], 'usage': {'prompt_tokens': 3983, 'completion_tokens': 6}}
       {'choices': [{'message': {'role': 'assistant', 'content': '{"result": "Yes"}'}}], 'usage': {'prompt_tokens': 706, 'completion_tokens': 6}}
@@ -288,7 +288,7 @@ To deal with this layout, we can take the following steps:
 
 .. code:: shell
 
-      
+
       Processed: 5000 rows [00:00, 15481.66 rows/s]
       Processed: 1 rows [00:00, 1291.75 rows/s]
       Processed: 1 rows [00:00,  4.70 rows/s]
