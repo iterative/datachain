@@ -2,16 +2,16 @@ import inspect
 import string
 from collections.abc import Sequence
 from enum import Enum
-from typing import Any, Union, get_args, get_origin
+from typing import Annotated, Any, Literal, Optional, Union, get_args, get_origin
 
 from pydantic import BaseModel, create_model
+from typing_extensions import Literal as LiteralEx
 
 from datachain.lib.feature import (
     TYPE_TO_DATACHAIN,
     Feature,
     FeatureType,
     FeatureTypeNames,
-    convert_type_to_datachain,
 )
 from datachain.lib.utils import DataChainParamsError
 
@@ -35,9 +35,7 @@ def pydantic_to_feature(data_cls: type[BaseModel]) -> type[Feature]:
 
     fields = {}
     for name, field_info in data_cls.model_fields.items():
-        anno = field_info.annotation
-        if anno not in TYPE_TO_DATACHAIN:
-            anno = _to_feature_type(anno)
+        anno = _to_feature_type(field_info.annotation)
         fields[name] = (anno, field_info.default)
 
     cls = create_model(
@@ -49,36 +47,46 @@ def pydantic_to_feature(data_cls: type[BaseModel]) -> type[Feature]:
     return cls
 
 
-def _to_feature_type(anno):
-    if inspect.isclass(anno) and issubclass(anno, Enum):
-        return str
+def _to_feature_type(anno):  # noqa: PLR0911
+    if anno in TYPE_TO_DATACHAIN:
+        return anno
+
+    if anno is type(None):
+        return type(None)
+
+    if inspect.isclass(anno):
+        if issubclass(anno, BaseModel):
+            return pydantic_to_feature(anno)
+        if issubclass(anno, Enum):
+            return str
+        if anno is object:
+            return object
 
     orig = get_origin(anno)
+    args = get_args(anno)
+
+    if orig in (Literal, LiteralEx):
+        return str
+
+    if orig is Optional:
+        return Optional[_to_feature_type(args[0])]
+
+    if orig is Annotated:
+        # Ignoring annotations
+        return _to_feature_type(args[0])
+
     if orig is list:
-        anno = get_args(anno)  # type: ignore[assignment]
-        if isinstance(anno, Sequence):
-            anno = anno[0]  # type: ignore[unreachable]
-        is_list = True
-    else:
-        is_list = False
+        if len(args) > 1:
+            raise TypeError(
+                "type conversion error: list is suppose to have only 1 value"
+            )
+        return list[_to_feature_type(args[0])]
 
-    try:
-        convert_type_to_datachain(anno)
-    except TypeError:
-        if not Feature.is_feature(anno):  # type: ignore[arg-type]
-            orig = get_origin(anno)
-            if orig in TYPE_TO_DATACHAIN:
-                anno = _to_feature_type(anno)
-            else:
-                if orig == Union:
-                    args = get_args(anno)
-                    if len(args) == 2 and (type(None) in args):
-                        return _to_feature_type(args[0])
+    if orig == Union:
+        vals = [_to_feature_type(arg) for arg in args]
+        return Union[tuple(vals)]
 
-                anno = pydantic_to_feature(anno)  # type: ignore[arg-type]
-    if is_list:
-        anno = list[anno]  # type: ignore[valid-type]
-    return anno
+    raise TypeError(f"Cannot recognize type {anno}")
 
 
 def features_to_tuples(
