@@ -48,19 +48,14 @@ def pydantic_to_feature(data_cls: type[BaseModel]) -> type[Feature]:
 
 
 def _to_feature_type(anno):  # noqa: PLR0911
+    if anno in feature_cache:
+        return feature_cache[anno]
+
     if anno in TYPE_TO_DATACHAIN:
         return anno
 
     if anno is type(None):
         return type(None)
-
-    if inspect.isclass(anno):
-        if issubclass(anno, BaseModel):
-            return pydantic_to_feature(anno)
-        if issubclass(anno, Enum):
-            return str
-        if anno is object:
-            return object
 
     orig = get_origin(anno)
     args = get_args(anno)
@@ -85,6 +80,14 @@ def _to_feature_type(anno):  # noqa: PLR0911
     if orig == Union:
         vals = [_to_feature_type(arg) for arg in args]
         return Union[tuple(vals)]
+
+    if inspect.isclass(anno):
+        if issubclass(anno, BaseModel):
+            return pydantic_to_feature(anno)
+        if issubclass(anno, Enum):
+            return str
+        if anno is object:
+            return object
 
     raise TypeError(f"Cannot recognize type {anno}")
 
