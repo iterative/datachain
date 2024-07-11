@@ -1,4 +1,4 @@
-|PyPI| |Python Version| |Codecov| |Tests| |License|
+|PyPI| |Python Version| |Codecov| |Tests| 
 
 .. |PyPI| image:: https://img.shields.io/pypi/v/datachain.svg
    :target: https://pypi.org/project/datachain/
@@ -39,21 +39,24 @@ For example, let us consider a dataset from Karlsruhe Institute of Technology de
       # this example requires a free Mistral API key, get yours at https://console.mistral.ai
       # add the key to your shell environment: $ export MISTRAL_API_KEY= your key
 
+      # pip install mistralai
+      # this example requires a free Mistral API key, get yours at https://console.mistral.ai
+      # add the key to your shell environment: $ export MISTRAL_API_KEY= your key
+      
       import os
-      import pandas as pd
-      from datachain.lib.feature import Feature
+      
       from mistralai.client import MistralClient
       from mistralai.models.chat_completion import ChatMessage
-      from datachain.lib.dc import Column, DataChain
-
-      source = "gs://datachain-demo/chatbot-KiT/"
+      
+      from datachain.lib.dc import DataChain, Column
+      
       PROMPT = "Was this bot dialog successful? Describe the 'result' as 'Yes' or 'No' in a short JSON"
-
+      
       model = "mistral-large-latest"
       api_key = os.environ["MISTRAL_API_KEY"]
-
+      
       chain = (
-          DataChain.from_storage(source)
+          DataChain.from_storage("gs://datachain-demo/chatbot-KiT/")
           .limit(5)
           .settings(cache=True, parallel=5)
           .map(
@@ -64,17 +67,21 @@ For example, let us consider a dataset from Karlsruhe Institute of Technology de
                   messages=[
                       ChatMessage(role="user", content=f"{PROMPT}: {file.get_value()}")
                   ],
-              ).choices[0].message.content,
+              )
+              .choices[0]
+              .message.content,
           )
           .save()
       )
 
       try:
-         print(chain.select("mistral_response").results())
+          print(chain.select("mistral_response").results())
       except Exception as e:
-         print(f"do you have the right Mistral API key? {e}")
+          print(f"do you have the right Mistral API key? {e}")
 
-      ->
+
+.. code:: shell
+
       [('{"result": "Yes"}',), ('{"result": "No"}',), ... , ('{"result": "Yes"}',)]
 
 Now we have parallel-processed an LLM API-based query over cloud data and persisted the results.
@@ -90,8 +97,10 @@ Datachain internally represents datasets as tables, so analytical queries on the
       success_rate = failed_dialogs.count() / chain.count()
       print(f"Chatbot dialog success rate: {100*success_rate:.2f}%")
 
-      ->
-      "40.00%" (results may vary)
+
+.. code:: shell
+
+      "40.00%" 
 
 Note that DataChain represents file samples as pointers into their respective storage locations. This means a newly created dataset version does not duplicate files in storage, and storage remains the single source of truth for the original samples
 
@@ -104,38 +113,46 @@ For example, instead of collecting just a text response from Mistral API, we mig
 .. code:: py
 
       import os
-      from datachain.lib.feature import Feature
-      from datachain.lib.dc import Column, DataChain
+      
       from mistralai.client import MistralClient
       from mistralai.models.chat_completion import ChatMessage
-
-      source = "gs://datachain-demo/chatbot-KiT/"
-      PROMPT = "Was this dialog successful? Describe the 'result' as 'Yes' or 'No' in a short JSON"
-
+      
+      from datachain.lib.dc import DataChain
+      from datachain.lib.feature import Feature
+      
+      
+      PROMPT = (
+          "Was this dialog successful? Describe the 'result' as 'Yes' or 'No' in a short JSON"
+      )
+      
       model = "mistral-large-latest"
       api_key = os.environ["MISTRAL_API_KEY"]
-
+      
+      
       ## define the data model ###
       class Usage(Feature):
           prompt_tokens: int = 0
           completion_tokens: int = 0
-
+      
+      
       class MyChatMessage(Feature):
           role: str = ""
           content: str = ""
-
+      
+      
       class CompletionResponseChoice(Feature):
           message: MyChatMessage = MyChatMessage()
-
+      
+      
       class MistralModel(Feature):
           id: str = ""
           choices: list[CompletionResponseChoice]
           usage: Usage = Usage()
-
-
+      
+      
       ## Populate model instances ###
       chain = (
-          DataChain.from_storage(source)
+          DataChain.from_storage("gs://datachain-demo/chatbot-KiT/")
           .limit(5)
           .settings(cache=True, parallel=5)
           .map(
@@ -147,7 +164,8 @@ For example, instead of collecting just a text response from Mistral API, we mig
                       messages=[
                           ChatMessage(role="user", content=f"{PROMPT}: {file.get_value()}")
                       ],
-                  ).dict()
+                  )
+                  .dict()
               ),
               output=MistralModel,
           )
@@ -158,19 +176,18 @@ After the chain execution, we can collect the objects:
 
 .. code:: py
 
-      responses = chain.collect_one("mistral_response")
-      for object in responses:
-         print(type(object))
-         ->
-         <class '__main__.MistralModel'>
-         <class '__main__.MistralModel'>
-         <class '__main__.MistralModel'>
-         <class '__main__.MistralModel'>
-         <class '__main__.MistralModel'>
+      for obj in responses:
+          assert isinstance(obj, MistralModel)
+          print(obj.dict())
 
-      print(responses[0].usage.prompt_tokens)
-         ->
-         610
+.. code:: shell
+      
+      {'choices': [{'message': {'role': 'assistant', 'content': '{"result": "Yes"}'}}], 'usage': {'prompt_tokens': 610, 'completion_tokens': 6}}
+      {'choices': [{'message': {'role': 'assistant', 'content': '{"result": "No"}'}}], 'usage': {'prompt_tokens': 3983, 'completion_tokens': 6}}
+      {'choices': [{'message': {'role': 'assistant', 'content': '{"result": "Yes"}'}}], 'usage': {'prompt_tokens': 706, 'completion_tokens': 6}}
+      {'choices': [{'message': {'role': 'assistant', 'content': '{"result": "No"}'}}], 'usage': {'prompt_tokens': 1250, 'completion_tokens': 6}}
+      {'choices': [{'message': {'role': 'assistant', 'content': '{"result": "Yes"}'}}], 'usage': {'prompt_tokens': 1217, 'completion_tokens': 6}}
+
 
 Dataset persistence
 --------------------
@@ -215,9 +232,7 @@ Here is an example of reading a CSV file where schema is heuristically derived f
 .. code:: py
 
       from datachain.lib.dc import DataChain
-
-      uri="gs://datachain-demo/chatbot-csv/"
-      csv_dataset = DataChain.from_csv(uri)
+      csv_dataset = DataChain.from_csv("gs://datachain-demo/chatbot-csv/")
 
       print(csv_dataset.to_pandas())
 
@@ -264,17 +279,21 @@ To deal with this layout, we can take the following steps:
 
    from datachain.lib.dc import DataChain
 
-   image_uri="gs://datachain-demo/coco2017/images/val/"
-   coco_json="gs://datachain-demo/coco2017/annotations_captions"
-
-   images = DataChain.from_storage(image_uri)
-   meta = DataChain.from_json(coco_json, jmespath = "images")
+   images = DataChain.from_storage("gs://datachain-demo/coco2017/images/val/")
+   meta = DataChain.from_json("gs://datachain-demo/coco2017/annotations_captions", jmespath = "images")
 
    images_with_meta = images.merge(meta, on="file.name", right_on="images.file_name")
 
-
    print(images_with_meta.limit(1).results())
 
+.. code:: shell
+
+      
+      Processed: 5000 rows [00:00, 15481.66 rows/s]
+      Processed: 1 rows [00:00, 1291.75 rows/s]
+      Processed: 1 rows [00:00,  4.70 rows/s]
+      Generated: 5000 rows [00:00, 27128.67 rows/s]
+      [(1, 2336066478558845549, '', 0, 'coco2017/images/val', '000000000139.jpg', 'CNvXoemj8IYDEAE=', '1719096046021595', 1, datetime.datetime(2024, 6, 22, 22, 40, 46, 70000, tzinfo=datetime.timezone.utc), 161811, '', '', None, 'gs://datachain-demo', 'gs://datachain-demo', 'coco2017/images/val', '000000000139.jpg', 161811, '1719096046021595', 'CNvXoemj8IYDEAE=', 1, datetime.datetime(1970, 1, 1, 0, 0, tzinfo=datetime.timezone.utc), None, '', 4146, 6967063844996569113, 2, '000000000139.jpg', 'http://images.cocodataset.org/val2017/000000000139.jpg', 426, 640, '2013-11-21 01:34:01', 'http://farm9.staticflickr.com/8035/8024364858_9c41dc1666_z.jpg', 139)]
 
 Passing data to training
 ------------------------
