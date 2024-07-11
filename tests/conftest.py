@@ -8,7 +8,10 @@ import attrs
 import pytest
 import pytest_servers.exceptions
 import sqlalchemy
+import torch
 from pytest import MonkeyPatch, TempPathFactory
+from torch import float32
+from torchvision.transforms import v2
 from upath.implementations.cloud import CloudPath
 
 from datachain.catalog import Catalog
@@ -549,3 +552,20 @@ def dataset_rows():
         }
         for i in range(19)
     ]
+
+
+@pytest.fixture(scope="session")
+def fake_clip_model():
+    class Model:
+        def encode_image(self, tensor):
+            return torch.randn(len(tensor), 512)
+
+        def encode_text(self, tensor):
+            return torch.randn(len(tensor), 512)
+
+    def tokenizer(tensor, context_length=77):
+        return torch.randn(len(tensor), context_length)
+
+    model = Model()
+    preprocess = v2.ToDtype(float32, scale=True)
+    return model, preprocess, tokenizer

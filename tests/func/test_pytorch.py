@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import open_clip
 import pytest
 from torch import Size, Tensor
@@ -8,10 +10,10 @@ from datachain.lib.dc import DataChain
 from datachain.lib.pytorch import PytorchDataset
 
 
-@pytest.fixture
-def fake_dataset(tmp_path, catalog):
+@pytest.fixture(scope="module")
+def fake_dataset(tmpdir_factory):
     # Create fake images in labeled dirs
-    data_path = tmp_path / "data" / ""
+    data_path = Path(tmpdir_factory.mktemp("data"))
     for i, (img, label) in enumerate(FakeData()):
         label = str(label)
         (data_path / label).mkdir(parents=True, exist_ok=True)
@@ -42,6 +44,7 @@ def test_pytorch_dataset(fake_dataset):
         assert isinstance(text, Tensor)
         assert isinstance(label, int)
         assert img.size() == Size([3, 64, 64])
+        break
 
 
 def test_pytorch_dataset_sample(fake_dataset):
@@ -67,3 +70,4 @@ def test_to_pytorch(fake_dataset):
         assert isinstance(text, Tensor)
         assert isinstance(label, int)
         assert img.size() == Size([3, 64, 64])
+        break

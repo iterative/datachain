@@ -1,4 +1,3 @@
-import open_clip
 import torch
 from transformers import CLIPModel, CLIPProcessor
 
@@ -6,10 +5,9 @@ from datachain.lib.file import TextFile
 from datachain.lib.text import convert_text
 
 
-def test_convert_text():
+def test_convert_text(fake_clip_model):
     text = "thisismytext"
-    tokenizer_model = "ViT-B-32"
-    tokenizer = open_clip.get_tokenizer(tokenizer_model)
+    model, _, tokenizer = fake_clip_model
     converted_text = convert_text(text, tokenizer=tokenizer)
     assert isinstance(converted_text, torch.Tensor)
 
@@ -22,7 +20,6 @@ def test_convert_text():
     converted_text = convert_text(
         text, tokenizer=tokenizer, tokenizer_kwargs=tokenizer_kwargs
     )
-    model, _, _ = open_clip.create_model_and_transforms(tokenizer_model)
     converted_text = convert_text(text, tokenizer=tokenizer, encoder=model.encode_text)
     assert converted_text.dtype == torch.float32
 
