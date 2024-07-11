@@ -2,13 +2,14 @@ import copy
 import inspect
 import re
 import warnings
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime
 from enum import Enum
 from functools import lru_cache
 from types import GenericAlias
 from typing import (
     TYPE_CHECKING,
+    Annotated,
     Any,
     ClassVar,
     Literal,
@@ -365,48 +366,59 @@ def _resolve(cls, name, field_info, prefix: list[str]):
     return FeatureAttributeWrapper(anno, [*prefix, norm_name])
 
 
-def convert_type_to_datachain(typ):  # noqa: PLR0911
-    if inspect.isclass(typ):
-        if issubclass(typ, SQLType):
-            return typ
-        if issubclass(typ, Enum):
-            return str
-
-    res = TYPE_TO_DATACHAIN.get(typ)
-    if res:
+def convert_type_to_datachain(anno):  # noqa: C901, PLR0912, PLR0911
+    if res := TYPE_TO_DATACHAIN.get(anno):
         return res
 
-    orig = get_origin(typ)
+    if anno is type(None):
+        return NullType
+
+    if inspect.isclass(anno):
+        if issubclass(anno, SQLType):
+            return anno
+        if issubclass(anno, Enum):
+            return String
+
+    orig = get_origin(anno)
+    args = get_args(anno)
 
     if orig in (Literal, LiteralEx):
         return String
 
-    args = get_args(typ)
-    if inspect.isclass(orig) and (issubclass(list, orig) or issubclass(tuple, orig)):
-        if args is None or len(args) != 1:
-            raise TypeError(f"Cannot resolve type '{typ}' for flattening features")
-
-        args0 = args[0]
-        if Feature.is_feature(args0):
-            return Array(JSON())
-
-        next_type = convert_type_to_datachain(args0)
-        return Array(next_type)
-
-    if inspect.isclass(orig) and issubclass(dict, orig):
+    if orig is dict:
         return JSON
 
-    if orig == Union and len(args) == 2 and (type(None) in args):
+    if orig is Annotated:
+        # Ignoring annotations
         return convert_type_to_datachain(args[0])
 
-    # Special case for list in JSON: Union[dict, list[dict]]
-    if orig == Union and len(args) >= 2:
+    is_orig_class = inspect.isclass(orig)
+
+    if is_orig_class and issubclass(orig, Mapping):
+        return JSON
+
+    if orig is list or (is_orig_class and issubclass(orig, Iterable)):
+        if len(args) > 1:
+            raise TypeError(
+                "type conversion error: list is suppose to have only 1 value"
+            )
+
+        if Feature.is_feature(args[0]):
+            return Array(JSON())
+
+        return Array(convert_type_to_datachain(args[0]))
+
+    if orig is Union and len(args) >= 2:
         args_no_nones = [arg for arg in args if arg != type(None)]
+        if len(args_no_nones) == 1:
+            # Handle Optional[X] type
+            return convert_type_to_datachain(args_no_nones[0])
         if len(args_no_nones) == 2:
             args_no_dicts = [arg for arg in args_no_nones if arg is not dict]
             if len(args_no_dicts) == 1 and get_origin(args_no_dicts[0]) is list:
                 arg = get_args(args_no_dicts[0])
                 if len(arg) == 1 and arg[0] is dict:
+                    # Handle specific case: Union[dict, list[dict]]
                     return JSON
 
-    raise TypeError(f"Cannot recognize type {typ}")
+    raise TypeError(f"Cannot recognize type {anno}")
