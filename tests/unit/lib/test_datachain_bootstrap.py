@@ -69,7 +69,7 @@ def test_no_bootstrap_for_callable(catalog):
     assert udf._had_teardown is False
 
 
-def test_bootstrap_in_chain():
+def test_bootstrap_in_chain(catalog):
     base = 1278
     prime = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29]
 
@@ -83,7 +83,7 @@ def test_bootstrap_in_chain():
     assert res == [base + val for val in prime]
 
 
-def test_vars_duplication_error():
+def test_vars_duplication_error(catalog):
     with pytest.raises(DatasetPrepareError):
         (
             DataChain.from_features(val=[2, 3, 5, 7, 11, 13, 17, 19, 23, 29])
