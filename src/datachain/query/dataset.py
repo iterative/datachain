@@ -490,7 +490,7 @@ class UDF(Step, ABC):
         processes = determine_processes(self.parallel)
 
         try:
-            if workers:
+            if workers and workers != 1:
                 from datachain.catalog.loader import get_distributed_class
 
                 distributor = get_distributed_class(min_task_size=self.min_task_size)
