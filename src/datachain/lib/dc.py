@@ -205,8 +205,8 @@ class DataChain(DatasetQuery):
         type: Literal["binary", "text", "image"] = "binary",
         session: Optional[Session] = None,
         recursive: Optional[bool] = True,
-        anon: bool = False,
         object_name: str = "file",
+        **kwargs,
     ) -> "Self":
         """Get data from a storage as a list of file with all file attributes. It
         returns the chain itself as usual.
@@ -216,7 +216,6 @@ class DataChain(DatasetQuery):
                 as `s3://`, `gs://`, `az://` or "file:///"
             type : read file as "binary", "text", or "image" data. Default is "binary".
             recursive : search recursively for the given path.
-            anon : use anonymous mode to access the storage.
             object_name : Created object column name.
 
         Example:
@@ -225,7 +224,7 @@ class DataChain(DatasetQuery):
             ```
         """
         func = get_file(type)
-        return cls(path, session=session, recursive=recursive, anon=anon).map(
+        return cls(path, session=session, recursive=recursive, **kwargs).map(
             **{object_name: func}
         )
 
@@ -247,7 +246,6 @@ class DataChain(DatasetQuery):
         cls,
         path,
         type: Literal["binary", "text", "image"] = "text",
-        anon: bool = False,
         spec: Optional[FeatureType] = None,
         schema_from: Optional[str] = "auto",
         jmespath: Optional[str] = None,
@@ -255,6 +253,7 @@ class DataChain(DatasetQuery):
         model_name: Optional[str] = None,
         show_schema: Optional[bool] = False,
         meta_type: Optional[str] = "json",
+        **kwargs,
     ) -> "DataChain":
         """Get data from JSON. It returns the chain itself.
 
@@ -262,7 +261,6 @@ class DataChain(DatasetQuery):
             path : storage URI with directory. URI must start with storage prefix such
                 as `s3://`, `gs://`, `az://` or "file:///"
             type : read file as "binary", "text", or "image" data. Default is "binary".
-            anon : use anonymous mode to access the storage.
             spec : optional Data Model
             schema_from : path to sample to infer spec from
             object_name : generated object column name
@@ -288,7 +286,7 @@ class DataChain(DatasetQuery):
             object_name = jmespath_to_name(jmespath)
         if not object_name:
             object_name = "json"
-        chain = DataChain.from_storage(path=path, type=type, anon=anon)
+        chain = DataChain.from_storage(path=path, type=type, **kwargs)
         signal_dict = {
             object_name: read_meta(
                 schema_from=schema_from,
@@ -748,19 +746,18 @@ class DataChain(DatasetQuery):
     def from_csv(
         cls,
         path,
-        anon: bool = False,
         delimiter: str = ",",
         header: bool = True,
         column_names: Optional[list[str]] = None,
         output: Optional[dict[str, FeatureType]] = None,
         object_name: Optional[str] = None,
+        **kwargs,
     ) -> "DataChain":
         """Generate chain from csv files.
 
         Parameters:
             path : Storage URI with directory. URI must start with storage prefix such
                 as `s3://`, `gs://`, `az://` or "file:///".
-            anon : Use anonymous mode to access the storage.
             delimiter : Character for delimiting columns.
             header : Whether the files include a header row.
             column_names : Column names if no header. Implies `header = False`.
@@ -777,7 +774,7 @@ class DataChain(DatasetQuery):
         from pyarrow.csv import ParseOptions, ReadOptions
         from pyarrow.dataset import CsvFileFormat
 
-        chain = DataChain.from_storage(path, anon=anon)
+        chain = DataChain.from_storage(path, **kwargs)
 
         if column_names and output:
             msg = "error parsing csv - only one of column_names or output is allowed"
@@ -801,17 +798,16 @@ class DataChain(DatasetQuery):
     def from_parquet(
         cls,
         path,
-        anon: bool = False,
         partitioning: Any = "hive",
         output: Optional[dict[str, FeatureType]] = None,
         object_name: Optional[str] = None,
+        **kwargs,
     ) -> "DataChain":
         """Generate chain from parquet files.
 
         Parameters:
             path : Storage URI with directory. URI must start with storage prefix such
                 as `s3://`, `gs://`, `az://` or "file:///".
-            anon : Use anonymous mode to access the storage.
             partitioning : Any pyarrow partitioning schema.
             output : Dictionary defining column names and their corresponding types.
             object_name : Created object column name.
@@ -823,7 +819,7 @@ class DataChain(DatasetQuery):
             Reading a partitioned dataset from a directory:
             >>> dc = DataChain.from_parquet("s3://mybucket/dir")
         """
-        chain = DataChain.from_storage(path, anon=anon)
+        chain = DataChain.from_storage(path, **kwargs)
         return chain.parse_tabular(
             output=output,
             object_name=object_name,
