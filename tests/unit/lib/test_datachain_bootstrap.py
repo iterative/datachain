@@ -24,7 +24,7 @@ class MyMapper(Mapper):
         self.value = MyMapper.TEARDOWN_VALUE
 
 
-def test_udf(catalog):
+def test_udf():
     vals = ["a", "b", "c", "d", "e", "f"]
     chain = DataChain.from_features(key=vals)
 
@@ -36,7 +36,7 @@ def test_udf(catalog):
 
 
 @pytest.mark.skip(reason="Skip until tests module will be importer for unit-tests")
-def test_udf_parallel(catalog):
+def test_udf_parallel():
     vals = ["a", "b", "c", "d", "e", "f"]
     chain = DataChain.from_features(key=vals)
 
@@ -45,7 +45,7 @@ def test_udf_parallel(catalog):
     assert res == [MyMapper.BOOTSTRAP_VALUE] * len(vals)
 
 
-def test_no_bootstrap_for_callable(catalog):
+def test_no_bootstrap_for_callable():
     class MyMapper:
         def __init__(self):
             self._had_bootstrap = False

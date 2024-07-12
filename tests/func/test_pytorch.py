@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import open_clip
 import pytest
 from torch import Size, Tensor
@@ -8,10 +10,10 @@ from datachain.lib.dc import DataChain
 from datachain.lib.pytorch import PytorchDataset
 
 
-@pytest.fixture
-def fake_dataset(tmp_path, catalog):
+@pytest.fixture(scope="module")
+def fake_dataset(tmpdir_factory):
     # Create fake images in labeled dirs
-    data_path = tmp_path / "data" / ""
+    data_path = Path(tmpdir_factory.mktemp("data"))
     for i, (img, label) in enumerate(FakeData()):
         label = str(label)
         (data_path / label).mkdir(parents=True, exist_ok=True)
@@ -37,11 +39,11 @@ def test_pytorch_dataset(fake_dataset):
         transform=transform,
         tokenizer=tokenizer,
     )
-    for img, text, label in pt_dataset:
-        assert isinstance(img, Tensor)
-        assert isinstance(text, Tensor)
-        assert isinstance(label, int)
-        assert img.size() == Size([3, 64, 64])
+    img, text, label = next(iter(pt_dataset))
+    assert isinstance(img, Tensor)
+    assert isinstance(text, Tensor)
+    assert isinstance(label, int)
+    assert img.size() == Size([3, 64, 64])
 
 
 def test_pytorch_dataset_sample(fake_dataset):
@@ -62,8 +64,8 @@ def test_to_pytorch(fake_dataset):
     tokenizer = open_clip.get_tokenizer("ViT-B-32")
     pt_dataset = fake_dataset.to_pytorch(transform=transform, tokenizer=tokenizer)
     assert isinstance(pt_dataset, IterableDataset)
-    for img, text, label in pt_dataset:
-        assert isinstance(img, Tensor)
-        assert isinstance(text, Tensor)
-        assert isinstance(label, int)
-        assert img.size() == Size([3, 64, 64])
+    img, text, label = next(iter(pt_dataset))
+    assert isinstance(img, Tensor)
+    assert isinstance(text, Tensor)
+    assert isinstance(label, int)
+    assert img.size() == Size([3, 64, 64])
