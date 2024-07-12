@@ -39,8 +39,6 @@ if TYPE_CHECKING:
     import pandas as pd
     from typing_extensions import Self
 
-    from datachain.catalog import Catalog
-
 C = Column
 
 
@@ -205,7 +203,7 @@ class DataChain(DatasetQuery):
         path,
         *,
         type: Literal["binary", "text", "image"] = "binary",
-        catalog: Optional["Catalog"] = None,
+        session: Optional[Session] = None,
         recursive: Optional[bool] = True,
         anon: bool = False,
         object_name: str = "file",
@@ -219,7 +217,7 @@ class DataChain(DatasetQuery):
             type : read file as "binary", "text", or "image" data. Default is "binary".
             recursive : search recursively for the given path.
             anon : use anonymous mode to access the storage.
-            object_name : Generated object column name.
+            object_name : Created object column name.
 
         Example:
             ```py
@@ -227,7 +225,7 @@ class DataChain(DatasetQuery):
             ```
         """
         func = get_file(type)
-        return cls(path, catalog=catalog, recursive=recursive, anon=anon).map(
+        return cls(path, session=session, recursive=recursive, anon=anon).map(
             **{object_name: func}
         )
 
@@ -767,7 +765,7 @@ class DataChain(DatasetQuery):
             header : Whether the files include a header row.
             column_names : Column names if no header. Implies `header = False`.
             output : Dictionary defining column names and their corresponding types.
-            object_name : Generated object column name.
+            object_name : Created object column name.
 
         Examples:
             Reading a csv file:
@@ -816,7 +814,7 @@ class DataChain(DatasetQuery):
             anon : Use anonymous mode to access the storage.
             partitioning : Any pyarrow partitioning schema.
             output : Dictionary defining column names and their corresponding types.
-            object_name : Generated object column name.
+            object_name : Created object column name.
 
         Examples:
             Reading a single file:
