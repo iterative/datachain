@@ -10,6 +10,7 @@ from typing import (
     Union,
 )
 
+import pandas as pd
 import sqlalchemy
 
 from datachain.lib.feature import Feature, FeatureType
@@ -36,7 +37,6 @@ from datachain.query.dataset import (
 from datachain.query.schema import Column, DatasetRow
 
 if TYPE_CHECKING:
-    import pandas as pd
     from typing_extensions import Self
 
     from datachain.catalog import Catalog
@@ -738,6 +738,15 @@ class DataChain(DatasetQuery):
                 )
 
         return cls.from_features(name, session, **fr_map)
+
+    def to_pandas(self, levels: bool = True) -> "pd.DataFrame":
+        if not levels:
+            return super().to_pandas()
+
+        headers = self.signals_schema.get_headers()
+        transposed_result = list(map(list, zip(*self.results())))
+        data = {tuple(n): val for n, val in zip(headers, transposed_result)}
+        return pd.DataFrame(data)
 
     def parse_tabular(
         self,

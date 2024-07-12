@@ -784,3 +784,7 @@ def test_extend_features(catalog):
 
     res = dc._extend_features("sum", "num")
     assert res == sum(range(len(features)))
+
+
+def test_to_pandas():
+    pass

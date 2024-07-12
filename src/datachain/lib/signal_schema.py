@@ -309,6 +309,16 @@ class SignalSchema:
                     sub_schema = SignalSchema({"* list of": args[0]})
                     sub_schema.print_tree(indent=indent, start_at=total_indent + indent)
 
+    def get_headers(self):
+        paths = [
+            path for path, _, has_subtree, _ in self.get_flat_tree() if not has_subtree
+        ]
+        max_length = max(len(path) for path in paths)
+        return [
+            path + [""] * (max_length - len(path)) if len(path) < max_length else path
+            for path in paths
+        ]
+
     @staticmethod
     def _type_to_str(type_):
         if get_origin(type_) == Union:
