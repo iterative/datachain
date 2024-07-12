@@ -42,6 +42,14 @@ def monkeypatch_session() -> Generator[MonkeyPatch, None, None]:
     mpatch.undo()
 
 
+@pytest.fixture(autouse=True)
+def clean_session() -> None:
+    """
+    Make sure we clean leftover session before each test case
+    """
+    Session.cleanup_for_tests()
+
+
 @pytest.fixture(scope="session", autouse=True)
 def clean_environment(
     monkeypatch_session: MonkeyPatch,

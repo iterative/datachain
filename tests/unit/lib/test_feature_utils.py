@@ -1,9 +1,16 @@
+from enum import Enum
 from typing import get_args, get_origin
 
 import pytest
+from pydantic import BaseModel
 
 from datachain.lib.dc import DataChain
-from datachain.lib.feature_utils import FeatureToTupleError, features_to_tuples
+from datachain.lib.feature import Feature
+from datachain.lib.feature_utils import (
+    FeatureToTupleError,
+    features_to_tuples,
+    pydantic_to_feature,
+)
 from datachain.query.schema import Column
 
 
@@ -104,3 +111,32 @@ def test_resolve_column():
 def test_resolve_column_attr():
     signal = Column.hello.world.again
     assert signal.name == "hello__world__again"
+
+
+def test_to_feature_list_of_lists():
+    class MyName1(BaseModel):
+        id: int
+        name: str
+
+    class Mytest2(BaseModel):
+        loc: str
+        identity: list[list[MyName1]]
+
+    cls = pydantic_to_feature(Mytest2)
+
+    assert issubclass(cls, Feature)
+
+
+def test_to_feature_function():
+    class MyEnum(str, Enum):
+        func = "function"
+
+    class MyCall(BaseModel):
+        id: str
+        type: MyEnum
+
+    cls = pydantic_to_feature(MyCall)
+    assert issubclass(cls, Feature)
+
+    type_ = cls.model_fields["type"].annotation
+    assert type_ is str

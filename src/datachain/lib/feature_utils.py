@@ -1,5 +1,7 @@
+import inspect
 import string
 from collections.abc import Sequence
+from enum import Enum
 from typing import Any, Union, get_args, get_origin
 
 from pydantic import BaseModel, create_model
@@ -35,23 +37,7 @@ def pydantic_to_feature(data_cls: type[BaseModel]) -> type[Feature]:
     for name, field_info in data_cls.model_fields.items():
         anno = field_info.annotation
         if anno not in TYPE_TO_DATACHAIN:
-            orig = get_origin(anno)
-            if orig is list:
-                anno = get_args(anno)  # type: ignore[assignment]
-                if isinstance(anno, Sequence):
-                    anno = anno[0]  # type: ignore[unreachable]
-                is_list = True
-            else:
-                is_list = False
-
-            try:
-                convert_type_to_datachain(anno)
-            except TypeError:
-                if not Feature.is_feature(anno):  # type: ignore[arg-type]
-                    anno = pydantic_to_feature(anno)  # type: ignore[arg-type]
-
-            if is_list:
-                anno = list[anno]  # type: ignore[valid-type]
+            anno = _to_feature_type(anno)
         fields[name] = (anno, field_info.default)
 
     cls = create_model(
@@ -61,6 +47,38 @@ def pydantic_to_feature(data_cls: type[BaseModel]) -> type[Feature]:
     )
     feature_cache[data_cls] = cls
     return cls
+
+
+def _to_feature_type(anno):
+    if inspect.isclass(anno) and issubclass(anno, Enum):
+        return str
+
+    orig = get_origin(anno)
+    if orig is list:
+        anno = get_args(anno)  # type: ignore[assignment]
+        if isinstance(anno, Sequence):
+            anno = anno[0]  # type: ignore[unreachable]
+        is_list = True
+    else:
+        is_list = False
+
+    try:
+        convert_type_to_datachain(anno)
+    except TypeError:
+        if not Feature.is_feature(anno):  # type: ignore[arg-type]
+            orig = get_origin(anno)
+            if orig in TYPE_TO_DATACHAIN:
+                anno = _to_feature_type(anno)
+            else:
+                if orig == Union:
+                    args = get_args(anno)
+                    if len(args) == 2 and (type(None) in args):
+                        return _to_feature_type(args[0])
+
+                anno = pydantic_to_feature(anno)  # type: ignore[arg-type]
+    if is_list:
+        anno = list[anno]  # type: ignore[valid-type]
+    return anno
 
 
 def dict_to_feature(name: str, data_dict: dict[str, FeatureType]) -> type[Feature]:
