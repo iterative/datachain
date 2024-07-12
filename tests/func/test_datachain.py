@@ -16,7 +16,7 @@ def test_catalog_anon(catalog, anon):
 
 def test_from_storage(cloud_test_catalog):
     ctc = cloud_test_catalog
-    dc = DataChain.from_storage(ctc.src_uri, session=ctc.session)
+    dc = DataChain.from_storage(ctc.src_uri, catalog=ctc.catalog)
     assert dc.count() == 7
 
 
@@ -27,7 +27,7 @@ def test_map_file(cloud_test_catalog):
         with file.open() as f:
             return file.name + " -> " + f.read().decode("utf-8")
 
-    dc = DataChain.from_storage(ctc.src_uri, session=ctc.session).map(signal=new_signal)
+    dc = DataChain.from_storage(ctc.src_uri, catalog=ctc.catalog).map(signal=new_signal)
     expected = {
         "description -> Cats and Dogs",
         "cat1 -> meow",
