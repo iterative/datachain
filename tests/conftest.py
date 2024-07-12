@@ -332,6 +332,7 @@ class CloudTestCatalog:
     server: CloudServer
     working_dir: PosixPath
     catalog: Catalog
+    session: Session
 
     @property
     def src(self):
@@ -432,7 +433,10 @@ def get_cloud_test_catalog(cloud_server, tmp_path, id_generator, metastore, ware
         tmp_dir=str(tmpfile_dir),
         client_config=cloud_server.client_config,
     )
-    return CloudTestCatalog(server=cloud_server, working_dir=tmp_path, catalog=catalog)
+    session = Session.get(catalog=catalog)
+    return CloudTestCatalog(
+        server=cloud_server, working_dir=tmp_path, catalog=catalog, session=session
+    )
 
 
 @pytest.fixture
