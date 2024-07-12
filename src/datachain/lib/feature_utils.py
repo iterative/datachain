@@ -1,17 +1,16 @@
 import inspect
 import string
 from collections.abc import Sequence
-from enum import Enum
-from typing import Annotated, Any, Literal, Optional, Union, get_args, get_origin
+from typing import Any, Literal, Union, get_args, get_origin
 
 from pydantic import BaseModel, create_model
 from typing_extensions import Literal as LiteralEx
 
 from datachain.lib.feature import (
-    TYPE_TO_DATACHAIN,
     Feature,
     FeatureType,
     FeatureTypeNames,
+    convert_type_to_datachain,
 )
 from datachain.lib.utils import DataChainParamsError
 
@@ -47,49 +46,23 @@ def pydantic_to_feature(data_cls: type[BaseModel]) -> type[Feature]:
     return cls
 
 
-def _to_feature_type(anno):  # noqa: PLR0911
+def _to_feature_type(anno):
     if anno in feature_cache:
         return feature_cache[anno]
 
-    if anno in TYPE_TO_DATACHAIN:
-        return anno
-
-    if anno is type(None):
-        return type(None)
+    if inspect.isclass(anno) and issubclass(anno, BaseModel):
+        return pydantic_to_feature(anno)
 
     orig = get_origin(anno)
     args = get_args(anno)
+    if args and orig not in (Literal, LiteralEx):
+        # recursively get features from each arg
+        anno = orig[tuple(_to_feature_type(arg) for arg in args)]
 
-    if orig in (Literal, LiteralEx):
-        return str
+    # check that type can be converted
+    convert_type_to_datachain(anno)
 
-    if orig is Optional:
-        return Optional[_to_feature_type(args[0])]
-
-    if orig is Annotated:
-        # Ignoring annotations
-        return _to_feature_type(args[0])
-
-    if orig is list:
-        if len(args) > 1:
-            raise TypeError(
-                "type conversion error: list is suppose to have only 1 value"
-            )
-        return list[_to_feature_type(args[0])]
-
-    if orig == Union:
-        vals = [_to_feature_type(arg) for arg in args]
-        return Union[tuple(vals)]
-
-    if inspect.isclass(anno):
-        if issubclass(anno, BaseModel):
-            return pydantic_to_feature(anno)
-        if issubclass(anno, Enum):
-            return str
-        if anno is object:
-            return object
-
-    raise TypeError(f"Cannot recognize type {anno}")
+    return anno
 
 
 def features_to_tuples(

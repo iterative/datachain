@@ -139,4 +139,4 @@ def test_to_feature_function():
     assert issubclass(cls, Feature)
 
     type_ = cls.model_fields["type"].annotation
-    assert type_ is str
+    assert type_ is MyEnum
