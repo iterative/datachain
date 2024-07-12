@@ -726,23 +726,13 @@ class DataChain(DatasetQuery):
             >>> dc = dc.filter(C("file.name").glob("*.jsonl"))
             >>> dc = dc.parse_tabular(format="json")
         """
-        from pyarrow import unify_schemas
-        from pyarrow.dataset import dataset
 
-        from datachain.lib.arrow import ArrowGenerator, schema_to_output
+        from datachain.lib.arrow import ArrowGenerator, infer_schema, schema_to_output
 
         schema = None
         if not output:
-            schemas = []
-            for row in self.select("file").iterate():
-                file = row[0]
-                ds = dataset(file.get_path(), filesystem=file.get_fs(), **kwargs)  # type: ignore[union-attr]
-                schemas.append(ds.schema)
-            if not schemas:
-                msg = "error parsing tabular data schema - found no files to parse"
-                raise DatasetPrepareError(self.name, msg)
-            schema = unify_schemas(schemas)
             try:
+                schema = infer_schema(self, **kwargs)
                 output = schema_to_output(schema)
             except ValueError as e:
                 raise DatasetPrepareError(self.name, e) from e
