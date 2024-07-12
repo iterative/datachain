@@ -314,7 +314,8 @@ Chain results can be exported or passed directly to Pytorch dataloader. For exam
 Tutorials
 ------------------
 
-* `Multimodal <examples/multimodal/clip_fine_tuning.ipynb>`_ (try in `Colab <https://colab.research.google.com/github/iterative/dvclive/blob/main/examples/multimodal/clip_fine_tuning.ipynb>`__)
+* `Computer Vision <examples/computer_vision/fashion_product_images/1-quick-start.ipynb>`_ (try in `Colab <https://colab.research.google.com/github/iterative/datachain/blob/main/examples/computer_vision/fashion_product_images/1-quick-start.ipynb>`__)
+* `Multimodal <examples/multimodal/clip_fine_tuning.ipynb>`_ (try in `Colab <https://colab.research.google.com/github/iterative/datachain/blob/main/examples/multimodal/clip_fine_tuning.ipynb>`__)
 
 Contributions
 --------------------
