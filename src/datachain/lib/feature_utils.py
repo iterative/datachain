@@ -22,7 +22,7 @@ SUFFIX_SYMBOLS = string.digits + string.ascii_lowercase
 class FeatureToTupleError(DataChainParamsError):
     def __init__(self, ds_name, msg):
         if ds_name:
-            ds_name = f"' {ds_name}'"
+            ds_name = f" '{ds_name}'"
         super().__init__(f"Cannot convert features for dataset{ds_name}: {msg}")
 
 
@@ -86,31 +86,6 @@ def features_to_tuples(
     output: Union[None, FeatureType, Sequence[str], dict[str, FeatureType]] = None,
     **fr_map,
 ) -> tuple[Any, Any, Any]:
-    types_map = {}
-    length = -1
-    for k, v in fr_map.items():
-        if not isinstance(v, Sequence) or isinstance(v, str):
-            raise FeatureToTupleError(ds_name, f"features '{k}' is not a sequence")
-        len_ = len(v)
-
-        if len_ == 0:
-            raise FeatureToTupleError(ds_name, f"feature '{k}' is empty list")
-
-        if length < 0:
-            length = len_
-        elif length != len_:
-            raise FeatureToTupleError(
-                ds_name,
-                f"feature '{k}' should have length {length} while {len_} is given",
-            )
-        typ = type(v[0])
-        if not Feature.is_feature_type(typ):
-            raise FeatureToTupleError(
-                ds_name,
-                f"feature '{k}' has unsupported type '{typ.__name__}'."
-                f" Please use Feature types: {FeatureTypeNames}",
-            )
-        types_map[k] = typ
     if output:
         if not isinstance(output, Sequence) and not isinstance(output, str):
             if len(fr_map) != 1:
@@ -133,13 +108,39 @@ def features_to_tuples(
                 f"number of outputs '{len(output)}' should match"
                 f" number of features '{len(fr_map)}'",
             )
-        if isinstance(output, dict):
+        if not isinstance(output, dict):
             raise FeatureToTupleError(
                 ds_name,
                 "output type must be dict[str, FeatureType] while "
                 f"'{type(output).__name__}' is given",
             )
     else:
+        types_map = {}
+        length = -1
+        for k, v in fr_map.items():
+            if not isinstance(v, Sequence) or isinstance(v, str):
+                raise FeatureToTupleError(ds_name, f"features '{k}' is not a sequence")
+
+            len_ = len(v)
+            if len_ == 0:
+                raise FeatureToTupleError(ds_name, f"feature '{k}' is empty list")
+
+            if length < 0:
+                length = len_
+            elif length != len_:
+                raise FeatureToTupleError(
+                    ds_name,
+                    f"feature '{k}' should have length {length} while {len_} is given",
+                )
+
+            typ = type(v[0])
+            if not Feature.is_feature_type(typ):
+                raise FeatureToTupleError(
+                    ds_name,
+                    f"feature '{k}' has unsupported type '{typ.__name__}'."
+                    f" Please use Feature types: {FeatureTypeNames}",
+                )
+            types_map[k] = typ
         output = types_map
 
     output_types: list[type] = list(output.values())  # type: ignore[union-attr,arg-type]

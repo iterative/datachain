@@ -12,6 +12,7 @@ from typing import (
 
 import sqlalchemy
 
+from datachain.lib.dataset_registry import Dataset
 from datachain.lib.feature import Feature, FeatureType
 from datachain.lib.feature_utils import features_to_tuples
 from datachain.lib.file import File, IndexedFile, get_file
@@ -40,6 +41,7 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
     from datachain.catalog import Catalog
+    from datachain.job import Job
 
 C = Column
 
@@ -346,6 +348,50 @@ class DataChain(DatasetQuery):
         }
         return chain.gen(**signal_dict)  # type: ignore[arg-type]
 
+    @classmethod
+    def dataset_registry(cls, session: Optional[Session] = None) -> "DataChain":
+        """Generate chain with list of registered datasets.
+
+        Example:
+            ```py
+            from datachain import DataChain
+
+            chain = DataChain.dataset_registry()
+            for ds in chain.iterate_one("dataset"):
+                print(f"{ds.name}@v{ds.version}")
+            ```
+        """
+        session = Session.get(session)
+        catalog = session.catalog
+        registered_datasets = list(catalog.ls_datasets())
+
+        # preselect jobs from db
+        jobs_ids: set[str] = {
+            v.job_id for ds in registered_datasets for v in ds.versions if v.job_id
+        }
+        jobs: dict[str, Job] = {
+            j.id: j for j in catalog.metastore.list_jobs_by_ids(list(jobs_ids))
+        }
+
+        # create list of Dataset features
+        datasets: list[Dataset] = []
+        for d in registered_datasets:
+            datasets.extend(
+                Dataset.from_models(
+                    dataset=d,
+                    version=v,
+                    job=jobs.get(v.job_id) if v.job_id else None,
+                )
+                for v in d.versions
+            )
+
+        return DataChain.from_features(
+            ds_name="dataset_registry",
+            session=session,
+            output=Dataset,
+            dataset=datasets,
+        )
+
     def show_json_schema(  # type: ignore[override]
         self, jmespath: Optional[str] = None, model_name: Optional[str] = None
     ) -> "DataChain":
@@ -573,8 +619,7 @@ class DataChain(DatasetQuery):
     def iterate(self, *cols: str) -> Iterator[list[FeatureType]]:
         """Iterate over rows.
 
-        If columns are specified - limit them to specified
-        columns.
+        If columns are specified - limit them to specified columns.
         """
         chain = self.select(*cols) if cols else self
 

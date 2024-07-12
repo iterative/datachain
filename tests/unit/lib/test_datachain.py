@@ -118,6 +118,19 @@ def test_from_features(catalog):
     )
 
 
+def test_dataset_registry(catalog):
+    ds = DataChain.dataset_registry()
+    datasets = [d for d in ds.iterate_one("dataset") if d.name == "fibonacci"]
+    assert len(datasets) == 0
+
+    DataChain.from_features(fib=[1, 1, 2, 3, 5, 8]).save("fibonacci")
+
+    ds = DataChain.dataset_registry()
+    datasets = [d for d in ds.iterate_one("dataset") if d.name == "fibonacci"]
+    assert len(datasets) == 1
+    assert datasets[0].num_objects == 6
+
+
 def test_preserve_feature_schema(catalog):
     ds = DataChain.create_empty(DataChain.DEFAULT_FILE_RECORD)
     ds = ds.gen(
