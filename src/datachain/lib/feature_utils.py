@@ -1,6 +1,7 @@
 import inspect
 import string
 from collections.abc import Sequence
+from types import GenericAlias
 from typing import Any, Literal, Union, get_args, get_origin
 
 from pydantic import BaseModel, create_model
@@ -50,7 +51,11 @@ def _to_feature_type(anno):
     if anno in feature_cache:
         return feature_cache[anno]
 
-    if inspect.isclass(anno) and issubclass(anno, BaseModel):
+    if (
+        inspect.isclass(anno)
+        and not isinstance(anno, GenericAlias)
+        and issubclass(anno, BaseModel)
+    ):
         return pydantic_to_feature(anno)
 
     orig = get_origin(anno)
