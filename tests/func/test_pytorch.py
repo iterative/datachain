@@ -39,12 +39,11 @@ def test_pytorch_dataset(fake_dataset):
         transform=transform,
         tokenizer=tokenizer,
     )
-    for img, text, label in pt_dataset:
-        assert isinstance(img, Tensor)
-        assert isinstance(text, Tensor)
-        assert isinstance(label, int)
-        assert img.size() == Size([3, 64, 64])
-        break
+    img, text, label = next(iter(pt_dataset))
+    assert isinstance(img, Tensor)
+    assert isinstance(text, Tensor)
+    assert isinstance(label, int)
+    assert img.size() == Size([3, 64, 64])
 
 
 def test_pytorch_dataset_sample(fake_dataset):
@@ -65,9 +64,8 @@ def test_to_pytorch(fake_dataset):
     tokenizer = open_clip.get_tokenizer("ViT-B-32")
     pt_dataset = fake_dataset.to_pytorch(transform=transform, tokenizer=tokenizer)
     assert isinstance(pt_dataset, IterableDataset)
-    for img, text, label in pt_dataset:
-        assert isinstance(img, Tensor)
-        assert isinstance(text, Tensor)
-        assert isinstance(label, int)
-        assert img.size() == Size([3, 64, 64])
-        break
+    img, text, label = next(iter(pt_dataset))
+    assert isinstance(img, Tensor)
+    assert isinstance(text, Tensor)
+    assert isinstance(label, int)
+    assert img.size() == Size([3, 64, 64])
