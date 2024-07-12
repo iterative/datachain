@@ -48,9 +48,6 @@ def pydantic_to_feature(data_cls: type[BaseModel]) -> type[Feature]:
 
 
 def _to_feature_type(anno):
-    if anno in feature_cache:
-        return feature_cache[anno]
-
     if (
         inspect.isclass(anno)
         and not isinstance(anno, GenericAlias)
