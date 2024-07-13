@@ -1,7 +1,6 @@
-import re
-import os
-from tqdm import tqdm
 import multiprocessing
+import os
+import re
 from collections.abc import Iterator, Sequence
 from typing import (
     TYPE_CHECKING,
@@ -14,6 +13,7 @@ from typing import (
 )
 
 import sqlalchemy
+from tqdm import tqdm
 
 from datachain.lib.feature import Feature, FeatureType
 from datachain.lib.feature_utils import features_to_tuples
@@ -948,7 +948,7 @@ class DataChain(DatasetQuery):
             bar_format=bar_format,
             unit_scale=True,
             unit_divisor=1000,
-            total=sum(self.iterate_one(f"{signal}.size")),
+            total=sum(self.iterate_one(f"{signal}.size")),  # type: ignore[ arg-type]
         )
         instantiate_pg = tqdm(
             desc=f"Instantiating {output}: ",
@@ -967,15 +967,18 @@ class DataChain(DatasetQuery):
 
         pg_counter = 0
         for file in self.collect_one(signal):
-            client = fetcher.get_client(file.source)
+            client = fetcher.get_client(file.source)  # type: ignore[union-attr]
 
-            dst = os.path.join(output, file.get_path())
+            dst = os.path.join(output, file.get_path())  # type: ignore[union-attr]
             dst_dir = os.path.dirname(dst)
             os.makedirs(dst_dir, exist_ok=True)
 
             # TODO fix having s3:// in the folder name
             client.instantiate_object(
-                file.get_uid(), dst, instantiate_pg, force=True
+                file.get_uid(),  # type: ignore[union-attr]
+                dst,
+                instantiate_pg,
+                force=True,
             )
             pg_counter += 1
             if pg_counter > 1000:
