@@ -758,7 +758,10 @@ class DataChain(DatasetQuery):
         if flatten:
             return super().to_pandas()
 
-        headers = self.signals_schema.get_headers()
+        headers, max_length = self.signals_schema.get_headers_with_length()
+        if max_length < 2:
+            return super().to_pandas()
+
         transposed_result = list(map(list, zip(*chain.results())))
         data = {tuple(n): val for n, val in zip(headers, transposed_result)}
         return pd.DataFrame(data)
