@@ -1,7 +1,7 @@
 import pytest
 
 from datachain.node import DirType, Node
-from datachain.nodes_thread_pool import NodeChunk
+from datachain.runner_thread_pool import NodeChunk
 
 
 @pytest.fixture
