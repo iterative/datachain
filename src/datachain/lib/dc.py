@@ -127,6 +127,16 @@ class DataChain(DatasetQuery):
         "size": 0,
         "random": 0,
     }
+    LEGACY_COLUMNS: ClassVar[list[str]] = [
+        "source",
+        "parent",
+        "name",
+        "version",
+        "etag",
+        "size",
+        "vtype",
+        "location",
+    ]
 
     def __init__(self, *args, **kwargs):
         """This method needs to be redefined as a part of Dataset and DacaChin
@@ -739,14 +749,28 @@ class DataChain(DatasetQuery):
 
         return cls.from_features(name, session, **fr_map)
 
-    def to_pandas(self, levels: bool = True) -> "pd.DataFrame":
-        if not levels:
+    def to_pandas(self, flatten=False) -> "pd.DataFrame":
+        to_hide = [
+            col for col in self.LEGACY_COLUMNS if col in self.signals_schema.values
+        ]
+        chain = self.select_except(*to_hide) if to_hide else self
+
+        if flatten:
             return super().to_pandas()
 
         headers = self.signals_schema.get_headers()
-        transposed_result = list(map(list, zip(*self.results())))
+        transposed_result = list(map(list, zip(*chain.results())))
         data = {tuple(n): val for n, val in zip(headers, transposed_result)}
         return pd.DataFrame(data)
+
+    def show(self, limit: int = 20, flatten=False, transpose=False) -> None:
+        dc = self.limit(limit) if limit > 0 else self
+        df = dc.to_pandas(flatten)
+        if transpose:
+            df = df.T
+        with pd.option_context("display.max_columns", None):
+            pd.set_option("display.multi_sparse", False)
+            print(df)
 
     def parse_tabular(
         self,
