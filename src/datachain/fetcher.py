@@ -56,7 +56,6 @@ class FileFetcher(RunnerThreadPool):
         for file in chunk:
             uid = file.get_uid()
             if self.cache.contains(uid):
-                # self.increase_counter(file.size)
-                self.increase_counter(1)
+                self.increase_counter(file.size)
             else:
                 self.get_client(file.source).put_in_cache(uid, callback=_CB())
