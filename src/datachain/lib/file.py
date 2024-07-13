@@ -22,8 +22,6 @@ if TYPE_CHECKING:
 
 
 class FileFeature(Feature):
-    _is_file = True
-
     def open(self):
         raise NotImplementedError
 

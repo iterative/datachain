@@ -2,7 +2,7 @@ import copy
 import inspect
 import re
 import warnings
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 from datetime import datetime
 from enum import Enum
 from functools import lru_cache
@@ -123,7 +123,6 @@ class Feature(BaseModel):
     `pydantic`'s BaseModel.
     """
 
-    _is_file: ClassVar[bool] = False
     _version: ClassVar[int] = 1
 
     @classmethod
@@ -166,16 +165,6 @@ class Feature(BaseModel):
 
     def _set_stream(self, catalog: "Catalog", caching_enabled: bool = False) -> None:
         pass
-
-    @classmethod
-    def get_file_signals(cls, path: list[str]) -> Iterable[list[str]]:
-        if cls._is_file:
-            yield path
-
-        for name, f_info in cls.model_fields.items():
-            anno = f_info.annotation
-            if Feature.is_feature(anno):
-                yield from anno.get_file_signals([*path, name])  # type: ignore[union-attr]
 
     @classmethod
     def is_feature(cls, anno) -> bool:

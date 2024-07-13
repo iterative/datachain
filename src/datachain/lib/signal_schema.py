@@ -163,7 +163,7 @@ class SignalSchema:
 
     def contains_file(self) -> bool:
         return any(
-            fr._is_file  # type: ignore[union-attr]
+            issubclass(fr, File)  # type: ignore[union-attr]
             for fr in self.values.values()
             if Feature.is_feature(fr)
         )
