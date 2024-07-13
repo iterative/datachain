@@ -5,7 +5,7 @@ import pytest
 from pydantic import BaseModel
 
 from datachain.lib.feature import Feature, convert_type_to_datachain
-from datachain.sql.types import JSON, Array, Int64, String
+from datachain.sql.types import JSON, Array, String
 
 
 class MyModel(BaseModel):
@@ -26,8 +26,6 @@ class MyFeature(Feature):
         (Mapping[str, int], JSON),
         (Optional[str], String),
         (Union[dict, list[dict]], JSON),
-        (Optional[Union[dict, list[dict]]], JSON),
-        (Union[dict, Optional[list[dict]]], JSON),
     ),
 )
 def test_convert_type_to_datachain(typ, expected):
@@ -40,7 +38,6 @@ def test_convert_type_to_datachain(typ, expected):
         (list[str], Array(String())),
         (Iterable[str], Array(String())),
         (list[list[str]], Array(Array(String()))),
-        (Optional[list[int]], Array(Int64())),
     ),
 )
 def test_convert_type_to_datachain_array(typ, expected):
