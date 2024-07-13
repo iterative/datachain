@@ -30,8 +30,8 @@ from datachain.cache import DataChainCache, UniqueId
 from datachain.client.fileslice import FileSlice, FileWrapper
 from datachain.error import ClientError as DataChainClientError
 from datachain.node import Entry
-from datachain.nodes_fetcher import NodesFetcher
-from datachain.nodes_thread_pool import NodeChunk
+from datachain.fetcher import NodesFetcher
+from datachain.runner_thread_pool import NodeChunk
 from datachain.storage import StorageURI
 
 if TYPE_CHECKING:

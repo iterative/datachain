@@ -1,4 +1,7 @@
 import re
+import os
+from tqdm import tqdm
+import multiprocessing
 from collections.abc import Iterator, Sequence
 from typing import (
     TYPE_CHECKING,
@@ -923,3 +926,60 @@ class DataChain(DatasetQuery):
 
         self._setup = self._setup | kwargs
         return self
+
+    def export_files(self, output: str, signal="file", force: bool = False) -> None:
+        """
+        Method that export all files from chain to some folder
+        """
+        from datachain.fetcher import FileFetcher
+        from datachain.runner_thread_pool import FileChunk
+
+        desc_max_len = max(len(output) + 16, 19)
+
+        bar_format = (
+            "{desc:<"
+            f"{desc_max_len}"
+            "}{percentage:3.0f}%|{bar}| {n_fmt:>5}/{total_fmt:<5} "
+            "[{elapsed}<{remaining}, {rate_fmt:>8}]"
+        )
+        download_pg = tqdm(
+            desc="Downloading files: ",
+            unit="B",
+            bar_format=bar_format,
+            unit_scale=True,
+            unit_divisor=1000,
+            total=sum(self.iterate_one(f"{signal}.size")),
+        )
+        instantiate_pg = tqdm(
+            desc=f"Instantiating {output}: ",
+            unit=" f",
+            bar_format=bar_format,
+            unit_scale=True,
+            unit_divisor=1000,
+            total=self.count(),
+        )
+
+        cache = self.catalog.cache
+
+        fetcher = FileFetcher(self.catalog, multiprocessing.cpu_count(), cache)
+        chunk_gen = FileChunk(cache, self.iterate_one(signal))
+        fetcher.run(chunk_gen, download_pg)
+
+        pg_counter = 0
+        for file in self.collect_one(signal):
+            client = fetcher.get_client(file.source)
+
+            dst = os.path.join(output, file.get_path())
+            dst_dir = os.path.dirname(dst)
+            os.makedirs(dst_dir, exist_ok=True)
+
+            # TODO fix having s3:// in the folder name
+            client.instantiate_object(
+                file.get_uid(), dst, instantiate_pg, force=True
+            )
+            pg_counter += 1
+            if pg_counter > 1000:
+                instantiate_pg.update(pg_counter)
+                pg_counter = 0
+
+        instantiate_pg.update(pg_counter)

@@ -63,7 +63,7 @@ from datachain.error import (
 )
 from datachain.listing import Listing
 from datachain.node import DirType, Node, NodeWithPath
-from datachain.nodes_thread_pool import NodesThreadPool
+from datachain.runner_thread_pool import RunnerThreadPool
 from datachain.remote.studio import StudioClient
 from datachain.sql.types import JSON, Boolean, DateTime, Int, Int64, SQLType, String
 from datachain.storage import Storage, StorageStatus, StorageURI
@@ -145,7 +145,7 @@ class QueryResult(NamedTuple):
     metrics: dict[str, Any]
 
 
-class DatasetRowsFetcher(NodesThreadPool):
+class DatasetRowsFetcher(RunnerThreadPool):
     def __init__(
         self,
         metastore: "AbstractMetastore",
