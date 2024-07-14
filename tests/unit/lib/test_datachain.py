@@ -5,9 +5,9 @@ from collections.abc import Generator, Iterator
 import numpy as np
 import pandas as pd
 import pytest
+from pydantic import BaseModel
 
 from datachain.lib.dc import C, DataChain
-from datachain.lib.feature import VersionedModel
 from datachain.lib.file import File
 from datachain.lib.signal_schema import (
     SignalResolvingError,
@@ -29,12 +29,12 @@ DF_OTHER_DATA = {
 }
 
 
-class MyFr(VersionedModel):
+class MyFr(BaseModel):
     nnn: str
     count: int
 
 
-class MyNested(VersionedModel):
+class MyNested(BaseModel):
     label: str
     fr: MyFr
 
@@ -194,7 +194,7 @@ def test_file_list(catalog):
 
 
 def test_gen(catalog):
-    class _TestFr(VersionedModel):
+    class _TestFr(BaseModel):
         file: File
         sqrt: float
         my_name: str
@@ -221,7 +221,7 @@ def test_gen(catalog):
 
 
 def test_map(catalog):
-    class _TestFr(VersionedModel):
+    class _TestFr(BaseModel):
         sqrt: float
         my_name: str
 
@@ -241,7 +241,7 @@ def test_map(catalog):
 
 
 def test_agg(catalog):
-    class _TestFr(VersionedModel):
+    class _TestFr(BaseModel):
         f: File
         cnt: int
         my_name: str
@@ -269,7 +269,7 @@ def test_agg(catalog):
 
 
 def test_agg_two_params(catalog):
-    class _TestFr(VersionedModel):
+    class _TestFr(BaseModel):
         f: File
         cnt: int
         my_name: str
@@ -325,7 +325,7 @@ def test_agg_simple_iterator_error(catalog):
 
     with pytest.raises(UdfSignatureError):
 
-        class _MyCls(VersionedModel):
+        class _MyCls(BaseModel):
             x: int
 
         def func(key) -> _MyCls:  # type: ignore[misc]
@@ -342,7 +342,7 @@ def test_agg_simple_iterator_error(catalog):
 
 
 def test_agg_tuple_result_iterator(catalog):
-    class _ImageGroup(VersionedModel):
+    class _ImageGroup(BaseModel):
         name: str
         size: int
 
@@ -364,7 +364,7 @@ def test_agg_tuple_result_iterator(catalog):
 
 
 def test_agg_tuple_result_generator(catalog):
-    class _ImageGroup(VersionedModel):
+    class _ImageGroup(BaseModel):
         name: str
         size: int
 

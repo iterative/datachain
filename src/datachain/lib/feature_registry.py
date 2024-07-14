@@ -1,3 +1,4 @@
+import inspect
 import logging
 from typing import Any, ClassVar, Optional
 
@@ -17,7 +18,9 @@ class Registry:
 
     @classmethod
     def get_name(cls, model) -> str:
-        return f"{model.__name__}@{cls.get_version(model)}"
+        if (version := cls.get_version(model)) > 0:
+            return f"{model.__name__}@v{version}"
+        return model.__name__
 
     @classmethod
     def add(cls, fr: type) -> None:
@@ -29,6 +32,12 @@ class Registry:
             full_name = f"{name}@{version}"
             logger.warning("Feature %s is already registered", full_name)
         cls.reg[name][version] = fr
+
+        if issubclass(fr, BaseModel):
+            for f_info in fr.model_fields.values():
+                anno = f_info.annotation
+                if inspect.isclass(anno) and issubclass(anno, BaseModel):
+                    cls.add(anno)
 
     @classmethod
     def get(cls, name: str, version: Optional[int] = None) -> Optional[type]:
@@ -45,12 +54,12 @@ class Registry:
     @classmethod
     def parse_name_version(cls, fullname: str) -> tuple[str, int]:
         name = fullname
-        version = 1
+        version = 0
 
         if "@" in fullname:
             name, version_str = fullname.split("@")
             if version_str.strip() != "":
-                version = int(version_str)
+                version = int(version_str[1:])
 
         return name, version
 

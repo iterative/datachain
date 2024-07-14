@@ -95,6 +95,12 @@ warnings.filterwarnings(
 feature_classes_lookup: dict[type, bool] = {}
 
 
+def registry_list(output: Sequence[FeatureType]):
+    for val in output:
+        if is_feature(val):
+            Registry.add(val)
+
+
 def is_standard_type(t: type) -> bool:
     return any(t is ft or t is get_args(ft)[0] for ft in get_args(FeatureStandardType))
 

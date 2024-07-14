@@ -1,5 +1,6 @@
 import copy
 from collections.abc import Iterator, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union, get_args, get_origin
 
@@ -57,7 +58,13 @@ class SignalResolvingTypeError(SignalResolvingError):
         )
 
 
+@dataclass
 class SignalSchema:
+    values: dict[str, FeatureType]
+    tree: dict[str, Any]
+    setup_func: dict[str, Callable]
+    setup_values: Optional[dict[str, Callable]]
+
     def __init__(
         self,
         values: dict[str, FeatureType],
@@ -123,15 +130,17 @@ class SignalSchema:
                 if not fr:
                     type_name, version = Registry.parse_name_version(type_name)
                     fr = Registry.get(type_name, version)
+
+                    if not fr:
+                        raise SignalSchemaError(
+                            f"cannot deserialize '{signal}': "
+                            f"unregistered type '{type_name}'."
+                            f" Try to register it with `Registry.add({type_name})`."
+                        )
             except TypeError as err:
                 raise SignalSchemaError(
                     f"cannot deserialize '{signal}': {err}"
                 ) from err
-
-            if not fr:
-                raise SignalSchemaError(
-                    f"cannot deserialize '{signal}': unsupported type '{type_name}'"
-                )
             signals[signal] = fr
 
         return SignalSchema(signals)
@@ -152,11 +161,11 @@ class SignalSchema:
         objs = []
         pos = 0
         for name, fr_type in self.values.items():
-            if val := self.setup_values.get(name, None):  # type: ignore[attr-defined]
+            if self.setup_values and (val := self.setup_values.get(name, None)):
                 objs.append(val)
             elif (fr := to_feature(fr_type)) is not None:
                 j, pos = ModelUtil.unflatten_to_json_pos(fr, row, pos)
-                objs.append(fr(**j))
+                objs.append(fr(**j))  # type: ignore[arg-type]
             else:
                 objs.append(row[pos])
                 pos += 1
