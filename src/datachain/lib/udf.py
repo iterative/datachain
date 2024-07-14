@@ -94,7 +94,7 @@ class UDFBase(AbstractUDF):
         return self._catalog
 
     def to_udf_wrapper(self, batch=1) -> "UDFWrapper":
-        udf_wrapper = udf(self.params_spec, self.output_spec, batch=batch)
+        udf_wrapper = udf(self.params_spec, self.output_spec, batch=batch)  # type: ignore[operator]
         return udf_wrapper(self)
 
     def validate_results(self, results, *args, **kwargs):

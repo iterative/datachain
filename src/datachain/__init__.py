@@ -1,5 +1,5 @@
 from datachain.lib.dc import C, DataChain
-from datachain.lib.feature import Feature, FileFeature
+from datachain.lib.feature import FileFeature
 from datachain.lib.file import File, FileError, IndexedFile, TarVFile
 from datachain.lib.image import ImageFile, convert_images
 from datachain.lib.text import convert_text
@@ -17,7 +17,6 @@ __all__ = [
     "Column",
     "DataChain",
     "DataChainError",
-    "Feature",
     "File",
     "FileError",
     "FileFeature",

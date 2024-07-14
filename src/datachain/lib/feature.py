@@ -52,7 +52,7 @@ FeatureStandardType = Union[
     type[datetime],
 ]
 
-FeatureType = Union[BaseModel, FeatureStandardType]
+FeatureType = Union[type[BaseModel], FeatureStandardType]
 FeatureTypeNames = "BaseModel, int, str, float, bool, list, dict, bytes, datetime"
 
 TYPE_TO_DATACHAIN = {
@@ -121,7 +121,7 @@ def is_feature(anno) -> bool:
     return result
 
 
-def to_feature(typ: Optional[Any]) -> Optional[BaseModel]:
+def to_feature(typ: Optional[Any]) -> Optional[type[BaseModel]]:
     if typ is None or not is_feature(typ):
         return None
     return typ
@@ -158,6 +158,21 @@ class VersionedModel(BaseModel):
     @classmethod
     def __pydantic_init_subclass__(cls):
         Registry.add(cls)
+
+
+class FileFeature(VersionedModel):
+    def _set_stream(self, catalog: "Catalog", caching_enabled: bool = False) -> None:
+        pass
+
+    def open(self):
+        raise NotImplementedError
+
+    def read(self):
+        with self.open() as stream:
+            return stream.read()
+
+    def get_value(self):
+        return self.read()
 
 
 class ModelUtil:
@@ -263,24 +278,6 @@ class ModelUtil:
         return cls._unflatten_with_path(model, dump, [])
 
 
-class Feature(BaseModel):
-    """A base class for defining data classes that serve as inputs and outputs for
-    DataChain processing functions like `map()`, `gen()`, etc. Inherits from
-    `pydantic`'s BaseModel.
-    """
-
-    def get_value(self, *args: Any, **kwargs: Any) -> Any:
-        name = self.__class__.__name__
-        raise NotImplementedError(f"get_value() is not defined for feature '{name}'")
-
-    @classmethod
-    def _prefix(cls) -> str:
-        return cls._normalize(cls.__name__)
-
-    def _set_stream(self, catalog: "Catalog", caching_enabled: bool = False) -> None:
-        pass
-
-
 def convert_type_to_datachain(typ):  # noqa: PLR0911
     if inspect.isclass(typ):
         if issubclass(typ, SQLType):
@@ -341,15 +338,3 @@ def _is_json_inside_union(orig, args) -> bool:
         if any(inspect.isclass(arg) and issubclass(arg, BaseModel) for arg in args):
             return True
     return False
-
-
-class FileFeature(VersionedModel):
-    def open(self):
-        raise NotImplementedError
-
-    def read(self):
-        with self.open() as stream:
-            return stream.read()
-
-    def get_value(self):
-        return self.read()

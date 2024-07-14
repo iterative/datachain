@@ -4,7 +4,7 @@ from typing import Literal, Optional, Union
 import pytest
 from pydantic import BaseModel
 
-from datachain.lib.feature import Feature, convert_type_to_datachain
+from datachain.lib.feature import convert_type_to_datachain
 from datachain.sql.types import JSON, Array, String
 
 
@@ -12,7 +12,7 @@ class MyModel(BaseModel):
     val1: str
 
 
-class MyFeature(Feature):
+class MyFeature(BaseModel):
     val1: str
 
 

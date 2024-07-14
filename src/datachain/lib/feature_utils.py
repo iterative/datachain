@@ -79,10 +79,10 @@ def features_to_tuples(
                 f"'{type(output).__name__}' is given",
             )
     else:
-        output = types_map
+        output = types_map  # type: ignore[assignment]
 
-    output_types: list[type] = list(output.values())  # type: ignore[union-attr,arg-type]
-    if len(output) > 1:
+    output_types: list[type] = list(output.values())  # type: ignore[union-attr,call-arg,arg-type]
+    if len(output) > 1:  # type: ignore[arg-type]
         tuple_type = tuple(output_types)
         res_type = tuple[tuple_type]  # type: ignore[valid-type]
         res_values = list(zip(*fr_map.values()))

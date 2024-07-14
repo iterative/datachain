@@ -11,6 +11,7 @@ from datachain.lib.feature import (
     build_tree,
     convert_type_to_datachain,
     is_feature,
+    to_feature,
 )
 from datachain.lib.feature_registry import Registry
 from datachain.lib.file import File
@@ -99,15 +100,15 @@ class SignalSchema:
     def serialize(self) -> dict[str, str]:
         signals = {}
         for name, fr_type in self.values.items():
-            if is_feature(fr_type):
-                signals[name] = Registry.get_name(fr_type)  # type: ignore[union-attr]
+            if (fr := to_feature(fr_type)) is not None:
+                signals[name] = Registry.get_name(fr)
             else:
                 orig = get_origin(fr_type)
                 args = get_args(fr_type)
                 # Check if fr_type is Optional
                 if orig == Union and len(args) == 2 and (type(None) in args):
                     fr_type = args[0]
-                signals[name] = fr_type.__name__
+                signals[name] = str(fr_type.__name__)  # type: ignore[union-attr]
         return signals
 
     @staticmethod
@@ -153,20 +154,20 @@ class SignalSchema:
         for name, fr_type in self.values.items():
             if val := self.setup_values.get(name, None):  # type: ignore[attr-defined]
                 objs.append(val)
-            elif is_feature(fr_type):
-                j, pos = ModelUtil.unflatten_to_json_pos(fr_type, row, pos)  # type: ignore[union-attr]
-                objs.append(fr_type(**j))
+            elif (fr := to_feature(fr_type)) is not None:
+                j, pos = ModelUtil.unflatten_to_json_pos(fr, row, pos)
+                objs.append(fr(**j))
             else:
                 objs.append(row[pos])
                 pos += 1
         return objs  # type: ignore[return-value]
 
     def contains_file(self) -> bool:
-        return any(
-            issubclass(fr, File)  # type: ignore[union-attr]
-            for fr in self.values.values()
-            if is_feature(fr)
-        )
+        for type_ in self.values.values():
+            if (fr := to_feature(type_)) is not None and issubclass(fr, File):
+                return True
+
+        return False
 
     def slice(
         self, keys: Sequence[str], setup: Optional[dict[str, Callable]] = None
@@ -181,12 +182,12 @@ class SignalSchema:
         res = []
         pos = 0
         for fr_cls in self.values.values():
-            if not is_feature(fr_cls):
+            if (fr := to_feature(fr_cls)) is None:
                 res.append(row[pos])
                 pos += 1
             else:
-                json, pos = ModelUtil.unflatten_to_json_pos(fr_cls, row, pos)  # type: ignore[union-attr]
-                obj = fr_cls(**json)
+                json, pos = ModelUtil.unflatten_to_json_pos(fr, row, pos)  # type: ignore[union-attr]
+                obj = fr(**json)
                 if isinstance(obj, File):
                     obj._set_stream(catalog)
                 res.append(obj)

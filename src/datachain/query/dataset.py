@@ -31,6 +31,7 @@ import sqlalchemy
 from attrs import frozen
 from dill import dumps, source
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback, TqdmCallback
+from pydantic import BaseModel
 from sqlalchemy import Column
 from sqlalchemy.sql import func as f
 from sqlalchemy.sql.elements import ColumnClause, ColumnElement
@@ -1876,9 +1877,9 @@ def _random_string(length: int) -> str:
 
 
 def _feature_predicate(obj):
-    from datachain.lib.feature import Feature
-
-    return inspect.isclass(obj) and source.isfrommain(obj) and issubclass(obj, Feature)
+    return (
+        inspect.isclass(obj) and source.isfrommain(obj) and issubclass(obj, BaseModel)
+    )
 
 
 def _imports(obj):

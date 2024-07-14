@@ -2,14 +2,14 @@ import math
 from typing import Optional
 
 import pytest
+from pydantic import BaseModel
 
 from datachain.lib.dc import DataChain, DatasetMergeError
-from datachain.lib.feature import Feature
 from datachain.lib.signal_schema import SignalResolvingError
 from datachain.sql.types import Float, String
 
 
-class TestUser(Feature):
+class TestUser(BaseModel):
     name: Optional[str] = None
     age: Optional[int] = None
 
@@ -19,12 +19,12 @@ class TestPlayer(TestUser):
     height: Optional[int] = None
 
 
-class TestEmployee(Feature):
+class TestEmployee(BaseModel):
     id: Optional[int] = None
     person: TestUser
 
 
-class TestTeamMember(Feature):
+class TestTeamMember(BaseModel):
     player: Optional[str] = None
     sport: Optional[str] = None
     weight: Optional[float] = None
