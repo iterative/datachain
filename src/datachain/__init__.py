@@ -1,7 +1,7 @@
 from datachain.lib.dc import C, DataChain
-from datachain.lib.feature import Feature
+from datachain.lib.feature import Feature, FileFeature
 from datachain.lib.feature_utils import pydantic_to_feature
-from datachain.lib.file import File, FileError, FileFeature, IndexedFile, TarVFile
+from datachain.lib.file import File, FileError, IndexedFile, TarVFile
 from datachain.lib.image import ImageFile, convert_images
 from datachain.lib.text import convert_text
 from datachain.lib.udf import Aggregator, Generator, Mapper

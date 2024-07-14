@@ -1,6 +1,8 @@
 import logging
 from typing import Any, ClassVar, Optional
 
+from pydantic import BaseModel
+
 logger = logging.getLogger(__name__)
 
 
@@ -8,13 +10,21 @@ class Registry:
     reg: ClassVar[dict[str, dict[int, Any]]] = {}
 
     @classmethod
+    def get_version(cls, model: type[BaseModel]) -> int:
+        if not hasattr(model, "_version"):
+            return 0
+        return model._version
+
+    @classmethod
+    def get_name(cls, model) -> str:
+        return f"{model.__name__}@{cls.get_version(model)}"
+
+    @classmethod
     def add(cls, fr: type) -> None:
-        if fr._is_hidden():  # type: ignore[attr-defined]
-            return
         name = fr.__name__
         if name not in cls.reg:
             cls.reg[name] = {}
-        version = fr._version  # type: ignore[attr-defined]
+        version = Registry.get_version(fr)
         if version in cls.reg[name]:
             full_name = f"{name}@{version}"
             logger.warning("Feature %s is already registered", full_name)

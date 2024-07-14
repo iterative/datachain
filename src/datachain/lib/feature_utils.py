@@ -12,6 +12,8 @@ from datachain.lib.feature import (
     FeatureType,
     FeatureTypeNames,
     convert_type_to_datachain,
+    is_feature,
+    is_feature_type,
 )
 from datachain.lib.utils import DataChainParamsError
 
@@ -65,7 +67,7 @@ def _to_feature_type(anno):
     try:
         convert_type_to_datachain(anno)
     except TypeError:
-        if not Feature.is_feature(anno):  # type: ignore[arg-type]
+        if not is_feature(anno):  # type: ignore[arg-type]
             orig = get_origin(anno)
             if orig in TYPE_TO_DATACHAIN:
                 anno = _to_feature_type(anno)
@@ -104,7 +106,7 @@ def features_to_tuples(
                 f"feature '{k}' should have length {length} while {len_} is given",
             )
         typ = type(v[0])
-        if not Feature.is_feature_type(typ):
+        if not is_feature_type(typ):
             raise FeatureToTupleError(
                 ds_name,
                 f"feature '{k}' has unsupported type '{typ.__name__}'."

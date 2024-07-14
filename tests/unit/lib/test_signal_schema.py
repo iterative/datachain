@@ -3,7 +3,7 @@ from typing import Optional, Union
 
 import pytest
 
-from datachain.lib.feature import Feature
+from datachain.lib.feature import ModelUtil, VersionedModel
 from datachain.lib.file import File
 from datachain.lib.signal_schema import (
     SetupError,
@@ -25,12 +25,12 @@ def nested_file_schema():
     return SignalSchema(schema)
 
 
-class MyType1(Feature):
+class MyType1(VersionedModel):
     aa: int
     bb: str
 
 
-class MyType2(Feature):
+class MyType2(VersionedModel):
     name: str
     deep: MyType1
 
@@ -199,13 +199,13 @@ def test_get_file_signals_nested(nested_file_schema):
 
 
 def test_create_model():
-    class MyFr(Feature):
+    class MyFr(VersionedModel):
         count: int
 
     spec = {"name": str, "age": float, "fr": MyFr}
     cls = SignalSchema(spec).create_model("TestModel")
 
-    assert isinstance(cls, type(Feature))
+    assert isinstance(cls, type(VersionedModel))
 
     res = {}
     for k, f_info in cls.model_fields.items():
@@ -265,7 +265,7 @@ def test_row_to_objs():
     schema = SignalSchema(spec)
 
     val = MyType2(name="Fred", deep=MyType1(aa=129, bb="qwe"))
-    row = ("myname", 12.5, *val._flatten())
+    row = ("myname", 12.5, *ModelUtil.flatten(val))
 
     res = schema.row_to_objs(row)
 
@@ -279,7 +279,7 @@ def test_row_to_objs_setup():
     schema = SignalSchema(spec, setup)
 
     val = MyType2(name="Fred", deep=MyType1(aa=129, bb="qwe"))
-    row = ("myname", 12.5, *val._flatten())
+    row = ("myname", 12.5, *ModelUtil.flatten(val))
 
     res = schema.row_to_objs(row)
     assert res == ["myname", 12.5, setup_value, val]

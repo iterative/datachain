@@ -8,9 +8,12 @@ from pydantic import create_model
 from datachain.lib.feature import (
     DATACHAIN_TO_TYPE,
     DEFAULT_DELIMITER,
-    Feature,
     FeatureType,
+    ModelUtil,
+    VersionedModel,
+    build_tree,
     convert_type_to_datachain,
+    is_feature,
 )
 from datachain.lib.feature_registry import Registry
 from datachain.lib.file import File
@@ -99,8 +102,8 @@ class SignalSchema:
     def serialize(self) -> dict[str, str]:
         signals = {}
         for name, fr_type in self.values.items():
-            if Feature.is_feature(fr_type):
-                signals[name] = fr_type._name()  # type: ignore[union-attr]
+            if is_feature(fr_type):
+                signals[name] = Registry.get_name(fr_type)  # type: ignore[union-attr]
             else:
                 orig = get_origin(fr_type)
                 args = get_args(fr_type)
@@ -153,8 +156,8 @@ class SignalSchema:
         for name, fr_type in self.values.items():
             if val := self.setup_values.get(name, None):  # type: ignore[attr-defined]
                 objs.append(val)
-            elif Feature.is_feature(fr_type):
-                j, pos = fr_type._unflatten_to_json_pos(row, pos)  # type: ignore[union-attr]
+            elif is_feature(fr_type):
+                j, pos = ModelUtil.unflatten_to_json_pos(fr_type, row, pos)  # type: ignore[union-attr]
                 objs.append(fr_type(**j))
             else:
                 objs.append(row[pos])
@@ -165,7 +168,7 @@ class SignalSchema:
         return any(
             issubclass(fr, File)  # type: ignore[union-attr]
             for fr in self.values.values()
-            if Feature.is_feature(fr)
+            if is_feature(fr)
         )
 
     def slice(
@@ -181,11 +184,11 @@ class SignalSchema:
         res = []
         pos = 0
         for fr_cls in self.values.values():
-            if not Feature.is_feature(fr_cls):
+            if not is_feature(fr_cls):
                 res.append(row[pos])
                 pos += 1
             else:
-                json, pos = fr_cls._unflatten_to_json_pos(row, pos)  # type: ignore[union-attr]
+                json, pos = ModelUtil.unflatten_to_json_pos(fr_cls, row, pos)  # type: ignore[union-attr]
                 obj = fr_cls(**json)
                 if isinstance(obj, File):
                     obj._set_stream(catalog)
@@ -265,12 +268,12 @@ class SignalSchema:
             if has_subtree and issubclass(type_, File):
                 yield ".".join(path)
 
-    def create_model(self, name: str) -> type[Feature]:
+    def create_model(self, name: str) -> type[VersionedModel]:
         fields = {key: (value, None) for key, value in self.values.items()}
 
         return create_model(
             name,
-            __base__=(Feature,),  # type: ignore[call-overload]
+            __base__=(VersionedModel,),  # type: ignore[call-overload]
             **fields,
         )
 
@@ -279,8 +282,7 @@ class SignalSchema:
         res = {}
 
         for name, val in values.items():
-            subtree = val.build_tree() if Feature.is_feature(val) else None  # type: ignore[union-attr]
-            res[name] = (val, subtree)
+            res[name] = (val, build_tree(val))
 
         return res
 
@@ -305,7 +307,7 @@ class SignalSchema:
 
             if get_origin(type_) is list:
                 args = get_args(type_)
-                if len(args) > 0 and Feature.is_feature(args[0]):
+                if len(args) > 0 and is_feature(args[0]):
                     sub_schema = SignalSchema({"* list of": args[0]})
                     sub_schema.print_tree(indent=indent, start_at=total_indent + indent)
 
