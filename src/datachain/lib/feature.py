@@ -345,23 +345,31 @@ def convert_type_to_datachain(typ):  # noqa: PLR0911
     if inspect.isclass(orig) and issubclass(dict, orig):
         return JSON
 
-    if orig == Union and len(args) == 2 and (type(None) in args):
-        return convert_type_to_datachain(args[0])
+    if orig == Union:
+        if len(args) == 2 and (type(None) in args):
+            return convert_type_to_datachain(args[0])
 
-    # Special case for list in JSON: Union[dict, list[dict]]
+        if _is_json_inside_union(orig, args):
+            return JSON
+
+    raise TypeError(f"Cannot recognize type {typ}")
+
+
+def _is_json_inside_union(orig, args) -> bool:
     if orig == Union and len(args) >= 2:
+        # List in JSON: Union[dict, list[dict]]
         args_no_nones = [arg for arg in args if arg != type(None)]
         if len(args_no_nones) == 2:
             args_no_dicts = [arg for arg in args_no_nones if arg is not dict]
             if len(args_no_dicts) == 1 and get_origin(args_no_dicts[0]) is list:
                 arg = get_args(args_no_dicts[0])
                 if len(arg) == 1 and arg[0] is dict:
-                    return JSON
+                    return True
 
+        # List of objects: Union[MyClass, OtherClass]
         if any(inspect.isclass(arg) and issubclass(arg, BaseModel) for arg in args):
-            return JSON
-
-    raise TypeError(f"Cannot recognize type {typ}")
+            return True
+    return False
 
 
 class FileFeature(VersionedModel):
