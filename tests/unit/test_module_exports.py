@@ -13,7 +13,6 @@ def test_module_exports():
             Column,
             DataChain,
             DataChainError,
-            Feature,
             File,
             FileError,
             FileFeature,
@@ -23,9 +22,9 @@ def test_module_exports():
             Mapper,
             Session,
             TarVFile,
+            VersionedModel,
             convert_images,
             convert_text,
-            pydantic_to_feature,
         )
     except Exception as e:  # noqa: BLE001
         pytest.fail(f"Importing raised an exception: {e}")
