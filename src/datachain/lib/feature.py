@@ -57,7 +57,6 @@ FeatureStandardType = Union[
 FeatureType = Union[BaseModel, FeatureStandardType]
 FeatureTypeNames = "BaseModel, int, str, float, bool, list, dict, bytes, datetime"
 
-
 TYPE_TO_DATACHAIN = {
     int: Int64,
     str: String,
@@ -85,7 +84,6 @@ DATACHAIN_TO_TYPE = {
     JSON: dict,
 }
 
-
 NUMPY_TO_DATACHAIN = {
     np.dtype("int8"): Int,
     np.dtype("int16"): Int,
@@ -102,14 +100,12 @@ NUMPY_TO_DATACHAIN = {
     pd.CategoricalDtype(): String,
 }
 
-
 # Disable Pydantic warning, see https://github.com/iterative/dvcx/issues/1285
 warnings.filterwarnings(
     "ignore",
     message="Field name .* shadows an attribute in parent",
     category=UserWarning,
 )
-
 
 # Optimization: Store feature classes in this lookup variable so extra checks can be
 # skipped within loops.
@@ -361,6 +357,9 @@ def convert_type_to_datachain(typ):  # noqa: PLR0911
                 arg = get_args(args_no_dicts[0])
                 if len(arg) == 1 and arg[0] is dict:
                     return JSON
+
+        if any(inspect.isclass(arg) and issubclass(arg, BaseModel) for arg in args):
+            return JSON
 
     raise TypeError(f"Cannot recognize type {typ}")
 
