@@ -18,8 +18,6 @@ from typing import (
     get_origin,
 )
 
-import numpy as np
-import pandas as pd
 from pydantic import BaseModel
 from typing_extensions import Literal as LiteralEx
 
@@ -84,21 +82,6 @@ DATACHAIN_TO_TYPE = {
     JSON: dict,
 }
 
-NUMPY_TO_DATACHAIN = {
-    np.dtype("int8"): Int,
-    np.dtype("int16"): Int,
-    np.dtype("int32"): Int,
-    np.dtype("int64"): Int,
-    np.dtype("uint8"): Int,
-    np.dtype("uint16"): Int,
-    np.dtype("uint32"): Int,
-    np.dtype("uint64"): Int,
-    np.dtype("float16"): Float,
-    np.dtype("float32"): Float,
-    np.dtype("float64"): Float,
-    np.dtype("object"): String,
-    pd.CategoricalDtype(): String,
-}
 
 # Disable Pydantic warning, see https://github.com/iterative/dvcx/issues/1285
 warnings.filterwarnings(
@@ -169,24 +152,12 @@ def _build_tree(model: type[BaseModel]):
 class VersionedModel(BaseModel):
     _version: ClassVar[int] = 1
 
+    def get_value(self):
+        return None
+
     @classmethod
     def __pydantic_init_subclass__(cls):
         Registry.add(cls)
-
-    @classmethod
-    def normalize(cls, name: str) -> str:
-        if DEFAULT_DELIMITER in name:
-            raise RuntimeError(
-                f"variable '{name}' cannot be used "
-                f"because it contains '{DEFAULT_DELIMITER}'"
-            )
-        return cls._to_snake_case(name)
-
-    @classmethod
-    def _to_snake_case(cls, name: str) -> str:
-        """Convert a CamelCase name to snake_case."""
-        s1 = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", name)
-        return re.sub("([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
 
 
 class ModelUtil:

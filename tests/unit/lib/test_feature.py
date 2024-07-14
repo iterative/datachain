@@ -1,16 +1,10 @@
-from typing import ClassVar, Literal, Optional
+from typing import ClassVar, Optional
 
 import pytest
 from pydantic import BaseModel, Field, ValidationError
 
-from datachain.lib.feature import ModelUtil, VersionedModel, is_feature
+from datachain.lib.feature import ModelUtil, VersionedModel
 from datachain.lib.feature_registry import Registry
-from datachain.lib.feature_utils import pydantic_to_feature
-from datachain.lib.signal_schema import SignalSchema
-from datachain.sql.types import (
-    Int64,
-    String,
-)
 
 
 class FileBasic(VersionedModel):
@@ -172,36 +166,6 @@ def test_type_array_of_floats():
     dict_ = {"d": [1, 3, 5]}
     t = _Test(**dict_)
     assert t.d == [1, 3, 5]
-
-
-def test_pydantic_to_feature():
-    class _MyTextBlock(BaseModel):
-        id: int
-        type: Literal["text"]
-
-    cls = pydantic_to_feature(_MyTextBlock)
-    assert is_feature(cls)
-
-    spec = SignalSchema({"val": cls}).to_udf_spec()
-    assert list(spec.keys()) == ["val__id", "val__type"]
-    assert list(spec.values()) == [Int64, String]
-
-
-def test_pydantic_to_feature_nested():
-    class _MyTextBlock(BaseModel):
-        id: int
-        type: Literal["text"]
-
-    class _MyMessage3(BaseModel):
-        val1: Optional[str]
-        val2: _MyTextBlock
-
-    cls = pydantic_to_feature(_MyMessage3)
-    assert is_feature(cls)
-
-    spec = SignalSchema({"val": cls}).to_udf_spec()
-    assert list(spec) == ["val__val1", "val__val2__id", "val__val2__type"]
-    assert list(spec.values()) == [String, Int64, String]
 
 
 def test_unflatten_to_json():

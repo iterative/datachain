@@ -3,14 +3,11 @@ from collections.abc import Iterator, Sequence
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union, get_args, get_origin
 
-from pydantic import create_model
-
 from datachain.lib.feature import (
     DATACHAIN_TO_TYPE,
     DEFAULT_DELIMITER,
     FeatureType,
     ModelUtil,
-    VersionedModel,
     build_tree,
     convert_type_to_datachain,
     is_feature,
@@ -267,15 +264,6 @@ class SignalSchema:
         for path, type_, has_subtree, _ in self.get_flat_tree():
             if has_subtree and issubclass(type_, File):
                 yield ".".join(path)
-
-    def create_model(self, name: str) -> type[VersionedModel]:
-        fields = {key: (value, None) for key, value in self.values.items()}
-
-        return create_model(
-            name,
-            __base__=(VersionedModel,),  # type: ignore[call-overload]
-            **fields,
-        )
 
     @staticmethod
     def _build_tree(values: dict[str, FeatureType]) -> dict[str, Any]:

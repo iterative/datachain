@@ -198,22 +198,6 @@ def test_get_file_signals_nested(nested_file_schema):
     assert files == ["f", "my_f", "my_f.nested_file"]
 
 
-def test_create_model():
-    class MyFr(VersionedModel):
-        count: int
-
-    spec = {"name": str, "age": float, "fr": MyFr}
-    cls = SignalSchema(spec).create_model("TestModel")
-
-    assert isinstance(cls, type(VersionedModel))
-
-    res = {}
-    for k, f_info in cls.model_fields.items():
-        res[k] = f_info.annotation
-
-    assert res == spec
-
-
 def test_build_tree():
     spec = {"name": str, "age": float, "fr": MyType2}
     lst = list(SignalSchema(spec).get_flat_tree())

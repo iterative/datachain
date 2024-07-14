@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from datachain.lib.dc import C, DataChain
-from datachain.lib.feature import Feature, VersionedModel
+from datachain.lib.feature import VersionedModel
 from datachain.lib.file import File
 from datachain.lib.signal_schema import (
     SignalResolvingError,
@@ -586,16 +586,6 @@ def test_default_output_type(catalog):
     chain = DataChain.from_features(name=names).map(res1=lambda name: name + suffix)
 
     assert chain.collect_one("res1") == [t + suffix for t in names]
-
-
-def test_create_model(catalog):
-    chain = DataChain.from_features(name=["aaa", "b", "c"], count=[1, 4, 6])
-
-    cls = chain.create_model("TestModel")
-    assert isinstance(cls, type(Feature))
-
-    fields = {n: f_info.annotation for n, f_info in cls.model_fields.items()}
-    assert fields == {"name": str, "count": int}
 
 
 def test_parse_tabular(tmp_dir, catalog):

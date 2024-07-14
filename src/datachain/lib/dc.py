@@ -12,7 +12,7 @@ from typing import (
 
 import sqlalchemy
 
-from datachain.lib.feature import Feature, FeatureType
+from datachain.lib.feature import FeatureType
 from datachain.lib.feature_utils import features_to_tuples
 from datachain.lib.file import File, IndexedFile, get_file
 from datachain.lib.meta_formats import read_meta, read_schema
@@ -150,9 +150,6 @@ class DataChain(DatasetQuery):
 
     def print_schema(self):
         self.signals_schema.print_tree()
-
-    def create_model(self, name: str) -> type[Feature]:
-        return self.signals_schema.create_model(name)
 
     def settings(
         self, cache=None, batch=None, parallel=None, workers=None, min_task_size=None

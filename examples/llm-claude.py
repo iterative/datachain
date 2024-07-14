@@ -27,7 +27,7 @@ chain = (
             messages=[
                 {
                     "role": "user",
-                    "content": file.get_value() if isinstance(file, File) else file,
+                    "content": file.read() if isinstance(file, File) else file,
                 },
             ],
             temperature=TEMPERATURE,

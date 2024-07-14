@@ -1,6 +1,5 @@
 from datachain.lib.dc import C, DataChain
 from datachain.lib.feature import Feature, FileFeature
-from datachain.lib.feature_utils import pydantic_to_feature
 from datachain.lib.file import File, FileError, IndexedFile, TarVFile
 from datachain.lib.image import ImageFile, convert_images
 from datachain.lib.text import convert_text
@@ -30,5 +29,4 @@ __all__ = [
     "TarVFile",
     "convert_images",
     "convert_text",
-    "pydantic_to_feature",
 ]

@@ -33,7 +33,7 @@ chain = (
     .limit(5)
     .settings(parallel=4, cache=True)
     .agg(
-        dialogues=lambda file: ["\n=====\n".join(f.get_value() for f in file)],
+        dialogues=lambda file: ["\n=====\n".join(f.read() for f in file)],
         output=str,
         partition_by=path.file_ext(C.name),
     )
