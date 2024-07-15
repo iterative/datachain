@@ -669,7 +669,7 @@ def test_parse_tabular_output_dict(tmp_dir, catalog):
 
 
 def test_parse_tabular_output_feature(tmp_dir, catalog):
-    class Output(Feature):
+    class Output(BaseModel):
         fname: str
         age: int
         loc: str
@@ -727,7 +727,7 @@ def test_from_csv_no_header_output_dict(tmp_dir, catalog):
 
 
 def test_from_csv_no_header_output_feature(tmp_dir, catalog):
-    class Output(Feature):
+    class Output(BaseModel):
         first_name: str
         age: int
         city: str

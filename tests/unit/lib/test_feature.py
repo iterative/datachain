@@ -1,15 +1,14 @@
-from typing import ClassVar, Optional
+from typing import ClassVar, Literal, Optional
 
 import pytest
 from pydantic import BaseModel, Field, ValidationError
 
 from datachain import DataModel
-from datachain.lib.feature import ModelUtil
+from datachain.lib.feature import ModelUtil, is_feature
 from datachain.lib.feature_registry import Registry
-from datachain.lib.feature_utils import dict_to_feature, pydantic_to_feature
+from datachain.lib.feature_utils import dict_to_feature
 from datachain.lib.signal_schema import SignalSchema
 from datachain.sql.types import (
-    Array,
     Int64,
     String,
 )
@@ -299,7 +298,7 @@ def test_dict_to_feature():
     data_dict = {"file": FileBasic, "id": int, "type": Literal["text"]}
 
     cls = dict_to_feature("val", data_dict)
-    assert Feature.is_feature(cls)
+    assert is_feature(cls)
 
     spec = SignalSchema({"val": cls}).to_udf_spec()
     assert list(spec.keys()) == [

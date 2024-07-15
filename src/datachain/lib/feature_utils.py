@@ -2,6 +2,8 @@ import string
 from collections.abc import Sequence
 from typing import Any, Union
 
+from pydantic import BaseModel, create_model
+
 from datachain.lib.feature import (
     FeatureType,
     FeatureTypeNames,
@@ -18,6 +20,15 @@ class FeatureToTupleError(DataChainParamsError):
         if ds_name:
             ds_name = f"' {ds_name}'"
         super().__init__(f"Cannot convert features for dataset{ds_name}: {msg}")
+
+
+def dict_to_feature(name: str, data_dict: dict[str, FeatureType]) -> type[BaseModel]:
+    fields = {name: (anno, ...) for name, anno in data_dict.items()}
+    return create_model(  # type: ignore[call-overload]
+        name,
+        __base__=BaseModel,
+        **fields,
+    )
 
 
 def features_to_tuples(
