@@ -690,8 +690,8 @@ def test_parse_tabular_output_feature(tmp_dir, catalog):
     dc = DataChain.from_storage(path.as_uri()).parse_tabular(
         format="json", output=Output
     )
-    df1 = dc.select("output.fname", "output.age", "output.loc").to_pandas()
-    df.columns = ["output.fname", "output.age", "output.loc"]
+    df1 = dc.select("fname", "age", "loc").to_pandas()
+    df.columns = ["fname", "age", "loc"]
     assert df1.equals(df)
 
 
@@ -725,7 +725,7 @@ def test_from_csv_no_header_error(tmp_dir, catalog):
         DataChain.from_csv(path.as_uri(), header=False)
 
 
-def test_from_csv_no_header_output(tmp_dir, catalog):
+def test_from_csv_no_header_output_dict(tmp_dir, catalog):
     df = pd.DataFrame(DF_DATA.values()).transpose()
     path = tmp_dir / "test.csv"
     df.to_csv(path, header=False, index=False)
@@ -736,25 +736,29 @@ def test_from_csv_no_header_output(tmp_dir, catalog):
     assert (df1.values != df.values).sum() == 0
 
 
-def test_from_csv_no_header_column_names(tmp_dir, catalog):
+def test_from_csv_no_header_output_feature(tmp_dir, catalog):
+    class Output(Feature):
+        first_name: str
+        age: int
+        city: str
+
     df = pd.DataFrame(DF_DATA.values()).transpose()
     path = tmp_dir / "test.csv"
     df.to_csv(path, header=False, index=False)
-    dc = DataChain.from_csv(
-        path.as_uri(), header=False, column_names=["first_name", "age", "city"]
-    )
+    dc = DataChain.from_csv(path.as_uri(), header=False, output=Output)
     df1 = dc.select("first_name", "age", "city").to_pandas()
     assert (df1.values != df.values).sum() == 0
 
 
-def test_from_csv_column_names_and_output(tmp_dir, catalog):
-    df = pd.DataFrame(DF_DATA)
+def test_from_csv_no_header_output_list(tmp_dir, catalog):
+    df = pd.DataFrame(DF_DATA.values()).transpose()
     path = tmp_dir / "test.csv"
-    df.to_csv(path)
-    column_names = ["fname", "age", "loc"]
-    output = {"fname": str, "age": int, "loc": str}
-    with pytest.raises(DataChainParamsError):
-        DataChain.from_csv(path.as_uri(), column_names=column_names, output=output)
+    df.to_csv(path, header=False, index=False)
+    dc = DataChain.from_csv(
+        path.as_uri(), header=False, output=["first_name", "age", "city"]
+    )
+    df1 = dc.select("first_name", "age", "city").to_pandas()
+    assert (df1.values != df.values).sum() == 0
 
 
 def test_from_csv_tab_delimited(tmp_dir, catalog):

@@ -705,6 +705,7 @@ class DataChain(DatasetQuery):
             None, type[Feature], Sequence[str], dict[str, FeatureType]
         ] = None,
         object_name: str = "",
+        model_name: str = "",
         **kwargs,
     ) -> "DataChain":
         """Generate chain from list of tabular files.
@@ -714,6 +715,7 @@ class DataChain(DatasetQuery):
                 corresponding types. List of column names is also accepted, in which
                 case types will be inferred.
             object_name : Generated object column name.
+            model_name : Generated model name.
             kwargs : Parameters to pass to pyarrow.dataset.dataset.
 
         Examples:
@@ -740,10 +742,14 @@ class DataChain(DatasetQuery):
 
         if object_name:
             if isinstance(output, dict):
-                output = dict_to_feature(object_name, output)
+                model_name = model_name or object_name
+                output = dict_to_feature(model_name, output)
             output = {object_name: output}  # type: ignore[dict-item]
         elif isinstance(output, type(Feature)):
-            output = {output._prefix(): output}
+            output = {
+                name: info.annotation  # type: ignore[misc]
+                for name, info in output.model_fields.items()
+            }
         output = {"source": IndexedFile} | output  # type: ignore[assignment,operator]
         return self.gen(ArrowGenerator(schema, **kwargs), output=output)
 
@@ -754,8 +760,11 @@ class DataChain(DatasetQuery):
         delimiter: str = ",",
         header: bool = True,
         column_names: Optional[list[str]] = None,
-        output: Optional[dict[str, FeatureType]] = None,
+        output: Union[
+            None, type[Feature], Sequence[str], dict[str, FeatureType]
+        ] = None,
         object_name: str = "",
+        model_name: str = "",
         **kwargs,
     ) -> "DataChain":
         """Generate chain from csv files.
@@ -765,9 +774,11 @@ class DataChain(DatasetQuery):
                 as `s3://`, `gs://`, `az://` or "file:///".
             delimiter : Character for delimiting columns.
             header : Whether the files include a header row.
-            column_names : Column names if no header. Implies `header = False`.
-            output : Dictionary defining column names and their corresponding types.
+            output : Dictionary or feature class defining column names and their
+                corresponding types. List of column names is also accepted, in which
+                case types will be inferred.
             object_name : Created object column name.
+            model_name : Generated model name.
 
         Examples:
             Reading a csv file:
@@ -781,22 +792,22 @@ class DataChain(DatasetQuery):
 
         chain = DataChain.from_storage(path, **kwargs)
 
-        if column_names and output:
-            msg = "error parsing csv - only one of column_names or output is allowed"
-            raise DatasetPrepareError(chain.name, msg)
-
-        if not header and not column_names:
-            if output:
+        if not header:
+            if not output:
+                msg = "error parsing csv - provide output if no header"
+                raise DatasetPrepareError(chain.name, msg)
+            if isinstance(output, Sequence):
+                column_names = output  # type: ignore[assignment]
+            elif isinstance(output, dict):
                 column_names = list(output.keys())
             else:
-                msg = "error parsing csv - provide column_names or output if no header"
-                raise DatasetPrepareError(chain.name, msg)
+                column_names = list(output.model_fields.keys())
 
         parse_options = ParseOptions(delimiter=delimiter)
         read_options = ReadOptions(column_names=column_names)
         format = CsvFileFormat(parse_options=parse_options, read_options=read_options)
         return chain.parse_tabular(
-            output=output, object_name=object_name, format=format
+            output=output, object_name=object_name, model_name=model_name, format=format
         )
 
     @classmethod
@@ -806,6 +817,7 @@ class DataChain(DatasetQuery):
         partitioning: Any = "hive",
         output: Optional[dict[str, FeatureType]] = None,
         object_name: str = "",
+        model_name: str = "",
         **kwargs,
     ) -> "DataChain":
         """Generate chain from parquet files.
@@ -816,6 +828,7 @@ class DataChain(DatasetQuery):
             partitioning : Any pyarrow partitioning schema.
             output : Dictionary defining column names and their corresponding types.
             object_name : Created object column name.
+            model_name : Generated model name.
 
         Examples:
             Reading a single file:
@@ -828,6 +841,7 @@ class DataChain(DatasetQuery):
         return chain.parse_tabular(
             output=output,
             object_name=object_name,
+            model_name=model_name,
             format="parquet",
             partitioning=partitioning,
         )
