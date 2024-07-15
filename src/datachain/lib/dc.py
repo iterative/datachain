@@ -124,12 +124,10 @@ class DataChain(DatasetQuery):
     """
 
     DEFAULT_FILE_RECORD: ClassVar[dict] = {
-        "id": 0,
         "source": "",
         "name": "",
         "vtype": "",
         "size": 0,
-        "random": 0,
     }
 
     def __init__(self, *args, **kwargs):
