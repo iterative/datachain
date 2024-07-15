@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from datachain.lib.feature import Feature
 from datachain.lib.feature_registry import Registry
-from datachain.lib.feature_utils import pydantic_to_feature
+from datachain.lib.feature_utils import dict_to_feature, pydantic_to_feature
 from datachain.lib.signal_schema import SignalSchema
 from datachain.sql.types import (
     Array,
@@ -372,3 +372,20 @@ def test_unflatten_to_json_list_of_lists():
         "name": "Co",
         "parents": [{"name": "parent1", "children": [{"type": 12, "name": "child1"}]}],
     }
+
+
+def test_dict_to_feature():
+    data_dict = {"file": FileBasic, "id": int, "type": Literal["text"]}
+
+    cls = dict_to_feature("val", data_dict)
+    assert Feature.is_feature(cls)
+
+    spec = SignalSchema({"val": cls}).to_udf_spec()
+    assert list(spec.keys()) == [
+        "val__file__parent",
+        "val__file__name",
+        "val__file__size",
+        "val__id",
+        "val__type",
+    ]
+    assert list(spec.values()) == [String, String, Int64, Int64, String]

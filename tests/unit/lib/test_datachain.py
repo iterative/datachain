@@ -617,6 +617,20 @@ def test_parse_tabular_format(tmp_dir, catalog):
     assert df1.equals(df)
 
 
+def test_parse_tabular_partitions(tmp_dir, catalog):
+    df = pd.DataFrame(DF_DATA)
+    path = tmp_dir / "test.parquet"
+    df.to_parquet(path, partition_cols=["first_name"])
+    dc = (
+        DataChain.from_storage(path.as_uri())
+        .filter(C("parent").glob("*first_name=Alice*"))
+        .parse_tabular(partitioning="hive")
+    )
+    df1 = dc.select("first_name", "age", "city").to_pandas()
+    df1 = df1.sort_values("first_name").reset_index(drop=True)
+    assert df1.equals(df.loc[:0])
+
+
 def test_parse_tabular_empty(tmp_dir, catalog):
     path = tmp_dir / "test.parquet"
     with pytest.raises(DataChainParamsError):
@@ -630,6 +644,7 @@ def test_parse_tabular_unify_schema(tmp_dir, catalog):
     path2 = tmp_dir / "df2.parquet"
     df1.to_parquet(path1)
     df2.to_parquet(path2)
+
     df_combined = (
         pd.concat([df1, df2], ignore_index=True)
         .replace({"": None, 0: None, np.nan: None})
@@ -650,7 +665,7 @@ def test_parse_tabular_unify_schema(tmp_dir, catalog):
     assert df.equals(df_combined)
 
 
-def test_parse_tabular_output(tmp_dir, catalog):
+def test_parse_tabular_output_dict(tmp_dir, catalog):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.jsonl"
     path.write_text(df.to_json(orient="records", lines=True))
@@ -663,88 +678,116 @@ def test_parse_tabular_output(tmp_dir, catalog):
     assert df1.equals(df)
 
 
-def test_parse_csv(tmp_dir, catalog):
+def test_parse_tabular_output_feature(tmp_dir, catalog):
+    class Output(Feature):
+        fname: str
+        age: int
+        loc: str
+
+    df = pd.DataFrame(DF_DATA)
+    path = tmp_dir / "test.jsonl"
+    path.write_text(df.to_json(orient="records", lines=True))
+    dc = DataChain.from_storage(path.as_uri()).parse_tabular(
+        format="json", output=Output
+    )
+    df1 = dc.select("fname", "age", "loc").to_pandas()
+    df.columns = ["fname", "age", "loc"]
+    assert df1.equals(df)
+
+
+def test_parse_tabular_output_list(tmp_dir, catalog):
+    df = pd.DataFrame(DF_DATA)
+    path = tmp_dir / "test.jsonl"
+    path.write_text(df.to_json(orient="records", lines=True))
+    output = ["fname", "age", "loc"]
+    dc = DataChain.from_storage(path.as_uri()).parse_tabular(
+        format="json", output=output
+    )
+    df1 = dc.select("fname", "age", "loc").to_pandas()
+    df.columns = ["fname", "age", "loc"]
+    assert df1.equals(df)
+
+
+def test_from_csv(tmp_dir, catalog):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.csv"
     df.to_csv(path)
-    dc = DataChain.from_storage(path.as_uri()).parse_csv()
+    dc = DataChain.from_csv(path.as_uri())
     df1 = dc.select("first_name", "age", "city").to_pandas()
     assert df1.equals(df)
 
 
-def test_parse_csv_no_header_error(tmp_dir, catalog):
+def test_from_csv_no_header_error(tmp_dir, catalog):
     df = pd.DataFrame(DF_DATA.values()).transpose()
     path = tmp_dir / "test.csv"
     df.to_csv(path, header=False, index=False)
     with pytest.raises(DataChainParamsError):
-        DataChain.from_storage(path.as_uri()).parse_csv(header=False)
+        DataChain.from_csv(path.as_uri(), header=False)
 
 
-def test_parse_csv_no_header_output(tmp_dir, catalog):
+def test_from_csv_no_header_output_dict(tmp_dir, catalog):
     df = pd.DataFrame(DF_DATA.values()).transpose()
     path = tmp_dir / "test.csv"
     df.to_csv(path, header=False, index=False)
-    dc = DataChain.from_storage(path.as_uri()).parse_csv(
-        header=False, output={"first_name": str, "age": int, "city": str}
+    dc = DataChain.from_csv(
+        path.as_uri(), header=False, output={"first_name": str, "age": int, "city": str}
     )
     df1 = dc.select("first_name", "age", "city").to_pandas()
     assert (df1.values != df.values).sum() == 0
 
 
-def test_parse_csv_no_header_column_names(tmp_dir, catalog):
+def test_from_csv_no_header_output_feature(tmp_dir, catalog):
+    class Output(Feature):
+        first_name: str
+        age: int
+        city: str
+
     df = pd.DataFrame(DF_DATA.values()).transpose()
     path = tmp_dir / "test.csv"
     df.to_csv(path, header=False, index=False)
-    dc = DataChain.from_storage(path.as_uri()).parse_csv(
-        header=False, column_names=["first_name", "age", "city"]
+    dc = DataChain.from_csv(path.as_uri(), header=False, output=Output)
+    df1 = dc.select("first_name", "age", "city").to_pandas()
+    assert (df1.values != df.values).sum() == 0
+
+
+def test_from_csv_no_header_output_list(tmp_dir, catalog):
+    df = pd.DataFrame(DF_DATA.values()).transpose()
+    path = tmp_dir / "test.csv"
+    df.to_csv(path, header=False, index=False)
+    dc = DataChain.from_csv(
+        path.as_uri(), header=False, output=["first_name", "age", "city"]
     )
     df1 = dc.select("first_name", "age", "city").to_pandas()
     assert (df1.values != df.values).sum() == 0
 
 
-def test_parse_csv_column_names_and_output(tmp_dir, catalog):
-    df = pd.DataFrame(DF_DATA)
-    path = tmp_dir / "test.csv"
-    df.to_csv(path)
-    column_names = ["fname", "age", "loc"]
-    output = {"fname": str, "age": int, "loc": str}
-    with pytest.raises(DataChainParamsError):
-        DataChain.from_storage(path.as_uri()).parse_csv(
-            column_names=column_names, output=output
-        )
-
-
-def test_parse_csv_tab_delimited(tmp_dir, catalog):
+def test_from_csv_tab_delimited(tmp_dir, catalog):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.csv"
     df.to_csv(path, sep="\t")
-    dc = DataChain.from_storage(path.as_uri()).parse_csv(delimiter="\t")
+    dc = DataChain.from_csv(path.as_uri(), delimiter="\t")
     df1 = dc.select("first_name", "age", "city").to_pandas()
     assert df1.equals(df)
 
 
-def test_parse_parquet_partitioned(tmp_dir, catalog):
+def test_from_parquet(tmp_dir, catalog):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.parquet"
-    df.to_parquet(path, partition_cols=["first_name"])
-    dc = DataChain.from_storage(path.as_uri()).parse_parquet()
+    df.to_parquet(path)
+    dc = DataChain.from_parquet(path.as_uri())
     df1 = dc.select("first_name", "age", "city").to_pandas()
-    df1 = df1.sort_values("first_name").reset_index(drop=True)
+
     assert df1.equals(df)
 
 
-def test_parse_parquet_filter_partitions(tmp_dir, catalog):
+def test_from_parquet_partitioned(tmp_dir, catalog):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.parquet"
     df.to_parquet(path, partition_cols=["first_name"])
-    dc = (
-        DataChain.from_storage(path.as_uri())
-        .filter(C("parent").glob("*first_name=Alice*"))
-        .parse_parquet()
-    )
+    dc = DataChain.from_parquet(path.as_uri())
     df1 = dc.select("first_name", "age", "city").to_pandas()
     df1 = df1.sort_values("first_name").reset_index(drop=True)
-    assert df1.equals(df.loc[:0])
+    assert df1.equals(df)
 
 
 @pytest.mark.parametrize("processes", [False, 2, True])
@@ -784,3 +827,27 @@ def test_extend_features(catalog):
 
     res = dc._extend_features("sum", "num")
     assert res == sum(range(len(features)))
+
+
+def test_from_storage_object_name(tmp_dir, catalog):
+    df = pd.DataFrame(DF_DATA)
+    path = tmp_dir / "test.parquet"
+    df.to_parquet(path)
+    dc = DataChain.from_storage(path.as_uri(), object_name="custom")
+    assert dc.schema["custom"] == File
+
+
+def test_from_features_object_name(tmp_dir, catalog):
+    fib = [1, 1, 2, 3, 5, 8]
+    values = ["odd" if num % 2 else "even" for num in fib]
+
+    dc = DataChain.from_features(fib=fib, odds=values, object_name="custom")
+    assert "custom.fib" in dc.to_pandas().columns
+
+
+def test_parse_tabular_object_name(tmp_dir, catalog):
+    df = pd.DataFrame(DF_DATA)
+    path = tmp_dir / "test.parquet"
+    df.to_parquet(path)
+    dc = DataChain.from_storage(path.as_uri()).parse_tabular(object_name="name")
+    assert "name.first_name" in dc.to_pandas().columns
