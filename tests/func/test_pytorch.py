@@ -11,7 +11,7 @@ from datachain.lib.pytorch import PytorchDataset
 
 
 @pytest.fixture(scope="module")
-def fake_dataset(tmpdir_factory):
+def fake_dir(tmpdir_factory):
     # Create fake images in labeled dirs
     data_path = Path(tmpdir_factory.mktemp("data"))
     for i, (img, label) in enumerate(FakeData()):
@@ -20,10 +20,13 @@ def fake_dataset(tmpdir_factory):
         img.save(data_path / label / f"{i}.jpg")
 
     # Create dataset from images
-    uri = data_path.as_uri()
+    return data_path.as_uri()
 
+
+@pytest.fixture
+def fake_dataset(fake_dir):
     return (
-        DataChain.from_storage(uri, type="image")
+        DataChain.from_storage(fake_dir, type="image")
         .map(text=lambda file: file.parent.split("/")[-1], output=str)
         .map(label=lambda text: int(text), output=int)
         .save("fake")
