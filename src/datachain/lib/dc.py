@@ -12,7 +12,7 @@ from typing import (
 
 import sqlalchemy
 
-from datachain.lib.dataset_registry import Dataset
+from datachain.lib.dataset import Dataset
 from datachain.lib.feature import Feature, FeatureType
 from datachain.lib.feature_utils import features_to_tuples
 from datachain.lib.file import File, IndexedFile, get_file
