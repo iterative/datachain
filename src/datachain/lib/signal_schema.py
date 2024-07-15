@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union, get_args, get_origin
 
+from datachain import DataModel
 from datachain.lib.feature import (
     DATACHAIN_TO_TYPE,
     DEFAULT_DELIMITER,
@@ -11,7 +12,6 @@ from datachain.lib.feature import (
     ModelUtil,
     build_tree,
     convert_type_to_datachain,
-    is_feature,
     to_feature,
 )
 from datachain.lib.feature_registry import Registry
@@ -306,7 +306,7 @@ class SignalSchema:
 
             if get_origin(type_) is list:
                 args = get_args(type_)
-                if len(args) > 0 and is_feature(args[0]):
+                if len(args) > 0 and DataModel.is_pydantic(args[0]):
                     sub_schema = SignalSchema({"* list of": args[0]})
                     sub_schema.print_tree(indent=indent, start_at=total_indent + indent)
 
