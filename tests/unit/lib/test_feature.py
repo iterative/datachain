@@ -6,6 +6,13 @@ from pydantic import BaseModel, Field, ValidationError
 from datachain import DataModel
 from datachain.lib.feature import ModelUtil
 from datachain.lib.feature_registry import Registry
+from datachain.lib.feature_utils import dict_to_feature, pydantic_to_feature
+from datachain.lib.signal_schema import SignalSchema
+from datachain.sql.types import (
+    Array,
+    Int64,
+    String,
+)
 
 
 class FileBasic(DataModel):
@@ -286,3 +293,20 @@ def test_version():
         _version: ClassVar[int] = 23
 
     assert Registry.get_version(_MyCls) == 23
+
+
+def test_dict_to_feature():
+    data_dict = {"file": FileBasic, "id": int, "type": Literal["text"]}
+
+    cls = dict_to_feature("val", data_dict)
+    assert Feature.is_feature(cls)
+
+    spec = SignalSchema({"val": cls}).to_udf_spec()
+    assert list(spec.keys()) == [
+        "val__file__parent",
+        "val__file__name",
+        "val__file__size",
+        "val__id",
+        "val__type",
+    ]
+    assert list(spec.values()) == [String, String, Int64, Int64, String]

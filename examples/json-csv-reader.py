@@ -103,7 +103,8 @@ def main():
     print("========================================================================")
     print("static CSV with header schema test parsing 3.5K objects")
     print("========================================================================")
-    static_csv_ds = DataChain.from_csv(uri, spec=ChatFeature)
+    static_csv_ds = DataChain.from_csv(uri, output=ChatFeature, object_name="chat")
+    static_csv_ds.print_schema()
     print(static_csv_ds.to_pandas())
 
     uri = "gs://datachain-demo/laion-aesthetics-csv"
@@ -111,7 +112,8 @@ def main():
     print("========================================================================")
     print("dynamic CSV with header schema test parsing 3M objects")
     print("========================================================================")
-    dynamic_csv_ds = DataChain.from_csv(uri, object_name="laion", show_schema=True)
+    dynamic_csv_ds = DataChain.from_csv(uri, object_name="laion")
+    dynamic_csv_ds.print_schema()
     print(dynamic_csv_ds.to_pandas())
 
 

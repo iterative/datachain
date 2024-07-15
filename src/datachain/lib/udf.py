@@ -129,7 +129,11 @@ class UDFBase(AbstractUDF):
         else:
             # Generator expression is required, otherwise the value will be materialized
             res = (
-                ModelUtil.flatten(obj) if isinstance(obj, BaseModel) else (obj,)
+                ModelUtil.flatten(obj)
+                if isinstance(obj, BaseModel)
+                else obj
+                if isinstance(obj, tuple)
+                else (obj,)
                 for obj in result_objs
             )
 
