@@ -104,3 +104,19 @@ def test_parquet_missing_column_names():
         ]
     )
     assert list(schema_to_output(schema)) == ["c0", "c1"]
+
+
+def test_parquet_override_column_names():
+    schema = pa.schema([("some_int", pa.int32()), ("some_string", pa.string())])
+    col_names = ["n1", "n2"]
+    assert schema_to_output(schema, col_names) == {
+        "n1": int,
+        "n2": str,
+    }
+
+
+def test_parquet_override_column_names_invalid():
+    schema = pa.schema([("some_int", pa.int32()), ("some_string", pa.string())])
+    col_names = ["n1", "n2", "n3"]
+    with pytest.raises(ValueError):
+        schema_to_output(schema, col_names)

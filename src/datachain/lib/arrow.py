@@ -1,4 +1,5 @@
 import re
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Optional
 
 import pyarrow as pa
@@ -44,12 +45,21 @@ def infer_schema(chain: "DataChain", **kwargs) -> pa.Schema:
     return pa.unify_schemas(schemas)
 
 
-def schema_to_output(schema: pa.Schema):
+def schema_to_output(schema: pa.Schema, col_names: Optional[Sequence[str]] = None):
     """Generate UDF output schema from pyarrow schema."""
+    if col_names and (len(schema) != len(col_names)):
+        raise ValueError(
+            "Error generating output from Arrow schema - "
+            f"Schema has {len(schema)} columns but got {len(col_names)} column names."
+        )
     default_column = 0
     output = {}
-    for field in schema:
-        column = field.name.lower()
+    for i, field in enumerate(schema):
+        if col_names:
+            column = col_names[i]
+        else:
+            column = field.name
+        column = column.lower()
         column = re.sub("[^0-9a-z_]+", "", column)
         if not column:
             column = f"c{default_column}"

@@ -695,6 +695,19 @@ def test_parse_tabular_output_feature(tmp_dir, catalog):
     assert df1.equals(df)
 
 
+def test_parse_tabular_output_list(tmp_dir, catalog):
+    df = pd.DataFrame(DF_DATA)
+    path = tmp_dir / "test.jsonl"
+    path.write_text(df.to_json(orient="records", lines=True))
+    output = ["fname", "age", "loc"]
+    dc = DataChain.from_storage(path.as_uri()).parse_tabular(
+        format="json", output=output
+    )
+    df1 = dc.select("fname", "age", "loc").to_pandas()
+    df.columns = ["fname", "age", "loc"]
+    assert df1.equals(df)
+
+
 def test_from_csv(tmp_dir, catalog):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.csv"

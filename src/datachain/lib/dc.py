@@ -701,14 +701,18 @@ class DataChain(DatasetQuery):
 
     def parse_tabular(
         self,
-        output: Union[None, FeatureType, dict[str, FeatureType]] = None,
+        output: Union[
+            None, type[Feature], Sequence[str], dict[str, FeatureType]
+        ] = None,
         object_name: str = "",
         **kwargs,
     ) -> "DataChain":
         """Generate chain from list of tabular files.
 
         Parameters:
-            output : Dictionary defining column names and their corresponding types.
+            output : Dictionary or feature class defining column names and their
+                corresponding types. List of column names is also accepted, in which
+                case types will be inferred.
             object_name : Generated object column name.
             kwargs : Parameters to pass to pyarrow.dataset.dataset.
 
@@ -726,10 +730,11 @@ class DataChain(DatasetQuery):
         from datachain.lib.arrow import ArrowGenerator, infer_schema, schema_to_output
 
         schema = None
-        if not output:
+        col_names = output if isinstance(output, Sequence) else None
+        if col_names or not output:
             try:
                 schema = infer_schema(self, **kwargs)
-                output = schema_to_output(schema)
+                output = schema_to_output(schema, col_names)
             except ValueError as e:
                 raise DatasetPrepareError(self.name, e) from e
 
