@@ -86,34 +86,56 @@ class DataChain(DatasetQuery):
 
         `DataChain.from_dataset("name")` - reading from a dataset.
 
-        `DataChain.from_features(fib=[1, 2, 3, 5, 8])` - generating from a values.
+        `DataChain.from_features(fib=[1, 2, 3, 5, 8])` - generating from values.
 
+        `DataChain.from_pandas(pd.DataFrame(...))` - generating from pandas.
+
+        `DataChain.from_json("file.json")` - generating from json.
+
+        `DataChain.from_csv("file.csv")` - generating from csv.
+
+        `DataChain.from_parquet("file.parquet")` - generating from parquet.
 
     Example:
         ```py
-        from datachain import DataChain, Feature
-        from datachain.lib.claude import claude_processor
+        import os
 
-        class Rating(Feature):
-        status: str = ""
-        explanation: str = ""
+        from mistralai.client import MistralClient
+        from mistralai.models.chat_completion import ChatMessage
 
-        PROMPT = "A 'user' is a human trying to find the best mobile plan.... "
-        MODEL = "claude-3-opus-20240229"
+        from datachain.lib.dc import DataChain, Column
+
+        PROMPT = (
+            "Was this bot dialog successful? "
+            "Describe the 'result' as 'Yes' or 'No' in a short JSON"
+        )
+
+        model = "mistral-large-latest"
+        api_key = os.environ["MISTRAL_API_KEY"]
 
         chain = (
-            DataChain.from_storage("s3://my-bucket/my")
-            .filter(C.name.glob("*.txt"))
+            DataChain.from_storage("gs://datachain-demo/chatbot-KiT/")
             .limit(5)
-            .map(claude=claude_processor(prompt=PROMPT, model=MODEL))
+            .settings(cache=True, parallel=5)
             .map(
-                rating=lambda claude: Rating(
-                    **(json.loads(claude.content[0].text) if claude.content else {})
-            ),
-            output=Rating,
+                mistral_response=lambda file: MistralClient(api_key=api_key)
+                .chat(
+                    model=model,
+                    response_format={"type": "json_object"},
+                    messages=[
+                        ChatMessage(role="user", content=f"{PROMPT}: {file.read()}")
+                    ],
+                )
+                .choices[0]
+                .message.content,
+            )
+            .save()
         )
-        chain.save("ratings")
-        print(chain)
+
+        try:
+            print(chain.select("mistral_response").results())
+        except Exception as e:
+            print(f"do you have the right Mistral API key? {e}")
         ```
     """
 
@@ -143,10 +165,12 @@ class DataChain(DatasetQuery):
             self.signals_schema = SignalSchema.from_column_types(self.column_types)
 
     @property
-    def schema(self):
+    def schema(self) -> dict[str, FeatureType]:
+        """Get schema of the chain."""
         return self.signals_schema.values if self.signals_schema else None
 
-    def print_schema(self):
+    def print_schema(self) -> None:
+        """Print schema of the chain."""
         self.signals_schema.print_tree()
 
     def create_model(self, name: str) -> type[Feature]:
@@ -230,14 +254,16 @@ class DataChain(DatasetQuery):
 
     @classmethod
     def from_dataset(cls, name: str, version: Optional[int] = None) -> "DataChain":
-        """Get data from dataset. It returns the chain itself.
+        """Get data from a saved Dataset. It returns the chain itself.
 
         Parameters:
             name : dataset name
             version : dataset version
 
-        Examples:
-            >>> chain = DataChain.from_dataset("my_cats")
+        Example:
+            ```py
+            chain = DataChain.from_dataset("my_cats")
+            ```
         """
         return DataChain(name=name, version=version)
 
@@ -268,12 +294,16 @@ class DataChain(DatasetQuery):
             show_schema : print auto-generated schema
             jmespath : JMESPATH expression to reduce JSON
 
-        Examples:
+        Example:
             infer JSON schema from data, reduce using JMESPATH, print schema
-            >>> chain = DataChain.from_json("gs://json", jmespath="key1.key2")
+            ```py
+            chain = DataChain.from_json("gs://json", jmespath="key1.key2")
+            ```
 
             infer JSON schema from a particular path, print data model
-            >>> chain = DataChain.from_json("gs://json_ds", schema_from="gs://json/my.json")
+            ```py
+            chain = DataChain.from_json("gs://json_ds", schema_from="gs://json/my.json")
+            ```
         """
         if schema_from == "auto":
             schema_from = path
@@ -308,12 +338,14 @@ class DataChain(DatasetQuery):
             jmespath : JMESPATH expression to reduce JSON
             model_name : generated model name
 
-        Examples:
+        Example:
             print JSON schema and save to column "meta_from":
-            >>> uri = "gs://datachain-demo/coco2017/annotations_captions/"
-            >>> chain = DataChain.from_storage(uri)
-            >>> chain = chain.show_json_schema()
-            >>> chain.save()
+            ```py
+            uri = "gs://datachain-demo/coco2017/annotations_captions/"
+            chain = DataChain.from_storage(uri)
+            chain = chain.show_json_schema()
+            chain.save()
+            ```
         """
         return self.map(
             meta_schema=lambda file: read_schema(
@@ -379,14 +411,18 @@ class DataChain(DatasetQuery):
                     signal name in format of `map(my_sign=my_func)`. This helps define
                     signal names and function in a nicer way.
 
-        Examples:
+        Example:
             Using signal_map and single type in output:
-            >>> chain = chain.map(value=lambda name: name[:-4] + ".json", output=str)
-            >>> chain.save("new_dataset")
+            ```py
+            chain = chain.map(value=lambda name: name[:-4] + ".json", output=str)
+            chain.save("new_dataset")
+            ```
 
             Using func and output as a map:
-            >>> chain = chain.map(lambda name: name[:-4] + ".json", output={"res": str})
-            >>> chain.save("new_dataset")
+            ```py
+            chain = chain.map(lambda name: name[:-4] + ".json", output={"res": str})
+            chain.save("new_dataset")
+            ```
         """
 
         udf_obj = self._udf_to_obj(Mapper, func, params, output, signal_map)
@@ -537,18 +573,42 @@ class DataChain(DatasetQuery):
                 yield chain.signals_schema.row_to_features(row, chain.session.catalog)
 
     def iterate_one(self, col: str) -> Iterator[FeatureType]:
+        """Iterate over one column."""
         for item in self.iterate(col):
             yield item[0]
 
     def collect(self, *cols: str) -> list[list[FeatureType]]:
+        """Collect results from all rows.
+
+        If columns are specified - limit them to specified
+        columns.
+        """
         return list(self.iterate(*cols))
 
     def collect_one(self, col: str) -> list[FeatureType]:
+        """Collect results from one column."""
         return list(self.iterate_one(col))
 
     def to_pytorch(self, **kwargs):
-        """Convert to pytorch dataset format."""
+        """
+        Convert to pytorch dataset format.
 
+        Args:
+            transform (Transform): Torchvision transforms to apply to the dataset.
+            tokenizer (Callable): Tokenizer to use to tokenize text values.
+            tokenizer_kwargs (dict): Additional kwargs to pass when calling tokenizer.
+            num_samples (int): Number of random samples to draw for each epoch.
+                This argument is ignored if `num_samples=0` (the default).
+
+        Example:
+            ```py
+            from torch.utils.data import DataLoader
+            loader = DataLoader(
+                chain.select("file", "label").to_pytorch(),
+                batch_size=16
+            )
+            ```
+        """
         try:
             import torch  # noqa: F401
         except ImportError as exc:
@@ -589,9 +649,11 @@ class DataChain(DatasetQuery):
             inner (bool): Whether to run inner join or outer join.
             rname (str): name prefix for conflicting signal names.
 
-        Examples:
-            >>> meta = meta_emd.merge(meta_pq, on=(C.name, C.emd__index),
-                                    right_on=(C.name, C.pq__index))
+        Example:
+            ```py
+            meta = meta_emd.merge(meta_pq, on=(C.name, C.emd__index),
+                                  right_on=(C.name, C.pq__index))
+            ```
         """
         if on is None:
             raise DatasetMergeError(["None"], None, "'on' must be specified")
@@ -662,7 +724,13 @@ class DataChain(DatasetQuery):
         object_name: str = "",
         **fr_map,
     ) -> "DataChain":
-        """Generate chain from list of features."""
+        """Generate chain from list of features.
+
+        Example:
+            ```py
+            DataChain.from_features(fib=[1, 2, 3, 5, 8])
+            ```
+        """
         tuple_type, output, tuples = features_to_tuples(ds_name, output, **fr_map)
 
         def _func_fr() -> Iterator[tuple_type]:  # type: ignore[valid-type]
@@ -681,7 +749,15 @@ class DataChain(DatasetQuery):
         session: Optional[Session] = None,
         object_name: str = "",
     ) -> "DataChain":
-        """Generate chain from pandas data-frame."""
+        """Generate chain from pandas data-frame.
+        Example:
+            ```py
+            import pandas as pd
+
+            df = pd.DataFrame({"fib": [1, 2, 3, 5, 8]})
+            DataChain.from_pandas(df)
+            ```
+        """
         fr_map = {col.lower(): df[col].tolist() for col in df.columns}
 
         for column in fr_map:
@@ -718,15 +794,19 @@ class DataChain(DatasetQuery):
             model_name : Generated model name.
             kwargs : Parameters to pass to pyarrow.dataset.dataset.
 
-        Examples:
+        Example:
             Reading a json lines file:
-            >>> dc = DataChain.from_storage("s3://mybucket/file.jsonl")
-            >>> dc = dc.parse_tabular(format="json")
+            ```py
+            dc = DataChain.from_storage("s3://mybucket/file.jsonl")
+            dc = dc.parse_tabular(format="json")
+            ```
 
             Reading a filtered list of files as a dataset:
-            >>> dc = DataChain.from_storage("s3://mybucket")
-            >>> dc = dc.filter(C("file.name").glob("*.jsonl"))
-            >>> dc = dc.parse_tabular(format="json")
+            ```py
+            dc = DataChain.from_storage("s3://mybucket")
+            dc = dc.filter(C("file.name").glob("*.jsonl"))
+            dc = dc.parse_tabular(format="json")
+            ```
         """
 
         from datachain.lib.arrow import ArrowGenerator, infer_schema, schema_to_output
@@ -780,12 +860,16 @@ class DataChain(DatasetQuery):
             object_name : Created object column name.
             model_name : Generated model name.
 
-        Examples:
+        Example:
             Reading a csv file:
-            >>> dc = DataChain.from_csv("s3://mybucket/file.csv")
+            ```py
+            dc = DataChain.from_csv("s3://mybucket/file.csv")
+            ```
 
             Reading csv files from a directory as a combined dataset:
-            >>> dc = DataChain.from_csv("s3://mybucket/dir")
+            ```py
+            dc = DataChain.from_csv("s3://mybucket/dir")
+            ```
         """
         from pyarrow.csv import ParseOptions, ReadOptions
         from pyarrow.dataset import CsvFileFormat
@@ -830,12 +914,16 @@ class DataChain(DatasetQuery):
             object_name : Created object column name.
             model_name : Generated model name.
 
-        Examples:
+        Example:
             Reading a single file:
-            >>> dc = DataChain.from_parquet("s3://mybucket/file.parquet")
+            ```py
+            dc = DataChain.from_parquet("s3://mybucket/file.parquet")
+            ```
 
             Reading a partitioned dataset from a directory:
-            >>> dc = DataChain.from_parquet("s3://mybucket/dir")
+            ```py
+            dc = DataChain.from_parquet("s3://mybucket/dir")
+            ```
         """
         chain = DataChain.from_storage(path, **kwargs)
         return chain.parse_tabular(
@@ -859,9 +947,11 @@ class DataChain(DatasetQuery):
             to_insert : records (or a single record) to insert. Each record is
                         a dictionary of signals and theirs values.
 
-        Examples:
-            >>> empty = DataChain.create_empty()
-            >>> single_record = DataChain.create_empty(DataChain.DEFAULT_FILE_RECORD)
+        Example:
+            ```py
+            empty = DataChain.create_empty()
+            single_record = DataChain.create_empty(DataChain.DEFAULT_FILE_RECORD)
+            ```
         """
         session = Session.get(session)
         catalog = session.catalog
@@ -887,15 +977,19 @@ class DataChain(DatasetQuery):
         return DataChain(name=dsr.name)
 
     def sum(self, fr: FeatureType):  # type: ignore[override]
+        """Compute the sum of a column."""
         return self._extend_features("sum", fr)
 
     def avg(self, fr: FeatureType):  # type: ignore[override]
+        """Compute the average of a column."""
         return self._extend_features("avg", fr)
 
     def min(self, fr: FeatureType):  # type: ignore[override]
+        """Compute the minimum of a column."""
         return self._extend_features("min", fr)
 
     def max(self, fr: FeatureType):  # type: ignore[override]
+        """Compute the maximum of a column."""
         return self._extend_features("max", fr)
 
     def setup(self, **kwargs) -> "Self":
