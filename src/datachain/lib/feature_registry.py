@@ -1,4 +1,3 @@
-import inspect
 import logging
 from typing import Any, ClassVar, Optional
 
@@ -23,21 +22,22 @@ class Registry:
         return model.__name__
 
     @classmethod
-    def add(cls, fr: type) -> None:
-        name = fr.__name__
+    def add(cls, fr: type):
+        if (model := Registry.to_pydantic(fr)) is None:
+            return
+
+        name = model.__name__
         if name not in cls.reg:
             cls.reg[name] = {}
-        version = Registry.get_version(fr)
+        version = Registry.get_version(model)
         if version in cls.reg[name]:
             full_name = f"{name}@{version}"
             logger.warning("Feature %s is already registered", full_name)
-        cls.reg[name][version] = fr
+        cls.reg[name][version] = model
 
-        if inspect.isclass(fr) and issubclass(fr, BaseModel):
-            for f_info in fr.model_fields.values():
-                anno = f_info.annotation
-                if inspect.isclass(anno) and issubclass(anno, BaseModel):
-                    cls.add(anno)
+        for f_info in model.model_fields.values():
+            if (anno := Registry.to_pydantic(f_info.annotation)) is not None:
+                cls.add(anno)
 
     @classmethod
     def get(cls, name: str, version: Optional[int] = None) -> Optional[type]:
@@ -68,3 +68,13 @@ class Registry:
         version = fr._version  # type: ignore[attr-defined]
         if fr.__name__ in cls.reg and version in cls.reg[fr.__name__]:
             del cls.reg[fr.__name__][version]
+
+    @staticmethod
+    def is_pydantic(val):
+        return not hasattr(val, "__origin__") and issubclass(val, BaseModel)
+
+    @staticmethod
+    def to_pydantic(val) -> Optional[type[BaseModel]]:
+        if val is None or not Registry.is_pydantic(val):
+            return None
+        return val

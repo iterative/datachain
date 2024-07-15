@@ -1,4 +1,3 @@
-import inspect
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, ClassVar, Union
 
@@ -28,12 +27,7 @@ class DataModel(BaseModel):
         if not isinstance(models, Sequence):
             models = [models]
         for val in models:
-            if DataModel.is_pydantic(val):
-                Registry.add(val)
-
-    @staticmethod
-    def is_pydantic(val):
-        return inspect.isclass(val) and issubclass(val, BaseModel)
+            Registry.add(val)
 
 
 class FileBasic(DataModel):

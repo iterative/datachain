@@ -5,8 +5,9 @@ from typing import TYPE_CHECKING, Callable
 
 from pydantic import BaseModel
 
-from datachain.lib.data_model import DataModel, FileBasic
+from datachain.lib.data_model import FileBasic
 from datachain.lib.feature import ModelUtil
+from datachain.lib.feature_registry import Registry
 from datachain.lib.signal_schema import SignalSchema
 from datachain.lib.udf_signature import UdfSignature
 from datachain.lib.utils import AbstractUDF, DataChainError, DataChainParamsError
@@ -172,7 +173,7 @@ class UDFBase(AbstractUDF):
                 slice = flat_obj[position : position + length]
                 position += length
 
-                if DataModel.is_pydantic(cls):
+                if Registry.is_pydantic(cls):
                     obj = cls(**ModelUtil.unflatten_to_json(cls, slice))
                 else:
                     obj = slice[0]
