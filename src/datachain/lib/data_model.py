@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 from datetime import datetime
-from typing import TYPE_CHECKING, ClassVar, Union, get_args
+from typing import TYPE_CHECKING, ClassVar, Union, get_args, get_origin
 
 from pydantic import BaseModel
 
@@ -63,6 +63,12 @@ class FileBasic(DataModel):
 
 
 def is_chain_type(t: type) -> bool:
-    return ModelStore.is_pydantic(t) or any(
-        t is ft or t is get_args(ft)[0] for ft in get_args(ChainStandardType)
-    )
+    if ModelStore.is_pydantic(t):
+        return True
+    if any(t is ft or t is get_args(ft)[0] for ft in get_args(ChainStandardType)):
+        return True
+
+    if get_origin(t) is list and len(get_args(t)) == 1:
+        return is_chain_type(get_args(t)[0])
+
+    return False
