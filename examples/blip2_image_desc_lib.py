@@ -1,8 +1,8 @@
 # pip install torch
 import torch
 
-from datachain.lib.hf_image_to_text import BLIP2describe
-from datachain.query import C, DatasetQuery
+from datachain.lib.dc import C, DataChain
+from datachain.lib.hf_image_to_text import BLIP2Describe
 
 source = "gs://dvcx-datalakes/dogs-and-cats/"
 
@@ -15,21 +15,19 @@ else:
 
 
 if __name__ == "__main__":
-    results = (
-        DatasetQuery(
-            source,
-            anon=True,
-        )
+    (
+        DataChain.from_storage(source, type="image")
         .filter(C.name.glob("cat*.jpg"))
-        .limit(5)
-        .add_signals(
-            BLIP2describe(
+        .map(
+            desc=BLIP2Describe(
                 # device=device,
                 device="cpu",
             ),
-            parallel=False,
+            params=["file"],
+            output={"description": str, "error": str},
         )
-        .select("source", "parent", "name", "description", "error")
-        .results()
+        .select(
+            "file.source", "file.parent", "file.name", "desc.description", "desc.error"
+        )
+        .show(5)
     )
-    print(*results, sep="\n")

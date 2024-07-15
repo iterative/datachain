@@ -1,7 +1,5 @@
 try:
-    import numpy as np
     import torch
-    from PIL import Image, ImageOps, UnidentifiedImageError
     from transformers import (
         AutoProcessor,
         Blip2ForConditionalGeneration,
@@ -15,21 +13,9 @@ except ImportError as exc:
         "  pip install 'datachain[cv]'\n"
     ) from exc
 
-
-from datachain.query import Object, udf
-from datachain.sql.types import String
+from datachain.lib.udf import Mapper
 
 DEFAULT_FIT_BOX = (500, 500)
-
-
-def encode_image(raw):
-    try:
-        img = Image.open(raw)
-    except UnidentifiedImageError:
-        return None
-    img.load()
-    img = img.convert("RGB")
-    return ImageOps.fit(img, DEFAULT_FIT_BOX)
 
 
 def infer_dtype(device):
@@ -38,29 +24,22 @@ def infer_dtype(device):
     return torch.float16
 
 
-@udf(
-    params=(Object(encode_image),),  # Columns consumed by the UDF.
-    output={
-        "description": String,
-        "error": String,
-    },  # Signals being returned by the UDF.
-    batch=64,
-    method="describe",
-)
-class BLIP2describe:
+class BLIP2Describe(Mapper):
     def __init__(self, device="cpu", model="Salesforce/blip2-opt-2.7b", max_tokens=300):
-        self.torch_dtype = infer_dtype(device)
-        self.processor = Blip2Processor.from_pretrained(model)
-        self.model = Blip2ForConditionalGeneration.from_pretrained(
-            model, torch_dtype=self.torch_dtype
-        )
+        self.model_name = model
         self.device = device
-        self.model.to(device)
         self.max_tokens = max_tokens
 
-    def describe(self, imgs):
-        images = np.squeeze(np.asarray(imgs))
-        inputs = self.processor(images=images, return_tensors="pt").to(
+    def setup(self):
+        self.torch_dtype = infer_dtype(self.device)
+        self.processor = Blip2Processor.from_pretrained(self.model_name)
+        self.model = Blip2ForConditionalGeneration.from_pretrained(
+            self.model_name, torch_dtype=self.torch_dtype
+        )
+        self.model.to(self.device)
+
+    def process(self, file):
+        inputs = self.processor(images=file.get_value(), return_tensors="pt").to(
             self.device, self.torch_dtype
         )
 
@@ -68,38 +47,33 @@ class BLIP2describe:
         generated_text = self.processor.batch_decode(
             generated_ids, skip_special_tokens=True
         )
-        return [(desc.strip(), "") for desc in generated_text]
+        desc = generated_text[0]
+        return desc.strip(), ""
 
 
-@udf(
-    params=(Object(encode_image),),  # Columns consumed by the UDF.
-    output={
-        "description": String,
-        "error": String,
-    },  # Signals being returned by the UDF.
-    batch=16,
-    method="describe",
-)
-class LLaVAdescribe:
+class LLaVADescribe(Mapper):
     def __init__(self, device="cpu", model="llava-hf/llava-1.5-7b-hf", max_tokens=300):
         self.device = device
-        self.torch_dtype = infer_dtype(device)
-        self.processor = AutoProcessor.from_pretrained(model)
-        self.model = LlavaForConditionalGeneration.from_pretrained(
-            model, torch_dtype=self.torch_dtype, low_cpu_mem_usage=True
-        )
-        self.model.to(device)
+        self.model_name = model
         self.max_tokens = max_tokens
         self.prompt = "USER: <image>\nDescribe this picture\nASSISTANT:"
 
-    def describe(self, imgs):
-        images = np.squeeze(np.asarray(imgs))
+    def setup(self):
+        self.torch_dtype = infer_dtype(self.device)
+        self.processor = AutoProcessor.from_pretrained(self.model_name)
+        self.model = LlavaForConditionalGeneration.from_pretrained(
+            self.model_name, torch_dtype=self.torch_dtype, low_cpu_mem_usage=True
+        )
+        self.model.to(self.device)
+
+    def process(self, file):
         inputs = self.processor(
-            text=[self.prompt] * len(imgs), images=images, return_tensors="pt"
+            text=self.prompt, images=file.get_value(), return_tensors="pt"
         ).to(self.device, self.torch_dtype)
 
         generated_ids = self.model.generate(**inputs, max_new_tokens=self.max_tokens)
         generated_text = self.processor.batch_decode(
             generated_ids, skip_special_tokens=True
         )
-        return [(desc.split("ASSISTANT:")[-1].strip(), "") for desc in generated_text]
+        desc = generated_text[0]
+        return desc.split("ASSISTANT:")[-1].strip(), ""

@@ -121,7 +121,7 @@ class UDFBase(AbstractUDF):
                         flat.extend(Feature._flatten(obj))
                     else:
                         flat.append(obj)
-                res.append(flat)
+                res.append(tuple(flat))
         else:
             # Generator expression is required, otherwise the value will be materialized
             res = (
