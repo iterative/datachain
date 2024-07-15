@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field, field_validator
 from datachain.cache import UniqueId
 from datachain.client.fileslice import FileSlice
 from datachain.lib.cached_stream import PreCachedStream, PreDownloadStream
-from datachain.lib.feature import FileFeature
+from datachain.lib.data_model import FileBasic
 from datachain.lib.utils import DataChainError
 from datachain.sql.types import JSON, Int, String
 from datachain.utils import TIME_ZERO
@@ -96,7 +96,7 @@ class VFileRegistry:
         return reader.open(file, location)
 
 
-class File(FileFeature):
+class File(FileBasic):
     source: str = Field(default="")
     parent: str = Field(default="")
     name: str

@@ -108,6 +108,7 @@ class SignalSchema:
         signals = {}
         for name, fr_type in self.values.items():
             if (fr := to_feature(fr_type)) is not None:
+                Registry.add(fr)
                 signals[name] = Registry.get_name(fr)
             else:
                 orig = get_origin(fr_type)

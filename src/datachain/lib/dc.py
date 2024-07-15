@@ -12,7 +12,8 @@ from typing import (
 
 import sqlalchemy
 
-from datachain.lib.feature import FeatureType, registry_list
+from datachain import DataModel
+from datachain.lib.feature import FeatureType
 from datachain.lib.feature_utils import features_to_tuples
 from datachain.lib.file import File, IndexedFile, get_file
 from datachain.lib.meta_formats import read_meta, read_schema
@@ -534,7 +535,7 @@ class DataChain(DatasetQuery):
         name = self.name or ""
 
         sign = UdfSignature.parse(name, signal_map, func, params, output, is_generator)
-        registry_list(list(sign.output_schema.values.values()))
+        DataModel.register(sign.output_schema.values.values())
 
         params_schema = self.signals_schema.slice(sign.params, self._setup)
 

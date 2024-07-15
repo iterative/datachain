@@ -7,10 +7,8 @@ from datetime import datetime
 from enum import Enum
 from types import GenericAlias
 from typing import (
-    TYPE_CHECKING,
     Annotated,
     Any,
-    ClassVar,
     Literal,
     Optional,
     Union,
@@ -21,7 +19,6 @@ from typing import (
 from pydantic import BaseModel
 from typing_extensions import Literal as LiteralEx
 
-from datachain.lib.feature_registry import Registry
 from datachain.query.schema import DEFAULT_DELIMITER
 from datachain.sql.types import (
     JSON,
@@ -37,9 +34,6 @@ from datachain.sql.types import (
     SQLType,
     String,
 )
-
-if TYPE_CHECKING:
-    from datachain.catalog import Catalog
 
 FeatureStandardType = Union[
     type[int],
@@ -95,12 +89,6 @@ warnings.filterwarnings(
 feature_classes_lookup: dict[type, bool] = {}
 
 
-def registry_list(output: Sequence[FeatureType]):
-    for val in output:
-        if is_feature(val):
-            Registry.add(val)
-
-
 def is_standard_type(t: type) -> bool:
     return any(t is ft or t is get_args(ft)[0] for ft in get_args(FeatureStandardType))
 
@@ -153,32 +141,6 @@ def _build_tree(model: type[BaseModel]):
         res[name] = (anno, subtree)
 
     return res
-
-
-class VersionedModel(BaseModel):
-    _version: ClassVar[int] = 1
-
-    def get_value(self):
-        return None
-
-    @classmethod
-    def __pydantic_init_subclass__(cls):
-        Registry.add(cls)
-
-
-class FileFeature(VersionedModel):
-    def _set_stream(self, catalog: "Catalog", caching_enabled: bool = False) -> None:
-        pass
-
-    def open(self):
-        raise NotImplementedError
-
-    def read(self):
-        with self.open() as stream:
-            return stream.read()
-
-    def get_value(self):
-        return self.read()
 
 
 class ModelUtil:

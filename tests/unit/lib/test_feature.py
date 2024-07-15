@@ -3,11 +3,12 @@ from typing import ClassVar, Optional
 import pytest
 from pydantic import BaseModel, Field, ValidationError
 
-from datachain.lib.feature import ModelUtil, VersionedModel
+from datachain import DataModel
+from datachain.lib.feature import ModelUtil
 from datachain.lib.feature_registry import Registry
 
 
-class FileBasic(VersionedModel):
+class FileBasic(DataModel):
     parent: str = Field(default="")
     name: str
     size: int = Field(default=0)
@@ -17,17 +18,17 @@ class TestFileInfo(FileBasic):
     location: dict = Field(default={})
 
 
-class FileInfoEx(VersionedModel):
+class FileInfoEx(DataModel):
     f_info: TestFileInfo
     type_id: int
 
 
-class MyNestedClass(VersionedModel):
+class MyNestedClass(DataModel):
     type: int
     Name: str = Field(default="test1")
 
 
-class MyTest(VersionedModel):
+class MyTest(DataModel):
     ThisIsName: str
     subClass: MyNestedClass  # noqa: N815
 
@@ -48,7 +49,7 @@ def test_flatten_with_empty_json():
 
 
 def test_flatten_with_accepted_empty_json():
-    class _Test(VersionedModel):
+    class _Test(DataModel):
         d: Optional[dict]
 
     assert ModelUtil.flatten(_Test(d=None)) == (None,)
@@ -70,7 +71,7 @@ def test_flatten_list():
 
 
 def test_registry():
-    class MyTestRndmz(VersionedModel):
+    class MyTestRndmz(DataModel):
         name: str
         count: int
 
@@ -81,7 +82,7 @@ def test_registry():
 
 
 def test_registry_versioned():
-    class MyTestXYZ(VersionedModel):
+    class MyTestXYZ(DataModel):
         _version: ClassVar[int] = 42
         name: str
         count: int
@@ -93,10 +94,10 @@ def test_registry_versioned():
 
 
 def test_inheritance():
-    class SubObject(VersionedModel):
+    class SubObject(DataModel):
         subname: str
 
-    class SoMyTest1(VersionedModel):
+    class SoMyTest1(DataModel):
         name: str
         sub: SubObject
 
@@ -116,11 +117,11 @@ def test_inheritance():
 
 
 def test_deserialize_nested():
-    class Child(VersionedModel):
+    class Child(DataModel):
         type: int
         name: str = Field(default="test1")
 
-    class Parent(VersionedModel):
+    class Parent(DataModel):
         name: str
         child: Child
 
@@ -138,11 +139,11 @@ def test_deserialize_nested():
 
 
 def test_deserialize_nested_with_name_normalization():
-    class ChildClass(VersionedModel):
+    class ChildClass(DataModel):
         type: int
         name: str = Field(default="test1")
 
-    class Parent2(VersionedModel):
+    class Parent2(DataModel):
         name: str
         childClass11: ChildClass  # noqa: N815
 
@@ -160,7 +161,7 @@ def test_deserialize_nested_with_name_normalization():
 
 
 def test_type_array_of_floats():
-    class _Test(VersionedModel):
+    class _Test(DataModel):
         d: list[float]
 
     dict_ = {"d": [1, 3, 5]}
@@ -169,11 +170,11 @@ def test_type_array_of_floats():
 
 
 def test_unflatten_to_json():
-    class _Child(VersionedModel):
+    class _Child(DataModel):
         type: int
         name: str = Field(default="test1")
 
-    class _Parent(VersionedModel):
+    class _Parent(DataModel):
         name: str
         child: _Child
 
@@ -187,11 +188,11 @@ def test_unflatten_to_json():
 
 
 def test_unflatten_to_json_list():
-    class _Child(VersionedModel):
+    class _Child(DataModel):
         type: int
         name: str = Field(default="test1")
 
-    class _Parent(VersionedModel):
+    class _Parent(DataModel):
         name: str
         children: list[_Child]
 
@@ -209,11 +210,11 @@ def test_unflatten_to_json_list():
 
 
 def test_unflatten_to_json_dict():
-    class _Child(VersionedModel):
+    class _Child(DataModel):
         type: int
         address: str = Field(default="test1")
 
-    class _Parent(VersionedModel):
+    class _Parent(DataModel):
         name: str
         children: dict[str, _Child]
 
@@ -237,7 +238,7 @@ def test_unflatten_to_json_dict():
 
 
 def test_unflatten_to_json_list_of_int():
-    class _Child(VersionedModel):
+    class _Child(DataModel):
         types: list[int]
         name: str = Field(default="test1")
 
@@ -255,15 +256,15 @@ def test_unflatten_to_json_list_of_int():
 
 
 def test_unflatten_to_json_list_of_lists():
-    class _Child(VersionedModel):
+    class _Child(DataModel):
         type: int
         name: str = Field(default="test1")
 
-    class _Parent(VersionedModel):
+    class _Parent(DataModel):
         name: str
         children: list[_Child]
 
-    class _Company(VersionedModel):
+    class _Company(DataModel):
         name: str
         parents: list[_Parent]
 

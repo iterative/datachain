@@ -13,17 +13,15 @@ def test_module_exports():
             Column,
             DataChain,
             DataChainError,
+            DataModel,
             File,
+            FileBasic,
             FileError,
-            FileFeature,
             Generator,
             IndexedFile,
             Mapper,
             Session,
             TarVFile,
-            VersionedModel,
-            convert_images,
-            convert_text,
         )
         from datachain.image import ImageFile, convert_images
         from datachain.text import convert_text

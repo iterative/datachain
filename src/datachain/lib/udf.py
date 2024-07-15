@@ -5,7 +5,8 @@ from typing import TYPE_CHECKING, Callable
 
 from pydantic import BaseModel
 
-from datachain.lib.feature import FileFeature, ModelUtil, is_feature
+from datachain.lib.data_model import FileBasic
+from datachain.lib.feature import ModelUtil, is_feature
 from datachain.lib.signal_schema import SignalSchema
 from datachain.lib.udf_signature import UdfSignature
 from datachain.lib.utils import AbstractUDF, DataChainError, DataChainParamsError
@@ -148,7 +149,7 @@ class UDFBase(AbstractUDF):
         for row in rows:
             obj_row = self.params.row_to_objs(row)
             for obj in obj_row:
-                if isinstance(obj, FileFeature):
+                if isinstance(obj, FileBasic):
                     obj._set_stream(self._catalog, caching_enabled=True)
             objs.append(obj_row)
         return objs
@@ -176,7 +177,7 @@ class UDFBase(AbstractUDF):
                 else:
                     obj = slice[0]
 
-                if isinstance(obj, FileFeature):
+                if isinstance(obj, FileBasic):
                     obj._set_stream(self._catalog)
                 output_map[signal].append(obj)
 
