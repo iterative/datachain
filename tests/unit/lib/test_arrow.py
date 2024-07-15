@@ -74,7 +74,6 @@ def test_arrow_type_error():
 def test_schema_to_output():
     schema = pa.schema([("some_int", pa.int32()), ("some_string", pa.string())])
     assert schema_to_output(schema) == {
-        "source": IndexedFile,
         "some_int": int,
         "some_string": str,
     }
@@ -90,7 +89,6 @@ def test_parquet_convert_column_names():
         ]
     )
     assert list(schema_to_output(schema)) == [
-        "source",
         "uppercasecol",
         "dotnotationcol",
         "withdashes",
@@ -105,4 +103,20 @@ def test_parquet_missing_column_names():
             ("", pa.int32()),
         ]
     )
-    assert list(schema_to_output(schema)) == ["source", "c0", "c1"]
+    assert list(schema_to_output(schema)) == ["c0", "c1"]
+
+
+def test_parquet_override_column_names():
+    schema = pa.schema([("some_int", pa.int32()), ("some_string", pa.string())])
+    col_names = ["n1", "n2"]
+    assert schema_to_output(schema, col_names) == {
+        "n1": int,
+        "n2": str,
+    }
+
+
+def test_parquet_override_column_names_invalid():
+    schema = pa.schema([("some_int", pa.int32()), ("some_string", pa.string())])
+    col_names = ["n1", "n2", "n3"]
+    with pytest.raises(ValueError):
+        schema_to_output(schema, col_names)
