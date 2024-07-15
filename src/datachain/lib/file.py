@@ -1,4 +1,5 @@
 import json
+import os
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
@@ -190,6 +191,15 @@ class File(FileFeature):
             return VFileRegistry.resolve(self, self.location)
 
         return self._stream
+
+    def export(self, output: str):
+        self._set_stream(self._catalog, caching_enabled=True)
+        dst = os.path.join(output, self.get_path())  # type: ignore[union-attr]
+        dst_dir = os.path.dirname(dst)
+        os.makedirs(dst_dir, exist_ok=True)
+
+        with open(dst, mode="wb") as f:
+            f.write(self.read())
 
     def _set_stream(self, catalog: "Catalog", caching_enabled: bool = False) -> None:
         self._catalog = catalog
