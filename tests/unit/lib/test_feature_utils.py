@@ -2,11 +2,11 @@ from typing import get_args, get_origin
 
 import pytest
 
-from datachain.lib.dc import DataChain
-from datachain.lib.feature_utils import (
+from datachain.lib.converters.values_to_tuples import (
     FeatureToTupleError,
-    features_to_tuples,
+    values_to_tuples,
 )
+from datachain.lib.dc import DataChain
 from datachain.query.schema import Column
 
 
@@ -14,7 +14,7 @@ def test_basic():
     fib = [1, 1, 2, 3, 5, 8]
     values = ["odd" if num % 2 else "even" for num in fib]
 
-    typ, _partition_by, vals = features_to_tuples(fib=fib, odds=values)
+    typ, _partition_by, vals = values_to_tuples(fib=fib, odds=values)
 
     assert get_origin(typ) is tuple
     assert get_args(typ) == (int, str)
@@ -42,7 +42,7 @@ def test_e2e(catalog):
 def test_single_value():
     fib = [1, 1, 2, 3, 5, 8]
 
-    typ, _partition_by, vals = features_to_tuples(fib=fib)
+    typ, _partition_by, vals = values_to_tuples(fib=fib)
 
     assert typ is int
     assert vals == fib

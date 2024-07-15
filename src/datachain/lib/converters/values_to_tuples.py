@@ -1,12 +1,8 @@
-import string
 from collections.abc import Sequence
 from typing import Any, Union
 
 from datachain.lib.data_model import ChainType, ChainTypeNames, is_chain_type
 from datachain.lib.utils import DataChainParamsError
-
-AUTO_FEATURE_PREFIX = "_auto_fr"
-SUFFIX_SYMBOLS = string.digits + string.ascii_lowercase
 
 
 class FeatureToTupleError(DataChainParamsError):
@@ -16,7 +12,7 @@ class FeatureToTupleError(DataChainParamsError):
         super().__init__(f"Cannot convert features for dataset{ds_name}: {msg}")
 
 
-def features_to_tuples(
+def values_to_tuples(
     ds_name: str = "",
     output: Union[None, ChainType, Sequence[str], dict[str, ChainType]] = None,
     **fr_map,

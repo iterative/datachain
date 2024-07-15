@@ -4,7 +4,7 @@ from typing import Optional, Union
 import pytest
 from pydantic import BaseModel
 
-from datachain.lib.feature import ModelUtil
+from datachain.lib.converters.flatten import flatten
 from datachain.lib.file import File
 from datachain.lib.model_store import ModelStore
 from datachain.lib.signal_schema import (
@@ -253,7 +253,7 @@ def test_row_to_objs():
     schema = SignalSchema(spec)
 
     val = MyType2(name="Fred", deep=MyType1(aa=129, bb="qwe"))
-    row = ("myname", 12.5, *ModelUtil.flatten(val))
+    row = ("myname", 12.5, *flatten(val))
 
     res = schema.row_to_objs(row)
 
@@ -267,7 +267,7 @@ def test_row_to_objs_setup():
     schema = SignalSchema(spec, setup)
 
     val = MyType2(name="Fred", deep=MyType1(aa=129, bb="qwe"))
-    row = ("myname", 12.5, *ModelUtil.flatten(val))
+    row = ("myname", 12.5, *flatten(val))
 
     res = schema.row_to_objs(row)
     assert res == ["myname", 12.5, setup_value, val]

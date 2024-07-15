@@ -3,8 +3,8 @@ import json
 import pandas as pd
 from PIL import Image
 
+from datachain.lib.converters.flatten import ShallowFeature
 from datachain.lib.dc import DataChain
-from datachain.lib.feature import ShallowFeature
 from datachain.lib.feature_udf import FeatureAggregator
 from datachain.lib.file import File, FileInfo
 from datachain.query.schema import C

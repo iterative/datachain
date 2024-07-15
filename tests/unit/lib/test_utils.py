@@ -4,7 +4,7 @@ from typing import Literal, Optional, Union
 import pytest
 from pydantic import BaseModel
 
-from datachain.lib.type_converter import convert_to_db_type
+from datachain.lib.converters.type_converter import convert_to_db_type
 from datachain.sql.types import JSON, Array, String
 
 

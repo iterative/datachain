@@ -13,8 +13,8 @@ from typing import (
 import sqlalchemy
 
 from datachain import DataModel
+from datachain.lib.converters.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import ChainType
-from datachain.lib.feature_utils import features_to_tuples
 from datachain.lib.file import File, IndexedFile, get_file
 from datachain.lib.meta_formats import read_meta, read_schema
 from datachain.lib.settings import Settings
@@ -709,7 +709,7 @@ class DataChain(DatasetQuery):
         **fr_map,
     ) -> "DataChain":
         """Generate chain from list of features."""
-        tuple_type, output, tuples = features_to_tuples(ds_name, output, **fr_map)
+        tuple_type, output, tuples = values_to_tuples(ds_name, output, **fr_map)
 
         def _func_fr() -> Iterator[tuple_type]:  # type: ignore[valid-type]
             yield from tuples

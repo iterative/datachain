@@ -6,16 +6,14 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, Union, get_args, get_
 
 from pydantic import BaseModel
 
+from datachain.lib.converters.flatten import DATACHAIN_TO_TYPE
+from datachain.lib.converters.type_converter import convert_to_db_type
+from datachain.lib.converters.unflatten import unflatten_to_json_pos
 from datachain.lib.data_model import ChainType
-from datachain.lib.feature import (
-    DATACHAIN_TO_TYPE,
-    DEFAULT_DELIMITER,
-    ModelUtil,
-)
 from datachain.lib.file import File
 from datachain.lib.model_store import ModelStore
-from datachain.lib.type_converter import convert_to_db_type
 from datachain.lib.utils import DataChainParamsError
+from datachain.query.schema import DEFAULT_DELIMITER
 
 if TYPE_CHECKING:
     from datachain.catalog import Catalog
@@ -164,7 +162,7 @@ class SignalSchema:
             if self.setup_values and (val := self.setup_values.get(name, None)):
                 objs.append(val)
             elif (fr := ModelStore.to_pydantic(fr_type)) is not None:
-                j, pos = ModelUtil.unflatten_to_json_pos(fr, row, pos)
+                j, pos = unflatten_to_json_pos(fr, row, pos)
                 objs.append(fr(**j))  # type: ignore[arg-type]
             else:
                 objs.append(row[pos])
@@ -197,7 +195,7 @@ class SignalSchema:
                 res.append(row[pos])
                 pos += 1
             else:
-                json, pos = ModelUtil.unflatten_to_json_pos(fr, row, pos)  # type: ignore[union-attr]
+                json, pos = unflatten_to_json_pos(fr, row, pos)  # type: ignore[union-attr]
                 obj = fr(**json)
                 if isinstance(obj, File):
                     obj._set_stream(catalog)

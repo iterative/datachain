@@ -1,12 +1,12 @@
-import inspect
 import sys
 import traceback
 from typing import TYPE_CHECKING, Callable
 
 from pydantic import BaseModel
 
+from datachain.lib.converters.flatten import flatten
+from datachain.lib.converters.unflatten import unflatten_to_json
 from datachain.lib.data_model import FileBasic
-from datachain.lib.feature import ModelUtil
 from datachain.lib.model_store import ModelStore
 from datachain.lib.signal_schema import SignalSchema
 from datachain.lib.udf_signature import UdfSignature
@@ -122,14 +122,14 @@ class UDFBase(AbstractUDF):
                 flat = []
                 for obj in tuple_:
                     if isinstance(obj, BaseModel):
-                        flat.extend(ModelUtil.flatten(obj))
+                        flat.extend(flatten(obj))
                     else:
                         flat.append(obj)
                 res.append(flat)
         else:
             # Generator expression is required, otherwise the value will be materialized
             res = (
-                ModelUtil.flatten(obj) if isinstance(obj, BaseModel) else (obj,)
+                flatten(obj) if isinstance(obj, BaseModel) else (obj,)
                 for obj in result_objs
             )
 
@@ -160,7 +160,7 @@ class UDFBase(AbstractUDF):
         spec_map = {}
         output_map = {}
         for name, (anno, subtree) in self.params.tree.items():
-            if inspect.isclass(anno) and issubclass(anno, BaseModel):
+            if ModelStore.is_pydantic(anno):
                 length = sum(1 for _ in self.params._get_flat_tree(subtree, [], 0))
             else:
                 length = 1
@@ -174,7 +174,7 @@ class UDFBase(AbstractUDF):
                 position += length
 
                 if ModelStore.is_pydantic(cls):
-                    obj = cls(**ModelUtil.unflatten_to_json(cls, slice))
+                    obj = cls(**unflatten_to_json(cls, slice))
                 else:
                     obj = slice[0]
 
