@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, Optional, Union
 from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
 
+from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 from fsspec.implementations.local import LocalFileSystem
 from pydantic import Field, field_validator
 
@@ -177,13 +178,21 @@ class File(FileBasic):
         uid = self.get_uid()
         client = self._catalog.get_client(self.source)
         if self._caching_enabled:
-            client.download(uid)
-        with client.open_object(uid, use_cache=self._caching_enabled) as f:
+            client.download(uid, callback=self._download_cb)
+        with client.open_object(
+            uid, use_cache=self._caching_enabled, cb=self._download_cb
+        ) as f:
             yield f
 
-    def _set_stream(self, catalog: "Catalog", caching_enabled: bool = False) -> None:
+    def _set_stream(
+        self,
+        catalog: "Catalog",
+        caching_enabled: bool = False,
+        download_cb: Callback = DEFAULT_CALLBACK,
+    ) -> None:
         self._catalog = catalog
         self._caching_enabled = caching_enabled
+        self._download_cb = download_cb
 
     def get_uid(self) -> UniqueId:
         dump = self.model_dump()
