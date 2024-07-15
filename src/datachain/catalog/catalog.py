@@ -84,6 +84,8 @@ if TYPE_CHECKING:
         AbstractMetastore,
         AbstractWarehouse,
     )
+    from datachain.dataset import DatasetVersion
+    from datachain.job import Job
 
 logger = logging.getLogger("datachain")
 
@@ -1419,6 +1421,25 @@ class Catalog:
         for d in datasets:
             if not d.is_bucket_listing:
                 yield d
+
+    def list_datasets_versions(
+        self,
+    ) -> Iterator[tuple[DatasetRecord, "DatasetVersion", Optional["Job"]]]:
+        """Iterate over all dataset versions with related jobs."""
+        datasets = list(self.ls_datasets())
+
+        # preselect dataset versions jobs from db to avoid multiple queries
+        jobs_ids: set[str] = {
+            v.job_id for ds in datasets for v in ds.versions if v.job_id
+        }
+        jobs: dict[str, Job] = {}
+        if jobs_ids:
+            jobs = {j.id: j for j in self.metastore.list_jobs_by_ids(list(jobs_ids))}
+
+        for d in datasets:
+            yield from (
+                (d, v, jobs.get(v.job_id) if v.job_id else None) for v in d.versions
+            )
 
     def ls_dataset_rows(
         self, name: str, version: int, offset=None, limit=None

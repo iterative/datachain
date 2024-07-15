@@ -41,7 +41,6 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
     from datachain.catalog import Catalog
-    from datachain.job import Job
 
 C = Column
 
@@ -363,33 +362,13 @@ class DataChain(DatasetQuery):
         """
         session = Session.get(session)
         catalog = session.catalog
-        registered_datasets = list(catalog.ls_datasets())
 
-        # preselect jobs from db
-        jobs_ids: set[str] = {
-            v.job_id for ds in registered_datasets for v in ds.versions if v.job_id
-        }
-        jobs: dict[str, Job] = {
-            j.id: j for j in catalog.metastore.list_jobs_by_ids(list(jobs_ids))
-        }
-
-        # create list of Dataset features
-        datasets: list[Dataset] = []
-        for d in registered_datasets:
-            datasets.extend(
-                Dataset.from_models(
-                    dataset=d,
-                    version=v,
-                    job=jobs.get(v.job_id) if v.job_id else None,
-                )
-                for v in d.versions
-            )
+        datasets = [
+            Dataset.from_models(d, v, j) for d, v, j in catalog.list_datasets_versions()
+        ]
 
         return DataChain.from_features(
-            ds_name="datasets",
-            session=session,
-            output=Dataset,
-            dataset=datasets,
+            session=session, output=Dataset, dataset=datasets
         )
 
     def show_json_schema(  # type: ignore[override]
