@@ -4,19 +4,12 @@ import re
 import warnings
 from collections.abc import Sequence
 from datetime import datetime
-from enum import Enum
 from typing import (
-    Annotated,
     Any,
-    Literal,
-    Optional,
-    Union,
-    get_args,
     get_origin,
 )
 
 from pydantic import BaseModel
-from typing_extensions import Literal as LiteralEx
 
 from datachain.lib.model_store import ModelStore
 from datachain.query.schema import DEFAULT_DELIMITER
@@ -31,23 +24,8 @@ from datachain.sql.types import (
     Int32,
     Int64,
     NullType,
-    SQLType,
     String,
 )
-
-TYPE_TO_DATACHAIN = {
-    int: Int64,
-    str: String,
-    Literal: String,
-    LiteralEx: String,
-    Enum: String,
-    float: Float,
-    bool: Boolean,
-    datetime: DateTime,  # Note, list of datetime is not supported yet
-    bytes: Binary,  # Note, list of bytes is not supported yet
-    list: Array,
-    dict: JSON,
-}
 
 DATACHAIN_TO_TYPE = {
     Int: int,
@@ -69,28 +47,6 @@ warnings.filterwarnings(
     message="Field name .* shadows an attribute in parent",
     category=UserWarning,
 )
-
-
-def build_tree(model: Optional[Any]):
-    if model is None:
-        return None
-    if (fr := ModelStore.to_pydantic(model)) is not None:
-        return _build_tree(fr)
-    return None
-
-
-def _build_tree(model: type[BaseModel]):
-    res = {}
-
-    for name, f_info in model.model_fields.items():
-        anno = f_info.annotation
-        if (fr := ModelStore.to_pydantic(anno)) is not None:
-            subtree = build_tree(fr)
-        else:
-            subtree = None
-        res[name] = (anno, subtree)
-
-    return res
 
 
 class ModelUtil:
@@ -195,65 +151,3 @@ class ModelUtil:
     @classmethod
     def unflatten(cls, model: type[BaseModel], dump):
         return cls._unflatten_with_path(model, dump, [])
-
-
-def convert_type_to_datachain(typ):  # noqa: PLR0911
-    if inspect.isclass(typ):
-        if issubclass(typ, SQLType):
-            return typ
-        if issubclass(typ, Enum):
-            return str
-
-    res = TYPE_TO_DATACHAIN.get(typ)
-    if res:
-        return res
-
-    orig = get_origin(typ)
-
-    if orig in (Literal, LiteralEx):
-        return String
-
-    args = get_args(typ)
-    if inspect.isclass(orig) and (issubclass(list, orig) or issubclass(tuple, orig)):
-        if args is None or len(args) != 1:
-            raise TypeError(f"Cannot resolve type '{typ}' for flattening features")
-
-        args0 = args[0]
-        if ModelStore.is_pydantic(args0):
-            return Array(JSON())
-
-        next_type = convert_type_to_datachain(args0)
-        return Array(next_type)
-
-    if orig is Annotated:
-        # Ignoring annotations
-        return convert_type_to_datachain(args[0])
-
-    if inspect.isclass(orig) and issubclass(dict, orig):
-        return JSON
-
-    if orig == Union:
-        if len(args) == 2 and (type(None) in args):
-            return convert_type_to_datachain(args[0])
-
-        if _is_json_inside_union(orig, args):
-            return JSON
-
-    raise TypeError(f"Cannot recognize type {typ}")
-
-
-def _is_json_inside_union(orig, args) -> bool:
-    if orig == Union and len(args) >= 2:
-        # List in JSON: Union[dict, list[dict]]
-        args_no_nones = [arg for arg in args if arg != type(None)]
-        if len(args_no_nones) == 2:
-            args_no_dicts = [arg for arg in args_no_nones if arg is not dict]
-            if len(args_no_dicts) == 1 and get_origin(args_no_dicts[0]) is list:
-                arg = get_args(args_no_dicts[0])
-                if len(arg) == 1 and arg[0] is dict:
-                    return True
-
-        # List of objects: Union[MyClass, OtherClass]
-        if any(inspect.isclass(arg) and issubclass(arg, BaseModel) for arg in args):
-            return True
-    return False

@@ -4,16 +4,17 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union, get_args, get_origin
 
+from pydantic import BaseModel
+
 from datachain.lib.data_model import ChainType
 from datachain.lib.feature import (
     DATACHAIN_TO_TYPE,
     DEFAULT_DELIMITER,
     ModelUtil,
-    build_tree,
-    convert_type_to_datachain,
 )
 from datachain.lib.file import File
 from datachain.lib.model_store import ModelStore
+from datachain.lib.type_converter import convert_to_db_type
 from datachain.lib.utils import DataChainParamsError
 
 if TYPE_CHECKING:
@@ -144,14 +145,14 @@ class SignalSchema:
 
         return SignalSchema(signals)
 
-    def to_udf_spec(self) -> dict[str, Any]:
+    def to_udf_spec(self) -> dict[str, type]:
         res = {}
         for path, type_, has_subtree, _ in self.get_flat_tree():
             if path[0] in self.setup_func:
                 continue
             if not has_subtree:
                 db_name = DEFAULT_DELIMITER.join(path)
-                res[db_name] = convert_type_to_datachain(type_)
+                res[db_name] = convert_to_db_type(type_)
         return res
 
     def row_to_objs(self, row: Sequence[Any]) -> list[ChainType]:
@@ -277,13 +278,13 @@ class SignalSchema:
                 yield ".".join(path)
 
     @staticmethod
-    def _build_tree(values: dict[str, ChainType]) -> dict[str, Any]:
-        res = {}
-
-        for name, val in values.items():
-            res[name] = (val, build_tree(val))
-
-        return res
+    def _build_tree(
+        values: dict[str, ChainType],
+    ) -> dict[str, tuple[ChainType, Optional[dict]]]:
+        return {
+            name: (val, SignalSchema._build_tree_for_type(val))
+            for name, val in values.items()
+        }
 
     def get_flat_tree(self) -> Iterator[tuple[list[str], type, bool, int]]:
         yield from self._get_flat_tree(self.tree, [], 0)
@@ -330,3 +331,27 @@ class SignalSchema:
             vals = f", {SignalSchema._type_to_str(args[1])}" if len(args) > 1 else ""
             return f"dict[{type_str}{vals}]"
         return type_.__name__
+
+    @staticmethod
+    def _build_tree_for_type(
+        model: ChainType,
+    ) -> Optional[dict[str, tuple[ChainType, Optional[dict]]]]:
+        if (fr := ModelStore.to_pydantic(model)) is not None:
+            return SignalSchema._build_tree_for_model(fr)
+        return None
+
+    @staticmethod
+    def _build_tree_for_model(
+        model: type[BaseModel],
+    ) -> Optional[dict[str, tuple[ChainType, Optional[dict]]]]:
+        res: dict[str, tuple[ChainType, Optional[dict]]] = {}
+
+        for name, f_info in model.model_fields.items():
+            anno = f_info.annotation
+            if (fr := ModelStore.to_pydantic(anno)) is not None:
+                subtree = SignalSchema._build_tree_for_model(fr)
+            else:
+                subtree = None
+            res[name] = (anno, subtree)  # type: ignore[assignment]
+
+        return res
