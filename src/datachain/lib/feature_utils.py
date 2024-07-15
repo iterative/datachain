@@ -81,6 +81,15 @@ def _to_feature_type(anno):
     return anno
 
 
+def dict_to_feature(name: str, data_dict: dict[str, FeatureType]) -> type[Feature]:
+    fields = {name: (anno, ...) for name, anno in data_dict.items()}
+    return create_model(  # type: ignore[call-overload]
+        name,
+        __base__=Feature,
+        **fields,
+    )
+
+
 def features_to_tuples(
     ds_name: str = "",
     output: Union[None, FeatureType, Sequence[str], dict[str, FeatureType]] = None,
