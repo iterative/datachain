@@ -21,7 +21,6 @@ __all__ = [
     "FileError",
     "FileFeature",
     "Generator",
-    "ImageFile",
     "IndexedFile",
     "Mapper",
     "Session",
