@@ -4,7 +4,7 @@ from typing import Callable, Optional, Union
 import pytest
 from pydantic import BaseModel
 
-from datachain.lib.feature import FeatureType
+from datachain.lib.data_model import ChainType
 from datachain.lib.file import File
 from datachain.lib.udf import Mapper
 from datachain.lib.udf_signature import UdfSignature, UdfSignatureError
@@ -13,7 +13,7 @@ from datachain.lib.udf_signature import UdfSignature, UdfSignatureError
 def get_sign(
     func: Optional[Callable] = None,
     params: Union[None, str, Sequence[str]] = None,
-    output: Union[None, FeatureType, Sequence[str], dict[str, FeatureType]] = None,
+    output: Union[None, ChainType, Sequence[str], dict[str, ChainType]] = None,
     **signal_map,
 ):
     return UdfSignature.parse("test", signal_map, func, params, output, False)

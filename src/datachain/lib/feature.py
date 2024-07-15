@@ -5,7 +5,6 @@ import warnings
 from collections.abc import Sequence
 from datetime import datetime
 from enum import Enum
-from types import GenericAlias
 from typing import (
     Annotated,
     Any,
@@ -19,6 +18,7 @@ from typing import (
 from pydantic import BaseModel
 from typing_extensions import Literal as LiteralEx
 
+from datachain.lib.model_store import ModelStore
 from datachain.query.schema import DEFAULT_DELIMITER
 from datachain.sql.types import (
     JSON,
@@ -34,20 +34,6 @@ from datachain.sql.types import (
     SQLType,
     String,
 )
-
-FeatureStandardType = Union[
-    type[int],
-    type[str],
-    type[float],
-    type[bool],
-    type[list],
-    type[dict],
-    type[bytes],
-    type[datetime],
-]
-
-FeatureType = Union[type[BaseModel], FeatureStandardType]
-FeatureTypeNames = "BaseModel, int, str, float, bool, list, dict, bytes, datetime"
 
 TYPE_TO_DATACHAIN = {
     int: Int64,
@@ -84,47 +70,11 @@ warnings.filterwarnings(
     category=UserWarning,
 )
 
-# Optimization: Store feature classes in this lookup variable so extra checks can be
-# skipped within loops.
-feature_classes_lookup: dict[type, bool] = {}
-
-
-def is_standard_type(t: type) -> bool:
-    return any(t is ft or t is get_args(ft)[0] for ft in get_args(FeatureStandardType))
-
-
-def is_feature_type(t: type) -> bool:
-    if is_standard_type(t):
-        return True
-    if get_origin(t) is list and len(get_args(t)) == 1:
-        return is_feature_type(get_args(t)[0])
-    return issubclass(t, BaseModel)
-
-
-def is_feature(anno) -> bool:
-    if anno in feature_classes_lookup:
-        # Optimization: Skip expensive subclass checks if already checked.
-        return feature_classes_lookup[anno]
-    is_class = inspect.isclass(anno)
-    result = (
-        is_class and not isinstance(anno, GenericAlias) and issubclass(anno, BaseModel)
-    )
-    if is_class:
-        # Only cache types in the feature classes lookup dict (not instances).
-        feature_classes_lookup[anno] = result
-    return result
-
-
-def to_feature(typ: Optional[Any]) -> Optional[type[BaseModel]]:
-    if typ is None or not is_feature(typ):
-        return None
-    return typ
-
 
 def build_tree(model: Optional[Any]):
     if model is None:
         return None
-    if (fr := to_feature(model)) is not None:
+    if (fr := ModelStore.to_pydantic(model)) is not None:
         return _build_tree(fr)
     return None
 
@@ -134,7 +84,7 @@ def _build_tree(model: type[BaseModel]):
 
     for name, f_info in model.model_fields.items():
         anno = f_info.annotation
-        if (fr := to_feature(anno)) is not None:
+        if (fr := ModelStore.to_pydantic(anno)) is not None:
             subtree = build_tree(fr)
         else:
             subtree = None
@@ -157,14 +107,15 @@ class ModelUtil:
 
             if isinstance(value, list):
                 yield [
-                    val.model_dump() if is_feature(type(val)) else val for val in value
+                    val.model_dump() if ModelStore.is_pydantic(type(val)) else val
+                    for val in value
                 ]
             elif isinstance(value, dict):
                 yield {
-                    key: val.model_dump() if is_feature(type(val)) else val
+                    key: val.model_dump() if ModelStore.is_pydantic(type(val)) else val
                     for key, val in value.items()
                 }
-            elif is_feature(anno):
+            elif ModelStore.is_pydantic(anno):
                 yield from cls._flatten_fields_values(anno.model_fields, value)
             else:
                 yield value
@@ -268,7 +219,7 @@ def convert_type_to_datachain(typ):  # noqa: PLR0911
             raise TypeError(f"Cannot resolve type '{typ}' for flattening features")
 
         args0 = args[0]
-        if is_feature(args0):
+        if ModelStore.is_pydantic(args0):
             return Array(JSON())
 
         next_type = convert_type_to_datachain(args0)

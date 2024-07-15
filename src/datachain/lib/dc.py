@@ -13,7 +13,7 @@ from typing import (
 import sqlalchemy
 
 from datachain import DataModel
-from datachain.lib.feature import FeatureType
+from datachain.lib.data_model import ChainType
 from datachain.lib.feature_utils import features_to_tuples
 from datachain.lib.file import File, IndexedFile, get_file
 from datachain.lib.meta_formats import read_meta, read_schema
@@ -244,7 +244,7 @@ class DataChain(DatasetQuery):
         path,
         type: Literal["binary", "text", "image"] = "text",
         anon: bool = False,
-        spec: Optional[FeatureType] = None,
+        spec: Optional[ChainType] = None,
         schema_from: Optional[str] = "auto",
         object_name: Optional[str] = "csv",
         model_name: Optional[str] = None,
@@ -291,7 +291,7 @@ class DataChain(DatasetQuery):
         path,
         type: Literal["binary", "text", "image"] = "text",
         anon: bool = False,
-        spec: Optional[FeatureType] = None,
+        spec: Optional[ChainType] = None,
         schema_from: Optional[str] = "auto",
         jmespath: Optional[str] = None,
         object_name: Optional[str] = None,
@@ -403,7 +403,7 @@ class DataChain(DatasetQuery):
         self,
         func: Optional[Callable] = None,
         params: Union[None, str, Sequence[str]] = None,
-        output: Union[None, FeatureType, Sequence[str], dict[str, FeatureType]] = None,
+        output: Union[None, ChainType, Sequence[str], dict[str, ChainType]] = None,
         **signal_map,
     ) -> "Self":
         """Apply a function to each row to create new signals. The function should
@@ -447,7 +447,7 @@ class DataChain(DatasetQuery):
         self,
         func: Optional[Callable] = None,
         params: Union[None, str, Sequence[str]] = None,
-        output: Union[None, FeatureType, Sequence[str], dict[str, FeatureType]] = None,
+        output: Union[None, ChainType, Sequence[str], dict[str, ChainType]] = None,
         **signal_map,
     ) -> "Self":
         """Apply a function to each row to create new rows (with potentially new
@@ -476,7 +476,7 @@ class DataChain(DatasetQuery):
         func: Optional[Callable] = None,
         partition_by: Optional[PartitionByType] = None,
         params: Union[None, str, Sequence[str]] = None,
-        output: Union[None, FeatureType, Sequence[str], dict[str, FeatureType]] = None,
+        output: Union[None, ChainType, Sequence[str], dict[str, ChainType]] = None,
         **signal_map,
     ) -> "Self":
         """Aggregate rows using `partition_by` statement and apply a function to the
@@ -506,7 +506,7 @@ class DataChain(DatasetQuery):
         self,
         func: Optional[Callable] = None,
         params: Union[None, str, Sequence[str]] = None,
-        output: Union[None, FeatureType, Sequence[str], dict[str, FeatureType]] = None,
+        output: Union[None, ChainType, Sequence[str], dict[str, ChainType]] = None,
         **signal_map,
     ) -> "Self":
         """This is a batch version of map().
@@ -528,7 +528,7 @@ class DataChain(DatasetQuery):
         target_class: type[UDFBase],
         func: Optional[Callable],
         params: Union[None, str, Sequence[str]],
-        output: Union[None, FeatureType, Sequence[str], dict[str, FeatureType]],
+        output: Union[None, ChainType, Sequence[str], dict[str, ChainType]],
         signal_map,
     ) -> UDFBase:
         is_generator = target_class.is_output_batched
@@ -570,7 +570,7 @@ class DataChain(DatasetQuery):
         chain.signals_schema = new_schema
         return chain
 
-    def iterate(self, *cols: str) -> Iterator[list[FeatureType]]:
+    def iterate(self, *cols: str) -> Iterator[list[ChainType]]:
         """Iterate over rows.
 
         If columns are specified - limit them to specified
@@ -583,14 +583,14 @@ class DataChain(DatasetQuery):
             for row in rows_iter:
                 yield chain.signals_schema.row_to_features(row, chain.session.catalog)
 
-    def iterate_one(self, col: str) -> Iterator[FeatureType]:
+    def iterate_one(self, col: str) -> Iterator[ChainType]:
         for item in self.iterate(col):
             yield item[0]
 
-    def collect(self, *cols: str) -> list[list[FeatureType]]:
+    def collect(self, *cols: str) -> list[list[ChainType]]:
         return list(self.iterate(*cols))
 
-    def collect_one(self, col: str) -> list[FeatureType]:
+    def collect_one(self, col: str) -> list[ChainType]:
         return list(self.iterate_one(col))
 
     def to_pytorch(self, **kwargs):
@@ -705,7 +705,7 @@ class DataChain(DatasetQuery):
         cls,
         ds_name: str = "",
         session: Optional[Session] = None,
-        output: Union[None, FeatureType, Sequence[str], dict[str, FeatureType]] = None,
+        output: Union[None, ChainType, Sequence[str], dict[str, ChainType]] = None,
         **fr_map,
     ) -> "DataChain":
         """Generate chain from list of features."""
@@ -741,7 +741,7 @@ class DataChain(DatasetQuery):
 
     def parse_tabular(
         self,
-        output: Optional[dict[str, FeatureType]] = None,
+        output: Optional[dict[str, ChainType]] = None,
         **kwargs,
     ) -> "DataChain":
         """Generate chain from list of tabular files.
@@ -790,7 +790,7 @@ class DataChain(DatasetQuery):
         delimiter: str = ",",
         header: bool = True,
         column_names: Optional[list[str]] = None,
-        output: Optional[dict[str, FeatureType]] = None,
+        output: Optional[dict[str, ChainType]] = None,
     ) -> "DataChain":
         """Generate chain from list of csv files.
 
@@ -832,7 +832,7 @@ class DataChain(DatasetQuery):
     def parse_parquet(
         self,
         partitioning: Any = "hive",
-        output: Optional[dict[str, FeatureType]] = None,
+        output: Optional[dict[str, ChainType]] = None,
     ) -> "DataChain":
         """Generate chain from list of parquet files.
 
@@ -903,16 +903,16 @@ class DataChain(DatasetQuery):
             db.execute(insert_q.values(**record))
         return DataChain(name=dsr.name)
 
-    def sum(self, fr: FeatureType):  # type: ignore[override]
+    def sum(self, fr: ChainType):  # type: ignore[override]
         return self._extend_features("sum", fr)
 
-    def avg(self, fr: FeatureType):  # type: ignore[override]
+    def avg(self, fr: ChainType):  # type: ignore[override]
         return self._extend_features("avg", fr)
 
-    def min(self, fr: FeatureType):  # type: ignore[override]
+    def min(self, fr: ChainType):  # type: ignore[override]
         return self._extend_features("min", fr)
 
-    def max(self, fr: FeatureType):  # type: ignore[override]
+    def max(self, fr: ChainType):  # type: ignore[override]
         return self._extend_features("max", fr)
 
     def setup(self, **kwargs) -> "Self":

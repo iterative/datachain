@@ -5,8 +5,8 @@ import pytest
 from pydantic import BaseModel
 
 from datachain.lib.feature import ModelUtil
-from datachain.lib.feature_registry import Registry
 from datachain.lib.file import File
+from datachain.lib.model_store import ModelStore
 from datachain.lib.signal_schema import (
     SetupError,
     SignalResolvingError,
@@ -125,7 +125,7 @@ def test_to_udf_spec():
 
 
 def test_select():
-    Registry.add(MyType2)
+    ModelStore.add(MyType2)
     schema = SignalSchema.deserialize(
         {
             "age": "float",
@@ -146,7 +146,7 @@ def test_select():
 
 
 def test_select_nested_names():
-    Registry.add(MyType2)
+    ModelStore.add(MyType2)
     schema = SignalSchema.deserialize(
         {
             "address": "str",

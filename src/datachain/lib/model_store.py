@@ -1,13 +1,13 @@
 import logging
-from typing import Any, ClassVar, Optional
+from typing import ClassVar, Optional
 
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
 
-class Registry:
-    reg: ClassVar[dict[str, dict[int, Any]]] = {}
+class ModelStore:
+    store: ClassVar[dict[str, dict[int, type[BaseModel]]]] = {}
 
     @classmethod
     def get_version(cls, model: type[BaseModel]) -> int:
@@ -23,25 +23,25 @@ class Registry:
 
     @classmethod
     def add(cls, fr: type):
-        if (model := Registry.to_pydantic(fr)) is None:
+        if (model := ModelStore.to_pydantic(fr)) is None:
             return
 
         name = model.__name__
-        if name not in cls.reg:
-            cls.reg[name] = {}
-        version = Registry.get_version(model)
-        if version in cls.reg[name]:
+        if name not in cls.store:
+            cls.store[name] = {}
+        version = ModelStore.get_version(model)
+        if version in cls.store[name]:
             full_name = f"{name}@{version}"
             logger.warning("Feature %s is already registered", full_name)
-        cls.reg[name][version] = model
+        cls.store[name][version] = model
 
         for f_info in model.model_fields.values():
-            if (anno := Registry.to_pydantic(f_info.annotation)) is not None:
+            if (anno := ModelStore.to_pydantic(f_info.annotation)) is not None:
                 cls.add(anno)
 
     @classmethod
     def get(cls, name: str, version: Optional[int] = None) -> Optional[type]:
-        class_dict = cls.reg.get(name, None)
+        class_dict = cls.store.get(name, None)
         if class_dict is None:
             return None
         if version is None:
@@ -66,8 +66,8 @@ class Registry:
     @classmethod
     def remove(cls, fr: type) -> None:
         version = fr._version  # type: ignore[attr-defined]
-        if fr.__name__ in cls.reg and version in cls.reg[fr.__name__]:
-            del cls.reg[fr.__name__][version]
+        if fr.__name__ in cls.store and version in cls.store[fr.__name__]:
+            del cls.store[fr.__name__][version]
 
     @staticmethod
     def is_pydantic(val):
@@ -75,6 +75,6 @@ class Registry:
 
     @staticmethod
     def to_pydantic(val) -> Optional[type[BaseModel]]:
-        if val is None or not Registry.is_pydantic(val):
+        if val is None or not ModelStore.is_pydantic(val):
             return None
         return val

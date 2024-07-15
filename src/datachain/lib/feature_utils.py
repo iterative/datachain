@@ -2,11 +2,7 @@ import string
 from collections.abc import Sequence
 from typing import Any, Union
 
-from datachain.lib.feature import (
-    FeatureType,
-    FeatureTypeNames,
-    is_feature_type,
-)
+from datachain.lib.data_model import ChainType, ChainTypeNames, is_chain_type
 from datachain.lib.utils import DataChainParamsError
 
 AUTO_FEATURE_PREFIX = "_auto_fr"
@@ -22,7 +18,7 @@ class FeatureToTupleError(DataChainParamsError):
 
 def features_to_tuples(
     ds_name: str = "",
-    output: Union[None, FeatureType, Sequence[str], dict[str, FeatureType]] = None,
+    output: Union[None, ChainType, Sequence[str], dict[str, ChainType]] = None,
     **fr_map,
 ) -> tuple[Any, Any, Any]:
     types_map = {}
@@ -43,11 +39,11 @@ def features_to_tuples(
                 f"feature '{k}' should have length {length} while {len_} is given",
             )
         typ = type(v[0])
-        if not is_feature_type(typ):
+        if not is_chain_type(typ):
             raise FeatureToTupleError(
                 ds_name,
                 f"feature '{k}' has unsupported type '{typ.__name__}'."
-                f" Please use Feature types: {FeatureTypeNames}",
+                f" Please use Feature types: {ChainTypeNames}",
             )
         types_map[k] = typ
     if output:

@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from datachain import DataModel
 from datachain.lib.feature import ModelUtil
-from datachain.lib.feature_registry import Registry
+from datachain.lib.model_store import ModelStore
 
 
 class FileBasic(DataModel):
@@ -75,10 +75,10 @@ def test_registry():
         name: str
         count: int
 
-    Registry.add(MyTestRndmz)
-    assert Registry.get(MyTestRndmz.__name__) == MyTestRndmz
-    assert Registry.get(MyTestRndmz.__name__, version=1) == MyTestRndmz
-    Registry.remove(MyTestRndmz)
+    ModelStore.add(MyTestRndmz)
+    assert ModelStore.get(MyTestRndmz.__name__) == MyTestRndmz
+    assert ModelStore.get(MyTestRndmz.__name__, version=1) == MyTestRndmz
+    ModelStore.remove(MyTestRndmz)
 
 
 def test_registry_versioned():
@@ -87,10 +87,10 @@ def test_registry_versioned():
         name: str
         count: int
 
-    assert Registry.get(MyTestXYZ.__name__) == MyTestXYZ
-    assert Registry.get(MyTestXYZ.__name__, version=1) is None
-    assert Registry.get(MyTestXYZ.__name__, version=42) == MyTestXYZ
-    Registry.remove(MyTestXYZ)
+    assert ModelStore.get(MyTestXYZ.__name__) == MyTestXYZ
+    assert ModelStore.get(MyTestXYZ.__name__, version=1) is None
+    assert ModelStore.get(MyTestXYZ.__name__, version=42) == MyTestXYZ
+    ModelStore.remove(MyTestXYZ)
 
 
 def test_inheritance():
@@ -111,9 +111,9 @@ def test_inheritance():
         obj = SoMyTest2(name="name", sub=SubObject(subname="subname"))
         assert ModelUtil.flatten(obj) == ("name", "subname")
     finally:
-        Registry.remove(SubObject)
-        Registry.remove(SoMyTest1)
-        Registry.remove(SoMyTest2)
+        ModelStore.remove(SubObject)
+        ModelStore.remove(SoMyTest1)
+        ModelStore.remove(SoMyTest2)
 
 
 def test_deserialize_nested():
@@ -285,4 +285,4 @@ def test_version():
         age: int
         _version: ClassVar[int] = 23
 
-    assert Registry.get_version(_MyCls) == 23
+    assert ModelStore.get_version(_MyCls) == 23
