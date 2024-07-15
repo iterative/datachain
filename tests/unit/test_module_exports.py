@@ -18,14 +18,13 @@ def test_module_exports():
             FileError,
             FileFeature,
             Generator,
-            ImageFile,
             IndexedFile,
             Mapper,
             Session,
             TarVFile,
-            convert_images,
-            convert_text,
             pydantic_to_feature,
         )
+        from datachain.image import ImageFile, convert_images
+        from datachain.text import convert_text
     except Exception as e:  # noqa: BLE001
         pytest.fail(f"Importing raised an exception: {e}")
