@@ -49,6 +49,7 @@ class UDFAdapter(_UDFBase):
         download_cb: Callback = DEFAULT_CALLBACK,
         processed_cb: Callback = DEFAULT_CALLBACK,
     ) -> Iterator[Iterable["UDFResult"]]:
+        self.inner._catalog = catalog
         if hasattr(self.inner, "setup") and callable(self.inner.setup):
             self.inner.setup()
 
@@ -69,17 +70,16 @@ class UDFAdapter(_UDFBase):
         cache: bool = False,
         cb: Callback = DEFAULT_CALLBACK,
     ) -> Iterable[UDFResult]:
-        self.inner._catalog = catalog
         if isinstance(arg, RowBatch):
             udf_inputs = [
                 self.bind_parameters(catalog, row, cache=cache, cb=cb)
                 for row in arg.rows
             ]
-            udf_outputs = self.inner(udf_inputs)
+            udf_outputs = self.inner(udf_inputs, download_cb=cb)
             return self._process_results(arg.rows, udf_outputs, is_generator)
         if isinstance(arg, RowDict):
             udf_inputs = self.bind_parameters(catalog, arg, cache=cache, cb=cb)
-            udf_outputs = self.inner(*udf_inputs)
+            udf_outputs = self.inner(*udf_inputs, download_cb=cb)
             if not is_generator:
                 # udf_outputs is generator already if is_generator=True
                 udf_outputs = [udf_outputs]
@@ -118,7 +118,12 @@ class UDFBase(AbstractUDF):
         This is needed for tasks like closing connections to end-points.
         """
 
-    def _init(self, sign: UdfSignature, params: SignalSchema, func: Callable):
+    def _init(
+        self,
+        sign: UdfSignature,
+        params: SignalSchema,
+        func: Callable,
+    ):
         self.params = params
         self.output = sign.output_schema
 
@@ -170,11 +175,11 @@ class UDFBase(AbstractUDF):
     def validate_results(self, results, *args, **kwargs):
         return results
 
-    def __call__(self, *rows):
+    def __call__(self, *rows, download_cb):
         if self.is_input_grouped:
-            objs = self._parse_grouped_rows(rows)
+            objs = self._parse_grouped_rows(rows[0], download_cb)
         else:
-            objs = self._parse_rows(rows)
+            objs = self._parse_rows(rows, download_cb)
 
         if not self.is_input_batched:
             objs = objs[0]
@@ -215,7 +220,7 @@ class UDFBase(AbstractUDF):
 
         return res
 
-    def _parse_rows(self, rows):
+    def _parse_rows(self, rows, download_cb):
         if not self.is_input_batched:
             rows = [rows]
         objs = []
@@ -223,12 +228,13 @@ class UDFBase(AbstractUDF):
             obj_row = self.params.row_to_objs(row)
             for obj in obj_row:
                 if isinstance(obj, FileBasic):
-                    obj._set_stream(self._catalog, caching_enabled=True)
+                    obj._set_stream(
+                        self._catalog, caching_enabled=True, download_cb=download_cb
+                    )
             objs.append(obj_row)
         return objs
 
-    def _parse_grouped_rows(self, rows):
-        group = rows[0]
+    def _parse_grouped_rows(self, group, download_cb):
         spec_map = {}
         output_map = {}
         for name, (anno, subtree) in self.params.tree.items():
@@ -251,7 +257,7 @@ class UDFBase(AbstractUDF):
                     obj = slice[0]
 
                 if isinstance(obj, FileBasic):
-                    obj._set_stream(self._catalog)
+                    obj._set_stream(self._catalog, download_cb=download_cb)
                 output_map[signal].append(obj)
 
         return list(output_map.values())
