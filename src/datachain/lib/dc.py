@@ -535,7 +535,7 @@ class DataChain(DatasetQuery):
         name = self.name or ""
 
         sign = UdfSignature.parse(name, signal_map, func, params, output, is_generator)
-        DataModel.register(sign.output_schema.values.values())
+        DataModel.register(list(sign.output_schema.values.values()))
 
         params_schema = self.signals_schema.slice(sign.params, self._setup)
 
