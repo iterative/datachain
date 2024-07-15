@@ -349,14 +349,14 @@ class DataChain(DatasetQuery):
         return chain.gen(**signal_dict)  # type: ignore[arg-type]
 
     @classmethod
-    def dataset_registry(cls, session: Optional[Session] = None) -> "DataChain":
+    def datasets(cls, session: Optional[Session] = None) -> "DataChain":
         """Generate chain with list of registered datasets.
 
         Example:
             ```py
             from datachain import DataChain
 
-            chain = DataChain.dataset_registry()
+            chain = DataChain.datasets()
             for ds in chain.iterate_one("dataset"):
                 print(f"{ds.name}@v{ds.version}")
             ```
@@ -386,7 +386,7 @@ class DataChain(DatasetQuery):
             )
 
         return DataChain.from_features(
-            ds_name="dataset_registry",
+            ds_name="datasets",
             session=session,
             output=Dataset,
             dataset=datasets,

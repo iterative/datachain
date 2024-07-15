@@ -41,7 +41,7 @@ class Dataset(Feature):
     _unique_id_keys: ClassVar[list[str]] = ["name", "version"]
 
     @staticmethod
-    def to_dict(
+    def _validate_dict(
         v: Optional[Union[str, dict]],
     ) -> dict:
         if v is None or v == "":
@@ -59,12 +59,12 @@ class Dataset(Feature):
     @field_validator("params", mode="before")
     @classmethod
     def validate_location(cls, v):
-        return Dataset.to_dict(v)
+        return Dataset._validate_dict(v)
 
     @field_validator("metrics", mode="before")
     @classmethod
     def validate_metrics(cls, v):
-        return Dataset.to_dict(v)
+        return Dataset._validate_dict(v)
 
     @classmethod
     def from_models(
