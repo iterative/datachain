@@ -33,7 +33,7 @@ class Registry:
             logger.warning("Feature %s is already registered", full_name)
         cls.reg[name][version] = fr
 
-        if issubclass(fr, BaseModel):
+        if inspect.isclass(fr) and issubclass(fr, BaseModel):
             for f_info in fr.model_fields.values():
                 anno = f_info.annotation
                 if inspect.isclass(anno) and issubclass(anno, BaseModel):
