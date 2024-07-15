@@ -10,7 +10,7 @@ from datachain.lib.dc import DataChain
 from datachain.lib.pytorch import PytorchDataset
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="module")
 def fake_dir(tmpdir_factory):
     # Create fake images in labeled dirs
     data_path = Path(tmpdir_factory.mktemp("data"))
