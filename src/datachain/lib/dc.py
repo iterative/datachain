@@ -249,7 +249,7 @@ class DataChain(DatasetQuery):
         spec: Optional[FeatureType] = None,
         schema_from: Optional[str] = "auto",
         jmespath: Optional[str] = None,
-        object_name: Optional[str] = None,
+        object_name: str = "",
         model_name: Optional[str] = None,
         show_schema: Optional[bool] = False,
         meta_type: Optional[str] = "json",
@@ -659,7 +659,7 @@ class DataChain(DatasetQuery):
         ds_name: str = "",
         session: Optional[Session] = None,
         output: Union[None, FeatureType, Sequence[str], dict[str, FeatureType]] = None,
-        object_name: Optional[str] = None,
+        object_name: str = "",
         **fr_map,
     ) -> "DataChain":
         """Generate chain from list of features."""
@@ -679,7 +679,7 @@ class DataChain(DatasetQuery):
         df: "pd.DataFrame",
         name: str = "",
         session: Optional[Session] = None,
-        object_name: Optional[str] = None,
+        object_name: str = "",
     ) -> "DataChain":
         """Generate chain from pandas data-frame."""
         fr_map = {col.lower(): df[col].tolist() for col in df.columns}
@@ -702,7 +702,7 @@ class DataChain(DatasetQuery):
     def parse_tabular(
         self,
         output: Union[None, FeatureType, dict[str, FeatureType]] = None,
-        object_name: Optional[str] = None,
+        object_name: str = "",
         **kwargs,
     ) -> "DataChain":
         """Generate chain from list of tabular files.
@@ -750,7 +750,7 @@ class DataChain(DatasetQuery):
         header: bool = True,
         column_names: Optional[list[str]] = None,
         output: Optional[dict[str, FeatureType]] = None,
-        object_name: Optional[str] = None,
+        object_name: str = "",
         **kwargs,
     ) -> "DataChain":
         """Generate chain from csv files.
@@ -800,7 +800,7 @@ class DataChain(DatasetQuery):
         path,
         partitioning: Any = "hive",
         output: Optional[dict[str, FeatureType]] = None,
-        object_name: Optional[str] = None,
+        object_name: str = "",
         **kwargs,
     ) -> "DataChain":
         """Generate chain from parquet files.
