@@ -201,7 +201,9 @@ class SignalSchema:
         schema = {k: union[k] for k in keys if k in union}
         return SignalSchema(schema, setup)
 
-    def row_to_features(self, row: Sequence, catalog: "Catalog") -> list[FeatureType]:
+    def row_to_features(
+        self, row: Sequence, catalog: "Catalog", cache: bool = False
+    ) -> list[FeatureType]:
         res = []
         pos = 0
         for fr_cls in self.values.values():
@@ -212,7 +214,7 @@ class SignalSchema:
                 json, pos = ModelUtil.unflatten_to_json_pos(fr, row, pos)  # type: ignore[union-attr]
                 obj = fr(**json)
                 if isinstance(obj, File):
-                    obj._set_stream(catalog)
+                    obj._set_stream(catalog, caching_enabled=cache)
                 res.append(obj)
         return res
 
