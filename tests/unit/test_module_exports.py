@@ -13,18 +13,25 @@ def test_module_exports():
             Column,
             DataChain,
             DataChainError,
-            Feature,
+            DataModel,
             File,
+            FileBasic,
             FileError,
-            FileFeature,
             Generator,
+            ImageFile,
             IndexedFile,
             Mapper,
             Session,
             TarVFile,
-            pydantic_to_feature,
+            TextFile,
         )
-        from datachain.image import ImageFile, convert_images
-        from datachain.text import convert_text
+        from datachain.torch import (
+            PytorchDataset,
+            clip_similarity_scores,
+            convert_image,
+            convert_images,
+            convert_text,
+            label_to_int,
+        )
     except Exception as e:  # noqa: BLE001
         pytest.fail(f"Importing raised an exception: {e}")

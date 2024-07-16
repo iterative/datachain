@@ -1,7 +1,7 @@
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union
+from typing import Any, Callable, Optional, Union
 
-if TYPE_CHECKING:
-    import torch
+import torch
+from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 
 
 def convert_text(
@@ -9,7 +9,7 @@ def convert_text(
     tokenizer: Optional[Callable] = None,
     tokenizer_kwargs: Optional[dict[str, Any]] = None,
     encoder: Optional[Callable] = None,
-) -> Union[str, list[str], "torch.Tensor"]:
+) -> Union[str, list[str], torch.Tensor]:
     """
     Tokenize and otherwise transform text.
 
@@ -29,21 +29,10 @@ def convert_text(
         res = tokenizer(text, **tokenizer_kwargs)
     else:
         res = tokenizer(text)
-    try:
-        from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 
-        tokens = (
-            res.input_ids if isinstance(tokenizer, PreTrainedTokenizerBase) else res
-        )
-    except ImportError:
-        tokens = res
+    tokens = res.input_ids if isinstance(tokenizer, PreTrainedTokenizerBase) else res
 
     if not encoder:
         return tokens
-
-    try:
-        import torch
-    except ImportError:
-        "Missing dependency 'torch' needed to encode text."
 
     return encoder(torch.tensor(tokens))

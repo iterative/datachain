@@ -3,8 +3,8 @@ from torch import Tensor
 from torchvision.transforms import ToTensor
 from transformers import CLIPImageProcessor
 
+from datachain.lib.file import ImageFile
 from datachain.lib.image import (
-    ImageFile,
     convert_image,
     convert_images,
 )
