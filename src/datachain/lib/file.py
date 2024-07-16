@@ -1,6 +1,7 @@
 import io
 import json
 import os
+import posixpath
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from datetime import datetime
@@ -267,7 +268,7 @@ class File(FileBasic):
         else:
             raise ValueError(f"Unsupported file export strategy: {strategy}")
 
-        return os.path.join(output, path)  # type: ignore[union-attr]
+        return posixpath.join(output, path)  # type: ignore[union-attr]
 
     def get_fs(self):
         return self._catalog.get_client(self.source).fs
