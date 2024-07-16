@@ -10,7 +10,7 @@ from typing import Any, Optional
 
 import attrs
 import multiprocess
-from dill import load
+from cloudpickle import load, loads
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 from multiprocess import get_context
 
@@ -84,7 +84,7 @@ def put_into_queue(queue: Queue, item: Any) -> None:
 
 def udf_entrypoint() -> int:
     # Load UDF info from stdin
-    udf_info = load(stdin.buffer)  # noqa: S301
+    udf_info = load(stdin.buffer)
 
     (
         warehouse_class,
@@ -95,7 +95,7 @@ def udf_entrypoint() -> int:
 
     # Parallel processing (faster for more CPU-heavy UDFs)
     dispatch = UDFDispatcher(
-        udf_info["udf"],
+        udf_info["udf_data"],
         udf_info["catalog_init"],
         udf_info["id_generator_clone_params"],
         udf_info["metastore_clone_params"],
@@ -108,7 +108,7 @@ def udf_entrypoint() -> int:
     batching = udf_info["batching"]
     table = udf_info["table"]
     n_workers = udf_info["processes"]
-    udf = udf_info["udf"]
+    udf = loads(udf_info["udf_data"])
     if n_workers is True:
         # Use default number of CPUs (cores)
         n_workers = None
@@ -146,7 +146,7 @@ class UDFDispatcher:
 
     def __init__(
         self,
-        udf,
+        udf_data,
         catalog_init_params,
         id_generator_clone_params,
         metastore_clone_params,
@@ -155,14 +155,7 @@ class UDFDispatcher:
         is_generator=False,
         buffer_size=DEFAULT_BATCH_SIZE,
     ):
-        # isinstance cannot be used here, as dill packages the entire class definition,
-        # and so these two types are not considered exactly equal,
-        # even if they have the same import path.
-        if full_module_type_path(type(udf)) != full_module_type_path(UDFFactory):
-            self.udf = udf
-        else:
-            self.udf = None
-            self.udf_factory = udf
+        self.udf_data = udf_data
         self.catalog_init_params = catalog_init_params
         (
             self.id_generator_class,
@@ -214,6 +207,15 @@ class UDFDispatcher:
             self.catalog = Catalog(
                 id_generator, metastore, warehouse, **self.catalog_init_params
             )
+        udf = loads(self.udf_data)
+        # isinstance cannot be used here, as cloudpickle packages the entire class
+        # definition, and so these two types are not considered exactly equal,
+        # even if they have the same import path.
+        if full_module_type_path(type(udf)) != full_module_type_path(UDFFactory):
+            self.udf = udf
+        else:
+            self.udf = None
+            self.udf_factory = udf
         if not self.udf:
             self.udf = self.udf_factory()
 
