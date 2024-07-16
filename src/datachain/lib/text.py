@@ -1,7 +1,11 @@
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
+from datachain.lib.file import File
+
 if TYPE_CHECKING:
     import torch
+
+    from datachain.catalog import Catalog
 
 
 def convert_text(
@@ -47,3 +51,13 @@ def convert_text(
         "Missing dependency 'torch' needed to encode text."
 
     return encoder(torch.tensor(tokens))
+
+
+class TextFile(File):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._stream = None
+
+    def _set_stream(self, catalog: "Catalog", caching_enabled: bool = False) -> None:
+        super()._set_stream(catalog, caching_enabled)
+        self._stream.set_mode("r")

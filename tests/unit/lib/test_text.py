@@ -1,8 +1,7 @@
 import torch
 from transformers import CLIPModel, CLIPProcessor
 
-from datachain.lib.file import TextFile
-from datachain.lib.text import convert_text
+from datachain.lib.text import TextFile, convert_text
 
 
 def test_convert_text(fake_clip_model):

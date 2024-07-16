@@ -14,7 +14,7 @@ import sqlalchemy
 
 from datachain.lib.feature import Feature, FeatureType
 from datachain.lib.feature_utils import dict_to_feature, features_to_tuples
-from datachain.lib.file import File, IndexedFile, get_file
+from datachain.lib.file import File, IndexedFile
 from datachain.lib.meta_formats import read_meta, read_schema
 from datachain.lib.settings import Settings
 from datachain.lib.signal_schema import SignalSchema
@@ -223,6 +223,41 @@ class DataChain(DatasetQuery):
             chain = DataChain.from_storage("s3://my-bucket/my-dir")
             ```
         """
+
+        def get_file(type: Literal["binary", "text", "image"] = "binary"):
+            file = File
+            if type == "text":
+                from datachain.lib.text import TextFile
+
+                file = TextFile
+            elif type == "image":
+                from datachain.lib.image import ImageFile
+
+                file = ImageFile  # type: ignore[assignment]
+
+            def get_file_type(
+                source: str,
+                parent: str,
+                name: str,
+                version: str,
+                etag: str,
+                size: int,
+                vtype: str,
+                location: Optional[Union[dict, list[dict]]],
+            ) -> file:  # type: ignore[valid-type]
+                return file(
+                    source=source,
+                    parent=parent,
+                    name=name,
+                    version=version,
+                    etag=etag,
+                    size=size,
+                    vtype=vtype,
+                    location=location,
+                )
+
+            return get_file_type
+
         func = get_file(type)
         return cls(path, session=session, recursive=recursive, **kwargs).map(
             **{object_name: func}

@@ -2,7 +2,7 @@ import json
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, ClassVar, Optional, Union
 from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
 
@@ -236,49 +236,6 @@ class File(FileFeature):
 
     def get_fs(self):
         return self._catalog.get_client(self.source).fs
-
-
-class TextFile(File):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self._stream = None
-
-    def _set_stream(self, catalog: "Catalog", caching_enabled: bool = False) -> None:
-        super()._set_stream(catalog, caching_enabled)
-        self._stream.set_mode("r")
-
-
-def get_file(type: Literal["binary", "text", "image"] = "binary"):
-    file = File
-    if type == "text":
-        file = TextFile
-    elif type == "image":
-        from datachain.lib.image import ImageFile
-
-        file = ImageFile  # type: ignore[assignment]
-
-    def get_file_type(
-        source: str,
-        parent: str,
-        name: str,
-        version: str,
-        etag: str,
-        size: int,
-        vtype: str,
-        location: Optional[Union[dict, list[dict]]],
-    ) -> file:  # type: ignore[valid-type]
-        return file(
-            source=source,
-            parent=parent,
-            name=name,
-            version=version,
-            etag=etag,
-            size=size,
-            vtype=vtype,
-            location=location,
-        )
-
-    return get_file_type
 
 
 class IndexedFile(Feature):

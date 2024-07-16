@@ -5,7 +5,8 @@ from fsspec.implementations.local import LocalFileSystem
 
 from datachain.cache import UniqueId
 from datachain.catalog import Catalog
-from datachain.lib.file import File, TextFile
+from datachain.lib.file import File
+from datachain.lib.text import TextFile
 
 
 def test_uid_missing_location():
