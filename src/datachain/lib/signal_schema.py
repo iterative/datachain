@@ -331,6 +331,15 @@ class SignalSchema:
                     sub_schema = SignalSchema({"* list of": args[0]})
                     sub_schema.print_tree(indent=indent, start_at=total_indent + indent)
 
+    def __or__(self, other):
+        return self.__class__(self.values | other.values)
+
+    def __contains__(self, name: str):
+        return name in self.values
+
+    def remove(self, name: str):
+        return self.values.pop(name)
+
     @staticmethod
     def _type_to_str(type_):  # noqa: PLR0911
         origin = get_origin(type_)

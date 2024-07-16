@@ -1,3 +1,4 @@
+import copy
 import re
 from collections.abc import Iterator, Sequence
 from typing import (
@@ -138,7 +139,6 @@ class DataChain(DatasetQuery):
     def __init__(self, *args, **kwargs):
         """This method needs to be redefined as a part of Dataset and DacaChin
         decoupling."""
-        include_sys = kwargs.pop("include_sys", False)
         super().__init__(
             *args,
             **kwargs,
@@ -152,9 +152,6 @@ class DataChain(DatasetQuery):
         else:
             self.signals_schema = SignalSchema.from_column_types(self.column_types)
 
-        if include_sys:
-            self.add_schema(SignalSchema({"sys": Sys}))
-
     @property
     def schema(self):
         return self.signals_schema.values if self.signals_schema else None
@@ -162,8 +159,19 @@ class DataChain(DatasetQuery):
     def print_schema(self):
         self.signals_schema.print_tree()
 
+    def clone(self, new_table: bool = True) -> "Self":
+        obj = super().clone(new_table=new_table)
+        obj.signals_schema = copy.deepcopy(self.signals_schema)
+        return obj
+
     def settings(
-        self, cache=None, batch=None, parallel=None, workers=None, min_task_size=None
+        self,
+        cache=None,
+        batch=None,
+        parallel=None,
+        workers=None,
+        min_task_size=None,
+        include_sys: Optional[bool] = None,
     ) -> "Self":
         """Change settings for chain.
 
@@ -187,8 +195,13 @@ class DataChain(DatasetQuery):
             )
             ```
         """
-        self._settings.add(Settings(cache, batch, parallel, workers, min_task_size))
-        return self
+        chain = self.clone()
+        if include_sys is True:
+            chain.signals_schema = SignalSchema({"sys": Sys}) | chain.signals_schema
+        elif include_sys is False and "sys" in chain.signals_schema:
+            chain.signals_schema.remove("sys")
+        chain._settings.add(Settings(cache, batch, parallel, workers, min_task_size))
+        return chain
 
     def reset_settings(self, settings: Optional[Settings] = None) -> "Self":
         """Reset all settings to default values."""
@@ -200,12 +213,11 @@ class DataChain(DatasetQuery):
         return self
 
     def add_schema(self, signals_schema: SignalSchema) -> "Self":
-        union = self.signals_schema.values | signals_schema.values
-        self.signals_schema = SignalSchema(union)
+        self.signals_schema |= signals_schema
         return self
 
     def get_file_signals(self) -> list[str]:
-        return self.signals_schema.get_file_signals()
+        return list(self.signals_schema.get_file_signals())
 
     @classmethod
     def from_storage(
