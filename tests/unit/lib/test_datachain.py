@@ -353,9 +353,7 @@ def test_agg_tuple_result_iterator(catalog):
 
     keys = ["n1", "n2", "n1"]
     values = [1, 5, 9]
-    ds = DataChain.from_values(key=keys, val=values).agg(
-        x=func, partition_by=C("key")
-    )
+    ds = DataChain.from_values(key=keys, val=values).agg(x=func, partition_by=C("key"))
 
     df = ds.to_pandas()
     assert len(df) == 2
@@ -375,9 +373,7 @@ def test_agg_tuple_result_generator(catalog):
 
     keys = ["n1", "n2", "n1"]
     values = [1, 5, 9]
-    ds = DataChain.from_values(key=keys, val=values).agg(
-        x=func, partition_by=C("key")
-    )
+    ds = DataChain.from_values(key=keys, val=values).agg(x=func, partition_by=C("key"))
 
     df = ds.to_pandas()
     assert len(df) == 2

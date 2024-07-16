@@ -1,4 +1,4 @@
-from datachain.lib.data_model import DataType, DataModel, FileBasic, is_chain_type
+from datachain.lib.data_model import DataModel, DataType, FileBasic, is_chain_type
 from datachain.lib.dc import C, Column, DataChain
 from datachain.lib.file import File, FileError, IndexedFile, TarVFile
 from datachain.lib.image import ImageFile
@@ -12,11 +12,11 @@ __all__ = [
     "Aggregator",
     "BaseUDF",
     "C",
-    "DataType",
     "Column",
     "DataChain",
     "DataChainError",
     "DataModel",
+    "DataType",
     "File",
     "FileBasic",
     "FileError",

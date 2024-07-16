@@ -757,12 +757,14 @@ class DataChain(DatasetQuery):
         return self.gen(ArrowGenerator(schema, **kwargs), output=output)
 
     @staticmethod
-    def _dict_to_data_model(name: str, data_dict: dict[str, DataType]) -> type[BaseModel]:
+    def _dict_to_data_model(
+        name: str, data_dict: dict[str, DataType]
+    ) -> type[BaseModel]:
         fields = {name: (anno, ...) for name, anno in data_dict.items()}
         return create_model(
             name,
             __base__=(DataModel,),  # type: ignore[call-overload]
-            **fields
+            **fields,
         )  # type: ignore[call-overload]
 
     @classmethod
