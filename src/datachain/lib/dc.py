@@ -69,6 +69,9 @@ class DatasetMergeError(DataChainParamsError):
         super().__init__(f"Merge error on='{on_str}'{right_on_str}: {msg}")
 
 
+OutputType = Union[None, ChainType, Sequence[str], dict[str, ChainType]]
+
+
 class DataChain(DatasetQuery):
     """AI 🔗 DataChain - a data structure for batch data processing and evaluation.
 
@@ -358,7 +361,7 @@ class DataChain(DatasetQuery):
         self,
         func: Optional[Callable] = None,
         params: Union[None, str, Sequence[str]] = None,
-        output: Union[None, ChainType, Sequence[str], dict[str, ChainType]] = None,
+        output: OutputType = None,
         **signal_map,
     ) -> "Self":
         """Apply a function to each row to create new signals. The function should
@@ -402,7 +405,7 @@ class DataChain(DatasetQuery):
         self,
         func: Optional[Callable] = None,
         params: Union[None, str, Sequence[str]] = None,
-        output: Union[None, ChainType, Sequence[str], dict[str, ChainType]] = None,
+        output: OutputType = None,
         **signal_map,
     ) -> "Self":
         """Apply a function to each row to create new rows (with potentially new
@@ -431,7 +434,7 @@ class DataChain(DatasetQuery):
         func: Optional[Callable] = None,
         partition_by: Optional[PartitionByType] = None,
         params: Union[None, str, Sequence[str]] = None,
-        output: Union[None, ChainType, Sequence[str], dict[str, ChainType]] = None,
+        output: OutputType = None,
         **signal_map,
     ) -> "Self":
         """Aggregate rows using `partition_by` statement and apply a function to the
@@ -461,7 +464,7 @@ class DataChain(DatasetQuery):
         self,
         func: Optional[Callable] = None,
         params: Union[None, str, Sequence[str]] = None,
-        output: Union[None, ChainType, Sequence[str], dict[str, ChainType]] = None,
+        output: OutputType = None,
         **signal_map,
     ) -> "Self":
         """This is a batch version of map().
@@ -483,7 +486,7 @@ class DataChain(DatasetQuery):
         target_class: type[UDFBase],
         func: Optional[Callable],
         params: Union[None, str, Sequence[str]],
-        output: Union[None, ChainType, Sequence[str], dict[str, ChainType]],
+        output: OutputType,
         signal_map,
     ) -> UDFBase:
         is_generator = target_class.is_output_batched
@@ -660,7 +663,7 @@ class DataChain(DatasetQuery):
         cls,
         ds_name: str = "",
         session: Optional[Session] = None,
-        output: Union[None, ChainType, Sequence[str], dict[str, ChainType]] = None,
+        output: OutputType = None,
         object_name: str = "",
         **fr_map,
     ) -> "DataChain":
@@ -703,7 +706,7 @@ class DataChain(DatasetQuery):
 
     def parse_tabular(
         self,
-        output: Union[None, ChainType, Sequence[str], dict[str, ChainType]],
+        output: OutputType = None,
         object_name: str = "",
         model_name: str = "",
         **kwargs,
@@ -765,7 +768,7 @@ class DataChain(DatasetQuery):
         delimiter: str = ",",
         header: bool = True,
         column_names: Optional[list[str]] = None,
-        output: Union[None, ChainType, Sequence[str], dict[str, ChainType]] = None,
+        output: OutputType = None,
         object_name: str = "",
         model_name: str = "",
         **kwargs,
