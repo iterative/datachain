@@ -2,11 +2,20 @@ import copy
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union, get_args, get_origin, \
-    Annotated, Literal
-from typing_extensions import Literal as LiteralEx
+from typing import (
+    TYPE_CHECKING,
+    Annotated,
+    Any,
+    Callable,
+    Literal,
+    Optional,
+    Union,
+    get_args,
+    get_origin,
+)
 
 from pydantic import create_model
+from typing_extensions import Literal as LiteralEx
 
 from datachain import DataModel
 from datachain.lib.feature import (
@@ -324,7 +333,7 @@ class SignalSchema:
                     sub_schema.print_tree(indent=indent, start_at=total_indent + indent)
 
     @staticmethod
-    def _type_to_str(type_):
+    def _type_to_str(type_):  # noqa: PLR0911
         origin = get_origin(type_)
 
         if origin == Union:
@@ -341,12 +350,12 @@ class SignalSchema:
             return f"list[{type_str}]"
         if origin is dict:
             args = get_args(type_)
-            type_str = SignalSchema._type_to_str(args[0])
+            type_str = SignalSchema._type_to_str(args[0]) if len(args) > 0 else ""
             vals = f", {SignalSchema._type_to_str(args[1])}" if len(args) > 1 else ""
             return f"dict[{type_str}{vals}]"
         if origin == Annotated:
             args = get_args(type_)
             return SignalSchema._type_to_str(args[0])
         if origin in (Literal, LiteralEx):
-            return f"Literal"
+            return "Literal"
         return type_.__name__
