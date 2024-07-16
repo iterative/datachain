@@ -19,6 +19,7 @@ transformer = transforms.Compose(
 
 # Embeddings processor function
 
+
 def embeddings_processor(file) -> list[float]:
     img_raw = file.get_value()
     img = convert_image(img_raw, transform=transformer).unsqueeze(0)
