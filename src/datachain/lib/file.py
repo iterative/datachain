@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from datachain.catalog import Catalog
 
 
-ExportStrategy = Literal["filename", "etag", "storage_path"]
+ExportStrategy = Literal["filename", "etag", "fullpath", "checksum"]
 
 
 class FileFeature(Feature):
@@ -256,14 +256,16 @@ class File(FileFeature):
             path = unquote(self.name)
         elif strategy == "etag":
             path = f"{self.etag}{self.get_file_suffix()}"
-        elif strategy == "storage_path":
+        elif strategy == "fullpath":
             fs = self.get_fs()
             if isinstance(fs, LocalFileSystem):
-                path = self.get_path().lstrip("/")
+                path = self.get_path().lstrip(os.sep)
             else:
                 path = (
                     Path(urlparse(self.source).netloc) / unquote(self.get_full_name())
                 ).as_posix()
+        elif strategy == "checksum":
+            raise NotImplementedError("Checksum strategy not implemented yet")
         else:
             raise ValueError(f"Unsupported file export strategy: {strategy}")
 

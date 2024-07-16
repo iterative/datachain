@@ -94,7 +94,7 @@ def test_get_destination_path_etag_strategy():
     )
 
 
-def test_get_destination_path_storage_path_strategy(catalog):
+def test_get_destination_path_fullpath_strategy(catalog):
     f = File(
         name="test.txt",
         parent="dir1/dir2",
@@ -103,12 +103,12 @@ def test_get_destination_path_storage_path_strategy(catalog):
     )
     f._set_stream(catalog, False)
     assert (
-        f.get_destination_path("output", "storage_path")
+        f.get_destination_path("output", "fullpath")
         == "output/mybkt/dir1/dir2/test.txt"
     )
 
 
-def test_get_destination_path_storage_path_strategy_file_source(catalog, tmp_path):
+def test_get_destination_path_fullpath_strategy_file_source(catalog, tmp_path):
     f = File(
         name="test.txt",
         parent="dir1/dir2",
@@ -117,7 +117,7 @@ def test_get_destination_path_storage_path_strategy_file_source(catalog, tmp_pat
     )
     f._set_stream(catalog, False)
     assert (
-        f.get_destination_path("output", "storage_path")
+        f.get_destination_path("output", "fullpath")
         == f"output{tmp_path}/dir1/dir2/test.txt"
     )
 
