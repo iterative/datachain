@@ -1,17 +1,13 @@
-import inspect
 import string
 from collections.abc import Sequence
-from enum import Enum
-from typing import Any, Union, get_args, get_origin
+from typing import Any, Union
 
 from pydantic import BaseModel, create_model
 
 from datachain.lib.feature import (
-    TYPE_TO_DATACHAIN,
-    Feature,
     FeatureType,
     FeatureTypeNames,
-    convert_type_to_datachain,
+    is_feature_type,
 )
 from datachain.lib.utils import DataChainParamsError
 
@@ -26,68 +22,9 @@ class FeatureToTupleError(DataChainParamsError):
         super().__init__(f"Cannot convert features for dataset{ds_name}: {msg}")
 
 
-feature_cache: dict[type[BaseModel], type[Feature]] = {}
-
-
-def pydantic_to_feature(data_cls: type[BaseModel]) -> type[Feature]:
-    if data_cls in feature_cache:
-        return feature_cache[data_cls]
-
-    fields = {}
-    for name, field_info in data_cls.model_fields.items():
-        anno = field_info.annotation
-        if anno not in TYPE_TO_DATACHAIN:
-            anno = _to_feature_type(anno)
-        fields[name] = (anno, field_info.default)
-
-    cls = create_model(
-        data_cls.__name__,
-        __base__=(data_cls, Feature),  # type: ignore[call-overload]
-        **fields,
-    )
-    feature_cache[data_cls] = cls
-    return cls
-
-
-def _to_feature_type(anno):
-    if inspect.isclass(anno) and issubclass(anno, Enum):
-        return str
-
-    orig = get_origin(anno)
-    if orig is list:
-        anno = get_args(anno)  # type: ignore[assignment]
-        if isinstance(anno, Sequence):
-            anno = anno[0]  # type: ignore[unreachable]
-        is_list = True
-    else:
-        is_list = False
-
-    try:
-        convert_type_to_datachain(anno)
-    except TypeError:
-        if not Feature.is_feature(anno):  # type: ignore[arg-type]
-            orig = get_origin(anno)
-            if orig in TYPE_TO_DATACHAIN:
-                anno = _to_feature_type(anno)
-            else:
-                if orig == Union:
-                    args = get_args(anno)
-                    if len(args) == 2 and (type(None) in args):
-                        return _to_feature_type(args[0])
-
-                anno = pydantic_to_feature(anno)  # type: ignore[arg-type]
-    if is_list:
-        anno = list[anno]  # type: ignore[valid-type]
-    return anno
-
-
-def dict_to_feature(name: str, data_dict: dict[str, FeatureType]) -> type[Feature]:
+def dict_to_feature(name: str, data_dict: dict[str, FeatureType]) -> type[BaseModel]:
     fields = {name: (anno, ...) for name, anno in data_dict.items()}
-    return create_model(  # type: ignore[call-overload]
-        name,
-        __base__=Feature,
-        **fields,
-    )
+    return create_model(name, **fields)  # type: ignore[call-overload]
 
 
 def features_to_tuples(
@@ -113,7 +50,7 @@ def features_to_tuples(
                 f"feature '{k}' should have length {length} while {len_} is given",
             )
         typ = type(v[0])
-        if not Feature.is_feature_type(typ):
+        if not is_feature_type(typ):
             raise FeatureToTupleError(
                 ds_name,
                 f"feature '{k}' has unsupported type '{typ.__name__}'."
@@ -149,10 +86,10 @@ def features_to_tuples(
                 f"'{type(output).__name__}' is given",
             )
     else:
-        output = types_map
+        output = types_map  # type: ignore[assignment]
 
-    output_types: list[type] = list(output.values())  # type: ignore[union-attr,arg-type]
-    if len(output) > 1:
+    output_types: list[type] = list(output.values())  # type: ignore[union-attr,call-arg,arg-type]
+    if len(output) > 1:  # type: ignore[arg-type]
         tuple_type = tuple(output_types)
         res_type = tuple[tuple_type]  # type: ignore[valid-type]
         res_values = list(zip(*fr_map.values()))

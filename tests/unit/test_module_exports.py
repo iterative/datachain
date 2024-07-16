@@ -13,16 +13,15 @@ def test_module_exports():
             Column,
             DataChain,
             DataChainError,
-            Feature,
+            DataModel,
             File,
+            FileBasic,
             FileError,
-            FileFeature,
             Generator,
             IndexedFile,
             Mapper,
             Session,
             TarVFile,
-            pydantic_to_feature,
         )
         from datachain.image import ImageFile, convert_images
         from datachain.text import convert_text

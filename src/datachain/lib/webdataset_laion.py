@@ -2,9 +2,8 @@ from collections.abc import Iterator
 from typing import Optional
 
 import numpy as np
-from pydantic import Field
+from pydantic import BaseModel, Field
 
-from datachain.lib.feature import Feature
 from datachain.lib.file import File
 from datachain.lib.webdataset import WDSBasic, WDSReadableSubclass
 
@@ -34,7 +33,7 @@ class WDSLaion(WDSBasic):
     json: Laion  # type: ignore[assignment]
 
 
-class LaionMeta(Feature):
+class LaionMeta(BaseModel):
     file: File
     index: Optional[int] = Field(default=None)
     b32_img: list[float] = Field(default=None)

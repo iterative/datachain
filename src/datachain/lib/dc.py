@@ -11,8 +11,10 @@ from typing import (
 )
 
 import sqlalchemy
+from pydantic import BaseModel
 
-from datachain.lib.feature import Feature, FeatureType
+from datachain import DataModel
+from datachain.lib.feature import FeatureType
 from datachain.lib.feature_utils import dict_to_feature, features_to_tuples
 from datachain.lib.file import File, IndexedFile, get_file
 from datachain.lib.meta_formats import read_meta, read_schema
@@ -148,9 +150,6 @@ class DataChain(DatasetQuery):
 
     def print_schema(self):
         self.signals_schema.print_tree()
-
-    def create_model(self, name: str) -> type[Feature]:
-        return self.signals_schema.create_model(name)
 
     def settings(
         self, cache=None, batch=None, parallel=None, workers=None, min_task_size=None
@@ -490,6 +489,8 @@ class DataChain(DatasetQuery):
         name = self.name or ""
 
         sign = UdfSignature.parse(name, signal_map, func, params, output, is_generator)
+        DataModel.register(list(sign.output_schema.values.values()))
+
         params_schema = self.signals_schema.slice(sign.params, self._setup)
 
         return UDFBase._create(target_class, sign, params_schema)
@@ -702,7 +703,7 @@ class DataChain(DatasetQuery):
     def parse_tabular(
         self,
         output: Union[
-            None, type[Feature], Sequence[str], dict[str, FeatureType]
+            None, type[BaseModel], Sequence[str], dict[str, FeatureType]
         ] = None,
         object_name: str = "",
         model_name: str = "",
@@ -745,7 +746,7 @@ class DataChain(DatasetQuery):
                 model_name = model_name or object_name
                 output = dict_to_feature(model_name, output)
             output = {object_name: output}  # type: ignore[dict-item]
-        elif isinstance(output, type(Feature)):
+        elif isinstance(output, type(BaseModel)):
             output = {
                 name: info.annotation  # type: ignore[misc]
                 for name, info in output.model_fields.items()
@@ -761,7 +762,7 @@ class DataChain(DatasetQuery):
         header: bool = True,
         column_names: Optional[list[str]] = None,
         output: Union[
-            None, type[Feature], Sequence[str], dict[str, FeatureType]
+            None, type[BaseModel], Sequence[str], dict[str, FeatureType]
         ] = None,
         object_name: str = "",
         model_name: str = "",
