@@ -294,7 +294,7 @@ def test_version():
 def test_dict_to_feature():
     data_dict = {"file": FileBasic, "id": int, "type": Literal["text"]}
 
-    cls = DataChain._dict_to_feature("val", data_dict)
+    cls = DataChain._dict_to_data_model("val", data_dict)
     assert ModelStore.is_pydantic(cls)
 
     spec = SignalSchema({"val": cls}).to_udf_spec()

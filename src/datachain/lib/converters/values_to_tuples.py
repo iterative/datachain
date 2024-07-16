@@ -1,11 +1,11 @@
 from collections.abc import Sequence
 from typing import Any, Union
 
-from datachain.lib.data_model import ChainType, ChainTypeNames, is_chain_type
+from datachain.lib.data_model import DataType, DataTypeNames, is_chain_type
 from datachain.lib.utils import DataChainParamsError
 
 
-class FeatureToTupleError(DataChainParamsError):
+class ValuesToTupleError(DataChainParamsError):
     def __init__(self, ds_name, msg):
         if ds_name:
             ds_name = f"' {ds_name}'"
@@ -14,43 +14,43 @@ class FeatureToTupleError(DataChainParamsError):
 
 def values_to_tuples(
     ds_name: str = "",
-    output: Union[None, ChainType, Sequence[str], dict[str, ChainType]] = None,
+    output: Union[None, DataType, Sequence[str], dict[str, DataType]] = None,
     **fr_map,
 ) -> tuple[Any, Any, Any]:
     types_map = {}
     length = -1
     for k, v in fr_map.items():
         if not isinstance(v, Sequence) or isinstance(v, str):
-            raise FeatureToTupleError(ds_name, f"features '{k}' is not a sequence")
+            raise ValuesToTupleError(ds_name, f"features '{k}' is not a sequence")
         len_ = len(v)
 
         if len_ == 0:
-            raise FeatureToTupleError(ds_name, f"feature '{k}' is empty list")
+            raise ValuesToTupleError(ds_name, f"feature '{k}' is empty list")
 
         if length < 0:
             length = len_
         elif length != len_:
-            raise FeatureToTupleError(
+            raise ValuesToTupleError(
                 ds_name,
                 f"feature '{k}' should have length {length} while {len_} is given",
             )
         typ = type(v[0])
         if not is_chain_type(typ):
-            raise FeatureToTupleError(
+            raise ValuesToTupleError(
                 ds_name,
                 f"feature '{k}' has unsupported type '{typ.__name__}'."
-                f" Please use Feature types: {ChainTypeNames}",
+                f" Please use Feature types: {DataTypeNames}",
             )
         types_map[k] = typ
     if output:
         if not isinstance(output, Sequence) and not isinstance(output, str):
             if len(fr_map) != 1:
-                raise FeatureToTupleError(
+                raise ValuesToTupleError(
                     ds_name,
                     f"only one output type was specified, {len(fr_map)} expected",
                 )
             if not isinstance(output, type):
-                raise FeatureToTupleError(
+                raise ValuesToTupleError(
                     ds_name,
                     f"output must specify a type while '{output}' was given",
                 )
@@ -59,13 +59,13 @@ def values_to_tuples(
             output = {key: output}  # type: ignore[dict-item]
 
         if len(output) != len(fr_map):
-            raise FeatureToTupleError(
+            raise ValuesToTupleError(
                 ds_name,
                 f"number of outputs '{len(output)}' should match"
                 f" number of features '{len(fr_map)}'",
             )
         if isinstance(output, dict):
-            raise FeatureToTupleError(
+            raise ValuesToTupleError(
                 ds_name,
                 "output type must be dict[str, FeatureType] while "
                 f"'{type(output).__name__}' is given",

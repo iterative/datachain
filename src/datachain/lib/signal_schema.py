@@ -20,7 +20,7 @@ from typing_extensions import Literal as LiteralEx
 from datachain.lib.converters.flatten import DATACHAIN_TO_TYPE
 from datachain.lib.converters.type_converter import convert_to_db_type
 from datachain.lib.converters.unflatten import unflatten_to_json_pos
-from datachain.lib.data_model import ChainType, DataModel
+from datachain.lib.data_model import DataType, DataModel
 from datachain.lib.file import File
 from datachain.lib.model_store import ModelStore
 from datachain.lib.utils import DataChainParamsError
@@ -68,14 +68,14 @@ class SignalResolvingTypeError(SignalResolvingError):
 
 @dataclass
 class SignalSchema:
-    values: dict[str, ChainType]
+    values: dict[str, DataType]
     tree: dict[str, Any]
     setup_func: dict[str, Callable]
     setup_values: Optional[dict[str, Callable]]
 
     def __init__(
         self,
-        values: dict[str, ChainType],
+        values: dict[str, DataType],
         setup: Optional[dict[str, Callable]] = None,
     ):
         self.values = values
@@ -101,7 +101,7 @@ class SignalSchema:
 
     @staticmethod
     def from_column_types(col_types: dict[str, Any]) -> "SignalSchema":
-        signals: dict[str, ChainType] = {}
+        signals: dict[str, DataType] = {}
         for field, type_ in col_types.items():
             type_ = DATACHAIN_TO_TYPE.get(type_, None)
             if type_ is None:
@@ -132,7 +132,7 @@ class SignalSchema:
         if not isinstance(schema, dict):
             raise SignalSchemaError(f"cannot deserialize signal schema: {schema}")
 
-        signals: dict[str, ChainType] = {}
+        signals: dict[str, DataType] = {}
         for signal, type_name in schema.items():
             try:
                 fr = NAMES_TO_TYPES.get(type_name)
@@ -164,7 +164,7 @@ class SignalSchema:
                 res[db_name] = convert_to_db_type(type_)
         return res
 
-    def row_to_objs(self, row: Sequence[Any]) -> list[ChainType]:
+    def row_to_objs(self, row: Sequence[Any]) -> list[DataType]:
         self._init_setup_values()
 
         objs = []
@@ -198,7 +198,7 @@ class SignalSchema:
         schema = {k: union[k] for k in keys if k in union}
         return SignalSchema(schema, setup)
 
-    def row_to_features(self, row: Sequence, catalog: "Catalog") -> list[ChainType]:
+    def row_to_features(self, row: Sequence, catalog: "Catalog") -> list[DataType]:
         res = []
         pos = 0
         for fr_cls in self.values.values():
@@ -229,7 +229,7 @@ class SignalSchema:
 
         return SignalSchema(schema)
 
-    def _find_in_tree(self, path: list[str]) -> ChainType:
+    def _find_in_tree(self, path: list[str]) -> DataType:
         curr_tree = self.tree
         curr_type = None
         i = 0
@@ -297,8 +297,8 @@ class SignalSchema:
 
     @staticmethod
     def _build_tree(
-        values: dict[str, ChainType],
-    ) -> dict[str, tuple[ChainType, Optional[dict]]]:
+        values: dict[str, DataType],
+    ) -> dict[str, tuple[DataType, Optional[dict]]]:
         return {
             name: (val, SignalSchema._build_tree_for_type(val))
             for name, val in values.items()
@@ -359,8 +359,8 @@ class SignalSchema:
 
     @staticmethod
     def _build_tree_for_type(
-        model: ChainType,
-    ) -> Optional[dict[str, tuple[ChainType, Optional[dict]]]]:
+        model: DataType,
+    ) -> Optional[dict[str, tuple[DataType, Optional[dict]]]]:
         if (fr := ModelStore.to_pydantic(model)) is not None:
             return SignalSchema._build_tree_for_model(fr)
         return None
@@ -368,8 +368,8 @@ class SignalSchema:
     @staticmethod
     def _build_tree_for_model(
         model: type[BaseModel],
-    ) -> Optional[dict[str, tuple[ChainType, Optional[dict]]]]:
-        res: dict[str, tuple[ChainType, Optional[dict]]] = {}
+    ) -> Optional[dict[str, tuple[DataType, Optional[dict]]]]:
+        res: dict[str, tuple[DataType, Optional[dict]]] = {}
 
         for name, f_info in model.model_fields.items():
             anno = f_info.annotation

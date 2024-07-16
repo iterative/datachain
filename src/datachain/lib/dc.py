@@ -15,7 +15,7 @@ from pydantic import BaseModel, create_model
 
 from datachain import DataModel
 from datachain.lib.converters.values_to_tuples import values_to_tuples
-from datachain.lib.data_model import ChainType
+from datachain.lib.data_model import DataType
 from datachain.lib.file import File, IndexedFile, get_file
 from datachain.lib.meta_formats import read_meta, read_schema
 from datachain.lib.model_store import ModelStore
@@ -52,10 +52,10 @@ class DatasetPrepareError(DataChainParamsError):
         super().__init__(f"Dataset{name}{output} processing prepare error: {msg}")
 
 
-class DatasetFromFeatureError(DataChainParamsError):
+class DatasetFromValuesError(DataChainParamsError):
     def __init__(self, name, msg):
         name = f" '{name}'" if name else ""
-        super().__init__(f"Dataset {name} from feature error: {msg}")
+        super().__init__(f"Dataset {name} from values error: {msg}")
 
 
 class DatasetMergeError(DataChainParamsError):
@@ -69,7 +69,7 @@ class DatasetMergeError(DataChainParamsError):
         super().__init__(f"Merge error on='{on_str}'{right_on_str}: {msg}")
 
 
-OutputType = Union[None, ChainType, Sequence[str], dict[str, ChainType]]
+OutputType = Union[None, DataType, Sequence[str], dict[str, DataType]]
 
 
 class DataChain(DatasetQuery):
@@ -249,7 +249,7 @@ class DataChain(DatasetQuery):
         cls,
         path,
         type: Literal["binary", "text", "image"] = "text",
-        spec: Optional[ChainType] = None,
+        spec: Optional[DataType] = None,
         schema_from: Optional[str] = "auto",
         jmespath: Optional[str] = None,
         object_name: str = "",
@@ -499,7 +499,7 @@ class DataChain(DatasetQuery):
 
         return UDFBase._create(target_class, sign, params_schema)
 
-    def _extend_features(self, method_name, *args, **kwargs):
+    def _extend_to_data_model(self, method_name, *args, **kwargs):
         super_func = getattr(super(), method_name)
 
         new_schema = self.signals_schema.resolve(*args)
@@ -528,7 +528,7 @@ class DataChain(DatasetQuery):
         chain.signals_schema = new_schema
         return chain
 
-    def iterate(self, *cols: str) -> Iterator[list[ChainType]]:
+    def iterate(self, *cols: str) -> Iterator[list[DataType]]:
         """Iterate over rows.
 
         If columns are specified - limit them to specified
@@ -541,14 +541,14 @@ class DataChain(DatasetQuery):
             for row in rows_iter:
                 yield chain.signals_schema.row_to_features(row, chain.session.catalog)
 
-    def iterate_one(self, col: str) -> Iterator[ChainType]:
+    def iterate_one(self, col: str) -> Iterator[DataType]:
         for item in self.iterate(col):
             yield item[0]
 
-    def collect(self, *cols: str) -> list[list[ChainType]]:
+    def collect(self, *cols: str) -> list[list[DataType]]:
         return list(self.iterate(*cols))
 
-    def collect_one(self, col: str) -> list[ChainType]:
+    def collect_one(self, col: str) -> list[DataType]:
         return list(self.iterate_one(col))
 
     def to_pytorch(self, **kwargs):
@@ -659,7 +659,7 @@ class DataChain(DatasetQuery):
         return ds
 
     @classmethod
-    def from_features(
+    def from_values(
         cls,
         ds_name: str = "",
         session: Optional[Session] = None,
@@ -667,7 +667,7 @@ class DataChain(DatasetQuery):
         object_name: str = "",
         **fr_map,
     ) -> "DataChain":
-        """Generate chain from list of features."""
+        """Generate chain from list of values."""
         tuple_type, output, tuples = values_to_tuples(ds_name, output, **fr_map)
 
         def _func_fr() -> Iterator[tuple_type]:  # type: ignore[valid-type]
@@ -675,7 +675,7 @@ class DataChain(DatasetQuery):
 
         chain = DataChain.create_empty(DataChain.DEFAULT_FILE_RECORD, session=session)
         if object_name:
-            output = {object_name: DataChain._dict_to_feature(object_name, output)}  # type: ignore[arg-type]
+            output = {object_name: DataChain._dict_to_data_model(object_name, output)}  # type: ignore[arg-type]
         return chain.gen(_func_fr, output=output)
 
     @classmethod
@@ -702,7 +702,7 @@ class DataChain(DatasetQuery):
                     f"import from pandas error - '{column}' cannot be a column name",
                 )
 
-        return cls.from_features(name, session, object_name=object_name, **fr_map)
+        return cls.from_values(name, session, object_name=object_name, **fr_map)
 
     def parse_tabular(
         self,
@@ -746,7 +746,7 @@ class DataChain(DatasetQuery):
         if object_name:
             if isinstance(output, dict):
                 model_name = model_name or object_name
-                output = DataChain._dict_to_feature(model_name, output)
+                output = DataChain._dict_to_data_model(model_name, output)
             output = {object_name: output}  # type: ignore[dict-item]
         elif isinstance(output, type(BaseModel)):
             output = {
@@ -757,9 +757,13 @@ class DataChain(DatasetQuery):
         return self.gen(ArrowGenerator(schema, **kwargs), output=output)
 
     @staticmethod
-    def _dict_to_feature(name: str, data_dict: dict[str, ChainType]) -> type[BaseModel]:
+    def _dict_to_data_model(name: str, data_dict: dict[str, DataType]) -> type[BaseModel]:
         fields = {name: (anno, ...) for name, anno in data_dict.items()}
-        return create_model(name, **fields)  # type: ignore[call-overload]
+        return create_model(
+            name,
+            __base__=(DataModel,),  # type: ignore[call-overload]
+            **fields
+        )  # type: ignore[call-overload]
 
     @classmethod
     def from_csv(
@@ -824,7 +828,7 @@ class DataChain(DatasetQuery):
         cls,
         path,
         partitioning: Any = "hive",
-        output: Optional[dict[str, ChainType]] = None,
+        output: Optional[dict[str, DataType]] = None,
         object_name: str = "",
         model_name: str = "",
         **kwargs,
@@ -895,17 +899,17 @@ class DataChain(DatasetQuery):
             db.execute(insert_q.values(**record))
         return DataChain(name=dsr.name)
 
-    def sum(self, fr: ChainType):  # type: ignore[override]
-        return self._extend_features("sum", fr)
+    def sum(self, fr: DataType):  # type: ignore[override]
+        return self._extend_to_data_model("sum", fr)
 
-    def avg(self, fr: ChainType):  # type: ignore[override]
-        return self._extend_features("avg", fr)
+    def avg(self, fr: DataType):  # type: ignore[override]
+        return self._extend_to_data_model("avg", fr)
 
-    def min(self, fr: ChainType):  # type: ignore[override]
-        return self._extend_features("min", fr)
+    def min(self, fr: DataType):  # type: ignore[override]
+        return self._extend_to_data_model("min", fr)
 
-    def max(self, fr: ChainType):  # type: ignore[override]
-        return self._extend_features("max", fr)
+    def max(self, fr: DataType):  # type: ignore[override]
+        return self._extend_to_data_model("max", fr)
 
     def setup(self, **kwargs) -> "Self":
         intersection = set(self._setup.keys()) & set(kwargs.keys())

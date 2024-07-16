@@ -9,7 +9,7 @@ from datachain.lib.model_store import ModelStore
 if TYPE_CHECKING:
     from datachain.catalog import Catalog
 
-ChainStandardType = Union[
+StandardType = Union[
     type[int],
     type[str],
     type[float],
@@ -19,8 +19,8 @@ ChainStandardType = Union[
     type[bytes],
     type[datetime],
 ]
-ChainType = Union[type[BaseModel], ChainStandardType]
-ChainTypeNames = "BaseModel, int, str, float, bool, list, dict, bytes, datetime"
+DataType = Union[type[BaseModel], StandardType]
+DataTypeNames = "BaseModel, int, str, float, bool, list, dict, bytes, datetime"
 
 
 class DataModel(BaseModel):
@@ -38,7 +38,7 @@ class DataModel(BaseModel):
         ModelStore.add(cls)
 
     @staticmethod
-    def register(models: Union[ChainType, Sequence[ChainType]]):
+    def register(models: Union[DataType, Sequence[DataType]]):
         """For registering classes manually. It accepts a single class or a sequence of
         classes."""
         if not isinstance(models, Sequence):
@@ -65,7 +65,7 @@ class FileBasic(DataModel):
 def is_chain_type(t: type) -> bool:
     if ModelStore.is_pydantic(t):
         return True
-    if any(t is ft or t is get_args(ft)[0] for ft in get_args(ChainStandardType)):
+    if any(t is ft or t is get_args(ft)[0] for ft in get_args(StandardType)):
         return True
 
     if get_origin(t) is list and len(get_args(t)) == 1:
