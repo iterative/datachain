@@ -1,12 +1,14 @@
 import json
 from abc import ABC, abstractmethod
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, Optional, Union
 from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
 
 from fsspec.implementations.local import LocalFileSystem
+from PIL import Image
 from pydantic import Field, field_validator
 
 from datachain.cache import UniqueId
@@ -248,13 +250,17 @@ class TextFile(File):
         self._stream.set_mode("r")
 
 
+class ImageFile(File):
+    def get_value(self):
+        value = super().get_value()
+        return Image.open(BytesIO(value))
+
+
 def get_file(type: Literal["binary", "text", "image"] = "binary"):
     file = File
     if type == "text":
         file = TextFile
     elif type == "image":
-        from datachain.lib.image import ImageFile
-
         file = ImageFile  # type: ignore[assignment]
 
     def get_file_type(

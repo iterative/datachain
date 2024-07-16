@@ -2,9 +2,11 @@ import logging
 from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
+from PIL import Image
 from torch import float32
 from torch.distributed import get_rank, get_world_size
 from torch.utils.data import IterableDataset, get_worker_info
+from torchvision.transforms import v2
 
 from datachain.catalog import Catalog, get_catalog
 from datachain.lib.dc import DataChain
@@ -18,20 +20,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger("datachain")
 
 
-try:
-    from PIL import Image
-    from torchvision.transforms import v2
-
-    DEFAULT_TRANSFORM = v2.Compose([v2.ToImage(), v2.ToDtype(float32, scale=True)])
-except ImportError:
-    logger.warning(
-        "Missing dependencies for computer vision:\n"
-        "To install run:\n\n"
-        "  pip install 'datachain[cv]'\n"
-    )
-    Image = None  # type: ignore[assignment]
-    v2 = None
-    DEFAULT_TRANSFORM = None
+DEFAULT_TRANSFORM = v2.Compose([v2.ToImage(), v2.ToDtype(float32, scale=True)])
 
 
 def label_to_int(value: str, classes: list) -> int:

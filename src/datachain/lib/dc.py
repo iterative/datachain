@@ -549,13 +549,7 @@ class DataChain(DatasetQuery):
     def to_pytorch(self, **kwargs):
         """Convert to pytorch dataset format."""
 
-        try:
-            import torch  # noqa: F401
-        except ImportError as exc:
-            raise ImportError(
-                "Missing required dependency 'torch' for Dataset.to_pytorch()"
-            ) from exc
-        from datachain.lib.pytorch import PytorchDataset
+        from datachain.torch import PytorchDataset
 
         if self.attached:
             chain = self
