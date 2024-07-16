@@ -1093,8 +1093,8 @@ def test_get_file_signals(cloud_test_catalog, dogs_dataset):
         feature_schema={
             "name": "str",
             "age": "str",
-            "f1": "File@1",
-            "f2": "File@1",
+            "f1": "File@v1",
+            "f2": "File@v1",
         },
     )
     row = {

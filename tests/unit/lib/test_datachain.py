@@ -5,9 +5,9 @@ from collections.abc import Generator, Iterator
 import numpy as np
 import pandas as pd
 import pytest
+from pydantic import BaseModel
 
 from datachain.lib.dc import C, DataChain
-from datachain.lib.feature import Feature
 from datachain.lib.file import File
 from datachain.lib.signal_schema import (
     SignalResolvingError,
@@ -29,12 +29,12 @@ DF_OTHER_DATA = {
 }
 
 
-class MyFr(Feature):
+class MyFr(BaseModel):
     nnn: str
     count: int
 
 
-class MyNested(Feature):
+class MyNested(BaseModel):
     label: str
     fr: MyFr
 
@@ -194,7 +194,7 @@ def test_file_list(catalog):
 
 
 def test_gen(catalog):
-    class _TestFr(Feature):
+    class _TestFr(BaseModel):
         file: File
         sqrt: float
         my_name: str
@@ -221,7 +221,7 @@ def test_gen(catalog):
 
 
 def test_map(catalog):
-    class _TestFr(Feature):
+    class _TestFr(BaseModel):
         sqrt: float
         my_name: str
 
@@ -241,7 +241,7 @@ def test_map(catalog):
 
 
 def test_agg(catalog):
-    class _TestFr(Feature):
+    class _TestFr(BaseModel):
         f: File
         cnt: int
         my_name: str
@@ -269,7 +269,7 @@ def test_agg(catalog):
 
 
 def test_agg_two_params(catalog):
-    class _TestFr(Feature):
+    class _TestFr(BaseModel):
         f: File
         cnt: int
         my_name: str
@@ -325,7 +325,7 @@ def test_agg_simple_iterator_error(catalog):
 
     with pytest.raises(UdfSignatureError):
 
-        class _MyCls(Feature):
+        class _MyCls(BaseModel):
             x: int
 
         def func(key) -> _MyCls:  # type: ignore[misc]
@@ -342,7 +342,7 @@ def test_agg_simple_iterator_error(catalog):
 
 
 def test_agg_tuple_result_iterator(catalog):
-    class _ImageGroup(Feature):
+    class _ImageGroup(BaseModel):
         name: str
         size: int
 
@@ -364,7 +364,7 @@ def test_agg_tuple_result_iterator(catalog):
 
 
 def test_agg_tuple_result_generator(catalog):
-    class _ImageGroup(Feature):
+    class _ImageGroup(BaseModel):
         name: str
         size: int
 
@@ -588,16 +588,6 @@ def test_default_output_type(catalog):
     assert chain.collect_one("res1") == [t + suffix for t in names]
 
 
-def test_create_model(catalog):
-    chain = DataChain.from_features(name=["aaa", "b", "c"], count=[1, 4, 6])
-
-    cls = chain.create_model("TestModel")
-    assert isinstance(cls, type(Feature))
-
-    fields = {n: f_info.annotation for n, f_info in cls.model_fields.items()}
-    assert fields == {"name": str, "count": int}
-
-
 def test_parse_tabular(tmp_dir, catalog):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.parquet"
@@ -679,7 +669,7 @@ def test_parse_tabular_output_dict(tmp_dir, catalog):
 
 
 def test_parse_tabular_output_feature(tmp_dir, catalog):
-    class Output(Feature):
+    class Output(BaseModel):
         fname: str
         age: int
         loc: str
@@ -737,7 +727,7 @@ def test_from_csv_no_header_output_dict(tmp_dir, catalog):
 
 
 def test_from_csv_no_header_output_feature(tmp_dir, catalog):
-    class Output(Feature):
+    class Output(BaseModel):
         first_name: str
         age: int
         city: str

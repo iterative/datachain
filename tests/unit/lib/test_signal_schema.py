@@ -2,8 +2,10 @@ import json
 from typing import Optional, Union
 
 import pytest
+from pydantic import BaseModel
 
-from datachain.lib.feature import Feature
+from datachain.lib.feature import ModelUtil
+from datachain.lib.feature_registry import Registry
 from datachain.lib.file import File
 from datachain.lib.signal_schema import (
     SetupError,
@@ -25,18 +27,18 @@ def nested_file_schema():
     return SignalSchema(schema)
 
 
-class MyType1(Feature):
+class MyType1(BaseModel):
     aa: int
     bb: str
 
 
-class MyType2(Feature):
+class MyType2(BaseModel):
     name: str
     deep: MyType1
 
 
 def test_deserialize_basic():
-    stored = {"name": "str", "count": "int", "file": "File@1"}
+    stored = {"name": "str", "count": "int", "file": "File@v1"}
     signals = SignalSchema.deserialize(stored)
 
     assert len(signals.values) == 3
@@ -68,7 +70,7 @@ def test_serialize_basic():
     assert len(signals) == 3
     assert signals["name"] == "str"
     assert signals["age"] == "float"
-    assert signals["f"] == "File@1"
+    assert signals["f"] == "File@v1"
 
 
 def test_feature_schema_serialize_optional():
@@ -101,7 +103,7 @@ def test_to_udf_spec():
         {
             "age": "float",
             "address": "str",
-            "f": "File@1",
+            "f": "File@v1",
         }
     )
 
@@ -123,11 +125,12 @@ def test_to_udf_spec():
 
 
 def test_select():
+    Registry.add(MyType2)
     schema = SignalSchema.deserialize(
         {
             "age": "float",
             "address": "str",
-            "f": "MyType1@1",
+            "f": "MyType1",
         }
     )
 
@@ -143,10 +146,11 @@ def test_select():
 
 
 def test_select_nested_names():
+    Registry.add(MyType2)
     schema = SignalSchema.deserialize(
         {
             "address": "str",
-            "fr": "MyType2@1",
+            "fr": "MyType2",
         }
     )
 
@@ -165,7 +169,7 @@ def test_select_nested_errors():
     schema = SignalSchema.deserialize(
         {
             "address": "str",
-            "fr": "MyType2@1",
+            "fr": "MyType2",
         }
     )
 
@@ -196,22 +200,6 @@ def test_get_file_signals_basic():
 def test_get_file_signals_nested(nested_file_schema):
     files = list(nested_file_schema.get_file_signals())
     assert files == ["f", "my_f", "my_f.nested_file"]
-
-
-def test_create_model():
-    class MyFr(Feature):
-        count: int
-
-    spec = {"name": str, "age": float, "fr": MyFr}
-    cls = SignalSchema(spec).create_model("TestModel")
-
-    assert isinstance(cls, type(Feature))
-
-    res = {}
-    for k, f_info in cls.model_fields.items():
-        res[k] = f_info.annotation
-
-    assert res == spec
 
 
 def test_build_tree():
@@ -265,7 +253,7 @@ def test_row_to_objs():
     schema = SignalSchema(spec)
 
     val = MyType2(name="Fred", deep=MyType1(aa=129, bb="qwe"))
-    row = ("myname", 12.5, *val._flatten())
+    row = ("myname", 12.5, *ModelUtil.flatten(val))
 
     res = schema.row_to_objs(row)
 
@@ -279,7 +267,7 @@ def test_row_to_objs_setup():
     schema = SignalSchema(spec, setup)
 
     val = MyType2(name="Fred", deep=MyType1(aa=129, bb="qwe"))
-    row = ("myname", 12.5, *val._flatten())
+    row = ("myname", 12.5, *ModelUtil.flatten(val))
 
     res = schema.row_to_objs(row)
     assert res == ["myname", 12.5, setup_value, val]

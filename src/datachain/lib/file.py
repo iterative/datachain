@@ -12,27 +12,13 @@ from pydantic import Field, field_validator
 from datachain.cache import UniqueId
 from datachain.client.fileslice import FileSlice
 from datachain.lib.cached_stream import PreCachedStream, PreDownloadStream
-from datachain.lib.feature import Feature
+from datachain.lib.data_model import DataModel, FileBasic
 from datachain.lib.utils import DataChainError
 from datachain.sql.types import JSON, Int, String
 from datachain.utils import TIME_ZERO
 
 if TYPE_CHECKING:
     from datachain.catalog import Catalog
-
-
-class FileFeature(Feature):
-    _is_file = True
-
-    def open(self):
-        raise NotImplementedError
-
-    def read(self):
-        with self.open() as stream:
-            return stream.read()
-
-    def get_value(self):
-        return self.read()
 
 
 class VFileError(DataChainError):
@@ -110,7 +96,7 @@ class VFileRegistry:
         return reader.open(file, location)
 
 
-class File(FileFeature):
+class File(FileBasic):
     source: str = Field(default="")
     parent: str = Field(default="")
     name: str
@@ -281,7 +267,7 @@ def get_file(type: Literal["binary", "text", "image"] = "binary"):
     return get_file_type
 
 
-class IndexedFile(Feature):
+class IndexedFile(DataModel):
     """File source info for tables."""
 
     file: File

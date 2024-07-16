@@ -1,7 +1,7 @@
+from datachain.lib.data_model import DataModel, FileBasic
 from datachain.lib.dc import C, DataChain
-from datachain.lib.feature import Feature
-from datachain.lib.feature_utils import pydantic_to_feature
-from datachain.lib.file import File, FileError, FileFeature, IndexedFile, TarVFile
+from datachain.lib.file import File, FileError, IndexedFile, TarVFile
+from datachain.lib.image import ImageFile
 from datachain.lib.udf import Aggregator, Generator, Mapper
 from datachain.lib.utils import AbstractUDF, DataChainError
 from datachain.query.dataset import UDF as BaseUDF  # noqa: N811
@@ -16,14 +16,14 @@ __all__ = [
     "Column",
     "DataChain",
     "DataChainError",
-    "Feature",
+    "DataModel",
     "File",
+    "FileBasic",
     "FileError",
-    "FileFeature",
     "Generator",
+    "ImageFile",
     "IndexedFile",
     "Mapper",
     "Session",
     "TarVFile",
-    "pydantic_to_feature",
 ]
