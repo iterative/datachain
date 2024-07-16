@@ -197,7 +197,7 @@ class File(FileFeature):
 
     def export(self, output: str, strategy: ExportStrategy) -> None:
         self._set_stream(self._catalog, caching_enabled=True)
-        dst = self.get_export_destination(output, strategy)
+        dst = self.get_destination_path(output, strategy)
         dst_dir = os.path.dirname(dst)
         os.makedirs(dst_dir, exist_ok=True)
 
@@ -247,7 +247,7 @@ class File(FileFeature):
             path = url2pathname(path)
         return path
 
-    def get_export_destination(self, output: str, strategy: ExportStrategy) -> str:
+    def get_destination_path(self, output: str, strategy: ExportStrategy) -> str:
         """
         Returns full destination path of a file for exporting to some output
         based on export strategy
@@ -257,10 +257,13 @@ class File(FileFeature):
         elif strategy == "etag":
             path = f"{self.etag}{self.get_file_suffix()}"
         elif strategy == "storage_path":
-            path = unquote(self.get_full_name())
             fs = self.get_fs()
-            if not isinstance(fs, LocalFileSystem):
-                path = (Path(urlparse(self.source).netloc) / path).as_posix()
+            if isinstance(fs, LocalFileSystem):
+                path = self.get_path().lstrip("/")
+            else:
+                path = (
+                    Path(urlparse(self.source).netloc) / unquote(self.get_full_name())
+                ).as_posix()
         else:
             raise ValueError(f"Unsupported file export strategy: {strategy}")
 

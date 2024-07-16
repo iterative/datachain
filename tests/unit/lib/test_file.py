@@ -65,6 +65,63 @@ def test_cache_get_path(catalog: Catalog):
         assert f.read() == data
 
 
+def test_get_destination_path_wrong_strategy():
+    f = File(name="test.txt", parent="dir1/dir2", source="s3://mybkt")
+    with pytest.raises(ValueError):
+        f.get_destination_path("", "wrong")
+
+
+def test_get_destination_path_filename_strategy():
+    f = File(name="test.txt", parent="dir1/dir2", source="s3://mybkt")
+    assert f.get_destination_path("output", "filename") == "output/test.txt"
+
+
+def test_get_destination_path_empty_output():
+    f = File(name="test.txt", parent="dir1/dir2", source="s3://mybkt")
+    assert f.get_destination_path("", "filename") == "test.txt"
+
+
+def test_get_destination_path_etag_strategy():
+    f = File(
+        name="test.txt",
+        parent="dir1/dir2",
+        source="s3://mybkt",
+        etag="ed779276108738fdb2179ccabf9680d9",
+    )
+    assert (
+        f.get_destination_path("output", "etag")
+        == "output/ed779276108738fdb2179ccabf9680d9.txt"
+    )
+
+
+def test_get_destination_path_storage_path_strategy(catalog):
+    f = File(
+        name="test.txt",
+        parent="dir1/dir2",
+        source="s3://mybkt",
+        etag="ed779276108738fdb2179ccabf9680d9",
+    )
+    f._set_stream(catalog, False)
+    assert (
+        f.get_destination_path("output", "storage_path")
+        == "output/mybkt/dir1/dir2/test.txt"
+    )
+
+
+def test_get_destination_path_storage_path_strategy_file_source(catalog, tmp_path):
+    f = File(
+        name="test.txt",
+        parent="dir1/dir2",
+        source=f"file://{tmp_path}",
+        etag="ed779276108738fdb2179ccabf9680d9",
+    )
+    f._set_stream(catalog, False)
+    assert (
+        f.get_destination_path("output", "storage_path")
+        == f"output{tmp_path}/dir1/dir2/test.txt"
+    )
+
+
 def test_read_binary_data(tmp_path, catalog: Catalog):
     file_name = "myfile"
     data = b"some\x00data\x00is\x48\x65\x6c\x57\x6f\x72\x6c\x64\xff\xffheRe"
