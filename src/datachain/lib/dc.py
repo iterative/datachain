@@ -589,7 +589,9 @@ class DataChain(DatasetQuery):
         """Collect results from one column."""
         return list(self.iterate_one(col))
 
-    def to_pytorch(self, **kwargs):
+    def to_pytorch(
+        self, transform=None, tokenizer=None, tokenizer_kwargs=None, num_samples=0
+    ):
         """
         Convert to pytorch dataset format.
 
@@ -622,7 +624,15 @@ class DataChain(DatasetQuery):
         else:
             chain = self.save()
         assert chain.name is not None  # for mypy
-        return PytorchDataset(chain.name, chain.version, catalog=self.catalog, **kwargs)
+        return PytorchDataset(
+            chain.name,
+            chain.version,
+            catalog=self.catalog,
+            transform=transform,
+            tokenizer=tokenizer,
+            tokenizer_kwargs=tokenizer_kwargs,
+            num_samples=num_samples,
+        )
 
     def remove_file_signals(self) -> "Self":
         schema = self.signals_schema.clone_without_file_signals()
