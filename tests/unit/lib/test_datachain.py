@@ -1,13 +1,14 @@
 import datetime
 import math
 from collections.abc import Generator, Iterator
+from unittest.mock import ANY
 
 import numpy as np
 import pandas as pd
 import pytest
 from pydantic import BaseModel
 
-from datachain.lib.dc import C, DataChain
+from datachain.lib.dc import C, DataChain, Sys
 from datachain.lib.file import File
 from datachain.lib.signal_schema import (
     SignalResolvingError,
@@ -837,3 +838,33 @@ def test_parse_tabular_object_name(tmp_dir, catalog):
     df.to_parquet(path)
     dc = DataChain.from_storage(path.as_uri()).parse_tabular(object_name="name")
     assert "name.first_name" in dc.to_pandas().columns
+
+
+def test_sys_feature(tmp_dir, catalog):
+    ds = DataChain.from_values(t1=features).save()
+    ds_sys = DataChain(name=ds.name, include_sys=True)
+    assert ds.signals_schema.values == {"t1": MyFr}
+    assert ds_sys.signals_schema.values == {"t1": MyFr, "sys": Sys}
+
+    args = []
+    ds_sys.map(res=lambda sys, t1: args.append((sys, t1))).save("ds_sys")
+
+    sys_cls = Sys.model_construct
+    assert args == [
+        (sys_cls(id=1, rand=ANY), MyFr(nnn="n1", count=3)),
+        (sys_cls(id=2, rand=ANY), MyFr(nnn="n2", count=5)),
+        (sys_cls(id=3, rand=ANY), MyFr(nnn="n1", count=1)),
+    ]
+    assert "sys" not in ds_sys.catalog.get_dataset("ds_sys").feature_schema
+
+    ds_no_sys = DataChain(name=ds.name, include_sys=False)
+    assert ds_no_sys.signals_schema.values == {"t1": MyFr}
+
+    args = []
+    ds_no_sys.map(res=lambda t1: args.append(t1)).save("ds_no_sys")
+    assert args == [
+        MyFr(nnn="n1", count=3),
+        MyFr(nnn="n2", count=5),
+        MyFr(nnn="n1", count=1),
+    ]
+    assert "sys" not in ds_no_sys.catalog.get_dataset("ds_no_sys").feature_schema

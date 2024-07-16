@@ -1343,10 +1343,8 @@ class DatasetQuery:
         finally:
             self.cleanup()
 
-    def to_records(self) -> list[dict]:
-        with self.as_iterable() as result:
-            cols = result.columns
-            return [dict(zip(cols, row)) for row in result]
+    def to_records(self) -> list[dict[str, Any]]:
+        return self.results(lambda cols, row: dict(zip(cols, row)))
 
     def to_pandas(self) -> "pd.DataFrame":
         records = self.to_records()
@@ -1485,30 +1483,35 @@ class DatasetQuery:
         query.steps.append(SQLOffset(offset))
         return query
 
+    def as_scalar(self) -> Any:
+        with self.as_iterable() as rows:
+            row = next(iter(rows))
+        return row[0]
+
     def count(self) -> int:
         query = self.clone()
         query.steps.append(SQLCount())
-        return query.results()[0][0]
+        return query.as_scalar()
 
-    def sum(self, col: ColumnElement):
+    def sum(self, col: ColumnElement) -> int:
         query = self.clone()
         query.steps.append(SQLSelect((f.sum(col),)))
-        return query.results()[0][0]
+        return query.as_scalar()
 
-    def avg(self, col: ColumnElement):
+    def avg(self, col: ColumnElement) -> int:
         query = self.clone()
         query.steps.append(SQLSelect((f.avg(col),)))
-        return query.results()[0][0]
+        return query.as_scalar()
 
-    def min(self, col: ColumnElement):
+    def min(self, col: ColumnElement) -> int:
         query = self.clone()
         query.steps.append(SQLSelect((f.min(col),)))
-        return query.results()[0][0]
+        return query.as_scalar()
 
-    def max(self, col: ColumnElement):
+    def max(self, col: ColumnElement) -> int:
         query = self.clone()
         query.steps.append(SQLSelect((f.max(col),)))
-        return query.results()[0][0]
+        return query.as_scalar()
 
     @detach
     def group_by(self, *cols: ColumnElement) -> "Self":

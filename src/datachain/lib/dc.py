@@ -72,6 +72,11 @@ class DatasetMergeError(DataChainParamsError):
 OutputType = Union[None, DataType, Sequence[str], dict[str, DataType]]
 
 
+class Sys(DataModel):
+    id: int
+    rand: int
+
+
 class DataChain(DatasetQuery):
     """AI 🔗 DataChain - a data structure for batch data processing and evaluation.
 
@@ -133,6 +138,7 @@ class DataChain(DatasetQuery):
     def __init__(self, *args, **kwargs):
         """This method needs to be redefined as a part of Dataset and DacaChin
         decoupling."""
+        include_sys = kwargs.pop("include_sys", False)
         super().__init__(
             *args,
             **kwargs,
@@ -145,6 +151,9 @@ class DataChain(DatasetQuery):
             self.signals_schema = SignalSchema.deserialize(self.feature_schema)
         else:
             self.signals_schema = SignalSchema.from_column_types(self.column_types)
+
+        if include_sys:
+            self.add_schema(SignalSchema({"sys": Sys}))
 
     @property
     def schema(self):
@@ -350,6 +359,7 @@ class DataChain(DatasetQuery):
             version : version of a dataset. Default - the last version that exist.
         """
         schema = self.signals_schema.serialize()
+        schema.pop("sys", None)
         return super().save(name=name, version=version, feature_schema=schema)
 
     def apply(self, func, *args, **kwargs):
@@ -526,6 +536,20 @@ class DataChain(DatasetQuery):
         chain.signals_schema = new_schema
         return chain
 
+    def iterate_flatten(self) -> Iterator[tuple[Any]]:
+        db_signals = self.signals_schema.db_signals()
+        with super().select(*db_signals).as_iterable() as rows:
+            yield from rows
+
+    def results(
+        self, row_factory: Optional[Callable] = None, **kwargs
+    ) -> list[tuple[Any, ...]]:
+        rows = self.iterate_flatten()
+        if row_factory:
+            db_signals = self.signals_schema.db_signals()
+            rows = (row_factory(db_signals, r) for r in rows)
+        return list(rows)
+
     def iterate(self, *cols: str) -> Iterator[list[DataType]]:
         """Iterate over rows.
 
@@ -533,13 +557,10 @@ class DataChain(DatasetQuery):
         columns.
         """
         chain = self.select(*cols) if cols else self
-
-        db_signals = chain.signals_schema.db_signals()
-        with super().select(*db_signals).as_iterable() as rows_iter:
-            for row in rows_iter:
-                yield chain.signals_schema.row_to_features(
-                    row, catalog=chain.session.catalog, cache=chain._settings.cache
-                )
+        for row in chain.iterate_flatten():
+            yield chain.signals_schema.row_to_features(
+                row, catalog=chain.session.catalog, cache=chain._settings.cache
+            )
 
     def iterate_one(self, col: str) -> Iterator[DataType]:
         for item in self.iterate(col):
