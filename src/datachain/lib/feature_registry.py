@@ -30,9 +30,6 @@ class Registry:
         if name not in cls.reg:
             cls.reg[name] = {}
         version = Registry.get_version(model)
-        if version in cls.reg[name]:
-            full_name = f"{name}@{version}"
-            logger.warning("Feature %s is already registered", full_name)
         cls.reg[name][version] = model
 
         for f_info in model.model_fields.values():

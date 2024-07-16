@@ -4,8 +4,7 @@ import anthropic
 import pandas as pd
 from anthropic.types import Message
 
-from datachain import Column
-from datachain.lib.dc import C, DataChain
+from datachain import Column, DataChain
 from datachain.sql.functions import path
 
 DATA = "gs://dvcx-datalakes/chatbot-public"
@@ -35,7 +34,7 @@ chain = (
     .agg(
         dialogues=lambda file: ["\n=====\n".join(f.read() for f in file)],
         output=str,
-        partition_by=path.file_ext(C.name),
+        partition_by=path.file_ext(Column("name")),
     )
     .setup(client=lambda: anthropic.Anthropic(api_key=API_KEY))
     .map(

@@ -24,11 +24,7 @@ class FeatureToTupleError(DataChainParamsError):
 
 def dict_to_feature(name: str, data_dict: dict[str, FeatureType]) -> type[BaseModel]:
     fields = {name: (anno, ...) for name, anno in data_dict.items()}
-    return create_model(  # type: ignore[call-overload]
-        name,
-        __base__=BaseModel,
-        **fields,
-    )
+    return create_model(name, **fields)  # type: ignore[call-overload]
 
 
 def features_to_tuples(
