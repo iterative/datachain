@@ -52,7 +52,7 @@ datachain query scripts/1-quick-start.py
 
 We'd love to have you join our growing community of DataChain users and contributors! Here's how you can get involved:
 
-- ⭐ Give us a star on [GitHub](https://github.com/iterative/dvcx) to show your support
+- ⭐ Give us a star on [GitHub](https://github.com/iterative/datachain) to show your support
 - 🌐 Visit the [dvc.ai website](https://dvc.ai/) to learn more about our products and services
 - 📞 Contact us to discuss on scaling 🚀 DataChain for your project!
 - 🙌 Follow us on [LinkedIn](https://www.linkedin.com/company/dvc-ai/) and [Twitter](https://x.com/DVCorg) for the latest updates and insights
