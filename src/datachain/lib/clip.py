@@ -1,19 +1,14 @@
 import inspect
-from typing import Any, Callable, Literal, Union
+from typing import TYPE_CHECKING, Any, Callable, Literal, Union
+
+import torch
+from transformers.modeling_utils import PreTrainedModel
 
 from datachain.lib.image import convert_images
 from datachain.lib.text import convert_text
 
-try:
-    import torch
+if TYPE_CHECKING:
     from PIL import Image
-    from transformers.modeling_utils import PreTrainedModel
-except ImportError as exc:
-    raise ImportError(
-        "Missing dependencies for computer vision:\n"
-        "To install run:\n\n"
-        "  pip install 'datachain[cv]'\n"
-    ) from exc
 
 
 def _get_encoder(model: Any, type: Literal["image", "text"]) -> Callable:
@@ -37,7 +32,7 @@ def _get_encoder(model: Any, type: Literal["image", "text"]) -> Callable:
 
 
 def similarity_scores(
-    images: Union[None, Image.Image, list[Image.Image]],
+    images: Union[None, "Image.Image", list["Image.Image"]],
     text: Union[None, str, list[str]],
     model: Any,
     preprocess: Callable,

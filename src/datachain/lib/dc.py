@@ -618,13 +618,7 @@ class DataChain(DatasetQuery):
             )
             ```
         """
-        try:
-            import torch  # noqa: F401
-        except ImportError as exc:
-            raise ImportError(
-                "Missing required dependency 'torch' for Dataset.to_pytorch()"
-            ) from exc
-        from datachain.lib.pytorch import PytorchDataset
+        from datachain.torch import PytorchDataset
 
         if self.attached:
             chain = self
