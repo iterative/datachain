@@ -3,6 +3,7 @@ import json
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, Optional, Union
 from urllib.parse import unquote, urlparse
@@ -10,6 +11,7 @@ from urllib.request import url2pathname
 
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 from fsspec.implementations.local import LocalFileSystem
+from PIL import Image
 from pydantic import Field, field_validator
 
 from datachain.cache import UniqueId
@@ -242,13 +244,17 @@ class TextFile(File):
             yield io.TextIOWrapper(binary)
 
 
+class ImageFile(File):
+    def get_value(self):
+        value = super().get_value()
+        return Image.open(BytesIO(value))
+
+
 def get_file(type_: Literal["binary", "text", "image"] = "binary"):
     file: type[File] = File
     if type_ == "text":
         file = TextFile
     elif type_ == "image":
-        from datachain.lib.image import ImageFile
-
         file = ImageFile  # type: ignore[assignment]
 
     def get_file_type(

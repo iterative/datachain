@@ -41,7 +41,8 @@ dependencies = [
   "ujson>=5.9.0",
   "pydantic>=2,<3",
   "jmespath>=1.0",
-  "datamodel-code-generator>=0.25"
+  "datamodel-code-generator>=0.25",
+  "Pillow>=10.0.0,<11"
 ]
 
 [project.optional-dependencies]
@@ -53,8 +54,7 @@ docs = [
   "mkdocstrings-python>=1.6.3",
   "mkdocs-literate-nav>=0.6.1"
 ]
-cv = [
-  "Pillow>=10.0.0,<11",
+torch = [
   "torch>=2.1.0",
   "torchvision",
   "transformers>=4.36.0"
@@ -68,7 +68,7 @@ vector = [
   "usearch"
 ]
 tests = [
-  "datachain[cv,remote,vector]",
+  "datachain[torch,remote,vector]",
   "pytest>=8,<9",
   "pytest-sugar>=0.9.6",
   "pytest-cov>=4.1.0",
