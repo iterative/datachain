@@ -943,6 +943,12 @@ class SQLCount(SQLClause):
 
 
 @frozen
+class SQLDistinct(SQLClause):
+    def apply_sql_clause(self, query):
+        return query.distinct()
+
+
+@frozen
 class SQLUnion(Step):
     query1: "DatasetQuery"
     query2: "DatasetQuery"
@@ -1512,6 +1518,12 @@ class DatasetQuery:
         query = self.clone()
         query.steps.append(SQLCount())
         return query.results()[0][0]
+
+    @detach
+    def distinct(self) -> "Self":
+        query = self.clone()
+        query.steps.append(SQLDistinct())
+        return query
 
     def sum(self, col: ColumnElement):
         query = self.clone()

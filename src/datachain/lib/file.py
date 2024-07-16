@@ -22,6 +22,9 @@ if TYPE_CHECKING:
     from datachain.catalog import Catalog
 
 
+ExportStrategy = Literal["filename", "etag", "storage_path"]
+
+
 class FileFeature(Feature):
     _is_file = True
 
@@ -192,9 +195,9 @@ class File(FileFeature):
 
         return self._stream
 
-    def export(self, output: str):
+    def export(self, output: str, strategy: ExportStrategy) -> None:
         self._set_stream(self._catalog, caching_enabled=True)
-        dst = self.get_export_destination(output)
+        dst = self.get_export_destination(output, strategy)
         dst_dir = os.path.dirname(dst)
         os.makedirs(dst_dir, exist_ok=True)
 
@@ -244,16 +247,22 @@ class File(FileFeature):
             path = url2pathname(path)
         return path
 
-    def get_export_destination(self, output: str) -> str:
+    def get_export_destination(self, output: str, strategy: ExportStrategy) -> str:
         """
         Returns full destination path of a file for exporting to some output
+        based on export strategy
         """
-        path = unquote(self.get_full_name())
-        fs = self.get_fs()
-
-        if not isinstance(fs, LocalFileSystem):
-            parsed = urlparse(self.source)
-            path = (Path(parsed.scheme) / parsed.netloc / path).as_posix()
+        if strategy == "filename":
+            path = unquote(self.name)
+        elif strategy == "etag":
+            path = f"{self.etag}{self.get_file_suffix()}"
+        elif strategy == "storage_path":
+            path = unquote(self.get_full_name())
+            fs = self.get_fs()
+            if not isinstance(fs, LocalFileSystem):
+                path = (Path(urlparse(self.source).netloc) / path).as_posix()
+        else:
+            raise ValueError(f"Unsupported file export strategy: {strategy}")
 
         return os.path.join(output, path)  # type: ignore[union-attr]
 

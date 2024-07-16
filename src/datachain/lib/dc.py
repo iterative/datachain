@@ -14,6 +14,7 @@ import sqlalchemy
 
 from datachain.lib.feature import Feature, FeatureType
 from datachain.lib.feature_utils import dict_to_feature, features_to_tuples
+from datachain.lib.file import ExportStrategy as FileExportStrategy
 from datachain.lib.file import File, IndexedFile, get_file
 from datachain.lib.meta_formats import read_meta, read_schema
 from datachain.lib.settings import Settings
@@ -907,7 +908,14 @@ class DataChain(DatasetQuery):
         self._setup = self._setup | kwargs
         return self
 
-    def export_files(self, output: str, signal="file", force: bool = False) -> None:
+    def export_files(
+        self, output: str, signal="file", strategy: FileExportStrategy = "storage_path"
+    ) -> None:
         """Method that export all files from chain to some folder"""
+        if (
+            strategy == "filename"
+            and self.select(f"{signal}.name").distinct().count() != self.count()
+        ):
+            raise ValueError("Files with the same name found")
         for file in self.collect_one(signal):
-            file.export(output)  # type: ignore[union-attr]
+            file.export(output, strategy)  # type: ignore[union-attr]
