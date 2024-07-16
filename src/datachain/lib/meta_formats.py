@@ -127,7 +127,7 @@ def read_meta(  # noqa: C901
 
         if show_schema:
             print(f"{model_output}")
-        # Below 'spec' should be a dynamically converted Feature from Pydantic datamodel
+        # Below 'spec' should be a dynamically converted DataModel from Pydantic
         if not spec:
             local_vars: dict[str, Any] = {}
             exec(model_output, globals(), local_vars)  # noqa: S102

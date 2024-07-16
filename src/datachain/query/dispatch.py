@@ -16,7 +16,6 @@ from multiprocess import get_context
 
 from datachain.catalog import Catalog
 from datachain.catalog.loader import get_distributed_class
-from datachain.query.batch import RowBatch
 from datachain.query.dataset import (
     get_download_callback,
     get_generated_callback,
@@ -355,6 +354,15 @@ class WorkerCallback(Callback):
         put_into_queue(self.queue, {"status": NOTIFY_STATUS, "downloaded": inc})
 
 
+class ProcessedCallback(Callback):
+    def __init__(self):
+        self.processed_rows: Optional[int] = None
+        super().__init__()
+
+    def relative_update(self, inc: int = 1) -> None:
+        self.processed_rows = inc
+
+
 @attrs.define
 class UDFWorker:
     catalog: Catalog
@@ -370,25 +378,28 @@ class UDFWorker:
         return WorkerCallback(self.done_queue)
 
     def run(self) -> None:
-        if hasattr(self.udf.func, "setup") and callable(self.udf.func.setup):
-            self.udf.func.setup()
-        while (batch := get_from_queue(self.task_queue)) != STOP_SIGNAL:
-            n_rows = len(batch.rows) if isinstance(batch, RowBatch) else 1
-            udf_output = self.udf(
-                self.catalog,
-                batch,
-                is_generator=self.is_generator,
-                cache=self.cache,
-                cb=self.cb,
-            )
+        processed_cb = ProcessedCallback()
+        udf_results = self.udf.run(
+            self.get_inputs(),
+            self.catalog,
+            self.is_generator,
+            self.cache,
+            download_cb=self.cb,
+            processed_cb=processed_cb,
+        )
+        for udf_output in udf_results:
             if isinstance(udf_output, GeneratorType):
                 udf_output = list(udf_output)  # can not pickle generator
             put_into_queue(
                 self.done_queue,
-                {"status": OK_STATUS, "result": udf_output, "processed": n_rows},
+                {
+                    "status": OK_STATUS,
+                    "result": udf_output,
+                    "processed": processed_cb.processed_rows,
+                },
             )
-
-        if hasattr(self.udf.func, "teardown") and callable(self.udf.func.teardown):
-            self.udf.func.teardown()
-
         put_into_queue(self.done_queue, {"status": FINISHED_STATUS})
+
+    def get_inputs(self):
+        while (batch := get_from_queue(self.task_queue)) != STOP_SIGNAL:
+            yield batch

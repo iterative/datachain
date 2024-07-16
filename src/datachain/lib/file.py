@@ -1,5 +1,7 @@
+import io
 import json
 from abc import ABC, abstractmethod
+from contextlib import contextmanager
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
@@ -7,13 +9,13 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, Optional, Union
 from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
 
+from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 from fsspec.implementations.local import LocalFileSystem
 from PIL import Image
 from pydantic import Field, field_validator
 
 from datachain.cache import UniqueId
 from datachain.client.fileslice import FileSlice
-from datachain.lib.cached_stream import PreCachedStream, PreDownloadStream
 from datachain.lib.data_model import DataModel, FileBasic
 from datachain.lib.utils import DataChainError
 from datachain.sql.types import JSON, Int, String
@@ -166,24 +168,33 @@ class File(FileBasic):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._stream = None
         self._catalog = None
         self._caching_enabled = False
 
+    @contextmanager
     def open(self):
-        if self._stream is None:
-            raise FileError(self, "stream is not set")
-
         if self.location:
-            return VFileRegistry.resolve(self, self.location)
+            with VFileRegistry.resolve(self, self.location) as f:
+                yield f
 
-        return self._stream
+        uid = self.get_uid()
+        client = self._catalog.get_client(self.source)
+        if self._caching_enabled:
+            client.download(uid, callback=self._download_cb)
+        with client.open_object(
+            uid, use_cache=self._caching_enabled, cb=self._download_cb
+        ) as f:
+            yield f
 
-    def _set_stream(self, catalog: "Catalog", caching_enabled: bool = False) -> None:
+    def _set_stream(
+        self,
+        catalog: "Catalog",
+        caching_enabled: bool = False,
+        download_cb: Callback = DEFAULT_CALLBACK,
+    ) -> None:
         self._catalog = catalog
-        stream_class = PreCachedStream if caching_enabled else PreDownloadStream
-        self._stream = stream_class(self._catalog, self.get_uid())
         self._caching_enabled = caching_enabled
+        self._download_cb = download_cb
 
     def get_uid(self) -> UniqueId:
         dump = self.model_dump()
@@ -227,13 +238,10 @@ class File(FileBasic):
 
 
 class TextFile(File):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self._stream = None
-
-    def _set_stream(self, catalog: "Catalog", caching_enabled: bool = False) -> None:
-        super()._set_stream(catalog, caching_enabled)
-        self._stream.set_mode("r")
+    @contextmanager
+    def open(self):
+        with super().open() as binary:
+            yield io.TextIOWrapper(binary)
 
 
 class ImageFile(File):
@@ -242,11 +250,11 @@ class ImageFile(File):
         return Image.open(BytesIO(value))
 
 
-def get_file(type: Literal["binary", "text", "image"] = "binary"):
-    file = File
-    if type == "text":
+def get_file(type_: Literal["binary", "text", "image"] = "binary"):
+    file: type[File] = File
+    if type_ == "text":
         file = TextFile
-    elif type == "image":
+    elif type_ == "image":
         file = ImageFile  # type: ignore[assignment]
 
     def get_file_type(

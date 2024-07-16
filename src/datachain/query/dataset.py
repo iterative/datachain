@@ -58,7 +58,6 @@ from datachain.sql.functions import rand
 from datachain.storage import Storage, StorageURI
 from datachain.utils import batched, determine_processes, inside_notebook
 
-from .batch import RowBatch
 from .metrics import metrics
 from .schema import C, UDFParamSpec, normalize_param
 from .session import Session
@@ -428,22 +427,6 @@ def get_generated_callback(is_generator: bool = False) -> Callback:
     return DEFAULT_CALLBACK
 
 
-def run_udf(
-    udf,
-    udf_inputs,
-    catalog,
-    is_generator,
-    cache,
-    download_cb: Callback = DEFAULT_CALLBACK,
-    processed_cb: Callback = DEFAULT_CALLBACK,
-) -> Iterator[Iterable["UDFResult"]]:
-    for batch in udf_inputs:
-        n_rows = len(batch.rows) if isinstance(batch, RowBatch) else 1
-        output = udf(catalog, batch, is_generator, cache, cb=download_cb)
-        processed_cb.relative_update(n_rows)
-        yield output
-
-
 @frozen
 class UDF(Step, ABC):
     udf: UDFType
@@ -549,9 +532,6 @@ class UDF(Step, ABC):
                 else:
                     udf = self.udf
 
-                if hasattr(udf.func, "setup") and callable(udf.func.setup):
-                    udf.func.setup()
-
                 warehouse = self.catalog.warehouse
 
                 with contextlib.closing(
@@ -561,8 +541,7 @@ class UDF(Step, ABC):
                     processed_cb = get_processed_callback()
                     generated_cb = get_generated_callback(self.is_generator)
                     try:
-                        udf_results = run_udf(
-                            udf,
+                        udf_results = udf.run(
                             udf_inputs,
                             self.catalog,
                             self.is_generator,
@@ -583,9 +562,6 @@ class UDF(Step, ABC):
                         generated_cb.close()
 
                 warehouse.insert_rows_done(udf_table)
-
-                if hasattr(udf.func, "teardown") and callable(udf.func.teardown):
-                    udf.func.teardown()
 
         except QueryScriptCancelError:
             self.catalog.warehouse.close()
