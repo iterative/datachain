@@ -8,6 +8,26 @@ from datachain.catalog import Catalog
 from datachain.lib.file import File, TextFile
 
 
+@pytest.fixture()
+def s3_file() -> File:
+    return File(
+        name="test.txt",
+        parent="dir1/dir2",
+        source="s3://mybkt",
+        etag="ed779276108738fdb2179ccabf9680d9",
+    )
+
+
+@pytest.fixture()
+def local_file(tmp_path) -> File:
+    return File(
+        name="test.txt",
+        parent="dir1/dir2",
+        source=f"file://{tmp_path}",
+        etag="ed779276108738fdb2179ccabf9680d9",
+    )
+
+
 def test_uid_missing_location():
     name = "my_name"
     vtype = "vt1"
@@ -81,43 +101,27 @@ def test_get_destination_path_empty_output():
     assert f.get_destination_path("", "filename") == "test.txt"
 
 
-def test_get_destination_path_etag_strategy():
-    f = File(
-        name="test.txt",
-        parent="dir1/dir2",
-        source="s3://mybkt",
-        etag="ed779276108738fdb2179ccabf9680d9",
-    )
+def test_get_destination_path_etag_strategy(s3_file):
     assert (
-        f.get_destination_path("output", "etag")
+        s3_file.get_destination_path("output", "etag")
         == "output/ed779276108738fdb2179ccabf9680d9.txt"
     )
 
 
-def test_get_destination_path_fullpath_strategy(catalog):
-    f = File(
-        name="test.txt",
-        parent="dir1/dir2",
-        source="s3://mybkt",
-        etag="ed779276108738fdb2179ccabf9680d9",
-    )
-    f._set_stream(catalog, False)
+def test_get_destination_path_fullpath_strategy(catalog, s3_file):
+    s3_file._set_stream(catalog, False)
     assert (
-        f.get_destination_path("output", "fullpath")
+        s3_file.get_destination_path("output", "fullpath")
         == "output/mybkt/dir1/dir2/test.txt"
     )
 
 
-def test_get_destination_path_fullpath_strategy_file_source(catalog, tmp_path):
-    f = File(
-        name="test.txt",
-        parent="dir1/dir2",
-        source=f"file://{tmp_path}",
-        etag="ed779276108738fdb2179ccabf9680d9",
-    )
-    f._set_stream(catalog, False)
+def test_get_destination_path_fullpath_strategy_file_source(
+    catalog, tmp_path, local_file
+):
+    local_file._set_stream(catalog, False)
     assert (
-        f.get_destination_path("output", "fullpath")
+        local_file.get_destination_path("output", "fullpath")
         == f"output{tmp_path}/dir1/dir2/test.txt"
     )
 
