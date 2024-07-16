@@ -904,6 +904,13 @@ def completion(shell: str) -> str:
 
 
 def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0911, PLR0912, PLR0915
+    if not (os.environ.get("DATACHAIN_EXPERIMENTAL_CLI")):
+        print("The DataChain CLI is currently experimental and disabled by default.")
+        print(
+            "Set the DATACHAIN_EXPERIMENTAL_CLI "
+            "environment variable to enable the CLI."
+        )
+        sys.exit(0)
     # Required for Windows multiprocessing support
     freeze_support()
 

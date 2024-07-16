@@ -16,10 +16,10 @@ body:
     attributes:
       label: Version Info
       description: |
-        Please run the following command and copy the output below:
+        Please run the following command and copy the version output below:
 
         ```bash
-        datachain -V; python -V
+        pip show datachain; python -V
         ```
 
       render: Text
