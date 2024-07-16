@@ -1,6 +1,3 @@
-import os
-from zipfile import ZipFile
-
 import numpy as np
 import torch
 from torch import nn, optim
@@ -8,11 +5,13 @@ from torchvision.transforms import v2
 from tqdm import tqdm
 
 # Data Transformations
-transform = v2.Compose([
-    v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)]),
-    v2.Resize((64, 64)),
-    v2.RGB()
-])
+transform = v2.Compose(
+    [
+        v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)]),
+        v2.Resize((64, 64)),
+        v2.RGB(),
+    ]
+)
 
 
 # Define torch model
@@ -31,8 +30,7 @@ class CNN(nn.Module):
         x = torch.relu(self.conv3(x))
         x = x.view(-1, 64 * 8 * 8)
         x = torch.relu(self.fc1(x))
-        x = self.fc2(x)
-        return x
+        return self.fc2(x)
 
 
 #### Train  #####
@@ -58,10 +56,8 @@ def train_model(train_loader, num_classes, num_epochs=20, lr=0.001):
     epoch_loss = []
 
     for epoch in range(num_epochs):
-        for i, data in tqdm(enumerate(train_loader)):
+        for i, data in tqdm(enumerate(train_loader)):  # noqa: B007
             inputs, labels = data
-            # inputs = data[0]
-            # labels = data[1]
             optimizer.zero_grad()
 
             # Forward pass
@@ -82,8 +78,7 @@ def train_model(train_loader, num_classes, num_epochs=20, lr=0.001):
 
 
 #### Evaluate  #####
-def evaluate_model(model, test_loader, label_names) -> tuple[list[dict], list[int]]: 
-
+def evaluate_model(model, test_loader, label_names) -> tuple[list[dict], list[int]]:
     # Initialize lists to store predictions and labels
     predictions = []
     true_labels = []
@@ -98,14 +93,20 @@ def evaluate_model(model, test_loader, label_names) -> tuple[list[dict], list[in
 
         # Forward pass
         outputs = model(inputs)
-        probs = torch.nn.functional.softmax(outputs, dim=1)  # Calculate softmax probabilities
+        probs = torch.nn.functional.softmax(outputs, dim=1)
         confidence, predicted_labels = torch.max(probs, 1)
 
         for i in range(len(predicted_labels)):
             label = int(predicted_labels[i].item())
             confidence_value = float(confidence[i].item())
             label_name = label_names[label]
-            predictions.append({"pred_class": label, "predc_proba": confidence_value, "pred_label": label_name})
+            predictions.append(
+                {
+                    "pred_class": label,
+                    "predc_proba": confidence_value,
+                    "pred_label": label_name,
+                }
+            )
 
     return predictions, true_labels
 
@@ -122,11 +123,6 @@ def build_evaluation_report(pred_labels, true_labels) -> tuple:
 
     Returns:
         tuple: A tuple containing the confusion matrix and classification report.
-
-    This function computes the confusion matrix and classification report using the predicted
-    and true labels provided. The classification report includes measures such as precision, 
-    recall, and F1-score, and the function handles cases where there might be division by zero 
-    in calculation of these metrics by setting those divisions to zero.
     """
     from sklearn.metrics import classification_report, confusion_matrix
 

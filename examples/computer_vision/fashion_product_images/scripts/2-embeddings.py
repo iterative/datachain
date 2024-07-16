@@ -1,12 +1,12 @@
 import torch
-
-from datachain import DataChain
-from datachain.lib.image import convert_image
 from torchvision import transforms
 from torchvision.models import resnet50
 
+from datachain import DataChain
+from datachain.lib.image import convert_image
 
 # Model & Transform methods
+
 model = resnet50(pretrained=True).eval()
 transformer = transforms.Compose(
     [
@@ -19,7 +19,7 @@ transformer = transforms.Compose(
 
 # Embeddings processor function
 
-def embeddings_processor(file) -> list[float]: 
+def embeddings_processor(file) -> list[float]:
     img_raw = file.get_value()
     img = convert_image(img_raw, transform=transformer).unsqueeze(0)
     with torch.no_grad():
