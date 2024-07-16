@@ -164,7 +164,7 @@ jobs:
         with:
           fetch-depth: 0
           repository: iterative/studio
-          ref: develop
+          ref: 0b8240778b06f18020434ccb344d4d40f5a4c815
           token: ${{ secrets.ITERATIVE_STUDIO_READ_ACCESS_TOKEN }}
 
       - name: Check out repository
