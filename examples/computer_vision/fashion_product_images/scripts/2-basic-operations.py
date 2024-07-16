@@ -1,4 +1,4 @@
-from datachain.lib.dc import C, DataChain
+from datachain import C, DataChain
 
 # Create a dataset
 

@@ -1,40 +1,36 @@
-from datachain import C, DataChain
-from datachain.lib.pytorch import label_to_int
-from torch import optim
 from torch.utils.data import DataLoader
 
-from src.train import (
-    CNN,
-    train_model,
-    transform,
-)
-
+from datachain import DataChain
+from datachain.lib.pytorch import label_to_int
+from src.train import train_model, transform
 
 # Define classes
 
 CLASSES = [
-        "Casual",
-        "Ethnic",
-        "Sports",
-        "Formal",
-        "Party",
-        "Smart Casual",
-        "Travel",
-        "nan",
-    ]
+    "Casual",
+    "Ethnic",
+    "Sports",
+    "Formal",
+    "Party",
+    "Smart Casual",
+    "Travel",
+    "nan",
+]
 NUM_CLASSES = len(CLASSES)
 
 
 # Create a Target column
 
+
 def add_target_label(usage) -> str:
     return usage if usage in CLASSES else "nan"
+
 
 ds = (
     DataChain(name="fashion-train")
     .map(target=add_target_label, params=["usage"], output=str)
     .map(label=lambda target: label_to_int(target, CLASSES), output=int)
-    .limit(1000) # Take a sample for the DEMO purposes
+    .limit(1000)  # Take a sample for the DEMO purposes
     .shuffle()
 )
 
@@ -50,7 +46,7 @@ train_loader = DataLoader(
 
 # Train the model
 
-model, optimizer = train_model(train_loader, NUM_CLASSES, num_epochs=3,  lr=0.001)
+model, optimizer = train_model(train_loader, NUM_CLASSES, num_epochs=3, lr=0.001)
 
 # NOTE: DataChain requires the  Last line to be an instance of DatasetQuery
 ds.select("file.name", "target", "label").show(3)
