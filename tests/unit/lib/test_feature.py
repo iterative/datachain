@@ -4,8 +4,8 @@ import pytest
 from pydantic import BaseModel, Field, ValidationError
 
 from datachain import DataChain, DataModel
-from datachain.lib.converters.flatten import flatten, flatten_list
-from datachain.lib.converters.unflatten import unflatten, unflatten_to_json
+from datachain.lib.convert.flatten import flatten, flatten_list
+from datachain.lib.convert.unflatten import unflatten, unflatten_to_json
 from datachain.lib.model_store import ModelStore
 from datachain.lib.signal_schema import SignalSchema
 from datachain.sql.types import Int64, String

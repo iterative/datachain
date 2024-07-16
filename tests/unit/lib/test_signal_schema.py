@@ -4,7 +4,7 @@ from typing import Optional, Union
 import pytest
 from pydantic import BaseModel
 
-from datachain.lib.converters.flatten import flatten
+from datachain.lib.convert.flatten import flatten
 from datachain.lib.file import File
 from datachain.lib.model_store import ModelStore
 from datachain.lib.signal_schema import (

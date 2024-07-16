@@ -2,7 +2,7 @@ from typing import get_args, get_origin
 
 import pytest
 
-from datachain.lib.converters.values_to_tuples import (
+from datachain.lib.convert.values_to_tuples import (
     ValuesToTupleError,
     values_to_tuples,
 )

@@ -4,8 +4,8 @@ from typing import TYPE_CHECKING, Callable
 
 from pydantic import BaseModel
 
-from datachain.lib.converters.flatten import flatten
-from datachain.lib.converters.unflatten import unflatten_to_json
+from datachain.lib.convert.flatten import flatten
+from datachain.lib.convert.unflatten import unflatten_to_json
 from datachain.lib.data_model import FileBasic
 from datachain.lib.model_store import ModelStore
 from datachain.lib.signal_schema import SignalSchema

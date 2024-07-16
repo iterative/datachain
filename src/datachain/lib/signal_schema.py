@@ -17,9 +17,9 @@ from typing import (
 from pydantic import BaseModel, create_model
 from typing_extensions import Literal as LiteralEx
 
-from datachain.lib.converters.flatten import DATACHAIN_TO_TYPE
-from datachain.lib.converters.type_converter import convert_to_db_type
-from datachain.lib.converters.unflatten import unflatten_to_json_pos
+from datachain.lib.convert.flatten import DATACHAIN_TO_TYPE
+from datachain.lib.convert.type_converter import convert_to_db_type
+from datachain.lib.convert.unflatten import unflatten_to_json_pos
 from datachain.lib.data_model import DataType, DataModel
 from datachain.lib.file import File
 from datachain.lib.model_store import ModelStore

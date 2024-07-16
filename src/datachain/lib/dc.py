@@ -14,7 +14,7 @@ import sqlalchemy
 from pydantic import BaseModel, create_model
 
 from datachain import DataModel
-from datachain.lib.converters.values_to_tuples import values_to_tuples
+from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import DataType
 from datachain.lib.file import File, IndexedFile, get_file
 from datachain.lib.meta_formats import read_meta, read_schema
