@@ -2,14 +2,25 @@ import copy
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union, get_args, get_origin
+from typing import (
+    TYPE_CHECKING,
+    Annotated,
+    Any,
+    Callable,
+    Literal,
+    Optional,
+    Union,
+    get_args,
+    get_origin,
+)
 
-from pydantic import BaseModel
+from pydantic import BaseModel, create_model
+from typing_extensions import Literal as LiteralEx
 
 from datachain.lib.converters.flatten import DATACHAIN_TO_TYPE
 from datachain.lib.converters.type_converter import convert_to_db_type
 from datachain.lib.converters.unflatten import unflatten_to_json_pos
-from datachain.lib.data_model import ChainType
+from datachain.lib.data_model import ChainType, DataModel
 from datachain.lib.file import File
 from datachain.lib.model_store import ModelStore
 from datachain.lib.utils import DataChainParamsError
@@ -275,6 +286,15 @@ class SignalSchema:
             if has_subtree and issubclass(type_, File):
                 yield ".".join(path)
 
+    def create_model(self, name: str) -> type[DataModel]:
+        fields = {key: (value, None) for key, value in self.values.items()}
+
+        return create_model(
+            name,
+            __base__=(DataModel,),  # type: ignore[call-overload]
+            **fields,
+        )
+
     @staticmethod
     def _build_tree(
         values: dict[str, ChainType],
@@ -310,24 +330,31 @@ class SignalSchema:
                     sub_schema.print_tree(indent=indent, start_at=total_indent + indent)
 
     @staticmethod
-    def _type_to_str(type_):
-        if get_origin(type_) == Union:
+    def _type_to_str(type_):  # noqa: PLR0911
+        origin = get_origin(type_)
+
+        if origin == Union:
             args = get_args(type_)
             formatted_types = ", ".join(SignalSchema._type_to_str(arg) for arg in args)
             return f"Union[{formatted_types}]"
-        if get_origin(type_) == Optional:
+        if origin == Optional:
             args = get_args(type_)
             type_str = SignalSchema._type_to_str(args[0])
             return f"Optional[{type_str}]"
-        if get_origin(type_) is list:
+        if origin is list:
             args = get_args(type_)
             type_str = SignalSchema._type_to_str(args[0])
             return f"list[{type_str}]"
-        if get_origin(type_) is dict:
+        if origin is dict:
             args = get_args(type_)
-            type_str = SignalSchema._type_to_str(args[0])
+            type_str = SignalSchema._type_to_str(args[0]) if len(args) > 0 else ""
             vals = f", {SignalSchema._type_to_str(args[1])}" if len(args) > 1 else ""
             return f"dict[{type_str}{vals}]"
+        if origin == Annotated:
+            args = get_args(type_)
+            return SignalSchema._type_to_str(args[0])
+        if origin in (Literal, LiteralEx):
+            return "Literal"
         return type_.__name__
 
     @staticmethod

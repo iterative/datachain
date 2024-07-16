@@ -7,12 +7,12 @@ from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
 
 from fsspec.implementations.local import LocalFileSystem
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
 
 from datachain.cache import UniqueId
 from datachain.client.fileslice import FileSlice
 from datachain.lib.cached_stream import PreCachedStream, PreDownloadStream
-from datachain.lib.data_model import FileBasic
+from datachain.lib.data_model import DataModel, FileBasic
 from datachain.lib.utils import DataChainError
 from datachain.sql.types import JSON, Int, String
 from datachain.utils import TIME_ZERO
@@ -267,7 +267,7 @@ def get_file(type: Literal["binary", "text", "image"] = "binary"):
     return get_file_type
 
 
-class IndexedFile(BaseModel):
+class IndexedFile(DataModel):
     """File source info for tables."""
 
     file: File

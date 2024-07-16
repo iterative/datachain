@@ -1,12 +1,14 @@
-from typing import ClassVar, Optional
+from typing import ClassVar, Literal, Optional
 
 import pytest
 from pydantic import BaseModel, Field, ValidationError
 
-from datachain import DataModel
+from datachain import DataChain, DataModel
 from datachain.lib.converters.flatten import flatten, flatten_list
 from datachain.lib.converters.unflatten import unflatten, unflatten_to_json
 from datachain.lib.model_store import ModelStore
+from datachain.lib.signal_schema import SignalSchema
+from datachain.sql.types import Int64, String
 
 
 class FileBasic(DataModel):
@@ -287,3 +289,20 @@ def test_version():
         _version: ClassVar[int] = 23
 
     assert ModelStore.get_version(_MyCls) == 23
+
+
+def test_dict_to_feature():
+    data_dict = {"file": FileBasic, "id": int, "type": Literal["text"]}
+
+    cls = DataChain._dict_to_feature("val", data_dict)
+    assert ModelStore.is_pydantic(cls)
+
+    spec = SignalSchema({"val": cls}).to_udf_spec()
+    assert list(spec.keys()) == [
+        "val__file__parent",
+        "val__file__name",
+        "val__file__size",
+        "val__id",
+        "val__type",
+    ]
+    assert list(spec.values()) == [String, String, Int64, Int64, String]

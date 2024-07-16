@@ -30,9 +30,6 @@ class ModelStore:
         if name not in cls.store:
             cls.store[name] = {}
         version = ModelStore.get_version(model)
-        if version in cls.store[name]:
-            full_name = f"{name}@{version}"
-            logger.warning("Feature %s is already registered", full_name)
         cls.store[name][version] = model
 
         for f_info in model.model_fields.values():
