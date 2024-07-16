@@ -18,6 +18,7 @@ from datachain.lib.converters.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import ChainType
 from datachain.lib.file import File, IndexedFile, get_file
 from datachain.lib.meta_formats import read_meta, read_schema
+from datachain.lib.model_store import ModelStore
 from datachain.lib.settings import Settings
 from datachain.lib.signal_schema import SignalSchema
 from datachain.lib.udf import (
@@ -702,9 +703,7 @@ class DataChain(DatasetQuery):
 
     def parse_tabular(
         self,
-        output: Union[
-            None, type[BaseModel], Sequence[str], dict[str, ChainType]
-        ] = None,
+        output: Union[None, ChainType, Sequence[str], dict[str, ChainType]],
         object_name: str = "",
         model_name: str = "",
         **kwargs,
@@ -804,8 +803,11 @@ class DataChain(DatasetQuery):
                 column_names = output  # type: ignore[assignment]
             elif isinstance(output, dict):
                 column_names = list(output.keys())
+            elif (fr := ModelStore.to_pydantic(output)) is not None:
+                column_names = list(fr.model_fields.keys())
             else:
-                column_names = list(output.model_fields.keys())
+                msg = f"error parsing csv - incompatible output type {type(output)}"
+                raise DatasetPrepareError(chain.name, msg)
 
         parse_options = ParseOptions(delimiter=delimiter)
         read_options = ReadOptions(column_names=column_names)
