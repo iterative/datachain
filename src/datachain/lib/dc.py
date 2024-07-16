@@ -497,7 +497,7 @@ class DataChain(DatasetQuery):
 
         params_schema = self.signals_schema.slice(sign.params, self._setup)
 
-        return UDFBase._create(target_class, sign, params_schema)
+        return target_class._create(sign, params_schema)
 
     def _extend_to_data_model(self, method_name, *args, **kwargs):
         super_func = getattr(super(), method_name)
@@ -539,7 +539,9 @@ class DataChain(DatasetQuery):
         db_signals = chain.signals_schema.db_signals()
         with super().select(*db_signals).as_iterable() as rows_iter:
             for row in rows_iter:
-                yield chain.signals_schema.row_to_features(row, chain.session.catalog)
+                yield chain.signals_schema.row_to_features(
+                    row, catalog=chain.session.catalog, cache=chain._settings.cache
+                )
 
     def iterate_one(self, col: str) -> Iterator[DataType]:
         for item in self.iterate(col):

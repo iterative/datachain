@@ -29,7 +29,7 @@ def test_udf_single_signal():
         random=1234,
         location=None,
     )
-    result = t(None, row)
+    result = t.run_once(None, row)
     assert result[0]["mul"] == (42)
 
 
@@ -55,7 +55,7 @@ def test_udf_multiple_signals():
         random=1234,
         location=None,
     )
-    result = t(None, row)
+    result = t.run_once(None, row)
     assert result[0] == {"id": 6, "mul": 42, "sum": 13}
 
 
@@ -85,7 +85,7 @@ def test_udf_batching():
             location=None,
         )
         batch = RowBatch([row])
-        result = t(None, batch)
+        result = t.run_once(None, batch)
         if result:
             assert len(result) == 1  # Matches batch size.
             results.extend(result)
@@ -124,7 +124,7 @@ def test_stateful_udf():
             random=1234,
             location=None,
         )
-        results.extend(udf_inst(None, row))
+        results.extend(udf_inst.run_once(None, row))
 
     assert len(results) == len(inputs)
     assert results == [{"id": 5, "sum": 5 + size} for size in inputs]
