@@ -2,13 +2,13 @@ import logging
 from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
+from pydantic import BaseModel
 from torch import float32
 from torch.distributed import get_rank, get_world_size
 from torch.utils.data import IterableDataset, get_worker_info
 
 from datachain.catalog import Catalog, get_catalog
 from datachain.lib.dc import DataChain
-from datachain.lib.feature import Feature
 from datachain.lib.text import convert_text
 
 if TYPE_CHECKING:
@@ -105,7 +105,7 @@ class PytorchDataset(IterableDataset):
         for row_features in stream:
             row = []
             for fr in row_features:
-                if isinstance(fr, Feature):
+                if isinstance(fr, BaseModel):
                     row.append(fr.get_value())  # type: ignore[unreachable]
                 else:
                     row.append(fr)

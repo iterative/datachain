@@ -2,14 +2,14 @@ import math
 from typing import Optional
 
 import pytest
+from pydantic import BaseModel
 
 from datachain.lib.dc import DataChain, DatasetMergeError
-from datachain.lib.feature import Feature
 from datachain.lib.signal_schema import SignalResolvingError
 from datachain.sql.types import Float, String
 
 
-class TestUser(Feature):
+class TestUser(BaseModel):
     name: Optional[str] = None
     age: Optional[int] = None
 
@@ -19,12 +19,12 @@ class TestPlayer(TestUser):
     height: Optional[int] = None
 
 
-class TestEmployee(Feature):
+class TestEmployee(BaseModel):
     id: Optional[int] = None
     person: TestUser
 
 
-class TestTeamMember(Feature):
+class TestTeamMember(BaseModel):
     player: Optional[str] = None
     sport: Optional[str] = None
     weight: Optional[float] = None
@@ -45,8 +45,8 @@ team = [
 
 
 def test_merge_objects(catalog):
-    ch1 = DataChain.from_features(emp=employees)
-    ch2 = DataChain.from_features(team=team)
+    ch1 = DataChain.from_values(emp=employees)
+    ch2 = DataChain.from_values(team=team)
     ch = ch1.merge(ch2, "emp.person.name", "team.player")
 
     str_default = String.default_value(catalog.warehouse.db.dialect)
@@ -86,8 +86,8 @@ def test_merge_similar_objects(catalog):
         TestEmployee(id=154, person=TestUser(name="David", age=29)),
     ]
 
-    ch1 = DataChain.from_features(emp=employees)
-    ch2 = DataChain.from_features(emp=new_employees)
+    ch1 = DataChain.from_values(emp=employees)
+    ch2 = DataChain.from_values(emp=new_employees)
 
     rname = "qq"
     ch = ch1.merge(ch2, "emp.person.name", rname=rname)
@@ -111,8 +111,8 @@ def test_merge_values(catalog):
 
     float_default = Float.default_value(catalog.warehouse.db.dialect)
 
-    ch1 = DataChain.from_features(id=order_ids, descr=order_descr)
-    ch2 = DataChain.from_features(id=delivery_ids, time=delivery_time)
+    ch1 = DataChain.from_values(id=order_ids, descr=order_descr)
+    ch2 = DataChain.from_values(id=delivery_ids, time=delivery_time)
 
     ch = ch1.merge(ch2, "id")
 
@@ -147,8 +147,8 @@ def test_merge_multi_conditions(catalog):
     delivery_name = ["water", "unknown"]
     delivery_time = [24.0, 16.5]
 
-    ch1 = DataChain.from_features(id=order_ids, name=order_name, descr=order_descr)
-    ch2 = DataChain.from_features(
+    ch1 = DataChain.from_values(id=order_ids, name=order_name, descr=order_descr)
+    ch2 = DataChain.from_values(
         id=delivery_ids, d_name=delivery_name, time=delivery_time
     )
 
@@ -166,8 +166,8 @@ def test_merge_multi_conditions(catalog):
 
 
 def test_merge_errors(catalog):
-    ch1 = DataChain.from_features(emp=employees)
-    ch2 = DataChain.from_features(team=team)
+    ch1 = DataChain.from_values(emp=employees)
+    ch2 = DataChain.from_values(team=team)
 
     with pytest.raises(SignalResolvingError):
         ch1.merge(ch2, "unknown")
@@ -185,7 +185,7 @@ def test_merge_errors(catalog):
 
 
 def test_merge_with_itself(catalog):
-    ch = DataChain.from_features(emp=employees)
+    ch = DataChain.from_values(emp=employees)
     merged = ch.merge(ch, "emp.id")
 
     count = 0
