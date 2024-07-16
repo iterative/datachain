@@ -1,4 +1,3 @@
-import inspect
 import sys
 import traceback
 from collections.abc import Iterable, Iterator
@@ -8,9 +7,10 @@ from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 from pydantic import BaseModel
 
 from datachain.dataset import RowDict
+from datachain.lib.convert.flatten import flatten
+from datachain.lib.convert.unflatten import unflatten_to_json
 from datachain.lib.data_model import FileBasic
-from datachain.lib.feature import ModelUtil
-from datachain.lib.feature_registry import Registry
+from datachain.lib.model_store import ModelStore
 from datachain.lib.signal_schema import SignalSchema
 from datachain.lib.udf_signature import UdfSignature
 from datachain.lib.utils import AbstractUDF, DataChainError, DataChainParamsError
@@ -195,14 +195,14 @@ class UDFBase(AbstractUDF):
                 flat = []
                 for obj in tuple_:
                     if isinstance(obj, BaseModel):
-                        flat.extend(ModelUtil.flatten(obj))
+                        flat.extend(flatten(obj))
                     else:
                         flat.append(obj)
                 res.append(flat)
         else:
             # Generator expression is required, otherwise the value will be materialized
             res = (
-                ModelUtil.flatten(obj)
+                flatten(obj)
                 if isinstance(obj, BaseModel)
                 else obj
                 if isinstance(obj, tuple)
@@ -238,7 +238,7 @@ class UDFBase(AbstractUDF):
         spec_map = {}
         output_map = {}
         for name, (anno, subtree) in self.params.tree.items():
-            if inspect.isclass(anno) and issubclass(anno, BaseModel):
+            if ModelStore.is_pydantic(anno):
                 length = sum(1 for _ in self.params._get_flat_tree(subtree, [], 0))
             else:
                 length = 1
@@ -251,8 +251,8 @@ class UDFBase(AbstractUDF):
                 slice = flat_obj[position : position + length]
                 position += length
 
-                if Registry.is_pydantic(cls):
-                    obj = cls(**ModelUtil.unflatten_to_json(cls, slice))
+                if ModelStore.is_pydantic(cls):
+                    obj = cls(**unflatten_to_json(cls, slice))
                 else:
                     obj = slice[0]
 

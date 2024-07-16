@@ -4,9 +4,9 @@ from typing import Optional, Union
 import pytest
 from pydantic import BaseModel
 
-from datachain.lib.feature import ModelUtil
-from datachain.lib.feature_registry import Registry
+from datachain.lib.convert.flatten import flatten
 from datachain.lib.file import File
+from datachain.lib.model_store import ModelStore
 from datachain.lib.signal_schema import (
     SetupError,
     SignalResolvingError,
@@ -125,7 +125,7 @@ def test_to_udf_spec():
 
 
 def test_select():
-    Registry.add(MyType2)
+    ModelStore.add(MyType2)
     schema = SignalSchema.deserialize(
         {
             "age": "float",
@@ -146,7 +146,7 @@ def test_select():
 
 
 def test_select_nested_names():
-    Registry.add(MyType2)
+    ModelStore.add(MyType2)
     schema = SignalSchema.deserialize(
         {
             "address": "str",
@@ -253,7 +253,7 @@ def test_row_to_objs():
     schema = SignalSchema(spec)
 
     val = MyType2(name="Fred", deep=MyType1(aa=129, bb="qwe"))
-    row = ("myname", 12.5, *ModelUtil.flatten(val))
+    row = ("myname", 12.5, *flatten(val))
 
     res = schema.row_to_objs(row)
 
@@ -267,7 +267,7 @@ def test_row_to_objs_setup():
     schema = SignalSchema(spec, setup)
 
     val = MyType2(name="Fred", deep=MyType1(aa=129, bb="qwe"))
-    row = ("myname", 12.5, *ModelUtil.flatten(val))
+    row = ("myname", 12.5, *flatten(val))
 
     res = schema.row_to_objs(row)
     assert res == ["myname", 12.5, setup_value, val]
