@@ -52,52 +52,7 @@ class NodeChunk:
         raise StopIteration
 
 
-class FileChunk:
-    def __init__(
-        self, cache, files, size_limit=10 * 1024 * 1024, file_limit=100
-    ):
-        self.cache = cache
-        self.files = files
-        self.size_limit = size_limit
-        self.file_limit = file_limit
-
-    def __iter__(self):
-        return self
-
-    def next_downloadable(self):
-        file = next(self.files, None)
-        while file and self.cache.contains(file.get_uid()):
-            file = next(self.files, None)
-        return file
-
-    def __next__(self):
-        file = self.next_downloadable()
-
-        total_size = 0
-        total_files = 0
-        bucket = []
-
-        while (
-            file
-            and total_size + file.size < self.size_limit
-            and total_files + 1 < self.file_limit
-        ):
-            bucket.append(file)
-            total_size += file.size
-            total_files += 1
-            file = self.next_downloadable()
-
-        if file:
-            bucket.append(file)
-            total_size += file.size
-            total_files += 1
-
-        if bucket:
-            return bucket
-        raise StopIteration
-
-
-class RunnerThreadPool(ABC):
+class NodesThreadPool(ABC):
     def __init__(self, max_threads):
         self._max_threads = max_threads
         self._thread_counter = 0
