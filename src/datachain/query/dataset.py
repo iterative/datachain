@@ -1399,7 +1399,14 @@ class DatasetQuery:
     def show(self, limit=20) -> None:
         df = self.limit(limit).to_pandas()
 
-        options = ["display.max_colwidth", 50, "display.show_dimensions", False]
+        options = [
+            "display.max_columns",
+            None,
+            "display.max_colwidth",
+            50,
+            "display.show_dimensions",
+            False,
+        ]
         with pd.option_context(*options):
             if inside_notebook():
                 from IPython.display import display
@@ -1407,7 +1414,7 @@ class DatasetQuery:
                 display(df)
 
             else:
-                print(df.to_string())
+                print(df)
 
         if len(df) == limit:
             print(f"[limited by {limit} objects]")
