@@ -78,7 +78,7 @@ def run_datachain_worker():
     worker_cmd = [
         "celery",
         "-A",
-        "clickhousedbadapter.distributed",
+        "datachain_server.distributed",
         "worker",
         "--loglevel=INFO",
         "-P",
@@ -90,7 +90,7 @@ def run_datachain_worker():
     ]
     workers.append(subprocess.Popen(worker_cmd, shell=False))  # noqa: S603
     try:
-        from clickhousedbadapter.distributed import app
+        from datachain_server.distributed import app
 
         inspect = app.control.inspect()
         attempts = 0
