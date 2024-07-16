@@ -1,10 +1,8 @@
+from datachain.lib.data_model import DataModel, FileBasic
 from datachain.lib.dc import C, DataChain
-from datachain.lib.feature import Feature
-from datachain.lib.feature_utils import pydantic_to_feature
 from datachain.lib.file import (
     File,
     FileError,
-    FileFeature,
     ImageFile,
     IndexedFile,
     TarVFile,
@@ -24,10 +22,10 @@ __all__ = [
     "Column",
     "DataChain",
     "DataChainError",
-    "Feature",
+    "DataModel",
     "File",
+    "FileBasic",
     "FileError",
-    "FileFeature",
     "Generator",
     "ImageFile",
     "IndexedFile",
@@ -35,5 +33,4 @@ __all__ = [
     "Session",
     "TarVFile",
     "TextFile",
-    "pydantic_to_feature",
 ]

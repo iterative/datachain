@@ -3,7 +3,7 @@ from collections.abc import Generator, Iterator, Sequence
 from dataclasses import dataclass
 from typing import Callable, Optional, Union, get_args, get_origin
 
-from datachain.lib.feature import Feature, FeatureType, FeatureTypeNames
+from datachain.lib.feature import FeatureType, FeatureTypeNames, is_feature_type
 from datachain.lib.signal_schema import SignalSchema
 from datachain.lib.utils import AbstractUDF, DataChainParamsError
 
@@ -127,7 +127,7 @@ class UdfSignature:
                         f"output signal '{key}' has type '{type(key)}'"
                         " while 'str' is expected",
                     )
-                if not Feature.is_feature_type(value):
+                if not is_feature_type(value):
                     raise UdfSignatureError(
                         chain,
                         f"output type '{value.__name__}' of signal '{key}' is not"
@@ -135,7 +135,7 @@ class UdfSignature:
                     )
 
             udf_output_map = output
-        elif Feature.is_feature_type(output):
+        elif is_feature_type(output):
             udf_output_map = {signal_name: output}
         else:
             raise UdfSignatureError(

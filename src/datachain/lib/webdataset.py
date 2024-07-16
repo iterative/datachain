@@ -13,9 +13,8 @@ from typing import (
     get_origin,
 )
 
-from pydantic import Field
+from pydantic import BaseModel, Field
 
-from datachain.lib.feature import Feature
 from datachain.lib.file import File, TarVFile
 from datachain.lib.utils import DataChainError
 
@@ -46,7 +45,7 @@ class UnknownFileExtensionError(WDSError):
         super().__init__(tar_stream, f"unknown extension '{ext}' for file '{name}'")
 
 
-class WDSBasic(Feature):
+class WDSBasic(BaseModel):
     file: File
 
 
@@ -75,7 +74,7 @@ class WDSAllFile(WDSBasic):
     cbor: Optional[bytes] = Field(default=None)
 
 
-class WDSReadableSubclass(Feature):
+class WDSReadableSubclass(BaseModel):
     @staticmethod
     def _reader(builder, item: tarfile.TarInfo) -> "WDSReadableSubclass":
         raise NotImplementedError

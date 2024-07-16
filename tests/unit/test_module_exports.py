@@ -13,10 +13,10 @@ def test_module_exports():
             Column,
             DataChain,
             DataChainError,
-            Feature,
+            DataModel,
             File,
+            FileBasic,
             FileError,
-            FileFeature,
             Generator,
             ImageFile,
             IndexedFile,
@@ -24,7 +24,6 @@ def test_module_exports():
             Session,
             TarVFile,
             TextFile,
-            pydantic_to_feature,
         )
         from datachain.torch import (
             PytorchDataset,

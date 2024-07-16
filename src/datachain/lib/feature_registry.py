@@ -1,6 +1,8 @@
 import logging
 from typing import Any, ClassVar, Optional
 
+from pydantic import BaseModel
+
 logger = logging.getLogger(__name__)
 
 
@@ -8,17 +10,31 @@ class Registry:
     reg: ClassVar[dict[str, dict[int, Any]]] = {}
 
     @classmethod
-    def add(cls, fr: type) -> None:
-        if fr._is_hidden():  # type: ignore[attr-defined]
+    def get_version(cls, model: type[BaseModel]) -> int:
+        if not hasattr(model, "_version"):
+            return 0
+        return model._version
+
+    @classmethod
+    def get_name(cls, model) -> str:
+        if (version := cls.get_version(model)) > 0:
+            return f"{model.__name__}@v{version}"
+        return model.__name__
+
+    @classmethod
+    def add(cls, fr: type):
+        if (model := Registry.to_pydantic(fr)) is None:
             return
-        name = fr.__name__
+
+        name = model.__name__
         if name not in cls.reg:
             cls.reg[name] = {}
-        version = fr._version  # type: ignore[attr-defined]
-        if version in cls.reg[name]:
-            full_name = f"{name}@{version}"
-            logger.warning("Feature %s is already registered", full_name)
-        cls.reg[name][version] = fr
+        version = Registry.get_version(model)
+        cls.reg[name][version] = model
+
+        for f_info in model.model_fields.values():
+            if (anno := Registry.to_pydantic(f_info.annotation)) is not None:
+                cls.add(anno)
 
     @classmethod
     def get(cls, name: str, version: Optional[int] = None) -> Optional[type]:
@@ -35,12 +51,12 @@ class Registry:
     @classmethod
     def parse_name_version(cls, fullname: str) -> tuple[str, int]:
         name = fullname
-        version = 1
+        version = 0
 
         if "@" in fullname:
             name, version_str = fullname.split("@")
             if version_str.strip() != "":
-                version = int(version_str)
+                version = int(version_str[1:])
 
         return name, version
 
@@ -49,3 +65,13 @@ class Registry:
         version = fr._version  # type: ignore[attr-defined]
         if fr.__name__ in cls.reg and version in cls.reg[fr.__name__]:
             del cls.reg[fr.__name__][version]
+
+    @staticmethod
+    def is_pydantic(val):
+        return not hasattr(val, "__origin__") and issubclass(val, BaseModel)
+
+    @staticmethod
+    def to_pydantic(val) -> Optional[type[BaseModel]]:
+        if val is None or not Registry.is_pydantic(val):
+            return None
+        return val

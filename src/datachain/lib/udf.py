@@ -3,7 +3,11 @@ import sys
 import traceback
 from typing import TYPE_CHECKING, Callable
 
-from datachain.lib.feature import Feature
+from pydantic import BaseModel
+
+from datachain.lib.data_model import FileBasic
+from datachain.lib.feature import ModelUtil
+from datachain.lib.feature_registry import Registry
 from datachain.lib.signal_schema import SignalSchema
 from datachain.lib.udf_signature import UdfSignature
 from datachain.lib.utils import AbstractUDF, DataChainError, DataChainParamsError
@@ -92,7 +96,7 @@ class UDFBase(AbstractUDF):
         return self._catalog
 
     def to_udf_wrapper(self, batch=1) -> "UDFWrapper":
-        udf_wrapper = udf(self.params_spec, self.output_spec, batch=batch)
+        udf_wrapper = udf(self.params_spec, self.output_spec, batch=batch)  # type: ignore[operator]
         return udf_wrapper(self)
 
     def validate_results(self, results, *args, **kwargs):
@@ -117,16 +121,16 @@ class UDFBase(AbstractUDF):
             for tuple_ in result_objs:
                 flat = []
                 for obj in tuple_:
-                    if isinstance(obj, Feature):
-                        flat.extend(Feature._flatten(obj))
+                    if isinstance(obj, BaseModel):
+                        flat.extend(ModelUtil.flatten(obj))
                     else:
                         flat.append(obj)
                 res.append(flat)
         else:
             # Generator expression is required, otherwise the value will be materialized
             res = (
-                obj._flatten()
-                if isinstance(obj, Feature)
+                ModelUtil.flatten(obj)
+                if isinstance(obj, BaseModel)
                 else obj
                 if isinstance(obj, tuple)
                 else (obj,)
@@ -150,7 +154,7 @@ class UDFBase(AbstractUDF):
         for row in rows:
             obj_row = self.params.row_to_objs(row)
             for obj in obj_row:
-                if isinstance(obj, Feature):
+                if isinstance(obj, FileBasic):
                     obj._set_stream(self._catalog, caching_enabled=True)
             objs.append(obj_row)
         return objs
@@ -160,7 +164,7 @@ class UDFBase(AbstractUDF):
         spec_map = {}
         output_map = {}
         for name, (anno, subtree) in self.params.tree.items():
-            if inspect.isclass(anno) and issubclass(anno, Feature):
+            if inspect.isclass(anno) and issubclass(anno, BaseModel):
                 length = sum(1 for _ in self.params._get_flat_tree(subtree, [], 0))
             else:
                 length = 1
@@ -173,12 +177,12 @@ class UDFBase(AbstractUDF):
                 slice = flat_obj[position : position + length]
                 position += length
 
-                if Feature.is_feature(cls):
-                    obj = cls(**cls._unflatten_to_json(slice))
+                if Registry.is_pydantic(cls):
+                    obj = cls(**ModelUtil.unflatten_to_json(cls, slice))
                 else:
                     obj = slice[0]
 
-                if isinstance(obj, Feature):
+                if isinstance(obj, FileBasic):
                     obj._set_stream(self._catalog)
                 output_map[signal].append(obj)
 
