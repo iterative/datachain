@@ -194,7 +194,7 @@ class File(FileFeature):
 
     def export(self, output: str):
         self._set_stream(self._catalog, caching_enabled=True)
-        dst = os.path.join(output, self.get_path())  # type: ignore[union-attr]
+        dst = self.get_export_destination(output)
         dst_dir = os.path.dirname(dst)
         os.makedirs(dst_dir, exist_ok=True)
 
@@ -243,6 +243,19 @@ class File(FileFeature):
             path = urlparse(path).path
             path = url2pathname(path)
         return path
+
+    def get_export_destination(self, output: str) -> str:
+        """
+        Returns full destination path of a file for exporting to some output
+        """
+        path = unquote(self.get_full_name())
+        fs = self.get_fs()
+
+        if not isinstance(fs, LocalFileSystem):
+            parsed = urlparse(self.source)
+            path = (Path(parsed.scheme) / parsed.netloc / path).as_posix()
+
+        return os.path.join(output, path)  # type: ignore[union-attr]
 
     def get_fs(self):
         return self._catalog.get_client(self.source).fs
