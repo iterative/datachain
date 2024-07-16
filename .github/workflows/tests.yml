@@ -50,7 +50,7 @@ jobs:
       - name: Lint code
         run: nox -s lint
 
-  test-open-source:
+  datachain:
     timeout-minutes: 25
     runs-on: ${{ matrix.os }}
     strategy:
@@ -127,7 +127,8 @@ jobs:
         run: nox -s docs
 
 
-  test-studio:
+  studio:
+    if: '!github.event.pull_request.head.repo.fork'
     runs-on: ubuntu-latest-16-cores
     strategy:
       matrix:
