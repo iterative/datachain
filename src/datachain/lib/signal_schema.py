@@ -18,6 +18,7 @@ from pydantic import BaseModel, create_model
 from typing_extensions import Literal as LiteralEx
 
 from datachain.lib.convert.flatten import DATACHAIN_TO_TYPE
+from datachain.lib.convert.sql_to_python import sql_to_python
 from datachain.lib.convert.type_converter import convert_to_db_type
 from datachain.lib.convert.unflatten import unflatten_to_json_pos
 from datachain.lib.data_model import DataModel, DataType
@@ -102,14 +103,13 @@ class SignalSchema:
     @staticmethod
     def from_column_types(col_types: dict[str, Any]) -> "SignalSchema":
         signals: dict[str, DataType] = {}
-        for field, type_ in col_types.items():
-            type_ = DATACHAIN_TO_TYPE.get(type_, None)
-            if type_ is None:
+        for field, col_type in col_types.items():
+            if (py_type := DATACHAIN_TO_TYPE.get(col_type, None)) is None:
                 raise SignalSchemaError(
                     f"signal schema cannot be obtained for column '{field}':"
-                    f" unsupported type '{type_}'"
+                    f" unsupported type '{py_type}'"
                 )
-            signals[field] = type_
+            signals[field] = py_type
         return SignalSchema(signals)
 
     def serialize(self) -> dict[str, str]:
@@ -277,6 +277,9 @@ class SignalSchema:
             if signal in schema:
                 del schema[signal]
         return SignalSchema(schema)
+
+    def mutate(self, args_map: dict) -> "SignalSchema":
+        return SignalSchema(self.values | sql_to_python(args_map))
 
     def merge(
         self,

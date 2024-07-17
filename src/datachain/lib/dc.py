@@ -549,6 +549,12 @@ class DataChain(DatasetQuery):
         chain.signals_schema = new_schema
         return chain
 
+    @detach
+    def mutate(self, **kwargs) -> "Self":
+        chain = super().mutate(**kwargs)
+        chain.signals_schema = self.signals_schema.mutate(kwargs)
+        return chain
+
     def iterate_flatten(self) -> Iterator[tuple[Any]]:
         db_signals = self.signals_schema.db_signals()
         with super().select(*db_signals).as_iterable() as rows:
