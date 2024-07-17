@@ -26,7 +26,6 @@ from typing import (
 )
 
 import attrs
-import pandas as pd
 import sqlalchemy
 from attrs import frozen
 from dill import dumps, source
@@ -53,7 +52,6 @@ from datachain.data_storage.schema import (
 from datachain.dataset import DatasetStatus, RowDict
 from datachain.error import DatasetNotFoundError, QueryScriptCancelError
 from datachain.progress import CombinedDownloadCallback
-from datachain.query.schema import DEFAULT_DELIMITER
 from datachain.sql.functions import rand
 from datachain.storage import Storage, StorageURI
 from datachain.utils import batched, determine_processes
@@ -1345,12 +1343,6 @@ class DatasetQuery:
 
     def to_records(self) -> list[dict[str, Any]]:
         return self.results(lambda cols, row: dict(zip(cols, row)))
-
-    def to_pandas(self) -> "pd.DataFrame":
-        records = self.to_records()
-        df = pd.DataFrame.from_records(records)
-        df.columns = [c.replace(DEFAULT_DELIMITER, ".") for c in df.columns]
-        return df
 
     def shuffle(self) -> "Self":
         # ToDo: implement shaffle based on seed and/or generating random column

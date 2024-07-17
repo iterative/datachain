@@ -740,12 +740,11 @@ class DataChain(DatasetQuery):
         ]
         chain = self.select_except(*to_hide) if to_hide else self
 
-        if flatten:
-            return super().to_pandas()
-
         headers, max_length = chain.signals_schema.get_headers_with_length()
-        if max_length < 2:
-            return super().to_pandas()
+        if flatten or max_length < 2:
+            df = pd.DataFrame.from_records(self.to_records())
+            df.columns = [".".join(header) for header in headers]
+            return df
 
         transposed_result = list(map(list, zip(*chain.results())))
         data = {tuple(n): val for n, val in zip(headers, transposed_result)}
