@@ -1,5 +1,4 @@
 import os
-from urllib.parse import urlparse
 
 import pytest
 
@@ -62,11 +61,18 @@ def test_read_file(cloud_test_catalog, use_cache):
 
 
 @pytest.mark.parametrize("strategy", ["fullpath", "filename"])
+@pytest.mark.parametrize("use_map", [True, False])
 @pytest.mark.parametrize("cloud_type", ["file"], indirect=True)
-def test_export_files(tmp_dir, cloud_test_catalog, strategy):
+def test_export_files(tmp_dir, cloud_test_catalog, strategy, use_map):
     ctc = cloud_test_catalog
     df = DataChain.from_storage(ctc.src_uri)
-    df.export_files(tmp_dir / "output", strategy=strategy)
+    if use_map:
+        df.export_files(tmp_dir / "output", strategy=strategy)
+        df.map(
+            res=lambda file: file.export(tmp_dir / "output", strategy=strategy)
+        ).exec()
+    else:
+        df.export_files(tmp_dir / "output", strategy=strategy)
 
     expected = {
         "description": "Cats and Dogs",
@@ -78,31 +84,13 @@ def test_export_files(tmp_dir, cloud_test_catalog, strategy):
         "dog4": "ruff",
     }
 
-    for entry in df.collect_one("file"):
-        # for entry in ENTRIES:
+    for file in df.collect_one("file"):
         if strategy == "filename":
-            file_path = entry.name
+            file_path = file.name
         else:
-            file_path = entry.get_full_name()
-            """
-            file_path = (
-                urlparse(ctc.src_uri).path.lstrip(os.sep)
-                / Path(entry.parent)
-                / entry.name
-            )
-            """
-            print(tmp_dir)
-            print(urlparse(ctc.src_uri))
-        print("opening")
-        print(f"tmp_dir is {tmp_dir}")
-        print("output")
-        print(f"src_uri path is {urlparse(ctc.src_uri).path.lstrip(os.sep)}")
-        print(f"file_path is {file_path}")
-        print("===")
-        print(f"opening file {tmp_dir / 'output' / file_path}")
-        print("===")
+            file_path = file.get_full_name()
         with open(tmp_dir / "output" / file_path) as f:
-            assert f.read() == expected[entry.name]
+            assert f.read() == expected[file.name]
 
 
 def test_export_files_filename_strategy_not_unique_files(tmp_dir, catalog):

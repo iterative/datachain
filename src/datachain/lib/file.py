@@ -267,10 +267,7 @@ class File(FileBasic):
             raise NotImplementedError("Checksum strategy not implemented yet")
         else:
             raise ValueError(f"Unsupported file export strategy: {strategy}")
-        print(f"Creating dst path of output {output} and path {path}")
-        dst = posixpath.join(output, path)  # type: ignore[union-attr]
-        print(f"Destination path is {dst}")
-        return dst
+        return posixpath.join(output, path)  # type: ignore[union-attr]
 
     def get_fs(self):
         return self._catalog.get_client(self.source).fs
