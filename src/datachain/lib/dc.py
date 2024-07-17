@@ -136,16 +136,6 @@ class DataChain(DatasetQuery):
         "vtype": "",
         "size": 0,
     }
-    LEGACY_COLUMNS: ClassVar[list[str]] = [
-        "source",
-        "parent",
-        "name",
-        "version",
-        "etag",
-        "size",
-        "vtype",
-        "location",
-    ]
 
     def __init__(self, *args, **kwargs):
         """This method needs to be redefined as a part of Dataset and DacaChin
@@ -744,7 +734,9 @@ class DataChain(DatasetQuery):
 
     def to_pandas(self, flatten=False) -> "pd.DataFrame":
         to_hide = [
-            col for col in self.LEGACY_COLUMNS if col in self.signals_schema.values
+            col
+            for col in File._datachain_column_types
+            if col in self.signals_schema.values
         ]
         chain = self.select_except(*to_hide) if to_hide else self
 
