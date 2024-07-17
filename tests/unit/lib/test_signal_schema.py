@@ -2,11 +2,10 @@ import json
 from typing import Optional, Union
 
 import pytest
-from pydantic import BaseModel
 
+from datachain import DataModel
 from datachain.lib.convert.flatten import flatten
 from datachain.lib.file import File
-from datachain.lib.model_store import ModelStore
 from datachain.lib.signal_schema import (
     SetupError,
     SignalResolvingError,
@@ -27,12 +26,12 @@ def nested_file_schema():
     return SignalSchema(schema)
 
 
-class MyType1(BaseModel):
+class MyType1(DataModel):
     aa: int
     bb: str
 
 
-class MyType2(BaseModel):
+class MyType2(DataModel):
     name: str
     deep: MyType1
 
@@ -125,7 +124,6 @@ def test_to_udf_spec():
 
 
 def test_select():
-    ModelStore.add(MyType2)
     schema = SignalSchema.deserialize(
         {
             "age": "float",
@@ -146,7 +144,6 @@ def test_select():
 
 
 def test_select_nested_names():
-    ModelStore.add(MyType2)
     schema = SignalSchema.deserialize(
         {
             "address": "str",
