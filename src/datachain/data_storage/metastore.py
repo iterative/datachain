@@ -780,7 +780,11 @@ class AbstractDBMetastore(AbstractMetastore):
             if storage.status == StorageStatus.PENDING:
                 return storage, False, True, None, None
 
-            if storage.is_expired or storage.status == StorageStatus.STALE:
+            if (
+                storage.is_stale
+                or storage.is_expired
+                or storage.status == StorageStatus.STALE
+            ):
                 storage = self.mark_storage_pending(storage, conn=conn)
                 return storage, True, False, None, None
 
