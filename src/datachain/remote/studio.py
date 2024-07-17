@@ -190,19 +190,11 @@ class StudioClient:
     def dataset_rows_chunk(
         self, name: str, version: int, offset: int
     ) -> Response[DatasetRowsData]:
-        def _parse_row(row):
-            row["id"] = int(row["id"])
-            return row
-
         req_data = {"dataset_name": name, "dataset_version": version}
-        response = self._send_request_msgpack(
+        return self._send_request_msgpack(
             "dataset-rows",
             {**req_data, "offset": offset, "limit": DATASET_ROWS_CHUNK_SIZE},
         )
-        if response.ok:
-            response.data = [_parse_row(r) for r in response.data]
-
-        return response
 
     def dataset_stats(self, name: str, version: int) -> Response[DatasetStatsData]:
         response = self._send_request(

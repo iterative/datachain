@@ -66,7 +66,6 @@ class ImageTransform:
     ):
         # Build a dict from row contents
         record = dict(zip(DatasetRow.schema.keys(), args))
-        del record["random"]  # random will be populated automatically
         record["is_latest"] = record["is_latest"] > 0  # needs to be a bool
 
         # yield same row back

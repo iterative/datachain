@@ -72,7 +72,7 @@ class DirExpansion:
     @staticmethod
     def base_select(q):
         return sa.select(
-            q.c.id,
+            q.c.sys__id,
             q.c.vtype,
             (q.c.dir_type == DirType.DIR).label("is_dir"),
             q.c.source,
@@ -86,7 +86,7 @@ class DirExpansion:
     def apply_group_by(q):
         return (
             sa.select(
-                f.min(q.c.id).label("id"),
+                f.min(q.c.sys__id).label("sys__id"),
                 q.c.vtype,
                 q.c.is_dir,
                 q.c.source,
@@ -111,7 +111,7 @@ class DirExpansion:
         parent_name = path.name(q.c.parent)
         q = q.union_all(
             sa.select(
-                sa.literal(-1).label("id"),
+                sa.literal(-1).label("sys__id"),
                 sa.literal("").label("vtype"),
                 true().label("is_dir"),
                 q.c.source,
@@ -233,9 +233,9 @@ class DataTable:
     @staticmethod
     def sys_columns():
         return [
-            sa.Column("id", Int, primary_key=True),
+            sa.Column("sys__id", Int, primary_key=True),
             sa.Column(
-                "random", UInt64, nullable=False, server_default=f.abs(f.random())
+                "sys__rand", UInt64, nullable=False, server_default=f.abs(f.random())
             ),
         ]
 

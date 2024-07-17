@@ -571,16 +571,16 @@ def test_row_number_with_order_by_name_descending(cloud_test_catalog):
 
     results = DatasetQuery(name=ds_name, catalog=catalog).to_records()
     results_name_id = [
-        {k: v for k, v in r.items() if k in ["id", "name"]} for r in results
+        {k: v for k, v in r.items() if k in ["sys__id", "name"]} for r in results
     ]
-    assert sorted(results_name_id, key=lambda k: k["id"]) == [
-        {"id": 1, "name": "dog4"},
-        {"id": 2, "name": "dog3"},
-        {"id": 3, "name": "dog2"},
-        {"id": 4, "name": "dog1"},
-        {"id": 5, "name": "description"},
-        {"id": 6, "name": "cat2"},
-        {"id": 7, "name": "cat1"},
+    assert sorted(results_name_id, key=lambda k: k["sys__id"]) == [
+        {"sys__id": 1, "name": "dog4"},
+        {"sys__id": 2, "name": "dog3"},
+        {"sys__id": 3, "name": "dog2"},
+        {"sys__id": 4, "name": "dog1"},
+        {"sys__id": 5, "name": "description"},
+        {"sys__id": 6, "name": "cat2"},
+        {"sys__id": 7, "name": "cat1"},
     ]
 
 
@@ -601,16 +601,16 @@ def test_row_number_with_order_by_name_ascending(cloud_test_catalog):
 
     results = DatasetQuery(name=ds_name, catalog=catalog).to_records()
     results_name_id = [
-        {k: v for k, v in r.items() if k in ["id", "name"]} for r in results
+        {k: v for k, v in r.items() if k in ["sys__id", "name"]} for r in results
     ]
-    assert sorted(results_name_id, key=lambda k: k["id"]) == [
-        {"id": 1, "name": "cat1"},
-        {"id": 2, "name": "cat2"},
-        {"id": 3, "name": "description"},
-        {"id": 4, "name": "dog1"},
-        {"id": 5, "name": "dog2"},
-        {"id": 6, "name": "dog3"},
-        {"id": 7, "name": "dog4"},
+    assert sorted(results_name_id, key=lambda k: k["sys__id"]) == [
+        {"sys__id": 1, "name": "cat1"},
+        {"sys__id": 2, "name": "cat2"},
+        {"sys__id": 3, "name": "description"},
+        {"sys__id": 4, "name": "dog1"},
+        {"sys__id": 5, "name": "dog2"},
+        {"sys__id": 6, "name": "dog3"},
+        {"sys__id": 7, "name": "dog4"},
     ]
 
 
@@ -635,16 +635,16 @@ def test_row_number_with_order_by_name_len_desc_and_name_asc(cloud_test_catalog)
 
     results = DatasetQuery(name=ds_name, catalog=catalog).to_records()
     results_name_id = [
-        {k: v for k, v in r.items() if k in ["id", "name"]} for r in results
+        {k: v for k, v in r.items() if k in ["sys__id", "name"]} for r in results
     ]
-    assert sorted(results_name_id, key=lambda k: k["id"]) == [
-        {"id": 1, "name": "description"},
-        {"id": 2, "name": "cat1"},
-        {"id": 3, "name": "cat2"},
-        {"id": 4, "name": "dog1"},
-        {"id": 5, "name": "dog2"},
-        {"id": 6, "name": "dog3"},
-        {"id": 7, "name": "dog4"},
+    assert sorted(results_name_id, key=lambda k: k["sys__id"]) == [
+        {"sys__id": 1, "name": "description"},
+        {"sys__id": 2, "name": "cat1"},
+        {"sys__id": 3, "name": "cat2"},
+        {"sys__id": 4, "name": "dog1"},
+        {"sys__id": 5, "name": "dog2"},
+        {"sys__id": 6, "name": "dog3"},
+        {"sys__id": 7, "name": "dog4"},
     ]
 
 
@@ -669,18 +669,18 @@ def test_row_number_with_order_by_before_add_signals(cloud_test_catalog):
 
     results = DatasetQuery(name=ds_name, catalog=catalog).to_records()
     results_name_id = [
-        {k: v for k, v in r.items() if k in ["id", "name"]} for r in results
+        {k: v for k, v in r.items() if k in ["sys__id", "name"]} for r in results
     ]
     # we should preserve order in final result based on order by which was added
     # before add_signals
-    assert sorted(results_name_id, key=lambda k: k["id"]) == [
-        {"id": 1, "name": "cat1"},
-        {"id": 2, "name": "cat2"},
-        {"id": 3, "name": "description"},
-        {"id": 4, "name": "dog1"},
-        {"id": 5, "name": "dog2"},
-        {"id": 6, "name": "dog3"},
-        {"id": 7, "name": "dog4"},
+    assert sorted(results_name_id, key=lambda k: k["sys__id"]) == [
+        {"sys__id": 1, "name": "cat1"},
+        {"sys__id": 2, "name": "cat2"},
+        {"sys__id": 3, "name": "description"},
+        {"sys__id": 4, "name": "dog1"},
+        {"sys__id": 5, "name": "dog2"},
+        {"sys__id": 6, "name": "dog3"},
+        {"sys__id": 7, "name": "dog4"},
     ]
 
 
@@ -1400,8 +1400,8 @@ def test_extract_limit(cloud_test_catalog, dogs_dataset):
 def test_extract_order_by(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
     q = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
-    results = list(q.order_by("random").extract("name"))
-    pairs = list(q.extract("random", "name"))
+    results = list(q.order_by("sys__rand").extract("name"))
+    pairs = list(q.extract("sys__rand", "name"))
     assert results == [(p[1],) for p in sorted(pairs)]
 
 
@@ -2804,7 +2804,7 @@ def test_simple_dataset_query(cloud_test_catalog):
 
     ds1, ds2 = (
         [
-            {k.name: v for k, v in zip(q.selected_columns, r) if k.name != "id"}
+            {k.name: v for k, v in zip(q.selected_columns, r) if k.name != "sys__id"}
             for r in warehouse.db.execute(q)
         ]
         for q in ds_queries
@@ -3447,7 +3447,7 @@ def test_udf_after_limit(cloud_test_catalog, method):
     # incorrect results on clickhouse cloud.
     # See https://github.com/iterative/dvcx/issues/940
     assert get_result(ds.order_by("name")) == expected
-    assert len(get_result(ds.order_by("random"))) == 100
+    assert len(get_result(ds.order_by("sys__rand"))) == 100
     assert len(get_result(ds)) == 100
 
 
