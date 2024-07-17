@@ -43,8 +43,8 @@ def test_dataset_table_compilation():
     assert result.string == (
         "\n"
         'CREATE TABLE IF NOT EXISTS "ds-1" (\n'
-        "\tid INTEGER NOT NULL, \n"
-        "\trandom INTEGER DEFAULT (abs(random())) NOT NULL, \n"
+        "\tsys__id INTEGER NOT NULL, \n"
+        "\tsys__rand INTEGER DEFAULT (abs(random())) NOT NULL, \n"
         "\tvtype VARCHAR NOT NULL, \n"
         "\tdir_type INTEGER, \n"
         "\tparent VARCHAR, \n"
@@ -60,7 +60,7 @@ def test_dataset_table_compilation():
         "\tsource VARCHAR NOT NULL, \n"
         "\tscore FLOAT NOT NULL, \n"
         "\tmeta_info JSON, \n"
-        "\tPRIMARY KEY (id)\n"
+        "\tPRIMARY KEY (sys__id)\n"
         ")\n"
         "\n"
     )

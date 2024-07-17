@@ -631,7 +631,7 @@ class SQLiteWarehouse(AbstractWarehouse):
             dst_empty = True
 
         dst_dr = self.dataset_rows(dst, dst_version).table
-        merge_fields = [c.name for c in src_dr.c if c.name != "id"]
+        merge_fields = [c.name for c in src_dr.c if c.name != "sys__id"]
         select_src = select(*(getattr(src_dr.c, f) for f in merge_fields))
 
         if dst_empty:

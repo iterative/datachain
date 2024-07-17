@@ -46,8 +46,8 @@ class DirTypeGroup:
 
 @attrs.define
 class Node:
-    id: int = 0
-    random: int = -1
+    sys__id: int = 0
+    sys__rand: int = -1
     vtype: str = ""
     dir_type: Optional[int] = None
     parent: str = ""
@@ -127,11 +127,11 @@ class Node:
 
     @classmethod
     def from_dir(cls, parent, name, **kwargs) -> "Node":
-        return cls(id=-1, dir_type=DirType.DIR, parent=parent, name=name, **kwargs)
+        return cls(sys__id=-1, dir_type=DirType.DIR, parent=parent, name=name, **kwargs)
 
     @classmethod
     def root(cls) -> "Node":
-        return cls(-1, dir_type=DirType.DIR)
+        return cls(sys__id=-1, dir_type=DirType.DIR)
 
 
 @attrs.define
