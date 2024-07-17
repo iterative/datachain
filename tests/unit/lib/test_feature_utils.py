@@ -2,11 +2,11 @@ from typing import get_args, get_origin
 
 import pytest
 
-from datachain.lib.dc import DataChain
-from datachain.lib.feature_utils import (
-    FeatureToTupleError,
-    features_to_tuples,
+from datachain.lib.convert.values_to_tuples import (
+    ValuesToTupleError,
+    values_to_tuples,
 )
+from datachain.lib.dc import DataChain
 from datachain.query.schema import Column
 
 
@@ -14,7 +14,7 @@ def test_basic():
     fib = [1, 1, 2, 3, 5, 8]
     values = ["odd" if num % 2 else "even" for num in fib]
 
-    typ, _partition_by, vals = features_to_tuples(fib=fib, odds=values)
+    typ, _partition_by, vals = values_to_tuples(fib=fib, odds=values)
 
     assert get_origin(typ) is tuple
     assert get_args(typ) == (int, str)
@@ -29,7 +29,7 @@ def test_e2e(catalog):
     fib = [1, 1, 2, 3, 5, 8]
     values = ["odd" if num % 2 else "even" for num in fib]
 
-    dc = DataChain.from_features(fib=fib, odds=values)
+    dc = DataChain.from_values(fib=fib, odds=values)
 
     vals = list(dc.iterate())
     lst1 = [item[0] for item in vals]
@@ -42,7 +42,7 @@ def test_e2e(catalog):
 def test_single_value():
     fib = [1, 1, 2, 3, 5, 8]
 
-    typ, _partition_by, vals = features_to_tuples(fib=fib)
+    typ, _partition_by, vals = values_to_tuples(fib=fib)
 
     assert typ is int
     assert vals == fib
@@ -51,7 +51,7 @@ def test_single_value():
 def test_single_e2e(catalog):
     fib = [1, 1, 2, 3, 5, 8]
 
-    dc = DataChain.from_features(fib=fib)
+    dc = DataChain.from_values(fib=fib)
 
     vals = list(dc.iterate())
     flattened = [item for sublist in vals for item in sublist]
@@ -60,43 +60,43 @@ def test_single_e2e(catalog):
 
 
 def test_not_array_value_error():
-    with pytest.raises(FeatureToTupleError):
-        DataChain.from_features(value=True)
+    with pytest.raises(ValuesToTupleError):
+        DataChain.from_values(value=True)
 
 
 def test_empty_value_list_error():
-    with pytest.raises(FeatureToTupleError):
-        DataChain.from_features(value=[])
+    with pytest.raises(ValuesToTupleError):
+        DataChain.from_values(value=[])
 
 
 def test_features_length_missmatch():
-    with pytest.raises(FeatureToTupleError):
-        DataChain.from_features(value1=[1, 2, 3], value2=[1, 2, 3, 4, 5])
+    with pytest.raises(ValuesToTupleError):
+        DataChain.from_values(value1=[1, 2, 3], value2=[1, 2, 3, 4, 5])
 
 
 def test_unknown_output_type():
-    with pytest.raises(FeatureToTupleError):
+    with pytest.raises(ValuesToTupleError):
 
         class UnknownFrType:
             def __init__(self, val):
                 self.val = val
 
-        DataChain.from_features(value1=[UnknownFrType(1), UnknownFrType(23)])
+        DataChain.from_values(value1=[UnknownFrType(1), UnknownFrType(23)])
 
 
 def test_output_type_missmatch():
-    with pytest.raises(FeatureToTupleError):
-        DataChain.from_features(value1=[1, 2, 3], output={"res": str})
+    with pytest.raises(ValuesToTupleError):
+        DataChain.from_values(value1=[1, 2, 3], output={"res": str})
 
 
 def test_output_length_missmatch():
-    with pytest.raises(FeatureToTupleError):
-        DataChain.from_features(value1=[1, 2, 3], output={"out1": int, "out2": int})
+    with pytest.raises(ValuesToTupleError):
+        DataChain.from_values(value1=[1, 2, 3], output={"out1": int, "out2": int})
 
 
 def test_output_spec_wrong_type():
-    with pytest.raises(FeatureToTupleError):
-        DataChain.from_features(value1=[1, 2, 3], output=123)
+    with pytest.raises(ValuesToTupleError):
+        DataChain.from_values(value1=[1, 2, 3], output=123)
 
 
 def test_resolve_column():

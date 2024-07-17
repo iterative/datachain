@@ -1,17 +1,10 @@
-try:
-    import torch
-    from transformers import (
-        AutoProcessor,
-        Blip2ForConditionalGeneration,
-        Blip2Processor,
-        LlavaForConditionalGeneration,
-    )
-except ImportError as exc:
-    raise ImportError(
-        "Missing dependencies for computer vision:\n"
-        "To install run:\n\n"
-        "  pip install 'datachain[cv]'\n"
-    ) from exc
+import torch
+from transformers import (
+    AutoProcessor,
+    Blip2ForConditionalGeneration,
+    Blip2Processor,
+    LlavaForConditionalGeneration,
+)
 
 from datachain.lib.udf import Mapper
 

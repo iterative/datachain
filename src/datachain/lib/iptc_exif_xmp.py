@@ -1,17 +1,10 @@
 import json
 
-try:
-    from PIL import (
-        ExifTags,
-        IptcImagePlugin,
-        TiffImagePlugin,
-    )
-except ImportError as exc:
-    raise ImportError(
-        "Missing dependency Pillow for computer vision:\n"
-        "To install run:\n\n"
-        "  pip install 'datachain[cv]'\n"
-    ) from exc
+from PIL import (
+    ExifTags,
+    IptcImagePlugin,
+    TiffImagePlugin,
+)
 
 
 def cast(v):  # to JSON serializable types

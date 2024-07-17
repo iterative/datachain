@@ -14,22 +14,17 @@ from typing import (
     get_origin,
 )
 
-from pydantic import create_model
+from pydantic import BaseModel, create_model
 from typing_extensions import Literal as LiteralEx
 
-from datachain import DataModel
-from datachain.lib.feature import (
-    DATACHAIN_TO_TYPE,
-    DEFAULT_DELIMITER,
-    FeatureType,
-    ModelUtil,
-    build_tree,
-    convert_type_to_datachain,
-    to_feature,
-)
-from datachain.lib.feature_registry import Registry
+from datachain.lib.convert.flatten import DATACHAIN_TO_TYPE
+from datachain.lib.convert.type_converter import convert_to_db_type
+from datachain.lib.convert.unflatten import unflatten_to_json_pos
+from datachain.lib.data_model import DataModel, DataType
 from datachain.lib.file import File
+from datachain.lib.model_store import ModelStore
 from datachain.lib.utils import DataChainParamsError
+from datachain.query.schema import DEFAULT_DELIMITER
 
 if TYPE_CHECKING:
     from datachain.catalog import Catalog
@@ -73,14 +68,14 @@ class SignalResolvingTypeError(SignalResolvingError):
 
 @dataclass
 class SignalSchema:
-    values: dict[str, FeatureType]
+    values: dict[str, DataType]
     tree: dict[str, Any]
     setup_func: dict[str, Callable]
     setup_values: Optional[dict[str, Callable]]
 
     def __init__(
         self,
-        values: dict[str, FeatureType],
+        values: dict[str, DataType],
         setup: Optional[dict[str, Callable]] = None,
     ):
         self.values = values
@@ -106,7 +101,7 @@ class SignalSchema:
 
     @staticmethod
     def from_column_types(col_types: dict[str, Any]) -> "SignalSchema":
-        signals: dict[str, FeatureType] = {}
+        signals: dict[str, DataType] = {}
         for field, type_ in col_types.items():
             type_ = DATACHAIN_TO_TYPE.get(type_, None)
             if type_ is None:
@@ -120,9 +115,9 @@ class SignalSchema:
     def serialize(self) -> dict[str, str]:
         signals = {}
         for name, fr_type in self.values.items():
-            if (fr := to_feature(fr_type)) is not None:
-                Registry.add(fr)
-                signals[name] = Registry.get_name(fr)
+            if (fr := ModelStore.to_pydantic(fr_type)) is not None:
+                ModelStore.add(fr)
+                signals[name] = ModelStore.get_name(fr)
             else:
                 orig = get_origin(fr_type)
                 args = get_args(fr_type)
@@ -137,13 +132,13 @@ class SignalSchema:
         if not isinstance(schema, dict):
             raise SignalSchemaError(f"cannot deserialize signal schema: {schema}")
 
-        signals: dict[str, FeatureType] = {}
+        signals: dict[str, DataType] = {}
         for signal, type_name in schema.items():
             try:
                 fr = NAMES_TO_TYPES.get(type_name)
                 if not fr:
-                    type_name, version = Registry.parse_name_version(type_name)
-                    fr = Registry.get(type_name, version)
+                    type_name, version = ModelStore.parse_name_version(type_name)
+                    fr = ModelStore.get(type_name, version)
 
                     if not fr:
                         raise SignalSchemaError(
@@ -159,17 +154,17 @@ class SignalSchema:
 
         return SignalSchema(signals)
 
-    def to_udf_spec(self) -> dict[str, Any]:
+    def to_udf_spec(self) -> dict[str, type]:
         res = {}
         for path, type_, has_subtree, _ in self.get_flat_tree():
             if path[0] in self.setup_func:
                 continue
             if not has_subtree:
                 db_name = DEFAULT_DELIMITER.join(path)
-                res[db_name] = convert_type_to_datachain(type_)
+                res[db_name] = convert_to_db_type(type_)
         return res
 
-    def row_to_objs(self, row: Sequence[Any]) -> list[FeatureType]:
+    def row_to_objs(self, row: Sequence[Any]) -> list[DataType]:
         self._init_setup_values()
 
         objs = []
@@ -177,8 +172,8 @@ class SignalSchema:
         for name, fr_type in self.values.items():
             if self.setup_values and (val := self.setup_values.get(name, None)):
                 objs.append(val)
-            elif (fr := to_feature(fr_type)) is not None:
-                j, pos = ModelUtil.unflatten_to_json_pos(fr, row, pos)
+            elif (fr := ModelStore.to_pydantic(fr_type)) is not None:
+                j, pos = unflatten_to_json_pos(fr, row, pos)
                 objs.append(fr(**j))  # type: ignore[arg-type]
             else:
                 objs.append(row[pos])
@@ -187,7 +182,9 @@ class SignalSchema:
 
     def contains_file(self) -> bool:
         for type_ in self.values.values():
-            if (fr := to_feature(type_)) is not None and issubclass(fr, File):
+            if (fr := ModelStore.to_pydantic(type_)) is not None and issubclass(
+                fr, File
+            ):
                 return True
 
         return False
@@ -201,18 +198,20 @@ class SignalSchema:
         schema = {k: union[k] for k in keys if k in union}
         return SignalSchema(schema, setup)
 
-    def row_to_features(self, row: Sequence, catalog: "Catalog") -> list[FeatureType]:
+    def row_to_features(
+        self, row: Sequence, catalog: "Catalog", cache: bool = False
+    ) -> list[DataType]:
         res = []
         pos = 0
         for fr_cls in self.values.values():
-            if (fr := to_feature(fr_cls)) is None:
+            if (fr := ModelStore.to_pydantic(fr_cls)) is None:
                 res.append(row[pos])
                 pos += 1
             else:
-                json, pos = ModelUtil.unflatten_to_json_pos(fr, row, pos)  # type: ignore[union-attr]
+                json, pos = unflatten_to_json_pos(fr, row, pos)  # type: ignore[union-attr]
                 obj = fr(**json)
                 if isinstance(obj, File):
-                    obj._set_stream(catalog)
+                    obj._set_stream(catalog, caching_enabled=cache)
                 res.append(obj)
         return res
 
@@ -232,7 +231,7 @@ class SignalSchema:
 
         return SignalSchema(schema)
 
-    def _find_in_tree(self, path: list[str]) -> FeatureType:
+    def _find_in_tree(self, path: list[str]) -> DataType:
         curr_tree = self.tree
         curr_type = None
         i = 0
@@ -299,13 +298,13 @@ class SignalSchema:
         )
 
     @staticmethod
-    def _build_tree(values: dict[str, FeatureType]) -> dict[str, Any]:
-        res = {}
-
-        for name, val in values.items():
-            res[name] = (val, build_tree(val))
-
-        return res
+    def _build_tree(
+        values: dict[str, DataType],
+    ) -> dict[str, tuple[DataType, Optional[dict]]]:
+        return {
+            name: (val, SignalSchema._build_tree_for_type(val))
+            for name, val in values.items()
+        }
 
     def get_flat_tree(self) -> Iterator[tuple[list[str], type, bool, int]]:
         yield from self._get_flat_tree(self.tree, [], 0)
@@ -328,9 +327,18 @@ class SignalSchema:
 
             if get_origin(type_) is list:
                 args = get_args(type_)
-                if len(args) > 0 and Registry.is_pydantic(args[0]):
+                if len(args) > 0 and ModelStore.is_pydantic(args[0]):
                     sub_schema = SignalSchema({"* list of": args[0]})
                     sub_schema.print_tree(indent=indent, start_at=total_indent + indent)
+
+    def __or__(self, other):
+        return self.__class__(self.values | other.values)
+
+    def __contains__(self, name: str):
+        return name in self.values
+
+    def remove(self, name: str):
+        return self.values.pop(name)
 
     @staticmethod
     def _type_to_str(type_):  # noqa: PLR0911
@@ -359,3 +367,27 @@ class SignalSchema:
         if origin in (Literal, LiteralEx):
             return "Literal"
         return type_.__name__
+
+    @staticmethod
+    def _build_tree_for_type(
+        model: DataType,
+    ) -> Optional[dict[str, tuple[DataType, Optional[dict]]]]:
+        if (fr := ModelStore.to_pydantic(model)) is not None:
+            return SignalSchema._build_tree_for_model(fr)
+        return None
+
+    @staticmethod
+    def _build_tree_for_model(
+        model: type[BaseModel],
+    ) -> Optional[dict[str, tuple[DataType, Optional[dict]]]]:
+        res: dict[str, tuple[DataType, Optional[dict]]] = {}
+
+        for name, f_info in model.model_fields.items():
+            anno = f_info.annotation
+            if (fr := ModelStore.to_pydantic(anno)) is not None:
+                subtree = SignalSchema._build_tree_for_model(fr)
+            else:
+                subtree = None
+            res[name] = (anno, subtree)  # type: ignore[assignment]
+
+        return res

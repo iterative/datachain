@@ -4,7 +4,7 @@ from typing import Literal, Optional, Union
 import pytest
 from pydantic import BaseModel
 
-from datachain.lib.feature import convert_type_to_datachain
+from datachain.lib.convert.type_converter import convert_to_db_type
 from datachain.sql.types import JSON, Array, String
 
 
@@ -29,7 +29,7 @@ class MyFeature(BaseModel):
     ),
 )
 def test_convert_type_to_datachain(typ, expected):
-    assert convert_type_to_datachain(typ) == expected
+    assert convert_to_db_type(typ) == expected
 
 
 @pytest.mark.parametrize(
@@ -41,7 +41,7 @@ def test_convert_type_to_datachain(typ, expected):
     ),
 )
 def test_convert_type_to_datachain_array(typ, expected):
-    assert convert_type_to_datachain(typ).to_dict() == expected.to_dict()
+    assert convert_to_db_type(typ).to_dict() == expected.to_dict()
 
 
 @pytest.mark.parametrize(
@@ -55,4 +55,4 @@ def test_convert_type_to_datachain_array(typ, expected):
 )
 def test_convert_type_to_datachain_error(typ):
     with pytest.raises(TypeError):
-        convert_type_to_datachain(typ)
+        convert_to_db_type(typ)
