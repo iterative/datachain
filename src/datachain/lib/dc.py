@@ -309,9 +309,8 @@ class DataChain(DatasetQuery):
         func = get_file(type)
         return (
             cls(path, session=session, recursive=recursive, **kwargs)
-            .settings(include_sys=True)
             .map(**{object_name: func})
-            .select("sys", object_name)
+            .select(object_name)
         )
 
     @classmethod
