@@ -1,7 +1,12 @@
+import os
+from pathlib import Path
+from urllib.parse import urlparse
+
 import pytest
 
 from datachain.lib.dc import DataChain
 from datachain.lib.file import File
+from tests.data import ENTRIES
 
 
 @pytest.mark.parametrize("anon", [True, False])
@@ -56,3 +61,64 @@ def test_read_file(cloud_test_catalog, use_cache):
         assert file.get_local_path() is None
         file.read()
         assert bool(file.get_local_path()) is use_cache
+
+
+@pytest.mark.parametrize("strategy", ["fullpath", "filename"])
+@pytest.mark.parametrize("cloud_type", ["file"], indirect=True)
+def test_export_files(tmp_dir, cloud_test_catalog, strategy):
+    ctc = cloud_test_catalog
+    df = DataChain.from_storage(ctc.src_uri)
+    df.export_files(tmp_dir / "output", strategy=strategy)
+
+    expected = {
+        "description": "Cats and Dogs",
+        "cat1": "meow",
+        "cat2": "mrow",
+        "dog1": "woof",
+        "dog2": "arf",
+        "dog3": "bark",
+        "dog4": "ruff",
+    }
+
+    for entry in ENTRIES:
+        if strategy == "filename":
+            file_path = entry.name
+        elif strategy == "etag":
+            file_path = entry.etag
+        else:
+            file_path = (
+                urlparse(ctc.src_uri).path.lstrip(os.sep)
+                / Path(entry.parent)
+                / entry.name
+            )
+            print(tmp_dir)
+            print(urlparse(ctc.src_uri))
+        print("opening")
+        print(tmp_dir)
+        print("output")
+        print(urlparse(ctc.src_uri).path)
+        print(file_path)
+        print("===")
+        print(tmp_dir / "output" / urlparse(ctc.src_uri).path / file_path)
+        print("===")
+        with open(tmp_dir / "output" / file_path) as f:
+            assert f.read() == expected[entry.name]
+
+
+def test_export_files_filename_strategy_not_unique_files(tmp_dir, catalog):
+    data = b"some\x00data\x00is\x48\x65\x6c\x57\x6f\x72\x6c\x64\xff\xffheRe"
+    bucket_name = "mybucket"
+    files = ["dir1/a.json", "dir1/dir2/a.json"]
+
+    # create bucket dir with duplicate file names
+    bucket_dir = tmp_dir / bucket_name
+    bucket_dir.mkdir(parents=True)
+    for file_path in files:
+        file_path = bucket_dir / file_path
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, "wb") as fd:
+            fd.write(data)
+
+    df = DataChain.from_storage((tmp_dir / bucket_name).as_uri())
+    with pytest.raises(ValueError):
+        df.export_files(tmp_dir / "output", strategy="filename")

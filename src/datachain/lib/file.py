@@ -258,7 +258,7 @@ class File(FileBasic):
         elif strategy == "fullpath":
             fs = self.get_fs()
             if isinstance(fs, LocalFileSystem):
-                path = self.get_path().lstrip(os.sep)
+                path = unquote(self.get_full_name())
             else:
                 path = (
                     Path(urlparse(self.source).netloc) / unquote(self.get_full_name())

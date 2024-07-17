@@ -2,7 +2,6 @@ import datetime
 import math
 import os
 from collections.abc import Generator, Iterator
-from pathlib import Path
 from unittest.mock import ANY
 
 import numpy as np
@@ -880,35 +879,3 @@ def test_sys_feature(tmp_dir, catalog):
         MyFr(nnn="n1", count=1),
     ]
     assert "sys" not in ds_no_sys.catalog.get_dataset("ds_no_sys").feature_schema
-
-
-@pytest.mark.parametrize("strategy", ["fullpath", "filename"])
-def test_export_files(tmp_dir, catalog, strategy):
-    data = b"some\x00data\x00is\x48\x65\x6c\x57\x6f\x72\x6c\x64\xff\xffheRe"
-    bucket_name = "mybucket"
-    files = ["dir1/a.json", "dir1/dir2/b.json"]
-
-    _create_local_bucket(tmp_dir, bucket_name, files, data)
-
-    df = DataChain.from_storage((tmp_dir / bucket_name).as_uri())
-    df.export_files(tmp_dir / "output", strategy=strategy)
-
-    for file_path in files:
-        if strategy == "filename":
-            path = os.path.basename(file_path)
-        else:
-            path = tmp_dir / bucket_name / Path(file_path)
-        with open(tmp_dir / "output" / path, "rb") as f:
-            assert f.read() == data
-
-
-def test_export_files_filename_strategy_not_unique_files(tmp_dir, catalog):
-    data = b"some\x00data\x00is\x48\x65\x6c\x57\x6f\x72\x6c\x64\xff\xffheRe"
-    bucket_name = "mybucket"
-    files = ["dir1/a.json", "dir1/dir2/a.json"]
-
-    _create_local_bucket(tmp_dir, bucket_name, files, data)
-
-    df = DataChain.from_storage((tmp_dir / bucket_name).as_uri())
-    with pytest.raises(ValueError):
-        df.export_files(tmp_dir / "output", strategy="filename")

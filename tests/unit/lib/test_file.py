@@ -23,7 +23,7 @@ def local_file(tmp_path) -> File:
     return File(
         name="test.txt",
         parent="dir1/dir2",
-        source=f"file://{tmp_path}",
+        source="file://",
         etag="ed779276108738fdb2179ccabf9680d9",
     )
 
@@ -119,7 +119,7 @@ def test_get_destination_path_fullpath_strategy_file_source(
     local_file._set_stream(catalog, False)
     assert (
         local_file.get_destination_path("output", "fullpath")
-        == f"output{tmp_path}/dir1/dir2/test.txt"
+        == "output/dir1/dir2/test.txt"
     )
 
 
