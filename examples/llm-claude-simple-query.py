@@ -61,4 +61,4 @@ chain = (
     )
 )
 
-chain.show(5)
+chain.show()

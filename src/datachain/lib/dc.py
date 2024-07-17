@@ -39,6 +39,7 @@ from datachain.query.dataset import (
     detach,
 )
 from datachain.query.schema import Column, DatasetRow
+from datachain.utils import inside_notebook
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -763,12 +764,19 @@ class DataChain(DatasetQuery):
         df = dc.to_pandas(flatten)
         if transpose:
             df = df.T
-        with pd.option_context("display.max_columns", None):
-            pd.set_option("display.multi_sparse", False)
-            print(df)
+
+        with pd.option_context(
+            "display.max_columns", None, "display.multi_sparse", False
+        ):
+            if inside_notebook():
+                from IPython.display import display
+
+                display(df)
+            else:
+                print(df)
 
         if len(df) == limit:
-            print(f"\nNot all rows were printed - only first {len(df)}")
+            print(f"\n[Limited by {len(df)} rows]")
 
     def parse_tabular(
         self,
