@@ -11,6 +11,7 @@ from typing import (
     Union,
 )
 
+import pandas as pd
 import sqlalchemy
 from pydantic import BaseModel, create_model
 
@@ -38,9 +39,9 @@ from datachain.query.dataset import (
     detach,
 )
 from datachain.query.schema import Column, DatasetRow
+from datachain.utils import inside_notebook
 
 if TYPE_CHECKING:
-    import pandas as pd
     from typing_extensions import Self
 
 C = Column
@@ -730,6 +731,37 @@ class DataChain(DatasetQuery):
                 )
 
         return cls.from_values(name, session, object_name=object_name, **fr_map)
+
+    def to_pandas(self, flatten=False) -> "pd.DataFrame":
+        headers, max_length = self.signals_schema.get_headers_with_length()
+        if flatten or max_length < 2:
+            df = pd.DataFrame.from_records(self.to_records())
+            if headers:
+                df.columns = [".".join(filter(None, header)) for header in headers]
+            return df
+
+        transposed_result = list(map(list, zip(*self.results())))
+        data = {tuple(n): val for n, val in zip(headers, transposed_result)}
+        return pd.DataFrame(data)
+
+    def show(self, limit: int = 20, flatten=False, transpose=False) -> None:
+        dc = self.limit(limit) if limit > 0 else self
+        df = dc.to_pandas(flatten)
+        if transpose:
+            df = df.T
+
+        with pd.option_context(
+            "display.max_columns", None, "display.multi_sparse", False
+        ):
+            if inside_notebook():
+                from IPython.display import display
+
+                display(df)
+            else:
+                print(df)
+
+        if len(df) == limit:
+            print(f"\n[Limited by {len(df)} rows]")
 
     def parse_tabular(
         self,

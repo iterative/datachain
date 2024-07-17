@@ -2,11 +2,10 @@ import json
 from typing import Optional, Union
 
 import pytest
-from pydantic import BaseModel
 
+from datachain import DataModel
 from datachain.lib.convert.flatten import flatten
 from datachain.lib.file import File
-from datachain.lib.model_store import ModelStore
 from datachain.lib.signal_schema import (
     SetupError,
     SignalResolvingError,
@@ -27,12 +26,12 @@ def nested_file_schema():
     return SignalSchema(schema)
 
 
-class MyType1(BaseModel):
+class MyType1(DataModel):
     aa: int
     bb: str
 
 
-class MyType2(BaseModel):
+class MyType2(DataModel):
     name: str
     deep: MyType1
 
@@ -125,12 +124,11 @@ def test_to_udf_spec():
 
 
 def test_select():
-    ModelStore.add(MyType2)
     schema = SignalSchema.deserialize(
         {
             "age": "float",
             "address": "str",
-            "f": "MyType1",
+            "f": "MyType1@v1",
         }
     )
 
@@ -146,11 +144,10 @@ def test_select():
 
 
 def test_select_nested_names():
-    ModelStore.add(MyType2)
     schema = SignalSchema.deserialize(
         {
             "address": "str",
-            "fr": "MyType2",
+            "fr": "MyType2@v1",
         }
     )
 
@@ -169,7 +166,7 @@ def test_select_nested_errors():
     schema = SignalSchema.deserialize(
         {
             "address": "str",
-            "fr": "MyType2",
+            "fr": "MyType2@v1",
         }
     )
 
@@ -285,3 +282,13 @@ def test_slice():
     keys = ["age", "name"]
     sliced = SignalSchema(schema).slice(keys)
     assert list(sliced.values.items()) == [("age", float), ("name", str)]
+
+
+def test_slice_nested():
+    schema = {
+        "name": str,
+        "feature": MyType1,
+    }
+    keys = ["feature.aa"]
+    sliced = SignalSchema(schema).slice(keys)
+    assert list(sliced.values.items()) == [("feature.aa", int)]
