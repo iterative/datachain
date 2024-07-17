@@ -143,8 +143,8 @@ class SignalSchema:
                     if not fr:
                         raise SignalSchemaError(
                             f"cannot deserialize '{signal}': "
-                            f"unregistered type '{type_name}'."
-                            f" Try to register it with `Registry.add({type_name})`."
+                            f"unknown type '{type_name}'."
+                            f" Try to add it with `ModelStore.add({type_name})`."
                         )
             except TypeError as err:
                 raise SignalSchemaError(
@@ -330,6 +330,15 @@ class SignalSchema:
                 if len(args) > 0 and ModelStore.is_pydantic(args[0]):
                     sub_schema = SignalSchema({"* list of": args[0]})
                     sub_schema.print_tree(indent=indent, start_at=total_indent + indent)
+
+    def __or__(self, other):
+        return self.__class__(self.values | other.values)
+
+    def __contains__(self, name: str):
+        return name in self.values
+
+    def remove(self, name: str):
+        return self.values.pop(name)
 
     @staticmethod
     def _type_to_str(type_):  # noqa: PLR0911

@@ -1,5 +1,5 @@
 from datachain.lib.data_model import DataModel, DataType, FileBasic, is_chain_type
-from datachain.lib.dc import C, Column, DataChain
+from datachain.lib.dc import C, Column, DataChain, Sys
 from datachain.lib.file import (
     File,
     FileError,
@@ -31,6 +31,7 @@ __all__ = [
     "IndexedFile",
     "Mapper",
     "Session",
+    "Sys",
     "TarVFile",
     "TextFile",
     "is_chain_type",

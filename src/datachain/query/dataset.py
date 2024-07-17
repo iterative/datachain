@@ -258,7 +258,7 @@ class DatasetDiffOperation(Step):
         """
 
     def apply(self, query_generator, temp_tables: list[str]):
-        source_query = query_generator.exclude(("id",))
+        source_query = query_generator.exclude(("sys__id",))
         target_query = self.dq.apply_steps().select()
         temp_tables.extend(self.dq.temp_table_names)
 
@@ -589,7 +589,7 @@ class UDF(Step, ABC):
 
         # fill table with partitions
         cols = [
-            query.selected_columns.id,
+            query.selected_columns.sys__id,
             f.dense_rank().over(order_by=list_partition_by).label(PARTITION_COLUMN_ID),
         ]
         self.catalog.warehouse.db.execute(
@@ -623,7 +623,7 @@ class UDF(Step, ABC):
             subq = query.subquery()
             query = (
                 sqlalchemy.select(*subq.c)
-                .outerjoin(partition_tbl, partition_tbl.c.id == subq.c.id)
+                .outerjoin(partition_tbl, partition_tbl.c.sys__id == subq.c.sys__id)
                 .add_columns(*partition_columns())
             )
 
@@ -655,18 +655,18 @@ class UDFSignal(UDF):
         columns = [
             sqlalchemy.Column(c.name, c.type)
             for c in query.selected_columns
-            if c.name != "id"
+            if c.name != "sys__id"
         ]
         table = self.catalog.warehouse.create_udf_table(self.udf_table_name(), columns)
         select_q = query.with_only_columns(
-            *[c for c in query.selected_columns if c.name != "id"]
+            *[c for c in query.selected_columns if c.name != "sys__id"]
         )
 
         # if there is order by clause we need row_number to preserve order
         # if there is no order by clause we still need row_number to generate
         # unique ids as uniqueness is important for this table
         select_q = select_q.add_columns(
-            f.row_number().over(order_by=select_q._order_by_clauses).label("id")
+            f.row_number().over(order_by=select_q._order_by_clauses).label("sys__id")
         )
 
         self.catalog.warehouse.db.execute(
@@ -682,7 +682,7 @@ class UDFSignal(UDF):
         if query._order_by_clauses:
             # we are adding ordering only if it's explicitly added by user in
             # query part before adding signals
-            q = q.order_by(table.c.id)
+            q = q.order_by(table.c.sys__id)
         return q, [table]
 
     def create_result_query(
@@ -692,7 +692,7 @@ class UDFSignal(UDF):
         original_cols = [c for c in subq.c if c.name not in partition_col_names]
 
         # new signal columns that are added to udf_table
-        signal_cols = [c for c in udf_table.c if c.name != "id"]
+        signal_cols = [c for c in udf_table.c if c.name != "sys__id"]
         signal_name_cols = {c.name: c for c in signal_cols}
         cols = signal_cols
 
@@ -712,7 +712,7 @@ class UDFSignal(UDF):
                 res = (
                     sqlalchemy.select(*cols1)
                     .select_from(subq)
-                    .outerjoin(udf_table, udf_table.c.id == subq.c.id)
+                    .outerjoin(udf_table, udf_table.c.sys__id == subq.c.sys__id)
                     .add_columns(*cols2)
                 )
             else:
@@ -721,7 +721,7 @@ class UDFSignal(UDF):
             if query._order_by_clauses:
                 # if ordering is used in query part before adding signals, we
                 # will have it as order by id from select from pre-created udf table
-                res = res.order_by(subq.c.id)
+                res = res.order_by(subq.c.sys__id)
 
             if self.partition_by is not None:
                 subquery = res.subquery()
@@ -759,7 +759,7 @@ class RowGenerator(UDF):
             # we get the same rows as we got as inputs of UDF since selecting
             # without ordering can be non deterministic in some databases
             c = query.selected_columns
-            query = query.order_by(c.id)
+            query = query.order_by(c.sys__id)
 
         udf_table_query = udf_table.select().subquery()
         udf_table_cols: list[sqlalchemy.Label[Any]] = [
@@ -951,7 +951,7 @@ class SQLJoin(Step):
         q1_column_names = {c.name for c in q1_columns}
         q2_columns = [
             c
-            if c.name not in q1_column_names and c.name != "id"
+            if c.name not in q1_column_names and c.name != "sys__id"
             else c.label(self.rname.format(name=c.name))
             for c in q2.c
         ]
@@ -1091,8 +1091,8 @@ class DatasetQuery:
             self.version = version or ds.latest_version
             self.feature_schema = ds.get_version(self.version).feature_schema
             self.column_types = copy(ds.schema)
-            if "id" in self.column_types:
-                self.column_types.pop("id")
+            if "sys__id" in self.column_types:
+                self.column_types.pop("sys__id")
             self.starting_step = QueryStep(self.catalog, name, self.version)
             # attaching to specific dataset
             self.name = name
@@ -1165,7 +1165,7 @@ class DatasetQuery:
             query.steps = self._chunk_limit(query.steps, index, total)
 
             # Prepend the chunk filter to the step chain.
-            query = query.filter(C.random % total == index)
+            query = query.filter(C.sys__rand % total == index)
             query.steps = query.steps[-1:] + query.steps[:-1]
 
         result = query.starting_step.apply()
@@ -1292,10 +1292,8 @@ class DatasetQuery:
         finally:
             self.cleanup()
 
-    def to_records(self) -> list[dict]:
-        with self.as_iterable() as result:
-            cols = result.columns
-            return [dict(zip(cols, row)) for row in result]
+    def to_records(self) -> list[dict[str, Any]]:
+        return self.results(lambda cols, row: dict(zip(cols, row)))
 
     def to_pandas(self) -> "pd.DataFrame":
         records = self.to_records()
@@ -1305,7 +1303,7 @@ class DatasetQuery:
 
     def shuffle(self) -> "Self":
         # ToDo: implement shaffle based on seed and/or generating random column
-        return self.order_by(C.random)
+        return self.order_by(C.sys__rand)
 
     def sample(self, n) -> "Self":
         """
@@ -1434,30 +1432,35 @@ class DatasetQuery:
         query.steps.append(SQLOffset(offset))
         return query
 
+    def as_scalar(self) -> Any:
+        with self.as_iterable() as rows:
+            row = next(iter(rows))
+        return row[0]
+
     def count(self) -> int:
         query = self.clone()
         query.steps.append(SQLCount())
-        return query.results()[0][0]
+        return query.as_scalar()
 
-    def sum(self, col: ColumnElement):
+    def sum(self, col: ColumnElement) -> int:
         query = self.clone()
         query.steps.append(SQLSelect((f.sum(col),)))
-        return query.results()[0][0]
+        return query.as_scalar()
 
-    def avg(self, col: ColumnElement):
+    def avg(self, col: ColumnElement) -> int:
         query = self.clone()
         query.steps.append(SQLSelect((f.avg(col),)))
-        return query.results()[0][0]
+        return query.as_scalar()
 
-    def min(self, col: ColumnElement):
+    def min(self, col: ColumnElement) -> int:
         query = self.clone()
         query.steps.append(SQLSelect((f.min(col),)))
-        return query.results()[0][0]
+        return query.as_scalar()
 
-    def max(self, col: ColumnElement):
+    def max(self, col: ColumnElement) -> int:
         query = self.clone()
         query.steps.append(SQLSelect((f.max(col),)))
-        return query.results()[0][0]
+        return query.as_scalar()
 
     @detach
     def group_by(self, *cols: ColumnElement) -> "Self":
@@ -1649,7 +1652,7 @@ class DatasetQuery:
                 c if isinstance(c, Column) else Column(c.name, c.type)
                 for c in query.columns
             ]
-            if not [c for c in columns if c.name != "id"]:
+            if not [c for c in columns if c.name != "sys__id"]:
                 raise RuntimeError(
                     "No columns to save in the query. "
                     "Ensure at least one column (other than 'id') is selected."
@@ -1668,11 +1671,11 @@ class DatasetQuery:
 
             # Exclude the id column and let the db create it to avoid unique
             # constraint violations.
-            q = query.exclude(("id",))
+            q = query.exclude(("sys__id",))
             if q._order_by_clauses:
                 # ensuring we have id sorted by order by clause if it exists in a query
                 q = q.add_columns(
-                    f.row_number().over(order_by=q._order_by_clauses).label("id")
+                    f.row_number().over(order_by=q._order_by_clauses).label("sys__id")
                 )
 
             cols = tuple(c.name for c in q.columns)

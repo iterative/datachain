@@ -539,7 +539,7 @@ def dataset_rows():
             "owner_name": "aws-iterative-sandbox",
             "last_modified": "2024-02-23T10:42:31.842944+00:00",
             "size": 49807360,
-            "random": 12123123123,
+            "sys__rand": 12123123123,
             "int_col": 5,
             "int_col_32": 5,
             "int_col_64": 5,
