@@ -832,8 +832,8 @@ def test_parse_tabular_object_name(tmp_dir, catalog):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.parquet"
     df.to_parquet(path)
-    dc = DataChain.from_storage(path.as_uri()).parse_tabular(object_name="name")
-    assert "name.first_name" in dc.to_pandas(flatten=True).columns
+    dc = DataChain.from_storage(path.as_uri()).parse_tabular(object_name="tbl")
+    assert "tbl.first_name" in dc.to_pandas(flatten=True).columns
 
 
 def test_sys_feature(tmp_dir, catalog):

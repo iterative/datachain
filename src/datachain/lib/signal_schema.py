@@ -335,7 +335,7 @@ class SignalSchema:
         paths = [
             path for path, _, has_subtree, _ in self.get_flat_tree() if not has_subtree
         ]
-        max_length = max(len(path) for path in paths)
+        max_length = max([len(path) for path in paths], default=0)
         return [
             path + [""] * (max_length - len(path)) if len(path) < max_length else path
             for path in paths

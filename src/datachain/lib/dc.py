@@ -733,20 +733,14 @@ class DataChain(DatasetQuery):
         return cls.from_values(name, session, object_name=object_name, **fr_map)
 
     def to_pandas(self, flatten=False) -> "pd.DataFrame":
-        to_hide = [
-            col
-            for col in File._datachain_column_types
-            if col in self.signals_schema.values
-        ]
-        chain = self.select_except(*to_hide) if to_hide else self
-
-        headers, max_length = chain.signals_schema.get_headers_with_length()
+        headers, max_length = self.signals_schema.get_headers_with_length()
         if flatten or max_length < 2:
             df = pd.DataFrame.from_records(self.to_records())
-            df.columns = [".".join(header) for header in headers]
+            if headers:
+                df.columns = [".".join(filter(None, header)) for header in headers]
             return df
 
-        transposed_result = list(map(list, zip(*chain.results())))
+        transposed_result = list(map(list, zip(*self.results())))
         data = {tuple(n): val for n, val in zip(headers, transposed_result)}
         return pd.DataFrame(data)
 
