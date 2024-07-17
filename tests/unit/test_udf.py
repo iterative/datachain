@@ -12,23 +12,7 @@ def test_udf_single_signal():
     def t(a, b):
         return (a * b,)
 
-    row = RowDict(
-        id=6,
-        vtype="",
-        dir_type=1,
-        parent="",
-        name="obj",
-        last_modified=None,
-        etag="",
-        version="",
-        is_latest=True,
-        size=7,
-        owner_name="",
-        owner_id="",
-        source="",
-        random=1234,
-        location=None,
-    )
+    row = RowDict(sys__id=1, sys__rand=1234, id=6, size=7)
     result = t.run_once(None, row)
     assert result[0]["mul"] == (42)
 
@@ -38,25 +22,9 @@ def test_udf_multiple_signals():
     def t(a, b):
         return (a * b, a + b)
 
-    row = RowDict(
-        id=6,
-        vtype="",
-        dir_type=1,
-        parent="",
-        name="obj",
-        last_modified=None,
-        etag="",
-        version="",
-        is_latest=True,
-        size=7,
-        owner_name="",
-        owner_id="",
-        source="",
-        random=1234,
-        location=None,
-    )
+    row = RowDict(sys__id=1, sys__rand=1234, id=6, size=7)
     result = t.run_once(None, row)
-    assert result[0] == {"id": 6, "mul": 42, "sum": 13}
+    assert result[0] == {"sys__id": 1, "mul": 42, "sum": 13}
 
 
 def test_udf_batching():
@@ -66,24 +34,8 @@ def test_udf_batching():
 
     inputs = list(zip(range(1, 11), range(21, 31)))
     results = []
-    for size, row_id in inputs:
-        row = RowDict(
-            id=row_id,
-            vtype="",
-            dir_type=1,
-            parent="",
-            name="obj",
-            last_modified=None,
-            etag="",
-            version="",
-            is_latest=True,
-            size=size,
-            owner_name="",
-            owner_id="",
-            source="",
-            random=1234,
-            location=None,
-        )
+    for row_id, (size, id) in enumerate(inputs):
+        row = RowDict(sys__id=row_id, sys__rand=1234 + row_id, id=id, size=size)
         batch = RowBatch([row])
         result = t.run_once(None, batch)
         if result:
@@ -91,7 +43,9 @@ def test_udf_batching():
             results.extend(result)
 
     assert len(results) == len(inputs)
-    assert results == [{"id": b, "mul": a * b} for (a, b) in inputs]
+    assert results == [
+        {"sys__id": id, "mul": a * b} for id, (a, b) in enumerate(inputs)
+    ]
 
 
 def test_stateful_udf():
@@ -108,7 +62,7 @@ def test_stateful_udf():
     results = []
     for size in inputs:
         row = RowDict(
-            id=5,
+            sys__id=5,
             vtype="",
             dir_type=1,
             parent="",
@@ -127,7 +81,7 @@ def test_stateful_udf():
         results.extend(udf_inst.run_once(None, row))
 
     assert len(results) == len(inputs)
-    assert results == [{"id": 5, "sum": 5 + size} for size in inputs]
+    assert results == [{"sys__id": 5, "sum": 5 + size} for size in inputs]
 
 
 @pytest.mark.parametrize("param", ["foo", ("foo",)])

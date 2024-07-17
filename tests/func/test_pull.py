@@ -43,12 +43,12 @@ def dog_entries_parquet_lz4(dog_entries) -> bytes:
             else:
                 adapted[k] = v
 
-        adapted["id"] = 1
+        adapted["sys__id"] = 1
+        adapted["sys__rand"] = 1
         adapted["vtype"] = b""
         adapted["location"] = b""
         adapted["source"] = b"s3://dogs"
         adapted["dir_type"] = DirType.FILE
-        adapted["random"] = 1
         return adapted
 
     dog_entries = [_adapt_row(e) for e in dog_entries]
@@ -74,7 +74,7 @@ def schema():
         "size": {"type": "Int64"},
         "owner_name": {"type": "String"},
         "owner_id": {"type": "String"},
-        "random": {"type": "Int64"},
+        "sys__rand": {"type": "Int64"},
         "location": {"type": "String"},
         "source": {"type": "String"},
     }
