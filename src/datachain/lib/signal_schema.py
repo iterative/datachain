@@ -192,10 +192,17 @@ class SignalSchema:
     def slice(
         self, keys: Sequence[str], setup: Optional[dict[str, Callable]] = None
     ) -> "SignalSchema":
+        # Make new schema that combines current schema and setup signals
         setup = setup or {}
         setup_no_types = dict.fromkeys(setup.keys(), str)
-        union = self.values | setup_no_types
-        schema = {k: union[k] for k in keys if k in union}
+        union = SignalSchema(self.values | setup_no_types)
+        # Slice combined schema by keys
+        schema = {}
+        for k in keys:
+            try:
+                schema[k] = union._find_in_tree(k.split("."))
+            except SignalResolvingError:
+                pass
         return SignalSchema(schema, setup)
 
     def row_to_features(
