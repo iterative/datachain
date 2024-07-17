@@ -864,3 +864,12 @@ def test_sys_feature(tmp_dir, catalog):
         MyFr(nnn="n1", count=1),
     ]
     assert "sys" not in ds_no_sys.catalog.get_dataset("ds_no_sys").feature_schema
+
+
+def test_to_pandas_multi_level():
+    df = DataChain.from_values(t1=features).to_pandas()
+
+    assert "t1" in df.columns
+    assert "nnn" in df["t1"].columns
+    assert "count" in df["t1"].columns
+    assert df["t1"]["count"].tolist() == [3, 5, 1]
