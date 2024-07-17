@@ -285,3 +285,13 @@ def test_slice():
     keys = ["age", "name"]
     sliced = SignalSchema(schema).slice(keys)
     assert list(sliced.values.items()) == [("age", float), ("name", str)]
+
+
+def test_slice_nested():
+    schema = {
+        "name": str,
+        "feature": MyType1,
+    }
+    keys = ["feature.aa"]
+    sliced = SignalSchema(schema).slice(keys)
+    assert list(sliced.values.items()) == [("feature.aa", int)]
