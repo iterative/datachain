@@ -128,7 +128,7 @@ def test_select():
         {
             "age": "float",
             "address": "str",
-            "f": "MyType1",
+            "f": "MyType1@v1",
         }
     )
 
@@ -147,7 +147,7 @@ def test_select_nested_names():
     schema = SignalSchema.deserialize(
         {
             "address": "str",
-            "fr": "MyType2",
+            "fr": "MyType2@v1",
         }
     )
 
@@ -166,7 +166,7 @@ def test_select_nested_errors():
     schema = SignalSchema.deserialize(
         {
             "address": "str",
-            "fr": "MyType2",
+            "fr": "MyType2@v1",
         }
     )
 
