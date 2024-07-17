@@ -1,12 +1,10 @@
 import os
-from pathlib import Path
 from urllib.parse import urlparse
 
 import pytest
 
 from datachain.lib.dc import DataChain
 from datachain.lib.file import File
-from tests.data import ENTRIES
 
 
 @pytest.mark.parametrize("anon", [True, False])
@@ -80,17 +78,19 @@ def test_export_files(tmp_dir, cloud_test_catalog, strategy):
         "dog4": "ruff",
     }
 
-    for entry in ENTRIES:
+    for entry in df.collect_one("file"):
+        # for entry in ENTRIES:
         if strategy == "filename":
             file_path = entry.name
-        elif strategy == "etag":
-            file_path = entry.etag
         else:
+            file_path = entry.get_full_name()
+            """
             file_path = (
                 urlparse(ctc.src_uri).path.lstrip(os.sep)
                 / Path(entry.parent)
                 / entry.name
             )
+            """
             print(tmp_dir)
             print(urlparse(ctc.src_uri))
         print("opening")
