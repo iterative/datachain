@@ -1,6 +1,5 @@
 import datetime
 import math
-import os
 from collections.abc import Generator, Iterator
 from unittest.mock import ANY
 
@@ -45,16 +44,6 @@ features = [MyFr(nnn="n1", count=3), MyFr(nnn="n2", count=5), MyFr(nnn="n1", cou
 features_nested = [
     MyNested(fr=fr, label=f"label_{num}") for num, fr in enumerate(features)
 ]
-
-
-def _create_local_bucket(tmp_dir, bucket_name, files, data):
-    bucket_dir = tmp_dir / bucket_name
-    bucket_dir.mkdir(parents=True)
-    for file_path in files:
-        file_path = bucket_dir / file_path
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
-        with open(file_path, "wb") as fd:
-            fd.write(data)
 
 
 def test_pandas_conversion(catalog):
