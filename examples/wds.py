@@ -15,12 +15,12 @@ meta_emd = (
     DataChain.from_storage("gs://dvcx-datacomp-small/metadata")
     .filter(C.name.glob("0020f*.npz"))
     .gen(emd=process_laion_meta)
-    .map(stem=lambda file: file.get_file_stem(), params=["emd.file"], output=str)
+    .map(stem=lambda emd: emd.file.get_file_stem(), params=["emd"], output=str)
 )
 
 meta_pq = DataChain.from_parquet(
     "gs://dvcx-datacomp-small/metadata/0020f*.parquet"
-).map(stem=lambda file: file.get_file_stem(), params=["source.file"], output=str)
+).map(stem=lambda source: source.file.get_file_stem(), params=["source"], output=str)
 
 meta = meta_emd.merge(
     meta_pq, on=["stem", "emd.index"], right_on=["stem", "source.index"]
