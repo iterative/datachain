@@ -124,10 +124,15 @@ def test_datasets(catalog):
     datasets = [d for d in ds.iterate_one("dataset") if d.name == "fibonacci"]
     assert len(datasets) == 0
 
-    DataChain.from_features(fib=[1, 1, 2, 3, 5, 8]).save("fibonacci")
+    DataChain.from_values(fib=[1, 1, 2, 3, 5, 8]).save("fibonacci")
 
     ds = DataChain.datasets()
     datasets = [d for d in ds.iterate_one("dataset") if d.name == "fibonacci"]
+    assert len(datasets) == 1
+    assert datasets[0].num_objects == 6
+
+    ds = DataChain.datasets(object_name="foo")
+    datasets = [d for d in ds.iterate_one("foo") if d.name == "fibonacci"]
     assert len(datasets) == 1
     assert datasets[0].num_objects == 6
 

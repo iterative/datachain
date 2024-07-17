@@ -1,13 +1,12 @@
 import json
 from datetime import datetime
-from typing import Any, ClassVar, Optional, Union
+from typing import Any, Optional, Union
 
 from pydantic import Field, field_validator
 
 from datachain.dataset import DatasetRecord, DatasetStatus, DatasetVersion
 from datachain.job import Job
 from datachain.lib.data_model import DataModel
-from datachain.sql.types import JSON, DateTime, Int, String
 from datachain.utils import TIME_ZERO
 
 
@@ -23,22 +22,6 @@ class Dataset(DataModel):
     size: Optional[int] = Field(default=None)
     params: dict[str, str] = Field(default=dict)
     metrics: dict[str, Any] = Field(default=dict)
-
-    _datachain_column_types: ClassVar[dict[str, Any]] = {
-        "dataset_id": Int,
-        "version_id": Int,
-        "name": String,
-        "version": Int,
-        "status": Int,
-        "created_at": DateTime,
-        "finished_at": DateTime,
-        "num_objects": Int,
-        "size": Int,
-        "params": JSON,
-        "metrics": JSON,
-    }
-
-    _unique_id_keys: ClassVar[list[str]] = ["name", "version"]
 
     @staticmethod
     def _validate_dict(

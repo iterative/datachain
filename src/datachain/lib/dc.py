@@ -323,7 +323,9 @@ class DataChain(DatasetQuery):
         return chain.gen(**signal_dict)  # type: ignore[arg-type]
 
     @classmethod
-    def datasets(cls, session: Optional[Session] = None) -> "DataChain":
+    def datasets(
+        cls, session: Optional[Session] = None, object_name: str = "dataset"
+    ) -> "Self":
         """Generate chain with list of registered datasets.
 
         Example:
@@ -341,9 +343,12 @@ class DataChain(DatasetQuery):
         datasets = [
             Dataset.from_models(d, v, j) for d, v, j in catalog.list_datasets_versions()
         ]
+        fr_map = {object_name: datasets}
 
-        return DataChain.from_features(
-            session=session, output=Dataset, dataset=datasets
+        return DataChain.from_values(
+            session=session,
+            output={object_name: Dataset},
+            **fr_map,
         )
 
     def show_json_schema(  # type: ignore[override]
