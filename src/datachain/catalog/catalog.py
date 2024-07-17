@@ -55,7 +55,6 @@ from datachain.error import (
     DataChainError,
     DatasetInvalidVersionError,
     DatasetNotFoundError,
-    PendingIndexingError,
     QueryScriptCancelError,
     QueryScriptCompileError,
     QueryScriptDatasetNotFound,
@@ -762,8 +761,17 @@ class Catalog:
         ) = source_metastore.register_storage_for_indexing(
             client.uri, force_update, prefix
         )
-        if in_progress:
-            raise PendingIndexingError(f"Pending indexing operation: uri={storage.uri}")
+        while in_progress:
+            time.sleep(1)
+            (
+                storage,
+                need_index,
+                in_progress,
+                partial_id,
+                partial_path,
+            ) = source_metastore.register_storage_for_indexing(
+                client.uri, force_update, prefix
+            )
 
         if not need_index:
             assert partial_id is not None
