@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+from datetime import datetime
 from functools import partial
 from typing import TYPE_CHECKING, Optional
 
@@ -8,6 +9,8 @@ import attrs
 from dvc_data.hashfile.db.local import LocalHashFileDB
 from dvc_objects.fs.local import LocalFileSystem
 from fsspec.callbacks import Callback, TqdmCallback
+
+from datachain.utils import TIME_ZERO
 
 from .progress import Tqdm
 
@@ -23,10 +26,13 @@ class UniqueId:
     storage: "StorageURI"
     parent: str
     name: str
-    etag: str
     size: int
-    vtype: str
-    location: Optional[str]
+    etag: str
+    version: str = ""
+    is_latest: bool = True
+    vtype: str = ""
+    location: Optional[str] = None
+    last_modified: datetime = TIME_ZERO
 
     @property
     def path(self) -> str:
