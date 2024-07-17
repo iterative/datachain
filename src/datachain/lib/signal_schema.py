@@ -18,8 +18,8 @@ from pydantic import BaseModel, create_model
 from typing_extensions import Literal as LiteralEx
 
 from datachain.lib.convert.flatten import DATACHAIN_TO_TYPE
+from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.convert.sql_to_python import sql_to_python
-from datachain.lib.convert.type_converter import convert_to_db_type
 from datachain.lib.convert.unflatten import unflatten_to_json_pos
 from datachain.lib.data_model import DataModel, DataType
 from datachain.lib.file import File
@@ -161,7 +161,7 @@ class SignalSchema:
                 continue
             if not has_subtree:
                 db_name = DEFAULT_DELIMITER.join(path)
-                res[db_name] = convert_to_db_type(type_)
+                res[db_name] = python_to_sql(type_)
         return res
 
     def row_to_objs(self, row: Sequence[Any]) -> list[DataType]:
