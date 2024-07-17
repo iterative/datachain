@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 from pydantic import BaseModel
 
+from datachain import Column
 from datachain.lib.dc import C, DataChain, Sys
 from datachain.lib.file import File
 from datachain.lib.signal_schema import (
@@ -873,3 +874,15 @@ def test_to_pandas_multi_level():
     assert "nnn" in df["t1"].columns
     assert "count" in df["t1"].columns
     assert df["t1"]["count"].tolist() == [3, 5, 1]
+
+
+def test_mutate():
+    chain = DataChain.from_values(t1=features).mutate(
+        circle=2 * 3.14 * Column("t1.count"), place="pref_" + Column("t1.nnn")
+    )
+
+    assert chain.signals_schema.values["circle"] is float
+    assert chain.signals_schema.values["place"] is str
+
+    expected = [fr.count * 2 * 3.14 for fr in features]
+    np.testing.assert_allclose(chain.collect_one("circle"), expected)
