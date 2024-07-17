@@ -1,3 +1,4 @@
+import copy
 import re
 from collections.abc import Iterator, Sequence
 from typing import (
@@ -12,11 +13,14 @@ from typing import (
 
 import pandas as pd
 import sqlalchemy
+from pydantic import BaseModel, create_model
 
-from datachain.lib.feature import Feature, FeatureType
-from datachain.lib.feature_utils import features_to_tuples
+from datachain import DataModel
+from datachain.lib.convert.values_to_tuples import values_to_tuples
+from datachain.lib.data_model import DataType
 from datachain.lib.file import File, IndexedFile, get_file
 from datachain.lib.meta_formats import read_meta, read_schema
+from datachain.lib.model_store import ModelStore
 from datachain.lib.settings import Settings
 from datachain.lib.signal_schema import SignalSchema
 from datachain.lib.udf import (
@@ -39,8 +43,6 @@ from datachain.query.schema import Column, DatasetRow
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-    from datachain.catalog import Catalog
-
 C = Column
 
 
@@ -51,10 +53,10 @@ class DatasetPrepareError(DataChainParamsError):
         super().__init__(f"Dataset{name}{output} processing prepare error: {msg}")
 
 
-class DatasetFromFeatureError(DataChainParamsError):
+class DatasetFromValuesError(DataChainParamsError):
     def __init__(self, name, msg):
         name = f" '{name}'" if name else ""
-        super().__init__(f"Dataset {name} from feature error: {msg}")
+        super().__init__(f"Dataset {name} from values error: {msg}")
 
 
 class DatasetMergeError(DataChainParamsError):
@@ -66,6 +68,14 @@ class DatasetMergeError(DataChainParamsError):
             else ""
         )
         super().__init__(f"Merge error on='{on_str}'{right_on_str}: {msg}")
+
+
+OutputType = Union[None, DataType, Sequence[str], dict[str, DataType]]
+
+
+class Sys(DataModel):
+    id: int
+    rand: int
 
 
 class DataChain(DatasetQuery):
@@ -120,12 +130,10 @@ class DataChain(DatasetQuery):
     """
 
     DEFAULT_FILE_RECORD: ClassVar[dict] = {
-        "id": 0,
         "source": "",
         "name": "",
         "vtype": "",
         "size": 0,
-        "random": 0,
     }
     LEGACY_COLUMNS: ClassVar[list[str]] = [
         "source",
@@ -161,11 +169,19 @@ class DataChain(DatasetQuery):
     def print_schema(self):
         self.signals_schema.print_tree()
 
-    def create_model(self, name: str) -> type[Feature]:
-        return self.signals_schema.create_model(name)
+    def clone(self, new_table: bool = True) -> "Self":
+        obj = super().clone(new_table=new_table)
+        obj.signals_schema = copy.deepcopy(self.signals_schema)
+        return obj
 
     def settings(
-        self, cache=None, batch=None, parallel=None, workers=None, min_task_size=None
+        self,
+        cache=None,
+        batch=None,
+        parallel=None,
+        workers=None,
+        min_task_size=None,
+        include_sys: Optional[bool] = None,
     ) -> "Self":
         """Change settings for chain.
 
@@ -189,8 +205,13 @@ class DataChain(DatasetQuery):
             )
             ```
         """
-        self._settings.add(Settings(cache, batch, parallel, workers, min_task_size))
-        return self
+        chain = self.clone()
+        if include_sys is True:
+            chain.signals_schema = SignalSchema({"sys": Sys}) | chain.signals_schema
+        elif include_sys is False and "sys" in chain.signals_schema:
+            chain.signals_schema.remove("sys")
+        chain._settings.add(Settings(cache, batch, parallel, workers, min_task_size))
+        return chain
 
     def reset_settings(self, settings: Optional[Settings] = None) -> "Self":
         """Reset all settings to default values."""
@@ -202,12 +223,11 @@ class DataChain(DatasetQuery):
         return self
 
     def add_schema(self, signals_schema: SignalSchema) -> "Self":
-        union = self.signals_schema.values | signals_schema.values
-        self.signals_schema = SignalSchema(union)
+        self.signals_schema |= signals_schema
         return self
 
     def get_file_signals(self) -> list[str]:
-        return self.signals_schema.get_file_signals()
+        return list(self.signals_schema.get_file_signals())
 
     @classmethod
     def from_storage(
@@ -215,9 +235,10 @@ class DataChain(DatasetQuery):
         path,
         *,
         type: Literal["binary", "text", "image"] = "binary",
-        catalog: Optional["Catalog"] = None,
+        session: Optional[Session] = None,
         recursive: Optional[bool] = True,
-        anon: bool = False,
+        object_name: str = "file",
+        **kwargs,
     ) -> "Self":
         """Get data from a storage as a list of file with all file attributes. It
         returns the chain itself as usual.
@@ -227,7 +248,7 @@ class DataChain(DatasetQuery):
                 as `s3://`, `gs://`, `az://` or "file:///"
             type : read file as "binary", "text", or "image" data. Default is "binary".
             recursive : search recursively for the given path.
-            anon : use anonymous mode to access the storage.
+            object_name : Created object column name.
 
         Example:
             ```py
@@ -235,7 +256,9 @@ class DataChain(DatasetQuery):
             ```
         """
         func = get_file(type)
-        return cls(path, catalog=catalog, recursive=recursive, anon=anon).map(file=func)
+        return cls(path, session=session, recursive=recursive, **kwargs).map(
+            **{object_name: func}
+        )
 
     @classmethod
     def from_dataset(cls, name: str, version: Optional[int] = None) -> "DataChain":
@@ -251,65 +274,18 @@ class DataChain(DatasetQuery):
         return DataChain(name=name, version=version)
 
     @classmethod
-    def from_csv(
-        cls,
-        path,
-        type: Literal["binary", "text", "image"] = "text",
-        anon: bool = False,
-        spec: Optional[FeatureType] = None,
-        schema_from: Optional[str] = "auto",
-        object_name: Optional[str] = "csv",
-        model_name: Optional[str] = None,
-        show_schema: Optional[bool] = False,
-    ) -> "DataChain":
-        """Get data from CSV. It returns the chain itself.
-
-        Parameters:
-            path : storage URI with directory. URI must start with storage prefix such
-                as `s3://`, `gs://`, `az://` or "file:///"
-            type : read file as "binary", "text", or "image" data. Default is "text".
-            anon : use anonymous mode to access the storage.
-            spec : Data Model for CSV file
-            object_name : generated object column name
-            model_name : generated model name
-            schema_from : path to sample to infer spec from
-            show_schema : print auto-generated schema
-
-        Examples:
-            infer model from the first two lines (header + data)
-            >>> chain = DataChain.from_csv("gs://csv")
-
-            use a particular data model
-            >>> chain = DataChain.from_csv("gs://csv"i, spec=MyModel)
-        """
-        if schema_from == "auto":
-            schema_from = path
-
-        chain = DataChain.from_storage(path=path, type=type, anon=anon)
-        signal_dict = {
-            object_name: read_meta(
-                schema_from=schema_from,
-                meta_type="csv",
-                spec=spec,
-                model_name=model_name,
-                show_schema=show_schema,
-            )
-        }
-        return chain.gen(**signal_dict)  # type: ignore[misc, arg-type]
-
-    @classmethod
     def from_json(
         cls,
         path,
         type: Literal["binary", "text", "image"] = "text",
-        anon: bool = False,
-        spec: Optional[FeatureType] = None,
+        spec: Optional[DataType] = None,
         schema_from: Optional[str] = "auto",
         jmespath: Optional[str] = None,
-        object_name: Optional[str] = None,
+        object_name: str = "",
         model_name: Optional[str] = None,
         show_schema: Optional[bool] = False,
         meta_type: Optional[str] = "json",
+        **kwargs,
     ) -> "DataChain":
         """Get data from JSON. It returns the chain itself.
 
@@ -317,7 +293,6 @@ class DataChain(DatasetQuery):
             path : storage URI with directory. URI must start with storage prefix such
                 as `s3://`, `gs://`, `az://` or "file:///"
             type : read file as "binary", "text", or "image" data. Default is "binary".
-            anon : use anonymous mode to access the storage.
             spec : optional Data Model
             schema_from : path to sample to infer spec from
             object_name : generated object column name
@@ -343,7 +318,7 @@ class DataChain(DatasetQuery):
             object_name = jmespath_to_name(jmespath)
         if not object_name:
             object_name = "json"
-        chain = DataChain.from_storage(path=path, type=type, anon=anon)
+        chain = DataChain.from_storage(path=path, type=type, **kwargs)
         signal_dict = {
             object_name: read_meta(
                 schema_from=schema_from,
@@ -406,6 +381,7 @@ class DataChain(DatasetQuery):
             version : version of a dataset. Default - the last version that exist.
         """
         schema = self.signals_schema.serialize()
+        schema.pop("sys", None)
         return super().save(name=name, version=version, feature_schema=schema)
 
     def apply(self, func, *args, **kwargs):
@@ -415,7 +391,7 @@ class DataChain(DatasetQuery):
         self,
         func: Optional[Callable] = None,
         params: Union[None, str, Sequence[str]] = None,
-        output: Union[None, FeatureType, Sequence[str], dict[str, FeatureType]] = None,
+        output: OutputType = None,
         **signal_map,
     ) -> "Self":
         """Apply a function to each row to create new signals. The function should
@@ -459,7 +435,7 @@ class DataChain(DatasetQuery):
         self,
         func: Optional[Callable] = None,
         params: Union[None, str, Sequence[str]] = None,
-        output: Union[None, FeatureType, Sequence[str], dict[str, FeatureType]] = None,
+        output: OutputType = None,
         **signal_map,
     ) -> "Self":
         """Apply a function to each row to create new rows (with potentially new
@@ -488,7 +464,7 @@ class DataChain(DatasetQuery):
         func: Optional[Callable] = None,
         partition_by: Optional[PartitionByType] = None,
         params: Union[None, str, Sequence[str]] = None,
-        output: Union[None, FeatureType, Sequence[str], dict[str, FeatureType]] = None,
+        output: OutputType = None,
         **signal_map,
     ) -> "Self":
         """Aggregate rows using `partition_by` statement and apply a function to the
@@ -518,7 +494,7 @@ class DataChain(DatasetQuery):
         self,
         func: Optional[Callable] = None,
         params: Union[None, str, Sequence[str]] = None,
-        output: Union[None, FeatureType, Sequence[str], dict[str, FeatureType]] = None,
+        output: OutputType = None,
         **signal_map,
     ) -> "Self":
         """This is a batch version of map().
@@ -540,18 +516,20 @@ class DataChain(DatasetQuery):
         target_class: type[UDFBase],
         func: Optional[Callable],
         params: Union[None, str, Sequence[str]],
-        output: Union[None, FeatureType, Sequence[str], dict[str, FeatureType]],
+        output: OutputType,
         signal_map,
     ) -> UDFBase:
         is_generator = target_class.is_output_batched
         name = self.name or ""
 
         sign = UdfSignature.parse(name, signal_map, func, params, output, is_generator)
+        DataModel.register(list(sign.output_schema.values.values()))
+
         params_schema = self.signals_schema.slice(sign.params, self._setup)
 
-        return UDFBase._create(target_class, sign, params_schema)
+        return target_class._create(sign, params_schema)
 
-    def _extend_features(self, method_name, *args, **kwargs):
+    def _extend_to_data_model(self, method_name, *args, **kwargs):
         super_func = getattr(super(), method_name)
 
         new_schema = self.signals_schema.resolve(*args)
@@ -580,39 +558,46 @@ class DataChain(DatasetQuery):
         chain.signals_schema = new_schema
         return chain
 
-    def iterate(self, *cols: str) -> Iterator[list[FeatureType]]:
+    def iterate_flatten(self) -> Iterator[tuple[Any]]:
+        db_signals = self.signals_schema.db_signals()
+        with super().select(*db_signals).as_iterable() as rows:
+            yield from rows
+
+    def results(
+        self, row_factory: Optional[Callable] = None, **kwargs
+    ) -> list[tuple[Any, ...]]:
+        rows = self.iterate_flatten()
+        if row_factory:
+            db_signals = self.signals_schema.db_signals()
+            rows = (row_factory(db_signals, r) for r in rows)
+        return list(rows)
+
+    def iterate(self, *cols: str) -> Iterator[list[DataType]]:
         """Iterate over rows.
 
         If columns are specified - limit them to specified
         columns.
         """
         chain = self.select(*cols) if cols else self
+        for row in chain.iterate_flatten():
+            yield chain.signals_schema.row_to_features(
+                row, catalog=chain.session.catalog, cache=chain._settings.cache
+            )
 
-        db_signals = chain.signals_schema.db_signals()
-        with super().select(*db_signals).as_iterable() as rows_iter:
-            for row in rows_iter:
-                yield chain.signals_schema.row_to_features(row, chain.session.catalog)
-
-    def iterate_one(self, col: str) -> Iterator[FeatureType]:
+    def iterate_one(self, col: str) -> Iterator[DataType]:
         for item in self.iterate(col):
             yield item[0]
 
-    def collect(self, *cols: str) -> list[list[FeatureType]]:
+    def collect(self, *cols: str) -> list[list[DataType]]:
         return list(self.iterate(*cols))
 
-    def collect_one(self, col: str) -> list[FeatureType]:
+    def collect_one(self, col: str) -> list[DataType]:
         return list(self.iterate_one(col))
 
     def to_pytorch(self, **kwargs):
         """Convert to pytorch dataset format."""
 
-        try:
-            import torch  # noqa: F401
-        except ImportError as exc:
-            raise ImportError(
-                "Missing required dependency 'torch' for Dataset.to_pytorch()"
-            ) from exc
-        from datachain.lib.pytorch import PytorchDataset
+        from datachain.torch import PytorchDataset
 
         if self.attached:
             chain = self
@@ -711,25 +696,32 @@ class DataChain(DatasetQuery):
         return ds
 
     @classmethod
-    def from_features(
+    def from_values(
         cls,
         ds_name: str = "",
         session: Optional[Session] = None,
-        output: Union[None, FeatureType, Sequence[str], dict[str, FeatureType]] = None,
+        output: OutputType = None,
+        object_name: str = "",
         **fr_map,
     ) -> "DataChain":
-        """Generate chain from list of features."""
-        tuple_type, output, tuples = features_to_tuples(ds_name, output, **fr_map)
+        """Generate chain from list of values."""
+        tuple_type, output, tuples = values_to_tuples(ds_name, output, **fr_map)
 
         def _func_fr() -> Iterator[tuple_type]:  # type: ignore[valid-type]
             yield from tuples
 
         chain = DataChain.create_empty(DataChain.DEFAULT_FILE_RECORD, session=session)
+        if object_name:
+            output = {object_name: DataChain._dict_to_data_model(object_name, output)}  # type: ignore[arg-type]
         return chain.gen(_func_fr, output=output)
 
     @classmethod
     def from_pandas(  # type: ignore[override]
-        cls, df: "pd.DataFrame", name: str = "", session: Optional[Session] = None
+        cls,
+        df: "pd.DataFrame",
+        name: str = "",
+        session: Optional[Session] = None,
+        object_name: str = "",
     ) -> "DataChain":
         """Generate chain from pandas data-frame."""
         fr_map = {col.lower(): df[col].tolist() for col in df.columns}
@@ -747,7 +739,7 @@ class DataChain(DatasetQuery):
                     f"import from pandas error - '{column}' cannot be a column name",
                 )
 
-        return cls.from_features(name, session, **fr_map)
+        return cls.from_values(name, session, object_name=object_name, **fr_map)
 
     def to_pandas(self, flatten=False) -> "pd.DataFrame":
         to_hide = [
@@ -777,13 +769,19 @@ class DataChain(DatasetQuery):
 
     def parse_tabular(
         self,
-        output: Optional[dict[str, FeatureType]] = None,
+        output: OutputType = None,
+        object_name: str = "",
+        model_name: str = "",
         **kwargs,
     ) -> "DataChain":
         """Generate chain from list of tabular files.
 
         Parameters:
-            output : Dictionary defining column names and their corresponding types.
+            output : Dictionary or feature class defining column names and their
+                corresponding types. List of column names is also accepted, in which
+                case types will be inferred.
+            object_name : Generated object column name.
+            model_name : Generated model name.
             kwargs : Parameters to pass to pyarrow.dataset.dataset.
 
         Examples:
@@ -796,107 +794,134 @@ class DataChain(DatasetQuery):
             >>> dc = dc.filter(C("file.name").glob("*.jsonl"))
             >>> dc = dc.parse_tabular(format="json")
         """
-        from pyarrow import unify_schemas
-        from pyarrow.dataset import dataset
 
-        from datachain.lib.arrow import ArrowGenerator, schema_to_output
+        from datachain.lib.arrow import ArrowGenerator, infer_schema, schema_to_output
 
         schema = None
-        if output:
-            output = {"source": IndexedFile} | output
-        else:
-            schemas = []
-            for row in self.select("file").iterate():
-                file = row[0]
-                ds = dataset(file.get_path(), filesystem=file.get_fs(), **kwargs)  # type: ignore[union-attr]
-                schemas.append(ds.schema)
-            if not schemas:
-                msg = "error parsing tabular data schema - found no files to parse"
-                raise DatasetPrepareError(self.name, msg)
-            schema = unify_schemas(schemas)
+        col_names = output if isinstance(output, Sequence) else None
+        if col_names or not output:
             try:
-                output = schema_to_output(schema)
+                schema = infer_schema(self, **kwargs)
+                output = schema_to_output(schema, col_names)
             except ValueError as e:
                 raise DatasetPrepareError(self.name, e) from e
 
+        if object_name:
+            if isinstance(output, dict):
+                model_name = model_name or object_name
+                output = DataChain._dict_to_data_model(model_name, output)
+            output = {object_name: output}  # type: ignore[dict-item]
+        elif isinstance(output, type(BaseModel)):
+            output = {
+                name: info.annotation  # type: ignore[misc]
+                for name, info in output.model_fields.items()
+            }
+        output = {"source": IndexedFile} | output  # type: ignore[assignment,operator]
         return self.gen(ArrowGenerator(schema, **kwargs), output=output)
 
-    def parse_csv(
-        self,
+    @staticmethod
+    def _dict_to_data_model(
+        name: str, data_dict: dict[str, DataType]
+    ) -> type[BaseModel]:
+        fields = {name: (anno, ...) for name, anno in data_dict.items()}
+        return create_model(
+            name,
+            __base__=(DataModel,),  # type: ignore[call-overload]
+            **fields,
+        )  # type: ignore[call-overload]
+
+    @classmethod
+    def from_csv(
+        cls,
+        path,
         delimiter: str = ",",
         header: bool = True,
         column_names: Optional[list[str]] = None,
-        output: Optional[dict[str, FeatureType]] = None,
+        output: OutputType = None,
+        object_name: str = "",
+        model_name: str = "",
+        **kwargs,
     ) -> "DataChain":
-        """Generate chain from list of csv files.
+        """Generate chain from csv files.
 
         Parameters:
+            path : Storage URI with directory. URI must start with storage prefix such
+                as `s3://`, `gs://`, `az://` or "file:///".
             delimiter : Character for delimiting columns.
             header : Whether the files include a header row.
-            column_names : Column names if no header. Implies `header = False`.
-            output : Dictionary defining column names and their corresponding types.
+            output : Dictionary or feature class defining column names and their
+                corresponding types. List of column names is also accepted, in which
+                case types will be inferred.
+            object_name : Created object column name.
+            model_name : Generated model name.
 
         Examples:
             Reading a csv file:
-            >>> dc = DataChain.from_storage("s3://mybucket/file.csv")
-            >>> dc = dc.parse_tabular(format="csv")
+            >>> dc = DataChain.from_csv("s3://mybucket/file.csv")
 
-            Reading a filtered list of csv files as a dataset:
-            >>> dc = DataChain.from_storage("s3://mybucket")
-            >>> dc = dc.filter(C("file.name").glob("*.csv"))
-            >>> dc = dc.parse_tabular()
+            Reading csv files from a directory as a combined dataset:
+            >>> dc = DataChain.from_csv("s3://mybucket/dir")
         """
         from pyarrow.csv import ParseOptions, ReadOptions
         from pyarrow.dataset import CsvFileFormat
 
-        if column_names and output:
-            msg = "error parsing csv - only one of column_names or output is allowed"
-            raise DatasetPrepareError(self.name, msg)
+        chain = DataChain.from_storage(path, **kwargs)
 
-        if not header and not column_names:
-            if output:
+        if not header:
+            if not output:
+                msg = "error parsing csv - provide output if no header"
+                raise DatasetPrepareError(chain.name, msg)
+            if isinstance(output, Sequence):
+                column_names = output  # type: ignore[assignment]
+            elif isinstance(output, dict):
                 column_names = list(output.keys())
+            elif (fr := ModelStore.to_pydantic(output)) is not None:
+                column_names = list(fr.model_fields.keys())
             else:
-                msg = "error parsing csv - provide column_names or output if no header"
-                raise DatasetPrepareError(self.name, msg)
+                msg = f"error parsing csv - incompatible output type {type(output)}"
+                raise DatasetPrepareError(chain.name, msg)
 
         parse_options = ParseOptions(delimiter=delimiter)
         read_options = ReadOptions(column_names=column_names)
         format = CsvFileFormat(parse_options=parse_options, read_options=read_options)
-        return self.parse_tabular(output=output, format=format)
+        return chain.parse_tabular(
+            output=output, object_name=object_name, model_name=model_name, format=format
+        )
 
-    def parse_parquet(
-        self,
+    @classmethod
+    def from_parquet(
+        cls,
+        path,
         partitioning: Any = "hive",
-        output: Optional[dict[str, FeatureType]] = None,
+        output: Optional[dict[str, DataType]] = None,
+        object_name: str = "",
+        model_name: str = "",
+        **kwargs,
     ) -> "DataChain":
-        """Generate chain from list of parquet files.
+        """Generate chain from parquet files.
 
         Parameters:
+            path : Storage URI with directory. URI must start with storage prefix such
+                as `s3://`, `gs://`, `az://` or "file:///".
             partitioning : Any pyarrow partitioning schema.
             output : Dictionary defining column names and their corresponding types.
+            object_name : Created object column name.
+            model_name : Generated model name.
 
         Examples:
             Reading a single file:
-            >>> dc = DataChain.from_storage("s3://mybucket/file.parquet")
-            >>> dc = dc.parse_tabular()
+            >>> dc = DataChain.from_parquet("s3://mybucket/file.parquet")
 
             Reading a partitioned dataset from a directory:
-            >>> dc = DataChain.from_storage("path/to/dir")
-            >>> dc = dc.parse_tabular()
-
-            Reading a filtered list of files as a dataset:
-            >>> dc = DataChain.from_storage("s3://mybucket")
-            >>> dc = dc.filter(C("file.name").glob("*.parquet"))
-            >>> dc = dc.parse_tabular()
-
-            Reading a filtered list of partitions as a dataset:
-            >>> dc = DataChain.from_storage("s3://mybucket")
-            >>> dc = dc.filter(C("file.parent").glob("*month=1*"))
-            >>> dc = dc.parse_tabular()
+            >>> dc = DataChain.from_parquet("s3://mybucket/dir")
         """
-        return self.parse_tabular(
-            output=output, format="parquet", partitioning=partitioning
+        chain = DataChain.from_storage(path, **kwargs)
+        return chain.parse_tabular(
+            output=output,
+            object_name=object_name,
+            model_name=model_name,
+            format="parquet",
+            partitioning=partitioning,
         )
 
     @classmethod
@@ -939,17 +964,17 @@ class DataChain(DatasetQuery):
             db.execute(insert_q.values(**record))
         return DataChain(name=dsr.name)
 
-    def sum(self, fr: FeatureType):  # type: ignore[override]
-        return self._extend_features("sum", fr)
+    def sum(self, fr: DataType):  # type: ignore[override]
+        return self._extend_to_data_model("sum", fr)
 
-    def avg(self, fr: FeatureType):  # type: ignore[override]
-        return self._extend_features("avg", fr)
+    def avg(self, fr: DataType):  # type: ignore[override]
+        return self._extend_to_data_model("avg", fr)
 
-    def min(self, fr: FeatureType):  # type: ignore[override]
-        return self._extend_features("min", fr)
+    def min(self, fr: DataType):  # type: ignore[override]
+        return self._extend_to_data_model("min", fr)
 
-    def max(self, fr: FeatureType):  # type: ignore[override]
-        return self._extend_features("max", fr)
+    def max(self, fr: DataType):  # type: ignore[override]
+        return self._extend_to_data_model("max", fr)
 
     def setup(self, **kwargs) -> "Self":
         intersection = set(self._setup.keys()) & set(kwargs.keys())

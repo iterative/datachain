@@ -130,7 +130,6 @@ class PoseDetector:
             return
 
         # CLeanup to records
-        del record["random"]  # random will be populated automatically
         record["is_latest"] = record["is_latest"] > 0  # needs to be a bool
         row = DatasetRow.create(**record)
 
@@ -211,7 +210,7 @@ if __name__ == "__main__":
     data = (
         DatasetQuery(os.path.join(cloud_prefix, bucket))
         .filter(C.name.glob(file_type))
-        .filter(C.random % filter_mod == chunk_num)
+        .filter(C.sys__rand % filter_mod == chunk_num)
         .generate(pose_udf)
         .results()
     )

@@ -104,7 +104,7 @@ class Partition(BatchingStrategy):
         with contextlib.closing(
             execute(
                 query,
-                order_by=(PARTITION_COLUMN_ID, "id", *query._order_by_clauses),
+                order_by=(PARTITION_COLUMN_ID, "sys__id", *query._order_by_clauses),
                 limit=query._limit,
             )
         ) as rows:

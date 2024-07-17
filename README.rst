@@ -6,11 +6,11 @@
 .. |Python Version| image:: https://img.shields.io/pypi/pyversions/datachain
    :target: https://pypi.org/project/datachain
    :alt: Python Version
-.. |Codecov| image:: https://codecov.io/gh/iterative/dvcx/branch/main/graph/badge.svg?token=VSCP2T9R5X
-   :target: https://app.codecov.io/gh/iterative/dvcx
+.. |Codecov| image:: https://codecov.io/gh/iterative/datachain/graph/badge.svg?token=byliXGGyGB
+   :target: https://codecov.io/gh/iterative/datachain
    :alt: Codecov
-.. |Tests| image:: https://github.com/iterative/dvcx/workflows/Tests/badge.svg
-   :target: https://github.com/iterative/dvcx/actions?workflow=Tests
+.. |Tests| image:: https://github.com/iterative/datachain/workflows/Tests/badge.svg
+   :target: https://github.com/iterative/datachain/actions?workflow=Tests
    :alt: Tests
 
 AI 🔗 DataChain
@@ -314,7 +314,8 @@ Chain results can be exported or passed directly to Pytorch dataloader. For exam
 Tutorials
 ------------------
 
-* `Multimodal <examples/multimodal/clip_fine_tuning.ipynb>`_ (try in `Colab <https://colab.research.google.com/github/iterative/dvclive/blob/main/examples/multimodal/clip_fine_tuning.ipynb>`__)
+* `Computer Vision <examples/computer_vision/fashion_product_images/1-quick-start.ipynb>`_ (try in `Colab <https://colab.research.google.com/github/iterative/datachain/blob/main/examples/computer_vision/fashion_product_images/1-quick-start.ipynb>`__)
+* `Multimodal <examples/multimodal/clip_fine_tuning.ipynb>`_ (try in `Colab <https://colab.research.google.com/github/iterative/datachain/blob/main/examples/multimodal/clip_fine_tuning.ipynb>`__)
 
 Contributions
 --------------------

@@ -195,7 +195,7 @@ class AbstractWarehouse(ABC, Serializable):
         cols_names = [c.name for c in cols]
 
         if not order_by:
-            ordering = [cols.id]
+            ordering = [cols.sys__id]
         else:
             ordering = order_by  # type: ignore[assignment]
 
@@ -372,7 +372,7 @@ class AbstractWarehouse(ABC, Serializable):
         """Returns total number of rows in a dataset"""
         dr = self.dataset_rows(dataset, version)
         table = dr.get_table()
-        query = select(sa.func.count(table.c.id))
+        query = select(sa.func.count(table.c.sys__id))
         (res,) = self.db.execute(query)
         return res[0]
 
@@ -388,7 +388,7 @@ class AbstractWarehouse(ABC, Serializable):
         dr = self.dataset_rows(dataset, version)
         table = dr.get_table()
         expressions: tuple[_ColumnsClauseArgument[Any], ...] = (
-            sa.func.count(table.c.id),
+            sa.func.count(table.c.sys__id),
         )
         if "size" in table.columns:
             expressions = (*expressions, sa.func.sum(table.c.size))
@@ -607,7 +607,7 @@ class AbstractWarehouse(ABC, Serializable):
             return func.coalesce(column, default).label(column.name)
 
         return sa.select(
-            de.c.id,
+            de.c.sys__id,
             with_default(dr.c.vtype),
             case((de.c.is_dir == true(), DirType.DIR), else_=dr.c.dir_type).label(
                 "dir_type"
@@ -621,10 +621,10 @@ class AbstractWarehouse(ABC, Serializable):
             with_default(dr.c.size),
             with_default(dr.c.owner_name),
             with_default(dr.c.owner_id),
-            with_default(dr.c.random),
+            with_default(dr.c.sys__rand),
             dr.c.location,
             de.c.source,
-        ).select_from(de.outerjoin(dr.table, de.c.id == dr.c.id))
+        ).select_from(de.outerjoin(dr.table, de.c.sys__id == dr.c.sys__id))
 
     def get_node_by_path(self, dataset_rows: "DataTable", path: str) -> Node:
         """Gets node that corresponds to some path"""
@@ -878,7 +878,7 @@ class AbstractWarehouse(ABC, Serializable):
         tbl = sa.Table(
             name,
             sa.MetaData(),
-            sa.Column("id", Int, primary_key=True),
+            sa.Column("sys__id", Int, primary_key=True),
             *columns,
         )
         self.db.create_table(tbl, if_not_exists=True)

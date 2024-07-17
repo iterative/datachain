@@ -811,8 +811,6 @@ def show(
     from datachain.query import DatasetQuery
     from datachain.utils import show_records
 
-    if columns:
-        columns = ("id", *columns)
     query = (
         DatasetQuery(name=name, version=version, catalog=catalog)
         .select(*columns)

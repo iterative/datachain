@@ -1,23 +1,7 @@
-from io import BytesIO
 from typing import Callable, Optional, Union
 
-from datachain.lib.file import File
-
-try:
-    import torch
-    from PIL import Image
-except ImportError as exc:
-    raise ImportError(
-        "Missing dependencies for computer vision:\n"
-        "To install run:\n\n"
-        "  pip install 'datachain[cv]'\n"
-    ) from exc
-
-
-class ImageFile(File):
-    def get_value(self):
-        value = super().get_value()
-        return Image.open(BytesIO(value))
+import torch
+from PIL import Image
 
 
 def convert_image(

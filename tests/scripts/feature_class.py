@@ -1,8 +1,9 @@
+from pydantic import BaseModel
+
 from datachain.lib.dc import C, DataChain
-from datachain.lib.feature import Feature
 
 
-class Embedding(Feature):
+class Embedding(BaseModel):
     value: float
 
 
