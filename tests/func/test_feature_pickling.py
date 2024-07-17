@@ -41,10 +41,10 @@ def file_to_message(file):
 
 
 def common_df_asserts(df):
-    assert df["file.name"].tolist() == ["cat1", "cat2"]
-    assert df["file.size"].tolist() == [4, 4]
-    assert df["message.id"].tolist() == ["cat1", "cat2"]
-    mc = df["message.content"].tolist()
+    assert df["file"]["name"].tolist() == ["cat1", "cat2"]
+    assert df["file"]["size"].tolist() == [4, 4]
+    assert df["message"]["id"].tolist() == ["cat1", "cat2"]
+    mc = df["message"]["content"].tolist()
     # This is needed due to differences in how JSON is stored
     # between SQLite and ClickHouse
     if isinstance(mc[0][0], str):
@@ -55,9 +55,9 @@ def common_df_asserts(df):
         [{"text": '{"file_name": "cat1"}', "type": "text"}],
         [{"text": '{"file_name": "cat2"}', "type": "text"}],
     ]
-    assert df["message.type"].tolist() == ["message", "message"]
-    assert df["message.input_file_info.file_name"].tolist() == ["cat1", "cat2"]
-    assert df["message.input_file_info.byte_size"].tolist() == [4, 4]
+    assert df["message"]["type"].tolist() == ["message", "message"]
+    assert df["message"]["input_file_info"]["file_name"].tolist() == ["cat1", "cat2"]
+    assert df["message"]["input_file_info"]["byte_size"].tolist() == [4, 4]
 
 
 @pytest.mark.parametrize(
@@ -87,10 +87,10 @@ def test_feature_udf_parallel(cloud_test_catalog_tmpfile):
 
     df = chain.to_pandas()
 
-    df = df.sort_values("file.name").reset_index(drop=True)
+    df = df.sort_values(("file", "name")).reset_index(drop=True)
 
     common_df_asserts(df)
-    assert df["message.model"].tolist() == ["Test AI Model", "Test AI Model"]
+    assert df["message"]["model"].tolist() == ["Test AI Model", "Test AI Model"]
 
 
 @pytest.mark.parametrize(
@@ -141,10 +141,10 @@ def test_feature_udf_parallel_local(cloud_test_catalog_tmpfile):
 
     df = chain.to_pandas()
 
-    df = df.sort_values("file.name").reset_index(drop=True)
+    df = df.sort_values(("file", "name")).reset_index(drop=True)
 
     common_df_asserts(df)
-    assert df["message.model"].tolist() == [
+    assert df["message"]["model"].tolist() == [
         "Test AI Model Local",
         "Test AI Model Local",
     ]
@@ -200,10 +200,10 @@ def test_feature_udf_parallel_local_pydantic(cloud_test_catalog_tmpfile):
 
     df = chain.to_pandas()
 
-    df = df.sort_values("file.name").reset_index(drop=True)
+    df = df.sort_values(("file", "name")).reset_index(drop=True)
 
     common_df_asserts(df)
-    assert df["message.model"].tolist() == [
+    assert df["message"]["model"].tolist() == [
         "Test AI Model Local Pydantic",
         "Test AI Model Local Pydantic",
     ]
