@@ -325,7 +325,7 @@ class DataChain(DatasetQuery):
     @classmethod
     def datasets(
         cls, session: Optional[Session] = None, object_name: str = "dataset"
-    ) -> "Self":
+    ) -> "DataChain":
         """Generate chain with list of registered datasets.
 
         Example:
@@ -347,8 +347,8 @@ class DataChain(DatasetQuery):
 
         return cls.from_values(
             session=session,
-            output=DatasetInfo,
-            **{object_name: datasets},
+            output={object_name: DatasetInfo},
+            **{object_name: datasets},  # type: ignore[arg-type]
         )
 
     def show_json_schema(  # type: ignore[override]

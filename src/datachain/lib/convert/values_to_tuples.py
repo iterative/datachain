@@ -18,7 +18,7 @@ def values_to_tuples(  # noqa: C901, PLR0912
     **fr_map,
 ) -> tuple[Any, Any, Any]:
     if output:
-        if not isinstance(output, Sequence) and not isinstance(output, str):
+        if not isinstance(output, (Sequence, str, dict)):
             if len(fr_map) != 1:
                 raise ValuesToTupleError(
                     ds_name,
@@ -55,7 +55,7 @@ def values_to_tuples(  # noqa: C901, PLR0912
         len_ = len(v)
 
         if output:
-            if k not in output:
+            if k not in output:  # type: ignore[operator]
                 raise ValuesToTupleError(
                     ds_name,
                     f"feature '{k}' is not present in the output",
