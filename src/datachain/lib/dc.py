@@ -750,7 +750,7 @@ class DataChain(DatasetQuery):
         if flatten:
             return super().to_pandas()
 
-        headers, max_length = self.signals_schema.get_headers_with_length()
+        headers, max_length = chain.signals_schema.get_headers_with_length()
         if max_length < 2:
             return super().to_pandas()
 
@@ -766,6 +766,9 @@ class DataChain(DatasetQuery):
         with pd.option_context("display.max_columns", None):
             pd.set_option("display.multi_sparse", False)
             print(df)
+
+        if len(df) == limit:
+            print(f"\nNot all rows were printed - only first {len(df)}")
 
     def parse_tabular(
         self,
