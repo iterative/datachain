@@ -17,7 +17,7 @@ from pydantic import BaseModel, create_model
 from datachain import DataModel
 from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import DataType
-from datachain.lib.dataset import Dataset
+from datachain.lib.dataset_info import DatasetInfo
 from datachain.lib.file import File, IndexedFile, get_file
 from datachain.lib.meta_formats import read_meta, read_schema
 from datachain.lib.model_store import ModelStore
@@ -341,13 +341,14 @@ class DataChain(DatasetQuery):
         catalog = session.catalog
 
         datasets = [
-            Dataset.from_models(d, v, j) for d, v, j in catalog.list_datasets_versions()
+            DatasetInfo.from_models(d, v, j)
+            for d, v, j in catalog.list_datasets_versions()
         ]
         fr_map = {object_name: datasets}
 
         return DataChain.from_values(
             session=session,
-            output={object_name: Dataset},
+            output={object_name: DatasetInfo},
             **fr_map,
         )
 

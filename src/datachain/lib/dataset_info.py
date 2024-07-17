@@ -1,6 +1,6 @@
 import json
 from datetime import datetime
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 from pydantic import Field, field_validator
 
@@ -9,10 +9,11 @@ from datachain.job import Job
 from datachain.lib.data_model import DataModel
 from datachain.utils import TIME_ZERO
 
+if TYPE_CHECKING:
+    from typing_extensions import Self
 
-class Dataset(DataModel):
-    dataset_id: int
-    version_id: int
+
+class DatasetInfo(DataModel):
     name: str
     version: int = Field(default=1)
     status: int = Field(default=DatasetStatus.CREATED)
@@ -42,12 +43,12 @@ class Dataset(DataModel):
     @field_validator("params", mode="before")
     @classmethod
     def validate_location(cls, v):
-        return Dataset._validate_dict(v)
+        return cls._validate_dict(v)
 
     @field_validator("metrics", mode="before")
     @classmethod
     def validate_metrics(cls, v):
-        return Dataset._validate_dict(v)
+        return cls._validate_dict(v)
 
     @classmethod
     def from_models(
@@ -55,10 +56,8 @@ class Dataset(DataModel):
         dataset: DatasetRecord,
         version: DatasetVersion,
         job: Optional[Job],
-    ) -> "Dataset":
+    ) -> "Self":
         return cls(
-            dataset_id=dataset.id,
-            version_id=version.id,
             name=dataset.name,
             version=version.version,
             status=version.status,
