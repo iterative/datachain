@@ -1,20 +1,12 @@
-try:
-    import numpy as np
-    import torch
-    from PIL import Image, ImageOps, UnidentifiedImageError
-    from transformers import (
-        AutoProcessor,
-        Blip2ForConditionalGeneration,
-        Blip2Processor,
-        LlavaForConditionalGeneration,
-    )
-except ImportError as exc:
-    raise ImportError(
-        "Missing dependencies for computer vision:\n"
-        "To install run:\n\n"
-        "  pip install 'datachain[cv]'\n"
-    ) from exc
-
+import numpy as np
+import torch
+from PIL import Image, ImageOps, UnidentifiedImageError
+from transformers import (
+    AutoProcessor,
+    Blip2ForConditionalGeneration,
+    Blip2Processor,
+    LlavaForConditionalGeneration,
+)
 
 from datachain.query import Object, udf
 from datachain.sql.types import String

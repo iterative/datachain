@@ -1,13 +1,15 @@
 import re
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Optional
 
+import pyarrow as pa
 from pyarrow.dataset import dataset
 
 from datachain.lib.file import File, IndexedFile
 from datachain.lib.udf import Generator
 
 if TYPE_CHECKING:
-    import pyarrow as pa
+    from datachain.lib.dc import DataChain
 
 
 class ArrowGenerator(Generator):
@@ -35,12 +37,29 @@ class ArrowGenerator(Generator):
                 index += 1
 
 
-def schema_to_output(schema: "pa.Schema"):
+def infer_schema(chain: "DataChain", **kwargs) -> pa.Schema:
+    schemas = []
+    for file in chain.iterate_one("file"):
+        ds = dataset(file.get_path(), filesystem=file.get_fs(), **kwargs)  # type: ignore[union-attr]
+        schemas.append(ds.schema)
+    return pa.unify_schemas(schemas)
+
+
+def schema_to_output(schema: pa.Schema, col_names: Optional[Sequence[str]] = None):
     """Generate UDF output schema from pyarrow schema."""
+    if col_names and (len(schema) != len(col_names)):
+        raise ValueError(
+            "Error generating output from Arrow schema - "
+            f"Schema has {len(schema)} columns but got {len(col_names)} column names."
+        )
     default_column = 0
-    output = {"source": IndexedFile}
-    for field in schema:
-        column = field.name.lower()
+    output = {}
+    for i, field in enumerate(schema):
+        if col_names:
+            column = col_names[i]
+        else:
+            column = field.name
+        column = column.lower()
         column = re.sub("[^0-9a-z_]+", "", column)
         if not column:
             column = f"c{default_column}"
@@ -50,11 +69,9 @@ def schema_to_output(schema: "pa.Schema"):
     return output
 
 
-def _arrow_type_mapper(col_type: "pa.DataType") -> type:  # noqa: PLR0911
+def _arrow_type_mapper(col_type: pa.DataType) -> type:  # noqa: PLR0911
     """Convert pyarrow types to basic types."""
     from datetime import datetime
-
-    import pyarrow as pa
 
     if pa.types.is_timestamp(col_type):
         return datetime

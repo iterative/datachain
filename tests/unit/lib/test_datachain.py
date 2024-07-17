@@ -1,13 +1,14 @@
 import datetime
 import math
 from collections.abc import Generator, Iterator
+from unittest.mock import ANY
 
 import numpy as np
 import pandas as pd
 import pytest
+from pydantic import BaseModel
 
-from datachain.lib.dc import C, DataChain
-from datachain.lib.feature import Feature
+from datachain.lib.dc import C, DataChain, Sys
 from datachain.lib.file import File
 from datachain.lib.signal_schema import (
     SignalResolvingError,
@@ -29,12 +30,12 @@ DF_OTHER_DATA = {
 }
 
 
-class MyFr(Feature):
+class MyFr(BaseModel):
     nnn: str
     count: int
 
 
-class MyNested(Feature):
+class MyNested(BaseModel):
     label: str
     fr: MyFr
 
@@ -153,7 +154,7 @@ def test_from_features_simple_types(catalog):
     fib = [1, 1, 2, 3, 5, 8]
     values = ["odd" if num % 2 else "even" for num in fib]
 
-    ds = DataChain.from_features(fib=fib, odds=values)
+    ds = DataChain.from_values(fib=fib, odds=values)
 
     df = ds.to_pandas()
     assert len(df) == len(fib)
@@ -163,7 +164,7 @@ def test_from_features_simple_types(catalog):
 
 def test_from_features_more_simple_types(catalog):
     ds_name = "my_ds_type"
-    DataChain.from_features(
+    DataChain.from_values(
         t1=features,
         num=range(len(features)),
         bb=[True, True, False],
@@ -200,19 +201,19 @@ def test_file_list(catalog):
     sizes = [1, 2, 3, 4, 5]
     files = [File(name=name, size=size) for name, size in zip(names, sizes)]
 
-    ds = DataChain.from_features(file=files)
+    ds = DataChain.from_values(file=files)
 
     for i, values in enumerate(ds.iterate()):
         assert values[0] == files[i]
 
 
 def test_gen(catalog):
-    class _TestFr(Feature):
+    class _TestFr(BaseModel):
         file: File
         sqrt: float
         my_name: str
 
-    ds = DataChain.from_features(t1=features)
+    ds = DataChain.from_values(t1=features)
     ds = ds.gen(
         x=lambda m_fr: [
             _TestFr(
@@ -234,11 +235,11 @@ def test_gen(catalog):
 
 
 def test_map(catalog):
-    class _TestFr(Feature):
+    class _TestFr(BaseModel):
         sqrt: float
         my_name: str
 
-    ds = DataChain.from_features(t1=features)
+    ds = DataChain.from_values(t1=features)
 
     df = ds.map(
         x=lambda m_fr: _TestFr(
@@ -254,13 +255,13 @@ def test_map(catalog):
 
 
 def test_agg(catalog):
-    class _TestFr(Feature):
+    class _TestFr(BaseModel):
         f: File
         cnt: int
         my_name: str
 
     df = (
-        DataChain.from_features(t1=features)
+        DataChain.from_values(t1=features)
         .agg(
             x=lambda frs: [
                 _TestFr(
@@ -282,7 +283,7 @@ def test_agg(catalog):
 
 
 def test_agg_two_params(catalog):
-    class _TestFr(Feature):
+    class _TestFr(BaseModel):
         f: File
         cnt: int
         my_name: str
@@ -293,7 +294,7 @@ def test_agg_two_params(catalog):
         MyFr(nnn="n1", count=2),
     ]
 
-    ds = DataChain.from_features(t1=features, t2=features2).agg(
+    ds = DataChain.from_values(t1=features, t2=features2).agg(
         x=lambda frs1, frs2: [
             _TestFr(
                 f=File(name=""),
@@ -319,7 +320,7 @@ def test_agg_simple_iterator(catalog):
 
     keys = ["a", "b", "c"]
     values = [3, 1, 2]
-    ds = DataChain.from_features(key=keys, val=values).gen(res=func)
+    ds = DataChain.from_values(key=keys, val=values).gen(res=func)
 
     df = ds.to_pandas()
     res = df["res_1"].tolist()
@@ -327,7 +328,7 @@ def test_agg_simple_iterator(catalog):
 
 
 def test_agg_simple_iterator_error(catalog):
-    chain = DataChain.from_features(key=["a", "b", "c"])
+    chain = DataChain.from_values(key=["a", "b", "c"])
 
     with pytest.raises(UdfSignatureError):
 
@@ -338,7 +339,7 @@ def test_agg_simple_iterator_error(catalog):
 
     with pytest.raises(UdfSignatureError):
 
-        class _MyCls(Feature):
+        class _MyCls(BaseModel):
             x: int
 
         def func(key) -> _MyCls:  # type: ignore[misc]
@@ -355,7 +356,7 @@ def test_agg_simple_iterator_error(catalog):
 
 
 def test_agg_tuple_result_iterator(catalog):
-    class _ImageGroup(Feature):
+    class _ImageGroup(BaseModel):
         name: str
         size: int
 
@@ -366,9 +367,7 @@ def test_agg_tuple_result_iterator(catalog):
 
     keys = ["n1", "n2", "n1"]
     values = [1, 5, 9]
-    ds = DataChain.from_features(key=keys, val=values).agg(
-        x=func, partition_by=C("key")
-    )
+    ds = DataChain.from_values(key=keys, val=values).agg(x=func, partition_by=C("key"))
 
     df = ds.to_pandas()
     assert len(df) == 2
@@ -377,7 +376,7 @@ def test_agg_tuple_result_iterator(catalog):
 
 
 def test_agg_tuple_result_generator(catalog):
-    class _ImageGroup(Feature):
+    class _ImageGroup(BaseModel):
         name: str
         size: int
 
@@ -388,9 +387,7 @@ def test_agg_tuple_result_generator(catalog):
 
     keys = ["n1", "n2", "n1"]
     values = [1, 5, 9]
-    ds = DataChain.from_features(key=keys, val=values).agg(
-        x=func, partition_by=C("key")
-    )
+    ds = DataChain.from_values(key=keys, val=values).agg(x=func, partition_by=C("key"))
 
     df = ds.to_pandas()
     assert len(df) == 2
@@ -399,7 +396,7 @@ def test_agg_tuple_result_generator(catalog):
 
 
 def test_iterate(catalog):
-    dc = DataChain.from_features(f1=features, num=range(len(features)))
+    dc = DataChain.from_values(f1=features, num=range(len(features)))
 
     n = 0
     for sample in dc.iterate():
@@ -417,7 +414,7 @@ def test_iterate(catalog):
 
 
 def test_iterate_nested_feature(catalog):
-    dc = DataChain.from_features(sign1=features_nested)
+    dc = DataChain.from_values(sign1=features_nested)
 
     for n, sample in enumerate(dc.iterate()):
         assert len(sample) == 1
@@ -428,7 +425,7 @@ def test_iterate_nested_feature(catalog):
 
 
 def test_select_feature(catalog):
-    dc = DataChain.from_features(my_n=features_nested)
+    dc = DataChain.from_values(my_n=features_nested)
 
     samples = dc.select("my_n").iterate()
     n = 0
@@ -455,7 +452,7 @@ def test_select_feature(catalog):
 
 
 def test_select_columns_intersection(catalog):
-    dc = DataChain.from_features(my_n=features_nested)
+    dc = DataChain.from_values(my_n=features_nested)
 
     samples = dc.select("my_n.fr", "my_n.fr.count").iterate()
     n = 0
@@ -468,7 +465,7 @@ def test_select_columns_intersection(catalog):
 
 
 def test_select_except(catalog):
-    dc = DataChain.from_features(fr1=features_nested, fr2=features)
+    dc = DataChain.from_values(fr1=features_nested, fr2=features)
 
     samples = dc.select_except("fr2").iterate()
     n = 0
@@ -480,7 +477,7 @@ def test_select_except(catalog):
 
 
 def test_select_wrong_type(catalog):
-    dc = DataChain.from_features(fr1=features_nested, fr2=features)
+    dc = DataChain.from_values(fr1=features_nested, fr2=features)
 
     with pytest.raises(SignalResolvingTypeError):
         list(dc.select(4).iterate())
@@ -490,7 +487,7 @@ def test_select_wrong_type(catalog):
 
 
 def test_select_except_error(catalog):
-    dc = DataChain.from_features(fr1=features_nested, fr2=features)
+    dc = DataChain.from_values(fr1=features_nested, fr2=features)
 
     with pytest.raises(SignalResolvingError):
         list(dc.select_except("not_exist", "file").iterate())
@@ -500,7 +497,7 @@ def test_select_except_error(catalog):
 
 
 def test_select_restore_from_saving(catalog):
-    dc = DataChain.from_features(my_n=features_nested)
+    dc = DataChain.from_values(my_n=features_nested)
 
     name = "test_test_select_save"
     dc.select("my_n.fr").save(name)
@@ -517,7 +514,7 @@ def test_select_restore_from_saving(catalog):
 
 def test_chain_of_maps(catalog):
     dc = (
-        DataChain.from_features(my_n=features_nested)
+        DataChain.from_values(my_n=features_nested)
         .map(full_name=lambda my_n: my_n.label + "-" + my_n.fr.nnn, output=str)
         .map(square=lambda my_n: my_n.fr.count**2, output=int)
     )
@@ -538,7 +535,7 @@ def test_vector(catalog):
     def get_vector(key) -> list[float]:
         return vector
 
-    ds = DataChain.from_features(key=[123]).map(emd=get_vector)
+    ds = DataChain.from_values(key=[123]).map(emd=get_vector)
 
     df = ds.to_pandas()
     assert np.allclose(df["emd"].tolist()[0], vector)
@@ -550,7 +547,7 @@ def test_vector_of_vectors(catalog):
     def get_vector(key) -> list[list[float]]:
         return vector
 
-    ds = DataChain.from_features(key=[123]).map(emd_list=get_vector)
+    ds = DataChain.from_values(key=[123]).map(emd_list=get_vector)
 
     df = ds.to_pandas()
     actual = df["emd_list"].tolist()[0]
@@ -566,7 +563,7 @@ def test_unsupported_output_type(catalog):
         return [vector]
 
     with pytest.raises(TypeError):
-        DataChain.from_features(key=[123]).map(emd=get_vector)
+        DataChain.from_values(key=[123]).map(emd=get_vector)
 
 
 def test_collect_one(catalog):
@@ -576,7 +573,7 @@ def test_collect_one(catalog):
 
     scores = [0.1, 0.2, 0.3, 0.4, 0.5]
 
-    chain = DataChain.from_features(file=files, score=scores)
+    chain = DataChain.from_values(file=files, score=scores)
 
     assert chain.collect_one("file") == files
     assert chain.collect_one("file.name") == names
@@ -596,19 +593,9 @@ def test_default_output_type(catalog):
     names = ["f1.jpg", "f1.json", "f1.txt", "f2.jpg", "f2.json"]
     suffix = "-new"
 
-    chain = DataChain.from_features(name=names).map(res1=lambda name: name + suffix)
+    chain = DataChain.from_values(name=names).map(res1=lambda name: name + suffix)
 
     assert chain.collect_one("res1") == [t + suffix for t in names]
-
-
-def test_create_model(catalog):
-    chain = DataChain.from_features(name=["aaa", "b", "c"], count=[1, 4, 6])
-
-    cls = chain.create_model("TestModel")
-    assert isinstance(cls, type(Feature))
-
-    fields = {n: f_info.annotation for n, f_info in cls.model_fields.items()}
-    assert fields == {"name": str, "count": int}
 
 
 def test_parse_tabular(tmp_dir, catalog):
@@ -630,6 +617,20 @@ def test_parse_tabular_format(tmp_dir, catalog):
     assert df1.equals(df)
 
 
+def test_parse_tabular_partitions(tmp_dir, catalog):
+    df = pd.DataFrame(DF_DATA)
+    path = tmp_dir / "test.parquet"
+    df.to_parquet(path, partition_cols=["first_name"])
+    dc = (
+        DataChain.from_storage(path.as_uri())
+        .filter(C("parent").glob("*first_name=Alice*"))
+        .parse_tabular(partitioning="hive")
+    )
+    df1 = dc.select("first_name", "age", "city").to_pandas()
+    df1 = df1.sort_values("first_name").reset_index(drop=True)
+    assert df1.equals(df.loc[:0])
+
+
 def test_parse_tabular_empty(tmp_dir, catalog):
     path = tmp_dir / "test.parquet"
     with pytest.raises(DataChainParamsError):
@@ -643,6 +644,7 @@ def test_parse_tabular_unify_schema(tmp_dir, catalog):
     path2 = tmp_dir / "df2.parquet"
     df1.to_parquet(path1)
     df2.to_parquet(path2)
+
     df_combined = (
         pd.concat([df1, df2], ignore_index=True)
         .replace({"": None, 0: None, np.nan: None})
@@ -663,7 +665,7 @@ def test_parse_tabular_unify_schema(tmp_dir, catalog):
     assert df.equals(df_combined)
 
 
-def test_parse_tabular_output(tmp_dir, catalog):
+def test_parse_tabular_output_dict(tmp_dir, catalog):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.jsonl"
     path.write_text(df.to_json(orient="records", lines=True))
@@ -676,88 +678,116 @@ def test_parse_tabular_output(tmp_dir, catalog):
     assert df1.equals(df)
 
 
-def test_parse_csv(tmp_dir, catalog):
+def test_parse_tabular_output_feature(tmp_dir, catalog):
+    class Output(BaseModel):
+        fname: str
+        age: int
+        loc: str
+
+    df = pd.DataFrame(DF_DATA)
+    path = tmp_dir / "test.jsonl"
+    path.write_text(df.to_json(orient="records", lines=True))
+    dc = DataChain.from_storage(path.as_uri()).parse_tabular(
+        format="json", output=Output
+    )
+    df1 = dc.select("fname", "age", "loc").to_pandas()
+    df.columns = ["fname", "age", "loc"]
+    assert df1.equals(df)
+
+
+def test_parse_tabular_output_list(tmp_dir, catalog):
+    df = pd.DataFrame(DF_DATA)
+    path = tmp_dir / "test.jsonl"
+    path.write_text(df.to_json(orient="records", lines=True))
+    output = ["fname", "age", "loc"]
+    dc = DataChain.from_storage(path.as_uri()).parse_tabular(
+        format="json", output=output
+    )
+    df1 = dc.select("fname", "age", "loc").to_pandas()
+    df.columns = ["fname", "age", "loc"]
+    assert df1.equals(df)
+
+
+def test_from_csv(tmp_dir, catalog):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.csv"
     df.to_csv(path)
-    dc = DataChain.from_storage(path.as_uri()).parse_csv()
+    dc = DataChain.from_csv(path.as_uri())
     df1 = dc.select("first_name", "age", "city").to_pandas()
     assert df1.equals(df)
 
 
-def test_parse_csv_no_header_error(tmp_dir, catalog):
+def test_from_csv_no_header_error(tmp_dir, catalog):
     df = pd.DataFrame(DF_DATA.values()).transpose()
     path = tmp_dir / "test.csv"
     df.to_csv(path, header=False, index=False)
     with pytest.raises(DataChainParamsError):
-        DataChain.from_storage(path.as_uri()).parse_csv(header=False)
+        DataChain.from_csv(path.as_uri(), header=False)
 
 
-def test_parse_csv_no_header_output(tmp_dir, catalog):
+def test_from_csv_no_header_output_dict(tmp_dir, catalog):
     df = pd.DataFrame(DF_DATA.values()).transpose()
     path = tmp_dir / "test.csv"
     df.to_csv(path, header=False, index=False)
-    dc = DataChain.from_storage(path.as_uri()).parse_csv(
-        header=False, output={"first_name": str, "age": int, "city": str}
+    dc = DataChain.from_csv(
+        path.as_uri(), header=False, output={"first_name": str, "age": int, "city": str}
     )
     df1 = dc.select("first_name", "age", "city").to_pandas()
     assert (df1.values != df.values).sum() == 0
 
 
-def test_parse_csv_no_header_column_names(tmp_dir, catalog):
+def test_from_csv_no_header_output_feature(tmp_dir, catalog):
+    class Output(BaseModel):
+        first_name: str
+        age: int
+        city: str
+
     df = pd.DataFrame(DF_DATA.values()).transpose()
     path = tmp_dir / "test.csv"
     df.to_csv(path, header=False, index=False)
-    dc = DataChain.from_storage(path.as_uri()).parse_csv(
-        header=False, column_names=["first_name", "age", "city"]
+    dc = DataChain.from_csv(path.as_uri(), header=False, output=Output)
+    df1 = dc.select("first_name", "age", "city").to_pandas()
+    assert (df1.values != df.values).sum() == 0
+
+
+def test_from_csv_no_header_output_list(tmp_dir, catalog):
+    df = pd.DataFrame(DF_DATA.values()).transpose()
+    path = tmp_dir / "test.csv"
+    df.to_csv(path, header=False, index=False)
+    dc = DataChain.from_csv(
+        path.as_uri(), header=False, output=["first_name", "age", "city"]
     )
     df1 = dc.select("first_name", "age", "city").to_pandas()
     assert (df1.values != df.values).sum() == 0
 
 
-def test_parse_csv_column_names_and_output(tmp_dir, catalog):
-    df = pd.DataFrame(DF_DATA)
-    path = tmp_dir / "test.csv"
-    df.to_csv(path)
-    column_names = ["fname", "age", "loc"]
-    output = {"fname": str, "age": int, "loc": str}
-    with pytest.raises(DataChainParamsError):
-        DataChain.from_storage(path.as_uri()).parse_csv(
-            column_names=column_names, output=output
-        )
-
-
-def test_parse_csv_tab_delimited(tmp_dir, catalog):
+def test_from_csv_tab_delimited(tmp_dir, catalog):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.csv"
     df.to_csv(path, sep="\t")
-    dc = DataChain.from_storage(path.as_uri()).parse_csv(delimiter="\t")
+    dc = DataChain.from_csv(path.as_uri(), delimiter="\t")
     df1 = dc.select("first_name", "age", "city").to_pandas()
     assert df1.equals(df)
 
 
-def test_parse_parquet_partitioned(tmp_dir, catalog):
+def test_from_parquet(tmp_dir, catalog):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.parquet"
-    df.to_parquet(path, partition_cols=["first_name"])
-    dc = DataChain.from_storage(path.as_uri()).parse_parquet()
+    df.to_parquet(path)
+    dc = DataChain.from_parquet(path.as_uri())
     df1 = dc.select("first_name", "age", "city").to_pandas()
-    df1 = df1.sort_values("first_name").reset_index(drop=True)
+
     assert df1.equals(df)
 
 
-def test_parse_parquet_filter_partitions(tmp_dir, catalog):
+def test_from_parquet_partitioned(tmp_dir, catalog):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.parquet"
     df.to_parquet(path, partition_cols=["first_name"])
-    dc = (
-        DataChain.from_storage(path.as_uri())
-        .filter(C("parent").glob("*first_name=Alice*"))
-        .parse_parquet()
-    )
+    dc = DataChain.from_parquet(path.as_uri())
     df1 = dc.select("first_name", "age", "city").to_pandas()
     df1 = df1.sort_values("first_name").reset_index(drop=True)
-    assert df1.equals(df.loc[:0])
+    assert df1.equals(df)
 
 
 @pytest.mark.parametrize("processes", [False, 2, True])
@@ -766,7 +796,7 @@ def test_parallel(processes, catalog):
     vals = ["a", "b", "c", "d", "e", "f", "g", "h", "i"]
 
     res = (
-        DataChain.from_features(key=vals)
+        DataChain.from_values(key=vals)
         .settings(parallel=processes)
         .map(res=lambda key: prefix + key)
         .collect_one("res")
@@ -780,7 +810,7 @@ def test_exec(catalog):
     all_names = set()
 
     dc = (
-        DataChain.from_features(name=names)
+        DataChain.from_values(name=names)
         .map(nop=lambda name: all_names.add(name))
         .exec()
     )
@@ -789,11 +819,65 @@ def test_exec(catalog):
 
 
 def test_extend_features(catalog):
-    dc = DataChain.from_features(f1=features, num=range(len(features)))
+    dc = DataChain.from_values(f1=features, num=range(len(features)))
 
-    res = dc._extend_features("select", "num")
+    res = dc._extend_to_data_model("select", "num")
     assert isinstance(res, DataChain)
     assert res.signals_schema.values == {"num": int}
 
-    res = dc._extend_features("sum", "num")
+    res = dc._extend_to_data_model("sum", "num")
     assert res == sum(range(len(features)))
+
+
+def test_from_storage_object_name(tmp_dir, catalog):
+    df = pd.DataFrame(DF_DATA)
+    path = tmp_dir / "test.parquet"
+    df.to_parquet(path)
+    dc = DataChain.from_storage(path.as_uri(), object_name="custom")
+    assert dc.schema["custom"] == File
+
+
+def test_from_features_object_name(tmp_dir, catalog):
+    fib = [1, 1, 2, 3, 5, 8]
+    values = ["odd" if num % 2 else "even" for num in fib]
+
+    dc = DataChain.from_values(fib=fib, odds=values, object_name="custom")
+    assert "custom.fib" in dc.to_pandas().columns
+
+
+def test_parse_tabular_object_name(tmp_dir, catalog):
+    df = pd.DataFrame(DF_DATA)
+    path = tmp_dir / "test.parquet"
+    df.to_parquet(path)
+    dc = DataChain.from_storage(path.as_uri()).parse_tabular(object_name="name")
+    assert "name.first_name" in dc.to_pandas().columns
+
+
+def test_sys_feature(tmp_dir, catalog):
+    ds = DataChain.from_values(t1=features)
+    ds_sys = ds.settings(include_sys=True)
+    assert ds.signals_schema.values == {"t1": MyFr}
+    assert ds_sys.signals_schema.values == {"t1": MyFr, "sys": Sys}
+
+    args = []
+    ds_sys.map(res=lambda sys, t1: args.append((sys, t1))).save("ds_sys")
+
+    sys_cls = Sys.model_construct
+    assert args == [
+        (sys_cls(id=1, rand=ANY), MyFr(nnn="n1", count=3)),
+        (sys_cls(id=2, rand=ANY), MyFr(nnn="n2", count=5)),
+        (sys_cls(id=3, rand=ANY), MyFr(nnn="n1", count=1)),
+    ]
+    assert "sys" not in ds_sys.catalog.get_dataset("ds_sys").feature_schema
+
+    ds_no_sys = ds_sys.settings(include_sys=False)
+    assert ds_no_sys.signals_schema.values == {"t1": MyFr}
+
+    args = []
+    ds_no_sys.map(res=lambda t1: args.append(t1)).save("ds_no_sys")
+    assert args == [
+        MyFr(nnn="n1", count=3),
+        MyFr(nnn="n2", count=5),
+        MyFr(nnn="n1", count=1),
+    ]
+    assert "sys" not in ds_no_sys.catalog.get_dataset("ds_no_sys").feature_schema

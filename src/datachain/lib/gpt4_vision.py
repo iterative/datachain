@@ -3,15 +3,7 @@ import io
 import os
 
 import requests
-
-try:
-    from PIL import Image, ImageOps, UnidentifiedImageError
-except ImportError as exc:
-    raise ImportError(
-        "Missing dependency Pillow for computer vision:\n"
-        "To install run:\n\n"
-        "  pip install 'datachain[cv]'\n"
-    ) from exc
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from datachain.query import Object, udf
 from datachain.sql.types import String

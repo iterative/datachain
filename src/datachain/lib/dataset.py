@@ -6,12 +6,12 @@ from pydantic import Field, field_validator
 
 from datachain.dataset import DatasetRecord, DatasetStatus, DatasetVersion
 from datachain.job import Job
-from datachain.lib.feature import Feature
+from datachain.lib.data_model import DataModel
 from datachain.sql.types import JSON, DateTime, Int, String
 from datachain.utils import TIME_ZERO
 
 
-class Dataset(Feature):
+class Dataset(DataModel):
     dataset_id: int
     version_id: int
     name: str

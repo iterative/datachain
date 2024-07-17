@@ -20,14 +20,19 @@ def test_from_storage(cloud_test_catalog):
     assert dc.count() == 7
 
 
-def test_map_file(cloud_test_catalog):
+@pytest.mark.parametrize("use_cache", [False, True])
+def test_map_file(cloud_test_catalog, use_cache):
     ctc = cloud_test_catalog
 
     def new_signal(file: File) -> str:
         with file.open() as f:
             return file.name + " -> " + f.read().decode("utf-8")
 
-    dc = DataChain.from_storage(ctc.src_uri, catalog=ctc.catalog).map(signal=new_signal)
+    dc = (
+        DataChain.from_storage(ctc.src_uri, catalog=ctc.catalog)
+        .settings(cache=use_cache)
+        .map(signal=new_signal)
+    )
     expected = {
         "description -> Cats and Dogs",
         "cat1 -> meow",
@@ -37,4 +42,17 @@ def test_map_file(cloud_test_catalog):
         "dog3 -> bark",
         "dog4 -> ruff",
     }
-    assert set(dc.collect_one("signal")) == expected
+    assert set(dc.iterate_one("signal")) == expected
+    for file in dc.iterate_one("file"):
+        assert bool(file.get_local_path()) is use_cache
+
+
+@pytest.mark.parametrize("use_cache", [False, True])
+def test_read_file(cloud_test_catalog, use_cache):
+    ctc = cloud_test_catalog
+
+    dc = DataChain.from_storage(ctc.src_uri, catalog=ctc.catalog)
+    for file in dc.settings(cache=use_cache).iterate_one("file"):
+        assert file.get_local_path() is None
+        file.read()
+        assert bool(file.get_local_path()) is use_cache

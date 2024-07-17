@@ -3,7 +3,7 @@ from collections.abc import Generator, Iterator, Sequence
 from dataclasses import dataclass
 from typing import Callable, Optional, Union, get_args, get_origin
 
-from datachain.lib.feature import Feature, FeatureType, FeatureTypeNames
+from datachain.lib.data_model import DataType, DataTypeNames, is_chain_type
 from datachain.lib.signal_schema import SignalSchema
 from datachain.lib.utils import AbstractUDF, DataChainParamsError
 
@@ -29,7 +29,7 @@ class UdfSignature:
         signal_map: dict[str, Callable],
         func: Optional[Callable] = None,
         params: Union[None, str, Sequence[str]] = None,
-        output: Union[None, FeatureType, Sequence[str], dict[str, FeatureType]] = None,
+        output: Union[None, DataType, Sequence[str], dict[str, DataType]] = None,
         is_generator: bool = True,
     ) -> "UdfSignature":
         keys = ", ".join(signal_map.keys())
@@ -127,15 +127,15 @@ class UdfSignature:
                         f"output signal '{key}' has type '{type(key)}'"
                         " while 'str' is expected",
                     )
-                if not Feature.is_feature_type(value):
+                if not is_chain_type(value):
                     raise UdfSignatureError(
                         chain,
                         f"output type '{value.__name__}' of signal '{key}' is not"
-                        f" supported. Please use Feature types: {FeatureTypeNames}",
+                        f" supported. Please use DataModel types: {DataTypeNames}",
                     )
 
             udf_output_map = output
-        elif Feature.is_feature_type(output):
+        elif is_chain_type(output):
             udf_output_map = {signal_name: output}
         else:
             raise UdfSignatureError(

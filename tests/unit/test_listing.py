@@ -121,9 +121,9 @@ def test_list_dir(listing):
 def test_list_file(listing):
     file = listing.resolve_path("dir1/dataset.csv")
     src = DataSource(listing, file)
-    results = list(src.ls(["id", "name", "dir_type"]))
+    results = list(src.ls(["sys__id", "name", "dir_type"]))
     assert {r[1] for r in results} == {"dataset.csv"}
-    assert results[0][0] == file.id
+    assert results[0][0] == file.sys__id
     assert results[0][1] == file.name
     assert results[0][2] == DirType.FILE
 
