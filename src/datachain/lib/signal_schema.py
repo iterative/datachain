@@ -338,6 +338,16 @@ class SignalSchema:
                     sub_schema = SignalSchema({"* list of": args[0]})
                     sub_schema.print_tree(indent=indent, start_at=total_indent + indent)
 
+    def get_headers_with_length(self):
+        paths = [
+            path for path, _, has_subtree, _ in self.get_flat_tree() if not has_subtree
+        ]
+        max_length = max([len(path) for path in paths], default=0)
+        return [
+            path + [""] * (max_length - len(path)) if len(path) < max_length else path
+            for path in paths
+        ], max_length
+
     def __or__(self, other):
         return self.__class__(self.values | other.values)
 

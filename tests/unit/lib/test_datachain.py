@@ -112,11 +112,8 @@ def test_from_features(catalog):
         params="parent",
         output={"file": File, "t1": MyFr},
     )
-    df1 = ds.to_pandas()
-
-    assert df1[["t1.nnn", "t1.count"]].equals(
-        pd.DataFrame({"t1.nnn": ["n1", "n2", "n1"], "t1.count": [3, 5, 1]})
-    )
+    for i, (_, t1) in enumerate(ds.iterate()):
+        assert t1 == features[i]
 
 
 def test_preserve_feature_schema(catalog):
@@ -212,13 +209,14 @@ def test_gen(catalog):
         params="t1",
         output={"x": _TestFr},
     )
+    # assert ds.collect() == 1
 
-    df = ds.to_pandas()
+    for i, (x,) in enumerate(ds.iterate()):
+        assert isinstance(x, _TestFr)
 
-    assert df["x.my_name"].tolist() == ["n1", "n2", "n1"]
-    assert np.allclose(df["x.sqrt"], [math.sqrt(x) for x in [3, 5, 1]])
-    with pytest.raises(KeyError):
-        df["x.t1.nnn"]
+        fr = features[i]
+        test_fr = _TestFr(file=File(name=""), sqrt=math.sqrt(fr.count), my_name=fr.nnn)
+        assert x == test_fr
 
 
 def test_map(catalog):
@@ -226,19 +224,18 @@ def test_map(catalog):
         sqrt: float
         my_name: str
 
-    ds = DataChain.from_values(t1=features)
-
-    df = ds.map(
+    dc = DataChain.from_values(t1=features).map(
         x=lambda m_fr: _TestFr(
             sqrt=math.sqrt(m_fr.count),
             my_name=m_fr.nnn + "_suf",
         ),
         params="t1",
         output={"x": _TestFr},
-    ).to_pandas()
+    )
 
-    assert df["x.my_name"].tolist() == ["n1_suf", "n2_suf", "n1_suf"]
-    assert np.allclose(df["x.sqrt"], [math.sqrt(x) for x in [3, 5, 1]])
+    assert dc.collect_one("x") == [
+        _TestFr(sqrt=math.sqrt(fr.count), my_name=fr.nnn + "_suf") for fr in features
+    ]
 
 
 def test_agg(catalog):
@@ -247,26 +244,31 @@ def test_agg(catalog):
         cnt: int
         my_name: str
 
-    df = (
-        DataChain.from_values(t1=features)
-        .agg(
-            x=lambda frs: [
-                _TestFr(
-                    f=File(name=""),
-                    cnt=sum(f.count for f in frs),
-                    my_name="-".join([fr.nnn for fr in frs]),
-                )
-            ],
-            partition_by=C.t1.nnn,
-            params="t1",
-            output={"x": _TestFr},
-        )
-        .to_pandas()
+    dc = DataChain.from_values(t1=features).agg(
+        x=lambda frs: [
+            _TestFr(
+                f=File(name=""),
+                cnt=sum(f.count for f in frs),
+                my_name="-".join([fr.nnn for fr in frs]),
+            )
+        ],
+        partition_by=C.t1.nnn,
+        params="t1",
+        output={"x": _TestFr},
     )
 
-    assert len(df) == 2
-    assert df["x.my_name"].tolist() == ["n1-n1", "n2"]
-    assert df["x.cnt"].tolist() == [4, 5]
+    assert dc.collect_one("x") == [
+        _TestFr(
+            f=File(name=""),
+            cnt=sum(fr.count for fr in features if fr.nnn == "n1"),
+            my_name="-".join([fr.nnn for fr in features if fr.nnn == "n1"]),
+        ),
+        _TestFr(
+            f=File(name=""),
+            cnt=sum(fr.count for fr in features if fr.nnn == "n2"),
+            my_name="-".join([fr.nnn for fr in features if fr.nnn == "n2"]),
+        ),
+    ]
 
 
 def test_agg_two_params(catalog):
@@ -294,10 +296,8 @@ def test_agg_two_params(catalog):
         output={"x": _TestFr},
     )
 
-    df = ds.to_pandas()
-    assert len(df) == 2
-    assert df["x.my_name"].tolist() == ["n1-n1", "n2"]
-    assert df["x.cnt"].tolist() == [12, 15]
+    assert ds.collect_one("x.my_name") == ["n1-n1", "n2"]
+    assert ds.collect_one("x.cnt") == [12, 15]
 
 
 def test_agg_simple_iterator(catalog):
@@ -356,10 +356,8 @@ def test_agg_tuple_result_iterator(catalog):
     values = [1, 5, 9]
     ds = DataChain.from_values(key=keys, val=values).agg(x=func, partition_by=C("key"))
 
-    df = ds.to_pandas()
-    assert len(df) == 2
-    assert df["x_1.name"].tolist() == ["n1-n1", "n2"]
-    assert df["x_1.size"].tolist() == [10, 5]
+    assert ds.collect_one("x_1.name") == ["n1-n1", "n2"]
+    assert ds.collect_one("x_1.size") == [10, 5]
 
 
 def test_agg_tuple_result_generator(catalog):
@@ -376,10 +374,8 @@ def test_agg_tuple_result_generator(catalog):
     values = [1, 5, 9]
     ds = DataChain.from_values(key=keys, val=values).agg(x=func, partition_by=C("key"))
 
-    df = ds.to_pandas()
-    assert len(df) == 2
-    assert df["x_1.name"].tolist() == ["n1-n1", "n2"]
-    assert df["x_1.size"].tolist() == [10, 5]
+    assert ds.collect_one("x_1.name") == ["n1-n1", "n2"]
+    assert ds.collect_one("x_1.size") == [10, 5]
 
 
 def test_iterate(catalog):
@@ -829,15 +825,15 @@ def test_from_features_object_name(tmp_dir, catalog):
     values = ["odd" if num % 2 else "even" for num in fib]
 
     dc = DataChain.from_values(fib=fib, odds=values, object_name="custom")
-    assert "custom.fib" in dc.to_pandas().columns
+    assert "custom.fib" in dc.to_pandas(flatten=True).columns
 
 
 def test_parse_tabular_object_name(tmp_dir, catalog):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.parquet"
     df.to_parquet(path)
-    dc = DataChain.from_storage(path.as_uri()).parse_tabular(object_name="name")
-    assert "name.first_name" in dc.to_pandas().columns
+    dc = DataChain.from_storage(path.as_uri()).parse_tabular(object_name="tbl")
+    assert "tbl.first_name" in dc.to_pandas(flatten=True).columns
 
 
 def test_sys_feature(tmp_dir, catalog):
@@ -868,3 +864,12 @@ def test_sys_feature(tmp_dir, catalog):
         MyFr(nnn="n1", count=1),
     ]
     assert "sys" not in ds_no_sys.catalog.get_dataset("ds_no_sys").feature_schema
+
+
+def test_to_pandas_multi_level():
+    df = DataChain.from_values(t1=features).to_pandas()
+
+    assert "t1" in df.columns
+    assert "nnn" in df["t1"].columns
+    assert "count" in df["t1"].columns
+    assert df["t1"]["count"].tolist() == [3, 5, 1]

@@ -3213,19 +3213,6 @@ def test_to_records(simple_ds_query):
     assert simple_ds_query.to_records() == SIMPLE_DS_QUERY_RECORDS
 
 
-@pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
-    indirect=True,
-)
-def test_to_pandas(simple_ds_query):
-    import pandas as pd
-
-    df = simple_ds_query.to_pandas()
-    expected = pd.DataFrame.from_records(SIMPLE_DS_QUERY_RECORDS)
-    assert (df == expected).all(axis=None)
-
-
 @pytest.mark.parametrize("method", ["to_records", "extract"])
 @pytest.mark.parametrize("save", [True, False])
 @pytest.mark.parametrize(
