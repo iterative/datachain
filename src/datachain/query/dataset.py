@@ -26,7 +26,6 @@ from typing import (
 )
 
 import attrs
-import pandas as pd
 import sqlalchemy
 from attrs import frozen
 from dill import dumps, source
@@ -53,10 +52,9 @@ from datachain.data_storage.schema import (
 from datachain.dataset import DatasetStatus, RowDict
 from datachain.error import DatasetNotFoundError, QueryScriptCancelError
 from datachain.progress import CombinedDownloadCallback
-from datachain.query.schema import DEFAULT_DELIMITER
 from datachain.sql.functions import rand
 from datachain.storage import Storage, StorageURI
-from datachain.utils import batched, determine_processes, inside_notebook
+from datachain.utils import batched, determine_processes
 
 from .metrics import metrics
 from .schema import C, UDFParamSpec, normalize_param
@@ -1346,12 +1344,6 @@ class DatasetQuery:
     def to_records(self) -> list[dict[str, Any]]:
         return self.results(lambda cols, row: dict(zip(cols, row)))
 
-    def to_pandas(self) -> "pd.DataFrame":
-        records = self.to_records()
-        df = pd.DataFrame.from_records(records)
-        df.columns = [c.replace(DEFAULT_DELIMITER, ".") for c in df.columns]
-        return df
-
     def shuffle(self) -> "Self":
         # ToDo: implement shaffle based on seed and/or generating random column
         return self.order_by(C.sys__rand)
@@ -1369,22 +1361,6 @@ class DatasetQuery:
         sampled = self.order_by(rand())
 
         return sampled.limit(n)
-
-    def show(self, limit=20) -> None:
-        df = self.limit(limit).to_pandas()
-
-        options = ["display.max_colwidth", 50, "display.show_dimensions", False]
-        with pd.option_context(*options):
-            if inside_notebook():
-                from IPython.display import display
-
-                display(df)
-
-            else:
-                print(df.to_string())
-
-        if len(df) == limit:
-            print(f"[limited by {limit} objects]")
 
     def clone(self, new_table=True) -> "Self":
         obj = copy(self)
