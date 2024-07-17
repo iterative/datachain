@@ -194,7 +194,6 @@ class File(FileBasic):
         self._set_stream(self._catalog, caching_enabled=True)
         dst = self.get_destination_path(output, strategy)
         dst_dir = os.path.dirname(dst)
-        print(f"Destination path is {dst}")
         os.makedirs(dst_dir, exist_ok=True)
 
         with open(dst, mode="wb") as f:
@@ -268,8 +267,10 @@ class File(FileBasic):
             raise NotImplementedError("Checksum strategy not implemented yet")
         else:
             raise ValueError(f"Unsupported file export strategy: {strategy}")
-
-        return posixpath.join(output, path)  # type: ignore[union-attr]
+        print(f"Creating dst path of output {output} and path {path}")
+        dst = posixpath.join(output, path)  # type: ignore[union-attr]
+        print(f"Destination path is {dst}")
+        return dst
 
     def get_fs(self):
         return self._catalog.get_client(self.source).fs
