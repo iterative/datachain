@@ -143,8 +143,8 @@ class SignalSchema:
                     if not fr:
                         raise SignalSchemaError(
                             f"cannot deserialize '{signal}': "
-                            f"unregistered type '{type_name}'."
-                            f" Try to register it with `Registry.add({type_name})`."
+                            f"unknown type '{type_name}'."
+                            f" Try to add it with `ModelStore.add({type_name})`."
                         )
             except TypeError as err:
                 raise SignalSchemaError(
