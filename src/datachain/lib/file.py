@@ -194,6 +194,7 @@ class File(FileBasic):
         self._set_stream(self._catalog, caching_enabled=True)
         dst = self.get_destination_path(output, strategy)
         dst_dir = os.path.dirname(dst)
+        print(f"Destination path is {dst}")
         os.makedirs(dst_dir, exist_ok=True)
 
         with open(dst, mode="wb") as f:
