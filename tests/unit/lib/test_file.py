@@ -85,20 +85,17 @@ def test_cache_get_path(catalog: Catalog):
         assert f.read() == data
 
 
-def test_get_destination_path_wrong_strategy():
-    f = File(name="test.txt", parent="dir1/dir2", source="s3://mybkt")
+def test_get_destination_path_wrong_strategy(s3_file):
     with pytest.raises(ValueError):
-        f.get_destination_path("", "wrong")
+        s3_file.get_destination_path("", "wrong")
 
 
-def test_get_destination_path_filename_strategy():
-    f = File(name="test.txt", parent="dir1/dir2", source="s3://mybkt")
-    assert f.get_destination_path("output", "filename") == "output/test.txt"
+def test_get_destination_path_filename_strategy(s3_file):
+    assert s3_file.get_destination_path("output", "filename") == "output/test.txt"
 
 
-def test_get_destination_path_empty_output():
-    f = File(name="test.txt", parent="dir1/dir2", source="s3://mybkt")
-    assert f.get_destination_path("", "filename") == "test.txt"
+def test_get_destination_path_empty_output(s3_file):
+    assert s3_file.get_destination_path("", "filename") == "test.txt"
 
 
 def test_get_destination_path_etag_strategy(s3_file):
