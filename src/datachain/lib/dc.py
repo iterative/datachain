@@ -344,12 +344,11 @@ class DataChain(DatasetQuery):
             DatasetInfo.from_models(d, v, j)
             for d, v, j in catalog.list_datasets_versions()
         ]
-        fr_map = {object_name: datasets}
 
-        return DataChain.from_values(
+        return cls.from_values(
             session=session,
-            output={object_name: DatasetInfo},
-            **fr_map,
+            output=DatasetInfo,
+            **{object_name: datasets},
         )
 
     def show_json_schema(  # type: ignore[override]

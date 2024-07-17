@@ -12,12 +12,27 @@ class ValuesToTupleError(DataChainParamsError):
         super().__init__(f"Cannot convert features for dataset{ds_name}: {msg}")
 
 
-def values_to_tuples(
+def values_to_tuples(  # noqa: C901, PLR0912
     ds_name: str = "",
-    output: Union[None, dict[str, DataType]] = None,
+    output: Union[None, DataType, Sequence[str], dict[str, DataType]] = None,
     **fr_map,
 ) -> tuple[Any, Any, Any]:
     if output:
+        if not isinstance(output, Sequence) and not isinstance(output, str):
+            if len(fr_map) != 1:
+                raise ValuesToTupleError(
+                    ds_name,
+                    f"only one output type was specified, {len(fr_map)} expected",
+                )
+            if not isinstance(output, type):
+                raise ValuesToTupleError(
+                    ds_name,
+                    f"output must specify a type while '{output}' was given",
+                )
+
+            key: str = next(iter(fr_map.keys()))
+            output = {key: output}  # type: ignore[dict-item]
+
         if not isinstance(output, dict):
             raise ValuesToTupleError(
                 ds_name,
