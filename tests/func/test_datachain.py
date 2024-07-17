@@ -96,10 +96,12 @@ def test_export_files(tmp_dir, cloud_test_catalog, strategy):
         print("opening")
         print(tmp_dir)
         print("output")
-        print(urlparse(ctc.src_uri).path)
+        print(urlparse(ctc.src_uri).path.lstrip(os.sep))
         print(file_path)
         print("===")
-        print(tmp_dir / "output" / urlparse(ctc.src_uri).path / file_path)
+        print(
+            tmp_dir / "output" / urlparse(ctc.src_uri).path.lstrip(os.sep) / file_path
+        )
         print("===")
         with open(tmp_dir / "output" / file_path) as f:
             assert f.read() == expected[entry.name]

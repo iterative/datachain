@@ -190,7 +190,7 @@ class File(FileBasic):
         ) as f:
             yield f
 
-    def export(self, output: str, strategy: ExportStrategy) -> None:
+    def export(self, output: str, strategy: ExportStrategy = "fullpath") -> None:
         self._set_stream(self._catalog, caching_enabled=True)
         dst = self.get_destination_path(output, strategy)
         dst_dir = os.path.dirname(dst)
