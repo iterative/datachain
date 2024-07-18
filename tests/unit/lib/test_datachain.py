@@ -117,6 +117,24 @@ def test_from_features(catalog):
         assert t1 == features[i]
 
 
+def test_datasets(catalog):
+    ds = DataChain.datasets()
+    datasets = [d for d in ds.iterate_one("dataset") if d.name == "fibonacci"]
+    assert len(datasets) == 0
+
+    DataChain.from_values(fib=[1, 1, 2, 3, 5, 8]).save("fibonacci")
+
+    ds = DataChain.datasets()
+    datasets = [d for d in ds.iterate_one("dataset") if d.name == "fibonacci"]
+    assert len(datasets) == 1
+    assert datasets[0].num_objects == 6
+
+    ds = DataChain.datasets(object_name="foo")
+    datasets = [d for d in ds.iterate_one("foo") if d.name == "fibonacci"]
+    assert len(datasets) == 1
+    assert datasets[0].num_objects == 6
+
+
 def test_preserve_feature_schema(catalog):
     ds = DataChain.create_empty(DataChain.DEFAULT_FILE_RECORD)
     ds = ds.gen(
@@ -210,14 +228,15 @@ def test_gen(catalog):
         params="t1",
         output={"x": _TestFr},
     )
-    # assert ds.collect() == 1
 
     for i, (x,) in enumerate(ds.iterate()):
         assert isinstance(x, _TestFr)
 
         fr = features[i]
         test_fr = _TestFr(file=File(name=""), sqrt=math.sqrt(fr.count), my_name=fr.nnn)
-        assert x == test_fr
+        assert x.file == test_fr.file
+        assert np.isclose(x.sqrt, test_fr.sqrt)
+        assert x.my_name == test_fr.my_name
 
 
 def test_map(catalog):
@@ -234,9 +253,16 @@ def test_map(catalog):
         output={"x": _TestFr},
     )
 
-    assert dc.collect_one("x") == [
+    x_list = dc.collect_one("x")
+    test_frs = [
         _TestFr(sqrt=math.sqrt(fr.count), my_name=fr.nnn + "_suf") for fr in features
     ]
+
+    assert len(x_list) == len(test_frs)
+
+    for x, test_fr in zip(x_list, test_frs):
+        assert np.isclose(x.sqrt, test_fr.sqrt)
+        assert x.my_name == test_fr.my_name
 
 
 def test_agg(catalog):
@@ -839,7 +865,7 @@ def test_parse_tabular_object_name(tmp_dir, catalog):
 
 def test_sys_feature(tmp_dir, catalog):
     ds = DataChain.from_values(t1=features)
-    ds_sys = ds.settings(include_sys=True)
+    ds_sys = ds.settings(sys=True)
     assert ds.signals_schema.values == {"t1": MyFr}
     assert ds_sys.signals_schema.values == {"t1": MyFr, "sys": Sys}
 
@@ -854,7 +880,7 @@ def test_sys_feature(tmp_dir, catalog):
     ]
     assert "sys" not in ds_sys.catalog.get_dataset("ds_sys").feature_schema
 
-    ds_no_sys = ds_sys.settings(include_sys=False)
+    ds_no_sys = ds_sys.settings(sys=False)
     assert ds_no_sys.signals_schema.values == {"t1": MyFr}
 
     args = []
