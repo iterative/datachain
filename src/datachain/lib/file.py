@@ -138,7 +138,7 @@ class File(FileBasic):
     ]
 
     @staticmethod
-    def to_dict(
+    def _validate_dict(
         v: Optional[Union[str, dict, list[dict]]],
     ) -> Optional[Union[str, dict, list[dict]]]:
         if v is None or v == "":
@@ -156,7 +156,7 @@ class File(FileBasic):
     @field_validator("location", mode="before")
     @classmethod
     def validate_location(cls, v):
-        return File.to_dict(v)
+        return File._validate_dict(v)
 
     @field_validator("parent", mode="before")
     @classmethod

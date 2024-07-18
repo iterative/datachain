@@ -131,7 +131,7 @@ class UdfSignature:
                     raise UdfSignatureError(
                         chain,
                         f"output type '{value.__name__}' of signal '{key}' is not"
-                        f" supported. Please use Feature types: {DataTypeNames}",
+                        f" supported. Please use DataModel types: {DataTypeNames}",
                     )
 
             udf_output_map = output

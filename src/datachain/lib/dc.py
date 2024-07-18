@@ -11,12 +11,14 @@ from typing import (
     Union,
 )
 
+import pandas as pd
 import sqlalchemy
 from pydantic import BaseModel, create_model
 
 from datachain import DataModel
 from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import DataType
+from datachain.lib.dataset_info import DatasetInfo
 from datachain.lib.file import ExportStrategy as FileExportStrategy
 from datachain.lib.file import File, IndexedFile, get_file
 from datachain.lib.meta_formats import read_meta, read_schema
@@ -39,9 +41,9 @@ from datachain.query.dataset import (
     detach,
 )
 from datachain.query.schema import Column, DatasetRow
+from datachain.utils import inside_notebook
 
 if TYPE_CHECKING:
-    import pandas as pd
     from typing_extensions import Self
 
 C = Column
@@ -57,7 +59,7 @@ class DatasetPrepareError(DataChainParamsError):
 class DatasetFromValuesError(DataChainParamsError):
     def __init__(self, name, msg):
         name = f" '{name}'" if name else ""
-        super().__init__(f"Dataset {name} from values error: {msg}")
+        super().__init__(f"Dataset{name} from values error: {msg}")
 
 
 class DatasetMergeError(DataChainParamsError):
@@ -87,7 +89,7 @@ class DataChain(DatasetQuery):
     enrich data.
 
     Data in DataChain is presented as Python classes with arbitrary set of fields,
-    including nested classes. The data classes have to inherit from `Feature` class.
+    including nested classes. The data classes have to inherit from `DataModel` class.
     The supported set of field types include: majority of the type supported by the
     underlyind library `Pydantic`.
 
@@ -104,10 +106,10 @@ class DataChain(DatasetQuery):
 
     Example:
         ```py
-        from datachain import DataChain, Feature
+        from datachain import DataChain, DataModel
         from datachain.lib.claude import claude_processor
 
-        class Rating(Feature):
+        class Rating(DataModel):
         status: str = ""
         explanation: str = ""
 
@@ -138,7 +140,7 @@ class DataChain(DatasetQuery):
     }
 
     def __init__(self, *args, **kwargs):
-        """This method needs to be redefined as a part of Dataset and DacaChin
+        """This method needs to be redefined as a part of Dataset and DataChain
         decoupling."""
         super().__init__(
             *args,
@@ -321,6 +323,35 @@ class DataChain(DatasetQuery):
             )
         }
         return chain.gen(**signal_dict)  # type: ignore[arg-type]
+
+    @classmethod
+    def datasets(
+        cls, session: Optional[Session] = None, object_name: str = "dataset"
+    ) -> "DataChain":
+        """Generate chain with list of registered datasets.
+
+        Example:
+            ```py
+            from datachain import DataChain
+
+            chain = DataChain.datasets()
+            for ds in chain.iterate_one("dataset"):
+                print(f"{ds.name}@v{ds.version}")
+            ```
+        """
+        session = Session.get(session)
+        catalog = session.catalog
+
+        datasets = [
+            DatasetInfo.from_models(d, v, j)
+            for d, v, j in catalog.list_datasets_versions()
+        ]
+
+        return cls.from_values(
+            session=session,
+            output={object_name: DatasetInfo},
+            **{object_name: datasets},  # type: ignore[arg-type]
+        )
 
     def show_json_schema(  # type: ignore[override]
         self, jmespath: Optional[str] = None, model_name: Optional[str] = None
@@ -566,8 +597,7 @@ class DataChain(DatasetQuery):
     def iterate(self, *cols: str) -> Iterator[list[DataType]]:
         """Iterate over rows.
 
-        If columns are specified - limit them to specified
-        columns.
+        If columns are specified - limit them to specified columns.
         """
         chain = self.select(*cols) if cols else self
         for row in chain.iterate_flatten():
@@ -731,6 +761,37 @@ class DataChain(DatasetQuery):
                 )
 
         return cls.from_values(name, session, object_name=object_name, **fr_map)
+
+    def to_pandas(self, flatten=False) -> "pd.DataFrame":
+        headers, max_length = self.signals_schema.get_headers_with_length()
+        if flatten or max_length < 2:
+            df = pd.DataFrame.from_records(self.to_records())
+            if headers:
+                df.columns = [".".join(filter(None, header)) for header in headers]
+            return df
+
+        transposed_result = list(map(list, zip(*self.results())))
+        data = {tuple(n): val for n, val in zip(headers, transposed_result)}
+        return pd.DataFrame(data)
+
+    def show(self, limit: int = 20, flatten=False, transpose=False) -> None:
+        dc = self.limit(limit) if limit > 0 else self
+        df = dc.to_pandas(flatten)
+        if transpose:
+            df = df.T
+
+        with pd.option_context(
+            "display.max_columns", None, "display.multi_sparse", False
+        ):
+            if inside_notebook():
+                from IPython.display import display
+
+                display(df)
+            else:
+                print(df)
+
+        if len(df) == limit:
+            print(f"\n[Limited by {len(df)} rows]")
 
     def parse_tabular(
         self,

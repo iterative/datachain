@@ -1,4 +1,3 @@
-import ast
 import contextlib
 import datetime
 import inspect
@@ -10,7 +9,6 @@ import re
 import string
 import subprocess
 import sys
-import types
 from abc import ABC, abstractmethod
 from collections.abc import Generator, Iterable, Iterator, Sequence
 from copy import copy
@@ -26,12 +24,9 @@ from typing import (
 )
 
 import attrs
-import pandas as pd
 import sqlalchemy
 from attrs import frozen
-from dill import dumps, source
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback, TqdmCallback
-from pydantic import BaseModel
 from sqlalchemy import Column
 from sqlalchemy.sql import func as f
 from sqlalchemy.sql.elements import ColumnClause, ColumnElement
@@ -53,10 +48,13 @@ from datachain.data_storage.schema import (
 from datachain.dataset import DatasetStatus, RowDict
 from datachain.error import DatasetNotFoundError, QueryScriptCancelError
 from datachain.progress import CombinedDownloadCallback
-from datachain.query.schema import DEFAULT_DELIMITER
 from datachain.sql.functions import rand
 from datachain.storage import Storage, StorageURI
-from datachain.utils import batched, determine_processes, inside_notebook
+from datachain.utils import (
+    batched,
+    determine_processes,
+    filtered_cloudpickle_dumps,
+)
 
 from .metrics import metrics
 from .schema import C, UDFParamSpec, normalize_param
@@ -492,7 +490,7 @@ class UDF(Step, ABC):
             elif processes:
                 # Parallel processing (faster for more CPU-heavy UDFs)
                 udf_info = {
-                    "udf": self.udf,
+                    "udf_data": filtered_cloudpickle_dumps(self.udf),
                     "catalog_init": self.catalog.get_init_params(),
                     "id_generator_clone_params": (
                         self.catalog.id_generator.clone_params()
@@ -513,16 +511,15 @@ class UDF(Step, ABC):
 
                 envs = dict(os.environ)
                 envs.update({"PYTHONPATH": os.getcwd()})
-                with self.process_feature_module():
-                    process_data = dumps(udf_info, recurse=True)
-                    result = subprocess.run(  # noqa: S603
-                        [datachain_exec_path, "--internal-run-udf"],
-                        input=process_data,
-                        check=False,
-                        env=envs,
-                    )
-                    if result.returncode != 0:
-                        raise RuntimeError("UDF Execution Failed!")
+                process_data = filtered_cloudpickle_dumps(udf_info)
+                result = subprocess.run(  # noqa: S603
+                    [datachain_exec_path, "--internal-run-udf"],
+                    input=process_data,
+                    check=False,
+                    env=envs,
+                )
+                if result.returncode != 0:
+                    raise RuntimeError("UDF Execution Failed!")
 
             else:
                 # Otherwise process single-threaded (faster for smaller UDFs)
@@ -570,57 +567,6 @@ class UDF(Step, ABC):
             # Close any open database connections if an error is encountered
             self.catalog.warehouse.close()
             raise
-
-    @contextlib.contextmanager
-    def process_feature_module(self):
-        # Generate a random name for the feature module
-        feature_module_name = "tmp" + _random_string(10)
-        # Create a dynamic module with the generated name
-        dynamic_module = types.ModuleType(feature_module_name)
-        # Get the import lines for the necessary objects from the main module
-        main_module = sys.modules["__main__"]
-        if getattr(main_module, "__file__", None):
-            import_lines = list(get_imports(main_module))
-        else:
-            import_lines = [
-                source.getimport(obj, alias=name)
-                for name, obj in main_module.__dict__.items()
-                if _imports(obj) and not (name.startswith("__") and name.endswith("__"))
-            ]
-
-        # Get the feature classes from the main module
-        feature_classes = {
-            name: obj
-            for name, obj in main_module.__dict__.items()
-            if _feature_predicate(obj)
-        }
-        if not feature_classes:
-            yield None
-            return
-
-        # Get the source code of the feature classes
-        feature_sources = [source.getsource(cls) for _, cls in feature_classes.items()]
-        # Set the module name for the feature classes to the generated name
-        for name, cls in feature_classes.items():
-            cls.__module__ = feature_module_name
-            setattr(dynamic_module, name, cls)
-        # Add the dynamic module to the sys.modules dictionary
-        sys.modules[feature_module_name] = dynamic_module
-        # Combine the import lines and feature sources
-        feature_file = "\n".join(import_lines) + "\n" + "\n".join(feature_sources)
-
-        # Write the module content to a .py file
-        with open(f"{feature_module_name}.py", "w") as module_file:
-            module_file.write(feature_file)
-
-        try:
-            yield feature_module_name
-        finally:
-            for cls in feature_classes.values():
-                cls.__module__ = main_module.__name__
-            os.unlink(f"{feature_module_name}.py")
-            # Remove the dynamic module from sys.modules
-            del sys.modules[feature_module_name]
 
     def create_partitions_table(self, query: Select) -> "Table":
         """
@@ -1352,12 +1298,6 @@ class DatasetQuery:
     def to_records(self) -> list[dict[str, Any]]:
         return self.results(lambda cols, row: dict(zip(cols, row)))
 
-    def to_pandas(self) -> "pd.DataFrame":
-        records = self.to_records()
-        df = pd.DataFrame.from_records(records)
-        df.columns = [c.replace(DEFAULT_DELIMITER, ".") for c in df.columns]
-        return df
-
     def shuffle(self) -> "Self":
         # ToDo: implement shaffle based on seed and/or generating random column
         return self.order_by(C.sys__rand)
@@ -1375,22 +1315,6 @@ class DatasetQuery:
         sampled = self.order_by(rand())
 
         return sampled.limit(n)
-
-    def show(self, limit=20) -> None:
-        df = self.limit(limit).to_pandas()
-
-        options = ["display.max_colwidth", 50, "display.show_dimensions", False]
-        with pd.option_context(*options):
-            if inside_notebook():
-                from IPython.display import display
-
-                display(df)
-
-            else:
-                print(df.to_string())
-
-        if len(df) == limit:
-            print(f"[limited by {limit} objects]")
 
     def clone(self, new_table=True) -> "Self":
         obj = copy(self)
@@ -1865,34 +1789,3 @@ def _random_string(length: int) -> str:
         random.choice(string.ascii_letters + string.digits)  # noqa: S311
         for i in range(length)
     )
-
-
-def _feature_predicate(obj):
-    return (
-        inspect.isclass(obj) and source.isfrommain(obj) and issubclass(obj, BaseModel)
-    )
-
-
-def _imports(obj):
-    return not source.isfrommain(obj)
-
-
-def get_imports(m):
-    root = ast.parse(inspect.getsource(m))
-
-    for node in ast.iter_child_nodes(root):
-        if isinstance(node, ast.Import):
-            module = None
-        elif isinstance(node, ast.ImportFrom):
-            module = node.module
-        else:
-            continue
-
-        for n in node.names:
-            import_script = ""
-            if module:
-                import_script += f"from {module} "
-            import_script += f"import {n.name}"
-            if n.asname:
-                import_script += f" as {n.asname}"
-            yield import_script
