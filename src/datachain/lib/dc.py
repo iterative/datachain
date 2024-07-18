@@ -19,6 +19,7 @@ from datachain import DataModel
 from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import DataType
 from datachain.lib.dataset_info import DatasetInfo
+from datachain.lib.file import ExportPlacement as FileExportPlacement
 from datachain.lib.file import File, IndexedFile, get_file
 from datachain.lib.meta_formats import read_meta, read_schema
 from datachain.lib.model_store import ModelStore
@@ -1009,3 +1010,19 @@ class DataChain(DatasetQuery):
 
         self._setup = self._setup | kwargs
         return self
+
+    def export_files(
+        self,
+        output: str,
+        signal="file",
+        placement: FileExportPlacement = "fullpath",
+        use_cache: bool = True,
+    ) -> None:
+        """Method that export all files from chain to some folder"""
+        if placement == "filename":
+            print("Checking if file names are unique")
+            if self.select(f"{signal}.name").distinct().count() != self.count():
+                raise ValueError("Files with the same name found")
+
+        for file in self.collect_one(signal):
+            file.export(output, placement, use_cache)  # type: ignore[union-attr]

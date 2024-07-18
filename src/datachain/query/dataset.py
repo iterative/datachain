@@ -866,6 +866,12 @@ class SQLCount(SQLClause):
 
 
 @frozen
+class SQLDistinct(SQLClause):
+    def apply_sql_clause(self, query):
+        return query.distinct()
+
+
+@frozen
 class SQLUnion(Step):
     query1: "DatasetQuery"
     query2: "DatasetQuery"
@@ -1405,6 +1411,12 @@ class DatasetQuery:
     def offset(self, offset: int) -> "Self":
         query = self.clone(new_table=False)
         query.steps.append(SQLOffset(offset))
+        return query
+
+    @detach
+    def distinct(self) -> "Self":
+        query = self.clone()
+        query.steps.append(SQLDistinct())
         return query
 
     def as_scalar(self) -> Any:
