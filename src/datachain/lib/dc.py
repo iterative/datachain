@@ -564,6 +564,7 @@ class DataChain(DatasetQuery):
 
     @detach
     def order_by(self, *args: str) -> "Self":
+        """Orders by specified set of signals"""
         return super().order_by(*self.signals_schema.resolve(*args).db_signals())
 
     @detach
