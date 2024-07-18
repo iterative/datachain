@@ -1025,4 +1025,4 @@ class DataChain(DatasetQuery):
         ):
             raise ValueError("Files with the same name found")
         for file in self.collect_one(signal):
-            file.export(output, strategy)  # type: ignore[union-attr]
+            file.export(output, strategy, use_cache)  # type: ignore[union-attr]
