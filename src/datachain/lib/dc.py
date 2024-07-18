@@ -27,7 +27,6 @@ from datachain.lib.settings import Settings
 from datachain.lib.signal_schema import SignalSchema
 from datachain.lib.udf import (
     Aggregator,
-    BatchMapper,
     Generator,
     Mapper,
     UDFBase,
@@ -49,21 +48,21 @@ if TYPE_CHECKING:
 C = Column
 
 
-class DatasetPrepareError(DataChainParamsError):  # noqa: D101
-    def __init__(self, name, msg, output=None):  # noqa: D107
+class DatasetPrepareError(DataChainParamsError):
+    def __init__(self, name, msg, output=None):
         name = f" '{name}'" if name else ""
         output = f" output '{output}'" if output else ""
         super().__init__(f"Dataset{name}{output} processing prepare error: {msg}")
 
 
-class DatasetFromValuesError(DataChainParamsError):  # noqa: D101
-    def __init__(self, name, msg):  # noqa: D107
+class DatasetFromValuesError(DataChainParamsError):
+    def __init__(self, name, msg):
         name = f" '{name}'" if name else ""
         super().__init__(f"Dataset{name} from values error: {msg}")
 
 
-class DatasetMergeError(DataChainParamsError):  # noqa: D101
-    def __init__(self, on: Sequence[str], right_on: Optional[Sequence[str]], msg: str):  # noqa: D107
+class DatasetMergeError(DataChainParamsError):
+    def __init__(self, on: Sequence[str], right_on: Optional[Sequence[str]], msg: str):
         on_str = ", ".join(on) if isinstance(on, Sequence) else ""
         right_on_str = (
             ", right_on='" + ", ".join(right_on) + "'"
@@ -76,7 +75,7 @@ class DatasetMergeError(DataChainParamsError):  # noqa: D101
 OutputType = Union[None, DataType, Sequence[str], dict[str, DataType]]
 
 
-class Sys(DataModel):  # noqa: D101
+class Sys(DataModel):
     id: int
     rand: int
 
@@ -118,7 +117,7 @@ class DataChain(DatasetQuery):
         from mistralai.client import MistralClient
         from mistralai.models.chat_completion import ChatMessage
 
-        from datachain.lib.dc import DataChain, Column
+        from datachain.dc import DataChain, Column
 
         PROMPT = (
             "Was this bot dialog successful? "
@@ -187,7 +186,7 @@ class DataChain(DatasetQuery):
         """Print schema of the chain."""
         self.signals_schema.print_tree()
 
-    def clone(self, new_table: bool = True) -> "Self":  # noqa: D102
+    def clone(self, new_table: bool = True) -> "Self":
         obj = super().clone(new_table=new_table)
         obj.signals_schema = copy.deepcopy(self.signals_schema)
         return obj
@@ -236,15 +235,15 @@ class DataChain(DatasetQuery):
         self._settings = settings if settings else Settings()
         return self
 
-    def reset_schema(self, signals_schema: SignalSchema) -> "Self":  # noqa: D102
+    def reset_schema(self, signals_schema: SignalSchema) -> "Self":
         self.signals_schema = signals_schema
         return self
 
-    def add_schema(self, signals_schema: SignalSchema) -> "Self":  # noqa: D102
+    def add_schema(self, signals_schema: SignalSchema) -> "Self":
         self.signals_schema |= signals_schema
         return self
 
-    def get_file_signals(self) -> list[str]:  # noqa: D102
+    def get_file_signals(self) -> list[str]:
         return list(self.signals_schema.get_file_signals())
 
     @classmethod
@@ -439,7 +438,26 @@ class DataChain(DatasetQuery):
         schema.pop("sys", None)
         return super().save(name=name, version=version, feature_schema=schema)
 
-    def apply(self, func, *args, **kwargs):  # noqa: D102
+    def apply(self, func, *args, **kwargs):
+        """Apply any function to the chain.
+
+        Useful for reusing in a chain of operations.
+
+        Example:
+            ```py
+            def parse_stem(chain):
+                return chain.map(
+                    lambda file: file.get_file_stem()
+                    output={"stem": str}
+                )
+
+            chain = (
+                DataChain.from_storage("s3://my-bucket")
+                .apply(parse_stem)
+                .filter(C("stem").glob("*cat*"))
+            )
+            ```
+        """
         return func(self, *args, **kwargs)
 
     def map(
@@ -547,27 +565,6 @@ class DataChain(DatasetQuery):
 
         return chain.reset_schema(udf_obj.output).reset_settings(self._settings)
 
-    def batch_map(
-        self,
-        func: Optional[Callable] = None,
-        params: Union[None, str, Sequence[str]] = None,
-        output: OutputType = None,
-        **signal_map,
-    ) -> "Self":
-        """This is a batch version of map().
-
-        It accepts the same parameters plus an
-        additional parameter:
-        """
-        udf_obj = self._udf_to_obj(BatchMapper, func, params, output, signal_map)
-        chain = DatasetQuery.generate(
-            self,
-            udf_obj.to_udf_wrapper(self._settings.batch),
-            **self._settings.to_dict(),
-        )
-
-        return chain.add_schema(udf_obj.output).reset_settings(self._settings)
-
     def _udf_to_obj(
         self,
         target_class: type[UDFBase],
@@ -615,12 +612,12 @@ class DataChain(DatasetQuery):
         chain.signals_schema = new_schema
         return chain
 
-    def iterate_flatten(self) -> Iterator[tuple[Any]]:  # noqa: D102
+    def iterate_flatten(self) -> Iterator[tuple[Any]]:
         db_signals = self.signals_schema.db_signals()
         with super().select(*db_signals).as_iterable() as rows:
             yield from rows
 
-    def results(  # noqa: D102
+    def results(
         self, row_factory: Optional[Callable] = None, **kwargs
     ) -> list[tuple[Any, ...]]:
         rows = self.iterate_flatten()
@@ -695,7 +692,7 @@ class DataChain(DatasetQuery):
             num_samples=num_samples,
         )
 
-    def remove_file_signals(self) -> "Self":  # noqa: D102
+    def remove_file_signals(self) -> "Self":
         schema = self.signals_schema.clone_without_file_signals()
         return self.select(*schema.values.keys())
 
@@ -1165,3 +1162,71 @@ class DataChain(DatasetQuery):
 
         for file in self.collect_one(signal):
             file.export(output, placement, use_cache)  # type: ignore[union-attr]
+
+    def shuffle(self) -> "Self":
+        """Shuffle the rows of the chain deterministically."""
+        return super().shuffle()
+
+    def sample(self, n) -> "Self":
+        """
+        Return a random sample from the chain.
+
+        Parameters:
+            n (int): Number of samples to draw.
+
+        NOTE: Samples are not deterministic, and streamed/paginated queries or
+        multiple workers will draw samples with replacement.
+        """
+        return super().sample(n)
+
+    @detach
+    def filter(self, *args) -> "Self":
+        """
+        Filter the chain according to conditions.
+
+        Example:
+            Basic usage with built-in operators
+            ```py
+            dc.filter(C("width") < 200)
+            ```
+
+            Using glob to match patterns
+            ```py
+            dc.filter(C("file.name").glob("*.jpg))
+            ```
+
+            Using `datachain.sql.functions`
+            ```py
+            from datachain.sql.functions import string
+            dc.filter(string.length(C("file.name")) > 5)
+            ```
+
+            Combining filters with "or"
+            ```py
+            dc.filter(C("file.name").glob("cat*") | C("file.name").glob("dog*))
+            ```
+
+            Combining filters with "and"
+            ```py
+            dc.filter(
+                C("file.name").glob("*.jpg) &
+                (string.length(C("file.name")) > 5)
+            )
+            ```
+        """
+        return super().filter(*args)
+
+    @detach
+    def limit(self, n: int) -> "Self":
+        """Return the first n rows of the chain."""
+        return super().limit(n)
+
+    @detach
+    def offset(self, offset: int) -> "Self":
+        """Return the results starting with the offset row."""
+        return super().offset(offset)
+
+    @detach
+    def distinct(self) -> "Self":
+        """Return unique/distinct rows."""
+        return super().distinct()
