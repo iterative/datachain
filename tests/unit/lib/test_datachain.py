@@ -902,10 +902,10 @@ def test_to_pandas_multi_level():
 
 
 def test_order_by_with_nested_columns():
-    names = ["a.jpg", "c.json", "d.txt", "a.jpg", "b.json"]
+    names = ["a.txt", "c.txt", "d.txt", "a.txt", "b.txt"]
 
     assert (
         DataChain.from_values(file=[File(name=name) for name in names])
         .order_by("file.name")
         .collect_one("file.name")
-    ) == ["a.jpg", "a.jpg", "b.json", "c.json", "d.txt"]
+    ) == ["a.txt", "a.txt", "b.txt", "c.txt", "d.txt"]
