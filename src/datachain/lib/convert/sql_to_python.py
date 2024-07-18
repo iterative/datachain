@@ -3,6 +3,8 @@ from typing import Any
 
 from sqlalchemy import ARRAY, JSON, Boolean, DateTime, Float, Integer, String
 
+from datachain import Column
+
 SQL_TO_PYTHON = {
     String: str,
     Integer: int,
@@ -14,10 +16,5 @@ SQL_TO_PYTHON = {
 }
 
 
-def sql_to_python(args_map: dict[str, Any]):
-    r = {}
-    for k, v in args_map.items():
-        x = type(v.type)
-        type_ = SQL_TO_PYTHON.get(x, str)
-        r[k] = type_
-    return r
+def sql_to_python(args_map: dict[str, Column]) -> dict[str, Any]:
+    return {k: SQL_TO_PYTHON.get(type(v.type), str) for k, v in args_map.items()}
