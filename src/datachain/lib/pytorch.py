@@ -33,7 +33,7 @@ class PytorchDataset(IterableDataset):
         name: str,
         version: Optional[int] = None,
         catalog: Optional["Catalog"] = None,
-        transform: Optional["Transform"] = DEFAULT_TRANSFORM,
+        transform: Optional["Transform"] = None,
         tokenizer: Optional[Callable] = None,
         tokenizer_kwargs: Optional[dict[str, Any]] = None,
         num_samples: int = 0,
@@ -53,7 +53,7 @@ class PytorchDataset(IterableDataset):
         """
         self.name = name
         self.version = version
-        self.transform = transform
+        self.transform = transform or DEFAULT_TRANSFORM
         self.tokenizer = tokenizer
         self.tokenizer_kwargs = tokenizer_kwargs or {}
         self.num_samples = num_samples
