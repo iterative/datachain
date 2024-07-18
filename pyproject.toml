@@ -38,7 +38,6 @@ dependencies = [
   "sqlalchemy>=2",
   "multiprocess==0.70.16",
   "dill==0.3.8",
-  "cloudpickle",
   "ujson>=5.9.0",
   "pydantic>=2,<3",
   "jmespath>=1.0",
@@ -175,7 +174,9 @@ ignore = [
   "SIM105",  # suppressible-exception
   "SIM108",  # if-else-block-instead-of-if-exp
   "SIM117",  # multiple-with-statements
-  "PERF203"  # perflint - try-except-in-loop, irrelevant for Python>=3.11
+  "PERF203",  # perflint - try-except-in-loop, irrelevant for Python>=3.11
+  "D100",  # undocumented-public-module
+  "D205"  # one-blank-line-after-class
 ]
 select = [
   "B",  # flake8-bugbear
@@ -225,7 +226,8 @@ select = [
   "RUF025",  # unnecessary-dict-comprehension-for-iterable
   "RUF027",  # missing-f-string-syntax
   "RUF030",  # assert-with-print-message
-  "RUF101"  # redirected-noqa
+  "RUF101",  # redirected-noqa
+  "D"  # pydocstyle
 ]
 
 [tool.ruff.lint.flake8-bugbear]
@@ -249,6 +251,10 @@ max-complexity = 15
 
 [tool.ruff.lint.per-file-ignores]
 "examples/**" = ["INP001"]
+"!src/datachain/lib/dc.py" = ["D"]
 "tests/scripts/**" = ["INP001"]
 "tests/**" = ["DTZ"]
 "tests/examples/wds_data.py" = ["E501"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"

@@ -49,21 +49,21 @@ if TYPE_CHECKING:
 C = Column
 
 
-class DatasetPrepareError(DataChainParamsError):
-    def __init__(self, name, msg, output=None):
+class DatasetPrepareError(DataChainParamsError):  # noqa: D101
+    def __init__(self, name, msg, output=None):  # noqa: D107
         name = f" '{name}'" if name else ""
         output = f" output '{output}'" if output else ""
         super().__init__(f"Dataset{name}{output} processing prepare error: {msg}")
 
 
-class DatasetFromValuesError(DataChainParamsError):
-    def __init__(self, name, msg):
+class DatasetFromValuesError(DataChainParamsError):  # noqa: D101
+    def __init__(self, name, msg):  # noqa: D107
         name = f" '{name}'" if name else ""
         super().__init__(f"Dataset{name} from values error: {msg}")
 
 
-class DatasetMergeError(DataChainParamsError):
-    def __init__(self, on: Sequence[str], right_on: Optional[Sequence[str]], msg: str):
+class DatasetMergeError(DataChainParamsError):  # noqa: D101
+    def __init__(self, on: Sequence[str], right_on: Optional[Sequence[str]], msg: str):  # noqa: D107
         on_str = ", ".join(on) if isinstance(on, Sequence) else ""
         right_on_str = (
             ", right_on='" + ", ".join(right_on) + "'"
@@ -76,7 +76,7 @@ class DatasetMergeError(DataChainParamsError):
 OutputType = Union[None, DataType, Sequence[str], dict[str, DataType]]
 
 
-class Sys(DataModel):
+class Sys(DataModel):  # noqa: D101
     id: int
     rand: int
 
@@ -163,7 +163,8 @@ class DataChain(DatasetQuery):
 
     def __init__(self, *args, **kwargs):
         """This method needs to be redefined as a part of Dataset and DataChain
-        decoupling."""
+        decoupling.
+        """
         super().__init__(
             *args,
             **kwargs,
@@ -186,7 +187,7 @@ class DataChain(DatasetQuery):
         """Print schema of the chain."""
         self.signals_schema.print_tree()
 
-    def clone(self, new_table: bool = True) -> "Self":
+    def clone(self, new_table: bool = True) -> "Self":  # noqa: D102
         obj = super().clone(new_table=new_table)
         obj.signals_schema = copy.deepcopy(self.signals_schema)
         return obj
@@ -235,15 +236,15 @@ class DataChain(DatasetQuery):
         self._settings = settings if settings else Settings()
         return self
 
-    def reset_schema(self, signals_schema: SignalSchema) -> "Self":
+    def reset_schema(self, signals_schema: SignalSchema) -> "Self":  # noqa: D102
         self.signals_schema = signals_schema
         return self
 
-    def add_schema(self, signals_schema: SignalSchema) -> "Self":
+    def add_schema(self, signals_schema: SignalSchema) -> "Self":  # noqa: D102
         self.signals_schema |= signals_schema
         return self
 
-    def get_file_signals(self) -> list[str]:
+    def get_file_signals(self) -> list[str]:  # noqa: D102
         return list(self.signals_schema.get_file_signals())
 
     @classmethod
@@ -438,7 +439,7 @@ class DataChain(DatasetQuery):
         schema.pop("sys", None)
         return super().save(name=name, version=version, feature_schema=schema)
 
-    def apply(self, func, *args, **kwargs):
+    def apply(self, func, *args, **kwargs):  # noqa: D102
         return func(self, *args, **kwargs)
 
     def map(
@@ -479,7 +480,6 @@ class DataChain(DatasetQuery):
             chain.save("new_dataset")
             ```
         """
-
         udf_obj = self._udf_to_obj(Mapper, func, params, output, signal_map)
 
         chain = self.add_signals(
@@ -507,7 +507,6 @@ class DataChain(DatasetQuery):
         extracting multiple file records from a single tar file or bounding boxes from a
         single image file).
         """
-
         udf_obj = self._udf_to_obj(Generator, func, params, output, signal_map)
         chain = DatasetQuery.generate(
             self,
@@ -616,12 +615,12 @@ class DataChain(DatasetQuery):
         chain.signals_schema = new_schema
         return chain
 
-    def iterate_flatten(self) -> Iterator[tuple[Any]]:
+    def iterate_flatten(self) -> Iterator[tuple[Any]]:  # noqa: D102
         db_signals = self.signals_schema.db_signals()
         with super().select(*db_signals).as_iterable() as rows:
             yield from rows
 
-    def results(
+    def results(  # noqa: D102
         self, row_factory: Optional[Callable] = None, **kwargs
     ) -> list[tuple[Any, ...]]:
         rows = self.iterate_flatten()
@@ -661,8 +660,7 @@ class DataChain(DatasetQuery):
     def to_pytorch(
         self, transform=None, tokenizer=None, tokenizer_kwargs=None, num_samples=0
     ):
-        """
-        Convert to pytorch dataset format.
+        """Convert to pytorch dataset format.
 
         Args:
             transform (Transform): Torchvision transforms to apply to the dataset.
@@ -697,7 +695,7 @@ class DataChain(DatasetQuery):
             num_samples=num_samples,
         )
 
-    def remove_file_signals(self) -> "Self":
+    def remove_file_signals(self) -> "Self":  # noqa: D102
         schema = self.signals_schema.clone_without_file_signals()
         return self.select(*schema.values.keys())
 
@@ -823,6 +821,7 @@ class DataChain(DatasetQuery):
         object_name: str = "",
     ) -> "DataChain":
         """Generate chain from pandas data-frame.
+
         Example:
             ```py
             import pandas as pd
@@ -849,6 +848,11 @@ class DataChain(DatasetQuery):
         return cls.from_values(name, session, object_name=object_name, **fr_map)
 
     def to_pandas(self, flatten=False) -> "pd.DataFrame":
+        """Return a pandas DataFrame from the chain.
+
+        Parameters:
+            flatten : Whether to use a multiindex or flatten column names.
+        """
         headers, max_length = self.signals_schema.get_headers_with_length()
         if flatten or max_length < 2:
             df = pd.DataFrame.from_records(self.to_records())
@@ -861,6 +865,13 @@ class DataChain(DatasetQuery):
         return pd.DataFrame(data)
 
     def show(self, limit: int = 20, flatten=False, transpose=False) -> None:
+        """Show a preview of the chain results.
+
+        Parameters:
+            limit : How many rows to show.
+            flatten : Whether to use a multiindex or flatten column names.
+            transpose : Whether to transpose rows and columns.
+        """
         dc = self.limit(limit) if limit > 0 else self
         df = dc.to_pandas(flatten)
         if transpose:
@@ -910,7 +921,6 @@ class DataChain(DatasetQuery):
             dc = dc.parse_tabular(format="json")
             ```
         """
-
         from datachain.lib.arrow import ArrowGenerator, infer_schema, schema_to_output
 
         schema = None
@@ -1107,6 +1117,29 @@ class DataChain(DatasetQuery):
         return self._extend_to_data_model("max", fr)
 
     def setup(self, **kwargs) -> "Self":
+        """Setup variables to pass to UDF functions.
+
+        Use before running map/gen/agg/batch_map to save an object and pass it as an
+        argument to the UDF.
+
+        Example:
+            ```py
+            import anthropic
+            from anthropic.types import Message
+
+            DataChain.from_storage(DATA, type="text")
+            .settings(parallel=4, cache=True)
+            .setup(client=lambda: anthropic.Anthropic(api_key=API_KEY))
+            .map(
+                claude=lambda client, file: client.messages.create(
+                    model=MODEL,
+                    system=PROMPT,
+                    messages=[{"role": "user", "content": file.get_value()}],
+                ),
+                output=Message,
+            )
+            ```
+        """
         intersection = set(self._setup.keys()) & set(kwargs.keys())
         if intersection:
             keys = ", ".join(intersection)
@@ -1122,7 +1155,7 @@ class DataChain(DatasetQuery):
         placement: FileExportPlacement = "fullpath",
         use_cache: bool = True,
     ) -> None:
-        """Method that export all files from chain to some folder"""
+        """Method that exports all files from chain to some folder."""
         if placement == "filename":
             print("Checking if file names are unique")
             if self.select(f"{signal}.name").distinct().count() != self.count():
