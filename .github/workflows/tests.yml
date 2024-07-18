@@ -191,7 +191,7 @@ jobs:
         # Generate `.test_durations` file with `pytest --store-durations --durations-path ../.github/.test_durations ...`
         run: >
           pytest
-          --config-file=pyproject.toml -rsx
+          --config-file=pyproject.toml -rs
           --splits=6 --group=${{ matrix.group }} --durations-path=../../.github/.test_durations
           tests ../datachain/tests
         working-directory: backend/datachain_server

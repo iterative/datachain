@@ -1156,16 +1156,18 @@ class DataChain(DatasetQuery):
             import anthropic
             from anthropic.types import Message
 
-            DataChain.from_storage(DATA, type="text")
-            .settings(parallel=4, cache=True)
-            .setup(client=lambda: anthropic.Anthropic(api_key=API_KEY))
-            .map(
-                claude=lambda client, file: client.messages.create(
-                    model=MODEL,
-                    system=PROMPT,
-                    messages=[{"role": "user", "content": file.get_value()}],
-                ),
-                output=Message,
+            (
+                DataChain.from_storage(DATA, type="text")
+                .settings(parallel=4, cache=True)
+                .setup(client=lambda: anthropic.Anthropic(api_key=API_KEY))
+                .map(
+                    claude=lambda client, file: client.messages.create(
+                        model=MODEL,
+                        system=PROMPT,
+                        messages=[{"role": "user", "content": file.get_value()}],
+                    ),
+                    output=Message,
+                )
             )
             ```
         """
