@@ -62,14 +62,17 @@ def test_read_file(cloud_test_catalog, use_cache):
 
 @pytest.mark.parametrize("strategy", ["fullpath", "filename"])
 @pytest.mark.parametrize("use_map", [True, False])
+@pytest.mark.parametrize("use_cache", [True, False])
 @pytest.mark.parametrize("cloud_type", ["file"], indirect=True)
-def test_export_files(tmp_dir, cloud_test_catalog, strategy, use_map):
+def test_export_files(tmp_dir, cloud_test_catalog, strategy, use_map, use_cache):
     ctc = cloud_test_catalog
     df = DataChain.from_storage(ctc.src_uri)
     if use_map:
-        df.export_files(tmp_dir / "output", strategy=strategy)
+        df.export_files(tmp_dir / "output", strategy=strategy, use_cache=use_cache)
         df.map(
-            res=lambda file: file.export(tmp_dir / "output", strategy=strategy)
+            res=lambda file: file.export(
+                tmp_dir / "output", strategy=strategy, use_cache=use_cache
+            )
         ).exec()
     else:
         df.export_files(tmp_dir / "output", strategy=strategy)

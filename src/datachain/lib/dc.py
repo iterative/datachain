@@ -1012,7 +1012,11 @@ class DataChain(DatasetQuery):
         return self
 
     def export_files(
-        self, output: str, signal="file", strategy: FileExportStrategy = "fullpath"
+        self,
+        output: str,
+        signal="file",
+        strategy: FileExportStrategy = "fullpath",
+        use_cache: bool = True,
     ) -> None:
         """Method that export all files from chain to some folder"""
         if (
