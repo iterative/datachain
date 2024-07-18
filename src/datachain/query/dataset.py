@@ -426,7 +426,7 @@ def get_generated_callback(is_generator: bool = False) -> Callback:
 
 
 @frozen
-class UDF(Step, ABC):
+class UDFStep(Step, ABC):
     udf: UDFType
     catalog: "Catalog"
     partition_by: Optional[PartitionByType] = None
@@ -635,7 +635,7 @@ class UDF(Step, ABC):
 
 
 @frozen
-class UDFSignal(UDF):
+class UDFSignal(UDFStep):
     is_generator = False
 
     def create_udf_table(self, query: Select) -> "Table":
@@ -730,7 +730,7 @@ class UDFSignal(UDF):
 
 
 @frozen
-class RowGenerator(UDF):
+class RowGenerator(UDFStep):
     """Extend dataset with new rows."""
 
     is_generator = True
