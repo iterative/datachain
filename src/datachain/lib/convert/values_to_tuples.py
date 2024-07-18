@@ -9,7 +9,7 @@ class ValuesToTupleError(DataChainParamsError):
     def __init__(self, ds_name, msg):
         if ds_name:
             ds_name = f"' {ds_name}'"
-        super().__init__(f"Cannot convert features for dataset{ds_name}: {msg}")
+        super().__init__(f"Cannot convert signals for dataset{ds_name}: {msg}")
 
 
 def values_to_tuples(  # noqa: C901, PLR0912
@@ -44,31 +44,31 @@ def values_to_tuples(  # noqa: C901, PLR0912
             raise ValuesToTupleError(
                 ds_name,
                 f"number of outputs '{len(output)}' should match"
-                f" number of features '{len(fr_map)}'",
+                f" number of signals '{len(fr_map)}'",
             )
 
     types_map = {}
     length = -1
     for k, v in fr_map.items():
         if not isinstance(v, Sequence) or isinstance(v, str):
-            raise ValuesToTupleError(ds_name, f"features '{k}' is not a sequence")
+            raise ValuesToTupleError(ds_name, f"signals '{k}' is not a sequence")
         len_ = len(v)
 
         if output:
             if k not in output:  # type: ignore[operator]
                 raise ValuesToTupleError(
                     ds_name,
-                    f"feature '{k}' is not present in the output",
+                    f"signal '{k}' is not present in the output",
                 )
         else:
             if len_ == 0:
-                raise ValuesToTupleError(ds_name, f"feature '{k}' is empty list")
+                raise ValuesToTupleError(ds_name, f"signal '{k}' is empty list")
 
             typ = type(v[0])
             if not is_chain_type(typ):
                 raise ValuesToTupleError(
                     ds_name,
-                    f"feature '{k}' has unsupported type '{typ.__name__}'."
+                    f"signal '{k}' has unsupported type '{typ.__name__}'."
                     f" Please use DataModel types: {DataTypeNames}",
                 )
             types_map[k] = typ
@@ -78,7 +78,7 @@ def values_to_tuples(  # noqa: C901, PLR0912
         elif length != len_:
             raise ValuesToTupleError(
                 ds_name,
-                f"feature '{k}' should have length {length} while {len_} is given",
+                f"signal '{k}' should have length {length} while {len_} is given",
             )
 
     if not output:
@@ -88,7 +88,7 @@ def values_to_tuples(  # noqa: C901, PLR0912
         raise ValuesToTupleError(
             ds_name,
             "output type must be dict[str, DataType] while empty is given"
-            " and no features are provided",
+            " and no signals are provided",
         )
 
     output_types: list[type] = list(output.values())  # type: ignore[union-attr,call-arg,arg-type]
