@@ -1019,10 +1019,10 @@ class DataChain(DatasetQuery):
         use_cache: bool = True,
     ) -> None:
         """Method that export all files from chain to some folder"""
-        if (
-            strategy == "filename"
-            and self.select(f"{signal}.name").distinct().count() != self.count()
-        ):
-            raise ValueError("Files with the same name found")
+        if strategy == "filename":
+            print("Checking if file names are unique")
+            if self.select(f"{signal}.name").distinct().count() != self.count():
+                raise ValueError("Files with the same name found")
+
         for file in self.collect_one(signal):
             file.export(output, strategy, use_cache)  # type: ignore[union-attr]

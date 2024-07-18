@@ -8,22 +8,11 @@ from datachain.catalog import Catalog
 from datachain.lib.file import File, TextFile
 
 
-@pytest.fixture()
-def s3_file() -> File:
+def create_file(source: str):
     return File(
         name="test.txt",
         parent="dir1/dir2",
-        source="s3://mybkt",
-        etag="ed779276108738fdb2179ccabf9680d9",
-    )
-
-
-@pytest.fixture()
-def local_file(tmp_path) -> File:
-    return File(
-        name="test.txt",
-        parent="dir1/dir2",
-        source="file://",
+        source=source,
         etag="ed779276108738fdb2179ccabf9680d9",
     )
 
@@ -85,41 +74,44 @@ def test_cache_get_path(catalog: Catalog):
         assert f.read() == data
 
 
-def test_get_destination_path_wrong_strategy(s3_file):
+def test_get_destination_path_wrong_strategy():
+    file = create_file("s3://mybkt")
     with pytest.raises(ValueError):
-        s3_file.get_destination_path("", "wrong")
+        file.get_destination_path("", "wrong")
 
 
-def test_get_destination_path_filename_strategy(s3_file):
-    assert s3_file.get_destination_path("output", "filename") == "output/test.txt"
+def test_get_destination_path_filename_strategy():
+    file = create_file("s3://mybkt")
+    assert file.get_destination_path("output", "filename") == "output/test.txt"
 
 
-def test_get_destination_path_empty_output(s3_file):
-    assert s3_file.get_destination_path("", "filename") == "test.txt"
+def test_get_destination_path_empty_output():
+    file = create_file("s3://mybkt")
+    assert file.get_destination_path("", "filename") == "test.txt"
 
 
-def test_get_destination_path_etag_strategy(s3_file):
+def test_get_destination_path_etag_strategy():
+    file = create_file("s3://mybkt")
     assert (
-        s3_file.get_destination_path("output", "etag")
+        file.get_destination_path("output", "etag")
         == "output/ed779276108738fdb2179ccabf9680d9.txt"
     )
 
 
-def test_get_destination_path_fullpath_strategy(catalog, s3_file):
-    s3_file._set_stream(catalog, False)
+def test_get_destination_path_fullpath_strategy(catalog):
+    file = create_file("s3://mybkt")
+    file._set_stream(catalog, False)
     assert (
-        s3_file.get_destination_path("output", "fullpath")
+        file.get_destination_path("output", "fullpath")
         == "output/mybkt/dir1/dir2/test.txt"
     )
 
 
-def test_get_destination_path_fullpath_strategy_file_source(
-    catalog, tmp_path, local_file
-):
-    local_file._set_stream(catalog, False)
+def test_get_destination_path_fullpath_strategy_file_source(catalog, tmp_path):
+    file = create_file("file:///")
+    file._set_stream(catalog, False)
     assert (
-        local_file.get_destination_path("output", "fullpath")
-        == "output/dir1/dir2/test.txt"
+        file.get_destination_path("output", "fullpath") == "output/dir1/dir2/test.txt"
     )
 
 
