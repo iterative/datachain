@@ -1,0 +1,3 @@
+datachain
+jupyter
+unstructured[pdf,embed-huggingface]
