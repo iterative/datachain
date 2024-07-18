@@ -173,7 +173,7 @@ class DataChain(DatasetQuery):
         parallel=None,
         workers=None,
         min_task_size=None,
-        include_sys: Optional[bool] = None,
+        sys: Optional[bool] = None,
     ) -> "Self":
         """Change settings for chain.
 
@@ -198,9 +198,9 @@ class DataChain(DatasetQuery):
             ```
         """
         chain = self.clone()
-        if include_sys is True:
+        if sys is True:
             chain.signals_schema = SignalSchema({"sys": Sys}) | chain.signals_schema
-        elif include_sys is False and "sys" in chain.signals_schema:
+        elif sys is False and "sys" in chain.signals_schema:
             chain.signals_schema.remove("sys")
         chain._settings.add(Settings(cache, batch, parallel, workers, min_task_size))
         return chain
