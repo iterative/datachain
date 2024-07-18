@@ -18,7 +18,7 @@ else:
 if __name__ == "__main__":
     print("** HuggingFace pipeline helper model zoo demo **")
     print("\nZero-shot object detection and classification:")
-    results = (
+    (
         DataChain.from_storage(
             image_source,
             anon=True,
@@ -36,12 +36,11 @@ if __name__ == "__main__":
             output={"model_output": dict, "error": str},
         )
         .select("file.source", "file.parent", "file.name", "model_output", "error")
-        .results()
+        .show()
     )
-    print(*results, sep="\n")
 
     print("\nNot-safe-for-work image detection:")
-    results = (
+    (
         DataChain.from_storage(
             image_source,
             anon=True,
@@ -58,12 +57,11 @@ if __name__ == "__main__":
             output={"model_output": dict, "error": str},
         )
         .select("file.source", "file.parent", "file.name", "model_output", "error")
-        .results()
+        .show()
     )
-    print(*results, sep="\n")
 
     print("\nAudio emotion classification:")
-    results = (
+    (
         DataChain.from_storage(
             audio_source,
             anon=True,
@@ -80,11 +78,10 @@ if __name__ == "__main__":
             output={"model_output": dict, "error": str},
         )
         .select("file.source", "file.parent", "file.name", "model_output", "error")
-        .results()
+        .show()
     )
-    print(*results, sep="\n")
     print("\nLong text summarization:")
-    results = (
+    (
         DataChain.from_storage(
             text_source,
             anon=True,
@@ -102,6 +99,5 @@ if __name__ == "__main__":
             output={"model_output": dict, "error": str},
         )
         .select("file.source", "file.parent", "file.name", "model_output", "error")
-        .results()
+        .show()
     )
-    print(*results, sep="\n")

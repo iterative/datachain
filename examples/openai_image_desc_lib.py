@@ -10,7 +10,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 source = "gs://dvcx-datalakes/dogs-and-cats/"
 
 if __name__ == "__main__":
-    results = (
+    (
         DataChain.from_storage(
             source,
             anon=True,
@@ -28,6 +28,5 @@ if __name__ == "__main__":
             output={"description": str, "error": str},
         )
         .select("file.source", "file.parent", "file.name", "description", "error")
-        .results()
+        .show()
     )
-    print(*results, sep="\n")
