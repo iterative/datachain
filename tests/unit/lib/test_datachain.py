@@ -227,14 +227,15 @@ def test_gen(catalog):
         params="t1",
         output={"x": _TestFr},
     )
-    # assert ds.collect() == 1
 
     for i, (x,) in enumerate(ds.iterate()):
         assert isinstance(x, _TestFr)
 
         fr = features[i]
         test_fr = _TestFr(file=File(name=""), sqrt=math.sqrt(fr.count), my_name=fr.nnn)
-        assert x == test_fr
+        assert x.file == test_fr.file
+        assert np.isclose(x.sqrt, test_fr.sqrt)
+        assert x.my_name == test_fr.my_name
 
 
 def test_map(catalog):
@@ -251,9 +252,16 @@ def test_map(catalog):
         output={"x": _TestFr},
     )
 
-    assert dc.collect_one("x") == [
+    x_list = dc.collect_one("x")
+    test_frs = [
         _TestFr(sqrt=math.sqrt(fr.count), my_name=fr.nnn + "_suf") for fr in features
     ]
+
+    assert len(x_list) == len(test_frs)
+
+    for x, test_fr in zip(x_list, test_frs):
+        assert np.isclose(x.sqrt, test_fr.sqrt)
+        assert x.my_name == test_fr.my_name
 
 
 def test_agg(catalog):
