@@ -281,6 +281,11 @@ class SignalSchema:
     def mutate(self, args_map: dict) -> "SignalSchema":
         return SignalSchema(self.values | sql_to_python(args_map))
 
+    def clone_without_sys_signals(self) -> "SignalSchema":
+        schema = copy.deepcopy(self.values)
+        schema.pop("sys", None)
+        return SignalSchema(schema)
+
     def merge(
         self,
         right_schema: "SignalSchema",

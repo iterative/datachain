@@ -883,8 +883,8 @@ def test_parse_tabular_object_name(tmp_dir, catalog):
 def test_sys_feature(tmp_dir, catalog):
     ds = DataChain.from_values(t1=features)
     ds_sys = ds.settings(sys=True)
-    assert ds.signals_schema.values == {"t1": MyFr}
-    assert ds_sys.signals_schema.values == {"t1": MyFr, "sys": Sys}
+    assert not ds._sys
+    assert ds_sys._sys
 
     args = []
     ds_sys.map(res=lambda sys, t1: args.append((sys, t1))).save("ds_sys")
@@ -898,7 +898,7 @@ def test_sys_feature(tmp_dir, catalog):
     assert "sys" not in ds_sys.catalog.get_dataset("ds_sys").feature_schema
 
     ds_no_sys = ds_sys.settings(sys=False)
-    assert ds_no_sys.signals_schema.values == {"t1": MyFr}
+    assert not ds_no_sys._sys
 
     args = []
     ds_no_sys.map(res=lambda t1: args.append(t1)).save("ds_no_sys")

@@ -1715,8 +1715,9 @@ def _send_result(dataset_query: DatasetQuery) -> None:
 
     columns = preview_args.get("columns") or []
 
+    select = getattr(dataset_query, "_select", dataset_query.select)
     preview_query = (
-        dataset_query.select(*columns)
+        select(*columns)
         .limit(preview_args.get("limit", 10))
         .offset(preview_args.get("offset", 0))
     )

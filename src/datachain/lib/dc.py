@@ -1,6 +1,6 @@
 import copy
 import re
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -177,19 +177,23 @@ class DataChain(DatasetQuery):
         self._settings = Settings()
         self._setup = {}
 
+        self.signals_schema = SignalSchema({"sys": Sys})
         if self.feature_schema:
-            self.signals_schema = SignalSchema.deserialize(self.feature_schema)
+            self.signals_schema |= SignalSchema.deserialize(self.feature_schema)
         else:
-            self.signals_schema = SignalSchema.from_column_types(self.column_types)
+            self.signals_schema |= SignalSchema.from_column_types(self.column_types)
+
+        self._sys = False
 
     @property
     def schema(self) -> dict[str, DataType]:
         """Get schema of the chain."""
-        return self.signals_schema.values if self.signals_schema else None
+        signals_schema = self.signals_schema.clone_without_sys_signals()
+        return signals_schema.values
 
     def print_schema(self) -> None:
         """Print schema of the chain."""
-        self.signals_schema.print_tree()
+        self.signals_schema.clone_without_sys_signals().print_tree()
 
     def clone(self, new_table: bool = True) -> "Self":  # noqa: D102
         obj = super().clone(new_table=new_table)
@@ -228,10 +232,8 @@ class DataChain(DatasetQuery):
             ```
         """
         chain = self.clone()
-        if sys is True:
-            chain.signals_schema = SignalSchema({"sys": Sys}) | chain.signals_schema
-        elif sys is False and "sys" in chain.signals_schema:
-            chain.signals_schema.remove("sys")
+        if sys is not None:
+            chain._sys = sys
         chain._settings.add(Settings(cache, batch, parallel, workers, min_task_size))
         return chain
 
@@ -439,8 +441,7 @@ class DataChain(DatasetQuery):
                 removed after process ends. Temp dataset are useful for optimization.
             version : version of a dataset. Default - the last version that exist.
         """
-        schema = self.signals_schema.serialize()
-        schema.pop("sys", None)
+        schema = self.signals_schema.clone_without_sys_signals().serialize()
         return super().save(name=name, version=version, feature_schema=schema)
 
     def apply(self, func, *args, **kwargs):  # noqa: D102
@@ -586,7 +587,11 @@ class DataChain(DatasetQuery):
         sign = UdfSignature.parse(name, signal_map, func, params, output, is_generator)
         DataModel.register(list(sign.output_schema.values.values()))
 
-        params_schema = self.signals_schema.slice(sign.params, self._setup)
+        signals_schema = self.signals_schema
+        if self._sys:
+            signals_schema = SignalSchema({"sys": Sys}) | signals_schema
+
+        params_schema = signals_schema.slice(sign.params, self._setup)
 
         return target_class._create(sign, params_schema)
 
@@ -603,6 +608,15 @@ class DataChain(DatasetQuery):
 
     @detach
     def select(self, *args: str) -> "Self":
+        """Select only a specified set of signals."""
+        new_schema = SignalSchema({"sys": Sys}) | self.signals_schema.resolve(*args)
+        columns = new_schema.db_signals()
+        chain = super().select(*columns)
+        chain.signals_schema = new_schema
+        return chain
+
+    @detach
+    def _select(self, *args: str) -> "Self":
         """Select only a specified set of signals."""
         new_schema = self.signals_schema.resolve(*args)
         columns = new_schema.db_signals()
@@ -648,9 +662,22 @@ class DataChain(DatasetQuery):
         chain.signals_schema = self.signals_schema.mutate(kwargs)
         return chain
 
-    def iterate_flatten(self) -> Iterator[tuple[Any]]:  # noqa: D102
-        db_signals = self.signals_schema.db_signals()
+    @overload
+    def iterate_flatten(self) -> Iterable[tuple[Any, ...]]: ...
+
+    @overload
+    def iterate_flatten(
+        self, row_factory: Callable[[list[str], tuple[Any, ...]], _T]
+    ) -> Iterable[_T]: ...
+
+    def iterate_flatten(self, row_factory=None):  # noqa: D102
+        signals_schema = self.signals_schema
+        if not self._sys:
+            signals_schema = signals_schema.clone_without_sys_signals()
+        db_signals = signals_schema.db_signals()
         with super().select(*db_signals).as_iterable() as rows:
+            if row_factory:
+                rows = (row_factory(db_signals, r) for r in rows)
             yield from rows
 
     @overload
@@ -662,11 +689,7 @@ class DataChain(DatasetQuery):
     ) -> list[_T]: ...
 
     def results(self, row_factory=None, **kwargs):  # noqa: D102
-        rows = self.iterate_flatten()
-        if row_factory:
-            db_signals = self.signals_schema.db_signals()
-            rows = (row_factory(db_signals, r) for r in rows)
-        return list(rows)
+        return list(self.iterate_flatten(row_factory=row_factory))
 
     def to_records(self) -> list[dict[str, Any]]:  # noqa: D102
         def to_dict(cols: list[str], row: tuple[Any, ...]) -> dict[str, Any]:
@@ -680,10 +703,15 @@ class DataChain(DatasetQuery):
         If columns are specified - limit them to specified columns.
         """
         chain = self.select(*cols) if cols else self
-        for row in chain.iterate_flatten():
-            yield chain.signals_schema.row_to_features(
-                row, catalog=chain.session.catalog, cache=chain._settings.cache
-            )
+        signals_schema = chain.signals_schema
+        if not self._sys:
+            signals_schema = signals_schema.clone_without_sys_signals()
+        db_signals = signals_schema.db_signals()
+        with super().select(*db_signals).as_iterable() as rows:
+            for row in rows:
+                yield signals_schema.row_to_features(
+                    row, catalog=chain.session.catalog, cache=chain._settings.cache
+                )
 
     def iterate_one(self, col: str) -> Iterator[DataType]:
         """Iterate over one column."""
@@ -898,7 +926,10 @@ class DataChain(DatasetQuery):
         Parameters:
             flatten : Whether to use a multiindex or flatten column names.
         """
-        headers, max_length = self.signals_schema.get_headers_with_length()
+        signals_schema = self.signals_schema
+        if not self._sys:
+            signals_schema = signals_schema.clone_without_sys_signals()
+        headers, max_length = signals_schema.get_headers_with_length()
         if flatten or max_length < 2:
             df = pd.DataFrame.from_records(self.to_records())
             if headers:
@@ -1205,7 +1236,7 @@ class DataChain(DatasetQuery):
         """Method that exports all files from chain to some folder."""
         if placement == "filename":
             print("Checking if file names are unique")
-            if self.select(f"{signal}.name").distinct().count() != self.count():
+            if self._select(f"{signal}.name").distinct().count() != self.count():
                 raise ValueError("Files with the same name found")
 
         for file in self.collect_one(signal):
