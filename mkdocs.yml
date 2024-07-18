@@ -64,7 +64,12 @@ theme:
 nav:
   - Home: index.md
   - API reference:
-      - Datachain: references/datachain.md
+      - references/index.md
+      - references/datachain.md
+      - references/datatype.md
+      - references/file.md
+      - references/udf.md
+      - references/torch.md
 
 markdown_extensions:
   - abbr

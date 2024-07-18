@@ -144,3 +144,6 @@ def similarity_scores(
             scores = logits
 
         return scores.tolist()
+
+
+clip_similarity_scores = similarity_scores
