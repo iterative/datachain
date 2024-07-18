@@ -547,7 +547,7 @@ class DataChain(DatasetQuery):
 
         return chain.reset_schema(udf_obj.output).reset_settings(self._settings)
 
-    def batch_map(
+    def batch_map(  # noqa: D102
         self,
         func: Optional[Callable] = None,
         params: Union[None, str, Sequence[str]] = None,
