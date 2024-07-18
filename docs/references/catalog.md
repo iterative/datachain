@@ -1,3 +1,0 @@
-# `Catalog`
-
-::: datachain.catalog.Catalog
