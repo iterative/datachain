@@ -40,6 +40,7 @@ from datachain.error import (
     StorageNotFoundError,
     TableMissingError,
 )
+from datachain.job import Job
 from datachain.storage import Storage, StorageStatus, StorageURI
 from datachain.utils import JSONSerialize, is_expired
 
@@ -67,6 +68,7 @@ class AbstractMetastore(ABC, Serializable):
     storage_class: type[Storage] = Storage
     dataset_class: type[DatasetRecord] = DatasetRecord
     dependency_class: type[DatasetDependency] = DatasetDependency
+    job_class: type[Job] = Job
 
     def __init__(
         self,
@@ -376,6 +378,9 @@ class AbstractMetastore(ABC, Serializable):
     #
     # Jobs
     #
+
+    def list_jobs_by_ids(self, ids: list[str], conn=None) -> Iterator["Job"]:
+        raise NotImplementedError
 
     @abstractmethod
     def create_job(
@@ -1468,6 +1473,10 @@ class AbstractDBMetastore(AbstractMetastore):
         ]
 
     @cached_property
+    def _job_fields(self) -> list[str]:
+        return [c.name for c in self._jobs_columns() if c.name]  # type: ignore[attr-defined]
+
+    @cached_property
     def _jobs(self) -> "Table":
         return Table(self.JOBS_TABLE, self.db.metadata, *self._jobs_columns())
 
@@ -1483,6 +1492,21 @@ class AbstractDBMetastore(AbstractMetastore):
         if not where:
             return self._jobs.update()
         return self._jobs.update().where(*where)
+
+    def _parse_job(self, rows) -> Job:
+        return Job.parse(*rows)
+
+    def _parse_jobs(self, rows) -> Iterator["Job"]:
+        for _, g in groupby(rows, lambda r: r[0]):
+            yield self._parse_job(*list(g))
+
+    def _jobs_query(self):
+        return self._jobs_select(*[getattr(self._jobs.c, f) for f in self._job_fields])
+
+    def list_jobs_by_ids(self, ids: list[str], conn=None) -> Iterator["Job"]:
+        """List jobs by ids."""
+        query = self._jobs_query().where(self._jobs.c.id.in_(ids))
+        yield from self._parse_jobs(self.db.execute(query, conn=conn))
 
     def create_job(
         self,

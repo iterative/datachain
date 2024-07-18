@@ -18,6 +18,7 @@ from pydantic import BaseModel, create_model
 from datachain import DataModel
 from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import DataType
+from datachain.lib.dataset_info import DatasetInfo
 from datachain.lib.file import File, IndexedFile, get_file
 from datachain.lib.meta_formats import read_meta, read_schema
 from datachain.lib.model_store import ModelStore
@@ -57,7 +58,7 @@ class DatasetPrepareError(DataChainParamsError):
 class DatasetFromValuesError(DataChainParamsError):
     def __init__(self, name, msg):
         name = f" '{name}'" if name else ""
-        super().__init__(f"Dataset {name} from values error: {msg}")
+        super().__init__(f"Dataset{name} from values error: {msg}")
 
 
 class DatasetMergeError(DataChainParamsError):
@@ -87,7 +88,7 @@ class DataChain(DatasetQuery):
     enrich data.
 
     Data in DataChain is presented as Python classes with arbitrary set of fields,
-    including nested classes. The data classes have to inherit from `Feature` class.
+    including nested classes. The data classes have to inherit from `DataModel` class.
     The supported set of field types include: majority of the type supported by the
     underlyind library `Pydantic`.
 
@@ -104,10 +105,10 @@ class DataChain(DatasetQuery):
 
     Example:
         ```py
-        from datachain import DataChain, Feature
+        from datachain import DataChain, DataModel
         from datachain.lib.claude import claude_processor
 
-        class Rating(Feature):
+        class Rating(DataModel):
         status: str = ""
         explanation: str = ""
 
@@ -138,7 +139,7 @@ class DataChain(DatasetQuery):
     }
 
     def __init__(self, *args, **kwargs):
-        """This method needs to be redefined as a part of Dataset and DacaChin
+        """This method needs to be redefined as a part of Dataset and DataChain
         decoupling."""
         super().__init__(
             *args,
@@ -321,6 +322,35 @@ class DataChain(DatasetQuery):
             )
         }
         return chain.gen(**signal_dict)  # type: ignore[arg-type]
+
+    @classmethod
+    def datasets(
+        cls, session: Optional[Session] = None, object_name: str = "dataset"
+    ) -> "DataChain":
+        """Generate chain with list of registered datasets.
+
+        Example:
+            ```py
+            from datachain import DataChain
+
+            chain = DataChain.datasets()
+            for ds in chain.iterate_one("dataset"):
+                print(f"{ds.name}@v{ds.version}")
+            ```
+        """
+        session = Session.get(session)
+        catalog = session.catalog
+
+        datasets = [
+            DatasetInfo.from_models(d, v, j)
+            for d, v, j in catalog.list_datasets_versions()
+        ]
+
+        return cls.from_values(
+            session=session,
+            output={object_name: DatasetInfo},
+            **{object_name: datasets},  # type: ignore[arg-type]
+        )
 
     def show_json_schema(  # type: ignore[override]
         self, jmespath: Optional[str] = None, model_name: Optional[str] = None
@@ -566,8 +596,7 @@ class DataChain(DatasetQuery):
     def iterate(self, *cols: str) -> Iterator[list[DataType]]:
         """Iterate over rows.
 
-        If columns are specified - limit them to specified
-        columns.
+        If columns are specified - limit them to specified columns.
         """
         chain = self.select(*cols) if cols else self
         for row in chain.iterate_flatten():
