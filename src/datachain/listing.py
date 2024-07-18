@@ -5,11 +5,12 @@ from itertools import zip_longest
 from typing import TYPE_CHECKING, Optional
 
 from fsspec.asyn import get_loop, sync
-from sqlalchemy import Column, case
+from sqlalchemy import Column
 from sqlalchemy.sql import func
 from tqdm import tqdm
 
 from datachain.node import DirType, Entry, Node, NodeWithPath
+from datachain.sql.functions import path as pathfunc
 from datachain.utils import suffix_to_number
 
 if TYPE_CHECKING:
@@ -117,7 +118,7 @@ class Listing:
                 dir_path = []
                 if not copy_dir_contents:
                     dir_path.append(node.name)
-                subtree_nodes = src.find(sort=["parent", "name"])
+                subtree_nodes = src.find(sort=["path"])
                 all_nodes.extend(
                     NodeWithPath(n.n, path=dir_path + n.path) for n in subtree_nodes
                 )
@@ -136,8 +137,7 @@ class Listing:
                 elif from_dataset:
                     node_path = [
                         src.listing.client.name,
-                        node.parent,
-                        node.name,
+                        node.path,
                     ]
                 else:
                     node_path = [node.name]
@@ -189,25 +189,19 @@ class Listing:
         dr = self.dataset_rows
         conds = []
         if names:
-            f = Column("name").op("GLOB")
-            conds.extend(f(name) for name in names)
+            for name in names:
+                conds.append(pathfunc.name(Column("path")).op("GLOB")(name))
         if inames:
-            f = func.lower(Column("name")).op("GLOB")
-            conds.extend(f(iname.lower()) for iname in inames)
+            for iname in inames:
+                conds.append(
+                    func.lower(pathfunc.name(Column("path"))).op("GLOB")(iname.lower())
+                )
         if paths:
-            node_path = case(
-                (Column("parent") == "", Column("name")),
-                else_=Column("parent") + "/" + Column("name"),
-            )
-            f = node_path.op("GLOB")
-            conds.extend(f(path) for path in paths)
+            for path in paths:
+                conds.append(Column("path").op("GLOB")(path))
         if ipaths:
-            node_path = case(
-                (Column("parent") == "", Column("name")),
-                else_=Column("parent") + "/" + Column("name"),
-            )
-            f = func.lower(node_path).op("GLOB")
-            conds.extend(f(ipath.lower()) for ipath in ipaths)
+            for ipath in ipaths:
+                conds.append(func.lower(Column("path")).op("GLOB")(ipath.lower()))
 
         if size is not None:
             size_limit = suffix_to_number(size)

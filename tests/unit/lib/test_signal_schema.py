@@ -116,8 +116,8 @@ def test_to_udf_spec():
     assert "address" in spec
     assert spec["address"] == String
 
-    assert "f__name" in spec
-    assert spec["f__name"] == String
+    assert "f__path" in spec
+    assert spec["f__path"] == String
 
     assert "f__size" in spec
     assert spec["f__size"] == Int64

@@ -2,6 +2,7 @@ import dataclasses
 import io
 import math
 import os
+import posixpath
 import tarfile
 from string import printable
 from tarfile import DIRTYPE, TarInfo
@@ -115,8 +116,8 @@ def create_tar_dataset(catalog, uri: str, ds_name: str) -> DatasetQuery:
     and the tar members (as v-objects).
     """
     ds1 = DatasetQuery(path=uri, catalog=catalog)
-    tar_entries = ds1.filter(C("name").glob("*.tar")).generate(index_tar)
-    return ds1.filter(~C("name").glob("*.tar")).union(tar_entries).save(ds_name)
+    tar_entries = ds1.filter(C.path.glob("*.tar")).generate(index_tar)
+    return ds1.filter(~C.path.glob("*.tar")).union(tar_entries).save(ds_name)
 
 
 def skip_if_not_sqlite():
@@ -153,56 +154,49 @@ def text_embedding(text: str) -> list[float]:
 
 SIMPLE_DS_QUERY_RECORDS = [
     {
-        "parent": "",
-        "name": "description",
+        "path": "cats/cat1",
+        "vtype": "",
+        "dir_type": 0,
+        "is_latest": 1,
+        "size": 4,
+    },
+    {
+        "path": "cats/cat2",
+        "vtype": "",
+        "dir_type": 0,
+        "is_latest": 1,
+        "size": 4,
+    },
+    {
+        "path": "description",
         "vtype": "",
         "dir_type": 0,
         "is_latest": 1,
         "size": 13,
     },
     {
-        "parent": "cats",
-        "name": "cat1",
+        "path": "dogs/dog1",
         "vtype": "",
         "dir_type": 0,
         "is_latest": 1,
         "size": 4,
     },
     {
-        "parent": "cats",
-        "name": "cat2",
-        "vtype": "",
-        "dir_type": 0,
-        "is_latest": 1,
-        "size": 4,
-    },
-    {
-        "parent": "dogs",
-        "name": "dog1",
-        "vtype": "",
-        "dir_type": 0,
-        "is_latest": 1,
-        "size": 4,
-    },
-    {
-        "parent": "dogs",
-        "name": "dog2",
+        "path": "dogs/dog2",
         "vtype": "",
         "dir_type": 0,
         "is_latest": 1,
         "size": 3,
     },
     {
-        "parent": "dogs",
-        "name": "dog3",
+        "path": "dogs/dog3",
         "vtype": "",
         "dir_type": 0,
         "is_latest": 1,
         "size": 4,
     },
     {
-        "parent": "dogs/others",
-        "name": "dog4",
+        "path": "dogs/others/dog4",
         "vtype": "",
         "dir_type": 0,
         "is_latest": 1,
@@ -214,8 +208,8 @@ SIMPLE_DS_QUERY_RECORDS = [
 def get_simple_ds_query(path, catalog):
     return (
         DatasetQuery(path=path, catalog=catalog)
-        .select(C.parent, C.name, C.vtype, C.dir_type, C.is_latest, C.size)
-        .order_by(C.source, C.parent, C.name)
+        .select(C.path, C.vtype, C.dir_type, C.is_latest, C.size)
+        .order_by(C.source, C.path)
     )
 
 
@@ -263,8 +257,5 @@ def assert_row_names(
     preview = dataset.get_version(version).preview
     assert preview
 
-    assert (
-        {r["name"] for r in dataset_rows}
-        == {r.get("name") for r in preview}
-        == expected_names
-    )
+    assert {r["path"] for r in dataset_rows} == {r.get("path") for r in preview}
+    assert {posixpath.basename(r["path"]) for r in dataset_rows} == expected_names

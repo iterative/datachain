@@ -55,7 +55,7 @@ def test_pandas_conversion(catalog):
 
 
 def test_pandas_file_column_conflict(catalog):
-    file_records = {"name": ["aa.txt", "bb.txt", "ccc.jpg", "dd", "e.txt"]}
+    file_records = {"path": ["aa.txt", "bb.txt", "ccc.jpg", "dd", "e.txt"]}
     with pytest.raises(DataChainParamsError):
         DataChain.from_pandas(pd.DataFrame(DF_DATA | file_records))
 
@@ -94,7 +94,7 @@ def test_pandas_incorrect_column_names(catalog):
 
 def test_from_features_basic(catalog):
     ds = DataChain.create_empty(DataChain.DEFAULT_FILE_RECORD)
-    ds = ds.gen(lambda prm: [File(name="")] * 5, params="parent", output={"file": File})
+    ds = ds.gen(lambda prm: [File(path="")] * 5, params="path", output={"file": File})
 
     ds_name = "my_ds"
     ds.save(ds_name)
@@ -109,8 +109,8 @@ def test_from_features_basic(catalog):
 def test_from_features(catalog):
     ds = DataChain.create_empty(DataChain.DEFAULT_FILE_RECORD)
     ds = ds.gen(
-        lambda prm: list(zip([File(name="")] * len(features), features)),
-        params="parent",
+        lambda prm: list(zip([File(path="")] * len(features), features)),
+        params="path",
         output={"file": File, "t1": MyFr},
     )
     for i, (_, t1) in enumerate(ds.iterate()):
@@ -138,8 +138,8 @@ def test_datasets(catalog):
 def test_preserve_feature_schema(catalog):
     ds = DataChain.create_empty(DataChain.DEFAULT_FILE_RECORD)
     ds = ds.gen(
-        lambda prm: list(zip([File(name="")] * len(features), features, features)),
-        params="parent",
+        lambda prm: list(zip([File(path="")] * len(features), features, features)),
+        params="path",
         output={"file": File, "t1": MyFr, "t2": MyFr},
     )
 
@@ -202,7 +202,7 @@ def test_from_features_more_simple_types(catalog):
 def test_file_list(catalog):
     names = ["f1.jpg", "f1.json", "f1.txt", "f2.jpg", "f2.json"]
     sizes = [1, 2, 3, 4, 5]
-    files = [File(name=name, size=size) for name, size in zip(names, sizes)]
+    files = [File(path=name, size=size) for name, size in zip(names, sizes)]
 
     ds = DataChain.from_values(file=files)
 
@@ -220,7 +220,7 @@ def test_gen(catalog):
     ds = ds.gen(
         x=lambda m_fr: [
             _TestFr(
-                file=File(name=""),
+                file=File(path=""),
                 sqrt=math.sqrt(m_fr.count),
                 my_name=m_fr.nnn,
             )
@@ -233,7 +233,7 @@ def test_gen(catalog):
         assert isinstance(x, _TestFr)
 
         fr = features[i]
-        test_fr = _TestFr(file=File(name=""), sqrt=math.sqrt(fr.count), my_name=fr.nnn)
+        test_fr = _TestFr(file=File(path=""), sqrt=math.sqrt(fr.count), my_name=fr.nnn)
         assert x.file == test_fr.file
         assert np.isclose(x.sqrt, test_fr.sqrt)
         assert x.my_name == test_fr.my_name
@@ -274,7 +274,7 @@ def test_agg(catalog):
     dc = DataChain.from_values(t1=features).agg(
         x=lambda frs: [
             _TestFr(
-                f=File(name=""),
+                f=File(path=""),
                 cnt=sum(f.count for f in frs),
                 my_name="-".join([fr.nnn for fr in frs]),
             )
@@ -286,12 +286,12 @@ def test_agg(catalog):
 
     assert dc.collect_one("x") == [
         _TestFr(
-            f=File(name=""),
+            f=File(path=""),
             cnt=sum(fr.count for fr in features if fr.nnn == "n1"),
             my_name="-".join([fr.nnn for fr in features if fr.nnn == "n1"]),
         ),
         _TestFr(
-            f=File(name=""),
+            f=File(path=""),
             cnt=sum(fr.count for fr in features if fr.nnn == "n2"),
             my_name="-".join([fr.nnn for fr in features if fr.nnn == "n2"]),
         ),
@@ -313,7 +313,7 @@ def test_agg_two_params(catalog):
     ds = DataChain.from_values(t1=features, t2=features2).agg(
         x=lambda frs1, frs2: [
             _TestFr(
-                f=File(name=""),
+                f=File(path=""),
                 cnt=sum(f1.count + f2.count for f1, f2 in zip(frs1, frs2)),
                 my_name="-".join([fr.nnn for fr in frs1]),
             )
@@ -330,7 +330,7 @@ def test_agg_two_params(catalog):
 def test_agg_simple_iterator(catalog):
     def func(key, val) -> Iterator[tuple[File, str]]:
         for i in range(val):
-            yield File(name=""), f"{key}_{i}"
+            yield File(path=""), f"{key}_{i}"
 
     keys = ["a", "b", "c"]
     values = [3, 1, 2]
@@ -377,7 +377,7 @@ def test_agg_tuple_result_iterator(catalog):
     def func(key, val) -> Iterator[tuple[File, _ImageGroup]]:
         n = "-".join(key)
         v = sum(val)
-        yield File(name=n), _ImageGroup(name=n, size=v)
+        yield File(path=n), _ImageGroup(name=n, size=v)
 
     keys = ["n1", "n2", "n1"]
     values = [1, 5, 9]
@@ -395,7 +395,7 @@ def test_agg_tuple_result_generator(catalog):
     def func(key, val) -> Generator[tuple[File, _ImageGroup], None, None]:
         n = "-".join(key)
         v = sum(val)
-        yield File(name=n), _ImageGroup(name=n, size=v)
+        yield File(path=n), _ImageGroup(name=n, size=v)
 
     keys = ["n1", "n2", "n1"]
     values = [1, 5, 9]
@@ -596,14 +596,14 @@ def test_unsupported_output_type(catalog):
 def test_collect_one(catalog):
     names = ["f1.jpg", "f1.json", "f1.txt", "f2.jpg", "f2.json"]
     sizes = [1, 2, 3, 4, 5]
-    files = [File(name=name, size=size) for name, size in zip(names, sizes)]
+    files = [File(path=name, size=size) for name, size in zip(names, sizes)]
 
     scores = [0.1, 0.2, 0.3, 0.4, 0.5]
 
     chain = DataChain.from_values(file=files, score=scores)
 
     assert chain.collect_one("file") == files
-    assert chain.collect_one("file.name") == names
+    assert chain.collect_one("file.path") == names
     assert chain.collect_one("file.size") == sizes
     assert chain.collect_one("file.source") == [""] * len(names)
     assert np.allclose(chain.collect_one("score"), scores)
@@ -620,7 +620,7 @@ def test_default_output_type(catalog):
     names = ["f1.jpg", "f1.json", "f1.txt", "f2.jpg", "f2.json"]
     suffix = "-new"
 
-    chain = DataChain.from_values(name=names).map(res1=lambda name: name + suffix)
+    chain = DataChain.from_values(path=names).map(res1=lambda path: path + suffix)
 
     assert chain.collect_one("res1") == [t + suffix for t in names]
 
@@ -650,7 +650,7 @@ def test_parse_tabular_partitions(tmp_dir, catalog):
     df.to_parquet(path, partition_cols=["first_name"])
     dc = (
         DataChain.from_storage(path.as_uri())
-        .filter(C("parent").glob("*first_name=Alice*"))
+        .filter(C("path").glob("*first_name=Alice*"))
         .parse_tabular(partitioning="hive")
     )
     df1 = dc.select("first_name", "age", "city").to_pandas()
@@ -680,7 +680,7 @@ def test_parse_tabular_unify_schema(tmp_dir, catalog):
     )
     dc = (
         DataChain.from_storage(tmp_dir.as_uri())
-        .filter(C("name").glob("*.parquet"))
+        .filter(C("path").glob("*.parquet"))
         .parse_tabular()
     )
     df = dc.select("first_name", "age", "city", "last_name", "country").to_pandas()
@@ -865,8 +865,8 @@ def test_exec(catalog):
     all_names = set()
 
     dc = (
-        DataChain.from_values(name=names)
-        .map(nop=lambda name: all_names.add(name))
+        DataChain.from_values(path=names)
+        .map(nop=lambda path: all_names.add(path))
         .exec()
     )
     assert isinstance(dc, DataChain)
@@ -963,27 +963,27 @@ def test_mutate():
 def test_order_by_with_nested_columns(with_function):
     names = ["a.txt", "c.txt", "d.txt", "a.txt", "b.txt"]
 
-    dc = DataChain.from_values(file=[File(name=name) for name in names])
+    dc = DataChain.from_values(file=[File(path=name) for name in names])
     if with_function:
         from datachain.sql.functions import rand
 
-        dc = dc.order_by("file.name", rand())
+        dc = dc.order_by("file.path", rand())
     else:
-        dc = dc.order_by("file.name")
+        dc = dc.order_by("file.path")
 
-    assert dc.collect_one("file.name") == ["a.txt", "a.txt", "b.txt", "c.txt", "d.txt"]
+    assert dc.collect_one("file.path") == ["a.txt", "a.txt", "b.txt", "c.txt", "d.txt"]
 
 
 @pytest.mark.parametrize("with_function", [True, False])
 def test_order_by_descending(with_function):
     names = ["a.txt", "c.txt", "d.txt", "a.txt", "b.txt"]
 
-    dc = DataChain.from_values(file=[File(name=name) for name in names])
+    dc = DataChain.from_values(file=[File(path=name) for name in names])
     if with_function:
         from datachain.sql.functions import rand
 
-        dc = dc.order_by("file.name", rand(), descending=True)
+        dc = dc.order_by("file.path", rand(), descending=True)
     else:
-        dc = dc.order_by("file.name", descending=True)
+        dc = dc.order_by("file.path", descending=True)
 
-    assert dc.collect_one("file.name") == ["d.txt", "c.txt", "b.txt", "a.txt", "a.txt"]
+    assert dc.collect_one("file.path") == ["d.txt", "c.txt", "b.txt", "a.txt", "a.txt"]

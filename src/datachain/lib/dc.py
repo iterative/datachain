@@ -46,6 +46,7 @@ from datachain.query.dataset import (
     detach,
 )
 from datachain.query.schema import Column, DatasetRow
+from datachain.sql.functions import path as pathfunc
 from datachain.utils import inside_notebook
 
 if TYPE_CHECKING:
@@ -194,7 +195,7 @@ class DataChain(DatasetQuery):
 
     DEFAULT_FILE_RECORD: ClassVar[dict] = {
         "source": "",
-        "name": "",
+        "path": "",
         "vtype": "",
         "size": 0,
     }
@@ -656,7 +657,7 @@ class DataChain(DatasetQuery):
         return super().order_by(*args)
 
     @detach
-    def distinct(self, arg: str, *args: str) -> "Self":  # type: ignore[override]
+    def distinct(self, arg, *args) -> "Self":  # type: ignore[override]
         """Removes duplicate rows based on uniqueness of some input column(s)
         i.e if rows are found with the same value of input column(s), only one
         row is left in the result set.
@@ -1334,10 +1335,10 @@ class DataChain(DatasetQuery):
         use_cache: bool = True,
     ) -> None:
         """Method that exports all files from chain to some folder."""
-        if placement == "filename":
-            print("Checking if file names are unique")
-            if self.distinct(f"{signal}.name").count() != self.count():
-                raise ValueError("Files with the same name found")
+        if placement == "filename" and (
+            self.distinct(pathfunc.name(C("{signal}__path"))).count() != self.count()
+        ):
+            raise ValueError("Files with the same name found")
 
         for file in self.collect_one(signal):
             file.export(output, placement, use_cache)  # type: ignore[union-attr]

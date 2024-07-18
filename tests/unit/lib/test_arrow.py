@@ -20,7 +20,7 @@ def test_arrow_generator(tmp_path, catalog):
     name = "111.parquet"
     pq_path = tmp_path / name
     df.to_parquet(pq_path)
-    stream = File(name=name, parent=tmp_path.as_posix(), source="file:///")
+    stream = File(path=pq_path.as_posix(), source="file:///")
     stream._set_stream(catalog, caching_enabled=False)
 
     func = ArrowGenerator()

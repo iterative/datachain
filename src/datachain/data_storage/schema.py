@@ -76,8 +76,7 @@ class DirExpansion:
             q.c.vtype,
             (q.c.dir_type == DirType.DIR).label("is_dir"),
             q.c.source,
-            q.c.parent,
-            q.c.name,
+            q.c.path,
             q.c.version,
             q.c.location,
         )
@@ -90,36 +89,29 @@ class DirExpansion:
                 q.c.vtype,
                 q.c.is_dir,
                 q.c.source,
-                q.c.parent,
-                q.c.name,
+                q.c.path,
                 q.c.version,
                 f.max(q.c.location).label("location"),
             )
             .select_from(q)
-            .group_by(
-                q.c.source, q.c.parent, q.c.name, q.c.vtype, q.c.is_dir, q.c.version
-            )
-            .order_by(
-                q.c.source, q.c.parent, q.c.name, q.c.vtype, q.c.is_dir, q.c.version
-            )
+            .group_by(q.c.source, q.c.path, q.c.vtype, q.c.is_dir, q.c.version)
+            .order_by(q.c.source, q.c.path, q.c.vtype, q.c.is_dir, q.c.version)
         )
 
     @classmethod
     def query(cls, q):
         q = cls.base_select(q).cte(recursive=True)
-        parent_parent = path.parent(q.c.parent)
-        parent_name = path.name(q.c.parent)
+        parent = path.parent(q.c.path)
         q = q.union_all(
             sa.select(
                 sa.literal(-1).label("sys__id"),
                 sa.literal("").label("vtype"),
                 true().label("is_dir"),
                 q.c.source,
-                parent_parent.label("parent"),
-                parent_name.label("name"),
+                parent.label("path"),
                 sa.literal("").label("version"),
                 null().label("location"),
-            ).where((parent_name != "") | (parent_parent != ""))
+            ).where(parent != "")
         )
         return cls.apply_group_by(q)
 

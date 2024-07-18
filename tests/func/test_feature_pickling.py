@@ -41,7 +41,7 @@ def file_to_message(file):
 
 
 def common_df_asserts(df):
-    assert df["file"]["name"].tolist() == ["cat1", "cat2"]
+    assert df["file"]["path"].tolist() == ["cats/cat1", "cats/cat2"]
     assert df["file"]["size"].tolist() == [4, 4]
     assert df["message"]["id"].tolist() == ["cat1", "cat2"]
     mc = df["message"]["content"].tolist()
@@ -77,7 +77,7 @@ def test_feature_udf_parallel(cloud_test_catalog_tmpfile):
 
     chain = (
         DataChain.from_storage(source, type="text", catalog=catalog)
-        .filter(C.name.glob("*cat*"))
+        .filter(C.path.glob("*cat*"))
         .settings(parallel=2)
         .map(
             message=file_to_message,
@@ -87,7 +87,7 @@ def test_feature_udf_parallel(cloud_test_catalog_tmpfile):
 
     df = chain.to_pandas()
 
-    df = df.sort_values(("file", "name")).reset_index(drop=True)
+    df = df.sort_values(("file", "path")).reset_index(drop=True)
 
     common_df_asserts(df)
     assert df["message"]["model"].tolist() == ["Test AI Model", "Test AI Model"]
@@ -125,7 +125,7 @@ def test_feature_udf_parallel_local(cloud_test_catalog_tmpfile):
 
     chain = (
         DataChain.from_storage(source, type="text", catalog=catalog)
-        .filter(C.name.glob("*cat*"))
+        .filter(C.path.glob("*cat*"))
         .settings(parallel=2)
         .map(
             message=lambda file: AIMessageLocal(
@@ -141,7 +141,7 @@ def test_feature_udf_parallel_local(cloud_test_catalog_tmpfile):
 
     df = chain.to_pandas()
 
-    df = df.sort_values(("file", "name")).reset_index(drop=True)
+    df = df.sort_values(("file", "path")).reset_index(drop=True)
 
     common_df_asserts(df)
     assert df["message"]["model"].tolist() == [
@@ -182,7 +182,7 @@ def test_feature_udf_parallel_local_pydantic(cloud_test_catalog_tmpfile):
 
     chain = (
         DataChain.from_storage(source, type="text", catalog=catalog)
-        .filter(C.name.glob("*cat*"))
+        .filter(C.path.glob("*cat*"))
         .settings(parallel=2)
         .map(
             message=lambda file: AIMessageLocalPydantic(
@@ -200,7 +200,7 @@ def test_feature_udf_parallel_local_pydantic(cloud_test_catalog_tmpfile):
 
     df = chain.to_pandas()
 
-    df = df.sort_values(("file", "name")).reset_index(drop=True)
+    df = df.sort_values(("file", "path")).reset_index(drop=True)
 
     common_df_asserts(df)
     assert df["message"]["model"].tolist() == [
