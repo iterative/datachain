@@ -563,9 +563,13 @@ class DataChain(DatasetQuery):
         return res
 
     @detach
-    def order_by(self, *args: str) -> "Self":
+    def order_by(self, *args: str, descending: bool = False) -> "Self":
         """Orders by specified set of signals"""
-        return super().order_by(*self.signals_schema.resolve(*args).db_signals())
+        columns = self.signals_schema.resolve(*args).db_signals()
+        if descending:
+            columns = [sqlalchemy.desc(c) for c in columns]
+
+        return super().order_by(*columns)
 
     @detach
     def select(self, *args: str) -> "Self":
