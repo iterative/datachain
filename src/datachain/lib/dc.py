@@ -564,7 +564,12 @@ class DataChain(DatasetQuery):
 
     @detach
     def order_by(self, *args: str, descending: bool = False) -> "Self":
-        """Orders by specified set of signals"""
+        """
+        Orders by specified set of signals
+
+        Parameters:
+            descending (bool): Whether to sort in descending order or not.
+        """
         columns = self.signals_schema.resolve(*args).db_signals()
         if descending:
             columns = [sqlalchemy.desc(c) for c in columns]
