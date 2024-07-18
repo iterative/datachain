@@ -1,15 +1,14 @@
 from typing import Literal, Optional
 
-from pydantic import BaseModel
-
+from datachain.lib.data_model import DataModel
 from datachain.lib.dc import C, DataChain
 
 
-class NestedFeature(BaseModel):
+class NestedFeature(DataModel):
     value: str
 
 
-class Embedding(BaseModel):
+class Embedding(DataModel):
     value: float
     nested: NestedFeature = NestedFeature(value="nested_value")
     literal_field: Optional[Literal["end_turn", "max_tokens", "stop_sequence"]] = None
