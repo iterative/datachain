@@ -55,7 +55,7 @@ class UniqueId:
     def get_hash(self) -> str:
         etag = f"{self.vtype}{self.location}" if self.vtype else self.etag
         return sha256(
-            f"{self.storage}/{self.parent}/{self.name}/{etag}".encode()
+            f"{self.storage}/{self.parent}/{self.name}/{self.version}/{etag}".encode()
         ).hexdigest()
 
 
