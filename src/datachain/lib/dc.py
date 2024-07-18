@@ -519,11 +519,6 @@ class DataChain(DatasetQuery):
         output: OutputType = None,
         **signal_map,
     ) -> "Self":
-        """This is a batch version of map().
-
-        It accepts the same parameters plus an
-        additional parameter:
-        """
         udf_obj = self._udf_to_obj(BatchMapper, func, params, output, signal_map)
         chain = DatasetQuery.generate(
             self,

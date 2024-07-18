@@ -1,9 +1,0 @@
-pybtex
-PyPDF2
-openai
-langchain
-tiktoken
-parse
-numpy
-pandas
-scipy
