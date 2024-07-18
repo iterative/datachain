@@ -8,7 +8,9 @@ from typing import (
     ClassVar,
     Literal,
     Optional,
+    TypeVar,
     Union,
+    overload,
 )
 
 import pandas as pd
@@ -47,6 +49,8 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
 C = Column
+
+_T = TypeVar("_T")
 
 
 class DatasetPrepareError(DataChainParamsError):  # noqa: D101
@@ -649,14 +653,26 @@ class DataChain(DatasetQuery):
         with super().select(*db_signals).as_iterable() as rows:
             yield from rows
 
-    def results(  # noqa: D102
-        self, row_factory: Optional[Callable] = None, **kwargs
-    ) -> list[tuple[Any, ...]]:
+    @overload
+    def results(self) -> list[tuple[Any, ...]]: ...
+
+    @overload
+    def results(
+        self, row_factory: Callable[[list[str], tuple[Any, ...]], _T]
+    ) -> list[_T]: ...
+
+    def results(self, row_factory=None, **kwargs):  # noqa: D102
         rows = self.iterate_flatten()
         if row_factory:
             db_signals = self.signals_schema.db_signals()
             rows = (row_factory(db_signals, r) for r in rows)
         return list(rows)
+
+    def to_records(self) -> list[dict[str, Any]]:  # noqa: D102
+        def to_dict(cols: list[str], row: tuple[Any, ...]) -> dict[str, Any]:
+            return dict(zip(cols, row))
+
+        return self.results(row_factory=to_dict)
 
     def iterate(self, *cols: str) -> Iterator[list[DataType]]:
         """Iterate over rows.

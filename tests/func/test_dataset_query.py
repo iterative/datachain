@@ -219,7 +219,7 @@ def test_filter(cloud_test_catalog, save, from_path):
         q = DatasetQuery(name=ds_name, catalog=catalog)
         dataset_record = catalog.get_dataset(ds_name)
         assert dataset_record.status == DatasetStatus.COMPLETE
-    result = q.results()
+    result = q.db_results()
     count = q.count()
     assert len(result) == 2
     assert count == 2
@@ -379,7 +379,7 @@ def test_select(cloud_test_catalog):
         .limit(6)
         .select(C.name, size10x=C.size * 10, size100x=C.size * 100)
     )
-    result = q.results()
+    result = q.db_results()
     assert result == [
         ("description", 130, 1300),
         ("cat1", 40, 400),
@@ -402,9 +402,9 @@ def test_select_missing_column(cloud_test_catalog):
     ds1 = ds.select(C.missing_column_name)
     ds2 = ds.select("missing_column_name")
     # The exception type varies by database backend
-    exc1 = pytest.raises(Exception, ds1.results)
+    exc1 = pytest.raises(Exception, ds1.db_results)
     assert "missing_column_name" in str(exc1.value)
-    exc2 = pytest.raises(KeyError, ds2.results)
+    exc2 = pytest.raises(KeyError, ds2.db_results)
     assert "missing_column_name" in str(exc2.value)
 
 
@@ -423,7 +423,7 @@ def test_select_except(cloud_test_catalog):
         .select(C.parent, "name", C.size, size10x=C.size * 10, size100x=C.size * 100)
         .select_except(C.parent, C.size10x)
     )
-    result = q.results()
+    result = q.db_results()
     assert result == [
         ("description", 13, 1300),
         ("cat1", 4, 400),
@@ -445,7 +445,7 @@ def test_distinct(cloud_test_catalog):
     ds = DatasetQuery(path=path, catalog=catalog)
 
     q = ds.select(C.parent).order_by(C.parent).distinct()
-    result = q.results()
+    result = q.db_results()
 
     assert result == [
         ("",),
@@ -495,11 +495,11 @@ def test_mutate(cloud_test_catalog, save):
         new_query = DatasetQuery(name=ds_name, catalog=catalog).order_by(
             C.size10x.desc(), C.name
         )
-        result = new_query.results(row_factory=lambda c, v: dict(zip(c, v)))
+        result = new_query.db_results(row_factory=lambda c, v: dict(zip(c, v)))
         dataset_record = catalog.get_dataset(ds_name)
         assert dataset_record.status == DatasetStatus.COMPLETE
     else:
-        result = q.results(row_factory=lambda c, v: dict(zip(c, v)))
+        result = q.db_results(row_factory=lambda c, v: dict(zip(c, v)))
     assert len(result) == 4
     assert len(result[0]) == 20
     cols = {"size10x", "size1000x", "s2", "s3", "s4"}
@@ -527,11 +527,11 @@ def test_order_by_limit(cloud_test_catalog, save):
         ds_name = "animals_cats"
         q.save(ds_name)
         new_query = DatasetQuery(name=ds_name, catalog=catalog).order_by(C.name.desc())
-        result = new_query.results()
+        result = new_query.db_results()
         dataset_record = catalog.get_dataset(ds_name)
         assert dataset_record.status == DatasetStatus.COMPLETE
     else:
-        result = q.results()
+        result = q.db_results()
     assert [r[5] for r in result] == ["dog4", "dog3", "dog2", "dog1", "description"]
 
 
@@ -550,7 +550,7 @@ def test_row_number_without_explicit_order_by(cloud_test_catalog):
         C.size > 0
     ).save(ds_name)
 
-    results = DatasetQuery(name=ds_name, catalog=catalog).to_records()
+    results = DatasetQuery(name=ds_name, catalog=catalog).to_db_records()
     assert len(results) == 7  # unordered, just checking num of results
 
 
@@ -569,7 +569,7 @@ def test_row_number_with_order_by_name_descending(cloud_test_catalog):
         C.name.desc()
     ).save(ds_name)
 
-    results = DatasetQuery(name=ds_name, catalog=catalog).to_records()
+    results = DatasetQuery(name=ds_name, catalog=catalog).to_db_records()
     results_name_id = [
         {k: v for k, v in r.items() if k in ["sys__id", "name"]} for r in results
     ]
@@ -599,7 +599,7 @@ def test_row_number_with_order_by_name_ascending(cloud_test_catalog):
         C.name.asc()
     ).save(ds_name)
 
-    results = DatasetQuery(name=ds_name, catalog=catalog).to_records()
+    results = DatasetQuery(name=ds_name, catalog=catalog).to_db_records()
     results_name_id = [
         {k: v for k, v in r.items() if k in ["sys__id", "name"]} for r in results
     ]
@@ -633,7 +633,7 @@ def test_row_number_with_order_by_name_len_desc_and_name_asc(cloud_test_catalog)
         name_len
     ).order_by(C.name_len.desc(), C.name.asc()).save(ds_name)
 
-    results = DatasetQuery(name=ds_name, catalog=catalog).to_records()
+    results = DatasetQuery(name=ds_name, catalog=catalog).to_db_records()
     results_name_id = [
         {k: v for k, v in r.items() if k in ["sys__id", "name"]} for r in results
     ]
@@ -667,7 +667,7 @@ def test_row_number_with_order_by_before_add_signals(cloud_test_catalog):
         C.name.asc()
     ).add_signals(name_len).save(ds_name)
 
-    results = DatasetQuery(name=ds_name, catalog=catalog).to_records()
+    results = DatasetQuery(name=ds_name, catalog=catalog).to_db_records()
     results_name_id = [
         {k: v for k, v in r.items() if k in ["sys__id", "name"]} for r in results
     ]
@@ -707,9 +707,9 @@ def test_udf(cloud_test_catalog):
         .filter(C.parent.glob("cats*") | (C.size < 4))
         .add_signals(name_len)
     )
-    result1 = q.select(C.name, C.name_len).results()
+    result1 = q.select(C.name, C.name_len).db_results()
     # ensure that we're able to run with same query multiple times
-    result2 = q.select(C.name, C.name_len).results()
+    result2 = q.select(C.name, C.name_len).db_results()
     count = q.count()
     assert len(result1) == 3
     assert len(result2) == 3
@@ -785,7 +785,7 @@ def test_udf_different_types(cloud_test_catalog):
         .add_signals(test_types)
     )
 
-    results = q.select().to_records()
+    results = q.select().to_db_records()
     col_values = [
         (
             r["int_col"],
@@ -891,7 +891,7 @@ def test_class_udf(cloud_test_catalog, batch):
         .filter(C.size < 13)
         .add_signals(MyUDF(5, multiplier=2))
     )
-    results = q.select(C.size, C.total).order_by(C.size).results()
+    results = q.select(C.size, C.total).order_by(C.size).db_results()
     assert results == [
         (3, 11),
         (4, 13),
@@ -939,7 +939,7 @@ def test_udf_parallel(cloud_test_catalog_tmpfile, batch):
         .add_signals(udf_func, parallel=-1)
         .select(C.name, C.name_len)
     )
-    result = q.results()
+    result = q.db_results()
 
     assert len(result) == 3
     for r in result:
@@ -977,7 +977,7 @@ def test_class_udf_parallel(cloud_test_catalog_tmpfile, batch):
         .filter(C.size < 13)
         .add_signals(MyUDF(5, multiplier=2), parallel=2)
     )
-    results = q.select(C.size, C.total).order_by(C.size).results()
+    results = q.select(C.size, C.total).order_by(C.size).db_results()
     assert results == [
         (3, 11),
         (4, 13),
@@ -1012,7 +1012,7 @@ def test_udf_parallel_exec_error(cloud_test_catalog_tmpfile):
         .add_signals(name_len_error, parallel=-1)
     )
     with pytest.raises(RuntimeError, match="UDF Execution Failed!"):
-        q.results()
+        q.db_results()
 
 
 @pytest.mark.parametrize(
@@ -1039,7 +1039,7 @@ def test_udf_parallel_interrupt(cloud_test_catalog_tmpfile, capfd):
         .add_signals(name_len_interrupt, parallel=-1)
     )
     with pytest.raises(RuntimeError, match="UDF Execution Failed!"):
-        q.results()
+        q.db_results()
     captured = capfd.readouterr()
     assert "KeyboardInterrupt" in captured.err
     assert "semaphore" not in captured.err
@@ -1087,7 +1087,7 @@ def test_udf_distributed(cloud_test_catalog_tmpfile, batch, workers, datachain_j
         .add_signals(udf_func, parallel=2, workers=workers)
         .select(C.name, C.name_len, C.blank)
     )
-    result = q.results()
+    result = q.db_results()
 
     assert len(result) == 3
     string_default = String.default_value(catalog.warehouse.db.dialect)
@@ -1129,7 +1129,7 @@ def test_udf_distributed_exec_error(
         .add_signals(name_len_error, parallel=2, workers=workers)
     )
     with pytest.raises(RuntimeError, match="Test Error!"):
-        q.results()
+        q.db_results()
 
 
 @pytest.mark.parametrize(
@@ -1161,7 +1161,7 @@ def test_udf_distributed_interrupt(cloud_test_catalog_tmpfile, capfd, datachain_
         .add_signals(name_len_interrupt, parallel=2, workers=2)
     )
     with pytest.raises(RuntimeError, match=r"Worker Killed \(KeyboardInterrupt\)"):
-        q.results()
+        q.db_results()
     captured = capfd.readouterr()
     assert "KeyboardInterrupt" in captured.err
     assert "semaphore" not in captured.err
@@ -1218,7 +1218,7 @@ def test_udf_distributed_cancel(cloud_test_catalog_tmpfile, capfd, datachain_job
     )
 
     with pytest.raises(SystemExit) as excinfo:
-        q.results()
+        q.db_results()
 
     assert excinfo.value.code == QUERY_SCRIPT_CANCELED_EXIT_CODE
     captured = capfd.readouterr()
@@ -1249,13 +1249,13 @@ def test_apply_udf(cloud_test_catalog, tmp_path):
     q = DatasetQuery(name="from-storage", version=1, catalog=catalog).filter(
         C.name_len == 4
     )
-    assert len(q.results()) == 6
+    assert len(q.db_results()) == 6
 
     catalog.apply_udf(f"{script}:name_len", "ds://animals", "from-dataset")
     q = DatasetQuery(name="from-dataset", version=1, catalog=catalog).filter(
         C.name_len == 4
     )
-    assert len(q.results()) == 6
+    assert len(q.db_results()) == 6
 
 
 def to_str(buf) -> str:
@@ -1284,7 +1284,7 @@ def test_udf_object_param(cloud_test_catalog, dogs_dataset, param, use_cache):
     q = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog).add_signals(
         signal, cache=use_cache
     )
-    result = q.results()
+    result = q.db_results()
 
     assert len(result) == 4
     signals = {r[-1] for r in result}
@@ -1308,7 +1308,7 @@ def test_udf_stream_param(cloud_test_catalog, dogs_dataset, use_cache):
     q = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog).add_signals(
         signal, cache=use_cache
     )
-    result = q.results()
+    result = q.db_results()
 
     assert len(result) == 4
     signals = {r[-1] for r in result}
@@ -1425,7 +1425,7 @@ def test_union(cloud_test_catalog):
     (dogs | cats).save("dogs_cats")
 
     q = DatasetQuery(name="dogs_cats", version=1, catalog=catalog)
-    result = q.results()
+    result = q.db_results()
     count = q.count()
     assert len(result) == 6
     assert count == 6
@@ -1460,14 +1460,14 @@ def test_join_left_one_column_predicate(
         signals2
     )
 
-    joined_records = dogs_cats.join(dogs, predicates).to_records()
+    joined_records = dogs_cats.join(dogs, predicates).to_db_records()
     assert len(joined_records) == 6
 
     cat_records_names = ["cat1", "cat2"]
 
     dogs_cats_records = DatasetQuery(
         name=dogs_cats_dataset.name, version=1, catalog=catalog
-    ).to_records()
+    ).to_db_records()
 
     # rows that found match have both signals
     assert all(
@@ -1524,9 +1524,9 @@ def test_join_left_multiple_column_pedicates(
 
     dogs_cats_records = DatasetQuery(
         name=dogs_cats_dataset.name, version=1, catalog=catalog
-    ).to_records()
+    ).to_db_records()
 
-    joined_records = dogs_cats.join(dogs, predicates).to_records()
+    joined_records = dogs_cats.join(dogs, predicates).to_db_records()
     assert len(joined_records) == 6
 
     # rows that found match have both signals
@@ -1567,7 +1567,7 @@ def test_join_with_binary_expression_on_one_column(
 
     res = dogs_cats.join(
         dogs, dogs_cats.c("name") == dogs.c("name"), inner=inner
-    ).to_records()
+    ).to_db_records()
 
     if inner:
         expected = [
@@ -1616,7 +1616,7 @@ def test_join_with_binary_expression_on_multiple_columns(
             & (dogs_cats.c("parent") == dogs.c("parent"))
         ),
         inner=inner,
-    ).to_records()
+    ).to_db_records()
 
     if inner:
         expected = [
@@ -1664,7 +1664,7 @@ def test_join_with_combination_binary_expression_and_column_predicates(
         dogs,
         [column_predicate, dogs_cats.c("parent") == dogs.c("parent")],
         inner=inner,
-    ).to_records()
+    ).to_db_records()
 
     if inner:
         expected = [
@@ -1708,7 +1708,7 @@ def test_join_with_binary_expression_with_arithmetics(
 
     res = cats.join(
         dogs, cats.c("size") == dogs.c("size") + 1, inner=inner
-    ).to_records()
+    ).to_db_records()
 
     assert sorted(((r["name"], r["name_right"]) for r in res), key=lambda x: x[0]) == [
         ("cat1", "dog2"),
@@ -1739,13 +1739,13 @@ def test_join_conflicting_custom_columns(cloud_test_catalog, dogs_dataset):
         signals2
     )
 
-    joined_records = ds1.join(ds2, "name").to_records()
+    joined_records = ds1.join(ds2, "name").to_db_records()
     assert len(joined_records) == 4
 
     # check custom columns
     assert all(r["sig1"] == 1 and r["sig1_right"] == 2 for r in joined_records)
 
-    joined_records = ds1.join(ds2, "name", rname="{name}_dupl").to_records()
+    joined_records = ds1.join(ds2, "name", rname="{name}_dupl").to_db_records()
     assert len(joined_records) == 4
 
     # check custom columns
@@ -1779,12 +1779,12 @@ def test_join_inner(
         signals2
     )
 
-    joined_records = dogs_cats.join(dogs, "name", inner=True).to_records()
+    joined_records = dogs_cats.join(dogs, "name", inner=True).to_db_records()
     assert len(joined_records) == 4
 
     dogs_records = DatasetQuery(
         name=dogs_dataset.name, version=1, catalog=catalog
-    ).to_records()
+    ).to_db_records()
 
     # check custom columns
     assert all(r["sig1"] == 1 and r["sig2"] == 2 for r in joined_records)
@@ -1793,7 +1793,9 @@ def test_join_inner(
         assert all([r[f"{k}_right"] == dog_r[k]] for k in dog_r)
 
     # joining on multiple fields
-    joined_records = dogs_cats.join(dogs, ["parent", "name"], inner=True).to_records()
+    joined_records = dogs_cats.join(
+        dogs, ["parent", "name"], inner=True
+    ).to_db_records()
     assert len(joined_records) == 4
 
     # check custom columns
@@ -1818,13 +1820,13 @@ def test_join_with_self(cloud_test_catalog, dogs_dataset):
 
     dogs_records = DatasetQuery(
         name=dogs_dataset.name, version=1, catalog=catalog
-    ).to_records()
+    ).to_db_records()
 
     dogs = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog).add_signals(
         signals1
     )
 
-    joined_records = dogs.join(dogs, "name").to_records()
+    joined_records = dogs.join(dogs, "name").to_db_records()
     assert len(joined_records) == 4
 
     # check custom columns
@@ -1859,11 +1861,11 @@ def test_join_with_missing_predicates(cloud_test_catalog, dogs_dataset):
     ).add_signals(signals2)
 
     with pytest.raises(ValueError) as excinfo:
-        dogs1.join(dogs2, "sig1").to_records()
+        dogs1.join(dogs2, "sig1").to_db_records()
     assert str(excinfo.value) == "Column sig1 was not found in right part of the join"
 
     with pytest.raises(ValueError) as excinfo:
-        dogs1.join(dogs2, "sig2").to_records()
+        dogs1.join(dogs2, "sig2").to_db_records()
     assert str(excinfo.value) == "Column sig2 was not found in left part of the join"
 
 
@@ -1879,11 +1881,11 @@ def test_join_with_wrong_predicates(cloud_test_catalog, dogs_dataset):
     dogs2 = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
 
     with pytest.raises(ValueError) as excinfo:
-        dogs1.join(dogs2, []).to_records()
+        dogs1.join(dogs2, []).to_db_records()
     assert str(excinfo.value) == "Missing predicates"
 
     with pytest.raises(TypeError) as excinfo:
-        dogs1.join(dogs2, [[]]).to_records()
+        dogs1.join(dogs2, [[]]).to_db_records()
     assert str(excinfo.value) == "Unsupported predicate [] for join expression"
 
 
@@ -1902,15 +1904,15 @@ def test_join_with_missing_columns_in_expression(
     cats = DatasetQuery(name=cats_dataset.name, version=1, catalog=catalog)
 
     with pytest.raises(ValueError) as excinfo:
-        dogs1.join(dogs2, dogs1.c("wrong") == dogs2.c("name")).to_records()
+        dogs1.join(dogs2, dogs1.c("wrong") == dogs2.c("name")).to_db_records()
     assert str(excinfo.value) == "Column wrong was not found in left part of the join"
 
     with pytest.raises(ValueError) as excinfo:
-        dogs1.join(dogs2, dogs1.c("name") == dogs2.c("wrong")).to_records()
+        dogs1.join(dogs2, dogs1.c("name") == dogs2.c("wrong")).to_db_records()
     assert str(excinfo.value) == "Column wrong was not found in right part of the join"
 
     with pytest.raises(ValueError) as excinfo:
-        dogs1.join(dogs2, dogs1.c("name") == cats.c("name")).to_records()
+        dogs1.join(dogs2, dogs1.c("name") == cats.c("name")).to_db_records()
     assert str(excinfo.value) == (
         "Column name was not found in left or right part of the join"
     )
@@ -1936,7 +1938,7 @@ def test_join_with_using_functions_in_expression(
             == sqlalchemy.func.upper(dogs.c("name"))
         ),
         inner=inner,
-    ).to_records()
+    ).to_db_records()
 
     if inner:
         expected = [
@@ -1978,7 +1980,7 @@ def test_row_generator(cloud_test_catalog, dogs_dataset):
         yield DatasetRow.create("subobject2", size=70, parent=parent_path)
 
     q = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog).generate(gen)
-    result = q.to_records()
+    result = q.to_db_records()
 
     parents_names = [(r["parent"], r["name"]) for r in result]
     parents_names.sort(key=lambda x: (x[1], x[0]))
@@ -2022,7 +2024,7 @@ def test_row_generator_with_filter(cloud_test_catalog, dogs_dataset):
         .generate(gen)
         .filter(C.name == "subobject")
     )
-    result = q.to_records()
+    result = q.to_db_records()
 
     parents_names = [(r["parent"], r["name"]) for r in result]
     parents_names.sort(key=lambda x: (x[1], x[0]))
@@ -2058,7 +2060,7 @@ def test_row_generator_with_limit(cloud_test_catalog, dogs_dataset):
         .limit(1)
         .generate(gen)
     )
-    result = q.to_records()
+    result = q.to_db_records()
 
     parents_names = [(r["parent"], r["name"]) for r in result]
     parents_names.sort(key=lambda x: (x[0], x[1]))
@@ -2095,7 +2097,7 @@ def test_row_generator_parallel(cloud_test_catalog_tmpfile):
     q = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog).generate(
         gen, parallel=-1
     )
-    result = q.to_records()
+    result = q.to_db_records()
 
     parents_names = [(r["parent"], r["name"]) for r in result]
     parents_names.sort(key=lambda x: (x[1], x[0]))
@@ -2128,7 +2130,7 @@ def test_row_generator_batch(cloud_test_catalog, dogs_dataset):
             yield DatasetRow.create("subobject2", size=70, parent=parent_path)
 
     q = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog).generate(gen)
-    result = q.to_records()
+    result = q.to_db_records()
     parents_names = [(r["parent"], r["name"]) for r in result]
     parents_names.sort(key=lambda x: (x[1], x[0]))
 
@@ -2169,7 +2171,7 @@ def test_row_generator_class(cloud_test_catalog, dogs_dataset):
     q = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog).generate(
         Subobjects
     )
-    result = q.to_records()
+    result = q.to_db_records()
     parents_names = [(r["parent"], r["name"]) for r in result]
     parents_names.sort(key=lambda x: (x[1], x[0]))
 
@@ -2212,7 +2214,7 @@ def test_row_generator_class_batch(cloud_test_catalog, dogs_dataset):
     q = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog).generate(
         Subobjects
     )
-    result = q.to_records()
+    result = q.to_db_records()
     parents_names = [(r["parent"], r["name"]) for r in result]
     parents_names.sort(key=lambda x: (x[1], x[0]))
 
@@ -2247,7 +2249,7 @@ def test_row_generator_partition_by(cloud_test_catalog, dogs_dataset):
     result = (
         DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
         .generate(gen, partition_by="parent")
-        .to_records()
+        .to_db_records()
     )
     parents_names = [(r["parent"], r["name"], r["cnt"]) for r in result]
     parents_names.sort(key=lambda x: (x[1], x[0]))
@@ -2291,7 +2293,7 @@ def test_row_generator_partition_by_parallel(cloud_test_catalog_tmpfile):
     q = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog).generate(
         gen, partition_by="parent", parallel=-1
     )
-    result = q.to_records()
+    result = q.to_db_records()
 
     parents_names = [(r["parent"], r["name"], r["cnt"]) for r in result]
     parents_names.sort(key=lambda x: (x[1], x[0]))
@@ -2327,7 +2329,7 @@ def test_row_generator_partition_by_batch(cloud_test_catalog, dogs_dataset):
     result = (
         DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
         .generate(gen, partition_by="parent")
-        .to_records()
+        .to_db_records()
     )
     parents_names = [(r["parent"], r["name"], r["cnt"]) for r in result]
     parents_names.sort(key=lambda x: (x[1], x[0]))
@@ -2408,7 +2410,7 @@ def test_row_generator_with_new_columns(cloud_test_catalog, dogs_dataset):
     ).save("dogs_with_rows_and_signals")
 
     q = DatasetQuery(name="dogs_with_rows_and_signals", catalog=catalog)
-    result = q.select().to_records()
+    result = q.select().to_db_records()
 
     col_values = [
         (
@@ -2494,14 +2496,14 @@ def test_row_generators_sequence_with_new_columns(cloud_test_catalog, dogs_datas
         yield *DatasetRow.create(name), name.lower(), 2
 
     DatasetQuery(name=dogs_dataset.name, catalog=catalog).generate(upper).save("upper")
-    for res in DatasetQuery(name="upper", catalog=catalog).to_records():
+    for res in DatasetQuery(name="upper", catalog=catalog).to_db_records():
         assert "name_upper" in res
         assert res["name_upper"] == res["name"].upper()
         assert "p1" in res
         assert res["p1"] == 1
 
     DatasetQuery(name="upper", catalog=catalog).generate(lower).save("lower")
-    for res in DatasetQuery(name="lower", catalog=catalog).to_records():
+    for res in DatasetQuery(name="lower", catalog=catalog).to_db_records():
         assert "name_upper" not in res
         assert "name_lower" in res
         assert res["name_lower"] == res["name"].lower()
@@ -2558,7 +2560,7 @@ def test_row_generator_with_new_columns_empty_values(cloud_test_catalog, dogs_da
     ).save("dogs_with_rows_and_signals")
 
     q = DatasetQuery(name="dogs_with_rows_and_signals", catalog=catalog)
-    result = q.to_records()
+    result = q.to_db_records()
 
     col_values = [
         (
@@ -2643,7 +2645,7 @@ def test_row_generator_with_new_columns_numpy(cloud_test_catalog, dogs_dataset):
     ).save("dogs_with_rows_and_signals")
 
     q = DatasetQuery(name="dogs_with_rows_and_signals", catalog=catalog)
-    result = q.to_records()
+    result = q.to_db_records()
 
     col_values = [
         (
@@ -2710,7 +2712,7 @@ def test_row_generator_with_new_columns_wrong_type(cloud_test_catalog, dogs_data
     with pytest.raises(ValueError):
         DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog).generate(
             Subobjects
-        ).to_records()
+        ).to_db_records()
 
 
 @pytest.mark.parametrize("tree", [TARRED_TREE], indirect=True)
@@ -2764,7 +2766,7 @@ def test_checksum_udf(cloud_test_catalog, dogs_dataset):
     q = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog).add_signals(
         checksum
     )
-    result = q.results()
+    result = q.db_results()
 
     assert len(result) == 4
 
@@ -2779,7 +2781,7 @@ def test_tar_loader(cloud_test_catalog):
     q.save("extracted")
 
     q = DatasetQuery(name="extracted", catalog=catalog).filter(C.parent.glob("*/cats*"))
-    assert len(q.results()) == 2
+    assert len(q.db_results()) == 2
 
     ds = q.extract(Object(to_str), "name")
     assert set(ds) == {("meow", "cat1"), ("mrow", "cat2")}
@@ -2853,7 +2855,7 @@ def test_similarity_search(cloud_test_catalog):
         .limit(1)
         .add_signals(TextEmbeddingGenerator())
         .select(C.embedding, C.source, C.parent, C.name)
-        .results()[0]
+        .db_results()[0]
     )
     q = (
         DatasetQuery(name="ds1", catalog=catalog)
@@ -2872,7 +2874,7 @@ def test_similarity_search(cloud_test_catalog):
     count = q.count()
     assert count == 13
 
-    result = q.results()
+    result = q.db_results()
     expected = [
         ("animals.tar", "description", 0.0, 0.0),
         ("animals.tar/cats", "cat1", 0.8508677010357059, 1.9078358385397216),
@@ -2924,12 +2926,12 @@ def test_subtract(cloud_test_catalog):
 
     # subtracting dataset from dataset
     q = dogs_cats.subtract(dogs)
-    result = q.results(row_factory=from_result_row)
+    result = q.db_results(row_factory=from_result_row)
     assert sorted(r["name"] for r in result) == ["cat1", "cat2"]
 
     # subtracting dataset out of index
     q = DatasetQuery(f"{src}", catalog=catalog).subtract(cats)
-    result = q.results(row_factory=from_result_row)
+    result = q.db_results(row_factory=from_result_row)
     assert sorted(r["name"] for r in result) == [
         "description",
         "dog1",
@@ -2942,7 +2944,7 @@ def test_subtract(cloud_test_catalog):
     q = DatasetQuery(f"{src}", catalog=catalog).subtract(
         DatasetQuery(f"{src}/dogs/*", catalog=catalog)
     )
-    result = q.results(row_factory=from_result_row)
+    result = q.db_results(row_factory=from_result_row)
     assert sorted(r["name"] for r in result) == ["cat1", "cat2", "description"]
 
     # subtracting with filter
@@ -2951,12 +2953,12 @@ def test_subtract(cloud_test_catalog):
         .filter(C.name.glob("dog*"))
         .subtract(cats)
     )
-    result = q.results(row_factory=from_result_row)
+    result = q.db_results(row_factory=from_result_row)
     assert sorted(r["name"] for r in result) == ["dog1", "dog2", "dog3", "dog4"]
 
     # chain subtracting
     q = dogs_cats.subtract(dogs).subtract(cats)
-    result = q.results()
+    result = q.db_results()
     count = q.count()
     assert len(result) == 0
     assert count == 0
@@ -2967,7 +2969,7 @@ def test_subtract(cloud_test_catalog):
         .subtract(cats)
         .filter(C.name.glob("dog*"))
     )
-    result = q.results(row_factory=from_result_row)
+    result = q.db_results(row_factory=from_result_row)
     assert sorted(r["name"] for r in result) == ["dog1", "dog2", "dog3", "dog4"]
 
     # subtract with usage of udfs and union
@@ -2981,7 +2983,7 @@ def test_subtract(cloud_test_catalog):
         .add_signals(name_len)
         .union(cats_with_signals)
     )
-    result = q.results(row_factory=from_result_row)
+    result = q.db_results(row_factory=from_result_row)
     assert sorted(r["name"] for r in result) == sorted(
         ["description", "dog1", "dog2", "dog3", "dog4", "cat1", "cat2"]
     )
@@ -2992,17 +2994,17 @@ def test_subtract(cloud_test_catalog):
     all_except_dog2 = DatasetQuery(f"{src}", catalog=catalog).filter(C.size > 3)
     only_cats = dogs_cats.filter(C.name.glob("cat*"))
     q = all_except_dog2.subtract(only_cats)
-    result = q.results(row_factory=from_result_row)
+    result = q.db_results(row_factory=from_result_row)
     assert sorted(r["name"] for r in result) == ["description", "dog1", "dog3", "dog4"]
 
     # subtracting after union
     q = dogs.union(cats).subtract(dogs)
-    result = q.results(row_factory=from_result_row)
+    result = q.db_results(row_factory=from_result_row)
     assert sorted(r["name"] for r in result) == ["cat1", "cat2"]
 
     # subtract with itself
     q = dogs.subtract(dogs)
-    result = q.results()
+    result = q.db_results()
     count = q.count()
     assert len(result) == 0
     assert count == 0
@@ -3034,7 +3036,7 @@ def test_group_by(cloud_test_catalog, cloud_type, dogs_dataset):
             functions.max(C.size),
         )
     )
-    result = q.results()
+    result = q.db_results()
     assert len(result) == 2
 
     result_dict = {r[0]: r[1:] for r in result}
@@ -3104,7 +3106,7 @@ def test_json_loader(cloud_test_catalog):
         .order_by(C.name)
     )
     assert q.count() == 4
-    res = q.results()
+    res = q.db_results()
     assert len(res) == 4
     assert [r[0] for r in res] == [r[0] for r in expected]
     assert [r[1] for r in res] == pytest.approx([r[1] for r in expected])
@@ -3173,23 +3175,23 @@ def test_changed(cloud_test_catalog):
 
     # changed between dataset and dataset
     q = dogs_updated_1.changed(dogs)
-    result = q.results(row_factory=from_result_row)
+    result = q.db_results(row_factory=from_result_row)
     assert sorted(r["name"] for r in result) == ["dog2"]
 
     q = dogs_updated_2.changed(dogs)
-    result = q.results(row_factory=from_result_row)
+    result = q.db_results(row_factory=from_result_row)
     assert sorted(r["name"] for r in result) == ["dog1", "dog2"]
 
     # changed between dataset and dataset, no change
     q = dogs.changed(dogs)
-    result = q.results()
+    result = q.db_results()
     count = q.count()
     assert len(result) == 0
     assert count == 0
 
     # changed between index and dataset
     q = DatasetQuery(f"{src}/dogs/*", catalog=catalog).changed(dogs)
-    result = q.results(row_factory=from_result_row)
+    result = q.db_results(row_factory=from_result_row)
     assert sorted(r["name"] for r in result) == ["dog1", "dog2"]
 
     # changed with filters
@@ -3198,12 +3200,12 @@ def test_changed(cloud_test_catalog):
         .filter(C.name.glob("dog*"))
         .changed(dogs)
     )
-    result = q.results(row_factory=from_result_row)
+    result = q.db_results(row_factory=from_result_row)
     assert sorted(r["name"] for r in result) == ["dog1", "dog2"]
 
     # chain changed
     q = dogs_updated_2.changed(dogs).changed(dogs_updated_1)
-    result = q.results(row_factory=from_result_row)
+    result = q.db_results(row_factory=from_result_row)
     assert sorted(r["name"] for r in result) == ["dog1"]
 
     # filtering after changed
@@ -3212,7 +3214,7 @@ def test_changed(cloud_test_catalog):
         .changed(dogs)
         .filter(C.name.glob("dog1*"))
     )
-    result = q.results(row_factory=from_result_row)
+    result = q.db_results(row_factory=from_result_row)
     assert sorted(r["name"] for r in result) == ["dog1"]
 
     # changed with usage of udfs
@@ -3221,18 +3223,18 @@ def test_changed(cloud_test_catalog):
         .changed(dogs)
         .add_signals(name_len)
     )
-    result = q.results(row_factory=from_result_row)
+    result = q.db_results(row_factory=from_result_row)
     assert sorted(r["name"] for r in result) == sorted(["dog1", "dog2"])
     assert all(r["name_len"] > 0 for r in result)
 
     # changed after union
     q = dogs_updated_2.union(cats).changed(dogs)
-    result = q.results(row_factory=from_result_row)
+    result = q.db_results(row_factory=from_result_row)
     assert sorted(r["name"] for r in result) == ["dog1", "dog2"]
 
     # changed with itself
     q = dogs.changed(dogs)
-    result = q.results()
+    result = q.db_results()
     count = q.count()
     assert len(result) == 0
     assert count == 0
@@ -3243,11 +3245,11 @@ def test_changed(cloud_test_catalog):
     [("s3", True)],
     indirect=True,
 )
-def test_to_records(simple_ds_query):
-    assert simple_ds_query.to_records() == SIMPLE_DS_QUERY_RECORDS
+def test_to_db_records(simple_ds_query):
+    assert simple_ds_query.to_db_records() == SIMPLE_DS_QUERY_RECORDS
 
 
-@pytest.mark.parametrize("method", ["to_records", "extract"])
+@pytest.mark.parametrize("method", ["to_db_records", "extract"])
 @pytest.mark.parametrize("save", [True, False])
 @pytest.mark.parametrize(
     "cloud_type,version_aware",
@@ -3279,10 +3281,10 @@ def test_udf_after_union(cloud_test_catalog, save, method):
         ds_dogs.save("dogs")
         ds_dogs = DatasetQuery(name="dogs", version=1, catalog=catalog)
 
-    if method == "to_records":
+    if method == "to_db_records":
 
         def get_result(query):
-            result = [(r["name"], r["name_len"]) for r in query.to_records()]
+            result = [(r["name"], r["name_len"]) for r in query.to_db_records()]
             result.sort()
             return result
 
@@ -3321,7 +3323,7 @@ def test_udf_after_union(cloud_test_catalog, save, method):
     ]
 
 
-@pytest.mark.parametrize("method", ["to_records", "extract"])
+@pytest.mark.parametrize("method", ["to_db_records", "extract"])
 @pytest.mark.parametrize(
     "cloud_type,version_aware",
     [("s3", True), ("file", False)],
@@ -3345,10 +3347,10 @@ def test_udf_after_union_same_rows_with_mutate(cloud_test_catalog, method):
     q1 = q_base.mutate(x=sqlalchemy.cast(C.name + "_1", String()))
     q2 = q_base.mutate(x=sqlalchemy.cast(C.name + "_2", String()))
 
-    if method == "to_records":
+    if method == "to_db_records":
 
         def get_result(query):
-            result = [(r["name"], r["x"], r["name_len"]) for r in query.to_records()]
+            result = [(r["name"], r["x"], r["name_len"]) for r in query.to_db_records()]
             result.sort()
             return result
 
@@ -3418,7 +3420,7 @@ def test_udf_after_limit(cloud_test_catalog, method):
                 query.limit(100)
                 .add_signals(name_int)
                 .select("name", "name_int")
-                .to_records()
+                .to_db_records()
             )
 
     elif method == "extract":
