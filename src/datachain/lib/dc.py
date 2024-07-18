@@ -244,9 +244,6 @@ class DataChain(DatasetQuery):
         self.signals_schema |= signals_schema
         return self
 
-    def get_file_signals(self) -> list[str]:  # noqa: D102
-        return list(self.signals_schema.get_file_signals())
-
     @classmethod
     def from_storage(
         cls,

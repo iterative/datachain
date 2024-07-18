@@ -290,9 +290,9 @@ class SignalSchema:
 
         return SignalSchema(self.values | schema_right)
 
-    def get_file_signals(self) -> Iterator[str]:
+    def get_signals(self, target_type: type[DataModel]) -> Iterator[str]:
         for path, type_, has_subtree, _ in self.get_flat_tree():
-            if has_subtree and issubclass(type_, File):
+            if has_subtree and issubclass(type_, target_type):
                 yield ".".join(path)
 
     def create_model(self, name: str) -> type[DataModel]:

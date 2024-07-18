@@ -1630,6 +1630,7 @@ class Catalog:
                 ...
             }
         """
+        from datachain.lib.file import File
         from datachain.lib.signal_schema import DEFAULT_DELIMITER, SignalSchema
 
         version = self.get_dataset(dataset_name).get_version(dataset_version)
@@ -1637,7 +1638,7 @@ class Catalog:
         file_signals_values = {}
 
         schema = SignalSchema.deserialize(version.feature_schema)
-        for file_signals in schema.get_file_signals():
+        for file_signals in schema.get_signals(File):
             prefix = file_signals.replace(".", DEFAULT_DELIMITER) + DEFAULT_DELIMITER
             file_signals_values[file_signals] = {
                 c_name.removeprefix(prefix): c_value
