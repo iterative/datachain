@@ -1,4 +1,3 @@
-import ast
 import contextlib
 import datetime
 import inspect
@@ -10,7 +9,6 @@ import re
 import string
 import subprocess
 import sys
-import types
 from abc import ABC, abstractmethod
 from collections.abc import Generator, Iterable, Iterator, Sequence
 from copy import copy
@@ -26,12 +24,9 @@ from typing import (
 )
 
 import attrs
-import pandas as pd
 import sqlalchemy
 from attrs import frozen
-from dill import dumps, source
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback, TqdmCallback
-from pydantic import BaseModel
 from sqlalchemy import Column
 from sqlalchemy.sql import func as f
 from sqlalchemy.sql.elements import ColumnClause, ColumnElement
@@ -53,10 +48,13 @@ from datachain.data_storage.schema import (
 from datachain.dataset import DatasetStatus, RowDict
 from datachain.error import DatasetNotFoundError, QueryScriptCancelError
 from datachain.progress import CombinedDownloadCallback
-from datachain.query.schema import DEFAULT_DELIMITER
 from datachain.sql.functions import rand
 from datachain.storage import Storage, StorageURI
-from datachain.utils import batched, determine_processes, inside_notebook
+from datachain.utils import (
+    batched,
+    determine_processes,
+    filtered_cloudpickle_dumps,
+)
 
 from .metrics import metrics
 from .schema import C, UDFParamSpec, normalize_param
@@ -257,7 +255,7 @@ class DatasetDiffOperation(Step):
         """
 
     def apply(self, query_generator, temp_tables: list[str]):
-        source_query = query_generator.exclude(("id",))
+        source_query = query_generator.exclude(("sys__id",))
         target_query = self.dq.apply_steps().select()
         temp_tables.extend(self.dq.temp_table_names)
 
@@ -492,7 +490,7 @@ class UDF(Step, ABC):
             elif processes:
                 # Parallel processing (faster for more CPU-heavy UDFs)
                 udf_info = {
-                    "udf": self.udf,
+                    "udf_data": filtered_cloudpickle_dumps(self.udf),
                     "catalog_init": self.catalog.get_init_params(),
                     "id_generator_clone_params": (
                         self.catalog.id_generator.clone_params()
@@ -513,16 +511,15 @@ class UDF(Step, ABC):
 
                 envs = dict(os.environ)
                 envs.update({"PYTHONPATH": os.getcwd()})
-                with self.process_feature_module():
-                    process_data = dumps(udf_info, recurse=True)
-                    result = subprocess.run(  # noqa: S603
-                        [datachain_exec_path, "--internal-run-udf"],
-                        input=process_data,
-                        check=False,
-                        env=envs,
-                    )
-                    if result.returncode != 0:
-                        raise RuntimeError("UDF Execution Failed!")
+                process_data = filtered_cloudpickle_dumps(udf_info)
+                result = subprocess.run(  # noqa: S603
+                    [datachain_exec_path, "--internal-run-udf"],
+                    input=process_data,
+                    check=False,
+                    env=envs,
+                )
+                if result.returncode != 0:
+                    raise RuntimeError("UDF Execution Failed!")
 
             else:
                 # Otherwise process single-threaded (faster for smaller UDFs)
@@ -571,57 +568,6 @@ class UDF(Step, ABC):
             self.catalog.warehouse.close()
             raise
 
-    @contextlib.contextmanager
-    def process_feature_module(self):
-        # Generate a random name for the feature module
-        feature_module_name = "tmp" + _random_string(10)
-        # Create a dynamic module with the generated name
-        dynamic_module = types.ModuleType(feature_module_name)
-        # Get the import lines for the necessary objects from the main module
-        main_module = sys.modules["__main__"]
-        if getattr(main_module, "__file__", None):
-            import_lines = list(get_imports(main_module))
-        else:
-            import_lines = [
-                source.getimport(obj, alias=name)
-                for name, obj in main_module.__dict__.items()
-                if _imports(obj) and not (name.startswith("__") and name.endswith("__"))
-            ]
-
-        # Get the feature classes from the main module
-        feature_classes = {
-            name: obj
-            for name, obj in main_module.__dict__.items()
-            if _feature_predicate(obj)
-        }
-        if not feature_classes:
-            yield None
-            return
-
-        # Get the source code of the feature classes
-        feature_sources = [source.getsource(cls) for _, cls in feature_classes.items()]
-        # Set the module name for the feature classes to the generated name
-        for name, cls in feature_classes.items():
-            cls.__module__ = feature_module_name
-            setattr(dynamic_module, name, cls)
-        # Add the dynamic module to the sys.modules dictionary
-        sys.modules[feature_module_name] = dynamic_module
-        # Combine the import lines and feature sources
-        feature_file = "\n".join(import_lines) + "\n" + "\n".join(feature_sources)
-
-        # Write the module content to a .py file
-        with open(f"{feature_module_name}.py", "w") as module_file:
-            module_file.write(feature_file)
-
-        try:
-            yield feature_module_name
-        finally:
-            for cls in feature_classes.values():
-                cls.__module__ = main_module.__name__
-            os.unlink(f"{feature_module_name}.py")
-            # Remove the dynamic module from sys.modules
-            del sys.modules[feature_module_name]
-
     def create_partitions_table(self, query: Select) -> "Table":
         """
         Create temporary table with group by partitions.
@@ -640,7 +586,7 @@ class UDF(Step, ABC):
 
         # fill table with partitions
         cols = [
-            query.selected_columns.id,
+            query.selected_columns.sys__id,
             f.dense_rank().over(order_by=list_partition_by).label(PARTITION_COLUMN_ID),
         ]
         self.catalog.warehouse.db.execute(
@@ -674,7 +620,7 @@ class UDF(Step, ABC):
             subq = query.subquery()
             query = (
                 sqlalchemy.select(*subq.c)
-                .outerjoin(partition_tbl, partition_tbl.c.id == subq.c.id)
+                .outerjoin(partition_tbl, partition_tbl.c.sys__id == subq.c.sys__id)
                 .add_columns(*partition_columns())
             )
 
@@ -706,18 +652,18 @@ class UDFSignal(UDF):
         columns = [
             sqlalchemy.Column(c.name, c.type)
             for c in query.selected_columns
-            if c.name != "id"
+            if c.name != "sys__id"
         ]
         table = self.catalog.warehouse.create_udf_table(self.udf_table_name(), columns)
         select_q = query.with_only_columns(
-            *[c for c in query.selected_columns if c.name != "id"]
+            *[c for c in query.selected_columns if c.name != "sys__id"]
         )
 
         # if there is order by clause we need row_number to preserve order
         # if there is no order by clause we still need row_number to generate
         # unique ids as uniqueness is important for this table
         select_q = select_q.add_columns(
-            f.row_number().over(order_by=select_q._order_by_clauses).label("id")
+            f.row_number().over(order_by=select_q._order_by_clauses).label("sys__id")
         )
 
         self.catalog.warehouse.db.execute(
@@ -733,7 +679,7 @@ class UDFSignal(UDF):
         if query._order_by_clauses:
             # we are adding ordering only if it's explicitly added by user in
             # query part before adding signals
-            q = q.order_by(table.c.id)
+            q = q.order_by(table.c.sys__id)
         return q, [table]
 
     def create_result_query(
@@ -743,7 +689,7 @@ class UDFSignal(UDF):
         original_cols = [c for c in subq.c if c.name not in partition_col_names]
 
         # new signal columns that are added to udf_table
-        signal_cols = [c for c in udf_table.c if c.name != "id"]
+        signal_cols = [c for c in udf_table.c if c.name != "sys__id"]
         signal_name_cols = {c.name: c for c in signal_cols}
         cols = signal_cols
 
@@ -763,7 +709,7 @@ class UDFSignal(UDF):
                 res = (
                     sqlalchemy.select(*cols1)
                     .select_from(subq)
-                    .outerjoin(udf_table, udf_table.c.id == subq.c.id)
+                    .outerjoin(udf_table, udf_table.c.sys__id == subq.c.sys__id)
                     .add_columns(*cols2)
                 )
             else:
@@ -772,7 +718,7 @@ class UDFSignal(UDF):
             if query._order_by_clauses:
                 # if ordering is used in query part before adding signals, we
                 # will have it as order by id from select from pre-created udf table
-                res = res.order_by(subq.c.id)
+                res = res.order_by(subq.c.sys__id)
 
             if self.partition_by is not None:
                 subquery = res.subquery()
@@ -810,7 +756,7 @@ class RowGenerator(UDF):
             # we get the same rows as we got as inputs of UDF since selecting
             # without ordering can be non deterministic in some databases
             c = query.selected_columns
-            query = query.order_by(c.id)
+            query = query.order_by(c.sys__id)
 
         udf_table_query = udf_table.select().subquery()
         udf_table_cols: list[sqlalchemy.Label[Any]] = [
@@ -920,6 +866,12 @@ class SQLCount(SQLClause):
 
 
 @frozen
+class SQLDistinct(SQLClause):
+    def apply_sql_clause(self, query):
+        return query.distinct()
+
+
+@frozen
 class SQLUnion(Step):
     query1: "DatasetQuery"
     query2: "DatasetQuery"
@@ -1002,7 +954,7 @@ class SQLJoin(Step):
         q1_column_names = {c.name for c in q1_columns}
         q2_columns = [
             c
-            if c.name not in q1_column_names and c.name != "id"
+            if c.name not in q1_column_names and c.name != "sys__id"
             else c.label(self.rname.format(name=c.name))
             for c in q2.c
         ]
@@ -1142,8 +1094,8 @@ class DatasetQuery:
             self.version = version or ds.latest_version
             self.feature_schema = ds.get_version(self.version).feature_schema
             self.column_types = copy(ds.schema)
-            if "id" in self.column_types:
-                self.column_types.pop("id")
+            if "sys__id" in self.column_types:
+                self.column_types.pop("sys__id")
             self.starting_step = QueryStep(self.catalog, name, self.version)
             # attaching to specific dataset
             self.name = name
@@ -1216,7 +1168,7 @@ class DatasetQuery:
             query.steps = self._chunk_limit(query.steps, index, total)
 
             # Prepend the chunk filter to the step chain.
-            query = query.filter(C.random % total == index)
+            query = query.filter(C.sys__rand % total == index)
             query.steps = query.steps[-1:] + query.steps[:-1]
 
         result = query.starting_step.apply()
@@ -1343,20 +1295,12 @@ class DatasetQuery:
         finally:
             self.cleanup()
 
-    def to_records(self) -> list[dict]:
-        with self.as_iterable() as result:
-            cols = result.columns
-            return [dict(zip(cols, row)) for row in result]
-
-    def to_pandas(self) -> "pd.DataFrame":
-        records = self.to_records()
-        df = pd.DataFrame.from_records(records)
-        df.columns = [c.replace(DEFAULT_DELIMITER, ".") for c in df.columns]
-        return df
+    def to_records(self) -> list[dict[str, Any]]:
+        return self.results(lambda cols, row: dict(zip(cols, row)))
 
     def shuffle(self) -> "Self":
         # ToDo: implement shaffle based on seed and/or generating random column
-        return self.order_by(C.random)
+        return self.order_by(C.sys__rand)
 
     def sample(self, n) -> "Self":
         """
@@ -1371,22 +1315,6 @@ class DatasetQuery:
         sampled = self.order_by(rand())
 
         return sampled.limit(n)
-
-    def show(self, limit=20) -> None:
-        df = self.limit(limit).to_pandas()
-
-        options = ["display.max_colwidth", 50, "display.show_dimensions", False]
-        with pd.option_context(*options):
-            if inside_notebook():
-                from IPython.display import display
-
-                display(df)
-
-            else:
-                print(df.to_string())
-
-        if len(df) == limit:
-            print(f"[limited by {limit} objects]")
 
     def clone(self, new_table=True) -> "Self":
         obj = copy(self)
@@ -1485,30 +1413,41 @@ class DatasetQuery:
         query.steps.append(SQLOffset(offset))
         return query
 
+    @detach
+    def distinct(self) -> "Self":
+        query = self.clone()
+        query.steps.append(SQLDistinct())
+        return query
+
+    def as_scalar(self) -> Any:
+        with self.as_iterable() as rows:
+            row = next(iter(rows))
+        return row[0]
+
     def count(self) -> int:
         query = self.clone()
         query.steps.append(SQLCount())
-        return query.results()[0][0]
+        return query.as_scalar()
 
-    def sum(self, col: ColumnElement):
+    def sum(self, col: ColumnElement) -> int:
         query = self.clone()
         query.steps.append(SQLSelect((f.sum(col),)))
-        return query.results()[0][0]
+        return query.as_scalar()
 
-    def avg(self, col: ColumnElement):
+    def avg(self, col: ColumnElement) -> int:
         query = self.clone()
         query.steps.append(SQLSelect((f.avg(col),)))
-        return query.results()[0][0]
+        return query.as_scalar()
 
-    def min(self, col: ColumnElement):
+    def min(self, col: ColumnElement) -> int:
         query = self.clone()
         query.steps.append(SQLSelect((f.min(col),)))
-        return query.results()[0][0]
+        return query.as_scalar()
 
-    def max(self, col: ColumnElement):
+    def max(self, col: ColumnElement) -> int:
         query = self.clone()
         query.steps.append(SQLSelect((f.max(col),)))
-        return query.results()[0][0]
+        return query.as_scalar()
 
     @detach
     def group_by(self, *cols: ColumnElement) -> "Self":
@@ -1700,7 +1639,7 @@ class DatasetQuery:
                 c if isinstance(c, Column) else Column(c.name, c.type)
                 for c in query.columns
             ]
-            if not [c for c in columns if c.name != "id"]:
+            if not [c for c in columns if c.name != "sys__id"]:
                 raise RuntimeError(
                     "No columns to save in the query. "
                     "Ensure at least one column (other than 'id') is selected."
@@ -1719,11 +1658,11 @@ class DatasetQuery:
 
             # Exclude the id column and let the db create it to avoid unique
             # constraint violations.
-            q = query.exclude(("id",))
+            q = query.exclude(("sys__id",))
             if q._order_by_clauses:
                 # ensuring we have id sorted by order by clause if it exists in a query
                 q = q.add_columns(
-                    f.row_number().over(order_by=q._order_by_clauses).label("id")
+                    f.row_number().over(order_by=q._order_by_clauses).label("sys__id")
                 )
 
             cols = tuple(c.name for c in q.columns)
@@ -1850,34 +1789,3 @@ def _random_string(length: int) -> str:
         random.choice(string.ascii_letters + string.digits)  # noqa: S311
         for i in range(length)
     )
-
-
-def _feature_predicate(obj):
-    return (
-        inspect.isclass(obj) and source.isfrommain(obj) and issubclass(obj, BaseModel)
-    )
-
-
-def _imports(obj):
-    return not source.isfrommain(obj)
-
-
-def get_imports(m):
-    root = ast.parse(inspect.getsource(m))
-
-    for node in ast.iter_child_nodes(root):
-        if isinstance(node, ast.Import):
-            module = None
-        elif isinstance(node, ast.ImportFrom):
-            module = node.module
-        else:
-            continue
-
-        for n in node.names:
-            import_script = ""
-            if module:
-                import_script += f"from {module} "
-            import_script += f"import {n.name}"
-            if n.asname:
-                import_script += f" as {n.asname}"
-            yield import_script

@@ -150,9 +150,14 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         help="Drop into the pdb debugger on fatal exception",
     )
 
-    subp = parser.add_subparsers(help="Sub-command help", dest="command")
+    subp = parser.add_subparsers(
+        title="Available Commands",
+        metavar="command",
+        dest="command",
+        help=f"Use `{parser.prog} command --help` for command-specific help.",
+    )
     parse_cp = subp.add_parser(
-        "cp", parents=[parent_parser], help="Copy data files from the cloud"
+        "cp", parents=[parent_parser], description="Copy data files from the cloud"
     )
     add_sources_arg(parse_cp).complete = shtab.DIR  # type: ignore[attr-defined]
     parse_cp.add_argument("output", type=str, help="Output")
@@ -179,7 +184,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     )
 
     parse_clone = subp.add_parser(
-        "clone", parents=[parent_parser], help="Copy data files from the cloud"
+        "clone", parents=[parent_parser], description="Copy data files from the cloud"
     )
     add_sources_arg(parse_clone).complete = shtab.DIR  # type: ignore[attr-defined]
     parse_clone.add_argument("output", type=str, help="Output")
@@ -222,7 +227,9 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     )
 
     parse_pull = subp.add_parser(
-        "pull", parents=[parent_parser], help="Pull specific dataset version from SaaS"
+        "pull",
+        parents=[parent_parser],
+        description="Pull specific dataset version from SaaS",
     )
     parse_pull.add_argument(
         "dataset",
@@ -263,7 +270,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     )
 
     parse_edit_dataset = subp.add_parser(
-        "edit-dataset", parents=[parent_parser], help="Edit dataset metadata"
+        "edit-dataset", parents=[parent_parser], description="Edit dataset metadata"
     )
     parse_edit_dataset.add_argument("name", type=str, help="Dataset name")
     parse_edit_dataset.add_argument(
@@ -285,9 +292,9 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         help="Dataset labels",
     )
 
-    subp.add_parser("ls-datasets", parents=[parent_parser], help="List datasets")
+    subp.add_parser("ls-datasets", parents=[parent_parser], description="List datasets")
     rm_dataset_parser = subp.add_parser(
-        "rm-dataset", parents=[parent_parser], help="Removes dataset"
+        "rm-dataset", parents=[parent_parser], description="Removes dataset"
     )
     rm_dataset_parser.add_argument("name", type=str, help="Dataset name")
     rm_dataset_parser.add_argument(
@@ -305,7 +312,9 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     )
 
     dataset_stats_parser = subp.add_parser(
-        "dataset-stats", parents=[parent_parser], help="Shows basic dataset stats"
+        "dataset-stats",
+        parents=[parent_parser],
+        description="Shows basic dataset stats",
     )
     dataset_stats_parser.add_argument("name", type=str, help="Dataset name")
     dataset_stats_parser.add_argument(
@@ -330,7 +339,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     )
 
     parse_merge_datasets = subp.add_parser(
-        "merge-datasets", parents=[parent_parser], help="Merges datasets"
+        "merge-datasets", parents=[parent_parser], description="Merges datasets"
     )
     parse_merge_datasets.add_argument(
         "--src",
@@ -360,7 +369,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     )
 
     parse_ls = subp.add_parser(
-        "ls", parents=[parent_parser], help="List storage contents"
+        "ls", parents=[parent_parser], description="List storage contents"
     )
     add_sources_arg(parse_ls, nargs="*")
     parse_ls.add_argument(
@@ -378,7 +387,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     )
 
     parse_du = subp.add_parser(
-        "du", parents=[parent_parser], help="Display space usage"
+        "du", parents=[parent_parser], description="Display space usage"
     )
     add_sources_arg(parse_du)
     parse_du.add_argument(
@@ -408,7 +417,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     )
 
     parse_find = subp.add_parser(
-        "find", parents=[parent_parser], help="Search in a directory hierarchy"
+        "find", parents=[parent_parser], description="Search in a directory hierarchy"
     )
     add_sources_arg(parse_find)
     parse_find.add_argument(
@@ -461,20 +470,20 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     )
 
     parse_index = subp.add_parser(
-        "index", parents=[parent_parser], help="Index storage location"
+        "index", parents=[parent_parser], description="Index storage location"
     )
     add_sources_arg(parse_index)
 
     subp.add_parser(
         "find-stale-storages",
         parents=[parent_parser],
-        help="Finds and marks stale storages",
+        description="Finds and marks stale storages",
     )
 
     show_parser = subp.add_parser(
         "show",
         parents=[parent_parser],
-        help="Create a new dataset with a query script",
+        description="Create a new dataset with a query script",
     )
     show_parser.add_argument("name", type=str, help="Dataset name")
     show_parser.add_argument(
@@ -489,7 +498,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     query_parser = subp.add_parser(
         "query",
         parents=[parent_parser],
-        help="Create a new dataset with a query script",
+        description="Create a new dataset with a query script",
     )
     query_parser.add_argument(
         "script", metavar="<script.py>", type=str, help="Filepath for script"
@@ -520,7 +529,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     )
 
     apply_udf_parser = subp.add_parser(
-        "apply-udf", parents=[parent_parser], help="Apply UDF"
+        "apply-udf", parents=[parent_parser], description="Apply UDF"
     )
     apply_udf_parser.add_argument("udf", type=str, help="UDF location")
     apply_udf_parser.add_argument("source", type=str, help="Source storage or dataset")
@@ -541,10 +550,10 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         "--udf-params", type=str, default=None, help="UDF class parameters"
     )
     subp.add_parser(
-        "clear-cache", parents=[parent_parser], help="Clear the local file cache"
+        "clear-cache", parents=[parent_parser], description="Clear the local file cache"
     )
     subp.add_parser(
-        "gc", parents=[parent_parser], help="Garbage collect temporary tables"
+        "gc", parents=[parent_parser], description="Garbage collect temporary tables"
     )
 
     add_completion_parser(subp, [parent_parser])
@@ -555,7 +564,7 @@ def add_completion_parser(subparsers, parents):
     parser = subparsers.add_parser(
         "completion",
         parents=parents,
-        help="Output shell completion script",
+        description="Output shell completion script",
     )
     parser.add_argument(
         "-s",
@@ -811,8 +820,6 @@ def show(
     from datachain.query import DatasetQuery
     from datachain.utils import show_records
 
-    if columns:
-        columns = ("id", *columns)
     query = (
         DatasetQuery(name=name, version=version, catalog=catalog)
         .select(*columns)

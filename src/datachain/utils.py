@@ -1,5 +1,6 @@
 import glob
 import importlib.util
+import io
 import json
 import os
 import os.path as osp
@@ -13,8 +14,10 @@ from itertools import islice
 from typing import TYPE_CHECKING, Any, Optional, TypeVar, Union
 from uuid import UUID
 
+import cloudpickle
 from dateutil import tz
 from dateutil.parser import isoparse
+from pydantic import BaseModel
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -388,3 +391,39 @@ def inside_notebook() -> bool:
             return False
 
     return False
+
+
+def get_all_subclasses(cls):
+    """Return all subclasses of a given class.
+    Can return duplicates due to multiple inheritance."""
+    for subclass in cls.__subclasses__():
+        yield from get_all_subclasses(subclass)
+        yield subclass
+
+
+def filtered_cloudpickle_dumps(obj: Any) -> bytes:
+    """Equivalent to cloudpickle.dumps, but this supports Pydantic models."""
+    model_namespaces = {}
+
+    with io.BytesIO() as f:
+        pickler = cloudpickle.CloudPickler(f)
+
+        for model_class in get_all_subclasses(BaseModel):
+            # This "is not None" check is needed, because due to multiple inheritance,
+            # it is theoretically possible to get the same class twice from
+            # get_all_subclasses.
+            if model_class.__pydantic_parent_namespace__ is not None:
+                # __pydantic_parent_namespace__ can contain many unnecessary and
+                # unpickleable entities, so should be removed for serialization.
+                model_namespaces[model_class] = (
+                    model_class.__pydantic_parent_namespace__
+                )
+                model_class.__pydantic_parent_namespace__ = None
+
+        try:
+            pickler.dump(obj)
+            return f.getvalue()
+        finally:
+            for model_class, namespace in model_namespaces.items():
+                # Restore original __pydantic_parent_namespace__ locally.
+                model_class.__pydantic_parent_namespace__ = namespace

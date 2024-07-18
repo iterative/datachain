@@ -1,3 +1,4 @@
+import copy
 import re
 from collections.abc import Iterator, Sequence
 from typing import (
@@ -10,12 +11,15 @@ from typing import (
     Union,
 )
 
+import pandas as pd
 import sqlalchemy
 from pydantic import BaseModel, create_model
 
 from datachain import DataModel
 from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import DataType
+from datachain.lib.dataset_info import DatasetInfo
+from datachain.lib.file import ExportPlacement as FileExportPlacement
 from datachain.lib.file import File, IndexedFile, get_file
 from datachain.lib.meta_formats import read_meta, read_schema
 from datachain.lib.model_store import ModelStore
@@ -37,9 +41,9 @@ from datachain.query.dataset import (
     detach,
 )
 from datachain.query.schema import Column, DatasetRow
+from datachain.utils import inside_notebook
 
 if TYPE_CHECKING:
-    import pandas as pd
     from typing_extensions import Self
 
 C = Column
@@ -55,7 +59,7 @@ class DatasetPrepareError(DataChainParamsError):
 class DatasetFromValuesError(DataChainParamsError):
     def __init__(self, name, msg):
         name = f" '{name}'" if name else ""
-        super().__init__(f"Dataset {name} from values error: {msg}")
+        super().__init__(f"Dataset{name} from values error: {msg}")
 
 
 class DatasetMergeError(DataChainParamsError):
@@ -72,6 +76,11 @@ class DatasetMergeError(DataChainParamsError):
 OutputType = Union[None, DataType, Sequence[str], dict[str, DataType]]
 
 
+class Sys(DataModel):
+    id: int
+    rand: int
+
+
 class DataChain(DatasetQuery):
     """AI 🔗 DataChain - a data structure for batch data processing and evaluation.
 
@@ -80,7 +89,7 @@ class DataChain(DatasetQuery):
     enrich data.
 
     Data in DataChain is presented as Python classes with arbitrary set of fields,
-    including nested classes. The data classes have to inherit from `Feature` class.
+    including nested classes. The data classes have to inherit from `DataModel` class.
     The supported set of field types include: majority of the type supported by the
     underlyind library `Pydantic`.
 
@@ -146,16 +155,14 @@ class DataChain(DatasetQuery):
     """
 
     DEFAULT_FILE_RECORD: ClassVar[dict] = {
-        "id": 0,
         "source": "",
         "name": "",
         "vtype": "",
         "size": 0,
-        "random": 0,
     }
 
     def __init__(self, *args, **kwargs):
-        """This method needs to be redefined as a part of Dataset and DacaChin
+        """This method needs to be redefined as a part of Dataset and DataChain
         decoupling."""
         super().__init__(
             *args,
@@ -179,8 +186,19 @@ class DataChain(DatasetQuery):
         """Print schema of the chain."""
         self.signals_schema.print_tree()
 
+    def clone(self, new_table: bool = True) -> "Self":
+        obj = super().clone(new_table=new_table)
+        obj.signals_schema = copy.deepcopy(self.signals_schema)
+        return obj
+
     def settings(
-        self, cache=None, batch=None, parallel=None, workers=None, min_task_size=None
+        self,
+        cache=None,
+        batch=None,
+        parallel=None,
+        workers=None,
+        min_task_size=None,
+        sys: Optional[bool] = None,
     ) -> "Self":
         """Change settings for chain.
 
@@ -204,8 +222,13 @@ class DataChain(DatasetQuery):
             )
             ```
         """
-        self._settings.add(Settings(cache, batch, parallel, workers, min_task_size))
-        return self
+        chain = self.clone()
+        if sys is True:
+            chain.signals_schema = SignalSchema({"sys": Sys}) | chain.signals_schema
+        elif sys is False and "sys" in chain.signals_schema:
+            chain.signals_schema.remove("sys")
+        chain._settings.add(Settings(cache, batch, parallel, workers, min_task_size))
+        return chain
 
     def reset_settings(self, settings: Optional[Settings] = None) -> "Self":
         """Reset all settings to default values."""
@@ -217,12 +240,11 @@ class DataChain(DatasetQuery):
         return self
 
     def add_schema(self, signals_schema: SignalSchema) -> "Self":
-        union = self.signals_schema.values | signals_schema.values
-        self.signals_schema = SignalSchema(union)
+        self.signals_schema |= signals_schema
         return self
 
     def get_file_signals(self) -> list[str]:
-        return self.signals_schema.get_file_signals()
+        return list(self.signals_schema.get_file_signals())
 
     @classmethod
     def from_storage(
@@ -332,6 +354,35 @@ class DataChain(DatasetQuery):
         }
         return chain.gen(**signal_dict)  # type: ignore[arg-type]
 
+    @classmethod
+    def datasets(
+        cls, session: Optional[Session] = None, object_name: str = "dataset"
+    ) -> "DataChain":
+        """Generate chain with list of registered datasets.
+
+        Example:
+            ```py
+            from datachain import DataChain
+
+            chain = DataChain.datasets()
+            for ds in chain.iterate_one("dataset"):
+                print(f"{ds.name}@v{ds.version}")
+            ```
+        """
+        session = Session.get(session)
+        catalog = session.catalog
+
+        datasets = [
+            DatasetInfo.from_models(d, v, j)
+            for d, v, j in catalog.list_datasets_versions()
+        ]
+
+        return cls.from_values(
+            session=session,
+            output={object_name: DatasetInfo},
+            **{object_name: datasets},  # type: ignore[arg-type]
+        )
+
     def show_json_schema(  # type: ignore[override]
         self, jmespath: Optional[str] = None, model_name: Optional[str] = None
     ) -> "DataChain":
@@ -384,6 +435,7 @@ class DataChain(DatasetQuery):
             version : version of a dataset. Default - the last version that exist.
         """
         schema = self.signals_schema.serialize()
+        schema.pop("sys", None)
         return super().save(name=name, version=version, feature_schema=schema)
 
     def apply(self, func, *args, **kwargs):
@@ -564,20 +616,30 @@ class DataChain(DatasetQuery):
         chain.signals_schema = new_schema
         return chain
 
+    def iterate_flatten(self) -> Iterator[tuple[Any]]:
+        db_signals = self.signals_schema.db_signals()
+        with super().select(*db_signals).as_iterable() as rows:
+            yield from rows
+
+    def results(
+        self, row_factory: Optional[Callable] = None, **kwargs
+    ) -> list[tuple[Any, ...]]:
+        rows = self.iterate_flatten()
+        if row_factory:
+            db_signals = self.signals_schema.db_signals()
+            rows = (row_factory(db_signals, r) for r in rows)
+        return list(rows)
+
     def iterate(self, *cols: str) -> Iterator[list[DataType]]:
         """Iterate over rows.
 
-        If columns are specified - limit them to specified
-        columns.
+        If columns are specified - limit them to specified columns.
         """
         chain = self.select(*cols) if cols else self
-
-        db_signals = chain.signals_schema.db_signals()
-        with super().select(*db_signals).as_iterable() as rows_iter:
-            for row in rows_iter:
-                yield chain.signals_schema.row_to_features(
-                    row, catalog=chain.session.catalog, cache=chain._settings.cache
-                )
+        for row in chain.iterate_flatten():
+            yield chain.signals_schema.row_to_features(
+                row, catalog=chain.session.catalog, cache=chain._settings.cache
+            )
 
     def iterate_one(self, col: str) -> Iterator[DataType]:
         """Iterate over one column."""
@@ -785,6 +847,37 @@ class DataChain(DatasetQuery):
                 )
 
         return cls.from_values(name, session, object_name=object_name, **fr_map)
+
+    def to_pandas(self, flatten=False) -> "pd.DataFrame":
+        headers, max_length = self.signals_schema.get_headers_with_length()
+        if flatten or max_length < 2:
+            df = pd.DataFrame.from_records(self.to_records())
+            if headers:
+                df.columns = [".".join(filter(None, header)) for header in headers]
+            return df
+
+        transposed_result = list(map(list, zip(*self.results())))
+        data = {tuple(n): val for n, val in zip(headers, transposed_result)}
+        return pd.DataFrame(data)
+
+    def show(self, limit: int = 20, flatten=False, transpose=False) -> None:
+        dc = self.limit(limit) if limit > 0 else self
+        df = dc.to_pandas(flatten)
+        if transpose:
+            df = df.T
+
+        with pd.option_context(
+            "display.max_columns", None, "display.multi_sparse", False
+        ):
+            if inside_notebook():
+                from IPython.display import display
+
+                display(df)
+            else:
+                print(df)
+
+        if len(df) == limit:
+            print(f"\n[Limited by {len(df)} rows]")
 
     def parse_tabular(
         self,
@@ -1021,3 +1114,19 @@ class DataChain(DatasetQuery):
 
         self._setup = self._setup | kwargs
         return self
+
+    def export_files(
+        self,
+        output: str,
+        signal="file",
+        placement: FileExportPlacement = "fullpath",
+        use_cache: bool = True,
+    ) -> None:
+        """Method that export all files from chain to some folder"""
+        if placement == "filename":
+            print("Checking if file names are unique")
+            if self.select(f"{signal}.name").distinct().count() != self.count():
+                raise ValueError("Files with the same name found")
+
+        for file in self.collect_one(signal):
+            file.export(output, placement, use_cache)  # type: ignore[union-attr]

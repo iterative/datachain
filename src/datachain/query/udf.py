@@ -147,9 +147,9 @@ class UDFBase:
             return (dict(zip(self.signal_names, row)) for row in results)
 
         # outputting signals
-        row_ids = [row["id"] for row in rows]
+        row_ids = [row["sys__id"] for row in rows]
         return [
-            dict(id=row_id, **dict(zip(self.signal_names, signals)))
+            {"sys__id": row_id} | dict(zip(self.signal_names, signals))
             for row_id, signals in zip(row_ids, results)
             if signals is not None  # skip rows with no output
         ]
