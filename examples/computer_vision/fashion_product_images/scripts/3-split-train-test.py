@@ -1,8 +1,6 @@
-from datachain.lib.dc import C, DataChain
+from datachain import C, DataChain
 
 # Define train_test_split function
-
-print("\n# Define train_test_split function:")
 
 
 def train_test_split(name) -> str:

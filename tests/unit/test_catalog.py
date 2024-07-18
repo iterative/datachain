@@ -31,9 +31,9 @@ def test_compile_query_script_with_feature_class(catalog):
     script = dedent(
         """
         from datachain.query import C, DatasetQuery, asUDF
-        from datachain.lib.feature import Feature as FromAlias
-        from datachain.lib.feature import Feature
-        import datachain.lib.feature.Feature as DirectImportedFeature
+        from datachain.lib.data_model import DataModel as FromAlias
+        from datachain.lib.data_model import DataModel
+        import datachain.lib.data_model.DataModel as DirectImportedFeature
         import datachain
 
         class NormalClass:
@@ -45,10 +45,10 @@ def test_compile_query_script_with_feature_class(catalog):
         class DirectImport(DirectImportedFeature):
             emb: float
 
-        class FullImport(datachain.lib.feature.Feature):
+        class FullImport(datachain.lib.data_model.DataModel):
             emb: float
 
-        class Embedding(Feature):
+        class Embedding(DataModel):
             emb: float
 
         DatasetQuery("s3://bkt/dir1")
@@ -58,9 +58,9 @@ def test_compile_query_script_with_feature_class(catalog):
     expected_feature = dedent(
         """
         from datachain.query import C, DatasetQuery, asUDF
-        from datachain.lib.feature import Feature as FromAlias
-        from datachain.lib.feature import Feature
-        import datachain.lib.feature.Feature as DirectImportedFeature
+        from datachain.lib.data_model import DataModel as FromAlias
+        from datachain.lib.data_model import DataModel
+        import datachain.lib.data_model.DataModel as DirectImportedFeature
         import datachain
         import datachain.query.dataset
 
@@ -70,19 +70,19 @@ def test_compile_query_script_with_feature_class(catalog):
         class DirectImport(DirectImportedFeature):
             emb: float
 
-        class FullImport(datachain.lib.feature.Feature):
+        class FullImport(datachain.lib.data_model.DataModel):
             emb: float
 
-        class Embedding(Feature):
+        class Embedding(DataModel):
             emb: float
         """
     ).strip()
     expected_result = dedent(
         """
         from datachain.query import C, DatasetQuery, asUDF
-        from datachain.lib.feature import Feature as FromAlias
-        from datachain.lib.feature import Feature
-        import datachain.lib.feature.Feature as DirectImportedFeature
+        from datachain.lib.data_model import DataModel as FromAlias
+        from datachain.lib.data_model import DataModel
+        import datachain.lib.data_model.DataModel as DirectImportedFeature
         import datachain
         import datachain.query.dataset
         from tmpfeature import *

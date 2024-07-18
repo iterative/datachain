@@ -434,6 +434,40 @@ def test_select_except(cloud_test_catalog):
     ]
 
 
+@pytest.mark.parametrize(
+    "cloud_type,version_aware",
+    [("s3", True)],
+    indirect=True,
+)
+def test_distinct(cloud_test_catalog):
+    catalog = cloud_test_catalog.catalog
+    path = cloud_test_catalog.src_uri
+    ds = DatasetQuery(path=path, catalog=catalog)
+
+    q = ds.select(C.parent).order_by(C.parent).distinct()
+    result = q.results()
+
+    assert result == [
+        ("",),
+        ("cats",),
+        ("dogs",),
+        ("dogs/others",),
+    ]
+
+
+@pytest.mark.parametrize(
+    "cloud_type,version_aware",
+    [("s3", True)],
+    indirect=True,
+)
+def test_distinct_count(cloud_test_catalog):
+    catalog = cloud_test_catalog.catalog
+    path = cloud_test_catalog.src_uri
+    ds = DatasetQuery(path=path, catalog=catalog)
+
+    assert ds.select(C.parent).order_by(C.parent).distinct().count() == 4
+
+
 @pytest.mark.parametrize("save", [True, False])
 @pytest.mark.parametrize(
     "cloud_type,version_aware",
@@ -3211,19 +3245,6 @@ def test_changed(cloud_test_catalog):
 )
 def test_to_records(simple_ds_query):
     assert simple_ds_query.to_records() == SIMPLE_DS_QUERY_RECORDS
-
-
-@pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
-    indirect=True,
-)
-def test_to_pandas(simple_ds_query):
-    import pandas as pd
-
-    df = simple_ds_query.to_pandas()
-    expected = pd.DataFrame.from_records(SIMPLE_DS_QUERY_RECORDS)
-    assert (df == expected).all(axis=None)
 
 
 @pytest.mark.parametrize("method", ["to_records", "extract"])

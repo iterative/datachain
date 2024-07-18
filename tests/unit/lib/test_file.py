@@ -8,6 +8,15 @@ from datachain.catalog import Catalog
 from datachain.lib.file import File, TextFile
 
 
+def create_file(source: str):
+    return File(
+        name="test.txt",
+        parent="dir1/dir2",
+        source=source,
+        etag="ed779276108738fdb2179ccabf9680d9",
+    )
+
+
 def test_uid_missing_location():
     name = "my_name"
     vtype = "vt1"
@@ -63,6 +72,47 @@ def test_cache_get_path(catalog: Catalog):
 
     with open(path, mode="rb") as f:
         assert f.read() == data
+
+
+def test_get_destination_path_wrong_strategy():
+    file = create_file("s3://mybkt")
+    with pytest.raises(ValueError):
+        file.get_destination_path("", "wrong")
+
+
+def test_get_destination_path_filename_strategy():
+    file = create_file("s3://mybkt")
+    assert file.get_destination_path("output", "filename") == "output/test.txt"
+
+
+def test_get_destination_path_empty_output():
+    file = create_file("s3://mybkt")
+    assert file.get_destination_path("", "filename") == "test.txt"
+
+
+def test_get_destination_path_etag_strategy():
+    file = create_file("s3://mybkt")
+    assert (
+        file.get_destination_path("output", "etag")
+        == "output/ed779276108738fdb2179ccabf9680d9.txt"
+    )
+
+
+def test_get_destination_path_fullpath_strategy(catalog):
+    file = create_file("s3://mybkt")
+    file._set_stream(catalog, False)
+    assert (
+        file.get_destination_path("output", "fullpath")
+        == "output/mybkt/dir1/dir2/test.txt"
+    )
+
+
+def test_get_destination_path_fullpath_strategy_file_source(catalog, tmp_path):
+    file = create_file("file:///")
+    file._set_stream(catalog, False)
+    assert (
+        file.get_destination_path("output", "fullpath") == "output/dir1/dir2/test.txt"
+    )
 
 
 def test_read_binary_data(tmp_path, catalog: Catalog):

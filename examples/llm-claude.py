@@ -1,7 +1,6 @@
 import os
 
 import anthropic
-import pandas as pd
 from anthropic.types import Message
 
 from datachain import Column, DataChain, File
@@ -37,6 +36,4 @@ chain = (
     )
 )
 
-with pd.option_context("display.max_columns", None):
-    df = chain.to_pandas()
-    print(df)
+chain.show()

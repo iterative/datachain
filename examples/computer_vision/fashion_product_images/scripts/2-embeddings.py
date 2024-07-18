@@ -2,12 +2,12 @@ import torch
 from torchvision import transforms
 from torchvision.models import resnet50
 
-from datachain.lib.dc import DataChain
-from datachain.lib.image import ImageReader
+from datachain import DataChain
+from datachain.lib.image import convert_image
 
-# Helpers
+# Model & Transform methods
 
-print("\n# Helpers:")
+model = resnet50(pretrained=True).eval()
 transformer = transforms.Compose(
     [
         transforms.Resize((224, 224)),
@@ -15,17 +15,14 @@ transformer = transforms.Compose(
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ]
 )
-reader = ImageReader(transform=transformer)
-model = resnet50(pretrained=True).eval()
+
 
 # Embeddings processor function
-
-print("\n# Embeddings processor function:")
 
 
 def embeddings_processor(file) -> list[float]:
     img_raw = file.get_value()
-    img = reader(img_raw).unsqueeze(0)
+    img = convert_image(img_raw, transform=transformer).unsqueeze(0)
     with torch.no_grad():
         emb = model(img)
 
