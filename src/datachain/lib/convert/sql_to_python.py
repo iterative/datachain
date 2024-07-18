@@ -3,7 +3,7 @@ from typing import Any
 
 from sqlalchemy import ARRAY, JSON, Boolean, DateTime, Float, Integer, String
 
-from datachain import Column
+from datachain.data_storage.sqlite import Column
 
 SQL_TO_PYTHON = {
     String: str,
