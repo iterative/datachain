@@ -615,6 +615,35 @@ class DataChain(DatasetQuery):
         chain.signals_schema = new_schema
         return chain
 
+    @detach
+    def mutate(self, **kwargs) -> "Self":
+        """Create new signals based on existing signals.
+
+        This method is vectorized and more efficient compared to map(), and it does not
+        extract or download any data from the internal database. However, it can only
+        utilize predefined built-in functions and their combinations.
+
+        The supported functions:
+           Numerical:   +, -, *, /, rand(), avg(), count(), func(),
+                        greatest(), least(), max(), min(), sum()
+           String:      length(), split()
+           Filename:    name(), parent(), file_stem(), file_ext()
+           Array:       length(), sip_hash_64(), euclidean_distance(),
+                        cosine_distance()
+
+        Example:
+        ```py
+         dc.mutate(
+                area=Column("image.height") * Column("image.width"),
+                extension=file_ext(Column("file.name")),
+                dist=cosine_distance(embedding_text, embedding_image)
+        )
+        ```
+        """
+        chain = super().mutate(**kwargs)
+        chain.signals_schema = self.signals_schema.mutate(kwargs)
+        return chain
+
     def iterate_flatten(self) -> Iterator[tuple[Any]]:  # noqa: D102
         db_signals = self.signals_schema.db_signals()
         with super().select(*db_signals).as_iterable() as rows:
