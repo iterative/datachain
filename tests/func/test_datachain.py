@@ -60,22 +60,22 @@ def test_read_file(cloud_test_catalog, use_cache):
         assert bool(file.get_local_path()) is use_cache
 
 
-@pytest.mark.parametrize("strategy", ["fullpath", "filename"])
+@pytest.mark.parametrize("placement", ["fullpath", "filename"])
 @pytest.mark.parametrize("use_map", [True, False])
 @pytest.mark.parametrize("use_cache", [True, False])
 @pytest.mark.parametrize("cloud_type", ["file"], indirect=True)
-def test_export_files(tmp_dir, cloud_test_catalog, strategy, use_map, use_cache):
+def test_export_files(tmp_dir, cloud_test_catalog, placement, use_map, use_cache):
     ctc = cloud_test_catalog
     df = DataChain.from_storage(ctc.src_uri)
     if use_map:
-        df.export_files(tmp_dir / "output", strategy=strategy, use_cache=use_cache)
+        df.export_files(tmp_dir / "output", placement=placement, use_cache=use_cache)
         df.map(
             res=lambda file: file.export(
-                tmp_dir / "output", strategy=strategy, use_cache=use_cache
+                tmp_dir / "output", placement=placement, use_cache=use_cache
             )
         ).exec()
     else:
-        df.export_files(tmp_dir / "output", strategy=strategy)
+        df.export_files(tmp_dir / "output", placement=placement)
 
     expected = {
         "description": "Cats and Dogs",
@@ -88,7 +88,7 @@ def test_export_files(tmp_dir, cloud_test_catalog, strategy, use_map, use_cache)
     }
 
     for file in df.collect_one("file"):
-        if strategy == "filename":
+        if placement == "filename":
             file_path = file.name
         else:
             file_path = file.get_full_name()
@@ -96,7 +96,7 @@ def test_export_files(tmp_dir, cloud_test_catalog, strategy, use_map, use_cache)
             assert f.read() == expected[file.name]
 
 
-def test_export_files_filename_strategy_not_unique_files(tmp_dir, catalog):
+def test_export_files_filename_placement_not_unique_files(tmp_dir, catalog):
     data = b"some\x00data\x00is\x48\x65\x6c\x57\x6f\x72\x6c\x64\xff\xffheRe"
     bucket_name = "mybucket"
     files = ["dir1/a.json", "dir1/dir2/a.json"]
@@ -112,4 +112,4 @@ def test_export_files_filename_strategy_not_unique_files(tmp_dir, catalog):
 
     df = DataChain.from_storage((tmp_dir / bucket_name).as_uri())
     with pytest.raises(ValueError):
-        df.export_files(tmp_dir / "output", strategy="filename")
+        df.export_files(tmp_dir / "output", placement="filename")

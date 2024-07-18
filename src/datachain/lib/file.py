@@ -26,7 +26,8 @@ from datachain.utils import TIME_ZERO
 if TYPE_CHECKING:
     from datachain.catalog import Catalog
 
-ExportStrategy = Literal["filename", "etag", "fullpath", "checksum"]
+# how to create file path when exporting
+ExportPlacement = Literal["filename", "etag", "fullpath", "checksum"]
 
 
 class VFileError(DataChainError):
@@ -191,11 +192,14 @@ class File(FileBasic):
             yield f
 
     def export(
-        self, output: str, strategy: ExportStrategy = "fullpath", use_cache: bool = True
+        self,
+        output: str,
+        placement: ExportPlacement = "fullpath",
+        use_cache: bool = True,
     ) -> None:
         if use_cache:
             self._caching_enabled = use_cache
-        dst = self.get_destination_path(output, strategy)
+        dst = self.get_destination_path(output, placement)
         dst_dir = os.path.dirname(dst)
         os.makedirs(dst_dir, exist_ok=True)
 
@@ -249,16 +253,16 @@ class File(FileBasic):
             path = url2pathname(path)
         return path
 
-    def get_destination_path(self, output: str, strategy: ExportStrategy) -> str:
+    def get_destination_path(self, output: str, placement: ExportPlacement) -> str:
         """
         Returns full destination path of a file for exporting to some output
-        based on export strategy
+        based on export placement
         """
-        if strategy == "filename":
+        if placement == "filename":
             path = unquote(self.name)
-        elif strategy == "etag":
+        elif placement == "etag":
             path = f"{self.etag}{self.get_file_suffix()}"
-        elif strategy == "fullpath":
+        elif placement == "fullpath":
             fs = self.get_fs()
             if isinstance(fs, LocalFileSystem):
                 path = unquote(self.get_full_name())
@@ -266,10 +270,10 @@ class File(FileBasic):
                 path = (
                     Path(urlparse(self.source).netloc) / unquote(self.get_full_name())
                 ).as_posix()
-        elif strategy == "checksum":
-            raise NotImplementedError("Checksum strategy not implemented yet")
+        elif placement == "checksum":
+            raise NotImplementedError("Checksum placement not implemented yet")
         else:
-            raise ValueError(f"Unsupported file export strategy: {strategy}")
+            raise ValueError(f"Unsupported file export placement: {placement}")
         return posixpath.join(output, path)  # type: ignore[union-attr]
 
     def get_fs(self):
