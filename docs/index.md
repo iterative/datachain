@@ -7,3 +7,4 @@
         - [File](./references/file.md)
         - [UDF](./references/udf.md)
     - [`datachain.torch`](./references/torch.md)
+    - [`datachain.sql`](./references/sql.md)

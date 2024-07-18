@@ -13,4 +13,6 @@ for examples of how to create a chain.
 
 ::: datachain.lib.utils.DataChainError
 
+::: datachain.query.session.Session
+
 ::: datachain.lib.dc.Sys

@@ -5,6 +5,10 @@ from datachain.sql.utils import compiler_not_implemented
 
 
 class length(GenericFunction):  # noqa: N801
+    """
+    Returns the length of the string.
+    """
+
     type = Int64()
     package = "string"
     name = "length"
@@ -12,6 +16,10 @@ class length(GenericFunction):  # noqa: N801
 
 
 class split(GenericFunction):  # noqa: N801
+    """
+    Takes a column and split character and returns an array of the parts.
+    """
+
     type = Array(String())
     package = "string"
     name = "split"

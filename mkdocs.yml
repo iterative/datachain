@@ -70,6 +70,7 @@ nav:
       - references/file.md
       - references/udf.md
       - references/torch.md
+      - references/sql.md
 
 markdown_extensions:
   - abbr
