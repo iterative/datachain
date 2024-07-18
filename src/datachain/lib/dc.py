@@ -563,6 +563,10 @@ class DataChain(DatasetQuery):
         return res
 
     @detach
+    def order_by(self, *args: str) -> "Self":
+        return super().order_by(*self.signals_schema.resolve(*args).db_signals())
+
+    @detach
     def select(self, *args: str) -> "Self":
         """Select only a specified set of signals."""
         new_schema = self.signals_schema.resolve(*args)

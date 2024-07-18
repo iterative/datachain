@@ -899,3 +899,13 @@ def test_to_pandas_multi_level():
     assert "nnn" in df["t1"].columns
     assert "count" in df["t1"].columns
     assert df["t1"]["count"].tolist() == [3, 5, 1]
+
+
+def test_order_by_with_nested_columns():
+    names = ["a.jpg", "c.json", "d.txt", "a.jpg", "b.json"]
+
+    assert (
+        DataChain.from_values(file=[File(name=name) for name in names])
+        .order_by("file.name")
+        .collect_one("file.name")
+    ) == ["a.jpg", "a.jpg", "b.json", "c.json", "d.txt"]
