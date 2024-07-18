@@ -25,8 +25,7 @@ ds.show(3)
 # Create a metadata DataChain
 
 print("\n# Create a metadata DataChain")
-ds_meta = DataChain.from_storage(ANNOTATIONS_PATH).parse_csv().save()
-ds_meta = ds_meta.map(filename=lambda c0: str(c0) + ".jpg", output=str)
+ds_meta = DataChain.from_csv(ANNOTATIONS_PATH).select_except("source").save()
 ds_meta.show(3)
 
 # Merge the original image and metadata datachains
