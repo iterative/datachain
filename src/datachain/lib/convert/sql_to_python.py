@@ -17,4 +17,7 @@ SQL_TO_PYTHON = {
 
 
 def sql_to_python(args_map: dict[str, Column]) -> dict[str, Any]:
-    return {k: SQL_TO_PYTHON.get(type(v.type), str) for k, v in args_map.items()}
+    return {
+        k: SQL_TO_PYTHON.get(type(v.type), str)  # type: ignore[union-attr]
+        for k, v in args_map.items()
+    }
