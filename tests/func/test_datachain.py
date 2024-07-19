@@ -1,5 +1,6 @@
 import os
 
+import pandas as pd
 import pytest
 
 from datachain.lib.dc import DataChain
@@ -20,6 +21,17 @@ def test_from_storage(cloud_test_catalog):
     ctc = cloud_test_catalog
     dc = DataChain.from_storage(ctc.src_uri, catalog=ctc.catalog)
     assert dc.count() == 7
+
+
+def test_from_storage_reindex(tmp_dir, catalog):
+    path = tmp_dir.as_uri()
+
+    pd.DataFrame({"name": ["Alice", "Bob"]}).to_parquet(tmp_dir / "test1.parquet")
+    assert DataChain.from_storage(path, catalog=catalog).count() == 1
+
+    pd.DataFrame({"name": ["Charlie", "David"]}).to_parquet(tmp_dir / "test2.parquet")
+    assert DataChain.from_storage(path, catalog=catalog).count() == 1
+    assert DataChain.from_storage(path, catalog=catalog, update=True).count() == 2
 
 
 @pytest.mark.parametrize("use_cache", [False, True])
