@@ -136,6 +136,7 @@ exclude_lines = [
   "if TYPE_CHECKING:",
   "raise NotImplementedError",
   "raise AssertionError",
+  "if self.dialect == .sqlite.",
   "@overload"
 ]
 
