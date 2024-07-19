@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from datachain import Column, DataChain, File
 
-DATA = "gs://dvcx-datalakes/chatbot-public"
+DATA = "gs://datachain-demo/chatbot-KiT"
 MODEL = "claude-3-opus-20240229"
 PROMPT = """Consider the dialogue between the 'user' and the 'bot'. \
 The 'user' is a human trying to find the best mobile plan. \

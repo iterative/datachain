@@ -1,30 +1,10 @@
-#
-# TODO:
-# refactor lib/meta_formats/read_scema into a Datachain method
-#
-# ER: add support for Optional fields in read_schema()
-# ER: add support for headless CSV within static schema only
-# ER: fix the bug in datamodel-codegen failing to recognize csv float and int columns
-#
-# Open issues:
-# 1. A single filename cannot be passed as schema source (#1563)
-# 2. Need syntax like "file.open(encoding='utf-8')" to avoid "type=text" (#1614)
-# 3. Need syntax like "datachain.collate(func -> Any)" (#1615)
-# 4. "Feature" does not tolerate creating a class twice (#1617)
-# 5. Unsure how to deal with 'folder' pseudo-files in cloud systems(#1618)
-# 6. There should be exec() method to force-run the existing chain (#1616)
-# 7. data-model-codegenerator: datamodel-codegen reports all CSV fields as 'str'.
-# 8. from_json and from_csv methods do not filter empty files from AWS
-# dependencies:
-# pip install datamodel-code-generator
-# pip install jmespath
+# pip install datamodel-code-generator jmespath
 
 from typing import Optional
 
 from pydantic import BaseModel
 
-from datachain.lib.dc import C, DataChain
-from datachain.lib.feature_utils import pydantic_to_feature
+from datachain import C, DataChain
 
 
 # Sample model for static JSON model
@@ -34,18 +14,12 @@ class LicenseModel(BaseModel):
     name: str
 
 
-LicenseFeature = pydantic_to_feature(LicenseModel)
-
-
 # Sample model for static CSV model
 class ChatDialog(BaseModel):
     id: Optional[int] = None
     count: Optional[int] = None
     sender: Optional[str] = None
     text: Optional[str] = None
-
-
-ChatFeature = pydantic_to_feature(ChatDialog)
 
 
 def main():
@@ -88,7 +62,7 @@ def main():
     print("========================================================================")
     print("static JSON schema test parsing 7 objects")
     print("========================================================================")
-    static_json_ds = DataChain.from_json(uri, jmespath="licenses", spec=LicenseFeature)
+    static_json_ds = DataChain.from_json(uri, jmespath="licenses", spec=LicenseModel)
     print(static_json_ds.to_pandas())
 
     print()
@@ -103,7 +77,7 @@ def main():
     print("========================================================================")
     print("static CSV with header schema test parsing 3.5K objects")
     print("========================================================================")
-    static_csv_ds = DataChain.from_csv(uri, output=ChatFeature, object_name="chat")
+    static_csv_ds = DataChain.from_csv(uri, output=ChatDialog, object_name="chat")
     static_csv_ds.print_schema()
     print(static_csv_ds.to_pandas())
 

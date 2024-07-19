@@ -5,8 +5,8 @@ from torch import nn, optim
 from torch.utils.data import DataLoader
 from torchvision.transforms import v2
 
-from datachain.lib.dc import C, DataChain
-from datachain.lib.pytorch import label_to_int
+from datachain import C, DataChain
+from datachain.torch import label_to_int
 
 STORAGE = "gs://dvcx-datalakes/dogs-and-cats/"
 
@@ -45,8 +45,12 @@ class CNN(nn.Module):
 if __name__ == "__main__":
     ds = (
         DataChain.from_storage(STORAGE, type="image")
-        .filter(C.name.glob("*.jpg"))
-        .map(label=lambda name: label_to_int(name[:3], CLASSES), output=int)
+        .filter(C("file.name").glob("*.jpg"))
+        .map(
+            label=lambda name: label_to_int(name[:3], CLASSES),
+            params=["file.name"],
+            output=int,
+        )
     )
 
     train_loader = DataLoader(

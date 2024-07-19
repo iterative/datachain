@@ -1,4 +1,4 @@
-from datachain.lib.dc import C, DataChain
+from datachain import C, DataChain
 from datachain.sql import literal
 from datachain.sql.functions import array, greatest, least, path, string
 
