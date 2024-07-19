@@ -24,6 +24,7 @@ DEFAULT_TRANSFORM = v2.Compose([v2.ToImage(), v2.ToDtype(float32, scale=True)])
 
 
 def label_to_int(value: str, classes: list) -> int:
+    """Given a value and list of classes, return the index of the value's class."""
     return classes.index(value)
 
 
@@ -40,6 +41,9 @@ class PytorchDataset(IterableDataset):
     ):
         """
         Pytorch IterableDataset that streams DataChain datasets.
+
+        See Also:
+            `DataChain.to_pytorch()` - convert chain to PyTorch Dataset.
 
         Args:
             name (str): Name of DataChain dataset to stream.

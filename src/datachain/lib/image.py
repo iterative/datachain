@@ -53,7 +53,7 @@ def convert_images(
     Resize, transform, and otherwise convert one or more images.
 
     Args:
-        img (Image, list[Image]): PIL.Image object or list of objects.
+        images (Image, list[Image]): PIL.Image object or list of objects.
         mode (str): PIL.Image mode.
         size (tuple[int, int]): Size in (width, height) pixels for resizing.
         transform (Callable): Torchvision transform or huggingface processor to apply.
