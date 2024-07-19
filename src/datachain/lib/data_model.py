@@ -21,6 +21,8 @@ DataTypeNames = "BaseModel, int, str, float, bool, list, dict, bytes, datetime"
 
 
 class DataModel(BaseModel):
+    """Pydantic model wrapper that registers model with `DataChain`."""
+
     _version: ClassVar[int] = 1
 
     def get_value(self):
@@ -45,6 +47,7 @@ class DataModel(BaseModel):
 
 
 def is_chain_type(t: type) -> bool:
+    """Return true if type is supported by `DataChain`."""
     if ModelStore.is_pydantic(t):
         return True
     if any(t is ft or t is get_args(ft)[0] for ft in get_args(StandardType)):

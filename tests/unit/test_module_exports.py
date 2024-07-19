@@ -17,7 +17,6 @@ def test_module_exports():
             DataChainError,
             DataModel,
             File,
-            FileBasic,
             FileError,
             Generator,
             ImageFile,

@@ -32,6 +32,7 @@ class Column(sa.ColumnClause, metaclass=ColumnMeta):
     inherit_cache: Optional[bool] = True
 
     def __init__(self, text, type_=None, is_literal=False, _selectable=None):
+        """Dataset column."""
         self.name = ColumnMeta.to_db_name(text)
         super().__init__(
             self.name, type_=type_, is_literal=is_literal, _selectable=_selectable
@@ -41,6 +42,7 @@ class Column(sa.ColumnClause, metaclass=ColumnMeta):
         return Column(self.name + DEFAULT_DELIMITER + name)
 
     def glob(self, glob_str):
+        """Search for matches using glob pattern matching."""
         return self.op("GLOB")(glob_str)
 
 

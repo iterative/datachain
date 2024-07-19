@@ -31,7 +31,6 @@ from datachain.lib.settings import Settings
 from datachain.lib.signal_schema import SignalSchema
 from datachain.lib.udf import (
     Aggregator,
-    BatchMapper,
     Generator,
     Mapper,
     UDFBase,
@@ -111,7 +110,9 @@ class DatasetMergeError(DataChainParamsError):  # noqa: D101
 OutputType = Union[None, DataType, Sequence[str], dict[str, DataType]]
 
 
-class Sys(DataModel):  # noqa: D101
+class Sys(DataModel):
+    """Model for internal DataChain signals `id` and `rand`."""
+
     id: int
     rand: int
 
@@ -153,7 +154,7 @@ class DataChain(DatasetQuery):
         from mistralai.client import MistralClient
         from mistralai.models.chat_completion import ChatMessage
 
-        from datachain.lib.dc import DataChain, Column
+        from datachain.dc import DataChain, Column
 
         PROMPT = (
             "Was this bot dialog successful? "
@@ -225,7 +226,8 @@ class DataChain(DatasetQuery):
         """Print schema of the chain."""
         self._effective_signals_schema.print_tree()
 
-    def clone(self, new_table: bool = True) -> "Self":  # noqa: D102
+    def clone(self, new_table: bool = True) -> "Self":
+        """Make a copy of the chain in a new table."""
         obj = super().clone(new_table=new_table)
         obj.signals_schema = copy.deepcopy(self.signals_schema)
         return obj
@@ -289,10 +291,11 @@ class DataChain(DatasetQuery):
         session: Optional[Session] = None,
         recursive: Optional[bool] = True,
         object_name: str = "file",
+        update: bool = False,
         **kwargs,
     ) -> "Self":
-        """Get data from a storage as a list of file with all file attributes. It
-        returns the chain itself as usual.
+        """Get data from a storage as a list of file with all file attributes.
+        It returns the chain itself as usual.
 
         Parameters:
             path : storage URI with directory. URI must start with storage prefix such
@@ -300,6 +303,7 @@ class DataChain(DatasetQuery):
             type : read file as "binary", "text", or "image" data. Default is "binary".
             recursive : search recursively for the given path.
             object_name : Created object column name.
+            update : force storage reindexing. Default is False.
 
         Example:
             ```py
@@ -308,7 +312,7 @@ class DataChain(DatasetQuery):
         """
         func = get_file(type)
         return (
-            cls(path, session=session, recursive=recursive, **kwargs)
+            cls(path, session=session, recursive=recursive, update=update, **kwargs)
             .map(**{object_name: func})
             .select(object_name)
         )
@@ -473,7 +477,26 @@ class DataChain(DatasetQuery):
         schema = self.signals_schema.clone_without_sys_signals().serialize()
         return super().save(name=name, version=version, feature_schema=schema)
 
-    def apply(self, func, *args, **kwargs):  # noqa: D102
+    def apply(self, func, *args, **kwargs):
+        """Apply any function to the chain.
+
+        Useful for reusing in a chain of operations.
+
+        Example:
+            ```py
+            def parse_stem(chain):
+                return chain.map(
+                    lambda file: file.get_file_stem()
+                    output={"stem": str}
+                )
+
+            chain = (
+                DataChain.from_storage("s3://my-bucket")
+                .apply(parse_stem)
+                .filter(C("stem").glob("*cat*"))
+            )
+            ```
+        """
         return func(self, *args, **kwargs)
 
     def map(
@@ -580,22 +603,6 @@ class DataChain(DatasetQuery):
         )
 
         return chain.reset_schema(udf_obj.output).reset_settings(self._settings)
-
-    def batch_map(  # noqa: D102
-        self,
-        func: Optional[Callable] = None,
-        params: Union[None, str, Sequence[str]] = None,
-        output: OutputType = None,
-        **signal_map,
-    ) -> "Self":
-        udf_obj = self._udf_to_obj(BatchMapper, func, params, output, signal_map)
-        chain = DatasetQuery.generate(
-            self,
-            udf_obj.to_udf_wrapper(self._settings.batch),
-            **self._settings.to_dict(),
-        )
-
-        return chain.add_schema(udf_obj.output).reset_settings(self._settings)
 
     def _udf_to_obj(
         self,

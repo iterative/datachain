@@ -31,7 +31,7 @@ def _get_encoder(model: Any, type: Literal["image", "text"]) -> Callable:
     )
 
 
-def similarity_scores(
+def clip_similarity_scores(
     images: Union[None, "Image.Image", list["Image.Image"]],
     text: Union[None, str, list[str]],
     model: Any,
@@ -43,71 +43,91 @@ def similarity_scores(
     """
     Calculate CLIP similarity scores between one or more images and/or text.
 
-    Args:
-        images: Images to use as inputs.
-        text: Text to use as inputs.
-        model: Model from clip or open_clip packages.
-        preprocess: Image preprocessor to apply.
-        tokenizer: Text tokenizer.
-        prob: Compute softmax probabilities.
-        image_to_text: Whether to compute for image-to-text or text-to-image. Ignored if
-            only one of images or text provided.
+    Parameters:
+        images : Images to use as inputs.
+        text : Text to use as inputs.
+        model : Model from clip or open_clip packages.
+        preprocess : Image preprocessor to apply.
+        tokenizer : Text tokenizer.
+        prob : Compute softmax probabilities.
+        image_to_text : Whether to compute for image-to-text or text-to-image. Ignored
+            if only one of images or text provided.
 
 
-    Examples
-    --------
+    Example:
+        Using https://github.com/openai/CLIP
+        ```py
+        >>> import clip
+        >>> model, preprocess = clip.load("ViT-B/32")
+        >>> similarity_scores(img, "cat", model, preprocess, clip.tokenize)
+        [[21.813]]
+        ```
 
-    using https://github.com/openai/CLIP
-    >>> import clip
-    >>> model, preprocess = clip.load("ViT-B/32")
-    >>> similarity_scores(img, "cat", model, preprocess, clip.tokenize)
-    [[21.813]]
+        Using https://github.com/mlfoundations/open_clip
+        ```py
+        >>> import open_clip
+        >>> model, _, preprocess = open_clip.create_model_and_transforms(
+        ...     "ViT-B-32", pretrained="laion2b_s34b_b79k"
+        ... )
+        >>> tokenizer = open_clip.get_tokenizer("ViT-B-32")
+        >>> similarity_scores(img, "cat", model, preprocess, tokenizer)
+        [[21.813]]
+        ```
 
-    using https://github.com/mlfoundations/open_clip
-    >>> import open_clip
-    >>> model, _, preprocess = open_clip.create_model_and_transforms(
-    ...     "ViT-B-32", pretrained="laion2b_s34b_b79k"
-    ... )
-    >>> tokenizer = open_clip.get_tokenizer("ViT-B-32")
-    >>> similarity_scores(img, "cat", model, preprocess, tokenizer)
-    [[21.813]]
+        Using https://huggingface.co/docs/transformers/en/model_doc/clip
+        ```py
+        >>> from transformers import CLIPProcessor, CLIPModel
+        >>> model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
+        >>> processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+        >>> scores = similarity_scores(
+        ...     img, "cat", model, processor.image_processor, processor.tokenizer
+        ... )
+        [[21.813]]
+        ```
 
-    using https://huggingface.co/docs/transformers/en/model_doc/clip
-    >>> from transformers import CLIPProcessor, CLIPModel
-    >>> model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
-    >>> processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-    >>> scores = similarity_scores(
-    ...     img, "cat", model, processor.image_processor, processor.tokenizer
-    ... )
-    [[21.813]]
+        Image -> list of text
+        ```py
+        >>> similarity_scores(img, ["cat", "dog"], model, preprocess, tokenizer)
+        [[21.813, 35.313]]
+        ```
 
-    image -> list of text
-    >>> similarity_scores(img, ["cat", "dog"], model, preprocess, tokenizer)
-    [[21.813, 35.313]]
+        List of images -> text
+        ```py
+        >>> similarity_scores([img1, img2], "cat", model, preprocess, tokenizer)
+        [[21.813], [83.123]]
+        ```
 
-    list of images -> text
-    >>> similarity_scores([img1, img2], "cat", model, preprocess, tokenizer)
-    [[21.813], [83.123]]
+        List of images -> list of text
+        ```py
+        >>> similarity_scores(
+        ...     [img1, img2], ["cat", "dog"], model, preprocess, tokenizer)
+        ... )
+        [[21.813, 35.313], [83.123, 34.843]]
+        ```
 
-    list of images -> list of text
-    >>> similarity_scores([img1, img2], ["cat", "dog"], model, preprocess, tokenizer)
-    [[21.813, 35.313], [83.123, 34.843]]
+        List of images -> list of images
+        ```py
+        >>> similarity_scores([img1, img2], None, model, preprocess, tokenizer)
+        [[94.189, 37.092]]
+        ```
 
-    list of images -> list of images
-    >>> similarity_scores([img1, img2], None, model, preprocess, tokenizer)
-    [[94.189, 37.092]]
+        List of text -> list of text
+        ```py
+        >>> similarity_scores(None, ["cat", "dog"], model, preprocess, tokenizer)
+        [[67.334, 23.588]]
+        ```
 
-    list of text -> list of text
-    >>> similarity_scores(None, ["cat", "dog"], model, preprocess, tokenizer)
-    [[67.334, 23.588]]
+        Text -> list of images
+        ```py
+        >>> similarity_scores([img1, img2], "cat", ..., image_to_text=False)
+        [[19.708, 19.842]]
+        ```
 
-    text -> list of images
-    >>> similarity_scores([img1, img2], "cat", ..., image_to_text=False)
-    [[19.708, 19.842]]
-
-    show scores as softmax probabilities
-    >>> similarity_scores(img, ["cat", "dog"], ..., prob=True)
-    [[0.423, 0.577]]
+        Show scores as softmax probabilities
+        ```py
+        >>> similarity_scores(img, ["cat", "dog"], ..., prob=True)
+        [[0.423, 0.577]]
+        ```
     """
 
     with torch.no_grad():
@@ -144,3 +164,6 @@ def similarity_scores(
             scores = logits
 
         return scores.tolist()
+
+
+similarity_scores = clip_similarity_scores
