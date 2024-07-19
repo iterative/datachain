@@ -603,6 +603,20 @@ class DataChain(DatasetQuery):
         return res
 
     @detach
+    def distinct(self, arg: str, *args: str) -> "Self":  # type: ignore[override]
+        """Removes duplicate rows based on uniqueness of some input column(s)
+        i.e if rows are found with the same value of input column(s), only one
+        row is left in the result set.
+
+        Example:
+        ```py
+         dc.distinct("file.parent", "file.name")
+        )
+        ```
+        """
+        return super().distinct(*self.signals_schema.resolve(arg, *args).db_signals())
+
+    @detach
     def select(self, *args: str, _sys: bool = True) -> "Self":
         """Select only a specified set of signals."""
         new_schema = self.signals_schema.resolve(*args)
@@ -1225,10 +1239,7 @@ class DataChain(DatasetQuery):
         """Method that exports all files from chain to some folder."""
         if placement == "filename":
             print("Checking if file names are unique")
-            if (
-                self.select(f"{signal}.name", _sys=False).distinct().count()
-                != self.count()
-            ):
+            if self.distinct(f"{signal}.name").count() != self.count():
                 raise ValueError("Files with the same name found")
 
         for file in self.collect_one(signal):

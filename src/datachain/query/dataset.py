@@ -867,8 +867,14 @@ class SQLCount(SQLClause):
 
 @frozen
 class SQLDistinct(SQLClause):
+    args: tuple[ColumnElement, ...]
+    dialect: str
+
     def apply_sql_clause(self, query):
-        return query.distinct()
+        if self.dialect == "sqlite":
+            return query.group_by(*self.args)
+
+        return query.distinct(*self.args)
 
 
 @frozen
@@ -1412,9 +1418,11 @@ class DatasetQuery:
         return query
 
     @detach
-    def distinct(self) -> "Self":
+    def distinct(self, *args) -> "Self":
         query = self.clone()
-        query.steps.append(SQLDistinct())
+        query.steps.append(
+            SQLDistinct(args, dialect=self.catalog.warehouse.db.dialect.name)
+        )
         return query
 
     def as_scalar(self) -> Any:

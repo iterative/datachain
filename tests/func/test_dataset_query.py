@@ -444,14 +444,12 @@ def test_distinct(cloud_test_catalog):
     path = cloud_test_catalog.src_uri
     ds = DatasetQuery(path=path, catalog=catalog)
 
-    q = ds.select(C.parent).order_by(C.parent).distinct()
-    result = q.db_results()
-
-    assert result == [
-        ("",),
-        ("cats",),
-        ("dogs",),
-        ("dogs/others",),
+    q = ds.select(C.parent, C.size).order_by(C.name).distinct(C.parent)
+    assert q.db_results(row_factory=lambda c, v: dict(zip(c, v))) == [
+        {"parent": "cats", "size": 4},
+        {"parent": "", "size": 13},
+        {"parent": "dogs", "size": 4},
+        {"parent": "dogs/others", "size": 4},
     ]
 
 
@@ -465,7 +463,9 @@ def test_distinct_count(cloud_test_catalog):
     path = cloud_test_catalog.src_uri
     ds = DatasetQuery(path=path, catalog=catalog)
 
-    assert ds.select(C.parent).order_by(C.parent).distinct().count() == 4
+    assert ds.distinct(C.parent).count() == 4
+    assert ds.distinct(C.name).count() == 7
+    assert ds.distinct().count() == 7
 
 
 @pytest.mark.parametrize("save", [True, False])
