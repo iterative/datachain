@@ -426,7 +426,7 @@ def get_generated_callback(is_generator: bool = False) -> Callback:
 
 
 @frozen
-class UDF(Step, ABC):
+class UDFStep(Step, ABC):
     udf: UDFType
     catalog: "Catalog"
     partition_by: Optional[PartitionByType] = None
@@ -635,7 +635,7 @@ class UDF(Step, ABC):
 
 
 @frozen
-class UDFSignal(UDF):
+class UDFSignal(UDFStep):
     is_generator = False
 
     def create_udf_table(self, query: Select) -> "Table":
@@ -730,7 +730,7 @@ class UDFSignal(UDF):
 
 
 @frozen
-class RowGenerator(UDF):
+class RowGenerator(UDFStep):
     """Extend dataset with new rows."""
 
     is_generator = True
@@ -1090,6 +1090,7 @@ class DatasetQuery:
             self.feature_schema = indexing_feature_schema
             self.column_types = indexing_column_types
         elif name:
+            self.name = name
             ds = self.catalog.get_dataset(name)
             self.version = version or ds.latest_version
             self.feature_schema = ds.get_version(self.version).feature_schema
@@ -1097,9 +1098,6 @@ class DatasetQuery:
             if "sys__id" in self.column_types:
                 self.column_types.pop("sys__id")
             self.starting_step = QueryStep(self.catalog, name, self.version)
-            # attaching to specific dataset
-            self.name = name
-            self.version = version
         else:
             raise ValueError("must provide path or name")
 

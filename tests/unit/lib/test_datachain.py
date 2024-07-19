@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 from pydantic import BaseModel
 
+from datachain import Column
 from datachain.lib.dc import C, DataChain, Sys
 from datachain.lib.file import File
 from datachain.lib.signal_schema import (
@@ -521,6 +522,23 @@ def test_select_restore_from_saving(catalog):
     assert n == len(features_nested)
 
 
+def test_from_dataset_name_version(catalog):
+    name = "test-version"
+    DataChain.from_values(
+        first_name=["Alice", "Bob", "Charlie"],
+        age=[40, 30, None],
+        city=[
+            "Houston",
+            "Los Angeles",
+            None,
+        ],
+    ).save(name)
+
+    dc = DataChain.from_dataset(name)
+    assert dc.name == name
+    assert dc.version
+
+
 def test_chain_of_maps(catalog):
     dc = (
         DataChain.from_values(my_n=features_nested)
@@ -899,3 +917,15 @@ def test_to_pandas_multi_level():
     assert "nnn" in df["t1"].columns
     assert "count" in df["t1"].columns
     assert df["t1"]["count"].tolist() == [3, 5, 1]
+
+
+def test_mutate():
+    chain = DataChain.from_values(t1=features).mutate(
+        circle=2 * 3.14 * Column("t1.count"), place="pref_" + Column("t1.nnn")
+    )
+
+    assert chain.signals_schema.values["circle"] is float
+    assert chain.signals_schema.values["place"] is str
+
+    expected = [fr.count * 2 * 3.14 for fr in features]
+    np.testing.assert_allclose(chain.collect_one("circle"), expected)
