@@ -185,18 +185,37 @@ def test_select_nested_errors():
         schema.resolve("fr.deep.not_exist")
 
 
-def test_get_file_signals_basic():
+def test_get_signals_basic():
     schema = {
         "name": str,
         "age": float,
         "f": File,
     }
-    assert list(SignalSchema(schema).get_file_signals()) == ["f"]
+    assert list(SignalSchema(schema).get_signals(File)) == ["f"]
 
 
-def test_get_file_signals_nested(nested_file_schema):
-    files = list(nested_file_schema.get_file_signals())
+def test_get_signals_no_signal():
+    schema = {
+        "name": str,
+    }
+    assert list(SignalSchema(schema).get_signals(File)) == []
+
+
+def test_get_signals_nested(nested_file_schema):
+    files = list(nested_file_schema.get_signals(File))
     assert files == ["f", "my_f", "my_f.nested_file"]
+
+
+def test_get_signals_subclass(nested_file_schema):
+    class NewFile(File):
+        pass
+
+    schema = {
+        "name": str,
+        "age": float,
+        "f": NewFile,
+    }
+    assert list(SignalSchema(schema).get_signals(File)) == ["f"]
 
 
 def test_build_tree():
