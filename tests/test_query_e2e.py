@@ -89,11 +89,11 @@ E2E_STEPS = (
             "query",
             os.path.join(tests_dir, "scripts", "feature_class.py"),
             "--columns",
-            "name,emd.value",
+            "file.name,emd.value",
         ),
         "expected_rows": dedent(
             """
-                    name    emd__value
+            file__name    emd__value
             1     cat.1.jpg  512.0
             2    cat.10.jpg  512.0
             3   cat.100.jpg  512.0

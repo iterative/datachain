@@ -24,4 +24,4 @@ DatasetQuery(
 ).limit(2).save("name_len")
 
 # Output the contents of the new dataset.
-print(DatasetQuery(name="name_len").select(C.name, C.name_len).results())
+print(DatasetQuery(name="name_len").select(C.name, C.name_len).db_results())
