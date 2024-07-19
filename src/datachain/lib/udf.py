@@ -88,6 +88,53 @@ class UDFAdapter(_UDFBase):
 
 
 class UDFBase(AbstractUDF):
+    """Base class for stateful user-defined functions.
+
+    Any class that inherits from it must have a `process()` method that takes input
+    params from one or more rows in the chain and produces the expected output.
+
+    Optionally, the class may include these methods:
+    - `setup()` to run code on each  worker before `process()` is called.
+    - `teardown()` to run code on each  worker after `process()` completes.
+
+    Example:
+        ```py
+        from datachain import C, DataChain, Mapper
+        import open_clip
+
+        class ImageEncoder(Mapper):
+            def __init__(self, model_name: str, pretrained: str):
+                self.model_name = model_name
+                self.pretrained = pretrained
+
+            def setup(self):
+                self.model, _, self.preprocess = (
+                    open_clip.create_model_and_transforms(
+                        self.model_name, self.pretrained
+                    )
+                )
+
+            def process(self, file) -> list[float]:
+                img = file.get_value()
+                img = self.preprocess(img).unsqueeze(0)
+                emb = self.model.encode_image(img)
+                return emb[0].tolist()
+
+        (
+            DataChain.from_storage(
+                "gs://datachain-demo/fashion-product-images/images", type="image"
+            )
+            .limit(5)
+            .map(
+                ImageEncoder("ViT-B-32", "laion2b_s34b_b79k"),
+                params=["file"],
+                output={"emb": list[float]},
+            )
+            .show()
+        )
+        ```
+    """
+
     is_input_batched = False
     is_output_batched = False
     is_input_grouped = False
@@ -280,7 +327,7 @@ class UDFBase(AbstractUDF):
 
 
 class Mapper(UDFBase):
-    pass
+    """Inherit from this class to pass to `DataChain.map()`."""
 
 
 class BatchMapper(Mapper):
@@ -289,10 +336,14 @@ class BatchMapper(Mapper):
 
 
 class Generator(UDFBase):
+    """Inherit from this class to pass to `DataChain.gen()`."""
+
     is_output_batched = True
 
 
 class Aggregator(UDFBase):
+    """Inherit from this class to pass to `DataChain.agg()`."""
+
     is_input_batched = True
     is_output_batched = True
     is_input_grouped = True

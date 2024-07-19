@@ -48,21 +48,21 @@ if TYPE_CHECKING:
 C = Column
 
 
-class DatasetPrepareError(DataChainParamsError):
-    def __init__(self, name, msg, output=None):
+class DatasetPrepareError(DataChainParamsError):  # noqa: D101
+    def __init__(self, name, msg, output=None):  # noqa: D107
         name = f" '{name}'" if name else ""
         output = f" output '{output}'" if output else ""
         super().__init__(f"Dataset{name}{output} processing prepare error: {msg}")
 
 
-class DatasetFromValuesError(DataChainParamsError):
-    def __init__(self, name, msg):
+class DatasetFromValuesError(DataChainParamsError):  # noqa: D101
+    def __init__(self, name, msg):  # noqa: D107
         name = f" '{name}'" if name else ""
         super().__init__(f"Dataset{name} from values error: {msg}")
 
 
-class DatasetMergeError(DataChainParamsError):
-    def __init__(self, on: Sequence[str], right_on: Optional[Sequence[str]], msg: str):
+class DatasetMergeError(DataChainParamsError):  # noqa: D101
+    def __init__(self, on: Sequence[str], right_on: Optional[Sequence[str]], msg: str):  # noqa: D107
         on_str = ", ".join(on) if isinstance(on, Sequence) else ""
         right_on_str = (
             ", right_on='" + ", ".join(right_on) + "'"
@@ -76,6 +76,8 @@ OutputType = Union[None, DataType, Sequence[str], dict[str, DataType]]
 
 
 class Sys(DataModel):
+    """Model for internal DataChain signals `id` and `rand`."""
+
     id: int
     rand: int
 
@@ -187,6 +189,7 @@ class DataChain(DatasetQuery):
         self.signals_schema.print_tree()
 
     def clone(self, new_table: bool = True) -> "Self":
+        """Make a copy of the chain in a new table."""
         obj = super().clone(new_table=new_table)
         obj.signals_schema = copy.deepcopy(self.signals_schema)
         return obj
@@ -235,15 +238,15 @@ class DataChain(DatasetQuery):
         self._settings = settings if settings else Settings()
         return self
 
-    def reset_schema(self, signals_schema: SignalSchema) -> "Self":
+    def reset_schema(self, signals_schema: SignalSchema) -> "Self":  # noqa: D102
         self.signals_schema = signals_schema
         return self
 
-    def add_schema(self, signals_schema: SignalSchema) -> "Self":
+    def add_schema(self, signals_schema: SignalSchema) -> "Self":  # noqa: D102
         self.signals_schema |= signals_schema
         return self
 
-    def get_file_signals(self) -> list[str]:
+    def get_file_signals(self) -> list[str]:  # noqa: D102
         return list(self.signals_schema.get_file_signals())
 
     @classmethod
@@ -612,12 +615,12 @@ class DataChain(DatasetQuery):
         chain.signals_schema = new_schema
         return chain
 
-    def iterate_flatten(self) -> Iterator[tuple[Any]]:
+    def iterate_flatten(self) -> Iterator[tuple[Any]]:  # noqa: D102
         db_signals = self.signals_schema.db_signals()
         with super().select(*db_signals).as_iterable() as rows:
             yield from rows
 
-    def results(
+    def results(  # noqa: D102
         self, row_factory: Optional[Callable] = None, **kwargs
     ) -> list[tuple[Any, ...]]:
         rows = self.iterate_flatten()
@@ -692,7 +695,7 @@ class DataChain(DatasetQuery):
             num_samples=num_samples,
         )
 
-    def remove_file_signals(self) -> "Self":
+    def remove_file_signals(self) -> "Self":  # noqa: D102
         schema = self.signals_schema.clone_without_file_signals()
         return self.select(*schema.values.keys())
 
@@ -1168,8 +1171,7 @@ class DataChain(DatasetQuery):
         return super().shuffle()
 
     def sample(self, n) -> "Self":
-        """
-        Return a random sample from the chain.
+        """Return a random sample from the chain.
 
         Parameters:
             n (int): Number of samples to draw.
@@ -1181,8 +1183,7 @@ class DataChain(DatasetQuery):
 
     @detach
     def filter(self, *args) -> "Self":
-        """
-        Filter the chain according to conditions.
+        """Filter the chain according to conditions.
 
         Example:
             Basic usage with built-in operators

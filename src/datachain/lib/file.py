@@ -54,12 +54,15 @@ class VFile(ABC):
 
 
 class TarVFile(VFile):
+    """Virtual file model for files extracted from tar archives."""
+
     @classmethod
     def get_vtype(cls) -> str:
         return "tar"
 
     @classmethod
     def open(cls, file: "File", location: list[dict]):
+        """Stream file from tar archive based on location in archive."""
         if len(location) > 1:
             VFileError(file, "multiple 'location's are not supported yet")
 
@@ -106,6 +109,8 @@ class VFileRegistry:
 
 
 class File(FileBasic):
+    """Binary file model."""
+
     source: str = Field(default="")
     parent: str = Field(default="")
     name: str
@@ -178,6 +183,7 @@ class File(FileBasic):
 
     @contextmanager
     def open(self):
+        """Stream in binary mode like `with file.open()`."""
         if self.location:
             with VFileRegistry.resolve(self, self.location) as f:
                 yield f
@@ -197,6 +203,7 @@ class File(FileBasic):
         placement: ExportPlacement = "fullpath",
         use_cache: bool = True,
     ) -> None:
+        """Export file to new location."""
         if use_cache:
             self._caching_enabled = use_cache
         dst = self.get_destination_path(output, placement)
@@ -217,11 +224,12 @@ class File(FileBasic):
         self._download_cb = download_cb
 
     def get_uid(self) -> UniqueId:
+        """Returns unique ID for file."""
         dump = self.model_dump()
         return UniqueId(*(dump[k] for k in self._unique_id_keys))
 
     def get_local_path(self) -> Optional[str]:
-        """Get path to a file in a local cache.
+        """Returns path to a file in a local cache.
         Return None if file is not cached. Throws an exception if cache is not setup."""
         if self._catalog is None:
             raise RuntimeError(
@@ -230,21 +238,27 @@ class File(FileBasic):
         return self._catalog.cache.get_path(self.get_uid())
 
     def get_file_suffix(self):
+        """Returns last part of file name with `.`."""
         return Path(self.name).suffix
 
     def get_file_ext(self):
+        """Returns last part of file name without `.`."""
         return Path(self.name).suffix.strip(".")
 
     def get_file_stem(self):
+        """Returns file name without extension."""
         return Path(self.name).stem
 
     def get_full_name(self):
+        """Returns name with parent directories."""
         return (Path(self.parent) / self.name).as_posix()
 
     def get_uri(self):
+        """Returns file URI."""
         return f"{self.source}/{self.get_full_name()}"
 
     def get_path(self) -> str:
+        """Returns file path."""
         path = unquote(self.get_uri())
         fs = self.get_fs()
         if isinstance(fs, LocalFileSystem):
@@ -277,18 +291,25 @@ class File(FileBasic):
         return posixpath.join(output, path)  # type: ignore[union-attr]
 
     def get_fs(self):
+        """Returns `fsspec` filesystem for the file."""
         return self._catalog.get_client(self.source).fs
 
 
 class TextFile(File):
+    """Text file model."""
+
     @contextmanager
     def open(self):
+        """Stream in text mode like `with file.open()`."""
         with super().open() as binary:
             yield io.TextIOWrapper(binary)
 
 
 class ImageFile(File):
+    """Image file model."""
+
     def get_value(self):
+        """Return `PIL.Image.Image."""
         value = super().get_value()
         return Image.open(BytesIO(value))
 
@@ -325,7 +346,10 @@ def get_file(type_: Literal["binary", "text", "image"] = "binary"):
 
 
 class IndexedFile(DataModel):
-    """File source info for tables."""
+    """Metadata indexed from tabular files.
+
+    Includes `file` and `index` signals.
+    """
 
     file: File
     index: int

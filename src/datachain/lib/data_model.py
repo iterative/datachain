@@ -24,6 +24,8 @@ DataTypeNames = "BaseModel, int, str, float, bool, list, dict, bytes, datetime"
 
 
 class DataModel(BaseModel):
+    """Pydantic model wrapper that registers model with `DataChain`."""
+
     _version: ClassVar[int] = 1
 
     def get_value(self):
@@ -48,6 +50,8 @@ class DataModel(BaseModel):
 
 
 class FileBasic(DataModel):
+    """Base class for all file-like `DataModel` classes."""
+
     def _set_stream(self, catalog: "Catalog", caching_enabled: bool = False) -> None:
         pass
 
@@ -55,14 +59,17 @@ class FileBasic(DataModel):
         raise NotImplementedError
 
     def read(self):
+        """Read raw file contents."""
         with self.open() as stream:
             return stream.read()
 
     def get_value(self):
+        """Return object with file contents formatted by file type."""
         return self.read()
 
 
 def is_chain_type(t: type) -> bool:
+    """Return true if type is supported by `DataChain`."""
     if ModelStore.is_pydantic(t):
         return True
     if any(t is ft or t is get_args(ft)[0] for ft in get_args(StandardType)):

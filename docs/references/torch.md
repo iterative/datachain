@@ -6,8 +6,6 @@ Use `pip install datachain[torch]` and then import from `datachain.torch` to use
 chain into a PyTorch `Dataset` for downstream tasks like model training or inference.
 The classes and methods below help manipulate data from the chain for PyTorch.
 
-::: datachain.lib.pytorch.PytorchDataset
-
 ::: datachain.lib.clip.clip_similarity_scores
 
 ::: datachain.lib.image.convert_image
