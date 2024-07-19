@@ -26,7 +26,7 @@ class MyMapper(Mapper):
 
 def test_udf():
     vals = ["a", "b", "c", "d", "e", "f"]
-    chain = DataChain.from_features(key=vals)
+    chain = DataChain.from_values(key=vals)
 
     udf = MyMapper()
     res = chain.map(res=udf).collect_one("res")
@@ -38,7 +38,7 @@ def test_udf():
 @pytest.mark.skip(reason="Skip until tests module will be importer for unit-tests")
 def test_udf_parallel():
     vals = ["a", "b", "c", "d", "e", "f"]
-    chain = DataChain.from_features(key=vals)
+    chain = DataChain.from_values(key=vals)
 
     res = chain.settings(parallel=4).map(res=MyMapper()).collect_one("res")
 
@@ -62,7 +62,7 @@ def test_no_bootstrap_for_callable():
 
     udf = MyMapper()
 
-    chain = DataChain.from_features(key=["a", "b", "c"])
+    chain = DataChain.from_values(key=["a", "b", "c"])
     chain.map(res=udf).collect()
 
     assert udf._had_bootstrap is False
@@ -74,7 +74,7 @@ def test_bootstrap_in_chain(catalog):
     prime = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29]
 
     res = (
-        DataChain.from_features(val=prime)
+        DataChain.from_values(val=prime)
         .setup(init_val=lambda: base)
         .map(x=lambda val, init_val: val + init_val, output=int)
         .collect_one("x")
@@ -86,7 +86,7 @@ def test_bootstrap_in_chain(catalog):
 def test_vars_duplication_error(catalog):
     with pytest.raises(DatasetPrepareError):
         (
-            DataChain.from_features(val=[2, 3, 5, 7, 11, 13, 17, 19, 23, 29])
+            DataChain.from_values(val=[2, 3, 5, 7, 11, 13, 17, 19, 23, 29])
             .setup(init_val=lambda: 11, connection=lambda: 123)
             .setup(init_val=lambda: 599)
         )

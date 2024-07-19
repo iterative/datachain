@@ -1,22 +1,15 @@
 import json
 
+from PIL import (
+    ExifTags,
+    Image,
+    IptcImagePlugin,
+    TiffImagePlugin,
+    UnidentifiedImageError,
+)
+
 from datachain.query import Object, udf
 from datachain.sql.types import JSON, String
-
-try:
-    from PIL import (
-        ExifTags,
-        Image,
-        IptcImagePlugin,
-        TiffImagePlugin,
-        UnidentifiedImageError,
-    )
-except ImportError as exc:
-    raise ImportError(
-        "Missing dependency Pillow for computer vision:\n"
-        "To install run:\n\n"
-        "  pip install 'datachain[cv]'\n"
-    ) from exc
 
 
 def encode_image(raw):

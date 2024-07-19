@@ -1,10 +1,12 @@
-import pandas as pd
+import os
 
-from datachain.lib.claude import claude_processor
-from datachain.lib.dc import C, DataChain
+import anthropic
+from anthropic.types import Message
+
+from datachain import Column, DataChain
 from datachain.sql.functions import path
 
-SOURCE = "gs://dvcx-datalakes/chatbot-public"
+DATA = "gs://dvcx-datalakes/chatbot-public"
 MODEL = "claude-3-opus-20240229"
 PROMPT = """Consider the following dialogues between the 'user' and the 'bot' separated\
  by '===='. The 'user' is a human trying to find the best mobile plan. The 'bot' is a \
@@ -17,24 +19,39 @@ failure reasons covering most failure cases. Present output as JSON list of reas
 strings and nothing else.
 """
 
+TEMPERATURE = 0.9
+DEFAULT_OUTPUT_TOKENS = 1024
+
+API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+
 
 chain = (
-    DataChain.from_storage(SOURCE, is_text=True)
-    .filter(C.name.glob("*.txt"))
+    DataChain.from_storage(DATA, type="text")
+    .filter(Column("file.name").glob("*.txt"))
     .limit(5)
+    .settings(parallel=4, cache=True)
     .agg(
-        dialogues=lambda file: ["\n=====\n".join(f.get_value() for f in file)],
+        dialogues=lambda file: ["\n=====\n".join(f.read() for f in file)],
         output=str,
-        partition_by=path.file_ext(C.name),
+        partition_by=path.file_ext(Column("name")),
     )
-    .map(claude=claude_processor(prompt=PROMPT, model=MODEL), params="dialogues")
+    .setup(client=lambda: anthropic.Anthropic(api_key=API_KEY))
     .map(
-        res=lambda claude: [str(claude.content[0].text) if claude.content else ""],
+        claude=lambda client, dialogues: client.messages.create(
+            model=MODEL,
+            system=PROMPT,
+            messages=[
+                {"role": "user", "content": dialogues},
+            ],
+            temperature=TEMPERATURE,
+            max_tokens=DEFAULT_OUTPUT_TOKENS,
+        ),
+        output=Message,
+    )
+    .map(
+        res=lambda claude: claude.content[0].text if claude.content else [],
         output=str,
     )
 )
 
-df = chain.to_pandas()
-
-with pd.option_context("display.max_columns", None):
-    print(df)
+chain.show()

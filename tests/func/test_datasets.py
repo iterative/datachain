@@ -892,7 +892,7 @@ def test_row_random(cloud_test_catalog):
     catalog = ctc.catalog
     catalog.index([ctc.src_uri])
     catalog.create_dataset_from_sources("test", [ctc.src_uri])
-    random_values = [row["random"] for row in catalog.ls_dataset_rows("test", 1)]
+    random_values = [row["sys__rand"] for row in catalog.ls_dataset_rows("test", 1)]
 
     # Random values are unique
     assert len(set(random_values)) == len(random_values)
@@ -908,7 +908,7 @@ def test_row_random(cloud_test_catalog):
 
     # Creating a new dataset preserves random values
     catalog.create_dataset_from_sources("test2", [ctc.src_uri])
-    random_values2 = {row["random"] for row in catalog.ls_dataset_rows("test2", 1)}
+    random_values2 = {row["sys__rand"] for row in catalog.ls_dataset_rows("test2", 1)}
     assert random_values2 == set(random_values)
 
 

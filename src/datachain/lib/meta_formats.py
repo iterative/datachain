@@ -13,10 +13,7 @@ from typing import Any, Callable
 import jmespath as jsp
 from pydantic import ValidationError
 
-from datachain.lib.feature_utils import pydantic_to_feature  # noqa: F401
 from datachain.lib.file import File
-
-# from datachain.lib.dc import C, DataChain
 
 
 def generate_uuid():
@@ -89,7 +86,6 @@ def read_schema(source_file, data_type="csv", expr=None, model_name=None):
     except subprocess.CalledProcessError as e:
         model_output = f"An error occurred in datamodel-codegen: {e.stderr}"
     print(f"{model_output}")
-    print("\n" + f"spec=pydantic_to_feature({model_name})" + "\n")
     return model_output
 
 
@@ -131,7 +127,7 @@ def read_meta(  # noqa: C901
 
         if show_schema:
             print(f"{model_output}")
-        # Below 'spec' should be a dynamically converted Feature from Pydantic datamodel
+        # Below 'spec' should be a dynamically converted DataModel from Pydantic
         if not spec:
             local_vars: dict[str, Any] = {}
             exec(model_output, globals(), local_vars)  # noqa: S102

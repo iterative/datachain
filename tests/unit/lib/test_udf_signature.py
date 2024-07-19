@@ -2,8 +2,9 @@ from collections.abc import Sequence
 from typing import Callable, Optional, Union
 
 import pytest
+from pydantic import BaseModel
 
-from datachain.lib.feature import Feature, FeatureType
+from datachain.lib.data_model import DataType
 from datachain.lib.file import File
 from datachain.lib.udf import Mapper
 from datachain.lib.udf_signature import UdfSignature, UdfSignatureError
@@ -12,7 +13,7 @@ from datachain.lib.udf_signature import UdfSignature, UdfSignatureError
 def get_sign(
     func: Optional[Callable] = None,
     params: Union[None, str, Sequence[str]] = None,
-    output: Union[None, FeatureType, Sequence[str], dict[str, FeatureType]] = None,
+    output: Union[None, DataType, Sequence[str], dict[str, DataType]] = None,
     **signal_map,
 ):
     return UdfSignature.parse("test", signal_map, func, params, output, False)
@@ -22,7 +23,7 @@ def func_str(p1) -> str:
     return "qwe"
 
 
-def func_tuple(p1) -> tuple[Feature, str, int]:
+def func_tuple(p1) -> tuple[BaseModel, str, int]:
     return File(name="n1"), "qwe", 33
 
 
@@ -84,7 +85,7 @@ def test_output_as_list():
 def test_multi_outputs_not_supported_yet():
     sign = get_sign(s1=func_tuple, output=["o1", "o2", "o3"])
 
-    assert sign.output_schema.values == {"o1": Feature, "o2": str, "o3": int}
+    assert sign.output_schema.values == {"o1": BaseModel, "o2": str, "o3": int}
 
 
 def test_multiple_signals_error():
@@ -178,7 +179,7 @@ def test_udf_flatten_value():
 
 
 def test_udf_flatten_feature():
-    class MyData(Feature):
+    class MyData(BaseModel):
         text: str
         count: int
 

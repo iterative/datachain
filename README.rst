@@ -6,11 +6,11 @@
 .. |Python Version| image:: https://img.shields.io/pypi/pyversions/datachain
    :target: https://pypi.org/project/datachain
    :alt: Python Version
-.. |Codecov| image:: https://codecov.io/gh/iterative/dvcx/branch/main/graph/badge.svg?token=VSCP2T9R5X
-   :target: https://app.codecov.io/gh/iterative/dvcx
+.. |Codecov| image:: https://codecov.io/gh/iterative/datachain/graph/badge.svg?token=byliXGGyGB
+   :target: https://codecov.io/gh/iterative/datachain
    :alt: Codecov
-.. |Tests| image:: https://github.com/iterative/dvcx/workflows/Tests/badge.svg
-   :target: https://github.com/iterative/dvcx/actions?workflow=Tests
+.. |Tests| image:: https://github.com/iterative/datachain/workflows/Tests/badge.svg
+   :target: https://github.com/iterative/datachain/actions?workflow=Tests
    :alt: Tests
 
 AI 🔗 DataChain
@@ -340,7 +340,7 @@ please `file an issue`_ along with a detailed description.
 
 .. _Apache 2.0 license: https://opensource.org/licenses/Apache-2.0
 .. _PyPI: https://pypi.org/
-.. _file an issue: https://github.com/iterative/dvcx/issues
+.. _file an issue: https://github.com/iterative/datachain/issues
 .. _pip: https://pip.pypa.io/
 .. github-only
 .. _Contributor Guide: CONTRIBUTING.rst

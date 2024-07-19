@@ -2,3 +2,4 @@
 data
 dev
 test-notebooks.sh
+model.pth
