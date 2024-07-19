@@ -1344,8 +1344,3 @@ class DataChain(DatasetQuery):
     def offset(self, offset: int) -> "Self":
         """Return the results starting with the offset row."""
         return super().offset(offset)
-
-    @detach
-    def distinct(self) -> "Self":
-        """Return unique/distinct rows."""
-        return super().distinct()
