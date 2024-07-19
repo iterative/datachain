@@ -2,28 +2,31 @@
 
 import os
 
-from datachain.lib.gpt4_vision import DescribeImage
-from datachain.query import C, DatasetQuery
+from datachain.lib.dc import C, DataChain
+from datachain.lib.gpt4_vision import describe_image
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 source = "gs://dvcx-datalakes/dogs-and-cats/"
 
 if __name__ == "__main__":
-    results = (
-        DatasetQuery(
+    (
+        DataChain.from_storage(
             source,
             anon=True,
         )
-        .filter(C.name.glob("cat*.jpg"))
+        .filter(C("name").glob("cat*.jpg"))
         .limit(10)
-        .add_signals(
-            DescribeImage(
-                key=OPENAI_API_KEY, max_tokens=300, prompt="What is in this image?"
+        .map(
+            lambda file: describe_image(
+                file,
+                key=OPENAI_API_KEY,
+                max_tokens=300,
+                prompt="What is in this image?",
             ),
-            parallel=-1,
+            params=["file"],
+            output={"description": str, "error": str},
         )
-        .select("source", "parent", "name", "description", "error")
-        .results()
+        .select("file.source", "file.parent", "file.name", "description", "error")
+        .show()
     )
-    print(*results, sep="\n")
