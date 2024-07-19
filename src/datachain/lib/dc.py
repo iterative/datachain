@@ -1,6 +1,7 @@
 import copy
 import re
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterable, Iterator, Sequence
+from functools import wraps
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -8,12 +9,15 @@ from typing import (
     ClassVar,
     Literal,
     Optional,
+    TypeVar,
     Union,
+    overload,
 )
 
 import pandas as pd
 import sqlalchemy
 from pydantic import BaseModel, create_model
+from sqlalchemy.sql.functions import GenericFunction
 
 from datachain import DataModel
 from datachain.lib.convert.values_to_tuples import values_to_tuples
@@ -43,9 +47,40 @@ from datachain.query.schema import Column, DatasetRow
 from datachain.utils import inside_notebook
 
 if TYPE_CHECKING:
-    from typing_extensions import Self
+    from typing_extensions import Concatenate, ParamSpec, Self
+
+    P = ParamSpec("P")
 
 C = Column
+
+_T = TypeVar("_T")
+D = TypeVar("D", bound="DataChain")
+
+
+def resolve_columns(
+    method: "Callable[Concatenate[D, P], D]",
+) -> "Callable[Concatenate[D, P], D]":
+    """Decorator that resolvs input column names to their actual DB names. This is
+    specially important for nested columns as user works with them by using dot
+    notation e.g (file.name) but are actually defined with default delimiter
+    in DB, e.g file__name.
+    If there are any sql functions in arguments, they will just be transferred as is
+    to a method.
+    """
+
+    @wraps(method)
+    def _inner(self: D, *args: "P.args", **kwargs: "P.kwargs") -> D:
+        resolved_args = self.signals_schema.resolve(
+            *[arg for arg in args if not isinstance(arg, GenericFunction)]
+        ).db_signals()
+
+        for idx, arg in enumerate(args):
+            if isinstance(arg, GenericFunction):
+                resolved_args.insert(idx, arg)
+
+        return method(self, *resolved_args, **kwargs)
+
+    return _inner
 
 
 class DatasetPrepareError(DataChainParamsError):  # noqa: D101
@@ -174,19 +209,22 @@ class DataChain(DatasetQuery):
         self._settings = Settings()
         self._setup = {}
 
+        self.signals_schema = SignalSchema({"sys": Sys})
         if self.feature_schema:
-            self.signals_schema = SignalSchema.deserialize(self.feature_schema)
+            self.signals_schema |= SignalSchema.deserialize(self.feature_schema)
         else:
-            self.signals_schema = SignalSchema.from_column_types(self.column_types)
+            self.signals_schema |= SignalSchema.from_column_types(self.column_types)
+
+        self._sys = False
 
     @property
     def schema(self) -> dict[str, DataType]:
         """Get schema of the chain."""
-        return self.signals_schema.values if self.signals_schema else None
+        return self._effective_signals_schema.values
 
     def print_schema(self) -> None:
         """Print schema of the chain."""
-        self.signals_schema.print_tree()
+        self._effective_signals_schema.print_tree()
 
     def clone(self, new_table: bool = True) -> "Self":
         """Make a copy of the chain in a new table."""
@@ -226,10 +264,8 @@ class DataChain(DatasetQuery):
             ```
         """
         chain = self.clone()
-        if sys is True:
-            chain.signals_schema = SignalSchema({"sys": Sys}) | chain.signals_schema
-        elif sys is False and "sys" in chain.signals_schema:
-            chain.signals_schema.remove("sys")
+        if sys is not None:
+            chain._sys = sys
         chain._settings.add(Settings(cache, batch, parallel, workers, min_task_size))
         return chain
 
@@ -245,9 +281,6 @@ class DataChain(DatasetQuery):
     def add_schema(self, signals_schema: SignalSchema) -> "Self":  # noqa: D102
         self.signals_schema |= signals_schema
         return self
-
-    def get_file_signals(self) -> list[str]:  # noqa: D102
-        return list(self.signals_schema.get_file_signals())
 
     @classmethod
     def from_storage(
@@ -276,8 +309,10 @@ class DataChain(DatasetQuery):
             ```
         """
         func = get_file(type)
-        return cls(path, session=session, recursive=recursive, **kwargs).map(
-            **{object_name: func}
+        return (
+            cls(path, session=session, recursive=recursive, **kwargs)
+            .map(**{object_name: func})
+            .select(object_name)
         )
 
     @classmethod
@@ -437,8 +472,7 @@ class DataChain(DatasetQuery):
                 removed after process ends. Temp dataset are useful for optimization.
             version : version of a dataset. Default - the last version that exist.
         """
-        schema = self.signals_schema.serialize()
-        schema.pop("sys", None)
+        schema = self.signals_schema.clone_without_sys_signals().serialize()
         return super().save(name=name, version=version, feature_schema=schema)
 
     def apply(self, func, *args, **kwargs):
@@ -582,7 +616,11 @@ class DataChain(DatasetQuery):
         sign = UdfSignature.parse(name, signal_map, func, params, output, is_generator)
         DataModel.register(list(sign.output_schema.values.values()))
 
-        params_schema = self.signals_schema.slice(sign.params, self._setup)
+        signals_schema = self.signals_schema
+        if self._sys:
+            signals_schema = SignalSchema({"sys": Sys}) | signals_schema
+
+        params_schema = signals_schema.slice(sign.params, self._setup)
 
         return target_class._create(sign, params_schema)
 
@@ -598,9 +636,31 @@ class DataChain(DatasetQuery):
         return res
 
     @detach
-    def select(self, *args: str) -> "Self":
+    @resolve_columns
+    def order_by(self, *args: Union[str, GenericFunction]) -> "Self":
+        """Orders by specified set of signals."""
+        return super().order_by(*args)
+
+    @detach
+    def distinct(self, arg: str, *args: str) -> "Self":  # type: ignore[override]
+        """Removes duplicate rows based on uniqueness of some input column(s)
+        i.e if rows are found with the same value of input column(s), only one
+        row is left in the result set.
+
+        Example:
+        ```py
+         dc.distinct("file.parent", "file.name")
+        )
+        ```
+        """
+        return super().distinct(*self.signals_schema.resolve(arg, *args).db_signals())
+
+    @detach
+    def select(self, *args: str, _sys: bool = True) -> "Self":
         """Select only a specified set of signals."""
         new_schema = self.signals_schema.resolve(*args)
+        if _sys:
+            new_schema = SignalSchema({"sys": Sys}) | new_schema
         columns = new_schema.db_signals()
         chain = super().select(*columns)
         chain.signals_schema = new_schema
@@ -615,19 +675,74 @@ class DataChain(DatasetQuery):
         chain.signals_schema = new_schema
         return chain
 
-    def iterate_flatten(self) -> Iterator[tuple[Any]]:  # noqa: D102
-        db_signals = self.signals_schema.db_signals()
+    @detach
+    def mutate(self, **kwargs) -> "Self":
+        """Create new signals based on existing signals.
+
+        This method is vectorized and more efficient compared to map(), and it does not
+        extract or download any data from the internal database. However, it can only
+        utilize predefined built-in functions and their combinations.
+
+        The supported functions:
+           Numerical:   +, -, *, /, rand(), avg(), count(), func(),
+                        greatest(), least(), max(), min(), sum()
+           String:      length(), split()
+           Filename:    name(), parent(), file_stem(), file_ext()
+           Array:       length(), sip_hash_64(), euclidean_distance(),
+                        cosine_distance()
+
+        Example:
+        ```py
+         dc.mutate(
+                area=Column("image.height") * Column("image.width"),
+                extension=file_ext(Column("file.name")),
+                dist=cosine_distance(embedding_text, embedding_image)
+        )
+        ```
+        """
+        chain = super().mutate(**kwargs)
+        chain.signals_schema = self.signals_schema.mutate(kwargs)
+        return chain
+
+    @property
+    def _effective_signals_schema(self) -> "SignalSchema":
+        """Effective schema used for user-facing API like iterate, to_pandas, etc."""
+        signals_schema = self.signals_schema
+        if not self._sys:
+            return signals_schema.clone_without_sys_signals()
+        return signals_schema
+
+    @overload
+    def iterate_flatten(self) -> Iterable[tuple[Any, ...]]: ...
+
+    @overload
+    def iterate_flatten(
+        self, row_factory: Callable[[list[str], tuple[Any, ...]], _T]
+    ) -> Iterable[_T]: ...
+
+    def iterate_flatten(self, row_factory=None):  # noqa: D102
+        db_signals = self._effective_signals_schema.db_signals()
         with super().select(*db_signals).as_iterable() as rows:
+            if row_factory:
+                rows = (row_factory(db_signals, r) for r in rows)
             yield from rows
 
-    def results(  # noqa: D102
-        self, row_factory: Optional[Callable] = None, **kwargs
-    ) -> list[tuple[Any, ...]]:
-        rows = self.iterate_flatten()
-        if row_factory:
-            db_signals = self.signals_schema.db_signals()
-            rows = (row_factory(db_signals, r) for r in rows)
-        return list(rows)
+    @overload
+    def results(self) -> list[tuple[Any, ...]]: ...
+
+    @overload
+    def results(
+        self, row_factory: Callable[[list[str], tuple[Any, ...]], _T]
+    ) -> list[_T]: ...
+
+    def results(self, row_factory=None, **kwargs):  # noqa: D102
+        return list(self.iterate_flatten(row_factory=row_factory))
+
+    def to_records(self) -> list[dict[str, Any]]:  # noqa: D102
+        def to_dict(cols: list[str], row: tuple[Any, ...]) -> dict[str, Any]:
+            return dict(zip(cols, row))
+
+        return self.results(row_factory=to_dict)
 
     def iterate(self, *cols: str) -> Iterator[list[DataType]]:
         """Iterate over rows.
@@ -635,10 +750,13 @@ class DataChain(DatasetQuery):
         If columns are specified - limit them to specified columns.
         """
         chain = self.select(*cols) if cols else self
-        for row in chain.iterate_flatten():
-            yield chain.signals_schema.row_to_features(
-                row, catalog=chain.session.catalog, cache=chain._settings.cache
-            )
+        signals_schema = chain._effective_signals_schema
+        db_signals = signals_schema.db_signals()
+        with super().select(*db_signals).as_iterable() as rows:
+            for row in rows:
+                yield signals_schema.row_to_features(
+                    row, catalog=chain.session.catalog, cache=chain._settings.cache
+                )
 
     def iterate_one(self, col: str) -> Iterator[DataType]:
         """Iterate over one column."""
@@ -853,7 +971,7 @@ class DataChain(DatasetQuery):
         Parameters:
             flatten : Whether to use a multiindex or flatten column names.
         """
-        headers, max_length = self.signals_schema.get_headers_with_length()
+        headers, max_length = self._effective_signals_schema.get_headers_with_length()
         if flatten or max_length < 2:
             df = pd.DataFrame.from_records(self.to_records())
             if headers:
@@ -1160,7 +1278,7 @@ class DataChain(DatasetQuery):
         """Method that exports all files from chain to some folder."""
         if placement == "filename":
             print("Checking if file names are unique")
-            if self.select(f"{signal}.name").distinct().count() != self.count():
+            if self.distinct(f"{signal}.name").count() != self.count():
                 raise ValueError("Files with the same name found")
 
         for file in self.collect_one(signal):

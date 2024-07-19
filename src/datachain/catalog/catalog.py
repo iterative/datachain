@@ -950,13 +950,9 @@ class Catalog:
                     ms = self.metastore.clone(uri, None)
                     st = self.warehouse.clone()
                     listing = Listing(None, ms, st, client, None)
-                    rows = (
-                        DatasetQuery(
-                            name=dataset.name, version=ds_version, catalog=self
-                        )
-                        .select()
-                        .to_records()
-                    )
+                    rows = DatasetQuery(
+                        name=dataset.name, version=ds_version, catalog=self
+                    ).to_db_records()
                     indexed_sources.append(
                         (
                             listing,
@@ -1162,9 +1158,8 @@ class Catalog:
         if not dataset_version.preview:
             values["preview"] = (
                 DatasetQuery(name=dataset.name, version=version, catalog=self)
-                .select()
                 .limit(20)
-                .to_records()
+                .to_db_records()
             )
 
         if not values:
@@ -1448,7 +1443,7 @@ class Catalog:
 
         dataset = self.get_dataset(name)
 
-        q = DatasetQuery(name=dataset.name, version=version, catalog=self).select()
+        q = DatasetQuery(name=dataset.name, version=version, catalog=self)
         if limit:
             q = q.limit(limit)
         if offset:
@@ -1456,7 +1451,7 @@ class Catalog:
 
         q = q.order_by("sys__id")
 
-        return q.to_records()
+        return q.to_db_records()
 
     def signed_url(self, source: str, path: str, client_config=None) -> str:
         client_config = client_config or self.client_config
@@ -1630,6 +1625,7 @@ class Catalog:
                 ...
             }
         """
+        from datachain.lib.file import File
         from datachain.lib.signal_schema import DEFAULT_DELIMITER, SignalSchema
 
         version = self.get_dataset(dataset_name).get_version(dataset_version)
@@ -1637,7 +1633,7 @@ class Catalog:
         file_signals_values = {}
 
         schema = SignalSchema.deserialize(version.feature_schema)
-        for file_signals in schema.get_file_signals():
+        for file_signals in schema.get_signals(File):
             prefix = file_signals.replace(".", DEFAULT_DELIMITER) + DEFAULT_DELIMITER
             file_signals_values[file_signals] = {
                 c_name.removeprefix(prefix): c_value
@@ -1678,10 +1674,13 @@ class Catalog:
             row["source"],
             row["parent"],
             row["name"],
-            row["etag"],
             row["size"],
+            row["etag"],
+            row["version"],
+            row["is_latest"],
             row["vtype"],
             row["location"],
+            row["last_modified"],
         )
 
     def ls(

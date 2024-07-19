@@ -10,13 +10,11 @@ from datachain.lib.file import (
 )
 from datachain.lib.udf import Aggregator, Generator, Mapper
 from datachain.lib.utils import AbstractUDF, DataChainError
-from datachain.query.dataset import UDF as BaseUDF  # noqa: N811
 from datachain.query.session import Session
 
 __all__ = [
     "AbstractUDF",
     "Aggregator",
-    "BaseUDF",
     "C",
     "Column",
     "DataChain",

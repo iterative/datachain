@@ -74,7 +74,7 @@ tests = [
   "pytest-sugar>=0.9.6",
   "pytest-cov>=4.1.0",
   "pytest-mock>=3.12.0",
-  "pytest-servers[all]>=0.5.4",
+  "pytest-servers[all]>=0.5.5",
   "pytest-benchmark[histogram]",
   "pytest-asyncio>=0.23.2",
   "pytest-xdist>=3.3.1",
@@ -96,8 +96,8 @@ dev = [
 
 [project.urls]
 Documentation = "https://datachain.dvc.ai"
-Issues = "https://github.com/iterative/dvcx/issues"
-Source = "https://github.com/iterative/dvcx"
+Issues = "https://github.com/iterative/datachain/issues"
+Source = "https://github.com/iterative/datachain"
 
 [project.scripts]
 datachain = "datachain.cli:main"
@@ -136,6 +136,7 @@ exclude_lines = [
   "if TYPE_CHECKING:",
   "raise NotImplementedError",
   "raise AssertionError",
+  "if self.dialect == .sqlite.",
   "@overload"
 ]
 

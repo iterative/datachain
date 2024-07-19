@@ -18,7 +18,8 @@ from pydantic import BaseModel, create_model
 from typing_extensions import Literal as LiteralEx
 
 from datachain.lib.convert.flatten import DATACHAIN_TO_TYPE
-from datachain.lib.convert.type_converter import convert_to_db_type
+from datachain.lib.convert.python_to_sql import python_to_sql
+from datachain.lib.convert.sql_to_python import sql_to_python
 from datachain.lib.convert.unflatten import unflatten_to_json_pos
 from datachain.lib.data_model import DataModel, DataType
 from datachain.lib.file import File
@@ -102,14 +103,13 @@ class SignalSchema:
     @staticmethod
     def from_column_types(col_types: dict[str, Any]) -> "SignalSchema":
         signals: dict[str, DataType] = {}
-        for field, type_ in col_types.items():
-            type_ = DATACHAIN_TO_TYPE.get(type_, None)
-            if type_ is None:
+        for field, col_type in col_types.items():
+            if (py_type := DATACHAIN_TO_TYPE.get(col_type, None)) is None:
                 raise SignalSchemaError(
                     f"signal schema cannot be obtained for column '{field}':"
-                    f" unsupported type '{type_}'"
+                    f" unsupported type '{py_type}'"
                 )
-            signals[field] = type_
+            signals[field] = py_type
         return SignalSchema(signals)
 
     def serialize(self) -> dict[str, str]:
@@ -161,7 +161,7 @@ class SignalSchema:
                 continue
             if not has_subtree:
                 db_name = DEFAULT_DELIMITER.join(path)
-                res[db_name] = convert_to_db_type(type_)
+                res[db_name] = python_to_sql(type_)
         return res
 
     def row_to_objs(self, row: Sequence[Any]) -> list[DataType]:
@@ -278,6 +278,14 @@ class SignalSchema:
                 del schema[signal]
         return SignalSchema(schema)
 
+    def mutate(self, args_map: dict) -> "SignalSchema":
+        return SignalSchema(self.values | sql_to_python(args_map))
+
+    def clone_without_sys_signals(self) -> "SignalSchema":
+        schema = copy.deepcopy(self.values)
+        schema.pop("sys", None)
+        return SignalSchema(schema)
+
     def merge(
         self,
         right_schema: "SignalSchema",
@@ -290,9 +298,9 @@ class SignalSchema:
 
         return SignalSchema(self.values | schema_right)
 
-    def get_file_signals(self) -> Iterator[str]:
+    def get_signals(self, target_type: type[DataModel]) -> Iterator[str]:
         for path, type_, has_subtree, _ in self.get_flat_tree():
-            if has_subtree and issubclass(type_, File):
+            if has_subtree and issubclass(type_, target_type):
                 yield ".".join(path)
 
     def create_model(self, name: str) -> type[DataModel]:
