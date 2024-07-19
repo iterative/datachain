@@ -188,12 +188,11 @@ class DataChain(DatasetQuery):
     @property
     def schema(self) -> dict[str, DataType]:
         """Get schema of the chain."""
-        signals_schema = self.signals_schema.clone_without_sys_signals()
-        return signals_schema.values
+        return self._effective_signals_schema.values
 
     def print_schema(self) -> None:
         """Print schema of the chain."""
-        self.signals_schema.clone_without_sys_signals().print_tree()
+        self._effective_signals_schema.print_tree()
 
     def clone(self, new_table: bool = True) -> "Self":  # noqa: D102
         obj = super().clone(new_table=new_table)
@@ -607,18 +606,11 @@ class DataChain(DatasetQuery):
         return res
 
     @detach
-    def select(self, *args: str) -> "Self":
-        """Select only a specified set of signals."""
-        new_schema = SignalSchema({"sys": Sys}) | self.signals_schema.resolve(*args)
-        columns = new_schema.db_signals()
-        chain = super().select(*columns)
-        chain.signals_schema = new_schema
-        return chain
-
-    @detach
-    def _select(self, *args: str) -> "Self":
+    def select(self, *args: str, _sys: bool = True) -> "Self":
         """Select only a specified set of signals."""
         new_schema = self.signals_schema.resolve(*args)
+        if _sys:
+            new_schema = SignalSchema({"sys": Sys}) | new_schema
         columns = new_schema.db_signals()
         chain = super().select(*columns)
         chain.signals_schema = new_schema
@@ -662,6 +654,14 @@ class DataChain(DatasetQuery):
         chain.signals_schema = self.signals_schema.mutate(kwargs)
         return chain
 
+    @property
+    def _effective_signals_schema(self) -> "SignalSchema":
+        """Effective schema used for user-facing API like iterate, to_pandas, etc."""
+        signals_schema = self.signals_schema
+        if not self._sys:
+            return signals_schema.clone_without_sys_signals()
+        return signals_schema
+
     @overload
     def iterate_flatten(self) -> Iterable[tuple[Any, ...]]: ...
 
@@ -671,10 +671,7 @@ class DataChain(DatasetQuery):
     ) -> Iterable[_T]: ...
 
     def iterate_flatten(self, row_factory=None):  # noqa: D102
-        signals_schema = self.signals_schema
-        if not self._sys:
-            signals_schema = signals_schema.clone_without_sys_signals()
-        db_signals = signals_schema.db_signals()
+        db_signals = self._effective_signals_schema.db_signals()
         with super().select(*db_signals).as_iterable() as rows:
             if row_factory:
                 rows = (row_factory(db_signals, r) for r in rows)
@@ -703,9 +700,7 @@ class DataChain(DatasetQuery):
         If columns are specified - limit them to specified columns.
         """
         chain = self.select(*cols) if cols else self
-        signals_schema = chain.signals_schema
-        if not self._sys:
-            signals_schema = signals_schema.clone_without_sys_signals()
+        signals_schema = chain._effective_signals_schema
         db_signals = signals_schema.db_signals()
         with super().select(*db_signals).as_iterable() as rows:
             for row in rows:
@@ -926,10 +921,7 @@ class DataChain(DatasetQuery):
         Parameters:
             flatten : Whether to use a multiindex or flatten column names.
         """
-        signals_schema = self.signals_schema
-        if not self._sys:
-            signals_schema = signals_schema.clone_without_sys_signals()
-        headers, max_length = signals_schema.get_headers_with_length()
+        headers, max_length = self._effective_signals_schema.get_headers_with_length()
         if flatten or max_length < 2:
             df = pd.DataFrame.from_records(self.to_records())
             if headers:
@@ -1236,7 +1228,10 @@ class DataChain(DatasetQuery):
         """Method that exports all files from chain to some folder."""
         if placement == "filename":
             print("Checking if file names are unique")
-            if self._select(f"{signal}.name").distinct().count() != self.count():
+            if (
+                self.select(f"{signal}.name", _sys=False).distinct().count()
+                != self.count()
+            ):
                 raise ValueError("Files with the same name found")
 
         for file in self.collect_one(signal):

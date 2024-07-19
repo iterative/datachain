@@ -1715,11 +1715,13 @@ def _send_result(dataset_query: DatasetQuery) -> None:
 
     columns = preview_args.get("columns") or []
 
-    select = getattr(dataset_query, "_select", dataset_query.select)
-    preview_query = (
-        select(*columns)
-        .limit(preview_args.get("limit", 10))
-        .offset(preview_args.get("offset", 0))
+    if type(dataset_query) is DatasetQuery:
+        preview_query = dataset_query.select(*columns)
+    else:
+        preview_query = dataset_query.select(*columns, _sys=False)
+
+    preview_query = preview_query.limit(preview_args.get("limit", 10)).offset(
+        preview_args.get("offset", 0)
     )
 
     dataset: Optional[tuple[str, int]] = None
