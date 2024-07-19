@@ -598,7 +598,7 @@ class DataChain(DatasetQuery):
         return res
 
     @detach
-    def distinct(self, arg: str, *args: str) -> "Self":
+    def distinct(self, arg: str, *args: str) -> "Self":  # type: ignore[override]
         """Removes duplicate rows based on uniqueness of some input column(s)
         i.e if rows are found with the same value of input column(s), only one
         row is left in the result set.
@@ -609,7 +609,7 @@ class DataChain(DatasetQuery):
         )
         ```
         """
-        return super().distinct(*self.signals_schema.resolve(*args).db_signals())
+        return super().distinct(*self.signals_schema.resolve(arg, *args).db_signals())
 
     @detach
     def select(self, *args: str) -> "Self":
