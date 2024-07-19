@@ -1070,6 +1070,7 @@ class DatasetQuery:
         anon: bool = False,
         indexing_feature_schema: Optional[dict] = None,
         indexing_column_types: Optional[dict[str, Any]] = None,
+        update: bool = False,
     ):
         if client_config is None:
             client_config = {}
@@ -1092,7 +1093,8 @@ class DatasetQuery:
         self.session = Session.get(session, catalog=catalog)
 
         if path:
-            self.starting_step = IndexingStep(path, self.catalog, {}, recursive)
+            kwargs = {"update": True} if update else {}
+            self.starting_step = IndexingStep(path, self.catalog, kwargs, recursive)
             self.feature_schema = indexing_feature_schema
             self.column_types = indexing_column_types
         elif name:

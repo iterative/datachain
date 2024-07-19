@@ -258,10 +258,11 @@ class DataChain(DatasetQuery):
         session: Optional[Session] = None,
         recursive: Optional[bool] = True,
         object_name: str = "file",
+        update: Optional[bool] = False,
         **kwargs,
     ) -> "Self":
-        """Get data from a storage as a list of file with all file attributes. It
-        returns the chain itself as usual.
+        """Get data from a storage as a list of file with all file attributes.
+        It returns the chain itself as usual.
 
         Parameters:
             path : storage URI with directory. URI must start with storage prefix such
@@ -269,6 +270,7 @@ class DataChain(DatasetQuery):
             type : read file as "binary", "text", or "image" data. Default is "binary".
             recursive : search recursively for the given path.
             object_name : Created object column name.
+            update : force storage reindexing. Default is False.
 
         Example:
             ```py
@@ -276,9 +278,9 @@ class DataChain(DatasetQuery):
             ```
         """
         func = get_file(type)
-        return cls(path, session=session, recursive=recursive, **kwargs).map(
-            **{object_name: func}
-        )
+        return cls(
+            path, session=session, recursive=recursive, update=update, **kwargs
+        ).map(**{object_name: func})
 
     @classmethod
     def from_dataset(cls, name: str, version: Optional[int] = None) -> "DataChain":
