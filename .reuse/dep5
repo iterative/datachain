@@ -1,8 +1,0 @@
-Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: datachain
-Upstream-Contact: Iterative, Inc. <support@iterative.ai>
-Source: https://github.com/iterative/datachain
-
-Files: *
-Copyright: 2017-2021 Iterative, Inc.
-License: Apache-2.0
