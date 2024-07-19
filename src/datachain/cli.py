@@ -826,7 +826,7 @@ def show(
         .limit(limit)
         .offset(offset)
     )
-    records = query.to_records()
+    records = query.to_db_records()
     show_records(records, collapse_columns=not no_collapse)
 
 

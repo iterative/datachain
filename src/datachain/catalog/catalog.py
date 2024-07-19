@@ -950,13 +950,9 @@ class Catalog:
                     ms = self.metastore.clone(uri, None)
                     st = self.warehouse.clone()
                     listing = Listing(None, ms, st, client, None)
-                    rows = (
-                        DatasetQuery(
-                            name=dataset.name, version=ds_version, catalog=self
-                        )
-                        .select()
-                        .to_records()
-                    )
+                    rows = DatasetQuery(
+                        name=dataset.name, version=ds_version, catalog=self
+                    ).to_db_records()
                     indexed_sources.append(
                         (
                             listing,
@@ -1162,9 +1158,8 @@ class Catalog:
         if not dataset_version.preview:
             values["preview"] = (
                 DatasetQuery(name=dataset.name, version=version, catalog=self)
-                .select()
                 .limit(20)
-                .to_records()
+                .to_db_records()
             )
 
         if not values:
@@ -1448,7 +1443,7 @@ class Catalog:
 
         dataset = self.get_dataset(name)
 
-        q = DatasetQuery(name=dataset.name, version=version, catalog=self).select()
+        q = DatasetQuery(name=dataset.name, version=version, catalog=self)
         if limit:
             q = q.limit(limit)
         if offset:
@@ -1456,7 +1451,7 @@ class Catalog:
 
         q = q.order_by("sys__id")
 
-        return q.to_records()
+        return q.to_db_records()
 
     def signed_url(self, source: str, path: str, client_config=None) -> str:
         client_config = client_config or self.client_config

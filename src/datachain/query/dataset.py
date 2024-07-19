@@ -1106,7 +1106,7 @@ class DatasetQuery:
         return bool(re.compile(r"^[a-zA-Z0-9]+://").match(path))
 
     def __iter__(self):
-        return iter(self.results())
+        return iter(self.db_results())
 
     def __or__(self, other):
         return self.union(other)
@@ -1227,12 +1227,15 @@ class DatasetQuery:
         warehouse.close()
         self.temp_table_names = []
 
-    def results(self, row_factory=None, **kwargs):
+    def db_results(self, row_factory=None, **kwargs):
         with self.as_iterable(**kwargs) as result:
             if row_factory:
                 cols = result.columns
                 return [row_factory(cols, r) for r in result]
             return list(result)
+
+    def to_db_records(self) -> list[dict[str, Any]]:
+        return self.db_results(lambda cols, row: dict(zip(cols, row)))
 
     @contextlib.contextmanager
     def as_iterable(self, **kwargs) -> Iterator[ResultIter]:
@@ -1292,9 +1295,6 @@ class DatasetQuery:
                 yield from mapper.iterate()
         finally:
             self.cleanup()
-
-    def to_records(self) -> list[dict[str, Any]]:
-        return self.results(lambda cols, row: dict(zip(cols, row)))
 
     def shuffle(self) -> "Self":
         # ToDo: implement shaffle based on seed and/or generating random column
@@ -1715,10 +1715,13 @@ def _send_result(dataset_query: DatasetQuery) -> None:
 
     columns = preview_args.get("columns") or []
 
-    preview_query = (
-        dataset_query.select(*columns)
-        .limit(preview_args.get("limit", 10))
-        .offset(preview_args.get("offset", 0))
+    if type(dataset_query) is DatasetQuery:
+        preview_query = dataset_query.select(*columns)
+    else:
+        preview_query = dataset_query.select(*columns, _sys=False)
+
+    preview_query = preview_query.limit(preview_args.get("limit", 10)).offset(
+        preview_args.get("offset", 0)
     )
 
     dataset: Optional[tuple[str, int]] = None
@@ -1727,7 +1730,7 @@ def _send_result(dataset_query: DatasetQuery) -> None:
         assert dataset_query.version, "Dataset version should be provided"
         dataset = dataset_query.name, dataset_query.version
 
-    preview = preview_query.to_records()
+    preview = preview_query.to_db_records()
     result = ExecutionResult(preview, dataset, metrics)
     data = attrs.asdict(result)
 
