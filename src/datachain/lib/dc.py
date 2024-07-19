@@ -307,8 +307,10 @@ class DataChain(DatasetQuery):
             ```
         """
         func = get_file(type)
-        return cls(path, session=session, recursive=recursive, **kwargs).map(
-            **{object_name: func}
+        return (
+            cls(path, session=session, recursive=recursive, **kwargs)
+            .map(**{object_name: func})
+            .select(object_name)
         )
 
     @classmethod
