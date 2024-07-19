@@ -1,4 +1,4 @@
-# pip install torch
+# pip install accelerate torch
 import torch
 
 from datachain.lib.dc import C, DataChain
