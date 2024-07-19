@@ -1673,10 +1673,13 @@ class Catalog:
             row["source"],
             row["parent"],
             row["name"],
-            row["etag"],
             row["size"],
+            row["etag"],
+            row["version"],
+            row["is_latest"],
             row["vtype"],
             row["location"],
+            row["last_modified"],
         )
 
     def ls(

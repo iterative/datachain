@@ -22,7 +22,17 @@ def test_uid_missing_location():
     vtype = "vt1"
 
     stream = File(name=name, vtype=vtype)
-    assert stream.get_uid() == UniqueId("", "", name, "", 0, vtype, None)
+    assert stream.get_uid() == UniqueId(
+        "",
+        "",
+        name,
+        size=0,
+        version="",
+        etag="",
+        is_latest=True,
+        vtype=vtype,
+        location=None,
+    )
 
 
 def test_uid_location():
@@ -31,7 +41,7 @@ def test_uid_location():
     loc = {"e": 42}
 
     stream = File(name=name, vtype=vtype, location=loc)
-    assert stream.get_uid() == UniqueId("", "", name, "", 0, vtype, loc)
+    assert stream.get_uid() == UniqueId("", "", name, 0, "", "", True, vtype, loc)
 
 
 def test_file_stem():
