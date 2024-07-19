@@ -40,7 +40,7 @@ def test_image_file(tmp_path, catalog):
 
     file = ImageFile(name=file_name, source=f"file://{tmp_path}")
     file._set_stream(catalog, caching_enabled=False)
-    assert isinstance(file.get_value(), Image.Image)
+    assert isinstance(file.read(), Image.Image)
 
 
 def test_convert_images(tmp_path):

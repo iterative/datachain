@@ -22,7 +22,7 @@ class ImageEncoder(Mapper):
         )
 
     def process(self, file) -> list[float]:
-        img = file.get_value()
+        img = file.read()
         img = self.preprocess(img).unsqueeze(0)
         emb = self.model.encode_image(img)
         return emb[0].tolist()

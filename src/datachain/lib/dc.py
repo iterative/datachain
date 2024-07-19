@@ -1278,3 +1278,64 @@ class DataChain(DatasetQuery):
 
         for file in self.collect_one(signal):
             file.export(output, placement, use_cache)  # type: ignore[union-attr]
+
+    def shuffle(self) -> "Self":
+        """Shuffle the rows of the chain deterministically."""
+        return self.order_by("sys.rand")
+
+    def sample(self, n) -> "Self":
+        """Return a random sample from the chain.
+
+        Parameters:
+            n (int): Number of samples to draw.
+
+        NOTE: Samples are not deterministic, and streamed/paginated queries or
+        multiple workers will draw samples with replacement.
+        """
+        return super().sample(n)
+
+    @detach
+    def filter(self, *args) -> "Self":
+        """Filter the chain according to conditions.
+
+        Example:
+            Basic usage with built-in operators
+            ```py
+            dc.filter(C("width") < 200)
+            ```
+
+            Using glob to match patterns
+            ```py
+            dc.filter(C("file.name").glob("*.jpg))
+            ```
+
+            Using `datachain.sql.functions`
+            ```py
+            from datachain.sql.functions import string
+            dc.filter(string.length(C("file.name")) > 5)
+            ```
+
+            Combining filters with "or"
+            ```py
+            dc.filter(C("file.name").glob("cat*") | C("file.name").glob("dog*))
+            ```
+
+            Combining filters with "and"
+            ```py
+            dc.filter(
+                C("file.name").glob("*.jpg) &
+                (string.length(C("file.name")) > 5)
+            )
+            ```
+        """
+        return super().filter(*args)
+
+    @detach
+    def limit(self, n: int) -> "Self":
+        """Return the first n rows of the chain."""
+        return super().limit(n)
+
+    @detach
+    def offset(self, offset: int) -> "Self":
+        """Return the results starting with the offset row."""
+        return super().offset(offset)
