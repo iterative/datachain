@@ -9,10 +9,8 @@
 
 from transformers import pipeline
 
-from datachain.lib.dc import DataChain
-from datachain.lib.unstructured import PartitionObject
-from datachain.query import C
-from datachain.sql.types import String
+from datachain.lib.dc import C, DataChain
+from datachain.lib.unstructured import partition_object
 
 device = "cpu"
 model = "pszemraj/led-large-book-summary"
@@ -32,18 +30,19 @@ def summarize(clean):
 
 
 ds = (
-    DataChain(
-        source,
-        anon=True,
-    )
-    .filter(C.name.glob("*.pdf"))
+    DataChain.from_storage(source)
+    .filter(C("name").glob("*.pdf"))
     .limit(1)
-    .map(PartitionObject(), parallel=False)
+    .map(
+        partition_object,
+        params=["file"],
+        output={"elements": dict, "title": str, "text": str, "error": str},
+    )
 )
 
-ds = ds.map(cleanse, output={"clean": String})
-ds = ds.map(summarize, output={"summary": String})
-results = ds.select("text", "summary").results()
+ds = ds.map(cleanse, output={"clean": str})
+ds = ds.map(summarize, output={"summary": str})
+results = ds.select("text", "summary").collect()
 
 for story in results:
     print("\n *********** the original: ********** ")

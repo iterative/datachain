@@ -1,8 +1,8 @@
-# pip install torch
+# pip install accelerate torch
 import torch
 
-from datachain.lib.hf_image_to_text import LLaVAdescribe
-from datachain.query import C, DatasetQuery
+from datachain.lib.dc import C, DataChain
+from datachain.lib.hf_image_to_text import LLaVADescribe
 
 model = "llava-hf/llava-1.5-7b-hf"
 
@@ -23,21 +23,19 @@ else:
     device = "cpu"
 
 if __name__ == "__main__":
-    results = (
-        DatasetQuery(
-            source,
-            anon=True,
-        )
+    (
+        DataChain.from_storage(source, type="image")
         .filter(C.name.glob("cat*.jpg"))
-        .limit(2)
-        .add_signals(
-            LLaVAdescribe(
+        .map(
+            desc=LLaVADescribe(
                 device=device,
                 model=model,
             ),
-            parallel=False,
+            params=["file"],
+            output={"description": str, "error": str},
         )
-        .select("source", "parent", "name", "description", "error")
-        .results()
+        .select(
+            "file.source", "file.parent", "file.name", "desc.description", "desc.error"
+        )
+        .show(2)
     )
-    print(*results, sep="\n")
