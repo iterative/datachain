@@ -445,7 +445,7 @@ def test_distinct(cloud_test_catalog):
     ds = DatasetQuery(path=path, catalog=catalog)
 
     q = ds.select(C.parent, C.size).order_by(C.name).distinct(C.parent)
-    assert q.to_records() == [
+    assert q.db_results(row_factory=lambda c, v: dict(zip(c, v))) == [
         {"parent": "cats", "size": 4},
         {"parent": "", "size": 13},
         {"parent": "dogs", "size": 4},
