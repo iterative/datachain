@@ -1421,10 +1421,7 @@ class DatasetQuery:
     def distinct(self, *args) -> "Self":
         query = self.clone()
         query.steps.append(
-            SQLDistinct(
-                args,
-                dialect=self.catalog.warehouse.db.dialect.name,
-            )
+            SQLDistinct(args, dialect=self.catalog.warehouse.db.dialect.name)
         )
         return query
 
