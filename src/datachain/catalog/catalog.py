@@ -2012,7 +2012,7 @@ class Catalog:
                 )
             if proc.returncode == QUERY_SCRIPT_INVALID_LAST_STATEMENT_EXIT_CODE:
                 raise QueryScriptRunError(
-                    "Last line in a script was not an instance of DatasetQuery",
+                    "Last line in a script was not an instance of DataChain",
                     return_code=proc.returncode,
                     output=output,
                 )
