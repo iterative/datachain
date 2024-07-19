@@ -18,7 +18,7 @@ from pydantic import Field, field_validator
 
 from datachain.cache import UniqueId
 from datachain.client.fileslice import FileSlice
-from datachain.lib.data_model import DataModel, FileBasic
+from datachain.lib.data_model import DataModel
 from datachain.lib.utils import DataChainError
 from datachain.sql.types import JSON, Int, String
 from datachain.utils import TIME_ZERO
@@ -105,7 +105,7 @@ class VFileRegistry:
         return reader.open(file, location)
 
 
-class File(FileBasic):
+class File(DataModel):
     source: str = Field(default="")
     parent: str = Field(default="")
     name: str
@@ -193,6 +193,10 @@ class File(FileBasic):
             uid, use_cache=self._caching_enabled, cb=self._download_cb
         ) as f:
             yield f
+
+    def read(self):
+        with self.open() as stream:
+            return stream.read()
 
     def export(
         self,
@@ -291,9 +295,9 @@ class TextFile(File):
 
 
 class ImageFile(File):
-    def get_value(self):
-        value = super().get_value()
-        return Image.open(BytesIO(value))
+    def read(self):
+        fobj = super().read()
+        return Image.open(BytesIO(fobj))
 
 
 def get_file(type_: Literal["binary", "text", "image"] = "binary"):
