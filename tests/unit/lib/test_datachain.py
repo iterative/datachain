@@ -929,3 +929,25 @@ def test_mutate():
 
     expected = [fr.count * 2 * 3.14 for fr in features]
     np.testing.assert_allclose(chain.collect_one("circle"), expected)
+
+
+def test_order_by_with_nested_columns():
+    names = ["a.txt", "c.txt", "d.txt", "a.txt", "b.txt"]
+
+    assert (
+        DataChain.from_values(file=[File(name=name) for name in names])
+        .order_by("file.name")
+        .collect_one("file.name")
+    ) == ["a.txt", "a.txt", "b.txt", "c.txt", "d.txt"]
+
+
+def test_order_by_with_func():
+    names = ["a.txt", "c.txt", "d.txt", "a.txt", "b.txt"]
+
+    from datachain.sql.functions import rand
+
+    assert (
+        DataChain.from_values(file=[File(name=name) for name in names])
+        .order_by("file.name", rand())
+        .collect_one("file.name")
+    ) == ["a.txt", "a.txt", "b.txt", "c.txt", "d.txt"]
