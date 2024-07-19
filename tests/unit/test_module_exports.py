@@ -66,7 +66,6 @@ def test_no_torch_deps(monkeypatch, dep):
             DataChainError,
             DataModel,
             File,
-            FileBasic,
             FileError,
             Generator,
             ImageFile,
