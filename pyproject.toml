@@ -96,8 +96,8 @@ dev = [
 
 [project.urls]
 Documentation = "https://datachain.dvc.ai"
-Issues = "https://github.com/iterative/dvcx/issues"
-Source = "https://github.com/iterative/dvcx"
+Issues = "https://github.com/iterative/datachain/issues"
+Source = "https://github.com/iterative/datachain"
 
 [project.scripts]
 datachain = "datachain.cli:main"
