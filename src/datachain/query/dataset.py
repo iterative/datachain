@@ -867,8 +867,10 @@ class SQLCount(SQLClause):
 
 @frozen
 class SQLDistinct(SQLClause):
+    args: tuple[ColumnElement, ...]
+
     def apply_sql_clause(self, query):
-        return query.distinct()
+        return query.group_by(*self.args)
 
 
 @frozen
@@ -1412,9 +1414,9 @@ class DatasetQuery:
         return query
 
     @detach
-    def distinct(self) -> "Self":
+    def distinct(self, *args) -> "Self":
         query = self.clone()
-        query.steps.append(SQLDistinct())
+        query.steps.append(SQLDistinct(args))
         return query
 
     def as_scalar(self) -> Any:
