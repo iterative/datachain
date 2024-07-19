@@ -258,7 +258,7 @@ class DataChain(DatasetQuery):
         session: Optional[Session] = None,
         recursive: Optional[bool] = True,
         object_name: str = "file",
-        update: Optional[bool] = False,
+        update: bool = False,
         **kwargs,
     ) -> "Self":
         """Get data from a storage as a list of file with all file attributes.
