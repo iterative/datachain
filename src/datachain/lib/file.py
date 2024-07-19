@@ -132,10 +132,13 @@ class File(FileBasic):
         "source",
         "parent",
         "name",
-        "etag",
         "size",
+        "etag",
+        "version",
+        "is_latest",
         "vtype",
         "location",
+        "last_modified",
     ]
 
     @staticmethod

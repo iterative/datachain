@@ -61,4 +61,12 @@ chain = (
     )
 )
 
+chain = chain.settings(parallel=13).mutate(
+    x=Column("file.name"),
+    y=Column("rating.status"),
+    price=Column("claude.usage.output_tokens") * 0.0072,
+)
+
+# chain.print_schema()
+
 chain.show()

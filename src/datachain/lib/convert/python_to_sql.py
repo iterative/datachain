@@ -19,7 +19,7 @@ from datachain.sql.types import (
     String,
 )
 
-TYPE_TO_DATACHAIN = {
+PYTHON_TO_SQL = {
     int: Int64,
     str: String,
     Literal: String,
@@ -34,14 +34,14 @@ TYPE_TO_DATACHAIN = {
 }
 
 
-def convert_to_db_type(typ):  # noqa: PLR0911
+def python_to_sql(typ):  # noqa: PLR0911
     if inspect.isclass(typ):
         if issubclass(typ, SQLType):
             return typ
         if issubclass(typ, Enum):
             return str
 
-    res = TYPE_TO_DATACHAIN.get(typ)
+    res = PYTHON_TO_SQL.get(typ)
     if res:
         return res
 
@@ -59,19 +59,19 @@ def convert_to_db_type(typ):  # noqa: PLR0911
         if ModelStore.is_pydantic(args0):
             return Array(JSON())
 
-        next_type = convert_to_db_type(args0)
+        next_type = python_to_sql(args0)
         return Array(next_type)
 
     if orig is Annotated:
         # Ignoring annotations
-        return convert_to_db_type(args[0])
+        return python_to_sql(args[0])
 
     if inspect.isclass(orig) and issubclass(dict, orig):
         return JSON
 
     if orig == Union:
         if len(args) == 2 and (type(None) in args):
-            return convert_to_db_type(args[0])
+            return python_to_sql(args[0])
 
         if _is_json_inside_union(orig, args):
             return JSON
