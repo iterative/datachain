@@ -24,15 +24,15 @@ def cast(v):  # to JSON serializable types
 
 
 def image_description(file):
-    img = file.get_value()
     (xmp, exif, iptc) = ({}, {}, {})
-    if img is None:
-        error = "Image format not understood"
+    try:
+        img = file.get_value()
+        xmp = img.getxmp()
+        img_exif = img.getexif()
+        img_iptc = IptcImagePlugin.getiptcinfo(img)
+    except Exception as err:  # noqa: BLE001
+        error = str(err)
         return ({}, {}, {}, error)
-    error = ""
-    xmp = img.getxmp()
-    img_exif = img.getexif()
-    img_iptc = IptcImagePlugin.getiptcinfo(img)
 
     if img_iptc:
         for k, v in img_iptc.items():
@@ -50,5 +50,5 @@ def image_description(file):
         json.dumps(xmp),
         json.dumps(exif),
         json.dumps(iptc),
-        error,
+        "",
     )

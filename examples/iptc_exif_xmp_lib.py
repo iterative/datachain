@@ -6,6 +6,7 @@ source = "gs://dvcx-datalakes/open-images-v6/"
 if __name__ == "__main__":
     (
         DataChain.from_storage(source, type="image")
+        .settings(parallel=-1)
         .filter(C("name").glob("*.jpg"))
         .limit(10000)
         .map(
@@ -13,6 +14,7 @@ if __name__ == "__main__":
             params=["file"],
             output={"xmp": dict, "exif": dict, "iptc": dict, "error": str},
         )
-        .select("file.source", "xmp", "exif", "iptc", "error")
+        .select("file.name", "xmp", "exif", "iptc", "error")
+        .filter((C("xmp") != "{}") | (C("exif") != "{}") | (C("iptc") != "{}"))
         .show()
     )

@@ -1,4 +1,4 @@
-# pip install torch
+# pip install torch scipy
 # NOTE: also need to install ffmpeg binary
 import torch
 
