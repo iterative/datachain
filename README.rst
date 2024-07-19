@@ -340,7 +340,7 @@ please `file an issue`_ along with a detailed description.
 
 .. _Apache 2.0 license: https://opensource.org/licenses/Apache-2.0
 .. _PyPI: https://pypi.org/
-.. _file an issue: https://github.com/iterative/dvcx/issues
+.. _file an issue: https://github.com/iterative/datachain/issues
 .. _pip: https://pip.pypa.io/
 .. github-only
 .. _Contributor Guide: CONTRIBUTING.rst
