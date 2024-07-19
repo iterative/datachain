@@ -871,7 +871,7 @@ class SQLDistinct(SQLClause):
     dialect: str
 
     def apply_sql_clause(self, query):
-        if self.dialect.name == "sqlite":
+        if self.dialect == "sqlite":
             return query.group_by(*self.args)
 
         return query.distinct(*self.args)
@@ -1423,7 +1423,7 @@ class DatasetQuery:
         query.steps.append(
             SQLDistinct(
                 args,
-                dialect=self.catalog.warehouse.db.dialect,  # type: ignore[arg-type]
+                dialect=self.catalog.warehouse.db.dialect.name,
             )
         )
         return query
