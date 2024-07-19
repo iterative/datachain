@@ -522,6 +522,23 @@ def test_select_restore_from_saving(catalog):
     assert n == len(features_nested)
 
 
+def test_from_dataset_name_version(catalog):
+    name = "test-version"
+    DataChain.from_values(
+        first_name=["Alice", "Bob", "Charlie"],
+        age=[40, 30, None],
+        city=[
+            "Houston",
+            "Los Angeles",
+            None,
+        ],
+    ).save(name)
+
+    dc = DataChain.from_dataset(name)
+    assert dc.name == name
+    assert dc.version
+
+
 def test_chain_of_maps(catalog):
     dc = (
         DataChain.from_values(my_n=features_nested)
