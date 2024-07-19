@@ -1,6 +1,7 @@
 import copy
 import re
 from collections.abc import Iterable, Iterator, Sequence
+from functools import wraps
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -16,6 +17,7 @@ from typing import (
 import pandas as pd
 import sqlalchemy
 from pydantic import BaseModel, create_model
+from sqlalchemy.sql.functions import GenericFunction
 
 from datachain import DataModel
 from datachain.lib.convert.values_to_tuples import values_to_tuples
@@ -46,11 +48,40 @@ from datachain.query.schema import Column, DatasetRow
 from datachain.utils import inside_notebook
 
 if TYPE_CHECKING:
-    from typing_extensions import Self
+    from typing_extensions import Concatenate, ParamSpec, Self
+
+    P = ParamSpec("P")
 
 C = Column
 
 _T = TypeVar("_T")
+D = TypeVar("D", bound="DataChain")
+
+
+def resolve_columns(
+    method: "Callable[Concatenate[D, P], D]",
+) -> "Callable[Concatenate[D, P], D]":
+    """Decorator that resolvs input column names to their actual DB names. This is
+    specially important for nested columns as user works with them by using dot
+    notation e.g (file.name) but are actually defined with default delimiter
+    in DB, e.g file__name.
+    If there are any sql functions in arguments, they will just be transferred as is
+    to a method.
+    """
+
+    @wraps(method)
+    def _inner(self: D, *args: "P.args", **kwargs: "P.kwargs") -> D:
+        resolved_args = self.signals_schema.resolve(
+            *[arg for arg in args if not isinstance(arg, GenericFunction)]
+        ).db_signals()
+
+        for idx, arg in enumerate(args):
+            if isinstance(arg, GenericFunction):
+                resolved_args.insert(idx, arg)
+
+        return method(self, *resolved_args, **kwargs)
+
+    return _inner
 
 
 class DatasetPrepareError(DataChainParamsError):  # noqa: D101
@@ -278,9 +309,11 @@ class DataChain(DatasetQuery):
             ```
         """
         func = get_file(type)
-        return cls(
-            path, session=session, recursive=recursive, update=update, **kwargs
-        ).map(**{object_name: func})
+        return (
+            cls(path, session=session, recursive=recursive, update=update, **kwargs)
+            .map(**{object_name: func})
+            .select(object_name)
+        )
 
     @classmethod
     def from_dataset(cls, name: str, version: Optional[int] = None) -> "DataChain":
@@ -603,6 +636,12 @@ class DataChain(DatasetQuery):
             res.signals_schema = new_schema
 
         return res
+
+    @detach
+    @resolve_columns
+    def order_by(self, *args: Union[str, GenericFunction]) -> "Self":
+        """Orders by specified set of signals."""
+        return super().order_by(*args)
 
     @detach
     def distinct(self, arg: str, *args: str) -> "Self":  # type: ignore[override]

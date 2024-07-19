@@ -1070,7 +1070,7 @@ class DatasetQuery:
         anon: bool = False,
         indexing_feature_schema: Optional[dict] = None,
         indexing_column_types: Optional[dict[str, Any]] = None,
-        update: bool = False,
+        update: Optional[bool] = False,
     ):
         if client_config is None:
             client_config = {}
