@@ -1025,7 +1025,7 @@ ds = DatasetQuery('{src_uri}')
     with pytest.raises(QueryScriptRunError) as exc_info:
         catalog.query(query_script)
         assert str(exc_info.value).startswith(
-            "Last line in a script was not an instance of DatasetQuery"
+            "Last line in a script was not an instance of DataChain"
         )
 
 
