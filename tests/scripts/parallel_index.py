@@ -1,7 +1,6 @@
 from pydantic import BaseModel
 
 from datachain.lib.dc import C, DataChain
-from datachain.query.dataset import DatasetQuery
 
 
 class Embedding(BaseModel):
@@ -18,5 +17,5 @@ ds = (
 ds.save("parallel_index")
 
 
-for row in DatasetQuery(name="parallel_index").select(C.name).results():
-    print(row[0])
+for row in ds.results():
+    print(row[2])

@@ -29,7 +29,7 @@ def run_script(results, max_retries=5, delay=0.1):
             attempt += 1
         else:
             # Handle other errors immediately
-            results.append((process.stdout, process.returncode))
+            results.append((process.stderr, process.returncode))
             break
     else:
         # Max retries reached, handle accordingly
@@ -50,8 +50,8 @@ def test_parallel_index(tmp_dir, catalog):
     _call_concurrently(*[lambda: run_script(results) for i in range(2)])
     assert len(results) == 2
     for output, returncode in results:
+        assert sorted(output.split("\n")) == sorted(expected.lstrip("\n").split("\n"))
         assert returncode == 0
-        assert expected.strip() in output.strip()
 
 
 def _call_concurrently(*callables):
