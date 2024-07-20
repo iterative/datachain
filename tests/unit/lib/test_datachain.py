@@ -817,6 +817,34 @@ def test_from_parquet_partitioned(tmp_dir, catalog):
     assert df1.equals(df)
 
 
+def test_to_parquet(tmp_dir, catalog):
+    df = pd.DataFrame(DF_DATA)
+    dc = DataChain.from_pandas(df)
+
+    path = tmp_dir / "test.parquet"
+    dc.to_parquet(path)
+
+    assert path.is_file()
+    pd.testing.assert_frame_equal(pd.read_parquet(path), df)
+
+
+def test_to_parquet_partitioned(tmp_dir, catalog):
+    df = pd.DataFrame(DF_DATA)
+    dc = DataChain.from_pandas(df)
+
+    path = tmp_dir / "parquets"
+    dc.to_parquet(path, partition_cols=["first_name"])
+
+    assert set(path.iterdir()) == {
+        path / f"first_name={name}" for name in df["first_name"]
+    }
+    df1 = pd.read_parquet(path)
+    df1 = df1.reindex(columns=df.columns)
+    df1["first_name"] = df1["first_name"].astype("str")
+    df1 = df1.sort_values("first_name").reset_index(drop=True)
+    pd.testing.assert_frame_equal(df1, df)
+
+
 @pytest.mark.parametrize("processes", [False, 2, True])
 def test_parallel(processes, catalog):
     prefix = "t & "

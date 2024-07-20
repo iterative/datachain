@@ -1,10 +1,12 @@
 import copy
+import os
 import re
 from collections.abc import Iterable, Iterator, Sequence
 from functools import wraps
 from typing import (
     TYPE_CHECKING,
     Any,
+    BinaryIO,
     Callable,
     ClassVar,
     Literal,
@@ -1176,6 +1178,25 @@ class DataChain(DatasetQuery):
             model_name=model_name,
             format="parquet",
             partitioning=partitioning,
+        )
+
+    def to_parquet(
+        self,
+        path: Union[str, os.PathLike[str], BinaryIO],
+        partition_cols: Optional[Sequence[str]] = None,
+        **kwargs,
+    ) -> None:
+        """Save chain to parquet file.
+
+        Parameters:
+            path : Path or a file-like binary object to save the file.
+            partition_cols : Column names by which to partition the dataset.
+        """
+        _partition_cols = list(partition_cols) if partition_cols else None
+        return self.to_pandas().to_parquet(
+            path,
+            partition_cols=_partition_cols,
+            **kwargs,
         )
 
     @classmethod
