@@ -30,7 +30,7 @@ def cast(v):  # to JSON serializable types
 def image_description(file):
     (xmp, exif, iptc) = ({}, {}, {})
     try:
-        img = file.get_value()
+        img = file.read()
         xmp = img.getxmp()
         img_exif = img.getexif()
         img_iptc = IptcImagePlugin.getiptcinfo(img)

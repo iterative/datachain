@@ -18,7 +18,7 @@ class Helper(Mapper):
         self.helper = pipeline(model=self.model, device=self.device)
 
     def process(self, file):
-        imgs = file.get_value()
+        imgs = file.read()
         result = self.helper(
             imgs,
             **self.kwargs,

@@ -52,7 +52,7 @@ class LLaVADescribe(Mapper):
 
     def process(self, file):
         inputs = self.processor(
-            text=self.prompt, images=file.get_value(), return_tensors="pt"
+            text=self.prompt, images=file.read(), return_tensors="pt"
         ).to(self.device, self.torch_dtype)
 
         generated_ids = self.model.generate(**inputs, max_new_tokens=self.max_tokens)

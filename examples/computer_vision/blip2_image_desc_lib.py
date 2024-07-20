@@ -43,7 +43,7 @@ class BLIP2Describe(Mapper):
         self.model.to(self.device)
 
     def process(self, file):
-        inputs = self.processor(images=file.get_value(), return_tensors="pt").to(
+        inputs = self.processor(images=file.read(), return_tensors="pt").to(
             self.device, self.torch_dtype
         )
 
