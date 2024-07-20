@@ -1309,7 +1309,7 @@ class DataChain(DatasetQuery):
 
     def shuffle(self) -> "Self":
         """Shuffle the rows of the chain deterministically."""
-        return super().shuffle()
+        return self.order_by("sys.rand")
 
     def sample(self, n) -> "Self":
         """Return a random sample from the chain.

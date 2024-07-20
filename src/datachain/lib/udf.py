@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from datachain.dataset import RowDict
 from datachain.lib.convert.flatten import flatten
 from datachain.lib.convert.unflatten import unflatten_to_json
-from datachain.lib.data_model import FileBasic
+from datachain.lib.file import File
 from datachain.lib.model_store import ModelStore
 from datachain.lib.signal_schema import SignalSchema
 from datachain.lib.udf_signature import UdfSignature
@@ -274,7 +274,7 @@ class UDFBase(AbstractUDF):
         for row in rows:
             obj_row = self.params.row_to_objs(row)
             for obj in obj_row:
-                if isinstance(obj, FileBasic):
+                if isinstance(obj, File):
                     obj._set_stream(
                         self._catalog, caching_enabled=cache, download_cb=download_cb
                     )
@@ -303,7 +303,7 @@ class UDFBase(AbstractUDF):
                 else:
                     obj = slice[0]
 
-                if isinstance(obj, FileBasic):
+                if isinstance(obj, File):
                     obj._set_stream(
                         self._catalog, caching_enabled=cache, download_cb=download_cb
                     )

@@ -21,7 +21,7 @@ transformer = transforms.Compose(
 
 
 def embeddings_processor(file) -> list[float]:
-    img_raw = file.get_value()
+    img_raw = file.read()
     img = convert_image(img_raw, transform=transformer).unsqueeze(0)
     with torch.no_grad():
         emb = model(img)
