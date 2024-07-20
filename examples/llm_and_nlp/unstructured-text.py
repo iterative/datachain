@@ -15,7 +15,7 @@ from datachain import C, DataChain
 
 device = "cpu"
 model = "pszemraj/led-large-book-summary"
-source = "gs://dvcx-datalakes/NLP/infobooks/"
+source = "gs://datachain-demo/nlp-infobooks/"
 
 
 def partition_object(file):

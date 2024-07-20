@@ -7,8 +7,7 @@ To install dependencies:
 
 import open_clip
 
-from datachain.lib.dc import C, DataChain
-from datachain.lib.udf import Mapper
+from datachain import C, DataChain, Mapper
 
 
 class ImageEncoder(Mapper):
@@ -31,7 +30,7 @@ class ImageEncoder(Mapper):
 if __name__ == "__main__":
     # Run in chain
     (
-        DataChain.from_storage("gs://dvcx-datalakes/dogs-and-cats/", type="image")
+        DataChain.from_storage("gs://datachain/dogs-and-cats/", type="image")
         .filter(C("name").glob("*cat*.jpg"))
         .settings(parallel=2)
         .limit(5)

@@ -8,7 +8,7 @@ from torchvision.transforms import v2
 from datachain import C, DataChain
 from datachain.torch import label_to_int
 
-STORAGE = "gs://dvcx-datalakes/dogs-and-cats/"
+STORAGE = "gs://datachain-demo/dogs-and-cats/"
 
 # Define transformation for data preprocessing
 transform = v2.Compose(

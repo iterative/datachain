@@ -9,7 +9,7 @@ from transformers import (
 
 from datachain import C, DataChain, Mapper
 
-source = "gs://dvcx-datalakes/dogs-and-cats/"
+source = "gs://datachain-demo/dogs-and-cats/"
 
 if torch.backends.mps.is_available():
     device = "mps"

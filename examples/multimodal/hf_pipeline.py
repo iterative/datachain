@@ -26,9 +26,9 @@ class Helper(Mapper):
         return (json.dumps(result), "")
 
 
-image_source = "gs://dvcx-datalakes/dogs-and-cats/"
-audio_source = "gs://dvcx-datalakes/speech-emotion-recognition-dataset/"
-text_source = "gs://dvcx-datalakes/NLP/cnn/stories"
+image_source = "gs://datachain-demo/dogs-and-cats/"
+audio_source = "gs://datachain-demo/speech-emotion-recognition-dataset/"
+text_source = "gs://datachain-demo/nlp-cnn-stories"
 
 if torch.cuda.is_available():
     device = "cuda"

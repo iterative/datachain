@@ -17,7 +17,7 @@ model = "llava-hf/llava-1.5-7b-hf"
 #
 # https://huggingface.co/llava-hf
 
-source = "gs://dvcx-datalakes/dogs-and-cats/"
+source = "gs://datachain-demo/dogs-and-cats/"
 
 # device='mps' not supported
 if torch.cuda.is_available():

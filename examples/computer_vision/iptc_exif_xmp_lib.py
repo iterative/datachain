@@ -8,7 +8,7 @@ from PIL import (
 
 from datachain import C, DataChain
 
-source = "gs://dvcx-datalakes/open-images-v6/"
+source = "gs://datachain-demo/open-images-v6/"
 
 
 def cast(v):  # to JSON serializable types

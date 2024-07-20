@@ -10,7 +10,7 @@ def num_chars_udf(name):
     return ([],)
 
 
-ds = DataChain.from_storage("gs://dvcx-datalakes/dogs-and-cats/")
+ds = DataChain.from_storage("gs://datachain-demo/dogs-and-cats/")
 ds.map(num_chars_udf, params=["file.name"], output={"num_chars": list[str]}).select(
     "file.name", "num_chars"
 ).show(5)

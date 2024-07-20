@@ -8,7 +8,7 @@ import requests
 from datachain import C, DataChain
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-SOURCE = "gs://dvcx-datalakes/dogs-and-cats/"
+SOURCE = "gs://datachain-demo/dogs-and-cats/"
 DEFAULT_FIT_BOX = (500, 500)
 DEFAULT_TOKENS = 300
 
