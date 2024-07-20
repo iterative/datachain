@@ -3,7 +3,6 @@ from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from PIL import Image
-from pydantic import BaseModel
 from torch import float32
 from torch.distributed import get_rank, get_world_size
 from torch.utils.data import IterableDataset, get_worker_info
@@ -11,6 +10,7 @@ from torchvision.transforms import v2
 
 from datachain.catalog import Catalog, get_catalog
 from datachain.lib.dc import DataChain
+from datachain.lib.file import File
 from datachain.lib.text import convert_text
 
 if TYPE_CHECKING:
@@ -98,8 +98,8 @@ class PytorchDataset(IterableDataset):
         for row_features in stream:
             row = []
             for fr in row_features:
-                if isinstance(fr, BaseModel):
-                    row.append(fr.get_value())  # type: ignore[unreachable]
+                if isinstance(fr, File):
+                    row.append(fr.read())  # type: ignore[unreachable]
                 else:
                     row.append(fr)
             # Apply transforms

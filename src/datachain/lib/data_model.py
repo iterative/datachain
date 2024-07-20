@@ -1,13 +1,10 @@
 from collections.abc import Sequence
 from datetime import datetime
-from typing import TYPE_CHECKING, ClassVar, Union, get_args, get_origin
+from typing import ClassVar, Union, get_args, get_origin
 
 from pydantic import BaseModel
 
 from datachain.lib.model_store import ModelStore
-
-if TYPE_CHECKING:
-    from datachain.catalog import Catalog
 
 StandardType = Union[
     type[int],
@@ -47,25 +44,6 @@ class DataModel(BaseModel):
             models = [models]
         for val in models:
             ModelStore.add(val)
-
-
-class FileBasic(DataModel):
-    """Base class for all file-like `DataModel` classes."""
-
-    def _set_stream(self, catalog: "Catalog", caching_enabled: bool = False) -> None:
-        pass
-
-    def open(self):
-        raise NotImplementedError
-
-    def read(self):
-        """Read raw file contents."""
-        with self.open() as stream:
-            return stream.read()
-
-    def get_value(self):
-        """Return object with file contents formatted by file type."""
-        return self.read()
 
 
 def is_chain_type(t: type) -> bool:
