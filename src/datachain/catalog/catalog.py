@@ -773,6 +773,13 @@ class Catalog:
                 client.uri, force_update, prefix
             )
 
+            if (
+                storage.is_stale
+                or storage.is_expired
+                or storage.status == StorageStatus.STALE
+            ):
+                break
+
         if not need_index:
             assert partial_id is not None
             assert partial_path is not None
