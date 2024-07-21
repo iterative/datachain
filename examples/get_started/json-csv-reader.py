@@ -5,6 +5,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 from datachain import C, DataChain
+from datachain.lib.data_model import ModelStore
 
 
 # Sample model for static JSON model
@@ -14,12 +15,18 @@ class LicenseModel(BaseModel):
     name: str
 
 
+LicenseFeature = ModelStore.add(LicenseModel)
+
+
 # Sample model for static CSV model
 class ChatDialog(BaseModel):
     id: Optional[int] = None
     count: Optional[int] = None
     sender: Optional[str] = None
     text: Optional[str] = None
+
+
+ChatFeature = ModelStore.add(ChatDialog)
 
 
 def main():
@@ -60,9 +67,11 @@ def main():
 
     print()
     print("========================================================================")
-    print("static JSON schema test parsing 7 objects")
+    print("static JSON schema test parsing 3/7 objects")
     print("========================================================================")
-    static_json_ds = DataChain.from_json(uri, jmespath="licenses", spec=LicenseModel)
+    static_json_ds = DataChain.from_json(
+        uri, jmespath="licenses", spec=LicenseFeature, nrows=3
+    )
     print(static_json_ds.to_pandas())
 
     print()

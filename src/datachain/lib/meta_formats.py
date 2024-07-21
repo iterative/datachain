@@ -13,6 +13,7 @@ from typing import Any, Callable
 import jmespath as jsp
 from pydantic import ValidationError
 
+from datachain.lib.data_model import ModelStore  # noqa: F401
 from datachain.lib.file import File
 
 
@@ -86,6 +87,8 @@ def read_schema(source_file, data_type="csv", expr=None, model_name=None):
     except subprocess.CalledProcessError as e:
         model_output = f"An error occurred in datamodel-codegen: {e.stderr}"
     print(f"{model_output}")
+    print("\n" + f"ModelStore.add({model_name})" + "\n")
+    print("\n" + f"spec={model_name}" + "\n")
     return model_output
 
 
@@ -99,6 +102,7 @@ def read_meta(  # noqa: C901
     jmespath=None,
     show_schema=False,
     model_name=None,
+    nrows=None,
 ) -> Callable:
     from datachain.lib.dc import DataChain
 
@@ -118,8 +122,7 @@ def read_meta(  # noqa: C901
                     output=str,
                 )
             )
-            # dummy executor (#1616)
-            chain.save()
+            chain.exec()
         finally:
             sys.stdout = current_stdout
         model_output = captured_output.getvalue()
@@ -147,6 +150,7 @@ def read_meta(  # noqa: C901
         DataModel=spec,  # noqa: N803
         meta_type=meta_type,
         jmespath=jmespath,
+        nrows=nrows,
     ) -> Iterator[spec]:
         def validator(json_object: dict) -> spec:
             json_string = json.dumps(json_object)
@@ -175,14 +179,22 @@ def read_meta(  # noqa: C901
                 yield from validator(json_object)
 
             else:
+                nrow = 0
                 for json_dict in json_object:
+                    nrow = nrow + 1
+                    if nrows is not None and nrow > nrows:
+                        return
                     yield from validator(json_dict)
 
         if meta_type == "jsonl":
             try:
+                nrow = 0
                 with file.open() as fd:
                     data_string = fd.readline().replace("\r", "")
                     while data_string:
+                        nrow = nrow + 1
+                        if nrows is not None and nrow > nrows:
+                            return
                         json_object = process_json(data_string, jmespath)
                         data_string = fd.readline()
                         yield from validator(json_object)
