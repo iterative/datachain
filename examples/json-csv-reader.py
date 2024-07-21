@@ -112,9 +112,9 @@ def main():
     uri = "gs://datachain-demo/laion-aesthetics-csv"
     print()
     print("========================================================================")
-    print("dynamic CSV with header schema test parsing 3M objects")
+    print("dynamic CSV with header schema test parsing 3/3M objects")
     print("========================================================================")
-    dynamic_csv_ds = DataChain.from_csv(uri, object_name="laion")
+    dynamic_csv_ds = DataChain.from_csv(uri, object_name="laion", nrows=3)
     dynamic_csv_ds.print_schema()
     print(dynamic_csv_ds.to_pandas())
 
