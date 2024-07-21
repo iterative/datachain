@@ -87,7 +87,7 @@ def read_schema(source_file, data_type="csv", expr=None, model_name=None):
     except subprocess.CalledProcessError as e:
         model_output = f"An error occurred in datamodel-codegen: {e.stderr}"
     print(f"{model_output}")
-    print("\n" + f"ModelStore.add({model_name})" + "\n")
+    print("\n" + f"ModelStore.register({model_name})" + "\n")
     print("\n" + f"spec={model_name}" + "\n")
     return model_output
 

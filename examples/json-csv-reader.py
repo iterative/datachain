@@ -34,7 +34,7 @@ class LicenseModel(BaseModel):
     name: str
 
 
-LicenseFeature = ModelStore.add(LicenseModel)
+LicenseFeature = ModelStore.register(LicenseModel)
 
 
 # Sample model for static CSV model
@@ -45,7 +45,7 @@ class ChatDialog(BaseModel):
     text: Optional[str] = None
 
 
-ChatFeature = ModelStore.add(ChatDialog)
+ChatFeature = ModelStore.register(ChatDialog)
 
 
 def main():
