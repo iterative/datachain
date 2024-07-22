@@ -27,7 +27,7 @@ class DataModel(BaseModel):
 
     @classmethod
     def __pydantic_init_subclass__(cls):
-        """It automatically registers every declared DataModel child class."""
+        # automatically registers every declared DataModel child class.
         ModelStore.add(cls)
 
     @staticmethod
