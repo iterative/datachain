@@ -45,7 +45,7 @@ if __name__ == "__main__":
             anon=True,
             type="image",
         )
-        .filter(C("name").glob("*.jpg"))
+        .filter(C("file.name").glob("*.jpg"))
         .limit(1)
         .map(
             Helper(
@@ -67,7 +67,7 @@ if __name__ == "__main__":
             anon=True,
             type="image",
         )
-        .filter(C("name").glob("*.jpg"))
+        .filter(C("file.name").glob("*.jpg"))
         .limit(1)
         .map(
             Helper(
@@ -88,7 +88,7 @@ if __name__ == "__main__":
             anon=True,
             type="binary",
         )
-        .filter(C("name").glob("*.wav"))
+        .filter(C("file.name").glob("*.wav"))
         .limit(1)
         .map(
             Helper(
@@ -108,7 +108,7 @@ if __name__ == "__main__":
             anon=True,
             type="text",
         )
-        .filter(C("name").glob("*.story"))
+        .filter(C("file.name").glob("*.story"))
         .limit(1)
         .map(
             Helper(
