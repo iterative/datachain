@@ -69,7 +69,7 @@ def main():
         uri, schema_from=schema_uri, jmespath="@", model_name="OpenImage"
     )
     print(json_pairs_ds.to_pandas())
-    # print(json_pairs_ds.collect()[0])
+    # print(list(json_pairs_ds.collect())[0])
 
     uri = "gs://datachain-demo/coco2017/annotations_captions/"
 

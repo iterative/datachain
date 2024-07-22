@@ -113,24 +113,24 @@ def test_from_features(catalog):
         params="parent",
         output={"file": File, "t1": MyFr},
     )
-    for i, (_, t1) in enumerate(ds.iterate()):
+    for i, (_, t1) in enumerate(ds.collect()):
         assert t1 == features[i]
 
 
 def test_datasets(catalog):
     ds = DataChain.datasets()
-    datasets = [d for d in ds.iterate_one("dataset") if d.name == "fibonacci"]
+    datasets = [d for d in ds.collect("dataset") if d.name == "fibonacci"]
     assert len(datasets) == 0
 
     DataChain.from_values(fib=[1, 1, 2, 3, 5, 8]).save("fibonacci")
 
     ds = DataChain.datasets()
-    datasets = [d for d in ds.iterate_one("dataset") if d.name == "fibonacci"]
+    datasets = [d for d in ds.collect("dataset") if d.name == "fibonacci"]
     assert len(datasets) == 1
     assert datasets[0].num_objects == 6
 
     ds = DataChain.datasets(object_name="foo")
-    datasets = [d for d in ds.iterate_one("foo") if d.name == "fibonacci"]
+    datasets = [d for d in ds.collect("foo") if d.name == "fibonacci"]
     assert len(datasets) == 1
     assert datasets[0].num_objects == 6
 
@@ -206,7 +206,7 @@ def test_file_list(catalog):
 
     ds = DataChain.from_values(file=files)
 
-    for i, values in enumerate(ds.iterate()):
+    for i, values in enumerate(ds.collect()):
         assert values[0] == files[i]
 
 
@@ -229,7 +229,7 @@ def test_gen(catalog):
         output={"x": _TestFr},
     )
 
-    for i, (x,) in enumerate(ds.iterate()):
+    for i, (x,) in enumerate(ds.collect()):
         assert isinstance(x, _TestFr)
 
         fr = features[i]
@@ -253,7 +253,7 @@ def test_map(catalog):
         output={"x": _TestFr},
     )
 
-    x_list = dc.collect_one("x")
+    x_list = list(dc.collect("x"))
     test_frs = [
         _TestFr(sqrt=math.sqrt(fr.count), my_name=fr.nnn + "_suf") for fr in features
     ]
@@ -284,7 +284,7 @@ def test_agg(catalog):
         output={"x": _TestFr},
     )
 
-    assert dc.collect_one("x") == [
+    assert list(dc.collect("x")) == [
         _TestFr(
             f=File(name=""),
             cnt=sum(fr.count for fr in features if fr.nnn == "n1"),
@@ -323,8 +323,8 @@ def test_agg_two_params(catalog):
         output={"x": _TestFr},
     )
 
-    assert ds.collect_one("x.my_name") == ["n1-n1", "n2"]
-    assert ds.collect_one("x.cnt") == [12, 15]
+    assert list(ds.collect("x.my_name")) == ["n1-n1", "n2"]
+    assert list(ds.collect("x.cnt")) == [12, 15]
 
 
 def test_agg_simple_iterator(catalog):
@@ -383,8 +383,8 @@ def test_agg_tuple_result_iterator(catalog):
     values = [1, 5, 9]
     ds = DataChain.from_values(key=keys, val=values).agg(x=func, partition_by=C("key"))
 
-    assert ds.collect_one("x_1.name") == ["n1-n1", "n2"]
-    assert ds.collect_one("x_1.size") == [10, 5]
+    assert list(ds.collect("x_1.name")) == ["n1-n1", "n2"]
+    assert list(ds.collect("x_1.size")) == [10, 5]
 
 
 def test_agg_tuple_result_generator(catalog):
@@ -401,15 +401,15 @@ def test_agg_tuple_result_generator(catalog):
     values = [1, 5, 9]
     ds = DataChain.from_values(key=keys, val=values).agg(x=func, partition_by=C("key"))
 
-    assert ds.collect_one("x_1.name") == ["n1-n1", "n2"]
-    assert ds.collect_one("x_1.size") == [10, 5]
+    assert list(ds.collect("x_1.name")) == ["n1-n1", "n2"]
+    assert list(ds.collect("x_1.size")) == [10, 5]
 
 
-def test_iterate(catalog):
+def test_collect(catalog):
     dc = DataChain.from_values(f1=features, num=range(len(features)))
 
     n = 0
-    for sample in dc.iterate():
+    for sample in dc.collect():
         assert len(sample) == 2
         fr, num = sample
 
@@ -423,10 +423,10 @@ def test_iterate(catalog):
     assert n == len(features)
 
 
-def test_iterate_nested_feature(catalog):
+def test_collect_nested_feature(catalog):
     dc = DataChain.from_values(sign1=features_nested)
 
-    for n, sample in enumerate(dc.iterate()):
+    for n, sample in enumerate(dc.collect()):
         assert len(sample) == 1
         nested = sample[0]
 
@@ -437,21 +437,21 @@ def test_iterate_nested_feature(catalog):
 def test_select_feature(catalog):
     dc = DataChain.from_values(my_n=features_nested)
 
-    samples = dc.select("my_n").iterate()
+    samples = dc.select("my_n").collect()
     n = 0
     for sample in samples:
         assert sample[0] == features_nested[n]
         n += 1
     assert n == len(features_nested)
 
-    samples = dc.select("my_n.fr").iterate()
+    samples = dc.select("my_n.fr").collect()
     n = 0
     for sample in samples:
         assert sample[0] == features[n]
         n += 1
     assert n == len(features_nested)
 
-    samples = dc.select("my_n.label", "my_n.fr.count").iterate()
+    samples = dc.select("my_n.label", "my_n.fr.count").collect()
     n = 0
     for sample in samples:
         label, count = sample
@@ -464,7 +464,7 @@ def test_select_feature(catalog):
 def test_select_columns_intersection(catalog):
     dc = DataChain.from_values(my_n=features_nested)
 
-    samples = dc.select("my_n.fr", "my_n.fr.count").iterate()
+    samples = dc.select("my_n.fr", "my_n.fr.count").collect()
     n = 0
     for sample in samples:
         fr, count = sample
@@ -477,7 +477,7 @@ def test_select_columns_intersection(catalog):
 def test_select_except(catalog):
     dc = DataChain.from_values(fr1=features_nested, fr2=features)
 
-    samples = dc.select_except("fr2").iterate()
+    samples = dc.select_except("fr2").collect()
     n = 0
     for sample in samples:
         fr = sample[0]
@@ -490,20 +490,20 @@ def test_select_wrong_type(catalog):
     dc = DataChain.from_values(fr1=features_nested, fr2=features)
 
     with pytest.raises(SignalResolvingTypeError):
-        list(dc.select(4).iterate())
+        list(dc.select(4).collect())
 
     with pytest.raises(SignalResolvingTypeError):
-        list(dc.select_except(features[0]).iterate())
+        list(dc.select_except(features[0]).collect())
 
 
 def test_select_except_error(catalog):
     dc = DataChain.from_values(fr1=features_nested, fr2=features)
 
     with pytest.raises(SignalResolvingError):
-        list(dc.select_except("not_exist", "file").iterate())
+        list(dc.select_except("not_exist", "file").collect())
 
     with pytest.raises(SignalResolvingError):
-        list(dc.select_except("fr1.label", "file").iterate())
+        list(dc.select_except("fr1.label", "file").collect())
 
 
 def test_select_restore_from_saving(catalog):
@@ -514,7 +514,7 @@ def test_select_restore_from_saving(catalog):
 
     restored = DataChain.from_dataset(name)
     n = 0
-    restored_sorted = sorted(restored.iterate(), key=lambda x: x[0].count)
+    restored_sorted = sorted(restored.collect(), key=lambda x: x[0].count)
     features_sorted = sorted(features, key=lambda x: x.count)
     for sample in restored_sorted:
         assert sample[0] == features_sorted[n]
@@ -593,7 +593,7 @@ def test_unsupported_output_type(catalog):
         DataChain.from_values(key=[123]).map(emd=get_vector)
 
 
-def test_collect_one(catalog):
+def test_collect_single_item(catalog):
     names = ["f1.jpg", "f1.json", "f1.txt", "f2.jpg", "f2.json"]
     sizes = [1, 2, 3, 4, 5]
     files = [File(name=name, size=size) for name, size in zip(names, sizes)]
@@ -602,11 +602,11 @@ def test_collect_one(catalog):
 
     chain = DataChain.from_values(file=files, score=scores)
 
-    assert chain.collect_one("file") == files
-    assert chain.collect_one("file.name") == names
-    assert chain.collect_one("file.size") == sizes
-    assert chain.collect_one("file.source") == [""] * len(names)
-    assert np.allclose(chain.collect_one("score"), scores)
+    assert list(chain.collect("file")) == files
+    assert list(chain.collect("file.name")) == names
+    assert list(chain.collect("file.size")) == sizes
+    assert list(chain.collect("file.source")) == [""] * len(names)
+    assert np.allclose(list(chain.collect("score")), scores)
 
     for actual, expected in zip(
         chain.collect("file.size", "score"), [[x, y] for x, y in zip(sizes, scores)]
@@ -622,7 +622,7 @@ def test_default_output_type(catalog):
 
     chain = DataChain.from_values(name=names).map(res1=lambda name: name + suffix)
 
-    assert chain.collect_one("res1") == [t + suffix for t in names]
+    assert list(chain.collect("res1")) == [t + suffix for t in names]
 
 
 def test_parse_tabular(tmp_dir, catalog):
@@ -850,11 +850,11 @@ def test_parallel(processes, catalog):
     prefix = "t & "
     vals = ["a", "b", "c", "d", "e", "f", "g", "h", "i"]
 
-    res = (
+    res = list(
         DataChain.from_values(key=vals)
         .settings(parallel=processes)
         .map(res=lambda key: prefix + key)
-        .collect_one("res")
+        .collect("res")
     )
 
     assert res == [prefix + v for v in vals]
@@ -956,7 +956,7 @@ def test_mutate():
     assert chain.signals_schema.values["place"] is str
 
     expected = [fr.count * 2 * 3.14 for fr in features]
-    np.testing.assert_allclose(chain.collect_one("circle"), expected)
+    np.testing.assert_allclose(list(chain.collect("circle")), expected)
 
 
 @pytest.mark.parametrize("with_function", [True, False])
@@ -971,7 +971,13 @@ def test_order_by_with_nested_columns(with_function):
     else:
         dc = dc.order_by("file.name")
 
-    assert dc.collect_one("file.name") == ["a.txt", "a.txt", "b.txt", "c.txt", "d.txt"]
+    assert list(dc.collect("file.name")) == [
+        "a.txt",
+        "a.txt",
+        "b.txt",
+        "c.txt",
+        "d.txt",
+    ]
 
 
 @pytest.mark.parametrize("with_function", [True, False])
@@ -986,4 +992,10 @@ def test_order_by_descending(with_function):
     else:
         dc = dc.order_by("file.name", descending=True)
 
-    assert dc.collect_one("file.name") == ["d.txt", "c.txt", "b.txt", "a.txt", "a.txt"]
+    assert list(dc.collect("file.name")) == [
+        "d.txt",
+        "c.txt",
+        "b.txt",
+        "a.txt",
+        "a.txt",
+    ]
