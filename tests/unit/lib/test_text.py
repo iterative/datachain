@@ -44,5 +44,5 @@ def test_text_file_mapper(tmp_path, catalog):
 
     file = TextFile(name=file_name, source=f"file://{tmp_path}")
     file._set_stream(catalog, caching_enabled=False)
-    res = file.get_value()
+    res = file.read()
     assert res == text

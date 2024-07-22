@@ -346,6 +346,7 @@ class DataChain(DatasetQuery):
         model_name: Optional[str] = None,
         show_schema: Optional[bool] = False,
         meta_type: Optional[str] = "json",
+        nrows=None,
         **kwargs,
     ) -> "DataChain":
         """Get data from JSON. It returns the chain itself.
@@ -355,11 +356,12 @@ class DataChain(DatasetQuery):
                 as `s3://`, `gs://`, `az://` or "file:///"
             type : read file as "binary", "text", or "image" data. Default is "binary".
             spec : optional Data Model
-            schema_from : path to sample to infer spec from
+            schema_from : path to sample to infer spec (if schema not provided)
             object_name : generated object column name
-            model_name : generated model name
+            model_name : optional generated model name
             show_schema : print auto-generated schema
-            jmespath : JMESPATH expression to reduce JSON
+            jmespath : optional JMESPATH expression to reduce JSON
+            nrows : optional row limit for jsonl and JSON arrays
 
         Example:
             infer JSON schema from data, reduce using JMESPATH, print schema
@@ -392,6 +394,7 @@ class DataChain(DatasetQuery):
                 model_name=model_name,
                 show_schema=show_schema,
                 jmespath=jmespath,
+                nrows=nrows,
             )
         }
         return chain.gen(**signal_dict)  # type: ignore[arg-type]
@@ -641,8 +644,15 @@ class DataChain(DatasetQuery):
 
     @detach
     @resolve_columns
-    def order_by(self, *args: Union[str, GenericFunction]) -> "Self":
-        """Orders by specified set of signals."""
+    def order_by(self, *args, descending: bool = False) -> "Self":
+        """Orders by specified set of signals.
+
+        Parameters:
+            descending (bool): Whether to sort in descending order or not.
+        """
+        if descending:
+            args = tuple([sqlalchemy.desc(a) for a in args])
+
         return super().order_by(*args)
 
     @detach
@@ -860,8 +870,10 @@ class DataChain(DatasetQuery):
                 f"'on' must be 'str' or 'Sequence' object but got type '{type(on)}'",
             )
 
-        on_columns = self.signals_schema.resolve(*on).db_signals()
+        signals_schema = self.signals_schema.clone_without_sys_signals()
+        on_columns = signals_schema.resolve(*on).db_signals()
 
+        right_signals_schema = right_ds.signals_schema.clone_without_sys_signals()
         if right_on is not None:
             if isinstance(right_on, str):
                 right_on = [right_on]
@@ -878,7 +890,7 @@ class DataChain(DatasetQuery):
                     on, right_on, "'on' and 'right_on' must have the same length'"
                 )
 
-            right_on_columns = right_ds.signals_schema.resolve(*right_on).db_signals()
+            right_on_columns = right_signals_schema.resolve(*right_on).db_signals()
 
             if len(right_on_columns) != len(on_columns):
                 on_str = ", ".join(right_on_columns)
@@ -904,7 +916,9 @@ class DataChain(DatasetQuery):
         ds = self.join(right_ds, sqlalchemy.and_(*ops), inner, rname + "{name}")
 
         ds.feature_schema = None
-        ds.signals_schema = self.signals_schema.merge(right_ds.signals_schema, rname)
+        ds.signals_schema = SignalSchema({"sys": Sys}) | signals_schema.merge(
+            right_signals_schema, rname
+        )
 
         return ds
 
@@ -986,22 +1000,43 @@ class DataChain(DatasetQuery):
         data = {tuple(n): val for n, val in zip(headers, transposed_result)}
         return pd.DataFrame(data)
 
-    def show(self, limit: int = 20, flatten=False, transpose=False) -> None:
+    def show(
+        self,
+        limit: int = 20,
+        flatten=False,
+        transpose=False,
+        truncate=True,
+    ) -> None:
         """Show a preview of the chain results.
 
         Parameters:
             limit : How many rows to show.
             flatten : Whether to use a multiindex or flatten column names.
             transpose : Whether to transpose rows and columns.
+            truncate : Whether or not to truncate the contents of columns.
         """
         dc = self.limit(limit) if limit > 0 else self
         df = dc.to_pandas(flatten)
         if transpose:
             df = df.T
 
-        with pd.option_context(
-            "display.max_columns", None, "display.multi_sparse", False
-        ):
+        options: list = [
+            "display.max_columns",
+            None,
+            "display.multi_sparse",
+            False,
+        ]
+
+        try:
+            if columns := os.get_terminal_size().columns:
+                options.extend(["display.width", columns])
+        except OSError:
+            pass
+
+        if not truncate:
+            options.extend(["display.max_colwidth", None])
+
+        with pd.option_context(*options):
             if inside_notebook():
                 from IPython.display import display
 
@@ -1309,7 +1344,7 @@ class DataChain(DatasetQuery):
 
     def shuffle(self) -> "Self":
         """Shuffle the rows of the chain deterministically."""
-        return super().shuffle()
+        return self.order_by("sys.rand")
 
     def sample(self, n) -> "Self":
         """Return a random sample from the chain.

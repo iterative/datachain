@@ -18,7 +18,7 @@ from pydantic import Field, field_validator
 
 from datachain.cache import UniqueId
 from datachain.client.fileslice import FileSlice
-from datachain.lib.data_model import DataModel, FileBasic
+from datachain.lib.data_model import DataModel
 from datachain.lib.utils import DataChainError
 from datachain.sql.types import JSON, Int, String
 from datachain.utils import TIME_ZERO
@@ -108,8 +108,8 @@ class VFileRegistry:
         return reader.open(file, location)
 
 
-class File(FileBasic):
-    """Binary file model."""
+class File(DataModel):
+    """`DataModel` for reading binary files."""
 
     source: str = Field(default="")
     parent: str = Field(default="")
@@ -199,6 +199,11 @@ class File(FileBasic):
             uid, use_cache=self._caching_enabled, cb=self._download_cb
         ) as f:
             yield f
+
+    def read(self):
+        """Returns file contents."""
+        with self.open() as stream:
+            return stream.read()
 
     def export(
         self,
@@ -299,7 +304,7 @@ class File(FileBasic):
 
 
 class TextFile(File):
-    """Text file model."""
+    """`DataModel` for reading text files."""
 
     @contextmanager
     def open(self):
@@ -309,12 +314,12 @@ class TextFile(File):
 
 
 class ImageFile(File):
-    """Image file model."""
+    """`DataModel` for reading image files."""
 
-    def get_value(self):
-        """Return `PIL.Image.Image."""
-        value = super().get_value()
-        return Image.open(BytesIO(value))
+    def read(self):
+        """Returns `PIL.Image.Image` object."""
+        fobj = super().read()
+        return Image.open(BytesIO(fobj))
 
 
 def get_file(type_: Literal["binary", "text", "image"] = "binary"):
