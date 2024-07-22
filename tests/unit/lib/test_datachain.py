@@ -738,7 +738,7 @@ def test_parse_tabular_output_list(tmp_dir, catalog):
 def test_from_csv(tmp_dir, catalog):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.csv"
-    df.to_csv(path)
+    df.to_csv(path, index=False)
     dc = DataChain.from_csv(path.as_uri())
     df1 = dc.select("first_name", "age", "city").to_pandas()
     assert df1.equals(df)
@@ -791,10 +791,21 @@ def test_from_csv_no_header_output_list(tmp_dir, catalog):
 def test_from_csv_tab_delimited(tmp_dir, catalog):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.csv"
-    df.to_csv(path, sep="\t")
+    df.to_csv(path, sep="\t", index=False)
     dc = DataChain.from_csv(path.as_uri(), delimiter="\t")
     df1 = dc.select("first_name", "age", "city").to_pandas()
     assert df1.equals(df)
+
+
+def test_from_csv_null_floats(tmp_dir, catalog):
+    df = pd.DataFrame(DF_DATA)
+    height = [70.1, 65.6, None, 72.3, 68.8]
+    df["height"] = height
+    path = tmp_dir / "test.csv"
+    df.to_csv(path, index=False)
+    dc = DataChain.from_csv(path.as_uri(), object_name="csv")
+    for i, row in enumerate(dc.collect()):
+        assert row[1].height == height[i]
 
 
 def test_from_parquet(tmp_dir, catalog):
