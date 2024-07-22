@@ -797,9 +797,9 @@ def test_from_csv_tab_delimited(tmp_dir, catalog):
     assert df1.equals(df)
 
 
-def test_from_csv_null_floats(tmp_dir, catalog):
+def test_from_csv_null_collect(tmp_dir, catalog):
     df = pd.DataFrame(DF_DATA)
-    height = [70.1, 65.6, None, 72.3, 68.8]
+    height = [70, 65, None, 72, 68]
     df["height"] = height
     path = tmp_dir / "test.csv"
     df.to_csv(path, index=False)
