@@ -1124,7 +1124,6 @@ class DataChain(DatasetQuery):
         path,
         delimiter: str = ",",
         header: bool = True,
-        column_names: Optional[list[str]] = None,
         output: OutputType = None,
         object_name: str = "",
         model_name: str = "",
@@ -1161,6 +1160,7 @@ class DataChain(DatasetQuery):
 
         chain = DataChain.from_storage(path, **kwargs)
 
+        column_names = None
         if not header:
             if not output:
                 msg = "error parsing csv - provide output if no header"
