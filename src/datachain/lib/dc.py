@@ -739,8 +739,8 @@ class DataChain(DatasetQuery):
 
         Parameters:
             row_factory : A callable to convert row to a custom format.
-                          It should accept two arguments, a list of column names and
-                          tuple of row values.
+                          It should accept two arguments: a list of column names and
+                          a tuple of row values.
         """
         db_signals = self._effective_signals_schema.db_signals()
         with super().select(*db_signals).as_iterable() as rows:
