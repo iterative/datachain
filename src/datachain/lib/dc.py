@@ -863,8 +863,10 @@ class DataChain(DatasetQuery):
                 f"'on' must be 'str' or 'Sequence' object but got type '{type(on)}'",
             )
 
-        on_columns = self.signals_schema.resolve(*on).db_signals()
+        signals_schema = self.signals_schema.clone_without_sys_signals()
+        on_columns = signals_schema.resolve(*on).db_signals()
 
+        right_signals_schema = right_ds.signals_schema.clone_without_sys_signals()
         if right_on is not None:
             if isinstance(right_on, str):
                 right_on = [right_on]
@@ -881,7 +883,7 @@ class DataChain(DatasetQuery):
                     on, right_on, "'on' and 'right_on' must have the same length'"
                 )
 
-            right_on_columns = right_ds.signals_schema.resolve(*right_on).db_signals()
+            right_on_columns = right_signals_schema.resolve(*right_on).db_signals()
 
             if len(right_on_columns) != len(on_columns):
                 on_str = ", ".join(right_on_columns)
@@ -907,7 +909,9 @@ class DataChain(DatasetQuery):
         ds = self.join(right_ds, sqlalchemy.and_(*ops), inner, rname + "{name}")
 
         ds.feature_schema = None
-        ds.signals_schema = self.signals_schema.merge(right_ds.signals_schema, rname)
+        ds.signals_schema = SignalSchema({"sys": Sys}) | signals_schema.merge(
+            right_signals_schema, rname
+        )
 
         return ds
 
