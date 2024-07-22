@@ -220,3 +220,56 @@ def test_get_fs(catalog):
     file = File(name="file", parent="dir", source="file:///")
     file._catalog = catalog
     assert isinstance(file.get_fs(), LocalFileSystem)
+
+
+def test_open_mode(tmp_path, catalog: Catalog):
+    file_name = "myfile"
+    data = "this is a TexT data..."
+
+    file_path = tmp_path / file_name
+    with open(file_path, "w") as fd:
+        fd.write(data)
+
+    file = File(name=file_name, source=f"file://{tmp_path}")
+    file._set_stream(catalog, True)
+    with file.open(mode="r") as stream:
+        assert stream.read() == data
+
+
+def test_read_length(tmp_path, catalog):
+    file_name = "myfile"
+    data = b"some\x00data\x00is\x48\x65\x6c\x57\x6f\x72\x6c\x64\xff\xffheRe"
+
+    file_path = tmp_path / file_name
+    with open(file_path, "wb") as fd:
+        fd.write(data)
+
+    file = File(name=file_name, source=f"file://{tmp_path}")
+    file._set_stream(catalog, False)
+    assert file.read(length=4) == data[:4]
+
+
+def test_read_bytes(tmp_path, catalog):
+    file_name = "myfile"
+    data = b"some\x00data\x00is\x48\x65\x6c\x57\x6f\x72\x6c\x64\xff\xffheRe"
+
+    file_path = tmp_path / file_name
+    with open(file_path, "wb") as fd:
+        fd.write(data)
+
+    file = File(name=file_name, source=f"file://{tmp_path}")
+    file._set_stream(catalog, False)
+    assert file.read_bytes() == data
+
+
+def test_read_text(tmp_path, catalog):
+    file_name = "myfile"
+    data = "this is a TexT data..."
+
+    file_path = tmp_path / file_name
+    with open(file_path, "w") as fd:
+        fd.write(data)
+
+    file = File(name=file_name, source=f"file://{tmp_path}")
+    file._set_stream(catalog, True)
+    assert file.read_text() == data
