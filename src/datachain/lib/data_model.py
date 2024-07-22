@@ -25,15 +25,9 @@ class DataModel(BaseModel):
 
     _version: ClassVar[int] = 1
 
-    def get_value(self):
-        """Getting value from data. It's used in conjunction with method that operate
-        with raw data such as to_pytorch(). In contrast to method that operated with
-        data structures such as pydantic"""
-        return
-
     @classmethod
     def __pydantic_init_subclass__(cls):
-        """It automatically registers every declared DataModel child class."""
+        # automatically registers every declared DataModel child class.
         ModelStore.add(cls)
 
     @staticmethod

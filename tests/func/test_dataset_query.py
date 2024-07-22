@@ -1486,7 +1486,9 @@ def test_join_left_one_column_predicate(
     # check core duplicated columns
     for r in joined_records:
         dog_r = next(dr for dr in dogs_cats_records if dr["name"] == r["name"])
-        assert all([r[f"{k}_right"] == dog_r[k]] for k in dog_r)
+        assert all(
+            [r[f"{k}_right"] == dog_r[k]] for k in dog_r if not k.startswith("sys__")
+        )
 
 
 @pytest.mark.parametrize(
@@ -1545,7 +1547,9 @@ def test_join_left_multiple_column_pedicates(
     # check core duplicated columns
     for r in joined_records:
         dog_r = next(dr for dr in dogs_cats_records if dr["name"] == r["name"])
-        assert all([r[f"{k}_right"] == dog_r[k]] for k in dog_r)
+        assert all(
+            [r[f"{k}_right"] == dog_r[k]] for k in dog_r if not k.startswith("sys__")
+        )
 
 
 @pytest.mark.parametrize(
@@ -1790,7 +1794,9 @@ def test_join_inner(
     assert all(r["sig1"] == 1 and r["sig2"] == 2 for r in joined_records)
     for r in joined_records:
         dog_r = next(dr for dr in dogs_records if dr["name"] == r["name"])
-        assert all([r[f"{k}_right"] == dog_r[k]] for k in dog_r)
+        assert all(
+            [r[f"{k}_right"] == dog_r[k]] for k in dog_r if not k.startswith("sys__")
+        )
 
     # joining on multiple fields
     joined_records = dogs_cats.join(
@@ -1803,7 +1809,9 @@ def test_join_inner(
     # check core duplicated columns
     for r in joined_records:
         dog_r = next(dr for dr in dogs_records if dr["name"] == r["name"])
-        assert all([r[f"{k}_right"] == dog_r[k]] for k in dog_r)
+        assert all(
+            [r[f"{k}_right"] == dog_r[k]] for k in dog_r if not k.startswith("sys__")
+        )
 
 
 @pytest.mark.parametrize(
@@ -1834,7 +1842,9 @@ def test_join_with_self(cloud_test_catalog, dogs_dataset):
     # check core duplicated columns
     for r in joined_records:
         dog_r = next(dr for dr in dogs_records if dr["name"] == r["name"])
-        assert all([r[f"{k}_right"] == dog_r[k]] for k in dog_r)
+        assert all(
+            [r[f"{k}_right"] == dog_r[k]] for k in dog_r if not k.startswith("sys__")
+        )
 
 
 @pytest.mark.parametrize(
