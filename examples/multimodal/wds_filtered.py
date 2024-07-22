@@ -11,7 +11,7 @@ try:
 except datachain.error.DatasetNotFoundError:
     wds = (
         DataChain.from_storage("gs://datachain-demo/datacomp-small/shards")
-        .filter(C.name.glob("00000000.tar"))
+        .filter(C("file.name").glob("00000000.tar"))
         .settings(cache=True)
         .gen(laion=process_webdataset(spec=WDSLaion), params="file")
         .save(name)
