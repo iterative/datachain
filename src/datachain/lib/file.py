@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from datetime import datetime
 from io import BytesIO
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, Optional, Union
 from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
@@ -181,11 +181,11 @@ class File(DataModel):
 
     @property
     def name(self):
-        return Path(self.path).name
+        return PurePosixPath(self.path).name
 
     @property
     def parent(self):
-        return str(Path(self.path).parent)
+        return str(PurePosixPath(self.path).parent)
 
     @contextmanager
     def open(self, mode: Literal["rb", "r"] = "rb"):
@@ -259,15 +259,15 @@ class File(DataModel):
 
     def get_file_suffix(self):
         """Returns last part of file name with `.`."""
-        return Path(self.path).suffix
+        return PurePosixPath(self.path).suffix
 
     def get_file_ext(self):
         """Returns last part of file name without `.`."""
-        return Path(self.path).suffix.strip(".")
+        return PurePosixPath(self.path).suffix.strip(".")
 
     def get_file_stem(self):
         """Returns file name without extension."""
-        return Path(self.path).stem
+        return PurePosixPath(self.path).stem
 
     def get_full_name(self):
         """Returns name with parent directories."""
