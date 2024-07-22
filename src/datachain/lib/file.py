@@ -344,6 +344,10 @@ class ImageFile(File):
         fobj = super().read()
         return Image.open(BytesIO(fobj))
 
+    def write(self, destination: str):
+        """Writes it's content to destination"""
+        self.read().save(destination)
+
 
 def get_file(type_: Literal["binary", "text", "image"] = "binary"):
     file: type[File] = File
