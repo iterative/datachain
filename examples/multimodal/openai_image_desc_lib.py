@@ -1,8 +1,14 @@
+# pip install Pillow
+
 import base64
 import os
 
 import requests
 
+from datachain import C, DataChain
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+SOURCE = "gs://datachain-demo/dogs-and-cats/"
 DEFAULT_FIT_BOX = (500, 500)
 DEFAULT_TOKENS = 300
 
@@ -64,3 +70,26 @@ def describe_image(
         openai_description = json_response["choices"][0]["message"]["content"]
 
     return (openai_description, error)
+
+
+if __name__ == "__main__":
+    (
+        DataChain.from_storage(
+            SOURCE,
+            anon=True,
+        )
+        .filter(C("name").glob("cat*.jpg"))
+        .limit(10)
+        .map(
+            lambda file: describe_image(
+                file,
+                key=OPENAI_API_KEY,
+                max_tokens=300,
+                prompt="What is in this image?",
+            ),
+            params=["file"],
+            output={"description": str, "error": str},
+        )
+        .select("file.source", "file.parent", "file.name", "description", "error")
+        .show()
+    )

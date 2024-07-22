@@ -6,6 +6,10 @@ from PIL import (
     TiffImagePlugin,
 )
 
+from datachain import C, DataChain
+
+source = "gs://datachain-demo/open-images-v6/"
+
 
 def cast(v):  # to JSON serializable types
     if isinstance(v, TiffImagePlugin.IFDRational):
@@ -26,7 +30,7 @@ def cast(v):  # to JSON serializable types
 def image_description(file):
     (xmp, exif, iptc) = ({}, {}, {})
     try:
-        img = file.get_value()
+        img = file.read()
         xmp = img.getxmp()
         img_exif = img.getexif()
         img_iptc = IptcImagePlugin.getiptcinfo(img)
@@ -51,4 +55,21 @@ def image_description(file):
         json.dumps(exif),
         json.dumps(iptc),
         "",
+    )
+
+
+if __name__ == "__main__":
+    (
+        DataChain.from_storage(source, type="image")
+        .settings(parallel=-1)
+        .filter(C("name").glob("*.jpg"))
+        .limit(10000)
+        .map(
+            image_description,
+            params=["file"],
+            output={"xmp": dict, "exif": dict, "iptc": dict, "error": str},
+        )
+        .select("file.name", "xmp", "exif", "iptc", "error")
+        .filter((C("xmp") != "{}") | (C("exif") != "{}") | (C("iptc") != "{}"))
+        .show()
     )

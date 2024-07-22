@@ -8,13 +8,23 @@
 # "pdf", "ppt", "pptx", "rtf", "rst", "tsv", "xlsx"
 
 from transformers import pipeline
+from unstructured.partition.auto import partition
+from unstructured.staging.base import convert_to_dataframe
 
-from datachain.lib.dc import C, DataChain
-from datachain.lib.unstructured import partition_object
+from datachain import C, DataChain
 
 device = "cpu"
 model = "pszemraj/led-large-book-summary"
-source = "gs://dvcx-datalakes/NLP/infobooks/"
+source = "gs://datachain-demo/nlp-infobooks/"
+
+
+def partition_object(file):
+    with file.open() as raw:
+        elements = partition(file=raw, metadata_filename=file.name)
+    title = str(elements[0])
+    text = "\n\n".join([str(el) for el in elements])
+    df = convert_to_dataframe(elements)
+    return (df.to_json(), title, text, "")
 
 
 def cleanse(text):
