@@ -57,8 +57,8 @@ def test_map_file(cloud_test_catalog, use_cache):
         "dog3 -> bark",
         "dog4 -> ruff",
     }
-    assert set(dc.iterate_one("signal")) == expected
-    for file in dc.iterate_one("file"):
+    assert set(dc.collect("signal")) == expected
+    for file in dc.collect("file"):
         assert bool(file.get_local_path()) is use_cache
 
 
@@ -67,7 +67,7 @@ def test_read_file(cloud_test_catalog, use_cache):
     ctc = cloud_test_catalog
 
     dc = DataChain.from_storage(ctc.src_uri, catalog=ctc.catalog)
-    for file in dc.settings(cache=use_cache).iterate_one("file"):
+    for file in dc.settings(cache=use_cache).collect("file"):
         assert file.get_local_path() is None
         file.read()
         assert bool(file.get_local_path()) is use_cache
@@ -100,7 +100,7 @@ def test_export_files(tmp_dir, cloud_test_catalog, placement, use_map, use_cache
         "dog4": "ruff",
     }
 
-    for file in df.collect_one("file"):
+    for file in df.collect("file"):
         if placement == "filename":
             file_path = file.name
         else:

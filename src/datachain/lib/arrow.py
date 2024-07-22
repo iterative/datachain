@@ -42,7 +42,7 @@ class ArrowGenerator(Generator):
 
 def infer_schema(chain: "DataChain", **kwargs) -> pa.Schema:
     schemas = []
-    for file in chain.iterate_one("file"):
+    for file in chain.collect("file"):
         ds = dataset(file.get_path(), filesystem=file.get_fs(), **kwargs)  # type: ignore[union-attr]
         schemas.append(ds.schema)
     return pa.unify_schemas(schemas)
