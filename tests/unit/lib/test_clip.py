@@ -1,6 +1,5 @@
 import pytest
 from PIL import Image
-from transformers import CLIPModel, CLIPProcessor
 
 from datachain.lib.clip import similarity_scores
 
@@ -46,9 +45,8 @@ def test_similarity_scores(fake_clip_model, images, text, prob, image_to_text):
                 assert sum(score) == pytest.approx(1)
 
 
-def test_similarity_scores_hf():
-    model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
-    processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+def test_similarity_scores_hf(fake_hf_model):
+    model, processor = fake_hf_model
 
     scores = similarity_scores(
         IMAGES, TEXTS, model, processor.image_processor, processor.tokenizer

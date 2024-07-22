@@ -1,7 +1,16 @@
+import random
+
 import pytest
 import torch
-from torch import float32
 from torchvision.transforms import v2
+from transformers.feature_extraction_utils import BatchFeature
+from transformers.image_processing_utils import BaseImageProcessor
+from transformers.modeling_utils import PreTrainedModel
+from transformers.tokenization_utils import PreTrainedTokenizer
+
+TO_TENSOR = v2.Compose(
+    [v2.ToImage(), v2.ToDtype(torch.float32, scale=True), v2.Resize((64, 64))]
+)
 
 
 @pytest.fixture(scope="session")
@@ -13,9 +22,51 @@ def fake_clip_model():
         def encode_text(self, tensor):
             return torch.randn(len(tensor), 512)
 
-    def tokenizer(tensor, context_length=77):
-        return torch.randn(len(tensor), context_length)
+    def tokenizer(text, context_length=77):
+        return torch.randn(len(text), context_length)
 
     model = Model()
-    preprocess = v2.ToDtype(float32, scale=True)
+    preprocess = TO_TENSOR
     return model, preprocess, tokenizer
+
+
+@pytest.fixture(scope="session")
+def fake_hf_model():
+    class Model(PreTrainedModel):
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def get_text_features(self, tensor):
+            return torch.randn(len(tensor), 512)
+
+        def get_image_features(self, tensor):
+            return torch.randn(len(tensor), 512)
+
+    class Tokenizer(PreTrainedTokenizer):
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __call__(self, text):
+            input_ids = [
+                [random.randint(0, 1000) for _ in range(77)]  # noqa: S311
+                for _ in range(len(text))
+            ]
+            return BatchFeature({"input_ids": input_ids})
+
+        def __bool__(self):
+            return True
+
+    class ImageProcessor(BaseImageProcessor):
+        def __call__(self, images):
+            if not isinstance(images, list):
+                images = [images]
+            pixel_values = [TO_TENSOR(img) for img in images]
+            return BatchFeature({"pixel_values": pixel_values})
+
+    class Processor:
+        tokenizer = Tokenizer()
+        image_processor = ImageProcessor()
+
+    model = Model()
+    processor = Processor()
+    return model, processor

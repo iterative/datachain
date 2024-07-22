@@ -1,5 +1,4 @@
 import torch
-from transformers import CLIPModel, CLIPProcessor
 
 from datachain.lib.file import TextFile
 from datachain.lib.text import convert_text
@@ -24,10 +23,9 @@ def test_convert_text(fake_clip_model):
     assert converted_text.dtype == torch.float32
 
 
-def test_convert_text_hf():
+def test_convert_text_hf(fake_hf_model):
     text = "thisismytext"
-    model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
-    processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+    model, processor = fake_hf_model
     converted_text = convert_text(
         text, tokenizer=processor.tokenizer, encoder=model.get_text_features
     )
