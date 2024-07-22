@@ -164,7 +164,7 @@ jobs:
         with:
           fetch-depth: 0
           repository: iterative/studio
-          ref: develop
+          ref: merge-parent-name
           token: ${{ secrets.ITERATIVE_STUDIO_READ_ACCESS_TOKEN }}
 
       - name: Check out repository
