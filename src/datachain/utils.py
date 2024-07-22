@@ -427,3 +427,9 @@ def filtered_cloudpickle_dumps(obj: Any) -> bytes:
             for model_class, namespace in model_namespaces.items():
                 # Restore original __pydantic_parent_namespace__ locally.
                 model_class.__pydantic_parent_namespace__ = namespace
+
+
+def get_datachain_executable() -> list[str]:
+    if datachain_exec_path := os.getenv("DATACHAIN_EXEC_PATH"):
+        return [datachain_exec_path]
+    return [sys.executable, "-m", "datachain"]
