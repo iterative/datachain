@@ -1,6 +1,7 @@
 import copy
 import re
 from collections.abc import Iterable, Iterator, Sequence
+from functools import wraps
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -16,6 +17,7 @@ from typing import (
 import pandas as pd
 import sqlalchemy
 from pydantic import BaseModel, create_model
+from sqlalchemy.sql.functions import GenericFunction
 
 from datachain import DataModel
 from datachain.lib.convert.values_to_tuples import values_to_tuples
@@ -46,11 +48,40 @@ from datachain.query.schema import Column, DatasetRow
 from datachain.utils import inside_notebook
 
 if TYPE_CHECKING:
-    from typing_extensions import Self
+    from typing_extensions import Concatenate, ParamSpec, Self
+
+    P = ParamSpec("P")
 
 C = Column
 
 _T = TypeVar("_T")
+D = TypeVar("D", bound="DataChain")
+
+
+def resolve_columns(
+    method: "Callable[Concatenate[D, P], D]",
+) -> "Callable[Concatenate[D, P], D]":
+    """Decorator that resolvs input column names to their actual DB names. This is
+    specially important for nested columns as user works with them by using dot
+    notation e.g (file.name) but are actually defined with default delimiter
+    in DB, e.g file__name.
+    If there are any sql functions in arguments, they will just be transferred as is
+    to a method.
+    """
+
+    @wraps(method)
+    def _inner(self: D, *args: "P.args", **kwargs: "P.kwargs") -> D:
+        resolved_args = self.signals_schema.resolve(
+            *[arg for arg in args if not isinstance(arg, GenericFunction)]
+        ).db_signals()
+
+        for idx, arg in enumerate(args):
+            if isinstance(arg, GenericFunction):
+                resolved_args.insert(idx, arg)
+
+        return method(self, *resolved_args, **kwargs)
+
+    return _inner
 
 
 class DatasetPrepareError(DataChainParamsError):  # noqa: D101
@@ -603,17 +634,19 @@ class DataChain(DatasetQuery):
         return res
 
     @detach
-    def order_by(self, *args: str, descending: bool = False) -> "Self":
+    @resolve_columns
+    def order_by(self, *args, descending: bool = False) -> "Self":
         """Orders by specified set of signals.
 
         Parameters:
             descending (bool): Whether to sort in descending order or not.
         """
-        columns = self.signals_schema.resolve(*args).db_signals()
         if descending:
-            columns = [sqlalchemy.desc(c) for c in columns]
+            args = tuple(
+                [sqlalchemy.desc(a) if isinstance(a, str) else a for a in args]
+            )
 
-        return super().order_by(*columns)
+        return super().order_by(*args)
 
     @detach
     def distinct(self, arg: str, *args: str) -> "Self":  # type: ignore[override]
