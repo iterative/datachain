@@ -78,7 +78,7 @@ if __name__ == "__main__":
             SOURCE,
             anon=True,
         )
-        .filter(C("name").glob("cat*.jpg"))
+        .filter(C("file.name").glob("cat*.jpg"))
         .limit(10)
         .map(
             lambda file: describe_image(

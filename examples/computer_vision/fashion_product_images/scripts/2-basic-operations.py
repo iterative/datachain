@@ -11,7 +11,7 @@ print("\n# Filtering & Sorting:")
 (
     DataChain.from_dataset("fashion-product-images")
     .select("parent", "name", "usage", "season", "year", "gender")
-    .filter(C.usage == "Casual" and C.season == "Summer")
+    .filter(C("usage") == "Casual" and C("season") == "Summer")
     .order_by("year")
     .group_by("gender")
     .to_pandas()
