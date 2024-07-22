@@ -3,21 +3,21 @@ import torch
 from torch.nn.functional import cosine_similarity
 from torch.utils.data import DataLoader
 
-from datachain.lib.dc import C, DataChain
+from datachain import C, DataChain
 
-source = "gs://dvcx-50k-laion-files/000000/00000000*"
+source = "gs://datachain-demo/50k-laion-files/000000/00000000*"
 
 
 def create_dataset():
     imgs = (
         DataChain.from_storage(source, type="image")
         .filter(C.name.glob("*.jpg"))
-        .map(stem=lambda name: name.split(".")[0], output=str)
+        .map(stem=lambda name: name.split(".")[0], params=["file.name"], output=str)
     )
     captions = (
         DataChain.from_storage(source, type="text")
         .filter(C.name.glob("*.txt"))
-        .map(stem=lambda name: name.split(".")[0], output=str)
+        .map(stem=lambda name: name.split(".")[0], params=["file.name"], output=str)
     )
     return imgs.merge(captions, on="stem")
 
