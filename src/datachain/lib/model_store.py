@@ -22,7 +22,8 @@ class ModelStore:
         return model.__name__
 
     @classmethod
-    def add(cls, fr: type):
+    def register(cls, fr: type):
+        """Register a class as a data model for deserialization."""
         if (model := ModelStore.to_pydantic(fr)) is None:
             return
 
@@ -34,7 +35,7 @@ class ModelStore:
 
         for f_info in model.model_fields.values():
             if (anno := ModelStore.to_pydantic(f_info.annotation)) is not None:
-                cls.add(anno)
+                cls.register(anno)
 
     @classmethod
     def get(cls, name: str, version: Optional[int] = None) -> Optional[type]:

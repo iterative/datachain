@@ -6,7 +6,8 @@ from anthropic.types import Message
 from datachain import Column, DataChain
 from datachain.sql.functions import path
 
-DATA = "gs://dvcx-datalakes/chatbot-public"
+DATA = "gs://datachain-demo/chatbot-KiT"
+MODEL = "claude-3-opus-20240229"
 MODEL = "claude-3-opus-20240229"
 PROMPT = """Consider the following dialogues between the 'user' and the 'bot' separated\
  by '===='. The 'user' is a human trying to find the best mobile plan. The 'bot' is a \

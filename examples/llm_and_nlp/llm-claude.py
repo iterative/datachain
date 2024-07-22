@@ -5,7 +5,7 @@ from anthropic.types import Message
 
 from datachain import Column, DataChain, File
 
-DATA = "gs://dvcx-datalakes/chatbot-public"
+DATA = "gs://datachain-demo/chatbot-KiT"
 MODEL = "claude-3-opus-20240229"
 PROMPT = """Summarise the dialog in a sentence"""
 TEMPERATURE = 0.9

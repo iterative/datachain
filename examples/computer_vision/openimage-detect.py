@@ -3,8 +3,7 @@ import json
 from PIL import Image
 from pydantic import BaseModel
 
-from datachain.lib.dc import C, DataChain
-from datachain.lib.file import File
+from datachain import C, DataChain, File
 from datachain.sql.functions import path
 
 
