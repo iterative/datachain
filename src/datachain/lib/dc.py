@@ -644,8 +644,16 @@ class DataChain(DatasetQuery):
 
     @detach
     @resolve_columns
-    def order_by(self, *args: Union[str, GenericFunction]) -> "Self":
-        """Orders by specified set of signals."""
+    def order_by(self, *args, descending: bool = False) -> "Self":
+        """Orders by specified set of signals.
+        Parameters:
+            descending (bool): Whether to sort in descending order or not.
+        """
+        if descending:
+            args = tuple(
+                [sqlalchemy.desc(a) if isinstance(a, str) else a for a in args]
+            )
+
         return super().order_by(*args)
 
     @detach
