@@ -54,7 +54,7 @@ def test_merge_objects(catalog):
 
     i = 0
     j = 0
-    for items in ch.iterate():
+    for items in ch.collect():
         assert len(items) == 2
 
         empl, player = items
@@ -92,14 +92,14 @@ def test_merge_similar_objects(catalog):
     rname = "qq"
     ch = ch1.merge(ch2, "emp.person.name", rname=rname)
 
-    assert list(ch.signals_schema.values.keys()) == ["emp", rname + "emp"]
+    assert list(ch.signals_schema.values.keys()) == ["sys", "emp", rname + "emp"]
 
-    empl = list(ch.iterate())
+    empl = list(ch.collect())
     assert len(empl) == 4
     assert len(empl[0]) == 2
 
     ch_inner = ch1.merge(ch2, "emp.person.name", rname=rname, inner=True)
-    assert len(list(ch_inner.iterate())) == 2
+    assert len(list(ch_inner.collect())) == 2
 
 
 def test_merge_values(catalog):
@@ -116,11 +116,17 @@ def test_merge_values(catalog):
 
     ch = ch1.merge(ch2, "id")
 
-    assert list(ch.signals_schema.values.keys()) == ["id", "descr", "right_id", "time"]
+    assert list(ch.signals_schema.values.keys()) == [
+        "sys",
+        "id",
+        "descr",
+        "right_id",
+        "time",
+    ]
 
     i = 0
     j = 0
-    sorted_items_list = sorted(ch.iterate(), key=lambda x: x[0])
+    sorted_items_list = sorted(ch.collect(), key=lambda x: x[0])
     for items in sorted_items_list:
         assert len(items) == 4
         id, name, _right_id, time = items
@@ -154,7 +160,7 @@ def test_merge_multi_conditions(catalog):
 
     ch = ch1.merge(ch2, ("id", "name"), ("id", "d_name"))
 
-    res = list(ch.iterate())
+    res = list(ch.collect())
 
     assert len(res) == max(len(employees), len(team))
     success_ids = set()
@@ -189,7 +195,7 @@ def test_merge_with_itself(catalog):
     merged = ch.merge(ch, "emp.id")
 
     count = 0
-    for left, right in merged.iterate():
+    for left, right in merged.collect():
         assert isinstance(left, TestEmployee)
         assert isinstance(right, TestEmployee)
         assert left == right == employees[count]

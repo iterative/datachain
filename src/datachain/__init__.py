@@ -8,6 +8,7 @@ from datachain.lib.file import (
     TarVFile,
     TextFile,
 )
+from datachain.lib.model_store import ModelStore
 from datachain.lib.udf import Aggregator, Generator, Mapper
 from datachain.lib.utils import AbstractUDF, DataChainError
 from datachain.query.session import Session
@@ -27,6 +28,7 @@ __all__ = [
     "ImageFile",
     "IndexedFile",
     "Mapper",
+    "ModelStore",
     "Session",
     "Sys",
     "TarVFile",

@@ -1,3 +1,4 @@
+# pip install torch
 import torch
 from transformers import (
     AutoProcessor,
@@ -6,7 +7,17 @@ from transformers import (
     LlavaForConditionalGeneration,
 )
 
-from datachain.lib.udf import Mapper
+from datachain import C, DataChain, Mapper
+
+source = "gs://datachain-demo/dogs-and-cats/"
+
+if torch.backends.mps.is_available():
+    device = "mps"
+elif torch.cuda.is_available():
+    device = "cuda"
+else:
+    device = "cpu"
+
 
 DEFAULT_FIT_BOX = (500, 500)
 
@@ -32,7 +43,7 @@ class BLIP2Describe(Mapper):
         self.model.to(self.device)
 
     def process(self, file):
-        inputs = self.processor(images=file.get_value(), return_tensors="pt").to(
+        inputs = self.processor(images=file.read(), return_tensors="pt").to(
             self.device, self.torch_dtype
         )
 
@@ -70,3 +81,22 @@ class LLaVADescribe(Mapper):
         )
         desc = generated_text[0]
         return desc.split("ASSISTANT:")[-1].strip(), ""
+
+
+if __name__ == "__main__":
+    (
+        DataChain.from_storage(source, type="image")
+        .filter(C.name.glob("cat*.jpg"))
+        .map(
+            desc=BLIP2Describe(
+                # device=device,
+                device="cpu",
+            ),
+            params=["file"],
+            output={"description": str, "error": str},
+        )
+        .select(
+            "file.source", "file.parent", "file.name", "desc.description", "desc.error"
+        )
+        .show(5)
+    )

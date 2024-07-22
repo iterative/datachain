@@ -1,7 +1,7 @@
 import copy
 import os
 import re
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Iterator, Sequence
 from functools import wraps
 from typing import (
     TYPE_CHECKING,
@@ -410,7 +410,7 @@ class DataChain(DatasetQuery):
             from datachain import DataChain
 
             chain = DataChain.datasets()
-            for ds in chain.iterate_one("dataset"):
+            for ds in chain.collect("dataset"):
                 print(f"{ds.name}@v{ds.version}")
             ```
         """
@@ -644,8 +644,15 @@ class DataChain(DatasetQuery):
 
     @detach
     @resolve_columns
-    def order_by(self, *args: Union[str, GenericFunction]) -> "Self":
-        """Orders by specified set of signals."""
+    def order_by(self, *args, descending: bool = False) -> "Self":
+        """Orders by specified set of signals.
+
+        Parameters:
+            descending (bool): Whether to sort in descending order or not.
+        """
+        if descending:
+            args = tuple([sqlalchemy.desc(a) for a in args])
+
         return super().order_by(*args)
 
     @detach
@@ -713,21 +720,28 @@ class DataChain(DatasetQuery):
 
     @property
     def _effective_signals_schema(self) -> "SignalSchema":
-        """Effective schema used for user-facing API like iterate, to_pandas, etc."""
+        """Effective schema used for user-facing API like collect, to_pandas, etc."""
         signals_schema = self.signals_schema
         if not self._sys:
             return signals_schema.clone_without_sys_signals()
         return signals_schema
 
     @overload
-    def iterate_flatten(self) -> Iterable[tuple[Any, ...]]: ...
+    def collect_flatten(self) -> Iterator[tuple[Any, ...]]: ...
 
     @overload
-    def iterate_flatten(
-        self, row_factory: Callable[[list[str], tuple[Any, ...]], _T]
-    ) -> Iterable[_T]: ...
+    def collect_flatten(
+        self, *, row_factory: Callable[[list[str], tuple[Any, ...]], _T]
+    ) -> Iterator[_T]: ...
 
-    def iterate_flatten(self, row_factory=None):  # noqa: D102
+    def collect_flatten(self, *, row_factory=None):
+        """Yields flattened rows of values as a tuple.
+
+        Args:
+            row_factory : A callable to convert row to a custom format.
+                          It should accept two arguments: a list of column names and
+                          a tuple of row values.
+        """
         db_signals = self._effective_signals_schema.db_signals()
         with super().select(*db_signals).as_iterable() as rows:
             if row_factory:
@@ -739,48 +753,70 @@ class DataChain(DatasetQuery):
 
     @overload
     def results(
-        self, row_factory: Callable[[list[str], tuple[Any, ...]], _T]
+        self, *, row_factory: Callable[[list[str], tuple[Any, ...]], _T]
     ) -> list[_T]: ...
 
-    def results(self, row_factory=None, **kwargs):  # noqa: D102
-        return list(self.iterate_flatten(row_factory=row_factory))
+    def results(self, *, row_factory=None):  # noqa: D102
+        if row_factory is None:
+            return list(self.collect_flatten())
+        return list(self.collect_flatten(row_factory=row_factory))
 
-    def to_records(self) -> list[dict[str, Any]]:  # noqa: D102
+    def to_records(self) -> list[dict[str, Any]]:
+        """Convert every row to a dictionary."""
+
         def to_dict(cols: list[str], row: tuple[Any, ...]) -> dict[str, Any]:
             return dict(zip(cols, row))
 
         return self.results(row_factory=to_dict)
 
-    def iterate(self, *cols: str) -> Iterator[list[DataType]]:
-        """Iterate over rows.
+    @overload
+    def collect(self) -> Iterator[tuple[DataType, ...]]: ...
 
-        If columns are specified - limit them to specified columns.
+    @overload
+    def collect(self, col: str) -> Iterator[DataType]: ...  # type: ignore[overload-overlap]
+
+    @overload
+    def collect(self, *cols: str) -> Iterator[tuple[DataType, ...]]: ...
+
+    def collect(self, *cols: str) -> Iterator[Union[DataType, tuple[DataType, ...]]]:  # type: ignore[overload-overlap,misc]
+        """Yields rows of values, optionally limited to the specified columns.
+
+        Args:
+            *cols: Limit to the specified columns. By default, all columns are selected.
+
+        Yields:
+            (DataType): Yields a single item if a column is selected.
+            (tuple[DataType, ...]): Yields a tuple of items if multiple columns are
+                selected.
+
+        Example:
+            Iterating over all rows:
+            ```py
+            for row in dc.collect():
+                print(row)
+            ```
+
+            Iterating over all rows with selected columns:
+            ```py
+            for name, size in dc.collect("file.name", "file.size"):
+                print(name, size)
+            ```
+
+            Iterating over a single column:
+            ```py
+            for file in dc.collect("file.name"):
+                print(file)
+            ```
         """
         chain = self.select(*cols) if cols else self
         signals_schema = chain._effective_signals_schema
         db_signals = signals_schema.db_signals()
         with super().select(*db_signals).as_iterable() as rows:
             for row in rows:
-                yield signals_schema.row_to_features(
+                ret = signals_schema.row_to_features(
                     row, catalog=chain.session.catalog, cache=chain._settings.cache
                 )
-
-    def iterate_one(self, col: str) -> Iterator[DataType]:
-        """Iterate over one column."""
-        for item in self.iterate(col):
-            yield item[0]
-
-    def collect(self, *cols: str) -> list[list[DataType]]:
-        """Collect results from all rows.
-
-        If columns are specified - limit them to specified
-        columns.
-        """
-        return list(self.iterate(*cols))
-
-    def collect_one(self, col: str) -> list[DataType]:
-        """Collect results from one column."""
-        return list(self.iterate_one(col))
+                yield ret[0] if len(cols) == 1 else tuple(ret)
 
     def to_pytorch(
         self, transform=None, tokenizer=None, tokenizer_kwargs=None, num_samples=0
@@ -863,8 +899,10 @@ class DataChain(DatasetQuery):
                 f"'on' must be 'str' or 'Sequence' object but got type '{type(on)}'",
             )
 
-        on_columns = self.signals_schema.resolve(*on).db_signals()
+        signals_schema = self.signals_schema.clone_without_sys_signals()
+        on_columns = signals_schema.resolve(*on).db_signals()
 
+        right_signals_schema = right_ds.signals_schema.clone_without_sys_signals()
         if right_on is not None:
             if isinstance(right_on, str):
                 right_on = [right_on]
@@ -881,7 +919,7 @@ class DataChain(DatasetQuery):
                     on, right_on, "'on' and 'right_on' must have the same length'"
                 )
 
-            right_on_columns = right_ds.signals_schema.resolve(*right_on).db_signals()
+            right_on_columns = right_signals_schema.resolve(*right_on).db_signals()
 
             if len(right_on_columns) != len(on_columns):
                 on_str = ", ".join(right_on_columns)
@@ -907,7 +945,9 @@ class DataChain(DatasetQuery):
         ds = self.join(right_ds, sqlalchemy.and_(*ops), inner, rname + "{name}")
 
         ds.feature_schema = None
-        ds.signals_schema = self.signals_schema.merge(right_ds.signals_schema, rname)
+        ds.signals_schema = SignalSchema({"sys": Sys}) | signals_schema.merge(
+            right_signals_schema, rname
+        )
 
         return ds
 
@@ -989,22 +1029,43 @@ class DataChain(DatasetQuery):
         data = {tuple(n): val for n, val in zip(headers, transposed_result)}
         return pd.DataFrame(data)
 
-    def show(self, limit: int = 20, flatten=False, transpose=False) -> None:
+    def show(
+        self,
+        limit: int = 20,
+        flatten=False,
+        transpose=False,
+        truncate=True,
+    ) -> None:
         """Show a preview of the chain results.
 
         Parameters:
             limit : How many rows to show.
             flatten : Whether to use a multiindex or flatten column names.
             transpose : Whether to transpose rows and columns.
+            truncate : Whether or not to truncate the contents of columns.
         """
         dc = self.limit(limit) if limit > 0 else self
         df = dc.to_pandas(flatten)
         if transpose:
             df = df.T
 
-        with pd.option_context(
-            "display.max_columns", None, "display.multi_sparse", False
-        ):
+        options: list = [
+            "display.max_columns",
+            None,
+            "display.multi_sparse",
+            False,
+        ]
+
+        try:
+            if columns := os.get_terminal_size().columns:
+                options.extend(["display.width", columns])
+        except OSError:
+            pass
+
+        if not truncate:
+            options.extend(["display.max_colwidth", None])
+
+        with pd.option_context(*options):
             if inside_notebook():
                 from IPython.display import display
 
@@ -1318,7 +1379,7 @@ class DataChain(DatasetQuery):
             if self.distinct(f"{signal}.name").count() != self.count():
                 raise ValueError("Files with the same name found")
 
-        for file in self.collect_one(signal):
+        for file in self.collect(signal):
             file.export(output, placement, use_cache)  # type: ignore[union-attr]
 
     def shuffle(self) -> "Self":

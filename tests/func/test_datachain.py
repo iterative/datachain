@@ -1,4 +1,5 @@
 import os
+import re
 
 import pandas as pd
 import pytest
@@ -56,8 +57,8 @@ def test_map_file(cloud_test_catalog, use_cache):
         "dog3 -> bark",
         "dog4 -> ruff",
     }
-    assert set(dc.iterate_one("signal")) == expected
-    for file in dc.iterate_one("file"):
+    assert set(dc.collect("signal")) == expected
+    for file in dc.collect("file"):
         assert bool(file.get_local_path()) is use_cache
 
 
@@ -66,7 +67,7 @@ def test_read_file(cloud_test_catalog, use_cache):
     ctc = cloud_test_catalog
 
     dc = DataChain.from_storage(ctc.src_uri, catalog=ctc.catalog)
-    for file in dc.settings(cache=use_cache).iterate_one("file"):
+    for file in dc.settings(cache=use_cache).collect("file"):
         assert file.get_local_path() is None
         file.read()
         assert bool(file.get_local_path()) is use_cache
@@ -99,7 +100,7 @@ def test_export_files(tmp_dir, cloud_test_catalog, placement, use_map, use_cache
         "dog4": "ruff",
     }
 
-    for file in df.collect_one("file"):
+    for file in df.collect("file"):
         if placement == "filename":
             file_path = file.name
         else:
@@ -125,3 +126,79 @@ def test_export_files_filename_placement_not_unique_files(tmp_dir, catalog):
     df = DataChain.from_storage((tmp_dir / bucket_name).as_uri())
     with pytest.raises(ValueError):
         df.export_files(tmp_dir / "output", placement="filename")
+
+
+def test_show(capsys, catalog):
+    first_name = ["Alice", "Bob", "Charlie"]
+    DataChain.from_values(
+        first_name=first_name,
+        age=[40, 30, None],
+        city=[
+            "Houston",
+            "Los Angeles",
+            None,
+        ],
+    ).show()
+    captured = capsys.readouterr()
+    normalized_output = re.sub(r"\s+", " ", captured.out)
+    assert "first_name age city" in normalized_output
+    for i in range(3):
+        assert f"{i} {first_name[i]}" in normalized_output
+
+
+def test_show_transpose(capsys, catalog):
+    first_name = ["Alice", "Bob", "Charlie"]
+    last_name = ["A", "B", "C"]
+    DataChain.from_values(
+        first_name=first_name,
+        last_name=last_name,
+    ).show(transpose=True)
+    captured = capsys.readouterr()
+    stripped_output = re.sub(r"\s+", " ", captured.out)
+    assert " ".join(first_name) in stripped_output
+    assert " ".join(last_name) in stripped_output
+
+
+def test_show_truncate(capsys, catalog):
+    client = ["Alice A", "Bob B", "Charles C"]
+    details = [
+        "This is a very long piece of text that would not fit in the default output "
+        "because pandas will truncate the column",
+        "Gives good tips",
+        "Not very nice",
+    ]
+
+    dc = DataChain.from_values(
+        client=client,
+        details=details,
+    )
+
+    dc.show()
+    captured = capsys.readouterr()
+    normalized_output = re.sub(r"\s+", " ", captured.out)
+    assert f"{client[0]} {details[0][:10]}" in normalized_output
+    assert details[0] not in normalized_output
+    for i in [1, 2]:
+        assert f"{client[i]} {details[i]}" in normalized_output
+
+
+def test_show_no_truncate(capsys, catalog):
+    client = ["Alice A", "Bob B", "Charles C"]
+    details = [
+        "This is a very long piece of text that would not fit in the default output "
+        "because pandas will truncate the column",
+        "Gives good tips",
+        "Not very nice",
+    ]
+
+    dc = DataChain.from_values(
+        client=client,
+        details=details,
+    )
+
+    dc.show(truncate=False)
+    captured = capsys.readouterr()
+    normalized_output = re.sub(r"\s+", " ", captured.out)
+    for i in range(3):
+        assert client[i] in normalized_output
+        assert details[i] in normalized_output

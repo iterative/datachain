@@ -958,12 +958,15 @@ class SQLJoin(Step):
 
         q1_columns = list(q1.c)
         q1_column_names = {c.name for c in q1_columns}
-        q2_columns = [
-            c
-            if c.name not in q1_column_names and c.name != "sys__id"
-            else c.label(self.rname.format(name=c.name))
-            for c in q2.c
-        ]
+
+        q2_columns = []
+        for c in q2.c:
+            if c.name.startswith("sys__"):
+                continue
+
+            if c.name in q1_column_names:
+                c = c.label(self.rname.format(name=c.name))
+            q2_columns.append(c)
 
         res_columns = q1_columns + q2_columns
         predicates = (

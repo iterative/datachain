@@ -25,16 +25,10 @@ class DataModel(BaseModel):
 
     _version: ClassVar[int] = 1
 
-    def get_value(self):
-        """Getting value from data. It's used in conjunction with method that operate
-        with raw data such as to_pytorch(). In contrast to method that operated with
-        data structures such as pydantic"""
-        return
-
     @classmethod
     def __pydantic_init_subclass__(cls):
         """It automatically registers every declared DataModel child class."""
-        ModelStore.add(cls)
+        ModelStore.register(cls)
 
     @staticmethod
     def register(models: Union[DataType, Sequence[DataType]]):
@@ -43,7 +37,7 @@ class DataModel(BaseModel):
         if not isinstance(models, Sequence):
             models = [models]
         for val in models:
-            ModelStore.add(val)
+            ModelStore.register(val)
 
 
 def is_chain_type(t: type) -> bool:
