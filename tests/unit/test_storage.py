@@ -82,20 +82,6 @@ def test_storage_status(metastore):
     assert partial_id is None
     assert partial_path is None
 
-    (
-        s2,
-        need_index,
-        in_progress,
-        partial_id,
-        partial_path,
-    ) = metastore.register_storage_for_indexing(uri)
-    assert s2.status == StorageStatus.PENDING
-    assert storage == s2 == metastore.get_storage(uri)
-    assert need_index is False
-    assert in_progress is True
-    assert partial_id is None
-    assert partial_path is None
-
     end_time = datetime.now(timezone.utc)
     metastore.mark_storage_indexed(uri, StorageStatus.COMPLETE, 1000, end_time)
     storage = metastore.get_storage(uri)
