@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Optional
 
 import pyarrow as pa
 from pyarrow.dataset import dataset
+from tqdm import tqdm
 
 from datachain.lib.file import File, IndexedFile
 from datachain.lib.udf import Generator
@@ -30,11 +31,13 @@ class ArrowGenerator(Generator):
         path = file.get_path()
         ds = dataset(path, filesystem=file.get_fs(), schema=self.schema, **self.kwargs)
         index = 0
-        for record_batch in ds.to_batches():
-            for record in record_batch.to_pylist():
-                source = IndexedFile(file=file, index=index)
-                yield [source, *record.values()]
-                index += 1
+        with tqdm(desc="Parsed by pyarrow", unit=" rows") as pbar:
+            for record_batch in ds.to_batches():
+                for record in record_batch.to_pylist():
+                    source = IndexedFile(file=file, index=index)
+                    yield [source, *record.values()]
+                    index += 1
+                pbar.update(len(record_batch))
 
 
 def infer_schema(chain: "DataChain", **kwargs) -> pa.Schema:

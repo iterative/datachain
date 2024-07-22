@@ -1,5 +1,5 @@
 import datachain.error
-from datachain.lib.dc import C, DataChain
+from datachain import C, DataChain
 from datachain.lib.webdataset import process_webdataset
 from datachain.lib.webdataset_laion import WDSLaion
 from datachain.sql import literal
@@ -10,7 +10,7 @@ try:
     wds = DataChain.from_dataset(name=name)
 except datachain.error.DatasetNotFoundError:
     wds = (
-        DataChain.from_storage("gs://dvcx-datacomp-small/shards")
+        DataChain.from_storage("gs://datachain-demo/datacomp-small/shards")
         .filter(C.name.glob("00000000.tar"))
         .settings(cache=True)
         .gen(laion=process_webdataset(spec=WDSLaion), params="file")
