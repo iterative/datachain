@@ -70,7 +70,7 @@ The files should be downloaded and processed in parallel with data caching:
 
 4 files were found:
 
-.. code: shell
+.. code:: shell
 
     $ ls output/datachain-demo/chatbot-KiT/
     15.txt 28.txt 29.txt 39.txt
@@ -79,14 +79,15 @@ The files should be downloaded and processed in parallel with data caching:
 LLM judging LLMs dialogues
 ==========================
 
-Finding good dialogues using an LLM can be more efficient. In this example,
-we use Mistral with a free API. Please install the package and get a free
-Mistral API key at https://console.mistral.ai
-
 .. code:: shell
 
     $ pip install mistralai
     $ export MISTRAL_API_KEY=_your_key_
+
+
+Finding good dialogues using an LLM can be more efficient. In this example,
+we use Mistral with a free API. Please install the package and get a free
+Mistral API key at https://console.mistral.ai
 
 
 .. code:: py
@@ -118,7 +119,7 @@ Mistral API key at https://console.mistral.ai
 
 With the current prompt, we found 31 files considered successful dialogues:
 
-.. code: shell
+.. code:: shell
 
     $ ls output_mistral/datachain-demo/chatbot-KiT/
     1.txt  15.txt 18.txt 2.txt  22.txt 25.txt 28.txt 33.txt 37.txt 4.txt  41.txt ...
@@ -182,8 +183,7 @@ Output:
 Deserializing Python-objects
 ============================
 
-
-..code:: py
+.. code:: py
 
     chain = DataChain.from_dataset("response")
 
@@ -198,7 +198,7 @@ Deserializing Python-objects
 
 Output:
 
-.code:: shell
+.. code:: shell
 
     gs://datachain-demo/chatbot-KiT/1.txt: Success, file size: 1776, tokens: 548
     gs://datachain-demo/chatbot-KiT/10.txt: Failure, file size: 11576, tokens: 3578
@@ -214,7 +214,7 @@ Some operations can be efficiently run inside the DB without deserializing Pytho
 Let's calculate the cost of using LLM APIs in a vectorized way.
 Mistral calls cost $2 per 1M input tokens and $6 per 1M output tokens:
 
-..code:: py
+.. code:: py
 
     chain = DataChain.from_dataset("mistral_dataset")
 
@@ -224,7 +224,7 @@ Mistral calls cost $2 per 1M input tokens and $6 per 1M output tokens:
 
 Output:
 
-..code:: shell
+.. code:: shell
 
     Spent $0.08 on 50 calls
 
