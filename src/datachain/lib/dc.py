@@ -657,7 +657,7 @@ class DataChain(DatasetQuery):
         return super().order_by(*args)
 
     @detach
-    def distinct(self, arg, *args) -> "Self":  # type: ignore[override]
+    def distinct(self, arg: str, *args: str) -> "Self":  # type: ignore[override]
         """Removes duplicate rows based on uniqueness of some input column(s)
         i.e if rows are found with the same value of input column(s), only one
         row is left in the result set.
@@ -1336,7 +1336,8 @@ class DataChain(DatasetQuery):
     ) -> None:
         """Method that exports all files from chain to some folder."""
         if placement == "filename" and (
-            self.distinct(pathfunc.name(C("{signal}__path"))).count() != self.count()
+            super().distinct(pathfunc.name(C(f"{signal}__path"))).count()
+            != self.count()
         ):
             raise ValueError("Files with the same name found")
 
