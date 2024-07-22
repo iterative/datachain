@@ -651,7 +651,10 @@ class DataChain(DatasetQuery):
         """
         if descending:
             args = tuple(
-                [sqlalchemy.desc(a) if isinstance(a, str) else a for a in args]
+                [
+                    sqlalchemy.desc(a) if not isinstance(a, GenericFunction) else a
+                    for a in args
+                ]
             )
 
         return super().order_by(*args)
