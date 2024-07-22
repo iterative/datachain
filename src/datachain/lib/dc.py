@@ -989,22 +989,43 @@ class DataChain(DatasetQuery):
         data = {tuple(n): val for n, val in zip(headers, transposed_result)}
         return pd.DataFrame(data)
 
-    def show(self, limit: int = 20, flatten=False, transpose=False) -> None:
+    def show(
+        self,
+        limit: int = 20,
+        flatten=False,
+        transpose=False,
+        truncate=True,
+    ) -> None:
         """Show a preview of the chain results.
 
         Parameters:
             limit : How many rows to show.
             flatten : Whether to use a multiindex or flatten column names.
             transpose : Whether to transpose rows and columns.
+            truncate : Whether or not to truncate the contents of columns.
         """
         dc = self.limit(limit) if limit > 0 else self
         df = dc.to_pandas(flatten)
         if transpose:
             df = df.T
 
-        with pd.option_context(
-            "display.max_columns", None, "display.multi_sparse", False
-        ):
+        options: list = [
+            "display.max_columns",
+            None,
+            "display.multi_sparse",
+            False,
+        ]
+
+        try:
+            if columns := os.get_terminal_size().columns:
+                options.extend(["display.width", columns])
+        except OSError:
+            pass
+
+        if not truncate:
+            options.extend(["display.max_colwidth", None])
+
+        with pd.option_context(*options):
             if inside_notebook():
                 from IPython.display import display
 
