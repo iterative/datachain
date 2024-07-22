@@ -1059,18 +1059,21 @@ class DataChain(DatasetQuery):
             except ValueError as e:
                 raise DatasetPrepareError(self.name, e) from e
 
+        if isinstance(output, dict):
+            model_name = model_name or object_name or ""
+            model = DataChain._dict_to_data_model(model_name, output)
+        else:
+            model = output  # type: ignore[assignment]
+
         if object_name:
-            if isinstance(output, dict):
-                model_name = model_name or object_name
-                output = DataChain._dict_to_data_model(model_name, output)
-            output = {object_name: output}  # type: ignore[dict-item]
+            output = {object_name: model}  # type: ignore[dict-item]
         elif isinstance(output, type(BaseModel)):
             output = {
                 name: info.annotation  # type: ignore[misc]
                 for name, info in output.model_fields.items()
             }
         output = {"source": IndexedFile} | output  # type: ignore[assignment,operator]
-        return self.gen(ArrowGenerator(schema, nrows, **kwargs), output=output)
+        return self.gen(ArrowGenerator(schema, model, nrows, **kwargs), output=output)
 
     @staticmethod
     def _dict_to_data_model(
