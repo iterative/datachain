@@ -31,7 +31,7 @@ if __name__ == "__main__":
     # Run in chain
     (
         DataChain.from_storage("gs://datachain-demo/dogs-and-cats/", type="image")
-        .filter(C("name").glob("*cat*.jpg"))
+        .filter(C("path").glob("*cat*.jpg"))
         .settings(parallel=2)
         .limit(5)
         .map(
