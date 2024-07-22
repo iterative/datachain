@@ -116,7 +116,7 @@ class SignalSchema:
         signals = {}
         for name, fr_type in self.values.items():
             if (fr := ModelStore.to_pydantic(fr_type)) is not None:
-                ModelStore.add(fr)
+                ModelStore.register(fr)
                 signals[name] = ModelStore.get_name(fr)
             else:
                 orig = get_origin(fr_type)
@@ -144,7 +144,7 @@ class SignalSchema:
                         raise SignalSchemaError(
                             f"cannot deserialize '{signal}': "
                             f"unknown type '{type_name}'."
-                            f" Try to add it with `ModelStore.add({type_name})`."
+                            f" Try to add it with `ModelStore.register({type_name})`."
                         )
             except TypeError as err:
                 raise SignalSchemaError(
