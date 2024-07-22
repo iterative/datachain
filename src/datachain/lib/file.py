@@ -185,10 +185,10 @@ class File(DataModel):
         self._caching_enabled = False
 
     @contextmanager
-    def open(self):
-        """Stream in binary mode like `with file.open()`."""
+    def open(self, mode: Literal["rb", "r"] = "rb"):
+        """Open the file and return a file object."""
         if self.location:
-            with VFileRegistry.resolve(self, self.location) as f:
+            with VFileRegistry.resolve(self, self.location) as f:  # type: ignore[arg-type]
                 yield f
 
         uid = self.get_uid()
@@ -198,11 +198,20 @@ class File(DataModel):
         with client.open_object(
             uid, use_cache=self._caching_enabled, cb=self._download_cb
         ) as f:
-            yield f
+            yield io.TextIOWrapper(f) if mode == "r" else f
 
-    def read(self):
+    def read(self, length: int = -1):
         """Returns file contents."""
         with self.open() as stream:
+            return stream.read(length)
+
+    def read_bytes(self):
+        """Returns file contents as bytes."""
+        return self.read()
+
+    def read_text(self):
+        """Returns file contents as text."""
+        with self.open(mode="r") as stream:
             return stream.read()
 
     def export(
@@ -308,9 +317,9 @@ class TextFile(File):
 
     @contextmanager
     def open(self):
-        """Stream in text mode like `with file.open()`."""
-        with super().open() as binary:
-            yield io.TextIOWrapper(binary)
+        """Open the file and return a file object in text mode."""
+        with super().open(mode="r") as stream:
+            yield stream
 
 
 class ImageFile(File):

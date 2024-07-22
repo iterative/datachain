@@ -92,7 +92,7 @@ def test_merge_similar_objects(catalog):
     rname = "qq"
     ch = ch1.merge(ch2, "emp.person.name", rname=rname)
 
-    assert list(ch.signals_schema.values.keys()) == ["emp", rname + "emp"]
+    assert list(ch.signals_schema.values.keys()) == ["sys", "emp", rname + "emp"]
 
     empl = list(ch.iterate())
     assert len(empl) == 4
@@ -116,7 +116,13 @@ def test_merge_values(catalog):
 
     ch = ch1.merge(ch2, "id")
 
-    assert list(ch.signals_schema.values.keys()) == ["id", "descr", "right_id", "time"]
+    assert list(ch.signals_schema.values.keys()) == [
+        "sys",
+        "id",
+        "descr",
+        "right_id",
+        "time",
+    ]
 
     i = 0
     j = 0

@@ -1,4 +1,4 @@
-from datachain.lib.dc import DataChain
+from datachain import DataChain
 
 
 # Define the UDF:
@@ -11,7 +11,7 @@ def name_len(name):
 if __name__ == "__main__":
     # Run in chain
     DataChain.from_storage(
-        path="gs://dvcx-datalakes/dogs-and-cats/",
+        path="gs://datachain-demo/dogs-and-cats/",
     ).map(
         name_len,
         params=["file.name"],
