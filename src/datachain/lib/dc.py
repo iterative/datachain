@@ -646,6 +646,7 @@ class DataChain(DatasetQuery):
     @resolve_columns
     def order_by(self, *args, descending: bool = False) -> "Self":
         """Orders by specified set of signals.
+
         Parameters:
             descending (bool): Whether to sort in descending order or not.
         """
