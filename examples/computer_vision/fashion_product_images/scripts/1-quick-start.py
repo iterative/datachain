@@ -19,7 +19,9 @@ ANNOTATIONS_PATH = "gs://datachain-demo/fashion-product-images/styles_clean.csv"
 # Create a Dataset
 
 print("\n# Create a Dataset")
-ds = DataChain.from_storage(DATA_PATH, type="image").filter(C.name.glob("*.jpg"))
+ds = DataChain.from_storage(DATA_PATH, type="image").filter(
+    C("file.name").glob("*.jpg")
+)
 ds.show(3)
 
 # Create a metadata DataChain
@@ -44,9 +46,9 @@ ds_annotated.save("fashion-product-images")
 print("\n# Filtering Data")
 ds = (
     DataChain.from_dataset(name="fashion-product-images")
-    .filter(C.mastercategory == "Apparel")
-    .filter(C.subcategory == "Topwear")
-    .filter(C.season == "Summer")
+    .filter(C("mastercategory") == "Apparel")
+    .filter(C("subcategory") == "Topwear")
+    .filter(C("season") == "Summer")
 )
 print(ds.to_pandas().shape)
 
