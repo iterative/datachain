@@ -228,7 +228,10 @@ class File(DataModel):
         os.makedirs(dst_dir, exist_ok=True)
 
         with open(dst, mode="wb") as f:
-            f.write(self.read())
+            val = self.read()
+            if isinstance(val, str):
+                val = val.encode()
+            f.write(val)
 
     def _set_stream(
         self,
