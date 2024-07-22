@@ -737,7 +737,7 @@ class DataChain(DatasetQuery):
     def collect_flatten(self, *, row_factory=None):
         """Yields flattened rows of values as a tuple.
 
-        Parameters:
+        Args:
             row_factory : A callable to convert row to a custom format.
                           It should accept two arguments: a list of column names and
                           a tuple of row values.
@@ -781,7 +781,7 @@ class DataChain(DatasetQuery):
     def collect(self, *cols: str) -> Iterator[Union[DataType, tuple[DataType, ...]]]:  # type: ignore[overload-overlap,misc]
         """Yields rows of values, optionally limited to the specified columns.
 
-        Parameters:
+        Args:
             *cols: Limit to the specified columns. By default, all columns are selected.
 
         Yields:
