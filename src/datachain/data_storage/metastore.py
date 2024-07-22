@@ -777,9 +777,6 @@ class AbstractDBMetastore(AbstractMetastore):
             self.create_storage_if_not_registered(uri, conn=conn)
             storage = self.get_storage(uri, conn=conn)
 
-            if storage.status == StorageStatus.PENDING:
-                return storage, False, True, None, None
-
             if (
                 storage.is_stale
                 or storage.is_expired

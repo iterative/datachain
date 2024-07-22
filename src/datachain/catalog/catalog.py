@@ -755,30 +755,12 @@ class Catalog:
         (
             storage,
             need_index,
-            in_progress,
+            _,
             partial_id,
             partial_path,
         ) = source_metastore.register_storage_for_indexing(
             client.uri, force_update, prefix
         )
-        while in_progress:
-            time.sleep(1)
-            (
-                storage,
-                need_index,
-                in_progress,
-                partial_id,
-                partial_path,
-            ) = source_metastore.register_storage_for_indexing(
-                client.uri, force_update, prefix
-            )
-
-            if (
-                storage.is_stale
-                or storage.is_expired
-                or storage.status == StorageStatus.STALE
-            ):
-                break
 
         if not need_index:
             assert partial_id is not None
