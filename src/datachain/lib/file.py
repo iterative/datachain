@@ -214,6 +214,11 @@ class File(DataModel):
         with self.open(mode="r") as stream:
             return stream.read()
 
+    def write(self, destination: str):
+        """Writes it's content to destination"""
+        with open(destination, mode="wb") as f:
+            f.write(self.read())
+
     def export(
         self,
         output: str,
@@ -227,8 +232,7 @@ class File(DataModel):
         dst_dir = os.path.dirname(dst)
         os.makedirs(dst_dir, exist_ok=True)
 
-        with open(dst, mode="wb") as f:
-            f.write(self.read())
+        self.write(dst)
 
     def _set_stream(
         self,
@@ -320,6 +324,16 @@ class TextFile(File):
         """Open the file and return a file object in text mode."""
         with super().open(mode="r") as stream:
             yield stream
+
+    def read_text(self):
+        """Returns file contents as text."""
+        with self.open() as stream:
+            return stream.read()
+
+    def write(self, destination: str):
+        """Writes it's content to destination"""
+        with open(destination, mode="w") as f:
+            f.write(self.read_text())
 
 
 class ImageFile(File):
