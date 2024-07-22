@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 
 import pandas as pd
 import pyarrow as pa
@@ -89,10 +90,17 @@ def test_arrow_type_error():
 
 
 def test_schema_to_output():
-    schema = pa.schema([("some_int", pa.int32()), ("some_string", pa.string())])
+    schema = pa.schema(
+        [
+            ("some_int", pa.int32()),
+            ("some_string", pa.string()),
+            ("strict_int", pa.int32(), False),
+        ]
+    )
     assert schema_to_output(schema) == {
-        "some_int": int,
-        "some_string": str,
+        "some_int": Optional[int],
+        "some_string": Optional[str],
+        "strict_int": int,
     }
 
 
@@ -127,8 +135,8 @@ def test_parquet_override_column_names():
     schema = pa.schema([("some_int", pa.int32()), ("some_string", pa.string())])
     col_names = ["n1", "n2"]
     assert schema_to_output(schema, col_names) == {
-        "n1": int,
-        "n2": str,
+        "n1": Optional[int],
+        "n2": Optional[str],
     }
 
 
