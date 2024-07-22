@@ -9,7 +9,7 @@ The typical use cases are data curation, LLM analytics and validation, image seg
 
 ---
 
-`pip install datachain` 
+`pip install datachain`
 
 ---
 
@@ -30,8 +30,8 @@ from transformers import AutoProcessor, PaliGemmaForConditionalGeneration
 
 images = DataChain.from_storage("gs://datachain-demo/newyorker_caption_contest/images", type="image")
 
-model = PaliGemmaForConditionalGeneration.from_pretrained("google/paligemma-3b-mix-224")  
-processor = AutoProcessor.from_pretrained("google/paligemma-3b-mix-224")  
+model = PaliGemmaForConditionalGeneration.from_pretrained("google/paligemma-3b-mix-224")
+processor = AutoProcessor.from_pretrained("google/paligemma-3b-mix-224")
 
 def process(file: File) -> str:
    image=file.read().convert("RGB")
@@ -64,7 +64,7 @@ _ , axes = plt.subplots(1, len(captions), figsize=(15, 5))
 
 for ax, img, caption in zip(axes, images, captions):
     ax.imshow(img.read(),cmap='gray')
-    ax.axis('off') 
+    ax.axis('off')
     wrapped_caption = "\n".join(wrap(trim_text(caption), 30))
     ax.set_title(wrapped_caption, fontsize=6)
 
@@ -97,7 +97,7 @@ from mistralai.client import MistralClient
 from mistralai.models.chat_completion import ChatMessage
 from mistralai.models.chat_completion import ChatCompletionResponse as MistralModel
 from datachain.lib.data_model import DataModel
-   
+
 prompt = "Was this dialog successful? Describe the 'result' as 'Yes' or 'No' in a short JSON"
 api_key = os.environ["MISTRAL_API_KEY"]
 
@@ -123,7 +123,7 @@ chain = (
     )
     .save("dialog-rating")
 )
-							
+
 **iter = chain.collect("mistral")
 **print(*map(lambda chat_response: chat_response.choices[0].message.content, iter))
 ```
@@ -145,7 +145,7 @@ Datachain internally represents datasets as tables, so analytical queries on the
 
 mistral_cost = chain.sum("mistral.usage.prompt_tokens")*0.000002 + \
                chain.sum("mistral.usage.completion_tokens")*0.000006
-               
+
 print(f"The cost of {chain.count()} calls to Mixtral 8x22b : ${mistral_cost:.4f}")
 ```
 
@@ -180,7 +180,7 @@ dialog-rating@v2
 By default, when a saved dataset is loaded, the latest version is fetched but another version can be requested:
 
 ```python
-ds = DataChain.from_dataset("dialog-rating", version = 1)  
+ds = DataChain.from_dataset("dialog-rating", version = 1)
 ```
 
 ### Chain execution, optimization and parallelism
@@ -200,9 +200,9 @@ DataChain library understands common annotation formats (JSON, CSV, webdataset a
 Here is an example of reading a simple CSV file where schema is heuristically derived from the header:
 
 ```python
-from datachain.lib.dc import DataChain 
+from datachain.lib.dc import DataChain
 
-uri="gs://datachain-demo/chatbot-csv/"  
+uri="gs://datachain-demo/chatbot-csv/"
 csv_dataset = DataChain.from_csv(uri)
 
 print(csv_dataset.to_pandas())
@@ -245,15 +245,15 @@ However, Datachain can easily parse the entire COCO structure via several readin
 
 ```python
 
-from datachain.lib.dc import Column, DataChain 
+from datachain.lib.dc import Column, DataChain
 
 images_uri="gs://datachain-demo/coco2017/images/val/"
-captions_uri="gs://datachain-demo/coco2017/annotations/captions_val2017.json" 
+captions_uri="gs://datachain-demo/coco2017/annotations/captions_val2017.json"
 
 images = DataChain.from_storage(images_uri)
 meta = DataChain.from_json(captions_uri, jmespath = "images")
 captions = DataChain.from_json(captions_uri, jmespath = "annotations")
-             
+
 images_meta = images.merge(meta, on="file.name", right_on="images.file_name")
 captioned_images = images_meta.merge(captions, on="images.id", right_on="annotations.image_id")
 ```
