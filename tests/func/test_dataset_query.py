@@ -544,12 +544,11 @@ def test_mutate_with_type_cast(cloud_test_catalog):
         DatasetQuery(path=path, catalog=catalog)
         .mutate(size_subtract=cast(C.size - 10, Int))
         .save(ds_name)
-        .save(ds_name)
     )
 
     assert (
         DatasetQuery(name=ds_name, catalog=catalog)
-        .order_by(C.size_subtract.desc(), C.name)
+        .order_by(C.size_subtract.desc())
         .select(C.size, C.size_subtract)
         .db_results(row_factory=lambda c, v: dict(zip(c, v)))
     ) == [
