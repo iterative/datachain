@@ -18,6 +18,7 @@ from datachain.lib.signal_schema import (
 )
 from datachain.lib.udf_signature import UdfSignatureError
 from datachain.lib.utils import DataChainParamsError
+from tests.utils import skip_if_not_sqlite
 
 DF_DATA = {
     "first_name": ["Alice", "Bob", "Charlie", "David", "Eva"],
@@ -798,6 +799,9 @@ def test_from_csv_tab_delimited(tmp_dir, catalog):
 
 
 def test_from_csv_null_collect(tmp_dir, catalog):
+    # Clickhouse requires setting type to Nullable(Type).
+    # See https://github.com/xzkostyan/clickhouse-sqlalchemy/issues/189.
+    skip_if_not_sqlite()
     df = pd.DataFrame(DF_DATA)
     height = [70, 65, None, 72, 68]
     df["height"] = height
