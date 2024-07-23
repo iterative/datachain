@@ -16,9 +16,6 @@ def test_convert_text(fake_clip_model):
     )
     assert converted_text.size() == (1, 100)
 
-    converted_text = convert_text(
-        text, tokenizer=tokenizer, tokenizer_kwargs=tokenizer_kwargs
-    )
     converted_text = convert_text(text, tokenizer=tokenizer, encoder=model.encode_text)
     assert converted_text.dtype == torch.float32
 
@@ -26,6 +23,9 @@ def test_convert_text(fake_clip_model):
 def test_convert_text_hf(fake_hf_model):
     text = "thisismytext"
     model, processor = fake_hf_model
+    converted_text = convert_text(text, tokenizer=processor.tokenizer)
+    assert isinstance(converted_text, torch.Tensor)
+
     converted_text = convert_text(
         text, tokenizer=processor.tokenizer, encoder=model.get_text_features
     )
