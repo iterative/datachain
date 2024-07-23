@@ -90,7 +90,7 @@ def test_wds(catalog, webdataset_tars):
         assert laion_wds.file.parent
         assert laion_wds.file.name == f"{idx}.jpg"
         assert laion_wds.file.location
-        assert laion_wds.json.dict() == Laion(**data).dict()
+        assert laion_wds.json.model_dump() == Laion(**data).model_dump()
 
     assert num_rows == len(WDS_TAR_SHARDS)
 

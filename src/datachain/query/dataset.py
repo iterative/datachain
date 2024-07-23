@@ -268,7 +268,7 @@ class DatasetDiffOperation(Step):
 
         columns = [
             c if isinstance(c, Column) else Column(c.name, c.type)
-            for c in source_query.columns
+            for c in source_query.selected_columns
         ]
         temp_table = self.catalog.warehouse.create_dataset_rows_table(
             temp_table_name,
@@ -1252,7 +1252,7 @@ class DatasetQuery:
     def as_iterable(self, **kwargs) -> Iterator[ResultIter]:
         try:
             query = self.apply_steps().select()
-            selected_columns = [c.name for c in query.columns]
+            selected_columns = [c.name for c in query.selected_columns]
             yield ResultIter(
                 self.catalog.warehouse.dataset_rows_select(query, **kwargs),
                 selected_columns,
@@ -1676,7 +1676,7 @@ class DatasetQuery:
                     f.row_number().over(order_by=q._order_by_clauses).label("sys__id")
                 )
 
-            cols = tuple(c.name for c in q.columns)
+            cols = tuple(c.name for c in q.selected_columns)
             insert_q = sqlalchemy.insert(dr.get_table()).from_select(cols, q)
             self.catalog.warehouse.db.execute(insert_q, **kwargs)
             self.catalog.metastore.update_dataset_status(

@@ -494,7 +494,7 @@ class AbstractWarehouse(ABC, Serializable):
         This gets nodes based on the provided query, and should be used sparingly,
         as it will be slow on any OLAP database systems.
         """
-        columns = [c.name for c in query.columns]
+        columns = [c.name for c in query.selected_columns]
         for row in self.db.execute(query):
             d = dict(zip(columns, row))
             yield Node(**d)
