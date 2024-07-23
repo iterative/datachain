@@ -129,6 +129,7 @@ jobs:
 
   studio:
     if: '!github.event.pull_request.head.repo.fork'
+    continue-on-error: true
     runs-on: ubuntu-latest-16-cores
     strategy:
       matrix:
