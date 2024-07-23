@@ -39,6 +39,8 @@ and validation.
 
    $ pip install datachain
 
+|Flowchart|
+
 Quick Start
 -----------
 
@@ -322,3 +324,5 @@ Community and Support
 .. _Pydantic: https://github.com/pydantic/pydantic
 .. _SQLite: https://www.sqlite.org/
 .. _Getting Started: https://datachain.dvc.ai/
+.. |Flowchart| image:: https://github.com/iterative/datachain/docs/assets/datachain-flowchart.png?branch=main
+   :alt: DataChain FlowChart
