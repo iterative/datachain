@@ -1120,7 +1120,7 @@ def test_udf_distributed_exec_error(
     @udf((C.name,), {"name_len": Int})
     def name_len_error(_name):
         # A udf that raises an exception
-        raise RuntimeError("Test Error!")
+        raise RuntimeError("Local Distributed Worker Failed!")
 
     q = (
         DatasetQuery(name="animals", version=1, catalog=catalog)
@@ -1160,7 +1160,7 @@ def test_udf_distributed_interrupt(cloud_test_catalog_tmpfile, capfd, datachain_
         .filter(C.parent.glob("cats*") | (C.size < 4))
         .add_signals(name_len_interrupt, parallel=2, workers=2)
     )
-    with pytest.raises(RuntimeError, match=r"Worker Killed \(KeyboardInterrupt\)"):
+    with pytest.raises(RuntimeError, match=r"Local Distributed Worker Failed!"):
         q.db_results()
     captured = capfd.readouterr()
     assert "KeyboardInterrupt" in captured.err
