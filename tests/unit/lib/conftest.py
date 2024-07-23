@@ -1,6 +1,5 @@
 import random
 
-import pytest
 import torch
 from torchvision.transforms import v2
 from transformers.feature_extraction_utils import BatchFeature
@@ -13,7 +12,6 @@ TO_TENSOR = v2.Compose(
 )
 
 
-@pytest.fixture(scope="session")
 def fake_clip_model():
     class Model:
         def encode_image(self, tensor):
@@ -30,7 +28,6 @@ def fake_clip_model():
     return model, preprocess, tokenizer
 
 
-@pytest.fixture(scope="session")
 def fake_hf_model():
     class Model(PreTrainedModel):
         def __init__(self, *args, **kwargs):
