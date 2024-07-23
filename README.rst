@@ -9,8 +9,8 @@
 .. |Codecov| image:: https://codecov.io/gh/iterative/datachain/graph/badge.svg?token=byliXGGyGB
    :target: https://codecov.io/gh/iterative/datachain
    :alt: Codecov
-.. |Tests| image:: https://github.com/iterative/datachain/workflows/Tests/badge.svg
-   :target: https://github.com/iterative/datachain/actions?workflow=Tests
+.. |Tests| image:: https://github.com/iterative/datachain/actions/workflows/tests.yml/badge.svg
+   :target: https://github.com/iterative/datachain/actions/workflows/tests.yml
    :alt: Tests
 
 AI 🔗 DataChain
