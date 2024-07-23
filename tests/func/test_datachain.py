@@ -4,6 +4,7 @@ import re
 import pandas as pd
 import pytest
 
+from datachain.dataset import DatasetStats
 from datachain.lib.dc import DataChain
 from datachain.lib.file import File
 
@@ -205,3 +206,12 @@ def test_show_no_truncate(capsys, catalog):
     for i in range(3):
         assert client[i] in normalized_output
         assert details[i] in normalized_output
+
+
+def test_from_storage_dataset_stats(tmp_dir, catalog):
+    for i in range(4):
+        (tmp_dir / f"file{i}.txt").write_text(f"file{i}")
+
+    dc = DataChain.from_storage(tmp_dir.as_uri(), catalog=catalog).save("test-data")
+    stats = catalog.dataset_stats(dc.name, dc.version)
+    assert stats == DatasetStats(num_objects=4, size=20)
