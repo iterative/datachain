@@ -54,6 +54,7 @@ if TYPE_CHECKING:
     P = ParamSpec("P")
 
 C = Column
+cast = sqlalchemy.cast
 
 _T = TypeVar("_T")
 D = TypeVar("D", bound="DataChain")

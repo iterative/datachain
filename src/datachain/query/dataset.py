@@ -33,6 +33,7 @@ from sqlalchemy.sql.elements import ColumnClause, ColumnElement
 from sqlalchemy.sql.expression import label
 from sqlalchemy.sql.schema import TableClause
 from sqlalchemy.sql.selectable import Select
+from sqlalchemy.sql.sqltypes import NullType
 
 from datachain.asyn import ASYNC_WORKERS, AsyncMapper, OrderedMapper
 from datachain.catalog import (
@@ -1390,6 +1391,13 @@ class DatasetQuery:
             >>> ds.mutate(size10x=C.size * 10).order_by(C.size10x).results()
         """
         query_args = [v.label(k) for k, v in dict(args, **kwargs).items()]
+        for arg in query_args:
+            if isinstance(arg.type, NullType):
+                raise TypeError(
+                    f"Cannot infere type for {arg.name}, use cast(..) function"
+                    " to explicitly set correct type"
+                )
+
         query = self.clone()
         query.steps.append(SQLMutate((*query_args,)))
         return query

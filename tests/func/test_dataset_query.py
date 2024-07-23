@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 import sqlalchemy
 from dateutil.parser import isoparse
-from sqlalchemy import tuple_
+from sqlalchemy import cast, tuple_
 
 from datachain.catalog import QUERY_SCRIPT_CANCELED_EXIT_CODE
 from datachain.dataset import DatasetDependencyType, DatasetStatus
@@ -509,6 +509,57 @@ def test_mutate(cloud_test_catalog, save):
         [40, 4000, 8, 12, 16],
         [40, 4000, 8, 12, 16],
         [30, 3000, 6, 9, 12],
+    ]
+
+
+@pytest.mark.parametrize(
+    "cloud_type,version_aware",
+    [("s3", True)],
+    indirect=True,
+)
+def test_mutate_cannot_infer_type(cloud_test_catalog):
+    catalog = cloud_test_catalog.catalog
+    path = cloud_test_catalog.src_uri
+    with pytest.raises(TypeError) as excinfo:
+        DatasetQuery(path=path, catalog=catalog).mutate(size_subtract=C.size - 10)
+
+    assert str(excinfo.value) == (
+        "Cannot infere type for size_subtract, use cast(..) function to explicitly"
+        " set correct type"
+    )
+
+
+@pytest.mark.parametrize(
+    "cloud_type,version_aware",
+    [("s3", True)],
+    indirect=True,
+)
+def test_mutate_with_type_cast(cloud_test_catalog):
+    catalog = cloud_test_catalog.catalog
+    path = cloud_test_catalog.src_uri
+    ds_name = "subtracted"
+
+    # without cast this would throw error as it cannot infer type from subtract
+    (
+        DatasetQuery(path=path, catalog=catalog)
+        .mutate(size_subtract=cast(C.size - 10, Int))
+        .save(ds_name)
+        .save(ds_name)
+    )
+
+    assert (
+        DatasetQuery(name=ds_name, catalog=catalog)
+        .order_by(C.size_subtract.desc(), C.name)
+        .select(C.size, C.size_subtract)
+        .db_results(row_factory=lambda c, v: dict(zip(c, v)))
+    ) == [
+        {"size": 13, "size_subtract": 3},
+        {"size": 4, "size_subtract": -6},
+        {"size": 4, "size_subtract": -6},
+        {"size": 4, "size_subtract": -6},
+        {"size": 4, "size_subtract": -6},
+        {"size": 4, "size_subtract": -6},
+        {"size": 3, "size_subtract": -7},
     ]
 
 
