@@ -272,4 +272,5 @@ def assert_row_names(
 
 
 def images_equal(img1: Image, img2: Image):
+    """Checks if two image objects have exactly the same data"""
     return list(img1.getdata()) == list(img2.getdata())
