@@ -912,29 +912,6 @@ class AbstractWarehouse(ABC, Serializable):
         for name in names:
             self.db.drop_table(Table(name, self.db.metadata), if_exists=True)
 
-    def subtract_query(
-        self,
-        source_query: sa.sql.selectable.Select,
-        target_query: sa.sql.selectable.Select,
-    ) -> sa.sql.selectable.Select:
-        sq = source_query.alias("source_query")
-        tq = target_query.alias("target_query")
-
-        source_target_join = sa.join(
-            sq,
-            tq,
-            (sq.c.source == tq.c.source)
-            & (sq.c.parent == tq.c.parent)
-            & (sq.c.name == tq.c.name),
-            isouter=True,
-        )
-
-        return (
-            select(*sq.c)
-            .select_from(source_target_join)
-            .where((tq.c.name == None) | (tq.c.name == ""))  # noqa: E711
-        )
-
     def changed_query(
         self,
         source_query: sa.sql.selectable.Select,
