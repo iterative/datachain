@@ -3,7 +3,7 @@ import os
 import shlex
 import sys
 import traceback
-from argparse import SUPPRESS, Action, ArgumentParser, ArgumentTypeError, Namespace
+from argparse import Action, ArgumentParser, ArgumentTypeError, Namespace
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from importlib.metadata import PackageNotFoundError, version
 from itertools import chain
@@ -106,10 +106,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     parser = ArgumentParser(
         description="DataChain: Wrangle unstructured AI data at scale", prog="datachain"
     )
-
     parser.add_argument("-V", "--version", action="version", version=__version__)
-    parser.add_argument("--internal-run-udf", action="store_true", help=SUPPRESS)
-    parser.add_argument("--internal-run-udf-worker", action="store_true", help=SUPPRESS)
 
     parent_parser = ArgumentParser(add_help=False)
     parent_parser.add_argument(
@@ -155,6 +152,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         metavar="command",
         dest="command",
         help=f"Use `{parser.prog} command --help` for command-specific help.",
+        required=True,
     )
     parse_cp = subp.add_parser(
         "cp", parents=[parent_parser], description="Copy data files from the cloud"
@@ -556,6 +554,8 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         "gc", parents=[parent_parser], description="Garbage collect temporary tables"
     )
 
+    subp.add_parser("internal-run-udf", parents=[parent_parser])
+    subp.add_parser("internal-run-udf-worker", parents=[parent_parser])
     add_completion_parser(subp, [parent_parser])
     return parser
 
@@ -910,26 +910,22 @@ def completion(shell: str) -> str:
     )
 
 
-def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0911, PLR0912, PLR0915
+def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR0915
     # Required for Windows multiprocessing support
     freeze_support()
 
     parser = get_parser()
     args = parser.parse_args(argv)
 
-    if args.internal_run_udf:
+    if args.command == "internal-run-udf":
         from datachain.query.dispatch import udf_entrypoint
 
         return udf_entrypoint()
 
-    if args.internal_run_udf_worker:
+    if args.command == "internal-run-udf-worker":
         from datachain.query.dispatch import udf_worker_entrypoint
 
         return udf_worker_entrypoint()
-
-    if args.command is None:
-        parser.print_help()
-        return 1
 
     from .catalog import get_catalog
 
