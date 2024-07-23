@@ -19,26 +19,21 @@ AI 🔗 DataChain
 DataChain is an open-source Python library for processing and curating unstructured
 data at scale.
 
-🤖 AI-Driven Data Curation: Use local ML models, LLM APIs calls to enreach your data.
+🤖 AI-Driven Data Curation: Use local ML models, LLM APIs calls to enrich your data.
 
 🚀 GenAI Dataset scale: Handle 10s of milions of files or file snippets.
 
-🐍 Python-friendly: Python objects instead of JSON to represent annotations
+🐍 Python-friendly: Use strictly typed `Pydantic`_ objects instead of JSON.
 
 
-Datachain enables parallel processing of multiple data files or samples.
-It can chain different operations such as filtering, aggregation and merging datasets.
-Resulting datasets can be saved, versioned, and extracted as files or converted
-to a PyTorch data loader.
+To ensure efficiency, Datachain supports parallel processing, parallel data
+downloads, and out-of-memory computing. It excels at optimizing batch operations.
+While most GenAI tools focus on online applications and realtime, DataChain is designed
+for offline data processing, data curation and ETL.
 
-Datachain can serialize Python objects (via `Pydantic`_) to an embedded
-`SQLite`_ databased. It efficiently deserializes Python object or run vectorized
-analytical query in the DB without deserialization.
+The typical use cases are Computer Vision data curation, LLM analytics
+and validation.
 
-The typical use cases are data curation, LLM analytics and validation, image
-segmentation, pose detection, and GenAI alignment.
-DataChain excels at optimizing batch operations, such as parallelizing synchronous API
-calls or leveraging heavy batch processing tasks.
 
 .. code:: console
 
@@ -47,48 +42,78 @@ calls or leveraging heavy batch processing tasks.
 Quick Start
 -----------
 
-Basic file filtering
-====================
+Basic evaluation
+================
 
-Find files with text dialogs that contains keyword "Thank you".
-The files should be downloaded and processed in parallel with data caching:
+We will evaluate chatbot dialogs stored as text files in Google Cloud Storage
+- 50 files total in the example.
+These dialogs involve users looking for better wireless plans chatting with bot.
+Our goal is to identify successful dialogs.
+
+The data used in the examples is publicly available. Please feel free to run this code.
+
+First, we'll use a simple sentiment analysis model. Please install transformers.
+
+.. code:: shell
+
+    pip install transformers
+
+The code below downloads files the cloud, applyes function
+`is_positive_dialogue_ending()` to each. All files with a positive sentiment
+are copied to local directory `output/`.
 
 .. code:: py
 
+    from transformers import pipeline
     from datachain import DataChain, Column
+
+    classifier = pipeline("sentiment-analysis", device="cpu",
+                    model="distilbert/distilbert-base-uncased-finetuned-sst-2-english")
+
+    def is_positive_dialogue_ending(file) -> bool:
+        dialogue_ending = file.read()[-512:]
+        return classifier(dialogue_ending)[0]["label"] == "POSITIVE"
 
     chain = (
        DataChain.from_storage("gs://datachain-demo/chatbot-KiT/",
                               object_name="file", type="text")
-       .settings(parallel=12, cache=True)
-       .map(is_good=lambda file: "thank you" in file.read().lower(),
-            output={"is_good": bool})
+       .settings(parallel=8, cache=True)
+       .map(is_positive=is_positive_dialogue_ending)
        .save("file_response")
     )
 
-    chain.filter(Column("is_good") == True).export_files("./output")
+    positive_chain = chain.filter(Column("is_positive") == True)
+    positive_chain.export_files("./output1")
 
-4 files were found:
+    print(f"{positive_chain.count()} files were exported")
+
+
+
+13 files were exported
 
 .. code:: shell
 
     $ ls output/datachain-demo/chatbot-KiT/
-    15.txt 28.txt 29.txt 39.txt
+    15.txt 20.txt 24.txt 27.txt 28.txt 29.txt 33.txt 37.txt 38.txt 43.txt ...
+    $ ls output/datachain-demo/chatbot-KiT/ | wc -l
+    13
 
 
-LLM judging LLMs dialogues
+LLM judging LLMs dialogs
 ==========================
+
+Finding good dialogs using an LLM can be more efficient. In this example,
+we use Mistral with a free API. Please install the package and get a free
+Mistral API key at https://console.mistral.ai
 
 .. code:: shell
 
     $ pip install mistralai
     $ export MISTRAL_API_KEY=_your_key_
 
-
-Finding good dialogues using an LLM can be more efficient. In this example,
-we use Mistral with a free API. Please install the package and get a free
-Mistral API key at https://console.mistral.ai
-
+Below is a similar code example, but this time using an LLM to evaluate the dialogs.
+Note, only 4 threads were used in this example `parallel=4` due to a limitation of
+the free LLM service.
 
 .. code:: py
 
@@ -110,24 +135,25 @@ Mistral API key at https://console.mistral.ai
     chain = (
        DataChain.from_storage("gs://datachain-demo/chatbot-KiT/", object_name="file")
        .settings(parallel=4, cache=True)
-       .map(is_good=eval_dialogue)
+       .map(is_success=eval_dialogue)
        .save("mistral_files")
     )
 
-    chain.filter(Column("is_good") == True).export_files("./output_mistral")
+    successful_chain = chain.filter(Column("is_success") == True)
+    successful_chain.export_files("./output_mistral")
+
+    print(f"{successful_chain.count()} files were exported")
 
 
-With the current prompt, we found 31 files considered successful dialogues:
+With the current prompt, we found 31 files considered successful dialogs:
 
 .. code:: shell
 
     $ ls output_mistral/datachain-demo/chatbot-KiT/
     1.txt  15.txt 18.txt 2.txt  22.txt 25.txt 28.txt 33.txt 37.txt 4.txt  41.txt ...
     $ ls output_mistral/datachain-demo/chatbot-KiT/ | wc -l
-    32
+    31
 
-Note: Only 4 threads were used in this example `parallel=4` due to a limitation of
-the free LLM service.
 
 
 Serializing Python-objects
@@ -148,7 +174,7 @@ Instead of extracting this information from the Mistral data structure (class
 
     PROMPT = "Was this dialog successful? Answer in a single word: Success or Failure."
 
-    def eval_dialogue(file: File) -> ChatCompletionResponse:
+    def eval_dialog(file: File) -> ChatCompletionResponse:
          client = MistralClient()
          return client.chat(
              model="open-mixtral-8x22b",
@@ -158,30 +184,39 @@ Instead of extracting this information from the Mistral data structure (class
     chain = (
        DataChain.from_storage("gs://datachain-demo/chatbot-KiT/", object_name="file")
        .settings(parallel=4, cache=True)
-       .map(response=eval_dialogue)
+       .map(response=eval_dialog)
+       .map(status=lambda response: response.choices[0].message.content.lower()[:7])
        .save("response")
     )
 
-    good_files = (
-        chain
-        .map(status=lambda response: response.choices[0].message.content.lower())
-        .filter(Column("status") == "success")
-    )
+    chain.select("file.name", "status", "response.usage").show(5)
 
-    good_files.export_files("./output_responses")
+    success_rate = chain.filter(Column("status") == "success").count() / chain.count()
+    print(f"{100*success_rate:.1f}% dialogs were successful")
 
 Output:
 
 .. code:: shell
 
-    $ ls output_responses/datachain-demo/chatbot-KiT/
-    1.txt  15.txt 18.txt 2.txt  22.txt 25.txt 28.txt 33.txt 37.txt 4.txt  41.txt ...
-    $ ls output_responses/datachain-demo/chatbot-KiT/ | wc -l
-    32
+         file   status      response     response          response
+         name                  usage        usage             usage
+                       prompt_tokens total_tokens completion_tokens
+    0   1.txt  success           547          548                 1
+    1  10.txt  failure          3576         3578                 2
+    2  11.txt  failure           626          628                 2
+    3  12.txt  failure          1144         1182                38
+    4  13.txt  success          1100         1101                 1
+
+    [Limited by 5 rows]
+    64.0% dialogs were successful
 
 
-Deserializing Python-objects
-============================
+Saving/Loading complex Python data structures
+=============================================
+
+In the previous examples, a few dataset were saved in the internal database.
+These datasets are versioned, and can be accessed using
+`DataChain.from_dataset("dataset_name")`.
 
 .. code:: py
 
@@ -229,23 +264,51 @@ Output:
     Spent $0.08 on 50 calls
 
 
-Passing data to pytorch for training
-====================================
+Direct access to database
+=========================
 
-Chain results can be exported or passed directly to Pytorch dataloader.
-For example, if we are interested in passing three columns to training,
-the following Pytorch code will do it:
+You can access this data directly using SQLite and accessing dataset table
+with prefix `ds_` and suffix `_1` which is a dataset version.
+Each row in the table represent a file (or snipped in a file):
+
+.. code:: shell
+
+    $ sqlite .datachain/db
+    sqlite> SELECT * FROM ds_response_1 LIMIT 1;
+    1|2788440105620256860|gs://datachain-demo|chatbot-KiT|1.txt|1776|1718484750633661
+    |CL2V9Mi+3oYDEAE=|1|1970-01-01 00:00:00|||12d32cdb52ed486aaecc02bd47f9cc80
+    |chat.completion|1721708449|open-mixtral-8x22b
+    |[{"index":0,"message":{"role":"assistant","content":"Success","name":null,
+    "tool_calls":null,"tool_call_id":null},"finish_reason":"stop"}]|547|548|1
+
+However, it can be more convinient to work with Python objects as in examples above.
+
+
+PyTorch data loader
+===================
+
+Chain results can be exported or passed directly to PyTorch dataloader.
+For example, if we are interested in passing image and a label based on file
+name suffix, the following code will do it:
 
 .. code:: py
 
-      ds = train.select("file", "caption_choices", "label_ind").to_pytorch(
-          transform=preprocess,
-          tokenizer=clip.tokenize,
-      )
+    from torch.utils.data import DataLoader
+    from transformers import CLIPProcessor
 
-      loader = DataLoader(ds, batch_size=2)
-      optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-      train(loader, model, optimizer)
+    from datachain import C, DataChain
+
+    processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+
+    chain = (
+        DataChain.from_storage("gs://datachain-demo/dogs-and-cats/", type="image")
+        .map(label=lambda name: name.split(".")[0], params=["file.name"])
+        .select("file", "label").to_pytorch(
+            transform=processor.image_processor,
+            tokenizer=processor.tokenizer,
+        )
+    )
+    loader = DataLoader(chain, batch_size=1)
 
 
 Tutorials
@@ -253,7 +316,6 @@ Tutorials
 
 * `Getting Started`_
 * `Multimodal <examples/multimodal/clip_fine_tuning.ipynb>`_ (try in `Colab <https://colab.research.google.com/github/iterative/datachain/blob/main/examples/multimodal/clip_fine_tuning.ipynb>`__)
-* `Computer Vision <examples/computer_vision/fashion_product_images/1-quick-start.ipynb>`_ (try in `Colab <https://colab.research.google.com/github/iterative/datachain/blob/main/examples/computer_vision/fashion_product_images/1-quick-start.ipynb>`__)
 
 Contributions
 -------------
@@ -265,6 +327,7 @@ To learn more, see the `Contributor Guide`_.
 Community and Support
 ---------------------
 
+* `Docs <https://datachain.dvc.ai/>`_
 * `File an issue`_ if you encounter any problems
 * `Discord Chat <https://dvc.org/chat>`_
 * `Email <mailto:support@dvc.org>`_
