@@ -1148,7 +1148,7 @@ class Catalog:
             )
             return
 
-        if not dataset_version.num_objects:
+        if not (dataset_version.num_objects and dataset_version.size):
             num_objects, size = self.warehouse.dataset_stats(dataset, version)
             if num_objects != dataset_version.num_objects:
                 values["num_objects"] = num_objects
