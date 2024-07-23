@@ -211,10 +211,11 @@ Output:
     64.0% dialogs were successful
 
 
-Saving/Loading complex Python data structures
+Complex Python data structures
 =============================================
 
-In the previous examples, a few dataset were saved in the internal database.
+In the previous examples, a few dataset were saved in the embedded database
+(`SQLite`_ in directory `.datachain`).
 These datasets are versioned, and can be accessed using
 `DataChain.from_dataset("dataset_name")`.
 
@@ -262,26 +263,6 @@ Output:
 .. code:: shell
 
     Spent $0.08 on 50 calls
-
-
-Direct access to database
-=========================
-
-You can access this data directly using SQLite and accessing dataset table
-with prefix `ds_` and suffix `_1` which is a dataset version.
-Each row in the table represent a file (or snipped in a file):
-
-.. code:: shell
-
-    $ sqlite .datachain/db
-    sqlite> SELECT * FROM ds_response_1 LIMIT 1;
-    1|2788440105620256860|gs://datachain-demo|chatbot-KiT|1.txt|1776|1718484750633661
-    |CL2V9Mi+3oYDEAE=|1|1970-01-01 00:00:00|||12d32cdb52ed486aaecc02bd47f9cc80
-    |chat.completion|1721708449|open-mixtral-8x22b
-    |[{"index":0,"message":{"role":"assistant","content":"Success","name":null,
-    "tool_calls":null,"tool_call_id":null},"finish_reason":"stop"}]|547|548|1
-
-However, it can be more convenient to work with Python objects as in examples above.
 
 
 PyTorch data loader
