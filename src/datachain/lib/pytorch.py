@@ -94,8 +94,7 @@ class PytorchDataset(IterableDataset):
         if self.num_samples > 0:
             ds = ds.sample(self.num_samples)
         ds = ds.chunk(total_rank, total_workers)
-        stream = ds.iterate()
-        for row_features in stream:
+        for row_features in ds.collect():
             row = []
             for fr in row_features:
                 if isinstance(fr, File):

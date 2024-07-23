@@ -4,6 +4,7 @@ import re
 import pandas as pd
 import pytest
 
+from datachain.dataset import DatasetStats
 from datachain.lib.dc import DataChain
 from datachain.lib.file import File
 
@@ -57,8 +58,8 @@ def test_map_file(cloud_test_catalog, use_cache):
         "dog3 -> bark",
         "dog4 -> ruff",
     }
-    assert set(dc.iterate_one("signal")) == expected
-    for file in dc.iterate_one("file"):
+    assert set(dc.collect("signal")) == expected
+    for file in dc.collect("file"):
         assert bool(file.get_local_path()) is use_cache
 
 
@@ -67,7 +68,7 @@ def test_read_file(cloud_test_catalog, use_cache):
     ctc = cloud_test_catalog
 
     dc = DataChain.from_storage(ctc.src_uri, catalog=ctc.catalog)
-    for file in dc.settings(cache=use_cache).iterate_one("file"):
+    for file in dc.settings(cache=use_cache).collect("file"):
         assert file.get_local_path() is None
         file.read()
         assert bool(file.get_local_path()) is use_cache
@@ -76,10 +77,13 @@ def test_read_file(cloud_test_catalog, use_cache):
 @pytest.mark.parametrize("placement", ["fullpath", "filename"])
 @pytest.mark.parametrize("use_map", [True, False])
 @pytest.mark.parametrize("use_cache", [True, False])
+@pytest.mark.parametrize("file_type", ["", "binary", "text"])
 @pytest.mark.parametrize("cloud_type", ["file"], indirect=True)
-def test_export_files(tmp_dir, cloud_test_catalog, placement, use_map, use_cache):
+def test_export_files(
+    tmp_dir, cloud_test_catalog, placement, use_map, use_cache, file_type
+):
     ctc = cloud_test_catalog
-    df = DataChain.from_storage(ctc.src_uri)
+    df = DataChain.from_storage(ctc.src_uri, type=file_type)
     if use_map:
         df.export_files(tmp_dir / "output", placement=placement, use_cache=use_cache)
         df.map(
@@ -100,7 +104,7 @@ def test_export_files(tmp_dir, cloud_test_catalog, placement, use_map, use_cache
         "dog4": "ruff",
     }
 
-    for file in df.collect_one("file"):
+    for file in df.collect("file"):
         if placement == "filename":
             file_path = file.name
         else:
@@ -202,3 +206,12 @@ def test_show_no_truncate(capsys, catalog):
     for i in range(3):
         assert client[i] in normalized_output
         assert details[i] in normalized_output
+
+
+def test_from_storage_dataset_stats(tmp_dir, catalog):
+    for i in range(4):
+        (tmp_dir / f"file{i}.txt").write_text(f"file{i}")
+
+    dc = DataChain.from_storage(tmp_dir.as_uri(), catalog=catalog).save("test-data")
+    stats = catalog.dataset_stats(dc.name, dc.version)
+    assert stats == DatasetStats(num_objects=4, size=20)

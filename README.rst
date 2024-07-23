@@ -9,339 +9,320 @@
 .. |Codecov| image:: https://codecov.io/gh/iterative/datachain/graph/badge.svg?token=byliXGGyGB
    :target: https://codecov.io/gh/iterative/datachain
    :alt: Codecov
-.. |Tests| image:: https://github.com/iterative/datachain/workflows/Tests/badge.svg
-   :target: https://github.com/iterative/datachain/actions?workflow=Tests
+.. |Tests| image:: https://github.com/iterative/datachain/actions/workflows/tests.yml/badge.svg
+   :target: https://github.com/iterative/datachain/actions/workflows/tests.yml
    :alt: Tests
 
 AI 🔗 DataChain
 ----------------
 
-DataChain is an open-source Python data processing library for wrangling unstructured AI data at scale.
+DataChain is an open-source Python library for processing and curating unstructured
+data at scale.
 
-Datachain enables multimodal API calls and local AI inferences to run in parallel over many samples as chained operations. The resulting datasets can be saved, versioned, and sent directly to PyTorch and TensorFlow for training. Datachain can persist features of Python objects returned by AI models, and enables vectorized analytical operations over them.
+🤖 AI-Driven Data Curation: Use local ML models, LLM APIs calls to enrich your data.
 
-The typical use cases are data curation, LLM analytics and validation, image segmentation, pose detection, and GenAI alignment. Datachain is especially helpful if batch operations can be optimized – for instance, when synchronous API calls can be parallelized  or where an LLM API offers batch processing.
+🚀 GenAI Dataset scale: Handle 10s of milions of files or file snippets.
+
+🐍 Python-friendly: Use strictly typed `Pydantic`_ objects instead of JSON.
+
+
+To ensure efficiency, Datachain supports parallel processing, parallel data
+downloads, and out-of-memory computing. It excels at optimizing batch operations.
+While most GenAI tools focus on online applications and realtime, DataChain is designed
+for offline data processing, data curation and ETL.
+
+The typical use cases are Computer Vision data curation, LLM analytics
+and validation.
+
 
 .. code:: console
 
    $ pip install datachain
 
-Operation basics
-----------------
+|Flowchart|
 
-DataChain is built by composing wrangling operations.
+Quick Start
+-----------
 
-For example, let us consider a dataset from Karlsruhe Institute of Technology detailing dialogs between users and customer service chatbots. We can use the chain to read data from the cloud, map it onto the parallel API calls for LLM evaluation, and organize the output into a dataset :
+Basic evaluation
+================
 
-.. code:: py
+We will evaluate chatbot dialogs stored as text files in Google Cloud Storage
+- 50 files total in the example.
+These dialogs involve users looking for better wireless plans chatting with bot.
+Our goal is to identify successful dialogs.
 
-      # pip install mistralai
-      # this example requires a free Mistral API key, get yours at https://console.mistral.ai
-      # add the key to your shell environment: $ export MISTRAL_API_KEY= your key
+The data used in the examples is publicly available. Please feel free to run this code.
 
-      # pip install mistralai
-      # this example requires a free Mistral API key, get yours at https://console.mistral.ai
-      # add the key to your shell environment: $ export MISTRAL_API_KEY= your key
-
-      import os
-
-      from mistralai.client import MistralClient
-      from mistralai.models.chat_completion import ChatMessage
-
-      from datachain.lib.dc import DataChain, Column
-
-      PROMPT = "Was this bot dialog successful? Describe the 'result' as 'Yes' or 'No' in a short JSON"
-
-      model = "mistral-large-latest"
-      api_key = os.environ["MISTRAL_API_KEY"]
-
-      chain = (
-          DataChain.from_storage("gs://datachain-demo/chatbot-KiT/")
-          .limit(5)
-          .settings(cache=True, parallel=5)
-          .map(
-              mistral_response=lambda file: MistralClient(api_key=api_key)
-              .chat(
-                  model=model,
-                  response_format={"type": "json_object"},
-                  messages=[
-                      ChatMessage(role="user", content=f"{PROMPT}: {file.get_value()}")
-                  ],
-              )
-              .choices[0]
-              .message.content,
-          )
-          .save()
-      )
-
-      try:
-          print(chain.select("mistral_response").results())
-      except Exception as e:
-          print(f"do you have the right Mistral API key? {e}")
-
+First, we'll use a simple sentiment analysis model. Please install transformers.
 
 .. code:: shell
 
-      [('{"result": "Yes"}',), ('{"result": "No"}',), ... , ('{"result": "Yes"}',)]
+    pip install transformers
 
-Now we have parallel-processed an LLM API-based query over cloud data and persisted the results.
-
-Vectorized analytics
---------------------
-
-Datachain internally represents datasets as tables, so analytical queries on the chain are automatically vectorized:
+The code below downloads files the cloud, applies function
+`is_positive_dialogue_ending()` to each. All files with a positive sentiment
+are copied to local directory `output/`.
 
 .. code:: py
 
-      failed_dialogs = chain.filter(Column("mistral_response") == '{"result": "No"}')
-      success_rate = failed_dialogs.count() / chain.count()
-      print(f"Chatbot dialog success rate: {100*success_rate:.2f}%")
+    from transformers import pipeline
+    from datachain import DataChain, Column
 
+    classifier = pipeline("sentiment-analysis", device="cpu",
+                    model="distilbert/distilbert-base-uncased-finetuned-sst-2-english")
+
+    def is_positive_dialogue_ending(file) -> bool:
+        dialogue_ending = file.read()[-512:]
+        return classifier(dialogue_ending)[0]["label"] == "POSITIVE"
+
+    chain = (
+       DataChain.from_storage("gs://datachain-demo/chatbot-KiT/",
+                              object_name="file", type="text")
+       .settings(parallel=8, cache=True)
+       .map(is_positive=is_positive_dialogue_ending)
+       .save("file_response")
+    )
+
+    positive_chain = chain.filter(Column("is_positive") == True)
+    positive_chain.export_files("./output1")
+
+    print(f"{positive_chain.count()} files were exported")
+
+
+
+13 files were exported
 
 .. code:: shell
 
-      "40.00%"
-
-Note that DataChain represents file samples as pointers into their respective storage locations. This means a newly created dataset version does not duplicate files in storage, and storage remains the single source of truth for the original samples
-
-Handling Python objects
------------------------
-In addition to storing primitive Python data types, chain is also capable of using data models.
-
-For example, instead of collecting just a text response from Mistral API, we might be interested in more fields of the Mistral response object. For this task, we can define a Pydantic-like model and populate it from the API replies:
-
-.. code:: py
-
-      import os
-
-      from mistralai.client import MistralClient
-      from mistralai.models.chat_completion import ChatMessage
-
-      from datachain.lib.dc import DataChain
-      from datachain.lib.feature import Feature
+    $ ls output/datachain-demo/chatbot-KiT/
+    15.txt 20.txt 24.txt 27.txt 28.txt 29.txt 33.txt 37.txt 38.txt 43.txt ...
+    $ ls output/datachain-demo/chatbot-KiT/ | wc -l
+    13
 
 
-      PROMPT = (
-          "Was this dialog successful? Describe the 'result' as 'Yes' or 'No' in a short JSON"
-      )
+LLM judging LLMs dialogs
+==========================
 
-      model = "mistral-large-latest"
-      api_key = os.environ["MISTRAL_API_KEY"]
-
-
-      ## define the data model ###
-      class Usage(Feature):
-          prompt_tokens: int = 0
-          completion_tokens: int = 0
-
-
-      class MyChatMessage(Feature):
-          role: str = ""
-          content: str = ""
-
-
-      class CompletionResponseChoice(Feature):
-          message: MyChatMessage = MyChatMessage()
-
-
-      class MistralModel(Feature):
-          id: str = ""
-          choices: list[CompletionResponseChoice]
-          usage: Usage = Usage()
-
-
-      ## Populate model instances ###
-      chain = (
-          DataChain.from_storage("gs://datachain-demo/chatbot-KiT/")
-          .limit(5)
-          .settings(cache=True, parallel=5)
-          .map(
-              mistral_response=lambda file: MistralModel(
-                  **MistralClient(api_key=api_key)
-                  .chat(
-                      model=model,
-                      response_format={"type": "json_object"},
-                      messages=[
-                          ChatMessage(role="user", content=f"{PROMPT}: {file.get_value()}")
-                      ],
-                  )
-                  .dict()
-              ),
-              output=MistralModel,
-          )
-          .save("dialog-eval")
-      )
-
-After the chain execution, we can collect the objects:
-
-.. code:: py
-
-      for obj in responses:
-          assert isinstance(obj, MistralModel)
-          print(obj.dict())
+Finding good dialogs using an LLM can be more efficient. In this example,
+we use Mistral with a free API. Please install the package and get a free
+Mistral API key at https://console.mistral.ai
 
 .. code:: shell
 
-      {'choices': [{'message': {'role': 'assistant', 'content': '{"result": "Yes"}'}}], 'usage': {'prompt_tokens': 610, 'completion_tokens': 6}}
-      {'choices': [{'message': {'role': 'assistant', 'content': '{"result": "No"}'}}], 'usage': {'prompt_tokens': 3983, 'completion_tokens': 6}}
-      {'choices': [{'message': {'role': 'assistant', 'content': '{"result": "Yes"}'}}], 'usage': {'prompt_tokens': 706, 'completion_tokens': 6}}
-      {'choices': [{'message': {'role': 'assistant', 'content': '{"result": "No"}'}}], 'usage': {'prompt_tokens': 1250, 'completion_tokens': 6}}
-      {'choices': [{'message': {'role': 'assistant', 'content': '{"result": "Yes"}'}}], 'usage': {'prompt_tokens': 1217, 'completion_tokens': 6}}
+    $ pip install mistralai
+    $ export MISTRAL_API_KEY=_your_key_
 
-
-Dataset persistence
---------------------
-
-The “save” operation makes chain dataset persistent in the current (working) directory of the query. A hidden folder .datachain/ holds the records. A persistent dataset can be accessed later to start a derivative chain:
+Below is a similar code example, but this time using an LLM to evaluate the dialogs.
+Note, only 4 threads were used in this example `parallel=4` due to a limitation of
+the free LLM service.
 
 .. code:: py
 
-         DataChain.from_dataset("dialog-eval").limit(2).save("dialog-eval")
+    from mistralai.client import MistralClient
+    from mistralai.models.chat_completion import ChatMessage
+    from datachain import File, DataChain, Column
 
-Persistent datasets are immutable and automatically versioned. Versions can be listed from shell:
+    PROMPT = "Was this dialog successful? Answer in a single word: Success or Failure."
+
+    def eval_dialogue(file: File) -> bool:
+         client = MistralClient()
+         response = client.chat(
+             model="open-mixtral-8x22b",
+             messages=[ChatMessage(role="system", content=PROMPT),
+                       ChatMessage(role="user", content=file.read())])
+         result = response.choices[0].message.content
+         return result.lower().startswith("success")
+
+    chain = (
+       DataChain.from_storage("gs://datachain-demo/chatbot-KiT/", object_name="file")
+       .settings(parallel=4, cache=True)
+       .map(is_success=eval_dialogue)
+       .save("mistral_files")
+    )
+
+    successful_chain = chain.filter(Column("is_success") == True)
+    successful_chain.export_files("./output_mistral")
+
+    print(f"{successful_chain.count()} files were exported")
+
+
+With the current prompt, we found 31 files considered successful dialogs:
 
 .. code:: shell
 
-      $ datachain ls-datasets
+    $ ls output_mistral/datachain-demo/chatbot-KiT/
+    1.txt  15.txt 18.txt 2.txt  22.txt 25.txt 28.txt 33.txt 37.txt 4.txt  41.txt ...
+    $ ls output_mistral/datachain-demo/chatbot-KiT/ | wc -l
+    31
 
-      dialog-rate (v1)
-      dialog-rate (v2)
 
-By default, when a persistent dataset is loaded, the latest version is fetched but another version can be requested:
+
+Serializing Python-objects
+==========================
+
+LLM responses contain valuable information for analytics, such as tokens used and the
+model. Preserving this information can be beneficial.
+
+Instead of extracting this information from the Mistral data structure (class
+`ChatCompletionResponse`), we serialize the entire Python object to the internal DB.
+
 
 .. code:: py
 
-      ds = DataChain.from_dataset("dialog-eval", version = 1)
+    from mistralai.client import MistralClient
+    from mistralai.models.chat_completion import ChatMessage, ChatCompletionResponse
+    from datachain import File, DataChain, Column
 
-Chain optimization and execution
---------------------------------
+    PROMPT = "Was this dialog successful? Answer in a single word: Success or Failure."
 
-Datachain avoids redundant operations. Execution is triggered only when a downstream operation requests the processed results. However, it would be inefficient to run, say, LLM queries again every time you just want to collect several objects.
+    def eval_dialog(file: File) -> ChatCompletionResponse:
+         client = MistralClient()
+         return client.chat(
+             model="open-mixtral-8x22b",
+             messages=[ChatMessage(role="system", content=PROMPT),
+                       ChatMessage(role="user", content=file.read())])
 
-“Save” operation nails execution results and automatically refers to them every time the downstream functions ask for data. Saving without an explicit name generates an auto-named dataset which serves the same purpose.
+    chain = (
+       DataChain.from_storage("gs://datachain-demo/chatbot-KiT/", object_name="file")
+       .settings(parallel=4, cache=True)
+       .map(response=eval_dialog)
+       .map(status=lambda response: response.choices[0].message.content.lower()[:7])
+       .save("response")
+    )
 
+    chain.select("file.name", "status", "response.usage").show(5)
 
-Matching data with metadata
-----------------------------
-It is common for AI data to come with pre-computed metadata (annotations, classes, etc).
+    success_rate = chain.filter(Column("status") == "success").count() / chain.count()
+    print(f"{100*success_rate:.1f}% dialogs were successful")
 
-DataChain library understands common metadata formats (JSON, CSV and parquet), and can unite data samples from storage with side-loaded metadata. The schema for metadata can be set explicitly or be inferred.
-
-Here is an example of reading a CSV file where schema is heuristically derived from the header:
-
-.. code:: py
-
-      from datachain.lib.dc import DataChain
-      csv_dataset = DataChain.from_csv("gs://datachain-demo/chatbot-csv/")
-
-      print(csv_dataset.to_pandas())
-
-Reading metadata from JSON format is a more complicated scenario because a JSON-annotated dataset typically references data samples (e.g. images) in annotation arrays somewhere within JSON files.
-
-Here is an example from MS COCO “captions” JSON which employs separate sections for image meta and captions:
-
-.. code:: json
-
-
-      {
-        "images": [
-          {
-            "license": 4,
-            "file_name": "000000397133.jpg",
-            "coco_url": "http://images.cocodataset.org/val2017/000000397133.jpg",
-            "height": 427,
-            "width": 640,
-            "date_captured": "2013-11-14 17:02:52",
-            "flickr_url": "http://farm7.staticflickr.com/6116/6255196340_da26cf2c9e_z.jpg",
-            "id": 397133
-          },
-          ...
-        ],
-        "annotations": [
-          {
-            "image_id"	:	"179765",
-            "id"	:	38,
-            "caption"	:	"A black Honda motorcycle parked in front of a garage."
-          },
-          ...
-        ],
-        ...
-      }
-
-To deal with this layout, we can take the following steps:
-
-1. Generate a dataset of raw image files from storage
-2. Generate a meta-information dataset from the JSON section “images”
-3. Join these datasets via the matching id keys
-
-.. code:: python
-
-
-   from datachain.lib.dc import DataChain
-
-   images = DataChain.from_storage("gs://datachain-demo/coco2017/images/val/")
-   meta = DataChain.from_json("gs://datachain-demo/coco2017/annotations_captions", jmespath = "images")
-
-   images_with_meta = images.merge(meta, on="file.name", right_on="images.file_name")
-
-   print(images_with_meta.limit(1).results())
+Output:
 
 .. code:: shell
 
+         file   status      response     response          response
+         name                  usage        usage             usage
+                       prompt_tokens total_tokens completion_tokens
+    0   1.txt  success           547          548                 1
+    1  10.txt  failure          3576         3578                 2
+    2  11.txt  failure           626          628                 2
+    3  12.txt  failure          1144         1182                38
+    4  13.txt  success          1100         1101                 1
 
-      Processed: 5000 rows [00:00, 15481.66 rows/s]
-      Processed: 1 rows [00:00, 1291.75 rows/s]
-      Processed: 1 rows [00:00,  4.70 rows/s]
-      Generated: 5000 rows [00:00, 27128.67 rows/s]
-      [(1, 2336066478558845549, '', 0, 'coco2017/images/val', '000000000139.jpg', 'CNvXoemj8IYDEAE=', '1719096046021595', 1, datetime.datetime(2024, 6, 22, 22, 40, 46, 70000, tzinfo=datetime.timezone.utc), 161811, '', '', None, 'gs://datachain-demo', 'gs://datachain-demo', 'coco2017/images/val', '000000000139.jpg', 161811, '1719096046021595', 'CNvXoemj8IYDEAE=', 1, datetime.datetime(1970, 1, 1, 0, 0, tzinfo=datetime.timezone.utc), None, '', 4146, 6967063844996569113, 2, '000000000139.jpg', 'http://images.cocodataset.org/val2017/000000000139.jpg', 426, 640, '2013-11-21 01:34:01', 'http://farm9.staticflickr.com/8035/8024364858_9c41dc1666_z.jpg', 139)]
+    [Limited by 5 rows]
+    64.0% dialogs were successful
 
-Passing data to training
-------------------------
 
-Chain results can be exported or passed directly to Pytorch dataloader. For example, if we are interested in passing three columns to training, the following Pytorch code will do it:
+Complex Python data structures
+=============================================
+
+In the previous examples, a few dataset were saved in the embedded database
+(`SQLite`_ in directory `.datachain`).
+These datasets are versioned, and can be accessed using
+`DataChain.from_dataset("dataset_name")`.
 
 .. code:: py
 
-      ds = train.select("file", "caption_choices", "label_ind").to_pytorch(
-          transform=preprocess,
-          tokenizer=clip.tokenize,
-      )
+    chain = DataChain.from_dataset("response")
 
-      loader = DataLoader(ds, batch_size=2)
-      optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-      train(loader, model, optimizer)
+    # Iterating one-by-one: out of memory
+    for file, response in chain.limit(5).collect("file", "response"):
+        # You work with Python objects
+        assert isinstance(response, ChatCompletionResponse)
+
+        status = response.choices[0].message.content[:7]
+        tokens = response.usage.total_tokens
+        print(f"{file.get_uri()}: {status}, file size: {file.size}, tokens: {tokens}")
+
+Output:
+
+.. code:: shell
+
+    gs://datachain-demo/chatbot-KiT/1.txt: Success, file size: 1776, tokens: 548
+    gs://datachain-demo/chatbot-KiT/10.txt: Failure, file size: 11576, tokens: 3578
+    gs://datachain-demo/chatbot-KiT/11.txt: Failure, file size: 2045, tokens: 628
+    gs://datachain-demo/chatbot-KiT/12.txt: Failure, file size: 3833, tokens: 1207
+    gs://datachain-demo/chatbot-KiT/13.txt: Success, file size: 3657, tokens: 1101
+
+
+Vectorized analytics over Python objects
+========================================
+
+Some operations can be efficiently run inside the DB without deserializing Python objects.
+Let's calculate the cost of using LLM APIs in a vectorized way.
+Mistral calls cost $2 per 1M input tokens and $6 per 1M output tokens:
+
+.. code:: py
+
+    chain = DataChain.from_dataset("mistral_dataset")
+
+    cost = chain.sum("response.usage.prompt_tokens")*0.000002 \
+               + chain.sum("response.usage.completion_tokens")*0.000006
+    print(f"Spent ${cost:.2f} on {chain.count()} calls")
+
+Output:
+
+.. code:: shell
+
+    Spent $0.08 on 50 calls
+
+
+PyTorch data loader
+===================
+
+Chain results can be exported or passed directly to PyTorch dataloader.
+For example, if we are interested in passing image and a label based on file
+name suffix, the following code will do it:
+
+.. code:: py
+
+    from torch.utils.data import DataLoader
+    from transformers import CLIPProcessor
+
+    from datachain import C, DataChain
+
+    processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+
+    chain = (
+        DataChain.from_storage("gs://datachain-demo/dogs-and-cats/", type="image")
+        .map(label=lambda name: name.split(".")[0], params=["file.name"])
+        .select("file", "label").to_pytorch(
+            transform=processor.image_processor,
+            tokenizer=processor.tokenizer,
+        )
+    )
+    loader = DataLoader(chain, batch_size=1)
+
 
 Tutorials
-------------------
+---------
 
-* `Computer Vision <examples/computer_vision/fashion_product_images/1-quick-start.ipynb>`_ (try in `Colab <https://colab.research.google.com/github/iterative/datachain/blob/main/examples/computer_vision/fashion_product_images/1-quick-start.ipynb>`__)
+* `Getting Started`_
 * `Multimodal <examples/multimodal/clip_fine_tuning.ipynb>`_ (try in `Colab <https://colab.research.google.com/github/iterative/datachain/blob/main/examples/multimodal/clip_fine_tuning.ipynb>`__)
 
 Contributions
---------------------
+-------------
 
 Contributions are very welcome.
 To learn more, see the `Contributor Guide`_.
 
 
-License
--------
+Community and Support
+---------------------
 
-Distributed under the terms of the `Apache 2.0 license`_,
-*DataChain* is free and open source software.
-
-
-Issues
-------
-
-If you encounter any problems,
-please `file an issue`_ along with a detailed description.
+* `Docs <https://datachain.dvc.ai/>`_
+* `File an issue`_ if you encounter any problems
+* `Discord Chat <https://dvc.org/chat>`_
+* `Email <mailto:support@dvc.org>`_
+* `Twitter <https://twitter.com/DVCorg>`_
 
 
-.. _Apache 2.0 license: https://opensource.org/licenses/Apache-2.0
 .. _PyPI: https://pypi.org/
 .. _file an issue: https://github.com/iterative/datachain/issues
-.. _pip: https://pip.pypa.io/
 .. github-only
 .. _Contributor Guide: CONTRIBUTING.rst
 .. _Pydantic: https://github.com/pydantic/pydantic
+.. _SQLite: https://www.sqlite.org/
+.. _Getting Started: https://datachain.dvc.ai/
+.. |Flowchart| image:: https://github.com/iterative/datachain/blob/main/docs/assets/flowchart.png?raw=true
+   :alt: DataChain FlowChart

@@ -41,7 +41,7 @@ def summarize(clean):
 
 ds = (
     DataChain.from_storage(source)
-    .filter(C("name").glob("*.pdf"))
+    .filter(C("file.name").glob("*.pdf"))
     .limit(1)
     .map(
         partition_object,
