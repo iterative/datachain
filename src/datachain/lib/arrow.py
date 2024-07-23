@@ -14,17 +14,24 @@ if TYPE_CHECKING:
 
 
 class ArrowGenerator(Generator):
-    def __init__(self, schema: Optional["pa.Schema"] = None, **kwargs):
+    def __init__(
+        self,
+        schema: Optional["pa.Schema"] = None,
+        nrows: Optional[int] = None,
+        **kwargs,
+    ):
         """
         Generator for getting rows from tabular files.
 
         Parameters:
 
         schema : Optional pyarrow schema for validation.
+        nrows : Optional row limit.
         kwargs: Parameters to pass to pyarrow.dataset.dataset.
         """
         super().__init__()
         self.schema = schema
+        self.nrows = nrows
         self.kwargs = kwargs
 
     def process(self, file: File):
@@ -37,12 +44,14 @@ class ArrowGenerator(Generator):
                     source = IndexedFile(file=file, index=index)
                     yield [source, *record.values()]
                     index += 1
+                    if self.nrows and index >= self.nrows:
+                        return
                 pbar.update(len(record_batch))
 
 
 def infer_schema(chain: "DataChain", **kwargs) -> pa.Schema:
     schemas = []
-    for file in chain.iterate_one("file"):
+    for file in chain.collect("file"):
         ds = dataset(file.get_path(), filesystem=file.get_fs(), **kwargs)  # type: ignore[union-attr]
         schemas.append(ds.schema)
     return pa.unify_schemas(schemas)

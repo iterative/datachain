@@ -1,7 +1,7 @@
 import copy
 import os
 import re
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Iterator, Sequence
 from functools import wraps
 from typing import (
     TYPE_CHECKING,
@@ -410,7 +410,7 @@ class DataChain(DatasetQuery):
             from datachain import DataChain
 
             chain = DataChain.datasets()
-            for ds in chain.iterate_one("dataset"):
+            for ds in chain.collect("dataset"):
                 print(f"{ds.name}@v{ds.version}")
             ```
         """
@@ -720,21 +720,28 @@ class DataChain(DatasetQuery):
 
     @property
     def _effective_signals_schema(self) -> "SignalSchema":
-        """Effective schema used for user-facing API like iterate, to_pandas, etc."""
+        """Effective schema used for user-facing API like collect, to_pandas, etc."""
         signals_schema = self.signals_schema
         if not self._sys:
             return signals_schema.clone_without_sys_signals()
         return signals_schema
 
     @overload
-    def iterate_flatten(self) -> Iterable[tuple[Any, ...]]: ...
+    def collect_flatten(self) -> Iterator[tuple[Any, ...]]: ...
 
     @overload
-    def iterate_flatten(
-        self, row_factory: Callable[[list[str], tuple[Any, ...]], _T]
-    ) -> Iterable[_T]: ...
+    def collect_flatten(
+        self, *, row_factory: Callable[[list[str], tuple[Any, ...]], _T]
+    ) -> Iterator[_T]: ...
 
-    def iterate_flatten(self, row_factory=None):  # noqa: D102
+    def collect_flatten(self, *, row_factory=None):
+        """Yields flattened rows of values as a tuple.
+
+        Args:
+            row_factory : A callable to convert row to a custom format.
+                          It should accept two arguments: a list of column names and
+                          a tuple of row values.
+        """
         db_signals = self._effective_signals_schema.db_signals()
         with super().select(*db_signals).as_iterable() as rows:
             if row_factory:
@@ -746,48 +753,70 @@ class DataChain(DatasetQuery):
 
     @overload
     def results(
-        self, row_factory: Callable[[list[str], tuple[Any, ...]], _T]
+        self, *, row_factory: Callable[[list[str], tuple[Any, ...]], _T]
     ) -> list[_T]: ...
 
-    def results(self, row_factory=None, **kwargs):  # noqa: D102
-        return list(self.iterate_flatten(row_factory=row_factory))
+    def results(self, *, row_factory=None):  # noqa: D102
+        if row_factory is None:
+            return list(self.collect_flatten())
+        return list(self.collect_flatten(row_factory=row_factory))
 
-    def to_records(self) -> list[dict[str, Any]]:  # noqa: D102
+    def to_records(self) -> list[dict[str, Any]]:
+        """Convert every row to a dictionary."""
+
         def to_dict(cols: list[str], row: tuple[Any, ...]) -> dict[str, Any]:
             return dict(zip(cols, row))
 
         return self.results(row_factory=to_dict)
 
-    def iterate(self, *cols: str) -> Iterator[list[DataType]]:
-        """Iterate over rows.
+    @overload
+    def collect(self) -> Iterator[tuple[DataType, ...]]: ...
 
-        If columns are specified - limit them to specified columns.
+    @overload
+    def collect(self, col: str) -> Iterator[DataType]: ...  # type: ignore[overload-overlap]
+
+    @overload
+    def collect(self, *cols: str) -> Iterator[tuple[DataType, ...]]: ...
+
+    def collect(self, *cols: str) -> Iterator[Union[DataType, tuple[DataType, ...]]]:  # type: ignore[overload-overlap,misc]
+        """Yields rows of values, optionally limited to the specified columns.
+
+        Args:
+            *cols: Limit to the specified columns. By default, all columns are selected.
+
+        Yields:
+            (DataType): Yields a single item if a column is selected.
+            (tuple[DataType, ...]): Yields a tuple of items if multiple columns are
+                selected.
+
+        Example:
+            Iterating over all rows:
+            ```py
+            for row in dc.collect():
+                print(row)
+            ```
+
+            Iterating over all rows with selected columns:
+            ```py
+            for name, size in dc.collect("file.name", "file.size"):
+                print(name, size)
+            ```
+
+            Iterating over a single column:
+            ```py
+            for file in dc.collect("file.name"):
+                print(file)
+            ```
         """
         chain = self.select(*cols) if cols else self
         signals_schema = chain._effective_signals_schema
         db_signals = signals_schema.db_signals()
         with super().select(*db_signals).as_iterable() as rows:
             for row in rows:
-                yield signals_schema.row_to_features(
+                ret = signals_schema.row_to_features(
                     row, catalog=chain.session.catalog, cache=chain._settings.cache
                 )
-
-    def iterate_one(self, col: str) -> Iterator[DataType]:
-        """Iterate over one column."""
-        for item in self.iterate(col):
-            yield item[0]
-
-    def collect(self, *cols: str) -> list[list[DataType]]:
-        """Collect results from all rows.
-
-        If columns are specified - limit them to specified
-        columns.
-        """
-        return list(self.iterate(*cols))
-
-    def collect_one(self, col: str) -> list[DataType]:
-        """Collect results from one column."""
-        return list(self.iterate_one(col))
+                yield ret[0] if len(cols) == 1 else tuple(ret)
 
     def to_pytorch(
         self, transform=None, tokenizer=None, tokenizer_kwargs=None, num_samples=0
@@ -1052,6 +1081,7 @@ class DataChain(DatasetQuery):
         output: OutputType = None,
         object_name: str = "",
         model_name: str = "",
+        nrows: Optional[int] = None,
         **kwargs,
     ) -> "DataChain":
         """Generate chain from list of tabular files.
@@ -1063,6 +1093,7 @@ class DataChain(DatasetQuery):
             object_name : Generated object column name.
             model_name : Generated model name.
             kwargs : Parameters to pass to pyarrow.dataset.dataset.
+            nrows : Optional row limit.
 
         Example:
             Reading a json lines file:
@@ -1100,7 +1131,7 @@ class DataChain(DatasetQuery):
                 for name, info in output.model_fields.items()
             }
         output = {"source": IndexedFile} | output  # type: ignore[assignment,operator]
-        return self.gen(ArrowGenerator(schema, **kwargs), output=output)
+        return self.gen(ArrowGenerator(schema, nrows, **kwargs), output=output)
 
     @staticmethod
     def _dict_to_data_model(
@@ -1123,6 +1154,7 @@ class DataChain(DatasetQuery):
         output: OutputType = None,
         object_name: str = "",
         model_name: str = "",
+        nrows=None,
         **kwargs,
     ) -> "DataChain":
         """Generate chain from csv files.
@@ -1137,6 +1169,7 @@ class DataChain(DatasetQuery):
                 case types will be inferred.
             object_name : Created object column name.
             model_name : Generated model name.
+            nrows : Optional row limit.
 
         Example:
             Reading a csv file:
@@ -1172,7 +1205,11 @@ class DataChain(DatasetQuery):
         read_options = ReadOptions(column_names=column_names)
         format = CsvFileFormat(parse_options=parse_options, read_options=read_options)
         return chain.parse_tabular(
-            output=output, object_name=object_name, model_name=model_name, format=format
+            output=output,
+            object_name=object_name,
+            model_name=model_name,
+            nrows=nrows,
+            format=format,
         )
 
     @classmethod
@@ -1183,6 +1220,7 @@ class DataChain(DatasetQuery):
         output: Optional[dict[str, DataType]] = None,
         object_name: str = "",
         model_name: str = "",
+        nrows=None,
         **kwargs,
     ) -> "DataChain":
         """Generate chain from parquet files.
@@ -1194,6 +1232,7 @@ class DataChain(DatasetQuery):
             output : Dictionary defining column names and their corresponding types.
             object_name : Created object column name.
             model_name : Generated model name.
+            nrows : Optional row limit.
 
         Example:
             Reading a single file:
@@ -1211,6 +1250,7 @@ class DataChain(DatasetQuery):
             output=output,
             object_name=object_name,
             model_name=model_name,
+            nrows=None,
             format="parquet",
             partitioning=partitioning,
         )
@@ -1339,7 +1379,7 @@ class DataChain(DatasetQuery):
             if self.distinct(f"{signal}.name").count() != self.count():
                 raise ValueError("Files with the same name found")
 
-        for file in self.collect_one(signal):
+        for file in self.collect(signal):
             file.export(output, placement, use_cache)  # type: ignore[union-attr]
 
     def shuffle(self) -> "Self":

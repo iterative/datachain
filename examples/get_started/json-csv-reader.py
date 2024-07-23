@@ -15,7 +15,7 @@ class LicenseModel(BaseModel):
     name: str
 
 
-LicenseFeature = ModelStore.add(LicenseModel)
+LicenseFeature = ModelStore.register(LicenseModel)
 
 
 # Sample model for static CSV model
@@ -26,7 +26,7 @@ class ChatDialog(BaseModel):
     text: Optional[str] = None
 
 
-ChatFeature = ModelStore.add(ChatDialog)
+ChatFeature = ModelStore.register(ChatDialog)
 
 
 def main():
@@ -50,7 +50,7 @@ def main():
         uri, schema_from=schema_uri, jmespath="@", model_name="OpenImage"
     )
     print(json_pairs_ds.to_pandas())
-    # print(json_pairs_ds.collect()[0])
+    # print(list(json_pairs_ds.collect())[0])
 
     uri = "gs://datachain-demo/coco2017/annotations_captions/"
 
@@ -60,7 +60,7 @@ def main():
     print("========================================================================")
     chain = (
         DataChain.from_storage(uri)
-        .filter(C.name.glob("*.json"))
+        .filter(C("file.name").glob("*.json"))
         .show_json_schema(jmespath="@", model_name="Coco")
     )
     chain.save()
@@ -93,9 +93,9 @@ def main():
     uri = "gs://datachain-demo/laion-aesthetics-csv"
     print()
     print("========================================================================")
-    print("dynamic CSV with header schema test parsing 3M objects")
+    print("dynamic CSV with header schema test parsing 3/3M objects")
     print("========================================================================")
-    dynamic_csv_ds = DataChain.from_csv(uri, object_name="laion")
+    dynamic_csv_ds = DataChain.from_csv(uri, object_name="laion", nrows=3)
     dynamic_csv_ds.print_schema()
     print(dynamic_csv_ds.to_pandas())
 

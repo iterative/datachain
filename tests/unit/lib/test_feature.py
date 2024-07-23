@@ -78,7 +78,7 @@ def test_registry():
         name: str
         count: int
 
-    ModelStore.add(MyTestRndmz)
+    ModelStore.register(MyTestRndmz)
     assert ModelStore.get(MyTestRndmz.__name__) == MyTestRndmz
     assert ModelStore.get(MyTestRndmz.__name__, version=1) == MyTestRndmz
     ModelStore.remove(MyTestRndmz)

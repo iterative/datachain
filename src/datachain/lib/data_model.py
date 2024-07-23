@@ -27,8 +27,8 @@ class DataModel(BaseModel):
 
     @classmethod
     def __pydantic_init_subclass__(cls):
-        # automatically registers every declared DataModel child class.
-        ModelStore.add(cls)
+        """It automatically registers every declared DataModel child class."""
+        ModelStore.register(cls)
 
     @staticmethod
     def register(models: Union[DataType, Sequence[DataType]]):
@@ -37,7 +37,7 @@ class DataModel(BaseModel):
         if not isinstance(models, Sequence):
             models = [models]
         for val in models:
-            ModelStore.add(val)
+            ModelStore.register(val)
 
 
 def is_chain_type(t: type) -> bool:

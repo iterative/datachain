@@ -12,44 +12,33 @@ Before you begin, ensure you have
 from datachain import C, DataChain
 
 # Define the paths
-
 DATA_PATH = "gs://datachain-demo/fashion-product-images"
 ANNOTATIONS_PATH = "gs://datachain-demo/fashion-product-images/styles_clean.csv"
 
-# Create a Dataset
-
 print("\n# Create a Dataset")
-ds = DataChain.from_storage(DATA_PATH, type="image").filter(C.name.glob("*.jpg"))
-ds.show(3)
-
-# Create a metadata DataChain
+dc = DataChain.from_storage(DATA_PATH, type="image", anon=True).filter(
+    C("file.name").glob("*.jpg")
+)
+dc.show(3)
 
 print("\n# Create a metadata DataChain")
-ds_meta = DataChain.from_csv(ANNOTATIONS_PATH).select_except("source").save()
-ds_meta.show(3)
-
-# Merge the original image and metadata datachains
+dc_meta = DataChain.from_csv(ANNOTATIONS_PATH).select_except("source").save()
+dc_meta.show(3)
 
 print("\n# Merge the original image and metadata datachains")
-ds_annotated = ds.merge(ds_meta, on="name", right_on="filename")
-
-# Save dataset
+dc_annotated = dc.merge(dc_meta, on="file.name", right_on="filename")
 
 print("\n# Save dataset")
-ds_annotated.save("fashion-product-images")
+dc_annotated.save("fashion-product-images")
 
-
-# Filtering Data
 
 print("\n# Filtering Data")
-ds = (
-    DataChain.from_dataset(name="fashion-product-images")
-    .filter(C.mastercategory == "Apparel")
-    .filter(C.subcategory == "Topwear")
-    .filter(C.season == "Summer")
+dc = DataChain.from_dataset(name="fashion-product-images").filter(
+    C("mastercategory") == "Apparel"
+    and C("subcategory") == "Topwear"
+    and C("season") == "Summer"
 )
-print(ds.to_pandas().shape)
+dc.show()
 
-
-# NOTE: DataChain requires the  Last line to be an instance of DatasetQuery
-ds.limit(3)
+# NOTE: Studio requires the last line to be an instance of DataChain
+dc.save("fashion-summer-topwear-apparel")
