@@ -58,7 +58,7 @@ First, we'll use a simple sentiment analysis model. Please install transformers.
 
     pip install transformers
 
-The code below downloads files the cloud, applyes function
+The code below downloads files the cloud, applies function
 `is_positive_dialogue_ending()` to each. All files with a positive sentiment
 are copied to local directory `output/`.
 
@@ -281,7 +281,7 @@ Each row in the table represent a file (or snipped in a file):
     |[{"index":0,"message":{"role":"assistant","content":"Success","name":null,
     "tool_calls":null,"tool_call_id":null},"finish_reason":"stop"}]|547|548|1
 
-However, it can be more convinient to work with Python objects as in examples above.
+However, it can be more convenient to work with Python objects as in examples above.
 
 
 PyTorch data loader
