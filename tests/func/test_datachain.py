@@ -1,3 +1,4 @@
+import math
 import os
 import re
 from datetime import datetime, timezone
@@ -5,7 +6,9 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+import pytz
 
+from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.dataset import DatasetStats
 from datachain.lib.dc import DataChain
 from datachain.lib.file import File
@@ -228,9 +231,13 @@ def test_from_storage_check_rows(tmp_dir, catalog):
 
     dc = DataChain.from_storage(tmp_dir.as_uri(), catalog=catalog).save("test-data")
 
+    is_sqlite = isinstance(catalog.warehouse, SQLiteWarehouse)
+    tz = timezone.utc if is_sqlite else pytz.UTC
+
     for (file,) in dc.collect():
         assert isinstance(file, File)
         stat = stats[file.name]
+        mtime = stat.st_mtime if is_sqlite else float(math.floor(stat.st_mtime))
         assert file == File(
             source=Path(tmp_dir.anchor).as_uri(),
             parent=tmp_dir.relative_to(tmp_dir.anchor),
@@ -239,7 +246,7 @@ def test_from_storage_check_rows(tmp_dir, catalog):
             version="",
             etag=stat.st_mtime.hex(),
             is_latest=True,
-            last_modified=datetime.fromtimestamp(stat.st_mtime, timezone.utc),
+            last_modified=datetime.fromtimestamp(mtime, tz=tz),
             location=None,
             vtype="",
         )
