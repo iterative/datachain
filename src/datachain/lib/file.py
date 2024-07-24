@@ -20,7 +20,7 @@ from datachain.cache import UniqueId
 from datachain.client.fileslice import FileSlice
 from datachain.lib.data_model import DataModel
 from datachain.lib.utils import DataChainError
-from datachain.sql.types import JSON, Int, String
+from datachain.sql.types import JSON, Boolean, DateTime, Int, String
 from datachain.utils import TIME_ZERO
 
 if TYPE_CHECKING:
@@ -126,11 +126,13 @@ class File(DataModel):
         "source": String,
         "parent": String,
         "name": String,
+        "size": Int,
         "version": String,
         "etag": String,
-        "size": Int,
-        "vtype": String,
+        "is_latest": Boolean,
+        "last_modified": DateTime,
         "location": JSON,
+        "vtype": String,
     }
 
     _unique_id_keys: ClassVar[list[str]] = [
@@ -360,21 +362,25 @@ def get_file(type_: Literal["binary", "text", "image"] = "binary"):
         source: str,
         parent: str,
         name: str,
+        size: int,
         version: str,
         etag: str,
-        size: int,
-        vtype: str,
+        is_latest: bool,
+        last_modified: datetime,
         location: Optional[Union[dict, list[dict]]],
+        vtype: str,
     ) -> file:  # type: ignore[valid-type]
         return file(
             source=source,
             parent=parent,
             name=name,
+            size=size,
             version=version,
             etag=etag,
-            size=size,
-            vtype=vtype,
+            is_latest=is_latest,
+            last_modified=last_modified,
             location=location,
+            vtype=vtype,
         )
 
     return get_file_type
