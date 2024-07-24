@@ -25,6 +25,7 @@ from typing import (
 
 import attrs
 import sqlalchemy
+import sqlalchemy as sa
 from attrs import frozen
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback, TqdmCallback
 from sqlalchemy import Column
@@ -297,16 +298,10 @@ class Subtract(DatasetDiffOperation):
     def query(self, source_query: Select, target_query: Select) -> Select:
         sq = source_query.alias("source_query")
         tq = target_query.alias("target_query")
-        on_clause = sqlalchemy.and_(
+        where_clause = sa.and_(
             getattr(sq.c, col_name) == getattr(tq.c, col_name) for col_name in self.on
         )  # type: ignore[arg-type]
-        outer_join = sqlalchemy.join(sq, tq, on_clause, isouter=True)
-
-        where_clause = sqlalchemy.and_(
-            getattr(tq.c, col_name) == None  # noqa: E711
-            for col_name in self.on
-        )  # type: ignore[arg-type]
-        return sqlalchemy.select(*sq.c).select_from(outer_join).where(where_clause)
+        return sq.select().where(~sa.exists().where(where_clause))
 
 
 @frozen
