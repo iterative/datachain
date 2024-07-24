@@ -821,7 +821,7 @@ class SQLMutate(SQLClause):
 
     def apply_sql_clause(self, query: Select) -> Select:
         original_subquery = query.subquery()
-        # double subquery is needed so that new column can be used in clauses
+        # this is needed for new column to be used in clauses
         # like ORDER BY, otherwise new column is not recognized
         subquery = (
             sqlalchemy.select(*original_subquery.c, *self.args)
