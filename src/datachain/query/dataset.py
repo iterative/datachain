@@ -251,7 +251,7 @@ class DatasetDiffOperation(Step):
         self,
         source_query: Select,
         target_query: Select,
-    ) -> Select:
+    ) -> sa.Selectable:
         """
         Should return select query that calculates desired diff between dataset queries
         """
@@ -295,13 +295,14 @@ class DatasetDiffOperation(Step):
 class Subtract(DatasetDiffOperation):
     on: Sequence[str]
 
-    def query(self, source_query: Select, target_query: Select) -> Select:
+    def query(self, source_query: Select, target_query: Select) -> sa.Selectable:
         sq = source_query.alias("source_query")
         tq = target_query.alias("target_query")
         where_clause = sa.and_(
-            getattr(sq.c, col_name) == getattr(tq.c, col_name) for col_name in self.on
+            getattr(sq.c, col_name).is_not_distinct_from(getattr(tq.c, col_name))
+            for col_name in self.on
         )  # type: ignore[arg-type]
-        return sq.select().where(~sa.exists().where(where_clause))
+        return sq.select().except_(sq.select().where(where_clause))
 
 
 @frozen
