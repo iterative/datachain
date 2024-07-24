@@ -1,5 +1,7 @@
 import os
 import re
+from datetime import datetime, timezone
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -215,3 +217,29 @@ def test_from_storage_dataset_stats(tmp_dir, catalog):
     dc = DataChain.from_storage(tmp_dir.as_uri(), catalog=catalog).save("test-data")
     stats = catalog.dataset_stats(dc.name, dc.version)
     assert stats == DatasetStats(num_objects=4, size=20)
+
+
+def test_from_storage_check_rows(tmp_dir, catalog):
+    stats = {}
+    for i in range(4):
+        file = tmp_dir / f"{i}.txt"
+        file.write_text(f"file{i}")
+        stats[file.name] = file.stat()
+
+    dc = DataChain.from_storage(tmp_dir.as_uri(), catalog=catalog).save("test-data")
+
+    for (file,) in dc.collect():
+        assert isinstance(file, File)
+        stat = stats[file.name]
+        assert file == File(
+            source=Path(tmp_dir.anchor).as_uri(),
+            parent=tmp_dir.relative_to(tmp_dir.anchor),
+            name=file.name,
+            size=stat.st_size,
+            version="",
+            etag=stat.st_mtime.hex(),
+            is_latest=True,
+            last_modified=datetime.fromtimestamp(stat.st_mtime, timezone.utc),
+            location=None,
+            vtype="",
+        )
