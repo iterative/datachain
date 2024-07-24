@@ -39,7 +39,7 @@ dependencies = [
   "multiprocess==0.70.16",
   "dill==0.3.8",
   "cloudpickle",
-  "ujson>=5.9.0",
+  "orjson>=3.10.5",
   "pydantic>=2,<3",
   "jmespath>=1.0",
   "datamodel-code-generator>=0.25",
@@ -92,7 +92,7 @@ dev = [
   "types-pytz",
   "types-PyYAML",
   "types-requests",
-  "types-ujson"
+  "types-orjson"
 ]
 
 [project.urls]
