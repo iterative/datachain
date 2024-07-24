@@ -7,11 +7,13 @@ from pathlib import Path
 import pandas as pd
 import pytest
 import pytz
+from PIL import Image
 
 from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.dataset import DatasetStats
 from datachain.lib.dc import DataChain
-from datachain.lib.file import File
+from datachain.lib.file import File, ImageFile
+from tests.utils import images_equal
 
 
 @pytest.mark.parametrize("anon", [True, False])
@@ -116,6 +118,27 @@ def test_export_files(
             file_path = file.get_full_name()
         with open(tmp_dir / "output" / file_path) as f:
             assert f.read() == expected[file.name]
+
+
+@pytest.mark.parametrize("use_cache", [True, False])
+def test_export_images_files(tmp_dir, tmp_path, use_cache):
+    images = [
+        {"name": "img1.jpg", "data": Image.new(mode="RGB", size=(64, 64))},
+        {"name": "img2.jpg", "data": Image.new(mode="RGB", size=(128, 128))},
+    ]
+
+    for img in images:
+        img["data"].save(tmp_path / img["name"])
+
+    DataChain.from_values(
+        file=[
+            ImageFile(name=img["name"], source=f"file://{tmp_path}") for img in images
+        ],
+    ).export_files(tmp_dir / "output", placement="filename", use_cache=use_cache)
+
+    for img in images:
+        exported_img = Image.open(tmp_dir / "output" / img["name"])
+        assert images_equal(img["data"], exported_img)
 
 
 def test_export_files_filename_placement_not_unique_files(tmp_dir, catalog):
