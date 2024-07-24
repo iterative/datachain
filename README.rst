@@ -158,7 +158,7 @@ Serializing Python-objects
 ==========================
 
 LLM responses may contain valuable information for analytics – such as the number of tokens used, or the
-model performance parameters. 
+model performance parameters.
 
 Instead of extracting this information from the Mistral response data structure (class
 `ChatCompletionResponse`), DataChain can serialize the entire LLM response to the internal DB:
