@@ -19,20 +19,18 @@ AI 🔗 DataChain
 DataChain is an open-source Python library for processing and curating unstructured
 data at scale.
 
-🤖 AI-Driven Data Curation: Use local ML models, LLM APIs calls to enrich your data.
+🤖 AI-Driven Data Curation: Use local ML models or LLM APIs calls to enrich your data.
 
-🚀 GenAI Dataset scale: Handle 10s of milions of files or file snippets.
+🚀 GenAI Dataset scale: Handle tens of milions of multimodal files.
 
-🐍 Python-friendly: Use strictly typed `Pydantic`_ objects instead of JSON.
+🐍 Python-friendly: Use strictly-typed `Pydantic`_ objects instead of JSON.
 
 
-To ensure efficiency, Datachain supports parallel processing, parallel data
-downloads, and out-of-memory computing. It excels at optimizing batch operations.
-While most GenAI tools focus on online applications and realtime, DataChain is designed
-for offline data processing, data curation and ETL.
+Datachain supports parallel processing, parallel data
+downloads, and out-of-memory computing. It excels at optimizing offline batch operations.
 
-The typical use cases are Computer Vision data curation, LLM analytics
-and validation.
+The typical use cases include Computer Vision data curation, LLM analytics,
+and validation of multimodal AI applications.
 
 
 .. code:: console
@@ -44,25 +42,25 @@ and validation.
 Quick Start
 -----------
 
-Basic evaluation
-================
+Data curation with a local model
+=================================
 
 We will evaluate chatbot dialogs stored as text files in Google Cloud Storage
-- 50 files total in the example.
-These dialogs involve users looking for better wireless plans chatting with bot.
-Our goal is to identify successful dialogs.
+- 50 files total in this example.
+These dialogs involve users chatting with a bot while looking for better wireless plans.
+Our goal is to identify the successful dialogs.
 
-The data used in the examples is publicly available. Please feel free to run this code.
+The data used in the examples is `publicly available`_. The sample code is designed to run on a local machine.
 
-First, we'll use a simple sentiment analysis model. Please install transformers.
+First, we'll show batch inference with a simple sentiment model using the `transformers` library:
 
 .. code:: shell
 
     pip install transformers
 
-The code below downloads files the cloud, applies function
-`is_positive_dialogue_ending()` to each. All files with a positive sentiment
-are copied to local directory `output/`.
+The code below downloads files the cloud, and applies a user-defined function
+to each one of them. All files with a positive sentiment
+detected are then copied to the local directory.
 
 .. code:: py
 
@@ -85,7 +83,7 @@ are copied to local directory `output/`.
     )
 
     positive_chain = chain.filter(Column("is_positive") == True)
-    positive_chain.export_files("./output1")
+    positive_chain.export_files("./output")
 
     print(f"{positive_chain.count()} files were exported")
 
@@ -101,11 +99,11 @@ are copied to local directory `output/`.
     13
 
 
-LLM judging LLMs dialogs
-==========================
+LLM judging chatbots
+=============================
 
-Finding good dialogs using an LLM can be more efficient. In this example,
-we use Mistral with a free API. Please install the package and get a free
+LLMs can work as efficient universal classifiers. In the example below,
+we employ a free API from Mistral to judge the chatbot performance. Please get a free
 Mistral API key at https://console.mistral.ai
 
 .. code:: shell
@@ -113,9 +111,7 @@ Mistral API key at https://console.mistral.ai
     $ pip install mistralai
     $ export MISTRAL_API_KEY=_your_key_
 
-Below is a similar code example, but this time using an LLM to evaluate the dialogs.
-Note, only 4 threads were used in this example `parallel=4` due to a limitation of
-the free LLM service.
+DataChain can parallelize API calls; the free Mistral tier supports up to 4 requests at the same time.
 
 .. code:: py
 
@@ -147,7 +143,7 @@ the free LLM service.
     print(f"{successful_chain.count()} files were exported")
 
 
-With the current prompt, we found 31 files considered successful dialogs:
+With the instruction above, the Mistral model considers 31/50 files to hold the successful dialogues:
 
 .. code:: shell
 
@@ -161,11 +157,11 @@ With the current prompt, we found 31 files considered successful dialogs:
 Serializing Python-objects
 ==========================
 
-LLM responses contain valuable information for analytics, such as tokens used and the
-model. Preserving this information can be beneficial.
+LLM responses may contain valuable information for analytics – such as the number of tokens used, or the
+model performance parameters.
 
-Instead of extracting this information from the Mistral data structure (class
-`ChatCompletionResponse`), we serialize the entire Python object to the internal DB.
+Instead of extracting this information from the Mistral response data structure (class
+`ChatCompletionResponse`), DataChain can serialize the entire LLM response to the internal DB:
 
 
 .. code:: py
@@ -213,21 +209,23 @@ Output:
     64.0% dialogs were successful
 
 
-Complex Python data structures
+Iterating over Python data structures
 =============================================
 
-In the previous examples, a few dataset were saved in the embedded database
-(`SQLite`_ in directory `.datachain`).
-These datasets are versioned, and can be accessed using
+In the previous examples, datasets were saved in the embedded database
+(`SQLite`_ in folder `.datachain` of the working directory).
+These datasets were automatically versioned, and can be accessed using
 `DataChain.from_dataset("dataset_name")`.
+
+Here is how to retrieve a saved dataset and iterate over the objects:
 
 .. code:: py
 
     chain = DataChain.from_dataset("response")
 
-    # Iterating one-by-one: out of memory
+    # Iterating one-by-one: support out-of-memory workflow
     for file, response in chain.limit(5).collect("file", "response"):
-        # You work with Python objects
+        # verify the collected Python objects
         assert isinstance(response, ChatCompletionResponse)
 
         status = response.choices[0].message.content[:7]
@@ -248,9 +246,8 @@ Output:
 Vectorized analytics over Python objects
 ========================================
 
-Some operations can be efficiently run inside the DB without deserializing Python objects.
-Let's calculate the cost of using LLM APIs in a vectorized way.
-Mistral calls cost $2 per 1M input tokens and $6 per 1M output tokens:
+Some operations can run inside the DB without deserialization.
+For instance, let's calculate the total cost of using the LLM APIs, assuming the Mixtral call costs $2 per 1M input tokens and $6 per 1M output tokens:
 
 .. code:: py
 
@@ -322,6 +319,7 @@ Community and Support
 .. github-only
 .. _Contributor Guide: CONTRIBUTING.rst
 .. _Pydantic: https://github.com/pydantic/pydantic
+.. _publicly available: https://radar.kit.edu/radar/en/dataset/FdJmclKpjHzLfExE.ExpBot%2B-%2BA%2Bdataset%2Bof%2B79%2Bdialogs%2Bwith%2Ban%2Bexperimental%2Bcustomer%2Bservice%2Bchatbot
 .. _SQLite: https://www.sqlite.org/
 .. _Getting Started: https://datachain.dvc.ai/
 .. |Flowchart| image:: https://github.com/iterative/datachain/blob/main/docs/assets/flowchart.png?raw=true
