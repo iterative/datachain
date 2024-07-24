@@ -21,7 +21,7 @@ data at scale.
 
 🤖 AI-Driven Data Curation: Use local ML models or LLM APIs calls to enrich your data.
 
-🚀 GenAI Dataset scale: Handle tens of milions of multimodal files.
+🚀 GenAI Dataset scale: Handle tens of millions of multimodal files.
 
 🐍 Python-friendly: Use strictly-typed `Pydantic`_ objects instead of JSON.
 
