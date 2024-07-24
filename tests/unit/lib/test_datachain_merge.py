@@ -9,22 +9,22 @@ from datachain.lib.signal_schema import SignalResolvingError
 from datachain.sql.types import Float, String
 
 
-class ExampleUser(BaseModel):
+class User(BaseModel):
     name: Optional[str] = None
     age: Optional[int] = None
 
 
-class ExamplePlayer(ExampleUser):
+class Player(User):
     weight: Optional[float] = None
     height: Optional[int] = None
 
 
-class ExampleEmployee(BaseModel):
+class Employee(BaseModel):
     id: Optional[int] = None
-    person: ExampleUser
+    person: User
 
 
-class ExampleTeamMember(BaseModel):
+class TeamMember(BaseModel):
     player: Optional[str] = None
     sport: Optional[str] = None
     weight: Optional[float] = None
@@ -32,15 +32,15 @@ class ExampleTeamMember(BaseModel):
 
 
 employees = [
-    ExampleEmployee(id=151, person=ExampleUser(name="Alice", age=31)),
-    ExampleEmployee(id=152, person=ExampleUser(name="Bob", age=27)),
-    ExampleEmployee(id=153, person=ExampleUser(name="Charlie", age=54)),
-    ExampleEmployee(id=154, person=ExampleUser(name="David", age=29)),
+    Employee(id=151, person=User(name="Alice", age=31)),
+    Employee(id=152, person=User(name="Bob", age=27)),
+    Employee(id=153, person=User(name="Charlie", age=54)),
+    Employee(id=154, person=User(name="David", age=29)),
 ]
 team = [
-    ExampleTeamMember(player="Alice", sport="volleyball", weight=120.3, height=5.5),
-    ExampleTeamMember(player="Charlie", sport="football", weight=200.0, height=6.0),
-    ExampleTeamMember(player="David", sport="football", weight=158.7, height=5.7),
+    TeamMember(player="Alice", sport="volleyball", weight=120.3, height=5.5),
+    TeamMember(player="Charlie", sport="football", weight=200.0, height=6.0),
+    TeamMember(player="David", sport="football", weight=158.7, height=5.7),
 ]
 
 
@@ -58,11 +58,11 @@ def test_merge_objects(catalog):
         assert len(items) == 2
 
         empl, player = items
-        assert isinstance(empl, ExampleEmployee)
+        assert isinstance(empl, Employee)
         assert empl == employees[i]
         i += 1
 
-        assert isinstance(player, ExampleTeamMember)
+        assert isinstance(player, TeamMember)
         if empl.person.name != "Bob":
             assert player.player == team[j].player
             assert player.sport == team[j].sport
@@ -81,9 +81,9 @@ def test_merge_objects(catalog):
 
 def test_merge_similar_objects(catalog):
     new_employees = [
-        ExampleEmployee(id=152, person=ExampleUser(name="Bob", age=27)),
-        ExampleEmployee(id=201, person=ExampleUser(name="Karl", age=18)),
-        ExampleEmployee(id=154, person=ExampleUser(name="David", age=29)),
+        Employee(id=152, person=User(name="Bob", age=27)),
+        Employee(id=201, person=User(name="Karl", age=18)),
+        Employee(id=154, person=User(name="David", age=29)),
     ]
 
     ch1 = DataChain.from_values(emp=employees)
@@ -196,8 +196,8 @@ def test_merge_with_itself(catalog):
 
     count = 0
     for left, right in merged.collect():
-        assert isinstance(left, ExampleEmployee)
-        assert isinstance(right, ExampleEmployee)
+        assert isinstance(left, Employee)
+        assert isinstance(right, Employee)
         assert left == right == employees[count]
         count += 1
 

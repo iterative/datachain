@@ -1027,11 +1027,7 @@ class DataChain(DatasetQuery):
 
         transposed_result = list(map(list, zip(*self.results())))
         data = {tuple(n): val for n, val in zip(headers, transposed_result)}
-        df = pd.DataFrame(data)
-        # Sort the dataframe to avoid a PerformanceWarning about unsorted indexing.
-        df.sort_index(axis=0, inplace=True, sort_remaining=True)
-        df.sort_index(axis=1, inplace=True, sort_remaining=True)
-        return df
+        return pd.DataFrame(data)
 
     def show(
         self,
