@@ -25,6 +25,7 @@ from typing import (
 
 import attrs
 import sqlalchemy
+import sqlalchemy as sa
 from attrs import frozen
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback, TqdmCallback
 from sqlalchemy import Column
@@ -250,7 +251,7 @@ class DatasetDiffOperation(Step):
         self,
         source_query: Select,
         target_query: Select,
-    ) -> Select:
+    ) -> sa.Selectable:
         """
         Should return select query that calculates desired diff between dataset queries
         """
@@ -292,23 +293,16 @@ class DatasetDiffOperation(Step):
 
 @frozen
 class Subtract(DatasetDiffOperation):
-    """
-    Calculates rows that are in a source query but are not in target query (diff)
-    This can be used to do delta updates (calculate UDF only on newly added rows)
-    Example:
-        >>> ds = DatasetQuery(name="dogs_cats") # some older dataset with embeddings
-        >>> ds_updated = (
-                DatasetQuery("gs://dvcx-datalakes/dogs-and-cats")
-                .filter(C.size > 1000) # we can also filter out source query
-                .subtract(ds)
-                .add_signals(calc_embeddings) # calculae embeddings only on new rows
-                .union(ds) # union with old dataset that's missing new rows
-                .save("dogs_cats_updated")
-            )
-    """
+    on: Sequence[str]
 
-    def query(self, source_query: Select, target_query: Select) -> Select:
-        return self.catalog.warehouse.subtract_query(source_query, target_query)
+    def query(self, source_query: Select, target_query: Select) -> sa.Selectable:
+        sq = source_query.alias("source_query")
+        tq = target_query.alias("target_query")
+        where_clause = sa.and_(
+            getattr(sq.c, col_name).is_not_distinct_from(getattr(tq.c, col_name))
+            for col_name in self.on
+        )  # type: ignore[arg-type]
+        return sq.select().except_(sq.select().where(where_clause))
 
 
 @frozen
@@ -1564,8 +1558,12 @@ class DatasetQuery:
 
     @detach
     def subtract(self, dq: "DatasetQuery") -> "Self":
+        return self._subtract(dq, on=["source", "parent", "name"])
+
+    @detach
+    def _subtract(self, dq: "DatasetQuery", on: Sequence[str]) -> "Self":
         query = self.clone()
-        query.steps.append(Subtract(dq, self.catalog))
+        query.steps.append(Subtract(dq, self.catalog, on=on))
         return query
 
     @detach
