@@ -583,8 +583,6 @@ def dataset_rows():
             "is_latest": True,
             "name": f"dql_1m_meta_text_emd.parquet_3_{i}_0.snappy.parquet",
             "etag": f"72b35c8e9b8eed1636c91eb94241c2f8-{i}",
-            "owner_id": "owner",
-            "owner_name": "aws-iterative-sandbox",
             "last_modified": "2024-02-23T10:42:31.842944+00:00",
             "size": 49807360,
             "sys__rand": 12123123123,

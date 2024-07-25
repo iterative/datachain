@@ -55,8 +55,6 @@ class Node:
     is_latest: bool = True
     last_modified: Optional[datetime] = None
     size: int = 0
-    owner_name: str = ""
-    owner_id: str = ""
     location: Optional[str] = None
     source: StorageURI = StorageURI("")
     dir_type: int = DirType.FILE
@@ -149,8 +147,6 @@ class Entry:
     is_latest: bool = True
     last_modified: Optional[datetime] = None
     size: int = 0
-    owner_name: str = ""
-    owner_id: str = ""
     location: Optional[str] = None
 
     @classmethod
@@ -211,9 +207,9 @@ class NodeWithPath:
 TIME_FMT = "%Y-%m-%d %H:%M"
 
 
-def long_line_str(name: str, timestamp: Optional[datetime], owner: str) -> str:
+def long_line_str(name: str, timestamp: Optional[datetime]) -> str:
     if timestamp is None:
         time = "-"
     else:
         time = timestamp.strftime(TIME_FMT)
-    return f"{owner: <19} {time: <19} {name}"
+    return f"{time: <19} {name}"
