@@ -149,7 +149,7 @@ def missing_vector_function(name, exc):
 
 
 def sqlite_string_split(string: str, sep: str, maxsplit: int = -1) -> str:
-    return orjson.dumps(string.split(sep, maxsplit))
+    return orjson.dumps(string.split(sep, maxsplit)).decode("utf-8")
 
 
 def register_user_defined_sql_functions() -> None:

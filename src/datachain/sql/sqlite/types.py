@@ -28,7 +28,7 @@ class Array(types.UserDefinedType):
 
 
 def adapt_array(arr):
-    return orjson.dumps(arr)
+    return orjson.dumps(arr).decode("utf-8")
 
 
 def convert_array(arr):
@@ -36,7 +36,7 @@ def convert_array(arr):
 
 
 def adapt_np_array(arr):
-    return orjson.dumps(arr, option=orjson.OPT_SERIALIZE_NUMPY)
+    return orjson.dumps(arr, option=orjson.OPT_SERIALIZE_NUMPY).decode("utf-8")
 
 
 def adapt_np_generic(val):
