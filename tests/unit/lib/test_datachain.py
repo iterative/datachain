@@ -660,7 +660,7 @@ def test_parse_tabular_partitions(tmp_dir, catalog):
 
 def test_parse_tabular_empty(tmp_dir, catalog):
     path = tmp_dir / "test.parquet"
-    with pytest.raises(DataChainParamsError):
+    with pytest.raises(FileNotFoundError):
         DataChain.from_storage(path.as_uri()).parse_tabular()
 
 

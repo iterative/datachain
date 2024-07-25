@@ -1,4 +1,5 @@
 import ast
+import glob
 import io
 import json
 import logging
@@ -704,7 +705,12 @@ class Catalog:
 
         client_config = client_config or self.client_config
         client, path = self.parse_url(source, **client_config)
-        prefix = posixpath.dirname(path)
+        stem = os.path.basename(os.path.normpath(path))
+        prefix = (
+            posixpath.dirname(path)
+            if glob.has_magic(stem) or client.fs.isfile(source)
+            else path
+        )
         storage_dataset_name = Storage.dataset_name(
             client.uri, posixpath.join(prefix, "")
         )
