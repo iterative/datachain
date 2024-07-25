@@ -638,8 +638,6 @@ class AbstractWarehouse(ABC, Serializable):
             with_default(dr.c.is_latest),
             dr.c.last_modified,
             with_default(dr.c.size),
-            with_default(dr.c.owner_name),
-            with_default(dr.c.owner_id),
             with_default(dr.c.sys__rand),
             dr.c.location,
             de.c.source,

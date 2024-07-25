@@ -64,8 +64,6 @@ def schema():
         "is_latest": {"type": "Boolean"},
         "last_modified": {"type": "DateTime"},
         "size": {"type": "Int64"},
-        "owner_name": {"type": "String"},
-        "owner_id": {"type": "String"},
         "sys__rand": {"type": "Int64"},
         "location": {"type": "String"},
         "source": {"type": "String"},
