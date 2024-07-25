@@ -1,11 +1,19 @@
+import math
 import os
 import re
+from datetime import datetime, timezone
+from pathlib import Path
 
 import pandas as pd
 import pytest
+import pytz
+from PIL import Image
 
+from datachain.data_storage.sqlite import SQLiteWarehouse
+from datachain.dataset import DatasetStats
 from datachain.lib.dc import DataChain
-from datachain.lib.file import File
+from datachain.lib.file import File, ImageFile
+from tests.utils import images_equal
 
 
 @pytest.mark.parametrize("anon", [True, False])
@@ -76,10 +84,13 @@ def test_read_file(cloud_test_catalog, use_cache):
 @pytest.mark.parametrize("placement", ["fullpath", "filename"])
 @pytest.mark.parametrize("use_map", [True, False])
 @pytest.mark.parametrize("use_cache", [True, False])
+@pytest.mark.parametrize("file_type", ["", "binary", "text"])
 @pytest.mark.parametrize("cloud_type", ["file"], indirect=True)
-def test_export_files(tmp_dir, cloud_test_catalog, placement, use_map, use_cache):
+def test_export_files(
+    tmp_dir, cloud_test_catalog, placement, use_map, use_cache, file_type
+):
     ctc = cloud_test_catalog
-    df = DataChain.from_storage(ctc.src_uri)
+    df = DataChain.from_storage(ctc.src_uri, type=file_type)
     if use_map:
         df.export_files(tmp_dir / "output", placement=placement, use_cache=use_cache)
         df.map(
@@ -107,6 +118,27 @@ def test_export_files(tmp_dir, cloud_test_catalog, placement, use_map, use_cache
             file_path = file.get_full_name()
         with open(tmp_dir / "output" / file_path) as f:
             assert f.read() == expected[file.name]
+
+
+@pytest.mark.parametrize("use_cache", [True, False])
+def test_export_images_files(tmp_dir, tmp_path, use_cache):
+    images = [
+        {"name": "img1.jpg", "data": Image.new(mode="RGB", size=(64, 64))},
+        {"name": "img2.jpg", "data": Image.new(mode="RGB", size=(128, 128))},
+    ]
+
+    for img in images:
+        img["data"].save(tmp_path / img["name"])
+
+    DataChain.from_values(
+        file=[
+            ImageFile(name=img["name"], source=f"file://{tmp_path}") for img in images
+        ],
+    ).export_files(tmp_dir / "output", placement="filename", use_cache=use_cache)
+
+    for img in images:
+        exported_img = Image.open(tmp_dir / "output" / img["name"])
+        assert images_equal(img["data"], exported_img)
 
 
 def test_export_files_filename_placement_not_unique_files(tmp_dir, catalog):
@@ -202,3 +234,42 @@ def test_show_no_truncate(capsys, catalog):
     for i in range(3):
         assert client[i] in normalized_output
         assert details[i] in normalized_output
+
+
+def test_from_storage_dataset_stats(tmp_dir, catalog):
+    for i in range(4):
+        (tmp_dir / f"file{i}.txt").write_text(f"file{i}")
+
+    dc = DataChain.from_storage(tmp_dir.as_uri(), catalog=catalog).save("test-data")
+    stats = catalog.dataset_stats(dc.name, dc.version)
+    assert stats == DatasetStats(num_objects=4, size=20)
+
+
+def test_from_storage_check_rows(tmp_dir, catalog):
+    stats = {}
+    for i in range(4):
+        file = tmp_dir / f"{i}.txt"
+        file.write_text(f"file{i}")
+        stats[file.name] = file.stat()
+
+    dc = DataChain.from_storage(tmp_dir.as_uri(), catalog=catalog).save("test-data")
+
+    is_sqlite = isinstance(catalog.warehouse, SQLiteWarehouse)
+    tz = timezone.utc if is_sqlite else pytz.UTC
+
+    for (file,) in dc.collect():
+        assert isinstance(file, File)
+        stat = stats[file.name]
+        mtime = stat.st_mtime if is_sqlite else float(math.floor(stat.st_mtime))
+        assert file == File(
+            source=Path(tmp_dir.anchor).as_uri(),
+            parent=tmp_dir.relative_to(tmp_dir.anchor),
+            name=file.name,
+            size=stat.st_size,
+            version="",
+            etag=stat.st_mtime.hex(),
+            is_latest=True,
+            last_modified=datetime.fromtimestamp(mtime, tz=tz),
+            location=None,
+            vtype="",
+        )

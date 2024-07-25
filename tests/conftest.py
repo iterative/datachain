@@ -6,13 +6,13 @@ from pathlib import PosixPath
 
 import attrs
 import pytest
-import pytest_servers.exceptions
 import sqlalchemy
 from pytest import MonkeyPatch, TempPathFactory
 from upath.implementations.cloud import CloudPath
 
 from datachain.catalog import Catalog
 from datachain.catalog.loader import get_id_generator, get_metastore, get_warehouse
+from datachain.cli_utils import CommaSeparatedArgs
 from datachain.client.local import FileClient
 from datachain.data_storage.sqlite import (
     SQLiteDatabaseEngine,
@@ -22,7 +22,7 @@ from datachain.data_storage.sqlite import (
 )
 from datachain.dataset import DatasetRecord
 from datachain.query.session import Session
-from datachain.utils import DataChainDir, get_env_list
+from datachain.utils import DataChainDir
 
 from .utils import DEFAULT_TREE, get_simple_ds_query, instantiate_tree
 
@@ -239,6 +239,13 @@ def tmp_dir(tmp_path_factory, monkeypatch):
 
 def pytest_addoption(parser):
     parser.addoption(
+        "--disable-remotes",
+        action=CommaSeparatedArgs,
+        default=[],
+        help="Comma separated list of remotes to disable",
+    )
+
+    parser.addoption(
         "--datachain-bin",
         type=str,
         default=DEFAULT_DATACHAIN_BIN,
@@ -359,7 +366,10 @@ class CloudTestCatalog:
         return self.server.client_config
 
 
-@pytest.fixture(scope="session", params=["file", "s3", "gs", "azure"])
+cloud_types = ["s3", "gs", "azure"]
+
+
+@pytest.fixture(scope="session", params=["file", *cloud_types])
 def cloud_type(request):
     return request.param
 
@@ -369,32 +379,38 @@ def version_aware(request):
     return request.param
 
 
+def pytest_collection_modifyitems(config, items):
+    disabled_remotes = config.getoption("--disable-remotes")
+    if not disabled_remotes:
+        return
+
+    for item in items:
+        if "cloud_server" in item.fixturenames:
+            cloud_type = item.callspec.params.get("cloud_type")
+            if cloud_type not in cloud_types:
+                continue
+            if "all" in disabled_remotes:
+                reason = "Skipping all tests requiring cloud"
+                item.add_marker(pytest.mark.skip(reason=reason))
+            if cloud_type in disabled_remotes:
+                reason = f"Skipping all tests for {cloud_type=}"
+                item.add_marker(pytest.mark.skip(reason=reason))
+
+
 @pytest.fixture(scope="session")
 def cloud_server(request, tmp_upath_factory, cloud_type, version_aware, tree):
-    # DATACHAIN_TEST_SKIP_MISSING_REMOTES can be set to a comma-separated list
-    # of remotes to skip tests for if unavailable or "all" to skip all
-    # unavailable remotes:
-    #  DATACHAIN_TEST_SKIP_MISSING_REMOTES=azure,gs
-    #  DATACHAIN_TEST_SKIP_MISSING_REMOTES=all
-    skip_missing_remotes = set(get_env_list("DATACHAIN_TEST_SKIP_MISSING_REMOTES", []))
-    try:
-        if cloud_type == "azure" and version_aware:
-            if conn_str := request.config.getoption("--azure-connection-string"):
-                src_path = tmp_upath_factory.azure(conn_str)
-            else:
-                pytest.skip("Can't test versioning with Azure")
-        elif cloud_type == "file":
-            if version_aware:
-                pytest.skip("Local storage can't be versioned")
-            else:
-                src_path = tmp_upath_factory.mktemp("local")
+    if cloud_type == "azure" and version_aware:
+        if conn_str := request.config.getoption("--azure-connection-string"):
+            src_path = tmp_upath_factory.azure(conn_str)
         else:
-            src_path = tmp_upath_factory.mktemp(cloud_type, version_aware=version_aware)
-    except pytest_servers.exceptions.RemoteUnavailable as exc:
-        if "all" in skip_missing_remotes or cloud_type in skip_missing_remotes:
-            pytest.skip(str(exc))
-        raise
-
+            pytest.skip("Can't test versioning with Azure")
+    elif cloud_type == "file":
+        if version_aware:
+            pytest.skip("Local storage can't be versioned")
+        else:
+            src_path = tmp_upath_factory.mktemp("local")
+    else:
+        src_path = tmp_upath_factory.mktemp(cloud_type, version_aware=version_aware)
     return make_cloud_server(src_path, cloud_type, tree)
 
 

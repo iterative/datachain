@@ -86,7 +86,7 @@ class LLaVADescribe(Mapper):
 if __name__ == "__main__":
     (
         DataChain.from_storage(source, type="image")
-        .filter(C.path.glob("*/cat*.jpg"))
+        .filter(C("file.path").glob("*/cat*.jpg"))
         .map(
             desc=BLIP2Describe(
                 # device=device,

@@ -62,7 +62,7 @@ if __name__ == "__main__":
     (
         DataChain.from_storage(source, type="image")
         .settings(parallel=-1)
-        .filter(C("name").glob("*.jpg"))
+        .filter(C("file.name").glob("*.jpg"))
         .limit(10000)
         .map(
             image_description,

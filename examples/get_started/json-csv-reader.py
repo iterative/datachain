@@ -60,7 +60,7 @@ def main():
     print("========================================================================")
     chain = (
         DataChain.from_storage(uri)
-        .filter(C.path.glob("*.json"))
+        .filter(C("file.path").glob("*.json"))
         .show_json_schema(jmespath="@", model_name="Coco")
     )
     chain.save()

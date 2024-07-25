@@ -89,6 +89,7 @@ dev = [
   "datachain[docs,tests]",
   "mypy==1.10.1",
   "types-python-dateutil",
+  "types-pytz",
   "types-PyYAML",
   "types-requests",
   "types-ujson"

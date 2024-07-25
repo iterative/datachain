@@ -69,26 +69,6 @@ jobs:
             pyv: '3.12'
 
     steps:
-
-      # https://github.com/iterative/pytest-servers/pull/122
-      # https://github.com/abiosoft/colima/issues/468
-      # https://github.com/abiosoft/colima/blob/main/docs/FAQ.md#cannot-connect-to-the-docker-daemon-at-unixvarrundockersock-is-the-docker-daemon-running
-      # colima v0.5.6 seems to run more stable than the latest - that has occasional network failures (ports are not open)
-      # see: https://github.com/abiosoft/colima/issues/962
-      - name: Use colima as default docker host on MacOS
-        if: runner.os == 'macOS'
-        run: |
-          brew install docker lima || true # avoid non-zero exit code if brew link fails
-          sudo curl -L -o /usr/local/bin/colima https://github.com/abiosoft/colima/releases/download/v0.5.6/colima-Darwin-x86_64
-          sudo chmod +x /usr/local/bin/colima
-          colima start
-          sudo ln -vsf "${HOME}"/.colima/default/docker.sock /var/run/docker.sock
-        env:
-          HOMEBREW_NO_AUTO_UPDATE: true
-          HOMEBREW_NO_INSTALL_CLEANUP: true
-          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: true
-          HOMEBREW_NO_INSTALL_UPGRADE: true
-
       - name: Check out the repository
         uses: actions/checkout@v4
         with:
@@ -106,12 +86,17 @@ jobs:
           nox --version
           uv --version
 
-      - name: Skip flaky azure, gs remotes if unavailable on macos
+      - name: Skip flaky azure, gs remotes on macOS
         if: runner.os == 'macOS'
-        run: echo 'DATACHAIN_TEST_SKIP_MISSING_REMOTES=azure,gs' >> "$GITHUB_ENV"
+        run: echo 'DISABLE_REMOTES_ARG=--disable-remotes=azure,gs' >> "$GITHUB_ENV"
+
+      - name: Skip all remotes on Windows
+        if: runner.os == 'Windows'
+        run: echo 'DISABLE_REMOTES_ARG=--disable-remotes=azure,gs' >> $env:GITHUB_ENV
 
       - name: Run tests
-        run: nox -s tests-${{ matrix.pyv }}
+        run: nox -s tests-${{ matrix.pyv }} -- $DISABLE_REMOTES_ARG
+        shell: bash
 
       - name: Upload coverage report
         uses: codecov/codecov-action@v4

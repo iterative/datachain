@@ -20,7 +20,7 @@ from datachain.cache import UniqueId
 from datachain.client.fileslice import FileSlice
 from datachain.lib.data_model import DataModel
 from datachain.lib.utils import DataChainError
-from datachain.sql.types import JSON, Int, String
+from datachain.sql.types import JSON, Boolean, DateTime, Int, String
 from datachain.utils import TIME_ZERO
 
 if TYPE_CHECKING:
@@ -124,11 +124,13 @@ class File(DataModel):
     _datachain_column_types: ClassVar[dict[str, Any]] = {
         "source": String,
         "path": String,
+        "size": Int,
         "version": String,
         "etag": String,
-        "size": Int,
-        "vtype": String,
+        "is_latest": Boolean,
+        "last_modified": DateTime,
         "location": JSON,
+        "vtype": String,
     }
 
     _unique_id_keys: ClassVar[list[str]] = [
@@ -217,6 +219,11 @@ class File(DataModel):
         with self.open(mode="r") as stream:
             return stream.read()
 
+    def save(self, destination: str):
+        """Writes it's content to destination"""
+        with open(destination, mode="wb") as f:
+            f.write(self.read())
+
     def export(
         self,
         output: str,
@@ -230,8 +237,7 @@ class File(DataModel):
         dst_dir = os.path.dirname(dst)
         os.makedirs(dst_dir, exist_ok=True)
 
-        with open(dst, mode="wb") as f:
-            f.write(self.read())
+        self.save(dst)
 
     def _set_stream(
         self,
@@ -324,6 +330,16 @@ class TextFile(File):
         with super().open(mode="r") as stream:
             yield stream
 
+    def read_text(self):
+        """Returns file contents as text."""
+        with self.open() as stream:
+            return stream.read()
+
+    def save(self, destination: str):
+        """Writes it's content to destination"""
+        with open(destination, mode="w") as f:
+            f.write(self.read_text())
+
 
 class ImageFile(File):
     """`DataModel` for reading image files."""
@@ -332,6 +348,10 @@ class ImageFile(File):
         """Returns `PIL.Image.Image` object."""
         fobj = super().read()
         return Image.open(BytesIO(fobj))
+
+    def save(self, destination: str):
+        """Writes it's content to destination"""
+        self.read().save(destination)
 
 
 def get_file(type_: Literal["binary", "text", "image"] = "binary"):
@@ -344,20 +364,24 @@ def get_file(type_: Literal["binary", "text", "image"] = "binary"):
     def get_file_type(
         source: str,
         path: str,
+        size: int,
         version: str,
         etag: str,
-        size: int,
-        vtype: str,
+        is_latest: bool,
+        last_modified: datetime,
         location: Optional[Union[dict, list[dict]]],
+        vtype: str,
     ) -> file:  # type: ignore[valid-type]
         return file(
             source=source,
             path=path,
+            size=size,
             version=version,
             etag=etag,
-            size=size,
-            vtype=vtype,
+            is_latest=is_latest,
+            last_modified=last_modified,
             location=location,
+            vtype=vtype,
         )
 
     return get_file_type

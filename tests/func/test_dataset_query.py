@@ -521,6 +521,35 @@ def test_mutate(cloud_test_catalog, save):
     [("s3", True)],
     indirect=True,
 )
+def test_order_by_after_mutate(cloud_test_catalog, save):
+    catalog = cloud_test_catalog.catalog
+    ds = DatasetQuery(path=cloud_test_catalog.src_uri, catalog=catalog)
+    q = (
+        ds.mutate(size10x=C.size * 10)
+        .filter((C.size10x < 40) | (C.size10x > 100) | C.name.glob("cat*"))
+        .order_by(C.size10x.desc())
+    )
+
+    if save:
+        ds_name = "animals_cats"
+        q.save(ds_name)
+        result = (
+            DatasetQuery(name=ds_name, catalog=catalog)
+            .order_by(C.size10x.desc(), C.name)
+            .db_results(row_factory=lambda c, v: dict(zip(c, v)))
+        )
+    else:
+        result = q.db_results(row_factory=lambda c, v: dict(zip(c, v)))
+
+    assert [r["size10x"] for r in result] == [130, 40, 40, 30]
+
+
+@pytest.mark.parametrize("save", [True, False])
+@pytest.mark.parametrize(
+    "cloud_type,version_aware",
+    [("s3", True)],
+    indirect=True,
+)
 def test_order_by_limit(cloud_test_catalog, save):
     catalog = cloud_test_catalog.catalog
     path = cloud_test_catalog.src_uri

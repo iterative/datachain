@@ -54,6 +54,7 @@ from datachain.utils import (
     batched,
     determine_processes,
     filtered_cloudpickle_dumps,
+    get_datachain_executable,
 )
 
 from .metrics import metrics
@@ -507,13 +508,12 @@ class UDFStep(Step, ABC):
 
                 # Run the UDFDispatcher in another process to avoid needing
                 # if __name__ == '__main__': in user scripts
-                datachain_exec_path = os.environ.get("DATACHAIN_EXEC_PATH", "datachain")
-
+                exec_cmd = get_datachain_executable()
                 envs = dict(os.environ)
                 envs.update({"PYTHONPATH": os.getcwd()})
                 process_data = filtered_cloudpickle_dumps(udf_info)
                 result = subprocess.run(  # noqa: S603
-                    [datachain_exec_path, "--internal-run-udf"],
+                    [*exec_cmd, "internal-run-udf"],
                     input=process_data,
                     check=False,
                     env=envs,
@@ -820,8 +820,16 @@ class SQLMutate(SQLClause):
     args: tuple[ColumnElement, ...]
 
     def apply_sql_clause(self, query: Select) -> Select:
-        subquery = query.subquery()
-        return sqlalchemy.select(*subquery.c, *self.args).select_from(subquery)
+        original_subquery = query.subquery()
+        # this is needed for new column to be used in clauses
+        # like ORDER BY, otherwise new column is not recognized
+        subquery = (
+            sqlalchemy.select(*original_subquery.c, *self.args)
+            .select_from(original_subquery)
+            .subquery()
+        )
+
+        return sqlalchemy.select(*subquery.c).select_from(subquery)
 
 
 @frozen
