@@ -210,15 +210,16 @@ def test_create_dataset_from_sources_failed(listed_bucket, cloud_test_catalog, m
     dataset_name = uuid.uuid4().hex
     src_uri = cloud_test_catalog.src_uri
     catalog = cloud_test_catalog.catalog
-    with mocker.patch.object(
+    # Mocks are automatically undone at the end of a test.
+    mocker.patch.object(
         catalog.warehouse.__class__,
         "create_dataset_rows_table",
         side_effect=RuntimeError("Error"),
-    ) as _:
-        with pytest.raises(RuntimeError):
-            catalog.create_dataset_from_sources(
-                dataset_name, [f"{src_uri}/dogs/*"], recursive=True
-            )
+    )
+    with pytest.raises(RuntimeError):
+        catalog.create_dataset_from_sources(
+            dataset_name, [f"{src_uri}/dogs/*"], recursive=True
+        )
 
     dataset = catalog.get_dataset(dataset_name)
     dataset_version = dataset.get_version(dataset.latest_version)
