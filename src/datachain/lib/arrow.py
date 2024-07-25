@@ -46,7 +46,7 @@ class ArrowGenerator(Generator):
         )
         index = 0
         with tqdm(desc="Parsed by pyarrow", unit=" rows") as pbar:
-            for record_batch in ds.to_batches():
+            for record_batch in ds.to_batches(use_threads=False):
                 for record in record_batch.to_pylist():
                     source = IndexedFile(file=file, index=index)
                     vals = list(record.values())
