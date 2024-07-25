@@ -366,7 +366,10 @@ class CloudTestCatalog:
         return self.server.client_config
 
 
-@pytest.fixture(scope="session", params=["file", "s3", "gs", "azure"])
+cloud_types = ["s3", "gs", "azure"]
+
+
+@pytest.fixture(scope="session", params=["file", *cloud_types])
 def cloud_type(request):
     return request.param
 
@@ -384,7 +387,7 @@ def pytest_collection_modifyitems(config, items):
     for item in items:
         if "cloud_server" in item.fixturenames:
             cloud_type = item.callspec.params.get("cloud_type")
-            if cloud_type == "file":
+            if cloud_type not in cloud_types:
                 continue
             if "all" in disabled_remotes:
                 reason = "Skipping all tests requiring cloud"
