@@ -263,7 +263,7 @@ def test_query_specific_dataset_set_proper_dataset_name_version(
 def test_save_set_proper_dataset_name_version(cloud_test_catalog, dogs_cats_dataset):
     catalog = cloud_test_catalog.catalog
     ds = DatasetQuery(name=dogs_cats_dataset.name, version=1, catalog=catalog)
-    ds = ds.filter(C.path.glob("dog*"))
+    ds = ds.filter(C.path.glob("*dog*"))
     ds2 = ds.save("dogs_small")
 
     assert ds2.name == "dogs_small"
@@ -526,7 +526,7 @@ def test_order_by_after_mutate(cloud_test_catalog, save):
     ds = DatasetQuery(path=cloud_test_catalog.src_uri, catalog=catalog)
     q = (
         ds.mutate(size10x=C.size * 10)
-        .filter((C.size10x < 40) | (C.size10x > 100) | C.name.glob("cat*"))
+        .filter((C.size10x < 40) | (C.size10x > 100) | C.path.glob("cat*"))
         .order_by(C.size10x.desc())
     )
 
@@ -535,7 +535,7 @@ def test_order_by_after_mutate(cloud_test_catalog, save):
         q.save(ds_name)
         result = (
             DatasetQuery(name=ds_name, catalog=catalog)
-            .order_by(C.size10x.desc(), C.name)
+            .order_by(C.size10x.desc(), pathfunc.name(C.path))
             .db_results(row_factory=lambda c, v: dict(zip(c, v)))
         )
     else:

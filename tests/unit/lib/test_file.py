@@ -172,12 +172,12 @@ def test_save_binary_data(tmp_path, catalog: Catalog):
     with open(tmp_path / file1_name, "wb") as fd:
         fd.write(data)
 
-    file1 = File(name=file1_name, source=f"file://{tmp_path}")
+    file1 = File(path=file1_name, source=f"file://{tmp_path}")
     file1._set_stream(catalog, False)
 
     file1.save(tmp_path / file2_name)
 
-    file2 = File(name=file2_name, source=f"file://{tmp_path}")
+    file2 = File(path=file2_name, source=f"file://{tmp_path}")
     file2._set_stream(catalog, False)
     assert file2.read() == data
 
@@ -190,12 +190,12 @@ def test_save_text_data(tmp_path, catalog: Catalog):
     with open(tmp_path / file1_name, "w") as fd:
         fd.write(data)
 
-    file1 = TextFile(name=file1_name, source=f"file://{tmp_path}")
+    file1 = TextFile(path=file1_name, source=f"file://{tmp_path}")
     file1._set_stream(catalog, False)
 
     file1.save(tmp_path / file2_name)
 
-    file2 = TextFile(name=file2_name, source=f"file://{tmp_path}")
+    file2 = TextFile(path=file2_name, source=f"file://{tmp_path}")
     file2._set_stream(catalog, False)
     assert file2.read() == data
 
@@ -209,12 +209,12 @@ def test_save_image_data(tmp_path, catalog: Catalog):
     image = Image.new(mode="RGB", size=(64, 64))
     image.save(tmp_path / file1_name)
 
-    file1 = ImageFile(name=file1_name, source=f"file://{tmp_path}")
+    file1 = ImageFile(path=file1_name, source=f"file://{tmp_path}")
     file1._set_stream(catalog, False)
 
     file1.save(tmp_path / file2_name)
 
-    file2 = ImageFile(name=file2_name, source=f"file://{tmp_path}")
+    file2 = ImageFile(path=file2_name, source=f"file://{tmp_path}")
     file2._set_stream(catalog, False)
     assert images_equal(image, file2.read())
 
