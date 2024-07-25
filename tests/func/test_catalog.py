@@ -146,8 +146,6 @@ def test_find_names_columns(cloud_test_catalog, cloud_type):
     src_uri = cloud_test_catalog.src_uri
     catalog = cloud_test_catalog.catalog
 
-    owner = "webfile" if cloud_type == "s3" else ""
-
     src_uri_path = src_uri
     if cloud_type == "file":
         src_uri_path = LocalFileSystem._strip_protocol(src_uri)
@@ -156,14 +154,14 @@ def test_find_names_columns(cloud_test_catalog, cloud_type):
         catalog.find(
             [src_uri],
             names=["*cat*"],
-            columns=["du", "name", "owner", "path", "size", "type"],
+            columns=["du", "name", "path", "size", "type"],
         )
     ) == {
         "\t".join(columns)
         for columns in [
-            ["8", "cats", "", f"{src_uri_path}/cats/", "0", "d"],
-            ["4", "cat1", owner, f"{src_uri_path}/cats/cat1", "4", "f"],
-            ["4", "cat2", owner, f"{src_uri_path}/cats/cat2", "4", "f"],
+            ["8", "cats", f"{src_uri_path}/cats/", "0", "d"],
+            ["4", "cat1", f"{src_uri_path}/cats/cat1", "4", "f"],
+            ["4", "cat2", f"{src_uri_path}/cats/cat2", "4", "f"],
         ]
     }
 
