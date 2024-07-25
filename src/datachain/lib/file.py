@@ -12,7 +12,6 @@ from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
 
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
-from fsspec.implementations.local import LocalFileSystem
 from PIL import Image
 from pydantic import Field, field_validator
 
