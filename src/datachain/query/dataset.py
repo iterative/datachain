@@ -814,8 +814,16 @@ class SQLMutate(SQLClause):
     args: tuple[ColumnElement, ...]
 
     def apply_sql_clause(self, query: Select) -> Select:
-        subquery = query.subquery()
-        return sqlalchemy.select(*subquery.c, *self.args).select_from(subquery)
+        original_subquery = query.subquery()
+        # this is needed for new column to be used in clauses
+        # like ORDER BY, otherwise new column is not recognized
+        subquery = (
+            sqlalchemy.select(*original_subquery.c, *self.args)
+            .select_from(original_subquery)
+            .subquery()
+        )
+
+        return sqlalchemy.select(*subquery.c).select_from(subquery)
 
 
 @frozen

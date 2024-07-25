@@ -216,7 +216,7 @@ class File(DataModel):
         with self.open(mode="r") as stream:
             return stream.read()
 
-    def write(self, destination: str):
+    def save(self, destination: str):
         """Writes it's content to destination"""
         with open(destination, mode="wb") as f:
             f.write(self.read())
@@ -234,7 +234,7 @@ class File(DataModel):
         dst_dir = os.path.dirname(dst)
         os.makedirs(dst_dir, exist_ok=True)
 
-        self.write(dst)
+        self.save(dst)
 
     def _set_stream(
         self,
@@ -332,7 +332,7 @@ class TextFile(File):
         with self.open() as stream:
             return stream.read()
 
-    def write(self, destination: str):
+    def save(self, destination: str):
         """Writes it's content to destination"""
         with open(destination, mode="w") as f:
             f.write(self.read_text())
@@ -346,7 +346,7 @@ class ImageFile(File):
         fobj = super().read()
         return Image.open(BytesIO(fobj))
 
-    def write(self, destination: str):
+    def save(self, destination: str):
         """Writes it's content to destination"""
         self.read().save(destination)
 

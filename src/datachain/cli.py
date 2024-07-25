@@ -491,6 +491,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         type=int,
         help="Dataset version",
     )
+    show_parser.add_argument("--schema", action="store_true", help="Show schema")
     add_show_args(show_parser)
 
     query_parser = subp.add_parser(
@@ -816,9 +817,14 @@ def show(
     offset: int = 0,
     columns: Sequence[str] = (),
     no_collapse: bool = False,
+    schema: bool = False,
 ) -> None:
+    from datachain.lib.dc import DataChain
     from datachain.query import DatasetQuery
     from datachain.utils import show_records
+
+    dataset = catalog.get_dataset(name)
+    dataset_version = dataset.get_version(version or dataset.latest_version)
 
     query = (
         DatasetQuery(name=name, version=version, catalog=catalog)
@@ -828,6 +834,10 @@ def show(
     )
     records = query.to_db_records()
     show_records(records, collapse_columns=not no_collapse)
+    if schema and dataset_version.feature_schema:
+        print("\nSchema:")
+        dc = DataChain(name=name, version=version, catalog=catalog)
+        dc.print_schema()
 
 
 def query(
@@ -1013,6 +1023,7 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
                 offset=args.offset,
                 columns=args.columns,
                 no_collapse=args.no_collapse,
+                schema=args.schema,
             )
         elif args.command == "rm-dataset":
             rm_dataset(catalog, args.name, version=args.version, force=args.force)

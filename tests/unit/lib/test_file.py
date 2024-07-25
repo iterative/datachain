@@ -2,10 +2,11 @@ import json
 
 import pytest
 from fsspec.implementations.local import LocalFileSystem
+from PIL import Image
 
 from datachain.cache import UniqueId
 from datachain.catalog import Catalog
-from datachain.lib.file import File, TextFile
+from datachain.lib.file import File, ImageFile, TextFile
 
 
 def create_file(source: str):
@@ -167,6 +168,61 @@ def test_read_text_data(tmp_path, catalog: Catalog):
     file = TextFile(name=file_name, source=f"file://{tmp_path}")
     file._set_stream(catalog, True)
     assert file.read() == data
+
+
+def test_save_binary_data(tmp_path, catalog: Catalog):
+    file1_name = "myfile1"
+    file2_name = "myfile2"
+    data = b"some\x00data\x00is\x48\x65\x6c\x57\x6f\x72\x6c\x64\xff\xffheRe"
+
+    with open(tmp_path / file1_name, "wb") as fd:
+        fd.write(data)
+
+    file1 = File(name=file1_name, source=f"file://{tmp_path}")
+    file1._set_stream(catalog, False)
+
+    file1.save(tmp_path / file2_name)
+
+    file2 = File(name=file2_name, source=f"file://{tmp_path}")
+    file2._set_stream(catalog, False)
+    assert file2.read() == data
+
+
+def test_save_text_data(tmp_path, catalog: Catalog):
+    file1_name = "myfile1.txt"
+    file2_name = "myfile2.txt"
+    data = "some text"
+
+    with open(tmp_path / file1_name, "w") as fd:
+        fd.write(data)
+
+    file1 = TextFile(name=file1_name, source=f"file://{tmp_path}")
+    file1._set_stream(catalog, False)
+
+    file1.save(tmp_path / file2_name)
+
+    file2 = TextFile(name=file2_name, source=f"file://{tmp_path}")
+    file2._set_stream(catalog, False)
+    assert file2.read() == data
+
+
+def test_save_image_data(tmp_path, catalog: Catalog):
+    from tests.utils import images_equal
+
+    file1_name = "myfile1.jpg"
+    file2_name = "myfile2.jpg"
+
+    image = Image.new(mode="RGB", size=(64, 64))
+    image.save(tmp_path / file1_name)
+
+    file1 = ImageFile(name=file1_name, source=f"file://{tmp_path}")
+    file1._set_stream(catalog, False)
+
+    file1.save(tmp_path / file2_name)
+
+    file2 = ImageFile(name=file2_name, source=f"file://{tmp_path}")
+    file2._set_stream(catalog, False)
+    assert images_equal(image, file2.read())
 
 
 def test_cache_get_path_without_cache():
