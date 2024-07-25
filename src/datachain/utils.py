@@ -340,8 +340,6 @@ def show_df(
                 "etag",
                 "is_latest",
                 "last_modified",
-                "owner_id",
-                "owner_name",
                 "size",
                 "version",
             ],

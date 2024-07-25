@@ -70,8 +70,6 @@ def test_stateful_udf():
             version="",
             is_latest=True,
             size=size,
-            owner_name="",
-            owner_id="",
             source="",
             random=1234,
             location=None,

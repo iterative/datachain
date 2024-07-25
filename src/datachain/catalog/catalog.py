@@ -513,8 +513,6 @@ def find_column_to_str(  # noqa: PLR0911
         )
     if column == "name":
         return posixpath.basename(row[field_lookup["path"]]) or ""
-    if column == "owner":
-        return row[field_lookup["owner_name"]] or ""
     if column == "path":
         is_dir = row[field_lookup["dir_type"]] == DirType.DIR
         path = row[field_lookup["path"]]
@@ -672,8 +670,6 @@ class Catalog:
             Column("is_latest", Boolean),
             Column("last_modified", DateTime(timezone=True)),
             Column("size", Int64),
-            Column("owner_name", String),
-            Column("owner_id", String),
             Column("location", JSON),
             Column("source", String),
         ]
@@ -1984,8 +1980,6 @@ class Catalog:
                 field_set.add("path")
             elif column == "name":
                 field_set.add("path")
-            elif column == "owner":
-                field_set.add("owner_name")
             elif column == "path":
                 field_set.add("dir_type")
                 field_set.add("path")
