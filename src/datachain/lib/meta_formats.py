@@ -11,7 +11,7 @@ from collections.abc import Iterator
 from typing import Any, Callable
 
 import jmespath as jsp
-from pydantic import ValidationError
+from pydantic import Field, ValidationError  # noqa: F401
 
 from datachain.lib.data_model import DataModel  # noqa: F401
 from datachain.lib.file import File
