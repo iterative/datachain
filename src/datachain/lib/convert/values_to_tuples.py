@@ -72,7 +72,7 @@ def values_to_tuples(  # noqa: C901, PLR0912
                     f" Please use DataModel types: {DataTypeNames}",
                 )
             if typ is list:
-                types_map[k] = list[type(v[0][0])]
+                types_map[k] = list[type(v[0][0])]  # type: ignore[misc]
             else:
                 types_map[k] = typ
 
