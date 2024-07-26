@@ -42,6 +42,7 @@ if TYPE_CHECKING:
     from sqlalchemy.dialects.sqlite import Insert
     from sqlalchemy.schema import SchemaItem
     from sqlalchemy.sql.elements import ColumnClause, ColumnElement, TextClause
+    from sqlalchemy.sql.selectable import Select
     from sqlalchemy.types import TypeEngine
 
 
@@ -708,3 +709,23 @@ class SQLiteWarehouse(AbstractWarehouse):
         client_config=None,
     ) -> list[str]:
         raise NotImplementedError("Exporting dataset table not implemented for SQLite")
+
+    def create_pre_udf_table(self, query: "Select") -> "Table":
+        """
+        Create a temporary table from a query for use in a UDF.
+        """
+        columns = [
+            sqlalchemy.Column(c.name, c.type)
+            for c in query.selected_columns
+            if c.name != "sys__id"
+        ]
+        table = self.create_udf_table(columns)
+
+        select_q = query.with_only_columns(
+            *[c for c in query.selected_columns if c.name != "sys__id"]
+        )
+        self.db.execute(
+            table.insert().from_select(list(select_q.selected_columns), select_q)
+        )
+
+        return table
