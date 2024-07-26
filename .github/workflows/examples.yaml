@@ -1,4 +1,3 @@
-
 name: Test Jupyter Notebooks
 
 on:
@@ -10,7 +9,7 @@ on:
   pull_request:
     branches:
       - main
-      - test-examples-ci 
+      - test-examples-ci
 
 jobs:
   test-notebooks:
@@ -22,65 +21,65 @@ jobs:
           - examples/computer_vision/fashion_product_images
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
     # Set up environment for the { matrix.dir }
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
-    - name: Check for examples
-      shell: bash
-      run: |
-        echo "Checking for Jupyter Notebooks and Python scripts..."
+      - name: Check for examples
+        shell: bash
+        run: |
+          echo "Checking for Jupyter Notebooks and Python scripts..."
 
-        if ls ${{ matrix.dir }}/*.ipynb 1> /dev/null 2>&1; then
-          echo "IPYNB_EXAMPLES_FOUND=true" >> $GITHUB_ENV
-        else
-          echo "IPYNB_EXAMPLES_FOUND=false" >> $GITHUB_ENV
-        fi
-        
-        if ls ${{ matrix.dir }}/scripts/*.py 1> /dev/null 2>&1; then
-          echo "PY_EXAMPLES_FOUND=true" >> $GITHUB_ENV
-        else
-          echo "PY_EXAMPLES_FOUND=false" >> $GITHUB_ENV
-        fi
-        
-    - name: Cache Python dependencies
-      if: env.IPYNB_EXAMPLES_FOUND == 'true' || env.PY_EXAMPLES_FOUND == 'true'
-      uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cache/pip
-          ${{ matrix.dir }}/.venv
-        key: ${{ runner.os }}-pip-${{ hashFiles('${{ matrix.dir }}/requirements.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
-          ${{ runner.os }}-
-  
-    - name: Set up virtual environment
-      if: env.IPYNB_EXAMPLES_FOUND == 'true' || env.PY_EXAMPLES_FOUND == 'true'
-      run: |
-        python -m venv ${{ matrix.dir }}/.venv
-        source ${{ matrix.dir }}/.venv/bin/activate
-        python -m pip install --upgrade pip
-        pip install notebook papermill
-        pip install git+https://github.com/iterative/datachain.git
-        if [ -f "${{ matrix.dir }}/requirements.txt" ]; then
-          pip install -r ${{ matrix.dir }}/requirements.txt
-        fi
-      shell: bash
+          if ls ${{ matrix.dir }}/*.ipynb 1> /dev/null 2>&1; then
+            echo "IPYNB_EXAMPLES_FOUND=true" >> $GITHUB_ENV
+          else
+            echo "IPYNB_EXAMPLES_FOUND=false" >> $GITHUB_ENV
+          fi
+
+          if ls ${{ matrix.dir }}/scripts/*.py 1> /dev/null 2>&1; then
+            echo "PY_EXAMPLES_FOUND=true" >> $GITHUB_ENV
+          else
+            echo "PY_EXAMPLES_FOUND=false" >> $GITHUB_ENV
+          fi
+
+      - name: Cache Python dependencies
+        if: env.IPYNB_EXAMPLES_FOUND == 'true' || env.PY_EXAMPLES_FOUND == 'true'
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/pip
+            ${{ matrix.dir }}/.venv
+          key: ${{ runner.os }}-pip-${{ hashFiles('${{ matrix.dir }}/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+            ${{ runner.os }}-
+
+      - name: Set up virtual environment
+        if: env.IPYNB_EXAMPLES_FOUND == 'true' || env.PY_EXAMPLES_FOUND == 'true'
+        run: |
+          python -m venv ${{ matrix.dir }}/.venv
+          source ${{ matrix.dir }}/.venv/bin/activate
+          python -m pip install --upgrade pip
+          pip install notebook papermill
+          pip install git+https://github.com/iterative/datachain.git
+          if [ -f "${{ matrix.dir }}/requirements.txt" ]; then
+            pip install -r ${{ matrix.dir }}/requirements.txt
+          fi
+        shell: bash
 
     # Test Jupyter Notebooks
-    - name: Test notebooks
-      if: env.IPYNB_EXAMPLES_FOUND == 'true'
-      run: |
-        source ${{ matrix.dir }}/.venv/bin/activate
-        chmod +x ./tests/examples/test_notebooks.sh
-        ./tests/examples/test_notebooks.sh -d ${{ matrix.dir }}
-      shell: bash
+      - name: Test notebooks
+        if: env.IPYNB_EXAMPLES_FOUND == 'true'
+        run: |
+          source ${{ matrix.dir }}/.venv/bin/activate
+          chmod +x ./tests/examples/test_notebooks.sh
+          ./tests/examples/test_notebooks.sh -d ${{ matrix.dir }}
+        shell: bash
 
     # - name: Commit & push changes in Jupyter Notebooks
     #   if: env.IPYNB_EXAMPLES_FOUND == 'true'
@@ -91,31 +90,30 @@ jobs:
     #     git push
 
     # Test .py scripts designed for Studio (in scripts/ dir)
-    - name: Test .py scripts
-      if: env.PY_EXAMPLES_FOUND == 'true'
-      run: |
-        set -e
-        source ${{ matrix.dir }}/.venv/bin/activate
-        cd ${{ matrix.dir }}
-        find scripts -type f -name '*.py' -print | sort | while read script; do
-          echo "Testing use case in $script"
-          datachain query $script
-        done
-      shell: bash 
-    
+      - name: Test .py scripts
+        if: env.PY_EXAMPLES_FOUND == 'true'
+        run: |
+          set -e
+          source ${{ matrix.dir }}/.venv/bin/activate
+          cd ${{ matrix.dir }}
+          find scripts -type f -name '*.py' -print | sort | while read script; do
+            echo "Testing use case in $script"
+            datachain query $script
+          done
+        shell: bash
+
     # Save artifacts
-    - name: Set sanitized directory name
-      if: always()
-      run: |
-        sanitized_dir=$(echo "${{ matrix.dir }}" | tr '/' '-')
-        echo "SANITIZED_DIR=$sanitized_dir" >> $GITHUB_ENV
+      - name: Set sanitized directory name
+        if: always()
+        run: |
+          sanitized_dir=$(echo "${{ matrix.dir }}" | tr '/' '-')
+          echo "SANITIZED_DIR=$sanitized_dir" >> $GITHUB_ENV
 
-    - name: Upload failed notebook outputs as artifacts
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: test-notebooks-${{ env.SANITIZED_DIR }}
-        path: |
-          output-*.ipynb
-          log-test-notebooks-*.log
-
+      - name: Upload failed notebook outputs as artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-notebooks-${{ env.SANITIZED_DIR }}
+          path: |
+            output-*.ipynb
+            log-test-notebooks-*.log
