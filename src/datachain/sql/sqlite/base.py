@@ -5,8 +5,8 @@ from datetime import MAXYEAR, MINYEAR, datetime, timezone
 from types import MappingProxyType
 from typing import Callable, Optional
 
+import orjson
 import sqlalchemy as sa
-import ujson
 from sqlalchemy.dialects import sqlite
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql.elements import literal
@@ -149,7 +149,7 @@ def missing_vector_function(name, exc):
 
 
 def sqlite_string_split(string: str, sep: str, maxsplit: int = -1) -> str:
-    return ujson.dumps(string.split(sep, maxsplit))
+    return orjson.dumps(string.split(sep, maxsplit)).decode("utf-8")
 
 
 def register_user_defined_sql_functions() -> None:
@@ -274,7 +274,7 @@ def compile_euclidean_distance(element, compiler, **kwargs):
 
 
 def py_json_array_length(arr):
-    return len(ujson.loads(arr))
+    return len(orjson.loads(arr))
 
 
 def compile_array_length(element, compiler, **kwargs):
