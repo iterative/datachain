@@ -71,7 +71,10 @@ def values_to_tuples(  # noqa: C901, PLR0912
                     f"signal '{k}' has unsupported type '{typ.__name__}'."
                     f" Please use DataModel types: {DataTypeNames}",
                 )
-            types_map[k] = typ
+            if typ is list:
+                types_map[k] = list[type(v[0][0])]
+            else:
+                types_map[k] = typ
 
         if length < 0:
             length = len_
