@@ -364,12 +364,12 @@ class DataChain(DatasetQuery):
             nrows : optional row limit for jsonl and JSON arrays
 
         Example:
-            infer JSON schema from data, reduce using JMESPATH, print schema
+            infer JSON schema from data, reduce using JMESPATH
             ```py
             chain = DataChain.from_json("gs://json", jmespath="key1.key2")
             ```
 
-            infer JSON schema from a particular path, print data model
+            infer JSON schema from a particular path
             ```py
             chain = DataChain.from_json("gs://json_ds", schema_from="gs://json/my.json")
             ```
@@ -384,7 +384,67 @@ class DataChain(DatasetQuery):
         if (not object_name) and jmespath:
             object_name = jmespath_to_name(jmespath)
         if not object_name:
-            object_name = "json"
+            object_name = meta_type
+        chain = DataChain.from_storage(path=path, type=type, **kwargs)
+        signal_dict = {
+            object_name: read_meta(
+                schema_from=schema_from,
+                meta_type=meta_type,
+                spec=spec,
+                model_name=model_name,
+                show_schema=show_schema,
+                jmespath=jmespath,
+                nrows=nrows,
+            )
+        }
+        return chain.gen(**signal_dict)  # type: ignore[arg-type]
+
+    @classmethod
+    def from_jsonl(
+        cls,
+        path,
+        type: Literal["binary", "text", "image"] = "text",
+        spec: Optional[DataType] = None,
+        schema_from: Optional[str] = "auto",
+        jmespath: Optional[str] = None,
+        object_name: str = "",
+        model_name: Optional[str] = None,
+        show_schema: Optional[bool] = False,
+        meta_type: Optional[str] = "jsonl",
+        nrows=None,
+        **kwargs,
+    ) -> "DataChain":
+        """Get data from JSON lines. It returns the chain itself.
+
+        Parameters:
+            path : storage URI with directory. URI must start with storage prefix such
+                as `s3://`, `gs://`, `az://` or "file:///"
+            type : read file as "binary", "text", or "image" data. Default is "binary".
+            spec : optional Data Model
+            schema_from : path to sample to infer spec (if schema not provided)
+            object_name : generated object column name
+            model_name : optional generated model name
+            show_schema : print auto-generated schema
+            jmespath : optional JMESPATH expression to reduce JSON
+            nrows : optional row limit for jsonl and JSON arrays
+
+        Example:
+            infer JSONl schema from data, limit parsing to 1 row
+            ```py
+            chain = DataChain.from_jsonl("gs://myjsonl", nrows=1)
+            ```
+        """
+        if schema_from == "auto":
+            schema_from = path
+
+        def jmespath_to_name(s: str):
+            name_end = re.search(r"\W", s).start() if re.search(r"\W", s) else len(s)  # type: ignore[union-attr]
+            return s[:name_end]
+
+        if (not object_name) and jmespath:
+            object_name = jmespath_to_name(jmespath)
+        if not object_name:
+            object_name = meta_type
         chain = DataChain.from_storage(path=path, type=type, **kwargs)
         signal_dict = {
             object_name: read_meta(
