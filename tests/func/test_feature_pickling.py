@@ -60,6 +60,13 @@ def common_df_asserts(df):
     assert df["message"]["input_file_info"]["byte_size"].tolist() == [4, 4]
 
 
+def sort_df_for_tests(df):
+    # Sort the dataframe to avoid a PerformanceWarning about unsorted indexing.
+    df.sort_index(axis=0, inplace=True, sort_remaining=True)
+    df.sort_index(axis=1, inplace=True, sort_remaining=True)
+    return df.sort_values(("file", "path")).reset_index(drop=True)
+
+
 @pytest.mark.parametrize(
     "cloud_type,version_aware",
     [("s3", True)],
@@ -87,7 +94,7 @@ def test_feature_udf_parallel(cloud_test_catalog_tmpfile):
 
     df = chain.to_pandas()
 
-    df = df.sort_values(("file", "path")).reset_index(drop=True)
+    df = sort_df_for_tests(df)
 
     common_df_asserts(df)
     assert df["message"]["model"].tolist() == ["Test AI Model", "Test AI Model"]
@@ -141,7 +148,7 @@ def test_feature_udf_parallel_local(cloud_test_catalog_tmpfile):
 
     df = chain.to_pandas()
 
-    df = df.sort_values(("file", "path")).reset_index(drop=True)
+    df = sort_df_for_tests(df)
 
     common_df_asserts(df)
     assert df["message"]["model"].tolist() == [
@@ -200,7 +207,7 @@ def test_feature_udf_parallel_local_pydantic(cloud_test_catalog_tmpfile):
 
     df = chain.to_pandas()
 
-    df = df.sort_values(("file", "path")).reset_index(drop=True)
+    df = sort_df_for_tests(df)
 
     common_df_asserts(df)
     assert df["message"]["model"].tolist() == [

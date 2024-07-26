@@ -19,8 +19,12 @@ from datachain.sql.types import Int, SQLType, UInt64
 if TYPE_CHECKING:
     from sqlalchemy import Engine
     from sqlalchemy.engine.interfaces import Dialect
-    from sqlalchemy.sql.base import Executable, ReadOnlyColumnCollection
-    from sqlalchemy.sql.elements import KeyedColumnElement
+    from sqlalchemy.sql.base import (
+        ColumnCollection,
+        Executable,
+        ReadOnlyColumnCollection,
+    )
+    from sqlalchemy.sql.elements import ColumnElement
 
 
 def dedup_columns(columns: Iterable[sa.Column]) -> list[sa.Column]:
@@ -43,7 +47,7 @@ def dedup_columns(columns: Iterable[sa.Column]) -> list[sa.Column]:
 
 
 def convert_rows_custom_column_types(
-    columns: "ReadOnlyColumnCollection[str, KeyedColumnElement[Any]]",
+    columns: "ColumnCollection[str, ColumnElement[Any]]",
     rows: Iterator[tuple[Any, ...]],
     dialect: "Dialect",
 ):

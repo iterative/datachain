@@ -952,6 +952,41 @@ class DataChain(DatasetQuery):
 
         return ds
 
+    def subtract(  # type: ignore[override]
+        self,
+        other: "DataChain",
+        on: Optional[Union[str, Sequence[str]]] = None,
+    ) -> "Self":
+        """Remove rows that appear in another chain.
+
+        Parameters:
+            other: chain whose rows will be removed from `self`
+            on: columns to consider for determining row equality. If unspecified,
+                defaults to all common columns between `self` and `other`.
+        """
+        if isinstance(on, str):
+            on = [on]
+        if on is None:
+            other_columns = set(other._effective_signals_schema.db_signals())
+            signals = [
+                c
+                for c in self._effective_signals_schema.db_signals()
+                if c in other_columns
+            ]
+            if not signals:
+                raise DataChainParamsError("subtract(): no common columns")
+        elif not isinstance(on, Sequence):
+            raise TypeError(
+                f"'on' must be 'str' or 'Sequence' object but got type '{type(on)}'",
+            )
+        elif not on:
+            raise DataChainParamsError(
+                "'on' cannot be empty",
+            )
+        else:
+            signals = self.signals_schema.resolve(*on).db_signals()
+        return super()._subtract(other, signals)
+
     @classmethod
     def from_values(
         cls,

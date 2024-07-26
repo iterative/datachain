@@ -493,7 +493,7 @@ class AbstractWarehouse(ABC, Serializable):
         This gets nodes based on the provided query, and should be used sparingly,
         as it will be slow on any OLAP database systems.
         """
-        columns = [c.name for c in query.columns]
+        columns = [c.name for c in query.selected_columns]
         for row in self.db.execute(query):
             d = dict(zip(columns, row))
             yield Node(**d)
@@ -910,27 +910,6 @@ class AbstractWarehouse(ABC, Serializable):
         """
         for name in names:
             self.db.drop_table(Table(name, self.db.metadata), if_exists=True)
-
-    def subtract_query(
-        self,
-        source_query: sa.sql.selectable.Select,
-        target_query: sa.sql.selectable.Select,
-    ) -> sa.sql.selectable.Select:
-        sq = source_query.alias("source_query")
-        tq = target_query.alias("target_query")
-
-        source_target_join = sa.join(
-            sq,
-            tq,
-            (sq.c.source == tq.c.source) & (sq.c.path == tq.c.path),
-            isouter=True,
-        )
-
-        return (
-            select(*sq.c)
-            .select_from(source_target_join)
-            .where((tq.c.path == None) | (tq.c.path == ""))  # noqa: E711
-        )
 
     def changed_query(
         self,
