@@ -1,4 +1,5 @@
 from datachain.lib.utils import DataChainParamsError
+from datachain.query.dataset import INSERT_BATCH_SIZE
 
 
 class SettingsError(DataChainParamsError):
@@ -56,7 +57,7 @@ class Settings:
 
     @property
     def batch(self):
-        return self._batch if self._batch is not None else 1
+        return self._batch if self._batch is not None else INSERT_BATCH_SIZE
 
     @property
     def workers(self):

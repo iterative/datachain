@@ -33,6 +33,7 @@ from datachain.lib.settings import Settings
 from datachain.lib.signal_schema import SignalSchema
 from datachain.lib.udf import (
     Aggregator,
+    BatchMapper,
     Generator,
     Mapper,
     UDFBase,
@@ -250,7 +251,7 @@ class DataChain(DatasetQuery):
 
         Parameters:
             cache : data caching (default=False)
-            batch : size of the batch (default=1000)
+            batch : size of batch to insert to warehouse (default=10000)
             parallel : number of thread for processors. True is a special value to
                 enable all available CPUs (default=1)
             workers : number of distributed workers. Only for Studio mode. (default=1)
@@ -545,7 +546,7 @@ class DataChain(DatasetQuery):
         udf_obj = self._udf_to_obj(Mapper, func, params, output, signal_map)
 
         chain = self.add_signals(
-            udf_obj.to_udf_wrapper(self._settings.batch),
+            udf_obj.to_udf_wrapper(),
             **self._settings.to_dict(),
         )
 
@@ -572,7 +573,7 @@ class DataChain(DatasetQuery):
         udf_obj = self._udf_to_obj(Generator, func, params, output, signal_map)
         chain = DatasetQuery.generate(
             self,
-            udf_obj.to_udf_wrapper(self._settings.batch),
+            udf_obj.to_udf_wrapper(),
             **self._settings.to_dict(),
         )
 
@@ -602,12 +603,39 @@ class DataChain(DatasetQuery):
         udf_obj = self._udf_to_obj(Aggregator, func, params, output, signal_map)
         chain = DatasetQuery.generate(
             self,
-            udf_obj.to_udf_wrapper(self._settings.batch),
+            udf_obj.to_udf_wrapper(),
             partition_by=partition_by,
             **self._settings.to_dict(),
         )
 
         return chain.reset_schema(udf_obj.output).reset_settings(self._settings)
+
+    def batch_map(
+        self,
+        func: Optional[Callable] = None,
+        params: Union[None, str, Sequence[str]] = None,
+        output: OutputType = None,
+        batch: int = 0,
+        **signal_map,
+    ) -> "Self":
+        """This is a batch version of map().
+
+        Input-output relationship: N:M
+
+        It accepts the same parameters plus an
+        additional parameter:
+
+            batch : Size of each batch passed to `func`. Defaults to
+                    `DataChain._settings.batch`.
+        """
+        udf_obj = self._udf_to_obj(BatchMapper, func, params, output, signal_map)
+        chain = DatasetQuery.generate(
+            self,
+            udf_obj.to_udf_wrapper(batch or self._settings.batch),
+            **self._settings.to_dict(),
+        )
+
+        return chain.add_schema(udf_obj.output).reset_settings(self._settings)
 
     def _udf_to_obj(
         self,

@@ -225,11 +225,10 @@ class UDFBase(AbstractUDF):
     def __call__(self, *rows, cache, download_cb):
         if self.is_input_grouped:
             objs = self._parse_grouped_rows(rows[0], cache, download_cb)
+        elif self.is_input_batched:
+            objs = zip(*self._parse_rows(rows[0], cache, download_cb))
         else:
-            objs = self._parse_rows(rows, cache, download_cb)
-
-        if not self.is_input_batched:
-            objs = objs[0]
+            objs = self._parse_rows([rows], cache, download_cb)[0]
 
         result_objs = self.process_safe(objs)
 
@@ -268,8 +267,6 @@ class UDFBase(AbstractUDF):
         return res
 
     def _parse_rows(self, rows, cache, download_cb):
-        if not self.is_input_batched:
-            rows = [rows]
         objs = []
         for row in rows:
             obj_row = self.params.row_to_objs(row)

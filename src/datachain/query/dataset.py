@@ -381,7 +381,7 @@ def process_udf_outputs(
     udf_table: "Table",
     udf_results: Iterator[Iterable["UDFResult"]],
     udf: UDFBase,
-    batch_size=INSERT_BATCH_SIZE,
+    batch: int = INSERT_BATCH_SIZE,
     cb: Callback = DEFAULT_CALLBACK,
 ) -> None:
     rows: list[UDFResult] = []
@@ -394,13 +394,13 @@ def process_udf_outputs(
         for row in udf_output:
             cb.relative_update()
             rows.append(adjust_outputs(warehouse, row, udf_col_types))
-            if len(rows) >= batch_size:
-                for row_chunk in batched(rows, batch_size):
+            if len(rows) >= batch:
+                for row_chunk in batched(rows, batch):
                     warehouse.insert_rows(udf_table, row_chunk)
                 rows.clear()
 
     if rows:
-        for row_chunk in batched(rows, batch_size):
+        for row_chunk in batched(rows, batch):
             warehouse.insert_rows(udf_table, row_chunk)
 
 
@@ -430,6 +430,7 @@ class UDFStep(Step, ABC):
     min_task_size: Optional[int] = None
     is_generator = False
     cache: bool = False
+    batch: int = INSERT_BATCH_SIZE
 
     @abstractmethod
     def create_udf_table(self, query: Select) -> "Table":
@@ -545,6 +546,7 @@ class UDFStep(Step, ABC):
                             udf_table,
                             udf_results,
                             udf,
+                            batch=self.batch,
                             cb=generated_cb,
                         )
                     finally:
@@ -1524,6 +1526,7 @@ class DatasetQuery:
         min_task_size: Optional[int] = None,
         partition_by: Optional[PartitionByType] = None,
         cache: bool = False,
+        batch: int = INSERT_BATCH_SIZE,
     ) -> "Self":
         """
         Adds one or more signals based on the results from the provided UDF.
@@ -1552,6 +1555,7 @@ class DatasetQuery:
                 workers=workers,
                 min_task_size=min_task_size,
                 cache=cache,
+                batch=batch,
             )
         )
         return query
@@ -1581,6 +1585,7 @@ class DatasetQuery:
         min_task_size: Optional[int] = None,
         partition_by: Optional[PartitionByType] = None,
         cache: bool = False,
+        batch: int = INSERT_BATCH_SIZE,
     ) -> "Self":
         if isinstance(udf, UDFClassWrapper):  # type: ignore[unreachable]
             # This is a bare decorated class, "instantiate" it now.
@@ -1596,6 +1601,7 @@ class DatasetQuery:
                 workers=workers,
                 min_task_size=min_task_size,
                 cache=cache,
+                batch=batch,
             )
         )
         return query

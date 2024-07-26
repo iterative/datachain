@@ -405,6 +405,93 @@ def test_agg_tuple_result_generator(catalog):
     assert list(ds.collect("x_1.size")) == [10, 5]
 
 
+def test_batch_map(catalog):
+    class _TestFr(BaseModel):
+        sqrt: float
+        my_name: str
+
+    dc = DataChain.from_values(t1=features).batch_map(
+        x=lambda m_frs: [
+            _TestFr(
+                sqrt=math.sqrt(m_fr.count),
+                my_name=m_fr.nnn + "_suf",
+            )
+            for m_fr in m_frs
+        ],
+        params="t1",
+        output={"x": _TestFr},
+    )
+
+    x_list = list(dc.collect("x"))
+    test_frs = [
+        _TestFr(sqrt=math.sqrt(fr.count), my_name=fr.nnn + "_suf") for fr in features
+    ]
+
+    assert len(x_list) == len(test_frs)
+
+    for x, test_fr in zip(x_list, test_frs):
+        assert np.isclose(x.sqrt, test_fr.sqrt)
+        assert x.my_name == test_fr.my_name
+
+
+def test_batch_map_agg(catalog):
+    class _TestFr(BaseModel):
+        total: int
+        names: str
+
+    dc = DataChain.from_values(t1=features).batch_map(
+        x=lambda m_frs: [
+            _TestFr(
+                total=sum(m_fr.count for m_fr in m_frs),
+                names="-".join([m_fr.nnn for m_fr in m_frs]),
+            )
+        ],
+        params="t1",
+        output={"x": _TestFr},
+    )
+
+    assert list(dc.collect("x")) == [_TestFr(total=9, names="n1-n2-n1")]
+
+
+def test_batch_map_two_params(catalog):
+    class _TestFr(BaseModel):
+        f: File
+        cnt: int
+        my_name: str
+
+    features2 = [
+        MyFr(nnn="n1", count=6),
+        MyFr(nnn="n2", count=10),
+        MyFr(nnn="n1", count=2),
+    ]
+
+    ds = DataChain.from_values(t1=features, t2=features2).batch_map(
+        x=lambda frs1, frs2: [
+            _TestFr(
+                f=File(name=""),
+                cnt=f1.count + f2.count,
+                my_name=f"{f1.nnn}-{f2.nnn}",
+            )
+            for f1, f2 in zip(frs1, frs2)
+        ],
+        params=("t1", "t2"),
+        output={"x": _TestFr},
+    )
+
+    assert list(ds.collect("x.my_name")) == ["n1-n1", "n2-n2", "n1-n1"]
+    assert list(ds.collect("x.cnt")) == [9, 15, 3]
+
+
+def test_batch_map_tuple_result_iterator(catalog):
+    def sqrt(t1: list[int]) -> Iterator[float]:
+        for val in t1:
+            yield math.sqrt(val)
+
+    dc = DataChain.from_values(t1=[1, 4, 9]).batch_map(x=sqrt)
+
+    assert list(dc.collect("x")) == [1, 2, 3]
+
+
 def test_collect(catalog):
     dc = DataChain.from_values(f1=features, num=range(len(features)))
 
