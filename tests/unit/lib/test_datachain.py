@@ -434,7 +434,7 @@ def test_batch_map(catalog):
         assert x.my_name == test_fr.my_name
 
 
-def test_batch_map_agg(catalog):
+def test_batch_map_wrong_size(catalog):
     class _TestFr(BaseModel):
         total: int
         names: str
@@ -450,7 +450,8 @@ def test_batch_map_agg(catalog):
         output={"x": _TestFr},
     )
 
-    assert list(dc.collect("x")) == [_TestFr(total=9, names="n1-n2-n1")]
+    with pytest.raises(AssertionError):
+        list(dc.collect())
 
 
 def test_batch_map_two_params(catalog):

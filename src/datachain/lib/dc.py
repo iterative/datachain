@@ -539,7 +539,9 @@ class DataChain(DatasetQuery):
 
             Using func and output as a map:
             ```py
-            chain = chain.map(lambda name: name[:-4] + ".json", output={"res": str})
+            chain = chain.map(
+                lambda name: name.split("."), output={"stem": str, "ext": str}
+            )
             chain.save("new_dataset")
             ```
         """
@@ -559,7 +561,7 @@ class DataChain(DatasetQuery):
         output: OutputType = None,
         **signal_map,
     ) -> "Self":
-        """Apply a function to each row to create new rows (with potentially new
+        r"""Apply a function to each row to create new rows (with potentially new
         signals). The function needs to return a new objects for each of the new rows.
         It returns a chain itself with new signals.
 
@@ -569,6 +571,15 @@ class DataChain(DatasetQuery):
         one key differences: It produces a sequence of rows for each input row (like
         extracting multiple file records from a single tar file or bounding boxes from a
         single image file).
+
+        Example:
+            ```py
+            chain = chain.gen(
+                line=lambda file: [l for l in file.read().split("\n")],
+                output=str,
+            )
+            chain.save("new_dataset")
+            ```
         """
         udf_obj = self._udf_to_obj(Generator, func, params, output, signal_map)
         chain = DatasetQuery.generate(
@@ -593,12 +604,22 @@ class DataChain(DatasetQuery):
 
         Input-output relationship: N:M
 
-        This method bears similarity to `gen()` and map(), employing a comparable set of
-        parameters, yet differs in two crucial aspects:
+        This method bears similarity to `gen()` and `map()`, employing a comparable set
+        of parameters, yet differs in two crucial aspects:
         1. The `partition_by` parameter: This specifies the column name or a list of
            column names that determine the grouping criteria for aggregation.
         2. Group-based UDF function input: Instead of individual rows, the function
            receives a list all rows within each group defined by `partition_by`.
+
+        Example:
+            ```py
+            chain = chain.agg(
+                total=lambda category, amount: [sum(amount)],
+                output=float,
+                partition_by="category",
+            )
+            chain.save("new_dataset")
+            ```
         """
         udf_obj = self._udf_to_obj(Aggregator, func, params, output, signal_map)
         chain = DatasetQuery.generate(
@@ -618,18 +639,27 @@ class DataChain(DatasetQuery):
         batch: int = 0,
         **signal_map,
     ) -> "Self":
-        """This is a batch version of map().
+        """This is a batch version of `map()`.
 
-        Input-output relationship: N:M
+        Input-output relationship: N:N
 
         It accepts the same parameters plus an
         additional parameter:
 
             batch : Size of each batch passed to `func`. Defaults to
                     `DataChain._settings.batch`.
+
+        Example:
+            ```py
+            chain = chain.batch_map(
+                sqrt=lambda size: np.sqrt(size),
+                output=float
+            )
+            chain.save("new_dataset")
+            ```
         """
         udf_obj = self._udf_to_obj(BatchMapper, func, params, output, signal_map)
-        chain = DatasetQuery.generate(
+        chain = DatasetQuery.add_signals(
             self,
             udf_obj.to_udf_wrapper(batch or self._settings.batch),
             **self._settings.to_dict(),

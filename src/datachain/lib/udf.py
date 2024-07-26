@@ -263,6 +263,15 @@ class UDFBase(AbstractUDF):
             )
             if isinstance(res[0], tuple):
                 res = res[0]
+        elif (
+            self.is_input_batched
+            and self.is_output_batched
+            and not self.is_input_grouped
+        ):
+            res = list(res)
+            assert len(res) == len(rows[0]), (
+                f"{self.name} returns {len(res)} " f"rows while len(rows[0]) expected"
+            )
 
         return res
 
@@ -327,7 +336,9 @@ class Mapper(UDFBase):
     """Inherit from this class to pass to `DataChain.map()`."""
 
 
-class BatchMapper(Mapper):
+class BatchMapper(UDFBase):
+    """Inherit from this class to pass to `DataChain.batch_map()`."""
+
     is_input_batched = True
     is_output_batched = True
 
