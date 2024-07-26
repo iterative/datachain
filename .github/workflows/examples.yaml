@@ -3,8 +3,6 @@ name: Test Jupyter Notebooks
 
 on:
   push:
-    branches:
-      - test-examples-ci
     paths:
       - 'examples/**.ipynb'
       - 'examples/**.py'
@@ -84,12 +82,12 @@ jobs:
         ./tests/examples/test_notebooks.sh -d ${{ matrix.dir }}
       shell: bash
 
-    - name: Commit & push changes
+    - name: Commit & push changes in Jupyter Notebooks
+      if: github.event_name == 'push'
       run: |
-        git config --global user.name 'Test Examples CI'
-        git config --global user.email 'examples@datachain.ai'
-        git add -A
-        git commit -m "Update Jupyter Notebooks with test results" || echo "No changes to commit"
+        git config --global user.name "${{ env.CI_COMMIT_AUTHOR }}"
+        git config --global user.email "username@users.noreply.github.com"
+        git commit -m "${{ env.CI_COMMIT_MESSAGE }}"
         git push
 
 

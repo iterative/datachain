@@ -12,7 +12,7 @@ Before you begin, ensure you have
 from datachain import C, DataChain
 
 # Define the paths
-DATA_PATH = "gs://datachain-demo/fashion-product-images"
+DATA_PATH = "gs://datachain-demo/fashion-product-images/"
 ANNOTATIONS_PATH = "gs://datachain-demo/fashion-product-images/styles_clean.csv"
 
 print("\n# Create a Dataset")
