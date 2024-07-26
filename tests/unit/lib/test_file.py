@@ -135,7 +135,6 @@ def test_read_binary_data(tmp_path, catalog: Catalog):
         fd.write(data)
 
     file = File(name=file_name, source=f"file://{tmp_path}")
-    file._set_stream(catalog, False)
     assert file.read() == data
 
 
@@ -148,7 +147,6 @@ def test_read_binary_data_as_text(tmp_path, catalog: Catalog):
         fd.write(data)
 
     file = TextFile(name=file_name, source=f"file://{tmp_path}")
-    file._set_stream(catalog, False)
     try:
         x = file.read()
     except UnicodeDecodeError:  # Unix
@@ -179,12 +177,10 @@ def test_save_binary_data(tmp_path, catalog: Catalog):
         fd.write(data)
 
     file1 = File(name=file1_name, source=f"file://{tmp_path}")
-    file1._set_stream(catalog, False)
 
     file1.save(tmp_path / file2_name)
 
     file2 = File(name=file2_name, source=f"file://{tmp_path}")
-    file2._set_stream(catalog, False)
     assert file2.read() == data
 
 
@@ -197,12 +193,10 @@ def test_save_text_data(tmp_path, catalog: Catalog):
         fd.write(data)
 
     file1 = TextFile(name=file1_name, source=f"file://{tmp_path}")
-    file1._set_stream(catalog, False)
 
     file1.save(tmp_path / file2_name)
 
     file2 = TextFile(name=file2_name, source=f"file://{tmp_path}")
-    file2._set_stream(catalog, False)
     assert file2.read() == data
 
 
@@ -216,12 +210,10 @@ def test_save_image_data(tmp_path, catalog: Catalog):
     image.save(tmp_path / file1_name)
 
     file1 = ImageFile(name=file1_name, source=f"file://{tmp_path}")
-    file1._set_stream(catalog, False)
 
     file1.save(tmp_path / file2_name)
 
     file2 = ImageFile(name=file2_name, source=f"file://{tmp_path}")
-    file2._set_stream(catalog, False)
     assert images_equal(image, file2.read())
 
 
@@ -301,7 +293,6 @@ def test_read_length(tmp_path, catalog):
         fd.write(data)
 
     file = File(name=file_name, source=f"file://{tmp_path}")
-    file._set_stream(catalog, False)
     assert file.read(length=4) == data[:4]
 
 
@@ -314,7 +305,6 @@ def test_read_bytes(tmp_path, catalog):
         fd.write(data)
 
     file = File(name=file_name, source=f"file://{tmp_path}")
-    file._set_stream(catalog, False)
     assert file.read_bytes() == data
 
 
@@ -327,5 +317,4 @@ def test_read_text(tmp_path, catalog):
         fd.write(data)
 
     file = File(name=file_name, source=f"file://{tmp_path}")
-    file._set_stream(catalog, True)
     assert file.read_text() == data

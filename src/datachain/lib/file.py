@@ -17,6 +17,7 @@ from PIL import Image
 from pydantic import Field, field_validator
 
 from datachain.cache import UniqueId
+from datachain.catalog.loader import get_catalog
 from datachain.client.fileslice import FileSlice
 from datachain.lib.data_model import DataModel
 from datachain.lib.utils import DataChainError
@@ -194,6 +195,11 @@ class File(DataModel):
                 yield f
 
         uid = self.get_uid()
+        if not self._catalog:
+            kwargs = {"caching_enabled": self._caching_enabled}
+            if hasattr(self, "_download_cb"):
+                kwargs["download_cb"] = self._download_cb
+            self._set_stream(get_catalog(), **kwargs)
         client = self._catalog.get_client(self.source)
         if self._caching_enabled:
             client.download(uid, callback=self._download_cb)
