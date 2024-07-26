@@ -29,7 +29,7 @@ def embeddings_processor(file) -> list[float]:
 print("\n# Compute and Save Embeddings:")
 dc_emb = (
     DataChain(name="fashion-tmp")  # from 2-basic-operations.py
-    .limit(1000)
+    .limit(100)
     .map(embeddings=embeddings_processor)
     .save("fashion-embeddings")
 )

@@ -1,6 +1,10 @@
-datachain
+datachain[torch,vector]
+matplotlib
 numpy
 pandas
+seaborn
+scikit-learn
 torch
 torchvision
 tqdm
+umap-learn

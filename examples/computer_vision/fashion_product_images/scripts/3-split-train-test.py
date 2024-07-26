@@ -16,7 +16,7 @@ print("\n# Add a signal (split):")
 ds = (
     DataChain.from_dataset("fashion-product-images")
     .filter((C("masterCategory") == "Apparel") & (C("subCategory") == "Topwear"))
-    .map(split=train_test_split, params=["name"], output=str)
+    .map(split=train_test_split, params=["file.name"], output=str)
     .save()
 )
 

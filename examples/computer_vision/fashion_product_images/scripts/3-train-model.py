@@ -30,7 +30,7 @@ ds = (
     DataChain(name="fashion-train")
     .map(target=add_target_label, params=["usage"], output=str)
     .map(label=lambda target: label_to_int(target, CLASSES), output=int)
-    .limit(1000)  # Take a sample for the DEMO purposes
+    .limit(100)  # Take a sample for the DEMO purposes
     .shuffle()
 )
 
@@ -49,4 +49,4 @@ train_loader = DataLoader(
 model, optimizer = train_model(train_loader, NUM_CLASSES, num_epochs=3, lr=0.001)
 
 # NOTE: DataChain requires the  Last line to be an instance of DatasetQuery
-ds.select("file.name", "target", "label").show(3)
+ds.select("file.name", "target", "label").limit(3)
