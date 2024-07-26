@@ -3,6 +3,8 @@ name: Test Jupyter Notebooks
 
 on:
   push:
+    branches:
+      - test-examples-ci
     paths:
       - 'examples/**.ipynb'
       - 'examples/**.py'
@@ -82,14 +84,13 @@ jobs:
         ./tests/examples/test_notebooks.sh -d ${{ matrix.dir }}
       shell: bash
 
-    - name: Commit & push changes in Jupyter Notebooks
-      if: github.event_name == 'push'
-      run: |
-        git config --global user.name "${{ env.CI_COMMIT_AUTHOR }}"
-        git config --global user.email "username@users.noreply.github.com"
-        git commit -m "${{ env.CI_COMMIT_MESSAGE }}"
-        git push
-
+    # - name: Commit & push changes in Jupyter Notebooks
+    #   if: env.IPYNB_EXAMPLES_FOUND == 'true'
+    #   run: |
+    #     git config --global user.name "${{ github.actor }}"
+    #     git config --global user.email "${{ github.actor }}@users.noreply.github.com"
+    #     git commit -am "Update Jupyter Notebooks"
+    #     git push
 
     # Test .py scripts designed for Studio (in scripts/ dir)
     - name: Test .py scripts
