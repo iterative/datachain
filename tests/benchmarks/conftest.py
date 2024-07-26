@@ -1,5 +1,6 @@
 import os
 import shutil
+from pathlib import Path
 from subprocess import check_output
 
 import pytest
@@ -129,3 +130,8 @@ def bench_datachain(datachain_bin, make_bench):
         return bench.pedantic(datachain_bin, args=args, **kwargs)
 
     return _bench_datachain
+
+
+@pytest.fixture
+def datasets():
+    return Path(__file__).parent / "datasets"
