@@ -397,7 +397,7 @@ class DataChain(DatasetQuery):
                 nrows=nrows,
             )
         }
-        return chain.gen(**signal_dict)  # type: ignore[arg-type]
+        return chain.gen(**signal_dict)  # type: ignore[misc, arg-type]
 
     @classmethod
     def from_jsonl(
@@ -457,7 +457,7 @@ class DataChain(DatasetQuery):
                 nrows=nrows,
             )
         }
-        return chain.gen(**signal_dict)  # type: ignore[arg-type]
+        return chain.gen(**signal_dict)  # type: ignore[misc, arg-type]
 
     @classmethod
     def datasets(
