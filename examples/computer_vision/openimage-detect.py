@@ -38,9 +38,8 @@ def openimage_detect(args):
         )
 
         fstream = File(
-            name=f"detect_{i}",
             source=source,
-            parent=f"{stream_jpg.parent}/{stream_jpg.name}",
+            path=f"{stream_jpg.path}/detect_{i}",
             version=stream_jpg.version,
             etag=f"{stream_jpg.etag}_{stream_jpg.etag}",
         )
@@ -52,10 +51,10 @@ source = "gs://datachain-demo/openimages-v6-test-jsonpairs"
 
 (
     DataChain.from_storage(source)
-    .filter(C("file.name").glob("*.jpg") | C("file.name").glob("*.json"))
+    .filter(C("file.path").glob("*.jpg") | C("file.path").glob("*.json"))
     .agg(
         openimage_detect,
-        partition_by=path.file_stem(C("file.name")),
+        partition_by=path.file_stem(path.name(C("file.path"))),
         params=["file"],
         output={"file": File, "bbox": BBox},
     )

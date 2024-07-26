@@ -66,7 +66,7 @@ class LLaVADescribe(Mapper):
 if __name__ == "__main__":
     (
         DataChain.from_storage(source, type="image")
-        .filter(C("file.name").glob("cat*.jpg"))
+        .filter(C("file.path").glob("*/cat*.jpg"))
         .map(
             desc=LLaVADescribe(
                 device=device,
@@ -75,8 +75,6 @@ if __name__ == "__main__":
             params=["file"],
             output={"description": str, "error": str},
         )
-        .select(
-            "file.source", "file.parent", "file.name", "desc.description", "desc.error"
-        )
+        .select("file.source", "file.path", "desc.description", "desc.error")
         .show(2)
     )
