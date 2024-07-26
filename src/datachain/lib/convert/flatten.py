@@ -48,10 +48,10 @@ def _flatten_fields_values(fields, obj: BaseModel):
         value = getattr(obj, name)
 
         if isinstance(value, list):
-            yield [
-                val.model_dump() if ModelStore.is_pydantic(type(val)) else val
-                for val in value
-            ]
+            if value and ModelStore.is_pydantic(type(value[0])):
+                yield [val.model_dump() for val in value]
+            else:
+                yield value
         elif isinstance(value, dict):
             yield {
                 key: val.model_dump() if ModelStore.is_pydantic(type(val)) else val
