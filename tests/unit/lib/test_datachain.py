@@ -1046,7 +1046,7 @@ def test_column_math():
     ch = chain.mutate(div2=Column("num") / 2.0)
     assert list(ch.collect("div2")) == [x / 2.0 for x in fib]
 
-    ch2 = ch.mutate(x = 1 - Column("div2"))
+    ch2 = ch.mutate(x=1 - Column("div2"))
     assert list(ch2.collect("x")) == [1 - (x / 2.0) for x in fib]
 
 
