@@ -3,8 +3,6 @@ name: Test Jupyter Notebooks
 
 on:
   push:
-    branches:
-      - test-examples-ci
     paths:
       - 'examples/**.ipynb'
       - 'examples/**.py'

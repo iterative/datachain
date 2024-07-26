@@ -55,7 +55,7 @@ for notebook in $(ls *.ipynb | sort); do
     # Check if the notebook ran successfully
     if [ $status -eq 0 ]; then
         echo -e "${notebook} - ${GREEN}SUCCESS${NC}"
-        
+
     else
         echo -e "${notebook} - ${RED}FAIL${NC}" | tee -a "$LOG_FILE"
         overall_status=1
