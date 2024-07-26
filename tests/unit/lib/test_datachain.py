@@ -660,7 +660,7 @@ def test_parse_tabular_partitions(tmp_dir, catalog):
 
 def test_parse_tabular_empty(tmp_dir, catalog):
     path = tmp_dir / "test.parquet"
-    with pytest.raises(DataChainParamsError):
+    with pytest.raises(FileNotFoundError):
         DataChain.from_storage(path.as_uri()).parse_tabular()
 
 
@@ -999,3 +999,38 @@ def test_order_by_descending(with_function):
         "a.txt",
         "a.txt",
     ]
+
+
+def test_union(catalog):
+    chain1 = DataChain.from_values(value=[1, 2])
+    chain2 = DataChain.from_values(value=[3, 4])
+    chain3 = chain1 | chain2
+    assert chain3.count() == 4
+    assert sorted(chain3.collect("value")) == [1, 2, 3, 4]
+
+
+def test_subtract(catalog):
+    chain1 = DataChain.from_values(a=[1, 1, 2], b=["x", "y", "z"])
+    chain2 = DataChain.from_values(a=[1, 2], b=["x", "y"])
+    assert set(chain1.subtract(chain2, on=["a", "b"]).collect()) == {(1, "y"), (2, "z")}
+    assert set(chain1.subtract(chain2, on=["b"]).collect()) == {(2, "z")}
+    assert set(chain1.subtract(chain2, on=["a"]).collect()) == set()
+    assert set(chain1.subtract(chain2).collect()) == {(1, "y"), (2, "z")}
+    assert chain1.subtract(chain1).count() == 0
+
+    chain3 = DataChain.from_values(a=[1, 3], c=["foo", "bar"])
+    assert set(chain1.subtract(chain3, on="a").collect()) == {(2, "z")}
+    assert set(chain1.subtract(chain3).collect()) == {(2, "z")}
+
+
+def test_subtract_error(catalog):
+    chain1 = DataChain.from_values(a=[1, 1, 2], b=["x", "y", "z"])
+    chain2 = DataChain.from_values(a=[1, 2], b=["x", "y"])
+    with pytest.raises(DataChainParamsError):
+        chain1.subtract(chain2, on=[])
+    with pytest.raises(TypeError):
+        chain1.subtract(chain2, on=42)
+
+    chain3 = DataChain.from_values(c=["foo", "bar"])
+    with pytest.raises(DataChainParamsError):
+        chain1.subtract(chain3)
