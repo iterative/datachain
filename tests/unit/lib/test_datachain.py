@@ -1055,3 +1055,22 @@ def test_from_values_array_of_floats():
     chain = DataChain.from_values(emd=embeddings)
 
     assert list(chain.collect("emd")) == embeddings
+
+
+def test_list_of_list_of_pydantic():
+    class MyTrace(BaseModel):
+        x: float
+        y: float
+
+    class MyNarrative(BaseModel):
+        id: int
+        traces: list[list[MyTrace]]
+
+    data = [
+        MyNarrative(id=1, traces=[[MyTrace(x=0.0, y=0.3), MyTrace(x=0.0, y=0.3)]]),
+        MyNarrative(id=2, traces=[[MyTrace(x=0.1, y=0.1), MyTrace(x=0.5, y=0.5)]]),
+    ]
+
+    chain = DataChain.from_values(vals=data)
+    chain = chain.save()
+    assert list(chain.collect("vals")) == data

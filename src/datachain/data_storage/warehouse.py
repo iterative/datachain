@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 
 import attrs
 import sqlalchemy as sa
+from pydantic import BaseModel
 from sqlalchemy import Table, case, select
 from sqlalchemy.sql import func
 from sqlalchemy.sql.expression import true
@@ -116,6 +117,8 @@ class AbstractWarehouse(ABC, Serializable):
                     return val
                 if value_type in (dict, list):
                     return json.dumps(val)
+                if issubclass(value_type, BaseModel):
+                    return val.model_dump()
                 raise ValueError(
                     f"Cannot convert value {val!r} with type {value_type} to JSON"
                 )
