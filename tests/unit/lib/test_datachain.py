@@ -1034,3 +1034,24 @@ def test_subtract_error(catalog):
     chain3 = DataChain.from_values(c=["foo", "bar"])
     with pytest.raises(DataChainParamsError):
         chain1.subtract(chain3)
+
+
+def test_column_math():
+    fib = [1, 1, 2, 3, 5, 8]
+    chain = DataChain.from_values(num=fib)
+
+    ch = chain.mutate(add2=Column("num") + 2)
+    assert list(ch.collect("add2")) == [x + 2 for x in fib]
+
+    ch = chain.mutate(div2=Column("num") / 2.0)
+    assert list(ch.collect("div2")) == [x / 2.0 for x in fib]
+
+    ch2 = ch.mutate(x=1 - Column("div2"))
+    assert list(ch2.collect("x")) == [1 - (x / 2.0) for x in fib]
+
+
+def test_from_values_array_of_floats():
+    embeddings = [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]]
+    chain = DataChain.from_values(emd=embeddings)
+
+    assert list(chain.collect("emd")) == embeddings

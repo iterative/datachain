@@ -17,12 +17,8 @@ from tests.utils import images_equal
 
 
 @pytest.mark.parametrize("anon", [True, False])
-def test_catalog_anon(catalog, anon):
-    chain = (
-        DataChain.from_storage("gs://dvcx-datalakes/dogs-and-cats/", anon=anon)
-        .limit(5)
-        .save("test_catalog_anon")
-    )
+def test_catalog_anon(tmp_dir, catalog, anon):
+    chain = DataChain.from_storage(tmp_dir.as_uri(), anon=anon)
     assert chain.catalog.client_config.get("anon", False) is anon
 
 
