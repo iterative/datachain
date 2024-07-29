@@ -12,7 +12,6 @@ from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
 
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
-from fsspec.implementations.local import LocalFileSystem
 from PIL import Image
 from pydantic import Field, field_validator
 
@@ -20,7 +19,7 @@ from datachain.cache import UniqueId
 from datachain.client.fileslice import FileSlice
 from datachain.lib.data_model import DataModel
 from datachain.lib.utils import DataChainError
-from datachain.sql.types import JSON, Int, String
+from datachain.sql.types import JSON, Boolean, DateTime, Int, String
 from datachain.utils import TIME_ZERO
 
 if TYPE_CHECKING:
@@ -126,11 +125,13 @@ class File(DataModel):
         "source": String,
         "parent": String,
         "name": String,
+        "size": Int,
         "version": String,
         "etag": String,
-        "size": Int,
-        "vtype": String,
+        "is_latest": Boolean,
+        "last_modified": DateTime,
         "location": JSON,
+        "vtype": String,
     }
 
     _unique_id_keys: ClassVar[list[str]] = [
@@ -214,7 +215,7 @@ class File(DataModel):
         with self.open(mode="r") as stream:
             return stream.read()
 
-    def write(self, destination: str):
+    def save(self, destination: str):
         """Writes it's content to destination"""
         with open(destination, mode="wb") as f:
             f.write(self.read())
@@ -232,7 +233,7 @@ class File(DataModel):
         dst_dir = os.path.dirname(dst)
         os.makedirs(dst_dir, exist_ok=True)
 
-        self.write(dst)
+        self.save(dst)
 
     def _set_stream(
         self,
@@ -281,9 +282,8 @@ class File(DataModel):
     def get_path(self) -> str:
         """Returns file path."""
         path = unquote(self.get_uri())
-        fs = self.get_fs()
-        if isinstance(fs, LocalFileSystem):
-            # Drop file:// protocol
+        source = urlparse(self.source)
+        if source.scheme == "file":
             path = urlparse(path).path
             path = url2pathname(path)
         return path
@@ -298,13 +298,10 @@ class File(DataModel):
         elif placement == "etag":
             path = f"{self.etag}{self.get_file_suffix()}"
         elif placement == "fullpath":
-            fs = self.get_fs()
-            if isinstance(fs, LocalFileSystem):
-                path = unquote(self.get_full_name())
-            else:
-                path = (
-                    Path(urlparse(self.source).netloc) / unquote(self.get_full_name())
-                ).as_posix()
+            path = unquote(self.get_full_name())
+            source = urlparse(self.source)
+            if source.scheme and source.scheme != "file":
+                path = posixpath.join(source.netloc, path)
         elif placement == "checksum":
             raise NotImplementedError("Checksum placement not implemented yet")
         else:
@@ -330,7 +327,7 @@ class TextFile(File):
         with self.open() as stream:
             return stream.read()
 
-    def write(self, destination: str):
+    def save(self, destination: str):
         """Writes it's content to destination"""
         with open(destination, mode="w") as f:
             f.write(self.read_text())
@@ -344,7 +341,7 @@ class ImageFile(File):
         fobj = super().read()
         return Image.open(BytesIO(fobj))
 
-    def write(self, destination: str):
+    def save(self, destination: str):
         """Writes it's content to destination"""
         self.read().save(destination)
 
@@ -360,21 +357,25 @@ def get_file(type_: Literal["binary", "text", "image"] = "binary"):
         source: str,
         parent: str,
         name: str,
+        size: int,
         version: str,
         etag: str,
-        size: int,
-        vtype: str,
+        is_latest: bool,
+        last_modified: datetime,
         location: Optional[Union[dict, list[dict]]],
+        vtype: str,
     ) -> file:  # type: ignore[valid-type]
         return file(
             source=source,
             parent=parent,
             name=name,
+            size=size,
             version=version,
             etag=etag,
-            size=size,
-            vtype=vtype,
+            is_latest=is_latest,
+            last_modified=last_modified,
             location=location,
+            vtype=vtype,
         )
 
     return get_file_type

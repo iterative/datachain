@@ -17,12 +17,12 @@ class FileBasic(DataModel):
     size: int = Field(default=0)
 
 
-class TestFileInfo(FileBasic):
+class FileInfo(FileBasic):
     location: dict = Field(default={})
 
 
 class FileInfoEx(DataModel):
-    f_info: TestFileInfo
+    f_info: FileInfo
     type_id: int
 
 
@@ -42,13 +42,13 @@ def test_flatten_basic():
 
 
 def test_flatten_with_json():
-    t1 = TestFileInfo(parent="prt4", name="test1", size=42, location={"ee": "rr"})
+    t1 = FileInfo(parent="prt4", name="test1", size=42, location={"ee": "rr"})
     assert flatten(t1) == ("prt4", "test1", 42, {"ee": "rr"})
 
 
 def test_flatten_with_empty_json():
     with pytest.raises(ValidationError):
-        TestFileInfo(parent="prt4", name="test1", size=42, location=None)
+        FileInfo(parent="prt4", name="test1", size=42, location=None)
 
 
 def test_flatten_with_accepted_empty_json():
@@ -59,15 +59,15 @@ def test_flatten_with_accepted_empty_json():
 
 
 def test_flatten_nested():
-    t0 = TestFileInfo(parent="sfo", name="sf", size=567, location={"42": 999})
+    t0 = FileInfo(parent="sfo", name="sf", size=567, location={"42": 999})
     t1 = FileInfoEx(f_info=t0, type_id=1849)
 
     assert flatten(t1) == ("sfo", "sf", 567, {"42": 999}, 1849)
 
 
 def test_flatten_list():
-    t1 = TestFileInfo(parent="p1", name="n4", size=3, location={"a": "b"})
-    t2 = TestFileInfo(parent="p2", name="n5", size=2, location={"c": "d"})
+    t1 = FileInfo(parent="p1", name="n4", size=3, location={"a": "b"})
+    t2 = FileInfo(parent="p2", name="n5", size=2, location={"c": "d"})
 
     vals = flatten_list([t1, t2])
     assert vals == ("p1", "n4", 3, {"a": "b"}, "p2", "n5", 2, {"c": "d"})

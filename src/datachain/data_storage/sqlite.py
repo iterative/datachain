@@ -496,9 +496,6 @@ class SQLiteMetastore(AbstractDBMetastore):
     def _jobs_insert(self) -> "Insert":
         return sqlite.insert(self._jobs)
 
-    def get_possibly_stale_jobs(self) -> list[tuple[str, str, int]]:
-        raise NotImplementedError("get_possibly_stale_jobs not implemented for SQLite")
-
 
 class SQLiteWarehouse(AbstractWarehouse):
     """
@@ -594,7 +591,7 @@ class SQLiteWarehouse(AbstractWarehouse):
     ):
         rows = self.db.execute(select_query, **kwargs)
         yield from convert_rows_custom_column_types(
-            select_query.columns, rows, sqlite_dialect
+            select_query.selected_columns, rows, sqlite_dialect
         )
 
     def get_dataset_sources(

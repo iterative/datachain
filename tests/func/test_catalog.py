@@ -1068,6 +1068,45 @@ def test_storage_stats(cloud_test_catalog):
     assert stats.size == 15
 
 
+@pytest.mark.parametrize("cloud_type", ["s3", "azure", "gs"], indirect=True)
+def test_enlist_source_handles_slash(cloud_test_catalog):
+    catalog = cloud_test_catalog.catalog
+    src_uri = cloud_test_catalog.src_uri
+
+    catalog.enlist_source(f"{src_uri}/dogs", ttl=1234)
+    stats = catalog.storage_stats(src_uri)
+    assert stats.num_objects == len(DEFAULT_TREE["dogs"])
+    assert stats.size == 15
+
+    catalog.enlist_source(f"{src_uri}/dogs/", ttl=1234, force_update=True)
+    stats = catalog.storage_stats(src_uri)
+    assert stats.num_objects == len(DEFAULT_TREE["dogs"])
+    assert stats.size == 15
+
+
+@pytest.mark.parametrize("cloud_type", ["s3", "azure", "gs"], indirect=True)
+def test_enlist_source_handles_glob(cloud_test_catalog):
+    catalog = cloud_test_catalog.catalog
+    src_uri = cloud_test_catalog.src_uri
+
+    catalog.enlist_source(f"{src_uri}/dogs/*.jpg", ttl=1234)
+    stats = catalog.storage_stats(src_uri)
+
+    assert stats.num_objects == len(DEFAULT_TREE["dogs"])
+    assert stats.size == 15
+
+
+@pytest.mark.parametrize("cloud_type", ["s3", "azure", "gs"], indirect=True)
+def test_enlist_source_handles_file(cloud_test_catalog):
+    catalog = cloud_test_catalog.catalog
+    src_uri = cloud_test_catalog.src_uri
+
+    catalog.enlist_source(f"{src_uri}/dogs/dog1", ttl=1234)
+    stats = catalog.storage_stats(src_uri)
+    assert stats.num_objects == len(DEFAULT_TREE["dogs"])
+    assert stats.size == 15
+
+
 @pytest.mark.parametrize("from_cli", [False, True])
 def test_garbage_collect(cloud_test_catalog, from_cli, capsys):
     catalog = cloud_test_catalog.catalog

@@ -25,6 +25,7 @@ from typing import (
 
 import attrs
 import sqlalchemy
+import sqlalchemy as sa
 from attrs import frozen
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback, TqdmCallback
 from sqlalchemy import Column
@@ -250,7 +251,7 @@ class DatasetDiffOperation(Step):
         self,
         source_query: Select,
         target_query: Select,
-    ) -> Select:
+    ) -> sa.Selectable:
         """
         Should return select query that calculates desired diff between dataset queries
         """
@@ -268,7 +269,7 @@ class DatasetDiffOperation(Step):
 
         columns = [
             c if isinstance(c, Column) else Column(c.name, c.type)
-            for c in source_query.columns
+            for c in source_query.selected_columns
         ]
         temp_table = self.catalog.warehouse.create_dataset_rows_table(
             temp_table_name,
@@ -292,23 +293,16 @@ class DatasetDiffOperation(Step):
 
 @frozen
 class Subtract(DatasetDiffOperation):
-    """
-    Calculates rows that are in a source query but are not in target query (diff)
-    This can be used to do delta updates (calculate UDF only on newly added rows)
-    Example:
-        >>> ds = DatasetQuery(name="dogs_cats") # some older dataset with embeddings
-        >>> ds_updated = (
-                DatasetQuery("gs://dvcx-datalakes/dogs-and-cats")
-                .filter(C.size > 1000) # we can also filter out source query
-                .subtract(ds)
-                .add_signals(calc_embeddings) # calculae embeddings only on new rows
-                .union(ds) # union with old dataset that's missing new rows
-                .save("dogs_cats_updated")
-            )
-    """
+    on: Sequence[str]
 
-    def query(self, source_query: Select, target_query: Select) -> Select:
-        return self.catalog.warehouse.subtract_query(source_query, target_query)
+    def query(self, source_query: Select, target_query: Select) -> sa.Selectable:
+        sq = source_query.alias("source_query")
+        tq = target_query.alias("target_query")
+        where_clause = sa.and_(
+            getattr(sq.c, col_name).is_not_distinct_from(getattr(tq.c, col_name))
+            for col_name in self.on
+        )  # type: ignore[arg-type]
+        return sq.select().except_(sq.select().where(where_clause))
 
 
 @frozen
@@ -820,8 +814,16 @@ class SQLMutate(SQLClause):
     args: tuple[ColumnElement, ...]
 
     def apply_sql_clause(self, query: Select) -> Select:
-        subquery = query.subquery()
-        return sqlalchemy.select(*subquery.c, *self.args).select_from(subquery)
+        original_subquery = query.subquery()
+        # this is needed for new column to be used in clauses
+        # like ORDER BY, otherwise new column is not recognized
+        subquery = (
+            sqlalchemy.select(*original_subquery.c, *self.args)
+            .select_from(original_subquery)
+            .subquery()
+        )
+
+        return sqlalchemy.select(*subquery.c).select_from(subquery)
 
 
 @frozen
@@ -1252,7 +1254,7 @@ class DatasetQuery:
     def as_iterable(self, **kwargs) -> Iterator[ResultIter]:
         try:
             query = self.apply_steps().select()
-            selected_columns = [c.name for c in query.columns]
+            selected_columns = [c.name for c in query.selected_columns]
             yield ResultIter(
                 self.catalog.warehouse.dataset_rows_select(query, **kwargs),
                 selected_columns,
@@ -1556,8 +1558,12 @@ class DatasetQuery:
 
     @detach
     def subtract(self, dq: "DatasetQuery") -> "Self":
+        return self._subtract(dq, on=["source", "parent", "name"])
+
+    @detach
+    def _subtract(self, dq: "DatasetQuery", on: Sequence[str]) -> "Self":
         query = self.clone()
-        query.steps.append(Subtract(dq, self.catalog))
+        query.steps.append(Subtract(dq, self.catalog, on=on))
         return query
 
     @detach
@@ -1676,7 +1682,7 @@ class DatasetQuery:
                     f.row_number().over(order_by=q._order_by_clauses).label("sys__id")
                 )
 
-            cols = tuple(c.name for c in q.columns)
+            cols = tuple(c.name for c in q.selected_columns)
             insert_q = sqlalchemy.insert(dr.get_table()).from_select(cols, q)
             self.catalog.warehouse.db.execute(insert_q, **kwargs)
             self.catalog.metastore.update_dataset_status(
