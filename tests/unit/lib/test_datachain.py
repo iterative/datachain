@@ -18,6 +18,7 @@ from datachain.lib.signal_schema import (
 )
 from datachain.lib.udf_signature import UdfSignatureError
 from datachain.lib.utils import DataChainParamsError
+from tests.utils import skip_if_not_sqlite
 
 DF_DATA = {
     "first_name": ["Alice", "Bob", "Charlie", "David", "Eva"],
@@ -826,7 +827,7 @@ def test_parse_tabular_output_list(tmp_dir, catalog):
 def test_from_csv(tmp_dir, catalog):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.csv"
-    df.to_csv(path)
+    df.to_csv(path, index=False)
     dc = DataChain.from_csv(path.as_uri())
     df1 = dc.select("first_name", "age", "city").to_pandas()
     assert df1.equals(df)
@@ -879,10 +880,24 @@ def test_from_csv_no_header_output_list(tmp_dir, catalog):
 def test_from_csv_tab_delimited(tmp_dir, catalog):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.csv"
-    df.to_csv(path, sep="\t")
+    df.to_csv(path, sep="\t", index=False)
     dc = DataChain.from_csv(path.as_uri(), delimiter="\t")
     df1 = dc.select("first_name", "age", "city").to_pandas()
     assert df1.equals(df)
+
+
+def test_from_csv_null_collect(tmp_dir, catalog):
+    # Clickhouse requires setting type to Nullable(Type).
+    # See https://github.com/xzkostyan/clickhouse-sqlalchemy/issues/189.
+    skip_if_not_sqlite()
+    df = pd.DataFrame(DF_DATA)
+    height = [70, 65, None, 72, 68]
+    df["height"] = height
+    path = tmp_dir / "test.csv"
+    df.to_csv(path, index=False)
+    dc = DataChain.from_csv(path.as_uri(), object_name="csv")
+    for i, row in enumerate(dc.collect()):
+        assert row[1].height == height[i]
 
 
 def test_from_parquet(tmp_dir, catalog):
@@ -1122,3 +1137,24 @@ def test_subtract_error(catalog):
     chain3 = DataChain.from_values(c=["foo", "bar"])
     with pytest.raises(DataChainParamsError):
         chain1.subtract(chain3)
+
+
+def test_column_math():
+    fib = [1, 1, 2, 3, 5, 8]
+    chain = DataChain.from_values(num=fib)
+
+    ch = chain.mutate(add2=Column("num") + 2)
+    assert list(ch.collect("add2")) == [x + 2 for x in fib]
+
+    ch = chain.mutate(div2=Column("num") / 2.0)
+    assert list(ch.collect("div2")) == [x / 2.0 for x in fib]
+
+    ch2 = ch.mutate(x=1 - Column("div2"))
+    assert list(ch2.collect("x")) == [1 - (x / 2.0) for x in fib]
+
+
+def test_from_values_array_of_floats():
+    embeddings = [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]]
+    chain = DataChain.from_values(emd=embeddings)
+
+    assert list(chain.collect("emd")) == embeddings

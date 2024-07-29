@@ -12,7 +12,6 @@ from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
 
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
-from fsspec.implementations.local import LocalFileSystem
 from PIL import Image
 from pydantic import Field, field_validator
 
@@ -283,9 +282,8 @@ class File(DataModel):
     def get_path(self) -> str:
         """Returns file path."""
         path = unquote(self.get_uri())
-        fs = self.get_fs()
-        if isinstance(fs, LocalFileSystem):
-            # Drop file:// protocol
+        source = urlparse(self.source)
+        if source.scheme == "file":
             path = urlparse(path).path
             path = url2pathname(path)
         return path
@@ -300,13 +298,10 @@ class File(DataModel):
         elif placement == "etag":
             path = f"{self.etag}{self.get_file_suffix()}"
         elif placement == "fullpath":
-            fs = self.get_fs()
-            if isinstance(fs, LocalFileSystem):
-                path = unquote(self.get_full_name())
-            else:
-                path = (
-                    Path(urlparse(self.source).netloc) / unquote(self.get_full_name())
-                ).as_posix()
+            path = unquote(self.get_full_name())
+            source = urlparse(self.source)
+            if source.scheme and source.scheme != "file":
+                path = posixpath.join(source.netloc, path)
         elif placement == "checksum":
             raise NotImplementedError("Checksum placement not implemented yet")
         else:

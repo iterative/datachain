@@ -343,7 +343,7 @@ class DataChain(DatasetQuery):
         spec: Optional[DataType] = None,
         schema_from: Optional[str] = "auto",
         jmespath: Optional[str] = None,
-        object_name: str = "",
+        object_name: Optional[str] = "",
         model_name: Optional[str] = None,
         show_schema: Optional[bool] = False,
         meta_type: Optional[str] = "json",
@@ -365,12 +365,12 @@ class DataChain(DatasetQuery):
             nrows : optional row limit for jsonl and JSON arrays
 
         Example:
-            infer JSON schema from data, reduce using JMESPATH, print schema
+            infer JSON schema from data, reduce using JMESPATH
             ```py
             chain = DataChain.from_json("gs://json", jmespath="key1.key2")
             ```
 
-            infer JSON schema from a particular path, print data model
+            infer JSON schema from a particular path
             ```py
             chain = DataChain.from_json("gs://json_ds", schema_from="gs://json/my.json")
             ```
@@ -385,7 +385,7 @@ class DataChain(DatasetQuery):
         if (not object_name) and jmespath:
             object_name = jmespath_to_name(jmespath)
         if not object_name:
-            object_name = "json"
+            object_name = meta_type
         chain = DataChain.from_storage(path=path, type=type, **kwargs)
         signal_dict = {
             object_name: read_meta(
@@ -398,7 +398,67 @@ class DataChain(DatasetQuery):
                 nrows=nrows,
             )
         }
-        return chain.gen(**signal_dict)  # type: ignore[arg-type]
+        return chain.gen(**signal_dict)  # type: ignore[misc, arg-type]
+
+    @classmethod
+    def from_jsonl(
+        cls,
+        path,
+        type: Literal["binary", "text", "image"] = "text",
+        spec: Optional[DataType] = None,
+        schema_from: Optional[str] = "auto",
+        jmespath: Optional[str] = None,
+        object_name: Optional[str] = "",
+        model_name: Optional[str] = None,
+        show_schema: Optional[bool] = False,
+        meta_type: Optional[str] = "jsonl",
+        nrows=None,
+        **kwargs,
+    ) -> "DataChain":
+        """Get data from JSON lines. It returns the chain itself.
+
+        Parameters:
+            path : storage URI with directory. URI must start with storage prefix such
+                as `s3://`, `gs://`, `az://` or "file:///"
+            type : read file as "binary", "text", or "image" data. Default is "binary".
+            spec : optional Data Model
+            schema_from : path to sample to infer spec (if schema not provided)
+            object_name : generated object column name
+            model_name : optional generated model name
+            show_schema : print auto-generated schema
+            jmespath : optional JMESPATH expression to reduce JSON
+            nrows : optional row limit for jsonl and JSON arrays
+
+        Example:
+            infer JSONl schema from data, limit parsing to 1 row
+            ```py
+            chain = DataChain.from_jsonl("gs://myjsonl", nrows=1)
+            ```
+        """
+        if schema_from == "auto":
+            schema_from = path
+
+        def jmespath_to_name(s: str):
+            name_end = re.search(r"\W", s).start() if re.search(r"\W", s) else len(s)  # type: ignore[union-attr]
+            return s[:name_end]
+
+        if (not object_name) and jmespath:
+            object_name = jmespath_to_name(jmespath)
+        if not object_name:
+            object_name = meta_type
+        chain = DataChain.from_storage(path=path, type=type, **kwargs)
+        signal_dict = {
+            object_name: read_meta(
+                schema_from=schema_from,
+                meta_type=meta_type,
+                spec=spec,
+                model_name=model_name,
+                show_schema=show_schema,
+                jmespath=jmespath,
+                nrows=nrows,
+            )
+        }
+        return chain.gen(**signal_dict)  # type: ignore[misc, arg-type]
 
     @classmethod
     def datasets(
@@ -1174,6 +1234,7 @@ class DataChain(DatasetQuery):
         output: OutputType = None,
         object_name: str = "",
         model_name: str = "",
+        source: bool = True,
         nrows: Optional[int] = None,
         **kwargs,
     ) -> "DataChain":
@@ -1185,8 +1246,9 @@ class DataChain(DatasetQuery):
                 case types will be inferred.
             object_name : Generated object column name.
             model_name : Generated model name.
-            kwargs : Parameters to pass to pyarrow.dataset.dataset.
+            source : Whether to include info about the source file.
             nrows : Optional row limit.
+            kwargs : Parameters to pass to pyarrow.dataset.dataset.
 
         Example:
             Reading a json lines file:
@@ -1213,18 +1275,24 @@ class DataChain(DatasetQuery):
             except ValueError as e:
                 raise DatasetPrepareError(self.name, e) from e
 
+        if isinstance(output, dict):
+            model_name = model_name or object_name or ""
+            model = DataChain._dict_to_data_model(model_name, output)
+        else:
+            model = output  # type: ignore[assignment]
+
         if object_name:
-            if isinstance(output, dict):
-                model_name = model_name or object_name
-                output = DataChain._dict_to_data_model(model_name, output)
-            output = {object_name: output}  # type: ignore[dict-item]
+            output = {object_name: model}  # type: ignore[dict-item]
         elif isinstance(output, type(BaseModel)):
             output = {
                 name: info.annotation  # type: ignore[misc]
                 for name, info in output.model_fields.items()
             }
-        output = {"source": IndexedFile} | output  # type: ignore[assignment,operator]
-        return self.gen(ArrowGenerator(schema, nrows, **kwargs), output=output)
+        if source:
+            output = {"source": IndexedFile} | output  # type: ignore[assignment,operator]
+        return self.gen(
+            ArrowGenerator(schema, model, source, nrows, **kwargs), output=output
+        )
 
     @staticmethod
     def _dict_to_data_model(
@@ -1243,10 +1311,10 @@ class DataChain(DatasetQuery):
         path,
         delimiter: str = ",",
         header: bool = True,
-        column_names: Optional[list[str]] = None,
         output: OutputType = None,
         object_name: str = "",
         model_name: str = "",
+        source: bool = True,
         nrows=None,
         **kwargs,
     ) -> "DataChain":
@@ -1262,6 +1330,7 @@ class DataChain(DatasetQuery):
                 case types will be inferred.
             object_name : Created object column name.
             model_name : Generated model name.
+            source : Whether to include info about the source file.
             nrows : Optional row limit.
 
         Example:
@@ -1280,6 +1349,7 @@ class DataChain(DatasetQuery):
 
         chain = DataChain.from_storage(path, **kwargs)
 
+        column_names = None
         if not header:
             if not output:
                 msg = "error parsing csv - provide output if no header"
@@ -1301,6 +1371,7 @@ class DataChain(DatasetQuery):
             output=output,
             object_name=object_name,
             model_name=model_name,
+            source=source,
             nrows=nrows,
             format=format,
         )
@@ -1313,6 +1384,7 @@ class DataChain(DatasetQuery):
         output: Optional[dict[str, DataType]] = None,
         object_name: str = "",
         model_name: str = "",
+        source: bool = True,
         nrows=None,
         **kwargs,
     ) -> "DataChain":
@@ -1325,6 +1397,7 @@ class DataChain(DatasetQuery):
             output : Dictionary defining column names and their corresponding types.
             object_name : Created object column name.
             model_name : Generated model name.
+            source : Whether to include info about the source file.
             nrows : Optional row limit.
 
         Example:
@@ -1343,6 +1416,7 @@ class DataChain(DatasetQuery):
             output=output,
             object_name=object_name,
             model_name=model_name,
+            source=source,
             nrows=None,
             format="parquet",
             partitioning=partitioning,

@@ -58,8 +58,8 @@ def trim_text(text):
     match = re.search(r'[A-Z][^.]*\.', text)
     return match.group(0) if match else ''
 
-images = chain.collect_one("file")
-captions = chain.collect_one("scene")
+images = chain.collect("file")
+captions = chain.collect("scene")
 _ , axes = plt.subplots(1, len(captions), figsize=(15, 5))
 
 for ax, img, caption in zip(axes, images, captions):
