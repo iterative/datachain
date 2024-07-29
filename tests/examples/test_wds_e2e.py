@@ -1,10 +1,13 @@
 import io
 import json
+import os
 import tarfile
+import warnings
 from pathlib import Path
 
 import pandas as pd
 import pytest
+from sqlalchemy.exc import SAWarning
 
 from datachain.client.local import FileClient
 from datachain.lib.dc import DataChain
@@ -96,35 +99,45 @@ def test_wds(catalog, webdataset_tars):
 
 
 def test_wds_merge_with_parquet_meta(catalog, webdataset_tars, webdataset_metadata):
-    wds = DataChain.from_storage(Path(webdataset_tars).as_uri()).gen(
-        laion=process_webdataset(spec=WDSLaion), params="file"
-    )
+    with warnings.catch_warnings():
+        # Ignore SQLAlchemy warnings about cartesian products as these warnings are
+        # not accurate, and are generated due to a bug in ClickHouse-SQLAlchemy.
+        # All queries do have ON clauses, and this warning is not generated in SQLite.
+        if os.environ.get("DATACHAIN_METASTORE") or os.environ.get(
+            "DATACHAIN_WAREHOUSE"
+        ):
+            # Ignore only when not running on SQLite.
+            warnings.filterwarnings("ignore", category=SAWarning)
 
-    meta = DataChain.from_parquet(Path(webdataset_metadata).as_uri())
-
-    res = wds.merge(meta, on="laion.json.uid", right_on="uid")
-
-    num_rows = 0
-    for r in res.collect("laion"):
-        num_rows += 1
-        assert isinstance(r, WDSLaion)
-        assert isinstance(r.file, File)
-        assert isinstance(r.json, Laion)
-        data = next(d for d in WDS_TAR_SHARDS if d["uid"] == r.json.uid)
-        assert r.txt == data["caption"]
-        assert r.json.uid == data["uid"]
-
-    assert num_rows == len(WDS_TAR_SHARDS)
-
-    meta_res = list(res.collect(*WDS_META.keys()))
-
-    for field_name_idx, rows_values in enumerate(WDS_META.values()):
-        assert sorted(rows_values.values()) == sorted(
-            [r[field_name_idx] for r in meta_res]
+        wds = DataChain.from_storage(Path(webdataset_tars).as_uri()).gen(
+            laion=process_webdataset(spec=WDSLaion), params="file"
         )
 
-    # validate correct merge
-    for laion_uid, uid in res.collect("laion.json.uid", "uid"):
-        assert laion_uid == uid
-    for caption, text in res.collect("laion.json.caption", "text"):
-        assert caption == text
+        meta = DataChain.from_parquet(Path(webdataset_metadata).as_uri())
+
+        res = wds.merge(meta, on="laion.json.uid", right_on="uid")
+
+        num_rows = 0
+        for r in res.collect("laion"):
+            num_rows += 1
+            assert isinstance(r, WDSLaion)
+            assert isinstance(r.file, File)
+            assert isinstance(r.json, Laion)
+            data = next(d for d in WDS_TAR_SHARDS if d["uid"] == r.json.uid)
+            assert r.txt == data["caption"]
+            assert r.json.uid == data["uid"]
+
+        assert num_rows == len(WDS_TAR_SHARDS)
+
+        meta_res = list(res.collect(*WDS_META.keys()))
+
+        for field_name_idx, rows_values in enumerate(WDS_META.values()):
+            assert sorted(rows_values.values()) == sorted(
+                [r[field_name_idx] for r in meta_res]
+            )
+
+        # Validate correct merge
+        for laion_uid, uid in res.collect("laion.json.uid", "uid"):
+            assert laion_uid == uid
+        for caption, text in res.collect("laion.json.caption", "text"):
+            assert caption == text
