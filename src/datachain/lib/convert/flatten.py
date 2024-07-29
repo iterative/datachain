@@ -42,16 +42,20 @@ def flatten_list(obj_list):
 
 
 def _flatten_fields_values(fields, obj: BaseModel):
+    def _flatten_list(value):
+        assert isinstance(value, list)
+        if value and ModelStore.is_pydantic(type(value[0])):
+            return [val.model_dump() for val in value]
+        if isinstance(value[0], list):
+            return [_flatten_list(v) for v in value]
+        return value
+
     for name, f_info in fields.items():
         anno = f_info.annotation
         # Optimization: Access attributes directly to skip the model_dump() call.
         value = getattr(obj, name)
-
         if isinstance(value, list):
-            if value and ModelStore.is_pydantic(type(value[0])):
-                yield [val.model_dump() for val in value]
-            else:
-                yield value
+            yield _flatten_list(value)
         elif isinstance(value, dict):
             yield {
                 key: val.model_dump() if ModelStore.is_pydantic(type(val)) else val
