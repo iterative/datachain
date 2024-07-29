@@ -258,9 +258,9 @@ class UDFBase(AbstractUDF):
 
         if not self.is_output_batched:
             res = list(res)
-            assert len(res) == 1, (
-                f"{self.name} returns {len(res)} " f"rows while it's not batched"
-            )
+            assert (
+                len(res) == 1
+            ), f"{self.name} returns {len(res)} rows while it's not batched"
             if isinstance(res[0], tuple):
                 res = res[0]
         elif (
@@ -269,9 +269,9 @@ class UDFBase(AbstractUDF):
             and not self.is_input_grouped
         ):
             res = list(res)
-            assert len(res) == len(rows[0]), (
-                f"{self.name} returns {len(res)} " f"rows while len(rows[0]) expected"
-            )
+            assert len(res) == len(
+                rows[0]
+            ), f"{self.name} returns {len(res)} rows while len(rows[0]) expected"
 
         return res
 
