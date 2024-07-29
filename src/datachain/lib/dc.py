@@ -1081,6 +1081,7 @@ class DataChain(DatasetQuery):
         output: OutputType = None,
         object_name: str = "",
         model_name: str = "",
+        source: bool = True,
         nrows: Optional[int] = None,
         **kwargs,
     ) -> "DataChain":
@@ -1092,8 +1093,9 @@ class DataChain(DatasetQuery):
                 case types will be inferred.
             object_name : Generated object column name.
             model_name : Generated model name.
-            kwargs : Parameters to pass to pyarrow.dataset.dataset.
+            source : Whether to include info about the source file.
             nrows : Optional row limit.
+            kwargs : Parameters to pass to pyarrow.dataset.dataset.
 
         Example:
             Reading a json lines file:
@@ -1133,8 +1135,11 @@ class DataChain(DatasetQuery):
                 name: info.annotation  # type: ignore[misc]
                 for name, info in output.model_fields.items()
             }
-        output = {"source": IndexedFile} | output  # type: ignore[assignment,operator]
-        return self.gen(ArrowGenerator(schema, model, nrows, **kwargs), output=output)
+        if source:
+            output = {"source": IndexedFile} | output  # type: ignore[assignment,operator]
+        return self.gen(
+            ArrowGenerator(schema, model, source, nrows, **kwargs), output=output
+        )
 
     @staticmethod
     def _dict_to_data_model(
@@ -1156,6 +1161,7 @@ class DataChain(DatasetQuery):
         output: OutputType = None,
         object_name: str = "",
         model_name: str = "",
+        source: bool = True,
         nrows=None,
         **kwargs,
     ) -> "DataChain":
@@ -1171,6 +1177,7 @@ class DataChain(DatasetQuery):
                 case types will be inferred.
             object_name : Created object column name.
             model_name : Generated model name.
+            source : Whether to include info about the source file.
             nrows : Optional row limit.
 
         Example:
@@ -1211,6 +1218,7 @@ class DataChain(DatasetQuery):
             output=output,
             object_name=object_name,
             model_name=model_name,
+            source=source,
             nrows=nrows,
             format=format,
         )
@@ -1223,6 +1231,7 @@ class DataChain(DatasetQuery):
         output: Optional[dict[str, DataType]] = None,
         object_name: str = "",
         model_name: str = "",
+        source: bool = True,
         nrows=None,
         **kwargs,
     ) -> "DataChain":
@@ -1235,6 +1244,7 @@ class DataChain(DatasetQuery):
             output : Dictionary defining column names and their corresponding types.
             object_name : Created object column name.
             model_name : Generated model name.
+            source : Whether to include info about the source file.
             nrows : Optional row limit.
 
         Example:
@@ -1253,6 +1263,7 @@ class DataChain(DatasetQuery):
             output=output,
             object_name=object_name,
             model_name=model_name,
+            source=source,
             nrows=None,
             format="parquet",
             partitioning=partitioning,

@@ -20,6 +20,7 @@ class ArrowGenerator(Generator):
         self,
         input_schema: Optional["pa.Schema"] = None,
         output_schema: Optional[type["BaseModel"]] = None,
+        source: bool = True,
         nrows: Optional[int] = None,
         **kwargs,
     ):
@@ -30,12 +31,14 @@ class ArrowGenerator(Generator):
 
         input_schema : Optional pyarrow schema for validation.
         output_schema : Optional pydantic model for validation.
+        source : Whether to include info about the source file.
         nrows : Optional row limit.
         kwargs: Parameters to pass to pyarrow.dataset.dataset.
         """
         super().__init__()
         self.input_schema = input_schema
         self.output_schema = output_schema
+        self.source = source
         self.nrows = nrows
         self.kwargs = kwargs
 
@@ -48,12 +51,14 @@ class ArrowGenerator(Generator):
         with tqdm(desc="Parsed by pyarrow", unit=" rows") as pbar:
             for record_batch in ds.to_batches(use_threads=False):
                 for record in record_batch.to_pylist():
-                    source = IndexedFile(file=file, index=index)
                     vals = list(record.values())
                     if self.output_schema:
                         fields = self.output_schema.model_fields
                         vals = [self.output_schema(**dict(zip(fields, vals)))]
-                    yield [source, *vals]
+                    if self.source:
+                        yield [IndexedFile(file=file, index=index), *vals]
+                    else:
+                        yield vals
                     index += 1
                     if self.nrows and index >= self.nrows:
                         return

@@ -53,6 +53,25 @@ def test_arrow_generator_nrows(tmp_path, catalog):
     assert len(objs) == 2
 
 
+def test_arrow_generator_no_source(tmp_path, catalog):
+    ids = [12345, 67890, 34, 0xF0123]
+    texts = ["28", "22", "we", "hello world"]
+    df = pd.DataFrame({"id": ids, "text": texts})
+
+    name = "111.parquet"
+    pq_path = tmp_path / name
+    df.to_parquet(pq_path)
+    stream = File(name=name, parent=tmp_path.as_posix(), source="file:///")
+    stream._set_stream(catalog, caching_enabled=False)
+
+    func = ArrowGenerator(source=False)
+    objs = list(func.process(stream))
+
+    for o, id, text in zip(objs, ids, texts):
+        assert o[0] == id
+        assert o[1] == text
+
+
 @pytest.mark.parametrize(
     "col_type,expected",
     (
