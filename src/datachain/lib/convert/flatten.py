@@ -46,7 +46,7 @@ def _flatten_fields_values(fields, obj: BaseModel):
         assert isinstance(value, list)
         if value and ModelStore.is_pydantic(type(value[0])):
             return [val.model_dump() for val in value]
-        if isinstance(value[0], list):
+        if value and isinstance(value[0], list):
             return [_flatten_list(v) for v in value]
         return value
 
