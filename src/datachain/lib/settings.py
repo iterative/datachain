@@ -1,5 +1,4 @@
 from datachain.lib.utils import DataChainParamsError
-from datachain.query.dataset import INSERT_BATCH_SIZE
 
 
 class SettingsError(DataChainParamsError):
@@ -8,11 +7,8 @@ class SettingsError(DataChainParamsError):
 
 
 class Settings:
-    def __init__(
-        self, cache=None, batch=None, parallel=None, workers=None, min_task_size=None
-    ):
+    def __init__(self, cache=None, parallel=None, workers=None, min_task_size=None):
         self._cache = cache
-        self._batch = batch
         self.parallel = parallel
         self._workers = workers
         self.min_task_size = min_task_size
@@ -21,12 +17,6 @@ class Settings:
             raise SettingsError(
                 "'cache' argument must be bool"
                 f" while {cache.__class__.__name__} was given"
-            )
-
-        if not isinstance(batch, int) and batch is not None:
-            raise SettingsError(
-                "'batch' argument must be int or None"
-                f" while {batch.__class__.__name__} was given"
             )
 
         if not isinstance(parallel, int) and parallel is not None:
@@ -56,10 +46,6 @@ class Settings:
         return self._cache if self._cache is not None else False
 
     @property
-    def batch(self):
-        return self._batch if self._batch is not None else INSERT_BATCH_SIZE
-
-    @property
     def workers(self):
         return self._workers if self._workers is not None else False
 
@@ -67,8 +53,6 @@ class Settings:
         res = {}
         if self._cache is not None:
             res["cache"] = self.cache
-        if self._batch is not None:
-            res["batch"] = self.batch
         if self.parallel is not None:
             res["parallel"] = self.parallel
         if self._workers is not None:
@@ -79,7 +63,6 @@ class Settings:
 
     def add(self, settings: "Settings"):
         self._cache = settings._cache or self._cache
-        self._batch = settings._batch or self._batch
         self.parallel = settings.parallel or self.parallel
         self._workers = settings._workers or self._workers
         self.min_task_size = settings.min_task_size or self.min_task_size

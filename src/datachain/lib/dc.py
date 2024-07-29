@@ -238,7 +238,6 @@ class DataChain(DatasetQuery):
     def settings(
         self,
         cache=None,
-        batch=None,
         parallel=None,
         workers=None,
         min_task_size=None,
@@ -251,7 +250,6 @@ class DataChain(DatasetQuery):
 
         Parameters:
             cache : data caching (default=False)
-            batch : size of batch to insert to warehouse (default=10000)
             parallel : number of thread for processors. True is a special value to
                 enable all available CPUs (default=1)
             workers : number of distributed workers. Only for Studio mode. (default=1)
@@ -269,7 +267,7 @@ class DataChain(DatasetQuery):
         chain = self.clone()
         if sys is not None:
             chain._sys = sys
-        chain._settings.add(Settings(cache, batch, parallel, workers, min_task_size))
+        chain._settings.add(Settings(cache, parallel, workers, min_task_size))
         return chain
 
     def reset_settings(self, settings: Optional[Settings] = None) -> "Self":
@@ -696,7 +694,7 @@ class DataChain(DatasetQuery):
         func: Optional[Callable] = None,
         params: Union[None, str, Sequence[str]] = None,
         output: OutputType = None,
-        batch: int = 0,
+        batch: int = 1000,
         **signal_map,
     ) -> "Self":
         """This is a batch version of `map()`.
@@ -706,8 +704,7 @@ class DataChain(DatasetQuery):
         It accepts the same parameters plus an
         additional parameter:
 
-            batch : Size of each batch passed to `func`. Defaults to
-                    `DataChain._settings.batch`.
+            batch : Size of each batch passed to `func`. Defaults to 1000.
 
         Example:
             ```py
@@ -721,7 +718,7 @@ class DataChain(DatasetQuery):
         udf_obj = self._udf_to_obj(BatchMapper, func, params, output, signal_map)
         chain = DatasetQuery.add_signals(
             self,
-            udf_obj.to_udf_wrapper(batch or self._settings.batch),
+            udf_obj.to_udf_wrapper(batch),
             **self._settings.to_dict(),
         )
 
