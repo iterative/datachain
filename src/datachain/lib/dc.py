@@ -343,7 +343,7 @@ class DataChain(DatasetQuery):
         jmespath: Optional[str] = None,
         object_name: Optional[str] = "",
         model_name: Optional[str] = None,
-        show_schema: Optional[bool] = False,
+        print_schema: Optional[bool] = False,
         meta_type: Optional[str] = "json",
         nrows=None,
         **kwargs,
@@ -358,7 +358,7 @@ class DataChain(DatasetQuery):
             schema_from : path to sample to infer spec (if schema not provided)
             object_name : generated object column name
             model_name : optional generated model name
-            show_schema : print auto-generated schema
+            print_schema : print auto-generated schema
             jmespath : optional JMESPATH expression to reduce JSON
             nrows : optional row limit for jsonl and JSON arrays
 
@@ -391,7 +391,7 @@ class DataChain(DatasetQuery):
                 meta_type=meta_type,
                 spec=spec,
                 model_name=model_name,
-                show_schema=show_schema,
+                print_schema=print_schema,
                 jmespath=jmespath,
                 nrows=nrows,
             )
@@ -408,7 +408,7 @@ class DataChain(DatasetQuery):
         jmespath: Optional[str] = None,
         object_name: Optional[str] = "",
         model_name: Optional[str] = None,
-        show_schema: Optional[bool] = False,
+        print_schema: Optional[bool] = False,
         meta_type: Optional[str] = "jsonl",
         nrows=None,
         **kwargs,
@@ -423,7 +423,7 @@ class DataChain(DatasetQuery):
             schema_from : path to sample to infer spec (if schema not provided)
             object_name : generated object column name
             model_name : optional generated model name
-            show_schema : print auto-generated schema
+            print_schema : print auto-generated schema
             jmespath : optional JMESPATH expression to reduce JSON
             nrows : optional row limit for jsonl and JSON arrays
 
@@ -451,7 +451,7 @@ class DataChain(DatasetQuery):
                 meta_type=meta_type,
                 spec=spec,
                 model_name=model_name,
-                show_schema=show_schema,
+                print_schema=print_schema,
                 jmespath=jmespath,
                 nrows=nrows,
             )
@@ -487,7 +487,7 @@ class DataChain(DatasetQuery):
             **{object_name: datasets},  # type: ignore[arg-type]
         )
 
-    def show_json_schema(  # type: ignore[override]
+    def print_json_schema(  # type: ignore[override]
         self, jmespath: Optional[str] = None, model_name: Optional[str] = None
     ) -> "DataChain":
         """Print JSON data model and save it. It returns the chain itself.
@@ -512,7 +512,7 @@ class DataChain(DatasetQuery):
             output=str,
         )
 
-    def show_jsonl_schema(  # type: ignore[override]
+    def print_jsonl_schema(  # type: ignore[override]
         self, jmespath: Optional[str] = None, model_name: Optional[str] = None
     ) -> "DataChain":
         """Print JSON data model and save it. It returns the chain itself.
