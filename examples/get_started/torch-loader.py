@@ -1,5 +1,6 @@
 # pip install Pillow torchvision
 
+from posixpath import basename
 import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader
@@ -45,10 +46,10 @@ class CNN(nn.Module):
 if __name__ == "__main__":
     ds = (
         DataChain.from_storage(STORAGE, type="image")
-        .filter(C("file.name").glob("*.jpg"))
+        .filter(C("file.path").glob("*.jpg"))
         .map(
-            label=lambda name: label_to_int(name[:3], CLASSES),
-            params=["file.name"],
+            label=lambda path: label_to_int(basename(path)[:3], CLASSES),
+            params=["file.path"],
             output=int,
         )
     )

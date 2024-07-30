@@ -34,7 +34,7 @@ class Rating(BaseModel):
 
 chain = (
     DataChain.from_storage(DATA, type="text")
-    .filter(Column("file.name").glob("*.txt"))
+    .filter(Column("file.path").glob("*.txt"))
     .limit(5)
     .settings(parallel=4, cache=True)
     .setup(client=lambda: anthropic.Anthropic(api_key=API_KEY))
@@ -62,7 +62,7 @@ chain = (
 )
 
 chain = chain.settings(parallel=13).mutate(
-    x=Column("file.name"),
+    x=Column("file.path"),
     y=Column("rating.status"),
     price=Column("claude.usage.output_tokens") * 0.0072,
 )

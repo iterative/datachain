@@ -28,13 +28,13 @@ API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 
 chain = (
     DataChain.from_storage(DATA, type="text")
-    .filter(Column("file.name").glob("*.txt"))
+    .filter(Column("file.path").glob("*.txt"))
     .limit(5)
     .settings(parallel=4, cache=True)
     .agg(
         dialogues=lambda file: ["\n=====\n".join(f.read() for f in file)],
         output=str,
-        partition_by=path.file_ext(Column("name")),
+        partition_by=path.file_ext(Column("file.path")),
     )
     .setup(client=lambda: anthropic.Anthropic(api_key=API_KEY))
     .map(
