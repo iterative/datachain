@@ -9,6 +9,7 @@ import pytest
 from pydantic import BaseModel
 
 from datachain import Column
+from datachain.lib.data_model import DataModel
 from datachain.lib.dc import C, DataChain, Sys
 from datachain.lib.file import File
 from datachain.lib.signal_schema import (
@@ -1070,3 +1071,37 @@ def test_from_values_array_of_floats():
     chain = DataChain.from_values(emd=embeddings)
 
     assert list(chain.collect("emd")) == embeddings
+
+
+def test_custom_model_with_nested_lists():
+    ds_name = "nested"
+
+    class Trace(BaseModel):
+        x: float
+        y: float
+
+    class Nested(BaseModel):
+        values: list[list[float]]
+        traces_single: list[Trace]
+        traces_double: list[list[Trace]]
+
+    DataModel.register(Nested)
+
+    DataChain.from_values(
+        nested=[
+            Nested(
+                values=[[0.5, 0.5], [0.5, 0.5]],
+                traces_single=[{"x": 0.5, "y": 0.5}, {"x": 0.5, "y": 0.5}],
+                traces_double=[[{"x": 0.5, "y": 0.5}], [{"x": 0.5, "y": 0.5}]],
+            )
+        ],
+        nums=[1],
+    ).save(ds_name)
+
+    assert list(DataChain(name=ds_name).collect("nested")) == [
+        Nested(
+            values=[[0.5, 0.5], [0.5, 0.5]],
+            traces_single=[{"x": 0.5, "y": 0.5}, {"x": 0.5, "y": 0.5}],
+            traces_double=[[{"x": 0.5, "y": 0.5}], [{"x": 0.5, "y": 0.5}]],
+        )
+    ]
