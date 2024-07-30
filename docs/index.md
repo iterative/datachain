@@ -279,10 +279,6 @@ images_with_dogs.select("annotations", "file.name").show()
 [Limited by 20 rows]
 ```
 
-To see more examples of working with metadata formats, please follow this tutorial:
-
-[https://github.com/iterative/datachain/blob/main/examples/getting_started/datasets.ipynb](https://github.com/iterative/datachain/blob/main/examples/getting_started/datasets.ipynb)
-
 ### Passing data to training
 
 Chain results can be exported or passed directly to Pytorch dataloader. For example, if we are interested in passing three columns to training, the following Pytorch code will do it:

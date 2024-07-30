@@ -19,6 +19,7 @@ from datachain.lib.signal_schema import (
 )
 from datachain.lib.udf_signature import UdfSignatureError
 from datachain.lib.utils import DataChainParamsError
+from tests.utils import skip_if_not_sqlite
 
 DF_DATA = {
     "first_name": ["Alice", "Bob", "Charlie", "David", "Eva"],
@@ -739,7 +740,7 @@ def test_parse_tabular_output_list(tmp_dir, catalog):
 def test_from_csv(tmp_dir, catalog):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.csv"
-    df.to_csv(path)
+    df.to_csv(path, index=False)
     dc = DataChain.from_csv(path.as_uri())
     df1 = dc.select("first_name", "age", "city").to_pandas()
     assert df1.equals(df)
@@ -792,10 +793,24 @@ def test_from_csv_no_header_output_list(tmp_dir, catalog):
 def test_from_csv_tab_delimited(tmp_dir, catalog):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.csv"
-    df.to_csv(path, sep="\t")
+    df.to_csv(path, sep="\t", index=False)
     dc = DataChain.from_csv(path.as_uri(), delimiter="\t")
     df1 = dc.select("first_name", "age", "city").to_pandas()
     assert df1.equals(df)
+
+
+def test_from_csv_null_collect(tmp_dir, catalog):
+    # Clickhouse requires setting type to Nullable(Type).
+    # See https://github.com/xzkostyan/clickhouse-sqlalchemy/issues/189.
+    skip_if_not_sqlite()
+    df = pd.DataFrame(DF_DATA)
+    height = [70, 65, None, 72, 68]
+    df["height"] = height
+    path = tmp_dir / "test.csv"
+    df.to_csv(path, index=False)
+    dc = DataChain.from_csv(path.as_uri(), object_name="csv")
+    for i, row in enumerate(dc.collect()):
+        assert row[1].height == height[i]
 
 
 def test_from_parquet(tmp_dir, catalog):

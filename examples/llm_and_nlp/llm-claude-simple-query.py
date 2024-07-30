@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 
 import anthropic
 from anthropic.types import Message
@@ -25,6 +26,11 @@ TEMPERATURE = 0.9
 DEFAULT_OUTPUT_TOKENS = 1024
 
 API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+
+if not API_KEY:
+    print("This example requires an Anthropic API key")
+    print("Add your key using the ANTHROPIC_API_KEY environment variable.")
+    sys.exit(0)
 
 
 class Rating(BaseModel):
