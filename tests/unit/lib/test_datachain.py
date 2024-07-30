@@ -1090,9 +1090,9 @@ def test_custom_model_with_nested_lists():
     DataChain.from_values(
         nested=[
             Nested(
-                values=[[0.5, 0.5], [0.6, 0.6]],
-                traces_single=[{"x": 0.5, "y": 0.5}, {"x": 0.6, "y": 0.6}],
-                traces_double=[[{"x": 0.5, "y": 0.5}], [{"x": 0.6, "y": 0.6}]],
+                values=[[0.5, 0.5], [0.5, 0.5]],
+                traces_single=[{"x": 0.5, "y": 0.5}, {"x": 0.5, "y": 0.5}],
+                traces_double=[[{"x": 0.5, "y": 0.5}], [{"x": 0.5, "y": 0.5}]],
             )
         ],
         nums=[1],
@@ -1100,8 +1100,8 @@ def test_custom_model_with_nested_lists():
 
     assert list(DataChain(name=ds_name).collect("nested")) == [
         Nested(
-            values=[[0.5, 0.5], [0.6, 0.6]],
-            traces_single=[{"x": 0.5, "y": 0.5}, {"x": 0.6, "y": 0.6}],
-            traces_double=[[{"x": 0.5, "y": 0.5}], [{"x": 0.6, "y": 0.6}]],
+            values=[[0.5, 0.5], [0.5, 0.5]],
+            traces_single=[{"x": 0.5, "y": 0.5}, {"x": 0.5, "y": 0.5}],
+            traces_double=[[{"x": 0.5, "y": 0.5}], [{"x": 0.5, "y": 0.5}]],
         )
     ]
