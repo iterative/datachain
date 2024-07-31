@@ -18,6 +18,7 @@ jobs:
       matrix:
         os: [ubuntu-latest-16-cores, macos-latest, windows-latest-8-cores]
         pyv: ['3.9', '3.12']
+        group: ['get_started', 'llm_and_nlp or computer_vision', 'multimodal']
     steps:
       - uses: actions/checkout@v4
 
@@ -34,4 +35,4 @@ jobs:
           uv --version
 
       - name: Run examples
-        run: nox -s examples -p ${{ matrix.pyv }}
+        run: nox -s examples -p ${{ matrix.pyv }} -- -m "${{ matrix.group }}"

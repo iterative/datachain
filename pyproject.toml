@@ -118,7 +118,12 @@ namespaces = false
 addopts = "-rfEs -m 'not benchmark and not examples'"
 markers = [
   "benchmark: benchmarks.",
-  "e2e: End-to-end tests"
+  "e2e: End-to-end tests",
+  "examples: All examples",
+  "computer_vision: Computer vision examples",
+  "get_started: Get started examples",
+  "llm_and_nlp: LLM and NLP examples",
+  "multimodal: Multimodal examples",
 ]
 asyncio_mode = "auto"
 filterwarnings = [

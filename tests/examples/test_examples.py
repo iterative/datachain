@@ -64,24 +64,28 @@ def smoke_test(example: str):
 
 
 @pytest.mark.examples
+@pytest.mark.get_started
 @pytest.mark.parametrize("example", get_started_examples)
 def test_get_started_examples(example):
     smoke_test(example)
 
 
 @pytest.mark.examples
+@pytest.mark.llm_and_nlp
 @pytest.mark.parametrize("example", llm_and_nlp_examples)
 def test_llm_and_nlp_examples(example):
     smoke_test(example)
 
 
 @pytest.mark.examples
+@pytest.mark.multimodal
 @pytest.mark.parametrize("example", multimodal_examples)
 def test_multimodal(example):
     smoke_test(example)
 
 
 @pytest.mark.examples
+@pytest.mark.computer_vision
 @pytest.mark.parametrize("example", computer_vision_examples)
 def test_computer_vision_examples(example):
     smoke_test(example)
