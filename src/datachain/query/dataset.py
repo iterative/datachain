@@ -262,9 +262,7 @@ class DatasetDiffOperation(Step):
         temp_tables.extend(self.dq.temp_table_names)
 
         # creating temp table that will hold subtract results
-        temp_table_name = self.catalog.warehouse.TMP_TABLE_NAME_PREFIX + _random_string(
-            6
-        )
+        temp_table_name = self.catalog.warehouse.temp_table_name()
         temp_tables.append(temp_table_name)
 
         columns = [
@@ -448,9 +446,6 @@ class UDFStep(Step, ABC):
         to select
         """
 
-    def udf_table_name(self) -> str:
-        return self.catalog.warehouse.UDF_TABLE_NAME_PREFIX + _random_string(6)
-
     def populate_udf_table(self, udf_table: "Table", query: Select) -> None:
         use_partitioning = self.partition_by is not None
         batching = self.udf.properties.get_batching(use_partitioning)
@@ -574,9 +569,7 @@ class UDFStep(Step, ABC):
             list_partition_by = [self.partition_by]
 
         # create table with partitions
-        tbl = self.catalog.warehouse.create_udf_table(
-            self.udf_table_name(), partition_columns()
-        )
+        tbl = self.catalog.warehouse.create_udf_table(partition_columns())
 
         # fill table with partitions
         cols = [
@@ -638,37 +631,12 @@ class UDFSignal(UDFStep):
             for (col_name, col_type) in self.udf.output.items()
         ]
 
-        return self.catalog.warehouse.create_udf_table(
-            self.udf_table_name(), udf_output_columns
-        )
-
-    def create_pre_udf_table(self, query: Select) -> "Table":
-        columns = [
-            sqlalchemy.Column(c.name, c.type)
-            for c in query.selected_columns
-            if c.name != "sys__id"
-        ]
-        table = self.catalog.warehouse.create_udf_table(self.udf_table_name(), columns)
-        select_q = query.with_only_columns(
-            *[c for c in query.selected_columns if c.name != "sys__id"]
-        )
-
-        # if there is order by clause we need row_number to preserve order
-        # if there is no order by clause we still need row_number to generate
-        # unique ids as uniqueness is important for this table
-        select_q = select_q.add_columns(
-            f.row_number().over(order_by=select_q._order_by_clauses).label("sys__id")
-        )
-
-        self.catalog.warehouse.db.execute(
-            table.insert().from_select(list(select_q.selected_columns), select_q)
-        )
-        return table
+        return self.catalog.warehouse.create_udf_table(udf_output_columns)
 
     def process_input_query(self, query: Select) -> tuple[Select, list["Table"]]:
         if os.getenv("DATACHAIN_DISABLE_QUERY_CACHE", "") not in ("", "0"):
             return query, []
-        table = self.create_pre_udf_table(query)
+        table = self.catalog.warehouse.create_pre_udf_table(query)
         q: Select = sqlalchemy.select(*table.c)
         if query._order_by_clauses:
             # we are adding ordering only if it's explicitly added by user in
@@ -732,7 +700,7 @@ class RowGenerator(UDFStep):
     def create_udf_table(self, query: Select) -> "Table":
         warehouse = self.catalog.warehouse
 
-        table_name = self.udf_table_name()
+        table_name = self.catalog.warehouse.udf_table_name()
         columns: tuple[Column, ...] = tuple(
             Column(name, typ) for name, typ in self.udf.output.items()
         )
@@ -1802,10 +1770,3 @@ def query_wrapper(dataset_query: DatasetQuery) -> DatasetQuery:
 
     _send_result(dataset_query)
     return dataset_query
-
-
-def _random_string(length: int) -> str:
-    return "".join(
-        random.choice(string.ascii_letters + string.digits)  # noqa: S311
-        for i in range(length)
-    )

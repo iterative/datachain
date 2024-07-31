@@ -1113,7 +1113,7 @@ def test_garbage_collect(cloud_test_catalog, from_cli, capsys):
     assert catalog.get_temp_table_names() == []
     temp_tables = ["tmp_vc12F", "udf_jh653", "ds_shadow_12345", "old_ds_shadow"]
     for t in temp_tables:
-        catalog.warehouse.create_udf_table(t)
+        catalog.warehouse.create_udf_table(name=t)
     assert set(catalog.get_temp_table_names()) == set(temp_tables)
     if from_cli:
         garbage_collect(catalog)
