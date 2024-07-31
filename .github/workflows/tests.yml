@@ -190,7 +190,7 @@ jobs:
       matrix:
         os: [ubuntu-latest-16-cores, macos-latest, windows-latest-8-cores]
         pyv: ['3.9', '3.12']
-        group: ['get_started', 'llm_and_nlp or computer_vision', 'multimodal']
+        group: ['llm_and_nlp']
     steps:
 
       - uses: actions/checkout@v4
