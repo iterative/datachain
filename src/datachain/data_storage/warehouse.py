@@ -17,7 +17,7 @@ from sqlalchemy.sql.expression import true
 
 from datachain.client import Client
 from datachain.data_storage.serializer import Serializable
-from datachain.dataset import DatasetRecord, RowDict
+from datachain.dataset import DatasetRecord
 from datachain.node import DirType, DirTypeGroup, Entry, Node, NodeWithPath, get_path
 from datachain.sql.functions import path as pathfunc
 from datachain.sql.types import Int, SQLType
@@ -201,23 +201,17 @@ class AbstractWarehouse(ABC, Serializable):
     def dataset_select_paginated(
         self,
         query,
-        limit: Optional[int] = None,
-        order_by: tuple["ColumnElement[Any]", ...] = (),
         page_size: int = SELECT_BATCH_SIZE,
-    ) -> Generator[RowDict, None, None]:
+    ) -> Generator[Sequence, None, None]:
         """
         This is equivalent to `db.execute`, but for selecting rows in batches
         """
-        cols = query.selected_columns
-        cols_names = [c.name for c in cols]
+        limit = query._limit
+        paginated_query = query.limit(page_size)
 
-        if not order_by:
-            ordering = [cols.sys__id]
-        else:
-            ordering = order_by  # type: ignore[assignment]
-
-        # reset query order by and apply new order by id
-        paginated_query = query.order_by(None).order_by(*ordering).limit(page_size)
+        if not paginated_query._order_by_clauses:
+            # default order by is order by `sys__id`
+            paginated_query = paginated_query.order_by(query.selected_columns.sys__id)
 
         results = None
         offset = 0
@@ -236,7 +230,7 @@ class AbstractWarehouse(ABC, Serializable):
                 processed = False
                 for row in results:
                     processed = True
-                    yield RowDict(zip(cols_names, row))
+                    yield row
                     num_yielded += 1
 
                 if not processed:

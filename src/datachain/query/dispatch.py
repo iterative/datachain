@@ -2,11 +2,8 @@ import contextlib
 from collections.abc import Iterator, Sequence
 from itertools import chain
 from multiprocessing import cpu_count
-from queue import Empty, Full, Queue
 from sys import stdin
-from time import sleep
-from types import GeneratorType
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Optional
 
 import attrs
 import multiprocess
@@ -22,7 +19,19 @@ from datachain.query.dataset import (
     get_processed_callback,
     process_udf_outputs,
 )
+from datachain.query.queue import (
+    get_from_queue,
+    marshal,
+    msgpack_pack,
+    msgpack_unpack,
+    put_into_queue,
+    unmarshal,
+)
 from datachain.query.udf import UDFBase, UDFFactory, UDFResult
+from datachain.utils import batched_it
+
+if TYPE_CHECKING:
+    import multiprocess.queues
 
 DEFAULT_BATCH_SIZE = 10000
 STOP_SIGNAL = "STOP"
@@ -42,44 +51,6 @@ def get_n_workers_from_arg(n_workers: Optional[int] = None) -> int:
     if n_workers < 1:
         raise RuntimeError("Must use at least one worker for parallel UDF execution!")
     return n_workers
-
-
-# For more context on the get_from_queue and put_into_queue functions, see the
-# discussion here:
-# https://github.com/iterative/dvcx/pull/1297#issuecomment-2026308773
-# This problem is not exactly described by, but is also related to these Python issues:
-# https://github.com/python/cpython/issues/66587
-# https://github.com/python/cpython/issues/88628
-# https://github.com/python/cpython/issues/108645
-
-
-def get_from_queue(queue: Queue) -> Any:
-    """
-    Gets an item from a queue.
-    This is required to handle signals, such as KeyboardInterrupt exceptions
-    while waiting for items to be available, although only on certain installations.
-    (See the above comment for more context.)
-    """
-    while True:
-        try:
-            return queue.get_nowait()
-        except Empty:
-            sleep(0.01)
-
-
-def put_into_queue(queue: Queue, item: Any) -> None:
-    """
-    Puts an item into a queue.
-    This is required to handle signals, such as KeyboardInterrupt exceptions
-    while waiting for items to be queued, although only on certain installations.
-    (See the above comment for more context.)
-    """
-    while True:
-        try:
-            queue.put_nowait(item)
-            return
-        except Full:
-            sleep(0.01)
 
 
 def udf_entrypoint() -> int:
@@ -105,6 +76,7 @@ def udf_entrypoint() -> int:
     )
 
     query = udf_info["query"]
+    udf_fields = [str(c.name) for c in query.selected_columns]
     batching = udf_info["batching"]
     table = udf_info["table"]
     n_workers = udf_info["processes"]
@@ -121,7 +93,8 @@ def udf_entrypoint() -> int:
         generated_cb = get_generated_callback(dispatch.is_generator)
         try:
             udf_results = dispatch.run_udf_parallel(
-                udf_inputs,
+                udf_fields,
+                marshal(udf_inputs),
                 n_workers=n_workers,
                 processed_cb=processed_cb,
                 download_cb=download_cb,
@@ -193,7 +166,7 @@ class UDFDispatcher:
                 self._batch_size = 1
         return self._batch_size
 
-    def _create_worker(self) -> "UDFWorker":
+    def _create_worker(self, udf_fields: Sequence[str]) -> "UDFWorker":
         if not self.catalog:
             id_generator = self.id_generator_class(
                 *self.id_generator_args, **self.id_generator_kwargs
@@ -226,14 +199,18 @@ class UDFDispatcher:
             self.done_queue,
             self.is_generator,
             self.cache,
+            udf_fields,
         )
 
-    def _run_worker(self) -> None:
+    def _run_worker(self, udf_fields: Sequence[str]) -> None:
         try:
-            worker = self._create_worker()
+            worker = self._create_worker(udf_fields)
             worker.run()
         except (Exception, KeyboardInterrupt) as e:
-            put_into_queue(self.done_queue, {"status": FAILED_STATUS, "exception": e})
+            put_into_queue(
+                self.done_queue,
+                {"status": FAILED_STATUS, "exception": e},
+            )
             raise
 
     @staticmethod
@@ -247,9 +224,9 @@ class UDFDispatcher:
 
     def run_udf_parallel(  # noqa: C901, PLR0912
         self,
+        udf_fields: Sequence[str],
         input_rows,
         n_workers: Optional[int] = None,
-        cache: bool = False,
         input_queue=None,
         processed_cb: Callback = DEFAULT_CALLBACK,
         download_cb: Callback = DEFAULT_CALLBACK,
@@ -270,7 +247,9 @@ class UDFDispatcher:
             self.task_queue = self.ctx.Queue()
         self.done_queue = self.ctx.Queue()
         pool = [
-            self.ctx.Process(name=f"Worker-UDF-{i}", target=self._run_worker)
+            self.ctx.Process(
+                name=f"Worker-UDF-{i}", target=self._run_worker, args=(udf_fields,)
+            )
             for i in range(n_workers)
         ]
         for p in pool:
@@ -305,7 +284,7 @@ class UDFDispatcher:
                     n_workers -= 1
                 elif status == OK_STATUS:
                     processed_cb.relative_update(result["processed"])
-                    yield result["result"]
+                    yield msgpack_unpack(result["result"])
                 else:  # Failed / error
                     n_workers -= 1
                     exc = result.get("exception")
@@ -348,7 +327,7 @@ class UDFDispatcher:
 
 
 class WorkerCallback(Callback):
-    def __init__(self, queue: multiprocess.Queue):
+    def __init__(self, queue: "multiprocess.queues.Queue"):
         self.queue = queue
         super().__init__()
 
@@ -369,10 +348,11 @@ class ProcessedCallback(Callback):
 class UDFWorker:
     catalog: Catalog
     udf: UDFBase
-    task_queue: multiprocess.Queue
-    done_queue: multiprocess.Queue
+    task_queue: "multiprocess.queues.Queue"
+    done_queue: "multiprocess.queues.Queue"
     is_generator: bool
     cache: bool
+    udf_fields: Sequence[str]
     cb: Callback = attrs.field()
 
     @cb.default
@@ -382,7 +362,8 @@ class UDFWorker:
     def run(self) -> None:
         processed_cb = ProcessedCallback()
         udf_results = self.udf.run(
-            self.get_inputs(),
+            self.udf_fields,
+            unmarshal(self.get_inputs()),
             self.catalog,
             self.is_generator,
             self.cache,
@@ -390,16 +371,15 @@ class UDFWorker:
             processed_cb=processed_cb,
         )
         for udf_output in udf_results:
-            if isinstance(udf_output, GeneratorType):
-                udf_output = list(udf_output)  # can not pickle generator
-            put_into_queue(
-                self.done_queue,
-                {
-                    "status": OK_STATUS,
-                    "result": udf_output,
-                    "processed": processed_cb.processed_rows,
-                },
-            )
+            for batch in batched_it(udf_output, DEFAULT_BATCH_SIZE):
+                put_into_queue(
+                    self.done_queue,
+                    {
+                        "status": OK_STATUS,
+                        "result": msgpack_pack(list(batch)),
+                        "processed": processed_cb.processed_rows,
+                    },
+                )
         put_into_queue(self.done_queue, {"status": FINISHED_STATUS})
 
     def get_inputs(self):

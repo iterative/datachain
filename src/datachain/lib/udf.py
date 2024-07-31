@@ -1,6 +1,5 @@
 import sys
 import traceback
-from collections.abc import Iterable, Iterator
 from typing import TYPE_CHECKING, Callable, Optional
 
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
@@ -14,16 +13,19 @@ from datachain.lib.model_store import ModelStore
 from datachain.lib.signal_schema import SignalSchema
 from datachain.lib.udf_signature import UdfSignature
 from datachain.lib.utils import AbstractUDF, DataChainError, DataChainParamsError
-from datachain.query.batch import RowBatch
+from datachain.query.batch import UDFInputBatch
 from datachain.query.schema import ColumnParameter
 from datachain.query.udf import UDFBase as _UDFBase
-from datachain.query.udf import UDFProperties, UDFResult
+from datachain.query.udf import UDFProperties
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator, Sequence
+
     from typing_extensions import Self
 
     from datachain.catalog import Catalog
-    from datachain.query.batch import BatchingResult
+    from datachain.query.batch import RowsInput, UDFInput
+    from datachain.query.udf import UDFResult
 
 
 class UdfError(DataChainParamsError):
@@ -35,29 +37,34 @@ class UDFAdapter(_UDFBase):
     def __init__(
         self,
         inner: "UDFBase",
-        properties: UDFProperties,
+        properties: "UDFProperties",
     ):
         self.inner = inner
         super().__init__(properties)
 
     def run(
         self,
-        udf_inputs: "Iterable[BatchingResult]",
+        udf_fields: "Sequence[str]",
+        udf_inputs: "Iterable[RowsInput]",
         catalog: "Catalog",
         is_generator: bool,
         cache: bool,
         download_cb: Callback = DEFAULT_CALLBACK,
         processed_cb: Callback = DEFAULT_CALLBACK,
-    ) -> Iterator[Iterable["UDFResult"]]:
+    ) -> "Iterator[Iterable[UDFResult]]":
         self.inner._catalog = catalog
         if hasattr(self.inner, "setup") and callable(self.inner.setup):
             self.inner.setup()
 
-        for batch in udf_inputs:
-            n_rows = len(batch.rows) if isinstance(batch, RowBatch) else 1
-            output = self.run_once(catalog, batch, is_generator, cache, cb=download_cb)
-            processed_cb.relative_update(n_rows)
-            yield output
+        yield from super().run(
+            udf_fields,
+            udf_inputs,
+            catalog,
+            is_generator,
+            cache,
+            download_cb,
+            processed_cb,
+        )
 
         if hasattr(self.inner, "teardown") and callable(self.inner.teardown):
             self.inner.teardown()
@@ -65,12 +72,12 @@ class UDFAdapter(_UDFBase):
     def run_once(
         self,
         catalog: "Catalog",
-        arg: "BatchingResult",
+        arg: "UDFInput",
         is_generator: bool = False,
         cache: bool = False,
         cb: Callback = DEFAULT_CALLBACK,
-    ) -> Iterable[UDFResult]:
-        if isinstance(arg, RowBatch):
+    ) -> "Iterable[UDFResult]":
+        if isinstance(arg, UDFInputBatch):
             udf_inputs = [
                 self.bind_parameters(catalog, row, cache=cache, cb=cb)
                 for row in arg.rows

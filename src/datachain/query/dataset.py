@@ -519,6 +519,7 @@ class UDFStep(Step, ABC):
                     udf = self.udf
 
                 warehouse = self.catalog.warehouse
+                udf_fields = [str(c.name) for c in query.selected_columns]
 
                 with contextlib.closing(
                     batching(warehouse.dataset_select_paginated, query)
@@ -528,6 +529,7 @@ class UDFStep(Step, ABC):
                     generated_cb = get_generated_callback(self.is_generator)
                     try:
                         udf_results = udf.run(
+                            udf_fields,
                             udf_inputs,
                             self.catalog,
                             self.is_generator,
@@ -1244,21 +1246,23 @@ class DatasetQuery:
         actual_params = [normalize_param(p) for p in params]
         try:
             query = self.apply_steps().select()
+            query_fields = [str(c.name) for c in query.selected_columns]
 
             def row_iter() -> Generator[RowDict, None, None]:
                 # warehouse isn't threadsafe, we need to clone() it
                 # in the thread that uses the results
                 with self.catalog.warehouse.clone() as warehouse:
-                    gen = warehouse.dataset_select_paginated(
-                        query, limit=query._limit, order_by=query._order_by_clauses
-                    )
+                    gen = warehouse.dataset_select_paginated(query)
                     with contextlib.closing(gen) as rows:
                         yield from rows
 
-            async def get_params(row: RowDict) -> tuple:
+            async def get_params(row: Sequence) -> tuple:
+                row_dict = RowDict(zip(query_fields, row))
                 return tuple(
                     [
-                        await p.get_value_async(self.catalog, row, mapper, **kwargs)
+                        await p.get_value_async(
+                            self.catalog, row_dict, mapper, **kwargs
+                        )
                         for p in actual_params
                     ]
                 )
