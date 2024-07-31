@@ -20,6 +20,7 @@ def can_import_unstructured():
 get_started_examples = [
     filename
     for filename in glob.glob("examples/get_started/**/*.py", recursive=True)
+    # torch-loader will not finish within an hour on Linux runner
     if "torch" not in filename or os.environ.get("RUNNER_OS") != "Linux"
 ]
 
