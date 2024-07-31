@@ -471,7 +471,7 @@ def test_batch_map_two_params(catalog):
     ds = DataChain.from_values(t1=features, t2=features2).batch_map(
         x=lambda frs1, frs2: [
             _TestFr(
-                f=File(name=""),
+                f=File(path=""),
                 cnt=f1.count + f2.count,
                 my_name=f"{f1.nnn}-{f2.nnn}",
             )
