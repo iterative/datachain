@@ -123,7 +123,7 @@ markers = [
   "computer_vision: Computer vision examples",
   "get_started: Get started examples",
   "llm_and_nlp: LLM and NLP examples",
-  "multimodal: Multimodal examples",
+  "multimodal: Multimodal examples"
 ]
 asyncio_mode = "auto"
 filterwarnings = [
