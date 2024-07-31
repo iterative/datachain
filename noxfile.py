@@ -87,6 +87,5 @@ def examples(session: nox.Session) -> None:
         "pytest",
         "-m",
         "examples",
-        "-vvv",
         *session.posargs,
     )
