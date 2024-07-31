@@ -58,8 +58,8 @@ def trim_text(text):
     match = re.search(r'[A-Z][^.]*\.', text)
     return match.group(0) if match else ''
 
-images = chain.collect_one("file")
-captions = chain.collect_one("scene")
+images = chain.collect("file")
+captions = chain.collect("scene")
 _ , axes = plt.subplots(1, len(captions), figsize=(15, 5))
 
 for ax, img, caption in zip(axes, images, captions):
@@ -278,10 +278,9 @@ images_with_dogs.select("annotations", "file.name").show()
 
 [Limited by 20 rows]
 ```
+For in-depth review of working with JSON metadata, please follow this tutorial:
 
-To see more examples of working with metadata formats, please follow this tutorial:
-
-[https://github.com/iterative/datachain/blob/main/examples/getting_started/datasets.ipynb](https://github.com/iterative/datachain/blob/main/examples/getting_started/datasets.ipynb)
+[https://github.com/iterative/datachain/blob/main/examples/get_started/json-metadata-tutorial.ipynb](https://github.com/iterative/datachain/blob/main/examples/get_started/json-metadata-tutorial.ipynb)
 
 ### Passing data to training
 

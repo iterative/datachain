@@ -497,9 +497,6 @@ class SQLiteMetastore(AbstractDBMetastore):
     def _jobs_insert(self) -> "Insert":
         return sqlite.insert(self._jobs)
 
-    def get_possibly_stale_jobs(self) -> list[tuple[str, str, int]]:
-        raise NotImplementedError("get_possibly_stale_jobs not implemented for SQLite")
-
 
 class SQLiteWarehouse(AbstractWarehouse):
     """

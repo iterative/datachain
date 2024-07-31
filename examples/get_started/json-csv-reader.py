@@ -35,7 +35,7 @@ def main():
     print("Dynamic JSONl schema from 2 objects")
     print("========================================================================")
     uri = "gs://datachain-demo/jsonl/object.jsonl"
-    jsonl_ds = DataChain.from_json(uri, meta_type="jsonl", show_schema=True)
+    jsonl_ds = DataChain.from_json(uri, meta_type="jsonl", print_schema=True)
     print(jsonl_ds.to_pandas())
 
     print()
@@ -61,7 +61,7 @@ def main():
     chain = (
         DataChain.from_storage(uri)
         .filter(C("file.name").glob("*.json"))
-        .show_json_schema(jmespath="@", model_name="Coco")
+        .print_json_schema(jmespath="@", model_name="Coco")
     )
     chain.save()
 
@@ -78,7 +78,7 @@ def main():
     print("========================================================================")
     print("dynamic JSON schema test parsing 5K objects")
     print("========================================================================")
-    dynamic_json_ds = DataChain.from_json(uri, jmespath="images", show_schema=True)
+    dynamic_json_ds = DataChain.from_json(uri, jmespath="images", print_schema=True)
     print(dynamic_json_ds.to_pandas())
 
     uri = "gs://datachain-demo/chatbot-csv/"

@@ -421,10 +421,6 @@ class AbstractMetastore(ABC, Serializable):
     ) -> None:
         """Set the status of the given job and dataset."""
 
-    @abstractmethod
-    def get_possibly_stale_jobs(self) -> list[tuple[str, str, int]]:
-        """Returns the possibly stale jobs."""
-
 
 class AbstractDBMetastore(AbstractMetastore):
     """

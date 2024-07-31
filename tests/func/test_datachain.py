@@ -17,12 +17,8 @@ from tests.utils import images_equal
 
 
 @pytest.mark.parametrize("anon", [True, False])
-def test_catalog_anon(catalog, anon):
-    chain = (
-        DataChain.from_storage("gs://dvcx-datalakes/dogs-and-cats/", anon=anon)
-        .limit(5)
-        .save("test_catalog_anon")
-    )
+def test_catalog_anon(tmp_dir, catalog, anon):
+    chain = DataChain.from_storage(tmp_dir.as_uri(), anon=anon)
     assert chain.catalog.client_config.get("anon", False) is anon
 
 
@@ -176,6 +172,22 @@ def test_show(capsys, catalog):
     assert "first_name age city" in normalized_output
     for i in range(3):
         assert f"{i} {first_name[i]}" in normalized_output
+
+
+def test_show_limit(capsys, catalog):
+    first_name = ["Alice", "Bob", "Charlie"]
+    DataChain.from_values(
+        first_name=first_name,
+        age=[40, 30, None],
+        city=[
+            "Houston",
+            "Los Angeles",
+            None,
+        ],
+    ).limit(1).show()
+    captured = capsys.readouterr()
+    new_line_count = captured.out.count("\n")
+    assert new_line_count == 2
 
 
 def test_show_transpose(capsys, catalog):

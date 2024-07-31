@@ -225,11 +225,10 @@ class UDFBase(AbstractUDF):
     def __call__(self, *rows, cache, download_cb):
         if self.is_input_grouped:
             objs = self._parse_grouped_rows(rows[0], cache, download_cb)
+        elif self.is_input_batched:
+            objs = zip(*self._parse_rows(rows[0], cache, download_cb))
         else:
-            objs = self._parse_rows(rows, cache, download_cb)
-
-        if not self.is_input_batched:
-            objs = objs[0]
+            objs = self._parse_rows([rows], cache, download_cb)[0]
 
         result_objs = self.process_safe(objs)
 
@@ -259,17 +258,24 @@ class UDFBase(AbstractUDF):
 
         if not self.is_output_batched:
             res = list(res)
-            assert len(res) == 1, (
-                f"{self.name} returns {len(res)} " f"rows while it's not batched"
-            )
+            assert (
+                len(res) == 1
+            ), f"{self.name} returns {len(res)} rows while it's not batched"
             if isinstance(res[0], tuple):
                 res = res[0]
+        elif (
+            self.is_input_batched
+            and self.is_output_batched
+            and not self.is_input_grouped
+        ):
+            res = list(res)
+            assert len(res) == len(
+                rows[0]
+            ), f"{self.name} returns {len(res)} rows while len(rows[0]) expected"
 
         return res
 
     def _parse_rows(self, rows, cache, download_cb):
-        if not self.is_input_batched:
-            rows = [rows]
         objs = []
         for row in rows:
             obj_row = self.params.row_to_objs(row)
@@ -330,7 +336,9 @@ class Mapper(UDFBase):
     """Inherit from this class to pass to `DataChain.map()`."""
 
 
-class BatchMapper(Mapper):
+class BatchMapper(UDFBase):
+    """Inherit from this class to pass to `DataChain.batch_map()`."""
+
     is_input_batched = True
     is_output_batched = True
 
