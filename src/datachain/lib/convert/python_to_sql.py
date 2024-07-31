@@ -82,7 +82,7 @@ def python_to_sql(typ):  # noqa: PLR0911
 def _is_json_inside_union(orig, args) -> bool:
     if orig == Union and len(args) >= 2:
         # List in JSON: Union[dict, list[dict]]
-        args_no_nones = [arg for arg in args if arg != type(None)]
+        args_no_nones = [arg for arg in args if arg != type(None)]  # noqa: E721
         if len(args_no_nones) == 2:
             args_no_dicts = [arg for arg in args_no_nones if arg is not dict]
             if len(args_no_dicts) == 1 and get_origin(args_no_dicts[0]) is list:
