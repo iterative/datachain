@@ -47,7 +47,12 @@ def is_chain_type(t: type) -> bool:
     if any(t is ft or t is get_args(ft)[0] for ft in get_args(StandardType)):
         return True
 
-    if get_origin(t) is list and len(get_args(t)) == 1:
+    orig = get_origin(t)
+    args = get_args(t)
+    if orig is list and len(args) == 1:
         return is_chain_type(get_args(t)[0])
+
+    if orig is Union and len(args) == 2 and (type(None) in args):
+        return is_chain_type(args[0])
 
     return False

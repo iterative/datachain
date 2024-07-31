@@ -174,6 +174,22 @@ def test_show(capsys, catalog):
         assert f"{i} {first_name[i]}" in normalized_output
 
 
+def test_show_limit(capsys, catalog):
+    first_name = ["Alice", "Bob", "Charlie"]
+    DataChain.from_values(
+        first_name=first_name,
+        age=[40, 30, None],
+        city=[
+            "Houston",
+            "Los Angeles",
+            None,
+        ],
+    ).limit(1).show()
+    captured = capsys.readouterr()
+    new_line_count = captured.out.count("\n")
+    assert new_line_count == 2
+
+
 def test_show_transpose(capsys, catalog):
     first_name = ["Alice", "Bob", "Charlie"]
     last_name = ["A", "B", "C"]

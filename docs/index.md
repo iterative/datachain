@@ -278,10 +278,9 @@ images_with_dogs.select("annotations", "file.name").show()
 
 [Limited by 20 rows]
 ```
+For in-depth review of working with JSON metadata, please follow this tutorial:
 
-To see more examples of working with metadata formats, please follow this tutorial:
-
-[https://github.com/iterative/datachain/blob/main/examples/getting_started/datasets.ipynb](https://github.com/iterative/datachain/blob/main/examples/getting_started/datasets.ipynb)
+[https://github.com/iterative/datachain/blob/main/examples/get_started/json-metadata-tutorial.ipynb](https://github.com/iterative/datachain/blob/main/examples/get_started/json-metadata-tutorial.ipynb)
 
 ### Passing data to training
 

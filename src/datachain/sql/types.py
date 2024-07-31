@@ -12,6 +12,7 @@ for sqlite we can use `sqlite.register_converter`
 ( https://docs.python.org/3/library/sqlite3.html#sqlite3.register_converter )
 """
 
+import json
 from datetime import datetime
 from types import MappingProxyType
 from typing import Any, Union
@@ -247,7 +248,10 @@ class Array(SQLType):
         return type_defaults(dialect).array()
 
     def on_read_convert(self, value, dialect):
-        return read_converter(dialect).array(value, self.item_type, dialect)
+        r = read_converter(dialect).array(value, self.item_type, dialect)
+        if isinstance(self.item_type, JSON):
+            r = [json.loads(item) if isinstance(item, str) else item for item in r]
+        return r
 
 
 class JSON(SQLType):

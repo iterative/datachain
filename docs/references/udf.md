@@ -13,6 +13,8 @@ steps need to happen before or after the processing function runs.
 
 ::: datachain.lib.udf.Aggregator
 
+::: datachain.lib.udf.BatchMapper
+
 ::: datachain.lib.udf.Generator
 
 ::: datachain.lib.udf.Mapper

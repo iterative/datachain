@@ -101,7 +101,7 @@ def read_meta(  # noqa: C901
     schema_from=None,
     meta_type="json",
     jmespath=None,
-    show_schema=False,
+    print_schema=False,
     model_name=None,
     nrows=None,
 ) -> Callable:
@@ -129,7 +129,7 @@ def read_meta(  # noqa: C901
         model_output = captured_output.getvalue()
         captured_output.close()
 
-        if show_schema:
+        if print_schema:
             print(f"{model_output}")
         # Below 'spec' should be a dynamically converted DataModel from Pydantic
         if not spec:
@@ -153,13 +153,13 @@ def read_meta(  # noqa: C901
         jmespath=jmespath,
         nrows=nrows,
     ) -> Iterator[spec]:
-        def validator(json_object: dict) -> spec:
+        def validator(json_object: dict, nrow=0) -> spec:
             json_string = json.dumps(json_object)
             try:
                 data_instance = data_model.model_validate_json(json_string)
                 yield data_instance
             except ValidationError as e:
-                print(f"Validation error occurred in file {file.name}:", e)
+                print(f"Validation error occurred in row {nrow} file {file.name}:", e)
 
         if meta_type == "csv":
             with (
@@ -185,7 +185,7 @@ def read_meta(  # noqa: C901
                     nrow = nrow + 1
                     if nrows is not None and nrow > nrows:
                         return
-                    yield from validator(json_dict)
+                    yield from validator(json_dict, nrow)
 
         if meta_type == "jsonl":
             try:
@@ -198,7 +198,7 @@ def read_meta(  # noqa: C901
                             return
                         json_object = process_json(data_string, jmespath)
                         data_string = fd.readline()
-                        yield from validator(json_object)
+                        yield from validator(json_object, nrow)
             except OSError as e:
                 print(f"An unexpected file error occurred in file {file.name}: {e}")
 

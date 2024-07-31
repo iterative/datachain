@@ -9,6 +9,7 @@ import pytest
 from pydantic import BaseModel
 
 from datachain import Column
+from datachain.lib.data_model import DataModel
 from datachain.lib.dc import C, DataChain, Sys
 from datachain.lib.file import File
 from datachain.lib.signal_schema import (
@@ -18,6 +19,7 @@ from datachain.lib.signal_schema import (
 )
 from datachain.lib.udf_signature import UdfSignatureError
 from datachain.lib.utils import DataChainParamsError
+from tests.utils import skip_if_not_sqlite
 
 DF_DATA = {
     "first_name": ["Alice", "Bob", "Charlie", "David", "Eva"],
@@ -405,6 +407,94 @@ def test_agg_tuple_result_generator(catalog):
     assert list(ds.collect("x_1.size")) == [10, 5]
 
 
+def test_batch_map(catalog):
+    class _TestFr(BaseModel):
+        sqrt: float
+        my_name: str
+
+    dc = DataChain.from_values(t1=features).batch_map(
+        x=lambda m_frs: [
+            _TestFr(
+                sqrt=math.sqrt(m_fr.count),
+                my_name=m_fr.nnn + "_suf",
+            )
+            for m_fr in m_frs
+        ],
+        params="t1",
+        output={"x": _TestFr},
+    )
+
+    x_list = list(dc.collect("x"))
+    test_frs = [
+        _TestFr(sqrt=math.sqrt(fr.count), my_name=fr.nnn + "_suf") for fr in features
+    ]
+
+    assert len(x_list) == len(test_frs)
+
+    for x, test_fr in zip(x_list, test_frs):
+        assert np.isclose(x.sqrt, test_fr.sqrt)
+        assert x.my_name == test_fr.my_name
+
+
+def test_batch_map_wrong_size(catalog):
+    class _TestFr(BaseModel):
+        total: int
+        names: str
+
+    dc = DataChain.from_values(t1=features).batch_map(
+        x=lambda m_frs: [
+            _TestFr(
+                total=sum(m_fr.count for m_fr in m_frs),
+                names="-".join([m_fr.nnn for m_fr in m_frs]),
+            )
+        ],
+        params="t1",
+        output={"x": _TestFr},
+    )
+
+    with pytest.raises(AssertionError):
+        list(dc.collect())
+
+
+def test_batch_map_two_params(catalog):
+    class _TestFr(BaseModel):
+        f: File
+        cnt: int
+        my_name: str
+
+    features2 = [
+        MyFr(nnn="n1", count=6),
+        MyFr(nnn="n2", count=10),
+        MyFr(nnn="n1", count=2),
+    ]
+
+    ds = DataChain.from_values(t1=features, t2=features2).batch_map(
+        x=lambda frs1, frs2: [
+            _TestFr(
+                f=File(name=""),
+                cnt=f1.count + f2.count,
+                my_name=f"{f1.nnn}-{f2.nnn}",
+            )
+            for f1, f2 in zip(frs1, frs2)
+        ],
+        params=("t1", "t2"),
+        output={"x": _TestFr},
+    )
+
+    assert list(ds.collect("x.my_name")) == ["n1-n1", "n2-n2", "n1-n1"]
+    assert list(ds.collect("x.cnt")) == [9, 15, 3]
+
+
+def test_batch_map_tuple_result_iterator(catalog):
+    def sqrt(t1: list[int]) -> Iterator[float]:
+        for val in t1:
+            yield math.sqrt(val)
+
+    dc = DataChain.from_values(t1=[1, 4, 9]).batch_map(x=sqrt)
+
+    assert list(dc.collect("x")) == [1, 2, 3]
+
+
 def test_collect(catalog):
     dc = DataChain.from_values(f1=features, num=range(len(features)))
 
@@ -738,7 +828,7 @@ def test_parse_tabular_output_list(tmp_dir, catalog):
 def test_from_csv(tmp_dir, catalog):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.csv"
-    df.to_csv(path)
+    df.to_csv(path, index=False)
     dc = DataChain.from_csv(path.as_uri())
     df1 = dc.select("first_name", "age", "city").to_pandas()
     assert df1.equals(df)
@@ -791,10 +881,24 @@ def test_from_csv_no_header_output_list(tmp_dir, catalog):
 def test_from_csv_tab_delimited(tmp_dir, catalog):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.csv"
-    df.to_csv(path, sep="\t")
+    df.to_csv(path, sep="\t", index=False)
     dc = DataChain.from_csv(path.as_uri(), delimiter="\t")
     df1 = dc.select("first_name", "age", "city").to_pandas()
     assert df1.equals(df)
+
+
+def test_from_csv_null_collect(tmp_dir, catalog):
+    # Clickhouse requires setting type to Nullable(Type).
+    # See https://github.com/xzkostyan/clickhouse-sqlalchemy/issues/189.
+    skip_if_not_sqlite()
+    df = pd.DataFrame(DF_DATA)
+    height = [70, 65, None, 72, 68]
+    df["height"] = height
+    path = tmp_dir / "test.csv"
+    df.to_csv(path, index=False)
+    dc = DataChain.from_csv(path.as_uri(), object_name="csv")
+    for i, row in enumerate(dc.collect()):
+        assert row[1].height == height[i]
 
 
 def test_from_parquet(tmp_dir, catalog):
@@ -1055,3 +1159,37 @@ def test_from_values_array_of_floats():
     chain = DataChain.from_values(emd=embeddings)
 
     assert list(chain.collect("emd")) == embeddings
+
+
+def test_custom_model_with_nested_lists():
+    ds_name = "nested"
+
+    class Trace(BaseModel):
+        x: float
+        y: float
+
+    class Nested(BaseModel):
+        values: list[list[float]]
+        traces_single: list[Trace]
+        traces_double: list[list[Trace]]
+
+    DataModel.register(Nested)
+
+    DataChain.from_values(
+        nested=[
+            Nested(
+                values=[[0.5, 0.5], [0.5, 0.5]],
+                traces_single=[{"x": 0.5, "y": 0.5}, {"x": 0.5, "y": 0.5}],
+                traces_double=[[{"x": 0.5, "y": 0.5}], [{"x": 0.5, "y": 0.5}]],
+            )
+        ],
+        nums=[1],
+    ).save(ds_name)
+
+    assert list(DataChain(name=ds_name).collect("nested")) == [
+        Nested(
+            values=[[0.5, 0.5], [0.5, 0.5]],
+            traces_single=[{"x": 0.5, "y": 0.5}, {"x": 0.5, "y": 0.5}],
+            traces_double=[[{"x": 0.5, "y": 0.5}], [{"x": 0.5, "y": 0.5}]],
+        )
+    ]
