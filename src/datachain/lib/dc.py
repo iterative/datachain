@@ -193,6 +193,8 @@ class DataChain(DatasetQuery):
         ```
     """
 
+    max_row_count: Optional[int] = None
+
     DEFAULT_FILE_RECORD: ClassVar[dict] = {
         "source": "",
         "name": "",
@@ -1600,7 +1602,18 @@ class DataChain(DatasetQuery):
     @detach
     def limit(self, n: int) -> "Self":
         """Return the first n rows of the chain."""
-        return super().limit(n)
+        n = max(n, 0)
+
+        if self.max_row_count is None:
+            self.max_row_count = n
+            return super().limit(n)
+
+        limit = min(n, self.max_row_count)
+        if limit == self.max_row_count:
+            return self
+
+        self.max_row_count = limit
+        return super().limit(self.max_row_count)
 
     @detach
     def offset(self, offset: int) -> "Self":
