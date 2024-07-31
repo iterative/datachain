@@ -93,6 +93,11 @@ dev = [
   "types-PyYAML",
   "types-requests"
 ]
+examples = [
+  "datachain[tests]",
+  "defusedxml",
+  "accelerate"
+]
 
 [project.urls]
 Documentation = "https://datachain.dvc.ai"
@@ -110,7 +115,7 @@ namespaces = false
 [tool.setuptools_scm]
 
 [tool.pytest.ini_options]
-addopts = "-rfEs -m 'not benchmark'"
+addopts = "-rfEs -m 'not benchmark and not examples'"
 markers = [
   "benchmark: benchmarks.",
   "e2e: End-to-end tests"

@@ -74,3 +74,19 @@ def dev(session: nox.Session) -> None:
 
     python = os.path.join(venv_dir, "bin/python")
     session.run(python, "-m", "pip", "install", "-e", ".[dev]", external=True)
+
+
+@nox.session(python=["3.9", "3.10", "3.11", "3.12", "pypy3.9", "pypy3.10"])
+def examples(session: nox.Session) -> None:
+    session.install(".[examples]")
+    try:
+        session.install("unstructured[all-docs]")
+    except:  # noqa: S110, E722
+        pass
+    session.run(
+        "pytest",
+        "-m",
+        "examples",
+        "-vvv",
+        *session.posargs,
+    )
