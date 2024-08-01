@@ -1201,12 +1201,10 @@ def test_rename_non_object_column_name_with_mutate(catalog):
 
     assert ds.signals_schema.values == {"my_ids": int}
 
-    # check that persist after saving
     ds.save("mutated")
+
     ds = DataChain(name="mutated")
-
     assert ds.signals_schema.values == {"my_ids": int, "sys": Sys}
-
     assert list(ds.order_by("my_ids").collect("my_ids")) == [1, 2, 3]
 
 
@@ -1219,13 +1217,12 @@ def test_rename_object_column_name_with_mutate(catalog):
     ds = ds.mutate(fname=Column("file.name"))
 
     assert list(ds.order_by("fname").collect("fname")) == ["a", "b", "c"]
-
     assert ds.signals_schema.values == {"file": File, "ids": int, "fname": str}
 
     # check that persist after saving
     ds.save("mutated")
-    ds = DataChain(name="mutated")
 
+    ds = DataChain(name="mutated")
     assert ds.signals_schema.values == {
         "file": File,
         "ids": int,
@@ -1248,10 +1245,8 @@ def test_rename_object_name_with_mutate(catalog):
 
     assert ds.signals_schema.values == {"my_file": File, "ids": int}
 
-    # check that persist after saving
     ds.save("mutated")
+
     ds = DataChain(name="mutated")
-
     assert ds.signals_schema.values == {"my_file": File, "ids": int, "sys": Sys}
-
     assert list(ds.order_by("my_file.name").collect("my_file.name")) == ["a", "b", "c"]
