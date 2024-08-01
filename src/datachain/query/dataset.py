@@ -1010,14 +1010,12 @@ def fill_columns(
 
     result: list[list[ColumnElement]] = [[] for _ in column_dicts]
     for n in combined_columns:
-        col = next(col_dict[n] for col_dict in column_dicts if n in col_dict)
         for col_dict, out in zip(column_dicts, result):
             if n in col_dict:
                 out.append(col_dict[n])
             else:
-                # Cast the NULL to ensure all columns are aware of their type
                 # Label it to ensure it's aware of its name
-                out.append(sqlalchemy.cast(sqlalchemy.null(), col.type).label(n))
+                out.append(sqlalchemy.null().label(n))
     return result
 
 
