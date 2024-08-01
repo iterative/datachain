@@ -1235,6 +1235,7 @@ def test_rename_non_object_column_name_with_mutate(catalog):
     ds = ds.mutate(my_ids=Column("ids"))
 
     assert ds.signals_schema.values == {"my_ids": int}
+    assert list(ds.order_by("my_ids").collect("my_ids")) == [1, 2, 3]
 
     ds.save("mutated")
 
@@ -1264,7 +1265,6 @@ def test_rename_object_column_name_with_mutate(catalog):
         "fname": str,
         "sys": Sys,
     }
-
     assert list(ds.order_by("fname").collect("fname")) == ["a", "b", "c"]
 
 
@@ -1277,7 +1277,6 @@ def test_rename_object_name_with_mutate(catalog):
     ds = ds.mutate(my_file=Column("file"))
 
     assert list(ds.order_by("my_file.name").collect("my_file.name")) == ["a", "b", "c"]
-
     assert ds.signals_schema.values == {"my_file": File, "ids": int}
 
     ds.save("mutated")
