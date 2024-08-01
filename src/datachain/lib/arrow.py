@@ -135,8 +135,8 @@ def _nrows_file(file: File, nrows: int) -> str:
     with file.open(mode="r") as reader:
         with open(tf.name, "a") as writer:
             for row, line in enumerate(reader):
-                writer.write(line)
-                writer.write("\n")
                 if row >= nrows:
                     break
+                writer.write(line)
+                writer.write("\n")
     return tf.name

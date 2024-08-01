@@ -825,11 +825,21 @@ def test_parse_tabular_output_list(tmp_dir, catalog):
     assert df1.equals(df)
 
 
+def test_parse_tabular_nrows(tmp_dir, catalog):
+    df = pd.DataFrame(DF_DATA)
+    path = tmp_dir / "test.parquet"
+    df.to_json(path, orient="records", lines=True)
+    dc = DataChain.from_storage(path.as_uri()).parse_tabular(nrows=2, format="json")
+    df1 = dc.select("first_name", "age", "city").to_pandas()
+
+    assert df1.equals(df[:2])
+
+
 def test_parse_tabular_nrows_invalid(tmp_dir, catalog):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.parquet"
     df.to_parquet(path)
-    with pytest.raises(ValueError):
+    with pytest.raises(DataChainParamsError):
         DataChain.from_storage(path.as_uri()).parse_tabular(nrows=2)
 
 

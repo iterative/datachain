@@ -1272,9 +1272,10 @@ class DataChain(DatasetQuery):
             if format not in ["csv", "json"] and not isinstance(
                 format, (CsvFileFormat, JsonFileFormat)
             ):
-                raise ValueError(
-                    "Error in `parse_tabular` - "
-                    "`nrows` only supported for csv and json formats."
+                raise DatasetPrepareError(
+                    self.name,
+                    "error in `parse_tabular` - "
+                    "`nrows` only supported for csv and json formats.",
                 )
 
         schema = None
@@ -1374,6 +1375,8 @@ class DataChain(DatasetQuery):
             else:
                 msg = f"error parsing csv - incompatible output type {type(output)}"
                 raise DatasetPrepareError(chain.name, msg)
+        elif nrows:
+            nrows += 1
 
         parse_options = ParseOptions(delimiter=delimiter)
         read_options = ReadOptions(column_names=column_names)
