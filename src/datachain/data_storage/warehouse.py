@@ -915,7 +915,7 @@ class AbstractWarehouse(ABC, Serializable):
             if self.is_temp_table_name(t)
         ]
 
-    def cleanup_temp_tables(self, names: Iterable[str]) -> None:
+    def cleanup_tables(self, names: Iterable[str]) -> None:
         """
         Drop tables created temporarily when processing datasets.
 

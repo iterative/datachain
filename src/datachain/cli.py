@@ -910,7 +910,7 @@ def garbage_collect(catalog: "Catalog"):
         print("Nothing to clean up.")
     else:
         print(f"Garbage collecting {len(temp_tables)} tables.")
-        catalog.cleanup_temp_tables(temp_tables)
+        catalog.cleanup_tables(temp_tables)
 
 
 def completion(shell: str) -> str:
