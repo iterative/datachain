@@ -1,3 +1,4 @@
+# pip install defusedxml
 import json
 
 from PIL import (
@@ -63,7 +64,7 @@ if __name__ == "__main__":
         DataChain.from_storage(source, type="image")
         .settings(parallel=-1)
         .filter(C("file.path").glob("*.jpg"))
-        .limit(10000)
+        .limit(5000)
         .map(
             image_description,
             params=["file"],
