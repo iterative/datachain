@@ -54,7 +54,7 @@ class ArrowGenerator(Generator):
             )
         index = 0
         with tqdm(desc="Parsed by pyarrow", unit=" rows") as pbar:
-            for record_batch in ds.to_batches(use_threads=False):
+            for record_batch in ds.to_batches():
                 for record in record_batch.to_pylist():
                     vals = list(record.values())
                     if self.output_schema:
