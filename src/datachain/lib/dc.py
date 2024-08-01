@@ -842,9 +842,9 @@ class DataChain(DatasetQuery):
             elif isinstance(value, Column) and value.name in schema.db_signals():
                 # renaming existing non object signal
                 mutated[name] = next(
-                    s
-                    for s in schema.db_signals(as_columns=True)
-                    if s.name == value.name
+                    signal
+                    for signal in schema.db_signals(as_columns=True)
+                    if signal.name == value.name
                 )
             else:
                 # adding new signal

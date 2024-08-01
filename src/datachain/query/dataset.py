@@ -791,12 +791,6 @@ class SQLSelect(SQLClause):
     def apply_sql_clause(self, query) -> Select:
         subquery = query.subquery()
 
-        """
-        print("subquery is")
-        print(subquery)
-        """
-        print("args in select are")
-        print(list(self.args))
         args = [subquery.c[str(c)] if isinstance(c, (str, C)) else c for c in self.args]
         if not args:
             args = subquery.c
