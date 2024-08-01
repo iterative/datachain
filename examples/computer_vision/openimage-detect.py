@@ -48,7 +48,7 @@ def openimage_detect(args):
         yield fstream, bbox
 
 
-source = "gs://datachain-demo/openimages-v6-test-jsonpairs"
+source = "gs://datachain-demo/openimages-v6-test-jsonpairs/"
 
 (
     DataChain.from_storage(source)

@@ -36,7 +36,7 @@ def main():
     print("========================================================================")
     uri = "gs://datachain-demo/jsonl/object.jsonl"
     jsonl_ds = DataChain.from_json(uri, meta_type="jsonl", print_schema=True)
-    print(jsonl_ds.to_pandas())
+    jsonl_ds.show()
 
     print()
     print("========================================================================")
@@ -49,8 +49,7 @@ def main():
     json_pairs_ds = DataChain.from_json(
         uri, schema_from=schema_uri, jmespath="@", model_name="OpenImage"
     )
-    print(json_pairs_ds.to_pandas())
-    # print(list(json_pairs_ds.collect())[0])
+    json_pairs_ds.show()
 
     uri = "gs://datachain-demo/coco2017/annotations_captions/"
 
@@ -72,7 +71,7 @@ def main():
     static_json_ds = DataChain.from_json(
         uri, jmespath="licenses", spec=LicenseFeature, nrows=3
     )
-    print(static_json_ds.to_pandas())
+    static_json_ds.show()
 
     print()
     print("========================================================================")
@@ -88,7 +87,7 @@ def main():
     print("========================================================================")
     static_csv_ds = DataChain.from_csv(uri, output=ChatDialog, object_name="chat")
     static_csv_ds.print_schema()
-    print(static_csv_ds.to_pandas())
+    static_csv_ds.show()
 
     uri = "gs://datachain-demo/laion-aesthetics-csv/laion_aesthetics_1024_33M_1.csv"
     print()
@@ -97,7 +96,7 @@ def main():
     print("========================================================================")
     dynamic_csv_ds = DataChain.from_csv(uri, object_name="laion", nrows=3)
     dynamic_csv_ds.print_schema()
-    print(dynamic_csv_ds.to_pandas())
+    dynamic_csv_ds.show()
 
 
 if __name__ == "__main__":

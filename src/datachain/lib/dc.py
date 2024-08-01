@@ -1124,7 +1124,7 @@ class DataChain(DatasetQuery):
         def _func_fr() -> Iterator[tuple_type]:  # type: ignore[valid-type]
             yield from tuples
 
-        chain = DataChain.create_empty(DataChain.DEFAULT_FILE_RECORD, session=session)
+        chain = DataChain.from_records(DataChain.DEFAULT_FILE_RECORD, session=session)
         if object_name:
             output = {object_name: DataChain._dict_to_data_model(object_name, output)}  # type: ignore[arg-type]
         return chain.gen(_func_fr, output=output)
@@ -1453,13 +1453,14 @@ class DataChain(DatasetQuery):
         )
 
     @classmethod
-    def create_empty(
+    def from_records(
         cls,
         to_insert: Optional[Union[dict, list[dict]]],
         session: Optional[Session] = None,
     ) -> "DataChain":
-        """Create empty chain. Returns a chain. This method is used for programmatically
-        generating a chains in contrast of reading data from storages or other sources.
+        """Create a DataChain from the provided records. This method can be used for
+        programmatically generating a chain in contrast of reading data from storages
+        or other sources.
 
         Parameters:
             to_insert : records (or a single record) to insert. Each record is
@@ -1467,8 +1468,8 @@ class DataChain(DatasetQuery):
 
         Example:
             ```py
-            empty = DataChain.create_empty()
-            single_record = DataChain.create_empty(DataChain.DEFAULT_FILE_RECORD)
+            empty = DataChain.from_records()
+            single_record = DataChain.from_records(DataChain.DEFAULT_FILE_RECORD)
             ```
         """
         session = Session.get(session)
