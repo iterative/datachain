@@ -831,8 +831,27 @@ class DataChain(DatasetQuery):
         )
         ```
         """
-        chain = super().mutate(**kwargs)
-        chain.signals_schema = self.signals_schema.mutate(kwargs)
+        mutated = {}
+        schema = self.signals_schema
+        for name, value in kwargs.items():
+            if isinstance(value, Column) and schema.has_object(value.name):
+                # renaming existing object
+                old_signals = schema.db_signals(obj_name=value.name, as_columns=True)
+                for signal in old_signals:
+                    mutated[signal.name.replace(value.name, name, 1)] = signal
+            elif isinstance(value, Column) and value.name in schema.db_signals():
+                # renaming existing non object signal
+                mutated[name] = next(
+                    s
+                    for s in schema.db_signals(as_columns=True)
+                    if s.name == value.name
+                )
+            else:
+                # adding new signal
+                mutated[name] = value
+
+        chain = super().mutate(**mutated)
+        chain.signals_schema = schema.mutate(kwargs)
         return chain
 
     @property
@@ -1101,7 +1120,7 @@ class DataChain(DatasetQuery):
             )
         else:
             signals = self.signals_schema.resolve(*on).db_signals()
-        return super()._subtract(other, signals)
+        return super()._subtract(other, signals)  # type: ignore[arg-type]
 
     @classmethod
     def from_values(

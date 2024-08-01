@@ -1193,3 +1193,65 @@ def test_custom_model_with_nested_lists():
             traces_double=[[{"x": 0.5, "y": 0.5}], [{"x": 0.5, "y": 0.5}]],
         )
     ]
+
+
+def test_rename_non_object_column_name_with_mutate(catalog):
+    ds = DataChain.from_values(ids=[1, 2, 3])
+    ds = ds.mutate(my_ids=Column("ids"))
+
+    assert ds.signals_schema.values == {"my_ids": int}
+
+    # check that persist after saving
+    ds.save("mutated")
+    ds = DataChain(name="mutated")
+
+    assert ds.signals_schema.values == {"my_ids": int, "sys": Sys}
+
+    assert list(ds.order_by("my_ids").collect("my_ids")) == [1, 2, 3]
+
+
+def test_rename_object_column_name_with_mutate(catalog):
+    names = ["a", "b", "c"]
+    sizes = [1, 2, 3]
+    files = [File(name=name, size=size) for name, size in zip(names, sizes)]
+
+    ds = DataChain.from_values(file=files, ids=[1, 2, 3])
+    ds = ds.mutate(fname=Column("file.name"))
+
+    assert list(ds.order_by("fname").collect("fname")) == ["a", "b", "c"]
+
+    assert ds.signals_schema.values == {"file": File, "ids": int, "fname": str}
+
+    # check that persist after saving
+    ds.save("mutated")
+    ds = DataChain(name="mutated")
+
+    assert ds.signals_schema.values == {
+        "file": File,
+        "ids": int,
+        "fname": str,
+        "sys": Sys,
+    }
+
+    assert list(ds.order_by("fname").collect("fname")) == ["a", "b", "c"]
+
+
+def test_rename_object_name_with_mutate(catalog):
+    names = ["a", "b", "c"]
+    sizes = [1, 2, 3]
+    files = [File(name=name, size=size) for name, size in zip(names, sizes)]
+
+    ds = DataChain.from_values(file=files, ids=[1, 2, 3])
+    ds = ds.mutate(my_file=Column("file"))
+
+    assert list(ds.order_by("my_file.name").collect("my_file.name")) == ["a", "b", "c"]
+
+    assert ds.signals_schema.values == {"my_file": File, "ids": int}
+
+    # check that persist after saving
+    ds.save("mutated")
+    ds = DataChain(name="mutated")
+
+    assert ds.signals_schema.values == {"my_file": File, "ids": int, "sys": Sys}
+
+    assert list(ds.order_by("my_file.name").collect("my_file.name")) == ["a", "b", "c"]
