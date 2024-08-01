@@ -612,6 +612,41 @@ def test_select_restore_from_saving(catalog):
     assert n == len(features_nested)
 
 
+def test_select_distinct(catalog):
+    class Embedding(BaseModel):
+        id: int
+        filename: str
+        values: list[float]
+
+    expected = [
+        [0.1, 0.3],
+        [0.1, 0.4],
+        [0.1, 0.5],
+        [0.1, 0.6],
+    ]
+
+    actual = (
+        DataChain.from_values(
+            embedding=[
+                Embedding(id=1, filename="a.jpg", values=expected[0]),
+                Embedding(id=2, filename="b.jpg", values=expected[2]),
+                Embedding(id=3, filename="c.jpg", values=expected[1]),
+                Embedding(id=4, filename="d.jpg", values=expected[1]),
+                Embedding(id=5, filename="e.jpg", values=expected[3]),
+            ],
+        )
+        .select("embedding.values", "embedding.filename")
+        .distinct("embedding.values")
+        .order_by("embedding.values")
+        .collect()
+    )
+
+    actual = [emb[0] for emb in actual]
+    assert len(actual) == 4
+    for i in [0, 1]:
+        assert np.allclose([emb[i] for emb in actual], [emp[i] for emp in expected])
+
+
 def test_from_dataset_name_version(catalog):
     name = "test-version"
     DataChain.from_values(

@@ -31,6 +31,7 @@ filtered = (
         / least(C("laion.json.original_width"), C("laion.json.original_height"))
         < 3.0
     )
+    .save()
 )
 filtered.show(3)
 
