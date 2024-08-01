@@ -10,7 +10,7 @@ from datachain.lib.arrow import (
     _arrow_type_mapper,
     schema_to_output,
 )
-from datachain.lib.file import File, IndexedFile
+from datachain.lib.file import File, IndexedFile, TextFile
 
 
 def test_arrow_generator(tmp_path, catalog):
@@ -41,6 +41,23 @@ def test_arrow_generator_nrows(tmp_path, catalog):
     texts = ["28", "22", "we", "hello world"]
     df = pd.DataFrame({"id": ids, "text": texts})
 
+    name = "111.csv"
+    csv_path = tmp_path / name
+    df.to_csv(csv_path)
+    stream = TextFile(name=name, parent=tmp_path.as_posix(), source="file:///")
+    stream._set_stream(catalog, caching_enabled=False)
+
+    func = ArrowGenerator(nrows=2, format="csv")
+    objs = list(func.process(stream))
+
+    assert len(objs) == 2
+
+
+def test_arrow_generator_nrows_parquet(tmp_path, catalog):
+    ids = [12345, 67890, 34, 0xF0123]
+    texts = ["28", "22", "we", "hello world"]
+    df = pd.DataFrame({"id": ids, "text": texts})
+
     name = "111.parquet"
     pq_path = tmp_path / name
     df.to_parquet(pq_path)
@@ -48,9 +65,8 @@ def test_arrow_generator_nrows(tmp_path, catalog):
     stream._set_stream(catalog, caching_enabled=False)
 
     func = ArrowGenerator(nrows=2)
-    objs = list(func.process(stream))
-
-    assert len(objs) == 2
+    with pytest.raises(ValueError):
+        list(func.process(stream))
 
 
 def test_arrow_generator_no_source(tmp_path, catalog):

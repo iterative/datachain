@@ -1346,7 +1346,7 @@ class DataChain(DatasetQuery):
         from pyarrow.csv import ParseOptions, ReadOptions
         from pyarrow.dataset import CsvFileFormat
 
-        chain = DataChain.from_storage(path, **kwargs)
+        chain = DataChain.from_storage(path, **kwargs, type="text")
 
         column_names = None
         if not header:
@@ -1384,7 +1384,6 @@ class DataChain(DatasetQuery):
         object_name: str = "",
         model_name: str = "",
         source: bool = True,
-        nrows=None,
         **kwargs,
     ) -> "DataChain":
         """Generate chain from parquet files.
@@ -1397,7 +1396,6 @@ class DataChain(DatasetQuery):
             object_name : Created object column name.
             model_name : Generated model name.
             source : Whether to include info about the source file.
-            nrows : Optional row limit.
 
         Example:
             Reading a single file:
@@ -1416,7 +1414,6 @@ class DataChain(DatasetQuery):
             object_name=object_name,
             model_name=model_name,
             source=source,
-            nrows=None,
             format="parquet",
             partitioning=partitioning,
         )

@@ -90,7 +90,7 @@ def main():
     static_csv_ds.print_schema()
     print(static_csv_ds.to_pandas())
 
-    uri = "gs://datachain-demo/laion-aesthetics-csv"
+    uri = "gs://datachain-demo/laion-aesthetics-csv/laion_aesthetics_1024_33M_1.csv"
     print()
     print("========================================================================")
     print("dynamic CSV with header schema test parsing 3/3M objects")

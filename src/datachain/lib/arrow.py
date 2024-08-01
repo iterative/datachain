@@ -1,12 +1,13 @@
 import re
 from collections.abc import Sequence
+from tempfile import NamedTemporaryFile
 from typing import TYPE_CHECKING, Optional
 
 import pyarrow as pa
 from pyarrow.dataset import dataset
 from tqdm import tqdm
 
-from datachain.lib.file import File, IndexedFile
+from datachain.lib.file import File, IndexedFile, TextFile
 from datachain.lib.udf import Generator
 
 if TYPE_CHECKING:
@@ -43,10 +44,19 @@ class ArrowGenerator(Generator):
         self.kwargs = kwargs
 
     def process(self, file: File):
-        path = file.get_path()
-        ds = dataset(
-            path, filesystem=file.get_fs(), schema=self.input_schema, **self.kwargs
-        )
+        if self.nrows:
+            if not isinstance(file, TextFile):
+                raise ValueError(
+                    "Error generating rows from Arrow table - "
+                    "`nrows` only supported for text file but binary file found."
+                )
+            path = _nrows_file(file, self.nrows)
+            ds = dataset(path, schema=self.input_schema, **self.kwargs)
+        else:
+            path = file.get_path()
+            ds = dataset(
+                path, filesystem=file.get_fs(), schema=self.input_schema, **self.kwargs
+            )
         index = 0
         with tqdm(desc="Parsed by pyarrow", unit=" rows") as pbar:
             for record_batch in ds.to_batches(use_threads=False):
@@ -60,8 +70,6 @@ class ArrowGenerator(Generator):
                     else:
                         yield vals
                     index += 1
-                    if self.nrows and index >= self.nrows:
-                        return
                 pbar.update(len(record_batch))
 
 
@@ -125,3 +133,15 @@ def _arrow_type_mapper(col_type: pa.DataType) -> type:  # noqa: PLR0911
     if isinstance(col_type, pa.lib.DictionaryType):
         return _arrow_type_mapper(col_type.value_type)  # type: ignore[return-value]
     raise TypeError(f"{col_type!r} datatypes not supported")
+
+
+def _nrows_file(file: TextFile, nrows: int) -> str:
+    tf = NamedTemporaryFile(delete=False)
+    with file.open() as reader:
+        with open(tf.name, "a") as writer:
+            for row, line in enumerate(reader):
+                writer.write(line)
+                writer.write("\n")
+                if row >= nrows:
+                    break
+    return tf.name
