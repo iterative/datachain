@@ -1148,6 +1148,28 @@ def test_union(catalog):
     assert sorted(chain3.collect("value")) == [1, 2, 3, 4]
 
 
+def test_union_different(catalog):
+    chain1 = DataChain.from_values(value=[1, 2], name=["chain", "more"])
+    chain2 = DataChain.from_values(value=[3, 4])
+    chain3 = chain1.union(chain2)
+    chain4 = chain2.union(chain1)
+    assert chain3.count() == chain4.count() == 4
+    assert sorted(chain3.collect()) == [(1, "chain"), (2, "more"), (3, None), (4, None)]
+    assert sorted(chain4.collect()) == [(1,), (2,), (3,), (4,)]
+
+
+def test_union_different_select(catalog):
+    chain1 = DataChain.from_values(value=[1, 2], name=["chain", "more"])
+    chain2 = DataChain.from_values(value=[3, 4], name=["or", "less"]).select_except(
+        "name"
+    )
+    chain3 = chain1.union(chain2)
+    chain4 = chain2.union(chain1)
+    assert chain3.count() == chain4.count() == 4
+    assert sorted(chain3.collect()) == [(1, "chain"), (2, "more"), (3, None), (4, None)]
+    assert sorted(chain4.collect()) == [(1,), (2,), (3,), (4,)]
+
+
 def test_subtract(catalog):
     chain1 = DataChain.from_values(a=[1, 1, 2], b=["x", "y", "z"])
     chain2 = DataChain.from_values(a=[1, 2], b=["x", "y"])
