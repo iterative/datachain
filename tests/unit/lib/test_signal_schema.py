@@ -286,6 +286,12 @@ def test_db_signals_as_columns():
     ]
 
 
+def test_has_object():
+    assert SignalSchema({"f": MyType2}).has_object("f") is True
+    assert SignalSchema({"f": str}).has_object("f") is False
+    assert SignalSchema({"a": str}).has_object("f") is False
+
+
 def test_row_to_objs():
     spec = {"name": str, "age": float, "fr": MyType2}
     schema = SignalSchema(spec)
