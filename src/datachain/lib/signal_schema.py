@@ -245,6 +245,9 @@ class SignalSchema:
         while curr_tree is not None and i < len(path):
             if val := curr_tree.get(path[i], None):
                 curr_type, curr_tree = val
+            elif i == 0 and (val := curr_tree.get(".".join(path), None)):
+                curr_type, curr_tree = val
+                break
             else:
                 curr_type = None
             i += 1
