@@ -1263,7 +1263,19 @@ class DataChain(DatasetQuery):
             dc = dc.parse_tabular(format="json")
             ```
         """
+        from pyarrow.dataset import CsvFileFormat, JsonFileFormat
+
         from datachain.lib.arrow import ArrowGenerator, infer_schema, schema_to_output
+
+        if nrows:
+            format = kwargs.get("format")
+            if format not in ["csv", "json"] and not isinstance(
+                format, (CsvFileFormat, JsonFileFormat)
+            ):
+                raise ValueError(
+                    "Error in `parse_tabular` - "
+                    "`nrows` only supported for csv and json formats."
+                )
 
         schema = None
         col_names = output if isinstance(output, Sequence) else None
@@ -1346,7 +1358,7 @@ class DataChain(DatasetQuery):
         from pyarrow.csv import ParseOptions, ReadOptions
         from pyarrow.dataset import CsvFileFormat
 
-        chain = DataChain.from_storage(path, **kwargs, type="text")
+        chain = DataChain.from_storage(path, **kwargs)
 
         column_names = None
         if not header:

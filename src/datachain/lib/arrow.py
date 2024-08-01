@@ -7,7 +7,7 @@ import pyarrow as pa
 from pyarrow.dataset import dataset
 from tqdm import tqdm
 
-from datachain.lib.file import File, IndexedFile, TextFile
+from datachain.lib.file import File, IndexedFile
 from datachain.lib.udf import Generator
 
 if TYPE_CHECKING:
@@ -45,11 +45,6 @@ class ArrowGenerator(Generator):
 
     def process(self, file: File):
         if self.nrows:
-            if not isinstance(file, TextFile):
-                raise ValueError(
-                    "Error generating rows from Arrow table - "
-                    "`nrows` only supported for text file but binary file found."
-                )
             path = _nrows_file(file, self.nrows)
             ds = dataset(path, schema=self.input_schema, **self.kwargs)
         else:
@@ -135,9 +130,9 @@ def _arrow_type_mapper(col_type: pa.DataType) -> type:  # noqa: PLR0911
     raise TypeError(f"{col_type!r} datatypes not supported")
 
 
-def _nrows_file(file: TextFile, nrows: int) -> str:
+def _nrows_file(file: File, nrows: int) -> str:
     tf = NamedTemporaryFile(delete=False)
-    with file.open() as reader:
+    with file.open(mode="r") as reader:
         with open(tf.name, "a") as writer:
             for row, line in enumerate(reader):
                 writer.write(line)
