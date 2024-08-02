@@ -1,9 +1,9 @@
 from typing import Any
 
-from datachain.query.dataset import Column
+from sqlalchemy import ColumnElement
 
 
-def sql_to_python(args_map: dict[str, Column]) -> dict[str, Any]:
+def sql_to_python(args_map: dict[str, ColumnElement]) -> dict[str, Any]:
     res = {}
     for name, sql_exp in args_map.items():
         try:
