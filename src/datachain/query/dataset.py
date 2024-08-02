@@ -1051,8 +1051,11 @@ class DatasetQuery:
         if anon:
             client_config["anon"] = True
 
+        self.session = Session.get(
+            session, catalog=catalog, client_config=client_config
+        )
+        self.catalog = catalog or self.session.catalog
         self.steps: list[Step] = []
-        self.catalog = catalog or get_catalog(client_config=client_config)
         self._chunk_index: Optional[int] = None
         self._chunk_total: Optional[int] = None
         self.temp_table_names: list[str] = []
@@ -1063,7 +1066,6 @@ class DatasetQuery:
         self.version: Optional[int] = None
         self.feature_schema: Optional[dict] = None
         self.column_types: Optional[dict[str, Any]] = None
-        self.session = Session.get(session, catalog=catalog)
 
         if path:
             kwargs = {"update": True} if update else {}
@@ -1200,12 +1202,10 @@ class DatasetQuery:
         # This is needed to always use a new connection with all metastore and warehouse
         # implementations, as errors may close or render unusable the existing
         # connections.
-        metastore = self.catalog.metastore.clone(use_new_connection=True)
-        metastore.cleanup_tables(self.temp_table_names)
-        metastore.close()
-        warehouse = self.catalog.warehouse.clone(use_new_connection=True)
-        warehouse.cleanup_tables(self.temp_table_names)
-        warehouse.close()
+        with self.catalog.metastore.clone(use_new_connection=True) as metastore:
+            metastore.cleanup_tables(self.temp_table_names)
+        with self.catalog.warehouse.clone(use_new_connection=True) as warehouse:
+            warehouse.cleanup_tables(self.temp_table_names)
         self.temp_table_names = []
 
     def db_results(self, row_factory=None, **kwargs):
@@ -1248,19 +1248,12 @@ class DatasetQuery:
             def row_iter() -> Generator[RowDict, None, None]:
                 # warehouse isn't threadsafe, we need to clone() it
                 # in the thread that uses the results
-                warehouse = None
-                try:
-                    warehouse = self.catalog.warehouse.clone()
+                with self.catalog.warehouse.clone() as warehouse:
                     gen = warehouse.dataset_select_paginated(
                         query, limit=query._limit, order_by=query._order_by_clauses
                     )
                     with contextlib.closing(gen) as rows:
                         yield from rows
-                finally:
-                    # clone doesn't necessarily create a new connection
-                    # we can't do `warehouse.close()` for now. It is a bad design
-                    # in clone / close interface that needs to be fixed.
-                    pass
 
             async def get_params(row: RowDict) -> tuple:
                 return tuple(

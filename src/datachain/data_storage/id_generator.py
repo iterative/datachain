@@ -33,6 +33,15 @@ class AbstractIDGenerator(ABC, Serializable):
     def cleanup_for_tests(self):
         """Cleanup for tests."""
 
+    def close(self) -> None:
+        """Closes any active database connections."""
+
+    def close_on_exit(self) -> None:
+        """Closes any active database or HTTP connections, called on exit or for test
+        cleanup only, as some ID Generator implementations may handle this differently.
+        """
+        self.close()
+
     @abstractmethod
     def init_id(self, uri: str) -> None:
         """Initializes the ID generator for the given URI with zero last_id."""
@@ -82,6 +91,10 @@ class AbstractDBIDGenerator(AbstractIDGenerator):
     @abstractmethod
     def clone(self) -> "AbstractDBIDGenerator":
         """Clones AbstractIDGenerator implementation."""
+
+    def close(self) -> None:
+        """Closes any active database connections."""
+        self.db.close()
 
     @property
     def db(self) -> "DatabaseEngine":

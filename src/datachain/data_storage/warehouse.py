@@ -70,6 +70,13 @@ class AbstractWarehouse(ABC, Serializable):
     def __init__(self, id_generator: "AbstractIDGenerator"):
         self.id_generator = id_generator
 
+    def __enter__(self) -> "AbstractWarehouse":
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        # Default behavior is to do nothing, as connections may be shared.
+        pass
+
     def cleanup_for_tests(self):
         """Cleanup for tests."""
 
@@ -157,6 +164,11 @@ class AbstractWarehouse(ABC, Serializable):
     def close(self) -> None:
         """Closes any active database connections."""
         self.db.close()
+
+    def close_on_exit(self) -> None:
+        """Closes any active database or HTTP connections, called on exit or for test
+        cleanup only, as some metastore implementations may handle this differently."""
+        self.close()
 
     #
     # Query Tables
