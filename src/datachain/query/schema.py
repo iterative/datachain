@@ -45,6 +45,10 @@ class Column(sa.ColumnClause, metaclass=ColumnMeta):
         """Search for matches using glob pattern matching."""
         return self.op("GLOB")(glob_str)
 
+    def regexp(self, regexp_str):
+        """Search for matches using regexp pattern matching."""
+        return self.op("REGEXP")(regexp_str)
+
 
 class UDFParameter(ABC):
     @abstractmethod

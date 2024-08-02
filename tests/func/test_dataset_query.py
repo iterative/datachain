@@ -212,7 +212,11 @@ def test_filter(cloud_test_catalog, save, from_path):
         catalog.index(sources)
         catalog.create_dataset_from_sources("animals", globs, recursive=True)
         ds = DatasetQuery(name="animals", version=1, catalog=catalog)
-    q = ds.filter(C.size < 13).filter(C.path.glob("cats*") | (C.size < 4))
+    q = (
+        ds.filter(C.size < 13)
+        .filter(C.path.glob("cats*") | (C.size < 4))
+        .filter(C.path.regexp("^cats/cat[0-9]$"))
+    )
     if save:
         ds_name = "animals_cats"
         q.save(ds_name)
