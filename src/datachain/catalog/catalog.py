@@ -1219,12 +1219,10 @@ class Catalog:
 
     def cleanup_tables(self, names: Iterable[str]) -> None:
         """
-        Drop tables created temporarily when processing datasets.
+        Drop tables passed.
 
-        This should be implemented even if temporary tables are used to
-        ensure that they are cleaned up as soon as they are no longer
-        needed. When running the same `DatasetQuery` multiple times we
-        may use the same temporary table names.
+        This should be implemented to ensure that the provided tables
+        are cleaned up as soon as they are no longer needed.
         """
         self.warehouse.cleanup_tables(names)
         self.id_generator.delete_uris(names)
