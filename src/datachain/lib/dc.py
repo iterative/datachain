@@ -193,8 +193,6 @@ class DataChain(DatasetQuery):
         ```
     """
 
-    max_row_count: Optional[int] = None
-
     DEFAULT_FILE_RECORD: ClassVar[dict] = {
         "source": "",
         "name": "",
@@ -1124,7 +1122,7 @@ class DataChain(DatasetQuery):
         def _func_fr() -> Iterator[tuple_type]:  # type: ignore[valid-type]
             yield from tuples
 
-        chain = DataChain.create_empty(DataChain.DEFAULT_FILE_RECORD, session=session)
+        chain = DataChain.from_records(DataChain.DEFAULT_FILE_RECORD, session=session)
         if object_name:
             output = {object_name: DataChain._dict_to_data_model(object_name, output)}  # type: ignore[arg-type]
         return chain.gen(_func_fr, output=output)
@@ -1441,13 +1439,14 @@ class DataChain(DatasetQuery):
         )
 
     @classmethod
-    def create_empty(
+    def from_records(
         cls,
         to_insert: Optional[Union[dict, list[dict]]],
         session: Optional[Session] = None,
     ) -> "DataChain":
-        """Create empty chain. Returns a chain. This method is used for programmatically
-        generating a chains in contrast of reading data from storages or other sources.
+        """Create a DataChain from the provided records. This method can be used for
+        programmatically generating a chain in contrast of reading data from storages
+        or other sources.
 
         Parameters:
             to_insert : records (or a single record) to insert. Each record is
@@ -1455,8 +1454,8 @@ class DataChain(DatasetQuery):
 
         Example:
             ```py
-            empty = DataChain.create_empty()
-            single_record = DataChain.create_empty(DataChain.DEFAULT_FILE_RECORD)
+            empty = DataChain.from_records()
+            single_record = DataChain.from_records(DataChain.DEFAULT_FILE_RECORD)
             ```
         """
         session = Session.get(session)
@@ -1602,18 +1601,7 @@ class DataChain(DatasetQuery):
     @detach
     def limit(self, n: int) -> "Self":
         """Return the first n rows of the chain."""
-        n = max(n, 0)
-
-        if self.max_row_count is None:
-            self.max_row_count = n
-            return super().limit(n)
-
-        limit = min(n, self.max_row_count)
-        if limit == self.max_row_count:
-            return self
-
-        self.max_row_count = limit
-        return super().limit(self.max_row_count)
+        return super().limit(n)
 
     @detach
     def offset(self, offset: int) -> "Self":
