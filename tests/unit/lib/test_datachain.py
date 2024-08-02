@@ -99,7 +99,7 @@ def test_pandas_incorrect_column_names(catalog):
 
 
 def test_from_features_basic(catalog):
-    ds = DataChain.create_empty(DataChain.DEFAULT_FILE_RECORD)
+    ds = DataChain.from_records(DataChain.DEFAULT_FILE_RECORD)
     ds = ds.gen(lambda prm: [File(name="")] * 5, params="parent", output={"file": File})
 
     ds_name = "my_ds"
@@ -113,7 +113,7 @@ def test_from_features_basic(catalog):
 
 
 def test_from_features(catalog):
-    ds = DataChain.create_empty(DataChain.DEFAULT_FILE_RECORD)
+    ds = DataChain.from_records(DataChain.DEFAULT_FILE_RECORD)
     ds = ds.gen(
         lambda prm: list(zip([File(name="")] * len(features), features)),
         params="parent",
@@ -142,7 +142,7 @@ def test_datasets(catalog):
 
 
 def test_preserve_feature_schema(catalog):
-    ds = DataChain.create_empty(DataChain.DEFAULT_FILE_RECORD)
+    ds = DataChain.from_records(DataChain.DEFAULT_FILE_RECORD)
     ds = ds.gen(
         lambda prm: list(zip([File(name="")] * len(features), features, features)),
         params="parent",
@@ -1232,6 +1232,36 @@ def test_custom_model_with_nested_lists():
             traces_double=[[{"x": 0.5, "y": 0.5}], [{"x": 0.5, "y": 0.5}]],
         )
     ]
+
+
+def test_min_limit():
+    dc = DataChain.from_values(a=[1, 2, 3, 4, 5])
+    assert dc.count() == 5
+    assert dc.limit(4).count() == 4
+    assert dc.count() == 5
+    assert dc.limit(1).count() == 1
+    assert dc.count() == 5
+    assert dc.limit(2).limit(3).count() == 2
+    assert dc.count() == 5
+    assert dc.limit(3).limit(2).count() == 2
+    assert dc.count() == 5
+
+
+def test_show_limit():
+    dc = DataChain.from_values(a=[1, 2, 3, 4, 5])
+    assert dc.count() == 5
+    assert dc.limit(4).count() == 4
+    dc.show(1)
+    assert dc.count() == 5
+    assert dc.limit(1).count() == 1
+    dc.show(1)
+    assert dc.count() == 5
+    assert dc.limit(2).limit(3).count() == 2
+    dc.show(1)
+    assert dc.count() == 5
+    assert dc.limit(3).limit(2).count() == 2
+    dc.show(1)
+    assert dc.count() == 5
 
 
 def test_column(catalog):
