@@ -1228,3 +1228,33 @@ def test_custom_model_with_nested_lists():
             traces_double=[[{"x": 0.5, "y": 0.5}], [{"x": 0.5, "y": 0.5}]],
         )
     ]
+
+
+def test_min_limit():
+    dc = DataChain.from_values(a=[1, 2, 3, 4, 5])
+    assert dc.count() == 5
+    assert dc.limit(4).count() == 4
+    assert dc.count() == 5
+    assert dc.limit(1).count() == 1
+    assert dc.count() == 5
+    assert dc.limit(2).limit(3).count() == 2
+    assert dc.count() == 5
+    assert dc.limit(3).limit(2).count() == 2
+    assert dc.count() == 5
+
+
+def test_show_limit():
+    dc = DataChain.from_values(a=[1, 2, 3, 4, 5])
+    assert dc.count() == 5
+    assert dc.limit(4).count() == 4
+    dc.show(1)
+    assert dc.count() == 5
+    assert dc.limit(1).count() == 1
+    dc.show(1)
+    assert dc.count() == 5
+    assert dc.limit(2).limit(3).count() == 2
+    dc.show(1)
+    assert dc.count() == 5
+    assert dc.limit(3).limit(2).count() == 2
+    dc.show(1)
+    assert dc.count() == 5
