@@ -7,6 +7,8 @@ import numpy as np
 import pandas as pd
 import pytest
 from pydantic import BaseModel
+from sqlalchemy.exc import CompileError
+from sqlalchemy.sql.sqltypes import NullType
 
 from datachain import Column
 from datachain.lib.data_model import DataModel
@@ -19,6 +21,8 @@ from datachain.lib.signal_schema import (
 )
 from datachain.lib.udf_signature import UdfSignatureError
 from datachain.lib.utils import DataChainParamsError
+from datachain.sql import functions as func
+from datachain.sql.types import Float, Int64, String
 from tests.utils import skip_if_not_sqlite
 
 DF_DATA = {
@@ -1228,3 +1232,56 @@ def test_custom_model_with_nested_lists():
             traces_double=[[{"x": 0.5, "y": 0.5}], [{"x": 0.5, "y": 0.5}]],
         )
     ]
+
+
+def test_column(catalog):
+    ds = DataChain.from_values(
+        ints=[1, 2], floats=[0.5, 0.5], file=[File(name="a"), File(name="b")]
+    )
+
+    c = ds.column("ints")
+    assert isinstance(c, Column)
+    assert c.name == "ints"
+    assert isinstance(c.type, Int64)
+
+    c = ds.column("floats")
+    assert isinstance(c, Column)
+    assert c.name == "floats"
+    assert isinstance(c.type, Float)
+
+    c = ds.column("file.name")
+    assert isinstance(c, Column)
+    assert c.name == "file__name"
+    assert isinstance(c.type, String)
+
+    c = ds.column("missing")
+    assert isinstance(c, Column)
+    assert c.name == "missing"
+    assert isinstance(c.type, NullType)
+
+
+def test_mutate_with_complex_expressions(catalog):
+    ds = DataChain.from_values(id=[1, 2, 3], name=["Jim", "Jon", "Joe"])
+
+    ds1 = ds.mutate(new=ds.column("id") - 1)
+    assert ds1.signals_schema.values["new"] is int
+    ds1.save("ds1")
+
+    ds2 = ds.mutate(new=func.avg(ds.column("id")))
+    assert ds2.signals_schema.values["new"] is float
+    ds2.save("ds2")
+
+    ds3 = ds.mutate(
+        new=func.string.length(ds.column("name")) * func.greatest(ds.column("id"))
+    )
+    assert ds3.signals_schema.values["new"] is int
+    ds3.save("ds3")
+
+    ds4 = ds.mutate(new=(func.sum(ds.column("id"))) * (5 - func.min(ds.column("id"))))
+    assert ds4.signals_schema.values["new"] is int
+    ds4.save("ds4")
+
+
+def test_mutate_with_expression_without_type(catalog):
+    with pytest.raises(CompileError):
+        DataChain.from_values(id=[1, 2]).mutate(new=(Column("id") - 1)).save()

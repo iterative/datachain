@@ -22,6 +22,7 @@ from pydantic import BaseModel, create_model
 from sqlalchemy.sql.functions import GenericFunction
 
 from datachain import DataModel
+from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import DataType
 from datachain.lib.dataset_info import DatasetInfo
@@ -226,6 +227,14 @@ class DataChain(DatasetQuery):
     def schema(self) -> dict[str, DataType]:
         """Get schema of the chain."""
         return self._effective_signals_schema.values
+
+    def column(self, name: str) -> Column:
+        """Returns Column instance with a type from current schema by name."""
+        for path, type_, _, _ in self.signals_schema.get_flat_tree():
+            if ".".join(path) == name:
+                return Column(name, python_to_sql(type_))
+
+        return Column(name)
 
     def print_schema(self) -> None:
         """Print schema of the chain."""
