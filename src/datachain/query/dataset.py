@@ -859,16 +859,17 @@ class SQLUnion(Step):
         temp_tables.extend(self.query1.temp_table_names)
         q2 = self.query2.apply_steps().select().subquery()
         temp_tables.extend(self.query2.temp_table_names)
-        columns1, columns2 = fill_columns(q1.columns, q2.columns)
+        columns = coalesce_columns(q1.columns, q2.columns)
 
         def q(*columns):
-            names = {c.name for c in columns}
-            col1 = [c for c in columns1 if c.name in names]
-            col2 = [c for c in columns2 if c.name in names]
             res = (
-                sqlalchemy.select(*col1)
+                sqlalchemy.select(*columns)
                 .select_from(q1)
-                .union_all(sqlalchemy.select(*col2).select_from(q2))
+                .outerjoin(
+                    q2,
+                    onclause=sqlalchemy.false() == sqlalchemy.true(),
+                    full=True,
+                )
             )
 
             subquery = res.subquery()
@@ -876,7 +877,7 @@ class SQLUnion(Step):
 
         return step_result(
             q,
-            columns1,
+            columns,
             dependencies=self.query1.dependencies | self.query2.dependencies,
         )
 
@@ -1002,21 +1003,19 @@ class GroupBy(Step):
         return step_result(q, grouped_query.selected_columns)
 
 
-def fill_columns(
-    *column_iterables: Iterable[ColumnElement],
-) -> list[list[ColumnElement]]:
-    column_dicts = [{c.name: c for c in columns} for columns in column_iterables]
-    combined_columns = {n: c for col_dict in column_dicts for n, c in col_dict.items()}
-
-    result: list[list[ColumnElement]] = [[] for _ in column_dicts]
-    for n in combined_columns:
-        for col_dict, out in zip(column_dicts, result):
-            if n in col_dict:
-                out.append(col_dict[n])
-            else:
-                # Label it to ensure it's aware of its name
-                out.append(sqlalchemy.null().label(n))
-    return result
+def coalesce_columns(left_columns, right_columns):
+    l_columns_dict = {c.name: c for c in left_columns}
+    r_columns_dict = {c.name: c for c in right_columns}
+    combined = {c.name for c in left_columns}.union({c.name for c in right_columns})
+    columns = []
+    for n in combined:
+        if n in l_columns_dict and n in r_columns_dict:
+            columns.append(f.coalesce(l_columns_dict[n], r_columns_dict[n]).label(n))
+        elif n in l_columns_dict:
+            columns.append(l_columns_dict[n].label(n))
+        else:
+            columns.append(r_columns_dict[n].label(n))
+    return columns
 
 
 @attrs.define
