@@ -914,14 +914,12 @@ class AbstractWarehouse(ABC, Serializable):
             if self.is_temp_table_name(t)
         ]
 
-    def cleanup_temp_tables(self, names: Iterable[str]) -> None:
+    def cleanup_tables(self, names: Iterable[str]) -> None:
         """
-        Drop tables created temporarily when processing datasets.
+        Drop tables passed.
 
-        This should be implemented even if temporary tables are used to
-        ensure that they are cleaned up as soon as they are no longer
-        needed. When running the same `DatasetQuery` multiple times we
-        may use the same temporary table names.
+        This should be implemented to ensure that the provided tables
+        are cleaned up as soon as they are no longer needed.
         """
         for name in names:
             self.db.drop_table(Table(name, self.db.metadata), if_exists=True)

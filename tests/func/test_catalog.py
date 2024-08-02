@@ -1120,7 +1120,7 @@ def test_garbage_collect(cloud_test_catalog, from_cli, capsys):
         captured = capsys.readouterr()
         assert captured.out == "Garbage collecting 4 tables.\n"
     else:
-        catalog.cleanup_temp_tables(temp_tables)
+        catalog.cleanup_tables(temp_tables)
     assert catalog.get_temp_table_names() == []
 
 
