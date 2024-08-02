@@ -227,7 +227,9 @@ class DataChain(DatasetQuery):
         return self._effective_signals_schema.values
 
     def column(self, name: str) -> Column:
-        """Returns Column instance with a type from current schema by name."""
+        """Returns Column instance with a type if name is found in current schema,
+        otherwise returns plain Column without type.
+        """
         for path, type_, _, _ in self.signals_schema.get_flat_tree():
             if ".".join(path) == name:
                 return Column(name, python_to_sql(type_))
