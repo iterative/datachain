@@ -97,7 +97,7 @@ class AbstractMetastore(ABC, Serializable):
     def close(self) -> None:
         """Closes any active database or HTTP connections."""
 
-    def cleanup_temp_tables(self, temp_table_names: list[str]) -> None:
+    def cleanup_tables(self, temp_table_names: list[str]) -> None:
         """Cleanup temp tables."""
 
     def cleanup_for_tests(self) -> None:
@@ -457,7 +457,7 @@ class AbstractDBMetastore(AbstractMetastore):
         """Closes any active database connections."""
         self.db.close()
 
-    def cleanup_temp_tables(self, temp_table_names: list[str]) -> None:
+    def cleanup_tables(self, temp_table_names: list[str]) -> None:
         """Cleanup temp tables."""
         self.id_generator.delete_uris(temp_table_names)
 
