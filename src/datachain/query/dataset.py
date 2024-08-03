@@ -25,6 +25,7 @@ from typing import (
 
 import attrs
 import sqlalchemy
+import sqlalchemy as sa
 from attrs import frozen
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback, TqdmCallback
 from sqlalchemy import Column
@@ -54,6 +55,7 @@ from datachain.utils import (
     batched,
     determine_processes,
     filtered_cloudpickle_dumps,
+    get_datachain_executable,
 )
 
 from .metrics import metrics
@@ -249,7 +251,7 @@ class DatasetDiffOperation(Step):
         self,
         source_query: Select,
         target_query: Select,
-    ) -> Select:
+    ) -> sa.Selectable:
         """
         Should return select query that calculates desired diff between dataset queries
         """
@@ -260,14 +262,12 @@ class DatasetDiffOperation(Step):
         temp_tables.extend(self.dq.temp_table_names)
 
         # creating temp table that will hold subtract results
-        temp_table_name = self.catalog.warehouse.TMP_TABLE_NAME_PREFIX + _random_string(
-            6
-        )
+        temp_table_name = self.catalog.warehouse.temp_table_name()
         temp_tables.append(temp_table_name)
 
         columns = [
             c if isinstance(c, Column) else Column(c.name, c.type)
-            for c in source_query.columns
+            for c in source_query.selected_columns
         ]
         temp_table = self.catalog.warehouse.create_dataset_rows_table(
             temp_table_name,
@@ -291,23 +291,16 @@ class DatasetDiffOperation(Step):
 
 @frozen
 class Subtract(DatasetDiffOperation):
-    """
-    Calculates rows that are in a source query but are not in target query (diff)
-    This can be used to do delta updates (calculate UDF only on newly added rows)
-    Example:
-        >>> ds = DatasetQuery(name="dogs_cats") # some older dataset with embeddings
-        >>> ds_updated = (
-                DatasetQuery("gs://dvcx-datalakes/dogs-and-cats")
-                .filter(C.size > 1000) # we can also filter out source query
-                .subtract(ds)
-                .add_signals(calc_embeddings) # calculae embeddings only on new rows
-                .union(ds) # union with old dataset that's missing new rows
-                .save("dogs_cats_updated")
-            )
-    """
+    on: Sequence[str]
 
-    def query(self, source_query: Select, target_query: Select) -> Select:
-        return self.catalog.warehouse.subtract_query(source_query, target_query)
+    def query(self, source_query: Select, target_query: Select) -> sa.Selectable:
+        sq = source_query.alias("source_query")
+        tq = target_query.alias("target_query")
+        where_clause = sa.and_(
+            getattr(sq.c, col_name).is_not_distinct_from(getattr(tq.c, col_name))
+            for col_name in self.on
+        )  # type: ignore[arg-type]
+        return sq.select().except_(sq.select().where(where_clause))
 
 
 @frozen
@@ -453,9 +446,6 @@ class UDFStep(Step, ABC):
         to select
         """
 
-    def udf_table_name(self) -> str:
-        return self.catalog.warehouse.UDF_TABLE_NAME_PREFIX + _random_string(6)
-
     def populate_udf_table(self, udf_table: "Table", query: Select) -> None:
         use_partitioning = self.partition_by is not None
         batching = self.udf.properties.get_batching(use_partitioning)
@@ -507,13 +497,12 @@ class UDFStep(Step, ABC):
 
                 # Run the UDFDispatcher in another process to avoid needing
                 # if __name__ == '__main__': in user scripts
-                datachain_exec_path = os.environ.get("DATACHAIN_EXEC_PATH", "datachain")
-
+                exec_cmd = get_datachain_executable()
                 envs = dict(os.environ)
                 envs.update({"PYTHONPATH": os.getcwd()})
                 process_data = filtered_cloudpickle_dumps(udf_info)
                 result = subprocess.run(  # noqa: S603
-                    [datachain_exec_path, "--internal-run-udf"],
+                    [*exec_cmd, "internal-run-udf"],
                     input=process_data,
                     check=False,
                     env=envs,
@@ -580,9 +569,7 @@ class UDFStep(Step, ABC):
             list_partition_by = [self.partition_by]
 
         # create table with partitions
-        tbl = self.catalog.warehouse.create_udf_table(
-            self.udf_table_name(), partition_columns()
-        )
+        tbl = self.catalog.warehouse.create_udf_table(partition_columns())
 
         # fill table with partitions
         cols = [
@@ -644,37 +631,12 @@ class UDFSignal(UDFStep):
             for (col_name, col_type) in self.udf.output.items()
         ]
 
-        return self.catalog.warehouse.create_udf_table(
-            self.udf_table_name(), udf_output_columns
-        )
-
-    def create_pre_udf_table(self, query: Select) -> "Table":
-        columns = [
-            sqlalchemy.Column(c.name, c.type)
-            for c in query.selected_columns
-            if c.name != "sys__id"
-        ]
-        table = self.catalog.warehouse.create_udf_table(self.udf_table_name(), columns)
-        select_q = query.with_only_columns(
-            *[c for c in query.selected_columns if c.name != "sys__id"]
-        )
-
-        # if there is order by clause we need row_number to preserve order
-        # if there is no order by clause we still need row_number to generate
-        # unique ids as uniqueness is important for this table
-        select_q = select_q.add_columns(
-            f.row_number().over(order_by=select_q._order_by_clauses).label("sys__id")
-        )
-
-        self.catalog.warehouse.db.execute(
-            table.insert().from_select(list(select_q.selected_columns), select_q)
-        )
-        return table
+        return self.catalog.warehouse.create_udf_table(udf_output_columns)
 
     def process_input_query(self, query: Select) -> tuple[Select, list["Table"]]:
         if os.getenv("DATACHAIN_DISABLE_QUERY_CACHE", "") not in ("", "0"):
             return query, []
-        table = self.create_pre_udf_table(query)
+        table = self.catalog.warehouse.create_pre_udf_table(query)
         q: Select = sqlalchemy.select(*table.c)
         if query._order_by_clauses:
             # we are adding ordering only if it's explicitly added by user in
@@ -738,7 +700,7 @@ class RowGenerator(UDFStep):
     def create_udf_table(self, query: Select) -> "Table":
         warehouse = self.catalog.warehouse
 
-        table_name = self.udf_table_name()
+        table_name = self.catalog.warehouse.udf_table_name()
         columns: tuple[Column, ...] = tuple(
             Column(name, typ) for name, typ in self.udf.output.items()
         )
@@ -820,8 +782,16 @@ class SQLMutate(SQLClause):
     args: tuple[ColumnElement, ...]
 
     def apply_sql_clause(self, query: Select) -> Select:
-        subquery = query.subquery()
-        return sqlalchemy.select(*subquery.c, *self.args).select_from(subquery)
+        original_subquery = query.subquery()
+        # this is needed for new column to be used in clauses
+        # like ORDER BY, otherwise new column is not recognized
+        subquery = (
+            sqlalchemy.select(*original_subquery.c, *self.args)
+            .select_from(original_subquery)
+            .subquery()
+        )
+
+        return sqlalchemy.select(*subquery.c).select_from(subquery)
 
 
 @frozen
@@ -867,8 +837,14 @@ class SQLCount(SQLClause):
 
 @frozen
 class SQLDistinct(SQLClause):
+    args: tuple[ColumnElement, ...]
+    dialect: str
+
     def apply_sql_clause(self, query):
-        return query.distinct()
+        if self.dialect == "sqlite":
+            return query.group_by(*self.args)
+
+        return query.distinct(*self.args)
 
 
 @frozen
@@ -952,12 +928,15 @@ class SQLJoin(Step):
 
         q1_columns = list(q1.c)
         q1_column_names = {c.name for c in q1_columns}
-        q2_columns = [
-            c
-            if c.name not in q1_column_names and c.name != "sys__id"
-            else c.label(self.rname.format(name=c.name))
-            for c in q2.c
-        ]
+
+        q2_columns = []
+        for c in q2.c:
+            if c.name.startswith("sys__"):
+                continue
+
+            if c.name in q1_column_names:
+                c = c.label(self.rname.format(name=c.name))
+            q2_columns.append(c)
 
         res_columns = q1_columns + q2_columns
         predicates = (
@@ -1064,6 +1043,7 @@ class DatasetQuery:
         anon: bool = False,
         indexing_feature_schema: Optional[dict] = None,
         indexing_column_types: Optional[dict[str, Any]] = None,
+        update: Optional[bool] = False,
     ):
         if client_config is None:
             client_config = {}
@@ -1086,7 +1066,8 @@ class DatasetQuery:
         self.session = Session.get(session, catalog=catalog)
 
         if path:
-            self.starting_step = IndexingStep(path, self.catalog, {}, recursive)
+            kwargs = {"update": True} if update else {}
+            self.starting_step = IndexingStep(path, self.catalog, kwargs, recursive)
             self.feature_schema = indexing_feature_schema
             self.column_types = indexing_column_types
         elif name:
@@ -1106,7 +1087,7 @@ class DatasetQuery:
         return bool(re.compile(r"^[a-zA-Z0-9]+://").match(path))
 
     def __iter__(self):
-        return iter(self.results())
+        return iter(self.db_results())
 
     def __or__(self, other):
         return self.union(other)
@@ -1220,25 +1201,28 @@ class DatasetQuery:
         # implementations, as errors may close or render unusable the existing
         # connections.
         metastore = self.catalog.metastore.clone(use_new_connection=True)
-        metastore.cleanup_temp_tables(self.temp_table_names)
+        metastore.cleanup_tables(self.temp_table_names)
         metastore.close()
         warehouse = self.catalog.warehouse.clone(use_new_connection=True)
-        warehouse.cleanup_temp_tables(self.temp_table_names)
+        warehouse.cleanup_tables(self.temp_table_names)
         warehouse.close()
         self.temp_table_names = []
 
-    def results(self, row_factory=None, **kwargs):
+    def db_results(self, row_factory=None, **kwargs):
         with self.as_iterable(**kwargs) as result:
             if row_factory:
                 cols = result.columns
                 return [row_factory(cols, r) for r in result]
             return list(result)
 
+    def to_db_records(self) -> list[dict[str, Any]]:
+        return self.db_results(lambda cols, row: dict(zip(cols, row)))
+
     @contextlib.contextmanager
     def as_iterable(self, **kwargs) -> Iterator[ResultIter]:
         try:
             query = self.apply_steps().select()
-            selected_columns = [c.name for c in query.columns]
+            selected_columns = [c.name for c in query.selected_columns]
             yield ResultIter(
                 self.catalog.warehouse.dataset_rows_select(query, **kwargs),
                 selected_columns,
@@ -1292,9 +1276,6 @@ class DatasetQuery:
                 yield from mapper.iterate()
         finally:
             self.cleanup()
-
-    def to_records(self) -> list[dict[str, Any]]:
-        return self.results(lambda cols, row: dict(zip(cols, row)))
 
     def shuffle(self) -> "Self":
         # ToDo: implement shaffle based on seed and/or generating random column
@@ -1402,6 +1383,9 @@ class DatasetQuery:
     @detach
     def limit(self, n: int) -> "Self":
         query = self.clone(new_table=False)
+        for step in query.steps:
+            if isinstance(step, SQLLimit) and step.n < n:
+                return query
         query.steps.append(SQLLimit(n))
         return query
 
@@ -1412,9 +1396,11 @@ class DatasetQuery:
         return query
 
     @detach
-    def distinct(self) -> "Self":
+    def distinct(self, *args) -> "Self":
         query = self.clone()
-        query.steps.append(SQLDistinct())
+        query.steps.append(
+            SQLDistinct(args, dialect=self.catalog.warehouse.db.dialect.name)
+        )
         return query
 
     def as_scalar(self) -> Any:
@@ -1543,8 +1529,12 @@ class DatasetQuery:
 
     @detach
     def subtract(self, dq: "DatasetQuery") -> "Self":
+        return self._subtract(dq, on=["source", "parent", "name"])
+
+    @detach
+    def _subtract(self, dq: "DatasetQuery", on: Sequence[str]) -> "Self":
         query = self.clone()
-        query.steps.append(Subtract(dq, self.catalog))
+        query.steps.append(Subtract(dq, self.catalog, on=on))
         return query
 
     @detach
@@ -1663,7 +1653,7 @@ class DatasetQuery:
                     f.row_number().over(order_by=q._order_by_clauses).label("sys__id")
                 )
 
-            cols = tuple(c.name for c in q.columns)
+            cols = tuple(c.name for c in q.selected_columns)
             insert_q = sqlalchemy.insert(dr.get_table()).from_select(cols, q)
             self.catalog.warehouse.db.execute(insert_q, **kwargs)
             self.catalog.metastore.update_dataset_status(
@@ -1715,10 +1705,13 @@ def _send_result(dataset_query: DatasetQuery) -> None:
 
     columns = preview_args.get("columns") or []
 
-    preview_query = (
-        dataset_query.select(*columns)
-        .limit(preview_args.get("limit", 10))
-        .offset(preview_args.get("offset", 0))
+    if type(dataset_query) is DatasetQuery:
+        preview_query = dataset_query.select(*columns)
+    else:
+        preview_query = dataset_query.select(*columns, _sys=False)
+
+    preview_query = preview_query.limit(preview_args.get("limit", 10)).offset(
+        preview_args.get("offset", 0)
     )
 
     dataset: Optional[tuple[str, int]] = None
@@ -1727,7 +1720,7 @@ def _send_result(dataset_query: DatasetQuery) -> None:
         assert dataset_query.version, "Dataset version should be provided"
         dataset = dataset_query.name, dataset_query.version
 
-    preview = preview_query.to_records()
+    preview = preview_query.to_db_records()
     result = ExecutionResult(preview, dataset, metrics)
     data = attrs.asdict(result)
 
@@ -1780,10 +1773,3 @@ def query_wrapper(dataset_query: DatasetQuery) -> DatasetQuery:
 
     _send_result(dataset_query)
     return dataset_query
-
-
-def _random_string(length: int) -> str:
-    return "".join(
-        random.choice(string.ascii_letters + string.digits)  # noqa: S311
-        for i in range(length)
-    )

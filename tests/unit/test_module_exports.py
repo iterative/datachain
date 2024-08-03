@@ -2,8 +2,10 @@
 
 import builtins
 import sys
+import warnings
 
 import pytest
+from sqlalchemy.exc import SAWarning
 
 
 def test_module_exports():
@@ -17,7 +19,6 @@ def test_module_exports():
             DataChainError,
             DataModel,
             File,
-            FileBasic,
             FileError,
             Generator,
             ImageFile,
@@ -58,25 +59,29 @@ def test_no_torch_deps(monkeypatch, dep):
     monkeypatch.setattr(builtins, "__import__", monkey_import_importerror)
 
     try:
-        from datachain import (
-            AbstractUDF,
-            Aggregator,
-            C,
-            Column,
-            DataChain,
-            DataChainError,
-            DataModel,
-            File,
-            FileBasic,
-            FileError,
-            Generator,
-            ImageFile,
-            IndexedFile,
-            Mapper,
-            Session,
-            TarVFile,
-            TextFile,
-        )
+        with warnings.catch_warnings():
+            # Ignore SQLAlchemy warnings about redeclaring functions due to multiple
+            # imports of the same code in this test, after deleting them from
+            # sys.modules, which would not happen in normal user code.
+            warnings.filterwarnings("ignore", category=SAWarning)
+            from datachain import (
+                AbstractUDF,
+                Aggregator,
+                C,
+                Column,
+                DataChain,
+                DataChainError,
+                DataModel,
+                File,
+                FileError,
+                Generator,
+                ImageFile,
+                IndexedFile,
+                Mapper,
+                Session,
+                TarVFile,
+                TextFile,
+            )
     except Exception as e:  # noqa: BLE001
         pytest.fail(f"Importing raised an exception: {e}")
 

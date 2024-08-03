@@ -4,42 +4,70 @@ from typing import TYPE_CHECKING, Optional
 
 import pyarrow as pa
 from pyarrow.dataset import dataset
+from tqdm import tqdm
 
 from datachain.lib.file import File, IndexedFile
 from datachain.lib.udf import Generator
 
 if TYPE_CHECKING:
+    from pydantic import BaseModel
+
     from datachain.lib.dc import DataChain
 
 
 class ArrowGenerator(Generator):
-    def __init__(self, schema: Optional["pa.Schema"] = None, **kwargs):
+    def __init__(
+        self,
+        input_schema: Optional["pa.Schema"] = None,
+        output_schema: Optional[type["BaseModel"]] = None,
+        source: bool = True,
+        nrows: Optional[int] = None,
+        **kwargs,
+    ):
         """
         Generator for getting rows from tabular files.
 
         Parameters:
 
-        schema : Optional pyarrow schema for validation.
+        input_schema : Optional pyarrow schema for validation.
+        output_schema : Optional pydantic model for validation.
+        source : Whether to include info about the source file.
+        nrows : Optional row limit.
         kwargs: Parameters to pass to pyarrow.dataset.dataset.
         """
         super().__init__()
-        self.schema = schema
+        self.input_schema = input_schema
+        self.output_schema = output_schema
+        self.source = source
+        self.nrows = nrows
         self.kwargs = kwargs
 
     def process(self, file: File):
         path = file.get_path()
-        ds = dataset(path, filesystem=file.get_fs(), schema=self.schema, **self.kwargs)
+        ds = dataset(
+            path, filesystem=file.get_fs(), schema=self.input_schema, **self.kwargs
+        )
         index = 0
-        for record_batch in ds.to_batches():
-            for record in record_batch.to_pylist():
-                source = IndexedFile(file=file, index=index)
-                yield [source, *record.values()]
-                index += 1
+        with tqdm(desc="Parsed by pyarrow", unit=" rows") as pbar:
+            for record_batch in ds.to_batches(use_threads=False):
+                for record in record_batch.to_pylist():
+                    vals = list(record.values())
+                    if self.output_schema:
+                        fields = self.output_schema.model_fields
+                        vals = [self.output_schema(**dict(zip(fields, vals)))]
+                    if self.source:
+                        yield [IndexedFile(file=file, index=index), *vals]
+                    else:
+                        yield vals
+                    index += 1
+                    if self.nrows and index >= self.nrows:
+                        return
+                pbar.update(len(record_batch))
 
 
 def infer_schema(chain: "DataChain", **kwargs) -> pa.Schema:
     schemas = []
-    for file in chain.iterate_one("file"):
+    for file in chain.collect("file"):
         ds = dataset(file.get_path(), filesystem=file.get_fs(), **kwargs)  # type: ignore[union-attr]
         schemas.append(ds.schema)
     return pa.unify_schemas(schemas)
@@ -64,7 +92,10 @@ def schema_to_output(schema: pa.Schema, col_names: Optional[Sequence[str]] = Non
         if not column:
             column = f"c{default_column}"
             default_column += 1
-        output[column] = _arrow_type_mapper(field.type)  # type: ignore[assignment]
+        dtype = _arrow_type_mapper(field.type)  # type: ignore[assignment]
+        if field.nullable:
+            dtype = Optional[dtype]  # type: ignore[assignment]
+        output[column] = dtype
 
     return output
 

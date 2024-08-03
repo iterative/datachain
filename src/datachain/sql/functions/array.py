@@ -5,6 +5,10 @@ from datachain.sql.utils import compiler_not_implemented
 
 
 class cosine_distance(GenericFunction):  # noqa: N801
+    """
+    Takes a column and array and returns the cosine distance between them.
+    """
+
     type = Float()
     package = "array"
     name = "cosine_distance"
@@ -12,6 +16,10 @@ class cosine_distance(GenericFunction):  # noqa: N801
 
 
 class euclidean_distance(GenericFunction):  # noqa: N801
+    """
+    Takes a column and array and returns the Euclidean distance between them.
+    """
+
     type = Float()
     package = "array"
     name = "euclidean_distance"
@@ -19,6 +27,10 @@ class euclidean_distance(GenericFunction):  # noqa: N801
 
 
 class length(GenericFunction):  # noqa: N801
+    """
+    Returns the length of the array.
+    """
+
     type = Int64()
     package = "array"
     name = "length"

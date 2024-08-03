@@ -11,8 +11,9 @@ from collections.abc import Iterator
 from typing import Any, Callable
 
 import jmespath as jsp
-from pydantic import ValidationError
+from pydantic import Field, ValidationError  # noqa: F401
 
+from datachain.lib.data_model import DataModel  # noqa: F401
 from datachain.lib.file import File
 
 
@@ -86,6 +87,9 @@ def read_schema(source_file, data_type="csv", expr=None, model_name=None):
     except subprocess.CalledProcessError as e:
         model_output = f"An error occurred in datamodel-codegen: {e.stderr}"
     print(f"{model_output}")
+    print("\n" + "from datachain.lib.data_model import DataModel" + "\n")
+    print("\n" + f"DataModel.register({model_name})" + "\n")
+    print("\n" + f"spec={model_name}" + "\n")
     return model_output
 
 
@@ -97,8 +101,9 @@ def read_meta(  # noqa: C901
     schema_from=None,
     meta_type="json",
     jmespath=None,
-    show_schema=False,
+    print_schema=False,
     model_name=None,
+    nrows=None,
 ) -> Callable:
     from datachain.lib.dc import DataChain
 
@@ -118,14 +123,13 @@ def read_meta(  # noqa: C901
                     output=str,
                 )
             )
-            # dummy executor (#1616)
-            chain.save()
+            chain.exec()
         finally:
             sys.stdout = current_stdout
         model_output = captured_output.getvalue()
         captured_output.close()
 
-        if show_schema:
+        if print_schema:
             print(f"{model_output}")
         # Below 'spec' should be a dynamically converted DataModel from Pydantic
         if not spec:
@@ -144,17 +148,18 @@ def read_meta(  # noqa: C901
 
     def parse_data(
         file: File,
-        DataModel=spec,  # noqa: N803
+        data_model=spec,
         meta_type=meta_type,
         jmespath=jmespath,
+        nrows=nrows,
     ) -> Iterator[spec]:
-        def validator(json_object: dict) -> spec:
+        def validator(json_object: dict, nrow=0) -> spec:
             json_string = json.dumps(json_object)
             try:
-                data_instance = DataModel.model_validate_json(json_string)
+                data_instance = data_model.model_validate_json(json_string)
                 yield data_instance
             except ValidationError as e:
-                print(f"Validation error occurred in file {file.name}:", e)
+                print(f"Validation error occurred in row {nrow} file {file.name}:", e)
 
         if meta_type == "csv":
             with (
@@ -175,17 +180,25 @@ def read_meta(  # noqa: C901
                 yield from validator(json_object)
 
             else:
+                nrow = 0
                 for json_dict in json_object:
-                    yield from validator(json_dict)
+                    nrow = nrow + 1
+                    if nrows is not None and nrow > nrows:
+                        return
+                    yield from validator(json_dict, nrow)
 
         if meta_type == "jsonl":
             try:
+                nrow = 0
                 with file.open() as fd:
                     data_string = fd.readline().replace("\r", "")
                     while data_string:
+                        nrow = nrow + 1
+                        if nrows is not None and nrow > nrows:
+                            return
                         json_object = process_json(data_string, jmespath)
                         data_string = fd.readline()
-                        yield from validator(json_object)
+                        yield from validator(json_object, nrow)
             except OSError as e:
                 print(f"An unexpected file error occurred in file {file.name}: {e}")
 

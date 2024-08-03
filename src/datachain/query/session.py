@@ -28,9 +28,9 @@ class Session:
 
     Parameters:
 
-    `name` (str): The name of the session. Only latters and numbers are supported.
+    name (str): The name of the session. Only latters and numbers are supported.
            It can be empty.
-    `catalog` (Catalog): Catalog object.
+    catalog (Catalog): Catalog object.
     """
 
     GLOBAL_SESSION_CTX: Optional["Session"] = None
@@ -80,9 +80,9 @@ class Session:
         """Creates a Session() object from a catalog.
 
         Parameters:
-            `session` (Session): Optional Session(). If not provided a new session will
+            session (Session): Optional Session(). If not provided a new session will
                     be created. It's needed mostly for simplie API purposes.
-            `catalog` (Catalog): Optional catalog. By default a new catalog is created.
+            catalog (Catalog): Optional catalog. By default a new catalog is created.
         """
         if session:
             return session

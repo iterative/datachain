@@ -75,7 +75,7 @@ def test_wds(catalog, webdataset_tars):
     )
 
     num_rows = 0
-    for laion_wds in res.iterate_one("laion"):
+    for laion_wds in res.collect("laion"):
         num_rows += 1
         assert isinstance(laion_wds, WDSLaion)
         idx, data = next(
@@ -90,7 +90,7 @@ def test_wds(catalog, webdataset_tars):
         assert laion_wds.file.parent
         assert laion_wds.file.name == f"{idx}.jpg"
         assert laion_wds.file.location
-        assert laion_wds.json.dict() == Laion(**data).dict()
+        assert laion_wds.json.model_dump() == Laion(**data).model_dump()
 
     assert num_rows == len(WDS_TAR_SHARDS)
 
@@ -105,7 +105,7 @@ def test_wds_merge_with_parquet_meta(catalog, webdataset_tars, webdataset_metada
     res = wds.merge(meta, on="laion.json.uid", right_on="uid")
 
     num_rows = 0
-    for r in res.collect_one("laion"):
+    for r in res.collect("laion"):
         num_rows += 1
         assert isinstance(r, WDSLaion)
         assert isinstance(r.file, File)
@@ -116,7 +116,7 @@ def test_wds_merge_with_parquet_meta(catalog, webdataset_tars, webdataset_metada
 
     assert num_rows == len(WDS_TAR_SHARDS)
 
-    meta_res = res.collect(*WDS_META.keys())
+    meta_res = list(res.collect(*WDS_META.keys()))
 
     for field_name_idx, rows_values in enumerate(WDS_META.values()):
         assert sorted(rows_values.values()) == sorted(
@@ -124,7 +124,7 @@ def test_wds_merge_with_parquet_meta(catalog, webdataset_tars, webdataset_metada
         )
 
     # validate correct merge
-    for laion_uid, uid in res.iterate("laion.json.uid", "uid"):
+    for laion_uid, uid in res.collect("laion.json.uid", "uid"):
         assert laion_uid == uid
-    for caption, text in res.iterate("laion.json.caption", "text"):
+    for caption, text in res.collect("laion.json.caption", "text"):
         assert caption == text

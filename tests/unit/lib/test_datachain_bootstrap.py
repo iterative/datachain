@@ -29,7 +29,7 @@ def test_udf():
     chain = DataChain.from_values(key=vals)
 
     udf = MyMapper()
-    res = chain.map(res=udf).collect_one("res")
+    res = list(chain.map(res=udf).collect("res"))
 
     assert res == [MyMapper.BOOTSTRAP_VALUE] * len(vals)
     assert udf.value == MyMapper.TEARDOWN_VALUE
@@ -40,7 +40,7 @@ def test_udf_parallel():
     vals = ["a", "b", "c", "d", "e", "f"]
     chain = DataChain.from_values(key=vals)
 
-    res = chain.settings(parallel=4).map(res=MyMapper()).collect_one("res")
+    res = list(chain.settings(parallel=4).map(res=MyMapper()).collect("res"))
 
     assert res == [MyMapper.BOOTSTRAP_VALUE] * len(vals)
 
@@ -63,7 +63,7 @@ def test_no_bootstrap_for_callable():
     udf = MyMapper()
 
     chain = DataChain.from_values(key=["a", "b", "c"])
-    chain.map(res=udf).collect()
+    list(chain.map(res=udf).collect())
 
     assert udf._had_bootstrap is False
     assert udf._had_teardown is False
@@ -73,11 +73,11 @@ def test_bootstrap_in_chain(catalog):
     base = 1278
     prime = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29]
 
-    res = (
+    res = list(
         DataChain.from_values(val=prime)
         .setup(init_val=lambda: base)
         .map(x=lambda val, init_val: val + init_val, output=int)
-        .collect_one("x")
+        .collect("x")
     )
 
     assert res == [base + val for val in prime]

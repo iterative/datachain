@@ -12,15 +12,14 @@ from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
 
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
-from fsspec.implementations.local import LocalFileSystem
 from PIL import Image
 from pydantic import Field, field_validator
 
 from datachain.cache import UniqueId
 from datachain.client.fileslice import FileSlice
-from datachain.lib.data_model import DataModel, FileBasic
+from datachain.lib.data_model import DataModel
 from datachain.lib.utils import DataChainError
-from datachain.sql.types import JSON, Int, String
+from datachain.sql.types import JSON, Boolean, DateTime, Int, String
 from datachain.utils import TIME_ZERO
 
 if TYPE_CHECKING:
@@ -54,12 +53,15 @@ class VFile(ABC):
 
 
 class TarVFile(VFile):
+    """Virtual file model for files extracted from tar archives."""
+
     @classmethod
     def get_vtype(cls) -> str:
         return "tar"
 
     @classmethod
     def open(cls, file: "File", location: list[dict]):
+        """Stream file from tar archive based on location in archive."""
         if len(location) > 1:
             VFileError(file, "multiple 'location's are not supported yet")
 
@@ -105,7 +107,9 @@ class VFileRegistry:
         return reader.open(file, location)
 
 
-class File(FileBasic):
+class File(DataModel):
+    """`DataModel` for reading binary files."""
+
     source: str = Field(default="")
     parent: str = Field(default="")
     name: str
@@ -121,21 +125,26 @@ class File(FileBasic):
         "source": String,
         "parent": String,
         "name": String,
+        "size": Int,
         "version": String,
         "etag": String,
-        "size": Int,
-        "vtype": String,
+        "is_latest": Boolean,
+        "last_modified": DateTime,
         "location": JSON,
+        "vtype": String,
     }
 
     _unique_id_keys: ClassVar[list[str]] = [
         "source",
         "parent",
         "name",
-        "etag",
         "size",
+        "etag",
+        "version",
+        "is_latest",
         "vtype",
         "location",
+        "last_modified",
     ]
 
     @staticmethod
@@ -177,9 +186,10 @@ class File(FileBasic):
         self._caching_enabled = False
 
     @contextmanager
-    def open(self):
+    def open(self, mode: Literal["rb", "r"] = "rb"):
+        """Open the file and return a file object."""
         if self.location:
-            with VFileRegistry.resolve(self, self.location) as f:
+            with VFileRegistry.resolve(self, self.location) as f:  # type: ignore[arg-type]
                 yield f
 
         uid = self.get_uid()
@@ -189,7 +199,26 @@ class File(FileBasic):
         with client.open_object(
             uid, use_cache=self._caching_enabled, cb=self._download_cb
         ) as f:
-            yield f
+            yield io.TextIOWrapper(f) if mode == "r" else f
+
+    def read(self, length: int = -1):
+        """Returns file contents."""
+        with self.open() as stream:
+            return stream.read(length)
+
+    def read_bytes(self):
+        """Returns file contents as bytes."""
+        return self.read()
+
+    def read_text(self):
+        """Returns file contents as text."""
+        with self.open(mode="r") as stream:
+            return stream.read()
+
+    def save(self, destination: str):
+        """Writes it's content to destination"""
+        with open(destination, mode="wb") as f:
+            f.write(self.read())
 
     def export(
         self,
@@ -197,14 +226,14 @@ class File(FileBasic):
         placement: ExportPlacement = "fullpath",
         use_cache: bool = True,
     ) -> None:
+        """Export file to new location."""
         if use_cache:
             self._caching_enabled = use_cache
         dst = self.get_destination_path(output, placement)
         dst_dir = os.path.dirname(dst)
         os.makedirs(dst_dir, exist_ok=True)
 
-        with open(dst, mode="wb") as f:
-            f.write(self.read())
+        self.save(dst)
 
     def _set_stream(
         self,
@@ -217,11 +246,12 @@ class File(FileBasic):
         self._download_cb = download_cb
 
     def get_uid(self) -> UniqueId:
+        """Returns unique ID for file."""
         dump = self.model_dump()
         return UniqueId(*(dump[k] for k in self._unique_id_keys))
 
     def get_local_path(self) -> Optional[str]:
-        """Get path to a file in a local cache.
+        """Returns path to a file in a local cache.
         Return None if file is not cached. Throws an exception if cache is not setup."""
         if self._catalog is None:
             raise RuntimeError(
@@ -230,25 +260,30 @@ class File(FileBasic):
         return self._catalog.cache.get_path(self.get_uid())
 
     def get_file_suffix(self):
+        """Returns last part of file name with `.`."""
         return Path(self.name).suffix
 
     def get_file_ext(self):
+        """Returns last part of file name without `.`."""
         return Path(self.name).suffix.strip(".")
 
     def get_file_stem(self):
+        """Returns file name without extension."""
         return Path(self.name).stem
 
     def get_full_name(self):
+        """Returns name with parent directories."""
         return (Path(self.parent) / self.name).as_posix()
 
     def get_uri(self):
+        """Returns file URI."""
         return f"{self.source}/{self.get_full_name()}"
 
     def get_path(self) -> str:
+        """Returns file path."""
         path = unquote(self.get_uri())
-        fs = self.get_fs()
-        if isinstance(fs, LocalFileSystem):
-            # Drop file:// protocol
+        source = urlparse(self.source)
+        if source.scheme == "file":
             path = urlparse(path).path
             path = url2pathname(path)
         return path
@@ -263,13 +298,10 @@ class File(FileBasic):
         elif placement == "etag":
             path = f"{self.etag}{self.get_file_suffix()}"
         elif placement == "fullpath":
-            fs = self.get_fs()
-            if isinstance(fs, LocalFileSystem):
-                path = unquote(self.get_full_name())
-            else:
-                path = (
-                    Path(urlparse(self.source).netloc) / unquote(self.get_full_name())
-                ).as_posix()
+            path = unquote(self.get_full_name())
+            source = urlparse(self.source)
+            if source.scheme and source.scheme != "file":
+                path = posixpath.join(source.netloc, path)
         elif placement == "checksum":
             raise NotImplementedError("Checksum placement not implemented yet")
         else:
@@ -277,20 +309,41 @@ class File(FileBasic):
         return posixpath.join(output, path)  # type: ignore[union-attr]
 
     def get_fs(self):
+        """Returns `fsspec` filesystem for the file."""
         return self._catalog.get_client(self.source).fs
 
 
 class TextFile(File):
+    """`DataModel` for reading text files."""
+
     @contextmanager
     def open(self):
-        with super().open() as binary:
-            yield io.TextIOWrapper(binary)
+        """Open the file and return a file object in text mode."""
+        with super().open(mode="r") as stream:
+            yield stream
+
+    def read_text(self):
+        """Returns file contents as text."""
+        with self.open() as stream:
+            return stream.read()
+
+    def save(self, destination: str):
+        """Writes it's content to destination"""
+        with open(destination, mode="w") as f:
+            f.write(self.read_text())
 
 
 class ImageFile(File):
-    def get_value(self):
-        value = super().get_value()
-        return Image.open(BytesIO(value))
+    """`DataModel` for reading image files."""
+
+    def read(self):
+        """Returns `PIL.Image.Image` object."""
+        fobj = super().read()
+        return Image.open(BytesIO(fobj))
+
+    def save(self, destination: str):
+        """Writes it's content to destination"""
+        self.read().save(destination)
 
 
 def get_file(type_: Literal["binary", "text", "image"] = "binary"):
@@ -304,28 +357,35 @@ def get_file(type_: Literal["binary", "text", "image"] = "binary"):
         source: str,
         parent: str,
         name: str,
+        size: int,
         version: str,
         etag: str,
-        size: int,
-        vtype: str,
+        is_latest: bool,
+        last_modified: datetime,
         location: Optional[Union[dict, list[dict]]],
+        vtype: str,
     ) -> file:  # type: ignore[valid-type]
         return file(
             source=source,
             parent=parent,
             name=name,
+            size=size,
             version=version,
             etag=etag,
-            size=size,
-            vtype=vtype,
+            is_latest=is_latest,
+            last_modified=last_modified,
             location=location,
+            vtype=vtype,
         )
 
     return get_file_type
 
 
 class IndexedFile(DataModel):
-    """File source info for tables."""
+    """Metadata indexed from tabular files.
+
+    Includes `file` and `index` signals.
+    """
 
     file: File
     index: int

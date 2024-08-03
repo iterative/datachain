@@ -39,7 +39,7 @@ dependencies = [
   "multiprocess==0.70.16",
   "dill==0.3.8",
   "cloudpickle",
-  "ujson>=5.9.0",
+  "orjson>=3.10.5",
   "pydantic>=2,<3",
   "jmespath>=1.0",
   "datamodel-code-generator>=0.25",
@@ -89,9 +89,9 @@ dev = [
   "datachain[docs,tests]",
   "mypy==1.10.1",
   "types-python-dateutil",
+  "types-pytz",
   "types-PyYAML",
-  "types-requests",
-  "types-ujson"
+  "types-requests"
 ]
 
 [project.urls]
@@ -117,6 +117,11 @@ markers = [
 ]
 asyncio_mode = "auto"
 filterwarnings = [
+  "error::pandas.errors.PerformanceWarning",
+  "error::pydantic.warnings.PydanticDeprecatedSince20",
+  "error::pytest_mock.PytestMockWarning",
+  "error::pytest.PytestCollectionWarning",
+  "error::sqlalchemy.exc.SADeprecationWarning",
   "ignore:Field name .* shadows an attribute in parent:UserWarning"  # datachain.lib.feature
 ]
 
@@ -136,6 +141,7 @@ exclude_lines = [
   "if TYPE_CHECKING:",
   "raise NotImplementedError",
   "raise AssertionError",
+  "if self.dialect == .sqlite.",
   "@overload"
 ]
 

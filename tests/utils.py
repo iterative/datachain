@@ -9,6 +9,7 @@ from time import sleep, time
 from typing import Any, Callable, Optional
 
 import pytest
+from PIL import Image
 
 from datachain.catalog.catalog import Catalog
 from datachain.dataset import DatasetDependency, DatasetRecord
@@ -280,3 +281,8 @@ def assert_row_names(
         == {r.get("name") for r in preview}
         == expected_names
     )
+
+
+def images_equal(img1: Image.Image, img2: Image.Image):
+    """Checks if two image objects have exactly the same data"""
+    return list(img1.getdata()) == list(img2.getdata())

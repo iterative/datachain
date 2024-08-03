@@ -42,6 +42,7 @@ if TYPE_CHECKING:
     from sqlalchemy.dialects.sqlite import Insert
     from sqlalchemy.schema import SchemaItem
     from sqlalchemy.sql.elements import ColumnClause, ColumnElement, TextClause
+    from sqlalchemy.sql.selectable import Select
     from sqlalchemy.types import TypeEngine
 
 
@@ -496,9 +497,6 @@ class SQLiteMetastore(AbstractDBMetastore):
     def _jobs_insert(self) -> "Insert":
         return sqlite.insert(self._jobs)
 
-    def get_possibly_stale_jobs(self) -> list[tuple[str, str, int]]:
-        raise NotImplementedError("get_possibly_stale_jobs not implemented for SQLite")
-
 
 class SQLiteWarehouse(AbstractWarehouse):
     """
@@ -594,7 +592,7 @@ class SQLiteWarehouse(AbstractWarehouse):
     ):
         rows = self.db.execute(select_query, **kwargs)
         yield from convert_rows_custom_column_types(
-            select_query.columns, rows, sqlite_dialect
+            select_query.selected_columns, rows, sqlite_dialect
         )
 
     def get_dataset_sources(
@@ -708,3 +706,23 @@ class SQLiteWarehouse(AbstractWarehouse):
         client_config=None,
     ) -> list[str]:
         raise NotImplementedError("Exporting dataset table not implemented for SQLite")
+
+    def create_pre_udf_table(self, query: "Select") -> "Table":
+        """
+        Create a temporary table from a query for use in a UDF.
+        """
+        columns = [
+            sqlalchemy.Column(c.name, c.type)
+            for c in query.selected_columns
+            if c.name != "sys__id"
+        ]
+        table = self.create_udf_table(columns)
+
+        select_q = query.with_only_columns(
+            *[c for c in query.selected_columns if c.name != "sys__id"]
+        )
+        self.db.execute(
+            table.insert().from_select(list(select_q.selected_columns), select_q)
+        )
+
+        return table

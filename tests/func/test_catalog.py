@@ -1025,7 +1025,7 @@ ds = DatasetQuery('{src_uri}')
     with pytest.raises(QueryScriptRunError) as exc_info:
         catalog.query(query_script)
         assert str(exc_info.value).startswith(
-            "Last line in a script was not an instance of DatasetQuery"
+            "Last line in a script was not an instance of DataChain"
         )
 
 
@@ -1068,20 +1068,59 @@ def test_storage_stats(cloud_test_catalog):
     assert stats.size == 15
 
 
+@pytest.mark.parametrize("cloud_type", ["s3", "azure", "gs"], indirect=True)
+def test_enlist_source_handles_slash(cloud_test_catalog):
+    catalog = cloud_test_catalog.catalog
+    src_uri = cloud_test_catalog.src_uri
+
+    catalog.enlist_source(f"{src_uri}/dogs", ttl=1234)
+    stats = catalog.storage_stats(src_uri)
+    assert stats.num_objects == len(DEFAULT_TREE["dogs"])
+    assert stats.size == 15
+
+    catalog.enlist_source(f"{src_uri}/dogs/", ttl=1234, force_update=True)
+    stats = catalog.storage_stats(src_uri)
+    assert stats.num_objects == len(DEFAULT_TREE["dogs"])
+    assert stats.size == 15
+
+
+@pytest.mark.parametrize("cloud_type", ["s3", "azure", "gs"], indirect=True)
+def test_enlist_source_handles_glob(cloud_test_catalog):
+    catalog = cloud_test_catalog.catalog
+    src_uri = cloud_test_catalog.src_uri
+
+    catalog.enlist_source(f"{src_uri}/dogs/*.jpg", ttl=1234)
+    stats = catalog.storage_stats(src_uri)
+
+    assert stats.num_objects == len(DEFAULT_TREE["dogs"])
+    assert stats.size == 15
+
+
+@pytest.mark.parametrize("cloud_type", ["s3", "azure", "gs"], indirect=True)
+def test_enlist_source_handles_file(cloud_test_catalog):
+    catalog = cloud_test_catalog.catalog
+    src_uri = cloud_test_catalog.src_uri
+
+    catalog.enlist_source(f"{src_uri}/dogs/dog1", ttl=1234)
+    stats = catalog.storage_stats(src_uri)
+    assert stats.num_objects == len(DEFAULT_TREE["dogs"])
+    assert stats.size == 15
+
+
 @pytest.mark.parametrize("from_cli", [False, True])
 def test_garbage_collect(cloud_test_catalog, from_cli, capsys):
     catalog = cloud_test_catalog.catalog
     assert catalog.get_temp_table_names() == []
     temp_tables = ["tmp_vc12F", "udf_jh653", "ds_shadow_12345", "old_ds_shadow"]
     for t in temp_tables:
-        catalog.warehouse.create_udf_table(t)
+        catalog.warehouse.create_udf_table(name=t)
     assert set(catalog.get_temp_table_names()) == set(temp_tables)
     if from_cli:
         garbage_collect(catalog)
         captured = capsys.readouterr()
         assert captured.out == "Garbage collecting 4 tables.\n"
     else:
-        catalog.cleanup_temp_tables(temp_tables)
+        catalog.cleanup_tables(temp_tables)
     assert catalog.get_temp_table_names() == []
 
 

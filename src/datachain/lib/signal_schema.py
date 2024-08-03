@@ -116,7 +116,7 @@ class SignalSchema:
         signals = {}
         for name, fr_type in self.values.items():
             if (fr := ModelStore.to_pydantic(fr_type)) is not None:
-                ModelStore.add(fr)
+                ModelStore.register(fr)
                 signals[name] = ModelStore.get_name(fr)
             else:
                 orig = get_origin(fr_type)
@@ -144,7 +144,7 @@ class SignalSchema:
                         raise SignalSchemaError(
                             f"cannot deserialize '{signal}': "
                             f"unknown type '{type_name}'."
-                            f" Try to add it with `ModelStore.add({type_name})`."
+                            f" Try to add it with `ModelStore.register({type_name})`."
                         )
             except TypeError as err:
                 raise SignalSchemaError(
@@ -243,8 +243,11 @@ class SignalSchema:
         curr_type = None
         i = 0
         while curr_tree is not None and i < len(path):
-            if val := curr_tree.get(path[i], None):
+            if val := curr_tree.get(path[i]):
                 curr_type, curr_tree = val
+            elif i == 0 and len(path) > 1 and (val := curr_tree.get(".".join(path))):
+                curr_type, curr_tree = val
+                break
             else:
                 curr_type = None
             i += 1
@@ -281,6 +284,11 @@ class SignalSchema:
     def mutate(self, args_map: dict) -> "SignalSchema":
         return SignalSchema(self.values | sql_to_python(args_map))
 
+    def clone_without_sys_signals(self) -> "SignalSchema":
+        schema = copy.deepcopy(self.values)
+        schema.pop("sys", None)
+        return SignalSchema(schema)
+
     def merge(
         self,
         right_schema: "SignalSchema",
@@ -293,9 +301,9 @@ class SignalSchema:
 
         return SignalSchema(self.values | schema_right)
 
-    def get_file_signals(self) -> Iterator[str]:
+    def get_signals(self, target_type: type[DataModel]) -> Iterator[str]:
         for path, type_, has_subtree, _ in self.get_flat_tree():
-            if has_subtree and issubclass(type_, File):
+            if has_subtree and issubclass(type_, target_type):
                 yield ".".join(path)
 
     def create_model(self, name: str) -> type[DataModel]:

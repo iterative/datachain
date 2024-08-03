@@ -1,4 +1,5 @@
 import ast
+import glob
 import io
 import json
 import logging
@@ -709,7 +710,12 @@ class Catalog:
 
         client_config = client_config or self.client_config
         client, path = self.parse_url(source, **client_config)
-        prefix = posixpath.dirname(path)
+        stem = os.path.basename(os.path.normpath(path))
+        prefix = (
+            posixpath.dirname(path)
+            if glob.has_magic(stem) or client.fs.isfile(source)
+            else path
+        )
         storage_dataset_name = Storage.dataset_name(
             client.uri, posixpath.join(prefix, "")
         )
@@ -950,13 +956,9 @@ class Catalog:
                     ms = self.metastore.clone(uri, None)
                     st = self.warehouse.clone()
                     listing = Listing(None, ms, st, client, None)
-                    rows = (
-                        DatasetQuery(
-                            name=dataset.name, version=ds_version, catalog=self
-                        )
-                        .select()
-                        .to_records()
-                    )
+                    rows = DatasetQuery(
+                        name=dataset.name, version=ds_version, catalog=self
+                    ).to_db_records()
                     indexed_sources.append(
                         (
                             listing,
@@ -1162,9 +1164,8 @@ class Catalog:
         if not dataset_version.preview:
             values["preview"] = (
                 DatasetQuery(name=dataset.name, version=version, catalog=self)
-                .select()
                 .limit(20)
-                .to_records()
+                .to_db_records()
             )
 
         if not values:
@@ -1216,16 +1217,14 @@ class Catalog:
     def get_temp_table_names(self) -> list[str]:
         return self.warehouse.get_temp_table_names()
 
-    def cleanup_temp_tables(self, names: Iterable[str]) -> None:
+    def cleanup_tables(self, names: Iterable[str]) -> None:
         """
-        Drop tables created temporarily when processing datasets.
+        Drop tables passed.
 
-        This should be implemented even if temporary tables are used to
-        ensure that they are cleaned up as soon as they are no longer
-        needed. When running the same `DatasetQuery` multiple times we
-        may use the same temporary table names.
+        This should be implemented to ensure that the provided tables
+        are cleaned up as soon as they are no longer needed.
         """
-        self.warehouse.cleanup_temp_tables(names)
+        self.warehouse.cleanup_tables(names)
         self.id_generator.delete_uris(names)
 
     def create_dataset_from_sources(
@@ -1448,7 +1447,7 @@ class Catalog:
 
         dataset = self.get_dataset(name)
 
-        q = DatasetQuery(name=dataset.name, version=version, catalog=self).select()
+        q = DatasetQuery(name=dataset.name, version=version, catalog=self)
         if limit:
             q = q.limit(limit)
         if offset:
@@ -1456,7 +1455,7 @@ class Catalog:
 
         q = q.order_by("sys__id")
 
-        return q.to_records()
+        return q.to_db_records()
 
     def signed_url(self, source: str, path: str, client_config=None) -> str:
         client_config = client_config or self.client_config
@@ -1630,6 +1629,7 @@ class Catalog:
                 ...
             }
         """
+        from datachain.lib.file import File
         from datachain.lib.signal_schema import DEFAULT_DELIMITER, SignalSchema
 
         version = self.get_dataset(dataset_name).get_version(dataset_version)
@@ -1637,7 +1637,7 @@ class Catalog:
         file_signals_values = {}
 
         schema = SignalSchema.deserialize(version.feature_schema)
-        for file_signals in schema.get_file_signals():
+        for file_signals in schema.get_signals(File):
             prefix = file_signals.replace(".", DEFAULT_DELIMITER) + DEFAULT_DELIMITER
             file_signals_values[file_signals] = {
                 c_name.removeprefix(prefix): c_value
@@ -1678,10 +1678,13 @@ class Catalog:
             row["source"],
             row["parent"],
             row["name"],
-            row["etag"],
             row["size"],
+            row["etag"],
+            row["version"],
+            row["is_latest"],
             row["vtype"],
             row["location"],
+            row["last_modified"],
         )
 
     def ls(
@@ -2013,7 +2016,7 @@ class Catalog:
                 )
             if proc.returncode == QUERY_SCRIPT_INVALID_LAST_STATEMENT_EXIT_CODE:
                 raise QueryScriptRunError(
-                    "Last line in a script was not an instance of DatasetQuery",
+                    "Last line in a script was not an instance of DataChain",
                     return_code=proc.returncode,
                     output=output,
                 )

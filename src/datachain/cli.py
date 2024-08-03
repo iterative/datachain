@@ -3,7 +3,7 @@ import os
 import shlex
 import sys
 import traceback
-from argparse import SUPPRESS, Action, ArgumentParser, ArgumentTypeError, Namespace
+from argparse import Action, ArgumentParser, ArgumentTypeError, Namespace
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from importlib.metadata import PackageNotFoundError, version
 from itertools import chain
@@ -106,10 +106,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     parser = ArgumentParser(
         description="DataChain: Wrangle unstructured AI data at scale", prog="datachain"
     )
-
     parser.add_argument("-V", "--version", action="version", version=__version__)
-    parser.add_argument("--internal-run-udf", action="store_true", help=SUPPRESS)
-    parser.add_argument("--internal-run-udf-worker", action="store_true", help=SUPPRESS)
 
     parent_parser = ArgumentParser(add_help=False)
     parent_parser.add_argument(
@@ -155,6 +152,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         metavar="command",
         dest="command",
         help=f"Use `{parser.prog} command --help` for command-specific help.",
+        required=True,
     )
     parse_cp = subp.add_parser(
         "cp", parents=[parent_parser], description="Copy data files from the cloud"
@@ -493,6 +491,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         type=int,
         help="Dataset version",
     )
+    show_parser.add_argument("--schema", action="store_true", help="Show schema")
     add_show_args(show_parser)
 
     query_parser = subp.add_parser(
@@ -556,6 +555,8 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         "gc", parents=[parent_parser], description="Garbage collect temporary tables"
     )
 
+    subp.add_parser("internal-run-udf", parents=[parent_parser])
+    subp.add_parser("internal-run-udf-worker", parents=[parent_parser])
     add_completion_parser(subp, [parent_parser])
     return parser
 
@@ -816,9 +817,14 @@ def show(
     offset: int = 0,
     columns: Sequence[str] = (),
     no_collapse: bool = False,
+    schema: bool = False,
 ) -> None:
+    from datachain.lib.dc import DataChain
     from datachain.query import DatasetQuery
     from datachain.utils import show_records
+
+    dataset = catalog.get_dataset(name)
+    dataset_version = dataset.get_version(version or dataset.latest_version)
 
     query = (
         DatasetQuery(name=name, version=version, catalog=catalog)
@@ -826,8 +832,12 @@ def show(
         .limit(limit)
         .offset(offset)
     )
-    records = query.to_records()
+    records = query.to_db_records()
     show_records(records, collapse_columns=not no_collapse)
+    if schema and dataset_version.feature_schema:
+        print("\nSchema:")
+        dc = DataChain(name=name, version=version, catalog=catalog)
+        dc.print_schema()
 
 
 def query(
@@ -900,7 +910,7 @@ def garbage_collect(catalog: "Catalog"):
         print("Nothing to clean up.")
     else:
         print(f"Garbage collecting {len(temp_tables)} tables.")
-        catalog.cleanup_temp_tables(temp_tables)
+        catalog.cleanup_tables(temp_tables)
 
 
 def completion(shell: str) -> str:
@@ -910,26 +920,22 @@ def completion(shell: str) -> str:
     )
 
 
-def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0911, PLR0912, PLR0915
+def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR0915
     # Required for Windows multiprocessing support
     freeze_support()
 
     parser = get_parser()
     args = parser.parse_args(argv)
 
-    if args.internal_run_udf:
+    if args.command == "internal-run-udf":
         from datachain.query.dispatch import udf_entrypoint
 
         return udf_entrypoint()
 
-    if args.internal_run_udf_worker:
+    if args.command == "internal-run-udf-worker":
         from datachain.query.dispatch import udf_worker_entrypoint
 
         return udf_worker_entrypoint()
-
-    if args.command is None:
-        parser.print_help()
-        return 1
 
     from .catalog import get_catalog
 
@@ -1017,6 +1023,7 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0911, PLR09
                 offset=args.offset,
                 columns=args.columns,
                 no_collapse=args.no_collapse,
+                schema=args.schema,
             )
         elif args.command == "rm-dataset":
             rm_dataset(catalog, args.name, version=args.version, force=args.force)

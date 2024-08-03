@@ -1,5 +1,4 @@
 import torch
-from transformers import CLIPModel, CLIPProcessor
 
 from datachain.lib.file import TextFile
 from datachain.lib.text import convert_text
@@ -17,17 +16,16 @@ def test_convert_text(fake_clip_model):
     )
     assert converted_text.size() == (1, 100)
 
-    converted_text = convert_text(
-        text, tokenizer=tokenizer, tokenizer_kwargs=tokenizer_kwargs
-    )
     converted_text = convert_text(text, tokenizer=tokenizer, encoder=model.encode_text)
     assert converted_text.dtype == torch.float32
 
 
-def test_convert_text_hf():
+def test_convert_text_hf(fake_hf_model):
     text = "thisismytext"
-    model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
-    processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+    model, processor = fake_hf_model
+    converted_text = convert_text(text, tokenizer=processor.tokenizer)
+    assert isinstance(converted_text, torch.Tensor)
+
     converted_text = convert_text(
         text, tokenizer=processor.tokenizer, encoder=model.get_text_features
     )
@@ -44,5 +42,5 @@ def test_text_file_mapper(tmp_path, catalog):
 
     file = TextFile(name=file_name, source=f"file://{tmp_path}")
     file._set_stream(catalog, caching_enabled=False)
-    res = file.get_value()
+    res = file.read()
     assert res == text

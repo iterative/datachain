@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from datachain.dataset import RowDict
 from datachain.lib.convert.flatten import flatten
 from datachain.lib.convert.unflatten import unflatten_to_json
-from datachain.lib.data_model import FileBasic
+from datachain.lib.file import File
 from datachain.lib.model_store import ModelStore
 from datachain.lib.signal_schema import SignalSchema
 from datachain.lib.udf_signature import UdfSignature
@@ -88,6 +88,53 @@ class UDFAdapter(_UDFBase):
 
 
 class UDFBase(AbstractUDF):
+    """Base class for stateful user-defined functions.
+
+    Any class that inherits from it must have a `process()` method that takes input
+    params from one or more rows in the chain and produces the expected output.
+
+    Optionally, the class may include these methods:
+    - `setup()` to run code on each  worker before `process()` is called.
+    - `teardown()` to run code on each  worker after `process()` completes.
+
+    Example:
+        ```py
+        from datachain import C, DataChain, Mapper
+        import open_clip
+
+        class ImageEncoder(Mapper):
+            def __init__(self, model_name: str, pretrained: str):
+                self.model_name = model_name
+                self.pretrained = pretrained
+
+            def setup(self):
+                self.model, _, self.preprocess = (
+                    open_clip.create_model_and_transforms(
+                        self.model_name, self.pretrained
+                    )
+                )
+
+            def process(self, file) -> list[float]:
+                img = file.get_value()
+                img = self.preprocess(img).unsqueeze(0)
+                emb = self.model.encode_image(img)
+                return emb[0].tolist()
+
+        (
+            DataChain.from_storage(
+                "gs://datachain-demo/fashion-product-images/images", type="image"
+            )
+            .limit(5)
+            .map(
+                ImageEncoder("ViT-B-32", "laion2b_s34b_b79k"),
+                params=["file"],
+                output={"emb": list[float]},
+            )
+            .show()
+        )
+        ```
+    """
+
     is_input_batched = False
     is_output_batched = False
     is_input_grouped = False
@@ -178,11 +225,10 @@ class UDFBase(AbstractUDF):
     def __call__(self, *rows, cache, download_cb):
         if self.is_input_grouped:
             objs = self._parse_grouped_rows(rows[0], cache, download_cb)
+        elif self.is_input_batched:
+            objs = zip(*self._parse_rows(rows[0], cache, download_cb))
         else:
-            objs = self._parse_rows(rows, cache, download_cb)
-
-        if not self.is_input_batched:
-            objs = objs[0]
+            objs = self._parse_rows([rows], cache, download_cb)[0]
 
         result_objs = self.process_safe(objs)
 
@@ -198,7 +244,7 @@ class UDFBase(AbstractUDF):
                         flat.extend(flatten(obj))
                     else:
                         flat.append(obj)
-                res.append(flat)
+                res.append(tuple(flat))
         else:
             # Generator expression is required, otherwise the value will be materialized
             res = (
@@ -212,22 +258,29 @@ class UDFBase(AbstractUDF):
 
         if not self.is_output_batched:
             res = list(res)
-            assert len(res) == 1, (
-                f"{self.name} returns {len(res)} " f"rows while it's not batched"
-            )
+            assert (
+                len(res) == 1
+            ), f"{self.name} returns {len(res)} rows while it's not batched"
             if isinstance(res[0], tuple):
                 res = res[0]
+        elif (
+            self.is_input_batched
+            and self.is_output_batched
+            and not self.is_input_grouped
+        ):
+            res = list(res)
+            assert len(res) == len(
+                rows[0]
+            ), f"{self.name} returns {len(res)} rows while len(rows[0]) expected"
 
         return res
 
     def _parse_rows(self, rows, cache, download_cb):
-        if not self.is_input_batched:
-            rows = [rows]
         objs = []
         for row in rows:
             obj_row = self.params.row_to_objs(row)
             for obj in obj_row:
-                if isinstance(obj, FileBasic):
+                if isinstance(obj, File):
                     obj._set_stream(
                         self._catalog, caching_enabled=cache, download_cb=download_cb
                     )
@@ -256,7 +309,7 @@ class UDFBase(AbstractUDF):
                 else:
                     obj = slice[0]
 
-                if isinstance(obj, FileBasic):
+                if isinstance(obj, File):
                     obj._set_stream(
                         self._catalog, caching_enabled=cache, download_cb=download_cb
                     )
@@ -280,19 +333,25 @@ class UDFBase(AbstractUDF):
 
 
 class Mapper(UDFBase):
-    pass
+    """Inherit from this class to pass to `DataChain.map()`."""
 
 
-class BatchMapper(Mapper):
+class BatchMapper(UDFBase):
+    """Inherit from this class to pass to `DataChain.batch_map()`."""
+
     is_input_batched = True
     is_output_batched = True
 
 
 class Generator(UDFBase):
+    """Inherit from this class to pass to `DataChain.gen()`."""
+
     is_output_batched = True
 
 
 class Aggregator(UDFBase):
+    """Inherit from this class to pass to `DataChain.agg()`."""
+
     is_input_batched = True
     is_output_batched = True
     is_input_grouped = True
