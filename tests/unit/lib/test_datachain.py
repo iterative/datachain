@@ -1285,3 +1285,22 @@ def test_show_limit():
     assert dc.limit(3).limit(2).count() == 2
     dc.show(1)
     assert dc.count() == 5
+
+
+def test_gen_limit(catalog):
+    def func(key, val) -> Iterator[tuple[File, str]]:
+        for i in range(val):
+            yield File(name=""), f"{key}_{i}"
+
+    keys = ["a", "b", "c", "d"]
+    values = [3, 3, 3, 3]
+
+    ds = DataChain.from_values(key=keys, val=values)
+
+    assert ds.count() == 4
+    assert ds.gen(res=func).count() == 12
+    assert ds.limit(2).gen(res=func).count() == 6
+    assert ds.limit(2).gen(res=func).limit(1).count() == 1
+    assert ds.limit(3).gen(res=func).limit(2).count() == 2
+    assert ds.limit(2).gen(res=func).limit(3).count() == 3
+    assert ds.limit(3).gen(res=func).limit(10).count() == 9
