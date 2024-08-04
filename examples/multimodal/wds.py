@@ -5,7 +5,7 @@ from datachain.sql.functions import path
 
 wds_images = (
     DataChain.from_storage("gs://datachain-demo/datacomp-small/shards")
-    .filter(C("file.name").glob("00000000.tar"))
+    .filter(C("file.name").glob("000000[0-5]*.tar"))  # from *00.tar to *59.tar
     .settings(cache=True)
     .gen(laion=process_webdataset(spec=WDSLaion), params="file")
     .save()  # materialize chain to avoid downloading data multiple times
