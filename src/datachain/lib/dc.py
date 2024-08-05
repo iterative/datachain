@@ -1273,7 +1273,20 @@ class DataChain(DatasetQuery):
             dc = dc.parse_tabular(format="json")
             ```
         """
+        from pyarrow.dataset import CsvFileFormat, JsonFileFormat
+
         from datachain.lib.arrow import ArrowGenerator, infer_schema, schema_to_output
+
+        if nrows:
+            format = kwargs.get("format")
+            if format not in ["csv", "json"] and not isinstance(
+                format, (CsvFileFormat, JsonFileFormat)
+            ):
+                raise DatasetPrepareError(
+                    self.name,
+                    "error in `parse_tabular` - "
+                    "`nrows` only supported for csv and json formats.",
+                )
 
         schema = None
         col_names = output if isinstance(output, Sequence) else None
@@ -1372,6 +1385,8 @@ class DataChain(DatasetQuery):
             else:
                 msg = f"error parsing csv - incompatible output type {type(output)}"
                 raise DatasetPrepareError(chain.name, msg)
+        elif nrows:
+            nrows += 1
 
         parse_options = ParseOptions(delimiter=delimiter)
         read_options = ReadOptions(column_names=column_names)
@@ -1394,7 +1409,6 @@ class DataChain(DatasetQuery):
         object_name: str = "",
         model_name: str = "",
         source: bool = True,
-        nrows=None,
         **kwargs,
     ) -> "DataChain":
         """Generate chain from parquet files.
@@ -1407,7 +1421,6 @@ class DataChain(DatasetQuery):
             object_name : Created object column name.
             model_name : Generated model name.
             source : Whether to include info about the source file.
-            nrows : Optional row limit.
 
         Example:
             Reading a single file:
@@ -1426,7 +1439,6 @@ class DataChain(DatasetQuery):
             object_name=object_name,
             model_name=model_name,
             source=source,
-            nrows=None,
             format="parquet",
             partitioning=partitioning,
         )
