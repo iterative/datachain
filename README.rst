@@ -51,6 +51,7 @@ DataChain introduces expressive data structures tailored for AI-specific workloa
 
     - **Transformations:** traditional data-frame or SQL operations such as filtering,
     grouping, joining.
+
     - **Enrichments:** mapping, aggregating and generating using customer’s Python
     code. This is needed to work with ML inference and LLM calls.
 
