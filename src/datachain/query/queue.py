@@ -1,5 +1,5 @@
 import datetime
-from collections.abc import Iterator, Generator, Iterable
+from collections.abc import Iterable, Iterator
 from queue import Empty, Full, Queue
 from struct import pack, unpack
 from time import sleep
@@ -7,7 +7,7 @@ from typing import Any
 
 import msgpack
 
-from datachain.query.batch import RowsInputBatch, RowsInput
+from datachain.query.batch import RowsInput, RowsInputBatch
 
 DEFAULT_BATCH_SIZE = 10000
 STOP_SIGNAL = "STOP"
