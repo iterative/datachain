@@ -317,9 +317,9 @@ class TextFile(File):
     """`DataModel` for reading text files."""
 
     @contextmanager
-    def open(self):
-        """Open the file and return a file object in text mode."""
-        with super().open(mode="r") as stream:
+    def open(self, mode: Literal["rb", "r"] = "r"):
+        """Open the file and return a file object (default to text mode)."""
+        with super().open(mode=mode) as stream:
             yield stream
 
     def read_text(self):
