@@ -8,14 +8,12 @@ wds_images = (
     .filter(C("file.name").glob("000000[0-5]*.tar"))  # from *00.tar to *59.tar
     .settings(cache=True)
     .gen(laion=process_webdataset(spec=WDSLaion), params="file")
-    .save()  # materialize chain to avoid downloading data multiple times
 )
 
 meta_pq = (
     DataChain.from_parquet("gs://datachain-demo/datacomp-small/metadata/0020f*.parquet")
     .settings(cache=True)
     .mutate(stem=path.file_stem(C("source.file.name")))
-    .save()
 )
 
 meta_emd = (
@@ -23,7 +21,6 @@ meta_emd = (
     .settings(cache=True)
     .gen(emd=process_laion_meta)
     .mutate(stem=path.file_stem(C("emd.file.name")))
-    .save()
 )
 
 meta = meta_emd.merge(
