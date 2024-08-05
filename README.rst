@@ -45,12 +45,15 @@ Data Structures
 ===============
 
 DataChain introduces expressive data structures tailored for AI-specific workload:
+
 - **Dataset:** Preserves the file-references and meta-information. Takes care of Python
   object serialization, dataset versioning and difference. Operations on dataset:
+
     - **Transformations:** traditional data-frame or SQL operations such as filtering,
     grouping, joining.
     - **Enrichments:** mapping, aggregating and generating using customer’s Python
     code. This is needed to work with ML inference and LLM calls.
+
 - **Chain** is a sequence of operations on datasets. Chain executes operations in lazy
   mode - only when needed.
 
@@ -73,6 +76,7 @@ use-cases and at the same time to fit it into traditional data infrastructure.
   if it fails due to issues like failed LLM calls, ML inference or file download.
 
 Additional relatively new ideas:
+
 - **Functional style data processing.** Using a functional/chaining approach to data
   processing rather than declarative SQL, inspired by R-dplyr and some Python libraries.
 - **Data Versioning.** Treats raw files in cloud storage as the source of truth for data
