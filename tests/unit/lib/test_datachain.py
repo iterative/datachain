@@ -1290,7 +1290,7 @@ def test_show_limit():
 def test_gen_limit(catalog):
     def func(key, val) -> Iterator[tuple[File, str]]:
         for i in range(val):
-            yield File(name=""), f"{key}_{i}"
+            yield File(path=""), f"{key}_{i}"
 
     keys = ["a", "b", "c", "d"]
     values = [3, 3, 3, 3]
