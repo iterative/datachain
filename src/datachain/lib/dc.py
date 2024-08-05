@@ -235,7 +235,7 @@ class DataChain(DatasetQuery):
             if path == name_path:
                 return Column(name, python_to_sql(type_))
 
-        return Column(name)
+        raise ValueError(f"Column with name {name} not found in the schema")
 
     def print_schema(self) -> None:
         """Print schema of the chain."""

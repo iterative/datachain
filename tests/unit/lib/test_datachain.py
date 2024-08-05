@@ -8,7 +8,6 @@ import pandas as pd
 import pytest
 from pydantic import BaseModel
 from sqlalchemy.exc import CompileError
-from sqlalchemy.sql.sqltypes import NullType
 
 from datachain import Column
 from datachain.lib.data_model import DataModel
@@ -1284,10 +1283,8 @@ def test_column(catalog):
     assert c.name == "file__name"
     assert isinstance(c.type, String)
 
-    c = ds.column("missing")
-    assert isinstance(c, Column)
-    assert c.name == "missing"
-    assert isinstance(c.type, NullType)
+    with pytest.raises(ValueError):
+        c = ds.column("missing")
 
 
 def test_mutate_with_subtraction():
