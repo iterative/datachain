@@ -36,23 +36,6 @@ def test_arrow_generator(tmp_path, catalog):
         assert o[2] == text
 
 
-def test_arrow_generator_nrows(tmp_path, catalog):
-    ids = [12345, 67890, 34, 0xF0123]
-    texts = ["28", "22", "we", "hello world"]
-    df = pd.DataFrame({"id": ids, "text": texts})
-
-    name = "111.parquet"
-    pq_path = tmp_path / name
-    df.to_parquet(pq_path)
-    stream = File(path=pq_path.as_posix(), source="file:///")
-    stream._set_stream(catalog, caching_enabled=False)
-
-    func = ArrowGenerator(nrows=2)
-    objs = list(func.process(stream))
-
-    assert len(objs) == 2
-
-
 def test_arrow_generator_no_source(tmp_path, catalog):
     ids = [12345, 67890, 34, 0xF0123]
     texts = ["28", "22", "we", "hello world"]

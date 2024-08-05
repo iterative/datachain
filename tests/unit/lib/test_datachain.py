@@ -860,6 +860,24 @@ def test_parse_tabular_output_list(tmp_dir, catalog):
     assert df1.equals(df)
 
 
+def test_parse_tabular_nrows(tmp_dir, catalog):
+    df = pd.DataFrame(DF_DATA)
+    path = tmp_dir / "test.parquet"
+    df.to_json(path, orient="records", lines=True)
+    dc = DataChain.from_storage(path.as_uri()).parse_tabular(nrows=2, format="json")
+    df1 = dc.select("first_name", "age", "city").to_pandas()
+
+    assert df1.equals(df[:2])
+
+
+def test_parse_tabular_nrows_invalid(tmp_dir, catalog):
+    df = pd.DataFrame(DF_DATA)
+    path = tmp_dir / "test.parquet"
+    df.to_parquet(path)
+    with pytest.raises(DataChainParamsError):
+        DataChain.from_storage(path.as_uri()).parse_tabular(nrows=2)
+
+
 def test_from_csv(tmp_dir, catalog):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.csv"
@@ -934,6 +952,15 @@ def test_from_csv_null_collect(tmp_dir, catalog):
     dc = DataChain.from_csv(path.as_uri(), object_name="csv")
     for i, row in enumerate(dc.collect()):
         assert row[1].height == height[i]
+
+
+def test_from_csv_nrows(tmp_dir, catalog):
+    df = pd.DataFrame(DF_DATA)
+    path = tmp_dir / "test.csv"
+    df.to_csv(path, index=False)
+    dc = DataChain.from_csv(path.as_uri(), nrows=2)
+    df1 = dc.select("first_name", "age", "city").to_pandas()
+    assert df1.equals(df[:2])
 
 
 def test_from_parquet(tmp_dir, catalog):
