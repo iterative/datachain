@@ -20,6 +20,7 @@ import pandas as pd
 import sqlalchemy
 from pydantic import BaseModel, create_model
 from sqlalchemy.sql.functions import GenericFunction
+from sqlalchemy.sql.sqltypes import NullType
 
 from datachain import DataModel
 from datachain.lib.convert.python_to_sql import python_to_sql
@@ -109,6 +110,13 @@ class DatasetMergeError(DataChainParamsError):  # noqa: D101
             else ""
         )
         super().__init__(f"Merge error on='{on_str}'{right_on_str}: {msg}")
+
+
+class MissingColumnTypeError(DataChainParamsError):  # noqa: D101
+    def __init__(self, col_name, expr):  # noqa: D107
+        super().__init__(
+            f"Cannot infer type for column {col_name} with expression {expr}"
+        )
 
 
 OutputType = Union[None, DataType, Sequence[str], dict[str, DataType]]
@@ -841,6 +849,16 @@ class DataChain(DatasetQuery):
         )
         ```
         """
+        for col_name, expr in kwargs.items():
+            if isinstance(expr.type, NullType):
+                """
+                raise DataChainColumnError(
+                    f"Cannot infere type for {arg.name}, use cast(..) function"
+                    " to explicitly set correct type"
+                )
+                """
+                raise MissingColumnTypeError(col_name, expr)
+
         chain = super().mutate(**kwargs)
         chain.signals_schema = self.signals_schema.mutate(kwargs)
         return chain

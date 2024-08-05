@@ -7,11 +7,10 @@ import numpy as np
 import pandas as pd
 import pytest
 from pydantic import BaseModel
-from sqlalchemy.exc import CompileError
 
 from datachain import Column
 from datachain.lib.data_model import DataModel
-from datachain.lib.dc import C, DataChain, Sys
+from datachain.lib.dc import C, DataChain, MissingColumnTypeError, Sys
 from datachain.lib.file import File
 from datachain.lib.signal_schema import (
     SignalResolvingError,
@@ -1380,5 +1379,9 @@ def test_mutate_with_saving():
 
 
 def test_mutate_with_expression_without_type(catalog):
-    with pytest.raises(CompileError):
+    with pytest.raises(MissingColumnTypeError) as excinfo:
         DataChain.from_values(id=[1, 2]).mutate(new=(Column("id") - 1)).save()
+
+    assert str(excinfo.value) == (
+        "Cannot infer type for column new with expression id - :id_1"
+    )
