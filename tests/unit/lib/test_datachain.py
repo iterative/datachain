@@ -1304,3 +1304,59 @@ def test_gen_limit(catalog):
     assert ds.limit(3).gen(res=func).limit(2).count() == 2
     assert ds.limit(2).gen(res=func).limit(3).count() == 3
     assert ds.limit(3).gen(res=func).limit(10).count() == 9
+
+
+def test_rename_non_object_column_name_with_mutate(catalog):
+    ds = DataChain.from_values(ids=[1, 2, 3])
+    ds = ds.mutate(my_ids=Column("ids"))
+
+    assert ds.signals_schema.values == {"my_ids": int}
+    assert list(ds.order_by("my_ids").collect("my_ids")) == [1, 2, 3]
+
+    ds.save("mutated")
+
+    ds = DataChain(name="mutated")
+    assert ds.signals_schema.values.get("my_ids") is int
+    assert "ids" not in ds.signals_schema.values
+    assert list(ds.order_by("my_ids").collect("my_ids")) == [1, 2, 3]
+
+
+def test_rename_object_column_name_with_mutate(catalog):
+    names = ["a", "b", "c"]
+    sizes = [1, 2, 3]
+    files = [File(name=name, size=size) for name, size in zip(names, sizes)]
+
+    ds = DataChain.from_values(file=files, ids=[1, 2, 3])
+    ds = ds.mutate(fname=Column("file.name"))
+
+    assert list(ds.order_by("fname").collect("fname")) == ["a", "b", "c"]
+    assert ds.signals_schema.values == {"file": File, "ids": int, "fname": str}
+
+    # check that persist after saving
+    ds.save("mutated")
+
+    ds = DataChain(name="mutated")
+    assert ds.signals_schema.values.get("file") is File
+    assert ds.signals_schema.values.get("ids") is int
+    assert ds.signals_schema.values.get("fname") is str
+    assert list(ds.order_by("fname").collect("fname")) == ["a", "b", "c"]
+
+
+def test_rename_object_name_with_mutate(catalog):
+    names = ["a", "b", "c"]
+    sizes = [1, 2, 3]
+    files = [File(name=name, size=size) for name, size in zip(names, sizes)]
+
+    ds = DataChain.from_values(file=files, ids=[1, 2, 3])
+    ds = ds.mutate(my_file=Column("file"))
+
+    assert list(ds.order_by("my_file.name").collect("my_file.name")) == ["a", "b", "c"]
+    assert ds.signals_schema.values == {"my_file": File, "ids": int}
+
+    ds.save("mutated")
+
+    ds = DataChain(name="mutated")
+    assert ds.signals_schema.values.get("my_file") is File
+    assert ds.signals_schema.values.get("ids") is int
+    assert "file" not in ds.signals_schema.values
+    assert list(ds.order_by("my_file.name").collect("my_file.name")) == ["a", "b", "c"]
