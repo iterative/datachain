@@ -49,10 +49,9 @@ DataChain introduces expressive data structures tailored for AI-specific workloa
 - **Dataset:** Preserves the file-references and meta-information. Takes care of Python
   object serialization, dataset versioning and difference. Operations on dataset:
 
-    - **Transformations:** traditional data-frame or SQL operations such as filtering,
+  - **Transformations:** traditional data-frame or SQL operations such as filtering,
     grouping, joining.
-
-    - **Enrichments:** mapping, aggregating and generating using customer’s Python
+  - **Enrichments:** mapping, aggregating and generating using customer’s Python
     code. This is needed to work with ML inference and LLM calls.
 
 - **Chain** is a sequence of operations on datasets. Chain executes operations in lazy
