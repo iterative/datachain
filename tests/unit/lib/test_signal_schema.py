@@ -264,11 +264,16 @@ def test_db_signals():
     ]
 
 
-def test_db_signals_object():
-    spec = {"name": str, "age": float, "fr": MyType2}
-    lst = list(SignalSchema(spec).db_signals(obj_name="fr"))
+def test_db_signals_filtering_by_name():
+    schema = SignalSchema({"name": str, "age": float, "fr": MyType2})
 
-    assert lst == ["fr__name", "fr__deep__aa", "fr__deep__bb"]
+    assert list(schema.db_signals(name="fr")) == [
+        "fr__name",
+        "fr__deep__aa",
+        "fr__deep__bb",
+    ]
+    assert list(schema.db_signals(name="name")) == ["name"]
+    assert list(schema.db_signals(name="missing")) == []
 
 
 def test_db_signals_as_columns():
