@@ -848,13 +848,24 @@ class DataChain(DatasetQuery):
         ```
         """
         for col_name, expr in kwargs.items():
-            if isinstance(expr.type, NullType):
+            if not isinstance(expr, Column) and isinstance(expr.type, NullType):
                 raise DataChainColumnError(
                     col_name, f"Cannot infer type with expression {expr}"
                 )
 
-        chain = super().mutate(**kwargs)
-        chain.signals_schema = self.signals_schema.mutate(kwargs)
+        mutated = {}
+        schema = self.signals_schema
+        for name, value in kwargs.items():
+            if isinstance(value, Column):
+                # renaming existing column
+                for signal in schema.db_signals(name=value.name, as_columns=True):
+                    mutated[signal.name.replace(value.name, name, 1)] = signal
+            else:
+                # adding new signal
+                mutated[name] = value
+
+        chain = super().mutate(**mutated)
+        chain.signals_schema = schema.mutate(kwargs)
         return chain
 
     @property
@@ -1123,7 +1134,7 @@ class DataChain(DatasetQuery):
             )
         else:
             signals = self.signals_schema.resolve(*on).db_signals()
-        return super()._subtract(other, signals)
+        return super()._subtract(other, signals)  # type: ignore[arg-type]
 
     @classmethod
     def from_values(
