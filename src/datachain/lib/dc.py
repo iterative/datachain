@@ -832,18 +832,10 @@ class DataChain(DatasetQuery):
         mutated = {}
         schema = self.signals_schema
         for name, value in kwargs.items():
-            if isinstance(value, Column) and schema.has_object(value.name):
-                # renaming existing object
-                old_signals = schema.db_signals(obj_name=value.name, as_columns=True)
-                for signal in old_signals:
+            if isinstance(value, Column):
+                # renaming existing column
+                for signal in schema.db_signals(name=value.name, as_columns=True):
                     mutated[signal.name.replace(value.name, name, 1)] = signal
-            elif isinstance(value, Column) and value.name in schema.db_signals():
-                # renaming existing non object signal
-                mutated[name] = next(
-                    signal
-                    for signal in schema.db_signals(as_columns=True)
-                    if signal.name == value.name
-                )
             else:
                 # adding new signal
                 mutated[name] = value

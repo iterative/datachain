@@ -223,7 +223,7 @@ class SignalSchema:
         return res
 
     def db_signals(
-        self, obj_name: Optional[str] = None, as_columns=False
+        self, name: Optional[str] = None, as_columns=False
     ) -> Union[list[str], list[Column]]:
         """
         Returns DB columns as strings or Column objects with proper types
@@ -237,11 +237,11 @@ class SignalSchema:
             if not has_subtree
         ]
 
-        if obj_name:
+        if name:
             signals = [
                 s
                 for s in signals
-                if str(s).startswith(f"{obj_name}{DEFAULT_DELIMITER}")
+                if str(s) == name or str(s).startswith(f"{name}{DEFAULT_DELIMITER}")
             ]
 
         return signals  # type: ignore[return-value]
@@ -297,9 +297,6 @@ class SignalSchema:
             if signal in schema:
                 del schema[signal]
         return SignalSchema(schema)
-
-    def has_object(self, name: str) -> bool:
-        return name in self.values and ModelStore.is_pydantic(self.values[name])
 
     def mutate(self, args_map: dict) -> "SignalSchema":
         new_values = self.values.copy()
