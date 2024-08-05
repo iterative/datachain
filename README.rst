@@ -20,20 +20,24 @@ DataChain is a data-frame library designed for AI-specific scenarios. It helps M
 AI engineers build a metadata layer on top of unstructured files and analyze data using
 this layer.
 
-📂 **Raw File Processing.** Process raw files (images, video, text, PDFs) directly from
-   storage (S3, GCP, Azure, Local), version and update datasets.
+📂 **Raw Files Processing**
+   Process raw files (images, video, text, PDFs) directly from storage (S3, GCP, Azure,
+   Local), version and update datasets.
 
-🌟 **Metadata layer.** Build a metadata layer on top of files using structured sources
-   like CSV, Parquet, and JSON files.
+🌟 **Metadata layer.**
+   Build a metadata layer on top of files using structured sources like CSV, Parquet,
+   and JSON files.
 
-⭐ **Metadata enrichment.** Enhance the metadata layer with outputs from local ML
-   model inferences and LLM calls.
+⭐ **Metadata enrichment.**
+   Enhance the metadata layer with outputs from local ML model inferences and LLM calls.
 
-🛠️ **Data Transformation.** Transform metadata using traditional methods like
-   filtering, grouping, joining, and others.
+🛠️ **Data Transformation.**
+   Transform metadata using traditional methods like filtering, grouping, joining, and
+   others.
 
-🐍 **User-friendly interface.** Operate efficiently with familiar Python objects and
-   object fields, eliminating the need for SQL.
+🐍 **User-friendly interface.**
+   Operate efficiently with familiar Python objects and object fields, eliminating the
+   need for SQL.
 
 
 .. code:: console
