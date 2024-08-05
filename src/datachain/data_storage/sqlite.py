@@ -95,7 +95,10 @@ class SQLiteDatabaseEngine(DatabaseEngine):
             if db_file == ":memory:":
                 # Enable multithreaded usage of the same in-memory db
                 db = sqlite3.connect(
-                    "file::memory:?cache=shared", uri=True, detect_types=detect_types
+                    "file::memory:?cache=shared",
+                    uri=True,
+                    detect_types=detect_types,
+                    timeout=20,
                 )
             else:
                 db = sqlite3.connect(
