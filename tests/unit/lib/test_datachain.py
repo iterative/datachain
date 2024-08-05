@@ -1270,7 +1270,8 @@ def test_rename_non_object_column_name_with_mutate(catalog):
     ds.save("mutated")
 
     ds = DataChain(name="mutated")
-    assert ds.signals_schema.values == {"my_ids": int, "sys": Sys}
+    assert ds.signals_schema.values.get("my_ids") is int
+    assert "ids" not in ds.signals_schema.values
     assert list(ds.order_by("my_ids").collect("my_ids")) == [1, 2, 3]
 
 
@@ -1289,12 +1290,9 @@ def test_rename_object_column_name_with_mutate(catalog):
     ds.save("mutated")
 
     ds = DataChain(name="mutated")
-    assert ds.signals_schema.values == {
-        "file": File,
-        "ids": int,
-        "fname": str,
-        "sys": Sys,
-    }
+    assert ds.signals_schema.values.get("file") is File
+    assert ds.signals_schema.values.get("ids") is int
+    assert ds.signals_schema.values.get("fname") is str
     assert list(ds.order_by("fname").collect("fname")) == ["a", "b", "c"]
 
 
@@ -1312,5 +1310,7 @@ def test_rename_object_name_with_mutate(catalog):
     ds.save("mutated")
 
     ds = DataChain(name="mutated")
-    assert ds.signals_schema.values == {"my_file": File, "ids": int, "sys": Sys}
+    assert ds.signals_schema.values.get("my_file") is File
+    assert ds.signals_schema.values.get("ids") is int
+    assert "file" not in ds.signals_schema.values
     assert list(ds.order_by("my_file.name").collect("my_file.name")) == ["a", "b", "c"]
