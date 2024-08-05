@@ -228,7 +228,7 @@ class DataChain(DatasetQuery):
 
     def column(self, name: str) -> Column:
         """Returns Column instance with a type if name is found in current schema,
-        otherwise returns plain Column without type.
+        otherwise raises an exception.
         """
         name_path = name.split(".")
         for path, type_, _, _ in self.signals_schema.get_flat_tree():
