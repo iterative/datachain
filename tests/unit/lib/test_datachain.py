@@ -1314,7 +1314,7 @@ def test_mutate_with_func():
     )
 
 
-def test_mutate_with_comples_expression():
+def test_mutate_with_complex_expression():
     ds = DataChain.from_values(id=[1, 2], name=["Jim", "Jon"])
     assert (
         ds.mutate(
