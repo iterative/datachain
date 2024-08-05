@@ -112,11 +112,9 @@ class DatasetMergeError(DataChainParamsError):  # noqa: D101
         super().__init__(f"Merge error on='{on_str}'{right_on_str}: {msg}")
 
 
-class MissingColumnTypeError(DataChainParamsError):  # noqa: D101
-    def __init__(self, col_name, expr):  # noqa: D107
-        super().__init__(
-            f"Cannot infer type for column {col_name} with expression {expr}"
-        )
+class DataChainColumnError(DataChainParamsError):  # noqa: D101
+    def __init__(self, col_name, msg):  # noqa: D107
+        super().__init__(f"Error for column {col_name}: {msg}")
 
 
 OutputType = Union[None, DataType, Sequence[str], dict[str, DataType]]
@@ -851,13 +849,9 @@ class DataChain(DatasetQuery):
         """
         for col_name, expr in kwargs.items():
             if isinstance(expr.type, NullType):
-                """
                 raise DataChainColumnError(
-                    f"Cannot infere type for {arg.name}, use cast(..) function"
-                    " to explicitly set correct type"
+                    col_name, f"Cannot infer type with expression {expr}"
                 )
-                """
-                raise MissingColumnTypeError(col_name, expr)
 
         chain = super().mutate(**kwargs)
         chain.signals_schema = self.signals_schema.mutate(kwargs)
