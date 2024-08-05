@@ -1290,26 +1290,50 @@ def test_column(catalog):
     assert isinstance(c.type, NullType)
 
 
-def test_mutate_with_complex_expressions(catalog):
-    ds = DataChain.from_values(id=[1, 2, 3], name=["Jim", "Jon", "Joe"])
+def test_mutate_with_subtraction():
+    ds = DataChain.from_values(id=[1, 2])
+    assert ds.mutate(new=ds.column("id") - 1).signals_schema.values["new"] is int
 
-    ds1 = ds.mutate(new=ds.column("id") - 1)
-    assert ds1.signals_schema.values["new"] is int
-    ds1.save("ds1")
 
-    ds2 = ds.mutate(new=func.avg(ds.column("id")))
-    assert ds2.signals_schema.values["new"] is float
-    ds2.save("ds2")
+def test_mutate_with_addition():
+    ds = DataChain.from_values(id=[1, 2])
+    assert ds.mutate(new=ds.column("id") + 1).signals_schema.values["new"] is int
 
-    ds3 = ds.mutate(
-        new=func.string.length(ds.column("name")) * func.greatest(ds.column("id"))
+
+def test_mutate_with_division():
+    ds = DataChain.from_values(id=[1, 2])
+    assert ds.mutate(new=ds.column("id") / 10).signals_schema.values["new"] is float
+
+
+def test_mutate_with_multiplication():
+    ds = DataChain.from_values(id=[1, 2])
+    assert ds.mutate(new=ds.column("id") * 10).signals_schema.values["new"] is int
+
+
+def test_mutate_with_func():
+    ds = DataChain.from_values(id=[1, 2])
+    assert (
+        ds.mutate(new=func.avg(ds.column("id"))).signals_schema.values["new"] is float
     )
-    assert ds3.signals_schema.values["new"] is int
-    ds3.save("ds3")
 
-    ds4 = ds.mutate(new=(func.sum(ds.column("id"))) * (5 - func.min(ds.column("id"))))
-    assert ds4.signals_schema.values["new"] is int
-    ds4.save("ds4")
+
+def test_mutate_with_comples_expression():
+    ds = DataChain.from_values(id=[1, 2], name=["Jim", "Jon"])
+    assert (
+        ds.mutate(
+            new=(func.sum(ds.column("id"))) * (5 - func.min(ds.column("id")))
+        ).signals_schema.values["new"]
+        is int
+    )
+
+
+def test_mutate_with_saving():
+    ds = DataChain.from_values(id=[1, 2])
+    ds = ds.mutate(new=ds.column("id") / 2).save("mutated")
+
+    ds = DataChain(name="mutated")
+    assert ds.signals_schema.values["new"] is float
+    assert list(ds.collect("new")) == [0.5, 1.0]
 
 
 def test_mutate_with_expression_without_type(catalog):

@@ -230,8 +230,9 @@ class DataChain(DatasetQuery):
         """Returns Column instance with a type if name is found in current schema,
         otherwise returns plain Column without type.
         """
+        name_path = name.split(".")
         for path, type_, _, _ in self.signals_schema.get_flat_tree():
-            if ".".join(path) == name:
+            if path == name_path:
                 return Column(name, python_to_sql(type_))
 
         return Column(name)
