@@ -1201,10 +1201,10 @@ class DatasetQuery:
         # implementations, as errors may close or render unusable the existing
         # connections.
         metastore = self.catalog.metastore.clone(use_new_connection=True)
-        metastore.cleanup_temp_tables(self.temp_table_names)
+        metastore.cleanup_tables(self.temp_table_names)
         metastore.close()
         warehouse = self.catalog.warehouse.clone(use_new_connection=True)
-        warehouse.cleanup_temp_tables(self.temp_table_names)
+        warehouse.cleanup_tables(self.temp_table_names)
         warehouse.close()
         self.temp_table_names = []
 
@@ -1383,6 +1383,9 @@ class DatasetQuery:
     @detach
     def limit(self, n: int) -> "Self":
         query = self.clone(new_table=False)
+        for step in query.steps:
+            if isinstance(step, SQLLimit) and step.n < n:
+                return query
         query.steps.append(SQLLimit(n))
         return query
 
