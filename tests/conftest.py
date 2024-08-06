@@ -1,8 +1,10 @@
 import os
 import os.path
+from typing import Optional
 import uuid
 from collections.abc import Generator
 from pathlib import PosixPath
+from sqlite3 import OperationalError
 
 import attrs
 import pytest
@@ -72,18 +74,21 @@ def cleanup_sqlite_db(
     db: SQLiteDatabaseEngine,
     cleanup_tables: list[str],
 ):
+    # removing in reversed order because of foreign keys
+    for table in reversed(cleanup_tables):
+        db.execute_str(f"DROP TABLE IF EXISTS '{table}'")
+
     # Wipe the DB after the test
     # Using new connection to check that the DB isn't locked
     tables = db.execute_str(
         "SELECT name FROM sqlite_master WHERE type='table'"
     ).fetchall()
 
-    # removing in reversed order because of foreign keys
-    for table in reversed(cleanup_tables):
-        db.execute_str(f"DROP TABLE IF EXISTS '{table}'")
-
     for (table,) in tables:
         name = table.replace("'", "''")
+        if name in cleanup_tables:
+            continue
+
         db.execute_str(f"DROP TABLE IF EXISTS '{name}'")
 
     # Close the connection so that the SQLite file is no longer open, to avoid

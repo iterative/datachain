@@ -74,6 +74,7 @@ def retry_sqlite_locks(func):
                 return func(*args, **kwargs)
             except sqlite3.OperationalError as operror:
                 exc = operror
+                print(f"Retrying {func.__name__}. Retry count: {retry_count}.")
                 sleep(get_retry_sleep_sec(retry_count))
         raise exc
 
