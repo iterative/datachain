@@ -829,8 +829,19 @@ class DataChain(DatasetQuery):
         )
         ```
         """
-        chain = super().mutate(**kwargs)
-        chain.signals_schema = self.signals_schema.mutate(kwargs)
+        mutated = {}
+        schema = self.signals_schema
+        for name, value in kwargs.items():
+            if isinstance(value, Column):
+                # renaming existing column
+                for signal in schema.db_signals(name=value.name, as_columns=True):
+                    mutated[signal.name.replace(value.name, name, 1)] = signal
+            else:
+                # adding new signal
+                mutated[name] = value
+
+        chain = super().mutate(**mutated)
+        chain.signals_schema = schema.mutate(kwargs)
         return chain
 
     @property
@@ -1099,7 +1110,7 @@ class DataChain(DatasetQuery):
             )
         else:
             signals = self.signals_schema.resolve(*on).db_signals()
-        return super()._subtract(other, signals)
+        return super()._subtract(other, signals)  # type: ignore[arg-type]
 
     @classmethod
     def from_values(
@@ -1261,7 +1272,20 @@ class DataChain(DatasetQuery):
             dc = dc.parse_tabular(format="json")
             ```
         """
+        from pyarrow.dataset import CsvFileFormat, JsonFileFormat
+
         from datachain.lib.arrow import ArrowGenerator, infer_schema, schema_to_output
+
+        if nrows:
+            format = kwargs.get("format")
+            if format not in ["csv", "json"] and not isinstance(
+                format, (CsvFileFormat, JsonFileFormat)
+            ):
+                raise DatasetPrepareError(
+                    self.name,
+                    "error in `parse_tabular` - "
+                    "`nrows` only supported for csv and json formats.",
+                )
 
         schema = None
         col_names = output if isinstance(output, Sequence) else None
@@ -1360,6 +1384,8 @@ class DataChain(DatasetQuery):
             else:
                 msg = f"error parsing csv - incompatible output type {type(output)}"
                 raise DatasetPrepareError(chain.name, msg)
+        elif nrows:
+            nrows += 1
 
         parse_options = ParseOptions(delimiter=delimiter)
         read_options = ReadOptions(column_names=column_names)
@@ -1382,7 +1408,6 @@ class DataChain(DatasetQuery):
         object_name: str = "",
         model_name: str = "",
         source: bool = True,
-        nrows=None,
         **kwargs,
     ) -> "DataChain":
         """Generate chain from parquet files.
@@ -1395,7 +1420,6 @@ class DataChain(DatasetQuery):
             object_name : Created object column name.
             model_name : Generated model name.
             source : Whether to include info about the source file.
-            nrows : Optional row limit.
 
         Example:
             Reading a single file:
@@ -1414,7 +1438,6 @@ class DataChain(DatasetQuery):
             object_name=object_name,
             model_name=model_name,
             source=source,
-            nrows=None,
             format="parquet",
             partitioning=partitioning,
         )

@@ -65,7 +65,8 @@ def clean_environment(
 
 @pytest.fixture
 def sqlite_db():
-    return SQLiteDatabaseEngine.from_db_file(":memory:")
+    with SQLiteDatabaseEngine.from_db_file(":memory:") as db:
+        yield db
 
 
 def cleanup_sqlite_db(
@@ -105,9 +106,10 @@ def id_generator():
 
         _id_generator.cleanup_for_tests()
 
-        # Close the connection so that the SQLite file is no longer open, to avoid
-        # pytest throwing: OSError: [Errno 24] Too many open files
-        _id_generator.db.close()
+    # Close the connection so that the SQLite file is no longer open, to avoid
+    # pytest throwing: OSError: [Errno 24] Too many open files
+    # Or, for other implementations, prevent "too many clients" errors.
+    _id_generator.close_on_exit()
 
 
 @pytest.fixture
@@ -122,23 +124,23 @@ def metastore(id_generator):
         yield _metastore
 
         cleanup_sqlite_db(_metastore.db.clone(), _metastore.default_table_names)
-        Session.cleanup_for_tests()
 
-        # Close the connection so that the SQLite file is no longer open, to avoid
-        # pytest throwing: OSError: [Errno 24] Too many open files
-        _metastore.db.close()
+    # Close the connection so that the SQLite file is no longer open, to avoid
+    # pytest throwing: OSError: [Errno 24] Too many open files
+    # Or, for other implementations, prevent "too many clients" errors.
+    _metastore.close_on_exit()
 
 
 def check_temp_tables_cleaned_up(original_warehouse):
     """Ensure that temporary tables are cleaned up."""
-    warehouse = original_warehouse.clone()
-    assert [
-        t
-        for t in sqlalchemy.inspect(warehouse.db.engine).get_table_names()
-        if t.startswith(
-            (warehouse.UDF_TABLE_NAME_PREFIX, warehouse.TMP_TABLE_NAME_PREFIX)
-        )
-    ] == []
+    with original_warehouse.clone() as warehouse:
+        assert [
+            t
+            for t in sqlalchemy.inspect(warehouse.db.engine).get_table_names()
+            if t.startswith(
+                (warehouse.UDF_TABLE_NAME_PREFIX, warehouse.TMP_TABLE_NAME_PREFIX)
+            )
+        ] == []
 
 
 @pytest.fixture
@@ -169,6 +171,12 @@ def catalog(id_generator, metastore, warehouse):
 
 
 @pytest.fixture
+def test_session(catalog):
+    with Session("TestSession", catalog=catalog) as session:
+        yield session
+
+
+@pytest.fixture
 def id_generator_tmpfile(tmp_path):
     if os.environ.get("DATACHAIN_ID_GENERATOR"):
         _id_generator = get_id_generator()
@@ -182,9 +190,10 @@ def id_generator_tmpfile(tmp_path):
 
         _id_generator.cleanup_for_tests()
 
-        # Close the connection so that the SQLite file is no longer open, to avoid
-        # pytest throwing: OSError: [Errno 24] Too many open files
-        _id_generator.db.close()
+    # Close the connection so that the SQLite file is no longer open, to avoid
+    # pytest throwing: OSError: [Errno 24] Too many open files
+    # Or, for other implementations, prevent "too many clients" errors.
+    _id_generator.close_on_exit()
 
 
 @pytest.fixture
@@ -199,11 +208,11 @@ def metastore_tmpfile(tmp_path, id_generator_tmpfile):
         yield _metastore
 
         cleanup_sqlite_db(_metastore.db.clone(), _metastore.default_table_names)
-        Session.cleanup_for_tests()
 
-        # Close the connection so that the SQLite file is no longer open, to avoid
-        # pytest throwing: OSError: [Errno 24] Too many open files
-        _metastore.db.close()
+    # Close the connection so that the SQLite file is no longer open, to avoid
+    # pytest throwing: OSError: [Errno 24] Too many open files
+    # Or, for other implementations, prevent "too many clients" errors.
+    _metastore.close_on_exit()
 
 
 @pytest.fixture
@@ -228,6 +237,24 @@ def warehouse_tmpfile(tmp_path, id_generator_tmpfile, metastore_tmpfile):
             # Close the connection so that the SQLite file is no longer open, to avoid
             # pytest throwing: OSError: [Errno 24] Too many open files
             _warehouse.db.close()
+
+
+@pytest.fixture
+def catalog_tmpfile(id_generator_tmpfile, metastore_tmpfile, warehouse_tmpfile):
+    # For testing parallel and distributed processing, as these cannot use
+    # in-memory databases.
+    return Catalog(
+        id_generator=id_generator_tmpfile,
+        metastore=metastore_tmpfile,
+        warehouse=warehouse_tmpfile,
+    )
+
+
+@pytest.fixture
+def test_session_tmpfile(catalog_tmpfile):
+    # For testing parallel and distributed processing, as these cannot use
+    # in-memory databases.
+    return Session("TestSession", catalog=catalog_tmpfile)
 
 
 @pytest.fixture
