@@ -48,10 +48,10 @@ class UniqueId:
         return loc_stack[0]
 
     def get_hash(self) -> str:
-        etag = f"{self.vtype}{self.location}" if self.vtype else self.etag
-        return sha256(
-            f"{self.storage}/{self.path}/{self.version}/{etag}".encode()
-        ).hexdigest()
+        fingerprint = f"{self.storage}/{self.path}/{self.version}/{self.etag}"
+        if self.location:
+            fingerprint += f"/{self.location}"
+        return sha256(fingerprint.encode()).hexdigest()
 
 
 def try_scandir(path):
