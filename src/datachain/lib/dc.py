@@ -20,8 +20,10 @@ import pandas as pd
 import sqlalchemy
 from pydantic import BaseModel, create_model
 from sqlalchemy.sql.functions import GenericFunction
+from sqlalchemy.sql.sqltypes import NullType
 
 from datachain import DataModel
+from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import DataType
 from datachain.lib.dataset_info import DatasetInfo
@@ -109,6 +111,11 @@ class DatasetMergeError(DataChainParamsError):  # noqa: D101
             else ""
         )
         super().__init__(f"Merge error on='{on_str}'{right_on_str}: {msg}")
+
+
+class DataChainColumnError(DataChainParamsError):  # noqa: D101
+    def __init__(self, col_name, msg):  # noqa: D107
+        super().__init__(f"Error for column {col_name}: {msg}")
 
 
 OutputType = Union[None, DataType, Sequence[str], dict[str, DataType]]
@@ -225,6 +232,17 @@ class DataChain(DatasetQuery):
     def schema(self) -> dict[str, DataType]:
         """Get schema of the chain."""
         return self._effective_signals_schema.values
+
+    def column(self, name: str) -> Column:
+        """Returns Column instance with a type if name is found in current schema,
+        otherwise raises an exception.
+        """
+        name_path = name.split(".")
+        for path, type_, _, _ in self.signals_schema.get_flat_tree():
+            if path == name_path:
+                return Column(name, python_to_sql(type_))
+
+        raise ValueError(f"Column with name {name} not found in the schema")
 
     def print_schema(self) -> None:
         """Print schema of the chain."""
@@ -830,6 +848,12 @@ class DataChain(DatasetQuery):
         )
         ```
         """
+        for col_name, expr in kwargs.items():
+            if not isinstance(expr, Column) and isinstance(expr.type, NullType):
+                raise DataChainColumnError(
+                    col_name, f"Cannot infer type with expression {expr}"
+                )
+
         mutated = {}
         schema = self.signals_schema
         for name, value in kwargs.items():
