@@ -1,7 +1,6 @@
 from PIL import Image
 from torch import Tensor
 from torchvision.transforms import ToTensor
-from transformers import CLIPImageProcessor
 
 from datachain.lib.file import ImageFile
 from datachain.lib.image import (
@@ -23,11 +22,11 @@ def test_convert_image():
     assert converted_img.size() == (4, 32, 32)
 
 
-def test_convert_image_hf(tmp_path):
-    transform = CLIPImageProcessor.from_pretrained("openai/clip-vit-base-patch32")
+def test_convert_image_hf(fake_hf_model):
+    _, processor = fake_hf_model
     converted_img = convert_image(
         IMAGE,
-        transform=transform,
+        transform=processor.image_processor,
     )
     assert isinstance(converted_img, Tensor)
 
@@ -40,7 +39,7 @@ def test_image_file(tmp_path, catalog):
 
     file = ImageFile(name=file_name, source=f"file://{tmp_path}")
     file._set_stream(catalog, caching_enabled=False)
-    assert isinstance(file.get_value(), Image.Image)
+    assert isinstance(file.read(), Image.Image)
 
 
 def test_convert_images(tmp_path):

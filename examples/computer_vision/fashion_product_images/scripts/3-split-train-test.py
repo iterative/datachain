@@ -1,8 +1,6 @@
-from datachain.lib.dc import C, DataChain
+from datachain import C, DataChain
 
 # Define train_test_split function
-
-print("\n# Define train_test_split function:")
 
 
 def train_test_split(name) -> str:
@@ -17,7 +15,7 @@ def train_test_split(name) -> str:
 print("\n# Add a signal (split):")
 ds = (
     DataChain.from_dataset("fashion-product-images")
-    .filter((C.masterCategory == "Apparel") & (C.subCategory == "Topwear"))
+    .filter((C("masterCategory") == "Apparel") & (C("subCategory") == "Topwear"))
     .map(split=train_test_split, params=["name"], output=str)
     .save()
 )
@@ -33,9 +31,9 @@ print(df["split"].value_counts())
 # Save train, test and val datasets
 
 print("\n# Save train, test and val datasets:")
-ds_train = ds.filter(C.split == "train").save("fashion-train")
-ds_test = ds.filter(C.split == "test").save("fashion-test")
-ds_val = ds.filter(C.split == "val").save("fashion-val")
+ds_train = ds.filter(C("split") == "train").save("fashion-train")
+ds_test = ds.filter(C("split") == "test").save("fashion-test")
+ds_val = ds.filter(C("split") == "val").save("fashion-val")
 
 # Print splitting details
 

@@ -3,7 +3,6 @@ from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from PIL import Image
-from pydantic import BaseModel
 from torch import float32
 from torch.distributed import get_rank, get_world_size
 from torch.utils.data import IterableDataset, get_worker_info
@@ -11,6 +10,7 @@ from torchvision.transforms import v2
 
 from datachain.catalog import Catalog, get_catalog
 from datachain.lib.dc import DataChain
+from datachain.lib.file import File
 from datachain.lib.text import convert_text
 
 if TYPE_CHECKING:
@@ -24,6 +24,7 @@ DEFAULT_TRANSFORM = v2.Compose([v2.ToImage(), v2.ToDtype(float32, scale=True)])
 
 
 def label_to_int(value: str, classes: list) -> int:
+    """Given a value and list of classes, return the index of the value's class."""
     return classes.index(value)
 
 
@@ -33,13 +34,16 @@ class PytorchDataset(IterableDataset):
         name: str,
         version: Optional[int] = None,
         catalog: Optional["Catalog"] = None,
-        transform: Optional["Transform"] = DEFAULT_TRANSFORM,
+        transform: Optional["Transform"] = None,
         tokenizer: Optional[Callable] = None,
         tokenizer_kwargs: Optional[dict[str, Any]] = None,
         num_samples: int = 0,
     ):
         """
         Pytorch IterableDataset that streams DataChain datasets.
+
+        See Also:
+            `DataChain.to_pytorch()` - convert chain to PyTorch Dataset.
 
         Args:
             name (str): Name of DataChain dataset to stream.
@@ -53,7 +57,7 @@ class PytorchDataset(IterableDataset):
         """
         self.name = name
         self.version = version
-        self.transform = transform
+        self.transform = transform or DEFAULT_TRANSFORM
         self.tokenizer = tokenizer
         self.tokenizer_kwargs = tokenizer_kwargs or {}
         self.num_samples = num_samples
@@ -90,12 +94,11 @@ class PytorchDataset(IterableDataset):
         if self.num_samples > 0:
             ds = ds.sample(self.num_samples)
         ds = ds.chunk(total_rank, total_workers)
-        stream = ds.iterate()
-        for row_features in stream:
+        for row_features in ds.collect():
             row = []
             for fr in row_features:
-                if isinstance(fr, BaseModel):
-                    row.append(fr.get_value())  # type: ignore[unreachable]
+                if isinstance(fr, File):
+                    row.append(fr.read())  # type: ignore[unreachable]
                 else:
                     row.append(fr)
             # Apply transforms

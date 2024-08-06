@@ -54,15 +54,46 @@ E2E_STEPS = (
     },
     {
         "command": (
+            python_exc,
+            os.path.join(tests_dir, "scripts", "feature_class_parallel_data_model.py"),
+        ),
+        "expected_in": dedent(
+            """
+            cat.1.jpg
+            cat.10.jpg
+            cat.100.jpg
+            cat.1000.jpg
+            cat.1001.jpg
+            """
+        ),
+    },
+    {
+        # This reads from stdin, to emulate using the python REPL shell.
+        "command": (python_exc, "-"),
+        "stdin_file": os.path.join(
+            tests_dir, "scripts", "feature_class_parallel_data_model.py"
+        ),
+        "expected_in": dedent(
+            """
+            cat.1.jpg
+            cat.10.jpg
+            cat.100.jpg
+            cat.1000.jpg
+            cat.1001.jpg
+            """
+        ),
+    },
+    {
+        "command": (
             "datachain",
             "query",
             os.path.join(tests_dir, "scripts", "feature_class.py"),
             "--columns",
-            "name,emd.value",
+            "file.name,emd.value",
         ),
         "expected_rows": dedent(
             """
-                    name    emd__value
+            file__name    emd__value
             1     cat.1.jpg  512.0
             2    cat.10.jpg  512.0
             3   cat.100.jpg  512.0
@@ -134,7 +165,7 @@ def communicate_and_interrupt_process(
     return "\n".join(stdout_lines), "\n".join(stderr_lines)
 
 
-def run_step(step):
+def run_step(step):  # noqa: PLR0912
     """Run an end-to-end query test step with a command and expected output."""
     command = step["command"]
     # Note that a process.returncode of -2 is the same as the shell returncode of 130
@@ -147,19 +178,29 @@ def run_step(step):
         interrupt_exit_code = 3221225786
     else:
         popen_args = {"start_new_session": True}
-    process = subprocess.Popen(  # noqa: S603
-        command,
-        shell=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        encoding="utf-8",
-        **popen_args,
-    )
-    interrupt_after = step.get("interrupt_after")
-    if interrupt_after:
-        stdout, stderr = communicate_and_interrupt_process(process, interrupt_after)
-    else:
-        stdout, stderr = process.communicate(timeout=E2E_STEP_TIMEOUT_SEC)
+    stdin_file = None
+    if step.get("stdin_file"):
+        # The "with" file open context manager cannot be used here without
+        # additional code duplication, as a file is only opened if needed.
+        stdin_file = open(step["stdin_file"])  # noqa: SIM115
+    try:
+        process = subprocess.Popen(  # noqa: S603
+            command,
+            shell=False,
+            stdin=stdin_file,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            encoding="utf-8",
+            **popen_args,
+        )
+        interrupt_after = step.get("interrupt_after")
+        if interrupt_after:
+            stdout, stderr = communicate_and_interrupt_process(process, interrupt_after)
+        else:
+            stdout, stderr = process.communicate(timeout=E2E_STEP_TIMEOUT_SEC)
+    finally:
+        if stdin_file:
+            stdin_file.close()
 
     if interrupt_after:
         if process.returncode not in (interrupt_exit_code, 1):

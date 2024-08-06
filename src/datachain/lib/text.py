@@ -31,8 +31,9 @@ def convert_text(
         res = tokenizer(text)
 
     tokens = res.input_ids if isinstance(tokenizer, PreTrainedTokenizerBase) else res
+    tokens = torch.tensor(tokens)
 
     if not encoder:
         return tokens
 
-    return encoder(torch.tensor(tokens))
+    return encoder(tokens)

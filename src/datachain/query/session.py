@@ -28,9 +28,9 @@ class Session:
 
     Parameters:
 
-    `name` (str): The name of the session. Only latters and numbers are supported.
+    name (str): The name of the session. Only latters and numbers are supported.
            It can be empty.
-    `catalog` (Catalog): Catalog object.
+    catalog (Catalog): Catalog object.
     """
 
     GLOBAL_SESSION_CTX: Optional["Session"] = None
@@ -41,7 +41,12 @@ class Session:
     SESSION_UUID_LEN = 6
     TEMP_TABLE_UUID_LEN = 6
 
-    def __init__(self, name="", catalog: Optional["Catalog"] = None):
+    def __init__(
+        self,
+        name="",
+        catalog: Optional["Catalog"] = None,
+        client_config: Optional[dict] = None,
+    ):
         if re.match(r"^[0-9a-zA-Z]+$", name) is None:
             raise ValueError(
                 f"Session name can contain only letters or numbers - '{name}' given."
@@ -52,13 +57,18 @@ class Session:
 
         session_uuid = uuid4().hex[: self.SESSION_UUID_LEN]
         self.name = f"{name}_{session_uuid}"
-        self.catalog = catalog or get_catalog()
+        self.is_new_catalog = not catalog
+        self.catalog = catalog or get_catalog(client_config=client_config)
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self._cleanup_temp_datasets()
+        if self.is_new_catalog:
+            self.catalog.metastore.close_on_exit()
+            self.catalog.warehouse.close_on_exit()
+            self.catalog.id_generator.close_on_exit()
 
     def generate_temp_dataset_name(self) -> str:
         tmp_table_uid = uuid4().hex[: self.TEMP_TABLE_UUID_LEN]
@@ -75,20 +85,25 @@ class Session:
 
     @classmethod
     def get(
-        cls, session: Optional["Session"] = None, catalog: Optional["Catalog"] = None
+        cls,
+        session: Optional["Session"] = None,
+        catalog: Optional["Catalog"] = None,
+        client_config: Optional[dict] = None,
     ) -> "Session":
         """Creates a Session() object from a catalog.
 
         Parameters:
-            `session` (Session): Optional Session(). If not provided a new session will
+            session (Session): Optional Session(). If not provided a new session will
                     be created. It's needed mostly for simplie API purposes.
-            `catalog` (Catalog): Optional catalog. By default a new catalog is created.
+            catalog (Catalog): Optional catalog. By default a new catalog is created.
         """
         if session:
             return session
 
         if cls.GLOBAL_SESSION is None:
-            cls.GLOBAL_SESSION_CTX = Session(cls.GLOBAL_SESSION_NAME, catalog)
+            cls.GLOBAL_SESSION_CTX = Session(
+                cls.GLOBAL_SESSION_NAME, catalog, client_config=client_config
+            )
             cls.GLOBAL_SESSION = cls.GLOBAL_SESSION_CTX.__enter__()
             atexit.register(cls._global_cleanup)
         return cls.GLOBAL_SESSION

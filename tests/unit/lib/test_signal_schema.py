@@ -2,11 +2,10 @@ import json
 from typing import Optional, Union
 
 import pytest
-from pydantic import BaseModel
 
+from datachain import Column, DataModel
 from datachain.lib.convert.flatten import flatten
 from datachain.lib.file import File
-from datachain.lib.model_store import ModelStore
 from datachain.lib.signal_schema import (
     SetupError,
     SignalResolvingError,
@@ -27,12 +26,12 @@ def nested_file_schema():
     return SignalSchema(schema)
 
 
-class MyType1(BaseModel):
+class MyType1(DataModel):
     aa: int
     bb: str
 
 
-class MyType2(BaseModel):
+class MyType2(DataModel):
     name: str
     deep: MyType1
 
@@ -125,12 +124,11 @@ def test_to_udf_spec():
 
 
 def test_select():
-    ModelStore.add(MyType2)
     schema = SignalSchema.deserialize(
         {
             "age": "float",
             "address": "str",
-            "f": "MyType1",
+            "f": "MyType1@v1",
         }
     )
 
@@ -146,11 +144,10 @@ def test_select():
 
 
 def test_select_nested_names():
-    ModelStore.add(MyType2)
     schema = SignalSchema.deserialize(
         {
             "address": "str",
-            "fr": "MyType2",
+            "fr": "MyType2@v1",
         }
     )
 
@@ -169,7 +166,7 @@ def test_select_nested_errors():
     schema = SignalSchema.deserialize(
         {
             "address": "str",
-            "fr": "MyType2",
+            "fr": "MyType2@v1",
         }
     )
 
@@ -188,18 +185,37 @@ def test_select_nested_errors():
         schema.resolve("fr.deep.not_exist")
 
 
-def test_get_file_signals_basic():
+def test_get_signals_basic():
     schema = {
         "name": str,
         "age": float,
         "f": File,
     }
-    assert list(SignalSchema(schema).get_file_signals()) == ["f"]
+    assert list(SignalSchema(schema).get_signals(File)) == ["f"]
 
 
-def test_get_file_signals_nested(nested_file_schema):
-    files = list(nested_file_schema.get_file_signals())
+def test_get_signals_no_signal():
+    schema = {
+        "name": str,
+    }
+    assert list(SignalSchema(schema).get_signals(File)) == []
+
+
+def test_get_signals_nested(nested_file_schema):
+    files = list(nested_file_schema.get_signals(File))
     assert files == ["f", "my_f", "my_f.nested_file"]
+
+
+def test_get_signals_subclass(nested_file_schema):
+    class NewFile(File):
+        pass
+
+    schema = {
+        "name": str,
+        "age": float,
+        "f": NewFile,
+    }
+    assert list(SignalSchema(schema).get_signals(File)) == ["f"]
 
 
 def test_build_tree():
@@ -235,7 +251,7 @@ def test_print_types():
         assert SignalSchema._type_to_str(t) == v
 
 
-def test_bd_signals():
+def test_db_signals():
     spec = {"name": str, "age": float, "fr": MyType2}
     lst = list(SignalSchema(spec).db_signals())
 
@@ -245,6 +261,33 @@ def test_bd_signals():
         "fr__name",
         "fr__deep__aa",
         "fr__deep__bb",
+    ]
+
+
+def test_db_signals_filtering_by_name():
+    schema = SignalSchema({"name": str, "age": float, "fr": MyType2})
+
+    assert list(schema.db_signals(name="fr")) == [
+        "fr__name",
+        "fr__deep__aa",
+        "fr__deep__bb",
+    ]
+    assert list(schema.db_signals(name="name")) == ["name"]
+    assert list(schema.db_signals(name="missing")) == []
+
+
+def test_db_signals_as_columns():
+    spec = {"name": str, "age": float, "fr": MyType2}
+    lst = list(SignalSchema(spec).db_signals(as_columns=True))
+
+    assert all(isinstance(s, Column) for s in lst)
+
+    assert [(c.name, type(c.type)) for c in lst] == [
+        ("name", String),
+        ("age", Float),
+        ("fr__name", String),
+        ("fr__deep__aa", Int64),
+        ("fr__deep__bb", String),
     ]
 
 
@@ -285,3 +328,13 @@ def test_slice():
     keys = ["age", "name"]
     sliced = SignalSchema(schema).slice(keys)
     assert list(sliced.values.items()) == [("age", float), ("name", str)]
+
+
+def test_slice_nested():
+    schema = {
+        "name": str,
+        "feature": MyType1,
+    }
+    keys = ["feature.aa"]
+    sliced = SignalSchema(schema).slice(keys)
+    assert list(sliced.values.items()) == [("feature.aa", int)]

@@ -38,7 +38,8 @@ dependencies = [
   "sqlalchemy>=2",
   "multiprocess==0.70.16",
   "dill==0.3.8",
-  "ujson>=5.9.0",
+  "cloudpickle",
+  "orjson>=3.10.5",
   "pydantic>=2,<3",
   "jmespath>=1.0",
   "datamodel-code-generator>=0.25",
@@ -73,7 +74,7 @@ tests = [
   "pytest-sugar>=0.9.6",
   "pytest-cov>=4.1.0",
   "pytest-mock>=3.12.0",
-  "pytest-servers[all]>=0.5.4",
+  "pytest-servers[all]>=0.5.5",
   "pytest-benchmark[histogram]",
   "pytest-asyncio>=0.23.2",
   "pytest-xdist>=3.3.1",
@@ -88,15 +89,15 @@ dev = [
   "datachain[docs,tests]",
   "mypy==1.10.1",
   "types-python-dateutil",
+  "types-pytz",
   "types-PyYAML",
-  "types-requests",
-  "types-ujson"
+  "types-requests"
 ]
 
 [project.urls]
 Documentation = "https://datachain.dvc.ai"
-Issues = "https://github.com/iterative/dvcx/issues"
-Source = "https://github.com/iterative/dvcx"
+Issues = "https://github.com/iterative/datachain/issues"
+Source = "https://github.com/iterative/datachain"
 
 [project.scripts]
 datachain = "datachain.cli:main"
@@ -116,6 +117,11 @@ markers = [
 ]
 asyncio_mode = "auto"
 filterwarnings = [
+  "error::pandas.errors.PerformanceWarning",
+  "error::pydantic.warnings.PydanticDeprecatedSince20",
+  "error::pytest_mock.PytestMockWarning",
+  "error::pytest.PytestCollectionWarning",
+  "error::sqlalchemy.exc.SADeprecationWarning",
   "ignore:Field name .* shadows an attribute in parent:UserWarning"  # datachain.lib.feature
 ]
 
@@ -135,6 +141,7 @@ exclude_lines = [
   "if TYPE_CHECKING:",
   "raise NotImplementedError",
   "raise AssertionError",
+  "if self.dialect == .sqlite.",
   "@overload"
 ]
 
@@ -174,7 +181,9 @@ ignore = [
   "SIM105",  # suppressible-exception
   "SIM108",  # if-else-block-instead-of-if-exp
   "SIM117",  # multiple-with-statements
-  "PERF203"  # perflint - try-except-in-loop, irrelevant for Python>=3.11
+  "PERF203",  # perflint - try-except-in-loop, irrelevant for Python>=3.11
+  "D100",  # undocumented-public-module
+  "D205"  # one-blank-line-after-class
 ]
 select = [
   "B",  # flake8-bugbear
@@ -224,7 +233,8 @@ select = [
   "RUF025",  # unnecessary-dict-comprehension-for-iterable
   "RUF027",  # missing-f-string-syntax
   "RUF030",  # assert-with-print-message
-  "RUF101"  # redirected-noqa
+  "RUF101",  # redirected-noqa
+  "D"  # pydocstyle
 ]
 
 [tool.ruff.lint.flake8-bugbear]
@@ -248,6 +258,10 @@ max-complexity = 15
 
 [tool.ruff.lint.per-file-ignores]
 "examples/**" = ["INP001"]
+"!src/datachain/lib/dc.py" = ["D"]
 "tests/scripts/**" = ["INP001"]
 "tests/**" = ["DTZ"]
 "tests/examples/wds_data.py" = ["E501"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"

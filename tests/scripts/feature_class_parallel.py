@@ -15,7 +15,6 @@ class Embedding(BaseModel):
     literal_field: Optional[Literal["end_turn", "max_tokens", "stop_sequence"]] = None
 
 
-# ToDO: make it parallel
 ds_name = "feature_class"
 ds = (
     DataChain.from_storage("gs://dvcx-datalakes/dogs-and-cats/")

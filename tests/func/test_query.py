@@ -149,7 +149,7 @@ def test_query_cli_no_dataset_returned(
 
     with pytest.raises(
         QueryScriptRunError,
-        match="Last line in a script was not an instance of DatasetQuery",
+        match="Last line in a script was not an instance of DataChain",
     ):
         query(catalog, str(filepath), "my-dataset", columns=["name"])
 
@@ -159,7 +159,7 @@ def test_query_cli_no_dataset_returned(
     assert latest_job[1] == os.path.basename(filepath)
     assert latest_job[2] == JobStatus.FAILED
     assert latest_job[3] == JobQueryType.PYTHON
-    assert latest_job[4] == "Last line in a script was not an instance of DatasetQuery"
+    assert latest_job[4] == "Last line in a script was not an instance of DataChain"
     assert latest_job[5].find("datachain.error.QueryScriptRunError")
 
 

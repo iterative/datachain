@@ -40,6 +40,7 @@ from datachain.error import (
     StorageNotFoundError,
     TableMissingError,
 )
+from datachain.job import Job
 from datachain.storage import Storage, StorageStatus, StorageURI
 from datachain.utils import JSONSerialize, is_expired
 
@@ -67,6 +68,7 @@ class AbstractMetastore(ABC, Serializable):
     storage_class: type[Storage] = Storage
     dataset_class: type[DatasetRecord] = DatasetRecord
     dependency_class: type[DatasetDependency] = DatasetDependency
+    job_class: type[Job] = Job
 
     def __init__(
         self,
@@ -75,6 +77,13 @@ class AbstractMetastore(ABC, Serializable):
     ):
         self.uri = uri
         self.partial_id: Optional[int] = partial_id
+
+    def __enter__(self) -> "AbstractMetastore":
+        """Returns self upon entering context manager."""
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        """Default behavior is to do nothing, as connections may be shared."""
 
     @abstractmethod
     def clone(
@@ -95,7 +104,13 @@ class AbstractMetastore(ABC, Serializable):
     def close(self) -> None:
         """Closes any active database or HTTP connections."""
 
-    def cleanup_temp_tables(self, temp_table_names: list[str]) -> None:
+    def close_on_exit(self) -> None:
+        """Closes any active database or HTTP connections, called on Session exit or
+        for test cleanup only, as some Metastore implementations may handle this
+        differently."""
+        self.close()
+
+    def cleanup_tables(self, temp_table_names: list[str]) -> None:
         """Cleanup temp tables."""
 
     def cleanup_for_tests(self) -> None:
@@ -377,6 +392,9 @@ class AbstractMetastore(ABC, Serializable):
     # Jobs
     #
 
+    def list_jobs_by_ids(self, ids: list[str], conn=None) -> Iterator["Job"]:
+        raise NotImplementedError
+
     @abstractmethod
     def create_job(
         self,
@@ -416,10 +434,6 @@ class AbstractMetastore(ABC, Serializable):
     ) -> None:
         """Set the status of the given job and dataset."""
 
-    @abstractmethod
-    def get_possibly_stale_jobs(self) -> list[tuple[str, str, int]]:
-        """Returns the possibly stale jobs."""
-
 
 class AbstractDBMetastore(AbstractMetastore):
     """
@@ -456,7 +470,7 @@ class AbstractDBMetastore(AbstractMetastore):
         """Closes any active database connections."""
         self.db.close()
 
-    def cleanup_temp_tables(self, temp_table_names: list[str]) -> None:
+    def cleanup_tables(self, temp_table_names: list[str]) -> None:
         """Cleanup temp tables."""
         self.id_generator.delete_uris(temp_table_names)
 
@@ -1468,6 +1482,10 @@ class AbstractDBMetastore(AbstractMetastore):
         ]
 
     @cached_property
+    def _job_fields(self) -> list[str]:
+        return [c.name for c in self._jobs_columns() if c.name]  # type: ignore[attr-defined]
+
+    @cached_property
     def _jobs(self) -> "Table":
         return Table(self.JOBS_TABLE, self.db.metadata, *self._jobs_columns())
 
@@ -1483,6 +1501,21 @@ class AbstractDBMetastore(AbstractMetastore):
         if not where:
             return self._jobs.update()
         return self._jobs.update().where(*where)
+
+    def _parse_job(self, rows) -> Job:
+        return Job.parse(*rows)
+
+    def _parse_jobs(self, rows) -> Iterator["Job"]:
+        for _, g in groupby(rows, lambda r: r[0]):
+            yield self._parse_job(*list(g))
+
+    def _jobs_query(self):
+        return self._jobs_select(*[getattr(self._jobs.c, f) for f in self._job_fields])
+
+    def list_jobs_by_ids(self, ids: list[str], conn=None) -> Iterator["Job"]:
+        """List jobs by ids."""
+        query = self._jobs_query().where(self._jobs.c.id.in_(ids))
+        yield from self._parse_jobs(self.db.execute(query, conn=conn))
 
     def create_job(
         self,

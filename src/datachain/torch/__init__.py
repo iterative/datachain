@@ -1,5 +1,5 @@
 try:
-    from datachain.lib.clip import similarity_scores as clip_similarity_scores
+    from datachain.lib.clip import clip_similarity_scores
     from datachain.lib.image import convert_image, convert_images
     from datachain.lib.pytorch import PytorchDataset, label_to_int
     from datachain.lib.text import convert_text

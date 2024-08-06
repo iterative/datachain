@@ -5,7 +5,7 @@ import attrs
 
 from datachain.cache import UniqueId
 from datachain.storage import StorageURI
-from datachain.utils import time_to_str
+from datachain.utils import TIME_ZERO, time_to_str
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -111,13 +111,16 @@ class Node:
         if storage is None:
             storage = self.source
         return UniqueId(
-            storage,
-            self.parent,
-            self.name,
-            self.etag,
-            self.size,
-            self.vtype,
-            self.location,
+            storage=storage,
+            parent=self.parent,
+            name=self.name,
+            size=self.size,
+            version=self.version or "",
+            etag=self.etag,
+            is_latest=self.is_latest,
+            vtype=self.vtype,
+            location=self.location,
+            last_modified=self.last_modified or TIME_ZERO,
         )
 
     @classmethod

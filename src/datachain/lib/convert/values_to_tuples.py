@@ -9,41 +9,16 @@ class ValuesToTupleError(DataChainParamsError):
     def __init__(self, ds_name, msg):
         if ds_name:
             ds_name = f"' {ds_name}'"
-        super().__init__(f"Cannot convert features for dataset{ds_name}: {msg}")
+        super().__init__(f"Cannot convert signals for dataset{ds_name}: {msg}")
 
 
-def values_to_tuples(
+def values_to_tuples(  # noqa: C901, PLR0912
     ds_name: str = "",
     output: Union[None, DataType, Sequence[str], dict[str, DataType]] = None,
     **fr_map,
 ) -> tuple[Any, Any, Any]:
-    types_map = {}
-    length = -1
-    for k, v in fr_map.items():
-        if not isinstance(v, Sequence) or isinstance(v, str):
-            raise ValuesToTupleError(ds_name, f"features '{k}' is not a sequence")
-        len_ = len(v)
-
-        if len_ == 0:
-            raise ValuesToTupleError(ds_name, f"feature '{k}' is empty list")
-
-        if length < 0:
-            length = len_
-        elif length != len_:
-            raise ValuesToTupleError(
-                ds_name,
-                f"feature '{k}' should have length {length} while {len_} is given",
-            )
-        typ = type(v[0])
-        if not is_chain_type(typ):
-            raise ValuesToTupleError(
-                ds_name,
-                f"feature '{k}' has unsupported type '{typ.__name__}'."
-                f" Please use Feature types: {DataTypeNames}",
-            )
-        types_map[k] = typ
     if output:
-        if not isinstance(output, Sequence) and not isinstance(output, str):
+        if not isinstance(output, (Sequence, str, dict)):
             if len(fr_map) != 1:
                 raise ValuesToTupleError(
                     ds_name,
@@ -58,20 +33,66 @@ def values_to_tuples(
             key: str = next(iter(fr_map.keys()))
             output = {key: output}  # type: ignore[dict-item]
 
+        if not isinstance(output, dict):
+            raise ValuesToTupleError(
+                ds_name,
+                "output type must be dict[str, DataType] while "
+                f"'{type(output).__name__}' is given",
+            )
+
         if len(output) != len(fr_map):
             raise ValuesToTupleError(
                 ds_name,
                 f"number of outputs '{len(output)}' should match"
-                f" number of features '{len(fr_map)}'",
+                f" number of signals '{len(fr_map)}'",
             )
-        if isinstance(output, dict):
+
+    types_map = {}
+    length = -1
+    for k, v in fr_map.items():
+        if not isinstance(v, Sequence) or isinstance(v, str):
+            raise ValuesToTupleError(ds_name, f"signals '{k}' is not a sequence")
+        len_ = len(v)
+
+        if output:
+            if k not in output:  # type: ignore[operator]
+                raise ValuesToTupleError(
+                    ds_name,
+                    f"signal '{k}' is not present in the output",
+                )
+        else:
+            if len_ == 0:
+                raise ValuesToTupleError(ds_name, f"signal '{k}' is empty list")
+
+            typ = type(v[0])
+            if not is_chain_type(typ):
+                raise ValuesToTupleError(
+                    ds_name,
+                    f"signal '{k}' has unsupported type '{typ.__name__}'."
+                    f" Please use DataModel types: {DataTypeNames}",
+                )
+            if typ is list:
+                types_map[k] = list[type(v[0][0])]  # type: ignore[misc]
+            else:
+                types_map[k] = typ
+
+        if length < 0:
+            length = len_
+        elif length != len_:
             raise ValuesToTupleError(
                 ds_name,
-                "output type must be dict[str, FeatureType] while "
-                f"'{type(output).__name__}' is given",
+                f"signal '{k}' should have length {length} while {len_} is given",
             )
-    else:
+
+    if not output:
         output = types_map  # type: ignore[assignment]
+
+    if not output:
+        raise ValuesToTupleError(
+            ds_name,
+            "output type must be dict[str, DataType] while empty is given"
+            " and no signals are provided",
+        )
 
     output_types: list[type] = list(output.values())  # type: ignore[union-attr,call-arg,arg-type]
     if len(output) > 1:  # type: ignore[arg-type]

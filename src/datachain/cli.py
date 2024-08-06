@@ -3,7 +3,7 @@ import os
 import shlex
 import sys
 import traceback
-from argparse import SUPPRESS, Action, ArgumentParser, ArgumentTypeError, Namespace
+from argparse import Action, ArgumentParser, ArgumentTypeError, Namespace
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from importlib.metadata import PackageNotFoundError, version
 from itertools import chain
@@ -106,10 +106,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     parser = ArgumentParser(
         description="DataChain: Wrangle unstructured AI data at scale", prog="datachain"
     )
-
     parser.add_argument("-V", "--version", action="version", version=__version__)
-    parser.add_argument("--internal-run-udf", action="store_true", help=SUPPRESS)
-    parser.add_argument("--internal-run-udf-worker", action="store_true", help=SUPPRESS)
 
     parent_parser = ArgumentParser(add_help=False)
     parent_parser.add_argument(
@@ -150,9 +147,15 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         help="Drop into the pdb debugger on fatal exception",
     )
 
-    subp = parser.add_subparsers(help="Sub-command help", dest="command")
+    subp = parser.add_subparsers(
+        title="Available Commands",
+        metavar="command",
+        dest="command",
+        help=f"Use `{parser.prog} command --help` for command-specific help.",
+        required=True,
+    )
     parse_cp = subp.add_parser(
-        "cp", parents=[parent_parser], help="Copy data files from the cloud"
+        "cp", parents=[parent_parser], description="Copy data files from the cloud"
     )
     add_sources_arg(parse_cp).complete = shtab.DIR  # type: ignore[attr-defined]
     parse_cp.add_argument("output", type=str, help="Output")
@@ -179,7 +182,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     )
 
     parse_clone = subp.add_parser(
-        "clone", parents=[parent_parser], help="Copy data files from the cloud"
+        "clone", parents=[parent_parser], description="Copy data files from the cloud"
     )
     add_sources_arg(parse_clone).complete = shtab.DIR  # type: ignore[attr-defined]
     parse_clone.add_argument("output", type=str, help="Output")
@@ -222,7 +225,9 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     )
 
     parse_pull = subp.add_parser(
-        "pull", parents=[parent_parser], help="Pull specific dataset version from SaaS"
+        "pull",
+        parents=[parent_parser],
+        description="Pull specific dataset version from SaaS",
     )
     parse_pull.add_argument(
         "dataset",
@@ -263,7 +268,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     )
 
     parse_edit_dataset = subp.add_parser(
-        "edit-dataset", parents=[parent_parser], help="Edit dataset metadata"
+        "edit-dataset", parents=[parent_parser], description="Edit dataset metadata"
     )
     parse_edit_dataset.add_argument("name", type=str, help="Dataset name")
     parse_edit_dataset.add_argument(
@@ -285,9 +290,9 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         help="Dataset labels",
     )
 
-    subp.add_parser("ls-datasets", parents=[parent_parser], help="List datasets")
+    subp.add_parser("ls-datasets", parents=[parent_parser], description="List datasets")
     rm_dataset_parser = subp.add_parser(
-        "rm-dataset", parents=[parent_parser], help="Removes dataset"
+        "rm-dataset", parents=[parent_parser], description="Removes dataset"
     )
     rm_dataset_parser.add_argument("name", type=str, help="Dataset name")
     rm_dataset_parser.add_argument(
@@ -305,7 +310,9 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     )
 
     dataset_stats_parser = subp.add_parser(
-        "dataset-stats", parents=[parent_parser], help="Shows basic dataset stats"
+        "dataset-stats",
+        parents=[parent_parser],
+        description="Shows basic dataset stats",
     )
     dataset_stats_parser.add_argument("name", type=str, help="Dataset name")
     dataset_stats_parser.add_argument(
@@ -330,7 +337,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     )
 
     parse_merge_datasets = subp.add_parser(
-        "merge-datasets", parents=[parent_parser], help="Merges datasets"
+        "merge-datasets", parents=[parent_parser], description="Merges datasets"
     )
     parse_merge_datasets.add_argument(
         "--src",
@@ -360,7 +367,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     )
 
     parse_ls = subp.add_parser(
-        "ls", parents=[parent_parser], help="List storage contents"
+        "ls", parents=[parent_parser], description="List storage contents"
     )
     add_sources_arg(parse_ls, nargs="*")
     parse_ls.add_argument(
@@ -378,7 +385,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     )
 
     parse_du = subp.add_parser(
-        "du", parents=[parent_parser], help="Display space usage"
+        "du", parents=[parent_parser], description="Display space usage"
     )
     add_sources_arg(parse_du)
     parse_du.add_argument(
@@ -408,7 +415,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     )
 
     parse_find = subp.add_parser(
-        "find", parents=[parent_parser], help="Search in a directory hierarchy"
+        "find", parents=[parent_parser], description="Search in a directory hierarchy"
     )
     add_sources_arg(parse_find)
     parse_find.add_argument(
@@ -461,20 +468,20 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     )
 
     parse_index = subp.add_parser(
-        "index", parents=[parent_parser], help="Index storage location"
+        "index", parents=[parent_parser], description="Index storage location"
     )
     add_sources_arg(parse_index)
 
     subp.add_parser(
         "find-stale-storages",
         parents=[parent_parser],
-        help="Finds and marks stale storages",
+        description="Finds and marks stale storages",
     )
 
     show_parser = subp.add_parser(
         "show",
         parents=[parent_parser],
-        help="Create a new dataset with a query script",
+        description="Create a new dataset with a query script",
     )
     show_parser.add_argument("name", type=str, help="Dataset name")
     show_parser.add_argument(
@@ -484,12 +491,13 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         type=int,
         help="Dataset version",
     )
+    show_parser.add_argument("--schema", action="store_true", help="Show schema")
     add_show_args(show_parser)
 
     query_parser = subp.add_parser(
         "query",
         parents=[parent_parser],
-        help="Create a new dataset with a query script",
+        description="Create a new dataset with a query script",
     )
     query_parser.add_argument(
         "script", metavar="<script.py>", type=str, help="Filepath for script"
@@ -520,7 +528,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     )
 
     apply_udf_parser = subp.add_parser(
-        "apply-udf", parents=[parent_parser], help="Apply UDF"
+        "apply-udf", parents=[parent_parser], description="Apply UDF"
     )
     apply_udf_parser.add_argument("udf", type=str, help="UDF location")
     apply_udf_parser.add_argument("source", type=str, help="Source storage or dataset")
@@ -541,12 +549,14 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         "--udf-params", type=str, default=None, help="UDF class parameters"
     )
     subp.add_parser(
-        "clear-cache", parents=[parent_parser], help="Clear the local file cache"
+        "clear-cache", parents=[parent_parser], description="Clear the local file cache"
     )
     subp.add_parser(
-        "gc", parents=[parent_parser], help="Garbage collect temporary tables"
+        "gc", parents=[parent_parser], description="Garbage collect temporary tables"
     )
 
+    subp.add_parser("internal-run-udf", parents=[parent_parser])
+    subp.add_parser("internal-run-udf-worker", parents=[parent_parser])
     add_completion_parser(subp, [parent_parser])
     return parser
 
@@ -555,7 +565,7 @@ def add_completion_parser(subparsers, parents):
     parser = subparsers.add_parser(
         "completion",
         parents=parents,
-        help="Output shell completion script",
+        description="Output shell completion script",
     )
     parser.add_argument(
         "-s",
@@ -807,9 +817,14 @@ def show(
     offset: int = 0,
     columns: Sequence[str] = (),
     no_collapse: bool = False,
+    schema: bool = False,
 ) -> None:
+    from datachain.lib.dc import DataChain
     from datachain.query import DatasetQuery
     from datachain.utils import show_records
+
+    dataset = catalog.get_dataset(name)
+    dataset_version = dataset.get_version(version or dataset.latest_version)
 
     query = (
         DatasetQuery(name=name, version=version, catalog=catalog)
@@ -817,8 +832,12 @@ def show(
         .limit(limit)
         .offset(offset)
     )
-    records = query.to_records()
+    records = query.to_db_records()
     show_records(records, collapse_columns=not no_collapse)
+    if schema and dataset_version.feature_schema:
+        print("\nSchema:")
+        dc = DataChain(name=name, version=version, catalog=catalog)
+        dc.print_schema()
 
 
 def query(
@@ -891,7 +910,7 @@ def garbage_collect(catalog: "Catalog"):
         print("Nothing to clean up.")
     else:
         print(f"Garbage collecting {len(temp_tables)} tables.")
-        catalog.cleanup_temp_tables(temp_tables)
+        catalog.cleanup_tables(temp_tables)
 
 
 def completion(shell: str) -> str:
@@ -901,26 +920,22 @@ def completion(shell: str) -> str:
     )
 
 
-def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0911, PLR0912, PLR0915
+def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR0915
     # Required for Windows multiprocessing support
     freeze_support()
 
     parser = get_parser()
     args = parser.parse_args(argv)
 
-    if args.internal_run_udf:
+    if args.command == "internal-run-udf":
         from datachain.query.dispatch import udf_entrypoint
 
         return udf_entrypoint()
 
-    if args.internal_run_udf_worker:
+    if args.command == "internal-run-udf-worker":
         from datachain.query.dispatch import udf_worker_entrypoint
 
         return udf_worker_entrypoint()
-
-    if args.command is None:
-        parser.print_help()
-        return 1
 
     from .catalog import get_catalog
 
@@ -1008,6 +1023,7 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0911, PLR09
                 offset=args.offset,
                 columns=args.columns,
                 no_collapse=args.no_collapse,
+                schema=args.schema,
             )
         elif args.command == "rm-dataset":
             rm_dataset(catalog, args.name, version=args.version, force=args.force)

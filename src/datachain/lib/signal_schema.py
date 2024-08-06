@@ -18,13 +18,14 @@ from pydantic import BaseModel, create_model
 from typing_extensions import Literal as LiteralEx
 
 from datachain.lib.convert.flatten import DATACHAIN_TO_TYPE
-from datachain.lib.convert.type_converter import convert_to_db_type
+from datachain.lib.convert.python_to_sql import python_to_sql
+from datachain.lib.convert.sql_to_python import sql_to_python
 from datachain.lib.convert.unflatten import unflatten_to_json_pos
 from datachain.lib.data_model import DataModel, DataType
 from datachain.lib.file import File
 from datachain.lib.model_store import ModelStore
 from datachain.lib.utils import DataChainParamsError
-from datachain.query.schema import DEFAULT_DELIMITER
+from datachain.query.schema import DEFAULT_DELIMITER, Column
 
 if TYPE_CHECKING:
     from datachain.catalog import Catalog
@@ -102,21 +103,20 @@ class SignalSchema:
     @staticmethod
     def from_column_types(col_types: dict[str, Any]) -> "SignalSchema":
         signals: dict[str, DataType] = {}
-        for field, type_ in col_types.items():
-            type_ = DATACHAIN_TO_TYPE.get(type_, None)
-            if type_ is None:
+        for field, col_type in col_types.items():
+            if (py_type := DATACHAIN_TO_TYPE.get(col_type, None)) is None:
                 raise SignalSchemaError(
                     f"signal schema cannot be obtained for column '{field}':"
-                    f" unsupported type '{type_}'"
+                    f" unsupported type '{py_type}'"
                 )
-            signals[field] = type_
+            signals[field] = py_type
         return SignalSchema(signals)
 
     def serialize(self) -> dict[str, str]:
         signals = {}
         for name, fr_type in self.values.items():
             if (fr := ModelStore.to_pydantic(fr_type)) is not None:
-                ModelStore.add(fr)
+                ModelStore.register(fr)
                 signals[name] = ModelStore.get_name(fr)
             else:
                 orig = get_origin(fr_type)
@@ -143,8 +143,8 @@ class SignalSchema:
                     if not fr:
                         raise SignalSchemaError(
                             f"cannot deserialize '{signal}': "
-                            f"unregistered type '{type_name}'."
-                            f" Try to register it with `Registry.add({type_name})`."
+                            f"unknown type '{type_name}'."
+                            f" Try to add it with `ModelStore.register({type_name})`."
                         )
             except TypeError as err:
                 raise SignalSchemaError(
@@ -161,7 +161,7 @@ class SignalSchema:
                 continue
             if not has_subtree:
                 db_name = DEFAULT_DELIMITER.join(path)
-                res[db_name] = convert_to_db_type(type_)
+                res[db_name] = python_to_sql(type_)
         return res
 
     def row_to_objs(self, row: Sequence[Any]) -> list[DataType]:
@@ -192,10 +192,17 @@ class SignalSchema:
     def slice(
         self, keys: Sequence[str], setup: Optional[dict[str, Callable]] = None
     ) -> "SignalSchema":
+        # Make new schema that combines current schema and setup signals
         setup = setup or {}
         setup_no_types = dict.fromkeys(setup.keys(), str)
-        union = self.values | setup_no_types
-        schema = {k: union[k] for k in keys if k in union}
+        union = SignalSchema(self.values | setup_no_types)
+        # Slice combined schema by keys
+        schema = {}
+        for k in keys:
+            try:
+                schema[k] = union._find_in_tree(k.split("."))
+            except SignalResolvingError:
+                pass
         return SignalSchema(schema, setup)
 
     def row_to_features(
@@ -215,12 +222,29 @@ class SignalSchema:
                 res.append(obj)
         return res
 
-    def db_signals(self) -> list[str]:
-        return [
+    def db_signals(
+        self, name: Optional[str] = None, as_columns=False
+    ) -> Union[list[str], list[Column]]:
+        """
+        Returns DB columns as strings or Column objects with proper types
+        Optionally, it can filter results by specific object, returning only his signals
+        """
+        signals = [
             DEFAULT_DELIMITER.join(path)
-            for path, _, has_subtree, _ in self.get_flat_tree()
+            if not as_columns
+            else Column(DEFAULT_DELIMITER.join(path), python_to_sql(_type))
+            for path, _type, has_subtree, _ in self.get_flat_tree()
             if not has_subtree
         ]
+
+        if name:
+            signals = [
+                s
+                for s in signals
+                if str(s) == name or str(s).startswith(f"{name}{DEFAULT_DELIMITER}")
+            ]
+
+        return signals  # type: ignore[return-value]
 
     def resolve(self, *names: str) -> "SignalSchema":
         schema = {}
@@ -236,8 +260,11 @@ class SignalSchema:
         curr_type = None
         i = 0
         while curr_tree is not None and i < len(path):
-            if val := curr_tree.get(path[i], None):
+            if val := curr_tree.get(path[i]):
                 curr_type, curr_tree = val
+            elif i == 0 and len(path) > 1 and (val := curr_tree.get(".".join(path))):
+                curr_type, curr_tree = val
+                break
             else:
                 curr_type = None
             i += 1
@@ -271,6 +298,25 @@ class SignalSchema:
                 del schema[signal]
         return SignalSchema(schema)
 
+    def mutate(self, args_map: dict) -> "SignalSchema":
+        new_values = self.values.copy()
+
+        for name, value in args_map.items():
+            if isinstance(value, Column) and value.name in self.values:
+                # renaming existing signal
+                del new_values[value.name]
+                new_values[name] = self.values[value.name]
+            else:
+                # adding new signal
+                new_values.update(sql_to_python({name: value}))
+
+        return SignalSchema(new_values)
+
+    def clone_without_sys_signals(self) -> "SignalSchema":
+        schema = copy.deepcopy(self.values)
+        schema.pop("sys", None)
+        return SignalSchema(schema)
+
     def merge(
         self,
         right_schema: "SignalSchema",
@@ -283,9 +329,9 @@ class SignalSchema:
 
         return SignalSchema(self.values | schema_right)
 
-    def get_file_signals(self) -> Iterator[str]:
+    def get_signals(self, target_type: type[DataModel]) -> Iterator[str]:
         for path, type_, has_subtree, _ in self.get_flat_tree():
-            if has_subtree and issubclass(type_, File):
+            if has_subtree and issubclass(type_, target_type):
                 yield ".".join(path)
 
     def create_model(self, name: str) -> type[DataModel]:
@@ -330,6 +376,16 @@ class SignalSchema:
                 if len(args) > 0 and ModelStore.is_pydantic(args[0]):
                     sub_schema = SignalSchema({"* list of": args[0]})
                     sub_schema.print_tree(indent=indent, start_at=total_indent + indent)
+
+    def get_headers_with_length(self):
+        paths = [
+            path for path, _, has_subtree, _ in self.get_flat_tree() if not has_subtree
+        ]
+        max_length = max([len(path) for path in paths], default=0)
+        return [
+            path + [""] * (max_length - len(path)) if len(path) < max_length else path
+            for path in paths
+        ], max_length
 
     def __or__(self, other):
         return self.__class__(self.values | other.values)

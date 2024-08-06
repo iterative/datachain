@@ -6,13 +6,13 @@ from pathlib import PosixPath
 
 import attrs
 import pytest
-import pytest_servers.exceptions
 import sqlalchemy
 from pytest import MonkeyPatch, TempPathFactory
 from upath.implementations.cloud import CloudPath
 
 from datachain.catalog import Catalog
 from datachain.catalog.loader import get_id_generator, get_metastore, get_warehouse
+from datachain.cli_utils import CommaSeparatedArgs
 from datachain.client.local import FileClient
 from datachain.data_storage.sqlite import (
     SQLiteDatabaseEngine,
@@ -22,7 +22,7 @@ from datachain.data_storage.sqlite import (
 )
 from datachain.dataset import DatasetRecord
 from datachain.query.session import Session
-from datachain.utils import DataChainDir, get_env_list
+from datachain.utils import DataChainDir
 
 from .utils import DEFAULT_TREE, get_simple_ds_query, instantiate_tree
 
@@ -65,7 +65,8 @@ def clean_environment(
 
 @pytest.fixture
 def sqlite_db():
-    return SQLiteDatabaseEngine.from_db_file(":memory:")
+    with SQLiteDatabaseEngine.from_db_file(":memory:") as db:
+        yield db
 
 
 def cleanup_sqlite_db(
@@ -105,9 +106,10 @@ def id_generator():
 
         _id_generator.cleanup_for_tests()
 
-        # Close the connection so that the SQLite file is no longer open, to avoid
-        # pytest throwing: OSError: [Errno 24] Too many open files
-        _id_generator.db.close()
+    # Close the connection so that the SQLite file is no longer open, to avoid
+    # pytest throwing: OSError: [Errno 24] Too many open files
+    # Or, for other implementations, prevent "too many clients" errors.
+    _id_generator.close_on_exit()
 
 
 @pytest.fixture
@@ -122,23 +124,23 @@ def metastore(id_generator):
         yield _metastore
 
         cleanup_sqlite_db(_metastore.db.clone(), _metastore.default_table_names)
-        Session.cleanup_for_tests()
 
-        # Close the connection so that the SQLite file is no longer open, to avoid
-        # pytest throwing: OSError: [Errno 24] Too many open files
-        _metastore.db.close()
+    # Close the connection so that the SQLite file is no longer open, to avoid
+    # pytest throwing: OSError: [Errno 24] Too many open files
+    # Or, for other implementations, prevent "too many clients" errors.
+    _metastore.close_on_exit()
 
 
 def check_temp_tables_cleaned_up(original_warehouse):
     """Ensure that temporary tables are cleaned up."""
-    warehouse = original_warehouse.clone()
-    assert [
-        t
-        for t in sqlalchemy.inspect(warehouse.db.engine).get_table_names()
-        if t.startswith(
-            (warehouse.UDF_TABLE_NAME_PREFIX, warehouse.TMP_TABLE_NAME_PREFIX)
-        )
-    ] == []
+    with original_warehouse.clone() as warehouse:
+        assert [
+            t
+            for t in sqlalchemy.inspect(warehouse.db.engine).get_table_names()
+            if t.startswith(
+                (warehouse.UDF_TABLE_NAME_PREFIX, warehouse.TMP_TABLE_NAME_PREFIX)
+            )
+        ] == []
 
 
 @pytest.fixture
@@ -169,6 +171,12 @@ def catalog(id_generator, metastore, warehouse):
 
 
 @pytest.fixture
+def test_session(catalog):
+    with Session("TestSession", catalog=catalog) as session:
+        yield session
+
+
+@pytest.fixture
 def id_generator_tmpfile(tmp_path):
     if os.environ.get("DATACHAIN_ID_GENERATOR"):
         _id_generator = get_id_generator()
@@ -182,9 +190,10 @@ def id_generator_tmpfile(tmp_path):
 
         _id_generator.cleanup_for_tests()
 
-        # Close the connection so that the SQLite file is no longer open, to avoid
-        # pytest throwing: OSError: [Errno 24] Too many open files
-        _id_generator.db.close()
+    # Close the connection so that the SQLite file is no longer open, to avoid
+    # pytest throwing: OSError: [Errno 24] Too many open files
+    # Or, for other implementations, prevent "too many clients" errors.
+    _id_generator.close_on_exit()
 
 
 @pytest.fixture
@@ -199,11 +208,11 @@ def metastore_tmpfile(tmp_path, id_generator_tmpfile):
         yield _metastore
 
         cleanup_sqlite_db(_metastore.db.clone(), _metastore.default_table_names)
-        Session.cleanup_for_tests()
 
-        # Close the connection so that the SQLite file is no longer open, to avoid
-        # pytest throwing: OSError: [Errno 24] Too many open files
-        _metastore.db.close()
+    # Close the connection so that the SQLite file is no longer open, to avoid
+    # pytest throwing: OSError: [Errno 24] Too many open files
+    # Or, for other implementations, prevent "too many clients" errors.
+    _metastore.close_on_exit()
 
 
 @pytest.fixture
@@ -231,6 +240,24 @@ def warehouse_tmpfile(tmp_path, id_generator_tmpfile, metastore_tmpfile):
 
 
 @pytest.fixture
+def catalog_tmpfile(id_generator_tmpfile, metastore_tmpfile, warehouse_tmpfile):
+    # For testing parallel and distributed processing, as these cannot use
+    # in-memory databases.
+    return Catalog(
+        id_generator=id_generator_tmpfile,
+        metastore=metastore_tmpfile,
+        warehouse=warehouse_tmpfile,
+    )
+
+
+@pytest.fixture
+def test_session_tmpfile(catalog_tmpfile):
+    # For testing parallel and distributed processing, as these cannot use
+    # in-memory databases.
+    return Session("TestSession", catalog=catalog_tmpfile)
+
+
+@pytest.fixture
 def tmp_dir(tmp_path_factory, monkeypatch):
     dpath = tmp_path_factory.mktemp("datachain-test")
     monkeypatch.chdir(dpath)
@@ -238,6 +265,13 @@ def tmp_dir(tmp_path_factory, monkeypatch):
 
 
 def pytest_addoption(parser):
+    parser.addoption(
+        "--disable-remotes",
+        action=CommaSeparatedArgs,
+        default=[],
+        help="Comma separated list of remotes to disable",
+    )
+
     parser.addoption(
         "--datachain-bin",
         type=str,
@@ -359,7 +393,10 @@ class CloudTestCatalog:
         return self.server.client_config
 
 
-@pytest.fixture(scope="session", params=["file", "s3", "gs", "azure"])
+cloud_types = ["s3", "gs", "azure"]
+
+
+@pytest.fixture(scope="session", params=["file", *cloud_types])
 def cloud_type(request):
     return request.param
 
@@ -369,32 +406,38 @@ def version_aware(request):
     return request.param
 
 
+def pytest_collection_modifyitems(config, items):
+    disabled_remotes = config.getoption("--disable-remotes")
+    if not disabled_remotes:
+        return
+
+    for item in items:
+        if "cloud_server" in item.fixturenames:
+            cloud_type = item.callspec.params.get("cloud_type")
+            if cloud_type not in cloud_types:
+                continue
+            if "all" in disabled_remotes:
+                reason = "Skipping all tests requiring cloud"
+                item.add_marker(pytest.mark.skip(reason=reason))
+            if cloud_type in disabled_remotes:
+                reason = f"Skipping all tests for {cloud_type=}"
+                item.add_marker(pytest.mark.skip(reason=reason))
+
+
 @pytest.fixture(scope="session")
 def cloud_server(request, tmp_upath_factory, cloud_type, version_aware, tree):
-    # DATACHAIN_TEST_SKIP_MISSING_REMOTES can be set to a comma-separated list
-    # of remotes to skip tests for if unavailable or "all" to skip all
-    # unavailable remotes:
-    #  DATACHAIN_TEST_SKIP_MISSING_REMOTES=azure,gs
-    #  DATACHAIN_TEST_SKIP_MISSING_REMOTES=all
-    skip_missing_remotes = set(get_env_list("DATACHAIN_TEST_SKIP_MISSING_REMOTES", []))
-    try:
-        if cloud_type == "azure" and version_aware:
-            if conn_str := request.config.getoption("--azure-connection-string"):
-                src_path = tmp_upath_factory.azure(conn_str)
-            else:
-                pytest.skip("Can't test versioning with Azure")
-        elif cloud_type == "file":
-            if version_aware:
-                pytest.skip("Local storage can't be versioned")
-            else:
-                src_path = tmp_upath_factory.mktemp("local")
+    if cloud_type == "azure" and version_aware:
+        if conn_str := request.config.getoption("--azure-connection-string"):
+            src_path = tmp_upath_factory.azure(conn_str)
         else:
-            src_path = tmp_upath_factory.mktemp(cloud_type, version_aware=version_aware)
-    except pytest_servers.exceptions.RemoteUnavailable as exc:
-        if "all" in skip_missing_remotes or cloud_type in skip_missing_remotes:
-            pytest.skip(str(exc))
-        raise
-
+            pytest.skip("Can't test versioning with Azure")
+    elif cloud_type == "file":
+        if version_aware:
+            pytest.skip("Local storage can't be versioned")
+        else:
+            src_path = tmp_upath_factory.mktemp("local")
+    else:
+        src_path = tmp_upath_factory.mktemp(cloud_type, version_aware=version_aware)
     return make_cloud_server(src_path, cloud_type, tree)
 
 

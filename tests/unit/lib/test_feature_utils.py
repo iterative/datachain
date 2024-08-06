@@ -25,13 +25,13 @@ def test_basic():
     assert vals[-1] == (fib[-1], values[-1])
 
 
-def test_e2e(catalog):
+def test_e2e(test_session):
     fib = [1, 1, 2, 3, 5, 8]
     values = ["odd" if num % 2 else "even" for num in fib]
 
-    dc = DataChain.from_values(fib=fib, odds=values)
+    dc = DataChain.from_values(fib=fib, odds=values, session=test_session)
 
-    vals = list(dc.iterate())
+    vals = list(dc.collect())
     lst1 = [item[0] for item in vals]
     lst2 = [item[1] for item in vals]
 
@@ -48,12 +48,12 @@ def test_single_value():
     assert vals == fib
 
 
-def test_single_e2e(catalog):
+def test_single_e2e(test_session):
     fib = [1, 1, 2, 3, 5, 8]
 
-    dc = DataChain.from_values(fib=fib)
+    dc = DataChain.from_values(fib=fib, session=test_session)
 
-    vals = list(dc.iterate())
+    vals = list(dc.collect())
     flattened = [item for sublist in vals for item in sublist]
 
     assert flattened == fib

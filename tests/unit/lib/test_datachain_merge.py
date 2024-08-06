@@ -9,22 +9,22 @@ from datachain.lib.signal_schema import SignalResolvingError
 from datachain.sql.types import Float, String
 
 
-class TestUser(BaseModel):
+class User(BaseModel):
     name: Optional[str] = None
     age: Optional[int] = None
 
 
-class TestPlayer(TestUser):
+class Player(User):
     weight: Optional[float] = None
     height: Optional[int] = None
 
 
-class TestEmployee(BaseModel):
+class Employee(BaseModel):
     id: Optional[int] = None
-    person: TestUser
+    person: User
 
 
-class TestTeamMember(BaseModel):
+class TeamMember(BaseModel):
     player: Optional[str] = None
     sport: Optional[str] = None
     weight: Optional[float] = None
@@ -32,37 +32,37 @@ class TestTeamMember(BaseModel):
 
 
 employees = [
-    TestEmployee(id=151, person=TestUser(name="Alice", age=31)),
-    TestEmployee(id=152, person=TestUser(name="Bob", age=27)),
-    TestEmployee(id=153, person=TestUser(name="Charlie", age=54)),
-    TestEmployee(id=154, person=TestUser(name="David", age=29)),
+    Employee(id=151, person=User(name="Alice", age=31)),
+    Employee(id=152, person=User(name="Bob", age=27)),
+    Employee(id=153, person=User(name="Charlie", age=54)),
+    Employee(id=154, person=User(name="David", age=29)),
 ]
 team = [
-    TestTeamMember(player="Alice", sport="volleyball", weight=120.3, height=5.5),
-    TestTeamMember(player="Charlie", sport="football", weight=200.0, height=6.0),
-    TestTeamMember(player="David", sport="football", weight=158.7, height=5.7),
+    TeamMember(player="Alice", sport="volleyball", weight=120.3, height=5.5),
+    TeamMember(player="Charlie", sport="football", weight=200.0, height=6.0),
+    TeamMember(player="David", sport="football", weight=158.7, height=5.7),
 ]
 
 
-def test_merge_objects(catalog):
-    ch1 = DataChain.from_values(emp=employees)
-    ch2 = DataChain.from_values(team=team)
+def test_merge_objects(test_session):
+    ch1 = DataChain.from_values(emp=employees, session=test_session)
+    ch2 = DataChain.from_values(team=team, session=test_session)
     ch = ch1.merge(ch2, "emp.person.name", "team.player")
 
-    str_default = String.default_value(catalog.warehouse.db.dialect)
-    float_default = Float.default_value(catalog.warehouse.db.dialect)
+    str_default = String.default_value(test_session.catalog.warehouse.db.dialect)
+    float_default = Float.default_value(test_session.catalog.warehouse.db.dialect)
 
     i = 0
     j = 0
-    for items in ch.iterate():
+    for items in ch.collect():
         assert len(items) == 2
 
         empl, player = items
-        assert isinstance(empl, TestEmployee)
+        assert isinstance(empl, Employee)
         assert empl == employees[i]
         i += 1
 
-        assert isinstance(player, TestTeamMember)
+        assert isinstance(player, TeamMember)
         if empl.person.name != "Bob":
             assert player.player == team[j].player
             assert player.sport == team[j].sport
@@ -79,48 +79,56 @@ def test_merge_objects(catalog):
     assert j == len(team)
 
 
-def test_merge_similar_objects(catalog):
+def test_merge_similar_objects(test_session):
     new_employees = [
-        TestEmployee(id=152, person=TestUser(name="Bob", age=27)),
-        TestEmployee(id=201, person=TestUser(name="Karl", age=18)),
-        TestEmployee(id=154, person=TestUser(name="David", age=29)),
+        Employee(id=152, person=User(name="Bob", age=27)),
+        Employee(id=201, person=User(name="Karl", age=18)),
+        Employee(id=154, person=User(name="David", age=29)),
     ]
 
-    ch1 = DataChain.from_values(emp=employees)
-    ch2 = DataChain.from_values(emp=new_employees)
+    ch1 = DataChain.from_values(emp=employees, session=test_session)
+    ch2 = DataChain.from_values(emp=new_employees, session=test_session)
 
     rname = "qq"
     ch = ch1.merge(ch2, "emp.person.name", rname=rname)
 
-    assert list(ch.signals_schema.values.keys()) == ["emp", rname + "emp"]
+    assert list(ch.signals_schema.values.keys()) == ["sys", "emp", rname + "emp"]
 
-    empl = list(ch.iterate())
+    empl = list(ch.collect())
     assert len(empl) == 4
     assert len(empl[0]) == 2
 
     ch_inner = ch1.merge(ch2, "emp.person.name", rname=rname, inner=True)
-    assert len(list(ch_inner.iterate())) == 2
+    assert len(list(ch_inner.collect())) == 2
 
 
-def test_merge_values(catalog):
+def test_merge_values(test_session):
     order_ids = [11, 22, 33, 44]
     order_descr = ["water", "water", "paper", "water"]
 
     delivery_ids = [11, 44]
     delivery_time = [24.0, 16.5]
 
-    float_default = Float.default_value(catalog.warehouse.db.dialect)
+    float_default = Float.default_value(test_session.catalog.warehouse.db.dialect)
 
-    ch1 = DataChain.from_values(id=order_ids, descr=order_descr)
-    ch2 = DataChain.from_values(id=delivery_ids, time=delivery_time)
+    ch1 = DataChain.from_values(id=order_ids, descr=order_descr, session=test_session)
+    ch2 = DataChain.from_values(
+        id=delivery_ids, time=delivery_time, session=test_session
+    )
 
     ch = ch1.merge(ch2, "id")
 
-    assert list(ch.signals_schema.values.keys()) == ["id", "descr", "right_id", "time"]
+    assert list(ch.signals_schema.values.keys()) == [
+        "sys",
+        "id",
+        "descr",
+        "right_id",
+        "time",
+    ]
 
     i = 0
     j = 0
-    sorted_items_list = sorted(ch.iterate(), key=lambda x: x[0])
+    sorted_items_list = sorted(ch.collect(), key=lambda x: x[0])
     for items in sorted_items_list:
         assert len(items) == 4
         id, name, _right_id, time = items
@@ -138,7 +146,7 @@ def test_merge_values(catalog):
     assert j == len(delivery_ids)
 
 
-def test_merge_multi_conditions(catalog):
+def test_merge_multi_conditions(test_session):
     order_ids = [11, 22, 33, 44]
     order_name = ["water", "water", "paper", "water"]
     order_descr = ["still water", "still water", "white paper", "sparkling water"]
@@ -147,14 +155,16 @@ def test_merge_multi_conditions(catalog):
     delivery_name = ["water", "unknown"]
     delivery_time = [24.0, 16.5]
 
-    ch1 = DataChain.from_values(id=order_ids, name=order_name, descr=order_descr)
+    ch1 = DataChain.from_values(
+        id=order_ids, name=order_name, descr=order_descr, session=test_session
+    )
     ch2 = DataChain.from_values(
-        id=delivery_ids, d_name=delivery_name, time=delivery_time
+        id=delivery_ids, d_name=delivery_name, time=delivery_time, session=test_session
     )
 
     ch = ch1.merge(ch2, ("id", "name"), ("id", "d_name"))
 
-    res = list(ch.iterate())
+    res = list(ch.collect())
 
     assert len(res) == max(len(employees), len(team))
     success_ids = set()
@@ -165,9 +175,9 @@ def test_merge_multi_conditions(catalog):
     assert success_ids == {11}
 
 
-def test_merge_errors(catalog):
-    ch1 = DataChain.from_values(emp=employees)
-    ch2 = DataChain.from_values(team=team)
+def test_merge_errors(test_session):
+    ch1 = DataChain.from_values(emp=employees, session=test_session)
+    ch2 = DataChain.from_values(team=team, session=test_session)
 
     with pytest.raises(SignalResolvingError):
         ch1.merge(ch2, "unknown")
@@ -184,14 +194,14 @@ def test_merge_errors(catalog):
         ch1.merge(ch2, "emp.person.name", True)
 
 
-def test_merge_with_itself(catalog):
-    ch = DataChain.from_values(emp=employees)
+def test_merge_with_itself(test_session):
+    ch = DataChain.from_values(emp=employees, session=test_session)
     merged = ch.merge(ch, "emp.id")
 
     count = 0
-    for left, right in merged.iterate():
-        assert isinstance(left, TestEmployee)
-        assert isinstance(right, TestEmployee)
+    for left, right in merged.collect():
+        assert isinstance(left, Employee)
+        assert isinstance(right, Employee)
         assert left == right == employees[count]
         count += 1
 
