@@ -278,21 +278,24 @@ class UDFDispatcher:
                 result = get_from_queue(self.done_queue)
                 status = result["status"]
                 if status == NOTIFY_STATUS:
-                    download_cb.relative_update(result["downloaded"])
+                    if downloaded := result.get("downloaded"):
+                        download_cb.relative_update(downloaded)
+                    if processed := result.get("processed"):
+                        processed_cb.relative_update(processed)
                 elif status == FINISHED_STATUS:
                     # Worker finished
                     n_workers -= 1
                 elif status == OK_STATUS:
-                    processed_cb.relative_update(result["processed"])
+                    if processed := result.get("processed"):
+                        processed_cb.relative_update(processed)
                     yield msgpack_unpack(result["result"])
                 else:  # Failed / error
                     n_workers -= 1
-                    exc = result.get("exception")
-                    if exc:
+                    if exc := result.get("exception"):
                         raise exc
                     raise RuntimeError("Internal error: Parallel UDF execution failed")
 
-                if not streaming_mode and not input_finished:
+                if status == OK_STATUS and not streaming_mode and not input_finished:
                     try:
                         put_into_queue(self.task_queue, next(input_data))
                     except StopIteration:
@@ -377,9 +380,12 @@ class UDFWorker:
                     {
                         "status": OK_STATUS,
                         "result": msgpack_pack(list(batch)),
-                        "processed": processed_cb.processed_rows,
                     },
                 )
+            put_into_queue(
+                self.done_queue,
+                {"status": NOTIFY_STATUS, "processed": processed_cb.processed_rows},
+            )
         put_into_queue(self.done_queue, {"status": FINISHED_STATUS})
 
     def get_inputs(self):
