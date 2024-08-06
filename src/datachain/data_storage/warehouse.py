@@ -166,8 +166,9 @@ class AbstractWarehouse(ABC, Serializable):
         self.db.close()
 
     def close_on_exit(self) -> None:
-        """Closes any active database or HTTP connections, called on exit or for test
-        cleanup only, as some metastore implementations may handle this differently."""
+        """Closes any active database or HTTP connections, called on Session exit or
+        for test cleanup only, as some Warehouse implementations may handle this
+        differently."""
         self.close()
 
     #

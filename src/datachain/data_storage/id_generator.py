@@ -37,8 +37,9 @@ class AbstractIDGenerator(ABC, Serializable):
         """Closes any active database connections."""
 
     def close_on_exit(self) -> None:
-        """Closes any active database or HTTP connections, called on exit or for test
-        cleanup only, as some ID Generator implementations may handle this differently.
+        """Closes any active database or HTTP connections, called on Session exit or
+        for test cleanup only, as some ID Generator implementations may handle this
+        differently.
         """
         self.close()
 

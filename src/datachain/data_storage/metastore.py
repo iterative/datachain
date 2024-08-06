@@ -105,8 +105,9 @@ class AbstractMetastore(ABC, Serializable):
         """Closes any active database or HTTP connections."""
 
     def close_on_exit(self) -> None:
-        """Closes any active database or HTTP connections, called on exit or for test
-        cleanup only, as some metastore implementations may handle this differently."""
+        """Closes any active database or HTTP connections, called on Session exit or
+        for test cleanup only, as some Metastore implementations may handle this
+        differently."""
         self.close()
 
     def cleanup_tables(self, temp_table_names: list[str]) -> None:

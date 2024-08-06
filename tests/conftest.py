@@ -124,7 +124,6 @@ def metastore(id_generator):
         yield _metastore
 
         cleanup_sqlite_db(_metastore.db.clone(), _metastore.default_table_names)
-        Session.cleanup_for_tests()
 
     # Close the connection so that the SQLite file is no longer open, to avoid
     # pytest throwing: OSError: [Errno 24] Too many open files
@@ -173,7 +172,8 @@ def catalog(id_generator, metastore, warehouse):
 
 @pytest.fixture
 def test_session(catalog):
-    return Session("TestSession", catalog=catalog)
+    with Session("TestSession", catalog=catalog) as session:
+        yield session
 
 
 @pytest.fixture
@@ -208,7 +208,6 @@ def metastore_tmpfile(tmp_path, id_generator_tmpfile):
         yield _metastore
 
         cleanup_sqlite_db(_metastore.db.clone(), _metastore.default_table_names)
-        Session.cleanup_for_tests()
 
     # Close the connection so that the SQLite file is no longer open, to avoid
     # pytest throwing: OSError: [Errno 24] Too many open files
