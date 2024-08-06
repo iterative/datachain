@@ -105,10 +105,6 @@ class AbstractDBIDGenerator(AbstractIDGenerator):
     def init(self) -> None:
         self.db.create_table(self._table, if_not_exists=True)
 
-    def cleanup_for_tests(self):
-        """Cleanup for tests."""
-        self.db.drop_table(self._table, if_exists=True)
-
     @abstractmethod
     def init_id(self, uri: str) -> None:
         """Initializes the ID generator for the given URI with zero last_id."""
