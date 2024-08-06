@@ -1,12 +1,13 @@
 import math
 from typing import Optional
 
+import pandas as pd
 import pytest
 from pydantic import BaseModel
 
 from datachain.lib.dc import DataChain, DatasetMergeError
 from datachain.lib.signal_schema import SignalResolvingError
-from datachain.sql.types import Float, String
+from datachain.sql.types import String
 
 
 class User(BaseModel):
@@ -50,7 +51,6 @@ def test_merge_objects(test_session):
     ch = ch1.merge(ch2, "emp.person.name", "team.player")
 
     str_default = String.default_value(test_session.catalog.warehouse.db.dialect)
-    float_default = Float.default_value(test_session.catalog.warehouse.db.dialect)
 
     i = 0
     j = 0
@@ -72,8 +72,8 @@ def test_merge_objects(test_session):
         else:
             assert player.player == str_default
             assert player.sport == str_default
-            assert player.weight == float_default
-            assert player.height == float_default
+            assert pd.isnull(player.weight)
+            assert pd.isnull(player.height)
 
     assert i == len(employees)
     assert j == len(team)
@@ -109,8 +109,6 @@ def test_merge_values(test_session):
     delivery_ids = [11, 44]
     delivery_time = [24.0, 16.5]
 
-    float_default = Float.default_value(test_session.catalog.warehouse.db.dialect)
-
     ch1 = DataChain.from_values(id=order_ids, descr=order_descr, session=test_session)
     ch2 = DataChain.from_values(
         id=delivery_ids, time=delivery_time, session=test_session
@@ -137,7 +135,7 @@ def test_merge_values(test_session):
         assert name == order_descr[i]
         i += 1
 
-        if time != float_default:
+        if pd.notnull(time):
             assert id == delivery_ids[j]
             assert time == delivery_time[j]
             j += 1

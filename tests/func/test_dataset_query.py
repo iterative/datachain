@@ -11,6 +11,7 @@ from textwrap import dedent
 from unittest.mock import ANY, patch
 
 import numpy as np
+import pandas as pd
 import pytest
 import sqlalchemy
 from dateutil.parser import isoparse
@@ -2644,36 +2645,9 @@ def test_row_generator_with_new_columns_empty_values(cloud_test_catalog, dogs_da
     q = DatasetQuery(name="dogs_with_rows_and_signals", catalog=catalog)
     result = q.to_db_records()
 
-    col_values = [
-        (
-            r["parent"],
-            r["name"],
-            r["int_col"],
-            r["int_col_32"],
-            r["int_col_64"],
-            r["bool_col"],
-            r["float_col"],
-            r["float_col_32"],
-            r["float_col_64"],
-            r["json_col"],
-            r["datetime_col"],
-            r["binary_col"],
-            r["array_col"],
-            r["array_col_nested"],
-            r["array_col_32"],
-            r["array_col_64"],
-        )
-        for r in result
-    ]
-
-    col_values.sort(key=lambda x: (x[1], x[0]))
-
-    assert col_values == [
-        ("dogs/dog1", "subobject", *new_col_values_empty),
-        ("dogs/dog2", "subobject", *new_col_values_empty),
-        ("dogs/dog3", "subobject", *new_col_values_empty),
-        ("dogs/others/dog4", "subobject", *new_col_values_empty),
-    ]
+    col_values = pd.DataFrame(result)
+    for col in new_columns:
+        assert col_values[col].notnull().sum() == 0
 
 
 @pytest.mark.parametrize(
@@ -3173,12 +3147,14 @@ def test_json_loader(cloud_test_catalog):
 
     col_default_values = tuple(t.default_value(dialect) for t in json_output.values())
 
-    expected = [
-        ("f1.json", col_default_values[0], col_default_values[1]),
-        ("f1.raw", 0.001, "deadbeef"),
-        ("f2.json", col_default_values[0], col_default_values[1]),
-        ("f2.raw", 0.005, "foobar"),
-    ]
+    expected = pd.DataFrame(
+        [
+            ("f1.json", col_default_values[0], col_default_values[1]),
+            ("f1.raw", 0.001, "deadbeef"),
+            ("f2.json", col_default_values[0], col_default_values[1]),
+            ("f2.raw", 0.005, "foobar"),
+        ]
+    )
 
     q = (
         DatasetQuery(cloud_test_catalog.src_uri, catalog=catalog)
@@ -3188,11 +3164,9 @@ def test_json_loader(cloud_test_catalog):
         .order_by(C.name)
     )
     assert q.count() == 4
-    res = q.db_results()
+    res = pd.DataFrame(q.db_results())
     assert len(res) == 4
-    assert [r[0] for r in res] == [r[0] for r in expected]
-    assert [r[1] for r in res] == pytest.approx([r[1] for r in expected])
-    assert [r[2] for r in res] == [r[2] for r in expected]
+    assert res.equals(expected)
 
 
 @pytest.mark.parametrize(
