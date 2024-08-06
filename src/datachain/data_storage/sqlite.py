@@ -15,7 +15,6 @@ from typing import (
 )
 
 import sqlalchemy
-from attrs import frozen
 from sqlalchemy import MetaData, Table, UniqueConstraint, exists, select
 from sqlalchemy.dialects import sqlite
 from sqlalchemy.schema import CreateIndex, CreateTable, DropTable
@@ -40,6 +39,7 @@ from datachain.utils import DataChainDir
 
 if TYPE_CHECKING:
     from sqlalchemy.dialects.sqlite import Insert
+    from sqlalchemy.engine.base import Engine
     from sqlalchemy.schema import SchemaItem
     from sqlalchemy.sql.elements import ColumnClause, ColumnElement, TextClause
     from sqlalchemy.sql.selectable import Select
@@ -51,6 +51,8 @@ logger = logging.getLogger("datachain")
 RETRY_START_SEC = 0.01
 RETRY_MAX_TIMES = 10
 RETRY_FACTOR = 2
+
+DETECT_TYPES = sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES
 
 Column = Union[str, "ColumnClause[Any]", "TextClause"]
 
@@ -80,26 +82,41 @@ def retry_sqlite_locks(func):
     return wrapper
 
 
-@frozen
 class SQLiteDatabaseEngine(DatabaseEngine):
     dialect = sqlite_dialect
 
     db: sqlite3.Connection
     db_file: Optional[str]
+    is_closed: bool
+
+    def __init__(
+        self,
+        engine: "Engine",
+        metadata: "MetaData",
+        db: sqlite3.Connection,
+        db_file: Optional[str] = None,
+    ):
+        self.engine = engine
+        self.metadata = metadata
+        self.db = db
+        self.db_file = db_file
+        self.is_closed = False
 
     @classmethod
     def from_db_file(cls, db_file: Optional[str] = None) -> "SQLiteDatabaseEngine":
-        detect_types = sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES
+        return cls(*cls._connect(db_file=db_file))
 
+    @staticmethod
+    def _connect(db_file: Optional[str] = None):
         try:
             if db_file == ":memory:":
                 # Enable multithreaded usage of the same in-memory db
                 db = sqlite3.connect(
-                    "file::memory:?cache=shared", uri=True, detect_types=detect_types
+                    "file::memory:?cache=shared", uri=True, detect_types=DETECT_TYPES
                 )
             else:
                 db = sqlite3.connect(
-                    db_file or DataChainDir.find().db, detect_types=detect_types
+                    db_file or DataChainDir.find().db, detect_types=DETECT_TYPES
                 )
             create_user_defined_sql_functions(db)
             engine = sqlalchemy.create_engine(
@@ -118,7 +135,7 @@ class SQLiteDatabaseEngine(DatabaseEngine):
 
             load_usearch_extension(db)
 
-            return cls(engine, MetaData(), db, db_file)
+            return engine, MetaData(), db, db_file
         except RuntimeError:
             raise DataChainError("Can't connect to SQLite DB") from None
 
@@ -138,6 +155,16 @@ class SQLiteDatabaseEngine(DatabaseEngine):
             {},
         )
 
+    def _reconnect(self) -> None:
+        if not self.is_closed:
+            raise RuntimeError("Cannot reconnect on still-open DB!")
+        engine, metadata, db, db_file = self._connect(db_file=self.db_file)
+        self.engine = engine
+        self.metadata = metadata
+        self.db = db
+        self.db_file = db_file
+        self.is_closed = False
+
     @retry_sqlite_locks
     def execute(
         self,
@@ -145,6 +172,9 @@ class SQLiteDatabaseEngine(DatabaseEngine):
         cursor: Optional[sqlite3.Cursor] = None,
         conn=None,
     ) -> sqlite3.Cursor:
+        if self.is_closed:
+            # Reconnect in case of being closed previously.
+            self._reconnect()
         if cursor is not None:
             result = cursor.execute(*self.compile_to_args(query))
         elif conn is not None:
@@ -179,6 +209,7 @@ class SQLiteDatabaseEngine(DatabaseEngine):
 
     def close(self) -> None:
         self.db.close()
+        self.is_closed = True
 
     @contextmanager
     def transaction(self):
@@ -359,6 +390,10 @@ class SQLiteMetastore(AbstractDBMetastore):
 
         self._init_tables()
 
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        """Close connection upon exit from context manager."""
+        self.close()
+
     def clone(
         self,
         uri: StorageURI = StorageURI(""),
@@ -520,6 +555,10 @@ class SQLiteWarehouse(AbstractWarehouse):
         super().__init__(id_generator)
 
         self.db = db or SQLiteDatabaseEngine.from_db_file(db_file)
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        """Close connection upon exit from context manager."""
+        self.close()
 
     def clone(self, use_new_connection: bool = False) -> "SQLiteWarehouse":
         return SQLiteWarehouse(self.id_generator.clone(), db=self.db.clone())

@@ -936,6 +936,49 @@ def test_class_udf(cloud_test_catalog, batch):
     [("s3", True)],
     indirect=True,
 )
+def test_udf_reuse_on_error(cloud_test_catalog_tmpfile):
+    catalog = cloud_test_catalog_tmpfile.catalog
+    sources = [cloud_test_catalog_tmpfile.src_uri]
+    globs = [s.rstrip("/") + "/*" for s in sources]
+    catalog.index(sources)
+    catalog.create_dataset_from_sources("animals", globs, recursive=True)
+
+    error_state = {"error": True}
+
+    @udf((C.name,), {"name_len": Int})
+    def name_len_maybe_error(name):
+        if error_state["error"]:
+            # A udf that raises an exception
+            raise RuntimeError("Test Error!")
+        return (len(name),)
+
+    q = (
+        DatasetQuery(name="animals", version=1, catalog=catalog)
+        .filter(C.size < 13)
+        .filter(C.parent.glob("cats*") | (C.size < 4))
+        .add_signals(name_len_maybe_error)
+        .select(C.name, C.name_len)
+    )
+    with pytest.raises(RuntimeError, match="Test Error!"):
+        q.db_results()
+
+    # Simulate fixing the error
+    error_state["error"] = False
+
+    # Retry Query
+    result = q.db_results()
+
+    assert len(result) == 3
+    for r in result:
+        # Check that the UDF ran successfully
+        assert len(r[0]) == r[1]
+
+
+@pytest.mark.parametrize(
+    "cloud_type,version_aware",
+    [("s3", True)],
+    indirect=True,
+)
 @pytest.mark.parametrize("batch", [False, True])
 def test_udf_parallel(cloud_test_catalog_tmpfile, batch):
     catalog = cloud_test_catalog_tmpfile.catalog
