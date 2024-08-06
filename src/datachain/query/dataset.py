@@ -1248,7 +1248,7 @@ class DatasetQuery:
             query = self.apply_steps().select()
             query_fields = [str(c.name) for c in query.selected_columns]
 
-            def row_iter() -> Generator[RowDict, None, None]:
+            def row_iter() -> Generator[Sequence, None, None]:
                 # warehouse isn't threadsafe, we need to clone() it
                 # in the thread that uses the results
                 with self.catalog.warehouse.clone() as warehouse:
