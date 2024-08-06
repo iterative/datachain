@@ -149,7 +149,7 @@ jobs:
         with:
           fetch-depth: 0
           repository: iterative/studio
-          ref: ilongin/148-datachain-column-with-type
+          ref: develop
           token: ${{ secrets.ITERATIVE_STUDIO_READ_ACCESS_TOKEN }}
 
       - name: Check out repository
