@@ -314,7 +314,7 @@ class DataChain(DatasetQuery):
         func = get_file(type)
         return (
             cls(path, session=session, recursive=recursive, update=update, **kwargs)
-            .map(**{object_name: func})
+            .mutate(**{object_name: func})
             .select(object_name)
         )
 
