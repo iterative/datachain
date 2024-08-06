@@ -1256,10 +1256,10 @@ def test_column_math(test_session):
     fib = [1, 1, 2, 3, 5, 8]
     chain = DataChain.from_values(num=fib, session=test_session)
 
-    ch = chain.mutate(add2=Column("num", Int64) + 2)
+    ch = chain.mutate(add2=chain.column("num") + 2)
     assert list(ch.collect("add2")) == [x + 2 for x in fib]
 
-    ch2 = ch.mutate(x=1 - Column("add2", Int64))
+    ch2 = ch.mutate(x=1 - ch.column("add2"))
     assert list(ch2.collect("x")) == [1 - (x + 2.0) for x in fib]
 
 
@@ -1268,7 +1268,7 @@ def test_column_math_division(test_session):
     fib = [1, 1, 2, 3, 5, 8]
     chain = DataChain.from_values(num=fib, session=test_session)
 
-    ch = chain.mutate(div2=Column("num", Int64) / 2.0)
+    ch = chain.mutate(div2=chain.column("num") / 2.0)
     assert list(ch.collect("div2")) == [x / 2.0 for x in fib]
 
 
