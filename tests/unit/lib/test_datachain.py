@@ -1259,11 +1259,17 @@ def test_column_math(test_session):
     ch = chain.mutate(add2=Column("num", Int64) + 2)
     assert list(ch.collect("add2")) == [x + 2 for x in fib]
 
+    ch2 = ch.mutate(x=1 - Column("add2", Int64))
+    assert list(ch2.collect("x")) == [1 - (x + 2.0) for x in fib]
+
+
+def test_column_math_division(test_session):
+    skip_if_not_sqlite()
+    fib = [1, 1, 2, 3, 5, 8]
+    chain = DataChain.from_values(num=fib, session=test_session)
+
     ch = chain.mutate(div2=Column("num", Int64) / 2.0)
     assert list(ch.collect("div2")) == [x / 2.0 for x in fib]
-
-    ch2 = ch.mutate(x=1 - Column("div2", Int64))
-    assert list(ch2.collect("x")) == [1 - (x / 2.0) for x in fib]
 
 
 def test_from_values_array_of_floats(test_session):
@@ -1475,6 +1481,7 @@ def test_mutate_with_complex_expression():
 
 
 def test_mutate_with_saving():
+    skip_if_not_sqlite()
     ds = DataChain.from_values(id=[1, 2])
     ds = ds.mutate(new=ds.column("id") / 2).save("mutated")
 
