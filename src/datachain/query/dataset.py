@@ -1376,10 +1376,14 @@ class DatasetQuery:
     @detach
     def limit(self, n: int) -> "Self":
         query = self.clone(new_table=False)
-        for step in query.steps:
-            if isinstance(step, SQLLimit) and step.n < n:
-                return query
-        query.steps.append(SQLLimit(n))
+        if (
+            query.steps
+            and (last_step := query.steps[-1])
+            and isinstance(last_step, SQLLimit)
+        ):
+            query.steps[-1] = SQLLimit(min(n, last_step.n))
+        else:
+            query.steps.append(SQLLimit(n))
         return query
 
     @detach

@@ -89,6 +89,15 @@ def main():
     static_csv_ds.print_schema()
     static_csv_ds.show()
 
+    uri = "gs://datachain-demo/laion-aesthetics-csv/laion_aesthetics_1024_33M_1.csv"
+    print()
+    print("========================================================================")
+    print("dynamic CSV with header schema test parsing 3/3M objects")
+    print("========================================================================")
+    dynamic_csv_ds = DataChain.from_csv(uri, object_name="laion", nrows=3)
+    dynamic_csv_ds.print_schema()
+    dynamic_csv_ds.show()
+
 
 if __name__ == "__main__":
     main()

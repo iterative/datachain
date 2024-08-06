@@ -884,6 +884,28 @@ def test_parse_tabular_output_list(tmp_dir, test_session):
     assert df1.equals(df)
 
 
+def test_parse_tabular_nrows(tmp_dir, test_session):
+    df = pd.DataFrame(DF_DATA)
+    path = tmp_dir / "test.parquet"
+    df.to_json(path, orient="records", lines=True)
+    dc = DataChain.from_storage(path.as_uri(), session=test_session).parse_tabular(
+        nrows=2, format="json"
+    )
+    df1 = dc.select("first_name", "age", "city").to_pandas()
+
+    assert df1.equals(df[:2])
+
+
+def test_parse_tabular_nrows_invalid(tmp_dir, test_session):
+    df = pd.DataFrame(DF_DATA)
+    path = tmp_dir / "test.parquet"
+    df.to_parquet(path)
+    with pytest.raises(DataChainParamsError):
+        DataChain.from_storage(path.as_uri(), session=test_session).parse_tabular(
+            nrows=2
+        )
+
+
 def test_from_csv(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.csv"
@@ -966,6 +988,15 @@ def test_from_csv_null_collect(tmp_dir, test_session):
     dc = DataChain.from_csv(path.as_uri(), object_name="csv", session=test_session)
     for i, row in enumerate(dc.collect()):
         assert row[1].height == height[i]
+
+
+def test_from_csv_nrows(tmp_dir, test_session):
+    df = pd.DataFrame(DF_DATA)
+    path = tmp_dir / "test.csv"
+    df.to_csv(path, index=False)
+    dc = DataChain.from_csv(path.as_uri(), nrows=2, session=test_session)
+    df1 = dc.select("first_name", "age", "city").to_pandas()
+    assert df1.equals(df[:2])
 
 
 def test_from_parquet(tmp_dir, test_session):
@@ -1303,3 +1334,78 @@ def test_show_limit():
     assert dc.limit(3).limit(2).count() == 2
     dc.show(1)
     assert dc.count() == 5
+
+
+def test_gen_limit(catalog):
+    def func(key, val) -> Iterator[tuple[File, str]]:
+        for i in range(val):
+            yield File(name=""), f"{key}_{i}"
+
+    keys = ["a", "b", "c", "d"]
+    values = [3, 3, 3, 3]
+
+    ds = DataChain.from_values(key=keys, val=values)
+
+    assert ds.count() == 4
+    assert ds.gen(res=func).count() == 12
+    assert ds.limit(2).gen(res=func).count() == 6
+    assert ds.limit(2).gen(res=func).limit(1).count() == 1
+    assert ds.limit(3).gen(res=func).limit(2).count() == 2
+    assert ds.limit(2).gen(res=func).limit(3).count() == 3
+    assert ds.limit(3).gen(res=func).limit(10).count() == 9
+
+
+def test_rename_non_object_column_name_with_mutate(catalog):
+    ds = DataChain.from_values(ids=[1, 2, 3])
+    ds = ds.mutate(my_ids=Column("ids"))
+
+    assert ds.signals_schema.values == {"my_ids": int}
+    assert list(ds.order_by("my_ids").collect("my_ids")) == [1, 2, 3]
+
+    ds.save("mutated")
+
+    ds = DataChain(name="mutated")
+    assert ds.signals_schema.values.get("my_ids") is int
+    assert "ids" not in ds.signals_schema.values
+    assert list(ds.order_by("my_ids").collect("my_ids")) == [1, 2, 3]
+
+
+def test_rename_object_column_name_with_mutate(catalog):
+    names = ["a", "b", "c"]
+    sizes = [1, 2, 3]
+    files = [File(name=name, size=size) for name, size in zip(names, sizes)]
+
+    ds = DataChain.from_values(file=files, ids=[1, 2, 3])
+    ds = ds.mutate(fname=Column("file.name"))
+
+    assert list(ds.order_by("fname").collect("fname")) == ["a", "b", "c"]
+    assert ds.signals_schema.values == {"file": File, "ids": int, "fname": str}
+
+    # check that persist after saving
+    ds.save("mutated")
+
+    ds = DataChain(name="mutated")
+    assert ds.signals_schema.values.get("file") is File
+    assert ds.signals_schema.values.get("ids") is int
+    assert ds.signals_schema.values.get("fname") is str
+    assert list(ds.order_by("fname").collect("fname")) == ["a", "b", "c"]
+
+
+def test_rename_object_name_with_mutate(catalog):
+    names = ["a", "b", "c"]
+    sizes = [1, 2, 3]
+    files = [File(name=name, size=size) for name, size in zip(names, sizes)]
+
+    ds = DataChain.from_values(file=files, ids=[1, 2, 3])
+    ds = ds.mutate(my_file=Column("file"))
+
+    assert list(ds.order_by("my_file.name").collect("my_file.name")) == ["a", "b", "c"]
+    assert ds.signals_schema.values == {"my_file": File, "ids": int}
+
+    ds.save("mutated")
+
+    ds = DataChain(name="mutated")
+    assert ds.signals_schema.values.get("my_file") is File
+    assert ds.signals_schema.values.get("ids") is int
+    assert "file" not in ds.signals_schema.values
+    assert list(ds.order_by("my_file.name").collect("my_file.name")) == ["a", "b", "c"]
