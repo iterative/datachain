@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from datachain import Column
 from datachain.lib.data_model import DataModel
-from datachain.lib.dc import C, DataChain, Sys
+from datachain.lib.dc import C, DataChain, DataChainColumnError, Sys
 from datachain.lib.file import File
 from datachain.lib.signal_schema import (
     SignalResolvingError,
@@ -19,6 +19,8 @@ from datachain.lib.signal_schema import (
 )
 from datachain.lib.udf_signature import UdfSignatureError
 from datachain.lib.utils import DataChainParamsError
+from datachain.sql import functions as func
+from datachain.sql.types import Float, Int64, String
 from tests.utils import skip_if_not_sqlite
 
 DF_DATA = {
@@ -1254,14 +1256,20 @@ def test_column_math(test_session):
     fib = [1, 1, 2, 3, 5, 8]
     chain = DataChain.from_values(num=fib, session=test_session)
 
-    ch = chain.mutate(add2=Column("num") + 2)
+    ch = chain.mutate(add2=chain.column("num") + 2)
     assert list(ch.collect("add2")) == [x + 2 for x in fib]
 
-    ch = chain.mutate(div2=Column("num") / 2.0)
-    assert list(ch.collect("div2")) == [x / 2.0 for x in fib]
+    ch2 = ch.mutate(x=1 - ch.column("add2"))
+    assert list(ch2.collect("x")) == [1 - (x + 2.0) for x in fib]
 
-    ch2 = ch.mutate(x=1 - Column("div2"))
-    assert list(ch2.collect("x")) == [1 - (x / 2.0) for x in fib]
+
+def test_column_math_division(test_session):
+    skip_if_not_sqlite()
+    fib = [1, 1, 2, 3, 5, 8]
+    chain = DataChain.from_values(num=fib, session=test_session)
+
+    ch = chain.mutate(div2=chain.column("num") / 2.0)
+    assert list(ch.collect("div2")) == [x / 2.0 for x in fib]
 
 
 def test_from_values_array_of_floats(test_session):
@@ -1409,3 +1417,83 @@ def test_rename_object_name_with_mutate(catalog):
     assert ds.signals_schema.values.get("ids") is int
     assert "file" not in ds.signals_schema.values
     assert list(ds.order_by("my_file.name").collect("my_file.name")) == ["a", "b", "c"]
+
+
+def test_column(catalog):
+    ds = DataChain.from_values(
+        ints=[1, 2], floats=[0.5, 0.5], file=[File(name="a"), File(name="b")]
+    )
+
+    c = ds.column("ints")
+    assert isinstance(c, Column)
+    assert c.name == "ints"
+    assert isinstance(c.type, Int64)
+
+    c = ds.column("floats")
+    assert isinstance(c, Column)
+    assert c.name == "floats"
+    assert isinstance(c.type, Float)
+
+    c = ds.column("file.name")
+    assert isinstance(c, Column)
+    assert c.name == "file__name"
+    assert isinstance(c.type, String)
+
+    with pytest.raises(ValueError):
+        c = ds.column("missing")
+
+
+def test_mutate_with_subtraction():
+    ds = DataChain.from_values(id=[1, 2])
+    assert ds.mutate(new=ds.column("id") - 1).signals_schema.values["new"] is int
+
+
+def test_mutate_with_addition():
+    ds = DataChain.from_values(id=[1, 2])
+    assert ds.mutate(new=ds.column("id") + 1).signals_schema.values["new"] is int
+
+
+def test_mutate_with_division():
+    ds = DataChain.from_values(id=[1, 2])
+    assert ds.mutate(new=ds.column("id") / 10).signals_schema.values["new"] is float
+
+
+def test_mutate_with_multiplication():
+    ds = DataChain.from_values(id=[1, 2])
+    assert ds.mutate(new=ds.column("id") * 10).signals_schema.values["new"] is int
+
+
+def test_mutate_with_func():
+    ds = DataChain.from_values(id=[1, 2])
+    assert (
+        ds.mutate(new=func.avg(ds.column("id"))).signals_schema.values["new"] is float
+    )
+
+
+def test_mutate_with_complex_expression():
+    ds = DataChain.from_values(id=[1, 2], name=["Jim", "Jon"])
+    assert (
+        ds.mutate(
+            new=(func.sum(ds.column("id"))) * (5 - func.min(ds.column("id")))
+        ).signals_schema.values["new"]
+        is int
+    )
+
+
+def test_mutate_with_saving():
+    skip_if_not_sqlite()
+    ds = DataChain.from_values(id=[1, 2])
+    ds = ds.mutate(new=ds.column("id") / 2).save("mutated")
+
+    ds = DataChain(name="mutated")
+    assert ds.signals_schema.values["new"] is float
+    assert list(ds.collect("new")) == [0.5, 1.0]
+
+
+def test_mutate_with_expression_without_type(catalog):
+    with pytest.raises(DataChainColumnError) as excinfo:
+        DataChain.from_values(id=[1, 2]).mutate(new=(Column("id") - 1)).save()
+
+    assert str(excinfo.value) == (
+        "Error for column new: Cannot infer type with expression id - :id_1"
+    )
