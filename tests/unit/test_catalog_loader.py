@@ -11,7 +11,6 @@ from datachain.catalog.loader import (
     get_warehouse,
 )
 from datachain.data_storage.sqlite import (
-    SQLiteDatabaseEngine,
     SQLiteIDGenerator,
     SQLiteMetastore,
     SQLiteWarehouse,
@@ -24,37 +23,34 @@ class DistributedClass:
         self.kwargs = kwargs
 
 
-def test_get_id_generator():
-    db = SQLiteDatabaseEngine.from_db_file(":memory:")
-
-    id_generator = SQLiteIDGenerator(db, table_prefix="prefix")
-    assert id_generator.db == db
+def test_get_id_generator(sqlite_db):
+    id_generator = SQLiteIDGenerator(sqlite_db, table_prefix="prefix")
+    assert id_generator.db == sqlite_db
     assert id_generator._table_prefix == "prefix"
 
     with patch.dict(os.environ, {"DATACHAIN__ID_GENERATOR": id_generator.serialize()}):
         id_generator2 = get_id_generator()
         assert id_generator2
         assert isinstance(id_generator2, SQLiteIDGenerator)
-        assert id_generator2._db.db_file == db.db_file
+        assert id_generator2._db.db_file == sqlite_db.db_file
         assert id_generator2._table_prefix == "prefix"
         assert id_generator2.clone_params() == id_generator.clone_params()
 
-    with patch.dict(os.environ, {"DATACHAIN__ID_GENERATOR": db.serialize()}):
+    with patch.dict(os.environ, {"DATACHAIN__ID_GENERATOR": sqlite_db.serialize()}):
         with pytest.raises(RuntimeError, match="instance of AbstractIDGenerator"):
             get_id_generator()
 
 
-def test_get_metastore():
-    db = SQLiteDatabaseEngine.from_db_file(":memory:")
-    id_generator = SQLiteIDGenerator(db, table_prefix="prefix")
+def test_get_metastore(sqlite_db):
+    id_generator = SQLiteIDGenerator(sqlite_db, table_prefix="prefix")
     uri = StorageURI("s3://bucket")
     partial_id = 37
 
-    metastore = SQLiteMetastore(id_generator, uri, partial_id, db)
+    metastore = SQLiteMetastore(id_generator, uri, partial_id, sqlite_db)
     assert metastore.id_generator == id_generator
     assert metastore.uri == uri
     assert metastore.partial_id == partial_id
-    assert metastore.db == db
+    assert metastore.db == sqlite_db
 
     with patch.dict(os.environ, {"DATACHAIN__METASTORE": metastore.serialize()}):
         metastore2 = get_metastore(None)
@@ -67,21 +63,20 @@ def test_get_metastore():
         )
         assert metastore2.uri == uri
         assert metastore2.partial_id == partial_id
-        assert metastore2.db.db_file == db.db_file
+        assert metastore2.db.db_file == sqlite_db.db_file
         assert metastore2.clone_params() == metastore.clone_params()
 
-    with patch.dict(os.environ, {"DATACHAIN__METASTORE": db.serialize()}):
+    with patch.dict(os.environ, {"DATACHAIN__METASTORE": sqlite_db.serialize()}):
         with pytest.raises(RuntimeError, match="instance of AbstractMetastore"):
             get_metastore(None)
 
 
-def test_get_warehouse():
-    db = SQLiteDatabaseEngine.from_db_file(":memory:")
-    id_generator = SQLiteIDGenerator(db, table_prefix="prefix")
+def test_get_warehouse(sqlite_db):
+    id_generator = SQLiteIDGenerator(sqlite_db, table_prefix="prefix")
 
-    warehouse = SQLiteWarehouse(id_generator, db)
+    warehouse = SQLiteWarehouse(id_generator, sqlite_db)
     assert warehouse.id_generator == id_generator
-    assert warehouse.db == db
+    assert warehouse.db == sqlite_db
 
     with patch.dict(os.environ, {"DATACHAIN__WAREHOUSE": warehouse.serialize()}):
         warehouse2 = get_warehouse(None)
@@ -92,10 +87,10 @@ def test_get_warehouse():
             warehouse2.id_generator._table_prefix
             == warehouse.id_generator._table_prefix
         )
-        assert warehouse2.db.db_file == db.db_file
+        assert warehouse2.db.db_file == sqlite_db.db_file
         assert warehouse2.clone_params() == warehouse.clone_params()
 
-    with patch.dict(os.environ, {"DATACHAIN__WAREHOUSE": db.serialize()}):
+    with patch.dict(os.environ, {"DATACHAIN__WAREHOUSE": sqlite_db.serialize()}):
         with pytest.raises(RuntimeError, match="instance of AbstractWarehouse"):
             get_warehouse(None)
 
@@ -135,13 +130,12 @@ def test_get_distributed_class():
             get_distributed_class()
 
 
-def test_get_catalog():
-    db = SQLiteDatabaseEngine.from_db_file(":memory:")
-    id_generator = SQLiteIDGenerator(db, table_prefix="prefix")
+def test_get_catalog(sqlite_db):
+    id_generator = SQLiteIDGenerator(sqlite_db, table_prefix="prefix")
     uri = StorageURI("s3://bucket")
     partial_id = 73
-    metastore = SQLiteMetastore(id_generator, uri, partial_id, db)
-    warehouse = SQLiteWarehouse(id_generator, db)
+    metastore = SQLiteMetastore(id_generator, uri, partial_id, sqlite_db)
+    warehouse = SQLiteWarehouse(id_generator, sqlite_db)
     env = {
         "DATACHAIN__ID_GENERATOR": id_generator.serialize(),
         "DATACHAIN__METASTORE": metastore.serialize(),
@@ -154,7 +148,7 @@ def test_get_catalog():
 
         assert catalog.id_generator
         assert isinstance(catalog.id_generator, SQLiteIDGenerator)
-        assert catalog.id_generator._db.db_file == db.db_file
+        assert catalog.id_generator._db.db_file == sqlite_db.db_file
         assert catalog.id_generator._table_prefix == "prefix"
         assert catalog.id_generator.clone_params() == id_generator.clone_params()
 
@@ -170,7 +164,7 @@ def test_get_catalog():
         )
         assert catalog.metastore.uri == uri
         assert catalog.metastore.partial_id == partial_id
-        assert catalog.metastore.db.db_file == db.db_file
+        assert catalog.metastore.db.db_file == sqlite_db.db_file
         assert catalog.metastore.clone_params() == metastore.clone_params()
 
         assert catalog.warehouse
@@ -183,5 +177,5 @@ def test_get_catalog():
             catalog.warehouse.id_generator._table_prefix
             == warehouse.id_generator._table_prefix
         )
-        assert catalog.warehouse.db.db_file == db.db_file
+        assert catalog.warehouse.db.db_file == sqlite_db.db_file
         assert catalog.warehouse.clone_params() == warehouse.clone_params()
