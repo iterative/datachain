@@ -3,7 +3,7 @@ from typing import Optional, Union
 
 import pytest
 
-from datachain import DataModel
+from datachain import Column, DataModel
 from datachain.lib.convert.flatten import flatten
 from datachain.lib.file import File
 from datachain.lib.signal_schema import (
@@ -251,7 +251,7 @@ def test_print_types():
         assert SignalSchema._type_to_str(t) == v
 
 
-def test_bd_signals():
+def test_db_signals():
     spec = {"name": str, "age": float, "fr": MyType2}
     lst = list(SignalSchema(spec).db_signals())
 
@@ -261,6 +261,33 @@ def test_bd_signals():
         "fr__name",
         "fr__deep__aa",
         "fr__deep__bb",
+    ]
+
+
+def test_db_signals_filtering_by_name():
+    schema = SignalSchema({"name": str, "age": float, "fr": MyType2})
+
+    assert list(schema.db_signals(name="fr")) == [
+        "fr__name",
+        "fr__deep__aa",
+        "fr__deep__bb",
+    ]
+    assert list(schema.db_signals(name="name")) == ["name"]
+    assert list(schema.db_signals(name="missing")) == []
+
+
+def test_db_signals_as_columns():
+    spec = {"name": str, "age": float, "fr": MyType2}
+    lst = list(SignalSchema(spec).db_signals(as_columns=True))
+
+    assert all(isinstance(s, Column) for s in lst)
+
+    assert [(c.name, type(c.type)) for c in lst] == [
+        ("name", String),
+        ("age", Float),
+        ("fr__name", String),
+        ("fr__deep__aa", Int64),
+        ("fr__deep__bb", String),
     ]
 
 

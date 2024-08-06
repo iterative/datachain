@@ -45,6 +45,16 @@ class Listing:
             self.dataset,
         )
 
+    def __enter__(self) -> "Listing":
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        self.close()
+
+    def close(self) -> None:
+        self.metastore.close()
+        self.warehouse.close()
+
     @property
     def id(self):
         return self.storage.id
@@ -57,16 +67,18 @@ class Listing:
         sync(get_loop(), self._fetch, start_prefix, method)
 
     async def _fetch(self, start_prefix: str, method: str) -> None:
-        self = self.clone()
-        if start_prefix:
-            start_prefix = start_prefix.rstrip("/")
-        try:
-            async for entries in self.client.scandir(start_prefix, method=method):
-                self.insert_entries(entries)
-                if len(entries) > 1:
-                    self.metastore.update_last_inserted_at()
-        finally:
-            self.insert_entries_done()
+        with self.clone() as fetch_listing:
+            if start_prefix:
+                start_prefix = start_prefix.rstrip("/")
+            try:
+                async for entries in fetch_listing.client.scandir(
+                    start_prefix, method=method
+                ):
+                    fetch_listing.insert_entries(entries)
+                    if len(entries) > 1:
+                        fetch_listing.metastore.update_last_inserted_at()
+            finally:
+                fetch_listing.insert_entries_done()
 
     def insert_entry(self, entry: Entry) -> None:
         self.warehouse.insert_rows(

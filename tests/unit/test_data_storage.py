@@ -36,21 +36,21 @@ def test_dir_expansion(cloud_test_catalog, version_aware, cloud_type):
 
     ds = create_tar_dataset(catalog, ctc.src_uri, "ds2")
     dataset = catalog.get_dataset(ds.name)
-    st = catalog.warehouse.clone()
-    q = st.dataset_rows(dataset).dir_expansion()
-    columns = (
-        "id",
-        "vtype",
-        "is_dir",
-        "source",
-        "path",
-        "version",
-        "location",
-    )
-    result = [dict(zip(columns, r)) for r in st.db.execute(q)]
-    to_compare = [
-        (r["path"], r["vtype"], r["is_dir"], r["version"] != "") for r in result
-    ]
+    with catalog.warehouse.clone() as warehouse:
+        q = warehouse.dataset_rows(dataset).dir_expansion()
+        columns = (
+            "id",
+            "vtype",
+            "is_dir",
+            "source",
+            "path",
+            "version",
+            "location",
+        )
+        result = [dict(zip(columns, r)) for r in warehouse.db.execute(q)]
+        to_compare = [
+            (r["path"], r["vtype"], r["is_dir"], r["version"] != "") for r in result
+        ]
 
     assert all(r["source"] == ctc.storage_uri for r in result)
     if cloud_type == "file":
