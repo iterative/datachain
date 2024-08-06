@@ -248,6 +248,18 @@ def test_show_no_truncate(capsys, catalog):
         assert details[i] in normalized_output
 
 
+def test_show_no_rows(capsys, catalog):
+    dc = DataChain.from_values(a_column=[1], b_column=["also 1"])
+    dc.limit(0).show()
+
+    captured = capsys.readouterr()
+    normalized_output = re.sub(r"\s+", " ", captured.out)
+    assert "Empty DataChain" in normalized_output
+    assert "a_column" in normalized_output
+    assert "b_column" in normalized_output
+    assert "1" not in normalized_output
+
+
 def test_from_storage_dataset_stats(tmp_dir, catalog):
     for i in range(4):
         (tmp_dir / f"file{i}.txt").write_text(f"file{i}")

@@ -1181,9 +1181,15 @@ class DataChain(DatasetQuery):
         """
         headers, max_length = self._effective_signals_schema.get_headers_with_length()
         if flatten or max_length < 2:
-            df = pd.DataFrame.from_records(self.to_records())
-            if headers:
-                df.columns = [".".join(filter(None, header)) for header in headers]
+            columns = [".".join(filter(None, header)) for header in headers]
+            records = self.to_records()
+
+            if len(records) == 0:
+                df = pd.DataFrame(columns=columns)
+            else:
+                df = pd.DataFrame.from_records(records)
+                if headers:
+                    df.columns = columns
             return df
 
         transposed_result = list(map(list, zip(*self.results())))
@@ -1206,6 +1212,7 @@ class DataChain(DatasetQuery):
             truncate : Whether or not to truncate the contents of columns.
         """
         dc = self.limit(limit) if limit > 0 else self
+
         df = dc.to_pandas(flatten)
         if transpose:
             df = df.T
@@ -1227,7 +1234,11 @@ class DataChain(DatasetQuery):
             options.extend(["display.max_colwidth", None])
 
         with pd.option_context(*options):
-            if inside_notebook():
+            if df.empty:
+                print("Empty DataChain")
+                print(f"Columns=[{', '.join(df.columns)}]")
+
+            elif inside_notebook():
                 from IPython.display import display
 
                 display(df)
