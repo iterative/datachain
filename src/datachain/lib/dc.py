@@ -1623,7 +1623,7 @@ class DataChain(DatasetQuery):
 
             Using glob to match patterns
             ```py
-            dc.filter(C("file.name").glob("*.jpg))
+            dc.filter(C("file.name").glob("*.jpg"))
             ```
 
             Using `datachain.sql.functions`
