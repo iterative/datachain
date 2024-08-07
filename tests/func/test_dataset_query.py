@@ -4,10 +4,13 @@ import math
 import os
 import pickle
 import random
+import signal
+import subprocess  # nosec B404
 import uuid
 from datetime import datetime, timedelta, timezone
 from json import dumps
 from textwrap import dedent
+from time import sleep
 from unittest.mock import ANY, patch
 
 import numpy as np
@@ -51,6 +54,7 @@ from datachain.sql.types import (
 from tests.data import ENTRIES
 from tests.utils import (
     DEFAULT_TREE,
+    LARGE_TREE,
     NUM_TREE,
     SIMPLE_DS_QUERY_RECORDS,
     TARRED_TREE,
@@ -61,6 +65,52 @@ from tests.utils import (
     make_index,
     text_embedding,
 )
+
+WORKER_COUNT = 1
+WORKER_SHUTDOWN_WAIT_SEC = 30
+
+
+@pytest.fixture()
+def run_datachain_worker():
+    if not os.environ.get("DATACHAIN_DISTRIBUTED"):
+        pytest.skip("Distributed tests are disabled")
+    workers = []
+    worker_cmd = [
+        "celery",
+        "-A",
+        "datachain_server.distributed",
+        "worker",
+        "--loglevel=INFO",
+        "-P",
+        "solo",
+        "-Q",
+        "datachain-worker",
+        "-n",
+        "datachain-worker-tests",
+    ]
+    workers.append(subprocess.Popen(worker_cmd, shell=False))  # noqa: S603
+    try:
+        from datachain_server.distributed import app
+
+        inspect = app.control.inspect()
+        attempts = 0
+        # Wait 10 seconds for the Celery worker(s) to be up
+        while not inspect.active() and attempts < 10:
+            sleep(1)
+            attempts += 1
+
+        if attempts == 10:
+            raise RuntimeError("Celery worker(s) did not start in time")
+
+        yield workers
+    finally:
+        for worker in workers:
+            os.kill(worker.pid, signal.SIGTERM)
+        for worker in workers:
+            try:
+                worker.wait(timeout=WORKER_SHUTDOWN_WAIT_SEC)
+            except subprocess.TimeoutExpired:
+                os.kill(worker.pid, signal.SIGKILL)
 
 
 def from_result_row(col_names, row):
@@ -1118,8 +1168,8 @@ def test_udf_parallel_interrupt(cloud_test_catalog_tmpfile, capfd):
 
 
 @pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
+    "cloud_type,version_aware,tree",
+    [("s3", True, LARGE_TREE)],
     indirect=True,
 )
 @pytest.mark.parametrize("batch", [False, True])
@@ -1129,7 +1179,14 @@ def test_udf_parallel_interrupt(cloud_test_catalog_tmpfile, capfd):
     reason="Set the DATACHAIN_DISTRIBUTED environment variable "
     "to test distributed UDFs",
 )
-def test_udf_distributed(cloud_test_catalog_tmpfile, batch, workers, datachain_job_id):
+def test_udf_distributed(
+    cloud_test_catalog_tmpfile,
+    batch,
+    workers,
+    tree,
+    datachain_job_id,
+    run_datachain_worker,
+):
     catalog = cloud_test_catalog_tmpfile.catalog
     sources = [cloud_test_catalog_tmpfile.src_uri]
     globs = [s.rstrip("/") + "/*" for s in sources]
@@ -1154,14 +1211,14 @@ def test_udf_distributed(cloud_test_catalog_tmpfile, batch, workers, datachain_j
 
     q = (
         DatasetQuery(name="animals", version=1, catalog=catalog)
-        .filter(C.size < 13)
-        .filter(C.parent.glob("cats*") | (C.size < 4))
+        .filter(C.size < 90)
+        .filter(C.parent.glob("cats*") | (C.size > 30))
         .add_signals(udf_func, parallel=2, workers=workers)
         .select(C.name, C.name_len, C.blank)
     )
     result = q.db_results()
 
-    assert len(result) == 3
+    assert len(result) == 148
     string_default = String.default_value(catalog.warehouse.db.dialect)
     for r in result:
         # Check that the UDF ran successfully
@@ -1170,8 +1227,8 @@ def test_udf_distributed(cloud_test_catalog_tmpfile, batch, workers, datachain_j
 
 
 @pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
+    "cloud_type,version_aware,tree",
+    [("s3", True, LARGE_TREE)],
     indirect=True,
 )
 @pytest.mark.parametrize("workers", (1, 2))
@@ -1181,7 +1238,7 @@ def test_udf_distributed(cloud_test_catalog_tmpfile, batch, workers, datachain_j
     "to test distributed UDFs",
 )
 def test_udf_distributed_exec_error(
-    cloud_test_catalog_tmpfile, workers, datachain_job_id
+    cloud_test_catalog_tmpfile, workers, datachain_job_id, tree, run_datachain_worker
 ):
     catalog = cloud_test_catalog_tmpfile.catalog
     sources = [cloud_test_catalog_tmpfile.src_uri]
@@ -1205,8 +1262,8 @@ def test_udf_distributed_exec_error(
 
 
 @pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
+    "cloud_type,version_aware,tree",
+    [("s3", True, LARGE_TREE)],
     indirect=True,
 )
 @pytest.mark.skipif(
@@ -1214,7 +1271,9 @@ def test_udf_distributed_exec_error(
     reason="Set the DATACHAIN_DISTRIBUTED environment variable "
     "to test distributed UDFs",
 )
-def test_udf_distributed_interrupt(cloud_test_catalog_tmpfile, capfd, datachain_job_id):
+def test_udf_distributed_interrupt(
+    cloud_test_catalog_tmpfile, capfd, datachain_job_id, tree, run_datachain_worker
+):
     catalog = cloud_test_catalog_tmpfile.catalog
     sources = [cloud_test_catalog_tmpfile.src_uri]
     globs = [s.rstrip("/") + "/*" for s in sources]
@@ -1240,8 +1299,8 @@ def test_udf_distributed_interrupt(cloud_test_catalog_tmpfile, capfd, datachain_
 
 
 @pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
+    "cloud_type,version_aware, tree",
+    [("s3", True, LARGE_TREE)],
     indirect=True,
 )
 @pytest.mark.skipif(
@@ -1249,7 +1308,9 @@ def test_udf_distributed_interrupt(cloud_test_catalog_tmpfile, capfd, datachain_
     reason="Set the DATACHAIN_DISTRIBUTED environment variable "
     "to test distributed UDFs",
 )
-def test_udf_distributed_cancel(cloud_test_catalog_tmpfile, capfd, datachain_job_id):
+def test_udf_distributed_cancel(
+    cloud_test_catalog_tmpfile, capfd, datachain_job_id, tree, run_datachain_worker
+):
     catalog = cloud_test_catalog_tmpfile.catalog
     metastore = catalog.metastore
     sources = [cloud_test_catalog_tmpfile.src_uri]
