@@ -140,11 +140,9 @@ class FileClient(Client):
             full_path += "/"
         return full_path
 
-    def convert_info(self, v: dict[str, Any], parent: str) -> Entry:
-        name = posixpath.basename(v["name"])
+    def convert_info(self, v: dict[str, Any], path: str) -> Entry:
         return Entry.from_file(
-            parent=parent,
-            name=name,
+            path=path,
             etag=v["mtime"].hex(),
             is_latest=True,
             last_modified=datetime.fromtimestamp(v["mtime"], timezone.utc),

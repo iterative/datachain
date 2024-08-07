@@ -277,7 +277,7 @@ class Client(ABC):
             if info["type"] == "directory":
                 subdirs.add(subprefix)
             else:
-                files.append(self.convert_info(info, prefix))
+                files.append(self.convert_info(info, subprefix))
         if files:
             await result_queue.put(files)
         found_count = len(subdirs) + len(files)
@@ -360,12 +360,11 @@ class Client(ABC):
 
         parent_uid = UniqueId(
             parent["source"],
-            parent["parent"],
-            parent["name"],
-            parent["etag"],
+            parent["path"],
             parent["size"],
-            parent["vtype"],
-            parent["location"],
+            parent["etag"],
+            vtype=parent["vtype"],
+            location=parent["location"],
         )
         f = self.open_object(parent_uid, use_cache=use_cache)
         return FileSlice(f, offset, size, posixpath.basename(uid.path))

@@ -1,3 +1,4 @@
+import posixpath
 import uuid
 from json import dumps
 from unittest.mock import ANY
@@ -595,7 +596,10 @@ def test_edit_dataset_remove_labels_and_description(cloud_test_catalog, dogs_dat
 def test_ls_dataset_rows(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
 
-    assert {r["name"] for r in catalog.ls_dataset_rows(dogs_dataset.name, 1)} == {
+    assert {
+        posixpath.basename(r["path"])
+        for r in catalog.ls_dataset_rows(dogs_dataset.name, 1)
+    } == {
         "dog1",
         "dog2",
         "dog3",
@@ -615,7 +619,7 @@ def test_ls_dataset_rows_with_limit_offset(cloud_test_catalog, dogs_dataset):
     )
 
     assert {
-        r["name"]
+        r["path"]
         for r in catalog.ls_dataset_rows(
             dogs_dataset.name,
             1,
@@ -623,7 +627,7 @@ def test_ls_dataset_rows_with_limit_offset(cloud_test_catalog, dogs_dataset):
             limit=1,
         )
     } == {
-        all_rows[2]["name"],
+        all_rows[2]["path"],
     }
 
 
@@ -776,7 +780,10 @@ def test_merge_datasets(cloud_test_catalog, dogs_dataset, cats_dataset):
     dogs_dataset = catalog.get_dataset(dogs_dataset.name)
     assert dogs_dataset.versions_values == [1, 2]
 
-    assert {r["name"] for r in catalog.ls_dataset_rows(dogs_dataset.name, 2)} == {
+    assert {
+        posixpath.basename(r["path"])
+        for r in catalog.ls_dataset_rows(dogs_dataset.name, 2)
+    } == {
         "dog1",
         "dog2",
         "dog3",
@@ -848,7 +855,10 @@ def test_merge_datasets_existing_pending_version(
 
     assert "similarity" in dogs_dataset.get_version(2).schema
 
-    assert {r["name"] for r in catalog.ls_dataset_rows(dogs_dataset.name, 2)} == {
+    assert {
+        posixpath.basename(r["path"])
+        for r in catalog.ls_dataset_rows(dogs_dataset.name, 2)
+    } == {
         "cat1",
         "cat2",
     }

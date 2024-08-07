@@ -45,7 +45,7 @@ if __name__ == "__main__":
             anon=True,
             type="image",
         )
-        .filter(C("file.name").glob("*.jpg"))
+        .filter(C("file.path").glob("*.jpg"))
         .limit(1)
         .map(
             Helper(
@@ -56,7 +56,7 @@ if __name__ == "__main__":
             params=["file"],
             output={"model_output": dict, "error": str},
         )
-        .select("file.source", "file.parent", "file.name", "model_output", "error")
+        .select("file.source", "file.path", "model_output", "error")
         .show()
     )
 
@@ -67,7 +67,7 @@ if __name__ == "__main__":
             anon=True,
             type="image",
         )
-        .filter(C("file.name").glob("*.jpg"))
+        .filter(C("file.path").glob("*.jpg"))
         .limit(1)
         .map(
             Helper(
@@ -77,7 +77,7 @@ if __name__ == "__main__":
             params=["file"],
             output={"model_output": dict, "error": str},
         )
-        .select("file.source", "file.parent", "file.name", "model_output", "error")
+        .select("file.source", "file.path", "model_output", "error")
         .show()
     )
 
@@ -88,7 +88,7 @@ if __name__ == "__main__":
             anon=True,
             type="binary",
         )
-        .filter(C("file.name").glob("*.wav"))
+        .filter(C("file.path").glob("*.wav"))
         .limit(1)
         .map(
             Helper(
@@ -98,7 +98,7 @@ if __name__ == "__main__":
             params=["file"],
             output={"model_output": dict, "error": str},
         )
-        .select("file.source", "file.parent", "file.name", "model_output", "error")
+        .select("file.source", "file.path", "model_output", "error")
         .show()
     )
     print("\nLong text summarization:")
@@ -108,7 +108,7 @@ if __name__ == "__main__":
             anon=True,
             type="text",
         )
-        .filter(C("file.name").glob("*.story"))
+        .filter(C("file.path").glob("*.story"))
         .limit(1)
         .map(
             Helper(
@@ -119,6 +119,6 @@ if __name__ == "__main__":
             params=["file"],
             output={"model_output": dict, "error": str},
         )
-        .select("file.source", "file.parent", "file.name", "model_output", "error")
+        .select("file.source", "file.path", "model_output", "error")
         .show()
     )

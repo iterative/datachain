@@ -9,9 +9,7 @@ def cache(tmp_path):
 
 
 def test_simple(cache):
-    uid = UniqueId(
-        "s3://foo", "data", "bar", etag="xyz", size=3, vtype="", location=None
-    )
+    uid = UniqueId("s3://foo", "data/bar", etag="xyz", size=3, vtype="", location=None)
     data = b"foo"
     assert not cache.contains(uid)
 
@@ -34,7 +32,7 @@ def test_get_total_size(cache):
     expected_total = sum(len(d) for _, d in file_info)
     for name, data in file_info:
         uid = UniqueId(
-            "s3://foo", "data", name, etag="xyz", size=3, vtype="", location=None
+            "s3://foo", f"data/{name}", etag="xyz", size=3, vtype="", location=None
         )
         cache.store_data(uid, data)
     total = cache.get_total_size()
@@ -47,7 +45,7 @@ def test_get_total_size(cache):
 
 def test_remove(cache):
     uid = UniqueId(
-        "s3://bkt42", "dir1/dir2", "file84", etag="abc", size=3, vtype="", location=None
+        "s3://bkt42", "dir1/dir2/file84", etag="abc", size=3, vtype="", location=None
     )
     cache.store_data(uid, b"some random string 679")
 

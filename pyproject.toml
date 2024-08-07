@@ -182,6 +182,7 @@ ignore = [
   "SIM108",  # if-else-block-instead-of-if-exp
   "SIM117",  # multiple-with-statements
   "PERF203",  # perflint - try-except-in-loop, irrelevant for Python>=3.11
+  "PERF401",
   "D100",  # undocumented-public-module
   "D205"  # one-blank-line-after-class
 ]

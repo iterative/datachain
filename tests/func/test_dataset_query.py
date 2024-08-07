@@ -3,18 +3,17 @@ import json
 import math
 import os
 import pickle
-import random
+import posixpath
 import uuid
 from datetime import datetime, timedelta, timezone
 from json import dumps
 from textwrap import dedent
-from unittest.mock import ANY, patch
+from unittest.mock import ANY
 
 import numpy as np
 import pytest
 import sqlalchemy
 from dateutil.parser import isoparse
-from sqlalchemy import tuple_
 
 from datachain.catalog import QUERY_SCRIPT_CANCELED_EXIT_CODE
 from datachain.dataset import DatasetDependencyType, DatasetStatus
@@ -32,6 +31,7 @@ from datachain.query import (
 from datachain.query.builtins import checksum, index_tar
 from datachain.query.dataset import QueryStep
 from datachain.sql import functions
+from datachain.sql.functions import path as pathfunc
 from datachain.sql.functions.array import cosine_distance, euclidean_distance
 from datachain.sql.types import (
     JSON,
@@ -179,7 +179,7 @@ def test_save_multiple_versions(cloud_test_catalog, from_path):
     q = ds
     q.save(ds_name)
 
-    q = q.filter(C.parent.glob("cats*") | (C.size < 4))
+    q = q.filter(C.path.glob("cats*") | (C.size < 4))
     q.save(ds_name)
     q.save(ds_name)
 
@@ -212,7 +212,7 @@ def test_filter(cloud_test_catalog, save, from_path):
         catalog.index(sources)
         catalog.create_dataset_from_sources("animals", globs, recursive=True)
         ds = DatasetQuery(name="animals", version=1, catalog=catalog)
-    q = ds.filter(C.size < 13).filter(C.parent.glob("cats*") | (C.size < 4))
+    q = ds.filter(C.size < 13).filter(C.path.glob("cats*") | (C.size < 4))
     if save:
         ds_name = "animals_cats"
         q.save(ds_name)
@@ -263,7 +263,7 @@ def test_query_specific_dataset_set_proper_dataset_name_version(
 def test_save_set_proper_dataset_name_version(cloud_test_catalog, dogs_cats_dataset):
     catalog = cloud_test_catalog.catalog
     ds = DatasetQuery(name=dogs_cats_dataset.name, version=1, catalog=catalog)
-    ds = ds.filter(C.name.glob("dog*"))
+    ds = ds.filter(C.path.glob("*dog*"))
     ds2 = ds.save("dogs_small")
 
     assert ds2.name == "dogs_small"
@@ -284,9 +284,9 @@ def test_exec(cloud_test_catalog, dogs_cats_dataset):
     catalog = cloud_test_catalog.catalog
     all_names = set()
 
-    @udf(params=("name",), output={})
-    def name_len(name):
-        all_names.add(name)
+    @udf(params=("path",), output={})
+    def name_len(path):
+        all_names.add(posixpath.basename(path))
 
     existing_datasets = list(catalog.ls_datasets())
     dq = (
@@ -312,7 +312,7 @@ def test_reset_dataset_name_version_after_filter(cloud_test_catalog, dogs_cats_d
     assert ds2.name == "dogs_small"
     assert ds2.version == 1
 
-    ds3 = ds2.filter(C.name.glob("dog1"))
+    ds3 = ds2.filter(C.path.glob("*dog1"))
     assert ds3.name is None
     assert ds3.version is None
 
@@ -326,18 +326,20 @@ def test_reset_dataset_name_version_after_filter(cloud_test_catalog, dogs_cats_d
     [("s3", True)],
     indirect=True,
 )
-@patch("random.randint")
-def test_avoid_recalculation_after_save(randint_mock, cloud_test_catalog):
-    @udf(("name",), {"name_len": Int})
-    def name_len(name):
-        random.randint(1, 5)  #  noqa: S311 using to check how many times we called UDF
-        return (len(name),)
+def test_avoid_recalculation_after_save(cloud_test_catalog):
+    calls = 0
+
+    @udf(("size",), {"name_len": Int})
+    def name_len(size):
+        nonlocal calls
+        calls += 1
+        return (size,)
 
     path = cloud_test_catalog.src_uri
     catalog = cloud_test_catalog.catalog
     ds = (
         DatasetQuery(path=path, catalog=catalog)
-        .filter(C.name == "dog1")
+        .filter(C.path.glob("*/dog1"))
         .add_signals(name_len)
     )
     ds2 = ds.save("ds1")
@@ -346,7 +348,7 @@ def test_avoid_recalculation_after_save(randint_mock, cloud_test_catalog):
     assert ds2.dependencies == set()
     assert isinstance(ds2.starting_step, QueryStep)
     ds2.save("ds2")
-    assert randint_mock.call_count == 1  # UDF should be called only once
+    assert calls == 1  # UDF should be called only once
 
 
 @pytest.mark.parametrize(
@@ -357,7 +359,7 @@ def test_avoid_recalculation_after_save(randint_mock, cloud_test_catalog):
 def test_chain_after_save(cloud_test_catalog, dogs_cats_dataset):
     catalog = cloud_test_catalog.catalog
     ds = DatasetQuery(name=dogs_cats_dataset.name, version=1, catalog=catalog)
-    ds.filter(C.name.glob("dog*")).save("ds1").filter(C.size < 4).save("ds2")
+    ds.filter(C.path.glob("*dog*")).save("ds1").filter(C.size < 4).save("ds2")
 
     assert_row_names(
         catalog, catalog.get_dataset("ds1"), 1, {"dog1", "dog2", "dog3", "dog4"}
@@ -375,18 +377,18 @@ def test_select(cloud_test_catalog):
     path = cloud_test_catalog.src_uri
     ds = DatasetQuery(path=path, catalog=catalog)
     q = (
-        ds.order_by(C.size.desc(), C.name)
+        ds.order_by(C.size.desc())
         .limit(6)
-        .select(C.name, size10x=C.size * 10, size100x=C.size * 100)
+        .select(C.size, size10x=C.size * 10, size100x=C.size * 100)
     )
     result = q.db_results()
     assert result == [
-        ("description", 130, 1300),
-        ("cat1", 40, 400),
-        ("cat2", 40, 400),
-        ("dog1", 40, 400),
-        ("dog3", 40, 400),
-        ("dog4", 40, 400),
+        (13, 130, 1300),
+        (4, 40, 400),
+        (4, 40, 400),
+        (4, 40, 400),
+        (4, 40, 400),
+        (4, 40, 400),
     ]
 
 
@@ -418,19 +420,19 @@ def test_select_except(cloud_test_catalog):
     path = cloud_test_catalog.src_uri
     ds = DatasetQuery(path=path, catalog=catalog)
     q = (
-        ds.order_by(C.size.desc(), C.name)
+        ds.order_by(C.size.desc())
         .limit(6)
-        .select(C.parent, "name", C.size, size10x=C.size * 10, size100x=C.size * 100)
-        .select_except(C.parent, C.size10x)
+        .select("path", C.size, size10x=C.size * 10, size100x=C.size * 100)
+        .select_except(C.path, C.size10x)
     )
     result = q.db_results()
     assert result == [
-        ("description", 13, 1300),
-        ("cat1", 4, 400),
-        ("cat2", 4, 400),
-        ("dog1", 4, 400),
-        ("dog3", 4, 400),
-        ("dog4", 4, 400),
+        (13, 1300),
+        (4, 400),
+        (4, 400),
+        (4, 400),
+        (4, 400),
+        (4, 400),
     ]
 
 
@@ -444,13 +446,14 @@ def test_distinct(cloud_test_catalog):
     path = cloud_test_catalog.src_uri
     ds = DatasetQuery(path=path, catalog=catalog)
 
-    q = ds.select(C.parent, C.size).order_by(C.name).distinct(C.parent)
-    assert q.db_results(row_factory=lambda c, v: dict(zip(c, v))) == [
-        {"parent": "cats", "size": 4},
-        {"parent": "", "size": 13},
-        {"parent": "dogs", "size": 4},
-        {"parent": "dogs/others", "size": 4},
-    ]
+    q = (
+        ds.select(pathfunc.name(C.path), C.size)
+        .order_by(pathfunc.name(C.path))
+        .distinct(C.size)
+    )
+    result = q.db_results()
+
+    assert result == [("cat1", 4), ("description", 13), ("dog2", 3)]
 
 
 @pytest.mark.parametrize(
@@ -463,8 +466,8 @@ def test_distinct_count(cloud_test_catalog):
     path = cloud_test_catalog.src_uri
     ds = DatasetQuery(path=path, catalog=catalog)
 
-    assert ds.distinct(C.parent).count() == 4
-    assert ds.distinct(C.name).count() == 7
+    assert ds.distinct(C.size).count() == 3
+    assert ds.distinct(C.path).count() == 7
     assert ds.distinct().count() == 7
 
 
@@ -486,14 +489,14 @@ def test_mutate(cloud_test_catalog, save):
             ("s3", C.size * 3),
             s4=C.size * 4,
         )
-        .filter((C.size10x < 40) | (C.size10x > 100) | C.name.glob("cat*"))
-        .order_by(C.size10x.desc(), C.name)
+        .filter((C.size10x < 40) | (C.size10x > 100) | C.path.glob("cat*"))
+        .order_by(C.size10x.desc(), C.path)
     )
     if save:
         ds_name = "animals_cats"
         q.save(ds_name)
         new_query = DatasetQuery(name=ds_name, catalog=catalog).order_by(
-            C.size10x.desc(), C.name
+            C.size10x.desc(), C.path
         )
         result = new_query.db_results(row_factory=lambda c, v: dict(zip(c, v)))
         dataset_record = catalog.get_dataset(ds_name)
@@ -501,7 +504,7 @@ def test_mutate(cloud_test_catalog, save):
     else:
         result = q.db_results(row_factory=lambda c, v: dict(zip(c, v)))
     assert len(result) == 4
-    assert len(result[0]) == 20
+    assert len(result[0]) == 19
     cols = {"size10x", "size1000x", "s2", "s3", "s4"}
     new_data = [[v for k, v in r.items() if k in cols] for r in result]
     assert new_data == [
@@ -523,7 +526,7 @@ def test_order_by_after_mutate(cloud_test_catalog, save):
     ds = DatasetQuery(path=cloud_test_catalog.src_uri, catalog=catalog)
     q = (
         ds.mutate(size10x=C.size * 10)
-        .filter((C.size10x < 40) | (C.size10x > 100) | C.name.glob("cat*"))
+        .filter((C.size10x < 40) | (C.size10x > 100) | C.path.glob("cat*"))
         .order_by(C.size10x.desc())
     )
 
@@ -532,7 +535,7 @@ def test_order_by_after_mutate(cloud_test_catalog, save):
         q.save(ds_name)
         result = (
             DatasetQuery(name=ds_name, catalog=catalog)
-            .order_by(C.size10x.desc(), C.name)
+            .order_by(C.size10x.desc(), pathfunc.name(C.path))
             .db_results(row_factory=lambda c, v: dict(zip(c, v)))
         )
     else:
@@ -551,17 +554,25 @@ def test_order_by_limit(cloud_test_catalog, save):
     catalog = cloud_test_catalog.catalog
     path = cloud_test_catalog.src_uri
     ds = DatasetQuery(path=path, catalog=catalog)
-    q = ds.order_by(C.name.desc()).limit(5)
+    q = ds.order_by(pathfunc.name(C.path).desc()).limit(5)
     if save:
         ds_name = "animals_cats"
         q.save(ds_name)
-        new_query = DatasetQuery(name=ds_name, catalog=catalog).order_by(C.name.desc())
+        new_query = DatasetQuery(name=ds_name, catalog=catalog).order_by(
+            pathfunc.name(C.path).desc()
+        )
         result = new_query.db_results()
         dataset_record = catalog.get_dataset(ds_name)
         assert dataset_record.status == DatasetStatus.COMPLETE
     else:
         result = q.db_results()
-    assert [r[5] for r in result] == ["dog4", "dog3", "dog2", "dog1", "description"]
+    assert [posixpath.basename(r[4]) for r in result] == [
+        "dog4",
+        "dog3",
+        "dog2",
+        "dog1",
+        "description",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -595,21 +606,21 @@ def test_row_number_with_order_by_name_descending(cloud_test_catalog):
     ds_name = uuid.uuid4().hex
 
     DatasetQuery(path=path, catalog=catalog, client_config=conf).order_by(
-        C.name.desc()
+        pathfunc.name(C.path).desc()
     ).save(ds_name)
 
     results = DatasetQuery(name=ds_name, catalog=catalog).to_db_records()
     results_name_id = [
-        {k: v for k, v in r.items() if k in ["sys__id", "name"]} for r in results
+        {k: v for k, v in r.items() if k in ["sys__id", "path"]} for r in results
     ]
     assert sorted(results_name_id, key=lambda k: k["sys__id"]) == [
-        {"sys__id": 1, "name": "dog4"},
-        {"sys__id": 2, "name": "dog3"},
-        {"sys__id": 3, "name": "dog2"},
-        {"sys__id": 4, "name": "dog1"},
-        {"sys__id": 5, "name": "description"},
-        {"sys__id": 6, "name": "cat2"},
-        {"sys__id": 7, "name": "cat1"},
+        {"sys__id": 1, "path": "dogs/others/dog4"},
+        {"sys__id": 2, "path": "dogs/dog3"},
+        {"sys__id": 3, "path": "dogs/dog2"},
+        {"sys__id": 4, "path": "dogs/dog1"},
+        {"sys__id": 5, "path": "description"},
+        {"sys__id": 6, "path": "cats/cat2"},
+        {"sys__id": 7, "path": "cats/cat1"},
     ]
 
 
@@ -625,21 +636,21 @@ def test_row_number_with_order_by_name_ascending(cloud_test_catalog):
     ds_name = uuid.uuid4().hex
 
     DatasetQuery(path=path, catalog=catalog, client_config=conf).order_by(
-        C.name.asc()
+        pathfunc.name(C.path).asc()
     ).save(ds_name)
 
     results = DatasetQuery(name=ds_name, catalog=catalog).to_db_records()
     results_name_id = [
-        {k: v for k, v in r.items() if k in ["sys__id", "name"]} for r in results
+        {k: v for k, v in r.items() if k in ["sys__id", "path"]} for r in results
     ]
     assert sorted(results_name_id, key=lambda k: k["sys__id"]) == [
-        {"sys__id": 1, "name": "cat1"},
-        {"sys__id": 2, "name": "cat2"},
-        {"sys__id": 3, "name": "description"},
-        {"sys__id": 4, "name": "dog1"},
-        {"sys__id": 5, "name": "dog2"},
-        {"sys__id": 6, "name": "dog3"},
-        {"sys__id": 7, "name": "dog4"},
+        {"sys__id": 1, "path": "cats/cat1"},
+        {"sys__id": 2, "path": "cats/cat2"},
+        {"sys__id": 3, "path": "description"},
+        {"sys__id": 4, "path": "dogs/dog1"},
+        {"sys__id": 5, "path": "dogs/dog2"},
+        {"sys__id": 6, "path": "dogs/dog3"},
+        {"sys__id": 7, "path": "dogs/others/dog4"},
     ]
 
 
@@ -654,26 +665,26 @@ def test_row_number_with_order_by_name_len_desc_and_name_asc(cloud_test_catalog)
     path = cloud_test_catalog.src_uri
     ds_name = uuid.uuid4().hex
 
-    @udf(("name",), {"name_len": Int})
-    def name_len(name):
-        return (len(name),)
+    @udf(("path",), {"name_len": Int})
+    def name_len(path):
+        return (len(posixpath.basename(path)),)
 
     DatasetQuery(path=path, catalog=catalog, client_config=conf).add_signals(
         name_len
-    ).order_by(C.name_len.desc(), C.name.asc()).save(ds_name)
+    ).order_by(C.name_len.desc(), pathfunc.name(C.path).asc()).save(ds_name)
 
     results = DatasetQuery(name=ds_name, catalog=catalog).to_db_records()
     results_name_id = [
-        {k: v for k, v in r.items() if k in ["sys__id", "name"]} for r in results
+        {k: v for k, v in r.items() if k in ["sys__id", "path"]} for r in results
     ]
     assert sorted(results_name_id, key=lambda k: k["sys__id"]) == [
-        {"sys__id": 1, "name": "description"},
-        {"sys__id": 2, "name": "cat1"},
-        {"sys__id": 3, "name": "cat2"},
-        {"sys__id": 4, "name": "dog1"},
-        {"sys__id": 5, "name": "dog2"},
-        {"sys__id": 6, "name": "dog3"},
-        {"sys__id": 7, "name": "dog4"},
+        {"sys__id": 1, "path": "description"},
+        {"sys__id": 2, "path": "cats/cat1"},
+        {"sys__id": 3, "path": "cats/cat2"},
+        {"sys__id": 4, "path": "dogs/dog1"},
+        {"sys__id": 5, "path": "dogs/dog2"},
+        {"sys__id": 6, "path": "dogs/dog3"},
+        {"sys__id": 7, "path": "dogs/others/dog4"},
     ]
 
 
@@ -688,28 +699,28 @@ def test_row_number_with_order_by_before_add_signals(cloud_test_catalog):
     path = cloud_test_catalog.src_uri
     ds_name = uuid.uuid4().hex
 
-    @udf(("name",), {"name_len": Int})
-    def name_len(name):
-        return (len(name),)
+    @udf(("path",), {"name_len": Int})
+    def name_len(path):
+        return (len(posixpath.basename(path)),)
 
     DatasetQuery(path=path, catalog=catalog, client_config=conf).order_by(
-        C.name.asc()
+        pathfunc.name(C.path).asc()
     ).add_signals(name_len).save(ds_name)
 
     results = DatasetQuery(name=ds_name, catalog=catalog).to_db_records()
     results_name_id = [
-        {k: v for k, v in r.items() if k in ["sys__id", "name"]} for r in results
+        {k: v for k, v in r.items() if k in ["sys__id", "path"]} for r in results
     ]
     # we should preserve order in final result based on order by which was added
     # before add_signals
     assert sorted(results_name_id, key=lambda k: k["sys__id"]) == [
-        {"sys__id": 1, "name": "cat1"},
-        {"sys__id": 2, "name": "cat2"},
-        {"sys__id": 3, "name": "description"},
-        {"sys__id": 4, "name": "dog1"},
-        {"sys__id": 5, "name": "dog2"},
-        {"sys__id": 6, "name": "dog3"},
-        {"sys__id": 7, "name": "dog4"},
+        {"sys__id": 1, "path": "cats/cat1"},
+        {"sys__id": 2, "path": "cats/cat2"},
+        {"sys__id": 3, "path": "description"},
+        {"sys__id": 4, "path": "dogs/dog1"},
+        {"sys__id": 5, "path": "dogs/dog2"},
+        {"sys__id": 6, "path": "dogs/dog3"},
+        {"sys__id": 7, "path": "dogs/others/dog4"},
     ]
 
 
@@ -725,20 +736,19 @@ def test_udf(cloud_test_catalog):
     catalog.index(sources)
     catalog.create_dataset_from_sources("animals", globs, recursive=True)
 
-    @udf(("name",), {"name_len": Int})
-    def name_len(name):
-        # A very simple udf.
-        return (len(name),)
+    @udf(("path",), {"name_len": Int})
+    def name_len(path):
+        return (len(posixpath.basename(path)),)
 
     q = (
         DatasetQuery(name="animals", version=1, catalog=catalog)
         .filter(C.size < 13)
-        .filter(C.parent.glob("cats*") | (C.size < 4))
+        .filter(C.path.glob("cats*") | (C.size < 4))
         .add_signals(name_len)
     )
-    result1 = q.select(C.name, C.name_len).db_results()
+    result1 = q.select(C.path, C.name_len).db_results()
     # ensure that we're able to run with same query multiple times
-    result2 = q.select(C.name, C.name_len).db_results()
+    result2 = q.select(C.path, C.name_len).db_results()
     count = q.count()
     assert len(result1) == 3
     assert len(result2) == 3
@@ -746,8 +756,8 @@ def test_udf(cloud_test_catalog):
 
     for r1, r2 in zip(result1, result2):
         # Check that the UDF ran successfully
-        assert len(r1[0]) == r1[1]
-        assert len(r2[0]) == r2[1]
+        assert len(posixpath.basename(r1[0])) == r1[1]
+        assert len(posixpath.basename(r2[0])) == r2[1]
 
     q.save("test_udf")
     dataset = catalog.get_dataset("test_udf")
@@ -810,7 +820,7 @@ def test_udf_different_types(cloud_test_catalog):
 
     q = (
         DatasetQuery(name="animals", version=1, catalog=catalog)
-        .filter(C.name == "cat1")
+        .filter(pathfunc.name(C.path) == "cat1")
         .add_signals(test_types)
     )
 
@@ -945,19 +955,19 @@ def test_udf_reuse_on_error(cloud_test_catalog_tmpfile):
 
     error_state = {"error": True}
 
-    @udf((C.name,), {"name_len": Int})
-    def name_len_maybe_error(name):
+    @udf((C.path,), {"path_len": Int})
+    def name_len_maybe_error(path):
         if error_state["error"]:
             # A udf that raises an exception
             raise RuntimeError("Test Error!")
-        return (len(name),)
+        return (len(path),)
 
     q = (
         DatasetQuery(name="animals", version=1, catalog=catalog)
         .filter(C.size < 13)
-        .filter(C.parent.glob("cats*") | (C.size < 4))
+        .filter(C.path.glob("cats*") | (C.size < 4))
         .add_signals(name_len_maybe_error)
-        .select(C.name, C.name_len)
+        .select(C.path, C.path_len)
     )
     with pytest.raises(RuntimeError, match="Test Error!"):
         q.db_results()
@@ -987,12 +997,12 @@ def test_udf_parallel(cloud_test_catalog_tmpfile, batch):
     catalog.index(sources)
     catalog.create_dataset_from_sources("animals", globs, recursive=True)
 
-    @udf(("name",), {"name_len": Int})
+    @udf(("path",), {"name_len": Int})
     def name_len_local(name):
         # A very simple udf.
         return (len(name),)
 
-    @udf(("name",), {"name_len": Int}, batch=2)
+    @udf(("path",), {"name_len": Int}, batch=2)
     def name_len_batch(names):
         # A very simple udf.
         return [(len(name),) for (name,) in names]
@@ -1007,9 +1017,9 @@ def test_udf_parallel(cloud_test_catalog_tmpfile, batch):
     q = (
         DatasetQuery(name="animals", version=1, catalog=catalog)
         .filter(C.size < 13)
-        .filter(C.parent.glob("cats*") | (C.size < 4))
+        .filter(C.path.glob("cats*") | (C.size < 4))
         .add_signals(udf_func, parallel=-1)
-        .select(C.name, C.name_len)
+        .select(C.path, C.name_len)
     )
     result = q.db_results()
 
@@ -1072,7 +1082,7 @@ def test_udf_parallel_exec_error(cloud_test_catalog_tmpfile):
     catalog.index(sources)
     catalog.create_dataset_from_sources("animals", globs, recursive=True)
 
-    @udf((C.name,), {"name_len": Int})
+    @udf((C.path,), {"name_len": Int})
     def name_len_error(_name):
         # A udf that raises an exception
         raise RuntimeError("Test Error!")
@@ -1080,7 +1090,7 @@ def test_udf_parallel_exec_error(cloud_test_catalog_tmpfile):
     q = (
         DatasetQuery(name="animals", version=1, catalog=catalog)
         .filter(C.size < 13)
-        .filter(C.parent.glob("cats*") | (C.size < 4))
+        .filter(C.path.glob("cats*") | (C.size < 4))
         .add_signals(name_len_error, parallel=-1)
     )
     with pytest.raises(RuntimeError, match="UDF Execution Failed!"):
@@ -1099,7 +1109,7 @@ def test_udf_parallel_interrupt(cloud_test_catalog_tmpfile, capfd):
     catalog.index(sources)
     catalog.create_dataset_from_sources("animals", globs, recursive=True)
 
-    @udf(("name",), {"name_len": Int})
+    @udf(("path",), {"name_len": Int})
     def name_len_interrupt(_name):
         # A UDF that emulates cancellation due to a KeyboardInterrupt.
         raise KeyboardInterrupt
@@ -1107,7 +1117,7 @@ def test_udf_parallel_interrupt(cloud_test_catalog_tmpfile, capfd):
     q = (
         DatasetQuery(name="animals", version=1, catalog=catalog)
         .filter(C.size < 13)
-        .filter(C.parent.glob("cats*") | (C.size < 4))
+        .filter(C.path.glob("cats*") | (C.size < 4))
         .add_signals(name_len_interrupt, parallel=-1)
     )
     with pytest.raises(RuntimeError, match="UDF Execution Failed!"):
@@ -1136,12 +1146,12 @@ def test_udf_distributed(cloud_test_catalog_tmpfile, batch, workers, datachain_j
     catalog.index(sources)
     catalog.create_dataset_from_sources("animals", globs, recursive=True)
 
-    @udf(("name",), {"name_len": Int, "blank": String})
+    @udf(("path",), {"name_len": Int, "blank": String})
     def name_len_local(name):
         # A very simple udf.
         return len(name), None
 
-    @udf(("name",), {"name_len": Int, "blank": String}, batch=2)
+    @udf(("path",), {"name_len": Int, "blank": String}, batch=2)
     def name_len_batch(names):
         # A very simple udf.
         return [(len(name), None) for (name,) in names]
@@ -1155,9 +1165,9 @@ def test_udf_distributed(cloud_test_catalog_tmpfile, batch, workers, datachain_j
     q = (
         DatasetQuery(name="animals", version=1, catalog=catalog)
         .filter(C.size < 13)
-        .filter(C.parent.glob("cats*") | (C.size < 4))
+        .filter(C.path.glob("cats*") | (C.size < 4))
         .add_signals(udf_func, parallel=2, workers=workers)
-        .select(C.name, C.name_len, C.blank)
+        .select(C.path, C.name_len, C.blank)
     )
     result = q.db_results()
 
@@ -1189,7 +1199,7 @@ def test_udf_distributed_exec_error(
     catalog.index(sources)
     catalog.create_dataset_from_sources("animals", globs, recursive=True)
 
-    @udf((C.name,), {"name_len": Int})
+    @udf((C.path,), {"name_len": Int})
     def name_len_error(_name):
         # A udf that raises an exception
         raise RuntimeError("Test Error!")
@@ -1197,7 +1207,7 @@ def test_udf_distributed_exec_error(
     q = (
         DatasetQuery(name="animals", version=1, catalog=catalog)
         .filter(C.size < 13)
-        .filter(C.parent.glob("cats*") | (C.size < 4))
+        .filter(C.path.glob("cats*") | (C.size < 4))
         .add_signals(name_len_error, parallel=2, workers=workers)
     )
     with pytest.raises(RuntimeError, match="Test Error!"):
@@ -1221,7 +1231,7 @@ def test_udf_distributed_interrupt(cloud_test_catalog_tmpfile, capfd, datachain_
     catalog.index(sources)
     catalog.create_dataset_from_sources("animals", globs, recursive=True)
 
-    @udf(("name",), {"name_len": Int})
+    @udf(("path",), {"name_len": Int})
     def name_len_interrupt(_name):
         # A UDF that emulates cancellation due to a KeyboardInterrupt.
         raise KeyboardInterrupt
@@ -1229,7 +1239,7 @@ def test_udf_distributed_interrupt(cloud_test_catalog_tmpfile, capfd, datachain_
     q = (
         DatasetQuery(name="animals", version=1, catalog=catalog)
         .filter(C.size < 13)
-        .filter(C.parent.glob("cats*") | (C.size < 4))
+        .filter(C.path.glob("cats*") | (C.size < 4))
         .add_signals(name_len_interrupt, parallel=2, workers=2)
     )
     with pytest.raises(RuntimeError, match=r"Worker Killed \(KeyboardInterrupt\)"):
@@ -1274,7 +1284,7 @@ def test_udf_distributed_cancel(cloud_test_catalog_tmpfile, capfd, datachain_job
         ),
     )
 
-    @udf(("name",), {"name_len": Int})
+    @udf(("path",), {"name_len": Int})
     def name_len_slow(name):
         # A very simple udf, that processes slowly to emulate being stuck.
         from time import sleep
@@ -1285,7 +1295,7 @@ def test_udf_distributed_cancel(cloud_test_catalog_tmpfile, capfd, datachain_job
     q = (
         DatasetQuery(name="animals", version=1, catalog=catalog)
         .filter(C.size < 13)
-        .filter(C.parent.glob("cats*") | (C.size < 4))
+        .filter(C.path.glob("cats*") | (C.size < 4))
         .add_signals(name_len_slow, parallel=2, workers=2)
     )
 
@@ -1306,13 +1316,14 @@ def test_apply_udf(cloud_test_catalog, tmp_path):
     catalog.create_dataset_from_sources("animals", globs, recursive=True)
 
     code = """\
+        import posixpath
         from datachain.query import C, udf
         from datachain.sql.types import Int
 
-        @udf((C.name,), {"name_len": Int})
-        def name_len(name):
-            # A very simple udf.
-            return (len(name),)
+        @udf(("path",), {"name_len": Int})
+        def name_len(path):
+            return (len(posixpath.basename(path)),)
+
     """
     script = tmp_path / "foo.py"
     script.write_text(dedent(code))
@@ -1340,18 +1351,18 @@ def test_udf_object_param(cloud_test_catalog, dogs_dataset, param, use_cache):
     catalog = cloud_test_catalog.catalog
     if isinstance(param, Object):
 
-        @udf((C.name, param), {"signal": String})
-        def signal(name, obj):
+        @udf((C.path, param), {"signal": String})
+        def signal(path, obj):
             # A very simple udf.
-            return (name + " -> " + obj,)
+            return (posixpath.basename(path) + " -> " + obj,)
 
     else:
 
-        @udf(("name", param), {"signal": String})
-        def signal(name, local_filename):
+        @udf(("path", param), {"signal": String})
+        def signal(path, local_filename):
             with open(local_filename, encoding="utf8") as f:
                 obj = f.read()
-            return (name + " -> " + obj,)
+            return (posixpath.basename(path) + " -> " + obj,)
 
     q = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog).add_signals(
         signal, cache=use_cache
@@ -1372,10 +1383,10 @@ def test_udf_object_param(cloud_test_catalog, dogs_dataset, param, use_cache):
 def test_udf_stream_param(cloud_test_catalog, dogs_dataset, use_cache):
     catalog = cloud_test_catalog.catalog
 
-    @udf((C.name, Stream()), {"signal": String})
-    def signal(name, stream):
+    @udf((C.path, Stream()), {"signal": String})
+    def signal(path, stream):
         with stream as buf:
-            return (name + " -> " + buf.read().decode("utf-8"),)
+            return (posixpath.basename(path) + " -> " + buf.read().decode("utf-8"),)
 
     q = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog).add_signals(
         signal, cache=use_cache
@@ -1395,10 +1406,10 @@ def test_extract(cloud_test_catalog, dogs_dataset, use_cache):
     catalog = cloud_test_catalog.catalog
     q = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
     results = set()
-    for name, stream in q.extract("name", Stream(), cache=use_cache):
+    for path, stream in q.extract("path", Stream(), cache=use_cache):
         with stream:
             value = stream.read().decode("utf-8")
-        results.add((name, value))
+        results.add((posixpath.basename(path), value))
     assert results == {
         ("dog1", "woof"),
         ("dog2", "arf"),
@@ -1410,8 +1421,8 @@ def test_extract(cloud_test_catalog, dogs_dataset, use_cache):
 def test_extract_object(cloud_test_catalog, dogs_dataset):
     ctc = cloud_test_catalog
     ds = DatasetQuery(name=dogs_dataset.name, version=1, catalog=ctc.catalog)
-    data = ds.extract(Object(to_str), "name")
-    assert set(data) == {
+    data = ds.extract(Object(to_str), "path")
+    assert {(value, posixpath.basename(path)) for value, path in data} == {
         ("woof", "dog1"),
         ("arf", "dog2"),
         ("bark", "dog3"),
@@ -1425,10 +1436,10 @@ def test_extract_chunked(cloud_test_catalog, dogs_dataset):
     all_data = []
     ds = DatasetQuery(name=dogs_dataset.name, version=1, catalog=ctc.catalog)
     for i in range(n):
-        data = ds.chunk(i, n).extract(Object(to_str), "name")
+        data = ds.chunk(i, n).extract(Object(to_str), "path")
         all_data.extend(data)
 
-    assert set(all_data) == {
+    assert {(value, posixpath.basename(path)) for value, path in all_data} == {
         ("woof", "dog1"),
         ("arf", "dog2"),
         ("bark", "dog3"),
@@ -1446,7 +1457,7 @@ def test_extract_chunked_limit(cloud_test_catalog, dogs_dataset):
     for _ in range(5):
         q = q.union(q)
     for i in range(chunks):
-        data = q.limit(limit).chunk(i, chunks).extract(Object(to_str), "name")
+        data = q.limit(limit).chunk(i, chunks).extract(Object(to_str), "path")
         all_data.extend(data)
 
     assert len(all_data) == limit
@@ -1460,7 +1471,7 @@ def test_extract_chunked_limit(cloud_test_catalog, dogs_dataset):
 def test_extract_limit(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
     q = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
-    results = list(q.limit(2).extract("name"))
+    results = list(q.limit(2).extract("path"))
     assert len(results) == 2
 
 
@@ -1472,8 +1483,8 @@ def test_extract_limit(cloud_test_catalog, dogs_dataset):
 def test_extract_order_by(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
     q = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
-    results = list(q.order_by("sys__rand").extract("name"))
-    pairs = list(q.extract("sys__rand", "name"))
+    results = list(q.order_by("sys__rand").extract("path"))
+    pairs = list(q.extract("sys__rand", "path"))
     assert results == [(p[1],) for p in sorted(pairs)]
 
 
@@ -1508,7 +1519,7 @@ def test_union(cloud_test_catalog):
     [("s3", True)],
     indirect=True,
 )
-@pytest.mark.parametrize("predicates", ["name", C.name])
+@pytest.mark.parametrize("predicates", ["path", C.path])
 def test_join_left_one_column_predicate(
     cloud_test_catalog,
     dogs_dataset,
@@ -1535,7 +1546,7 @@ def test_join_left_one_column_predicate(
     joined_records = dogs_cats.join(dogs, predicates).to_db_records()
     assert len(joined_records) == 6
 
-    cat_records_names = ["cat1", "cat2"]
+    cat_records_names = ["cats/cat1", "cats/cat2"]
 
     dogs_cats_records = DatasetQuery(
         name=dogs_cats_dataset.name, version=1, catalog=catalog
@@ -1545,7 +1556,7 @@ def test_join_left_one_column_predicate(
     assert all(
         r["sig1"] == 1 and r["sig2"] == 2
         for r in joined_records
-        if r["name"] not in cat_records_names
+        if r["path"] not in cat_records_names
     )
 
     int_default = Int.default_value(catalog.warehouse.db.dialect)
@@ -1553,11 +1564,11 @@ def test_join_left_one_column_predicate(
     assert all(
         r["sig1"] == 1 and r["sig2"] == int_default
         for r in joined_records
-        if r["name"] in cat_records_names
+        if r["path"] in cat_records_names
     )
     # check core duplicated columns
     for r in joined_records:
-        dog_r = next(dr for dr in dogs_cats_records if dr["name"] == r["name"])
+        dog_r = next(dr for dr in dogs_cats_records if dr["path"] == r["path"])
         assert all(
             [r[f"{k}_right"] == dog_r[k]] for k in dog_r if not k.startswith("sys__")
         )
@@ -1569,9 +1580,9 @@ def test_join_left_one_column_predicate(
     indirect=True,
 )
 @pytest.mark.parametrize(
-    "predicates", [["name", "parent"], [C.name, C.parent], ["name", C.parent]]
+    "predicates", [["path", "size"], [C.path, C.size], ["path", C.size]]
 )
-def test_join_left_multiple_column_pedicates(
+def test_join_left_multiple_column_predicates(
     cloud_test_catalog,
     dogs_dataset,
     dogs_cats_dataset,
@@ -1594,7 +1605,7 @@ def test_join_left_multiple_column_pedicates(
         signals2
     )
 
-    cat_records_names = ["cat1", "cat2"]
+    cat_records_names = ["cats/cat1", "cats/cat2"]
 
     dogs_cats_records = DatasetQuery(
         name=dogs_cats_dataset.name, version=1, catalog=catalog
@@ -1607,18 +1618,18 @@ def test_join_left_multiple_column_pedicates(
     assert all(
         r["sig1"] == 1 and r["sig2"] == 2
         for r in joined_records
-        if r["name"] not in cat_records_names
+        if r["path"] not in cat_records_names
     )
     int_default = Int.default_value(catalog.warehouse.db.dialect)
     # rows from the left that didn't find match (cats) don't have sig2
     assert all(
         r["sig1"] == 1 and r["sig2"] == int_default
         for r in joined_records
-        if r["name"] in cat_records_names
+        if r["path"] in cat_records_names
     )
     # check core duplicated columns
     for r in joined_records:
-        dog_r = next(dr for dr in dogs_cats_records if dr["name"] == r["name"])
+        dog_r = next(dr for dr in dogs_cats_records if dr["path"] == r["path"])
         assert all(
             [r[f"{k}_right"] == dog_r[k]] for k in dog_r if not k.startswith("sys__")
         )
@@ -1630,90 +1641,47 @@ def test_join_left_multiple_column_pedicates(
     indirect=True,
 )
 @pytest.mark.parametrize("inner", [True, False])
-def test_join_with_binary_expression_on_one_column(
-    cloud_test_catalog,
-    dogs_dataset,
-    cats_dataset,
-    inner,
-):
-    catalog = cloud_test_catalog.catalog
-    dogs = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
-    cats = DatasetQuery(name=cats_dataset.name, version=1, catalog=catalog)
-    dogs_cats = dogs.union(cats)
-
-    res = dogs_cats.join(
-        dogs, dogs_cats.c("name") == dogs.c("name"), inner=inner
-    ).to_db_records()
-
-    if inner:
-        expected = [
-            ("dog1", "dog1"),
-            ("dog2", "dog2"),
-            ("dog3", "dog3"),
-            ("dog4", "dog4"),
-        ]
-    else:
-        string_default = String.default_value(catalog.warehouse.db.dialect)
-        expected = [
-            ("cat1", string_default),
-            ("cat2", string_default),
-            ("dog1", "dog1"),
-            ("dog2", "dog2"),
-            ("dog3", "dog3"),
-            ("dog4", "dog4"),
-        ]
-
-    assert (
-        sorted(((r["name"], r["name_right"]) for r in res), key=lambda x: x[0])
-        == expected
-    )
-
-
-@pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
-    indirect=True,
-)
-@pytest.mark.parametrize("inner", [True, False])
-def test_join_with_binary_expression_on_multiple_columns(
-    cloud_test_catalog,
-    dogs_dataset,
-    dogs_cats_dataset,
-    inner,
+@pytest.mark.parametrize("n_columns", [1, 2])
+def test_join_with_binary_expression(
+    cloud_test_catalog, dogs_dataset, dogs_cats_dataset, inner, n_columns
 ):
     catalog = cloud_test_catalog.catalog
     dogs = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
     dogs_cats = DatasetQuery(name=dogs_cats_dataset.name, version=1, catalog=catalog)
 
+    if n_columns == 1:
+        predicate = dogs_cats.c("path") == dogs.c("path")
+    else:
+        predicate = (dogs_cats.c("path") == dogs.c("path")) & (
+            dogs_cats.c("size") == dogs.c("size")
+        )
+
     res = dogs_cats.join(
         dogs,
-        (
-            (dogs_cats.c("name") == dogs.c("name"))
-            & (dogs_cats.c("parent") == dogs.c("parent"))
-        ),
+        predicate,
         inner=inner,
     ).to_db_records()
 
     if inner:
         expected = [
-            ("dog1", "dog1"),
-            ("dog2", "dog2"),
-            ("dog3", "dog3"),
-            ("dog4", "dog4"),
+            ("dogs/dog1", "dogs/dog1"),
+            ("dogs/dog2", "dogs/dog2"),
+            ("dogs/dog3", "dogs/dog3"),
+            ("dogs/others/dog4", "dogs/others/dog4"),
         ]
     else:
         string_default = String.default_value(catalog.warehouse.db.dialect)
         expected = [
-            ("cat1", string_default),
-            ("cat2", string_default),
-            ("dog1", "dog1"),
-            ("dog2", "dog2"),
-            ("dog3", "dog3"),
-            ("dog4", "dog4"),
+            ("cats/cat1", string_default),
+            ("cats/cat2", string_default),
+            ("dogs/dog1", "dogs/dog1"),
+            ("dogs/dog2", "dogs/dog2"),
+            ("dogs/dog3", "dogs/dog3"),
+            ("dogs/others/dog4", "dogs/others/dog4"),
         ]
 
     assert (
-        sorted(((r["name"], r["name_right"]) for r in res), key=lambda x: x[0])
+        sorted(((r["path"], r["path_right"]) for r in res), key=lambda x: x[0])
         == expected
     )
 
@@ -1724,7 +1692,7 @@ def test_join_with_binary_expression_on_multiple_columns(
     indirect=True,
 )
 @pytest.mark.parametrize("inner", [True, False])
-@pytest.mark.parametrize("column_predicate", ["name", C.name])
+@pytest.mark.parametrize("column_predicate", ["path", C.path])
 def test_join_with_combination_binary_expression_and_column_predicates(
     cloud_test_catalog,
     dogs_dataset,
@@ -1738,30 +1706,30 @@ def test_join_with_combination_binary_expression_and_column_predicates(
 
     res = dogs_cats.join(
         dogs,
-        [column_predicate, dogs_cats.c("parent") == dogs.c("parent")],
+        [column_predicate, dogs_cats.c("size") == dogs.c("size")],
         inner=inner,
     ).to_db_records()
 
     if inner:
         expected = [
-            ("dog1", "dog1"),
-            ("dog2", "dog2"),
-            ("dog3", "dog3"),
-            ("dog4", "dog4"),
+            ("dogs/dog1", "dogs/dog1"),
+            ("dogs/dog2", "dogs/dog2"),
+            ("dogs/dog3", "dogs/dog3"),
+            ("dogs/others/dog4", "dogs/others/dog4"),
         ]
     else:
         string_default = String.default_value(catalog.warehouse.db.dialect)
         expected = [
-            ("cat1", string_default),
-            ("cat2", string_default),
-            ("dog1", "dog1"),
-            ("dog2", "dog2"),
-            ("dog3", "dog3"),
-            ("dog4", "dog4"),
+            ("cats/cat1", string_default),
+            ("cats/cat2", string_default),
+            ("dogs/dog1", "dogs/dog1"),
+            ("dogs/dog2", "dogs/dog2"),
+            ("dogs/dog3", "dogs/dog3"),
+            ("dogs/others/dog4", "dogs/others/dog4"),
         ]
 
     assert (
-        sorted(((r["name"], r["name_right"]) for r in res), key=lambda x: x[0])
+        sorted(((r["path"], r["path_right"]) for r in res), key=lambda x: x[0])
         == expected
     )
 
@@ -1786,9 +1754,9 @@ def test_join_with_binary_expression_with_arithmetics(
         dogs, cats.c("size") == dogs.c("size") + 1, inner=inner
     ).to_db_records()
 
-    assert sorted(((r["name"], r["name_right"]) for r in res), key=lambda x: x[0]) == [
-        ("cat1", "dog2"),
-        ("cat2", "dog2"),
+    assert sorted(((r["path"], r["path_right"]) for r in res), key=lambda x: x[0]) == [
+        ("cats/cat1", "dogs/dog2"),
+        ("cats/cat2", "dogs/dog2"),
     ]
 
 
@@ -1815,13 +1783,13 @@ def test_join_conflicting_custom_columns(cloud_test_catalog, dogs_dataset):
         signals2
     )
 
-    joined_records = ds1.join(ds2, "name").to_db_records()
+    joined_records = ds1.join(ds2, "path").to_db_records()
     assert len(joined_records) == 4
 
     # check custom columns
     assert all(r["sig1"] == 1 and r["sig1_right"] == 2 for r in joined_records)
 
-    joined_records = ds1.join(ds2, "name", rname="{name}_dupl").to_db_records()
+    joined_records = ds1.join(ds2, "path", rname="{name}_dupl").to_db_records()
     assert len(joined_records) == 4
 
     # check custom columns
@@ -1855,7 +1823,7 @@ def test_join_inner(
         signals2
     )
 
-    joined_records = dogs_cats.join(dogs, "name", inner=True).to_db_records()
+    joined_records = dogs_cats.join(dogs, "path", inner=True).to_db_records()
     assert len(joined_records) == 4
 
     dogs_records = DatasetQuery(
@@ -1865,22 +1833,20 @@ def test_join_inner(
     # check custom columns
     assert all(r["sig1"] == 1 and r["sig2"] == 2 for r in joined_records)
     for r in joined_records:
-        dog_r = next(dr for dr in dogs_records if dr["name"] == r["name"])
+        dog_r = next(dr for dr in dogs_records if dr["path"] == r["path"])
         assert all(
             [r[f"{k}_right"] == dog_r[k]] for k in dog_r if not k.startswith("sys__")
         )
 
     # joining on multiple fields
-    joined_records = dogs_cats.join(
-        dogs, ["parent", "name"], inner=True
-    ).to_db_records()
+    joined_records = dogs_cats.join(dogs, ["path", "size"], inner=True).to_db_records()
     assert len(joined_records) == 4
 
     # check custom columns
     assert all(r["sig1"] == 1 and r["sig2"] == 2 for r in joined_records)
     # check core duplicated columns
     for r in joined_records:
-        dog_r = next(dr for dr in dogs_records if dr["name"] == r["name"])
+        dog_r = next(dr for dr in dogs_records if dr["path"] == r["path"])
         assert all(
             [r[f"{k}_right"] == dog_r[k]] for k in dog_r if not k.startswith("sys__")
         )
@@ -1906,14 +1872,14 @@ def test_join_with_self(cloud_test_catalog, dogs_dataset):
         signals1
     )
 
-    joined_records = dogs.join(dogs, "name").to_db_records()
+    joined_records = dogs.join(dogs, "path").to_db_records()
     assert len(joined_records) == 4
 
     # check custom columns
     assert all(r["sig1"] == 1 and r["sig1_right"] == 1 for r in joined_records)
     # check core duplicated columns
     for r in joined_records:
-        dog_r = next(dr for dr in dogs_records if dr["name"] == r["name"])
+        dog_r = next(dr for dr in dogs_records if dr["path"] == r["path"])
         assert all(
             [r[f"{k}_right"] == dog_r[k]] for k in dog_r if not k.startswith("sys__")
         )
@@ -1986,17 +1952,17 @@ def test_join_with_missing_columns_in_expression(
     cats = DatasetQuery(name=cats_dataset.name, version=1, catalog=catalog)
 
     with pytest.raises(ValueError) as excinfo:
-        dogs1.join(dogs2, dogs1.c("wrong") == dogs2.c("name")).to_db_records()
+        dogs1.join(dogs2, dogs1.c("wrong") == dogs2.c("path")).to_db_records()
     assert str(excinfo.value) == "Column wrong was not found in left part of the join"
 
     with pytest.raises(ValueError) as excinfo:
-        dogs1.join(dogs2, dogs1.c("name") == dogs2.c("wrong")).to_db_records()
+        dogs1.join(dogs2, dogs1.c("path") == dogs2.c("wrong")).to_db_records()
     assert str(excinfo.value) == "Column wrong was not found in right part of the join"
 
     with pytest.raises(ValueError) as excinfo:
-        dogs1.join(dogs2, dogs1.c("name") == cats.c("name")).to_db_records()
+        dogs1.join(dogs2, dogs1.c("path") == cats.c("path")).to_db_records()
     assert str(excinfo.value) == (
-        "Column name was not found in left or right part of the join"
+        "Column path was not found in left or right part of the join"
     )
 
 
@@ -2016,32 +1982,32 @@ def test_join_with_using_functions_in_expression(
     res = dogs_cats.join(
         dogs,
         (
-            sqlalchemy.func.upper(dogs_cats.c("name"))
-            == sqlalchemy.func.upper(dogs.c("name"))
+            sqlalchemy.func.upper(dogs_cats.c("path"))
+            == sqlalchemy.func.upper(dogs.c("path"))
         ),
         inner=inner,
     ).to_db_records()
 
     if inner:
         expected = [
-            ("dog1", "dog1"),
-            ("dog2", "dog2"),
-            ("dog3", "dog3"),
-            ("dog4", "dog4"),
+            ("dogs/dog1", "dogs/dog1"),
+            ("dogs/dog2", "dogs/dog2"),
+            ("dogs/dog3", "dogs/dog3"),
+            ("dogs/others/dog4", "dogs/others/dog4"),
         ]
     else:
         string_default = String.default_value(catalog.warehouse.db.dialect)
         expected = [
-            ("cat1", string_default),
-            ("cat2", string_default),
-            ("dog1", "dog1"),
-            ("dog2", "dog2"),
-            ("dog3", "dog3"),
-            ("dog4", "dog4"),
+            ("cats/cat1", string_default),
+            ("cats/cat2", string_default),
+            ("dogs/dog1", "dogs/dog1"),
+            ("dogs/dog2", "dogs/dog2"),
+            ("dogs/dog3", "dogs/dog3"),
+            ("dogs/others/dog4", "dogs/others/dog4"),
         ]
 
     assert (
-        sorted(((r["name"], r["name_right"]) for r in res), key=lambda x: x[0])
+        sorted(((r["path"], r["path_right"]) for r in res), key=lambda x: x[0])
         == expected
     )
 
@@ -2054,28 +2020,24 @@ def test_join_with_using_functions_in_expression(
 def test_row_generator(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
 
-    @udf(("name", C.parent), DatasetRow.schema)
-    def gen(name, parent):
+    @udf(("path",), DatasetRow.schema)
+    def gen(path):
         # A very simple file row generator.
-        parent_path = name if not parent else f"{parent}/{name}"
-        yield DatasetRow.create("subobject", size=50, parent=parent_path)
-        yield DatasetRow.create("subobject2", size=70, parent=parent_path)
+        yield DatasetRow.create(f"{path}/subobject", size=50)
+        yield DatasetRow.create(f"{path}/subobject2", size=70)
 
     q = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog).generate(gen)
     result = q.to_db_records()
-
-    parents_names = [(r["parent"], r["name"]) for r in result]
-    parents_names.sort(key=lambda x: (x[1], x[0]))
-
+    parents_names = sorted(r["path"] for r in result)
     assert parents_names == [
-        ("dogs/dog1", "subobject"),
-        ("dogs/dog2", "subobject"),
-        ("dogs/dog3", "subobject"),
-        ("dogs/others/dog4", "subobject"),
-        ("dogs/dog1", "subobject2"),
-        ("dogs/dog2", "subobject2"),
-        ("dogs/dog3", "subobject2"),
-        ("dogs/others/dog4", "subobject2"),
+        "dogs/dog1/subobject",
+        "dogs/dog1/subobject2",
+        "dogs/dog2/subobject",
+        "dogs/dog2/subobject2",
+        "dogs/dog3/subobject",
+        "dogs/dog3/subobject2",
+        "dogs/others/dog4/subobject",
+        "dogs/others/dog4/subobject2",
     ]
 
     q.save("test_generator")
@@ -2094,30 +2056,24 @@ def test_row_generator(cloud_test_catalog, dogs_dataset):
 def test_row_generator_with_filter(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
 
-    @udf(("name", C.parent), DatasetRow.schema)
-    def gen(name, parent):
+    @udf(("path",), DatasetRow.schema)
+    def gen(path):
         # A very simple file row generator.
-        parent_path = name if not parent else f"{parent}/{name}"
-        yield DatasetRow.create("subobject", size=50, parent=parent_path)
-        yield DatasetRow.create("subobject2", size=70, parent=parent_path)
+        yield DatasetRow.create(f"{path}/subobject", size=50)
+        yield DatasetRow.create(f"{path}/subobject2", size=70)
 
     q = (
         DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
         .generate(gen)
-        .filter(C.name == "subobject")
+        .filter(pathfunc.name(C.path) == "subobject")
     )
     result = q.to_db_records()
-
-    parents_names = [(r["parent"], r["name"]) for r in result]
-    parents_names.sort(key=lambda x: (x[1], x[0]))
-
-    assert len(parents_names) == 4
-
+    parents_names = sorted(r["path"] for r in result)
     assert parents_names == [
-        ("dogs/dog1", "subobject"),
-        ("dogs/dog2", "subobject"),
-        ("dogs/dog3", "subobject"),
-        ("dogs/others/dog4", "subobject"),
+        "dogs/dog1/subobject",
+        "dogs/dog2/subobject",
+        "dogs/dog3/subobject",
+        "dogs/others/dog4/subobject",
     ]
 
 
@@ -2129,27 +2085,23 @@ def test_row_generator_with_filter(cloud_test_catalog, dogs_dataset):
 def test_row_generator_with_limit(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
 
-    @udf((C.name, C.parent), DatasetRow.schema)
-    def gen(name, parent):
+    @udf(("path",), DatasetRow.schema)
+    def gen(path):
         # A very simple file row generator.
-        parent_path = name if not parent else f"{parent}/{name}"
-        yield DatasetRow.create("subobject", size=50, parent=parent_path)
-        yield DatasetRow.create("subobject2", size=70, parent=parent_path)
+        yield DatasetRow.create(f"{path}/subobject", size=50)
+        yield DatasetRow.create(f"{path}/subobject2", size=70)
 
     q = (
         DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
-        .order_by(C.parent, C.name)
+        .order_by(C.path)
         .limit(1)
         .generate(gen)
     )
     result = q.to_db_records()
-
-    parents_names = [(r["parent"], r["name"]) for r in result]
-    parents_names.sort(key=lambda x: (x[0], x[1]))
-
+    parents_names = sorted(r["path"] for r in result)
     assert parents_names == [
-        ("dogs/dog1", "subobject"),
-        ("dogs/dog1", "subobject2"),
+        "dogs/dog1/subobject",
+        "dogs/dog1/subobject2",
     ]
 
 
@@ -2169,30 +2121,26 @@ def test_row_generator_parallel(cloud_test_catalog_tmpfile):
         dogs_dataset_name, [f"{src_uri}/dogs/*"], recursive=True
     )
 
-    @udf(("name", "parent"), DatasetRow.schema)
-    def gen(name, parent):
+    @udf(("path",), DatasetRow.schema)
+    def gen(path):
         # A very simple file row generator.
-        parent_path = name if not parent else f"{parent}/{name}"
-        yield DatasetRow.create("subobject", size=50, parent=parent_path)
-        yield DatasetRow.create("subobject2", size=70, parent=parent_path)
+        yield DatasetRow.create(f"{path}/subobject", size=50)
+        yield DatasetRow.create(f"{path}/subobject2", size=70)
 
     q = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog).generate(
         gen, parallel=-1
     )
     result = q.to_db_records()
-
-    parents_names = [(r["parent"], r["name"]) for r in result]
-    parents_names.sort(key=lambda x: (x[1], x[0]))
-
+    parents_names = sorted(r["path"] for r in result)
     assert parents_names == [
-        ("dogs/dog1", "subobject"),
-        ("dogs/dog2", "subobject"),
-        ("dogs/dog3", "subobject"),
-        ("dogs/others/dog4", "subobject"),
-        ("dogs/dog1", "subobject2"),
-        ("dogs/dog2", "subobject2"),
-        ("dogs/dog3", "subobject2"),
-        ("dogs/others/dog4", "subobject2"),
+        "dogs/dog1/subobject",
+        "dogs/dog1/subobject2",
+        "dogs/dog2/subobject",
+        "dogs/dog2/subobject2",
+        "dogs/dog3/subobject",
+        "dogs/dog3/subobject2",
+        "dogs/others/dog4/subobject",
+        "dogs/others/dog4/subobject2",
     ]
 
 
@@ -2204,27 +2152,24 @@ def test_row_generator_parallel(cloud_test_catalog_tmpfile):
 def test_row_generator_batch(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
 
-    @udf(("name", "parent"), DatasetRow.schema, batch=4)
+    @udf(("path"), DatasetRow.schema, batch=4)
     def gen(inputs):
-        for name, parent in inputs:
-            parent_path = name if not parent else f"{parent}/{name}"
-            yield DatasetRow.create("subobject", size=50, parent=parent_path)
-            yield DatasetRow.create("subobject2", size=70, parent=parent_path)
+        for (path,) in inputs:
+            yield DatasetRow.create(f"{path}/subobject", size=50)
+            yield DatasetRow.create(f"{path}/subobject2", size=70)
 
     q = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog).generate(gen)
     result = q.to_db_records()
-    parents_names = [(r["parent"], r["name"]) for r in result]
-    parents_names.sort(key=lambda x: (x[1], x[0]))
-
+    parents_names = sorted(r["path"] for r in result)
     assert parents_names == [
-        ("dogs/dog1", "subobject"),
-        ("dogs/dog2", "subobject"),
-        ("dogs/dog3", "subobject"),
-        ("dogs/others/dog4", "subobject"),
-        ("dogs/dog1", "subobject2"),
-        ("dogs/dog2", "subobject2"),
-        ("dogs/dog3", "subobject2"),
-        ("dogs/others/dog4", "subobject2"),
+        "dogs/dog1/subobject",
+        "dogs/dog1/subobject2",
+        "dogs/dog2/subobject",
+        "dogs/dog2/subobject2",
+        "dogs/dog3/subobject",
+        "dogs/dog3/subobject2",
+        "dogs/others/dog4/subobject",
+        "dogs/others/dog4/subobject2",
     ]
 
 
@@ -2237,7 +2182,7 @@ def test_row_generator_class(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
 
     @udf(
-        params=(C.name, C.parent),
+        params=(C.path,),
         output=DatasetRow.schema,
         method="generate_subobjects",
     )
@@ -2245,27 +2190,24 @@ def test_row_generator_class(cloud_test_catalog, dogs_dataset):
         def __init__(self):
             pass
 
-        def generate_subobjects(self, name, parent):
-            parent_path = name if not parent else f"{parent}/{name}"
-            yield DatasetRow.create("subobject", size=50, parent=parent_path)
-            yield DatasetRow.create("subobject2", size=70, parent=parent_path)
+        def generate_subobjects(self, path):
+            yield DatasetRow.create(f"{path}/subobject", size=50)
+            yield DatasetRow.create(f"{path}/subobject2", size=70)
 
     q = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog).generate(
         Subobjects
     )
     result = q.to_db_records()
-    parents_names = [(r["parent"], r["name"]) for r in result]
-    parents_names.sort(key=lambda x: (x[1], x[0]))
-
+    parents_names = sorted(r["path"] for r in result)
     assert parents_names == [
-        ("dogs/dog1", "subobject"),
-        ("dogs/dog2", "subobject"),
-        ("dogs/dog3", "subobject"),
-        ("dogs/others/dog4", "subobject"),
-        ("dogs/dog1", "subobject2"),
-        ("dogs/dog2", "subobject2"),
-        ("dogs/dog3", "subobject2"),
-        ("dogs/others/dog4", "subobject2"),
+        "dogs/dog1/subobject",
+        "dogs/dog1/subobject2",
+        "dogs/dog2/subobject",
+        "dogs/dog2/subobject2",
+        "dogs/dog3/subobject",
+        "dogs/dog3/subobject2",
+        "dogs/others/dog4/subobject",
+        "dogs/others/dog4/subobject2",
     ]
 
 
@@ -2278,7 +2220,7 @@ def test_row_generator_class_batch(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
 
     @udf(
-        params=(C.name, C.parent),
+        params=(C.path,),
         output=DatasetRow.schema,
         method="generate_subobjects",
         batch=4,
@@ -2288,27 +2230,24 @@ def test_row_generator_class_batch(cloud_test_catalog, dogs_dataset):
             pass
 
         def generate_subobjects(self, inputs):
-            for name, parent in inputs:
-                parent_path = name if not parent else f"{parent}/{name}"
-                yield DatasetRow.create("subobject", size=50, parent=parent_path)
-                yield DatasetRow.create("subobject2", size=70, parent=parent_path)
+            for (path,) in inputs:
+                yield DatasetRow.create(f"{path}/subobject", size=50)
+                yield DatasetRow.create(f"{path}/subobject2", size=70)
 
     q = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog).generate(
         Subobjects
     )
     result = q.to_db_records()
-    parents_names = [(r["parent"], r["name"]) for r in result]
-    parents_names.sort(key=lambda x: (x[1], x[0]))
-
+    parents_names = sorted(r["path"] for r in result)
     assert parents_names == [
-        ("dogs/dog1", "subobject"),
-        ("dogs/dog2", "subobject"),
-        ("dogs/dog3", "subobject"),
-        ("dogs/others/dog4", "subobject"),
-        ("dogs/dog1", "subobject2"),
-        ("dogs/dog2", "subobject2"),
-        ("dogs/dog3", "subobject2"),
-        ("dogs/others/dog4", "subobject2"),
+        "dogs/dog1/subobject",
+        "dogs/dog1/subobject2",
+        "dogs/dog2/subobject",
+        "dogs/dog2/subobject2",
+        "dogs/dog3/subobject",
+        "dogs/dog3/subobject2",
+        "dogs/others/dog4/subobject",
+        "dogs/others/dog4/subobject2",
     ]
 
 
@@ -2320,31 +2259,29 @@ def test_row_generator_class_batch(cloud_test_catalog, dogs_dataset):
 def test_row_generator_partition_by(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
 
-    @udf(("name", "parent"), DatasetRow.extend(cnt=Int))
+    @udf(("path",), DatasetRow.extend(cnt=Int))
     def gen(inputs):
         cnt = len(inputs)
-        for name, parent in inputs:
-            parent_path = name if not parent else f"{parent}/{name}"
-            yield (*DatasetRow.create("subobject", size=50, parent=parent_path), cnt)
-            yield (*DatasetRow.create("subobject2", size=70, parent=parent_path), cnt)
+        for (path,) in inputs:
+            yield (*DatasetRow.create(f"{path}/subobject", size=50), cnt)
+            yield (*DatasetRow.create(f"{path}/subobject2", size=70), cnt)
 
     result = (
         DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
-        .generate(gen, partition_by="parent")
+        .generate(gen, partition_by=pathfunc.parent(C.path))
         .to_db_records()
     )
-    parents_names = [(r["parent"], r["name"], r["cnt"]) for r in result]
-    parents_names.sort(key=lambda x: (x[1], x[0]))
-
+    parents_names = [(r["path"], r["cnt"]) for r in result]
+    parents_names.sort(key=lambda x: (x[0]))
     assert parents_names == [
-        ("dogs/dog1", "subobject", 3),
-        ("dogs/dog2", "subobject", 3),
-        ("dogs/dog3", "subobject", 3),
-        ("dogs/others/dog4", "subobject", 1),
-        ("dogs/dog1", "subobject2", 3),
-        ("dogs/dog2", "subobject2", 3),
-        ("dogs/dog3", "subobject2", 3),
-        ("dogs/others/dog4", "subobject2", 1),
+        ("dogs/dog1/subobject", 3),
+        ("dogs/dog1/subobject2", 3),
+        ("dogs/dog2/subobject", 3),
+        ("dogs/dog2/subobject2", 3),
+        ("dogs/dog3/subobject", 3),
+        ("dogs/dog3/subobject2", 3),
+        ("dogs/others/dog4/subobject", 1),
+        ("dogs/others/dog4/subobject2", 1),
     ]
 
 
@@ -2364,31 +2301,29 @@ def test_row_generator_partition_by_parallel(cloud_test_catalog_tmpfile):
         dogs_dataset_name, [f"{src_uri}/dogs/*"], recursive=True
     )
 
-    @udf(("name", "parent"), DatasetRow.extend(cnt=Int))
+    @udf(("path",), DatasetRow.extend(cnt=Int))
     def gen(inputs):
         cnt = len(inputs)
-        for name, parent in inputs:
-            parent_path = name if not parent else f"{parent}/{name}"
-            yield (*DatasetRow.create("subobject", size=50, parent=parent_path), cnt)
-            yield (*DatasetRow.create("subobject2", size=70, parent=parent_path), cnt)
+        for (path,) in inputs:
+            yield (*DatasetRow.create(f"{path}/subobject", size=50), cnt)
+            yield (*DatasetRow.create(f"{path}/subobject2", size=70), cnt)
 
-    q = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog).generate(
-        gen, partition_by="parent", parallel=-1
+    result = (
+        DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
+        .generate(gen, partition_by=pathfunc.parent(C.path), parallel=-1)
+        .to_db_records()
     )
-    result = q.to_db_records()
-
-    parents_names = [(r["parent"], r["name"], r["cnt"]) for r in result]
-    parents_names.sort(key=lambda x: (x[1], x[0]))
-
+    parents_names = [(r["path"], r["cnt"]) for r in result]
+    parents_names.sort(key=lambda x: (x[0]))
     assert parents_names == [
-        ("dogs/dog1", "subobject", 3),
-        ("dogs/dog2", "subobject", 3),
-        ("dogs/dog3", "subobject", 3),
-        ("dogs/others/dog4", "subobject", 1),
-        ("dogs/dog1", "subobject2", 3),
-        ("dogs/dog2", "subobject2", 3),
-        ("dogs/dog3", "subobject2", 3),
-        ("dogs/others/dog4", "subobject2", 1),
+        ("dogs/dog1/subobject", 3),
+        ("dogs/dog1/subobject2", 3),
+        ("dogs/dog2/subobject", 3),
+        ("dogs/dog2/subobject2", 3),
+        ("dogs/dog3/subobject", 3),
+        ("dogs/dog3/subobject2", 3),
+        ("dogs/others/dog4/subobject", 1),
+        ("dogs/others/dog4/subobject2", 1),
     ]
 
 
@@ -2400,31 +2335,29 @@ def test_row_generator_partition_by_parallel(cloud_test_catalog_tmpfile):
 def test_row_generator_partition_by_batch(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
 
-    @udf(("name", "parent"), DatasetRow.extend(cnt=Int), batch=2)
+    @udf(("path",), DatasetRow.extend(cnt=Int), batch=2)
     def gen(inputs):
         cnt = len(inputs)
-        for name, parent in inputs:
-            parent_path = name if not parent else f"{parent}/{name}"
-            yield (*DatasetRow.create("subobject", size=50, parent=parent_path), cnt)
-            yield (*DatasetRow.create("subobject2", size=70, parent=parent_path), cnt)
+        for (path,) in inputs:
+            yield (*DatasetRow.create(f"{path}/subobject", size=50), cnt)
+            yield (*DatasetRow.create(f"{path}/subobject2", size=70), cnt)
 
     result = (
         DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
-        .generate(gen, partition_by="parent")
+        .generate(gen, partition_by=pathfunc.parent(C.path))
         .to_db_records()
     )
-    parents_names = [(r["parent"], r["name"], r["cnt"]) for r in result]
-    parents_names.sort(key=lambda x: (x[1], x[0]))
-
+    parents_names = [(r["path"], r["cnt"]) for r in result]
+    parents_names.sort(key=lambda x: (x[0]))
     assert parents_names == [
-        ("dogs/dog1", "subobject", 3),
-        ("dogs/dog2", "subobject", 3),
-        ("dogs/dog3", "subobject", 3),
-        ("dogs/others/dog4", "subobject", 1),
-        ("dogs/dog1", "subobject2", 3),
-        ("dogs/dog2", "subobject2", 3),
-        ("dogs/dog3", "subobject2", 3),
-        ("dogs/others/dog4", "subobject2", 1),
+        ("dogs/dog1/subobject", 3),
+        ("dogs/dog1/subobject2", 3),
+        ("dogs/dog2/subobject", 3),
+        ("dogs/dog2/subobject2", 3),
+        ("dogs/dog3/subobject", 3),
+        ("dogs/dog3/subobject2", 3),
+        ("dogs/others/dog4/subobject", 1),
+        ("dogs/others/dog4/subobject2", 1),
     ]
 
 
@@ -2458,7 +2391,7 @@ def test_row_generator_with_new_columns(cloud_test_catalog, dogs_dataset):
     }
 
     @udf(
-        params=(C.name, C.parent),
+        params=(C.path,),
         output=DatasetRow.schema | new_columns,
         method="generate_subobjects",
     )
@@ -2466,10 +2399,9 @@ def test_row_generator_with_new_columns(cloud_test_catalog, dogs_dataset):
         def __init__(self):
             pass
 
-        def generate_subobjects(self, name, parent):
-            parent_path = name if not parent else f"{parent}/{name}"
+        def generate_subobjects(self, path):
             yield (
-                *DatasetRow.create("subobject", size=50, parent=parent_path),
+                *DatasetRow.create(f"{path}/subobject", size=50),
                 "some_string",
                 10,
                 11,
@@ -2496,8 +2428,7 @@ def test_row_generator_with_new_columns(cloud_test_catalog, dogs_dataset):
 
     col_values = [
         (
-            r["parent"],
-            r["name"],
+            r["path"],
             r["string_col"],
             r["int_col"],
             r["int_col_32"],
@@ -2538,10 +2469,10 @@ def test_row_generator_with_new_columns(cloud_test_catalog, dogs_dataset):
     )
 
     assert col_values == [
-        ("dogs/dog1", "subobject", *new_col_values),
-        ("dogs/dog2", "subobject", *new_col_values),
-        ("dogs/dog3", "subobject", *new_col_values),
-        ("dogs/others/dog4", "subobject", *new_col_values),
+        ("dogs/dog1/subobject", *new_col_values),
+        ("dogs/dog2/subobject", *new_col_values),
+        ("dogs/dog3/subobject", *new_col_values),
+        ("dogs/others/dog4/subobject", *new_col_values),
     ]
 
     dataset = catalog.get_dataset("dogs_with_rows_and_signals")
@@ -2569,26 +2500,26 @@ def test_row_generator_with_new_columns(cloud_test_catalog, dogs_dataset):
 def test_row_generators_sequence_with_new_columns(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
 
-    @udf(params="name", output=DatasetRow.schema | {"name_upper": String, "p1": Int})
-    def upper(name):
-        yield *DatasetRow.create(name), name.upper(), 1
+    @udf(params="path", output=DatasetRow.schema | {"path_upper": String, "p1": Int})
+    def upper(path):
+        yield *DatasetRow.create(path), path.upper(), 1
 
-    @udf(params="name", output=DatasetRow.schema | {"name_lower": String, "p2": Int})
-    def lower(name):
-        yield *DatasetRow.create(name), name.lower(), 2
+    @udf(params="path", output=DatasetRow.schema | {"path_lower": String, "p2": Int})
+    def lower(path):
+        yield *DatasetRow.create(path), path.lower(), 2
 
     DatasetQuery(name=dogs_dataset.name, catalog=catalog).generate(upper).save("upper")
     for res in DatasetQuery(name="upper", catalog=catalog).to_db_records():
-        assert "name_upper" in res
-        assert res["name_upper"] == res["name"].upper()
+        assert "path_upper" in res
+        assert res["path_upper"] == res["path"].upper()
         assert "p1" in res
         assert res["p1"] == 1
 
     DatasetQuery(name="upper", catalog=catalog).generate(lower).save("lower")
     for res in DatasetQuery(name="lower", catalog=catalog).to_db_records():
-        assert "name_upper" not in res
-        assert "name_lower" in res
-        assert res["name_lower"] == res["name"].lower()
+        assert "path_upper" not in res
+        assert "path_lower" in res
+        assert res["path_lower"] == res["path"].lower()
         assert "p1" not in res
         assert "p2" in res
         assert res["p2"] == 2
@@ -2622,7 +2553,7 @@ def test_row_generator_with_new_columns_empty_values(cloud_test_catalog, dogs_da
     new_col_values_empty = tuple(t.default_value(dialect) for t in new_columns.values())
 
     @udf(
-        params=(C.name, C.parent),
+        params=(C.path,),
         output=DatasetRow.schema | new_columns,
         method="generate_subobjects",
     )
@@ -2630,11 +2561,9 @@ def test_row_generator_with_new_columns_empty_values(cloud_test_catalog, dogs_da
         def __init__(self):
             pass
 
-        def generate_subobjects(self, name, parent):
-            parent_path = name if not parent else f"{parent}/{name}"
+        def generate_subobjects(self, path):
             yield (
-                DatasetRow.create("subobject", size=50, parent=parent_path)
-                + new_col_values_empty
+                DatasetRow.create(f"{path}/subobject", size=50) + new_col_values_empty
             )
 
     DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog).generate(
@@ -2646,8 +2575,7 @@ def test_row_generator_with_new_columns_empty_values(cloud_test_catalog, dogs_da
 
     col_values = [
         (
-            r["parent"],
-            r["name"],
+            r["path"],
             r["int_col"],
             r["int_col_32"],
             r["int_col_64"],
@@ -2666,13 +2594,13 @@ def test_row_generator_with_new_columns_empty_values(cloud_test_catalog, dogs_da
         for r in result
     ]
 
-    col_values.sort(key=lambda x: (x[1], x[0]))
+    col_values.sort(key=lambda x: x[0])
 
     assert col_values == [
-        ("dogs/dog1", "subobject", *new_col_values_empty),
-        ("dogs/dog2", "subobject", *new_col_values_empty),
-        ("dogs/dog3", "subobject", *new_col_values_empty),
-        ("dogs/others/dog4", "subobject", *new_col_values_empty),
+        ("dogs/dog1/subobject", *new_col_values_empty),
+        ("dogs/dog2/subobject", *new_col_values_empty),
+        ("dogs/dog3/subobject", *new_col_values_empty),
+        ("dogs/others/dog4/subobject", *new_col_values_empty),
     ]
 
 
@@ -2698,7 +2626,7 @@ def test_row_generator_with_new_columns_numpy(cloud_test_catalog, dogs_dataset):
     }
 
     @udf(
-        params=(C.name, C.parent),
+        params=(C.path,),
         output=DatasetRow.schema | new_columns,
         method="generate_subobjects",
     )
@@ -2706,10 +2634,9 @@ def test_row_generator_with_new_columns_numpy(cloud_test_catalog, dogs_dataset):
         def __init__(self):
             pass
 
-        def generate_subobjects(self, name, parent):
-            parent_path = name if not parent else f"{parent}/{name}"
+        def generate_subobjects(self, path):
             yield (
-                *DatasetRow.create("subobject", size=50, parent=parent_path),
+                *DatasetRow.create(f"{path}/subobject", size=50),
                 np.int32(11),
                 np.int64(12),
                 np.float32(0.5),
@@ -2731,8 +2658,7 @@ def test_row_generator_with_new_columns_numpy(cloud_test_catalog, dogs_dataset):
 
     col_values = [
         (
-            r["parent"],
-            r["name"],
+            r["path"],
             r["int_col_32"],
             r["int_col_64"],
             r["float_col_32"],
@@ -2746,8 +2672,7 @@ def test_row_generator_with_new_columns_numpy(cloud_test_catalog, dogs_dataset):
         )
         for r in result
     ]
-
-    col_values.sort(key=lambda x: (x[1], x[0]))
+    col_values.sort(key=lambda x: x[0])
 
     new_col_values = (
         11,
@@ -2763,10 +2688,10 @@ def test_row_generator_with_new_columns_numpy(cloud_test_catalog, dogs_dataset):
     )
 
     assert col_values == [
-        ("dogs/dog1", "subobject", *new_col_values),
-        ("dogs/dog2", "subobject", *new_col_values),
-        ("dogs/dog3", "subobject", *new_col_values),
-        ("dogs/others/dog4", "subobject", *new_col_values),
+        ("dogs/dog1/subobject", *new_col_values),
+        ("dogs/dog2/subobject", *new_col_values),
+        ("dogs/dog3/subobject", *new_col_values),
+        ("dogs/others/dog4/subobject", *new_col_values),
     ]
 
 
@@ -2779,7 +2704,7 @@ def test_row_generator_with_new_columns_wrong_type(cloud_test_catalog, dogs_data
     catalog = cloud_test_catalog.catalog
 
     @udf(
-        params=(C.name, C.parent),
+        params=(C.path,),
         output={**DatasetRow.schema, "int_col": Int},
         method="generate_subobjects",
     )
@@ -2787,9 +2712,8 @@ def test_row_generator_with_new_columns_wrong_type(cloud_test_catalog, dogs_data
         def __init__(self):
             pass
 
-        def generate_subobjects(self, name, parent):
-            parent_path = name if not parent else f"{parent}/{name}"
-            yield (*DatasetRow.create("subobject", size=50, parent=parent_path), 0.5)
+        def generate_subobjects(self, path):
+            yield (*DatasetRow.create(f"{path}/subobject", size=50), 0.5)
 
     with pytest.raises(ValueError):
         DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog).generate(
@@ -2828,13 +2752,15 @@ def test_index_tar(cloud_test_catalog):
     offsets = [
         json.loads(row["location"])[0]["offset"]
         for row in rows
-        if row["name"] != "animals.tar"
+        if not row["path"].endswith("animals.tar")
     ]
     # Check that offsets are unique integers
     assert all(isinstance(offset, int) for offset in offsets)
     assert len(set(offsets)) == len(offsets)
 
-    assert all(row["vtype"] == "tar" for row in rows if row["name"] != "animals.tar")
+    assert all(
+        row["vtype"] == "tar" for row in rows if not row["path"].endswith("animals.tar")
+    )
 
 
 @pytest.mark.parametrize(
@@ -2862,11 +2788,14 @@ def test_tar_loader(cloud_test_catalog):
     q = DatasetQuery(name="animals", version=1, catalog=catalog).generate(index_tar)
     q.save("extracted")
 
-    q = DatasetQuery(name="extracted", catalog=catalog).filter(C.parent.glob("*/cats*"))
+    q = DatasetQuery(name="extracted", catalog=catalog).filter(C.path.glob("*/cats/*"))
     assert len(q.db_results()) == 2
 
-    ds = q.extract(Object(to_str), "name")
-    assert set(ds) == {("meow", "cat1"), ("mrow", "cat2")}
+    ds = q.extract(Object(to_str), "path")
+    assert {(value, posixpath.basename(path)) for value, path in ds} == {
+        ("meow", "cat1"),
+        ("mrow", "cat2"),
+    }
 
 
 @pytest.mark.parametrize("cloud_type", ["s3", "azure", "gs"], indirect=True)
@@ -2883,7 +2812,7 @@ def test_simple_dataset_query(cloud_test_catalog):
     for ds_name in ("ds1", "ds2"):
         ds = metastore.get_dataset(ds_name)
         dr = warehouse.dataset_rows(ds)
-        dq = dr.select().order_by(dr.c.parent, dr.c.name)
+        dq = dr.select().order_by(dr.c.path)
         ds_queries.append(dq)
 
     ds1, ds2 = (
@@ -2896,22 +2825,22 @@ def test_simple_dataset_query(cloud_test_catalog):
 
     # everything except the id field should match
     assert ds1 == ds2
-    assert [(r["parent"], r["name"]) for r in ds1] == [
-        ("", "animals.tar"),
-        ("", "description"),
-        ("animals.tar", "description"),
-        ("animals.tar/cats", "cat1"),
-        ("animals.tar/cats", "cat2"),
-        ("animals.tar/dogs", "dog1"),
-        ("animals.tar/dogs", "dog2"),
-        ("animals.tar/dogs", "dog3"),
-        ("animals.tar/dogs/others", "dog4"),
-        ("cats", "cat1"),
-        ("cats", "cat2"),
-        ("dogs", "dog1"),
-        ("dogs", "dog2"),
-        ("dogs", "dog3"),
-        ("dogs/others", "dog4"),
+    assert [r["path"] for r in ds1] == [
+        ("animals.tar"),
+        ("animals.tar/cats/cat1"),
+        ("animals.tar/cats/cat2"),
+        ("animals.tar/description"),
+        ("animals.tar/dogs/dog1"),
+        ("animals.tar/dogs/dog2"),
+        ("animals.tar/dogs/dog3"),
+        ("animals.tar/dogs/others/dog4"),
+        ("cats/cat1"),
+        ("cats/cat2"),
+        ("description"),
+        ("dogs/dog1"),
+        ("dogs/dog2"),
+        ("dogs/dog3"),
+        ("dogs/others/dog4"),
     ]
 
 
@@ -2922,60 +2851,61 @@ def test_similarity_search(cloud_test_catalog):
     create_tar_dataset(catalog, ctc.src_uri, "ds1")
 
     @udf(
-        params=(Object(to_str),),
+        params=(Object(to_str), "path"),
         output={"embedding": Array(Float32)},
         method="embedding",
     )
     class TextEmbeddingGenerator:
-        def embedding(self, text):
+        def embedding(self, text, path):
+            print(text)
+            print(path)
             return (text_embedding(text),)
 
-    target_embedding, source, parent, name = (
+    target_embedding, path = (
         DatasetQuery(name="ds1", catalog=catalog)
-        .filter(~C.name.glob("*.tar"))
-        .order_by(C.source, C.parent, C.name)
+        .filter(C.path.glob("*description"))
+        .order_by(sqlalchemy.func.length(C.path))
         .limit(1)
         .add_signals(TextEmbeddingGenerator())
-        .select(C.embedding, C.source, C.parent, C.name)
+        .select(C.embedding, C.path)
         .db_results()[0]
     )
     q = (
         DatasetQuery(name="ds1", catalog=catalog)
         .filter(
-            ~C.name.glob("*.tar"),
-            tuple_(C.source, C.parent, C.name) != (source, parent, name),
+            ~C.path.glob("*.tar"),
+            C.path != path,
         )
         .add_signals(TextEmbeddingGenerator())
         .mutate(
             cos_dist=cosine_distance(C.embedding, target_embedding),
             eucl_dist=euclidean_distance(C.embedding, target_embedding),
         )
-        .select(C.parent, C.name, C.cos_dist, C.eucl_dist)
-        .order_by(C.source, C.parent, C.name)
+        .select(C.path, C.cos_dist, C.eucl_dist)
+        .order_by(C.path)
     )
     count = q.count()
     assert count == 13
 
     result = q.db_results()
     expected = [
-        ("animals.tar", "description", 0.0, 0.0),
-        ("animals.tar/cats", "cat1", 0.8508677010357059, 1.9078358385397216),
-        ("animals.tar/cats", "cat2", 0.8508677010357059, 1.9078358385397216),
-        ("animals.tar/dogs", "dog1", 0.7875133863812602, 1.8750659656122843),
-        ("animals.tar/dogs", "dog2", 0.7356502722055684, 1.775619888314893),
-        ("animals.tar/dogs", "dog3", 0.7695916496857775, 1.8344983482620636),
-        ("animals.tar/dogs/others", "dog4", 0.9789704524691446, 2.0531542018152322),
-        ("cats", "cat1", 0.8508677010357059, 1.9078358385397216),
-        ("cats", "cat2", 0.8508677010357059, 1.9078358385397216),
-        ("dogs", "dog1", 0.7875133863812602, 1.8750659656122843),
-        ("dogs", "dog2", 0.7356502722055684, 1.775619888314893),
-        ("dogs", "dog3", 0.7695916496857775, 1.8344983482620636),
-        ("dogs/others", "dog4", 0.9789704524691446, 2.0531542018152322),
+        ("animals.tar/cats/cat1", 0.8508677010357059, 1.9078358385397216),
+        ("animals.tar/cats/cat2", 0.8508677010357059, 1.9078358385397216),
+        ("animals.tar/description", 0.0, 0.0),
+        ("animals.tar/dogs/dog1", 0.7875133863812602, 1.8750659656122843),
+        ("animals.tar/dogs/dog2", 0.7356502722055684, 1.775619888314893),
+        ("animals.tar/dogs/dog3", 0.7695916496857775, 1.8344983482620636),
+        ("animals.tar/dogs/others/dog4", 0.9789704524691446, 2.0531542018152322),
+        ("cats/cat1", 0.8508677010357059, 1.9078358385397216),
+        ("cats/cat2", 0.8508677010357059, 1.9078358385397216),
+        ("dogs/dog1", 0.7875133863812602, 1.8750659656122843),
+        ("dogs/dog2", 0.7356502722055684, 1.775619888314893),
+        ("dogs/dog3", 0.7695916496857775, 1.8344983482620636),
+        ("dogs/others/dog4", 0.9789704524691446, 2.0531542018152322),
     ]
 
-    for (p1, n1, c1, e1), (p2, n2, c2, e2) in zip(result, expected):
+    for (p1, c1, e1), (p2, c2, e2) in zip(result, expected):
         assert p1.endswith(p2)
-        assert n1 == n2
         assert math.isclose(c1, c2, abs_tol=1e-5)
         assert math.isclose(e1, e2, abs_tol=1e-5)
 
@@ -2986,10 +2916,9 @@ def test_similarity_search(cloud_test_catalog):
     indirect=True,
 )
 def test_subtract(cloud_test_catalog):
-    @udf(("name",), {"name_len": Int})
-    def name_len(name):
-        # A very simple udf.
-        return (len(name),)
+    @udf(("path",), {"name_len": Int})
+    def name_len(path):
+        return (len(posixpath.basename(path)),)
 
     catalog = cloud_test_catalog.catalog
     sources = [str(cloud_test_catalog.src_uri)]
@@ -3009,12 +2938,12 @@ def test_subtract(cloud_test_catalog):
     # subtracting dataset from dataset
     q = dogs_cats.subtract(dogs)
     result = q.db_results(row_factory=from_result_row)
-    assert sorted(r["name"] for r in result) == ["cat1", "cat2"]
+    assert sorted(posixpath.basename(r["path"]) for r in result) == ["cat1", "cat2"]
 
     # subtracting dataset out of index
     q = DatasetQuery(f"{src}", catalog=catalog).subtract(cats)
     result = q.db_results(row_factory=from_result_row)
-    assert sorted(r["name"] for r in result) == [
+    assert sorted(posixpath.basename(r["path"]) for r in result) == [
         "description",
         "dog1",
         "dog2",
@@ -3027,16 +2956,25 @@ def test_subtract(cloud_test_catalog):
         DatasetQuery(f"{src}/dogs/*", catalog=catalog)
     )
     result = q.db_results(row_factory=from_result_row)
-    assert sorted(r["name"] for r in result) == ["cat1", "cat2", "description"]
+    assert sorted(posixpath.basename(r["path"]) for r in result) == [
+        "cat1",
+        "cat2",
+        "description",
+    ]
 
     # subtracting with filter
     q = (
         DatasetQuery(f"{src}", catalog=catalog)
-        .filter(C.name.glob("dog*"))
+        .filter(C.path.glob("*dog*"))
         .subtract(cats)
     )
     result = q.db_results(row_factory=from_result_row)
-    assert sorted(r["name"] for r in result) == ["dog1", "dog2", "dog3", "dog4"]
+    assert sorted(posixpath.basename(r["path"]) for r in result) == [
+        "dog1",
+        "dog2",
+        "dog3",
+        "dog4",
+    ]
 
     # chain subtracting
     q = dogs_cats.subtract(dogs).subtract(cats)
@@ -3049,10 +2987,15 @@ def test_subtract(cloud_test_catalog):
     q = (
         DatasetQuery(f"{src}", catalog=catalog)
         .subtract(cats)
-        .filter(C.name.glob("dog*"))
+        .filter(C.path.glob("*dog*"))
     )
     result = q.db_results(row_factory=from_result_row)
-    assert sorted(r["name"] for r in result) == ["dog1", "dog2", "dog3", "dog4"]
+    assert sorted(posixpath.basename(r["path"]) for r in result) == [
+        "dog1",
+        "dog2",
+        "dog3",
+        "dog4",
+    ]
 
     # subtract with usage of udfs and union
     # simulates updating dataset with new changes in index and not re-calculating
@@ -3066,7 +3009,7 @@ def test_subtract(cloud_test_catalog):
         .union(cats_with_signals)
     )
     result = q.db_results(row_factory=from_result_row)
-    assert sorted(r["name"] for r in result) == sorted(
+    assert sorted(posixpath.basename(r["path"]) for r in result) == sorted(
         ["description", "dog1", "dog2", "dog3", "dog4", "cat1", "cat2"]
     )
     assert all(r["name_len"] > 0 for r in result)
@@ -3074,15 +3017,20 @@ def test_subtract(cloud_test_catalog):
     # subtracting with source and target filter
     # only dog2 file has size less then 4
     all_except_dog2 = DatasetQuery(f"{src}", catalog=catalog).filter(C.size > 3)
-    only_cats = dogs_cats.filter(C.name.glob("cat*"))
+    only_cats = dogs_cats.filter(C.path.glob("*cat*"))
     q = all_except_dog2.subtract(only_cats)
     result = q.db_results(row_factory=from_result_row)
-    assert sorted(r["name"] for r in result) == ["description", "dog1", "dog3", "dog4"]
+    assert sorted(posixpath.basename(r["path"]) for r in result) == [
+        "description",
+        "dog1",
+        "dog3",
+        "dog4",
+    ]
 
     # subtracting after union
     q = dogs.union(cats).subtract(dogs)
     result = q.db_results(row_factory=from_result_row)
-    assert sorted(r["name"] for r in result) == ["cat1", "cat2"]
+    assert sorted(posixpath.basename(r["path"]) for r in result) == ["cat1", "cat2"]
 
     # subtract with itself
     q = dogs.subtract(dogs)
@@ -3108,6 +3056,7 @@ def test_group_by(cloud_test_catalog, cloud_type, dogs_dataset):
 
     q = (
         DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
+        .mutate(parent=pathfunc.parent(C.path))
         .group_by(C.parent)
         .select(
             C.parent,
@@ -3182,6 +3131,7 @@ def test_json_loader(cloud_test_catalog):
 
     q = (
         DatasetQuery(cloud_test_catalog.src_uri, catalog=catalog)
+        .mutate(name=pathfunc.name(C.path))
         .add_signals(split_name)
         .add_signals(attach_json, partition_by=C.basename)
         .select(C.name, C.similarity, C.md5)
@@ -3203,10 +3153,9 @@ def test_json_loader(cloud_test_catalog):
 def test_changed(cloud_test_catalog):
     now = datetime.now(timezone.utc)
 
-    @udf(("name",), {"name_len": Int})
-    def name_len(name):
-        # A very simple udf.
-        return (len(name),)
+    @udf(("path",), {"name_len": Int})
+    def name_len(path):
+        return (len(posixpath.basename(path)),)
 
     def _index(catalog, uri, entries_updated_last_mod):
         """
@@ -3218,7 +3167,7 @@ def test_changed(cloud_test_catalog):
         entries = []
 
         for entry in ENTRIES:
-            if entry.name in entries_updated_last_mod:
+            if posixpath.basename(entry.path) in entries_updated_last_mod:
                 entry.last_modified = now + timedelta(days=2)
             else:
                 entry.last_modified = now
@@ -3258,11 +3207,11 @@ def test_changed(cloud_test_catalog):
     # changed between dataset and dataset
     q = dogs_updated_1.changed(dogs)
     result = q.db_results(row_factory=from_result_row)
-    assert sorted(r["name"] for r in result) == ["dog2"]
+    assert sorted(posixpath.basename(r["path"]) for r in result) == ["dog2"]
 
     q = dogs_updated_2.changed(dogs)
     result = q.db_results(row_factory=from_result_row)
-    assert sorted(r["name"] for r in result) == ["dog1", "dog2"]
+    assert sorted(posixpath.basename(r["path"]) for r in result) == ["dog1", "dog2"]
 
     # changed between dataset and dataset, no change
     q = dogs.changed(dogs)
@@ -3274,30 +3223,30 @@ def test_changed(cloud_test_catalog):
     # changed between index and dataset
     q = DatasetQuery(f"{src}/dogs/*", catalog=catalog).changed(dogs)
     result = q.db_results(row_factory=from_result_row)
-    assert sorted(r["name"] for r in result) == ["dog1", "dog2"]
+    assert sorted(posixpath.basename(r["path"]) for r in result) == ["dog1", "dog2"]
 
     # changed with filters
     q = (
         DatasetQuery(f"{src}", catalog=catalog)
-        .filter(C.name.glob("dog*"))
+        .filter(C.path.glob("*dog*"))
         .changed(dogs)
     )
     result = q.db_results(row_factory=from_result_row)
-    assert sorted(r["name"] for r in result) == ["dog1", "dog2"]
+    assert sorted(posixpath.basename(r["path"]) for r in result) == ["dog1", "dog2"]
 
     # chain changed
     q = dogs_updated_2.changed(dogs).changed(dogs_updated_1)
     result = q.db_results(row_factory=from_result_row)
-    assert sorted(r["name"] for r in result) == ["dog1"]
+    assert sorted(posixpath.basename(r["path"]) for r in result) == ["dog1"]
 
     # filtering after changed
     q = (
         DatasetQuery(f"{src}/dogs/*", catalog=catalog)
         .changed(dogs)
-        .filter(C.name.glob("dog1*"))
+        .filter(C.path.glob("*dog1"))
     )
     result = q.db_results(row_factory=from_result_row)
-    assert sorted(r["name"] for r in result) == ["dog1"]
+    assert sorted(posixpath.basename(r["path"]) for r in result) == ["dog1"]
 
     # changed with usage of udfs
     q = (
@@ -3306,13 +3255,15 @@ def test_changed(cloud_test_catalog):
         .add_signals(name_len)
     )
     result = q.db_results(row_factory=from_result_row)
-    assert sorted(r["name"] for r in result) == sorted(["dog1", "dog2"])
+    assert sorted(posixpath.basename(r["path"]) for r in result) == sorted(
+        ["dog1", "dog2"]
+    )
     assert all(r["name_len"] > 0 for r in result)
 
     # changed after union
     q = dogs_updated_2.union(cats).changed(dogs)
     result = q.db_results(row_factory=from_result_row)
-    assert sorted(r["name"] for r in result) == ["dog1", "dog2"]
+    assert sorted(posixpath.basename(r["path"]) for r in result) == ["dog1", "dog2"]
 
     # changed with itself
     q = dogs.changed(dogs)
@@ -3331,7 +3282,7 @@ def test_to_db_records(simple_ds_query):
     assert simple_ds_query.to_db_records() == SIMPLE_DS_QUERY_RECORDS
 
 
-@pytest.mark.parametrize("method", ["to_db_records", "extract"])
+@pytest.mark.parametrize("method", ["to_db_records"])
 @pytest.mark.parametrize("save", [True, False])
 @pytest.mark.parametrize(
     "cloud_type,version_aware",
@@ -3345,19 +3296,18 @@ def test_udf_after_union(cloud_test_catalog, save, method):
     catalog.index(sources)
     catalog.create_dataset_from_sources("animals", globs, recursive=True)
 
-    @udf(("name",), {"name_len": Int})
-    def name_len(name):
-        # A very simple udf.
-        return (len(name),)
+    @udf(("path",), {"name_len": Int})
+    def name_len(path):
+        return (len(posixpath.basename(path)),)
 
     ds_cats = DatasetQuery(name="animals", version=1, catalog=catalog).filter(
-        C.parent.glob("*cats*")
+        C.path.glob("*cats*")
     )
     if save:
         ds_cats.save("cats")
         ds_cats = DatasetQuery(name="cats", version=1, catalog=catalog)
     ds_dogs = DatasetQuery(name="animals", version=1, catalog=catalog).filter(
-        C.parent.glob("*dogs*")
+        C.path.glob("*dogs*")
     )
     if save:
         ds_dogs.save("dogs")
@@ -3366,14 +3316,10 @@ def test_udf_after_union(cloud_test_catalog, save, method):
     if method == "to_db_records":
 
         def get_result(query):
-            result = [(r["name"], r["name_len"]) for r in query.to_db_records()]
-            result.sort()
-            return result
-
-    elif method == "extract":
-
-        def get_result(query):
-            result = list(query.extract("name", "name_len"))
+            result = [
+                (posixpath.basename(r["path"]), r["name_len"])
+                for r in query.to_db_records()
+            ]
             result.sort()
             return result
 
@@ -3405,7 +3351,7 @@ def test_udf_after_union(cloud_test_catalog, save, method):
     ]
 
 
-@pytest.mark.parametrize("method", ["to_db_records", "extract"])
+@pytest.mark.parametrize("method", ["to_db_records"])
 @pytest.mark.parametrize(
     "cloud_type,version_aware",
     [("s3", True), ("file", False)],
@@ -3418,28 +3364,25 @@ def test_udf_after_union_same_rows_with_mutate(cloud_test_catalog, method):
     catalog.index(sources)
     catalog.create_dataset_from_sources("animals", globs, recursive=True)
 
-    @udf(("name",), {"name_len": Int})
-    def name_len(name):
-        # A very simple udf.
-        return (len(name),)
+    @udf(("path",), {"name_len": Int})
+    def name_len(path):
+        return (len(posixpath.basename(path)),)
 
     q_base = DatasetQuery(name="animals", version=1, catalog=catalog).filter(
-        C.parent.glob("*dogs*")
+        C.path.glob("*dogs*")
     )
-    q1 = q_base.mutate(x=sqlalchemy.cast(C.name + "_1", String()))
-    q2 = q_base.mutate(x=sqlalchemy.cast(C.name + "_2", String()))
+    q1 = q_base.mutate(x=sqlalchemy.cast(pathfunc.name(C.path) + "_1", String()))
+    q2 = q_base.mutate(x=sqlalchemy.cast(pathfunc.name(C.path) + "_2", String()))
 
     if method == "to_db_records":
 
         def get_result(query):
-            result = [(r["name"], r["x"], r["name_len"]) for r in query.to_db_records()]
+            result = [
+                (posixpath.basename(r["path"]), r["x"], r["name_len"])
+                for r in query.to_db_records()
+            ]
             result.sort()
             return result
-
-    elif method == "extract":
-
-        def get_result(query):
-            return sorted(query.extract("name", "x", "name_len"))
 
     q = q1.union(q2).add_signals(name_len)
     result1 = get_result(q)
@@ -3475,7 +3418,7 @@ def test_udf_after_union_same_rows_with_mutate(cloud_test_catalog, method):
     ]
 
 
-@pytest.mark.parametrize("method", ["select", "extract"])
+@pytest.mark.parametrize("method", ["select"])
 @pytest.mark.parametrize(
     "cloud_type,version_aware,tree",
     [("s3", True, NUM_TREE), ("file", False, NUM_TREE)],
@@ -3505,19 +3448,17 @@ def test_udf_after_limit(cloud_test_catalog, method):
                 .to_db_records()
             )
 
-    elif method == "extract":
-
-        def get_result(query):
-            data = query.limit(100).add_signals(name_int).extract("name", "name_int")
-            return [{"name": name, "name_int": name_int} for name, name_int in data]
-
     expected = [{"name": f"{i:06d}", "name_int": i} for i in range(100)]
-    ds = DatasetQuery(name="animals", version=1, catalog=catalog)
+    ds = (
+        DatasetQuery(name="animals", version=1, catalog=catalog)
+        .mutate(name=pathfunc.name(C.path))
+        .save()
+    )
     # We test a few different orderings here, because we've had strange
     # bugs in the past where calling add_signals() after limit() gave us
     # incorrect results on clickhouse cloud.
     # See https://github.com/iterative/dvcx/issues/940
-    assert get_result(ds.order_by("name")) == expected
+    assert get_result(ds.order_by(C.name)) == expected
     assert len(get_result(ds.order_by("sys__rand"))) == 100
     assert len(get_result(ds)) == 100
 
@@ -3613,7 +3554,7 @@ def test_dataset_dependencies_multiple_direct_dataset_dependencies(
     if method == "union":
         dogs.union(cats).save(ds_name)
     else:
-        dogs.join(cats, "name").save(ds_name)
+        dogs.join(cats, "path").save(ds_name)
 
     storage_depenedncy = {
         "id": ANY,
@@ -3727,10 +3668,10 @@ def test_dataset_dependencies_multiple_union(
 def test_save_subset_of_columns(cloud_test_catalog):
     catalog = cloud_test_catalog.catalog
     path = f"{cloud_test_catalog.src_uri}/cats"
-    DatasetQuery(path=path, catalog=catalog).select(C.name).save("cats", version=1)
+    DatasetQuery(path=path, catalog=catalog).select(C.path).save("cats", version=1)
 
     dataset = catalog.get_dataset("cats")
-    assert dataset.schema == {"name": String}
+    assert dataset.schema == {"path": String}
 
 
 @pytest.mark.parametrize(

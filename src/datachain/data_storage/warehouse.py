@@ -19,6 +19,7 @@ from datachain.client import Client
 from datachain.data_storage.serializer import Serializable
 from datachain.dataset import DatasetRecord, RowDict
 from datachain.node import DirType, DirTypeGroup, Entry, Node, NodeWithPath, get_path
+from datachain.sql.functions import path as pathfunc
 from datachain.sql.types import Int, SQLType
 from datachain.storage import StorageURI
 from datachain.utils import sql_escape_like
@@ -373,9 +374,7 @@ class AbstractWarehouse(ABC, Serializable):
 
         else:
             parent = self.get_node_by_path(dr, path.lstrip("/").rstrip("/*"))
-            select_query = select_query.where(
-                (dr.c.parent == parent.path) | (self.path_expr(dr) == path)
-            )
+            select_query = select_query.where(pathfunc.parent(dr.c.path) == parent.path)
         return select_query
 
     def rename_dataset_table(
@@ -532,8 +531,8 @@ class AbstractWarehouse(ABC, Serializable):
             dr,
             parent_path,
             type="dir",
-            conds=[sa.Column("parent") == parent_path],
-            order_by=["source", "parent", "name"],
+            conds=[pathfunc.parent(sa.Column("path")) == parent_path],
+            order_by=["source", "path"],
         )
         return self.get_nodes(query)
 
@@ -556,7 +555,7 @@ class AbstractWarehouse(ABC, Serializable):
                 & ~self.instr(relpath, "/")
                 & (self.path_expr(de) != dirpath)
             )
-            .order_by(de.c.source, de.c.parent, de.c.name, de.c.version)
+            .order_by(de.c.source, de.c.path, de.c.version)
         )
 
     def _get_node_by_path_list(
@@ -572,8 +571,8 @@ class AbstractWarehouse(ABC, Serializable):
         ).subquery()
         query = self.expand_query(de, dr)
 
-        q = query.where((de.c.parent == parent) & (de.c.name == name)).order_by(
-            de.c.source, de.c.parent, de.c.name, de.c.version
+        q = query.where(de.c.path == get_path(parent, name)).order_by(
+            de.c.source, de.c.path, de.c.version
         )
         row = next(self.dataset_rows_select(q), None)
         if not row:
@@ -636,8 +635,7 @@ class AbstractWarehouse(ABC, Serializable):
             case((de.c.is_dir == true(), DirType.DIR), else_=dr.c.dir_type).label(
                 "dir_type"
             ),
-            de.c.parent,
-            de.c.name,
+            de.c.path,
             with_default(dr.c.etag),
             de.c.version,
             with_default(dr.c.is_latest),
@@ -670,7 +668,7 @@ class AbstractWarehouse(ABC, Serializable):
             .where(
                 dr.c.is_latest == true(),
                 dr.c.dir_type != DirType.DIR,
-                (dr.c.parent + "/").startswith(path),
+                dr.c.path.startswith(path),
             )
             .exists()
         )
@@ -678,8 +676,7 @@ class AbstractWarehouse(ABC, Serializable):
         if not row:
             raise FileNotFoundError(f"Unable to resolve path {path}")
         path = path.removesuffix("/")
-        parent, name = path.rsplit("/", 1) if "/" in path else ("", path)
-        return Node.from_dir(parent, name)
+        return Node.from_dir(path)
 
     def expand_path(self, dataset_rows: "DataTable", path: str) -> list[Node]:
         """Simulates Unix-like shell expansion"""
@@ -703,18 +700,21 @@ class AbstractWarehouse(ABC, Serializable):
         de = dr.dataset_dir_expansion(
             dr.select().where(dr.c.is_latest == true()).subquery()
         ).subquery()
-        where_cond = de.c.parent == parent_path
+        where_cond = pathfunc.parent(de.c.path) == parent_path
         if parent_path == "":
             # Exclude the root dir
-            where_cond = where_cond & (de.c.name != "")
+            where_cond = where_cond & (de.c.path != "")
         inner_query = self.expand_query(de, dr).where(where_cond).subquery()
+
+        def field_to_expr(f):
+            if f == "name":
+                return pathfunc.name(inner_query.c.path)
+            return getattr(inner_query.c, f)
+
         return self.db.execute(
-            sa.select(*(getattr(inner_query.c, f) for f in fields))
-            .select_from(inner_query)
-            .order_by(
+            select(*(field_to_expr(f) for f in fields)).order_by(
                 inner_query.c.source,
-                inner_query.c.parent,
-                inner_query.c.name,
+                inner_query.c.path,
                 inner_query.c.version,
             )
         )
@@ -727,21 +727,20 @@ class AbstractWarehouse(ABC, Serializable):
         """
         dr = dataset_rows
         dirpath = f"{parent_path}/"
-        relpath = func.substr(self.path_expr(dr), len(dirpath) + 1)
 
         def field_to_expr(f):
             if f == "name":
-                return relpath
+                return pathfunc.name(dr.c.path)
             return getattr(dr.c, f)
 
         q = (
             select(*(field_to_expr(f) for f in fields))
             .where(
                 self.path_expr(dr).like(f"{sql_escape_like(dirpath)}%"),
-                ~self.instr(relpath, "/"),
+                ~self.instr(pathfunc.name(dr.c.path), "/"),
                 dr.c.is_latest == true(),
             )
-            .order_by(dr.c.source, dr.c.parent, dr.c.name, dr.c.version, dr.c.etag)
+            .order_by(dr.c.source, dr.c.path, dr.c.version, dr.c.etag)
         )
         return self.db.execute(q)
 
@@ -758,7 +757,7 @@ class AbstractWarehouse(ABC, Serializable):
         if isinstance(node, dict):
             is_dir = node.get("is_dir", node["dir_type"] in DirTypeGroup.SUBOBJ_DIR)
             node_size = node["size"]
-            path = get_path(node["parent"], node["name"])
+            path = node["path"]
         else:
             is_dir = node.is_container
             node_size = node.size
@@ -790,7 +789,7 @@ class AbstractWarehouse(ABC, Serializable):
         return results[0] or 0, 0
 
     def path_expr(self, t):
-        return case((t.c.parent == "", t.c.name), else_=t.c.parent + "/" + t.c.name)
+        return t.c.path
 
     def _find_query(
         self,
@@ -947,11 +946,7 @@ class AbstractWarehouse(ABC, Serializable):
         tq = target_query.alias("target_query")
 
         source_target_join = sa.join(
-            sq,
-            tq,
-            (sq.c.source == tq.c.source)
-            & (sq.c.parent == tq.c.parent)
-            & (sq.c.name == tq.c.name),
+            sq, tq, (sq.c.source == tq.c.source) & (sq.c.path == tq.c.path)
         )
 
         return (
