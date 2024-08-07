@@ -50,8 +50,7 @@ class Node:
     sys__rand: int = -1
     vtype: str = ""
     dir_type: Optional[int] = None
-    parent: str = ""
-    name: str = ""
+    path: str = ""
     etag: str = ""
     version: Optional[str] = None
     is_latest: bool = True
@@ -61,10 +60,6 @@ class Node:
     owner_id: str = ""
     location: Optional[str] = None
     source: StorageURI = StorageURI("")
-
-    @property
-    def path(self) -> str:
-        return f"{self.parent}/{self.name}" if self.parent else self.name
 
     @property
     def is_dir(self) -> bool:
@@ -107,13 +102,12 @@ class Node:
             return self.path + "/"
         return self.path
 
-    def as_uid(self, storage: Optional[StorageURI] = None):
+    def as_uid(self, storage: Optional[StorageURI] = None) -> UniqueId:
         if storage is None:
             storage = self.source
         return UniqueId(
             storage=storage,
-            parent=self.parent,
-            name=self.name,
+            path=self.path,
             size=self.size,
             version=self.version or "",
             etag=self.etag,
@@ -129,20 +123,30 @@ class Node:
         return cls(**kw)
 
     @classmethod
-    def from_dir(cls, parent, name, **kwargs) -> "Node":
-        return cls(sys__id=-1, dir_type=DirType.DIR, parent=parent, name=name, **kwargs)
+    def from_dir(cls, path, **kwargs) -> "Node":
+        return cls(sys__id=-1, dir_type=DirType.DIR, path=path, **kwargs)
 
     @classmethod
     def root(cls) -> "Node":
         return cls(sys__id=-1, dir_type=DirType.DIR)
+
+    @property
+    def name(self):
+        return self.path.rsplit("/", 1)[-1]
+
+    @property
+    def parent(self):
+        split = self.path.rsplit("/", 1)
+        if len(split) <= 1:
+            return ""
+        return split[0]
 
 
 @attrs.define
 class Entry:
     vtype: str = ""
     dir_type: Optional[int] = None
-    parent: str = ""
-    name: str = ""
+    path: str = ""
     etag: str = ""
     version: str = ""
     is_latest: bool = True
@@ -157,26 +161,33 @@ class Entry:
         return self.dir_type == DirType.DIR
 
     @classmethod
-    def from_dir(cls, parent: str, name: str, **kwargs) -> "Entry":
-        return cls(dir_type=DirType.DIR, parent=parent, name=name, **kwargs)
+    def from_dir(cls, path: str, **kwargs) -> "Entry":
+        return cls(dir_type=DirType.DIR, path=path, **kwargs)
 
     @classmethod
-    def from_file(cls, parent: str, name: str, **kwargs) -> "Entry":
-        return cls(dir_type=DirType.FILE, parent=parent, name=name, **kwargs)
+    def from_file(cls, path: str, **kwargs) -> "Entry":
+        return cls(dir_type=DirType.FILE, path=path, **kwargs)
 
     @classmethod
     def root(cls):
         return cls(dir_type=DirType.DIR)
 
     @property
-    def path(self) -> str:
-        return f"{self.parent}/{self.name}" if self.parent else self.name
-
-    @property
     def full_path(self) -> str:
         if self.is_dir and self.path:
             return self.path + "/"
         return self.path
+
+    @property
+    def name(self):
+        return self.path.rsplit("/", 1)[-1]
+
+    @property
+    def parent(self):
+        split = self.path.rsplit("/", 1)
+        if len(split) <= 1:
+            return ""
+        return split[0]
 
 
 def get_path(parent: str, name: str):

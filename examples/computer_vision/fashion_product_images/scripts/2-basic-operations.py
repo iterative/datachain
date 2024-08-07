@@ -6,8 +6,7 @@ dc = DataChain.from_dataset("fashion-product-images")  # from 1-quick-start.py
 print("\n# Filtering & Sorting:")
 (
     dc.select(
-        "file.parent",
-        "file.name",
+        "file.path",
         "usage",
         "season",
         "year",
@@ -27,8 +26,7 @@ print("\n# Filtering & Sorting:")
 
 print("\n# Add signals (columns) with map() method:")
 dc_len = DataChain.from_dataset("fashion-product-images").map(
-    prod_name_length=lambda name: len(name),
-    params=["file.name"],
+    prod_name_length=lambda file: len(file.name),
     output=int,
 )
 
@@ -40,7 +38,7 @@ dc_len.save("fashion-tmp")
 print("\n# Save a new version (with prod_name_length_2 column):")
 (
     DataChain(name="fashion-summer-topwear-apparel")
-    .map(prod_name_length_2=lambda name: len(name), params=["file.name"], output=int)
+    .map(prod_name_length_2=lambda file: len(file.name), output=int)
     .save("fashion-tmp")
 )
 

@@ -1,42 +1,34 @@
 from datachain import C, DataChain
 from datachain.lib.webdataset import process_webdataset
 from datachain.lib.webdataset_laion import WDSLaion, process_laion_meta
+from datachain.sql.functions import path
 
-wds = (
-    DataChain.from_storage("gs://datachain-demo/datacomp-small/shards")
-    .filter(C("file.name").glob("00000000.tar"))
+wds_images = (
+    DataChain.from_storage("gs://datachain-demo/datacomp-small/shards/")
+    .filter(C("file.path").glob("*000000[0-5]*.tar"))  # from *00.tar to *59.tar
     .settings(cache=True)
     .gen(laion=process_webdataset(spec=WDSLaion), params="file")
-    .save()  # materialize chain to avoid downloading data multiple times
 )
 
-meta_pq = (
+wds_with_pq = (
     DataChain.from_parquet("gs://datachain-demo/datacomp-small/metadata/0020f*.parquet")
-    .filter(
-        C("uid").in_(values[0] for values in wds.select("laion.json.uid").collect())
-    )
-    .map(stem=lambda file: file.get_file_stem(), params=["source.file"], output=str)
-    .save()
+    .settings(cache=True)
+    .merge(wds_images, on="uid", right_on="laion.json.uid", inner=True)
+    .mutate(stem=path.file_stem(path.name(C("source.file.path"))))
 )
 
-meta_emd = (
+res = (
     DataChain.from_storage("gs://datachain-demo/datacomp-small/metadata/0020f*.npz")
+    .settings(cache=True)
     .gen(emd=process_laion_meta)
-    .filter(
-        C("emd.index").in_(
-            values[0] for values in meta_pq.select("source.index").collect()
-        )
+    .mutate(stem=path.file_stem(path.name(C("emd.file.path"))))
+    .merge(
+        wds_with_pq,
+        on=["stem", "emd.index"],
+        right_on=["stem", "source.index"],
+        inner=True,
     )
-    .map(stem=lambda file: file.get_file_stem(), params=["emd.file"], output=str)
+    .save("wds")
 )
 
-
-meta = meta_emd.merge(
-    meta_pq,
-    on=["stem", "emd.index"],
-    right_on=["stem", "source.index"],
-)
-
-res = wds.merge(meta, on="laion.json.uid", right_on="uid")
-
-res.show(3)
+res.show(5)

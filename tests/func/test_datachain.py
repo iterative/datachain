@@ -128,7 +128,7 @@ def test_export_images_files(test_session, tmp_dir, tmp_path, use_cache):
 
     DataChain.from_values(
         file=[
-            ImageFile(name=img["name"], source=f"file://{tmp_path}") for img in images
+            ImageFile(path=img["name"], source=f"file://{tmp_path}") for img in images
         ],
         session=test_session,
     ).export_files(tmp_dir / "output", placement="filename", use_cache=use_cache)
@@ -285,8 +285,7 @@ def test_from_storage_check_rows(tmp_dir, test_session):
         mtime = stat.st_mtime if is_sqlite else float(math.floor(stat.st_mtime))
         assert file == File(
             source=Path(tmp_dir.anchor).as_uri(),
-            parent=tmp_dir.relative_to(tmp_dir.anchor),
-            name=file.name,
+            path=file.path,
             size=stat.st_size,
             version="",
             etag=stat.st_mtime.hex(),

@@ -512,7 +512,7 @@ def cloud_test_catalog_tmpfile(
 
 @pytest.fixture
 def listed_bucket(cloud_test_catalog):
-    list(cloud_test_catalog.catalog.ls([cloud_test_catalog.src_uri], fields=["name"]))
+    cloud_test_catalog.catalog.index([cloud_test_catalog.src_uri])
 
 
 @pytest.fixture

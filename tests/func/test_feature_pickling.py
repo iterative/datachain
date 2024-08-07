@@ -41,7 +41,7 @@ def file_to_message(file):
 
 
 def common_df_asserts(df):
-    assert df["file"]["name"].tolist() == ["cat1", "cat2"]
+    assert df["file"]["path"].tolist() == ["cats/cat1", "cats/cat2"]
     assert df["file"]["size"].tolist() == [4, 4]
     assert df["message"]["id"].tolist() == ["cat1", "cat2"]
     mc = df["message"]["content"].tolist()
@@ -64,7 +64,7 @@ def sort_df_for_tests(df):
     # Sort the dataframe to avoid a PerformanceWarning about unsorted indexing.
     df.sort_index(axis=0, inplace=True, sort_remaining=True)
     df.sort_index(axis=1, inplace=True, sort_remaining=True)
-    return df.sort_values(("file", "name")).reset_index(drop=True)
+    return df.sort_values(("file", "path")).reset_index(drop=True)
 
 
 @pytest.mark.parametrize(
@@ -84,7 +84,7 @@ def test_feature_udf_parallel(cloud_test_catalog_tmpfile):
 
     chain = (
         DataChain.from_storage(source, type="text", catalog=catalog)
-        .filter(C.name.glob("*cat*"))
+        .filter(C.path.glob("*cat*"))
         .settings(parallel=2)
         .map(
             message=file_to_message,
@@ -132,7 +132,7 @@ def test_feature_udf_parallel_local(cloud_test_catalog_tmpfile):
 
     chain = (
         DataChain.from_storage(source, type="text", catalog=catalog)
-        .filter(C.name.glob("*cat*"))
+        .filter(C.path.glob("*cat*"))
         .settings(parallel=2)
         .map(
             message=lambda file: AIMessageLocal(
@@ -189,7 +189,7 @@ def test_feature_udf_parallel_local_pydantic(cloud_test_catalog_tmpfile):
 
     chain = (
         DataChain.from_storage(source, type="text", catalog=catalog)
-        .filter(C.name.glob("*cat*"))
+        .filter(C.path.glob("*cat*"))
         .settings(parallel=2)
         .map(
             message=lambda file: AIMessageLocalPydantic(

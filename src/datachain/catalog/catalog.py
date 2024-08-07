@@ -529,21 +529,16 @@ def find_column_to_str(  # noqa: PLR0911
     if column == "du":
         return str(
             src.listing.du(
-                {
-                    f: row[field_lookup[f]]
-                    for f in ["dir_type", "size", "parent", "name"]
-                }
+                {f: row[field_lookup[f]] for f in ["dir_type", "size", "path"]}
             )[0]
         )
     if column == "name":
-        return row[field_lookup["name"]] or ""
+        return posixpath.basename(row[field_lookup["path"]]) or ""
     if column == "owner":
         return row[field_lookup["owner_name"]] or ""
     if column == "path":
         is_dir = row[field_lookup["dir_type"]] == DirType.DIR
-        parent = row[field_lookup["parent"]]
-        name = row[field_lookup["name"]]
-        path = f"{parent}/{name}" if parent else name
+        path = row[field_lookup["path"]]
         if is_dir and path:
             full_path = path + "/"
         else:
@@ -724,8 +719,7 @@ class Catalog:
         columns = [
             Column("vtype", String),
             Column("dir_type", Int),
-            Column("parent", String),
-            Column("name", String),
+            Column("path", String),
             Column("etag", String),
             Column("version", String),
             Column("is_latest", Boolean),
@@ -1623,8 +1617,7 @@ class Catalog:
         Example output:
             {
                 "source": "s3://ldb-public",
-                "parent": "animals/dogs",
-                "name": "dog.jpg",
+                "path": "animals/dogs/dog.jpg",
                 ...
             }
         """
@@ -1675,8 +1668,7 @@ class Catalog:
     def _get_row_uid(self, row: RowDict) -> UniqueId:
         return UniqueId(
             row["source"],
-            row["parent"],
-            row["name"],
+            row["path"],
             row["size"],
             row["etag"],
             row["version"],
@@ -2308,16 +2300,14 @@ class Catalog:
             if column == "du":
                 field_set.add("dir_type")
                 field_set.add("size")
-                field_set.add("parent")
-                field_set.add("name")
+                field_set.add("path")
             elif column == "name":
-                field_set.add("name")
+                field_set.add("path")
             elif column == "owner":
                 field_set.add("owner_name")
             elif column == "path":
                 field_set.add("dir_type")
-                field_set.add("parent")
-                field_set.add("name")
+                field_set.add("path")
             elif column == "size":
                 field_set.add("size")
             elif column == "type":

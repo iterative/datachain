@@ -307,7 +307,7 @@ class Subtract(DatasetDiffOperation):
 class Changed(DatasetDiffOperation):
     """
     Calculates rows that are changed in a source query compared to target query
-    Changed means it has same source + parent + name but different last_modified
+    Changed means it has same source + path but different last_modified
     Example:
         >>> ds = DatasetQuery(name="dogs_cats") # some older dataset with embeddings
         >>> ds_updated = (
@@ -1526,7 +1526,7 @@ class DatasetQuery:
 
     @detach
     def subtract(self, dq: "DatasetQuery") -> "Self":
-        return self._subtract(dq, on=["source", "parent", "name"])
+        return self._subtract(dq, on=["source", "path"])
 
     @detach
     def _subtract(self, dq: "DatasetQuery", on: Sequence[str]) -> "Self":

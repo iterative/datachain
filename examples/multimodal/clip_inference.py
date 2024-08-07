@@ -11,13 +11,13 @@ source = "gs://datachain-demo/50k-laion-files/000000/00000000*"
 def create_dataset():
     imgs = (
         DataChain.from_storage(source, type="image")
-        .filter(C("file.name").glob("*.jpg"))
-        .map(stem=lambda name: name.split(".")[0], params=["file.name"], output=str)
+        .filter(C("file.path").glob("*.jpg"))
+        .map(stem=lambda file: file.get_file_stem(), params=["file"], output=str)
     )
     captions = (
         DataChain.from_storage(source, type="text")
-        .filter(C("file.name").glob("*.txt"))
-        .map(stem=lambda name: name.split(".")[0], params=["file.name"], output=str)
+        .filter(C("file.path").glob("*.txt"))
+        .map(stem=lambda file: file.get_file_stem(), params=["file"], output=str)
     )
     return imgs.merge(captions, on="stem")
 

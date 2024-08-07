@@ -215,8 +215,7 @@ def normalize_param(param: UDFParamSpec) -> UDFParameter:
 class DatasetRow:
     schema: ClassVar[dict[str, type[SQLType]]] = {
         "source": String,
-        "parent": String,
-        "name": String,
+        "path": String,
         "size": Int64,
         "location": JSON,
         "vtype": String,
@@ -231,9 +230,8 @@ class DatasetRow:
 
     @staticmethod
     def create(
-        name: str,
+        path: str,
         source: str = "",
-        parent: str = "",
         size: int = 0,
         location: Optional[dict[str, Any]] = None,
         vtype: str = "",
@@ -245,7 +243,6 @@ class DatasetRow:
         version: str = "",
         etag: str = "",
     ) -> tuple[
-        str,
         str,
         str,
         int,
@@ -267,8 +264,7 @@ class DatasetRow:
 
         return (  # type: ignore [return-value]
             source,
-            parent,
-            name,
+            path,
             size,
             location,
             vtype,

@@ -10,6 +10,7 @@ Before you begin, ensure you have
 """
 
 from datachain import C, DataChain
+from datachain.sql.functions import path
 
 # Define the paths
 DATA_PATH = "gs://datachain-demo/fashion-product-images"
@@ -17,7 +18,7 @@ ANNOTATIONS_PATH = "gs://datachain-demo/fashion-product-images/styles_clean.csv"
 
 print("\n# Create a Dataset")
 dc = DataChain.from_storage(DATA_PATH, type="image", anon=True).filter(
-    C("file.name").glob("*.jpg")
+    C("file.path").glob("*.jpg")
 )
 dc.show(3)
 
@@ -26,7 +27,9 @@ dc_meta = DataChain.from_csv(ANNOTATIONS_PATH).select_except("source").save()
 dc_meta.show(3)
 
 print("\n# Merge the original image and metadata datachains")
-dc_annotated = dc.merge(dc_meta, on="file.name", right_on="filename")
+dc_annotated = dc.mutate(filename=path.name(C("file.path"))).merge(
+    dc_meta, on="filename"
+)
 
 print("\n# Save dataset")
 dc_annotated.save("fashion-product-images")
