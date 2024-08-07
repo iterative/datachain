@@ -49,6 +49,7 @@ from datachain.query.dataset import (
     detach,
 )
 from datachain.query.schema import Column, DatasetRow
+from datachain.sql.functions import path as pathfunc
 from datachain.utils import inside_notebook
 
 if TYPE_CHECKING:
@@ -202,7 +203,7 @@ class DataChain(DatasetQuery):
 
     DEFAULT_FILE_RECORD: ClassVar[dict] = {
         "source": "",
-        "name": "",
+        "path": "",
         "vtype": "",
         "size": 0,
     }
@@ -1606,10 +1607,11 @@ class DataChain(DatasetQuery):
         use_cache: bool = True,
     ) -> None:
         """Method that exports all files from chain to some folder."""
-        if placement == "filename":
-            print("Checking if file names are unique")
-            if self.distinct(f"{signal}.name").count() != self.count():
-                raise ValueError("Files with the same name found")
+        if placement == "filename" and (
+            super().distinct(pathfunc.name(C(f"{signal}__path"))).count()
+            != self.count()
+        ):
+            raise ValueError("Files with the same name found")
 
         for file in self.collect(signal):
             file.export(output, placement, use_cache)  # type: ignore[union-attr]
@@ -1641,7 +1643,7 @@ class DataChain(DatasetQuery):
 
             Using glob to match patterns
             ```py
-            dc.filter(C("file.name").glob("*.jpg))
+            dc.filter(C("file.name").glob("*.jpg"))
             ```
 
             Using `datachain.sql.functions`

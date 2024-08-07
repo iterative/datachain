@@ -8,24 +8,23 @@ from datachain.nodes_thread_pool import NodeChunk
 def nodes():
     return iter(
         [
-            make_size_node(11, DirType.DIR, "a", "f1", 100),
-            make_size_node(12, DirType.FILE, "b", "f2", 100),
-            make_size_node(13, DirType.FILE, "c", "f3", 100),
-            make_size_node(14, DirType.FILE, "d", "", 100),
-            make_size_node(15, DirType.FILE, "e", "f5", 100),
-            make_size_node(16, DirType.DIR, "f", "f6", 100),
-            make_size_node(17, DirType.FILE, "g", "f7", 100),
+            make_size_node(11, DirType.DIR, "a/f1", 100),
+            make_size_node(12, DirType.FILE, "b/f2", 100),
+            make_size_node(13, DirType.FILE, "c/f3", 100),
+            make_size_node(14, DirType.FILE, "d/", 100),
+            make_size_node(15, DirType.FILE, "e/f5", 100),
+            make_size_node(16, DirType.DIR, "f/f6", 100),
+            make_size_node(17, DirType.FILE, "g/f7", 100),
         ]
     )
 
 
-def make_size_node(node_id, dir_type, parent, name, size):
+def make_size_node(node_id, dir_type, path, size):
     return Node(
         node_id,
         vtype="",
         dir_type=dir_type,
-        parent=parent,
-        name=name,
+        path=path,
         size=size,
     )
 
@@ -40,7 +39,7 @@ def make_chunks(nodes, *args, **kwargs):
 
 
 def test_node_bucket_the_only_item():
-    bkt = make_chunks(iter([make_size_node(20, DirType.FILE, 2, "file.csv", 100)]), 201)
+    bkt = make_chunks(iter([make_size_node(20, DirType.FILE, "file.csv", 100)]), 201)
 
     result = next(bkt)
     assert len(result) == 1
@@ -48,7 +47,7 @@ def test_node_bucket_the_only_item():
 
 
 def test_node_bucket_the_only_item_over_limit():
-    bkt = make_chunks(iter([make_size_node(20, DirType.FILE, 2, "file.csv", 100)]), 1)
+    bkt = make_chunks(iter([make_size_node(20, DirType.FILE, "file.csv", 100)]), 1)
 
     result = next(bkt)
     assert len(result) == 1
@@ -56,7 +55,7 @@ def test_node_bucket_the_only_item_over_limit():
 
 
 def test_node_bucket_the_last_one():
-    bkt = make_chunks(iter([make_size_node(20, DirType.FILE, 2, "file.csv", 100)]), 1)
+    bkt = make_chunks(iter([make_size_node(20, DirType.FILE, "file.csv", 100)]), 1)
 
     next(bkt)
     with pytest.raises(StopIteration):

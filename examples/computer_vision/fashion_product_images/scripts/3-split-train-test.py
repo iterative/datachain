@@ -3,7 +3,7 @@ from datachain import C, DataChain
 # Define train_test_split function
 
 
-def train_test_split(name) -> str:
+def train_test_split(path) -> str:
     import random
 
     labels = ["train", "test", "val"]
@@ -16,7 +16,7 @@ print("\n# Add a signal (split):")
 ds = (
     DataChain.from_dataset("fashion-product-images")
     .filter((C("masterCategory") == "Apparel") & (C("subCategory") == "Topwear"))
-    .map(split=train_test_split, params=["name"], output=str)
+    .map(split=train_test_split, params=["file.path"], output=str)
     .save()
 )
 

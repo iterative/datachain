@@ -18,7 +18,7 @@ def client(cloud_server, cloud_server_credentials):
 
 
 def normalize_entries(entries):
-    return {(e.parent, e.name) for e in entries}
+    return {e.path for e in entries}
 
 
 def match_entries(result, expected):

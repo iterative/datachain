@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from datetime import datetime
 from io import BytesIO
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, Optional, Union
 from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
@@ -111,8 +111,7 @@ class File(DataModel):
     """`DataModel` for reading binary files."""
 
     source: str = Field(default="")
-    parent: str = Field(default="")
-    name: str
+    path: str
     size: int = Field(default=0)
     version: str = Field(default="")
     etag: str = Field(default="")
@@ -123,8 +122,7 @@ class File(DataModel):
 
     _datachain_column_types: ClassVar[dict[str, Any]] = {
         "source": String,
-        "parent": String,
-        "name": String,
+        "path": String,
         "size": Int,
         "version": String,
         "etag": String,
@@ -136,8 +134,7 @@ class File(DataModel):
 
     _unique_id_keys: ClassVar[list[str]] = [
         "source",
-        "parent",
-        "name",
+        "path",
         "size",
         "etag",
         "version",
@@ -168,11 +165,9 @@ class File(DataModel):
     def validate_location(cls, v):
         return File._validate_dict(v)
 
-    @field_validator("parent", mode="before")
+    @field_validator("path", mode="before")
     @classmethod
     def validate_path(cls, path):
-        if path == "":
-            return ""
         return Path(path).as_posix()
 
     def model_dump_custom(self):
@@ -184,6 +179,14 @@ class File(DataModel):
         super().__init__(**kwargs)
         self._catalog = None
         self._caching_enabled = False
+
+    @property
+    def name(self):
+        return PurePosixPath(self.path).name
+
+    @property
+    def parent(self):
+        return str(PurePosixPath(self.path).parent)
 
     @contextmanager
     def open(self, mode: Literal["rb", "r"] = "rb"):
@@ -261,19 +264,19 @@ class File(DataModel):
 
     def get_file_suffix(self):
         """Returns last part of file name with `.`."""
-        return Path(self.name).suffix
+        return PurePosixPath(self.path).suffix
 
     def get_file_ext(self):
         """Returns last part of file name without `.`."""
-        return Path(self.name).suffix.strip(".")
+        return PurePosixPath(self.path).suffix.strip(".")
 
     def get_file_stem(self):
         """Returns file name without extension."""
-        return Path(self.name).stem
+        return PurePosixPath(self.path).stem
 
     def get_full_name(self):
         """Returns name with parent directories."""
-        return (Path(self.parent) / self.name).as_posix()
+        return self.path
 
     def get_uri(self):
         """Returns file URI."""
@@ -355,8 +358,7 @@ def get_file(type_: Literal["binary", "text", "image"] = "binary"):
 
     def get_file_type(
         source: str,
-        parent: str,
-        name: str,
+        path: str,
         size: int,
         version: str,
         etag: str,
@@ -367,8 +369,7 @@ def get_file(type_: Literal["binary", "text", "image"] = "binary"):
     ) -> file:  # type: ignore[valid-type]
         return file(
             source=source,
-            parent=parent,
-            name=name,
+            path=path,
             size=size,
             version=version,
             etag=etag,
