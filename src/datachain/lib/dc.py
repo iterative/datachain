@@ -1490,6 +1490,7 @@ class DataChain(DatasetQuery):
         cls,
         to_insert: Optional[Union[dict, list[dict]]],
         session: Optional[Session] = None,
+        schema: Optional[dict[str, DataType]] = None,
     ) -> "DataChain":
         """Create a DataChain from the provided records. This method can be used for
         programmatically generating a chain in contrast of reading data from storages
@@ -1509,10 +1510,24 @@ class DataChain(DatasetQuery):
         catalog = session.catalog
 
         name = session.generate_temp_dataset_name()
-        columns: tuple[sqlalchemy.Column[Any], ...] = tuple(
+        if schema:
+            columns = SignalSchema(schema).db_signals(as_columns=True)
+        else:
+            columns: tuple[sqlalchemy.Column[Any], ...] = tuple(
+                sqlalchemy.Column(name, typ)
+                for name, typ in File._datachain_column_types.items()
+            )
+
+        columns2: tuple[sqlalchemy.Column[Any], ...] = tuple(
             sqlalchemy.Column(name, typ)
             for name, typ in File._datachain_column_types.items()
         )
+
+        for c in columns:
+            print(c.name, c.type, c.table)
+        print("-----------------")
+        for c in columns2:
+            print(c.name, c.type, c.table)
         dsr = catalog.create_dataset(name, columns=columns)
 
         if isinstance(to_insert, dict):
