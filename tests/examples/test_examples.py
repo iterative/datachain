@@ -8,15 +8,6 @@ import pytest
 NO_EXAMPLES = "no examples found"
 
 
-def can_import_unstructured():
-    try:
-        import unstructured  # noqa: F401
-
-        return True
-    except ImportError:
-        return False
-
-
 get_started_examples = [
     filename
     for filename in glob.glob("examples/get_started/**/*.py", recursive=True)
@@ -29,8 +20,7 @@ llm_and_nlp_examples = [
     for filename in glob.glob("examples/llm_and_nlp/**/*.py", recursive=True)
     # no anthropic token
     if "claude" not in filename
-    and ("unstructured" not in filename or can_import_unstructured())
-] or [NO_EXAMPLES]
+]
 
 multimodal_examples = [
     filename

@@ -79,10 +79,6 @@ def dev(session: nox.Session) -> None:
 @nox.session(python=["3.9", "3.10", "3.11", "3.12", "pypy3.9", "pypy3.10"])
 def examples(session: nox.Session) -> None:
     session.install(".[examples]")
-    try:
-        session.install("unstructured[pdf]")
-    except:  # noqa: S110, E722
-        pass
     session.run(
         "pytest",
         "-m",

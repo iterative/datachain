@@ -220,15 +220,6 @@ jobs:
           python-version: ${{ matrix.pyv }}
           cache: 'pip'
 
-      - name: Install libmagic for unstructured package
-        if: ${{ runner.os == 'macOS' &&  matrix.group == 'llm_and_nlp or computer_vision' }}
-        run: brew install libmagic
-        env:
-          HOMEBREW_NO_AUTO_UPDATE: true
-          HOMEBREW_NO_INSTALL_CLEANUP: true
-          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: true
-          HOMEBREW_NO_INSTALL_UPGRADE: true
-
       - name: Upgrade nox and uv
         run: |
           python -m pip install --upgrade 'nox[uv]'
