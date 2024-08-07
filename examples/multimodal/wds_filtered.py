@@ -1,11 +1,13 @@
 import datachain.error
 from datachain import C, DataChain
+from datachain.lib.model_store import ModelStore
 from datachain.lib.webdataset import process_webdataset
-from datachain.lib.webdataset_laion import WDSLaion
+from datachain.lib.webdataset_laion import LaionMeta, WDSLaion
 from datachain.sql import literal
 from datachain.sql.functions import array, greatest, least, string
 
 name = "wds"
+ModelStore.register(LaionMeta)
 try:
     wds = DataChain.from_dataset(name=name)
 except datachain.error.DatasetNotFoundError:
