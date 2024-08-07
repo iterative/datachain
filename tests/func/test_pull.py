@@ -141,6 +141,7 @@ def remote_config():
 
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
 @pytest.mark.parametrize("dataset_uri", ["ds://dogs@v1", "ds://dogs"])
+@skip_if_not_sqlite
 def test_pull_dataset_success(
     requests_mock,
     cloud_test_catalog,
@@ -149,7 +150,6 @@ def test_pull_dataset_success(
     dog_entries_parquet_lz4,
     dataset_uri,
 ):
-    skip_if_not_sqlite()
     data_url = (
         "https://studio-blobvault.s3.amazonaws.com/datachain_ds_export_1_0.parquet.lz4"
     )
@@ -198,6 +198,7 @@ def test_pull_dataset_success(
 
 
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
+@skip_if_not_sqlite
 def test_pull_dataset_wrong_dataset_uri_format(
     requests_mock,
     cloud_test_catalog,
@@ -205,7 +206,6 @@ def test_pull_dataset_wrong_dataset_uri_format(
     remote_dataset,
     dog_entries_parquet_lz4,
 ):
-    skip_if_not_sqlite()
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(DataChainError) as exc_info:
@@ -214,13 +214,13 @@ def test_pull_dataset_wrong_dataset_uri_format(
 
 
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
+@skip_if_not_sqlite
 def test_pull_dataset_wrong_version(
     requests_mock,
     cloud_test_catalog,
     remote_config,
     remote_dataset,
 ):
-    skip_if_not_sqlite()
     requests_mock.post(
         f'{remote_config["url"]}/dataset-info',
         json=remote_dataset,
@@ -233,13 +233,13 @@ def test_pull_dataset_wrong_version(
 
 
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
+@skip_if_not_sqlite
 def test_pull_dataset_not_found_in_remote(
     requests_mock,
     cloud_test_catalog,
     remote_config,
     remote_dataset,
 ):
-    skip_if_not_sqlite()
     requests_mock.post(
         f'{remote_config["url"]}/dataset-info',
         status_code=404,
@@ -253,13 +253,13 @@ def test_pull_dataset_not_found_in_remote(
 
 
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
+@skip_if_not_sqlite
 def test_pull_dataset_error_on_fetching_stats(
     requests_mock,
     cloud_test_catalog,
     remote_config,
     remote_dataset,
 ):
-    skip_if_not_sqlite()
     requests_mock.post(
         f'{remote_config["url"]}/dataset-info',
         json=remote_dataset,
@@ -278,6 +278,7 @@ def test_pull_dataset_error_on_fetching_stats(
 
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
 @pytest.mark.parametrize("export_status", ["failed", "removed"])
+@skip_if_not_sqlite
 def test_pull_dataset_exporting_dataset_failed_in_remote(
     requests_mock,
     cloud_test_catalog,
@@ -285,7 +286,6 @@ def test_pull_dataset_exporting_dataset_failed_in_remote(
     remote_dataset,
     export_status,
 ):
-    skip_if_not_sqlite()
     data_url = (
         "https://studio-blobvault.s3.amazonaws.com/datachain_ds_export_1_0.parquet.lz4"
     )
@@ -310,6 +310,7 @@ def test_pull_dataset_exporting_dataset_failed_in_remote(
 
 
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
+@skip_if_not_sqlite
 def test_pull_dataset_empty_parquet(
     requests_mock,
     cloud_test_catalog,
@@ -317,7 +318,6 @@ def test_pull_dataset_empty_parquet(
     remote_dataset,
     dog_entries_parquet_lz4,
 ):
-    skip_if_not_sqlite()
     data_url = (
         "https://studio-blobvault.s3.amazonaws.com/datachain_ds_export_1_0.parquet.lz4"
     )

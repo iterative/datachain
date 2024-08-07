@@ -99,8 +99,8 @@ def test_subname_expansion(listing):
     _match_filenames(nodes, ["dir1", "dir2"])
 
 
+@skip_if_not_sqlite
 def test_multilevel_expansion(listing):
-    skip_if_not_sqlite()
     nodes = listing.expand_path("dir[1,2]/d*")
     _match_filenames(nodes, ["dataset.csv", "diagram.png", "d2"])
 

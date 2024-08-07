@@ -121,9 +121,11 @@ def create_tar_dataset(catalog, uri: str, ds_name: str) -> DatasetQuery:
     return ds1.filter(~C.path.glob("*.tar")).union(tar_entries).save(ds_name)
 
 
-def skip_if_not_sqlite():
-    if os.environ.get("DATACHAIN_METASTORE") or os.environ.get("DATACHAIN_WAREHOUSE"):
-        pytest.skip("This test is not supported on other data storages")
+skip_if_not_sqlite = pytest.mark.skipif(
+    os.environ.get("DATACHAIN_METASTORE") is not None
+    or os.environ.get("DATACHAIN_WAREHOUSE") is not None,
+    reason="This test is not supported on other data storages",
+)
 
 
 WEBFORMAT_TREE: dict[str, Any] = {

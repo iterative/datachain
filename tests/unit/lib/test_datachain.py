@@ -978,10 +978,10 @@ def test_from_csv_tab_delimited(tmp_dir, test_session):
     assert df1.equals(df)
 
 
+@skip_if_not_sqlite
 def test_from_csv_null_collect(tmp_dir, test_session):
     # Clickhouse requires setting type to Nullable(Type).
     # See https://github.com/xzkostyan/clickhouse-sqlalchemy/issues/189.
-    skip_if_not_sqlite()
     df = pd.DataFrame(DF_DATA)
     height = [70, 65, None, 72, 68]
     df["height"] = height
@@ -1263,8 +1263,8 @@ def test_column_math(test_session):
     assert list(ch2.collect("x")) == [1 - (x + 2.0) for x in fib]
 
 
+@skip_if_not_sqlite
 def test_column_math_division(test_session):
-    skip_if_not_sqlite()
     fib = [1, 1, 2, 3, 5, 8]
     chain = DataChain.from_values(num=fib, session=test_session)
 
@@ -1480,8 +1480,8 @@ def test_mutate_with_complex_expression():
     )
 
 
+@skip_if_not_sqlite
 def test_mutate_with_saving():
-    skip_if_not_sqlite()
     ds = DataChain.from_values(id=[1, 2])
     ds = ds.mutate(new=ds.column("id") / 2).save("mutated")
 
