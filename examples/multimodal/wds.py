@@ -10,25 +10,25 @@ wds_images = (
     .gen(laion=process_webdataset(spec=WDSLaion), params="file")
 )
 
-meta_pq = (
+wds_with_pq = (
     DataChain.from_parquet("gs://datachain-demo/datacomp-small/metadata/0020f*.parquet")
     .settings(cache=True)
+    .merge(wds_images, on="uid", right_on="laion.json.uid", inner=True)
     .mutate(stem=path.file_stem(C("source.file.name")))
 )
 
-meta_emd = (
+res = (
     DataChain.from_storage("gs://datachain-demo/datacomp-small/metadata/0020f*.npz")
     .settings(cache=True)
     .gen(emd=process_laion_meta)
     .mutate(stem=path.file_stem(C("emd.file.name")))
+    .merge(
+        wds_with_pq,
+        on=["stem", "emd.index"],
+        right_on=["stem", "source.index"],
+        inner=True,
+    )
+    .save("wds")
 )
-
-meta = meta_emd.merge(
-    meta_pq,
-    on=["stem", "emd.index"],
-    right_on=["stem", "source.index"],
-)
-
-res = wds_images.merge(meta, on="laion.json.uid", right_on="uid").save("wds")
 
 res.show(5)
