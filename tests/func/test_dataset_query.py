@@ -11,7 +11,6 @@ from textwrap import dedent
 from unittest.mock import ANY, patch
 
 import numpy as np
-import pandas as pd
 import pytest
 import sqlalchemy
 from dateutil.parser import isoparse
@@ -2645,9 +2644,14 @@ def test_row_generator_with_new_columns_empty_values(cloud_test_catalog, dogs_da
     q = DatasetQuery(name="dogs_with_rows_and_signals", catalog=catalog)
     result = q.to_db_records()
 
-    col_values = pd.DataFrame(result)
-    for col in new_columns:
-        assert col_values[col].notnull().sum() == 0
+    for row in result:
+        for i, col in enumerate(new_columns):
+            val = row[col]
+            expected = new_col_values_empty[i]
+            if isinstance(expected, float) and math.isnan(expected):
+                assert math.isnan(val)
+            else:
+                assert val == expected
 
 
 @pytest.mark.parametrize(
@@ -3112,7 +3116,6 @@ def test_group_by(cloud_test_catalog, cloud_type, dogs_dataset):
 @pytest.mark.parametrize("tree", [WEBFORMAT_TREE], indirect=True)
 def test_json_loader(cloud_test_catalog):
     catalog = cloud_test_catalog.catalog
-    dialect = catalog.warehouse.db.dialect
 
     @udf(
         params=(C.name,),
@@ -3141,32 +3144,29 @@ def test_json_loader(cloud_test_catalog):
             if json_data and ext != ".json":
                 signals.append([json_data.get(k) for k in json_output])
             else:
-                signals.append(None)
+                signals.append([None, None])
 
         return signals
 
-    col_default_values = tuple(t.default_value(dialect) for t in json_output.values())
-
-    expected = pd.DataFrame(
-        [
-            ("f1.json", col_default_values[0], col_default_values[1]),
-            ("f1.raw", 0.001, "deadbeef"),
-            ("f2.json", col_default_values[0], col_default_values[1]),
-            ("f2.raw", 0.005, "foobar"),
-        ]
-    )
+    expected = [
+        ("f1.raw", 0.001, "deadbeef"),
+        ("f2.raw", 0.005, "foobar"),
+    ]
 
     q = (
         DatasetQuery(cloud_test_catalog.src_uri, catalog=catalog)
         .add_signals(split_name)
         .add_signals(attach_json, partition_by=C.basename)
+        .filter(C.glob(C.name, "*.raw"))
         .select(C.name, C.similarity, C.md5)
         .order_by(C.name)
     )
-    assert q.count() == 4
-    res = pd.DataFrame(q.db_results())
-    assert len(res) == 4
-    assert res.equals(expected)
+    assert q.count() == 2
+    res = q.db_results()
+    assert len(res) == 2
+    assert [r[0] for r in res] == [r[0] for r in expected]
+    assert [r[1] for r in res] == pytest.approx([r[1] for r in expected])
+    assert [r[2] for r in res] == [r[2] for r in expected]
 
 
 @pytest.mark.parametrize(

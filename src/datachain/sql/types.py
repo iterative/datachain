@@ -331,10 +331,10 @@ class TypeReadConverter:
         return float("nan") if value is None else value
 
     def float32(self, value):
-        return float("nan") if value is None else value
+        return self.float(value)
 
     def float64(self, value):
-        return float("nan") if value is None else value
+        return self.float(value)
 
     def array(self, value, item_type, dialect):
         if value is None or item_type is None:
@@ -418,10 +418,10 @@ class TypeDefaults:
         return float("nan")
 
     def float32(self):
-        return float("nan")
+        return self.float()
 
     def float64(self):
-        return float("nan")
+        return self.float()
 
     def array(self):
         return None
