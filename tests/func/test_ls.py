@@ -275,7 +275,6 @@ def test_ls_remote_sources(cloud_type, capsys, monkeypatch):
     assert captured.out == ls_remote_sources_output.format(src=src)
 
 
-owner_id = "a13a3ff923430363b098ce9c769e450724e74e646332b08ca6b3ac4f96dae083"
 REMOTE_DATA: dict[str, list[dict[str, Any]]] = {
     "": [
         {
@@ -287,8 +286,6 @@ REMOTE_DATA: dict[str, list[dict[str, Any]]] = {
             "is_latest": True,
             "last_modified": datetime(2023, 1, 17, 21, 39, 0, 88564),
             "size": 0,
-            "owner_name": "",
-            "owner_id": "",
             "path_str": "{src}/cats",
             "path": [],
         },
@@ -301,8 +298,6 @@ REMOTE_DATA: dict[str, list[dict[str, Any]]] = {
             "is_latest": True,
             "last_modified": datetime(2023, 1, 17, 21, 39, 0, 88567),
             "size": 0,
-            "owner_name": "",
-            "owner_id": "",
             "path_str": "{src}/dogs",
             "path": [],
         },
@@ -315,8 +310,6 @@ REMOTE_DATA: dict[str, list[dict[str, Any]]] = {
             "is_latest": True,
             "last_modified": datetime(2022, 2, 10, 3, 39, 9),
             "size": 350496,
-            "owner_name": "",
-            "owner_id": owner_id,
             "path_str": "{src}/description",
             "path": [],
         },
@@ -331,8 +324,6 @@ REMOTE_DATA: dict[str, list[dict[str, Any]]] = {
             "is_latest": True,
             "last_modified": datetime(2022, 6, 28, 22, 39, 1),
             "size": 32975,
-            "owner_name": "",
-            "owner_id": owner_id,
             "path_str": "{src}/dogs/others/dog4",
             "path": [],
         },
@@ -347,8 +338,6 @@ REMOTE_DATA: dict[str, list[dict[str, Any]]] = {
             "is_latest": True,
             "last_modified": datetime(2022, 6, 28, 22, 39, 1),
             "size": 101,
-            "owner_name": "",
-            "owner_id": owner_id,
             "path_str": "{src}/dogs/dog1",
             "path": [],
         },
@@ -361,8 +350,6 @@ REMOTE_DATA: dict[str, list[dict[str, Any]]] = {
             "is_latest": True,
             "last_modified": datetime(2022, 6, 28, 22, 39, 1),
             "size": 29759,
-            "owner_name": "",
-            "owner_id": owner_id,
             "path_str": "{src}/dogs/dog2",
             "path": [],
         },
@@ -375,8 +362,6 @@ REMOTE_DATA: dict[str, list[dict[str, Any]]] = {
             "is_latest": True,
             "last_modified": datetime(2022, 6, 28, 22, 39, 1),
             "size": 102,
-            "owner_name": "",
-            "owner_id": owner_id,
             "path_str": "{src}/dogs/dog3",
             "path": [],
         },

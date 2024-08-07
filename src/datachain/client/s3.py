@@ -121,8 +121,6 @@ class ClientS3(Client):
             is_latest=v.get("IsLatest", True),
             last_modified=v.get("LastModified", ""),
             size=v["Size"],
-            owner_name=v.get("Owner", {}).get("DisplayName", ""),
-            owner_id=v.get("Owner", {}).get("ID", ""),
         )
 
     async def _fetch_dir(
@@ -168,6 +166,4 @@ class ClientS3(Client):
             is_latest=v.get("IsLatest", True),
             last_modified=v.get("LastModified", ""),
             size=v["size"],
-            owner_name=v.get("Owner", {}).get("DisplayName", ""),
-            owner_id=v.get("Owner", {}).get("ID", ""),
         )
