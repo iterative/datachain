@@ -80,7 +80,7 @@ def dev(session: nox.Session) -> None:
 def examples(session: nox.Session) -> None:
     session.install(".[examples]")
     try:
-        session.install("unstructured[all-docs]")
+        session.install("unstructured[pdf]")
     except:  # noqa: S110, E722
         pass
     session.run(
