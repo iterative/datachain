@@ -15,11 +15,19 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class RowBatch:
+class RowsOutputBatch:
+    rows: Sequence[Sequence]
+
+
+RowsOutput = Union[Sequence, RowsOutputBatch]
+
+
+@dataclass
+class UDFInputBatch:
     rows: Sequence["RowDict"]
 
 
-BatchingResult = Union["RowDict", RowBatch]
+UDFInput = Union["RowDict", UDFInputBatch]
 
 
 class BatchingStrategy(ABC):
@@ -28,9 +36,9 @@ class BatchingStrategy(ABC):
     @abstractmethod
     def __call__(
         self,
-        execute: Callable,
+        execute: Callable[..., Generator[Sequence, None, None]],
         query: sa.sql.selectable.Select,
-    ) -> Generator[BatchingResult, None, None]:
+    ) -> Generator[RowsOutput, None, None]:
         """Apply the provided parameters to the UDF."""
 
 
@@ -42,9 +50,9 @@ class NoBatching(BatchingStrategy):
 
     def __call__(
         self,
-        execute: Callable,
+        execute: Callable[..., Generator[Sequence, None, None]],
         query: sa.sql.selectable.Select,
-    ) -> Generator["RowDict", None, None]:
+    ) -> Generator[Sequence, None, None]:
         return execute(query, limit=query._limit, order_by=query._order_by_clauses)
 
 
@@ -59,14 +67,14 @@ class Batch(BatchingStrategy):
 
     def __call__(
         self,
-        execute: Callable,
+        execute: Callable[..., Generator[Sequence, None, None]],
         query: sa.sql.selectable.Select,
-    ) -> Generator[RowBatch, None, None]:
+    ) -> Generator[RowsOutputBatch, None, None]:
         # choose page size that is a multiple of the batch size
         page_size = math.ceil(SELECT_BATCH_SIZE / self.count) * self.count
 
         # select rows in batches
-        results: list[RowDict] = []
+        results: list[Sequence] = []
 
         with contextlib.closing(
             execute(
@@ -80,10 +88,10 @@ class Batch(BatchingStrategy):
                 results.append(row)
                 if len(results) >= self.count:
                     batch, results = results[: self.count], results[self.count :]
-                    yield RowBatch(batch)
+                    yield RowsOutputBatch(batch)
 
             if len(results) > 0:
-                yield RowBatch(results)
+                yield RowsOutputBatch(results)
 
 
 class Partition(BatchingStrategy):
@@ -95,11 +103,14 @@ class Partition(BatchingStrategy):
 
     def __call__(
         self,
-        execute: Callable,
+        execute: Callable[..., Generator[Sequence, None, None]],
         query: sa.sql.selectable.Select,
-    ) -> Generator[RowBatch, None, None]:
+    ) -> Generator[RowsOutputBatch, None, None]:
         current_partition: Optional[int] = None
-        batch: list[RowDict] = []
+        batch: list[Sequence] = []
+
+        query_fields = [str(c.name) for c in query.selected_columns]
+        partition_column_idx = query_fields.index(PARTITION_COLUMN_ID)
 
         with contextlib.closing(
             execute(
@@ -109,13 +120,13 @@ class Partition(BatchingStrategy):
             )
         ) as rows:
             for row in rows:
-                partition = row[PARTITION_COLUMN_ID]
+                partition = row[partition_column_idx]
                 if current_partition != partition:
                     current_partition = partition
                     if len(batch) > 0:
-                        yield RowBatch(batch)
+                        yield RowsOutputBatch(batch)
                         batch = []
                 batch.append(row)
 
             if len(batch) > 0:
-                yield RowBatch(batch)
+                yield RowsOutputBatch(batch)

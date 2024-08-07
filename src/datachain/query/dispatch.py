@@ -100,8 +100,9 @@ def udf_entrypoint() -> int:
         udf_info["id_generator_clone_params"],
         udf_info["metastore_clone_params"],
         udf_info["warehouse_clone_params"],
-        is_generator=udf_info.get("is_generator", False),
         cache=udf_info["cache"],
+        udf_fields=udf_info["fields"],
+        is_generator=udf_info.get("is_generator", False),
     )
 
     query = udf_info["query"]
@@ -142,6 +143,9 @@ def udf_worker_entrypoint() -> int:
 
 
 class UDFDispatcher:
+    catalog: Optional[Catalog] = None
+    task_queue: Optional[multiprocess.Queue] = None
+    done_queue: Optional[multiprocess.Queue] = None
     _batch_size: Optional[int] = None
 
     def __init__(
@@ -151,9 +155,10 @@ class UDFDispatcher:
         id_generator_clone_params,
         metastore_clone_params,
         warehouse_clone_params,
-        cache,
-        is_generator=False,
-        buffer_size=DEFAULT_BATCH_SIZE,
+        cache: bool,
+        udf_fields: "Sequence[str]",
+        is_generator: bool = False,
+        buffer_size: int = DEFAULT_BATCH_SIZE,
     ):
         self.udf_data = udf_data
         self.catalog_init_params = catalog_init_params
@@ -172,8 +177,9 @@ class UDFDispatcher:
             self.warehouse_args,
             self.warehouse_kwargs,
         ) = warehouse_clone_params
-        self.is_generator = is_generator
         self.cache = cache
+        self.udf_fields = udf_fields
+        self.is_generator = is_generator
         self.catalog = None
         self.task_queue = None
         self.done_queue = None
@@ -224,8 +230,9 @@ class UDFDispatcher:
             self.udf,
             self.task_queue,
             self.done_queue,
-            self.is_generator,
             self.cache,
+            self.udf_fields,
+            self.is_generator,
         )
 
     def _run_worker(self) -> None:
@@ -233,7 +240,10 @@ class UDFDispatcher:
             worker = self._create_worker()
             worker.run()
         except (Exception, KeyboardInterrupt) as e:
-            put_into_queue(self.done_queue, {"status": FAILED_STATUS, "exception": e})
+            if self.done_queue:
+                put_into_queue(
+                    self.done_queue, {"status": FAILED_STATUS, "exception": e}
+                )
             raise
 
     @staticmethod
@@ -249,7 +259,6 @@ class UDFDispatcher:
         self,
         input_rows,
         n_workers: Optional[int] = None,
-        cache: bool = False,
         input_queue=None,
         processed_cb: Callback = DEFAULT_CALLBACK,
         download_cb: Callback = DEFAULT_CALLBACK,
@@ -371,8 +380,9 @@ class UDFWorker:
     udf: UDFBase
     task_queue: multiprocess.Queue
     done_queue: multiprocess.Queue
-    is_generator: bool
     cache: bool
+    udf_fields: Sequence[str]
+    is_generator: bool
     cb: Callback = attrs.field()
 
     @cb.default
@@ -382,6 +392,7 @@ class UDFWorker:
     def run(self) -> None:
         processed_cb = ProcessedCallback()
         udf_results = self.udf.run(
+            self.udf_fields,
             self.get_inputs(),
             self.catalog,
             self.is_generator,
