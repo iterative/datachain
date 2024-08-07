@@ -128,10 +128,10 @@ def test_from_features(test_session):
         assert t1 == features[i]
 
 
-def test_from_records_empty_chain(test_session):
+def test_from_records_empty_chain_with_schema(test_session):
     schema = {"my_file": File, "my_col": int}
-    ds = DataChain.from_records([], session=test_session, schema=schema)
-    # ds = ds.gen(lambda prm: [File(name="")] * 5, params="parent", output={"file": File})
+    ds = DataChain.from_records([], schema=schema, session=test_session)
+    ds_sys = ds.settings(sys=True)
 
     ds_name = "my_ds"
     ds.save(ds_name)
@@ -141,7 +141,16 @@ def test_from_records_empty_chain(test_session):
     assert isinstance(ds.signals_schema, SignalSchema)
     assert ds.schema.keys() == {"my_file", "my_col"}
     assert set(ds.schema.values()) == {File, int}
-    assert 1 == 2
+    assert ds.count() == 0
+
+    # check that columns have actually been created from schema
+    dr = ds_sys.catalog.warehouse.dataset_rows(ds_sys.catalog.get_dataset(ds_name))
+    assert sorted([c.name for c in dr.c]) == sorted(ds.signals_schema.db_signals())
+
+
+def test_from_records_empty_chain_without_schema():
+    with pytest.raises(ValueError):
+        DataChain.from_records([], schema=None)
 
 
 def test_datasets(test_session):

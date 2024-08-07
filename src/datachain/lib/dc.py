@@ -1509,26 +1509,31 @@ class DataChain(DatasetQuery):
         session = Session.get(session)
         catalog = session.catalog
 
+        if not to_insert and not schema:
+            raise ValueError("Schema is required for creating empty dataset")
+
         name = session.generate_temp_dataset_name()
+        signal_schema = None
+        columns: list[sqlalchemy.Column] = []
+
         if schema:
-            columns = SignalSchema(schema).db_signals(as_columns=True)
+            signal_schema = SignalSchema(schema)
+            columns = signal_schema.db_signals(as_columns=True)  # type: ignore[assignment]
         else:
-            columns: tuple[sqlalchemy.Column[Any], ...] = tuple(
+            columns = [
                 sqlalchemy.Column(name, typ)
                 for name, typ in File._datachain_column_types.items()
-            )
+            ]
 
-        columns2: tuple[sqlalchemy.Column[Any], ...] = tuple(
-            sqlalchemy.Column(name, typ)
-            for name, typ in File._datachain_column_types.items()
+        dsr = catalog.create_dataset(
+            name,
+            columns=columns,
+            feature_schema=(
+                signal_schema.clone_without_sys_signals().serialize()
+                if signal_schema
+                else None
+            ),
         )
-
-        for c in columns:
-            print(c.name, c.type, c.table)
-        print("-----------------")
-        for c in columns2:
-            print(c.name, c.type, c.table)
-        dsr = catalog.create_dataset(name, columns=columns)
 
         if isinstance(to_insert, dict):
             to_insert = [to_insert]
