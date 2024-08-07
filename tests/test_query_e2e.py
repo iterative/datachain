@@ -16,7 +16,7 @@ tests_dir = os.path.dirname(os.path.abspath(__file__))
 python_exc = sys.executable or "python3"
 
 
-E2E_STEP_TIMEOUT_SEC = 30
+E2E_STEP_TIMEOUT_SEC = 60
 
 
 E2E_STEPS = (

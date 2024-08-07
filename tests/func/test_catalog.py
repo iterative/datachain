@@ -256,8 +256,8 @@ def test_cp_root(cloud_test_catalog, recursive, star, dir_exists, cloud_type):
     ["s3", "gs", "azure"],
     indirect=True,
 )
+@skip_if_not_sqlite
 def test_cp_local_dataset(cloud_test_catalog, dogs_dataset):
-    skip_if_not_sqlite()
     working_dir = cloud_test_catalog.working_dir
     catalog = cloud_test_catalog.catalog
 
