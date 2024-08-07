@@ -189,13 +189,13 @@ def test_failed_storage(metastore):
     assert storage.error_stack == error_stack
 
 
+@skip_if_not_sqlite
 def test_unlist_source(
     listed_bucket,
     cloud_test_catalog,
     cloud_type,
 ):
     # TODO remove when https://github.com/iterative/dvcx/pull/868 is merged
-    skip_if_not_sqlite()
     source_uri = cloud_test_catalog.src_uri
     catalog = cloud_test_catalog.catalog
     _partial_id, partial_path = catalog.metastore.get_valid_partial_id(

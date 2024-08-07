@@ -6,9 +6,11 @@ from sqlalchemy import Column, Integer, Table
 
 from datachain.data_storage.serializer import deserialize
 from datachain.data_storage.sqlite import SQLiteDatabaseEngine
+from tests.utils import skip_if_not_sqlite
 
 
 @pytest.mark.parametrize("db_file", [":memory:", "file.db"])
+@skip_if_not_sqlite
 def test_init_clone(db_file):
     with SQLiteDatabaseEngine.from_db_file(db_file) as db:
         assert db.db_file == db_file
