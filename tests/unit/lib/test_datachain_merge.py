@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from datachain.lib.dc import DataChain, DatasetMergeError
 from datachain.lib.signal_schema import SignalResolvingError
 from datachain.sql.types import String
+from tests.utils import skip_if_not_sqlite
 
 
 class User(BaseModel):
@@ -46,6 +47,7 @@ team = [
 
 
 def test_merge_objects(test_session):
+    skip_if_not_sqlite()
     ch1 = DataChain.from_values(emp=employees, session=test_session)
     ch2 = DataChain.from_values(team=team, session=test_session)
     ch = ch1.merge(ch2, "emp.person.name", "team.player")
@@ -103,6 +105,7 @@ def test_merge_similar_objects(test_session):
 
 
 def test_merge_values(test_session):
+    skip_if_not_sqlite()
     order_ids = [11, 22, 33, 44]
     order_descr = ["water", "water", "paper", "water"]
 
