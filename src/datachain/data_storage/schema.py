@@ -180,12 +180,6 @@ class DataTable:
 
         if metadata is None:
             metadata = sa.MetaData()
-        print("Creating table with column")
-        for c in columns:
-            print(c.name, c.type)
-
-        print(name)
-        print(metadata)
         return sa.Table(name, metadata, *columns)
 
     def get_table(self) -> "sa.Table":
