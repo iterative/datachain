@@ -20,7 +20,6 @@ except datachain.error.DatasetNotFoundError:
     )
 
 wds.print_schema()
-wds.show(3)
 
 filtered = (
     wds.filter(string.length(C("laion.txt")) > 5)
@@ -35,6 +34,7 @@ filtered = (
     )
     .save()
 )
+
 filtered.show(3)
 
 print(f"wds count:      {wds.count():>6}")

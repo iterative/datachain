@@ -2,11 +2,9 @@ import glob
 import os
 import subprocess
 import sys
+from typing import Optional
 
 import pytest
-
-NO_EXAMPLES = "no examples found"
-
 
 get_started_examples = [
     filename
@@ -39,12 +37,10 @@ computer_vision_examples = [
 ]
 
 
-def smoke_test(example: str):
-    if example == NO_EXAMPLES:
-        return
-
+def smoke_test(example: str, env: Optional[dict] = None):
     completed_process = subprocess.run(  # noqa: S603
         [sys.executable, example],
+        env={**os.environ, **(env or {})},
         capture_output=True,
         cwd=os.path.abspath(os.path.join(__file__, "..", "..", "..")),
         check=True,
@@ -58,7 +54,7 @@ def smoke_test(example: str):
 @pytest.mark.get_started
 @pytest.mark.parametrize("example", get_started_examples)
 def test_get_started_examples(example):
-    smoke_test(example)
+    smoke_test(example, {"NUM_EPOCHS": "1"})
 
 
 @pytest.mark.examples
@@ -72,7 +68,14 @@ def test_llm_and_nlp_examples(example):
 @pytest.mark.multimodal
 @pytest.mark.parametrize("example", multimodal_examples)
 def test_multimodal(example):
-    smoke_test(example)
+    smoke_test(
+        example,
+        {
+            "IMAGE_TARS": "gs://datachain-demo/datacomp-small/shards/00001285.tar",
+            "PARQUET_METADATA": "gs://datachain-demo/datacomp-small/metadata/036d6b9ae87a00e738f8fc554130b65b.parquet",
+            "NPZ_METADATA": "gs://datachain-demo/datacomp-small/metadata/036d6b9ae87a00e738f8fc554130b65b.npz",
+        },
+    )
 
 
 @pytest.mark.examples
