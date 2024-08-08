@@ -500,7 +500,7 @@ class AbstractWarehouse(ABC, Serializable):
         c = query.selected_columns
         q = query.where(c.dir_type.in_(file_group))
         if not include_subobjects:
-            q = q.where(c.vtype == "")
+            q = q.where((c.location == "") | (c.location.is_(None)))
         return q
 
     def get_nodes(self, query) -> Iterator[Node]:
@@ -624,7 +624,6 @@ class AbstractWarehouse(ABC, Serializable):
 
         return sa.select(
             de.c.sys__id,
-            with_default(dr.c.vtype),
             case((de.c.is_dir == true(), DirType.DIR), else_=dr.c.dir_type).label(
                 "dir_type"
             ),
