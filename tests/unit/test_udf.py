@@ -63,7 +63,6 @@ def test_stateful_udf():
     for size in inputs:
         row = RowDict(
             sys__id=5,
-            vtype="",
             dir_type=1,
             path="obj",
             last_modified=None,

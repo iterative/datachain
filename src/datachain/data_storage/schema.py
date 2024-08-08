@@ -81,7 +81,6 @@ class DirExpansion:
     def base_select(q):
         return sa.select(
             q.c.sys__id,
-            q.c.vtype,
             (q.c.dir_type == DirType.DIR).label("is_dir"),
             q.c.source,
             q.c.path,
@@ -94,7 +93,6 @@ class DirExpansion:
         return (
             sa.select(
                 f.min(q.c.sys__id).label("sys__id"),
-                q.c.vtype,
                 q.c.is_dir,
                 q.c.source,
                 q.c.path,
@@ -102,8 +100,8 @@ class DirExpansion:
                 f.max(q.c.location).label("location"),
             )
             .select_from(q)
-            .group_by(q.c.source, q.c.path, q.c.vtype, q.c.is_dir, q.c.version)
-            .order_by(q.c.source, q.c.path, q.c.vtype, q.c.is_dir, q.c.version)
+            .group_by(q.c.source, q.c.path, q.c.is_dir, q.c.version)
+            .order_by(q.c.source, q.c.path, q.c.is_dir, q.c.version)
         )
 
     @classmethod
@@ -113,7 +111,6 @@ class DirExpansion:
         q = q.union_all(
             sa.select(
                 sa.literal(-1).label("sys__id"),
-                sa.literal("").label("vtype"),
                 true().label("is_dir"),
                 q.c.source,
                 parent.label("path"),
