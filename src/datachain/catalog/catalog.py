@@ -717,7 +717,6 @@ class Catalog:
         source_metastore = self.metastore.clone(client.uri)
 
         columns = [
-            Column("vtype", String),
             Column("dir_type", Int),
             Column("path", String),
             Column("etag", String),
@@ -1673,7 +1672,6 @@ class Catalog:
             row["etag"],
             row["version"],
             row["is_latest"],
-            row["vtype"],
             row["location"],
             row["last_modified"],
         )

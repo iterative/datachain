@@ -45,7 +45,6 @@ def dog_entries_parquet_lz4(dog_entries) -> bytes:
 
         adapted["sys__id"] = 1
         adapted["sys__rand"] = 1
-        adapted["vtype"] = b""
         adapted["location"] = b""
         adapted["source"] = b"s3://dogs"
         adapted["dir_type"] = DirType.FILE
@@ -63,7 +62,6 @@ def dog_entries_parquet_lz4(dog_entries) -> bytes:
 def schema():
     return {
         "id": {"type": "UInt64"},
-        "vtype": {"type": "String"},
         "dir_type": {"type": "Int32"},
         "path": {"type": "String"},
         "etag": {"type": "String"},

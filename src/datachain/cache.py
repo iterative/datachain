@@ -29,7 +29,6 @@ class UniqueId:
     etag: str
     version: str = ""
     is_latest: bool = True
-    vtype: str = ""
     location: Optional[str] = None
     last_modified: datetime = TIME_ZERO
 

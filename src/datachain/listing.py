@@ -104,7 +104,7 @@ class Listing:
         return self.warehouse.get_node_by_path(self.dataset_rows, path)
 
     def ls_path(self, node, fields):
-        if node.vtype == "tar" or node.dir_type == DirType.TAR_ARCHIVE:
+        if node.location or node.dir_type == DirType.TAR_ARCHIVE:
             return self.warehouse.select_node_fields_by_parent_path_tar(
                 self.dataset_rows, node.path, fields
             )
@@ -235,7 +235,7 @@ class Listing:
         return self.warehouse.size(self.dataset_rows, node, count_files)
 
     def subtree_files(self, node: Node, sort=None):
-        if node.dir_type == DirType.TAR_ARCHIVE or node.vtype != "":
+        if node.dir_type == DirType.TAR_ARCHIVE or node.location:
             include_subobjects = True
         else:
             include_subobjects = False
