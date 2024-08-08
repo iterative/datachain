@@ -5,9 +5,9 @@ from typing import Callable, Optional
 from botocore.exceptions import ClientError
 from fsspec.asyn import get_loop
 
+from datachain.asyn import iter_over_async
 from datachain.client import Client
 from datachain.error import ClientError as DataChainClientError
-from datachain.lib.asyn import iter_over_async
 from datachain.lib.file import File
 
 ResultQueue = asyncio.Queue[Optional[Sequence[File]]]
@@ -86,6 +86,7 @@ async def _fetch(
 
 
 async def _scandir(client, prefix, fetch_workers) -> AsyncIterator:
+    """Recursively goes through dir tree and yields files found"""
     result_queue: ResultQueue = asyncio.Queue()
     loop = get_loop()
     main_task = loop.create_task(_fetch(client, prefix, result_queue, fetch_workers))
