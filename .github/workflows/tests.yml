@@ -151,7 +151,10 @@ jobs:
           STUDIO_READ_ACCESS_TOKEN: ${{ secrets.ITERATIVE_STUDIO_READ_ACCESS_TOKEN }}
         run: |
           echo "DataChain branch: $BRANCH"
-          if git ls-remote --heads https://"$STUDIO_READ_ACCESS_TOKEN"@github.com/iterative/studio.git "$BRANCH" | grep -F "$BRANCH" 2>&1>/dev/null
+          if $BRANCH == 'main'
+          then
+              STUDIO_BRANCH=develop
+          elif git ls-remote --heads https://"$STUDIO_READ_ACCESS_TOKEN"@github.com/iterative/studio.git "$BRANCH" | grep -F "$BRANCH" 2>&1>/dev/null
           then
               STUDIO_BRANCH="$BRANCH"
           else
