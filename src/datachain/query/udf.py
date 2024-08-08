@@ -20,7 +20,7 @@ from .batch import (
     BatchingStrategy,
     NoBatching,
     Partition,
-    RowsInputBatch,
+    RowsOutputBatch,
     UDFInputBatch,
 )
 from .schema import (
@@ -32,7 +32,7 @@ from .schema import (
 if TYPE_CHECKING:
     from datachain.catalog import Catalog
 
-    from .batch import RowsInput, UDFInput
+    from .batch import RowsOutput, UDFInput
 
 ColumnType = Any
 
@@ -115,7 +115,7 @@ class UDFBase:
     def run(
         self,
         udf_fields: "Sequence[str]",
-        udf_inputs: "Iterable[RowsInput]",
+        udf_inputs: "Iterable[RowsOutput]",
         catalog: "Catalog",
         is_generator: bool,
         cache: bool,
@@ -123,7 +123,7 @@ class UDFBase:
         processed_cb: Callback = DEFAULT_CALLBACK,
     ) -> Iterator[Iterable["UDFResult"]]:
         for batch in udf_inputs:
-            if isinstance(batch, RowsInputBatch):
+            if isinstance(batch, RowsOutputBatch):
                 n_rows = len(batch.rows)
                 inputs: UDFInput = UDFInputBatch(
                     [RowDict(zip(udf_fields, row)) for row in batch.rows]

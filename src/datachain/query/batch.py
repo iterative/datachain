@@ -15,11 +15,11 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class RowsInputBatch:
+class RowsOutputBatch:
     rows: Sequence[Sequence]
 
 
-RowsInput = Union[Sequence, RowsInputBatch]
+RowsOutput = Union[Sequence, RowsOutputBatch]
 
 
 @dataclass
@@ -38,7 +38,7 @@ class BatchingStrategy(ABC):
         self,
         execute: Callable[..., Generator[Sequence, None, None]],
         query: "Select",
-    ) -> Generator[RowsInput, None, None]:
+    ) -> Generator[RowsOutput, None, None]:
         """Apply the provided parameters to the UDF."""
 
 
@@ -69,7 +69,7 @@ class Batch(BatchingStrategy):
         self,
         execute: Callable[..., Generator[Sequence, None, None]],
         query: "Select",
-    ) -> Generator[RowsInputBatch, None, None]:
+    ) -> Generator[RowsOutputBatch, None, None]:
         # choose page size that is a multiple of the batch size
         page_size = math.ceil(SELECT_BATCH_SIZE / self.count) * self.count
 
@@ -81,10 +81,10 @@ class Batch(BatchingStrategy):
                 results.append(row)
                 if len(results) >= self.count:
                     batch, results = results[: self.count], results[self.count :]
-                    yield RowsInputBatch(batch)
+                    yield RowsOutputBatch(batch)
 
             if len(results) > 0:
-                yield RowsInputBatch(results)
+                yield RowsOutputBatch(results)
 
 
 class Partition(BatchingStrategy):
@@ -98,7 +98,7 @@ class Partition(BatchingStrategy):
         self,
         execute: Callable[..., Generator[Sequence, None, None]],
         query: "Select",
-    ) -> Generator[RowsInputBatch, None, None]:
+    ) -> Generator[RowsOutputBatch, None, None]:
         current_partition: Optional[int] = None
         batch: list[Sequence] = []
 
@@ -117,9 +117,9 @@ class Partition(BatchingStrategy):
                 if current_partition != partition:
                     current_partition = partition
                     if len(batch) > 0:
-                        yield RowsInputBatch(batch)
+                        yield RowsOutputBatch(batch)
                         batch = []
                 batch.append(row)
 
             if len(batch) > 0:
-                yield RowsInputBatch(batch)
+                yield RowsOutputBatch(batch)

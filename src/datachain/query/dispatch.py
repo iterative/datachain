@@ -3,7 +3,7 @@ from collections.abc import Iterator, Sequence
 from itertools import chain
 from multiprocessing import cpu_count
 from sys import stdin
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 
 import attrs
 import multiprocess
@@ -29,9 +29,6 @@ from datachain.query.queue import (
 )
 from datachain.query.udf import UDFBase, UDFFactory, UDFResult
 from datachain.utils import batched_it
-
-if TYPE_CHECKING:
-    import multiprocess.queues
 
 DEFAULT_BATCH_SIZE = 10000
 STOP_SIGNAL = "STOP"
@@ -71,12 +68,12 @@ def udf_entrypoint() -> int:
         udf_info["id_generator_clone_params"],
         udf_info["metastore_clone_params"],
         udf_info["warehouse_clone_params"],
-        is_generator=udf_info.get("is_generator", False),
+        udf_fields=udf_info["udf_fields"],
         cache=udf_info["cache"],
+        is_generator=udf_info.get("is_generator", False),
     )
 
     query = udf_info["query"]
-    udf_fields = [str(c.name) for c in query.selected_columns]
     batching = udf_info["batching"]
     table = udf_info["table"]
     n_workers = udf_info["processes"]
@@ -93,7 +90,6 @@ def udf_entrypoint() -> int:
         generated_cb = get_generated_callback(dispatch.is_generator)
         try:
             udf_results = dispatch.run_udf_parallel(
-                udf_fields,
                 marshal(udf_inputs),
                 n_workers=n_workers,
                 processed_cb=processed_cb,
@@ -115,6 +111,9 @@ def udf_worker_entrypoint() -> int:
 
 
 class UDFDispatcher:
+    catalog: Optional[Catalog] = None
+    task_queue: Optional[multiprocess.Queue] = None
+    done_queue: Optional[multiprocess.Queue] = None
     _batch_size: Optional[int] = None
 
     def __init__(
@@ -124,9 +123,10 @@ class UDFDispatcher:
         id_generator_clone_params,
         metastore_clone_params,
         warehouse_clone_params,
-        cache,
-        is_generator=False,
-        buffer_size=DEFAULT_BATCH_SIZE,
+        udf_fields: "Sequence[str]",
+        cache: bool,
+        is_generator: bool = False,
+        buffer_size: int = DEFAULT_BATCH_SIZE,
     ):
         self.udf_data = udf_data
         self.catalog_init_params = catalog_init_params
@@ -145,12 +145,13 @@ class UDFDispatcher:
             self.warehouse_args,
             self.warehouse_kwargs,
         ) = warehouse_clone_params
-        self.is_generator = is_generator
+        self.udf_fields = udf_fields
         self.cache = cache
+        self.is_generator = is_generator
+        self.buffer_size = buffer_size
         self.catalog = None
         self.task_queue = None
         self.done_queue = None
-        self.buffer_size = buffer_size
         self.ctx = get_context("spawn")
 
     @property
@@ -166,7 +167,7 @@ class UDFDispatcher:
                 self._batch_size = 1
         return self._batch_size
 
-    def _create_worker(self, udf_fields: Sequence[str]) -> "UDFWorker":
+    def _create_worker(self) -> "UDFWorker":
         if not self.catalog:
             id_generator = self.id_generator_class(
                 *self.id_generator_args, **self.id_generator_kwargs
@@ -199,18 +200,19 @@ class UDFDispatcher:
             self.done_queue,
             self.is_generator,
             self.cache,
-            udf_fields,
+            self.udf_fields,
         )
 
-    def _run_worker(self, udf_fields: Sequence[str]) -> None:
+    def _run_worker(self) -> None:
         try:
-            worker = self._create_worker(udf_fields)
+            worker = self._create_worker()
             worker.run()
         except (Exception, KeyboardInterrupt) as e:
-            put_into_queue(
-                self.done_queue,
-                {"status": FAILED_STATUS, "exception": e},
-            )
+            if self.done_queue:
+                put_into_queue(
+                    self.done_queue,
+                    {"status": FAILED_STATUS, "exception": e},
+                )
             raise
 
     @staticmethod
@@ -224,7 +226,6 @@ class UDFDispatcher:
 
     def run_udf_parallel(  # noqa: C901, PLR0912
         self,
-        udf_fields: Sequence[str],
         input_rows,
         n_workers: Optional[int] = None,
         input_queue=None,
@@ -247,9 +248,7 @@ class UDFDispatcher:
             self.task_queue = self.ctx.Queue()
         self.done_queue = self.ctx.Queue()
         pool = [
-            self.ctx.Process(
-                name=f"Worker-UDF-{i}", target=self._run_worker, args=(udf_fields,)
-            )
+            self.ctx.Process(name=f"Worker-UDF-{i}", target=self._run_worker)
             for i in range(n_workers)
         ]
         for p in pool:
@@ -330,7 +329,7 @@ class UDFDispatcher:
 
 
 class WorkerCallback(Callback):
-    def __init__(self, queue: "multiprocess.queues.Queue"):
+    def __init__(self, queue: "multiprocess.Queue"):
         self.queue = queue
         super().__init__()
 
@@ -351,8 +350,8 @@ class ProcessedCallback(Callback):
 class UDFWorker:
     catalog: Catalog
     udf: UDFBase
-    task_queue: "multiprocess.queues.Queue"
-    done_queue: "multiprocess.queues.Queue"
+    task_queue: "multiprocess.Queue"
+    done_queue: "multiprocess.Queue"
     is_generator: bool
     cache: bool
     udf_fields: Sequence[str]

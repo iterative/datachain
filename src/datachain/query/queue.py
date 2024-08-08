@@ -7,7 +7,7 @@ from typing import Any
 
 import msgpack
 
-from datachain.query.batch import RowsInput, RowsInputBatch
+from datachain.query.batch import RowsOutput, RowsOutputBatch
 
 DEFAULT_BATCH_SIZE = 10000
 STOP_SIGNAL = "STOP"
@@ -70,7 +70,7 @@ def _msgpack_pack_extended_types(obj: Any) -> msgpack.ExtType:
         data = (obj.timestamp(),)  # type: ignore   # noqa: PGH003
         return msgpack.ExtType(MSGPACK_EXT_TYPE_DATETIME, pack("!d", *data))
 
-    if isinstance(obj, RowsInputBatch):
+    if isinstance(obj, RowsOutputBatch):
         return msgpack.ExtType(
             MSGPACK_EXT_TYPE_ROWS_INPUT_BATCH,
             msgpack_pack(obj.rows),
@@ -101,7 +101,7 @@ def _msgpack_unpack_extended_types(code: int, data: bytes) -> Any:
         return datetime.datetime.fromtimestamp(timestamp, tz=tz_info)
 
     if code == MSGPACK_EXT_TYPE_ROWS_INPUT_BATCH:
-        return RowsInputBatch(msgpack_unpack(data))
+        return RowsOutputBatch(msgpack_unpack(data))
 
     return msgpack.ExtType(code, data)
 
@@ -110,11 +110,11 @@ def msgpack_unpack(data: bytes) -> Any:
     return msgpack.unpackb(data, ext_hook=_msgpack_unpack_extended_types)
 
 
-def marshal(obj: Iterator[RowsInput]) -> Iterable[bytes]:
+def marshal(obj: Iterator[RowsOutput]) -> Iterable[bytes]:
     for row in obj:
         yield msgpack_pack(row)
 
 
-def unmarshal(obj: Iterator[bytes]) -> Iterable[RowsInput]:
+def unmarshal(obj: Iterator[bytes]) -> Iterable[RowsOutput]:
     for row in obj:
         yield msgpack_unpack(row)

@@ -461,6 +461,8 @@ class UDFStep(Step, ABC):
 
         processes = determine_processes(self.parallel)
 
+        udf_fields = [str(c.name) for c in query.selected_columns]
+
         try:
             if workers:
                 from datachain.catalog.loader import get_distributed_class
@@ -473,6 +475,7 @@ class UDFStep(Step, ABC):
                     query,
                     workers,
                     processes,
+                    udf_fields=udf_fields,
                     is_generator=self.is_generator,
                     use_partitioning=use_partitioning,
                     cache=self.cache,
@@ -489,6 +492,7 @@ class UDFStep(Step, ABC):
                     "warehouse_clone_params": self.catalog.warehouse.clone_params(),
                     "table": udf_table,
                     "query": query,
+                    "udf_fields": udf_fields,
                     "batching": batching,
                     "processes": processes,
                     "is_generator": self.is_generator,
@@ -519,7 +523,6 @@ class UDFStep(Step, ABC):
                     udf = self.udf
 
                 warehouse = self.catalog.warehouse
-                udf_fields = [str(c.name) for c in query.selected_columns]
 
                 with contextlib.closing(
                     batching(warehouse.dataset_select_paginated, query)

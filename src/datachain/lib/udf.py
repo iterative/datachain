@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
     from datachain.catalog import Catalog
-    from datachain.query.batch import RowsInput, UDFInput
+    from datachain.query.batch import RowsOutput, UDFInput
     from datachain.query.udf import UDFResult
 
 
@@ -37,7 +37,7 @@ class UDFAdapter(_UDFBase):
     def __init__(
         self,
         inner: "UDFBase",
-        properties: "UDFProperties",
+        properties: UDFProperties,
     ):
         self.inner = inner
         super().__init__(properties)
@@ -45,7 +45,7 @@ class UDFAdapter(_UDFBase):
     def run(
         self,
         udf_fields: "Sequence[str]",
-        udf_inputs: "Iterable[RowsInput]",
+        udf_inputs: "Iterable[RowsOutput]",
         catalog: "Catalog",
         is_generator: bool,
         cache: bool,
