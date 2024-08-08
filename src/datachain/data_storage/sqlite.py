@@ -127,7 +127,7 @@ class SQLiteDatabaseEngine(DatabaseEngine):
             db.execute("PRAGMA foreign_keys = ON")
             db.execute("PRAGMA cache_size = -102400")  # 100 MiB
             # Enable Write-Ahead Log Journaling
-            db.execute("PRAGMA journal_mode = WAL")
+            db.execute("PRAGMA journal_mode = MEMORY")
             db.execute("PRAGMA synchronous = NORMAL")
             db.execute("PRAGMA case_sensitive_like = ON")
             if os.environ.get("DEBUG_SHOW_SQL_QUERIES"):
