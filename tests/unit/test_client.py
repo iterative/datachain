@@ -118,7 +118,7 @@ def test_parse_file_relative_path_home_dir(cloud_test_catalog):
 
 @pytest.mark.parametrize("cloud_type", ["file"], indirect=True)
 def test_parse_file_path_ends_with_slash(cloud_type):
-    client, rel_part = Client.parse_url("./animals/".replace("/", os.sep), None, None)
+    client, rel_part = Client.parse_url("./animals/".replace("/", os.sep), None)
     root_uri = FileClient.root_path().as_uri()
     assert client.uri == root_uri
     assert (
