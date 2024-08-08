@@ -506,7 +506,7 @@ def test_mutate(cloud_test_catalog, save):
     else:
         result = q.db_results(row_factory=lambda c, v: dict(zip(c, v)))
     assert len(result) == 4
-    assert len(result[0]) == 19
+    assert len(result[0]) == 18
     cols = {"size10x", "size1000x", "s2", "s3", "s4"}
     new_data = [[v for k, v in r.items() if k in cols] for r in result]
     assert new_data == [
@@ -568,7 +568,7 @@ def test_order_by_limit(cloud_test_catalog, save):
         assert dataset_record.status == DatasetStatus.COMPLETE
     else:
         result = q.db_results()
-    assert [posixpath.basename(r[4]) for r in result] == [
+    assert [posixpath.basename(r[3]) for r in result] == [
         "dog4",
         "dog3",
         "dog2",
@@ -2740,7 +2740,9 @@ def test_index_tar(cloud_test_catalog):
     assert len(set(offsets)) == len(offsets)
 
     assert all(
-        row["vtype"] == "tar" for row in rows if not row["path"].endswith("animals.tar")
+        json.loads(row["location"])[0]["vtype"] == "tar"
+        for row in rows
+        if not row["path"].endswith("animals.tar")
     )
 
 

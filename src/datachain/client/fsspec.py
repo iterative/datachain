@@ -360,7 +360,6 @@ class Client(ABC):
             parent["path"],
             parent["size"],
             parent["etag"],
-            vtype=parent["vtype"],
             location=parent["location"],
         )
         f = self.open_object(parent_uid, use_cache=use_cache)

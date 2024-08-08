@@ -48,7 +48,6 @@ class DirTypeGroup:
 class Node:
     sys__id: int = 0
     sys__rand: int = 0
-    vtype: str = ""
     dir_type: Optional[int] = None
     path: str = ""
     etag: str = ""
@@ -112,7 +111,6 @@ class Node:
             version=self.version or "",
             etag=self.etag,
             is_latest=self.is_latest,
-            vtype=self.vtype,
             location=self.location,
             last_modified=self.last_modified or TIME_ZERO,
         )
@@ -144,7 +142,6 @@ class Node:
 
 @attrs.define
 class Entry:
-    vtype: str = ""
     dir_type: Optional[int] = None
     path: str = ""
     etag: str = ""

@@ -196,7 +196,6 @@ def test_from_records_empty_chain_without_schema(test_session):
         "is_latest",
         "last_modified",
         "location",
-        "vtype",
     }
     assert ds.count() == 0
 
