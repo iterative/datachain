@@ -1504,7 +1504,6 @@ class DataChain(DatasetQuery):
 
         Example:
             ```py
-            empty = DataChain.from_records()
             single_record = DataChain.from_records(DataChain.DEFAULT_FILE_RECORD)
             ```
         """
@@ -1512,7 +1511,7 @@ class DataChain(DatasetQuery):
         catalog = session.catalog
 
         if not to_insert and not schema:
-            raise ValueError("Schema is required for creating empty dataset")
+            raise ValueError("Non empty records to insert or schema must be defined")
 
         name = session.generate_temp_dataset_name()
         signal_schema = None
