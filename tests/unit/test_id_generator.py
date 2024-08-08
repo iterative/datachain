@@ -5,6 +5,7 @@ from sqlalchemy import select
 
 from datachain.data_storage.serializer import deserialize
 from datachain.data_storage.sqlite import SQLiteIDGenerator
+from tests.utils import skip_if_not_sqlite
 
 
 def get_rows(id_generator):
@@ -25,6 +26,7 @@ def test_init(sqlite_db):
     assert not sqlite_db.has_table("id_generator")
 
 
+@skip_if_not_sqlite
 def test_init_empty(tmp_dir):
     id_generator = SQLiteIDGenerator()
     assert id_generator._table_prefix is None

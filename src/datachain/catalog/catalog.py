@@ -676,7 +676,7 @@ class Catalog:
 
     def parse_url(self, uri: str, **config: Any) -> tuple[Client, str]:
         config = config or self.client_config
-        return Client.parse_url(uri, self.metastore, self.cache, **config)
+        return Client.parse_url(uri, self.cache, **config)
 
     def get_client(self, uri: StorageURI, **config: Any) -> Client:
         """
