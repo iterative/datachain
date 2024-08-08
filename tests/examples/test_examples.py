@@ -38,13 +38,25 @@ computer_vision_examples = [
 
 
 def smoke_test(example: str, env: Optional[dict] = None):
-    completed_process = subprocess.run(  # noqa: S603
-        [sys.executable, example],
-        env={**os.environ, **(env or {})},
-        capture_output=True,
-        cwd=os.path.abspath(os.path.join(__file__, "..", "..", "..")),
-        check=True,
-    )
+    try:
+        completed_process = subprocess.run(  # noqa: S603
+            [sys.executable, example],
+            env={**os.environ, **(env or {})},
+            capture_output=True,
+            cwd=os.path.abspath(os.path.join(__file__, "..", "..", "..")),
+            check=True,
+        )
+    except subprocess.CalledProcessError as e:
+        print(f"Example failed: {example}")
+        print()
+        print()
+        print("stdout:")
+        print(e.stdout.decode("utf-8"))
+        print()
+        print()
+        print("stderr:")
+        print(e.stderr.decode("utf-8"))
+        pytest.fail("subprocess returned a non-zero exit code")
 
     assert completed_process.stdout
     assert completed_process.stderr
@@ -71,7 +83,7 @@ def test_multimodal(example):
     smoke_test(
         example,
         {
-            "IMAGE_TARS": "gs://datachain-demo/datacomp-small/shards/00001285.tar",
+            "IMAGE_TARS": "gs://datachain-demo/datacomp-small/shards/00001286.tar",
             "PARQUET_METADATA": "gs://datachain-demo/datacomp-small/metadata/036d6b9ae87a00e738f8fc554130b65b.parquet",
             "NPZ_METADATA": "gs://datachain-demo/datacomp-small/metadata/036d6b9ae87a00e738f8fc554130b65b.npz",
         },
