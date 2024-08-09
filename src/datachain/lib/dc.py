@@ -204,7 +204,6 @@ class DataChain(DatasetQuery):
     DEFAULT_FILE_RECORD: ClassVar[dict] = {
         "source": "",
         "path": "",
-        "vtype": "",
         "size": 0,
     }
 

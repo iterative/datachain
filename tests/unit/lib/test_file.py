@@ -19,9 +19,7 @@ def create_file(source: str):
 
 def test_uid_missing_location():
     name = "my_name"
-    vtype = "vt1"
-
-    stream = File(path=name, vtype=vtype)
+    stream = File(path=name)
     assert stream.get_uid() == UniqueId(
         "",
         name,
@@ -29,18 +27,16 @@ def test_uid_missing_location():
         version="",
         etag="",
         is_latest=True,
-        vtype=vtype,
         location=None,
     )
 
 
 def test_uid_location():
     name = "na_me"
-    vtype = "some_random"
     loc = {"e": 42}
 
-    stream = File(path=name, vtype=vtype, location=loc)
-    assert stream.get_uid() == UniqueId("", name, 0, "", "", True, vtype, loc)
+    stream = File(path=name, location=loc)
+    assert stream.get_uid() == UniqueId("", name, 0, "", "", True, loc)
 
 
 def test_file_stem():

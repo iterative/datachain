@@ -21,7 +21,6 @@ def test_dataset_table_compilation():
     table = DataTable.new_table(
         "ds-1",
         columns=[
-            Column("vtype", String, nullable=False, index=True),
             Column("dir_type", Int, index=True),
             Column("path", String, nullable=False, index=True),
             Column("etag", String),
@@ -44,7 +43,6 @@ def test_dataset_table_compilation():
         'CREATE TABLE IF NOT EXISTS "ds-1" (\n'
         "\tsys__id INTEGER NOT NULL, \n"
         "\tsys__rand INTEGER DEFAULT (abs(random())) NOT NULL, \n"
-        "\tvtype VARCHAR NOT NULL, \n"
         "\tdir_type INTEGER, \n"
         "\tpath VARCHAR NOT NULL, \n"
         "\tetag VARCHAR, \n"

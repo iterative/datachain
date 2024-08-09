@@ -344,7 +344,6 @@ def show_df(
                 "owner_name",
                 "size",
                 "version",
-                "vtype",
             ],
             inplace=True,
             errors="ignore",

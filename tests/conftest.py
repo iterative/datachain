@@ -574,7 +574,6 @@ def dataset_rows():
             "location": "",
             "source": "s3://my-bucket",
             "dir_type": 0,
-            "vtype": "",
             "parent": "input/text_emd_1m",
             "version": "7e589b7d-382c-49a5-931f-2b999c930c5e",
             "is_latest": True,

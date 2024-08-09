@@ -48,8 +48,6 @@ class DirTypeGroup:
 class Node:
     sys__id: int = 0
     sys__rand: int = -1
-    vtype: str = ""
-    dir_type: Optional[int] = None
     path: str = ""
     etag: str = ""
     version: Optional[str] = None
@@ -60,6 +58,7 @@ class Node:
     owner_id: str = ""
     location: Optional[str] = None
     source: StorageURI = StorageURI("")
+    dir_type: int = DirType.FILE
 
     @property
     def is_dir(self) -> bool:
@@ -112,7 +111,6 @@ class Node:
             version=self.version or "",
             etag=self.etag,
             is_latest=self.is_latest,
-            vtype=self.vtype,
             location=self.location,
             last_modified=self.last_modified or TIME_ZERO,
         )
@@ -144,8 +142,6 @@ class Node:
 
 @attrs.define
 class Entry:
-    vtype: str = ""
-    dir_type: Optional[int] = None
     path: str = ""
     etag: str = ""
     version: str = ""
@@ -156,26 +152,12 @@ class Entry:
     owner_id: str = ""
     location: Optional[str] = None
 
-    @property
-    def is_dir(self) -> bool:
-        return self.dir_type == DirType.DIR
-
-    @classmethod
-    def from_dir(cls, path: str, **kwargs) -> "Entry":
-        return cls(dir_type=DirType.DIR, path=path, **kwargs)
-
     @classmethod
     def from_file(cls, path: str, **kwargs) -> "Entry":
-        return cls(dir_type=DirType.FILE, path=path, **kwargs)
-
-    @classmethod
-    def root(cls):
-        return cls(dir_type=DirType.DIR)
+        return cls(path=path, **kwargs)
 
     @property
     def full_path(self) -> str:
-        if self.is_dir and self.path:
-            return self.path + "/"
         return self.path
 
     @property
