@@ -10,9 +10,8 @@ from typing import (
 
 import sqlalchemy as sa
 from sqlalchemy.sql import func as f
-from sqlalchemy.sql.expression import null, true
+from sqlalchemy.sql.expression import false, null, true
 
-from datachain.node import DirType
 from datachain.sql.functions import path
 from datachain.sql.types import Int, SQLType, UInt64
 
@@ -81,7 +80,7 @@ class DirExpansion:
     def base_select(q):
         return sa.select(
             q.c.sys__id,
-            (q.c.dir_type == DirType.DIR).label("is_dir"),
+            false().label("is_dir"),
             q.c.source,
             q.c.path,
             q.c.version,
