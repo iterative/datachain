@@ -10,7 +10,6 @@ from transformers import pipeline
 from datachain import C, DataChain, Mapper
 
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
-# hf = HfApi()
 
 
 class Helper(Mapper):
@@ -44,8 +43,6 @@ else:
 if __name__ == "__main__":
     print("** HuggingFace pipeline helper model zoo demo **")
     print("\nZero-shot object detection and classification:")
-    zoo_model = "google/owlv2-base-patch16"
-    # hf.snapshot_download(repo_id=zoo_model, repo_type="model")
     (
         DataChain.from_storage(
             image_source,
@@ -56,7 +53,7 @@ if __name__ == "__main__":
         .limit(1)
         .map(
             Helper(
-                model=zoo_model,
+                model="google/owlv2-base-patch16",
                 device=device,
                 candidate_labels=["cat", "dog", "squirrel", "unknown"],
             ),
@@ -68,8 +65,6 @@ if __name__ == "__main__":
     )
 
     print("\nNot-safe-for-work image detection:")
-    nsfw_model = "Falconsai/nsfw_image_detection"
-    # hf.snapshot_download(repo_id=nsfw_model, repo_type="model")
     (
         DataChain.from_storage(
             image_source,
@@ -80,7 +75,7 @@ if __name__ == "__main__":
         .limit(1)
         .map(
             Helper(
-                model=nsfw_model,
+                model="Falconsai/nsfw_image_detection",
                 device=device,
             ),
             params=["file"],
@@ -93,8 +88,6 @@ if __name__ == "__main__":
     print("\nAudio emotion classification:")
     try:
         subprocess.run(["ffmpeg", "-L"], check=True)  # noqa: S603, S607
-        emotions_model = "Krithika-p/my_awesome_emotions_model"
-        # hf.snapshot_download(repo_id=emotions_model, repo_type="model")
         (
             DataChain.from_storage(
                 audio_source,
@@ -105,7 +98,7 @@ if __name__ == "__main__":
             .limit(1)
             .map(
                 Helper(
-                    model=emotions_model,
+                    model="Krithika-p/my_awesome_emotions_model",
                     device=device,
                 ),
                 params=["file"],
@@ -118,8 +111,6 @@ if __name__ == "__main__":
         print("ffmpeg binary not found, skipping audio example")
 
     print("\nLong text summarization:")
-    long_text_model = "pszemraj/led-large-book-summary"
-    # hf.snapshot_download(repo_id=long_text_model, repo_type="model")
     (
         DataChain.from_storage(
             text_source,
@@ -130,7 +121,7 @@ if __name__ == "__main__":
         .limit(1)
         .map(
             Helper(
-                model=long_text_model,
+                model="pszemraj/led-large-book-summary",
                 device=device,
                 max_length=150,
             ),

@@ -1,4 +1,4 @@
-# pip install accelerate torch
+# pip install accelerate torch huggingface_hub[hf_transfer]
 import os
 
 import torch
@@ -24,8 +24,6 @@ source = "gs://datachain-demo/dogs-and-cats/"
 model = "llava-hf/llava-1.5-7b-hf"
 
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
-# hf = HfApi()
-# hf.snapshot_download(repo_id=model, repo_type="model")
 
 
 # device='mps' not supported
