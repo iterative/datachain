@@ -1206,14 +1206,14 @@ class DataChain(DatasetQuery):
         """
         headers, max_length = self._effective_signals_schema.get_headers_with_length()
         if flatten or max_length < 2:
-            df = pd.DataFrame.from_records(self.to_records())
+            columns = []
             if headers:
-                df.columns = [".".join(filter(None, header)) for header in headers]
-            return df
+                columns = [".".join(filter(None, header)) for header in headers]
+            return pd.DataFrame.from_records(self.to_records(), columns=columns)
 
-        transposed_result = list(map(list, zip(*self.results())))
-        data = {tuple(n): val for n, val in zip(headers, transposed_result)}
-        return pd.DataFrame(data)
+        return pd.DataFrame(
+            self.results(), columns=pd.MultiIndex.from_tuples(map(tuple, headers))
+        )
 
     def show(
         self,
@@ -1232,6 +1232,12 @@ class DataChain(DatasetQuery):
         """
         dc = self.limit(limit) if limit > 0 else self
         df = dc.to_pandas(flatten)
+
+        if df.empty:
+            print("Empty result")
+            print(f"Columns: {list(df.columns)}")
+            return
+
         if transpose:
             df = df.T
 

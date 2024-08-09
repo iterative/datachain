@@ -176,6 +176,26 @@ def test_show(capsys, test_session):
         assert f"{i} {first_name[i]}" in normalized_output
 
 
+def test_show_nested_empty(capsys, test_session):
+    files = [File(size=s, path=p) for p, s in zip(list("abcde"), range(5))]
+    DataChain.from_values(file=files, session=test_session).limit(0).show()
+
+    captured = capsys.readouterr()
+    normalized_output = re.sub(r"\s+", " ", captured.out)
+    assert "Empty result" in normalized_output
+    assert "('file', 'path')" in normalized_output
+
+
+def test_show_empty(capsys, test_session):
+    first_name = ["Alice", "Bob", "Charlie"]
+    DataChain.from_values(first_name=first_name, session=test_session).limit(0).show()
+
+    captured = capsys.readouterr()
+    normalized_output = re.sub(r"\s+", " ", captured.out)
+    assert "Empty result" in normalized_output
+    assert "Columns: ['first_name']" in normalized_output
+
+
 def test_show_limit(capsys, test_session):
     first_name = ["Alice", "Bob", "Charlie"]
     DataChain.from_values(
