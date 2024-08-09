@@ -2,11 +2,8 @@ import contextlib
 from collections.abc import Iterator, Sequence
 from itertools import chain
 from multiprocessing import cpu_count
-from queue import Empty, Full, Queue
 from sys import stdin
-from time import sleep
-from types import GeneratorType
-from typing import Any, Optional
+from typing import Optional
 
 import attrs
 import multiprocess
@@ -22,7 +19,16 @@ from datachain.query.dataset import (
     get_processed_callback,
     process_udf_outputs,
 )
+from datachain.query.queue import (
+    get_from_queue,
+    marshal,
+    msgpack_pack,
+    msgpack_unpack,
+    put_into_queue,
+    unmarshal,
+)
 from datachain.query.udf import UDFBase, UDFFactory, UDFResult
+from datachain.utils import batched_it
 
 DEFAULT_BATCH_SIZE = 10000
 STOP_SIGNAL = "STOP"
@@ -44,44 +50,6 @@ def get_n_workers_from_arg(n_workers: Optional[int] = None) -> int:
     return n_workers
 
 
-# For more context on the get_from_queue and put_into_queue functions, see the
-# discussion here:
-# https://github.com/iterative/dvcx/pull/1297#issuecomment-2026308773
-# This problem is not exactly described by, but is also related to these Python issues:
-# https://github.com/python/cpython/issues/66587
-# https://github.com/python/cpython/issues/88628
-# https://github.com/python/cpython/issues/108645
-
-
-def get_from_queue(queue: Queue) -> Any:
-    """
-    Gets an item from a queue.
-    This is required to handle signals, such as KeyboardInterrupt exceptions
-    while waiting for items to be available, although only on certain installations.
-    (See the above comment for more context.)
-    """
-    while True:
-        try:
-            return queue.get_nowait()
-        except Empty:
-            sleep(0.01)
-
-
-def put_into_queue(queue: Queue, item: Any) -> None:
-    """
-    Puts an item into a queue.
-    This is required to handle signals, such as KeyboardInterrupt exceptions
-    while waiting for items to be queued, although only on certain installations.
-    (See the above comment for more context.)
-    """
-    while True:
-        try:
-            queue.put_nowait(item)
-            return
-        except Full:
-            sleep(0.01)
-
-
 def udf_entrypoint() -> int:
     # Load UDF info from stdin
     udf_info = load(stdin.buffer)
@@ -100,8 +68,9 @@ def udf_entrypoint() -> int:
         udf_info["id_generator_clone_params"],
         udf_info["metastore_clone_params"],
         udf_info["warehouse_clone_params"],
-        is_generator=udf_info.get("is_generator", False),
+        udf_fields=udf_info["udf_fields"],
         cache=udf_info["cache"],
+        is_generator=udf_info.get("is_generator", False),
     )
 
     query = udf_info["query"]
@@ -121,7 +90,7 @@ def udf_entrypoint() -> int:
         generated_cb = get_generated_callback(dispatch.is_generator)
         try:
             udf_results = dispatch.run_udf_parallel(
-                udf_inputs,
+                marshal(udf_inputs),
                 n_workers=n_workers,
                 processed_cb=processed_cb,
                 download_cb=download_cb,
@@ -142,6 +111,9 @@ def udf_worker_entrypoint() -> int:
 
 
 class UDFDispatcher:
+    catalog: Optional[Catalog] = None
+    task_queue: Optional[multiprocess.Queue] = None
+    done_queue: Optional[multiprocess.Queue] = None
     _batch_size: Optional[int] = None
 
     def __init__(
@@ -151,9 +123,10 @@ class UDFDispatcher:
         id_generator_clone_params,
         metastore_clone_params,
         warehouse_clone_params,
-        cache,
-        is_generator=False,
-        buffer_size=DEFAULT_BATCH_SIZE,
+        udf_fields: "Sequence[str]",
+        cache: bool,
+        is_generator: bool = False,
+        buffer_size: int = DEFAULT_BATCH_SIZE,
     ):
         self.udf_data = udf_data
         self.catalog_init_params = catalog_init_params
@@ -172,12 +145,13 @@ class UDFDispatcher:
             self.warehouse_args,
             self.warehouse_kwargs,
         ) = warehouse_clone_params
-        self.is_generator = is_generator
+        self.udf_fields = udf_fields
         self.cache = cache
+        self.is_generator = is_generator
+        self.buffer_size = buffer_size
         self.catalog = None
         self.task_queue = None
         self.done_queue = None
-        self.buffer_size = buffer_size
         self.ctx = get_context("spawn")
 
     @property
@@ -226,6 +200,7 @@ class UDFDispatcher:
             self.done_queue,
             self.is_generator,
             self.cache,
+            self.udf_fields,
         )
 
     def _run_worker(self) -> None:
@@ -233,7 +208,11 @@ class UDFDispatcher:
             worker = self._create_worker()
             worker.run()
         except (Exception, KeyboardInterrupt) as e:
-            put_into_queue(self.done_queue, {"status": FAILED_STATUS, "exception": e})
+            if self.done_queue:
+                put_into_queue(
+                    self.done_queue,
+                    {"status": FAILED_STATUS, "exception": e},
+                )
             raise
 
     @staticmethod
@@ -249,7 +228,6 @@ class UDFDispatcher:
         self,
         input_rows,
         n_workers: Optional[int] = None,
-        cache: bool = False,
         input_queue=None,
         processed_cb: Callback = DEFAULT_CALLBACK,
         download_cb: Callback = DEFAULT_CALLBACK,
@@ -299,21 +277,24 @@ class UDFDispatcher:
                 result = get_from_queue(self.done_queue)
                 status = result["status"]
                 if status == NOTIFY_STATUS:
-                    download_cb.relative_update(result["downloaded"])
+                    if downloaded := result.get("downloaded"):
+                        download_cb.relative_update(downloaded)
+                    if processed := result.get("processed"):
+                        processed_cb.relative_update(processed)
                 elif status == FINISHED_STATUS:
                     # Worker finished
                     n_workers -= 1
                 elif status == OK_STATUS:
-                    processed_cb.relative_update(result["processed"])
-                    yield result["result"]
+                    if processed := result.get("processed"):
+                        processed_cb.relative_update(processed)
+                    yield msgpack_unpack(result["result"])
                 else:  # Failed / error
                     n_workers -= 1
-                    exc = result.get("exception")
-                    if exc:
+                    if exc := result.get("exception"):
                         raise exc
                     raise RuntimeError("Internal error: Parallel UDF execution failed")
 
-                if not streaming_mode and not input_finished:
+                if status == OK_STATUS and not streaming_mode and not input_finished:
                     try:
                         put_into_queue(self.task_queue, next(input_data))
                     except StopIteration:
@@ -348,7 +329,7 @@ class UDFDispatcher:
 
 
 class WorkerCallback(Callback):
-    def __init__(self, queue: multiprocess.Queue):
+    def __init__(self, queue: "multiprocess.Queue"):
         self.queue = queue
         super().__init__()
 
@@ -369,10 +350,11 @@ class ProcessedCallback(Callback):
 class UDFWorker:
     catalog: Catalog
     udf: UDFBase
-    task_queue: multiprocess.Queue
-    done_queue: multiprocess.Queue
+    task_queue: "multiprocess.Queue"
+    done_queue: "multiprocess.Queue"
     is_generator: bool
     cache: bool
+    udf_fields: Sequence[str]
     cb: Callback = attrs.field()
 
     @cb.default
@@ -382,7 +364,8 @@ class UDFWorker:
     def run(self) -> None:
         processed_cb = ProcessedCallback()
         udf_results = self.udf.run(
-            self.get_inputs(),
+            self.udf_fields,
+            unmarshal(self.get_inputs()),
             self.catalog,
             self.is_generator,
             self.cache,
@@ -390,15 +373,17 @@ class UDFWorker:
             processed_cb=processed_cb,
         )
         for udf_output in udf_results:
-            if isinstance(udf_output, GeneratorType):
-                udf_output = list(udf_output)  # can not pickle generator
+            for batch in batched_it(udf_output, DEFAULT_BATCH_SIZE):
+                put_into_queue(
+                    self.done_queue,
+                    {
+                        "status": OK_STATUS,
+                        "result": msgpack_pack(list(batch)),
+                    },
+                )
             put_into_queue(
                 self.done_queue,
-                {
-                    "status": OK_STATUS,
-                    "result": udf_output,
-                    "processed": processed_cb.processed_rows,
-                },
+                {"status": NOTIFY_STATUS, "processed": processed_cb.processed_rows},
             )
         put_into_queue(self.done_queue, {"status": FINISHED_STATUS})
 

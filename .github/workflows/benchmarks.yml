@@ -11,7 +11,7 @@ env:
   FORCE_COLOR: "1"
 
 jobs:
-  build:
+  run:
     if: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'run-benchmarks') }}
     runs-on: ubuntu-latest
 

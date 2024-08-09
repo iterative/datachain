@@ -10,7 +10,7 @@ import sys
 import time
 from collections.abc import Iterable, Iterator, Sequence
 from datetime import date, datetime, timezone
-from itertools import islice
+from itertools import chain, islice
 from typing import TYPE_CHECKING, Any, Optional, TypeVar, Union
 from uuid import UUID
 
@@ -241,7 +241,7 @@ _T_co = TypeVar("_T_co", covariant=True)
 
 
 def batched(iterable: Iterable[_T_co], n: int) -> Iterator[tuple[_T_co, ...]]:
-    "Batch data into tuples of length n. The last batch may be shorter."
+    """Batch data into tuples of length n. The last batch may be shorter."""
     # Based on: https://docs.python.org/3/library/itertools.html#itertools-recipes
     # batched('ABCDEFG', 3) --> ABC DEF G
     if n < 1:
@@ -249,6 +249,21 @@ def batched(iterable: Iterable[_T_co], n: int) -> Iterator[tuple[_T_co, ...]]:
     it = iter(iterable)
     while batch := tuple(islice(it, n)):
         yield batch
+
+
+def batched_it(iterable: Iterable[_T_co], n: int) -> Iterator[Iterator[_T_co]]:
+    """Batch data into iterators of length n. The last batch may be shorter."""
+    # batched('ABCDEFG', 3) --> ABC DEF G
+    if n < 1:
+        raise ValueError("Batch size must be at least one")
+    it = iter(iterable)
+    while True:
+        chunk_it = islice(it, n)
+        try:
+            first_el = next(chunk_it)
+        except StopIteration:
+            return
+        yield chain((first_el,), chunk_it)
 
 
 def flatten(items):

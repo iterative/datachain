@@ -5,21 +5,29 @@ from collections.abc import Generator, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Optional, Union
 
-import sqlalchemy as sa
-
 from datachain.data_storage.schema import PARTITION_COLUMN_ID
 from datachain.data_storage.warehouse import SELECT_BATCH_SIZE
 
 if TYPE_CHECKING:
+    from sqlalchemy import Select
+
     from datachain.dataset import RowDict
 
 
 @dataclass
-class RowBatch:
+class RowsOutputBatch:
+    rows: Sequence[Sequence]
+
+
+RowsOutput = Union[Sequence, RowsOutputBatch]
+
+
+@dataclass
+class UDFInputBatch:
     rows: Sequence["RowDict"]
 
 
-BatchingResult = Union["RowDict", RowBatch]
+UDFInput = Union["RowDict", UDFInputBatch]
 
 
 class BatchingStrategy(ABC):
@@ -28,9 +36,9 @@ class BatchingStrategy(ABC):
     @abstractmethod
     def __call__(
         self,
-        execute: Callable,
-        query: sa.sql.selectable.Select,
-    ) -> Generator[BatchingResult, None, None]:
+        execute: Callable[..., Generator[Sequence, None, None]],
+        query: "Select",
+    ) -> Generator[RowsOutput, None, None]:
         """Apply the provided parameters to the UDF."""
 
 
@@ -42,10 +50,10 @@ class NoBatching(BatchingStrategy):
 
     def __call__(
         self,
-        execute: Callable,
-        query: sa.sql.selectable.Select,
-    ) -> Generator["RowDict", None, None]:
-        return execute(query, limit=query._limit, order_by=query._order_by_clauses)
+        execute: Callable[..., Generator[Sequence, None, None]],
+        query: "Select",
+    ) -> Generator[Sequence, None, None]:
+        return execute(query)
 
 
 class Batch(BatchingStrategy):
@@ -59,31 +67,24 @@ class Batch(BatchingStrategy):
 
     def __call__(
         self,
-        execute: Callable,
-        query: sa.sql.selectable.Select,
-    ) -> Generator[RowBatch, None, None]:
+        execute: Callable[..., Generator[Sequence, None, None]],
+        query: "Select",
+    ) -> Generator[RowsOutputBatch, None, None]:
         # choose page size that is a multiple of the batch size
         page_size = math.ceil(SELECT_BATCH_SIZE / self.count) * self.count
 
         # select rows in batches
-        results: list[RowDict] = []
+        results: list[Sequence] = []
 
-        with contextlib.closing(
-            execute(
-                query,
-                page_size=page_size,
-                limit=query._limit,
-                order_by=query._order_by_clauses,
-            )
-        ) as rows:
+        with contextlib.closing(execute(query, page_size=page_size)) as rows:
             for row in rows:
                 results.append(row)
                 if len(results) >= self.count:
                     batch, results = results[: self.count], results[self.count :]
-                    yield RowBatch(batch)
+                    yield RowsOutputBatch(batch)
 
             if len(results) > 0:
-                yield RowBatch(results)
+                yield RowsOutputBatch(results)
 
 
 class Partition(BatchingStrategy):
@@ -95,27 +96,30 @@ class Partition(BatchingStrategy):
 
     def __call__(
         self,
-        execute: Callable,
-        query: sa.sql.selectable.Select,
-    ) -> Generator[RowBatch, None, None]:
+        execute: Callable[..., Generator[Sequence, None, None]],
+        query: "Select",
+    ) -> Generator[RowsOutputBatch, None, None]:
         current_partition: Optional[int] = None
-        batch: list[RowDict] = []
+        batch: list[Sequence] = []
 
-        with contextlib.closing(
-            execute(
-                query,
-                order_by=(PARTITION_COLUMN_ID, "sys__id", *query._order_by_clauses),
-                limit=query._limit,
-            )
-        ) as rows:
+        query_fields = [str(c.name) for c in query.selected_columns]
+        partition_column_idx = query_fields.index(PARTITION_COLUMN_ID)
+
+        ordered_query = query.order_by(None).order_by(
+            PARTITION_COLUMN_ID,
+            "sys__id",
+            *query._order_by_clauses,
+        )
+
+        with contextlib.closing(execute(ordered_query)) as rows:
             for row in rows:
-                partition = row[PARTITION_COLUMN_ID]
+                partition = row[partition_column_idx]
                 if current_partition != partition:
                     current_partition = partition
                     if len(batch) > 0:
-                        yield RowBatch(batch)
+                        yield RowsOutputBatch(batch)
                         batch = []
                 batch.append(row)
 
             if len(batch) > 0:
-                yield RowBatch(batch)
+                yield RowsOutputBatch(batch)

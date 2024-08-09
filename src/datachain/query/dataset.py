@@ -461,6 +461,8 @@ class UDFStep(Step, ABC):
 
         processes = determine_processes(self.parallel)
 
+        udf_fields = [str(c.name) for c in query.selected_columns]
+
         try:
             if workers:
                 from datachain.catalog.loader import get_distributed_class
@@ -473,6 +475,7 @@ class UDFStep(Step, ABC):
                     query,
                     workers,
                     processes,
+                    udf_fields=udf_fields,
                     is_generator=self.is_generator,
                     use_partitioning=use_partitioning,
                     cache=self.cache,
@@ -489,6 +492,7 @@ class UDFStep(Step, ABC):
                     "warehouse_clone_params": self.catalog.warehouse.clone_params(),
                     "table": udf_table,
                     "query": query,
+                    "udf_fields": udf_fields,
                     "batching": batching,
                     "processes": processes,
                     "is_generator": self.is_generator,
@@ -528,6 +532,7 @@ class UDFStep(Step, ABC):
                     generated_cb = get_generated_callback(self.is_generator)
                     try:
                         udf_results = udf.run(
+                            udf_fields,
                             udf_inputs,
                             self.catalog,
                             self.is_generator,
@@ -1244,21 +1249,23 @@ class DatasetQuery:
         actual_params = [normalize_param(p) for p in params]
         try:
             query = self.apply_steps().select()
+            query_fields = [str(c.name) for c in query.selected_columns]
 
-            def row_iter() -> Generator[RowDict, None, None]:
+            def row_iter() -> Generator[Sequence, None, None]:
                 # warehouse isn't threadsafe, we need to clone() it
                 # in the thread that uses the results
                 with self.catalog.warehouse.clone() as warehouse:
-                    gen = warehouse.dataset_select_paginated(
-                        query, limit=query._limit, order_by=query._order_by_clauses
-                    )
+                    gen = warehouse.dataset_select_paginated(query)
                     with contextlib.closing(gen) as rows:
                         yield from rows
 
-            async def get_params(row: RowDict) -> tuple:
+            async def get_params(row: Sequence) -> tuple:
+                row_dict = RowDict(zip(query_fields, row))
                 return tuple(
                     [
-                        await p.get_value_async(self.catalog, row, mapper, **kwargs)
+                        await p.get_value_async(
+                            self.catalog, row_dict, mapper, **kwargs
+                        )
                         for p in actual_params
                     ]
                 )
