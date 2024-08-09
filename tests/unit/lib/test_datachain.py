@@ -1159,6 +1159,42 @@ def test_to_pandas_multi_level(test_session):
     assert df["t1"]["count"].tolist() == [3, 5, 1]
 
 
+def test_to_pandas_empty(test_session):
+    df = (
+        DataChain.from_values(t1=[1, 2, 3], session=test_session)
+        .limit(0)
+        .to_pandas(flatten=True)
+    )
+
+    assert df.empty
+    assert "t1" in df.columns
+    assert df["t1"].tolist() == []
+
+    df = (
+        DataChain.from_values(my_n=features_nested, session=test_session)
+        .limit(0)
+        .to_pandas(flatten=False)
+    )
+
+    assert df.empty
+    assert df["my_n"].empty
+    assert list(df.columns) == [
+        ("my_n", "label", ""),
+        ("my_n", "fr", "nnn"),
+        ("my_n", "fr", "count"),
+    ]
+
+    df = (
+        DataChain.from_values(my_n=features_nested, session=test_session)
+        .limit(0)
+        .to_pandas(flatten=True)
+    )
+
+    assert df.empty
+    assert df["my_n.fr.nnn"].tolist() == []
+    assert list(df.columns) == ["my_n.label", "my_n.fr.nnn", "my_n.fr.count"]
+
+
 def test_mutate(test_session):
     chain = DataChain.from_values(t1=features, session=test_session).mutate(
         circle=2 * 3.14 * Column("t1.count"), place="pref_" + Column("t1.nnn")
