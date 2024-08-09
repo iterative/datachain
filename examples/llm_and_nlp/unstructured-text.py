@@ -8,7 +8,7 @@
 # "pdf", "ppt", "pptx", "rtf", "rst", "tsv", "xlsx"
 
 from transformers import pipeline
-from unstructured.partition.auto import partition
+from unstructured.partition.pdf import partition_pdf as partition
 from unstructured.staging.base import convert_to_dataframe
 
 from datachain import C, DataChain

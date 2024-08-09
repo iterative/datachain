@@ -508,7 +508,7 @@ class DataChain(DatasetQuery):
 
     def print_json_schema(  # type: ignore[override]
         self, jmespath: Optional[str] = None, model_name: Optional[str] = None
-    ) -> "DataChain":
+    ) -> "Self":
         """Print JSON data model and save it. It returns the chain itself.
 
         Parameters:
@@ -533,7 +533,7 @@ class DataChain(DatasetQuery):
 
     def print_jsonl_schema(  # type: ignore[override]
         self, jmespath: Optional[str] = None, model_name: Optional[str] = None
-    ) -> "DataChain":
+    ) -> "Self":
         """Print JSON data model and save it. It returns the chain itself.
 
         Parameters:
@@ -549,7 +549,7 @@ class DataChain(DatasetQuery):
 
     def save(  # type: ignore[override]
         self, name: Optional[str] = None, version: Optional[int] = None
-    ) -> "DataChain":
+    ) -> "Self":
         """Save to a Dataset. It returns the chain itself.
 
         Parameters:
@@ -1270,7 +1270,7 @@ class DataChain(DatasetQuery):
         source: bool = True,
         nrows: Optional[int] = None,
         **kwargs,
-    ) -> "DataChain":
+    ) -> "Self":
         """Generate chain from list of tabular files.
 
         Parameters:
