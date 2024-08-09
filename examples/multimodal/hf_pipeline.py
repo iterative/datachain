@@ -4,12 +4,12 @@ import json
 import os
 import subprocess
 
+os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
+
 import torch
 from transformers import pipeline
 
 from datachain import C, DataChain, Mapper
-
-os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 
 
 class Helper(Mapper):
