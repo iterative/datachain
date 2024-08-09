@@ -1,5 +1,8 @@
-# pip install torch
+# pip install torch huggingface-hub[hf_transfer]
+import os
+
 import torch
+from huggingface_hub import HfApi
 from transformers import (
     AutoProcessor,
     Blip2ForConditionalGeneration,
@@ -10,6 +13,10 @@ from transformers import (
 from datachain import C, DataChain, Mapper
 
 source = "gs://datachain-demo/dogs-and-cats/"
+
+os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
+hf = HfApi()
+hf.snapshot_download(repo_id="Salesforce/blip2-opt-2.7b", repo_type="model")
 
 if torch.backends.mps.is_available():
     device = "mps"

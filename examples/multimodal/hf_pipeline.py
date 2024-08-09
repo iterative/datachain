@@ -1,11 +1,17 @@
-# pip install scipy torch transformers
+# pip install scipy torch transformers huggingface-hub[hf_transfer]
 # NOTE: also need to install ffmpeg binary
 import json
+import os
 
 import torch
+from huggingface_hub import HfApi
 from transformers import pipeline
 
 from datachain import C, DataChain, Mapper
+
+os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
+hf = HfApi()
+hf.snapshot_download(repo_id="google/owlv2-base-patch16", repo_type="model")
 
 
 class Helper(Mapper):
