@@ -158,43 +158,36 @@ def text_embedding(text: str) -> list[float]:
 SIMPLE_DS_QUERY_RECORDS = [
     {
         "path": "cats/cat1",
-        "dir_type": 0,
         "is_latest": 1,
         "size": 4,
     },
     {
         "path": "cats/cat2",
-        "dir_type": 0,
         "is_latest": 1,
         "size": 4,
     },
     {
         "path": "description",
-        "dir_type": 0,
         "is_latest": 1,
         "size": 13,
     },
     {
         "path": "dogs/dog1",
-        "dir_type": 0,
         "is_latest": 1,
         "size": 4,
     },
     {
         "path": "dogs/dog2",
-        "dir_type": 0,
         "is_latest": 1,
         "size": 3,
     },
     {
         "path": "dogs/dog3",
-        "dir_type": 0,
         "is_latest": 1,
         "size": 4,
     },
     {
         "path": "dogs/others/dog4",
-        "dir_type": 0,
         "is_latest": 1,
         "size": 4,
     },
@@ -204,7 +197,7 @@ SIMPLE_DS_QUERY_RECORDS = [
 def get_simple_ds_query(path, catalog):
     return (
         DatasetQuery(path=path, catalog=catalog)
-        .select(C.path, C.dir_type, C.is_latest, C.size)
+        .select(C.path, C.is_latest, C.size)
         .order_by(C.source, C.path)
     )
 
