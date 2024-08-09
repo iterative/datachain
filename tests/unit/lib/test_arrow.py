@@ -7,7 +7,7 @@ import pytest
 
 from datachain.lib.arrow import (
     ArrowGenerator,
-    _arrow_type_mapper,
+    arrow_type_mapper,
     schema_to_output,
 )
 from datachain.lib.file import File, IndexedFile
@@ -79,7 +79,7 @@ def test_arrow_generator_no_source(tmp_path, catalog):
     ),
 )
 def test_arrow_type_mapper(col_type, expected):
-    assert _arrow_type_mapper(col_type) == expected
+    assert arrow_type_mapper(col_type) == expected
 
 
 def test_arrow_type_error():
@@ -88,7 +88,7 @@ def test_arrow_type_error():
         mode=pa.lib.UnionMode_DENSE,
     )
     with pytest.raises(TypeError):
-        _arrow_type_mapper(col_type)
+        arrow_type_mapper(col_type)
 
 
 def test_schema_to_output():

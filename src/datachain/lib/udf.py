@@ -244,9 +244,12 @@ class UDFBase(AbstractUDF):
 
         if len(self.output.values) > 1:
             res = []
-            for tuple_ in result_objs:
+            for row in result_objs:
+                if isinstance(row, BaseModel):
+                    res.append(flatten(row))
+                    continue
                 flat = []
-                for obj in tuple_:
+                for obj in row:
                     if isinstance(obj, BaseModel):
                         flat.extend(flatten(obj))
                     else:
