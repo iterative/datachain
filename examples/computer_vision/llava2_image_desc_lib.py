@@ -2,7 +2,6 @@
 import os
 
 import torch
-from huggingface_hub import HfApi
 from transformers import (
     AutoProcessor,
     LlavaForConditionalGeneration,
@@ -25,8 +24,8 @@ source = "gs://datachain-demo/dogs-and-cats/"
 model = "llava-hf/llava-1.5-7b-hf"
 
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
-hf = HfApi()
-hf.snapshot_download(repo_id=model, repo_type="model")
+# hf = HfApi()
+# hf.snapshot_download(repo_id=model, repo_type="model")
 
 
 # device='mps' not supported

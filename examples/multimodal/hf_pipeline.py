@@ -5,13 +5,12 @@ import os
 import subprocess
 
 import torch
-from huggingface_hub import HfApi
 from transformers import pipeline
 
 from datachain import C, DataChain, Mapper
 
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
-hf = HfApi()
+# hf = HfApi()
 
 
 class Helper(Mapper):
@@ -46,7 +45,7 @@ if __name__ == "__main__":
     print("** HuggingFace pipeline helper model zoo demo **")
     print("\nZero-shot object detection and classification:")
     zoo_model = "google/owlv2-base-patch16"
-    hf.snapshot_download(repo_id=zoo_model, repo_type="model")
+    # hf.snapshot_download(repo_id=zoo_model, repo_type="model")
     (
         DataChain.from_storage(
             image_source,
@@ -70,7 +69,7 @@ if __name__ == "__main__":
 
     print("\nNot-safe-for-work image detection:")
     nsfw_model = "Falconsai/nsfw_image_detection"
-    hf.snapshot_download(repo_id=nsfw_model, repo_type="model")
+    # hf.snapshot_download(repo_id=nsfw_model, repo_type="model")
     (
         DataChain.from_storage(
             image_source,
@@ -95,7 +94,7 @@ if __name__ == "__main__":
     try:
         subprocess.run(["ffmpeg", "-L"], check=True)  # noqa: S603, S607
         emotions_model = "Krithika-p/my_awesome_emotions_model"
-        hf.snapshot_download(repo_id=emotions_model, repo_type="model")
+        # hf.snapshot_download(repo_id=emotions_model, repo_type="model")
         (
             DataChain.from_storage(
                 audio_source,
@@ -120,7 +119,7 @@ if __name__ == "__main__":
 
     print("\nLong text summarization:")
     long_text_model = "pszemraj/led-large-book-summary"
-    hf.snapshot_download(repo_id=long_text_model, repo_type="model")
+    # hf.snapshot_download(repo_id=long_text_model, repo_type="model")
     (
         DataChain.from_storage(
             text_source,
