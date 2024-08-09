@@ -98,7 +98,8 @@ examples = [
   "defusedxml",
   "accelerate",
   "unstructured[pdf]",
-  "pdfplumber==0.11.1"
+  "pdfplumber==0.11.1",
+  "huggingface_hub[hf_transfer]"
 ]
 
 [project.urls]
