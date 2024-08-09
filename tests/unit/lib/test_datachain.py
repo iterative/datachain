@@ -980,10 +980,10 @@ def test_from_csv_tab_delimited(tmp_dir, test_session):
     assert df1.equals(df)
 
 
+@skip_if_not_sqlite
 def test_from_csv_null_collect(tmp_dir, test_session):
     # Clickhouse requires setting type to Nullable(Type).
     # See https://github.com/xzkostyan/clickhouse-sqlalchemy/issues/189.
-    skip_if_not_sqlite()
     df = pd.DataFrame(DF_DATA)
     height = [70, 65, None, 72, 68]
     gender = ["f", "m", None, "m", "f"]
@@ -1168,6 +1168,42 @@ def test_to_pandas_multi_level(test_session):
     assert df["t1"]["count"].tolist() == [3, 5, 1]
 
 
+def test_to_pandas_empty(test_session):
+    df = (
+        DataChain.from_values(t1=[1, 2, 3], session=test_session)
+        .limit(0)
+        .to_pandas(flatten=True)
+    )
+
+    assert df.empty
+    assert "t1" in df.columns
+    assert df["t1"].tolist() == []
+
+    df = (
+        DataChain.from_values(my_n=features_nested, session=test_session)
+        .limit(0)
+        .to_pandas(flatten=False)
+    )
+
+    assert df.empty
+    assert df["my_n"].empty
+    assert list(df.columns) == [
+        ("my_n", "label", ""),
+        ("my_n", "fr", "nnn"),
+        ("my_n", "fr", "count"),
+    ]
+
+    df = (
+        DataChain.from_values(my_n=features_nested, session=test_session)
+        .limit(0)
+        .to_pandas(flatten=True)
+    )
+
+    assert df.empty
+    assert df["my_n.fr.nnn"].tolist() == []
+    assert list(df.columns) == ["my_n.label", "my_n.fr.nnn", "my_n.fr.count"]
+
+
 def test_mutate(test_session):
     chain = DataChain.from_values(t1=features, session=test_session).mutate(
         circle=2 * 3.14 * Column("t1.count"), place="pref_" + Column("t1.nnn")
@@ -1272,8 +1308,8 @@ def test_column_math(test_session):
     assert list(ch2.collect("x")) == [1 - (x + 2.0) for x in fib]
 
 
+@skip_if_not_sqlite
 def test_column_math_division(test_session):
-    skip_if_not_sqlite()
     fib = [1, 1, 2, 3, 5, 8]
     chain = DataChain.from_values(num=fib, session=test_session)
 
@@ -1489,8 +1525,8 @@ def test_mutate_with_complex_expression():
     )
 
 
+@skip_if_not_sqlite
 def test_mutate_with_saving():
-    skip_if_not_sqlite()
     ds = DataChain.from_values(id=[1, 2])
     ds = ds.mutate(new=ds.column("id") / 2).save("mutated")
 

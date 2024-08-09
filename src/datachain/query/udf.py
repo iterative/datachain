@@ -15,7 +15,14 @@ from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 
 from datachain.dataset import RowDict
 
-from .batch import Batch, BatchingStrategy, NoBatching, Partition, RowBatch
+from .batch import (
+    Batch,
+    BatchingStrategy,
+    NoBatching,
+    Partition,
+    RowsOutputBatch,
+    UDFInputBatch,
+)
 from .schema import (
     UDFParameter,
     UDFParamSpec,
@@ -25,7 +32,7 @@ from .schema import (
 if TYPE_CHECKING:
     from datachain.catalog import Catalog
 
-    from .batch import BatchingResult
+    from .batch import RowsOutput, UDFInput
 
 ColumnType = Any
 
@@ -107,7 +114,8 @@ class UDFBase:
 
     def run(
         self,
-        udf_inputs: "Iterable[BatchingResult]",
+        udf_fields: "Sequence[str]",
+        udf_inputs: "Iterable[RowsOutput]",
         catalog: "Catalog",
         is_generator: bool,
         cache: bool,
@@ -115,15 +123,22 @@ class UDFBase:
         processed_cb: Callback = DEFAULT_CALLBACK,
     ) -> Iterator[Iterable["UDFResult"]]:
         for batch in udf_inputs:
-            n_rows = len(batch.rows) if isinstance(batch, RowBatch) else 1
-            output = self.run_once(catalog, batch, is_generator, cache, cb=download_cb)
+            if isinstance(batch, RowsOutputBatch):
+                n_rows = len(batch.rows)
+                inputs: UDFInput = UDFInputBatch(
+                    [RowDict(zip(udf_fields, row)) for row in batch.rows]
+                )
+            else:
+                n_rows = 1
+                inputs = RowDict(zip(udf_fields, batch))
+            output = self.run_once(catalog, inputs, is_generator, cache, cb=download_cb)
             processed_cb.relative_update(n_rows)
             yield output
 
     def run_once(
         self,
         catalog: "Catalog",
-        arg: "BatchingResult",
+        arg: "UDFInput",
         is_generator: bool = False,
         cache: bool = False,
         cb: Callback = DEFAULT_CALLBACK,
@@ -199,12 +214,12 @@ class UDFWrapper(UDFBase):
     def run_once(
         self,
         catalog: "Catalog",
-        arg: "BatchingResult",
+        arg: "UDFInput",
         is_generator: bool = False,
         cache: bool = False,
         cb: Callback = DEFAULT_CALLBACK,
     ) -> Iterable[UDFResult]:
-        if isinstance(arg, RowBatch):
+        if isinstance(arg, UDFInputBatch):
             udf_inputs = [
                 self.bind_parameters(catalog, row, cache=cache, cb=cb)
                 for row in arg.rows

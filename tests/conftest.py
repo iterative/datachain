@@ -65,6 +65,8 @@ def clean_environment(
 
 @pytest.fixture
 def sqlite_db():
+    if os.environ.get("DATACHAIN_METASTORE") or os.environ.get("DATACHAIN_WAREHOUSE"):
+        pytest.skip("This test only runs on SQLite")
     with SQLiteDatabaseEngine.from_db_file(":memory:") as db:
         yield db
 

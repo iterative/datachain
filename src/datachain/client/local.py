@@ -2,7 +2,7 @@ import os
 import posixpath
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from urllib.parse import urlparse
 
 from fsspec.implementations.local import LocalFileSystem
@@ -11,9 +11,6 @@ from datachain.node import Entry
 from datachain.storage import StorageURI
 
 from .fsspec import Client
-
-if TYPE_CHECKING:
-    from datachain.data_storage import AbstractMetastore
 
 
 class FileClient(Client):
@@ -97,9 +94,7 @@ class FileClient(Client):
         return cls.root_dir(), uri.removeprefix(cls.root_path().as_uri())
 
     @classmethod
-    def from_name(
-        cls, name: str, metastore: "AbstractMetastore", cache, kwargs
-    ) -> "FileClient":
+    def from_name(cls, name: str, cache, kwargs) -> "FileClient":
         use_symlinks = kwargs.pop("use_symlinks", False)
         return cls(name, kwargs, cache, use_symlinks=use_symlinks)
 
