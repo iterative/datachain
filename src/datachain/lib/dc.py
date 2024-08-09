@@ -52,6 +52,7 @@ from datachain.sql.functions import path as pathfunc
 from datachain.utils import inside_notebook
 
 if TYPE_CHECKING:
+    from datasets import Dataset
     from typing_extensions import Concatenate, ParamSpec, Self
 
     P = ParamSpec("P")
@@ -1264,7 +1265,7 @@ class DataChain(DatasetQuery):
     @classmethod
     def from_hf(
         cls,
-        path: str,
+        dataset: Union[str, "Dataset"],
         session: Optional[Session] = None,
         object_name: str = "",
         model_name: str = "",
@@ -1273,27 +1274,39 @@ class DataChain(DatasetQuery):
         """Generate chain from huggingface hub dataset.
 
         Parameters:
-            path : Path or name of the dataset to read from huggingface.
+            dataset : Path or name of the dataset to read from Hugging Face Hub,
+                or an instance of `datasets.Dataset`.
             session : Session to use for the chain.
             object_name : Generated object column name.
             model_name : Generated model name.
             kwargs : Parameters to pass to datasets.load_dataset.
 
         Example:
+            Load from Hugging Face Hub:
             ```py
-            DataChain.from_hf("beans")
+            DataChain.from_hf("beans", split="train")
+            ```
+
+            Generate chain from loaded dataset:
+            ```py
+            from datasets import load_dataset
+            ds = load_dataset("beans", split="train")
+            DataChain.from_hf(ds)
             ```
         """
-        from datachain.lib.hf import HFGenerator, get_output_schema
+        from datachain.lib.hf import HFGenerator, get_output_schema, stream_dataset
+
+        if isinstance(dataset, str):
+            dataset = stream_dataset(dataset, **kwargs)
 
         model_name = model_name or object_name or ""
-        output = get_output_schema(path, model_name, **kwargs)
+        output = get_output_schema(dataset, model_name)
         model = dict_to_data_model(model_name, output)
         if object_name:
             output = {object_name: model}
 
         chain = DataChain.from_records(DataChain.DEFAULT_FILE_RECORD, session=session)
-        return chain.gen(HFGenerator(path, model, **kwargs), output=output)
+        return chain.gen(HFGenerator(dataset, model), output=output)
 
     def parse_tabular(
         self,

@@ -6,6 +6,7 @@ from unittest.mock import ANY
 import numpy as np
 import pandas as pd
 import pytest
+from datasets import Dataset
 from pydantic import BaseModel
 
 from datachain import Column
@@ -1497,3 +1498,9 @@ def test_mutate_with_expression_without_type(catalog):
     assert str(excinfo.value) == (
         "Error for column new: Cannot infer type with expression id - :id_1"
     )
+
+
+def test_from_hf(test_session):
+    ds = Dataset.from_dict(DF_DATA)
+    df = DataChain.from_hf(ds, session=test_session).to_pandas()
+    assert df.equals(pd.DataFrame(DF_DATA))

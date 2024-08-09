@@ -42,19 +42,17 @@ class HFAudio(DataModel):
 
 
 class HFGenerator(Generator):
-    def __init__(self, path: str, output_schema: type["BaseModel"], **kwargs):
+    def __init__(self, ds: datasets.Dataset, output_schema: type["BaseModel"]):
         super().__init__()
-        self.path = path
+        self.ds = ds
         self.output_schema = output_schema
-        self.kwargs = kwargs
 
     def process(self):
-        ds = datasets.load_dataset(self.path, streaming=True, **self.kwargs)
-        if isinstance(ds, datasets.IterableDatasetDict):
-            for split in ds:
-                yield from self._process_ds(ds[split], split)
+        if isinstance(self.ds, datasets.IterableDatasetDict):
+            for split in self.ds:
+                yield from self._process_ds(self.ds[split], split)
         else:
-            yield from self._process_ds(ds)
+            yield from self._process_ds(self.ds)
 
     def _process_ds(self, ds: datasets.Dataset, split=False):
         for row in ds:
@@ -67,7 +65,11 @@ class HFGenerator(Generator):
             yield self.output_schema(**output_dict)
 
 
-def _convert_feature(val: Any, feat: datasets.Feature, anno: Any) -> Any:
+def stream_dataset(path: str, **kwargs):
+    return datasets.load_dataset(path, streaming=True, **kwargs)
+
+
+def _convert_feature(val: Any, feat: Any, anno: Any) -> Any:
     if isinstance(feat, datasets.Value):
         return val
     if isinstance(feat, datasets.ClassLabel):
@@ -89,8 +91,9 @@ def _convert_feature(val: Any, feat: datasets.Feature, anno: Any) -> Any:
         return HFAudio(**val)
 
 
-def get_output_schema(path: str, model_name: str = "", **kwargs) -> dict[str, DataType]:
-    ds = datasets.load_dataset(path, streaming=True, **kwargs)
+def get_output_schema(
+    ds: datasets.Dataset, model_name: str = ""
+) -> dict[str, DataType]:
     fields_dict = {}
     if isinstance(ds, datasets.IterableDatasetDict):
         fields_dict["split"] = str
