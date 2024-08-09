@@ -2,6 +2,7 @@
 # NOTE: also need to install ffmpeg binary
 import json
 import os
+import subprocess
 
 import torch
 from huggingface_hub import HfApi
@@ -11,7 +12,6 @@ from datachain import C, DataChain, Mapper
 
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 hf = HfApi()
-hf.snapshot_download(repo_id="google/owlv2-base-patch16", repo_type="model")
 
 
 class Helper(Mapper):
@@ -45,6 +45,8 @@ else:
 if __name__ == "__main__":
     print("** HuggingFace pipeline helper model zoo demo **")
     print("\nZero-shot object detection and classification:")
+    zoo_model = "google/owlv2-base-patch16"
+    hf.snapshot_download(repo_id=zoo_model, repo_type="model")
     (
         DataChain.from_storage(
             image_source,
@@ -55,7 +57,7 @@ if __name__ == "__main__":
         .limit(1)
         .map(
             Helper(
-                model="google/owlv2-base-patch16",
+                model=zoo_model,
                 device=device,
                 candidate_labels=["cat", "dog", "squirrel", "unknown"],
             ),
@@ -67,6 +69,8 @@ if __name__ == "__main__":
     )
 
     print("\nNot-safe-for-work image detection:")
+    nsfw_model = "Falconsai/nsfw_image_detection"
+    hf.snapshot_download(repo_id=nsfw_model, repo_type="model")
     (
         DataChain.from_storage(
             image_source,
@@ -77,7 +81,7 @@ if __name__ == "__main__":
         .limit(1)
         .map(
             Helper(
-                model="Falconsai/nsfw_image_detection",
+                model=nsfw_model,
                 device=device,
             ),
             params=["file"],
@@ -88,26 +92,35 @@ if __name__ == "__main__":
     )
 
     print("\nAudio emotion classification:")
-    (
-        DataChain.from_storage(
-            audio_source,
-            anon=True,
-            type="binary",
+    try:
+        subprocess.run(["ffmpeg", "-L"], check=True)  # noqa: S603, S607
+        emotions_model = "Krithika-p/my_awesome_emotions_model"
+        hf.snapshot_download(repo_id=emotions_model, repo_type="model")
+        (
+            DataChain.from_storage(
+                audio_source,
+                anon=True,
+                type="binary",
+            )
+            .filter(C("file.path").glob("*.wav"))
+            .limit(1)
+            .map(
+                Helper(
+                    model=emotions_model,
+                    device=device,
+                ),
+                params=["file"],
+                output={"model_output": dict, "error": str},
+            )
+            .select("file.source", "file.path", "model_output", "error")
+            .show()
         )
-        .filter(C("file.path").glob("*.wav"))
-        .limit(1)
-        .map(
-            Helper(
-                model="Krithika-p/my_awesome_emotions_model",
-                device=device,
-            ),
-            params=["file"],
-            output={"model_output": dict, "error": str},
-        )
-        .select("file.source", "file.path", "model_output", "error")
-        .show()
-    )
+    except FileNotFoundError:
+        print("ffmpeg binary not found, skipping audio example")
+
     print("\nLong text summarization:")
+    long_text_model = "pszemraj/led-large-book-summary"
+    hf.snapshot_download(repo_id=long_text_model, repo_type="model")
     (
         DataChain.from_storage(
             text_source,
@@ -118,7 +131,7 @@ if __name__ == "__main__":
         .limit(1)
         .map(
             Helper(
-                model="pszemraj/led-large-book-summary",
+                model=long_text_model,
                 device=device,
                 max_length=150,
             ),
