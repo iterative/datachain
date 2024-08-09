@@ -14,6 +14,7 @@ from typing import (
     get_origin,
 )
 
+import sqlalchemy as sa
 from pydantic import BaseModel, create_model
 from typing_extensions import Literal as LiteralEx
 
@@ -232,7 +233,7 @@ class SignalSchema:
         signals = [
             DEFAULT_DELIMITER.join(path)
             if not as_columns
-            else Column(DEFAULT_DELIMITER.join(path), python_to_sql(_type))
+            else sa.Column(DEFAULT_DELIMITER.join(path), python_to_sql(_type))
             for path, _type, has_subtree, _ in self.get_flat_tree()
             if not has_subtree
         ]
