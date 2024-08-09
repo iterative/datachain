@@ -9,7 +9,6 @@ import pytest
 
 from datachain.dataset import DatasetStatus
 from datachain.error import DataChainError
-from datachain.node import DirType
 from datachain.utils import JSONSerialize
 from tests.data import ENTRIES
 from tests.utils import assert_row_names, skip_if_not_sqlite
@@ -17,9 +16,7 @@ from tests.utils import assert_row_names, skip_if_not_sqlite
 
 @pytest.fixture
 def dog_entries():
-    return [
-        attrs.asdict(e) for e in ENTRIES if e.name.startswith("dog") and not e.is_dir
-    ]
+    return [attrs.asdict(e) for e in ENTRIES if e.name.startswith("dog")]
 
 
 @pytest.fixture
@@ -47,7 +44,6 @@ def dog_entries_parquet_lz4(dog_entries) -> bytes:
         adapted["sys__rand"] = 1
         adapted["location"] = b""
         adapted["source"] = b"s3://dogs"
-        adapted["dir_type"] = DirType.FILE
         return adapted
 
     dog_entries = [_adapt_row(e) for e in dog_entries]
@@ -62,7 +58,6 @@ def dog_entries_parquet_lz4(dog_entries) -> bytes:
 def schema():
     return {
         "id": {"type": "UInt64"},
-        "dir_type": {"type": "Int32"},
         "path": {"type": "String"},
         "etag": {"type": "String"},
         "version": {"type": "String"},

@@ -26,7 +26,6 @@ from datachain.utils import sql_escape_like
 
 if TYPE_CHECKING:
     from sqlalchemy.sql._typing import _ColumnsClauseArgument
-    from sqlalchemy.sql.elements import ColumnElement
     from sqlalchemy.sql.selectable import Select
     from sqlalchemy.types import TypeEngine
 
@@ -342,9 +341,7 @@ class AbstractWarehouse(ABC, Serializable):
 
         column_objects = [dr.c[c] for c in column_names]
         # include all object types - file, tar archive, tar file (subobject)
-        select_query = dr.select(*column_objects).where(
-            dr.c.dir_type.in_(DirTypeGroup.FILE) & (dr.c.is_latest == true())
-        )
+        select_query = dr.select(*column_objects).where(dr.c.is_latest == true())
         if path is None:
             return select_query
         if recursive:
@@ -421,7 +418,6 @@ class AbstractWarehouse(ABC, Serializable):
         """
 
         def _prepare_entry(entry: Entry):
-            assert entry.dir_type is not None
             return attrs.asdict(entry) | {"source": uri}
 
         return [_prepare_entry(e) for e in entries]
@@ -441,7 +437,7 @@ class AbstractWarehouse(ABC, Serializable):
         """Inserts dataset rows directly into dataset table"""
 
     @abstractmethod
-    def instr(self, source, target) -> "ColumnElement":
+    def instr(self, source, target) -> sa.ColumnElement:
         """
         Return SQLAlchemy Boolean determining if a target substring is present in
         source string column
@@ -625,7 +621,7 @@ class AbstractWarehouse(ABC, Serializable):
 
         return sa.select(
             de.c.sys__id,
-            case((de.c.is_dir == true(), DirType.DIR), else_=dr.c.dir_type).label(
+            case((de.c.is_dir == true(), DirType.DIR), else_=DirType.FILE).label(
                 "dir_type"
             ),
             de.c.path,
@@ -650,7 +646,6 @@ class AbstractWarehouse(ABC, Serializable):
             query = dr.select().where(
                 self.path_expr(dr) == path,
                 dr.c.is_latest == true(),
-                dr.c.dir_type != DirType.DIR,
             )
             row = next(self.db.execute(query), None)
             if row is not None:
@@ -660,7 +655,6 @@ class AbstractWarehouse(ABC, Serializable):
             dr.select()
             .where(
                 dr.c.is_latest == true(),
-                dr.c.dir_type != DirType.DIR,
                 dr.c.path.startswith(path),
             )
             .exists()
@@ -761,13 +755,11 @@ class AbstractWarehouse(ABC, Serializable):
 
         sub_glob = posixpath.join(path, "*")
         dr = dataset_rows
-        selections = [
+        selections: list[sa.ColumnElement] = [
             func.sum(dr.c.size),
         ]
         if count_files:
-            selections.append(
-                func.sum(dr.c.dir_type.in_(DirTypeGroup.FILE)),
-            )
+            selections.append(func.count())
         results = next(
             self.db.execute(
                 dr.select(*selections).where(
