@@ -171,7 +171,7 @@ class ClientS3(Client):
 
     def info_to_file(self, v: dict[str, Any], path: str) -> File:
         return File(
-            source=self.name,
+            source=self.uri,
             path=path,
             size=v["size"],
             version=ClientS3.clean_s3_version(v.get("VersionId", "")),
