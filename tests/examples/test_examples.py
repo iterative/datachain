@@ -24,16 +24,14 @@ multimodal_examples = [
     filename
     for filename in glob.glob("examples/multimodal/**/*.py", recursive=True)
     # no OpenAI token
-    # and hf download painfully slow
-    if "openai" not in filename and "hf" not in filename
+    if "openai" not in filename
 ]
 
 computer_vision_examples = [
     filename
     for filename in glob.glob("examples/computer_vision/**/*.py", recursive=True)
     # fashion product images tutorial out of scope
-    # and hf download painfully slow
-    if "image_desc" not in filename and "fashion_product_images" not in filename
+    if "fashion_product_images" not in filename
 ]
 
 

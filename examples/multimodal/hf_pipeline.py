@@ -1,4 +1,4 @@
-# pip install scipy torch transformers huggingface-hub[hf_transfer]
+# pip install scipy torch transformers huggingface_hub[hf_transfer]
 # NOTE: also need to install ffmpeg binary
 import json
 import os

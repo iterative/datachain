@@ -1,5 +1,8 @@
 # pip install accelerate torch
+import os
+
 import torch
+from huggingface_hub import HfApi
 from transformers import (
     AutoProcessor,
     LlavaForConditionalGeneration,
@@ -19,6 +22,13 @@ model = "llava-hf/llava-1.5-7b-hf"
 
 source = "gs://datachain-demo/dogs-and-cats/"
 
+model = "llava-hf/llava-1.5-7b-hf"
+
+os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
+hf = HfApi()
+hf.snapshot_download(repo_id=model, repo_type="model")
+
+
 # device='mps' not supported
 if torch.cuda.is_available():
     device = "cuda"
@@ -36,7 +46,7 @@ def infer_dtype(device):
 
 
 class LLaVADescribe(Mapper):
-    def __init__(self, device="cpu", model="llava-hf/llava-1.5-7b-hf", max_tokens=300):
+    def __init__(self, device="cpu", model=model, max_tokens=300):
         self.device = device
         self.model_name = model
         self.max_tokens = max_tokens
