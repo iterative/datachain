@@ -3,6 +3,7 @@ from typing import Any
 from adlfs import AzureBlobFileSystem
 from tqdm import tqdm
 
+from datachain.lib.file import File
 from datachain.node import Entry
 
 from .fsspec import DELIMITER, Client, ResultQueue
@@ -16,6 +17,18 @@ class AzureClient(Client):
     def convert_info(self, v: dict[str, Any], path: str) -> Entry:
         version_id = v.get("version_id")
         return Entry.from_file(
+            path=path,
+            etag=v.get("etag", "").strip('"'),
+            version=version_id or "",
+            is_latest=version_id is None or bool(v.get("is_current_version")),
+            last_modified=v["last_modified"],
+            size=v.get("size", ""),
+        )
+
+    def info_to_file(self, v: dict[str, Any], path: str) -> File:
+        version_id = v.get("version_id")
+        return File(
+            source=self.uri,
             path=path,
             etag=v.get("etag", "").strip('"'),
             version=version_id or "",

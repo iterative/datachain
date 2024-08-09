@@ -101,7 +101,6 @@ def list_bucket(uri: str, client_config=None, fetch_workers=FETCH_WORKERS) -> Ca
     def list_func() -> Iterator[File]:
         config = client_config or {}
         client, path = Client.parse_url(uri, None, **config)  # type: ignore[arg-type]
-        files_gen = iter_over_async(_scandir(client, path, fetch_workers), get_loop())
-        yield from files_gen
+        yield from iter_over_async(_scandir(client, path, fetch_workers), get_loop())
 
     return list_func
