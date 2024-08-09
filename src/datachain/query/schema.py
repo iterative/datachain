@@ -9,7 +9,7 @@ import attrs
 import sqlalchemy as sa
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 
-from datachain.sql.types import JSON, Boolean, DateTime, Int, Int64, SQLType, String
+from datachain.sql.types import JSON, Boolean, DateTime, Int64, SQLType, String
 
 if TYPE_CHECKING:
     from datachain.catalog import Catalog
@@ -222,7 +222,6 @@ class DatasetRow:
         "path": String,
         "size": Int64,
         "location": JSON,
-        "dir_type": Int,
         "owner_name": String,
         "owner_id": String,
         "is_latest": Boolean,
@@ -237,7 +236,6 @@ class DatasetRow:
         source: str = "",
         size: int = 0,
         location: Optional[dict[str, Any]] = None,
-        dir_type: int = 0,
         owner_name: str = "",
         owner_id: str = "",
         is_latest: bool = True,
@@ -268,7 +266,6 @@ class DatasetRow:
             path,
             size,
             location,
-            dir_type,
             owner_name,
             owner_id,
             is_latest,
