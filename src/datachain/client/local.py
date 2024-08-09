@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 
 from fsspec.implementations.local import LocalFileSystem
 
+from datachain.lib.file import File
 from datachain.node import Entry
 from datachain.storage import StorageURI
 
@@ -142,6 +143,16 @@ class FileClient(Client):
             is_latest=True,
             last_modified=datetime.fromtimestamp(v["mtime"], timezone.utc),
             size=v.get("size", ""),
+        )
+
+    def info_to_file(self, v: dict[str, Any], path: str) -> File:
+        return File(
+            source=self.uri,
+            path=path,
+            size=v.get("size", ""),
+            etag=v["mtime"].hex(),
+            is_latest=True,
+            last_modified=datetime.fromtimestamp(v["mtime"], timezone.utc),
         )
 
     def fetch_nodes(

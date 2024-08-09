@@ -9,6 +9,7 @@ from dateutil.parser import isoparse
 from gcsfs import GCSFileSystem
 from tqdm import tqdm
 
+from datachain.lib.file import File
 from datachain.node import Entry
 
 from .fsspec import DELIMITER, Client, ResultQueue
@@ -113,6 +114,17 @@ class GCSClient(Client):
 
     def convert_info(self, v: dict[str, Any], path: str) -> Entry:
         return Entry.from_file(
+            path=path,
+            etag=v.get("etag", ""),
+            version=v.get("generation", ""),
+            is_latest=not v.get("timeDeleted"),
+            last_modified=self.parse_timestamp(v["updated"]),
+            size=v.get("size", ""),
+        )
+
+    def info_to_file(self, v: dict[str, Any], path: str) -> File:
+        return File(
+            source=self.uri,
             path=path,
             etag=v.get("etag", ""),
             version=v.get("generation", ""),

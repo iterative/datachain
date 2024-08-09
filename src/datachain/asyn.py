@@ -224,3 +224,23 @@ class OrderedMapper(AsyncMapper[InputT, ResultT]):
     async def _break_iteration(self) -> None:
         self.heap = []
         self._push_result(self._next_yield, None)
+
+
+def iter_over_async(ait, loop):
+    """Wrap an asynchronous iterator into a synchronous one"""
+    ait = ait.__aiter__()
+
+    # helper async fn that just gets the next element from the async iterator
+    async def get_next():
+        try:
+            obj = await ait.__anext__()
+            return False, obj
+        except StopAsyncIteration:
+            return True, None
+
+    # actual sync iterator
+    while True:
+        done, obj = asyncio.run_coroutine_threadsafe(get_next(), loop).result()
+        if done:
+            break
+        yield obj

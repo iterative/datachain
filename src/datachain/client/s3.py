@@ -5,6 +5,7 @@ from botocore.exceptions import NoCredentialsError
 from s3fs import S3FileSystem
 from tqdm import tqdm
 
+from datachain.lib.file import File
 from datachain.node import Entry
 
 from .fsspec import DELIMITER, Client, ResultQueue
@@ -166,4 +167,15 @@ class ClientS3(Client):
             size=v["size"],
             owner_name=v.get("Owner", {}).get("DisplayName", ""),
             owner_id=v.get("Owner", {}).get("ID", ""),
+        )
+
+    def info_to_file(self, v: dict[str, Any], path: str) -> File:
+        return File(
+            source=self.uri,
+            path=path,
+            size=v["size"],
+            version=ClientS3.clean_s3_version(v.get("VersionId", "")),
+            etag=v.get("ETag", "").strip('"'),
+            is_latest=v.get("IsLatest", True),
+            last_modified=v.get("LastModified", ""),
         )

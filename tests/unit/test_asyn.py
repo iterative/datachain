@@ -8,7 +8,7 @@ from fsspec.asyn import sync
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
-from datachain.asyn import AsyncMapper, OrderedMapper, get_loop
+from datachain.asyn import AsyncMapper, OrderedMapper, get_loop, iter_over_async
 
 
 async def fake_io(i):
@@ -161,3 +161,31 @@ def test_mapper_exception_hypothesis(inputs, workers, create_mapper):
                 list(mapper.iterate(timeout=4))
         finally:
             join_all_tasks(loop)
+
+
+def test_iter_over_async():
+    async def gen():
+        yield 1
+        yield 2
+
+    res = iter_over_async(gen(), get_loop())
+    assert list(res) == [1, 2]
+
+
+def test_iter_over_async_exception():
+    async def gen():
+        yield 1
+        raise Exception("Some error")
+
+    with pytest.raises(Exception) as excinfo:
+        list(iter_over_async(gen(), get_loop()))
+    assert str(excinfo.value) == "Some error"
+
+
+def test_iter_over_async_empty():
+    async def gen():
+        for i in []:
+            yield i
+
+    res = iter_over_async(gen(), get_loop())
+    assert list(res) == []
