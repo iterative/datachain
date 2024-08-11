@@ -322,6 +322,9 @@ Tutorials
 
 * `Getting Started`_
 * `Multimodal <examples/multimodal/clip_fine_tuning.ipynb>`_ (try in `Colab <https://colab.research.google.com/github/iterative/datachain/blob/main/examples/multimodal/clip_fine_tuning.ipynb>`__)
+* `LLM evaluations <examples/llm/llm_chatbot_evaluation.ipynb>`_
+* `Reading JSON metadata <examples/get_started/json-metadata-tutorial.ipynb>`_
+
 
 Contributions
 -------------
