@@ -16,32 +16,27 @@
 AI 🔗 DataChain
 ----------------
 
-DataChain is a modern data-frame library designed for artificial intelligence.
-It is made to organize your unstructured data into datasets and wrangle it at scale.
-
-.. code:: console
-
-   $ pip install datachain
+DataChain is a modern Pythonic data-frame library designed for artificial intelligence.
+It is made to organize your unstructured data into datasets and wrangle it at scale on
+your local machine.
 
 Key Features
 ============
 
-📂 **Storage as a Source of Truth**
-   - Process unstructured data directly from storage without creating redundant copies:
-     images, video, text, PDFs, JSONs, parquet
-   - Supported storages: S3, GCP, Azure, and local file systems
-   - Combine files with metadata into persistent, versioned datasets.
+📂 **Storage as a Source of Truth** (S3, GCP, Azure, and local file systems)
+   - Process unstructured data in storage without redundant copies.
+   - Support data in images, video, text, PDFs, JSONs, CSVs, parquet.
+   - Join files and metadata together into persistent, versioned, columnar datasets.
 
-🧠 **Metadata Enrichment and Processing.**
-   - Generate and enrich metadata with local AI models and LLM API calls
-   - Transform metadata using traditional methods like filtering, joining, group-by and
-     others.
+🐍 **Python-friendly data pipelines.**
+   - Operate Python objects and object fields.
+   - Eliminate the need for passing data to and from SQL.
+   - No need for Spark jobs or external parallelization libraries.
 
-🐍 **Python-friendly data wrangling.**
-   - Leverage Python code for data processing.
-   - Apply vectorized operrations on Python objects and object fields: filter, join,
-     group-by, etc
-   - Eliminate the need for SQL in your data processing pipeline
+🧠 **Data Enrichment and Processing.**
+   - Generate metadata columns with local AI models and LLM API calls.
+   - Curate very large datasets with filtering, joining, and grouping by AI metadata.
+   - Pass datasets to Pytorch and Tensorflow, or export back into storage.
 
 🚀 **Efficiency.**
    - Handle out-of-memory workloads.
@@ -49,20 +44,9 @@ Key Features
    - Vectorized operations on Python object fields: sum, count, avg, etc
 
 
-Data Structures
-===============
+.. code:: console
 
-DataChain introduces expressive data structures tailored for AI workload.
-DataChain name comes from these major data structures.
-
-- **Dataset:** Preserves file references and metadata.
-
-  - Handles Python object serialization and dataset versioning.
-
-  - Supports both vectorized (e.g., filtering, grouping) and non-vectorized operations
-    (e.g., ML inference, LLM calls)
-
-- **Chain** is a sequence of operations on datasets.
+   $ pip install datachain
 
 
 Quick Start
