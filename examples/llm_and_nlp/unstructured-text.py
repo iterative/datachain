@@ -8,6 +8,7 @@
 # "pdf", "ppt", "pptx", "rtf", "rst", "tsv", "xlsx"
 
 from transformers import pipeline
+from unstructured.partition.pdf import PartitionStrategy
 from unstructured.partition.pdf import partition_pdf as partition
 from unstructured.staging.base import convert_to_dataframe
 
@@ -20,7 +21,9 @@ source = "gs://datachain-demo/nlp-infobooks/"
 
 def partition_object(file):
     with file.open() as raw:
-        elements = partition(file=raw, metadata_filename=file.name)
+        elements = partition(
+            file=raw, metadata_filename=file.name, strategy=PartitionStrategy.FAST
+        )
     title = str(elements[0])
     text = "\n\n".join([str(el) for el in elements])
     df = convert_to_dataframe(elements)
