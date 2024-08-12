@@ -577,6 +577,7 @@ class Catalog:
         warehouse_ready_callback: Optional[
             Callable[["AbstractWarehouse"], None]
         ] = None,
+        in_memory: bool = False,
     ):
         datachain_dir = DataChainDir(cache=cache_dir, tmp=tmp_dir)
         datachain_dir.init()
@@ -590,6 +591,7 @@ class Catalog:
             "tmp_dir": tmp_dir,
         }
         self._warehouse_ready_callback = warehouse_ready_callback
+        self.in_memory = in_memory
 
     @cached_property
     def warehouse(self) -> "AbstractWarehouse":

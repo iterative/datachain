@@ -265,7 +265,11 @@ class SQLiteIDGenerator(AbstractDBIDGenerator):
         table_prefix: Optional[str] = None,
         skip_db_init: bool = False,
         db_file: Optional[str] = None,
+        in_memory: bool = False,
     ):
+        if in_memory:
+            db_file = ":memory:"
+
         db = db or SQLiteDatabaseEngine.from_db_file(db_file)
 
         super().__init__(db, table_prefix, skip_db_init)
@@ -383,6 +387,7 @@ class SQLiteMetastore(AbstractDBMetastore):
         partial_id: Optional[int] = None,
         db: Optional["SQLiteDatabaseEngine"] = None,
         db_file: Optional[str] = None,
+        in_memory: bool = False,
     ):
         self.schema: DefaultSchema = DefaultSchema()
         super().__init__(id_generator, uri, partial_id)
@@ -390,6 +395,9 @@ class SQLiteMetastore(AbstractDBMetastore):
         # needed for dropping tables in correct order for tests because of
         # foreign keys
         self.default_table_names: list[str] = []
+
+        if in_memory:
+            db_file = ":memory:"
 
         self.db = db or SQLiteDatabaseEngine.from_db_file(db_file)
 
@@ -555,9 +563,13 @@ class SQLiteWarehouse(AbstractWarehouse):
         id_generator: "SQLiteIDGenerator",
         db: Optional["SQLiteDatabaseEngine"] = None,
         db_file: Optional[str] = None,
+        in_memory: bool = False,
     ):
         self.schema: DefaultSchema = DefaultSchema()
         super().__init__(id_generator)
+
+        if in_memory:
+            db_file = ":memory:"
 
         self.db = db or SQLiteDatabaseEngine.from_db_file(db_file)
 
