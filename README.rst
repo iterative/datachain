@@ -23,34 +23,35 @@ your local machine.
 Key Features
 ============
 
-📂 **Storage as a Source of Truth** (S3, GCP, Azure, and local file systems)
-   - Process unstructured data in storage without redundant copies.
-   - Support data in images, video, text, PDFs, JSONs, CSVs, parquet.
+📂 **Storage as a Source of Truth.**
+   - Process unstructured data without redundant copies: S3, GCP, Azure, and local
+     file systems.
+   - Multimodal data: images, video, text, PDFs, JSONs, CSVs, parquet.
    - Join files and metadata together into persistent, versioned, columnar datasets.
 
 🐍 **Python-friendly data pipelines.**
-   - Operate Python objects and object fields.
-   - Eliminate the need for passing data to and from SQL.
-   - No need for Spark jobs or external parallelization libraries.
+   - Operate on Python objects and object fields.
+   - Built-in parallelization and out-of-memory compute without a need in SQL or
+     Spark jobs.
 
 🧠 **Data Enrichment and Processing.**
-   - Generate metadata columns with local AI models and LLM API calls.
-   - Curate very large datasets with filtering, joining, and grouping by AI metadata.
+   - Generate metadata columns using local AI models and LLM APIs.
+   - Filter, join, and group by AI metadata. Vector similarity search.
    - Pass datasets to Pytorch and Tensorflow, or export back into storage.
 
 🚀 **Efficiency.**
-   - Handle out-of-memory workloads.
-   - Optimize performance with parallelization and data caching.
-   - Vectorized operations on Python object fields: sum, count, avg, etc
+   - Parallelization, out-of-memory workloads and data caching.
+   - Vectorized operations on Python object fields: sum, count, avg, etc.
+   - Vector search on embeddings.
 
+
+Quick Start
+-----------
 
 .. code:: console
 
    $ pip install datachain
 
-
-Quick Start
------------
 
 Data curation with a local model
 =================================
