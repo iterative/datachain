@@ -74,7 +74,7 @@ plt.show()
 
 If interested to see more multimodal examples for DataChain, please follow this tutorial:
 
-[https://github.com/iterative/datachain/blob/main/examples/multimodal/clip_fine_tuning.ipynb](https://github.com/iterative/datachain/blob/main/examples/multimodal/clip_fine_tuning.ipynb)
+[https://github.com/iterative/datachain-examples/blob/main/multimodal/clip_fine_tuning.ipynb](https://github.com/iterative/datachain-examples/blob/main/multimodal/clip_fine_tuning.ipynb) [Google Colab](https://colab.research.google.com/github/iterative/datachain-examples/blob/main/multimodal/clip_fine_tuning.ipynb)
 
 ### Handling Python objects
 
@@ -133,7 +133,7 @@ chain = (
 
 If you are interested in more LLM evaluation examples for DataChain, please follow this tutorial:
 
-[https://github.com/iterative/datachain/blob/main/examples/llm/llm_chatbot_evaluation.ipynb](https://github.com/iterative/datachain/blob/main/examples/llm/llm_chatbot_evaluation.ipynb) [Google Colab](https://colab.research.google.com/github/iterative/datachain/blob/main/examples/llm/llm_chatbot_evaluation.ipynb)
+[https://github.com/iterative/datachain-examples/blob/main/llm/llm_chatbot_evaluation.ipynb](https://github.com/iterative/datachain-examples/blob/main/llm/llm_chatbot_evaluation.ipynb) [Google Colab](https://colab.research.google.com/github/iterative/datachain-examples/blob/main/llm/llm_chatbot_evaluation.ipynb)
 
 ### Vectorized analytics
 
@@ -279,7 +279,7 @@ images_with_dogs.select("annotations", "file.name").show()
 ```
 For in-depth review of working with JSON metadata, please follow this tutorial:
 
-[https://github.com/iterative/datachain/blob/main/examples/get_started/json-metadata-tutorial.ipynb](https://github.com/iterative/datachain/blob/main/examples/get_started/json-metadata-tutorial.ipynb) [Google Colab](https://colab.research.google.com/github/iterative/datachain/blob/main/examples/get_started/json-metadata-tutorial.ipynb)
+[https://github.com/iterative/datachain-examples/blob/main/formats/json-metadata-tutorial.ipynb](https://github.com/iterative/datachain-examples/blob/main/formats/json-metadata-tutorial.ipynb) [Google Colab](https://colab.research.google.com/github/iterative/datachain-examples/blob/main/formats/json-metadata-tutorial.ipynb)
 
 ### Passing data to training
 
@@ -299,4 +299,4 @@ train(loader, model, optimizer)
 
 See a larger example for CLIP fine-tuning here:
 
-[https://github.com/iterative/datachain/blob/main/examples/multimodal/clip_fine_tuning.ipynb](https://github.com/iterative/datachain/blob/main/examples/multimodal/clip_fine_tuning.ipynb) [Google Colab](https://colab.research.google.com/github/iterative/datachain/blob/main/examples/multimodal/clip_fine_tuning.ipynb)
+[https://github.com/iterative/datachain-examples/blob/main/multimodal/clip_fine_tuning.ipynb](https://github.com/iterative/datachain-examples/blob/main/multimodal/clip_fine_tuning.ipynb) [Google Colab](https://colab.research.google.com/github/iterative/datachain-examples/blob/main/multimodal/clip_fine_tuning.ipynb)
