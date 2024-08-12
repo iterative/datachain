@@ -18,6 +18,7 @@ nltk.download("averaged_perceptron_tagger_eng")
 
 
 from transformers import pipeline
+from unstructured.partition.pdf import PartitionStrategy
 from unstructured.partition.pdf import partition_pdf as partition
 from unstructured.staging.base import convert_to_dataframe
 
@@ -30,7 +31,9 @@ source = "gs://datachain-demo/nlp-infobooks/*.pdf"
 
 def partition_object(file):
     with file.open() as raw:
-        elements = partition(file=raw, metadata_filename=file.name)
+        elements = partition(
+            file=raw, metadata_filename=file.name, strategy=PartitionStrategy.FAST
+        )
     title = str(elements[0])
     text = "\n\n".join([str(el) for el in elements])
     df = convert_to_dataframe(elements)
@@ -49,9 +52,10 @@ def summarize(clean):
     return (summary,)
 
 
-ds = (
-    DataChain.from_storage(source, anon=True)
+dc = (
+    DataChain.from_storage(source)
     .settings(cache=True)
+    .limit(1)
     .map(
         partition_object,
         params=["file"],
@@ -59,14 +63,14 @@ ds = (
     )
 )
 
-ds = ds.map(cleanse, output={"clean": str})
-ds = ds.map(summarize, output={"summary": str})
-results = ds.select("text", "summary").collect()
+dc = dc.map(cleanse, output={"clean": str})
+dc = dc.map(summarize, output={"summary": str})
+results = dc.select("text", "summary").collect()
 
 for story in results:
-    print("\n *********** the original: ********** \n")
+    print("\n *********** the original: ********** ")
     print(story[0])
 
-    print("\n *********** the summary: *********** \n")
+    print("\n *********** the summary: *********** ")
     print(story[1])
     print("\n")
