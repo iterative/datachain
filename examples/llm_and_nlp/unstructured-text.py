@@ -54,7 +54,6 @@ def summarize(clean):
 
 dc = (
     DataChain.from_storage(source)
-    .settings(cache=True)
     .limit(1)
     .map(
         partition_object,
