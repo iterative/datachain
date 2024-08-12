@@ -1,11 +1,6 @@
 #
-# pip install unstructured[all-docs] huggingface_hub[hf_transfer]
+# pip install unstructured[pdf] nltk==3.8.1 huggingface_hub[hf_transfer]
 #
-# partition_object supports via unstructured library:
-#
-# "csv", "doc", "docx", "epub", "image", "md", "msg", "odt", "org",
-# "pdf", "ppt", "pptx", "rtf", "rst", "tsv", "xlsx"
-
 import os
 
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
