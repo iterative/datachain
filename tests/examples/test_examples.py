@@ -32,7 +32,7 @@ computer_vision_examples = [
     for filename in glob.glob("examples/computer_vision/**/*.py", recursive=True)
     # fashion product images tutorial out of scope
     # and hf download painfully slow
-    if "image_desc" not in filename and "fashion_product_images" not in filename
+    if "fashion_product_images" not in filename
 ]
 
 

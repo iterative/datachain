@@ -1,4 +1,7 @@
-# pip install accelerate torch
+# pip install accelerate torch huggingface_hub[hf_transfer]
+import os
+
+os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 import torch
 from transformers import (
     AutoProcessor,
@@ -7,8 +10,6 @@ from transformers import (
 
 from datachain import C, DataChain, Mapper
 
-model = "llava-hf/llava-1.5-7b-hf"
-
 # HuggingFace supports the following base models:
 #
 # "llava-hf/llava-1.5-7b-hf"
@@ -16,8 +17,10 @@ model = "llava-hf/llava-1.5-7b-hf"
 # "llava-hf/bakLlava-v1-hf"
 #
 # https://huggingface.co/llava-hf
+model = "llava-hf/bakLlava-v1-hf"
 
 source = "gs://datachain-demo/dogs-and-cats/"
+
 
 # device='mps' not supported
 if torch.cuda.is_available():
@@ -46,7 +49,7 @@ class LLaVADescribe(Mapper):
         self.torch_dtype = infer_dtype(self.device)
         self.processor = AutoProcessor.from_pretrained(self.model_name)
         self.model = LlavaForConditionalGeneration.from_pretrained(
-            self.model_name, torch_dtype=self.torch_dtype, low_cpu_mem_usage=True
+            self.model_name, torch_dtype=self.torch_dtype, low_cpu_mem_usage=False
         )
         self.model.to(self.device)
 
