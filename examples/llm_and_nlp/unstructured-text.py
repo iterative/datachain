@@ -1,21 +1,31 @@
+# ruff: noqa: E402
 #
-# pip install unstructured[all-docs]
-# libmagic
+# pip install unstructured[all-docs] huggingface_hub[hf_transfer]
 #
 # partition_object supports via unstructured library:
 #
 # "csv", "doc", "docx", "epub", "image", "md", "msg", "odt", "org",
 # "pdf", "ppt", "pptx", "rtf", "rst", "tsv", "xlsx"
 
+import os
+
+os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
+
+import nltk
+
+nltk.download("punkt_tab")
+nltk.download("averaged_perceptron_tagger_eng")
+
+
 from transformers import pipeline
 from unstructured.partition.pdf import partition_pdf as partition
 from unstructured.staging.base import convert_to_dataframe
 
-from datachain import C, DataChain
+from datachain import DataChain
 
 device = "cpu"
 model = "pszemraj/led-large-book-summary"
-source = "gs://datachain-demo/nlp-infobooks/"
+source = "gs://datachain-demo/nlp-infobooks/*.pdf"
 
 
 def partition_object(file):
@@ -40,9 +50,8 @@ def summarize(clean):
 
 
 ds = (
-    DataChain.from_storage(source)
-    .filter(C("file.path").glob("*.pdf"))
-    .limit(1)
+    DataChain.from_storage(source, anon=True)
+    .settings(cache=True)
     .map(
         partition_object,
         params=["file"],
@@ -55,9 +64,9 @@ ds = ds.map(summarize, output={"summary": str})
 results = ds.select("text", "summary").collect()
 
 for story in results:
-    print("\n *********** the original: ********** ")
+    print("\n *********** the original: ********** \n")
     print(story[0])
 
-    print("\n *********** the summary: *********** ")
+    print("\n *********** the summary: *********** \n")
     print(story[1])
     print("\n")
