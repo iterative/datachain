@@ -64,9 +64,9 @@ jobs:
             pyv: '3.9'
           - os: macos-latest
             pyv: '3.12'
-          - os: windows-latest-8-cores
+          - os: windows-latest
             pyv: '3.9'
-          - os: windows-latest-8-cores
+          - os: windows-latest
             pyv: '3.12'
 
     steps:
@@ -115,7 +115,7 @@ jobs:
 
   studio:
     if: '!github.event.pull_request.head.repo.fork'
-    runs-on: ubuntu-latest-16-cores
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         pyv: ['3.12']
@@ -207,7 +207,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest-16-cores, macos-latest, windows-latest-8-cores]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         pyv: ['3.9', '3.12']
         group: ['get_started', 'llm_and_nlp or computer_vision', 'multimodal']
     steps:
