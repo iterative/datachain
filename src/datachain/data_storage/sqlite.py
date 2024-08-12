@@ -122,6 +122,11 @@ class SQLiteDatabaseEngine(DatabaseEngine):
             engine = sqlalchemy.create_engine(
                 "sqlite+pysqlite:///", creator=lambda: db, future=True
             )
+            # ensure we run SA on_connect init (e.g it registers regexp function),
+            # also makes sure that it's consistent. Otherwise in some cases it
+            # seems we are getting different results if engine object is used in a
+            # different thread first and enine is not used in the Main thread.
+            engine.connect().close()
 
             db.isolation_level = None  # Use autocommit mode
             db.execute("PRAGMA foreign_keys = ON")

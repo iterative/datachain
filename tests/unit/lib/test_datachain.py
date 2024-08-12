@@ -5,6 +5,8 @@ from unittest.mock import ANY
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 import pytest
 from pydantic import BaseModel
 
@@ -984,12 +986,19 @@ def test_from_csv_null_collect(tmp_dir, test_session):
     # See https://github.com/xzkostyan/clickhouse-sqlalchemy/issues/189.
     df = pd.DataFrame(DF_DATA)
     height = [70, 65, None, 72, 68]
+    gender = ["f", "m", None, "m", "f"]
     df["height"] = height
+    df["gender"] = gender
     path = tmp_dir / "test.csv"
     df.to_csv(path, index=False)
     dc = DataChain.from_csv(path.as_uri(), object_name="csv", session=test_session)
     for i, row in enumerate(dc.collect()):
-        assert row[1].height == height[i]
+        # None value in numeric column will get converted to nan.
+        if not height[i]:
+            assert math.isnan(row[1].height)
+        else:
+            assert row[1].height == height[i]
+        assert row[1].gender == gender[i]
 
 
 def test_from_csv_nrows(tmp_dir, test_session):
@@ -1157,6 +1166,42 @@ def test_to_pandas_multi_level(test_session):
     assert "nnn" in df["t1"].columns
     assert "count" in df["t1"].columns
     assert df["t1"]["count"].tolist() == [3, 5, 1]
+
+
+def test_to_pandas_empty(test_session):
+    df = (
+        DataChain.from_values(t1=[1, 2, 3], session=test_session)
+        .limit(0)
+        .to_pandas(flatten=True)
+    )
+
+    assert df.empty
+    assert "t1" in df.columns
+    assert df["t1"].tolist() == []
+
+    df = (
+        DataChain.from_values(my_n=features_nested, session=test_session)
+        .limit(0)
+        .to_pandas(flatten=False)
+    )
+
+    assert df.empty
+    assert df["my_n"].empty
+    assert list(df.columns) == [
+        ("my_n", "label", ""),
+        ("my_n", "fr", "nnn"),
+        ("my_n", "fr", "count"),
+    ]
+
+    df = (
+        DataChain.from_values(my_n=features_nested, session=test_session)
+        .limit(0)
+        .to_pandas(flatten=True)
+    )
+
+    assert df.empty
+    assert df["my_n.fr.nnn"].tolist() == []
+    assert list(df.columns) == ["my_n.label", "my_n.fr.nnn", "my_n.fr.count"]
 
 
 def test_mutate(test_session):
@@ -1497,3 +1542,48 @@ def test_mutate_with_expression_without_type(catalog):
     assert str(excinfo.value) == (
         "Error for column new: Cannot infer type with expression id - :id_1"
     )
+
+
+def test_from_values_nan_inf(tmp_dir, catalog):
+    vals = [float("nan"), float("inf"), float("-inf")]
+    dc = DataChain.from_values(vals=vals)
+    res = list(dc.collect("vals"))
+    assert np.isnan(res[0])
+    assert np.isposinf(res[1])
+    assert np.isneginf(res[2])
+
+
+def test_from_pandas_nan_inf(tmp_dir, catalog):
+    vals = [float("nan"), float("inf"), float("-inf")]
+    df = pd.DataFrame({"vals": vals})
+    dc = DataChain.from_pandas(df)
+    res = list(dc.collect("vals"))
+    assert np.isnan(res[0])
+    assert np.isposinf(res[1])
+    assert np.isneginf(res[2])
+
+
+def test_from_parquet_nan_inf(tmp_dir, catalog):
+    vals = [float("nan"), float("inf"), float("-inf")]
+    tbl = pa.table({"vals": vals})
+    path = tmp_dir / "test.parquet"
+    pq.write_table(tbl, path)
+    dc = DataChain.from_parquet(path.as_uri())
+
+    res = list(dc.collect("vals"))
+    assert np.isnan(res[0])
+    assert np.isposinf(res[1])
+    assert np.isneginf(res[2])
+
+
+def test_from_csv_nan_inf(tmp_dir, catalog):
+    vals = [float("nan"), float("inf"), float("-inf")]
+    df = pd.DataFrame({"vals": vals})
+    path = tmp_dir / "test.csv"
+    df.to_csv(path, index=False)
+    dc = DataChain.from_csv(path.as_uri())
+
+    res = list(dc.collect("vals"))
+    assert np.isnan(res[0])
+    assert np.isposinf(res[1])
+    assert np.isneginf(res[2])
