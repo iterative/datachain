@@ -1,4 +1,3 @@
-# ruff: noqa: E402
 #
 # pip install unstructured[all-docs] huggingface_hub[hf_transfer]
 #
@@ -10,12 +9,6 @@
 import os
 
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
-
-import nltk
-
-nltk.download("punkt_tab")
-nltk.download("averaged_perceptron_tagger_eng")
-
 
 from transformers import pipeline
 from unstructured.partition.pdf import PartitionStrategy
