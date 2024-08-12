@@ -1,11 +1,15 @@
 #
-# pip install unstructured[all-docs]
+# pip install unstructured[all-docs] huggingface_hub[hf_transfer]
 # libmagic
 #
 # partition_object supports via unstructured library:
 #
 # "csv", "doc", "docx", "epub", "image", "md", "msg", "odt", "org",
 # "pdf", "ppt", "pptx", "rtf", "rst", "tsv", "xlsx"
+
+import os
+
+os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 
 from transformers import pipeline
 from unstructured.partition.pdf import PartitionStrategy
