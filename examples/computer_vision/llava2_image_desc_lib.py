@@ -51,7 +51,7 @@ class LLaVADescribe(Mapper):
         self.model = LlavaForConditionalGeneration.from_pretrained(
             self.model_name, torch_dtype=self.torch_dtype, low_cpu_mem_usage=False
         )
-        self.model.to(self.device)
+        self.model.to(self.device, self.torch_dtype)
 
     def process(self, file):
         inputs = self.processor(
