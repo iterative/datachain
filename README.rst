@@ -167,7 +167,7 @@ Mistral API key at https://console.mistral.ai
 
 .. code:: shell
 
-    $ pip install mistralai>=1.0.0
+    $ pip install mistralai (Requires version >=1.0.0)
     $ export MISTRAL_API_KEY=_your_key_
 
 DataChain can parallelize API calls; the free Mistral tier supports up to 4 requests at the same time.
