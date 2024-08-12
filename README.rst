@@ -167,25 +167,24 @@ Mistral API key at https://console.mistral.ai
 
 .. code:: shell
 
-    $ pip install mistralai
+    $ pip install mistralai (Requires version >=1.0.0)
     $ export MISTRAL_API_KEY=_your_key_
 
 DataChain can parallelize API calls; the free Mistral tier supports up to 4 requests at the same time.
 
 .. code:: py
 
-    from mistralai.client import MistralClient
-    from mistralai.models.chat_completion import ChatMessage
+    from mistralai import Mistral
     from datachain import File, DataChain, Column
 
     PROMPT = "Was this dialog successful? Answer in a single word: Success or Failure."
 
     def eval_dialogue(file: File) -> bool:
-         client = MistralClient()
-         response = client.chat(
+         client = Mistral()
+         response = client.chat.complete(
              model="open-mixtral-8x22b",
-             messages=[ChatMessage(role="system", content=PROMPT),
-                       ChatMessage(role="user", content=file.read())])
+             messages=[{"role": "system", "content": PROMPT},
+                       {"role": "user", "content": file.read()}])
          result = response.choices[0].message.content
          return result.lower().startswith("success")
 
@@ -225,8 +224,8 @@ Instead of extracting this information from the Mistral response data structure 
 
 .. code:: py
 
-    from mistralai.client import MistralClient
-    from mistralai.models.chat_completion import ChatMessage, ChatCompletionResponse
+    from mistralai import Mistral
+    from mistralai.models import ChatCompletionResponse
     from datachain import File, DataChain, Column
 
     PROMPT = "Was this dialog successful? Answer in a single word: Success or Failure."
@@ -235,8 +234,8 @@ Instead of extracting this information from the Mistral response data structure 
          client = MistralClient()
          return client.chat(
              model="open-mixtral-8x22b",
-             messages=[ChatMessage(role="system", content=PROMPT),
-                       ChatMessage(role="user", content=file.read())])
+             messages=[{"role": "system", "content": PROMPT},
+                       {"role": "user", "content": file.read()}])
 
     chain = (
        DataChain.from_storage("gs://datachain-demo/chatbot-KiT/", object_name="file")
