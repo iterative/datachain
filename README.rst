@@ -16,90 +16,42 @@
 AI 🔗 DataChain
 ----------------
 
-DataChain is a data-frame library designed for AI-specific scenarios. It helps ML and
-AI engineers build a metadata layer on top of unstructured files and analyze data using
-this layer.
+DataChain is a modern Pythonic data-frame library designed for artificial intelligence.
+It is made to organize your unstructured data into datasets and wrangle it at scale on
+your local machine.
 
-📂 **Raw Files Processing**
-   Process raw files (images, video, text, PDFs) directly from storage (S3, GCP, Azure,
-   Local), version and update datasets.
+Key Features
+============
 
-🌟 **Metadata layer.**
-   Build a metadata layer on top of files using structured sources like CSV, Parquet,
-   and JSON files.
+📂 **Storage as a Source of Truth.**
+   - Process unstructured data without redundant copies: S3, GCP, Azure, and local
+     file systems.
+   - Multimodal data: images, video, text, PDFs, JSONs, CSVs, parquet.
+   - Join files and metadata together into persistent, versioned, columnar datasets.
 
-⭐ **Metadata enrichment.**
-   Enhance the metadata layer with outputs from local ML model inferences and LLM calls.
+🐍 **Python-friendly data pipelines.**
+   - Operate on Python objects and object fields.
+   - Built-in parallelization and out-of-memory compute without a need in SQL or
+     Spark jobs.
 
-🛠️ **Data Transformation.**
-   Transform metadata using traditional methods like filtering, grouping, joining, and
-   others.
+🧠 **Data Enrichment and Processing.**
+   - Generate metadata columns using local AI models and LLM APIs.
+   - Filter, join, and group by AI metadata. Vector similarity search.
+   - Pass datasets to Pytorch and Tensorflow, or export back into storage.
 
-🐍 **User-friendly interface.**
-   Operate efficiently with familiar Python objects and object fields, eliminating the
-   need for SQL.
+🚀 **Efficiency.**
+   - Parallelization, out-of-memory workloads and data caching.
+   - Vectorized operations on Python object fields: sum, count, avg, etc.
+   - Vector search on embeddings.
 
+
+Quick Start
+-----------
 
 .. code:: console
 
    $ pip install datachain
 
-
-Data Structures
-===============
-
-DataChain introduces expressive data structures tailored for AI-specific workload:
-
-- **Dataset:** Preserves the file-references and meta-information. Takes care of Python
-  object serialization, dataset versioning and difference. Operations on dataset:
-
-  - **Transformations:** traditional data-frame or SQL operations such as filtering,
-    grouping, joining.
-  - **Enrichments:** mapping, aggregating and generating using customer’s Python
-    code. This is needed to work with ML inference and LLM calls.
-
-- **Chain** is a sequence of operations on datasets. Chain executes operations in lazy
-  mode - only when needed.
-
-DataChain name comes from these major data structures: dataset and chaining.
-
-
-What’s new in DataChain?
-========================
-
-The project combines multiple ideas from different areas in order to simplify AI
-use-cases and at the same time to fit it into traditional data infrastructure.
-
-- **Python-Native for AI.** Utilizes Python instead of SQL for data manipulation as the
-  native language for AI. It’s powered by `Pydantic`_ data models.
-- **Separation of CPU-GPU workloads.** Distinguishes CPU-heavy transformations (filter,
-  group_by, join) from GPU heavy enrichments (ML-inference or LLM calls). That’s mostly
-  needed for distributed computations.
-- **Resuming data processing** (in development). Introduces idempotent operations,
-  allowing data processing to resume from the last successful process file/record/batch
-  if it fails due to issues like failed LLM calls, ML inference or file download.
-
-Additional relatively new ideas:
-
-- **Functional style data processing.** Using a functional/chaining approach to data
-  processing rather than declarative SQL, inspired by R-dplyr and some Python libraries.
-- **Data Versioning.** Treats raw files in cloud storage as the source of truth for data
-  and implements data versioning, extending ideas from DVC (developed by the same team).
-
-
-What DataChain is NOT?
-======================
-
-- **Not a database** (Postgres, MySQL). Instead, it uses databases under the hood:
-  `SQLite`_ in open-source and ClickHouse and other data warehouses for the commercial
-  version.
-- **Not a data processing tool / data warehouse** (Spark, Snowflake, Big Query) since
-  it delegates heavy data transformations to underlying data warehouses and focuses on
-  AI specific data enrichments and orchestrating all the pieces together.
-
-
-Quick Start
------------
 
 Data curation with a local model
 =================================
@@ -354,6 +306,9 @@ Tutorials
 
 * `Getting Started`_
 * `Multimodal <examples/multimodal/clip_fine_tuning.ipynb>`_ (try in `Colab <https://colab.research.google.com/github/iterative/datachain/blob/main/examples/multimodal/clip_fine_tuning.ipynb>`__)
+* `LLM evaluations <examples/llm/llm_chatbot_evaluation.ipynb>`_
+* `Reading JSON metadata <examples/get_started/json-metadata-tutorial.ipynb>`_
+
 
 Contributions
 -------------
