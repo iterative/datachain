@@ -1,14 +1,12 @@
 import math
 from typing import Optional
 
-import pandas as pd
 import pytest
 from pydantic import BaseModel
 
 from datachain.lib.dc import DataChain, DatasetMergeError
 from datachain.lib.signal_schema import SignalResolvingError
-from datachain.sql.types import String
-from tests.utils import skip_if_not_sqlite
+from datachain.sql.types import Float, String
 
 
 class User(BaseModel):
@@ -47,12 +45,12 @@ team = [
 
 
 def test_merge_objects(test_session):
-    skip_if_not_sqlite()
     ch1 = DataChain.from_values(emp=employees, session=test_session)
     ch2 = DataChain.from_values(team=team, session=test_session)
     ch = ch1.merge(ch2, "emp.person.name", "team.player")
 
     str_default = String.default_value(test_session.catalog.warehouse.db.dialect)
+    float_default = Float.default_value(test_session.catalog.warehouse.db.dialect)
 
     i = 0
     j = 0
@@ -74,8 +72,8 @@ def test_merge_objects(test_session):
         else:
             assert player.player == str_default
             assert player.sport == str_default
-            assert pd.isnull(player.weight)
-            assert pd.isnull(player.height)
+            assert player.weight == float_default
+            assert player.height == float_default
 
     assert i == len(employees)
     assert j == len(team)
@@ -105,12 +103,13 @@ def test_merge_similar_objects(test_session):
 
 
 def test_merge_values(test_session):
-    skip_if_not_sqlite()
     order_ids = [11, 22, 33, 44]
     order_descr = ["water", "water", "paper", "water"]
 
     delivery_ids = [11, 44]
     delivery_time = [24.0, 16.5]
+
+    float_default = Float.default_value(test_session.catalog.warehouse.db.dialect)
 
     ch1 = DataChain.from_values(id=order_ids, descr=order_descr, session=test_session)
     ch2 = DataChain.from_values(
@@ -138,7 +137,7 @@ def test_merge_values(test_session):
         assert name == order_descr[i]
         i += 1
 
-        if pd.notnull(time):
+        if time != float_default:
             assert id == delivery_ids[j]
             assert time == delivery_time[j]
             j += 1

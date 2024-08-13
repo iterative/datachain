@@ -174,7 +174,7 @@ class UInt64(Int):
 
 
 class Float(SQLType):
-    impl = types.FLOAT
+    impl = types.INTEGER
 
     @property
     def python_type(self):
@@ -328,13 +328,13 @@ class TypeReadConverter:
         return value
 
     def float(self, value):
-        return float("nan") if value is None else value
+        return value
 
     def float32(self, value):
-        return self.float(value)
+        return value
 
     def float64(self, value):
-        return self.float(value)
+        return value
 
     def array(self, value, item_type, dialect):
         if value is None or item_type is None:
@@ -415,13 +415,13 @@ class TypeDefaults:
         return None
 
     def float(self):
-        return float("nan")
+        return None
 
     def float32(self):
-        return self.float()
+        return None
 
     def float64(self):
-        return self.float()
+        return None
 
     def array(self):
         return None

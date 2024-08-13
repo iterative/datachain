@@ -1396,8 +1396,7 @@ class DataChain(DatasetQuery):
             dc = DataChain.from_csv("s3://mybucket/dir")
             ```
         """
-        from pandas.io.parsers.readers import STR_NA_VALUES
-        from pyarrow.csv import ConvertOptions, ParseOptions, ReadOptions
+        from pyarrow.csv import ParseOptions, ReadOptions
         from pyarrow.dataset import CsvFileFormat
 
         chain = DataChain.from_storage(path, **kwargs)
@@ -1421,14 +1420,7 @@ class DataChain(DatasetQuery):
 
         parse_options = ParseOptions(delimiter=delimiter)
         read_options = ReadOptions(column_names=column_names)
-        convert_options = ConvertOptions(
-            strings_can_be_null=True, null_values=STR_NA_VALUES
-        )
-        format = CsvFileFormat(
-            parse_options=parse_options,
-            read_options=read_options,
-            convert_options=convert_options,
-        )
+        format = CsvFileFormat(parse_options=parse_options, read_options=read_options)
         return chain.parse_tabular(
             output=output,
             object_name=object_name,
