@@ -26,8 +26,8 @@ dc.map(num_chars_udf, params=["file"], output={"num_chars": list[str]}).select(
 
 (
     dc.mutate(
-        stem=path.file_stem(path.name(C("file.path"))),
-        ext=path.file_ext(path.name(C("file.path"))),
+        stem=path.file_stem(C("file.path")),
+        ext=path.file_ext(C("file.path")),
     )
     .select("file.path", "stem", "ext")
     .show(5)
