@@ -53,12 +53,18 @@ Quick Start
    $ pip install datachain
 
 
-Curating a dataset using JSON metadata
+Curating a dataset with JSON metadata
 ======================================
 
-This dataset consists of images of cats and dogs, annotated with ground truth and model inferences.
-Annotations are stored in the 'json-pairs' format, where each image has a matching JSON file.
-Our goal here is to find all animals the model assigned to class 'cats' with high confidence.
+The source dataset consists of images of cats and dogs, annotated with ground truth and model inferences.
+For example, image file `cat.1009.jpg` has the following metadata in `cat.1009.json`:
+
+.. code:: json
+
+    '{"class": "cat", "id": "1009", "num_annotators": 8, "inference": {"class": "dog", "confidence": 0.68}}'
+
+
+Here is how to copy all images the model assigned to class 'cats' with high confidence:
 
 .. code:: py
 
