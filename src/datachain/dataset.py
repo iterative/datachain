@@ -25,6 +25,7 @@ DD = TypeVar("DD", bound="DatasetDependency")
 
 DATASET_PREFIX = "ds://"
 QUERY_DATASET_PREFIX = "ds_query_"
+LISTING_PREFIX = "lst__"
 
 
 def parse_dataset_uri(uri: str) -> tuple[str, Optional[int]]:
@@ -282,6 +283,33 @@ class DatasetRecord:
             c_name: NAME_TYPES_MAPPING[c_type["type"]].from_dict(c_type)  # type: ignore [attr-defined]
             for c_name, c_type in ct.items()
         }
+
+    @staticmethod
+    def listing_name(uri: str, path: str) -> str:
+        return f"{LISTING_PREFIX}/{uri}/{path}"
+
+    @staticmethod
+    def is_listing(ds_name) -> bool:
+        return ds_name.startswith(LISTING_PREFIX)
+
+    @classmethod
+    def contains_listing(cls, ds_name1: str, ds_name2: str) -> bool:
+        """
+        ds_name: lst__s3://ldb-public/animals/dogs/
+        uri: s3://ldb-public
+        path: /animals
+        contains: False
+
+        ds_name: lst__s3://ldb-public/animals/
+        uri: s3://ldb-public
+        path: /animals/dogs
+        contains: False
+        """
+        return (
+            cls.is_listing(ds_name1)
+            and cls.is_listing(ds_name2)
+            and ds_name2.startswith(ds_name1)
+        )
 
     @classmethod
     def parse(  # noqa: PLR0913

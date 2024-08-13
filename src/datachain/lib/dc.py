@@ -1,5 +1,7 @@
 import copy
+import glob
 import os
+import posixpath
 import re
 from collections.abc import Iterator, Sequence
 from functools import wraps
@@ -19,16 +21,19 @@ from typing import (
 import pandas as pd
 import sqlalchemy
 from pydantic import BaseModel, create_model
+from sqlalchemy.sql.expression import true
 from sqlalchemy.sql.functions import GenericFunction
 from sqlalchemy.sql.sqltypes import NullType
 
 from datachain import DataModel
+from datachain.client import Client
+from datachain.dataset import DatasetRecord
 from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import DataType
 from datachain.lib.dataset_info import DatasetInfo
 from datachain.lib.file import ExportPlacement as FileExportPlacement
-from datachain.lib.file import File, IndexedFile, get_file
+from datachain.lib.file import File, IndexedFile
 from datachain.lib.meta_formats import read_meta, read_schema
 from datachain.lib.model_store import ModelStore
 from datachain.lib.settings import Settings
@@ -303,9 +308,42 @@ class DataChain(DatasetQuery):
         return self
 
     @classmethod
+    def _listing_chain(
+        cls, dc: "DataChain", path: str, recursive: Optional[bool] = True
+    ):
+        # TODO generalize "file" to arbitrary name
+        dc = dc.filter(C("file.is_latest") == true())
+        if recursive:
+            root = False
+            where = C("file.path").glob(path)
+            if not path or path == "/":
+                # root of the bucket, e.g s3://bucket/ -> getting all the nodes
+                # in the bucket
+                root = True
+
+            if not root and not glob.has_magic(
+                os.path.basename(os.path.normpath(path))
+            ):
+                # not a root and not a explicit glob, so it's pointing to some directory
+                # and we are adding a proper glob syntax for it
+                # e.g s3://bucket/dir1 -> s3://bucket/dir1/*
+                dir_path = path.rstrip("/") + "/*"
+                where = where | C("file.path").glob(dir_path)
+
+            if not root:
+                # not a root, so running glob query
+                print(f"Not a root, where clause is {where}")
+                dc = dc.filter(where)
+        else:
+            # TODO fix non recursive queries
+            pass
+
+        return dc
+
+    @classmethod
     def from_storage(
         cls,
-        path,
+        uri,
         *,
         type: Literal["binary", "text", "image"] = "binary",
         session: Optional[Session] = None,
@@ -313,6 +351,7 @@ class DataChain(DatasetQuery):
         recursive: Optional[bool] = True,
         object_name: str = "file",
         update: bool = False,
+        client_config=None,
         **kwargs,
     ) -> "Self":
         """Get data from a storage as a list of file with all file attributes.
@@ -331,6 +370,50 @@ class DataChain(DatasetQuery):
             chain = DataChain.from_storage("s3://my-bucket/my-dir")
             ```
         """
+        # TODO handle non recursive and update
+        # TODO check if dataset already exists - partials
+        # TODO refactor for FS uris, e.g file:///home/ivan/dogs
+        # TODO generalize file to be something else maybe ??
+        from datachain.lib.listing import list_bucket
+
+        client, path = Client.parse_url(uri, None, **client_config)
+        print(f"Client uri is {client.uri}, path is {path}")
+        glob_used = glob.has_magic(os.path.basename(os.path.normpath(path)))
+
+        lst_path = (
+            posixpath.dirname(path) if glob_used or client.fs.isfile(uri) else path
+        )
+
+        dataset_name = DatasetRecord.listing_name(
+            client.uri, posixpath.join(lst_path, "")
+        )
+        print(f"Listing dataset name is {dataset_name}")
+
+        # TODO fix partials
+        for ds in cls.datasets().collect("dataset"):
+            print(f"Got dataset {ds.name}@v{ds.version}")
+            # TODO filter out expired ones
+            if DatasetRecord.contains_listing(ds.name, dataset_name) and not update:
+                print(f"Not updating {dataset_name}")
+                # can use this listing, no need for new one
+                return cls._listing_chain(
+                    cls.from_dataset(ds.name, **kwargs), path, recursive=recursive
+                )
+
+        print(f"Listing and saving {dataset_name}")
+        (
+            cls.from_records(DataChain.DEFAULT_FILE_RECORD, **kwargs)
+            .gen(file=list_bucket(uri, **client_config))
+            .save(dataset_name)
+        )
+
+        # construct returning datachain that is selecting listing
+        return cls._listing_chain(
+            cls.from_dataset(dataset_name, **kwargs), path, recursive=recursive
+        )
+
+        """
+        # OLD CODE
         func = get_file(type)
         return (
             cls(
@@ -344,9 +427,12 @@ class DataChain(DatasetQuery):
             .map(**{object_name: func})
             .select(object_name)
         )
+        """
 
     @classmethod
-    def from_dataset(cls, name: str, version: Optional[int] = None) -> "DataChain":
+    def from_dataset(
+        cls, name: str, version: Optional[int] = None, **kwargs
+    ) -> "DataChain":
         """Get data from a saved Dataset. It returns the chain itself.
 
         Parameters:
@@ -358,7 +444,7 @@ class DataChain(DatasetQuery):
             chain = DataChain.from_dataset("my_cats")
             ```
         """
-        return DataChain(name=name, version=version)
+        return DataChain(name=name, version=version, **kwargs)
 
     @classmethod
     def from_json(
@@ -636,6 +722,7 @@ class DataChain(DatasetQuery):
         """
         udf_obj = self._udf_to_obj(Mapper, func, params, output, signal_map)
 
+        print(f"In map, settings is {self._settings.to_dict()}")
         chain = self.add_signals(
             udf_obj.to_udf_wrapper(),
             **self._settings.to_dict(),
@@ -671,6 +758,7 @@ class DataChain(DatasetQuery):
             ```
         """
         udf_obj = self._udf_to_obj(Generator, func, params, output, signal_map)
+        print(f"Using cache in generate {self._settings.to_dict()}")
         chain = DatasetQuery.generate(
             self,
             udf_obj.to_udf_wrapper(),
@@ -1524,6 +1612,7 @@ class DataChain(DatasetQuery):
         to_insert: Optional[Union[dict, list[dict]]],
         session: Optional[Session] = None,
         in_memory: bool = False,
+        **kwargs,
     ) -> "DataChain":
         """Create a DataChain from the provided records. This method can be used for
         programmatically generating a chain in contrast of reading data from storages
@@ -1540,7 +1629,7 @@ class DataChain(DatasetQuery):
             ```
         """
         session = Session.get(session, in_memory=in_memory)
-        catalog = session.catalog
+        catalog = kwargs.get("catalog") or session.catalog
 
         name = session.generate_temp_dataset_name()
         columns: tuple[sqlalchemy.Column[Any], ...] = tuple(
@@ -1560,7 +1649,7 @@ class DataChain(DatasetQuery):
         insert_q = dr.get_table().insert()
         for record in to_insert:
             db.execute(insert_q.values(**record))
-        return DataChain(name=dsr.name)
+        return DataChain(name=dsr.name, **kwargs)
 
     def sum(self, fr: DataType):  # type: ignore[override]
         """Compute the sum of a column."""

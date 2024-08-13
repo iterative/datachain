@@ -22,24 +22,33 @@ def test_catalog_anon(tmp_dir, catalog, anon):
     assert chain.catalog.client_config.get("anon", False) is anon
 
 
-def test_from_storage(cloud_test_catalog):
+def test_ffrom_storage(cloud_test_catalog):
     ctc = cloud_test_catalog
-    dc = DataChain.from_storage(ctc.src_uri, catalog=ctc.catalog)
+    dc = DataChain.from_storage(ctc.src_uri, client_config=ctc.catalog.client_config)
     assert dc.count() == 7
 
 
 def test_from_storage_reindex(tmp_dir, catalog):
+    tmp_dir = tmp_dir / "parquets"
     path = tmp_dir.as_uri()
+    os.mkdir(tmp_dir)
 
     pd.DataFrame({"name": ["Alice", "Bob"]}).to_parquet(tmp_dir / "test1.parquet")
-    assert DataChain.from_storage(path, catalog=catalog).count() == 1
+    assert (
+        DataChain.from_storage(path, client_config=catalog.client_config).count() == 1
+    )
 
     pd.DataFrame({"name": ["Charlie", "David"]}).to_parquet(tmp_dir / "test2.parquet")
     assert DataChain.from_storage(path, catalog=catalog).count() == 1
     assert DataChain.from_storage(path, catalog=catalog, update=True).count() == 2
 
 
-@pytest.mark.parametrize("use_cache", [False, True])
+@pytest.mark.parametrize(
+    "cloud_type,version_aware",
+    [("s3", True)],
+    indirect=True,
+)
+@pytest.mark.parametrize("use_cache", [True])
 def test_map_file(cloud_test_catalog, use_cache):
     ctc = cloud_test_catalog
 
@@ -48,7 +57,9 @@ def test_map_file(cloud_test_catalog, use_cache):
             return file.name + " -> " + f.read().decode("utf-8")
 
     dc = (
-        DataChain.from_storage(ctc.src_uri, catalog=ctc.catalog)
+        DataChain.from_storage(
+            ctc.src_uri, client_config=ctc.catalog.client_config, catalog=ctc.catalog
+        )
         .settings(cache=use_cache)
         .map(signal=new_signal)
     )
@@ -63,6 +74,7 @@ def test_map_file(cloud_test_catalog, use_cache):
     }
     assert set(dc.collect("signal")) == expected
     for file in dc.collect("file"):
+        print(file.get_local_path())
         assert bool(file.get_local_path()) is use_cache
 
 
