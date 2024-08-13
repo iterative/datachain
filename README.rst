@@ -53,43 +53,6 @@ Quick Start
    $ pip install datachain
 
 
-Curating a dataset with JSON metadata
-======================================
-
-The source dataset consists of images of cats and dogs, annotated with ground truth and model inferences.
-For example, image file `cat.1009.jpg` has the following metadata in `cat.1009.json`:
-
-.. code:: json
-
-    '{"class": "cat", "id": "1009", "num_annotators": 8, "inference": {"class": "dog", "confidence": 0.68}}'
-
-
-Here is how to copy all images the model assigned to class 'cats' with high confidence:
-
-.. code:: py
-
-    import re
-    from datachain import Column, DataChain
-
-    def extract_id(filename: str) -> str:
-        # find the json-pair ID encoded in filename
-        match = re.search(r'\.(\d+)\.', filename)
-        if match:
-            return match.group(1)
-        else:
-            return None
-
-    meta = DataChain.from_json("gs://datachain-demo/dogs-and-cats/*json", object_name="meta")
-    images = DataChain.from_storage("gs://datachain-demo/dogs-and-cats/*jpg")
-    images = images.map(id = lambda file: extract_id(file.path))
-
-    annotated = images.merge(meta, on="id", right_on="meta.id")
-    likely_cats = annotated.filter((Column("meta.inference.confidence") > 0.91) \
-                                    & (Column("meta.inference.class_") == "cat"))
-    likely_cats.export_files("high-confidence-cats/", signal="file")
-
-
-
 Data curation with a local AI model
 ===================================
 Batch inference with a simple sentiment model using the `transformers` library:
