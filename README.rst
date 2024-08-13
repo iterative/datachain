@@ -56,10 +56,18 @@ Quick Start
 Selecting files using JSON metadata
 ======================================
 
-Download only a small subset of high-confidence cat images from a storage using
-JSON metadata.
-Annotations are stored in the 'json-pairs' format, where each image has a matching
-JSON file.
+A storage consists of images of cats and dogs (`dog.1048.jpg`, `cat.1009.jpg`),
+annotated with ground truth and model inferences in the 'json-pairs' format,
+where each image has a matching JSON file like:
+
+.. code:: json
+
+    {
+        "class": "cat", "id": "1009", "num_annotators": 8,
+        "inference": {"class": "dog", "confidence": 0.68}
+    }
+
+Example of downloading only high-confidence cat images using JSON metadata:
 
 
 .. code:: py
@@ -76,14 +84,6 @@ JSON file.
                                    & (Column("meta.inference.class_") == "cat"))
     likely_cats.export_files("high-confidence-cats/", signal="file")
 
-This example works with files like `dog.1048.jpg`, `cat.1009.jpg` and metadata
-`cat.1009.json`:
-
-.. code:: json
-
-    {"class": "cat", "id": "1009", "num_annotators": 8, "inference": {"class": "dog", "confidence": 0.68}}
-
-The code can be easely adapted for different JSON formats or file naming patterns.
 
 Data curation with a local AI model
 ===================================
