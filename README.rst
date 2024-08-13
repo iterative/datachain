@@ -53,8 +53,8 @@ Quick Start
    $ pip install datachain
 
 
-Curating the dataset with JSON metadata
-=======================================
+Curating a dataset using JSON metadata
+======================================
 
 This dataset consists of images of cats and dogs, annotated with ground truth and model inferences.
 Annotations are stored in the 'json-pairs' format, where each image has a matching JSON file.
@@ -68,7 +68,6 @@ Our goal here is to find all animals the model assigned to class 'cats' with hig
     def extract_id(filename: str) -> str:
         # find the json-pair ID encoded in filename
         match = re.search(r'\.(\d+)\.', filename)
-
         if match:
             return match.group(1)
         else:
@@ -79,7 +78,8 @@ Our goal here is to find all animals the model assigned to class 'cats' with hig
     images = images.map(id = lambda file: extract_id(file.path))
 
     annotated = images.merge(meta, on="id", right_on="meta.id")
-    likely_cats = annotated.filter((Column("meta.inference.confidence") > 0.91) & (Column("meta.inference.class_") == "cat"))
+    likely_cats = annotated.filter((Column("meta.inference.confidence") > 0.91) \
+                                    & (Column("meta.inference.class_") == "cat"))
     likely_cats.export_files("high-confidence-cats/", signal="file")
 
 
@@ -329,9 +329,9 @@ Tutorials
 ---------
 
 * `Getting Started`_
-* `Multimodal <examples/multimodal/clip_fine_tuning.ipynb>`_ (try in `Colab <https://colab.research.google.com/github/iterative/datachain/blob/main/examples/multimodal/clip_fine_tuning.ipynb>`__)
-* `LLM evaluations <examples/llm/llm_chatbot_evaluation.ipynb>`_
-* `Reading JSON metadata <examples/get_started/json-metadata-tutorial.ipynb>`_
+* `Multimodal <https://github.com/iterative/datachain-examples/blob/main/multimodal/clip_fine_tuning.ipynb>`_ (try in `Colab <https://colab.research.google.com/github/iterative/datachain-examples/blob/main/multimodal/clip_fine_tuning.ipynb>`__)
+* `LLM evaluations <https://github.com/iterative/datachain-examples/blob/main/llm/llm_chatbot_evaluation.ipynb>`_ (try in `Colab <https://colab.research.google.com/github/iterative/datachain-examples/blob/main/llm/llm_chatbot_evaluation.ipynb>`__)
+* `Reading JSON metadata <https://github.com/iterative/datachain-examples/blob/main/formats/json-metadata-tutorial.ipynb>`_ (try in `Colab <https://colab.research.google.com/github/iterative/datachain-examples/blob/main/formats/json-metadata-tutorial.ipynb>`__)
 
 
 Contributions
