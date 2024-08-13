@@ -53,6 +53,7 @@ Quick Start
    $ pip install datachain
 
 
+
 Curating a dataset with JSON metadata
 ======================================
 
@@ -82,7 +83,6 @@ Here is how to copy all images the model assigned to class 'cats' with high conf
     meta = DataChain.from_json("gs://datachain-demo/dogs-and-cats/*json", object_name="meta")
     images = DataChain.from_storage("gs://datachain-demo/dogs-and-cats/*jpg")
     images = images.map(id = lambda file: extract_id(file.path))
-
     annotated = images.merge(meta, on="id", right_on="meta.id")
     likely_cats = annotated.filter((Column("meta.inference.confidence") > 0.91) \
                                     & (Column("meta.inference.class_") == "cat"))
