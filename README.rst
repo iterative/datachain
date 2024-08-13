@@ -58,7 +58,7 @@ Selecting files using JSON metadata
 
 A storage consists of images of cats and dogs (`dog.1048.jpg`, `cat.1009.jpg`),
 annotated with ground truth and model inferences in the 'json-pairs' format,
-where each image has a matching JSON file like:
+where each image has a matching JSON file like `cat.1009.json`:
 
 .. code:: json
 
