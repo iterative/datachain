@@ -352,6 +352,7 @@ class DataChain(DatasetQuery):
         object_name: str = "file",
         update: bool = False,
         client_config=None,
+        anon: bool = False,
         **kwargs,
     ) -> "Self":
         """Get data from a storage as a list of file with all file attributes.
@@ -376,6 +377,13 @@ class DataChain(DatasetQuery):
         # TODO generalize file to be something else maybe ??
         from datachain.lib.listing import list_bucket
 
+        client_config = client_config or {}
+        if session:
+            client_config = session.catalog.client_config
+
+        if anon:
+            client_config["anon"] = True
+
         client, path = Client.parse_url(uri, None, **client_config)
         print(f"Client uri is {client.uri}, path is {path}")
         glob_used = glob.has_magic(os.path.basename(os.path.normpath(path)))
@@ -390,7 +398,7 @@ class DataChain(DatasetQuery):
         print(f"Listing dataset name is {dataset_name}")
 
         # TODO fix partials
-        for ds in cls.datasets().collect("dataset"):
+        for ds in cls.datasets(session=session).collect("dataset"):
             print(f"Got dataset {ds.name}@v{ds.version}")
             # TODO filter out expired ones
             if DatasetRecord.contains_listing(ds.name, dataset_name) and not update:
@@ -402,15 +410,19 @@ class DataChain(DatasetQuery):
 
         print(f"Listing and saving {dataset_name}")
         (
-            cls.from_records(DataChain.DEFAULT_FILE_RECORD, **kwargs)
+            cls.from_records(DataChain.DEFAULT_FILE_RECORD, session=session, **kwargs)
             .gen(file=list_bucket(uri, **client_config))
             .save(dataset_name)
         )
 
         # construct returning datachain that is selecting listing
-        return cls._listing_chain(
-            cls.from_dataset(dataset_name, **kwargs), path, recursive=recursive
+        dc = cls._listing_chain(
+            cls.from_dataset(dataset_name, session=session, **kwargs),
+            path,
+            recursive=recursive,
         )
+        print(f"Returning listing chain  catalog is {dc.session.catalog}")
+        return dc
 
         """
         # OLD CODE
@@ -431,7 +443,11 @@ class DataChain(DatasetQuery):
 
     @classmethod
     def from_dataset(
-        cls, name: str, version: Optional[int] = None, **kwargs
+        cls,
+        name: str,
+        version: Optional[int] = None,
+        session: Optional[Session] = None,
+        **kwargs,
     ) -> "DataChain":
         """Get data from a saved Dataset. It returns the chain itself.
 
@@ -444,7 +460,12 @@ class DataChain(DatasetQuery):
             chain = DataChain.from_dataset("my_cats")
             ```
         """
-        return DataChain(name=name, version=version, **kwargs)
+        print("In from dataset")
+        print(kwargs)
+        print("======")
+        dc = DataChain(name=name, version=version, session=session, **kwargs)
+        print(f"Catalog in from dataset is {dc.session.catalog}")
+        return dc
 
     @classmethod
     def from_json(
@@ -1064,6 +1085,7 @@ class DataChain(DatasetQuery):
         db_signals = signals_schema.db_signals()
         with super().select(*db_signals).as_iterable() as rows:
             for row in rows:
+                print(f"Before rows to features, catalog is {chain.session.catalog}")
                 ret = signals_schema.row_to_features(
                     row, catalog=chain.session.catalog, cache=chain._settings.cache
                 )

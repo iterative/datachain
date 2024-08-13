@@ -101,7 +101,9 @@ class Session:
                     be created. It's needed mostly for simplie API purposes.
             catalog (Catalog): Optional catalog. By default a new catalog is created.
         """
+        print("In get session")
         if session:
+            print("returning session")
             return session
 
         if cls.GLOBAL_SESSION is None:

@@ -13,6 +13,7 @@ from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.dataset import DatasetStats
 from datachain.lib.dc import DataChain
 from datachain.lib.file import File, ImageFile
+from datachain.query.session import Session
 from tests.utils import images_equal
 
 
@@ -28,27 +29,20 @@ def test_ffrom_storage(cloud_test_catalog):
     assert dc.count() == 7
 
 
-def test_from_storage_reindex(tmp_dir, catalog):
+def test_from_storage_reindex(tmp_dir, test_session):
     tmp_dir = tmp_dir / "parquets"
     path = tmp_dir.as_uri()
     os.mkdir(tmp_dir)
 
     pd.DataFrame({"name": ["Alice", "Bob"]}).to_parquet(tmp_dir / "test1.parquet")
-    assert (
-        DataChain.from_storage(path, client_config=catalog.client_config).count() == 1
-    )
+    assert DataChain.from_storage(path, session=test_session).count() == 1
 
     pd.DataFrame({"name": ["Charlie", "David"]}).to_parquet(tmp_dir / "test2.parquet")
-    assert DataChain.from_storage(path, catalog=catalog).count() == 1
-    assert DataChain.from_storage(path, catalog=catalog, update=True).count() == 2
+    assert DataChain.from_storage(path, session=test_session).count() == 1
+    assert DataChain.from_storage(path, session=test_session, update=True).count() == 2
 
 
-@pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
-    indirect=True,
-)
-@pytest.mark.parametrize("use_cache", [True])
+@pytest.mark.parametrize("use_cache", [True, False])
 def test_map_file(cloud_test_catalog, use_cache):
     ctc = cloud_test_catalog
 
@@ -56,13 +50,13 @@ def test_map_file(cloud_test_catalog, use_cache):
         with file.open() as f:
             return file.name + " -> " + f.read().decode("utf-8")
 
+    session = Session("CTCSession", catalog=ctc.catalog)
     dc = (
-        DataChain.from_storage(
-            ctc.src_uri, client_config=ctc.catalog.client_config, catalog=ctc.catalog
-        )
+        DataChain.from_storage(ctc.src_uri, session=session)
         .settings(cache=use_cache)
         .map(signal=new_signal)
     )
+
     expected = {
         "description -> Cats and Dogs",
         "cat1 -> meow",
@@ -74,7 +68,6 @@ def test_map_file(cloud_test_catalog, use_cache):
     }
     assert set(dc.collect("signal")) == expected
     for file in dc.collect("file"):
-        print(file.get_local_path())
         assert bool(file.get_local_path()) is use_cache
 
 
@@ -82,7 +75,9 @@ def test_map_file(cloud_test_catalog, use_cache):
 def test_read_file(cloud_test_catalog, use_cache):
     ctc = cloud_test_catalog
 
-    dc = DataChain.from_storage(ctc.src_uri, catalog=ctc.catalog)
+    session = Session("CTCSession", catalog=ctc.catalog)
+
+    dc = DataChain.from_storage(ctc.src_uri, session=session)
     for file in dc.settings(cache=use_cache).collect("file"):
         assert file.get_local_path() is None
         file.read()
@@ -98,7 +93,8 @@ def test_export_files(
     tmp_dir, cloud_test_catalog, placement, use_map, use_cache, file_type
 ):
     ctc = cloud_test_catalog
-    df = DataChain.from_storage(ctc.src_uri, type=file_type, catalog=ctc.catalog)
+    session = Session("CTCSession", catalog=ctc.catalog)
+    df = DataChain.from_storage(ctc.src_uri, type=file_type, session=session)
     if use_map:
         df.export_files(tmp_dir / "output", placement=placement, use_cache=use_cache)
         df.map(
