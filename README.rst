@@ -53,35 +53,36 @@ Quick Start
    $ pip install datachain
 
 
-Curating a dataset using JSON metadata
+Selecting files using JSON metadata
 ======================================
 
-This dataset consists of images of cats and dogs, annotated with ground truth and model inferences.
-Annotations are stored in the 'json-pairs' format, where each image has a matching JSON file.
-Our goal here is to find all animals the model assigned to class 'cats' with high confidence.
+A storage consists of images of cats and dogs (`dog.1048.jpg`, `cat.1009.jpg`),
+annotated with ground truth and model inferences in the 'json-pairs' format,
+where each image has a matching JSON file like `cat.1009.json`:
+
+.. code:: json
+
+    {
+        "class": "cat", "id": "1009", "num_annotators": 8,
+        "inference": {"class": "dog", "confidence": 0.68}
+    }
+
+Example of downloading only high-confidence cat images using JSON metadata:
+
 
 .. code:: py
 
-    import re
     from datachain import Column, DataChain
-
-    def extract_id(filename: str) -> str:
-        # find the json-pair ID encoded in filename
-        match = re.search(r'\.(\d+)\.', filename)
-        if match:
-            return match.group(1)
-        else:
-            return None
 
     meta = DataChain.from_json("gs://datachain-demo/dogs-and-cats/*json", object_name="meta")
     images = DataChain.from_storage("gs://datachain-demo/dogs-and-cats/*jpg")
-    images = images.map(id = lambda file: extract_id(file.path))
 
-    annotated = images.merge(meta, on="id", right_on="meta.id")
-    likely_cats = annotated.filter((Column("meta.inference.confidence") > 0.91) \
-                                    & (Column("meta.inference.class_") == "cat"))
+    images_id = images.map(id=lambda file: file.path.split('.')[-2])
+    annotated = images_id.merge(meta, on="id", right_on="meta.id")
+
+    likely_cats = annotated.filter((Column("meta.inference.confidence") > 0.93) \
+                                   & (Column("meta.inference.class_") == "cat"))
     likely_cats.export_files("high-confidence-cats/", signal="file")
-
 
 
 Data curation with a local AI model
