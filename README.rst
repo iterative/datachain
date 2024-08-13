@@ -81,7 +81,7 @@ This example works with files like `dog.1048.jpg`, `cat.1009.jpg` and metadata
 
 .. code:: json
 
-    '{"class": "cat", "id": "1009", "num_annotators": 8, "inference": {"class": "dog", "confidence": 0.68}}'
+    {"class": "cat", "id": "1009", "num_annotators": 8, "inference": {"class": "dog", "confidence": 0.68}}
 
 The code can be easely adapted for different JSON formats or file naming patterns.
 
