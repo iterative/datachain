@@ -47,7 +47,7 @@ class DirTypeGroup:
 @attrs.define
 class Node:
     sys__id: int = 0
-    sys__rand: int = -1
+    sys__rand: int = 0
     vtype: str = ""
     dir_type: Optional[int] = None
     path: str = ""
