@@ -406,10 +406,18 @@ class DataChain(DatasetQuery):
 
         for ds in cls.datasets(session=session).collect("dataset"):
             # TODO filter out expired ones
-            if DatasetRecord.contains_listing(ds.name, dataset_name) and not update:
+            if (
+                DatasetRecord.contains_listing(
+                    ds.name,  # type: ignore[union-attr]
+                    dataset_name,
+                )
+                and not update
+            ):
                 # can use this listing, no need for new one
                 return cls._listing_chain(
-                    cls.from_dataset(ds.name, **kwargs), path, recursive=recursive
+                    cls.from_dataset(ds.name, **kwargs),  # type: ignore[union-attr]
+                    path,
+                    recursive=recursive,
                 )
 
         (
