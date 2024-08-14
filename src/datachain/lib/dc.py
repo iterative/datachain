@@ -363,7 +363,7 @@ class DataChain(DatasetQuery):
         It returns the chain itself as usual.
 
         Parameters:
-            path : storage URI with directory. URI must start with storage prefix such
+            uri : storage URI with directory. URI must start with storage prefix such
                 as `s3://`, `gs://`, `az://` or "file:///"
             type : read file as "binary", "text", or "image" data. Default is "binary".
             recursive : search recursively for the given path.
