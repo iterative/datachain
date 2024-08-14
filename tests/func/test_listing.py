@@ -10,7 +10,7 @@ def test_listing_generator(cloud_test_catalog, cloud_type):
     uri = f"{ctc.src_uri}/cats"
 
     dc = DataChain.from_records(DataChain.DEFAULT_FILE_RECORD).gen(
-        file=list_bucket(uri, client_config=ctc.catalog.client_config)
+        file=list_bucket(uri, **ctc.catalog.client_config)
     )
     assert dc.count() == 2
 

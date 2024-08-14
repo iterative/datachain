@@ -117,13 +117,11 @@ class DataChainCache:
 
         try:
             oid = uid.get_hash()
-            print(f"Adding to cache with oid {oid}")
             self.odb.add(tmp_info, self.odb.fs, oid)
         finally:
             os.unlink(tmp_info)
 
     def store_data(self, uid: UniqueId, contents: bytes) -> None:
-        print("Storing data to cache")
         checksum = uid.get_hash()
         dst = self.path_from_checksum(checksum)
         if not os.path.exists(dst):
