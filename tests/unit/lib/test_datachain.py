@@ -1006,6 +1006,16 @@ def test_from_csv(tmp_dir, test_session):
     assert df1.equals(df)
 
 
+@skip_if_not_sqlite
+def test_from_csv_in_memory(tmp_dir):
+    df = pd.DataFrame(DF_DATA)
+    path = tmp_dir / "test.csv"
+    df.to_csv(path, index=False)
+    dc = DataChain.from_csv(path.as_uri(), in_memory=True)
+    df1 = dc.select("first_name", "age", "city").to_pandas()
+    assert df1.equals(df)
+
+
 def test_from_csv_no_header_error(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA.values()).transpose()
     path = tmp_dir / "test.csv"
@@ -1102,6 +1112,17 @@ def test_from_parquet(tmp_dir, test_session):
     path = tmp_dir / "test.parquet"
     df.to_parquet(path)
     dc = DataChain.from_parquet(path.as_uri(), session=test_session)
+    df1 = dc.select("first_name", "age", "city").to_pandas()
+
+    assert df1.equals(df)
+
+
+@skip_if_not_sqlite
+def test_from_parquet_in_memory(tmp_dir):
+    df = pd.DataFrame(DF_DATA)
+    path = tmp_dir / "test.parquet"
+    df.to_parquet(path)
+    dc = DataChain.from_parquet(path.as_uri(), in_memory=True)
     df1 = dc.select("first_name", "age", "city").to_pandas()
 
     assert df1.equals(df)

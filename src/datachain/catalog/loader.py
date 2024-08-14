@@ -28,6 +28,8 @@ WAREHOUSE_ARG_PREFIX = "DATACHAIN_WAREHOUSE_ARG_"
 DISTRIBUTED_IMPORT_PATH = "DATACHAIN_DISTRIBUTED"
 DISTRIBUTED_ARG_PREFIX = "DATACHAIN_DISTRIBUTED_ARG_"
 
+IN_MEMORY_ERROR_MESSAGE = "In-memory is only supported on SQLite"
+
 
 def get_id_generator(in_memory: bool = False) -> "AbstractIDGenerator":
     id_generator_serialized = os.environ.get(ID_GENERATOR_SERIALIZED)
@@ -51,7 +53,7 @@ def get_id_generator(in_memory: bool = False) -> "AbstractIDGenerator":
         id_generator_args["in_memory"] = in_memory
         return SQLiteIDGenerator(**id_generator_args)
     if in_memory:
-        raise RuntimeError("In-memory databased are only supported on SQLite")
+        raise RuntimeError(IN_MEMORY_ERROR_MESSAGE)
     # ID generator paths are specified as (for example):
     # datachain.data_storage.SQLiteIDGenerator
     if "." not in id_generator_import_path:
@@ -94,7 +96,7 @@ def get_metastore(
         metastore_args["in_memory"] = in_memory
         return SQLiteMetastore(id_generator, **metastore_args)
     if in_memory:
-        raise RuntimeError("In-memory databased are only supported on SQLite")
+        raise RuntimeError(IN_MEMORY_ERROR_MESSAGE)
     # Metastore paths are specified as (for example):
     # datachain.data_storage.SQLiteMetastore
     if "." not in metastore_import_path:
@@ -136,7 +138,7 @@ def get_warehouse(
         warehouse_args["in_memory"] = in_memory
         return SQLiteWarehouse(id_generator, **warehouse_args)
     if in_memory:
-        raise RuntimeError("In-memory databased are only supported on SQLite")
+        raise RuntimeError(IN_MEMORY_ERROR_MESSAGE)
     # Warehouse paths are specified as (for example):
     # datachain.data_storage.SQLiteWarehouse
     if "." not in warehouse_import_path:
