@@ -33,7 +33,8 @@ from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import DataType
 from datachain.lib.dataset_info import DatasetInfo
 from datachain.lib.file import ExportPlacement as FileExportPlacement
-from datachain.lib.file import File, IndexedFile
+from datachain.lib.file import File, IndexedFile, get_file_type
+from datachain.lib.listing import list_bucket
 from datachain.lib.meta_formats import read_meta, read_schema
 from datachain.lib.model_store import ModelStore
 from datachain.lib.settings import Settings
@@ -376,8 +377,7 @@ class DataChain(DatasetQuery):
         """
         # TODO handle non recursive
         # TODO refactor for FS uris, e.g file:///home/ivan/dogs
-        # TODO fix type (binary, text, image)
-        from datachain.lib.listing import list_bucket
+        file_type = get_file_type(type)
 
         if client_config is None:
             client_config = {}
@@ -389,7 +389,10 @@ class DataChain(DatasetQuery):
             session, catalog=kwargs.get("catalog"), client_config=client_config
         )
 
-        client, path = Client.parse_url(uri, None, **session.catalog.client_config)
+        client, path = Client.parse_url(
+            uri, session.catalog.cache, **session.catalog.client_config
+        )
+
         glob_used = glob.has_magic(os.path.basename(os.path.normpath(path)))
 
         lst_path = (
@@ -413,12 +416,11 @@ class DataChain(DatasetQuery):
             cls.from_records(DataChain.DEFAULT_FILE_RECORD, session=session, **kwargs)
             .gen(
                 list_bucket(lst_uri, **session.catalog.client_config),
-                output={f"{object_name}": File},
+                output={f"{object_name}": file_type},
             )
             .save(dataset_name)
         )
 
-        # construct returning datachain that is selecting listing
         return cls._listing_chain(
             cls.from_dataset(dataset_name, session=session, **kwargs),
             path,
