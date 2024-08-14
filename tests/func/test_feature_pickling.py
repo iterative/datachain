@@ -84,7 +84,7 @@ def test_feature_udf_parallel(cloud_test_catalog_tmpfile):
 
     chain = (
         DataChain.from_storage(source, type="text", catalog=catalog)
-        .filter(C.path.glob("*cat*"))
+        .filter(C("file.path").glob("*cat*"))
         .settings(parallel=2)
         .map(
             message=file_to_message,
@@ -132,7 +132,7 @@ def test_feature_udf_parallel_local(cloud_test_catalog_tmpfile):
 
     chain = (
         DataChain.from_storage(source, type="text", catalog=catalog)
-        .filter(C.path.glob("*cat*"))
+        .filter(C("file.path").glob("*cat*"))
         .settings(parallel=2)
         .map(
             message=lambda file: AIMessageLocal(
@@ -189,7 +189,7 @@ def test_feature_udf_parallel_local_pydantic(cloud_test_catalog_tmpfile):
 
     chain = (
         DataChain.from_storage(source, type="text", catalog=catalog)
-        .filter(C.path.glob("*cat*"))
+        .filter(C("file.path").glob("*cat*"))
         .settings(parallel=2)
         .map(
             message=lambda file: AIMessageLocalPydantic(

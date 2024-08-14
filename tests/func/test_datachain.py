@@ -23,7 +23,7 @@ def test_catalog_anon(tmp_dir, catalog, anon):
     assert chain.catalog.client_config.get("anon", False) is anon
 
 
-def test_ffrom_storage(cloud_test_catalog):
+def test_from_storage(cloud_test_catalog):
     ctc = cloud_test_catalog
     dc = DataChain.from_storage(ctc.src_uri, client_config=ctc.catalog.client_config)
     assert dc.count() == 7

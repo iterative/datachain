@@ -309,13 +309,17 @@ class DataChain(DatasetQuery):
 
     @classmethod
     def _listing_chain(
-        cls, dc: "DataChain", path: str, recursive: Optional[bool] = True
+        cls,
+        dc: "DataChain",
+        path: str,
+        recursive: Optional[bool] = True,
+        object_name="file",
     ):
         # TODO generalize "file" to arbitrary name
-        dc = dc.filter(C("file.is_latest") == true())
+        dc = dc.filter(C(f"{object_name}.is_latest") == true())
         if recursive:
             root = False
-            where = C("file.path").glob(path)
+            where = C(f"{object_name}.path").glob(path)
             if not path or path == "/":
                 # root of the bucket, e.g s3://bucket/ -> getting all the nodes
                 # in the bucket
@@ -328,11 +332,10 @@ class DataChain(DatasetQuery):
                 # and we are adding a proper glob syntax for it
                 # e.g s3://bucket/dir1 -> s3://bucket/dir1/*
                 dir_path = path.rstrip("/") + "/*"
-                where = where | C("file.path").glob(dir_path)
+                where = where | C(f"{object_name}.path").glob(dir_path)
 
             if not root:
                 # not a root, so running glob query
-                print(f"Not a root, where clause is {where}")
                 dc = dc.filter(where)
         else:
             # TODO fix non recursive queries
@@ -371,75 +374,57 @@ class DataChain(DatasetQuery):
             chain = DataChain.from_storage("s3://my-bucket/my-dir")
             ```
         """
-        # TODO handle non recursive and update
-        # TODO check if dataset already exists - partials
+        # TODO handle non recursive
         # TODO refactor for FS uris, e.g file:///home/ivan/dogs
-        # TODO generalize file to be something else maybe ??
+        # TODO fix type (binary, text, image)
         from datachain.lib.listing import list_bucket
 
-        client_config = client_config or {}
-        if session:
-            client_config = session.catalog.client_config
+        if client_config is None:
+            client_config = {}
 
         if anon:
             client_config["anon"] = True
 
-        client, path = Client.parse_url(uri, None, **client_config)
-        print(f"Client uri is {client.uri}, path is {path}")
+        session = Session.get(
+            session, catalog=kwargs.get("catalog"), client_config=client_config
+        )
+
+        client, path = Client.parse_url(uri, None, **session.catalog.client_config)
         glob_used = glob.has_magic(os.path.basename(os.path.normpath(path)))
 
         lst_path = (
             posixpath.dirname(path) if glob_used or client.fs.isfile(uri) else path
         )
+        lst_uri = f"{client.uri}/{lst_path}"
 
         dataset_name = DatasetRecord.listing_name(
             client.uri, posixpath.join(lst_path, "")
         )
-        print(f"Listing dataset name is {dataset_name}")
 
-        # TODO fix partials
         for ds in cls.datasets(session=session).collect("dataset"):
-            print(f"Got dataset {ds.name}@v{ds.version}")
             # TODO filter out expired ones
             if DatasetRecord.contains_listing(ds.name, dataset_name) and not update:
-                print(f"Not updating {dataset_name}")
                 # can use this listing, no need for new one
                 return cls._listing_chain(
                     cls.from_dataset(ds.name, **kwargs), path, recursive=recursive
                 )
 
-        print(f"Listing and saving {dataset_name}")
         (
             cls.from_records(DataChain.DEFAULT_FILE_RECORD, session=session, **kwargs)
-            .gen(file=list_bucket(uri, **client_config))
+            .gen(
+                list_bucket(lst_uri, **session.catalog.client_config),
+                output={f"{object_name}": File},
+            )
             .save(dataset_name)
         )
 
         # construct returning datachain that is selecting listing
-        dc = cls._listing_chain(
+        return cls._listing_chain(
             cls.from_dataset(dataset_name, session=session, **kwargs),
             path,
             recursive=recursive,
+            object_name=object_name,
         )
-        print(f"Returning listing chain  catalog is {dc.session.catalog}")
-        return dc
-
-        """
-        # OLD CODE
-        func = get_file(type)
-        return (
-            cls(
-                path,
-                session=session,
-                recursive=recursive,
-                update=update,
-                in_memory=in_memory,
-                **kwargs,
-            )
-            .map(**{object_name: func})
-            .select(object_name)
-        )
-        """
 
     @classmethod
     def from_dataset(
@@ -460,12 +445,7 @@ class DataChain(DatasetQuery):
             chain = DataChain.from_dataset("my_cats")
             ```
         """
-        print("In from dataset")
-        print(kwargs)
-        print("======")
-        dc = DataChain(name=name, version=version, session=session, **kwargs)
-        print(f"Catalog in from dataset is {dc.session.catalog}")
-        return dc
+        return DataChain(name=name, version=version, session=session, **kwargs)
 
     @classmethod
     def from_json(
@@ -743,7 +723,6 @@ class DataChain(DatasetQuery):
         """
         udf_obj = self._udf_to_obj(Mapper, func, params, output, signal_map)
 
-        print(f"In map, settings is {self._settings.to_dict()}")
         chain = self.add_signals(
             udf_obj.to_udf_wrapper(),
             **self._settings.to_dict(),
@@ -779,7 +758,6 @@ class DataChain(DatasetQuery):
             ```
         """
         udf_obj = self._udf_to_obj(Generator, func, params, output, signal_map)
-        print(f"Using cache in generate {self._settings.to_dict()}")
         chain = DatasetQuery.generate(
             self,
             udf_obj.to_udf_wrapper(),
@@ -1085,7 +1063,6 @@ class DataChain(DatasetQuery):
         db_signals = signals_schema.db_signals()
         with super().select(*db_signals).as_iterable() as rows:
             for row in rows:
-                print(f"Before rows to features, catalog is {chain.session.catalog}")
                 ret = signals_schema.row_to_features(
                     row, catalog=chain.session.catalog, cache=chain._settings.cache
                 )

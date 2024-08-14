@@ -1529,7 +1529,6 @@ class DatasetQuery:
         at least that minimum number of rows to each distributed worker, mostly useful
         if there are a very large number of small tasks to process.
         """
-        print(f"In add signals, cache is {cache}")
         if isinstance(udf, UDFClassWrapper):  # type: ignore[unreachable]
             # This is a bare decorated class, "instantiate" it now.
             udf = udf()  # type: ignore[unreachable]
