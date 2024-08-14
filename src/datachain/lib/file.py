@@ -256,7 +256,6 @@ class File(DataModel):
     def get_local_path(self) -> Optional[str]:
         """Returns path to a file in a local cache.
         Return None if file is not cached. Throws an exception if cache is not setup."""
-        print(f"Getting local path, catalog is {self._catalog}")
         if self._catalog is None:
             raise RuntimeError(
                 "cannot resolve local file path because catalog is not setup"
