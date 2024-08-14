@@ -11,10 +11,14 @@ from collections.abc import Iterator
 from typing import Any, Callable
 
 import jmespath as jsp
-from pydantic import Field, ValidationError  # noqa: F401
+from pydantic import BaseModel, ConfigDict, Field, ValidationError  # noqa: F401
 
 from datachain.lib.data_model import DataModel  # noqa: F401
 from datachain.lib.file import File
+
+
+class UserModel(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
 
 
 def generate_uuid():
@@ -72,6 +76,8 @@ def read_schema(source_file, data_type="csv", expr=None, model_name=None):
         data_type,
         "--class-name",
         model_name,
+        "--base-class",
+        "datachain.lib.meta_formats.UserModel",
     ]
     try:
         result = subprocess.run(  # noqa: S603
@@ -87,7 +93,7 @@ def read_schema(source_file, data_type="csv", expr=None, model_name=None):
     except subprocess.CalledProcessError as e:
         model_output = f"An error occurred in datamodel-codegen: {e.stderr}"
     print(f"{model_output}")
-    print("\n" + "from datachain.lib.data_model import DataModel" + "\n")
+    print("from datachain.lib.data_model import DataModel")
     print("\n" + f"DataModel.register({model_name})" + "\n")
     print("\n" + f"spec={model_name}" + "\n")
     return model_output

@@ -797,7 +797,7 @@ class DataChain(DatasetQuery):
             descending (bool): Whether to sort in descending order or not.
         """
         if descending:
-            args = tuple([sqlalchemy.desc(a) for a in args])
+            args = tuple(sqlalchemy.desc(a) for a in args)
 
         return super().order_by(*args)
 

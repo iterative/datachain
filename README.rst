@@ -53,17 +53,41 @@ Quick Start
    $ pip install datachain
 
 
-Data curation with a local model
-=================================
+Selecting files using JSON metadata
+======================================
 
-We will evaluate chatbot dialogs stored as text files in Google Cloud Storage
-- 50 files total in this example.
-These dialogs involve users chatting with a bot while looking for better wireless plans.
-Our goal is to identify the successful dialogs.
+A storage consists of images of cats and dogs (`dog.1048.jpg`, `cat.1009.jpg`),
+annotated with ground truth and model inferences in the 'json-pairs' format,
+where each image has a matching JSON file like `cat.1009.json`:
 
-The data used in the examples is `publicly available`_. The sample code is designed to run on a local machine.
+.. code:: json
 
-First, we'll show batch inference with a simple sentiment model using the `transformers` library:
+    {
+        "class": "cat", "id": "1009", "num_annotators": 8,
+        "inference": {"class": "dog", "confidence": 0.68}
+    }
+
+Example of downloading only high-confidence cat images using JSON metadata:
+
+
+.. code:: py
+
+    from datachain import Column, DataChain
+
+    meta = DataChain.from_json("gs://datachain-demo/dogs-and-cats/*json", object_name="meta")
+    images = DataChain.from_storage("gs://datachain-demo/dogs-and-cats/*jpg")
+
+    images_id = images.map(id=lambda file: file.path.split('.')[-2])
+    annotated = images_id.merge(meta, on="id", right_on="meta.id")
+
+    likely_cats = annotated.filter((Column("meta.inference.confidence") > 0.93) \
+                                   & (Column("meta.inference.class_") == "cat"))
+    likely_cats.export_files("high-confidence-cats/", signal="file")
+
+
+Data curation with a local AI model
+===================================
+Batch inference with a simple sentiment model using the `transformers` library:
 
 .. code:: shell
 
@@ -114,8 +138,9 @@ LLM judging chatbots
 =============================
 
 LLMs can work as efficient universal classifiers. In the example below,
-we employ a free API from Mistral to judge the chatbot performance. Please get a free
+we employ a free API from Mistral to judge the `publicly available`_ chatbot dialogs. Please get a free
 Mistral API key at https://console.mistral.ai
+
 
 .. code:: shell
 
@@ -305,9 +330,9 @@ Tutorials
 ---------
 
 * `Getting Started`_
-* `Multimodal <examples/multimodal/clip_fine_tuning.ipynb>`_ (try in `Colab <https://colab.research.google.com/github/iterative/datachain/blob/main/examples/multimodal/clip_fine_tuning.ipynb>`__)
-* `LLM evaluations <examples/llm/llm_chatbot_evaluation.ipynb>`_
-* `Reading JSON metadata <examples/get_started/json-metadata-tutorial.ipynb>`_
+* `Multimodal <https://github.com/iterative/datachain-examples/blob/main/multimodal/clip_fine_tuning.ipynb>`_ (try in `Colab <https://colab.research.google.com/github/iterative/datachain-examples/blob/main/multimodal/clip_fine_tuning.ipynb>`__)
+* `LLM evaluations <https://github.com/iterative/datachain-examples/blob/main/llm/llm_chatbot_evaluation.ipynb>`_ (try in `Colab <https://colab.research.google.com/github/iterative/datachain-examples/blob/main/llm/llm_chatbot_evaluation.ipynb>`__)
+* `Reading JSON metadata <https://github.com/iterative/datachain-examples/blob/main/formats/json-metadata-tutorial.ipynb>`_ (try in `Colab <https://colab.research.google.com/github/iterative/datachain-examples/blob/main/formats/json-metadata-tutorial.ipynb>`__)
 
 
 Contributions
