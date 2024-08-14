@@ -16,102 +16,78 @@
 AI 🔗 DataChain
 ----------------
 
-DataChain is a data-frame library designed for AI-specific scenarios. It helps ML and
-AI engineers build a metadata layer on top of unstructured files and analyze data using
-this layer.
+DataChain is a modern Pythonic data-frame library designed for artificial intelligence.
+It is made to organize your unstructured data into datasets and wrangle it at scale on
+your local machine.
 
-📂 **Raw Files Processing**
-   Process raw files (images, video, text, PDFs) directly from storage (S3, GCP, Azure,
-   Local), version and update datasets.
+Key Features
+============
 
-🌟 **Metadata layer.**
-   Build a metadata layer on top of files using structured sources like CSV, Parquet,
-   and JSON files.
+📂 **Storage as a Source of Truth.**
+   - Process unstructured data without redundant copies: S3, GCP, Azure, and local
+     file systems.
+   - Multimodal data: images, video, text, PDFs, JSONs, CSVs, parquet.
+   - Join files and metadata together into persistent, versioned, columnar datasets.
 
-⭐ **Metadata enrichment.**
-   Enhance the metadata layer with outputs from local ML model inferences and LLM calls.
+🐍 **Python-friendly data pipelines.**
+   - Operate on Python objects and object fields.
+   - Built-in parallelization and out-of-memory compute without a need in SQL or
+     Spark jobs.
 
-🛠️ **Data Transformation.**
-   Transform metadata using traditional methods like filtering, grouping, joining, and
-   others.
+🧠 **Data Enrichment and Processing.**
+   - Generate metadata columns using local AI models and LLM APIs.
+   - Filter, join, and group by AI metadata. Vector similarity search.
+   - Pass datasets to Pytorch and Tensorflow, or export back into storage.
 
-🐍 **User-friendly interface.**
-   Operate efficiently with familiar Python objects and object fields, eliminating the
-   need for SQL.
+🚀 **Efficiency.**
+   - Parallelization, out-of-memory workloads and data caching.
+   - Vectorized operations on Python object fields: sum, count, avg, etc.
+   - Vector search on embeddings.
 
+
+Quick Start
+-----------
 
 .. code:: console
 
    $ pip install datachain
 
 
-Data Structures
-===============
+Selecting files using JSON metadata
+======================================
 
-DataChain introduces expressive data structures tailored for AI-specific workload:
+A storage consists of images of cats and dogs (`dog.1048.jpg`, `cat.1009.jpg`),
+annotated with ground truth and model inferences in the 'json-pairs' format,
+where each image has a matching JSON file like `cat.1009.json`:
 
-- **Dataset:** Preserves the file-references and meta-information. Takes care of Python
-  object serialization, dataset versioning and difference. Operations on dataset:
+.. code:: json
 
-  - **Transformations:** traditional data-frame or SQL operations such as filtering,
-    grouping, joining.
-  - **Enrichments:** mapping, aggregating and generating using customer’s Python
-    code. This is needed to work with ML inference and LLM calls.
+    {
+        "class": "cat", "id": "1009", "num_annotators": 8,
+        "inference": {"class": "dog", "confidence": 0.68}
+    }
 
-- **Chain** is a sequence of operations on datasets. Chain executes operations in lazy
-  mode - only when needed.
-
-DataChain name comes from these major data structures: dataset and chaining.
+Example of downloading only high-confidence cat images using JSON metadata:
 
 
-What’s new in DataChain?
-========================
+.. code:: py
 
-The project combines multiple ideas from different areas in order to simplify AI
-use-cases and at the same time to fit it into traditional data infrastructure.
+    from datachain import Column, DataChain
 
-- **Python-Native for AI.** Utilizes Python instead of SQL for data manipulation as the
-  native language for AI. It’s powered by `Pydantic`_ data models.
-- **Separation of CPU-GPU workloads.** Distinguishes CPU-heavy transformations (filter,
-  group_by, join) from GPU heavy enrichments (ML-inference or LLM calls). That’s mostly
-  needed for distributed computations.
-- **Resuming data processing** (in development). Introduces idempotent operations,
-  allowing data processing to resume from the last successful process file/record/batch
-  if it fails due to issues like failed LLM calls, ML inference or file download.
+    meta = DataChain.from_json("gs://datachain-demo/dogs-and-cats/*json", object_name="meta")
+    images = DataChain.from_storage("gs://datachain-demo/dogs-and-cats/*jpg")
 
-Additional relatively new ideas:
+    images_id = images.map(id=lambda file: file.path.split('.')[-2])
+    annotated = images_id.merge(meta, on="id", right_on="meta.id")
 
-- **Functional style data processing.** Using a functional/chaining approach to data
-  processing rather than declarative SQL, inspired by R-dplyr and some Python libraries.
-- **Data Versioning.** Treats raw files in cloud storage as the source of truth for data
-  and implements data versioning, extending ideas from DVC (developed by the same team).
+    likely_cats = annotated.filter((Column("meta.inference.confidence") > 0.93) \
+                                   & (Column("meta.inference.class_") == "cat"))
+    likely_cats.export_files("high-confidence-cats/", signal="file")
 
 
-What DataChain is NOT?
-======================
-
-- **Not a database** (Postgres, MySQL). Instead, it uses databases under the hood:
-  `SQLite`_ in open-source and ClickHouse and other data warehouses for the commercial
-  version.
-- **Not a data processing tool / data warehouse** (Spark, Snowflake, Big Query) since
-  it delegates heavy data transformations to underlying data warehouses and focuses on
-  AI specific data enrichments and orchestrating all the pieces together.
-
-
-Quick Start
------------
-
-Data curation with a local model
-=================================
-
-We will evaluate chatbot dialogs stored as text files in Google Cloud Storage
-- 50 files total in this example.
-These dialogs involve users chatting with a bot while looking for better wireless plans.
-Our goal is to identify the successful dialogs.
-
-The data used in the examples is `publicly available`_. The sample code is designed to run on a local machine.
-
-First, we'll show batch inference with a simple sentiment model using the `transformers` library:
+Data curation with a local AI model
+===================================
+Batch inference with a simple sentiment model using the `transformers` library:
 
 .. code:: shell
 
@@ -162,30 +138,30 @@ LLM judging chatbots
 =============================
 
 LLMs can work as efficient universal classifiers. In the example below,
-we employ a free API from Mistral to judge the chatbot performance. Please get a free
+we employ a free API from Mistral to judge the `publicly available`_ chatbot dialogs. Please get a free
 Mistral API key at https://console.mistral.ai
+
 
 .. code:: shell
 
-    $ pip install mistralai
+    $ pip install mistralai (Requires version >=1.0.0)
     $ export MISTRAL_API_KEY=_your_key_
 
 DataChain can parallelize API calls; the free Mistral tier supports up to 4 requests at the same time.
 
 .. code:: py
 
-    from mistralai.client import MistralClient
-    from mistralai.models.chat_completion import ChatMessage
+    from mistralai import Mistral
     from datachain import File, DataChain, Column
 
     PROMPT = "Was this dialog successful? Answer in a single word: Success or Failure."
 
     def eval_dialogue(file: File) -> bool:
-         client = MistralClient()
-         response = client.chat(
+         client = Mistral()
+         response = client.chat.complete(
              model="open-mixtral-8x22b",
-             messages=[ChatMessage(role="system", content=PROMPT),
-                       ChatMessage(role="user", content=file.read())])
+             messages=[{"role": "system", "content": PROMPT},
+                       {"role": "user", "content": file.read()}])
          result = response.choices[0].message.content
          return result.lower().startswith("success")
 
@@ -225,8 +201,8 @@ Instead of extracting this information from the Mistral response data structure 
 
 .. code:: py
 
-    from mistralai.client import MistralClient
-    from mistralai.models.chat_completion import ChatMessage, ChatCompletionResponse
+    from mistralai import Mistral
+    from mistralai.models import ChatCompletionResponse
     from datachain import File, DataChain, Column
 
     PROMPT = "Was this dialog successful? Answer in a single word: Success or Failure."
@@ -235,8 +211,8 @@ Instead of extracting this information from the Mistral response data structure 
          client = MistralClient()
          return client.chat(
              model="open-mixtral-8x22b",
-             messages=[ChatMessage(role="system", content=PROMPT),
-                       ChatMessage(role="user", content=file.read())])
+             messages=[{"role": "system", "content": PROMPT},
+                       {"role": "user", "content": file.read()}])
 
     chain = (
        DataChain.from_storage("gs://datachain-demo/chatbot-KiT/", object_name="file")
@@ -354,7 +330,10 @@ Tutorials
 ---------
 
 * `Getting Started`_
-* `Multimodal <examples/multimodal/clip_fine_tuning.ipynb>`_ (try in `Colab <https://colab.research.google.com/github/iterative/datachain/blob/main/examples/multimodal/clip_fine_tuning.ipynb>`__)
+* `Multimodal <https://github.com/iterative/datachain-examples/blob/main/multimodal/clip_fine_tuning.ipynb>`_ (try in `Colab <https://colab.research.google.com/github/iterative/datachain-examples/blob/main/multimodal/clip_fine_tuning.ipynb>`__)
+* `LLM evaluations <https://github.com/iterative/datachain-examples/blob/main/llm/llm_chatbot_evaluation.ipynb>`_ (try in `Colab <https://colab.research.google.com/github/iterative/datachain-examples/blob/main/llm/llm_chatbot_evaluation.ipynb>`__)
+* `Reading JSON metadata <https://github.com/iterative/datachain-examples/blob/main/formats/json-metadata-tutorial.ipynb>`_ (try in `Colab <https://colab.research.google.com/github/iterative/datachain-examples/blob/main/formats/json-metadata-tutorial.ipynb>`__)
+
 
 Contributions
 -------------
