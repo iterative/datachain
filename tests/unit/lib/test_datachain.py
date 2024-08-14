@@ -1544,6 +1544,7 @@ def test_mutate_with_expression_without_type(catalog):
     )
 
 
+@skip_if_not_sqlite
 def test_from_values_nan_inf(tmp_dir, catalog):
     vals = [float("nan"), float("inf"), float("-inf")]
     dc = DataChain.from_values(vals=vals)
@@ -1553,6 +1554,7 @@ def test_from_values_nan_inf(tmp_dir, catalog):
     assert np.isneginf(res[2])
 
 
+@skip_if_not_sqlite
 def test_from_pandas_nan_inf(tmp_dir, catalog):
     vals = [float("nan"), float("inf"), float("-inf")]
     df = pd.DataFrame({"vals": vals})
@@ -1563,6 +1565,7 @@ def test_from_pandas_nan_inf(tmp_dir, catalog):
     assert np.isneginf(res[2])
 
 
+@skip_if_not_sqlite
 def test_from_parquet_nan_inf(tmp_dir, catalog):
     vals = [float("nan"), float("inf"), float("-inf")]
     tbl = pa.table({"vals": vals})
@@ -1576,6 +1579,7 @@ def test_from_parquet_nan_inf(tmp_dir, catalog):
     assert np.isneginf(res[2])
 
 
+@skip_if_not_sqlite
 def test_from_csv_nan_inf(tmp_dir, catalog):
     vals = [float("nan"), float("inf"), float("-inf")]
     df = pd.DataFrame({"vals": vals})
