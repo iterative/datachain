@@ -97,15 +97,15 @@ async def _scandir(client, prefix, fetch_workers) -> AsyncIterator:
     await main_task
 
 
-def list_bucket(uri: str, fetch_workers=FETCH_WORKERS, **kwargs) -> Callable:
+def list_bucket(uri: str, client_config=None, fetch_workers=FETCH_WORKERS) -> Callable:
     """
     Function that returns another generator function that yields File objects
     from bucket where each File represents one bucket entry.
     """
 
     def list_func() -> Iterator[File]:
-        # config = client_config or {}
-        client, path = Client.parse_url(uri, None, **kwargs)  # type: ignore[arg-type]
+        config = client_config or {}
+        client, path = Client.parse_url(uri, None, **config)  # type: ignore[arg-type]
         yield from iter_over_async(_scandir(client, path, fetch_workers), get_loop())
 
     return list_func
