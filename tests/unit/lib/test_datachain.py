@@ -1392,6 +1392,46 @@ def test_union(test_session):
     assert sorted(chain3.collect("value")) == [1, 2, 3, 4]
 
 
+def test_union_different_columns(test_session):
+    chain1 = DataChain.from_values(
+        value=[1, 2], name=["chain", "more"], session=test_session
+    )
+    chain2 = DataChain.from_values(value=[3, 4], session=test_session)
+    chain3 = DataChain.from_values(
+        other=["a", "different", "thing"], session=test_session
+    )
+    with pytest.raises(
+        ValueError, match="Cannot perform union. name only present in left"
+    ):
+        chain1.union(chain2).show()
+    with pytest.raises(
+        ValueError, match="Cannot perform union. name only present in right"
+    ):
+        chain2.union(chain1).show()
+    with pytest.raises(
+        ValueError,
+        match="Cannot perform union. "
+        "other only present in left. "
+        "name, value only present in right",
+    ):
+        chain3.union(chain1).show()
+
+
+def test_union_different_column_order(test_session):
+    chain1 = DataChain.from_values(
+        value=[1, 2], name=["chain", "more"], session=test_session
+    )
+    chain2 = DataChain.from_values(
+        name=["different", "order"], value=[9, 10], session=test_session
+    )
+    assert list(chain1.union(chain2).collect()) == [
+        (1, "chain"),
+        (2, "more"),
+        (9, "different"),
+        (10, "order"),
+    ]
+
+
 def test_subtract(test_session):
     chain1 = DataChain.from_values(a=[1, 1, 2], b=["x", "y", "z"], session=test_session)
     chain2 = DataChain.from_values(a=[1, 2], b=["x", "y"], session=test_session)
