@@ -386,7 +386,10 @@ class DataChain(DatasetQuery):
             client_config["anon"] = True
 
         session = Session.get(
-            session, catalog=kwargs.get("catalog"), client_config=client_config
+            session,
+            catalog=kwargs.get("catalog"),
+            client_config=client_config,
+            in_memory=in_memory,
         )
 
         client, path = Client.parse_url(
@@ -404,7 +407,7 @@ class DataChain(DatasetQuery):
             client.uri, posixpath.join(lst_path, "")
         )
 
-        for ds in cls.datasets(session=session).collect("dataset"):
+        for ds in cls.datasets(session=session, in_memory=in_memory).collect("dataset"):
             # TODO filter out expired ones
             if (
                 DatasetRecord.contains_listing(
@@ -421,7 +424,12 @@ class DataChain(DatasetQuery):
                 )
 
         (
-            cls.from_records(DataChain.DEFAULT_FILE_RECORD, session=session, **kwargs)
+            cls.from_records(
+                DataChain.DEFAULT_FILE_RECORD,
+                session=session,
+                in_memory=in_memory,
+                **kwargs,
+            )
             .gen(
                 list_bucket(lst_uri, **session.catalog.client_config),
                 output={f"{object_name}": file_type},
