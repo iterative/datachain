@@ -17,6 +17,7 @@ from datetime import datetime
 from types import MappingProxyType
 from typing import Any, Union
 
+import sqlalchemy as sa
 from sqlalchemy import TypeDecorator, types
 
 _registry: dict[str, "TypeConverter"] = {}
@@ -395,7 +396,11 @@ class TypeReadConverter:
         return value
 
     def float(self, value):
-        return float("nan") if value is None else value
+        if value is None:
+            return float("nan")
+        if isinstance(value, str) and value.lower() == "nan":
+            return float("nan")
+        return value
 
     def float32(self, value):
         return self.float(value)
@@ -415,6 +420,8 @@ class TypeReadConverter:
         return value
 
     def binary(self, value):
+        if isinstance(value, str):
+            return value.encode()
         return value
 
 
@@ -502,25 +509,25 @@ class TypeDefaults:
 
 class DBDefaults:
     def string(self):
-        return None
+        return sa.text("''")
 
     def boolean(self):
-        return None
+        return sa.text("False")
 
     def int(self):
-        return None
+        return sa.text("0")
 
     def int32(self):
-        return None
+        return self.int()
 
     def int64(self):
-        return None
+        return self.int()
 
     def uint64(self):
-        return None
+        return self.int()
 
     def float(self):
-        return None
+        return sa.text("NaN")
 
     def float32(self):
         return self.float()
@@ -529,16 +536,16 @@ class DBDefaults:
         return self.float()
 
     def array(self):
-        return None
+        return sa.text("'[]'")
 
     def json(self):
-        return None
+        return sa.text("'{}'")
 
     def datetime(self):
-        return None
+        return sa.text("'1970-01-01 00:00:00'")
 
     def binary(self):
-        return None
+        return sa.text("''")
 
 
 TYPES = [
