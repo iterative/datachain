@@ -839,6 +839,9 @@ class DataChain(DatasetQuery):
     def mutate(self, **kwargs) -> "Self":
         """Create new signals based on existing signals.
 
+        This method cannot modify existing columns. If you need to modify an existing column,
+        use a different name for the new column and then use `select()` to choose which columns to keep.
+
         This method is vectorized and more efficient compared to map(), and it does not
         extract or download any data from the internal database. However, it can only
         utilize predefined built-in functions and their combinations.
@@ -860,6 +863,10 @@ class DataChain(DatasetQuery):
         )
         ```
         """
+        existing_columns = set(self.signals_schema.values.keys())
+        for col_name in kwargs.keys():
+            if col_name in existing_columns:
+                raise DataChainColumnError(col_name, "Cannot modify existing column with mutate(). Use a different name for the new column.")
         for col_name, expr in kwargs.items():
             if not isinstance(expr, Column) and isinstance(expr.type, NullType):
                 raise DataChainColumnError(
