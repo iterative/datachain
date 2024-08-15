@@ -20,6 +20,8 @@ from sqlalchemy.dialects import sqlite
 from sqlalchemy.schema import CreateIndex, CreateTable, DropTable
 from sqlalchemy.sql import func
 from sqlalchemy.sql.expression import bindparam, cast
+from sqlalchemy.sql.selectable import Select
+from tqdm import tqdm
 
 import datachain.sql.sqlite
 from datachain.data_storage import AbstractDBMetastore, AbstractWarehouse
@@ -35,14 +37,13 @@ from datachain.sql.sqlite import create_user_defined_sql_functions, sqlite_diale
 from datachain.sql.sqlite.base import load_usearch_extension
 from datachain.sql.types import SQLType
 from datachain.storage import StorageURI
-from datachain.utils import DataChainDir
+from datachain.utils import DataChainDir, batched_it
 
 if TYPE_CHECKING:
     from sqlalchemy.dialects.sqlite import Insert
     from sqlalchemy.engine.base import Engine
     from sqlalchemy.schema import SchemaItem
-    from sqlalchemy.sql.elements import ColumnClause, ColumnElement, TextClause
-    from sqlalchemy.sql.selectable import Select
+    from sqlalchemy.sql.elements import ColumnElement
     from sqlalchemy.types import TypeEngine
 
 
@@ -53,8 +54,6 @@ RETRY_MAX_TIMES = 10
 RETRY_FACTOR = 2
 
 DETECT_TYPES = sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES
-
-Column = Union[str, "ColumnClause[Any]", "TextClause"]
 
 datachain.sql.sqlite.setup()
 
@@ -631,9 +630,7 @@ class SQLiteWarehouse(AbstractWarehouse):
         self.db.create_table(table, if_not_exists=if_not_exists)
         return table
 
-    def dataset_rows_select(
-        self, select_query: sqlalchemy.sql.selectable.Select, **kwargs
-    ):
+    def dataset_rows_select(self, select_query: Select, **kwargs):
         rows = self.db.execute(select_query, **kwargs)
         yield from convert_rows_custom_column_types(
             select_query.selected_columns, rows, sqlite_dialect
@@ -751,6 +748,34 @@ class SQLiteWarehouse(AbstractWarehouse):
     ) -> list[str]:
         raise NotImplementedError("Exporting dataset table not implemented for SQLite")
 
+    def copy_table(
+        self,
+        table: Table,
+        query: Select,
+        progress_cb: Optional[Callable[[int], None]] = None,
+    ) -> None:
+        if "sys__id" in query.selected_columns:
+            col_id = query.selected_columns.sys__id
+        else:
+            col_id = sqlalchemy.column("sys__id")
+        select_ids = query.with_only_columns(col_id)
+
+        ids = self.db.execute(select_ids).fetchall()
+
+        select_q = query.with_only_columns(
+            *[c for c in query.selected_columns if c.name != "sys__id"]
+        )
+
+        for batch in batched_it(ids, 10_000):
+            batch_ids = [row[0] for row in batch]
+            select_q._where_criteria = (col_id.in_(batch_ids),)
+            q = table.insert().from_select(list(select_q.selected_columns), select_q)
+
+            self.db.execute(q)
+
+            if progress_cb:
+                progress_cb(len(batch_ids))
+
     def create_pre_udf_table(self, query: "Select") -> "Table":
         """
         Create a temporary table from a query for use in a UDF.
@@ -762,11 +787,7 @@ class SQLiteWarehouse(AbstractWarehouse):
         ]
         table = self.create_udf_table(columns)
 
-        select_q = query.with_only_columns(
-            *[c for c in query.selected_columns if c.name != "sys__id"]
-        )
-        self.db.execute(
-            table.insert().from_select(list(select_q.selected_columns), select_q)
-        )
+        with tqdm(desc="Preparing", unit=" rows") as pbar:
+            self.copy_table(table, query, progress_cb=pbar.update)
 
         return table

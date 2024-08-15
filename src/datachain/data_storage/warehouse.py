@@ -6,7 +6,7 @@ import random
 import string
 from abc import ABC, abstractmethod
 from collections.abc import Generator, Iterable, Iterator, Sequence
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 from urllib.parse import urlparse
 
 import attrs
@@ -14,6 +14,7 @@ import sqlalchemy as sa
 from sqlalchemy import Table, case, select
 from sqlalchemy.sql import func
 from sqlalchemy.sql.expression import true
+from tqdm import tqdm
 
 from datachain.client import Client
 from datachain.data_storage.serializer import Serializable
@@ -902,6 +903,17 @@ class AbstractWarehouse(ABC, Serializable):
         return tbl
 
     @abstractmethod
+    def copy_table(
+        self,
+        table: Table,
+        query: "Select",
+        progress_cb: Optional[Callable[[int], None]] = None,
+    ) -> None:
+        """
+        Copy the results of a query into a table.
+        """
+
+    @abstractmethod
     def create_pre_udf_table(self, query: "Select") -> "Table":
         """
         Create a temporary table from a query for use in a UDF.
@@ -928,8 +940,10 @@ class AbstractWarehouse(ABC, Serializable):
         This should be implemented to ensure that the provided tables
         are cleaned up as soon as they are no longer needed.
         """
-        for name in names:
-            self.db.drop_table(Table(name, self.db.metadata), if_exists=True)
+        with tqdm(desc="Cleanup", unit=" tables") as pbar:
+            for name in names:
+                self.db.drop_table(Table(name, self.db.metadata), if_exists=True)
+                pbar.update(1)
 
     def changed_query(
         self,
