@@ -41,6 +41,17 @@ def test_get_id_generator(sqlite_db):
             get_id_generator()
 
 
+def test_get_id_generator_in_memory():
+    if os.environ.get("DATACHAIN_ID_GENERATOR"):
+        with pytest.raises(RuntimeError):
+            id_generator = get_id_generator(in_memory=True)
+    else:
+        id_generator = get_id_generator(in_memory=True)
+        assert isinstance(id_generator, SQLiteIDGenerator)
+        assert id_generator.db.db_file == ":memory:"
+        id_generator.close()
+
+
 def test_get_metastore(sqlite_db):
     id_generator = SQLiteIDGenerator(sqlite_db, table_prefix="prefix")
     uri = StorageURI("s3://bucket")
@@ -71,6 +82,21 @@ def test_get_metastore(sqlite_db):
             get_metastore(None)
 
 
+def test_get_metastore_in_memory():
+    if os.environ.get("DATACHAIN_METASTORE"):
+        id_generator = get_id_generator()
+        with pytest.raises(RuntimeError):
+            metastore = get_metastore(id_generator, in_memory=True)
+        id_generator.close()
+    else:
+        id_generator = get_id_generator(in_memory=True)
+        metastore = get_metastore(id_generator, in_memory=True)
+        assert isinstance(metastore, SQLiteMetastore)
+        assert metastore.db.db_file == ":memory:"
+        metastore.close()
+        id_generator.close()
+
+
 def test_get_warehouse(sqlite_db):
     id_generator = SQLiteIDGenerator(sqlite_db, table_prefix="prefix")
 
@@ -93,6 +119,21 @@ def test_get_warehouse(sqlite_db):
     with patch.dict(os.environ, {"DATACHAIN__WAREHOUSE": sqlite_db.serialize()}):
         with pytest.raises(RuntimeError, match="instance of AbstractWarehouse"):
             get_warehouse(None)
+
+
+def test_get_warehouse_in_memory():
+    if os.environ.get("DATACHAIN_WAREHOUSE"):
+        id_generator = get_id_generator()
+        with pytest.raises(RuntimeError):
+            warehouse = get_warehouse(id_generator, in_memory=True)
+        id_generator.close()
+    else:
+        id_generator = get_id_generator(in_memory=True)
+        warehouse = get_warehouse(id_generator, in_memory=True)
+        assert isinstance(warehouse, SQLiteWarehouse)
+        assert warehouse.db.db_file == ":memory:"
+        warehouse.close()
+        id_generator.close()
 
 
 def test_get_distributed_class():
