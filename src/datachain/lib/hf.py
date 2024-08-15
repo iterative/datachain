@@ -1,5 +1,20 @@
 try:
-    import datasets
+    from datasets import (
+        Array2D,
+        Array3D,
+        Array4D,
+        Array5D,
+        Audio,
+        ClassLabel,
+        Dataset,
+        DatasetDict,
+        Image,
+        IterableDataset,
+        IterableDatasetDict,
+        Sequence,
+        Value,
+        load_dataset,
+    )
     from datasets.features.features import string_to_arrow
     from datasets.features.image import image_to_bytes
 
@@ -11,7 +26,7 @@ except ImportError as exc:
     ) from exc
 
 from io import BytesIO
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Union
 
 import PIL
 
@@ -23,12 +38,19 @@ if TYPE_CHECKING:
     from pydantic import BaseModel
 
 
+HFDatasetType = Union[DatasetDict, Dataset, IterableDatasetDict, IterableDataset]
+
+
 class HFClassLabel(DataModel):
     string: str
     integer: int
 
+    def read(self):
+        return self.integer
+
 
 class HFImage(DataModel):
+    path: str
     img: bytes
 
     def read(self):
@@ -42,19 +64,19 @@ class HFAudio(DataModel):
 
 
 class HFGenerator(Generator):
-    def __init__(self, ds: datasets.Dataset, output_schema: type["BaseModel"]):
+    def __init__(self, ds: HFDatasetType, output_schema: type["BaseModel"]):
         super().__init__()
         self.ds = ds
         self.output_schema = output_schema
 
     def process(self):
-        if isinstance(self.ds, datasets.IterableDatasetDict):
+        if isinstance(self.ds, (DatasetDict, IterableDatasetDict)):
             for split in self.ds:
                 yield from self._process_ds(self.ds[split], split)
         else:
             yield from self._process_ds(self.ds)
 
-    def _process_ds(self, ds: datasets.Dataset, split=False):
+    def _process_ds(self, ds: Union[Dataset, IterableDataset], split=False):
         for row in ds:
             output_dict = {}
             if split:
@@ -66,36 +88,32 @@ class HFGenerator(Generator):
 
 
 def stream_dataset(path: str, **kwargs):
-    return datasets.load_dataset(path, streaming=True, **kwargs)
+    return load_dataset(path, streaming=True, **kwargs)
 
 
 def _convert_feature(val: Any, feat: Any, anno: Any) -> Any:
-    if isinstance(feat, datasets.Value):
+    if isinstance(feat, (Value, Array2D, Array3D, Array4D, Array5D)):
         return val
-    if isinstance(feat, datasets.ClassLabel):
+    if isinstance(feat, ClassLabel):
         return HFClassLabel(string=feat.names[val], integer=val)
-    if isinstance(feat, datasets.Sequence):
-        sdict = {}
-        for sname in val:
-            sfeat = feat.feature[sname]
-            sanno = anno.model_fields[sname].annotation
-            sdict[sname] = [_convert_feature(v, sfeat, sanno) for v in val]
-        return anno(**sdict)
-    if isinstance(
-        feat, (datasets.Array2D, datasets.Array3D, datasets.Array4D, datasets.Array5D)
-    ):
-        return val.tolist()
-    if isinstance(feat, datasets.Image):
-        return HFImage(img=image_to_bytes(val))
-    if isinstance(feat, datasets.Audio):
+    if isinstance(feat, Sequence):
+        if isinstance(feat.feature, dict):
+            sdict = {}
+            for sname in val:
+                sfeat = feat.feature[sname]
+                sanno = anno.model_fields[sname].annotation
+                sdict[sname] = [_convert_feature(v, sfeat, sanno) for v in val[sname]]
+            return anno(**sdict)
+        return val
+    if isinstance(feat, Image):
+        return HFImage(img=image_to_bytes(val), path=val.filename)
+    if isinstance(feat, Audio):
         return HFAudio(**val)
 
 
-def get_output_schema(
-    ds: datasets.Dataset, model_name: str = ""
-) -> dict[str, DataType]:
+def get_output_schema(ds: HFDatasetType, model_name: str = "") -> dict[str, DataType]:
     fields_dict = {}
-    if isinstance(ds, datasets.IterableDatasetDict):
+    if isinstance(ds, (DatasetDict, IterableDatasetDict)):
         fields_dict["split"] = str
         ds = ds[next(iter(ds.keys()))]
     for name, val in ds.features.items():
@@ -104,29 +122,32 @@ def get_output_schema(
 
 
 def _feature_to_chain_type(name: str, val: Any) -> type:  # noqa: PLR0911
-    if isinstance(val, datasets.Value):
+    if isinstance(val, Value):
         return arrow_type_mapper(val.pa_type)
-    if isinstance(val, datasets.ClassLabel):
+    if isinstance(val, ClassLabel):
         return HFClassLabel
-    if isinstance(val, datasets.Sequence):
-        sequence_dict = {}
-        for sname, sval in val.feature.items():
-            sequence_dict[sname] = list[_feature_to_chain_type(sname, sval)]  # type: ignore[misc]
-        return dict_to_data_model(name, sequence_dict)
-    if isinstance(val, datasets.Array2D):
-        dtype = _feature_to_chain_type(name, string_to_arrow(val.dtype))  # type: ignore[misc]
+    if isinstance(val, Sequence):
+        if isinstance(val.feature, dict):
+            sequence_dict = {}
+            for sname, sval in val.feature.items():
+                dtype = _feature_to_chain_type(sname, sval)
+                sequence_dict[sname] = list[dtype]  # type: ignore[valid-type]
+            return dict_to_data_model(name, sequence_dict)  # type: ignore[arg-type]
+        return list[_feature_to_chain_type(name, val.feature)]  # type: ignore[arg-type,misc]
+    if isinstance(val, Array2D):
+        dtype = arrow_type_mapper(string_to_arrow(val.dtype))
         return list[list[dtype]]  # type: ignore[valid-type]
-    if isinstance(val, datasets.Array3D):
-        dtype = _feature_to_chain_type(name, string_to_arrow(val.dtype))  # type: ignore[misc]
+    if isinstance(val, Array3D):
+        dtype = arrow_type_mapper(string_to_arrow(val.dtype))
         return list[list[list[dtype]]]  # type: ignore[valid-type]
-    if isinstance(val, datasets.Array4D):
-        dtype = _feature_to_chain_type(name, string_to_arrow(val.dtype))  # type: ignore[misc]
+    if isinstance(val, Array4D):
+        dtype = arrow_type_mapper(string_to_arrow(val.dtype))
         return list[list[list[list[dtype]]]]  # type: ignore[valid-type]
-    if isinstance(val, datasets.Array5D):
-        dtype = _feature_to_chain_type(name, string_to_arrow(val.dtype))  # type: ignore[misc]
+    if isinstance(val, Array5D):
+        dtype = arrow_type_mapper(string_to_arrow(val.dtype))
         return list[list[list[list[list[dtype]]]]]  # type: ignore[valid-type]
-    if isinstance(val, datasets.Image):
+    if isinstance(val, Image):
         return HFImage
-    if isinstance(val, datasets.Audio):
+    if isinstance(val, Audio):
         return HFAudio
     raise TypeError(f"Unknown huggingface datasets type {type(val)}")

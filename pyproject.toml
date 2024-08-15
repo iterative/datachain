@@ -86,7 +86,8 @@ tests = [
   "hypothesis",
   "open_clip_torch",
   "aiotools>=1.7.0",
-  "requests-mock"
+  "requests-mock",
+  "scipy"
 ]
 dev = [
   "datachain[docs,tests]",

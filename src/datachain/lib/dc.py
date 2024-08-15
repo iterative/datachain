@@ -52,8 +52,9 @@ from datachain.sql.functions import path as pathfunc
 from datachain.utils import inside_notebook
 
 if TYPE_CHECKING:
-    from datasets import Dataset
     from typing_extensions import Concatenate, ParamSpec, Self
+
+    from datachain.lib.hf import HFDatasetType
 
     P = ParamSpec("P")
 
@@ -1265,7 +1266,7 @@ class DataChain(DatasetQuery):
     @classmethod
     def from_hf(
         cls,
-        dataset: Union[str, "Dataset"],
+        dataset: Union[str, "HFDatasetType"],
         session: Optional[Session] = None,
         object_name: str = "",
         model_name: str = "",
@@ -1275,7 +1276,7 @@ class DataChain(DatasetQuery):
 
         Parameters:
             dataset : Path or name of the dataset to read from Hugging Face Hub,
-                or an instance of `datasets.Dataset`.
+                or an instance of `datasets.Dataset`-like object.
             session : Session to use for the chain.
             object_name : Generated object column name.
             model_name : Generated model name.

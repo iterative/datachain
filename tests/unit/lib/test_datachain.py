@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from datasets import Dataset
+from datasets.exceptions import DatasetNotFoundError
 from pydantic import BaseModel
 
 from datachain import Column
@@ -1504,3 +1505,14 @@ def test_from_hf(test_session):
     ds = Dataset.from_dict(DF_DATA)
     df = DataChain.from_hf(ds, session=test_session).to_pandas()
     assert df.equals(pd.DataFrame(DF_DATA))
+
+
+def test_from_hf_object_name(test_session):
+    ds = Dataset.from_dict(DF_DATA)
+    df = DataChain.from_hf(ds, session=test_session, object_name="obj").to_pandas()
+    assert df["obj"].equals(pd.DataFrame(DF_DATA))
+
+
+def test_from_hf_invalid(test_session):
+    with pytest.raises(DatasetNotFoundError):
+        DataChain.from_hf("invalid_dataset", session=test_session)
