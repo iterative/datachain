@@ -206,7 +206,7 @@ def test_db_defaults(col_type, default_value, catalog):
 
     query = sqlalchemy.Select(table_col).select_from(table)
 
-    values = list(row[0] for row in warehouse.dataset_rows_select(query))
+    values = [row[0] for row in warehouse.dataset_rows_select(query)]
     assert len(values) == 1
     if callable(default_value):
         assert default_value(values[0])
