@@ -1181,6 +1181,20 @@ def test_parallel(processes, test_session_tmpfile):
     assert res == [prefix + v for v in vals]
 
 
+@skip_if_not_sqlite
+def test_parallel_in_memory():
+    prefix = "t & "
+    vals = ["a", "b", "c", "d", "e", "f", "g", "h", "i"]
+
+    with pytest.raises(RuntimeError):
+        list(
+            DataChain.from_values(key=vals, in_memory=True)
+            .settings(parallel=True)
+            .map(res=lambda key: prefix + key)
+            .collect("res")
+        )
+
+
 def test_exec(test_session):
     names = ("f1.jpg", "f1.json", "f1.txt", "f2.jpg", "f2.json")
     all_names = set()
