@@ -1,4 +1,5 @@
 import os
+import sys
 
 import anthropic
 from anthropic.types import Message
@@ -25,16 +26,21 @@ DEFAULT_OUTPUT_TOKENS = 1024
 
 API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 
+if not API_KEY:
+    print("This example requires an Anthropic API key")
+    print("Add your key using the ANTHROPIC_API_KEY environment variable.")
+    sys.exit(0)
+
 
 chain = (
     DataChain.from_storage(DATA, type="text")
-    .filter(Column("file.name").glob("*.txt"))
+    .filter(Column("file.path").glob("*.txt"))
     .limit(5)
     .settings(parallel=4, cache=True)
     .agg(
         dialogues=lambda file: ["\n=====\n".join(f.read() for f in file)],
         output=str,
-        partition_by=path.file_ext(Column("name")),
+        partition_by=path.file_ext(Column("file.path")),
     )
     .setup(client=lambda: anthropic.Anthropic(api_key=API_KEY))
     .map(

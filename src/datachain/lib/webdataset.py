@@ -119,7 +119,7 @@ class Builder:
         return self._tar.extractfile(item).read().decode(self._encoding)
 
     def add(self, file: tarfile.TarInfo):
-        fstream = File(name=file.name)
+        fstream = File(path=file.name)
         ext = fstream.get_file_ext()
         stem = fstream.get_file_stem()
 
@@ -176,9 +176,8 @@ class Builder:
         )
         etag = hashlib.md5(etag_string.encode(), usedforsecurity=False).hexdigest()
         return File(
-            name=core_file.name,
             source=self._tar_stream.source,
-            parent=new_parent,
+            path=f"{new_parent}/{core_file.name}",
             version=self._tar_stream.version,
             size=core_file.size,
             etag=etag,

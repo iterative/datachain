@@ -78,6 +78,13 @@ class AbstractMetastore(ABC, Serializable):
         self.uri = uri
         self.partial_id: Optional[int] = partial_id
 
+    def __enter__(self) -> "AbstractMetastore":
+        """Returns self upon entering context manager."""
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        """Default behavior is to do nothing, as connections may be shared."""
+
     @abstractmethod
     def clone(
         self,
@@ -97,7 +104,13 @@ class AbstractMetastore(ABC, Serializable):
     def close(self) -> None:
         """Closes any active database or HTTP connections."""
 
-    def cleanup_temp_tables(self, temp_table_names: list[str]) -> None:
+    def close_on_exit(self) -> None:
+        """Closes any active database or HTTP connections, called on Session exit or
+        for test cleanup only, as some Metastore implementations may handle this
+        differently."""
+        self.close()
+
+    def cleanup_tables(self, temp_table_names: list[str]) -> None:
         """Cleanup temp tables."""
 
     def cleanup_for_tests(self) -> None:
@@ -421,10 +434,6 @@ class AbstractMetastore(ABC, Serializable):
     ) -> None:
         """Set the status of the given job and dataset."""
 
-    @abstractmethod
-    def get_possibly_stale_jobs(self) -> list[tuple[str, str, int]]:
-        """Returns the possibly stale jobs."""
-
 
 class AbstractDBMetastore(AbstractMetastore):
     """
@@ -461,7 +470,7 @@ class AbstractDBMetastore(AbstractMetastore):
         """Closes any active database connections."""
         self.db.close()
 
-    def cleanup_temp_tables(self, temp_table_names: list[str]) -> None:
+    def cleanup_tables(self, temp_table_names: list[str]) -> None:
         """Cleanup temp tables."""
         self.id_generator.delete_uris(temp_table_names)
 

@@ -6,24 +6,24 @@ from sqlalchemy import Column, Integer, Table
 
 from datachain.data_storage.serializer import deserialize
 from datachain.data_storage.sqlite import SQLiteDatabaseEngine
+from tests.utils import skip_if_not_sqlite
 
 
 @pytest.mark.parametrize("db_file", [":memory:", "file.db"])
+@skip_if_not_sqlite
 def test_init_clone(db_file):
-    db = SQLiteDatabaseEngine.from_db_file(db_file)
-    assert db.db_file == db_file
+    with SQLiteDatabaseEngine.from_db_file(db_file) as db:
+        assert db.db_file == db_file
 
-    # Test clone
-    db2 = db.clone()
-    assert isinstance(db2, SQLiteDatabaseEngine)
-    assert db2.db_file == db_file
+        # Test clone
+        with db.clone() as db2:
+            assert isinstance(db2, SQLiteDatabaseEngine)
+            assert db2.db_file == db_file
 
 
-def test_serialize():
-    obj = SQLiteDatabaseEngine.from_db_file(":memory:")
-
+def test_serialize(sqlite_db):
     # Test serialization
-    serialized = obj.serialize()
+    serialized = sqlite_db.serialize()
     assert serialized
     serialized_pickled = base64.b64decode(serialized.encode())
     assert serialized_pickled
@@ -36,7 +36,7 @@ def test_serialize():
     obj3 = deserialize(serialized)
     assert isinstance(obj3, SQLiteDatabaseEngine)
     assert obj3.db_file == ":memory:"
-    assert obj3.clone_params() == obj.clone_params()
+    assert obj3.clone_params() == sqlite_db.clone_params()
 
 
 def test_table(sqlite_db):

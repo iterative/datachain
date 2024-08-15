@@ -49,4 +49,4 @@ train_loader = DataLoader(
 model, optimizer = train_model(train_loader, NUM_CLASSES, num_epochs=3, lr=0.001)
 
 # NOTE: DataChain requires the  Last line to be an instance of DatasetQuery
-ds.select("file.name", "target", "label").show(3)
+ds.select("file.path", "target", "label").limit(3)

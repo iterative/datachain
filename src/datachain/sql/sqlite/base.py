@@ -22,8 +22,10 @@ from datachain.sql.sqlite.types import (
     register_type_converters,
 )
 from datachain.sql.types import (
+    DBDefaults,
     TypeDefaults,
     register_backend_types,
+    register_db_defaults,
     register_type_defaults,
     register_type_read_converters,
 )
@@ -66,6 +68,7 @@ def setup():
     register_backend_types("sqlite", SQLiteTypeConverter())
     register_type_read_converters("sqlite", SQLiteTypeReadConverter())
     register_type_defaults("sqlite", TypeDefaults())
+    register_db_defaults("sqlite", DBDefaults())
 
     compiles(sql_path.parent, "sqlite")(compile_path_parent)
     compiles(sql_path.name, "sqlite")(compile_path_name)
@@ -78,6 +81,7 @@ def setup():
     compiles(conditional.least, "sqlite")(compile_least)
     compiles(Values, "sqlite")(compile_values)
     compiles(random.rand, "sqlite")(compile_rand)
+    compiles(array.avg, "sqlite")(compile_avg)
 
     if load_usearch_extension(sqlite3.connect(":memory:")):
         compiles(array.cosine_distance, "sqlite")(compile_cosine_distance_ext)
@@ -347,6 +351,10 @@ def compile_values(element, compiler, **kwargs):
 
 def compile_rand(element, compiler, **kwargs):
     return compiler.process(func.random(), **kwargs)
+
+
+def compile_avg(element, compiler, **kwargs):
+    return compiler.process(func.avg(*element.clauses.clauses), **kwargs)
 
 
 def load_usearch_extension(conn) -> bool:

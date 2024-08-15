@@ -67,7 +67,11 @@ def convert_rows_custom_column_types(
     for row in rows:
         row_list = list(row)
         for idx, t in custom_columns_types:
-            row_list[idx] = t.on_read_convert(row_list[idx], dialect)
+            row_list[idx] = (
+                t.default_value(dialect)
+                if row_list[idx] is None
+                else t.on_read_convert(row_list[idx], dialect)
+            )
 
         yield tuple(row_list)
 
@@ -80,8 +84,7 @@ class DirExpansion:
             q.c.vtype,
             (q.c.dir_type == DirType.DIR).label("is_dir"),
             q.c.source,
-            q.c.parent,
-            q.c.name,
+            q.c.path,
             q.c.version,
             q.c.location,
         )
@@ -94,36 +97,29 @@ class DirExpansion:
                 q.c.vtype,
                 q.c.is_dir,
                 q.c.source,
-                q.c.parent,
-                q.c.name,
+                q.c.path,
                 q.c.version,
                 f.max(q.c.location).label("location"),
             )
             .select_from(q)
-            .group_by(
-                q.c.source, q.c.parent, q.c.name, q.c.vtype, q.c.is_dir, q.c.version
-            )
-            .order_by(
-                q.c.source, q.c.parent, q.c.name, q.c.vtype, q.c.is_dir, q.c.version
-            )
+            .group_by(q.c.source, q.c.path, q.c.vtype, q.c.is_dir, q.c.version)
+            .order_by(q.c.source, q.c.path, q.c.vtype, q.c.is_dir, q.c.version)
         )
 
     @classmethod
     def query(cls, q):
         q = cls.base_select(q).cte(recursive=True)
-        parent_parent = path.parent(q.c.parent)
-        parent_name = path.name(q.c.parent)
+        parent = path.parent(q.c.path)
         q = q.union_all(
             sa.select(
                 sa.literal(-1).label("sys__id"),
                 sa.literal("").label("vtype"),
                 true().label("is_dir"),
                 q.c.source,
-                parent_parent.label("parent"),
-                parent_name.label("name"),
+                parent.label("path"),
                 sa.literal("").label("version"),
                 null().label("location"),
-            ).where((parent_name != "") | (parent_parent != ""))
+            ).where(parent != "")
         )
         return cls.apply_group_by(q)
 
@@ -144,7 +140,15 @@ class DataTable:
         self.column_types: dict[str, SQLType] = column_types or {}
 
     @staticmethod
-    def copy_column(column: sa.Column):
+    def copy_column(
+        column: sa.Column,
+        primary_key: Optional[bool] = None,
+        index: Optional[bool] = None,
+        nullable: Optional[bool] = None,
+        default: Optional[Any] = None,
+        server_default: Optional[Any] = None,
+        unique: Optional[bool] = None,
+    ) -> sa.Column:
         """
         Copy a sqlalchemy Column object intended for use as a signal column.
 
@@ -158,12 +162,14 @@ class DataTable:
         return sa.Column(
             column.name,
             column.type,
-            primary_key=column.primary_key,
-            index=column.index,
-            nullable=column.nullable,
-            default=column.default,
-            server_default=column.server_default,
-            unique=column.unique,
+            primary_key=primary_key if primary_key is not None else column.primary_key,
+            index=index if index is not None else column.index,
+            nullable=nullable if nullable is not None else column.nullable,
+            default=default if default is not None else column.default,
+            server_default=(
+                server_default if server_default is not None else column.server_default
+            ),
+            unique=unique if unique is not None else column.unique,
         )
 
     @classmethod

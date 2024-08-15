@@ -1,5 +1,6 @@
 import re
 from collections.abc import Sequence
+from tempfile import NamedTemporaryFile
 from typing import TYPE_CHECKING, Optional
 
 import pyarrow as pa
@@ -10,13 +11,17 @@ from datachain.lib.file import File, IndexedFile
 from datachain.lib.udf import Generator
 
 if TYPE_CHECKING:
+    from pydantic import BaseModel
+
     from datachain.lib.dc import DataChain
 
 
 class ArrowGenerator(Generator):
     def __init__(
         self,
-        schema: Optional["pa.Schema"] = None,
+        input_schema: Optional["pa.Schema"] = None,
+        output_schema: Optional[type["BaseModel"]] = None,
+        source: bool = True,
         nrows: Optional[int] = None,
         **kwargs,
     ):
@@ -25,27 +30,41 @@ class ArrowGenerator(Generator):
 
         Parameters:
 
-        schema : Optional pyarrow schema for validation.
+        input_schema : Optional pyarrow schema for validation.
+        output_schema : Optional pydantic model for validation.
+        source : Whether to include info about the source file.
         nrows : Optional row limit.
         kwargs: Parameters to pass to pyarrow.dataset.dataset.
         """
         super().__init__()
-        self.schema = schema
+        self.input_schema = input_schema
+        self.output_schema = output_schema
+        self.source = source
         self.nrows = nrows
         self.kwargs = kwargs
 
     def process(self, file: File):
-        path = file.get_path()
-        ds = dataset(path, filesystem=file.get_fs(), schema=self.schema, **self.kwargs)
+        if self.nrows:
+            path = _nrows_file(file, self.nrows)
+            ds = dataset(path, schema=self.input_schema, **self.kwargs)
+        else:
+            path = file.get_path()
+            ds = dataset(
+                path, filesystem=file.get_fs(), schema=self.input_schema, **self.kwargs
+            )
         index = 0
         with tqdm(desc="Parsed by pyarrow", unit=" rows") as pbar:
             for record_batch in ds.to_batches():
                 for record in record_batch.to_pylist():
-                    source = IndexedFile(file=file, index=index)
-                    yield [source, *record.values()]
+                    vals = list(record.values())
+                    if self.output_schema:
+                        fields = self.output_schema.model_fields
+                        vals = [self.output_schema(**dict(zip(fields, vals)))]
+                    if self.source:
+                        yield [IndexedFile(file=file, index=index), *vals]
+                    else:
+                        yield vals
                     index += 1
-                    if self.nrows and index >= self.nrows:
-                        return
                 pbar.update(len(record_batch))
 
 
@@ -76,7 +95,10 @@ def schema_to_output(schema: pa.Schema, col_names: Optional[Sequence[str]] = Non
         if not column:
             column = f"c{default_column}"
             default_column += 1
-        output[column] = _arrow_type_mapper(field.type)  # type: ignore[assignment]
+        dtype = _arrow_type_mapper(field.type)  # type: ignore[assignment]
+        if field.nullable:
+            dtype = Optional[dtype]  # type: ignore[assignment]
+        output[column] = dtype
 
     return output
 
@@ -106,3 +128,15 @@ def _arrow_type_mapper(col_type: pa.DataType) -> type:  # noqa: PLR0911
     if isinstance(col_type, pa.lib.DictionaryType):
         return _arrow_type_mapper(col_type.value_type)  # type: ignore[return-value]
     raise TypeError(f"{col_type!r} datatypes not supported")
+
+
+def _nrows_file(file: File, nrows: int) -> str:
+    tf = NamedTemporaryFile(delete=False)
+    with file.open(mode="r") as reader:
+        with open(tf.name, "a") as writer:
+            for row, line in enumerate(reader):
+                if row >= nrows:
+                    break
+                writer.write(line)
+                writer.write("\n")
+    return tf.name

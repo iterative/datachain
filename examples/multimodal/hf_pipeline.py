@@ -1,6 +1,10 @@
-# pip install scipy torch transformers
+# pip install scipy torch transformers huggingface_hub[hf_transfer]
 # NOTE: also need to install ffmpeg binary
 import json
+import os
+import subprocess
+
+os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 
 import torch
 from transformers import pipeline
@@ -45,7 +49,7 @@ if __name__ == "__main__":
             anon=True,
             type="image",
         )
-        .filter(C("file.name").glob("*.jpg"))
+        .filter(C("file.path").glob("*.jpg"))
         .limit(1)
         .map(
             Helper(
@@ -56,7 +60,7 @@ if __name__ == "__main__":
             params=["file"],
             output={"model_output": dict, "error": str},
         )
-        .select("file.source", "file.parent", "file.name", "model_output", "error")
+        .select("file.source", "file.path", "model_output", "error")
         .show()
     )
 
@@ -67,7 +71,7 @@ if __name__ == "__main__":
             anon=True,
             type="image",
         )
-        .filter(C("file.name").glob("*.jpg"))
+        .filter(C("file.path").glob("*.jpg"))
         .limit(1)
         .map(
             Helper(
@@ -77,30 +81,35 @@ if __name__ == "__main__":
             params=["file"],
             output={"model_output": dict, "error": str},
         )
-        .select("file.source", "file.parent", "file.name", "model_output", "error")
+        .select("file.source", "file.path", "model_output", "error")
         .show()
     )
 
     print("\nAudio emotion classification:")
-    (
-        DataChain.from_storage(
-            audio_source,
-            anon=True,
-            type="binary",
+    try:
+        subprocess.run(["ffmpeg", "-L"], check=True)  # noqa: S603, S607
+        (
+            DataChain.from_storage(
+                audio_source,
+                anon=True,
+                type="binary",
+            )
+            .filter(C("file.path").glob("*.wav"))
+            .limit(1)
+            .map(
+                Helper(
+                    model="Krithika-p/my_awesome_emotions_model",
+                    device=device,
+                ),
+                params=["file"],
+                output={"model_output": dict, "error": str},
+            )
+            .select("file.source", "file.path", "model_output", "error")
+            .show()
         )
-        .filter(C("file.name").glob("*.wav"))
-        .limit(1)
-        .map(
-            Helper(
-                model="Krithika-p/my_awesome_emotions_model",
-                device=device,
-            ),
-            params=["file"],
-            output={"model_output": dict, "error": str},
-        )
-        .select("file.source", "file.parent", "file.name", "model_output", "error")
-        .show()
-    )
+    except FileNotFoundError:
+        print("ffmpeg binary not found, skipping audio example")
+
     print("\nLong text summarization:")
     (
         DataChain.from_storage(
@@ -108,7 +117,7 @@ if __name__ == "__main__":
             anon=True,
             type="text",
         )
-        .filter(C("file.name").glob("*.story"))
+        .filter(C("file.path").glob("*.story"))
         .limit(1)
         .map(
             Helper(
@@ -119,6 +128,6 @@ if __name__ == "__main__":
             params=["file"],
             output={"model_output": dict, "error": str},
         )
-        .select("file.source", "file.parent", "file.name", "model_output", "error")
+        .select("file.source", "file.path", "model_output", "error")
         .show()
     )

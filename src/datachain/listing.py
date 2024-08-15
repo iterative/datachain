@@ -5,11 +5,12 @@ from itertools import zip_longest
 from typing import TYPE_CHECKING, Optional
 
 from fsspec.asyn import get_loop, sync
-from sqlalchemy import Column, case
+from sqlalchemy import Column
 from sqlalchemy.sql import func
 from tqdm import tqdm
 
 from datachain.node import DirType, Entry, Node, NodeWithPath
+from datachain.sql.functions import path as pathfunc
 from datachain.utils import suffix_to_number
 
 if TYPE_CHECKING:
@@ -44,6 +45,16 @@ class Listing:
             self.dataset,
         )
 
+    def __enter__(self) -> "Listing":
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        self.close()
+
+    def close(self) -> None:
+        self.metastore.close()
+        self.warehouse.close()
+
     @property
     def id(self):
         return self.storage.id
@@ -56,16 +67,18 @@ class Listing:
         sync(get_loop(), self._fetch, start_prefix, method)
 
     async def _fetch(self, start_prefix: str, method: str) -> None:
-        self = self.clone()
-        if start_prefix:
-            start_prefix = start_prefix.rstrip("/")
-        try:
-            async for entries in self.client.scandir(start_prefix, method=method):
-                self.insert_entries(entries)
-                if len(entries) > 1:
-                    self.metastore.update_last_inserted_at()
-        finally:
-            self.insert_entries_done()
+        with self.clone() as fetch_listing:
+            if start_prefix:
+                start_prefix = start_prefix.rstrip("/")
+            try:
+                async for entries in fetch_listing.client.scandir(
+                    start_prefix, method=method
+                ):
+                    fetch_listing.insert_entries(entries)
+                    if len(entries) > 1:
+                        fetch_listing.metastore.update_last_inserted_at()
+            finally:
+                fetch_listing.insert_entries_done()
 
     def insert_entry(self, entry: Entry) -> None:
         self.warehouse.insert_rows(
@@ -117,7 +130,7 @@ class Listing:
                 dir_path = []
                 if not copy_dir_contents:
                     dir_path.append(node.name)
-                subtree_nodes = src.find(sort=["parent", "name"])
+                subtree_nodes = src.find(sort=["path"])
                 all_nodes.extend(
                     NodeWithPath(n.n, path=dir_path + n.path) for n in subtree_nodes
                 )
@@ -136,8 +149,7 @@ class Listing:
                 elif from_dataset:
                     node_path = [
                         src.listing.client.name,
-                        node.parent,
-                        node.name,
+                        node.path,
                     ]
                 else:
                     node_path = [node.name]
@@ -189,25 +201,19 @@ class Listing:
         dr = self.dataset_rows
         conds = []
         if names:
-            f = Column("name").op("GLOB")
-            conds.extend(f(name) for name in names)
+            for name in names:
+                conds.append(pathfunc.name(Column("path")).op("GLOB")(name))
         if inames:
-            f = func.lower(Column("name")).op("GLOB")
-            conds.extend(f(iname.lower()) for iname in inames)
+            for iname in inames:
+                conds.append(
+                    func.lower(pathfunc.name(Column("path"))).op("GLOB")(iname.lower())
+                )
         if paths:
-            node_path = case(
-                (Column("parent") == "", Column("name")),
-                else_=Column("parent") + "/" + Column("name"),
-            )
-            f = node_path.op("GLOB")
-            conds.extend(f(path) for path in paths)
+            for path in paths:
+                conds.append(Column("path").op("GLOB")(path))
         if ipaths:
-            node_path = case(
-                (Column("parent") == "", Column("name")),
-                else_=Column("parent") + "/" + Column("name"),
-            )
-            f = func.lower(node_path).op("GLOB")
-            conds.extend(f(ipath.lower()) for ipath in ipaths)
+            for ipath in ipaths:
+                conds.append(func.lower(Column("path")).op("GLOB")(ipath.lower()))
 
         if size is not None:
             size_limit = suffix_to_number(size)

@@ -4,7 +4,8 @@ import pickle
 from sqlalchemy import select
 
 from datachain.data_storage.serializer import deserialize
-from datachain.data_storage.sqlite import SQLiteDatabaseEngine, SQLiteIDGenerator
+from datachain.data_storage.sqlite import SQLiteIDGenerator
+from tests.utils import skip_if_not_sqlite
 
 
 def get_rows(id_generator):
@@ -25,6 +26,7 @@ def test_init(sqlite_db):
     assert not sqlite_db.has_table("id_generator")
 
 
+@skip_if_not_sqlite
 def test_init_empty(tmp_dir):
     id_generator = SQLiteIDGenerator()
     assert id_generator._table_prefix is None
@@ -79,11 +81,9 @@ def test_clone_params(id_generator):
     assert not clone.db.has_table("id_generator")
 
 
-def test_serialize():
-    db = SQLiteDatabaseEngine.from_db_file(":memory:")
-
-    obj = SQLiteIDGenerator(db, table_prefix="prefix")
-    assert obj.db == db
+def test_serialize(sqlite_db):
+    obj = SQLiteIDGenerator(sqlite_db, table_prefix="prefix")
+    assert obj.db == sqlite_db
     assert obj._table_prefix == "prefix"
 
     # Test clone
@@ -101,13 +101,13 @@ def test_serialize():
     (f, args, kwargs) = pickle.loads(serialized_pickled)  # noqa: S301
     assert str(f) == str(SQLiteIDGenerator.init_after_clone)
     assert args == []
-    assert str(kwargs["db_clone_params"]) == str(db.clone_params())
+    assert str(kwargs["db_clone_params"]) == str(sqlite_db.clone_params())
     assert kwargs["table_prefix"] == "prefix"
 
     # Test deserialization
     obj3 = deserialize(serialized)
     assert isinstance(obj3, SQLiteIDGenerator)
-    assert obj3.db.db_file == db.db_file
+    assert obj3.db.db_file == sqlite_db.db_file
     assert obj3._table_prefix == "prefix"
 
 

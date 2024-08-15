@@ -34,6 +34,7 @@ from sqlalchemy.sql.elements import ColumnClause, ColumnElement
 from sqlalchemy.sql.expression import label
 from sqlalchemy.sql.schema import TableClause
 from sqlalchemy.sql.selectable import Select
+from tqdm import tqdm
 
 from datachain.asyn import ASYNC_WORKERS, AsyncMapper, OrderedMapper
 from datachain.catalog import (
@@ -125,7 +126,10 @@ class QueryGenerator:
     func: QueryGeneratorFunc
     columns: tuple[ColumnElement, ...]
 
-    def exclude(self, column_names) -> Select:
+    def only(self, column_names: Sequence[str]) -> Select:
+        return self.func(*(c for c in self.columns if c.name in column_names))
+
+    def exclude(self, column_names: Sequence[str]) -> Select:
         return self.func(*(c for c in self.columns if c.name not in column_names))
 
     def select(self, column_names=None) -> Select:
@@ -262,9 +266,7 @@ class DatasetDiffOperation(Step):
         temp_tables.extend(self.dq.temp_table_names)
 
         # creating temp table that will hold subtract results
-        temp_table_name = self.catalog.warehouse.TMP_TABLE_NAME_PREFIX + _random_string(
-            6
-        )
+        temp_table_name = self.catalog.warehouse.temp_table_name()
         temp_tables.append(temp_table_name)
 
         columns = [
@@ -309,7 +311,7 @@ class Subtract(DatasetDiffOperation):
 class Changed(DatasetDiffOperation):
     """
     Calculates rows that are changed in a source query compared to target query
-    Changed means it has same source + parent + name but different last_modified
+    Changed means it has same source + path but different last_modified
     Example:
         >>> ds = DatasetQuery(name="dogs_cats") # some older dataset with embeddings
         >>> ds_updated = (
@@ -448,9 +450,6 @@ class UDFStep(Step, ABC):
         to select
         """
 
-    def udf_table_name(self) -> str:
-        return self.catalog.warehouse.UDF_TABLE_NAME_PREFIX + _random_string(6)
-
     def populate_udf_table(self, udf_table: "Table", query: Select) -> None:
         use_partitioning = self.partition_by is not None
         batching = self.udf.properties.get_batching(use_partitioning)
@@ -466,6 +465,8 @@ class UDFStep(Step, ABC):
 
         processes = determine_processes(self.parallel)
 
+        udf_fields = [str(c.name) for c in query.selected_columns]
+
         try:
             if workers:
                 from datachain.catalog.loader import get_distributed_class
@@ -478,6 +479,7 @@ class UDFStep(Step, ABC):
                     query,
                     workers,
                     processes,
+                    udf_fields=udf_fields,
                     is_generator=self.is_generator,
                     use_partitioning=use_partitioning,
                     cache=self.cache,
@@ -494,6 +496,7 @@ class UDFStep(Step, ABC):
                     "warehouse_clone_params": self.catalog.warehouse.clone_params(),
                     "table": udf_table,
                     "query": query,
+                    "udf_fields": udf_fields,
                     "batching": batching,
                     "processes": processes,
                     "is_generator": self.is_generator,
@@ -533,6 +536,7 @@ class UDFStep(Step, ABC):
                     generated_cb = get_generated_callback(self.is_generator)
                     try:
                         udf_results = udf.run(
+                            udf_fields,
                             udf_inputs,
                             self.catalog,
                             self.is_generator,
@@ -574,9 +578,7 @@ class UDFStep(Step, ABC):
             list_partition_by = [self.partition_by]
 
         # create table with partitions
-        tbl = self.catalog.warehouse.create_udf_table(
-            self.udf_table_name(), partition_columns()
-        )
+        tbl = self.catalog.warehouse.create_udf_table(partition_columns())
 
         # fill table with partitions
         cols = [
@@ -638,37 +640,12 @@ class UDFSignal(UDFStep):
             for (col_name, col_type) in self.udf.output.items()
         ]
 
-        return self.catalog.warehouse.create_udf_table(
-            self.udf_table_name(), udf_output_columns
-        )
-
-    def create_pre_udf_table(self, query: Select) -> "Table":
-        columns = [
-            sqlalchemy.Column(c.name, c.type)
-            for c in query.selected_columns
-            if c.name != "sys__id"
-        ]
-        table = self.catalog.warehouse.create_udf_table(self.udf_table_name(), columns)
-        select_q = query.with_only_columns(
-            *[c for c in query.selected_columns if c.name != "sys__id"]
-        )
-
-        # if there is order by clause we need row_number to preserve order
-        # if there is no order by clause we still need row_number to generate
-        # unique ids as uniqueness is important for this table
-        select_q = select_q.add_columns(
-            f.row_number().over(order_by=select_q._order_by_clauses).label("sys__id")
-        )
-
-        self.catalog.warehouse.db.execute(
-            table.insert().from_select(list(select_q.selected_columns), select_q)
-        )
-        return table
+        return self.catalog.warehouse.create_udf_table(udf_output_columns)
 
     def process_input_query(self, query: Select) -> tuple[Select, list["Table"]]:
         if os.getenv("DATACHAIN_DISABLE_QUERY_CACHE", "") not in ("", "0"):
             return query, []
-        table = self.create_pre_udf_table(query)
+        table = self.catalog.warehouse.create_pre_udf_table(query)
         q: Select = sqlalchemy.select(*table.c)
         if query._order_by_clauses:
             # we are adding ordering only if it's explicitly added by user in
@@ -732,7 +709,7 @@ class RowGenerator(UDFStep):
     def create_udf_table(self, query: Select) -> "Table":
         warehouse = self.catalog.warehouse
 
-        table_name = self.udf_table_name()
+        table_name = self.catalog.warehouse.udf_table_name()
         columns: tuple[Column, ...] = tuple(
             Column(name, typ) for name, typ in self.udf.output.items()
         )
@@ -1083,8 +1060,11 @@ class DatasetQuery:
         if anon:
             client_config["anon"] = True
 
+        self.session = Session.get(
+            session, catalog=catalog, client_config=client_config
+        )
+        self.catalog = catalog or self.session.catalog
         self.steps: list[Step] = []
-        self.catalog = catalog or get_catalog(client_config=client_config)
         self._chunk_index: Optional[int] = None
         self._chunk_total: Optional[int] = None
         self.temp_table_names: list[str] = []
@@ -1095,7 +1075,6 @@ class DatasetQuery:
         self.version: Optional[int] = None
         self.feature_schema: Optional[dict] = None
         self.column_types: Optional[dict[str, Any]] = None
-        self.session = Session.get(session, catalog=catalog)
 
         if path:
             kwargs = {"update": True} if update else {}
@@ -1232,12 +1211,10 @@ class DatasetQuery:
         # This is needed to always use a new connection with all metastore and warehouse
         # implementations, as errors may close or render unusable the existing
         # connections.
-        metastore = self.catalog.metastore.clone(use_new_connection=True)
-        metastore.cleanup_temp_tables(self.temp_table_names)
-        metastore.close()
-        warehouse = self.catalog.warehouse.clone(use_new_connection=True)
-        warehouse.cleanup_temp_tables(self.temp_table_names)
-        warehouse.close()
+        with self.catalog.metastore.clone(use_new_connection=True) as metastore:
+            metastore.cleanup_tables(self.temp_table_names)
+        with self.catalog.warehouse.clone(use_new_connection=True) as warehouse:
+            warehouse.cleanup_tables(self.temp_table_names)
         self.temp_table_names = []
 
     def db_results(self, row_factory=None, **kwargs):
@@ -1276,28 +1253,23 @@ class DatasetQuery:
         actual_params = [normalize_param(p) for p in params]
         try:
             query = self.apply_steps().select()
+            query_fields = [str(c.name) for c in query.selected_columns]
 
-            def row_iter() -> Generator[RowDict, None, None]:
+            def row_iter() -> Generator[Sequence, None, None]:
                 # warehouse isn't threadsafe, we need to clone() it
                 # in the thread that uses the results
-                warehouse = None
-                try:
-                    warehouse = self.catalog.warehouse.clone()
-                    gen = warehouse.dataset_select_paginated(
-                        query, limit=query._limit, order_by=query._order_by_clauses
-                    )
+                with self.catalog.warehouse.clone() as warehouse:
+                    gen = warehouse.dataset_select_paginated(query)
                     with contextlib.closing(gen) as rows:
                         yield from rows
-                finally:
-                    # clone doesn't necessarily create a new connection
-                    # we can't do `warehouse.close()` for now. It is a bad design
-                    # in clone / close interface that needs to be fixed.
-                    pass
 
-            async def get_params(row: RowDict) -> tuple:
+            async def get_params(row: Sequence) -> tuple:
+                row_dict = RowDict(zip(query_fields, row))
                 return tuple(
                     [
-                        await p.get_value_async(self.catalog, row, mapper, **kwargs)
+                        await p.get_value_async(
+                            self.catalog, row_dict, mapper, **kwargs
+                        )
                         for p in actual_params
                     ]
                 )
@@ -1415,7 +1387,14 @@ class DatasetQuery:
     @detach
     def limit(self, n: int) -> "Self":
         query = self.clone(new_table=False)
-        query.steps.append(SQLLimit(n))
+        if (
+            query.steps
+            and (last_step := query.steps[-1])
+            and isinstance(last_step, SQLLimit)
+        ):
+            query.steps[-1] = SQLLimit(min(n, last_step.n))
+        else:
+            query.steps.append(SQLLimit(n))
         return query
 
     @detach
@@ -1558,7 +1537,7 @@ class DatasetQuery:
 
     @detach
     def subtract(self, dq: "DatasetQuery") -> "Self":
-        return self._subtract(dq, on=["source", "parent", "name"])
+        return self._subtract(dq, on=["source", "path"])
 
     @detach
     def _subtract(self, dq: "DatasetQuery", on: Sequence[str]) -> "Self":
@@ -1673,18 +1652,13 @@ class DatasetQuery:
 
             dr = self.catalog.warehouse.dataset_rows(dataset)
 
-            # Exclude the id column and let the db create it to avoid unique
-            # constraint violations.
-            q = query.exclude(("sys__id",))
-            if q._order_by_clauses:
-                # ensuring we have id sorted by order by clause if it exists in a query
-                q = q.add_columns(
-                    f.row_number().over(order_by=q._order_by_clauses).label("sys__id")
+            with tqdm(desc="Saving", unit=" rows") as pbar:
+                self.catalog.warehouse.copy_table(
+                    dr.get_table(),
+                    query.select(),
+                    progress_cb=pbar.update,
                 )
 
-            cols = tuple(c.name for c in q.selected_columns)
-            insert_q = sqlalchemy.insert(dr.get_table()).from_select(cols, q)
-            self.catalog.warehouse.db.execute(insert_q, **kwargs)
             self.catalog.metastore.update_dataset_status(
                 dataset, DatasetStatus.COMPLETE, version=version
             )
@@ -1802,10 +1776,3 @@ def query_wrapper(dataset_query: DatasetQuery) -> DatasetQuery:
 
     _send_result(dataset_query)
     return dataset_query
-
-
-def _random_string(length: int) -> str:
-    return "".join(
-        random.choice(string.ascii_letters + string.digits)  # noqa: S311
-        for i in range(length)
-    )

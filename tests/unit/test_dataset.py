@@ -23,8 +23,7 @@ def test_dataset_table_compilation():
         columns=[
             Column("vtype", String, nullable=False, index=True),
             Column("dir_type", Int, index=True),
-            Column("parent", String, index=True),
-            Column("name", String, nullable=False, index=True),
+            Column("path", String, nullable=False, index=True),
             Column("etag", String),
             Column("version", String),
             Column("is_latest", Boolean),
@@ -47,8 +46,7 @@ def test_dataset_table_compilation():
         "\tsys__rand INTEGER DEFAULT (abs(random())) NOT NULL, \n"
         "\tvtype VARCHAR NOT NULL, \n"
         "\tdir_type INTEGER, \n"
-        "\tparent VARCHAR, \n"
-        "\tname VARCHAR NOT NULL, \n"
+        "\tpath VARCHAR NOT NULL, \n"
         "\tetag VARCHAR, \n"
         "\tversion VARCHAR, \n"
         "\tis_latest BOOLEAN, \n"

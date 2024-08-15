@@ -1,33 +1,45 @@
-import pandas as pd
+import os
 
 from datachain import C, DataChain
 from datachain.lib.webdataset import process_webdataset
 from datachain.lib.webdataset_laion import WDSLaion, process_laion_meta
+from datachain.sql.functions import path
 
-wds = (
-    DataChain.from_storage("gs://datachain-demo/datacomp-small/shards")
-    .filter(C("file.name").glob("00000000.tar"))
+IMAGE_TARS = os.getenv(
+    "IMAGE_TARS", "gs://datachain-demo/datacomp-small/shards/000000[0-5]*.tar"
+)
+PARQUET_METADATA = os.getenv(
+    "PARQUET_METADATA", "gs://datachain-demo/datacomp-small/metadata/0020f*.parquet"
+)
+NPZ_METADATA = os.getenv(
+    "NPZ_METADATA", "gs://datachain-demo/datacomp-small/metadata/0020f*.npz"
+)
+
+wds_images = (
+    DataChain.from_storage(IMAGE_TARS)
     .settings(cache=True)
     .gen(laion=process_webdataset(spec=WDSLaion), params="file")
 )
 
-meta_emd = (
-    DataChain.from_storage("gs://datachain-demo/datacomp-small/metadata")
-    .filter(C("file.name").glob("0020f*.npz"))
+wds_with_pq = (
+    DataChain.from_parquet(PARQUET_METADATA)
+    .settings(cache=True)
+    .merge(wds_images, on="uid", right_on="laion.json.uid", inner=True)
+    .mutate(stem=path.file_stem(C("source.file.path")))
+)
+
+res = (
+    DataChain.from_storage(NPZ_METADATA)
+    .settings(cache=True)
     .gen(emd=process_laion_meta)
-    .map(stem=lambda file: file.get_file_stem(), params=["emd.file"], output=str)
+    .mutate(stem=path.file_stem(C("emd.file.path")))
+    .merge(
+        wds_with_pq,
+        on=["stem", "emd.index"],
+        right_on=["stem", "source.index"],
+        inner=True,
+    )
+    .save("wds")
 )
 
-meta_pq = DataChain.from_parquet(
-    "gs://datachain-demo/datacomp-small/metadata/0020f*.parquet"
-).map(stem=lambda file: file.get_file_stem(), params=["source.file"], output=str)
-
-meta = meta_emd.merge(
-    meta_pq, on=["stem", "emd.index"], right_on=["stem", "source.index"]
-)
-
-res = wds.merge(meta, on="laion.json.uid", right_on="uid")
-
-df = res.limit(10).to_pandas()
-with pd.option_context("display.max_columns", None):
-    print(df)
+res.show(5)

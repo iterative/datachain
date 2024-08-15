@@ -20,8 +20,7 @@ def load_tar(raw):
 @udf(
     (
         C.source,
-        C.name,
-        C.parent,
+        C.path,
         C.size,
         C.vtype,
         C.dir_type,
@@ -37,8 +36,7 @@ def load_tar(raw):
 )
 def index_tar(
     source,
-    name,
-    parent,
+    parent_path,
     size,
     vtype,
     dir_type,
@@ -52,9 +50,8 @@ def index_tar(
 ):
     # generate original tar files as well, along with subobjects
     yield DatasetRow.create(
-        name,
         source=source,
-        parent=parent,
+        path=parent_path,
         size=size,
         vtype=vtype,
         dir_type=dir_type,
@@ -66,15 +63,12 @@ def index_tar(
         etag=etag,
     )
 
-    parent_path = name if not parent else f"{parent}/{name}"
     for info in tar_entries:
         if info.isfile():
             full_path = f"{parent_path}/{info.name}"
-            parent_dir, subobject_name = full_path.rsplit("/", 1)
             yield DatasetRow.create(
-                subobject_name,
                 source=source,
-                parent=parent_dir,
+                path=full_path,
                 size=info.size,
                 vtype="tar",
                 location={
@@ -83,8 +77,7 @@ def index_tar(
                     "size": info.size,
                     "parent": {
                         "source": source,
-                        "parent": parent,
-                        "name": name,
+                        "path": parent_path,
                         "version": version,
                         "size": size,
                         "etag": etag,

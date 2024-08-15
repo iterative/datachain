@@ -24,8 +24,7 @@ For example, let us consider the New Yorker Cartoon caption contest dataset, whe
 # pip install transformers
 #
 
-from datachain.lib.dc import Column, DataChain
-from datachain.lib.file import File
+from datachain.lib.dc import Column, DataChain, File
 from transformers import AutoProcessor, PaliGemmaForConditionalGeneration
 
 images = DataChain.from_storage("gs://datachain-demo/newyorker_caption_contest/images", type="image")
@@ -58,8 +57,8 @@ def trim_text(text):
     match = re.search(r'[A-Z][^.]*\.', text)
     return match.group(0) if match else ''
 
-images = chain.collect_one("file")
-captions = chain.collect_one("scene")
+images = chain.collect("file")
+captions = chain.collect("scene")
 _ , axes = plt.subplots(1, len(captions), figsize=(15, 5))
 
 for ax, img, caption in zip(axes, images, captions):
@@ -75,7 +74,7 @@ plt.show()
 
 If interested to see more multimodal examples for DataChain, please follow this tutorial:
 
-[https://github.com/iterative/datachain/blob/main/examples/multimodal/clip_fine_tuning.ipynb](https://github.com/iterative/datachain/blob/main/examples/multimodal/clip_fine_tuning.ipynb)
+[https://github.com/iterative/datachain-examples/blob/main/multimodal/clip_fine_tuning.ipynb](https://github.com/iterative/datachain-examples/blob/main/multimodal/clip_fine_tuning.ipynb) [Google Colab](https://colab.research.google.com/github/iterative/datachain-examples/blob/main/multimodal/clip_fine_tuning.ipynb)
 
 ### Handling Python objects
 
@@ -134,7 +133,7 @@ chain = (
 
 If you are interested in more LLM evaluation examples for DataChain, please follow this tutorial:
 
-[https://github.com/iterative/datachain/blob/main/examples/llm/llm_chatbot_evaluation.ipynb](https://github.com/iterative/datachain/blob/main/examples/llm/llm_chatbot_evaluation.ipynb)
+[https://github.com/iterative/datachain-examples/blob/main/llm/llm_chatbot_evaluation.ipynb](https://github.com/iterative/datachain-examples/blob/main/llm/llm_chatbot_evaluation.ipynb) [Google Colab](https://colab.research.google.com/github/iterative/datachain-examples/blob/main/llm/llm_chatbot_evaluation.ipynb)
 
 ### Vectorized analytics
 
@@ -278,10 +277,9 @@ images_with_dogs.select("annotations", "file.name").show()
 
 [Limited by 20 rows]
 ```
+For in-depth review of working with JSON metadata, please follow this tutorial:
 
-To see more examples of working with metadata formats, please follow this tutorial:
-
-[https://github.com/iterative/datachain/blob/main/examples/getting_started/datasets.ipynb](https://github.com/iterative/datachain/blob/main/examples/getting_started/datasets.ipynb)
+[https://github.com/iterative/datachain-examples/blob/main/formats/json-metadata-tutorial.ipynb](https://github.com/iterative/datachain-examples/blob/main/formats/json-metadata-tutorial.ipynb) [Google Colab](https://colab.research.google.com/github/iterative/datachain-examples/blob/main/formats/json-metadata-tutorial.ipynb)
 
 ### Passing data to training
 
@@ -301,4 +299,4 @@ train(loader, model, optimizer)
 
 See a larger example for CLIP fine-tuning here:
 
-[https://github.com/iterative/datachain/blob/main/examples/multimodal/clip_fine_tuning.ipynb](https://github.com/iterative/datachain/blob/main/examples/multimodal/clip_fine_tuning.ipynb)
+[https://github.com/iterative/datachain-examples/blob/main/multimodal/clip_fine_tuning.ipynb](https://github.com/iterative/datachain-examples/blob/main/multimodal/clip_fine_tuning.ipynb) [Google Colab](https://colab.research.google.com/github/iterative/datachain-examples/blob/main/multimodal/clip_fine_tuning.ipynb)

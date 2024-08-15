@@ -256,8 +256,8 @@ def test_cp_root(cloud_test_catalog, recursive, star, dir_exists, cloud_type):
     ["s3", "gs", "azure"],
     indirect=True,
 )
+@skip_if_not_sqlite
 def test_cp_local_dataset(cloud_test_catalog, dogs_dataset):
-    skip_if_not_sqlite()
     working_dir = cloud_test_catalog.working_dir
     catalog = cloud_test_catalog.catalog
 
@@ -1113,14 +1113,14 @@ def test_garbage_collect(cloud_test_catalog, from_cli, capsys):
     assert catalog.get_temp_table_names() == []
     temp_tables = ["tmp_vc12F", "udf_jh653", "ds_shadow_12345", "old_ds_shadow"]
     for t in temp_tables:
-        catalog.warehouse.create_udf_table(t)
+        catalog.warehouse.create_udf_table(name=t)
     assert set(catalog.get_temp_table_names()) == set(temp_tables)
     if from_cli:
         garbage_collect(catalog)
         captured = capsys.readouterr()
         assert captured.out == "Garbage collecting 4 tables.\n"
     else:
-        catalog.cleanup_temp_tables(temp_tables)
+        catalog.cleanup_tables(temp_tables)
     assert catalog.get_temp_table_names() == []
 
 

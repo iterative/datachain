@@ -35,8 +35,8 @@ def main():
     print("Dynamic JSONl schema from 2 objects")
     print("========================================================================")
     uri = "gs://datachain-demo/jsonl/object.jsonl"
-    jsonl_ds = DataChain.from_json(uri, meta_type="jsonl", show_schema=True)
-    print(jsonl_ds.to_pandas())
+    jsonl_ds = DataChain.from_json(uri, meta_type="jsonl", print_schema=True)
+    jsonl_ds.show()
 
     print()
     print("========================================================================")
@@ -49,8 +49,7 @@ def main():
     json_pairs_ds = DataChain.from_json(
         uri, schema_from=schema_uri, jmespath="@", model_name="OpenImage"
     )
-    print(json_pairs_ds.to_pandas())
-    # print(list(json_pairs_ds.collect())[0])
+    json_pairs_ds.show()
 
     uri = "gs://datachain-demo/coco2017/annotations_captions/"
 
@@ -60,8 +59,8 @@ def main():
     print("========================================================================")
     chain = (
         DataChain.from_storage(uri)
-        .filter(C("file.name").glob("*.json"))
-        .show_json_schema(jmespath="@", model_name="Coco")
+        .filter(C("file.path").glob("*.json"))
+        .print_json_schema(jmespath="@", model_name="Coco")
     )
     chain.save()
 
@@ -72,13 +71,13 @@ def main():
     static_json_ds = DataChain.from_json(
         uri, jmespath="licenses", spec=LicenseFeature, nrows=3
     )
-    print(static_json_ds.to_pandas())
+    static_json_ds.show()
 
     print()
     print("========================================================================")
     print("dynamic JSON schema test parsing 5K objects")
     print("========================================================================")
-    dynamic_json_ds = DataChain.from_json(uri, jmespath="images", show_schema=True)
+    dynamic_json_ds = DataChain.from_json(uri, jmespath="images", print_schema=True)
     print(dynamic_json_ds.to_pandas())
 
     uri = "gs://datachain-demo/chatbot-csv/"
@@ -88,16 +87,16 @@ def main():
     print("========================================================================")
     static_csv_ds = DataChain.from_csv(uri, output=ChatDialog, object_name="chat")
     static_csv_ds.print_schema()
-    print(static_csv_ds.to_pandas())
+    static_csv_ds.show()
 
-    uri = "gs://datachain-demo/laion-aesthetics-csv"
+    uri = "gs://datachain-demo/laion-aesthetics-csv/laion_aesthetics_1024_33M_1.csv"
     print()
     print("========================================================================")
     print("dynamic CSV with header schema test parsing 3/3M objects")
     print("========================================================================")
     dynamic_csv_ds = DataChain.from_csv(uri, object_name="laion", nrows=3)
     dynamic_csv_ds.print_schema()
-    print(dynamic_csv_ds.to_pandas())
+    dynamic_csv_ds.show()
 
 
 if __name__ == "__main__":

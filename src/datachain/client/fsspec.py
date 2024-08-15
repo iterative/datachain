@@ -37,7 +37,6 @@ from datachain.storage import StorageURI
 if TYPE_CHECKING:
     from fsspec.spec import AbstractFileSystem
 
-    from datachain.data_storage import AbstractMetastore
 
 logger = logging.getLogger("datachain")
 
@@ -116,13 +115,12 @@ class Client(ABC):
     @staticmethod
     def parse_url(
         source: str,
-        metastore: "AbstractMetastore",
         cache: DataChainCache,
         **kwargs,
     ) -> tuple["Client", str]:
         cls = Client.get_implementation(source)
         storage_url, rel_path = cls.split_url(source)
-        client = cls.from_name(storage_url, metastore, cache, kwargs)
+        client = cls.from_name(storage_url, cache, kwargs)
         return client, rel_path
 
     @classmethod
@@ -136,7 +134,6 @@ class Client(ABC):
     def from_name(
         cls,
         name: str,
-        metastore: "AbstractMetastore",
         cache: DataChainCache,
         kwargs: dict[str, Any],
     ) -> "Client":
@@ -277,7 +274,7 @@ class Client(ABC):
             if info["type"] == "directory":
                 subdirs.add(subprefix)
             else:
-                files.append(self.convert_info(info, prefix))
+                files.append(self.convert_info(info, subprefix))
         if files:
             await result_queue.put(files)
         found_count = len(subdirs) + len(files)
@@ -360,12 +357,11 @@ class Client(ABC):
 
         parent_uid = UniqueId(
             parent["source"],
-            parent["parent"],
-            parent["name"],
-            parent["etag"],
+            parent["path"],
             parent["size"],
-            parent["vtype"],
-            parent["location"],
+            parent["etag"],
+            vtype=parent["vtype"],
+            location=parent["location"],
         )
         f = self.open_object(parent_uid, use_cache=use_cache)
         return FileSlice(f, offset, size, posixpath.basename(uid.path))

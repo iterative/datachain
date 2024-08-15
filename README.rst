@@ -16,43 +16,78 @@
 AI 🔗 DataChain
 ----------------
 
-DataChain is an open-source Python library for processing and curating unstructured
-data at scale.
+DataChain is a modern Pythonic data-frame library designed for artificial intelligence.
+It is made to organize your unstructured data into datasets and wrangle it at scale on
+your local machine.
 
-🤖 AI-Driven Data Curation: Use local ML models or LLM APIs calls to enrich your data.
+Key Features
+============
 
-🚀 GenAI Dataset scale: Handle tens of millions of multimodal files.
+📂 **Storage as a Source of Truth.**
+   - Process unstructured data without redundant copies: S3, GCP, Azure, and local
+     file systems.
+   - Multimodal data: images, video, text, PDFs, JSONs, CSVs, parquet.
+   - Join files and metadata together into persistent, versioned, columnar datasets.
 
-🐍 Python-friendly: Use strictly-typed `Pydantic`_ objects instead of JSON.
+🐍 **Python-friendly data pipelines.**
+   - Operate on Python objects and object fields.
+   - Built-in parallelization and out-of-memory compute without a need in SQL or
+     Spark jobs.
+
+🧠 **Data Enrichment and Processing.**
+   - Generate metadata columns using local AI models and LLM APIs.
+   - Filter, join, and group by AI metadata. Vector similarity search.
+   - Pass datasets to Pytorch and Tensorflow, or export back into storage.
+
+🚀 **Efficiency.**
+   - Parallelization, out-of-memory workloads and data caching.
+   - Vectorized operations on Python object fields: sum, count, avg, etc.
+   - Vector search on embeddings.
 
 
-Datachain supports parallel processing, parallel data
-downloads, and out-of-memory computing. It excels at optimizing offline batch operations.
-
-The typical use cases include Computer Vision data curation, LLM analytics,
-and validation of multimodal AI applications.
-
+Quick Start
+-----------
 
 .. code:: console
 
    $ pip install datachain
 
-|Flowchart|
 
-Quick Start
------------
+Selecting files using JSON metadata
+======================================
 
-Data curation with a local model
-=================================
+A storage consists of images of cats and dogs (`dog.1048.jpg`, `cat.1009.jpg`),
+annotated with ground truth and model inferences in the 'json-pairs' format,
+where each image has a matching JSON file like `cat.1009.json`:
 
-We will evaluate chatbot dialogs stored as text files in Google Cloud Storage
-- 50 files total in this example.
-These dialogs involve users chatting with a bot while looking for better wireless plans.
-Our goal is to identify the successful dialogs.
+.. code:: json
 
-The data used in the examples is `publicly available`_. The sample code is designed to run on a local machine.
+    {
+        "class": "cat", "id": "1009", "num_annotators": 8,
+        "inference": {"class": "dog", "confidence": 0.68}
+    }
 
-First, we'll show batch inference with a simple sentiment model using the `transformers` library:
+Example of downloading only high-confidence cat images using JSON metadata:
+
+
+.. code:: py
+
+    from datachain import Column, DataChain
+
+    meta = DataChain.from_json("gs://datachain-demo/dogs-and-cats/*json", object_name="meta")
+    images = DataChain.from_storage("gs://datachain-demo/dogs-and-cats/*jpg")
+
+    images_id = images.map(id=lambda file: file.path.split('.')[-2])
+    annotated = images_id.merge(meta, on="id", right_on="meta.id")
+
+    likely_cats = annotated.filter((Column("meta.inference.confidence") > 0.93) \
+                                   & (Column("meta.inference.class_") == "cat"))
+    likely_cats.export_files("high-confidence-cats/", signal="file")
+
+
+Data curation with a local AI model
+===================================
+Batch inference with a simple sentiment model using the `transformers` library:
 
 .. code:: shell
 
@@ -103,30 +138,30 @@ LLM judging chatbots
 =============================
 
 LLMs can work as efficient universal classifiers. In the example below,
-we employ a free API from Mistral to judge the chatbot performance. Please get a free
+we employ a free API from Mistral to judge the `publicly available`_ chatbot dialogs. Please get a free
 Mistral API key at https://console.mistral.ai
+
 
 .. code:: shell
 
-    $ pip install mistralai
+    $ pip install mistralai (Requires version >=1.0.0)
     $ export MISTRAL_API_KEY=_your_key_
 
 DataChain can parallelize API calls; the free Mistral tier supports up to 4 requests at the same time.
 
 .. code:: py
 
-    from mistralai.client import MistralClient
-    from mistralai.models.chat_completion import ChatMessage
+    from mistralai import Mistral
     from datachain import File, DataChain, Column
 
     PROMPT = "Was this dialog successful? Answer in a single word: Success or Failure."
 
     def eval_dialogue(file: File) -> bool:
-         client = MistralClient()
-         response = client.chat(
+         client = Mistral()
+         response = client.chat.complete(
              model="open-mixtral-8x22b",
-             messages=[ChatMessage(role="system", content=PROMPT),
-                       ChatMessage(role="user", content=file.read())])
+             messages=[{"role": "system", "content": PROMPT},
+                       {"role": "user", "content": file.read()}])
          result = response.choices[0].message.content
          return result.lower().startswith("success")
 
@@ -166,8 +201,8 @@ Instead of extracting this information from the Mistral response data structure 
 
 .. code:: py
 
-    from mistralai.client import MistralClient
-    from mistralai.models.chat_completion import ChatMessage, ChatCompletionResponse
+    from mistralai import Mistral
+    from mistralai.models import ChatCompletionResponse
     from datachain import File, DataChain, Column
 
     PROMPT = "Was this dialog successful? Answer in a single word: Success or Failure."
@@ -176,8 +211,8 @@ Instead of extracting this information from the Mistral response data structure 
          client = MistralClient()
          return client.chat(
              model="open-mixtral-8x22b",
-             messages=[ChatMessage(role="system", content=PROMPT),
-                       ChatMessage(role="user", content=file.read())])
+             messages=[{"role": "system", "content": PROMPT},
+                       {"role": "user", "content": file.read()}])
 
     chain = (
        DataChain.from_storage("gs://datachain-demo/chatbot-KiT/", object_name="file")
@@ -295,7 +330,10 @@ Tutorials
 ---------
 
 * `Getting Started`_
-* `Multimodal <examples/multimodal/clip_fine_tuning.ipynb>`_ (try in `Colab <https://colab.research.google.com/github/iterative/datachain/blob/main/examples/multimodal/clip_fine_tuning.ipynb>`__)
+* `Multimodal <https://github.com/iterative/datachain-examples/blob/main/multimodal/clip_fine_tuning.ipynb>`_ (try in `Colab <https://colab.research.google.com/github/iterative/datachain-examples/blob/main/multimodal/clip_fine_tuning.ipynb>`__)
+* `LLM evaluations <https://github.com/iterative/datachain-examples/blob/main/llm/llm_chatbot_evaluation.ipynb>`_ (try in `Colab <https://colab.research.google.com/github/iterative/datachain-examples/blob/main/llm/llm_chatbot_evaluation.ipynb>`__)
+* `Reading JSON metadata <https://github.com/iterative/datachain-examples/blob/main/formats/json-metadata-tutorial.ipynb>`_ (try in `Colab <https://colab.research.google.com/github/iterative/datachain-examples/blob/main/formats/json-metadata-tutorial.ipynb>`__)
+
 
 Contributions
 -------------

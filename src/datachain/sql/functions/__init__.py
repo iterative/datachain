@@ -1,16 +1,17 @@
 from sqlalchemy.sql.expression import func
 
-from . import path, string
+from . import array, path, string
+from .array import avg
 from .conditional import greatest, least
 from .random import rand
 
 count = func.count
 sum = func.sum
-avg = func.avg
 min = func.min
 max = func.max
 
 __all__ = [
+    "array",
     "avg",
     "count",
     "func",

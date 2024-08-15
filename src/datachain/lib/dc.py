@@ -20,8 +20,10 @@ import pandas as pd
 import sqlalchemy
 from pydantic import BaseModel, create_model
 from sqlalchemy.sql.functions import GenericFunction
+from sqlalchemy.sql.sqltypes import NullType
 
 from datachain import DataModel
+from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import DataType
 from datachain.lib.dataset_info import DatasetInfo
@@ -33,6 +35,7 @@ from datachain.lib.settings import Settings
 from datachain.lib.signal_schema import SignalSchema
 from datachain.lib.udf import (
     Aggregator,
+    BatchMapper,
     Generator,
     Mapper,
     UDFBase,
@@ -46,6 +49,7 @@ from datachain.query.dataset import (
     detach,
 )
 from datachain.query.schema import Column, DatasetRow
+from datachain.sql.functions import path as pathfunc
 from datachain.utils import inside_notebook
 
 if TYPE_CHECKING:
@@ -107,6 +111,11 @@ class DatasetMergeError(DataChainParamsError):  # noqa: D101
             else ""
         )
         super().__init__(f"Merge error on='{on_str}'{right_on_str}: {msg}")
+
+
+class DataChainColumnError(DataChainParamsError):  # noqa: D101
+    def __init__(self, col_name, msg):  # noqa: D107
+        super().__init__(f"Error for column {col_name}: {msg}")
 
 
 OutputType = Union[None, DataType, Sequence[str], dict[str, DataType]]
@@ -194,7 +203,7 @@ class DataChain(DatasetQuery):
 
     DEFAULT_FILE_RECORD: ClassVar[dict] = {
         "source": "",
-        "name": "",
+        "path": "",
         "vtype": "",
         "size": 0,
     }
@@ -224,6 +233,17 @@ class DataChain(DatasetQuery):
         """Get schema of the chain."""
         return self._effective_signals_schema.values
 
+    def column(self, name: str) -> Column:
+        """Returns Column instance with a type if name is found in current schema,
+        otherwise raises an exception.
+        """
+        name_path = name.split(".")
+        for path, type_, _, _ in self.signals_schema.get_flat_tree():
+            if path == name_path:
+                return Column(name, python_to_sql(type_))
+
+        raise ValueError(f"Column with name {name} not found in the schema")
+
     def print_schema(self) -> None:
         """Print schema of the chain."""
         self._effective_signals_schema.print_tree()
@@ -237,7 +257,6 @@ class DataChain(DatasetQuery):
     def settings(
         self,
         cache=None,
-        batch=None,
         parallel=None,
         workers=None,
         min_task_size=None,
@@ -250,7 +269,6 @@ class DataChain(DatasetQuery):
 
         Parameters:
             cache : data caching (default=False)
-            batch : size of the batch (default=1000)
             parallel : number of thread for processors. True is a special value to
                 enable all available CPUs (default=1)
             workers : number of distributed workers. Only for Studio mode. (default=1)
@@ -268,7 +286,7 @@ class DataChain(DatasetQuery):
         chain = self.clone()
         if sys is not None:
             chain._sys = sys
-        chain._settings.add(Settings(cache, batch, parallel, workers, min_task_size))
+        chain._settings.add(Settings(cache, parallel, workers, min_task_size))
         return chain
 
     def reset_settings(self, settings: Optional[Settings] = None) -> "Self":
@@ -342,9 +360,9 @@ class DataChain(DatasetQuery):
         spec: Optional[DataType] = None,
         schema_from: Optional[str] = "auto",
         jmespath: Optional[str] = None,
-        object_name: str = "",
+        object_name: Optional[str] = "",
         model_name: Optional[str] = None,
-        show_schema: Optional[bool] = False,
+        print_schema: Optional[bool] = False,
         meta_type: Optional[str] = "json",
         nrows=None,
         **kwargs,
@@ -359,17 +377,17 @@ class DataChain(DatasetQuery):
             schema_from : path to sample to infer spec (if schema not provided)
             object_name : generated object column name
             model_name : optional generated model name
-            show_schema : print auto-generated schema
+            print_schema : print auto-generated schema
             jmespath : optional JMESPATH expression to reduce JSON
             nrows : optional row limit for jsonl and JSON arrays
 
         Example:
-            infer JSON schema from data, reduce using JMESPATH, print schema
+            infer JSON schema from data, reduce using JMESPATH
             ```py
             chain = DataChain.from_json("gs://json", jmespath="key1.key2")
             ```
 
-            infer JSON schema from a particular path, print data model
+            infer JSON schema from a particular path
             ```py
             chain = DataChain.from_json("gs://json_ds", schema_from="gs://json/my.json")
             ```
@@ -384,7 +402,7 @@ class DataChain(DatasetQuery):
         if (not object_name) and jmespath:
             object_name = jmespath_to_name(jmespath)
         if not object_name:
-            object_name = "json"
+            object_name = meta_type
         chain = DataChain.from_storage(path=path, type=type, **kwargs)
         signal_dict = {
             object_name: read_meta(
@@ -392,12 +410,72 @@ class DataChain(DatasetQuery):
                 meta_type=meta_type,
                 spec=spec,
                 model_name=model_name,
-                show_schema=show_schema,
+                print_schema=print_schema,
                 jmespath=jmespath,
                 nrows=nrows,
             )
         }
-        return chain.gen(**signal_dict)  # type: ignore[arg-type]
+        return chain.gen(**signal_dict)  # type: ignore[misc, arg-type]
+
+    @classmethod
+    def from_jsonl(
+        cls,
+        path,
+        type: Literal["binary", "text", "image"] = "text",
+        spec: Optional[DataType] = None,
+        schema_from: Optional[str] = "auto",
+        jmespath: Optional[str] = None,
+        object_name: Optional[str] = "",
+        model_name: Optional[str] = None,
+        print_schema: Optional[bool] = False,
+        meta_type: Optional[str] = "jsonl",
+        nrows=None,
+        **kwargs,
+    ) -> "DataChain":
+        """Get data from JSON lines. It returns the chain itself.
+
+        Parameters:
+            path : storage URI with directory. URI must start with storage prefix such
+                as `s3://`, `gs://`, `az://` or "file:///"
+            type : read file as "binary", "text", or "image" data. Default is "binary".
+            spec : optional Data Model
+            schema_from : path to sample to infer spec (if schema not provided)
+            object_name : generated object column name
+            model_name : optional generated model name
+            print_schema : print auto-generated schema
+            jmespath : optional JMESPATH expression to reduce JSON
+            nrows : optional row limit for jsonl and JSON arrays
+
+        Example:
+            infer JSONl schema from data, limit parsing to 1 row
+            ```py
+            chain = DataChain.from_jsonl("gs://myjsonl", nrows=1)
+            ```
+        """
+        if schema_from == "auto":
+            schema_from = path
+
+        def jmespath_to_name(s: str):
+            name_end = re.search(r"\W", s).start() if re.search(r"\W", s) else len(s)  # type: ignore[union-attr]
+            return s[:name_end]
+
+        if (not object_name) and jmespath:
+            object_name = jmespath_to_name(jmespath)
+        if not object_name:
+            object_name = meta_type
+        chain = DataChain.from_storage(path=path, type=type, **kwargs)
+        signal_dict = {
+            object_name: read_meta(
+                schema_from=schema_from,
+                meta_type=meta_type,
+                spec=spec,
+                model_name=model_name,
+                print_schema=print_schema,
+                jmespath=jmespath,
+                nrows=nrows,
+            )
+        }
+        return chain.gen(**signal_dict)  # type: ignore[misc, arg-type]
 
     @classmethod
     def datasets(
@@ -428,9 +506,9 @@ class DataChain(DatasetQuery):
             **{object_name: datasets},  # type: ignore[arg-type]
         )
 
-    def show_json_schema(  # type: ignore[override]
+    def print_json_schema(  # type: ignore[override]
         self, jmespath: Optional[str] = None, model_name: Optional[str] = None
-    ) -> "DataChain":
+    ) -> "Self":
         """Print JSON data model and save it. It returns the chain itself.
 
         Parameters:
@@ -453,9 +531,9 @@ class DataChain(DatasetQuery):
             output=str,
         )
 
-    def show_jsonl_schema(  # type: ignore[override]
+    def print_jsonl_schema(  # type: ignore[override]
         self, jmespath: Optional[str] = None, model_name: Optional[str] = None
-    ) -> "DataChain":
+    ) -> "Self":
         """Print JSON data model and save it. It returns the chain itself.
 
         Parameters:
@@ -471,7 +549,7 @@ class DataChain(DatasetQuery):
 
     def save(  # type: ignore[override]
         self, name: Optional[str] = None, version: Optional[int] = None
-    ) -> "DataChain":
+    ) -> "Self":
         """Save to a Dataset. It returns the chain itself.
 
         Parameters:
@@ -538,14 +616,16 @@ class DataChain(DatasetQuery):
 
             Using func and output as a map:
             ```py
-            chain = chain.map(lambda name: name[:-4] + ".json", output={"res": str})
+            chain = chain.map(
+                lambda name: name.split("."), output={"stem": str, "ext": str}
+            )
             chain.save("new_dataset")
             ```
         """
         udf_obj = self._udf_to_obj(Mapper, func, params, output, signal_map)
 
         chain = self.add_signals(
-            udf_obj.to_udf_wrapper(self._settings.batch),
+            udf_obj.to_udf_wrapper(),
             **self._settings.to_dict(),
         )
 
@@ -558,7 +638,7 @@ class DataChain(DatasetQuery):
         output: OutputType = None,
         **signal_map,
     ) -> "Self":
-        """Apply a function to each row to create new rows (with potentially new
+        r"""Apply a function to each row to create new rows (with potentially new
         signals). The function needs to return a new objects for each of the new rows.
         It returns a chain itself with new signals.
 
@@ -568,11 +648,20 @@ class DataChain(DatasetQuery):
         one key differences: It produces a sequence of rows for each input row (like
         extracting multiple file records from a single tar file or bounding boxes from a
         single image file).
+
+        Example:
+            ```py
+            chain = chain.gen(
+                line=lambda file: [l for l in file.read().split("\n")],
+                output=str,
+            )
+            chain.save("new_dataset")
+            ```
         """
         udf_obj = self._udf_to_obj(Generator, func, params, output, signal_map)
         chain = DatasetQuery.generate(
             self,
-            udf_obj.to_udf_wrapper(self._settings.batch),
+            udf_obj.to_udf_wrapper(),
             **self._settings.to_dict(),
         )
 
@@ -592,22 +681,67 @@ class DataChain(DatasetQuery):
 
         Input-output relationship: N:M
 
-        This method bears similarity to `gen()` and map(), employing a comparable set of
-        parameters, yet differs in two crucial aspects:
+        This method bears similarity to `gen()` and `map()`, employing a comparable set
+        of parameters, yet differs in two crucial aspects:
         1. The `partition_by` parameter: This specifies the column name or a list of
            column names that determine the grouping criteria for aggregation.
         2. Group-based UDF function input: Instead of individual rows, the function
            receives a list all rows within each group defined by `partition_by`.
+
+        Example:
+            ```py
+            chain = chain.agg(
+                total=lambda category, amount: [sum(amount)],
+                output=float,
+                partition_by="category",
+            )
+            chain.save("new_dataset")
+            ```
         """
         udf_obj = self._udf_to_obj(Aggregator, func, params, output, signal_map)
         chain = DatasetQuery.generate(
             self,
-            udf_obj.to_udf_wrapper(self._settings.batch),
+            udf_obj.to_udf_wrapper(),
             partition_by=partition_by,
             **self._settings.to_dict(),
         )
 
         return chain.reset_schema(udf_obj.output).reset_settings(self._settings)
+
+    def batch_map(
+        self,
+        func: Optional[Callable] = None,
+        params: Union[None, str, Sequence[str]] = None,
+        output: OutputType = None,
+        batch: int = 1000,
+        **signal_map,
+    ) -> "Self":
+        """This is a batch version of `map()`.
+
+        Input-output relationship: N:N
+
+        It accepts the same parameters plus an
+        additional parameter:
+
+            batch : Size of each batch passed to `func`. Defaults to 1000.
+
+        Example:
+            ```py
+            chain = chain.batch_map(
+                sqrt=lambda size: np.sqrt(size),
+                output=float
+            )
+            chain.save("new_dataset")
+            ```
+        """
+        udf_obj = self._udf_to_obj(BatchMapper, func, params, output, signal_map)
+        chain = DatasetQuery.add_signals(
+            self,
+            udf_obj.to_udf_wrapper(batch),
+            **self._settings.to_dict(),
+        )
+
+        return chain.add_schema(udf_obj.output).reset_settings(self._settings)
 
     def _udf_to_obj(
         self,
@@ -651,7 +785,7 @@ class DataChain(DatasetQuery):
             descending (bool): Whether to sort in descending order or not.
         """
         if descending:
-            args = tuple([sqlalchemy.desc(a) for a in args])
+            args = tuple(sqlalchemy.desc(a) for a in args)
 
         return super().order_by(*args)
 
@@ -714,8 +848,25 @@ class DataChain(DatasetQuery):
         )
         ```
         """
-        chain = super().mutate(**kwargs)
-        chain.signals_schema = self.signals_schema.mutate(kwargs)
+        for col_name, expr in kwargs.items():
+            if not isinstance(expr, Column) and isinstance(expr.type, NullType):
+                raise DataChainColumnError(
+                    col_name, f"Cannot infer type with expression {expr}"
+                )
+
+        mutated = {}
+        schema = self.signals_schema
+        for name, value in kwargs.items():
+            if isinstance(value, Column):
+                # renaming existing column
+                for signal in schema.db_signals(name=value.name, as_columns=True):
+                    mutated[signal.name.replace(value.name, name, 1)] = signal
+            else:
+                # adding new signal
+                mutated[name] = value
+
+        chain = super().mutate(**mutated)
+        chain.signals_schema = schema.mutate(kwargs)
         return chain
 
     @property
@@ -984,7 +1135,7 @@ class DataChain(DatasetQuery):
             )
         else:
             signals = self.signals_schema.resolve(*on).db_signals()
-        return super()._subtract(other, signals)
+        return super()._subtract(other, signals)  # type: ignore[arg-type]
 
     @classmethod
     def from_values(
@@ -1007,7 +1158,7 @@ class DataChain(DatasetQuery):
         def _func_fr() -> Iterator[tuple_type]:  # type: ignore[valid-type]
             yield from tuples
 
-        chain = DataChain.create_empty(DataChain.DEFAULT_FILE_RECORD, session=session)
+        chain = DataChain.from_records(DataChain.DEFAULT_FILE_RECORD, session=session)
         if object_name:
             output = {object_name: DataChain._dict_to_data_model(object_name, output)}  # type: ignore[arg-type]
         return chain.gen(_func_fr, output=output)
@@ -1055,14 +1206,14 @@ class DataChain(DatasetQuery):
         """
         headers, max_length = self._effective_signals_schema.get_headers_with_length()
         if flatten or max_length < 2:
-            df = pd.DataFrame.from_records(self.to_records())
+            columns = []
             if headers:
-                df.columns = [".".join(filter(None, header)) for header in headers]
-            return df
+                columns = [".".join(filter(None, header)) for header in headers]
+            return pd.DataFrame.from_records(self.to_records(), columns=columns)
 
-        transposed_result = list(map(list, zip(*self.results())))
-        data = {tuple(n): val for n, val in zip(headers, transposed_result)}
-        return pd.DataFrame(data)
+        return pd.DataFrame(
+            self.results(), columns=pd.MultiIndex.from_tuples(map(tuple, headers))
+        )
 
     def show(
         self,
@@ -1081,6 +1232,12 @@ class DataChain(DatasetQuery):
         """
         dc = self.limit(limit) if limit > 0 else self
         df = dc.to_pandas(flatten)
+
+        if df.empty:
+            print("Empty result")
+            print(f"Columns: {list(df.columns)}")
+            return
+
         if transpose:
             df = df.T
 
@@ -1116,9 +1273,10 @@ class DataChain(DatasetQuery):
         output: OutputType = None,
         object_name: str = "",
         model_name: str = "",
+        source: bool = True,
         nrows: Optional[int] = None,
         **kwargs,
-    ) -> "DataChain":
+    ) -> "Self":
         """Generate chain from list of tabular files.
 
         Parameters:
@@ -1127,8 +1285,9 @@ class DataChain(DatasetQuery):
                 case types will be inferred.
             object_name : Generated object column name.
             model_name : Generated model name.
-            kwargs : Parameters to pass to pyarrow.dataset.dataset.
+            source : Whether to include info about the source file.
             nrows : Optional row limit.
+            kwargs : Parameters to pass to pyarrow.dataset.dataset.
 
         Example:
             Reading a json lines file:
@@ -1144,7 +1303,20 @@ class DataChain(DatasetQuery):
             dc = dc.parse_tabular(format="json")
             ```
         """
+        from pyarrow.dataset import CsvFileFormat, JsonFileFormat
+
         from datachain.lib.arrow import ArrowGenerator, infer_schema, schema_to_output
+
+        if nrows:
+            format = kwargs.get("format")
+            if format not in ["csv", "json"] and not isinstance(
+                format, (CsvFileFormat, JsonFileFormat)
+            ):
+                raise DatasetPrepareError(
+                    self.name,
+                    "error in `parse_tabular` - "
+                    "`nrows` only supported for csv and json formats.",
+                )
 
         schema = None
         col_names = output if isinstance(output, Sequence) else None
@@ -1155,18 +1327,24 @@ class DataChain(DatasetQuery):
             except ValueError as e:
                 raise DatasetPrepareError(self.name, e) from e
 
+        if isinstance(output, dict):
+            model_name = model_name or object_name or ""
+            model = DataChain._dict_to_data_model(model_name, output)
+        else:
+            model = output  # type: ignore[assignment]
+
         if object_name:
-            if isinstance(output, dict):
-                model_name = model_name or object_name
-                output = DataChain._dict_to_data_model(model_name, output)
-            output = {object_name: output}  # type: ignore[dict-item]
+            output = {object_name: model}  # type: ignore[dict-item]
         elif isinstance(output, type(BaseModel)):
             output = {
                 name: info.annotation  # type: ignore[misc]
                 for name, info in output.model_fields.items()
             }
-        output = {"source": IndexedFile} | output  # type: ignore[assignment,operator]
-        return self.gen(ArrowGenerator(schema, nrows, **kwargs), output=output)
+        if source:
+            output = {"source": IndexedFile} | output  # type: ignore[assignment,operator]
+        return self.gen(
+            ArrowGenerator(schema, model, source, nrows, **kwargs), output=output
+        )
 
     @staticmethod
     def _dict_to_data_model(
@@ -1185,10 +1363,10 @@ class DataChain(DatasetQuery):
         path,
         delimiter: str = ",",
         header: bool = True,
-        column_names: Optional[list[str]] = None,
         output: OutputType = None,
         object_name: str = "",
         model_name: str = "",
+        source: bool = True,
         nrows=None,
         **kwargs,
     ) -> "DataChain":
@@ -1204,6 +1382,7 @@ class DataChain(DatasetQuery):
                 case types will be inferred.
             object_name : Created object column name.
             model_name : Generated model name.
+            source : Whether to include info about the source file.
             nrows : Optional row limit.
 
         Example:
@@ -1217,11 +1396,13 @@ class DataChain(DatasetQuery):
             dc = DataChain.from_csv("s3://mybucket/dir")
             ```
         """
-        from pyarrow.csv import ParseOptions, ReadOptions
+        from pandas.io.parsers.readers import STR_NA_VALUES
+        from pyarrow.csv import ConvertOptions, ParseOptions, ReadOptions
         from pyarrow.dataset import CsvFileFormat
 
         chain = DataChain.from_storage(path, **kwargs)
 
+        column_names = None
         if not header:
             if not output:
                 msg = "error parsing csv - provide output if no header"
@@ -1235,14 +1416,24 @@ class DataChain(DatasetQuery):
             else:
                 msg = f"error parsing csv - incompatible output type {type(output)}"
                 raise DatasetPrepareError(chain.name, msg)
+        elif nrows:
+            nrows += 1
 
         parse_options = ParseOptions(delimiter=delimiter)
         read_options = ReadOptions(column_names=column_names)
-        format = CsvFileFormat(parse_options=parse_options, read_options=read_options)
+        convert_options = ConvertOptions(
+            strings_can_be_null=True, null_values=STR_NA_VALUES
+        )
+        format = CsvFileFormat(
+            parse_options=parse_options,
+            read_options=read_options,
+            convert_options=convert_options,
+        )
         return chain.parse_tabular(
             output=output,
             object_name=object_name,
             model_name=model_name,
+            source=source,
             nrows=nrows,
             format=format,
         )
@@ -1255,7 +1446,7 @@ class DataChain(DatasetQuery):
         output: Optional[dict[str, DataType]] = None,
         object_name: str = "",
         model_name: str = "",
-        nrows=None,
+        source: bool = True,
         **kwargs,
     ) -> "DataChain":
         """Generate chain from parquet files.
@@ -1267,7 +1458,7 @@ class DataChain(DatasetQuery):
             output : Dictionary defining column names and their corresponding types.
             object_name : Created object column name.
             model_name : Generated model name.
-            nrows : Optional row limit.
+            source : Whether to include info about the source file.
 
         Example:
             Reading a single file:
@@ -1285,7 +1476,7 @@ class DataChain(DatasetQuery):
             output=output,
             object_name=object_name,
             model_name=model_name,
-            nrows=None,
+            source=source,
             format="parquet",
             partitioning=partitioning,
         )
@@ -1310,13 +1501,14 @@ class DataChain(DatasetQuery):
         )
 
     @classmethod
-    def create_empty(
+    def from_records(
         cls,
         to_insert: Optional[Union[dict, list[dict]]],
         session: Optional[Session] = None,
     ) -> "DataChain":
-        """Create empty chain. Returns a chain. This method is used for programmatically
-        generating a chains in contrast of reading data from storages or other sources.
+        """Create a DataChain from the provided records. This method can be used for
+        programmatically generating a chain in contrast of reading data from storages
+        or other sources.
 
         Parameters:
             to_insert : records (or a single record) to insert. Each record is
@@ -1324,8 +1516,8 @@ class DataChain(DatasetQuery):
 
         Example:
             ```py
-            empty = DataChain.create_empty()
-            single_record = DataChain.create_empty(DataChain.DEFAULT_FILE_RECORD)
+            empty = DataChain.from_records()
+            single_record = DataChain.from_records(DataChain.DEFAULT_FILE_RECORD)
             ```
         """
         session = Session.get(session)
@@ -1409,10 +1601,11 @@ class DataChain(DatasetQuery):
         use_cache: bool = True,
     ) -> None:
         """Method that exports all files from chain to some folder."""
-        if placement == "filename":
-            print("Checking if file names are unique")
-            if self.distinct(f"{signal}.name").count() != self.count():
-                raise ValueError("Files with the same name found")
+        if placement == "filename" and (
+            super().distinct(pathfunc.name(C(f"{signal}__path"))).count()
+            != self.count()
+        ):
+            raise ValueError("Files with the same name found")
 
         for file in self.collect(signal):
             file.export(output, placement, use_cache)  # type: ignore[union-attr]
@@ -1444,7 +1637,7 @@ class DataChain(DatasetQuery):
 
             Using glob to match patterns
             ```py
-            dc.filter(C("file.name").glob("*.jpg))
+            dc.filter(C("file.name").glob("*.jpg"))
             ```
 
             Using `datachain.sql.functions`

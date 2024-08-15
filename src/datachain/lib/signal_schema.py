@@ -25,7 +25,7 @@ from datachain.lib.data_model import DataModel, DataType
 from datachain.lib.file import File
 from datachain.lib.model_store import ModelStore
 from datachain.lib.utils import DataChainParamsError
-from datachain.query.schema import DEFAULT_DELIMITER
+from datachain.query.schema import DEFAULT_DELIMITER, Column
 
 if TYPE_CHECKING:
     from datachain.catalog import Catalog
@@ -222,12 +222,29 @@ class SignalSchema:
                 res.append(obj)
         return res
 
-    def db_signals(self) -> list[str]:
-        return [
+    def db_signals(
+        self, name: Optional[str] = None, as_columns=False
+    ) -> Union[list[str], list[Column]]:
+        """
+        Returns DB columns as strings or Column objects with proper types
+        Optionally, it can filter results by specific object, returning only his signals
+        """
+        signals = [
             DEFAULT_DELIMITER.join(path)
-            for path, _, has_subtree, _ in self.get_flat_tree()
+            if not as_columns
+            else Column(DEFAULT_DELIMITER.join(path), python_to_sql(_type))
+            for path, _type, has_subtree, _ in self.get_flat_tree()
             if not has_subtree
         ]
+
+        if name:
+            signals = [
+                s
+                for s in signals
+                if str(s) == name or str(s).startswith(f"{name}{DEFAULT_DELIMITER}")
+            ]
+
+        return signals  # type: ignore[return-value]
 
     def resolve(self, *names: str) -> "SignalSchema":
         schema = {}
@@ -243,8 +260,11 @@ class SignalSchema:
         curr_type = None
         i = 0
         while curr_tree is not None and i < len(path):
-            if val := curr_tree.get(path[i], None):
+            if val := curr_tree.get(path[i]):
                 curr_type, curr_tree = val
+            elif i == 0 and len(path) > 1 and (val := curr_tree.get(".".join(path))):
+                curr_type, curr_tree = val
+                break
             else:
                 curr_type = None
             i += 1
@@ -279,7 +299,18 @@ class SignalSchema:
         return SignalSchema(schema)
 
     def mutate(self, args_map: dict) -> "SignalSchema":
-        return SignalSchema(self.values | sql_to_python(args_map))
+        new_values = self.values.copy()
+
+        for name, value in args_map.items():
+            if isinstance(value, Column) and value.name in self.values:
+                # renaming existing signal
+                del new_values[value.name]
+                new_values[name] = self.values[value.name]
+            else:
+                # adding new signal
+                new_values.update(sql_to_python({name: value}))
+
+        return SignalSchema(new_values)
 
     def clone_without_sys_signals(self) -> "SignalSchema":
         schema = copy.deepcopy(self.values)

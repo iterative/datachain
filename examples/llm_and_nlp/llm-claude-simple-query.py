@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 
 import anthropic
 from anthropic.types import Message
@@ -26,6 +27,11 @@ DEFAULT_OUTPUT_TOKENS = 1024
 
 API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 
+if not API_KEY:
+    print("This example requires an Anthropic API key")
+    print("Add your key using the ANTHROPIC_API_KEY environment variable.")
+    sys.exit(0)
+
 
 class Rating(BaseModel):
     status: str = ""
@@ -34,7 +40,7 @@ class Rating(BaseModel):
 
 chain = (
     DataChain.from_storage(DATA, type="text")
-    .filter(Column("file.name").glob("*.txt"))
+    .filter(Column("file.path").glob("*.txt"))
     .limit(5)
     .settings(parallel=4, cache=True)
     .setup(client=lambda: anthropic.Anthropic(api_key=API_KEY))
@@ -62,7 +68,7 @@ chain = (
 )
 
 chain = chain.settings(parallel=13).mutate(
-    x=Column("file.name"),
+    x=Column("file.path"),
     y=Column("rating.status"),
     price=Column("claude.usage.output_tokens") * 0.0072,
 )
