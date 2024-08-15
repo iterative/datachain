@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy import Column, Integer, Table
 
 from datachain.data_storage.serializer import deserialize
-from datachain.data_storage.sqlite import SQLiteDatabaseEngine
+from datachain.data_storage.sqlite import SQLiteDatabaseEngine, get_db_file_in_memory
 from tests.utils import skip_if_not_sqlite
 
 
@@ -19,6 +19,26 @@ def test_init_clone(db_file):
         with db.clone() as db2:
             assert isinstance(db2, SQLiteDatabaseEngine)
             assert db2.db_file == db_file
+
+
+@pytest.mark.parametrize(
+    "db_file,in_memory,expected",
+    [
+        (None, False, None),
+        (None, True, ":memory:"),
+        (":memory:", False, ":memory:"),
+        (":memory:", True, ":memory:"),
+        ("file.db", False, "file.db"),
+        ("file.db", True, RuntimeError),
+    ],
+)
+@skip_if_not_sqlite
+def test_get_db_file_in_memory(db_file, in_memory, expected):
+    if expected is RuntimeError:
+        with pytest.raises(RuntimeError):
+            get_db_file_in_memory(db_file, in_memory)
+    else:
+        assert get_db_file_in_memory(db_file, in_memory) == expected
 
 
 def test_serialize(sqlite_db):
