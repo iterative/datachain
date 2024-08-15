@@ -577,6 +577,7 @@ class Catalog:
         warehouse_ready_callback: Optional[
             Callable[["AbstractWarehouse"], None]
         ] = None,
+        in_memory: bool = False,
     ):
         datachain_dir = DataChainDir(cache=cache_dir, tmp=tmp_dir)
         datachain_dir.init()
@@ -590,6 +591,7 @@ class Catalog:
             "tmp_dir": tmp_dir,
         }
         self._warehouse_ready_callback = warehouse_ready_callback
+        self.in_memory = in_memory
 
     @cached_property
     def warehouse(self) -> "AbstractWarehouse":
@@ -1627,8 +1629,17 @@ class Catalog:
         version = self.get_dataset(dataset_name).get_version(dataset_version)
 
         file_signals_values = {}
+        file_schemas = {}
+        # TODO: To remove after we properly fix deserialization
+        for signal, type_name in version.feature_schema.items():
+            from datachain.lib.model_store import ModelStore
 
-        schema = SignalSchema.deserialize(version.feature_schema)
+            type_name_parsed, v = ModelStore.parse_name_version(type_name)
+            fr = ModelStore.get(type_name_parsed, v)
+            if fr and issubclass(fr, File):
+                file_schemas[signal] = type_name
+
+        schema = SignalSchema.deserialize(file_schemas)
         for file_signals in schema.get_signals(File):
             prefix = file_signals.replace(".", DEFAULT_DELIMITER) + DEFAULT_DELIMITER
             file_signals_values[file_signals] = {

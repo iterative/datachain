@@ -309,6 +309,7 @@ class DataChain(DatasetQuery):
         *,
         type: Literal["binary", "text", "image"] = "binary",
         session: Optional[Session] = None,
+        in_memory: bool = False,
         recursive: Optional[bool] = True,
         object_name: str = "file",
         update: bool = False,
@@ -332,7 +333,14 @@ class DataChain(DatasetQuery):
         """
         func = get_file(type)
         return (
-            cls(path, session=session, recursive=recursive, update=update, **kwargs)
+            cls(
+                path,
+                session=session,
+                recursive=recursive,
+                update=update,
+                in_memory=in_memory,
+                **kwargs,
+            )
             .map(**{object_name: func})
             .select(object_name)
         )
@@ -479,7 +487,10 @@ class DataChain(DatasetQuery):
 
     @classmethod
     def datasets(
-        cls, session: Optional[Session] = None, object_name: str = "dataset"
+        cls,
+        session: Optional[Session] = None,
+        in_memory: bool = False,
+        object_name: str = "dataset",
     ) -> "DataChain":
         """Generate chain with list of registered datasets.
 
@@ -492,7 +503,7 @@ class DataChain(DatasetQuery):
                 print(f"{ds.name}@v{ds.version}")
             ```
         """
-        session = Session.get(session)
+        session = Session.get(session, in_memory=in_memory)
         catalog = session.catalog
 
         datasets = [
@@ -502,6 +513,7 @@ class DataChain(DatasetQuery):
 
         return cls.from_values(
             session=session,
+            in_memory=in_memory,
             output={object_name: DatasetInfo},
             **{object_name: datasets},  # type: ignore[arg-type]
         )
@@ -1142,6 +1154,7 @@ class DataChain(DatasetQuery):
         cls,
         ds_name: str = "",
         session: Optional[Session] = None,
+        in_memory: bool = False,
         output: OutputType = None,
         object_name: str = "",
         **fr_map,
@@ -1158,7 +1171,9 @@ class DataChain(DatasetQuery):
         def _func_fr() -> Iterator[tuple_type]:  # type: ignore[valid-type]
             yield from tuples
 
-        chain = DataChain.from_records(DataChain.DEFAULT_FILE_RECORD, session=session)
+        chain = DataChain.from_records(
+            DataChain.DEFAULT_FILE_RECORD, session=session, in_memory=in_memory
+        )
         if object_name:
             output = {object_name: DataChain._dict_to_data_model(object_name, output)}  # type: ignore[arg-type]
         return chain.gen(_func_fr, output=output)
@@ -1169,6 +1184,7 @@ class DataChain(DatasetQuery):
         df: "pd.DataFrame",
         name: str = "",
         session: Optional[Session] = None,
+        in_memory: bool = False,
         object_name: str = "",
     ) -> "DataChain":
         """Generate chain from pandas data-frame.
@@ -1196,7 +1212,9 @@ class DataChain(DatasetQuery):
                     f"import from pandas error - '{column}' cannot be a column name",
                 )
 
-        return cls.from_values(name, session, object_name=object_name, **fr_map)
+        return cls.from_values(
+            name, session, object_name=object_name, in_memory=in_memory, **fr_map
+        )
 
     def to_pandas(self, flatten=False) -> "pd.DataFrame":
         """Return a pandas DataFrame from the chain.
@@ -1505,6 +1523,7 @@ class DataChain(DatasetQuery):
         cls,
         to_insert: Optional[Union[dict, list[dict]]],
         session: Optional[Session] = None,
+        in_memory: bool = False,
     ) -> "DataChain":
         """Create a DataChain from the provided records. This method can be used for
         programmatically generating a chain in contrast of reading data from storages
@@ -1520,7 +1539,7 @@ class DataChain(DatasetQuery):
             single_record = DataChain.from_records(DataChain.DEFAULT_FILE_RECORD)
             ```
         """
-        session = Session.get(session)
+        session = Session.get(session, in_memory=in_memory)
         catalog = session.catalog
 
         name = session.generate_temp_dataset_name()
