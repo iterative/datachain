@@ -46,7 +46,6 @@ team = [
 ]
 
 
-@skip_if_not_sqlite
 def test_merge_objects(test_session):
     ch1 = DataChain.from_values(emp=employees, session=test_session)
     ch2 = DataChain.from_values(team=team, session=test_session)
@@ -139,7 +138,6 @@ def test_merge_similar_objects_in_memory():
     assert len(list(ch_inner.collect())) == 2
 
 
-@skip_if_not_sqlite
 def test_merge_values(test_session):
     order_ids = [11, 22, 33, 44]
     order_descr = ["water", "water", "paper", "water"]
