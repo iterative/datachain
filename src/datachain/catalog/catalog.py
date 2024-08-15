@@ -1628,6 +1628,7 @@ class Catalog:
 
         file_signals_values = {}
         file_schemas = {}
+        # TODO: To remove after we properly fix deserialization
         for signal, type_name in version.feature_schema.items():
             from datachain.lib.model_store import ModelStore
 
