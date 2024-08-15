@@ -414,9 +414,6 @@ class TypeReadConverter:
     def datetime(self, value):
         return value
 
-    def uuid(self, value):
-        return value
-
     def binary(self, value):
         return value
 
@@ -499,9 +496,6 @@ class TypeDefaults:
     def datetime(self):
         return None
 
-    def uuid(self):
-        return None
-
     def binary(self):
         return None
 
@@ -526,7 +520,7 @@ class DBDefaults:
         return None
 
     def float(self):
-        return float("nan")
+        return None
 
     def float32(self):
         return self.float()
@@ -541,9 +535,6 @@ class DBDefaults:
         return None
 
     def datetime(self):
-        return None
-
-    def uuid(self):
         return None
 
     def binary(self):

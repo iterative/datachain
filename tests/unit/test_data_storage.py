@@ -2,9 +2,11 @@ from datetime import datetime
 from typing import Any
 
 import pytest
+import sqlalchemy
 
 from datachain.sql.types import (
     JSON,
+    TYPES,
     Array,
     Boolean,
     DateTime,
@@ -165,3 +167,22 @@ def test_convert_type(cloud_test_catalog):
     # error, float to int in list
     with pytest.raises(ValueError):
         run_convert_type([1.5, 1], Array(Int))
+
+
+@pytest.mark.parametrize("col_type", TYPES)
+def test_db_defaults(col_type, catalog):
+    warehouse = catalog.warehouse
+
+    if col_type == Array:
+        col = Array(Int)
+    else:
+        col = col_type()
+
+    table = warehouse.create_udf_table([sqlalchemy.Column("val", col)])
+    warehouse.insert_rows(table, [{"val": None}])
+
+    rows = warehouse.db.execute(table.select()).fetchall()
+    assert len(rows) == 1
+    assert rows[0][1] == col.db_default_value(warehouse.db.dialect)
+
+    warehouse.db.drop_table(table)
