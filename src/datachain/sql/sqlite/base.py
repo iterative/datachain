@@ -22,8 +22,10 @@ from datachain.sql.sqlite.types import (
     register_type_converters,
 )
 from datachain.sql.types import (
+    DBDefaults,
     TypeDefaults,
     register_backend_types,
+    register_db_defaults,
     register_type_defaults,
     register_type_read_converters,
 )
@@ -66,6 +68,7 @@ def setup():
     register_backend_types("sqlite", SQLiteTypeConverter())
     register_type_read_converters("sqlite", SQLiteTypeReadConverter())
     register_type_defaults("sqlite", TypeDefaults())
+    register_db_defaults("sqlite", DBDefaults())
 
     compiles(sql_path.parent, "sqlite")(compile_path_parent)
     compiles(sql_path.name, "sqlite")(compile_path_name)

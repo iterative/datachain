@@ -47,7 +47,6 @@ team = [
 
 
 def test_merge_objects(test_session):
-    skip_if_not_sqlite()
     ch1 = DataChain.from_values(emp=employees, session=test_session)
     ch2 = DataChain.from_values(team=team, session=test_session)
     ch = ch1.merge(ch2, "emp.person.name", "team.player")
@@ -104,8 +103,42 @@ def test_merge_similar_objects(test_session):
     assert len(list(ch_inner.collect())) == 2
 
 
+@skip_if_not_sqlite
+def test_merge_similar_objects_in_memory():
+    # Skip if not on SQLite, as in_memory databases are only supported on SQLite
+    new_employees = [
+        Employee(id=152, person=User(name="Bob", age=27)),
+        Employee(id=201, person=User(name="Karl", age=18)),
+        Employee(id=154, person=User(name="David", age=29)),
+    ]
+
+    ch1 = DataChain.from_values(emp=employees, in_memory=True)
+    # This should use the same session as above (in_memory=True automatically)
+    ch2 = DataChain.from_values(emp=new_employees)
+    assert ch1.session.catalog.in_memory is True
+    assert ch1.session.catalog.metastore.db.db_file == ":memory:"
+    assert ch1.session.catalog.warehouse.db.db_file == ":memory:"
+    assert ch2.session.catalog.in_memory is True
+    assert ch2.session.catalog.metastore.db.db_file == ":memory:"
+    assert ch2.session.catalog.warehouse.db.db_file == ":memory:"
+
+    rname = "qq"
+    ch = ch1.merge(ch2, "emp.person.name", rname=rname)
+    assert ch.session.catalog.in_memory is True
+    assert ch.session.catalog.metastore.db.db_file == ":memory:"
+    assert ch.session.catalog.warehouse.db.db_file == ":memory:"
+
+    assert list(ch.signals_schema.values.keys()) == ["sys", "emp", rname + "emp"]
+
+    empl = list(ch.collect())
+    assert len(empl) == 4
+    assert len(empl[0]) == 2
+
+    ch_inner = ch1.merge(ch2, "emp.person.name", rname=rname, inner=True)
+    assert len(list(ch_inner.collect())) == 2
+
+
 def test_merge_values(test_session):
-    skip_if_not_sqlite()
     order_ids = [11, 22, 33, 44]
     order_descr = ["water", "water", "paper", "water"]
 

@@ -1,0 +1,5 @@
+outs:
+- md5: c19f7ea21ac38f5a3f21d12b11f2e833
+  size: 61441248
+  hash: md5
+  path: laion-tiny.npz
