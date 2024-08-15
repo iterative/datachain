@@ -34,6 +34,7 @@ from sqlalchemy.sql.elements import ColumnClause, ColumnElement
 from sqlalchemy.sql.expression import label
 from sqlalchemy.sql.schema import TableClause
 from sqlalchemy.sql.selectable import Select
+from tqdm import tqdm
 
 from datachain.asyn import ASYNC_WORKERS, AsyncMapper, OrderedMapper
 from datachain.catalog import (
@@ -125,7 +126,10 @@ class QueryGenerator:
     func: QueryGeneratorFunc
     columns: tuple[ColumnElement, ...]
 
-    def exclude(self, column_names) -> Select:
+    def only(self, column_names: Sequence[str]) -> Select:
+        return self.func(*(c for c in self.columns if c.name in column_names))
+
+    def exclude(self, column_names: Sequence[str]) -> Select:
         return self.func(*(c for c in self.columns if c.name not in column_names))
 
     def select(self, column_names=None) -> Select:
@@ -1659,18 +1663,13 @@ class DatasetQuery:
 
             dr = self.catalog.warehouse.dataset_rows(dataset)
 
-            # Exclude the id column and let the db create it to avoid unique
-            # constraint violations.
-            q = query.exclude(("sys__id",))
-            if q._order_by_clauses:
-                # ensuring we have id sorted by order by clause if it exists in a query
-                q = q.add_columns(
-                    f.row_number().over(order_by=q._order_by_clauses).label("sys__id")
+            with tqdm(desc="Saving", unit=" rows") as pbar:
+                self.catalog.warehouse.copy_table(
+                    dr.get_table(),
+                    query.select(),
+                    progress_cb=pbar.update,
                 )
 
-            cols = tuple(c.name for c in q.selected_columns)
-            insert_q = sqlalchemy.insert(dr.get_table()).from_select(cols, q)
-            self.catalog.warehouse.db.execute(insert_q, **kwargs)
             self.catalog.metastore.update_dataset_status(
                 dataset, DatasetStatus.COMPLETE, version=version
             )

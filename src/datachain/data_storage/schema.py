@@ -67,7 +67,11 @@ def convert_rows_custom_column_types(
     for row in rows:
         row_list = list(row)
         for idx, t in custom_columns_types:
-            row_list[idx] = t.on_read_convert(row_list[idx], dialect)
+            row_list[idx] = (
+                t.default_value(dialect)
+                if row_list[idx] is None
+                else t.on_read_convert(row_list[idx], dialect)
+            )
 
         yield tuple(row_list)
 
@@ -136,7 +140,15 @@ class DataTable:
         self.column_types: dict[str, SQLType] = column_types or {}
 
     @staticmethod
-    def copy_column(column: sa.Column):
+    def copy_column(
+        column: sa.Column,
+        primary_key: Optional[bool] = None,
+        index: Optional[bool] = None,
+        nullable: Optional[bool] = None,
+        default: Optional[Any] = None,
+        server_default: Optional[Any] = None,
+        unique: Optional[bool] = None,
+    ) -> sa.Column:
         """
         Copy a sqlalchemy Column object intended for use as a signal column.
 
@@ -150,12 +162,14 @@ class DataTable:
         return sa.Column(
             column.name,
             column.type,
-            primary_key=column.primary_key,
-            index=column.index,
-            nullable=column.nullable,
-            default=column.default,
-            server_default=column.server_default,
-            unique=column.unique,
+            primary_key=primary_key if primary_key is not None else column.primary_key,
+            index=index if index is not None else column.index,
+            nullable=nullable if nullable is not None else column.nullable,
+            default=default if default is not None else column.default,
+            server_default=(
+                server_default if server_default is not None else column.server_default
+            ),
+            unique=unique if unique is not None else column.unique,
         )
 
     @classmethod
