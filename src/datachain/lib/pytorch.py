@@ -93,13 +93,8 @@ class PytorchDataset(IterableDataset):
         if self.num_samples > 0:
             ds = ds.sample(self.num_samples)
         ds = ds.chunk(total_rank, total_workers)
-        for row_features in ds.collect():
-            row = []
-            for fr in row_features:
-                if hasattr(fr, "read"):
-                    row.append(fr.read())  # type: ignore[unreachable]
-                else:
-                    row.append(fr)
+        for row in ds.read():
+            row = list(row)  # type: ignore[assignment]
             # Apply transforms
             if self.transform:
                 try:
@@ -107,16 +102,16 @@ class PytorchDataset(IterableDataset):
                         row = self.transform(row)
                     for i, val in enumerate(row):
                         if isinstance(val, Image.Image):
-                            row[i] = self.transform(val)
+                            row[i] = self.transform(val)  # type: ignore[unreachable]
                 except ValueError:
                     logger.warning("Skipping transform due to unsupported data types.")
                     self.transform = None
             if self.tokenizer:
                 for i, val in enumerate(row):
                     if isinstance(val, str) or (
-                        isinstance(val, list) and isinstance(val[0], str)
+                        isinstance(val, list) and isinstance(val[0], str)  # type: ignore[unreachable]
                     ):
-                        row[i] = convert_text(
+                        row[i] = convert_text(  # type: ignore[unreachable]
                             val, self.tokenizer, self.tokenizer_kwargs
                         ).squeeze(0)  # type: ignore[union-attr]
             yield row

@@ -43,6 +43,9 @@ class MyFr(BaseModel):
     nnn: str
     count: int
 
+    def read(self):
+        return f"{self.nnn}-{self.count}"
+
 
 class MyNested(BaseModel):
     label: str
@@ -1733,3 +1736,15 @@ def test_from_hf_object_name(test_session):
 def test_from_hf_invalid(test_session):
     with pytest.raises(DatasetNotFoundError):
         DataChain.from_hf("invalid_dataset", session=test_session)
+
+
+def test_read(test_session):
+    dc = DataChain.from_values(
+        f1=features, num=range(len(features)), session=test_session
+    )
+
+    for n, sample in enumerate(dc.read()):
+        assert len(sample) == 2
+        fr, num = sample
+        assert fr == f"{features[n].nnn}-{features[n].count}"
+        assert num == n

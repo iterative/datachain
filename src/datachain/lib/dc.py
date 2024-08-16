@@ -982,6 +982,45 @@ class DataChain(DatasetQuery):
                 )
                 yield ret[0] if len(cols) == 1 else tuple(ret)
 
+    @overload
+    def read(self) -> Iterator[tuple[DataType, ...]]: ...
+
+    @overload
+    def read(self, col: str) -> Iterator[DataType]: ...  # type: ignore[overload-overlap]
+
+    @overload
+    def read(self, *cols: str) -> Iterator[tuple[DataType, ...]]: ...
+
+    def read(self, *cols: str) -> Iterator[Union[DataType, tuple[DataType, ...]]]:  # type: ignore[overload-overlap,misc]
+        """Yields rows of values, reading from objects.
+
+        This method is similar to `collect()` except that `collect()` will return
+        Pydantic-like objects and this method will return the results of the `read()`
+        method of those objects. For example, given a chain of image files like
+        `DataChain.from_storage(.., type="image")`, `collect()` will return each file as
+        a `datachain.ImageFile`, and `read()` will call `datachain.ImageFile.read()`,
+        which returns a `PIL.Image.Image`. If no `read()` method exists, the
+        Pydantic-like object will be returned (same as `collect()`).
+
+        Args:
+            *cols: Limit to the specified columns. By default, all columns are selected.
+
+        Yields:
+            (DataType): Yields a single item if a column is selected.
+            (tuple[DataType, ...]): Yields a tuple of items if multiple columns are
+                selected.
+        """
+        for row_features in self.collect(*cols):
+            row = []
+            if not isinstance(row_features, tuple):
+                row_features = [row_features]  # type: ignore[unreachable]
+            for fr in row_features:
+                if hasattr(fr, "read"):
+                    row.append(fr.read())  # type: ignore[unreachable]
+                else:
+                    row.append(fr)
+            yield row[0] if len(cols) == 1 else tuple(row)
+
     def to_pytorch(
         self, transform=None, tokenizer=None, tokenizer_kwargs=None, num_samples=0
     ):
