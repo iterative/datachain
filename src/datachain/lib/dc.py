@@ -318,6 +318,9 @@ class DataChain(DatasetQuery):
         recursive: Optional[bool] = True,
         object_name="file",
     ):
+        def _file_c(name: str) -> C:
+            return C(f"{object_name}.{name}")
+
         dc = dc.filter(C(f"{object_name}.is_latest") == true())
         if recursive:
             root = False
@@ -340,8 +343,10 @@ class DataChain(DatasetQuery):
                 # not a root, so running glob query
                 dc = dc.filter(where)
         else:
-            # TODO fix non recursive queries
-            pass
+            dc = dc.filter(
+                pathfunc.parent(C(f"{object_name}.path"))
+                == path.lstrip("/").rstrip("/*")
+            )
 
         return dc
 
@@ -388,7 +393,6 @@ class DataChain(DatasetQuery):
             chain = DataChain.from_storage("s3://my-bucket/my-dir")
             ```
         """
-        # TODO handle non recursive
         # TODO refactor for FS uris, e.g file:///home/ivan/dogs
         file_type = get_file_type(type)
 
@@ -434,6 +438,7 @@ class DataChain(DatasetQuery):
                     recursive=recursive,
                 )
 
+        # caching new listing to special listing dataset
         (
             cls.from_records(
                 DataChain.DEFAULT_FILE_RECORD,
