@@ -321,10 +321,10 @@ class DataChain(DatasetQuery):
         def _file_c(name: str) -> C:
             return C(f"{object_name}.{name}")
 
-        dc = dc.filter(C(f"{object_name}.is_latest") == true())
+        dc = dc.filter(_file_c("is_latest") == true())
         if recursive:
             root = False
-            where = C(f"{object_name}.path").glob(path)
+            where = _file_c("path").glob(path)
             if not path or path == "/":
                 # root of the bucket, e.g s3://bucket/ -> getting all the nodes
                 # in the bucket
@@ -337,15 +337,14 @@ class DataChain(DatasetQuery):
                 # and we are adding a proper glob syntax for it
                 # e.g s3://bucket/dir1 -> s3://bucket/dir1/*
                 dir_path = path.rstrip("/") + "/*"
-                where = where | C(f"{object_name}.path").glob(dir_path)
+                where = where | _file_c("path").glob(dir_path)
 
             if not root:
                 # not a root, so running glob query
                 dc = dc.filter(where)
         else:
             dc = dc.filter(
-                pathfunc.parent(C(f"{object_name}.path"))
-                == path.lstrip("/").rstrip("/*")
+                pathfunc.parent(_file_c("path")) == path.lstrip("/").rstrip("/*")
             )
 
         return dc
