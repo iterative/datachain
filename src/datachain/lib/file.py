@@ -119,6 +119,7 @@ class File(DataModel):
     last_modified: datetime = Field(default=TIME_ZERO)
     location: Optional[Union[dict, list[dict]]] = Field(default=None)
     vtype: str = Field(default="")
+    is_valid: Optional[bool] = Field(default=None)
 
     _datachain_column_types: ClassVar[dict[str, Any]] = {
         "source": String,
@@ -191,6 +192,9 @@ class File(DataModel):
     @contextmanager
     def open(self, mode: Literal["rb", "r"] = "rb"):
         """Open the file and return a file object."""
+        if self.is_valid is False:
+            raise FileNotFoundError(f"File {self.path} is not valid")
+
         if self.location:
             with VFileRegistry.resolve(self, self.location) as f:  # type: ignore[arg-type]
                 yield f

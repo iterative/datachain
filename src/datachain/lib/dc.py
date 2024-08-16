@@ -1689,3 +1689,18 @@ class DataChain(DatasetQuery):
     def offset(self, offset: int) -> "Self":
         """Return the results starting with the offset row."""
         return super().offset(offset)
+    
+    def resolve_files(self, signal: str = "file") -> "Self":
+        """Check if the file object is valid and update its is_valid field。"""
+        def check_file(file: File) -> File:
+            if not isinstance(file, File):
+                raise ValueError(f"Signal '{signal}' is not a File object")
+
+            try:
+                with file.open():
+                    file.is_valid = True
+            except Exception:
+                file.is_valid = False
+            return file
+
+        return self.map(**{signal: check_file})
