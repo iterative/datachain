@@ -212,9 +212,9 @@ jobs:
         pyv: ['3.9', '3.12']
         group: ['get_started', 'llm_and_nlp or computer_vision']
         include:
-          - { group: multimodal, os: ubuntu-latest-4-cores }
-          - { group: multimodal, os: macos-latest }
-          - { group: multimodal, os: windows-latest }
+          - {group: multimodal, os: ubuntu-latest-4-cores}
+          - {group: multimodal, os: macos-latest}
+          - {group: multimodal, os: windows-latest}
     steps:
 
       - uses: actions/checkout@v4
