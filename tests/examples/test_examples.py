@@ -65,6 +65,7 @@ def smoke_test(example: str, env: Optional[dict] = None):
 @pytest.mark.get_started
 @pytest.mark.parametrize("example", get_started_examples)
 def test_get_started_examples(example):
+    print("HEREEE")
     smoke_test(example, {"NUM_EPOCHS": "1"})
 
 
