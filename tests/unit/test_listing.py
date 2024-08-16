@@ -4,7 +4,7 @@ import pytest
 
 from datachain.catalog import Catalog
 from datachain.catalog.catalog import DataSource
-from datachain.node import DirType, Entry
+from datachain.node import DirType, Entry, get_path
 from tests.utils import skip_if_not_sqlite
 
 TREE = {
@@ -24,7 +24,7 @@ def _tree_to_entries(tree: dict, path=""):
             yield from _tree_to_entries(v, dir_path)
         else:
             for fname in v:
-                yield Entry.from_file(path, fname)
+                yield Entry.from_file(get_path(path, fname))
 
 
 @pytest.fixture
@@ -99,8 +99,8 @@ def test_subname_expansion(listing):
     _match_filenames(nodes, ["dir1", "dir2"])
 
 
+@skip_if_not_sqlite
 def test_multilevel_expansion(listing):
-    skip_if_not_sqlite()
     nodes = listing.expand_path("dir[1,2]/d*")
     _match_filenames(nodes, ["dataset.csv", "diagram.png", "d2"])
 
@@ -114,8 +114,8 @@ def test_expand_root(listing):
 
 def test_list_dir(listing):
     dir1 = listing.resolve_path("dir1/")
-    names = listing.ls_path(dir1, ["name"])
-    assert {n[0] for n in names} == {"d2", "dataset.csv"}
+    names = listing.ls_path(dir1, ["path"])
+    assert {n[0] for n in names} == {"dir1/d2", "dir1/dataset.csv"}
 
 
 def test_list_file(listing):

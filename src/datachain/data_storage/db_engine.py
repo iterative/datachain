@@ -4,7 +4,6 @@ from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any, ClassVar, Optional, Union
 
 import sqlalchemy as sa
-from attrs import frozen
 from sqlalchemy.sql import FROM_LINTING
 from sqlalchemy.sql.roles import DDLRole
 
@@ -23,12 +22,17 @@ logger = logging.getLogger("datachain")
 SELECT_BATCH_SIZE = 100_000  # number of rows to fetch at a time
 
 
-@frozen
 class DatabaseEngine(ABC, Serializable):
     dialect: ClassVar["Dialect"]
 
     engine: "Engine"
     metadata: "MetaData"
+
+    def __enter__(self) -> "DatabaseEngine":
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        self.close()
 
     @abstractmethod
     def clone(self) -> "DatabaseEngine":

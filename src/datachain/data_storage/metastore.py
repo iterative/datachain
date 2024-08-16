@@ -78,6 +78,13 @@ class AbstractMetastore(ABC, Serializable):
         self.uri = uri
         self.partial_id: Optional[int] = partial_id
 
+    def __enter__(self) -> "AbstractMetastore":
+        """Returns self upon entering context manager."""
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        """Default behavior is to do nothing, as connections may be shared."""
+
     @abstractmethod
     def clone(
         self,
@@ -96,6 +103,12 @@ class AbstractMetastore(ABC, Serializable):
 
     def close(self) -> None:
         """Closes any active database or HTTP connections."""
+
+    def close_on_exit(self) -> None:
+        """Closes any active database or HTTP connections, called on Session exit or
+        for test cleanup only, as some Metastore implementations may handle this
+        differently."""
+        self.close()
 
     def cleanup_tables(self, temp_table_names: list[str]) -> None:
         """Cleanup temp tables."""

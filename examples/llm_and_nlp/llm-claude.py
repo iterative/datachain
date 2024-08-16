@@ -22,7 +22,7 @@ if not API_KEY:
 
 chain = (
     DataChain.from_storage(DATA, type="text")
-    .filter(Column("file.name").glob("*.txt"))
+    .filter(Column("file.path").glob("*.txt"))
     .limit(5)
     .settings(parallel=4, cache=True)
     .setup(client=lambda: anthropic.Anthropic(api_key=API_KEY))

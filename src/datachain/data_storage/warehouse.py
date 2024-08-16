@@ -6,7 +6,7 @@ import random
 import string
 from abc import ABC, abstractmethod
 from collections.abc import Generator, Iterable, Iterator, Sequence
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 from urllib.parse import urlparse
 
 import attrs
@@ -14,11 +14,13 @@ import sqlalchemy as sa
 from sqlalchemy import Table, case, select
 from sqlalchemy.sql import func
 from sqlalchemy.sql.expression import true
+from tqdm import tqdm
 
 from datachain.client import Client
 from datachain.data_storage.serializer import Serializable
-from datachain.dataset import DatasetRecord, RowDict
+from datachain.dataset import DatasetRecord
 from datachain.node import DirType, DirTypeGroup, Entry, Node, NodeWithPath, get_path
+from datachain.sql.functions import path as pathfunc
 from datachain.sql.types import Int, SQLType
 from datachain.storage import StorageURI
 from datachain.utils import sql_escape_like
@@ -69,6 +71,13 @@ class AbstractWarehouse(ABC, Serializable):
 
     def __init__(self, id_generator: "AbstractIDGenerator"):
         self.id_generator = id_generator
+
+    def __enter__(self) -> "AbstractWarehouse":
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        # Default behavior is to do nothing, as connections may be shared.
+        pass
 
     def cleanup_for_tests(self):
         """Cleanup for tests."""
@@ -158,6 +167,12 @@ class AbstractWarehouse(ABC, Serializable):
         """Closes any active database connections."""
         self.db.close()
 
+    def close_on_exit(self) -> None:
+        """Closes any active database or HTTP connections, called on Session exit or
+        for test cleanup only, as some Warehouse implementations may handle this
+        differently."""
+        self.close()
+
     #
     # Query Tables
     #
@@ -187,23 +202,17 @@ class AbstractWarehouse(ABC, Serializable):
     def dataset_select_paginated(
         self,
         query,
-        limit: Optional[int] = None,
-        order_by: tuple["ColumnElement[Any]", ...] = (),
         page_size: int = SELECT_BATCH_SIZE,
-    ) -> Generator[RowDict, None, None]:
+    ) -> Generator[Sequence, None, None]:
         """
         This is equivalent to `db.execute`, but for selecting rows in batches
         """
-        cols = query.selected_columns
-        cols_names = [c.name for c in cols]
+        limit = query._limit
+        paginated_query = query.limit(page_size)
 
-        if not order_by:
-            ordering = [cols.sys__id]
-        else:
-            ordering = order_by  # type: ignore[assignment]
-
-        # reset query order by and apply new order by id
-        paginated_query = query.order_by(None).order_by(*ordering).limit(page_size)
+        if not paginated_query._order_by_clauses:
+            # default order by is order by `sys__id`
+            paginated_query = paginated_query.order_by(query.selected_columns.sys__id)
 
         results = None
         offset = 0
@@ -222,7 +231,7 @@ class AbstractWarehouse(ABC, Serializable):
                 processed = False
                 for row in results:
                     processed = True
-                    yield RowDict(zip(cols_names, row))
+                    yield row
                     num_yielded += 1
 
                 if not processed:
@@ -360,9 +369,7 @@ class AbstractWarehouse(ABC, Serializable):
 
         else:
             parent = self.get_node_by_path(dr, path.lstrip("/").rstrip("/*"))
-            select_query = select_query.where(
-                (dr.c.parent == parent.path) | (self.path_expr(dr) == path)
-            )
+            select_query = select_query.where(pathfunc.parent(dr.c.path) == parent.path)
         return select_query
 
     def rename_dataset_table(
@@ -519,8 +526,8 @@ class AbstractWarehouse(ABC, Serializable):
             dr,
             parent_path,
             type="dir",
-            conds=[sa.Column("parent") == parent_path],
-            order_by=["source", "parent", "name"],
+            conds=[pathfunc.parent(sa.Column("path")) == parent_path],
+            order_by=["source", "path"],
         )
         return self.get_nodes(query)
 
@@ -543,7 +550,7 @@ class AbstractWarehouse(ABC, Serializable):
                 & ~self.instr(relpath, "/")
                 & (self.path_expr(de) != dirpath)
             )
-            .order_by(de.c.source, de.c.parent, de.c.name, de.c.version)
+            .order_by(de.c.source, de.c.path, de.c.version)
         )
 
     def _get_node_by_path_list(
@@ -559,8 +566,8 @@ class AbstractWarehouse(ABC, Serializable):
         ).subquery()
         query = self.expand_query(de, dr)
 
-        q = query.where((de.c.parent == parent) & (de.c.name == name)).order_by(
-            de.c.source, de.c.parent, de.c.name, de.c.version
+        q = query.where(de.c.path == get_path(parent, name)).order_by(
+            de.c.source, de.c.path, de.c.version
         )
         row = next(self.dataset_rows_select(q), None)
         if not row:
@@ -623,8 +630,7 @@ class AbstractWarehouse(ABC, Serializable):
             case((de.c.is_dir == true(), DirType.DIR), else_=dr.c.dir_type).label(
                 "dir_type"
             ),
-            de.c.parent,
-            de.c.name,
+            de.c.path,
             with_default(dr.c.etag),
             de.c.version,
             with_default(dr.c.is_latest),
@@ -657,7 +663,7 @@ class AbstractWarehouse(ABC, Serializable):
             .where(
                 dr.c.is_latest == true(),
                 dr.c.dir_type != DirType.DIR,
-                (dr.c.parent + "/").startswith(path),
+                dr.c.path.startswith(path),
             )
             .exists()
         )
@@ -665,8 +671,7 @@ class AbstractWarehouse(ABC, Serializable):
         if not row:
             raise FileNotFoundError(f"Unable to resolve path {path}")
         path = path.removesuffix("/")
-        parent, name = path.rsplit("/", 1) if "/" in path else ("", path)
-        return Node.from_dir(parent, name)
+        return Node.from_dir(path)
 
     def expand_path(self, dataset_rows: "DataTable", path: str) -> list[Node]:
         """Simulates Unix-like shell expansion"""
@@ -690,18 +695,21 @@ class AbstractWarehouse(ABC, Serializable):
         de = dr.dataset_dir_expansion(
             dr.select().where(dr.c.is_latest == true()).subquery()
         ).subquery()
-        where_cond = de.c.parent == parent_path
+        where_cond = pathfunc.parent(de.c.path) == parent_path
         if parent_path == "":
             # Exclude the root dir
-            where_cond = where_cond & (de.c.name != "")
+            where_cond = where_cond & (de.c.path != "")
         inner_query = self.expand_query(de, dr).where(where_cond).subquery()
+
+        def field_to_expr(f):
+            if f == "name":
+                return pathfunc.name(inner_query.c.path)
+            return getattr(inner_query.c, f)
+
         return self.db.execute(
-            sa.select(*(getattr(inner_query.c, f) for f in fields))
-            .select_from(inner_query)
-            .order_by(
+            select(*(field_to_expr(f) for f in fields)).order_by(
                 inner_query.c.source,
-                inner_query.c.parent,
-                inner_query.c.name,
+                inner_query.c.path,
                 inner_query.c.version,
             )
         )
@@ -714,21 +722,20 @@ class AbstractWarehouse(ABC, Serializable):
         """
         dr = dataset_rows
         dirpath = f"{parent_path}/"
-        relpath = func.substr(self.path_expr(dr), len(dirpath) + 1)
 
         def field_to_expr(f):
             if f == "name":
-                return relpath
+                return pathfunc.name(dr.c.path)
             return getattr(dr.c, f)
 
         q = (
             select(*(field_to_expr(f) for f in fields))
             .where(
                 self.path_expr(dr).like(f"{sql_escape_like(dirpath)}%"),
-                ~self.instr(relpath, "/"),
+                ~self.instr(pathfunc.name(dr.c.path), "/"),
                 dr.c.is_latest == true(),
             )
-            .order_by(dr.c.source, dr.c.parent, dr.c.name, dr.c.version, dr.c.etag)
+            .order_by(dr.c.source, dr.c.path, dr.c.version, dr.c.etag)
         )
         return self.db.execute(q)
 
@@ -745,7 +752,7 @@ class AbstractWarehouse(ABC, Serializable):
         if isinstance(node, dict):
             is_dir = node.get("is_dir", node["dir_type"] in DirTypeGroup.SUBOBJ_DIR)
             node_size = node["size"]
-            path = get_path(node["parent"], node["name"])
+            path = node["path"]
         else:
             is_dir = node.is_container
             node_size = node.size
@@ -777,7 +784,7 @@ class AbstractWarehouse(ABC, Serializable):
         return results[0] or 0, 0
 
     def path_expr(self, t):
-        return case((t.c.parent == "", t.c.name), else_=t.c.parent + "/" + t.c.name)
+        return t.c.path
 
     def _find_query(
         self,
@@ -896,6 +903,17 @@ class AbstractWarehouse(ABC, Serializable):
         return tbl
 
     @abstractmethod
+    def copy_table(
+        self,
+        table: Table,
+        query: "Select",
+        progress_cb: Optional[Callable[[int], None]] = None,
+    ) -> None:
+        """
+        Copy the results of a query into a table.
+        """
+
+    @abstractmethod
     def create_pre_udf_table(self, query: "Select") -> "Table":
         """
         Create a temporary table from a query for use in a UDF.
@@ -922,8 +940,10 @@ class AbstractWarehouse(ABC, Serializable):
         This should be implemented to ensure that the provided tables
         are cleaned up as soon as they are no longer needed.
         """
-        for name in names:
-            self.db.drop_table(Table(name, self.db.metadata), if_exists=True)
+        with tqdm(desc="Cleanup", unit=" tables") as pbar:
+            for name in names:
+                self.db.drop_table(Table(name, self.db.metadata), if_exists=True)
+                pbar.update(1)
 
     def changed_query(
         self,
@@ -934,11 +954,7 @@ class AbstractWarehouse(ABC, Serializable):
         tq = target_query.alias("target_query")
 
         source_target_join = sa.join(
-            sq,
-            tq,
-            (sq.c.source == tq.c.source)
-            & (sq.c.parent == tq.c.parent)
-            & (sq.c.name == tq.c.name),
+            sq, tq, (sq.c.source == tq.c.source) & (sq.c.path == tq.c.path)
         )
 
         return (

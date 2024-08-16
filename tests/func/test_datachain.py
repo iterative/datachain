@@ -86,7 +86,7 @@ def test_export_files(
     tmp_dir, cloud_test_catalog, placement, use_map, use_cache, file_type
 ):
     ctc = cloud_test_catalog
-    df = DataChain.from_storage(ctc.src_uri, type=file_type)
+    df = DataChain.from_storage(ctc.src_uri, type=file_type, catalog=ctc.catalog)
     if use_map:
         df.export_files(tmp_dir / "output", placement=placement, use_cache=use_cache)
         df.map(
@@ -117,7 +117,7 @@ def test_export_files(
 
 
 @pytest.mark.parametrize("use_cache", [True, False])
-def test_export_images_files(tmp_dir, tmp_path, use_cache):
+def test_export_images_files(test_session, tmp_dir, tmp_path, use_cache):
     images = [
         {"name": "img1.jpg", "data": Image.new(mode="RGB", size=(64, 64))},
         {"name": "img2.jpg", "data": Image.new(mode="RGB", size=(128, 128))},
@@ -128,8 +128,9 @@ def test_export_images_files(tmp_dir, tmp_path, use_cache):
 
     DataChain.from_values(
         file=[
-            ImageFile(name=img["name"], source=f"file://{tmp_path}") for img in images
+            ImageFile(path=img["name"], source=f"file://{tmp_path}") for img in images
         ],
+        session=test_session,
     ).export_files(tmp_dir / "output", placement="filename", use_cache=use_cache)
 
     for img in images:
@@ -137,7 +138,7 @@ def test_export_images_files(tmp_dir, tmp_path, use_cache):
         assert images_equal(img["data"], exported_img)
 
 
-def test_export_files_filename_placement_not_unique_files(tmp_dir, catalog):
+def test_export_files_filename_placement_not_unique_files(tmp_dir, test_session):
     data = b"some\x00data\x00is\x48\x65\x6c\x57\x6f\x72\x6c\x64\xff\xffheRe"
     bucket_name = "mybucket"
     files = ["dir1/a.json", "dir1/dir2/a.json"]
@@ -151,12 +152,12 @@ def test_export_files_filename_placement_not_unique_files(tmp_dir, catalog):
         with open(file_path, "wb") as fd:
             fd.write(data)
 
-    df = DataChain.from_storage((tmp_dir / bucket_name).as_uri())
+    df = DataChain.from_storage((tmp_dir / bucket_name).as_uri(), session=test_session)
     with pytest.raises(ValueError):
         df.export_files(tmp_dir / "output", placement="filename")
 
 
-def test_show(capsys, catalog):
+def test_show(capsys, test_session):
     first_name = ["Alice", "Bob", "Charlie"]
     DataChain.from_values(
         first_name=first_name,
@@ -166,6 +167,7 @@ def test_show(capsys, catalog):
             "Los Angeles",
             None,
         ],
+        session=test_session,
     ).show()
     captured = capsys.readouterr()
     normalized_output = re.sub(r"\s+", " ", captured.out)
@@ -174,7 +176,27 @@ def test_show(capsys, catalog):
         assert f"{i} {first_name[i]}" in normalized_output
 
 
-def test_show_limit(capsys, catalog):
+def test_show_nested_empty(capsys, test_session):
+    files = [File(size=s, path=p) for p, s in zip(list("abcde"), range(5))]
+    DataChain.from_values(file=files, session=test_session).limit(0).show()
+
+    captured = capsys.readouterr()
+    normalized_output = re.sub(r"\s+", " ", captured.out)
+    assert "Empty result" in normalized_output
+    assert "('file', 'path')" in normalized_output
+
+
+def test_show_empty(capsys, test_session):
+    first_name = ["Alice", "Bob", "Charlie"]
+    DataChain.from_values(first_name=first_name, session=test_session).limit(0).show()
+
+    captured = capsys.readouterr()
+    normalized_output = re.sub(r"\s+", " ", captured.out)
+    assert "Empty result" in normalized_output
+    assert "Columns: ['first_name']" in normalized_output
+
+
+def test_show_limit(capsys, test_session):
     first_name = ["Alice", "Bob", "Charlie"]
     DataChain.from_values(
         first_name=first_name,
@@ -184,18 +206,20 @@ def test_show_limit(capsys, catalog):
             "Los Angeles",
             None,
         ],
+        session=test_session,
     ).limit(1).show()
     captured = capsys.readouterr()
     new_line_count = captured.out.count("\n")
     assert new_line_count == 2
 
 
-def test_show_transpose(capsys, catalog):
+def test_show_transpose(capsys, test_session):
     first_name = ["Alice", "Bob", "Charlie"]
     last_name = ["A", "B", "C"]
     DataChain.from_values(
         first_name=first_name,
         last_name=last_name,
+        session=test_session,
     ).show(transpose=True)
     captured = capsys.readouterr()
     stripped_output = re.sub(r"\s+", " ", captured.out)
@@ -203,7 +227,7 @@ def test_show_transpose(capsys, catalog):
     assert " ".join(last_name) in stripped_output
 
 
-def test_show_truncate(capsys, catalog):
+def test_show_truncate(capsys, test_session):
     client = ["Alice A", "Bob B", "Charles C"]
     details = [
         "This is a very long piece of text that would not fit in the default output "
@@ -215,6 +239,7 @@ def test_show_truncate(capsys, catalog):
     dc = DataChain.from_values(
         client=client,
         details=details,
+        session=test_session,
     )
 
     dc.show()
@@ -226,7 +251,7 @@ def test_show_truncate(capsys, catalog):
         assert f"{client[i]} {details[i]}" in normalized_output
 
 
-def test_show_no_truncate(capsys, catalog):
+def test_show_no_truncate(capsys, test_session):
     client = ["Alice A", "Bob B", "Charles C"]
     details = [
         "This is a very long piece of text that would not fit in the default output "
@@ -238,6 +263,7 @@ def test_show_no_truncate(capsys, catalog):
     dc = DataChain.from_values(
         client=client,
         details=details,
+        session=test_session,
     )
 
     dc.show(truncate=False)
@@ -248,25 +274,29 @@ def test_show_no_truncate(capsys, catalog):
         assert details[i] in normalized_output
 
 
-def test_from_storage_dataset_stats(tmp_dir, catalog):
+def test_from_storage_dataset_stats(tmp_dir, test_session):
     for i in range(4):
         (tmp_dir / f"file{i}.txt").write_text(f"file{i}")
 
-    dc = DataChain.from_storage(tmp_dir.as_uri(), catalog=catalog).save("test-data")
-    stats = catalog.dataset_stats(dc.name, dc.version)
+    dc = DataChain.from_storage(tmp_dir.as_uri(), session=test_session).save(
+        "test-data"
+    )
+    stats = test_session.catalog.dataset_stats(dc.name, dc.version)
     assert stats == DatasetStats(num_objects=4, size=20)
 
 
-def test_from_storage_check_rows(tmp_dir, catalog):
+def test_from_storage_check_rows(tmp_dir, test_session):
     stats = {}
     for i in range(4):
         file = tmp_dir / f"{i}.txt"
         file.write_text(f"file{i}")
         stats[file.name] = file.stat()
 
-    dc = DataChain.from_storage(tmp_dir.as_uri(), catalog=catalog).save("test-data")
+    dc = DataChain.from_storage(tmp_dir.as_uri(), session=test_session).save(
+        "test-data"
+    )
 
-    is_sqlite = isinstance(catalog.warehouse, SQLiteWarehouse)
+    is_sqlite = isinstance(test_session.catalog.warehouse, SQLiteWarehouse)
     tz = timezone.utc if is_sqlite else pytz.UTC
 
     for (file,) in dc.collect():
@@ -275,8 +305,7 @@ def test_from_storage_check_rows(tmp_dir, catalog):
         mtime = stat.st_mtime if is_sqlite else float(math.floor(stat.st_mtime))
         assert file == File(
             source=Path(tmp_dir.anchor).as_uri(),
-            parent=tmp_dir.relative_to(tmp_dir.anchor),
-            name=file.name,
+            path=file.path,
             size=stat.st_size,
             version="",
             etag=stat.st_mtime.hex(),

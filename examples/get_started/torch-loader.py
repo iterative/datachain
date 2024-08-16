@@ -1,5 +1,8 @@
 # pip install Pillow torchvision
 
+import os
+from posixpath import basename
+
 import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader
@@ -9,6 +12,7 @@ from datachain import C, DataChain
 from datachain.torch import label_to_int
 
 STORAGE = "gs://datachain-demo/dogs-and-cats/"
+NUM_EPOCHS = os.getenv("NUM_EPOCHS", "3")
 
 # Define transformation for data preprocessing
 transform = v2.Compose(
@@ -45,10 +49,10 @@ class CNN(nn.Module):
 if __name__ == "__main__":
     ds = (
         DataChain.from_storage(STORAGE, type="image")
-        .filter(C("file.name").glob("*.jpg"))
+        .filter(C("file.path").glob("*.jpg"))
         .map(
-            label=lambda name: label_to_int(name[:3], CLASSES),
-            params=["file.name"],
+            label=lambda path: label_to_int(basename(path)[:3], CLASSES),
+            params=["file.path"],
             output=int,
         )
     )
@@ -64,8 +68,7 @@ if __name__ == "__main__":
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
     # Train the model
-    num_epochs = 3
-    for epoch in range(num_epochs):
+    for epoch in range(int(NUM_EPOCHS)):
         for i, data in enumerate(train_loader):
             inputs, labels = data
             optimizer.zero_grad()

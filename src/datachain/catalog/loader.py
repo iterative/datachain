@@ -28,8 +28,10 @@ WAREHOUSE_ARG_PREFIX = "DATACHAIN_WAREHOUSE_ARG_"
 DISTRIBUTED_IMPORT_PATH = "DATACHAIN_DISTRIBUTED"
 DISTRIBUTED_ARG_PREFIX = "DATACHAIN_DISTRIBUTED_ARG_"
 
+IN_MEMORY_ERROR_MESSAGE = "In-memory is only supported on SQLite"
 
-def get_id_generator() -> "AbstractIDGenerator":
+
+def get_id_generator(in_memory: bool = False) -> "AbstractIDGenerator":
     id_generator_serialized = os.environ.get(ID_GENERATOR_SERIALIZED)
     if id_generator_serialized:
         id_generator_obj = deserialize(id_generator_serialized)
@@ -43,25 +45,31 @@ def get_id_generator() -> "AbstractIDGenerator":
     id_generator_import_path = os.environ.get(ID_GENERATOR_IMPORT_PATH)
     id_generator_arg_envs = get_envs_by_prefix(ID_GENERATOR_ARG_PREFIX)
     # Convert env variable names to keyword argument names by lowercasing them
-    id_generator_args = {k.lower(): v for k, v in id_generator_arg_envs.items()}
+    id_generator_args: dict[str, Any] = {
+        k.lower(): v for k, v in id_generator_arg_envs.items()
+    }
 
-    if id_generator_import_path:
-        # ID generator paths are specified as (for example):
-        # datachain.data_storage.SQLiteIDGenerator
-        if "." not in id_generator_import_path:
-            raise RuntimeError(
-                f"Invalid {ID_GENERATOR_IMPORT_PATH} import path:"
-                f"{id_generator_import_path}"
-            )
-        module_name, _, class_name = id_generator_import_path.rpartition(".")
-        id_generator = import_module(module_name)
-        id_generator_class = getattr(id_generator, class_name)
-    else:
-        id_generator_class = SQLiteIDGenerator
+    if not id_generator_import_path:
+        id_generator_args["in_memory"] = in_memory
+        return SQLiteIDGenerator(**id_generator_args)
+    if in_memory:
+        raise RuntimeError(IN_MEMORY_ERROR_MESSAGE)
+    # ID generator paths are specified as (for example):
+    # datachain.data_storage.SQLiteIDGenerator
+    if "." not in id_generator_import_path:
+        raise RuntimeError(
+            f"Invalid {ID_GENERATOR_IMPORT_PATH} import path:"
+            f"{id_generator_import_path}"
+        )
+    module_name, _, class_name = id_generator_import_path.rpartition(".")
+    id_generator = import_module(module_name)
+    id_generator_class = getattr(id_generator, class_name)
     return id_generator_class(**id_generator_args)
 
 
-def get_metastore(id_generator: Optional["AbstractIDGenerator"]) -> "AbstractMetastore":
+def get_metastore(
+    id_generator: Optional["AbstractIDGenerator"], in_memory: bool = False
+) -> "AbstractMetastore":
     metastore_serialized = os.environ.get(METASTORE_SERIALIZED)
     if metastore_serialized:
         metastore_obj = deserialize(metastore_serialized)
@@ -78,24 +86,32 @@ def get_metastore(id_generator: Optional["AbstractIDGenerator"]) -> "AbstractMet
     metastore_import_path = os.environ.get(METASTORE_IMPORT_PATH)
     metastore_arg_envs = get_envs_by_prefix(METASTORE_ARG_PREFIX)
     # Convert env variable names to keyword argument names by lowercasing them
-    metastore_args = {k.lower(): v for k, v in metastore_arg_envs.items()}
+    metastore_args: dict[str, Any] = {
+        k.lower(): v for k, v in metastore_arg_envs.items()
+    }
 
-    if metastore_import_path:
-        # Metastore paths are specified as (for example):
-        # datachain.data_storage.SQLiteMetastore
-        if "." not in metastore_import_path:
-            raise RuntimeError(
-                f"Invalid {METASTORE_IMPORT_PATH} import path: {metastore_import_path}"
-            )
-        module_name, _, class_name = metastore_import_path.rpartition(".")
-        metastore = import_module(module_name)
-        metastore_class = getattr(metastore, class_name)
-    else:
-        metastore_class = SQLiteMetastore
+    if not metastore_import_path:
+        if not isinstance(id_generator, SQLiteIDGenerator):
+            raise ValueError("SQLiteMetastore can only be used with SQLiteIDGenerator")
+        metastore_args["in_memory"] = in_memory
+        return SQLiteMetastore(id_generator, **metastore_args)
+    if in_memory:
+        raise RuntimeError(IN_MEMORY_ERROR_MESSAGE)
+    # Metastore paths are specified as (for example):
+    # datachain.data_storage.SQLiteMetastore
+    if "." not in metastore_import_path:
+        raise RuntimeError(
+            f"Invalid {METASTORE_IMPORT_PATH} import path: {metastore_import_path}"
+        )
+    module_name, _, class_name = metastore_import_path.rpartition(".")
+    metastore = import_module(module_name)
+    metastore_class = getattr(metastore, class_name)
     return metastore_class(id_generator, **metastore_args)
 
 
-def get_warehouse(id_generator: Optional["AbstractIDGenerator"]) -> "AbstractWarehouse":
+def get_warehouse(
+    id_generator: Optional["AbstractIDGenerator"], in_memory: bool = False
+) -> "AbstractWarehouse":
     warehouse_serialized = os.environ.get(WAREHOUSE_SERIALIZED)
     if warehouse_serialized:
         warehouse_obj = deserialize(warehouse_serialized)
@@ -112,20 +128,26 @@ def get_warehouse(id_generator: Optional["AbstractIDGenerator"]) -> "AbstractWar
     warehouse_import_path = os.environ.get(WAREHOUSE_IMPORT_PATH)
     warehouse_arg_envs = get_envs_by_prefix(WAREHOUSE_ARG_PREFIX)
     # Convert env variable names to keyword argument names by lowercasing them
-    warehouse_args = {k.lower(): v for k, v in warehouse_arg_envs.items()}
+    warehouse_args: dict[str, Any] = {
+        k.lower(): v for k, v in warehouse_arg_envs.items()
+    }
 
-    if warehouse_import_path:
-        # Warehouse paths are specified as (for example):
-        # datachain.data_storage.SQLiteWarehouse
-        if "." not in warehouse_import_path:
-            raise RuntimeError(
-                f"Invalid {WAREHOUSE_IMPORT_PATH} import path: {warehouse_import_path}"
-            )
-        module_name, _, class_name = warehouse_import_path.rpartition(".")
-        warehouse = import_module(module_name)
-        warehouse_class = getattr(warehouse, class_name)
-    else:
-        warehouse_class = SQLiteWarehouse
+    if not warehouse_import_path:
+        if not isinstance(id_generator, SQLiteIDGenerator):
+            raise ValueError("SQLiteWarehouse can only be used with SQLiteIDGenerator")
+        warehouse_args["in_memory"] = in_memory
+        return SQLiteWarehouse(id_generator, **warehouse_args)
+    if in_memory:
+        raise RuntimeError(IN_MEMORY_ERROR_MESSAGE)
+    # Warehouse paths are specified as (for example):
+    # datachain.data_storage.SQLiteWarehouse
+    if "." not in warehouse_import_path:
+        raise RuntimeError(
+            f"Invalid {WAREHOUSE_IMPORT_PATH} import path: {warehouse_import_path}"
+        )
+    module_name, _, class_name = warehouse_import_path.rpartition(".")
+    warehouse = import_module(module_name)
+    warehouse_class = getattr(warehouse, class_name)
     return warehouse_class(id_generator, **warehouse_args)
 
 
@@ -152,7 +174,9 @@ def get_distributed_class(**kwargs):
     return distributed_class(**distributed_args | kwargs)
 
 
-def get_catalog(client_config: Optional[dict[str, Any]] = None) -> Catalog:
+def get_catalog(
+    client_config: Optional[dict[str, Any]] = None, in_memory: bool = False
+) -> Catalog:
     """
     Function that creates Catalog instance with appropriate metastore
     and warehouse classes. Metastore class can be provided with env variable
@@ -164,10 +188,11 @@ def get_catalog(client_config: Optional[dict[str, Any]] = None) -> Catalog:
     and name of variable after, e.g. if it accepts team_id as kwargs
     we can provide DATACHAIN_METASTORE_ARG_TEAM_ID=12345 env variable.
     """
-    id_generator = get_id_generator()
+    id_generator = get_id_generator(in_memory=in_memory)
     return Catalog(
         id_generator=id_generator,
-        metastore=get_metastore(id_generator),
-        warehouse=get_warehouse(id_generator),
+        metastore=get_metastore(id_generator, in_memory=in_memory),
+        warehouse=get_warehouse(id_generator, in_memory=in_memory),
         client_config=client_config,
+        in_memory=in_memory,
     )

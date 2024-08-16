@@ -1,7 +1,6 @@
 import asyncio
 import json
 import os
-import posixpath
 from collections.abc import Iterable
 from datetime import datetime
 from typing import Any, Optional, cast
@@ -10,6 +9,7 @@ from dateutil.parser import isoparse
 from gcsfs import GCSFileSystem
 from tqdm import tqdm
 
+from datachain.lib.file import File
 from datachain.node import Entry
 
 from .fsspec import DELIMITER, Client, ResultQueue
@@ -110,20 +110,22 @@ class GCSClient(Client):
 
     def _entry_from_dict(self, d: dict[str, Any]) -> Entry:
         info = self.fs._process_object(self.name, d)
-        full_path = info["name"]
-        subprefix = self.rel_path(full_path)
-        parent = posixpath.dirname(subprefix)
-        return self.convert_info(info, parent)
+        return self.convert_info(info, self.rel_path(info["name"]))
 
-    def convert_info(self, v: dict[str, Any], parent: str) -> Entry:
-        name = v.get("name", "").split(DELIMITER)[-1]
-        if "generation" in v:
-            gen = f"#{v['generation']}"
-            if name.endswith(gen):
-                name = name[: -len(gen)]
+    def convert_info(self, v: dict[str, Any], path: str) -> Entry:
         return Entry.from_file(
-            parent=parent,
-            name=name,
+            path=path,
+            etag=v.get("etag", ""),
+            version=v.get("generation", ""),
+            is_latest=not v.get("timeDeleted"),
+            last_modified=self.parse_timestamp(v["updated"]),
+            size=v.get("size", ""),
+        )
+
+    def info_to_file(self, v: dict[str, Any], path: str) -> File:
+        return File(
+            source=self.uri,
+            path=path,
             etag=v.get("etag", ""),
             version=v.get("generation", ""),
             is_latest=not v.get("timeDeleted"),

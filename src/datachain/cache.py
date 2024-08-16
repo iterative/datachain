@@ -24,8 +24,7 @@ sha256 = partial(hashlib.sha256, usedforsecurity=False)
 @attrs.frozen
 class UniqueId:
     storage: "StorageURI"
-    parent: str
-    name: str
+    path: str
     size: int
     etag: str
     version: str = ""
@@ -33,10 +32,6 @@ class UniqueId:
     vtype: str = ""
     location: Optional[str] = None
     last_modified: datetime = TIME_ZERO
-
-    @property
-    def path(self) -> str:
-        return f"{self.parent}/{self.name}" if self.parent else self.name
 
     def get_parsed_location(self) -> Optional[dict]:
         if not self.location:
@@ -53,10 +48,10 @@ class UniqueId:
         return loc_stack[0]
 
     def get_hash(self) -> str:
-        etag = f"{self.vtype}{self.location}" if self.vtype else self.etag
-        return sha256(
-            f"{self.storage}/{self.parent}/{self.name}/{self.version}/{etag}".encode()
-        ).hexdigest()
+        fingerprint = f"{self.storage}/{self.path}/{self.version}/{self.etag}"
+        if self.location:
+            fingerprint += f"/{self.location}"
+        return sha256(fingerprint.encode()).hexdigest()
 
 
 def try_scandir(path):

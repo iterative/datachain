@@ -2,10 +2,10 @@ from datachain import DataChain
 
 
 # Define the UDF:
-def name_len(name):
-    if name.endswith(".json"):
+def path_len(path):
+    if path.endswith(".json"):
         return (-1,)
-    return (len(name),)
+    return (len(path),)
 
 
 if __name__ == "__main__":
@@ -13,7 +13,7 @@ if __name__ == "__main__":
     DataChain.from_storage(
         path="gs://datachain-demo/dogs-and-cats/",
     ).map(
-        name_len,
-        params=["file.name"],
-        output={"name_len": int},
+        path_len,
+        params=["file.path"],
+        output={"path_len": int},
     ).show()

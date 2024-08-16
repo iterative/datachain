@@ -1,11 +1,11 @@
 import asyncio
-import posixpath
 from typing import Any, cast
 
 from botocore.exceptions import NoCredentialsError
 from s3fs import S3FileSystem
 from tqdm import tqdm
 
+from datachain.lib.file import File
 from datachain.node import Entry
 
 from .fsspec import DELIMITER, Client, ResultQueue
@@ -112,10 +112,8 @@ class ClientS3(Client):
         await self._fetch_flat(start_prefix, result_queue)
 
     def _entry_from_boto(self, v, bucket, versions=False):
-        parent, name = posixpath.split(v["Key"])
         return Entry.from_file(
-            parent=parent,
-            name=name,
+            path=v["Key"],
             etag=v.get("ETag", "").strip('"'),
             version=ClientS3.clean_s3_version(v.get("VersionId", "")),
             is_latest=v.get("IsLatest", True),
@@ -145,7 +143,7 @@ class ClientS3(Client):
             if info["type"] == "directory":
                 subdirs.add(subprefix)
             else:
-                files.append(self.convert_info(info, prefix.rstrip("/")))
+                files.append(self.convert_info(info, subprefix))
                 pbar.update()
             found = True
         if not found:
@@ -159,10 +157,9 @@ class ClientS3(Client):
     def clean_s3_version(ver):
         return ver if ver != "null" else ""
 
-    def convert_info(self, v: dict[str, Any], parent: str) -> Entry:
+    def convert_info(self, v: dict[str, Any], path: str) -> Entry:
         return Entry.from_file(
-            parent=parent,
-            name=v.get("Key", "").split(DELIMITER)[-1],
+            path=path,
             etag=v.get("ETag", "").strip('"'),
             version=ClientS3.clean_s3_version(v.get("VersionId", "")),
             is_latest=v.get("IsLatest", True),
@@ -170,4 +167,15 @@ class ClientS3(Client):
             size=v["size"],
             owner_name=v.get("Owner", {}).get("DisplayName", ""),
             owner_id=v.get("Owner", {}).get("ID", ""),
+        )
+
+    def info_to_file(self, v: dict[str, Any], path: str) -> File:
+        return File(
+            source=self.uri,
+            path=path,
+            size=v["size"],
+            version=ClientS3.clean_s3_version(v.get("VersionId", "")),
+            etag=v.get("ETag", "").strip('"'),
+            is_latest=v.get("IsLatest", True),
+            last_modified=v.get("LastModified", ""),
         )

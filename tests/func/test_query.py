@@ -97,8 +97,10 @@ def test_query_cli(cloud_test_catalog_tmpfile, tmp_path, catalog_info_filepath, 
 
     query_script = f"""\
     from datachain.query import DatasetQuery
+    from datachain import C
+    from datachain.sql.functions.path import name
 
-    DatasetQuery({src_uri!r}, catalog=catalog)
+    DatasetQuery({src_uri!r}, catalog=catalog).mutate(name=name(C.path))
     """
     query_script = setup_catalog(query_script, catalog_info_filepath)
 
@@ -263,7 +265,7 @@ def test_query_where_last_command_is_call_on_save_which_returns_attached_dataset
     query_script = f"""\
     from datachain.query import C, DatasetQuery
 
-    DatasetQuery({src_uri!r}, catalog=catalog).filter(C.name.glob("dog*")).save("dogs")
+    DatasetQuery({src_uri!r}, catalog=catalog).filter(C.path.glob("*dog*")).save("dogs")
     """
     query_script = setup_catalog(query_script, catalog_info_filepath)
 
@@ -300,7 +302,7 @@ def test_query_where_last_command_is_attached_dataset_query_created_from_save(
 
     ds = DatasetQuery(
         {src_uri!r}, catalog=catalog
-    ).filter(C.name.glob("dog*")).save("dogs")
+    ).filter(C.path.glob("*dog*")).save("dogs")
     ds
     """
     query_script = setup_catalog(query_script, catalog_info_filepath)
@@ -338,7 +340,7 @@ def test_query_where_last_command_is_attached_dataset_query_created_from_query(
 
     ds = DatasetQuery(
         {src_uri!r}, catalog=catalog
-    ).filter(C.name.glob("dog*")).save("dogs")
+    ).filter(C.path.glob("*dog*")).save("dogs")
     DatasetQuery(name="dogs", version=1, catalog=catalog)
     """
     query_script = setup_catalog(query_script, catalog_info_filepath)

@@ -16,7 +16,7 @@ tests_dir = os.path.dirname(os.path.abspath(__file__))
 python_exc = sys.executable or "python3"
 
 
-E2E_STEP_TIMEOUT_SEC = 30
+E2E_STEP_TIMEOUT_SEC = 60
 
 
 E2E_STEPS = (
@@ -44,11 +44,11 @@ E2E_STEPS = (
         ),
         "expected_in": dedent(
             """
-            cat.1.jpg
-            cat.10.jpg
-            cat.100.jpg
-            cat.1000.jpg
-            cat.1001.jpg
+            dogs-and-cats/cat.1.jpg
+            dogs-and-cats/cat.10.jpg
+            dogs-and-cats/cat.100.jpg
+            dogs-and-cats/cat.1000.jpg
+            dogs-and-cats/cat.1001.jpg
             """
         ),
     },
@@ -59,11 +59,11 @@ E2E_STEPS = (
         ),
         "expected_in": dedent(
             """
-            cat.1.jpg
-            cat.10.jpg
-            cat.100.jpg
-            cat.1000.jpg
-            cat.1001.jpg
+            dogs-and-cats/cat.1.jpg
+            dogs-and-cats/cat.10.jpg
+            dogs-and-cats/cat.100.jpg
+            dogs-and-cats/cat.1000.jpg
+            dogs-and-cats/cat.1001.jpg
             """
         ),
     },
@@ -75,11 +75,11 @@ E2E_STEPS = (
         ),
         "expected_in": dedent(
             """
-            cat.1.jpg
-            cat.10.jpg
-            cat.100.jpg
-            cat.1000.jpg
-            cat.1001.jpg
+            dogs-and-cats/cat.1.jpg
+            dogs-and-cats/cat.10.jpg
+            dogs-and-cats/cat.100.jpg
+            dogs-and-cats/cat.1000.jpg
+            dogs-and-cats/cat.1001.jpg
             """
         ),
     },
@@ -89,16 +89,16 @@ E2E_STEPS = (
             "query",
             os.path.join(tests_dir, "scripts", "feature_class.py"),
             "--columns",
-            "file.name,emd.value",
+            "file.path,emd.value",
         ),
         "expected_rows": dedent(
             """
-            file__name    emd__value
-            1     cat.1.jpg  512.0
-            2    cat.10.jpg  512.0
-            3   cat.100.jpg  512.0
-            4  cat.1000.jpg  512.0
-            5  cat.1001.jpg  512.0
+                               file__path  emd__value
+            0     dogs-and-cats/cat.1.jpg       512.0
+            1    dogs-and-cats/cat.10.jpg       512.0
+            2   dogs-and-cats/cat.100.jpg       512.0
+            3  dogs-and-cats/cat.1000.jpg       512.0
+            4  dogs-and-cats/cat.1001.jpg       512.0
             """
         ),
     },

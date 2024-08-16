@@ -40,7 +40,7 @@ def test_text_file_mapper(tmp_path, catalog):
     with open(file_path, "w") as fd:
         fd.write(text)
 
-    file = TextFile(name=file_name, source=f"file://{tmp_path}")
+    file = TextFile(path=file_name, source=f"file://{tmp_path}")
     file._set_stream(catalog, caching_enabled=False)
     res = file.read()
     assert res == text
