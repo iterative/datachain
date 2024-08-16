@@ -101,7 +101,6 @@ def test_hf_image(tmp_path):
     gen = HFGenerator(ds, dict_to_data_model("", schema))
     row = next(iter(gen.process()))
     assert row.split == "train"
-    assert row.image.path == str(train_dir / "img1.png")
     assert row.image.img == image_to_bytes(img)
 
 

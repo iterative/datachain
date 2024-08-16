@@ -50,7 +50,6 @@ class HFClassLabel(DataModel):
 
 
 class HFImage(DataModel):
-    path: str
     img: bytes
 
     def read(self):
@@ -106,7 +105,7 @@ def _convert_feature(val: Any, feat: Any, anno: Any) -> Any:
             return anno(**sdict)
         return val
     if isinstance(feat, Image):
-        return HFImage(img=image_to_bytes(val), path=val.filename)
+        return HFImage(img=image_to_bytes(val))
     if isinstance(feat, Audio):
         return HFAudio(**val)
 
