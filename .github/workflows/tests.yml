@@ -223,12 +223,12 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: |
-              3.9
-              3.10
-              3.11
-              3.12
-              pypy3.9
-              pypy3.10
+            3.9
+            3.10
+            3.11
+            3.12
+            pypy3.9
+            pypy3.10
 
       - name: Set up Python ${{ matrix.pyv }}
         uses: actions/setup-python@v5
