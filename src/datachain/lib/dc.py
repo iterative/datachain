@@ -351,7 +351,7 @@ class DataChain(DatasetQuery):
 
     @staticmethod
     def _listing_dataset_name(uri: str, path: str) -> str:
-        return f"{LISTING_PREFIX}/{uri}/{path}"
+        return f"{LISTING_PREFIX}/{uri}/{path.lstrip('/')}"
 
     @staticmethod
     def _listing_expired(created_at: datetime) -> bool:
@@ -392,7 +392,6 @@ class DataChain(DatasetQuery):
             chain = DataChain.from_storage("s3://my-bucket/my-dir")
             ```
         """
-        # TODO refactor for FS uris, e.g file:///home/ivan/dogs
         file_type = get_file_type(type)
 
         if client_config is None:
@@ -419,7 +418,7 @@ class DataChain(DatasetQuery):
             or client.fs.isfile(uri)
             else path
         )
-        lst_uri = f"{client.uri}/{lst_path}"
+        lst_uri = f"{client.uri}/{lst_path.lstrip('/')}"
 
         ds_name = cls._listing_dataset_name(client.uri, posixpath.join(lst_path, ""))
 
@@ -449,7 +448,7 @@ class DataChain(DatasetQuery):
                 list_bucket(lst_uri, **session.catalog.client_config),
                 output={f"{object_name}": file_type},
             )
-            .save(ds_name)
+            .save(ds_name, listing=True)
         )
 
         return cls._listing_filter(
@@ -680,7 +679,7 @@ class DataChain(DatasetQuery):
         )
 
     def save(  # type: ignore[override]
-        self, name: Optional[str] = None, version: Optional[int] = None
+        self, name: Optional[str] = None, version: Optional[int] = None, **kwargs
     ) -> "Self":
         """Save to a Dataset. It returns the chain itself.
 
@@ -690,7 +689,7 @@ class DataChain(DatasetQuery):
             version : version of a dataset. Default - the last version that exist.
         """
         schema = self.signals_schema.clone_without_sys_signals().serialize()
-        return super().save(name=name, version=version, feature_schema=schema)
+        return super().save(name=name, version=version, feature_schema=schema, **kwargs)
 
     def apply(self, func, *args, **kwargs):
         """Apply any function to the chain.

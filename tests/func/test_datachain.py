@@ -11,7 +11,7 @@ from PIL import Image
 
 from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.dataset import DatasetStats
-from datachain.lib.dc import DataChain
+from datachain.lib.dc import LISTING_PREFIX, DataChain
 from datachain.lib.file import File, ImageFile
 from datachain.query.session import Session
 from tests.utils import images_equal
@@ -40,6 +40,71 @@ def test_from_storage_reindex(tmp_dir, test_session):
     pd.DataFrame({"name": ["Charlie", "David"]}).to_parquet(tmp_dir / "test2.parquet")
     assert DataChain.from_storage(path, session=test_session).count() == 1
     assert DataChain.from_storage(path, session=test_session, update=True).count() == 2
+
+
+@pytest.mark.parametrize(
+    "cloud_type",
+    ["s3", "azure", "gs"],
+    indirect=True,
+)
+def test_from_storage_partials(cloud_test_catalog):
+    def _datasets(session):
+        return sorted(
+            [
+                f"{ds.name}@v{ds.version}"
+                for ds in DataChain.datasets(session=session).collect("dataset")
+                if ds.name.startswith(LISTING_PREFIX)
+            ]
+        )
+
+    ctc = cloud_test_catalog
+    src_uri = ctc.src_uri
+    session = Session("CTCSession", catalog=ctc.catalog)
+
+    DataChain.from_storage(f"{src_uri}/dogs", session=session)
+    assert _datasets(session) == [
+        f"{DataChain._listing_dataset_name(src_uri, 'dogs/')}@v1",
+    ]
+
+    DataChain.from_storage(f"{src_uri}/dogs/others", session=session)
+    assert _datasets(session) == [
+        f"{DataChain._listing_dataset_name(src_uri, 'dogs/')}@v1",
+    ]
+
+    DataChain.from_storage(f"{src_uri}", session=session)
+    assert _datasets(session) == sorted(
+        [
+            f"{DataChain._listing_dataset_name(src_uri, 'dogs/')}@v1",
+            f"{DataChain._listing_dataset_name(src_uri, '')}@v1",
+        ]
+    )
+
+    DataChain.from_storage(f"{src_uri}/cats", session=session)
+    assert _datasets(session) == sorted(
+        [
+            f"{DataChain._listing_dataset_name(src_uri, 'dogs/')}@v1",
+            f"{DataChain._listing_dataset_name(src_uri, '')}@v1",
+        ]
+    )
+
+    DataChain.from_storage(f"{src_uri}/cats", session=session, update=True)
+    assert _datasets(session) == sorted(
+        [
+            f"{DataChain._listing_dataset_name(src_uri, 'dogs/')}@v1",
+            f"{DataChain._listing_dataset_name(src_uri, 'cats/')}@v1",
+            f"{DataChain._listing_dataset_name(src_uri, '')}@v1",
+        ]
+    )
+
+    DataChain.from_storage(f"{src_uri}/cats", session=session, update=True)
+    assert _datasets(session) == sorted(
+        [
+            f"{DataChain._listing_dataset_name(src_uri, 'dogs/')}@v1",
+            f"{DataChain._listing_dataset_name(src_uri, 'cats/')}@v1",
+            f"{DataChain._listing_dataset_name(src_uri, 'cats/')}@v2",
+            f"{DataChain._listing_dataset_name(src_uri, '')}@v1",
+        ]
+    )
 
 
 @pytest.mark.parametrize("use_cache", [True, False])
