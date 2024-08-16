@@ -4,6 +4,7 @@ import os
 import posixpath
 import re
 from collections.abc import Iterator, Sequence
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 from typing import (
     TYPE_CHECKING,
@@ -27,7 +28,6 @@ from sqlalchemy.sql.sqltypes import NullType
 
 from datachain import DataModel
 from datachain.client import Client
-from datachain.dataset import DatasetRecord
 from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import DataType
@@ -67,6 +67,9 @@ C = Column
 
 _T = TypeVar("_T")
 D = TypeVar("D", bound="DataChain")
+
+LISTING_TTL = 4 * 60 * 60  # cached listing lasts 4 days
+LISTING_PREFIX = "lst__"  # listing datasets start with this name
 
 
 def resolve_columns(
@@ -308,15 +311,13 @@ class DataChain(DatasetQuery):
         self.signals_schema |= signals_schema
         return self
 
-    @classmethod
-    def _listing_chain(
-        cls,
+    @staticmethod
+    def _listing_filter(
         dc: "DataChain",
         path: str,
         recursive: Optional[bool] = True,
         object_name="file",
     ):
-        # TODO generalize "file" to arbitrary name
         dc = dc.filter(C(f"{object_name}.is_latest") == true())
         if recursive:
             root = False
@@ -343,6 +344,18 @@ class DataChain(DatasetQuery):
             pass
 
         return dc
+
+    @staticmethod
+    def _listing_dataset_name(uri: str, path: str) -> str:
+        return f"{LISTING_PREFIX}/{uri}/{path}"
+
+    @staticmethod
+    def _listing_expired(created_at: datetime) -> bool:
+        return datetime.now(timezone.utc) > created_at + timedelta(seconds=LISTING_TTL)
+
+    @staticmethod
+    def _listing_subset(ds1_name: str, ds2_name: str) -> bool:
+        return ds2_name.startswith(ds1_name)
 
     @classmethod
     def from_storage(
@@ -396,28 +409,26 @@ class DataChain(DatasetQuery):
             uri, session.catalog.cache, **session.catalog.client_config
         )
 
-        glob_used = glob.has_magic(os.path.basename(os.path.normpath(path)))
-
+        # clean path without globs
         lst_path = (
-            posixpath.dirname(path) if glob_used or client.fs.isfile(uri) else path
+            posixpath.dirname(path)
+            if glob.has_magic(os.path.basename(os.path.normpath(path)))
+            or client.fs.isfile(uri)
+            else path
         )
         lst_uri = f"{client.uri}/{lst_path}"
 
-        dataset_name = DatasetRecord.listing_name(
-            client.uri, posixpath.join(lst_path, "")
-        )
+        ds_name = cls._listing_dataset_name(client.uri, posixpath.join(lst_path, ""))
 
         for ds in cls.datasets(session=session, in_memory=in_memory).collect("dataset"):
-            # TODO filter out expired ones
+            if cls._listing_expired(ds.created_at):  # type: ignore[union-attr]
+                continue
             if (
-                DatasetRecord.contains_listing(
-                    ds.name,  # type: ignore[union-attr]
-                    dataset_name,
-                )
+                cls._listing_subset(ds.name, ds_name)  # type: ignore[union-attr]
                 and not update
             ):
-                # can use this listing, no need for new one
-                return cls._listing_chain(
+                # we can use found listing as it contains the one from input
+                return cls._listing_filter(
                     cls.from_dataset(ds.name, **kwargs),  # type: ignore[union-attr]
                     path,
                     recursive=recursive,
@@ -434,11 +445,11 @@ class DataChain(DatasetQuery):
                 list_bucket(lst_uri, **session.catalog.client_config),
                 output={f"{object_name}": file_type},
             )
-            .save(dataset_name)
+            .save(ds_name)
         )
 
-        return cls._listing_chain(
-            cls.from_dataset(dataset_name, session=session, **kwargs),
+        return cls._listing_filter(
+            cls.from_dataset(ds_name, session=session, **kwargs),
             path,
             recursive=recursive,
             object_name=object_name,
