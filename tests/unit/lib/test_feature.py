@@ -3,9 +3,10 @@ from typing import ClassVar, Literal, Optional
 import pytest
 from pydantic import BaseModel, Field, ValidationError
 
-from datachain import DataChain, DataModel
+from datachain import DataModel
 from datachain.lib.convert.flatten import flatten, flatten_list
 from datachain.lib.convert.unflatten import unflatten, unflatten_to_json
+from datachain.lib.data_model import dict_to_data_model
 from datachain.lib.model_store import ModelStore
 from datachain.lib.signal_schema import SignalSchema
 from datachain.sql.types import Int64, String
@@ -341,7 +342,7 @@ def test_version():
 def test_dict_to_feature():
     data_dict = {"file": FileBasic, "id": int, "type": Literal["text"]}
 
-    cls = DataChain._dict_to_data_model("val", data_dict)
+    cls = dict_to_data_model("val", data_dict)
     assert ModelStore.is_pydantic(cls)
 
     spec = SignalSchema({"val": cls}).to_udf_spec()

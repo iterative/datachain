@@ -52,7 +52,7 @@ def test_hf_class_label():
 def test_hf_sequence_list():
     ds = Dataset.from_dict({"seq": [[0, 1], [2, 3]]})
     schema = get_output_schema(ds)
-    assert schema["seq"] is list[int]
+    assert schema["seq"] == list[int]
 
     gen = HFGenerator(ds, dict_to_data_model("", schema))
     row = next(iter(gen.process()))
@@ -67,7 +67,7 @@ def test_hf_sequence_dict():
     new_features["pokemon"] = Sequence(feature={"name": Value(dtype="string")})
     ds = ds.cast(new_features)
     schema = get_output_schema(ds)
-    assert schema["pokemon"].model_fields["name"].annotation is list[str]
+    assert schema["pokemon"].model_fields["name"].annotation == list[str]
 
     gen = HFGenerator(ds, dict_to_data_model("", schema))
     row = next(iter(gen.process()))
@@ -80,7 +80,7 @@ def test_hf_array():
     new_features["arr"] = Array2D(shape=(2, 2), dtype="int32")
     ds = ds.cast(new_features)
     schema = get_output_schema(ds)
-    assert schema["arr"] is list[list[int]]
+    assert schema["arr"] == list[list[int]]
 
     gen = HFGenerator(ds, dict_to_data_model("", schema))
     row = next(iter(gen.process()))

@@ -1,12 +1,14 @@
 import math
 from typing import Optional
 
+import pandas as pd
 import pytest
 from pydantic import BaseModel
 
 from datachain.lib.dc import DataChain, DatasetMergeError
 from datachain.lib.signal_schema import SignalResolvingError
-from datachain.sql.types import Float, String
+from datachain.sql.types import String
+from tests.utils import skip_if_not_sqlite
 
 
 class User(BaseModel):
@@ -50,7 +52,6 @@ def test_merge_objects(test_session):
     ch = ch1.merge(ch2, "emp.person.name", "team.player")
 
     str_default = String.default_value(test_session.catalog.warehouse.db.dialect)
-    float_default = Float.default_value(test_session.catalog.warehouse.db.dialect)
 
     i = 0
     j = 0
@@ -72,8 +73,8 @@ def test_merge_objects(test_session):
         else:
             assert player.player == str_default
             assert player.sport == str_default
-            assert player.weight == float_default
-            assert player.height == float_default
+            assert pd.isnull(player.weight)
+            assert pd.isnull(player.height)
 
     assert i == len(employees)
     assert j == len(team)
@@ -102,14 +103,47 @@ def test_merge_similar_objects(test_session):
     assert len(list(ch_inner.collect())) == 2
 
 
+@skip_if_not_sqlite
+def test_merge_similar_objects_in_memory():
+    # Skip if not on SQLite, as in_memory databases are only supported on SQLite
+    new_employees = [
+        Employee(id=152, person=User(name="Bob", age=27)),
+        Employee(id=201, person=User(name="Karl", age=18)),
+        Employee(id=154, person=User(name="David", age=29)),
+    ]
+
+    ch1 = DataChain.from_values(emp=employees, in_memory=True)
+    # This should use the same session as above (in_memory=True automatically)
+    ch2 = DataChain.from_values(emp=new_employees)
+    assert ch1.session.catalog.in_memory is True
+    assert ch1.session.catalog.metastore.db.db_file == ":memory:"
+    assert ch1.session.catalog.warehouse.db.db_file == ":memory:"
+    assert ch2.session.catalog.in_memory is True
+    assert ch2.session.catalog.metastore.db.db_file == ":memory:"
+    assert ch2.session.catalog.warehouse.db.db_file == ":memory:"
+
+    rname = "qq"
+    ch = ch1.merge(ch2, "emp.person.name", rname=rname)
+    assert ch.session.catalog.in_memory is True
+    assert ch.session.catalog.metastore.db.db_file == ":memory:"
+    assert ch.session.catalog.warehouse.db.db_file == ":memory:"
+
+    assert list(ch.signals_schema.values.keys()) == ["sys", "emp", rname + "emp"]
+
+    empl = list(ch.collect())
+    assert len(empl) == 4
+    assert len(empl[0]) == 2
+
+    ch_inner = ch1.merge(ch2, "emp.person.name", rname=rname, inner=True)
+    assert len(list(ch_inner.collect())) == 2
+
+
 def test_merge_values(test_session):
     order_ids = [11, 22, 33, 44]
     order_descr = ["water", "water", "paper", "water"]
 
     delivery_ids = [11, 44]
     delivery_time = [24.0, 16.5]
-
-    float_default = Float.default_value(test_session.catalog.warehouse.db.dialect)
 
     ch1 = DataChain.from_values(id=order_ids, descr=order_descr, session=test_session)
     ch2 = DataChain.from_values(
@@ -137,7 +171,7 @@ def test_merge_values(test_session):
         assert name == order_descr[i]
         i += 1
 
-        if time != float_default:
+        if pd.notnull(time):
             assert id == delivery_ids[j]
             assert time == delivery_time[j]
             j += 1

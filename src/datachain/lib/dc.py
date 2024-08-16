@@ -310,6 +310,7 @@ class DataChain(DatasetQuery):
         *,
         type: Literal["binary", "text", "image"] = "binary",
         session: Optional[Session] = None,
+        in_memory: bool = False,
         recursive: Optional[bool] = True,
         object_name: str = "file",
         update: bool = False,
@@ -333,7 +334,14 @@ class DataChain(DatasetQuery):
         """
         func = get_file(type)
         return (
-            cls(path, session=session, recursive=recursive, update=update, **kwargs)
+            cls(
+                path,
+                session=session,
+                recursive=recursive,
+                update=update,
+                in_memory=in_memory,
+                **kwargs,
+            )
             .map(**{object_name: func})
             .select(object_name)
         )
@@ -480,7 +488,10 @@ class DataChain(DatasetQuery):
 
     @classmethod
     def datasets(
-        cls, session: Optional[Session] = None, object_name: str = "dataset"
+        cls,
+        session: Optional[Session] = None,
+        in_memory: bool = False,
+        object_name: str = "dataset",
     ) -> "DataChain":
         """Generate chain with list of registered datasets.
 
@@ -493,7 +504,7 @@ class DataChain(DatasetQuery):
                 print(f"{ds.name}@v{ds.version}")
             ```
         """
-        session = Session.get(session)
+        session = Session.get(session, in_memory=in_memory)
         catalog = session.catalog
 
         datasets = [
@@ -503,13 +514,14 @@ class DataChain(DatasetQuery):
 
         return cls.from_values(
             session=session,
+            in_memory=in_memory,
             output={object_name: DatasetInfo},
             **{object_name: datasets},  # type: ignore[arg-type]
         )
 
     def print_json_schema(  # type: ignore[override]
         self, jmespath: Optional[str] = None, model_name: Optional[str] = None
-    ) -> "DataChain":
+    ) -> "Self":
         """Print JSON data model and save it. It returns the chain itself.
 
         Parameters:
@@ -534,7 +546,7 @@ class DataChain(DatasetQuery):
 
     def print_jsonl_schema(  # type: ignore[override]
         self, jmespath: Optional[str] = None, model_name: Optional[str] = None
-    ) -> "DataChain":
+    ) -> "Self":
         """Print JSON data model and save it. It returns the chain itself.
 
         Parameters:
@@ -550,7 +562,7 @@ class DataChain(DatasetQuery):
 
     def save(  # type: ignore[override]
         self, name: Optional[str] = None, version: Optional[int] = None
-    ) -> "DataChain":
+    ) -> "Self":
         """Save to a Dataset. It returns the chain itself.
 
         Parameters:
@@ -786,7 +798,7 @@ class DataChain(DatasetQuery):
             descending (bool): Whether to sort in descending order or not.
         """
         if descending:
-            args = tuple([sqlalchemy.desc(a) for a in args])
+            args = tuple(sqlalchemy.desc(a) for a in args)
 
         return super().order_by(*args)
 
@@ -1143,6 +1155,7 @@ class DataChain(DatasetQuery):
         cls,
         ds_name: str = "",
         session: Optional[Session] = None,
+        in_memory: bool = False,
         output: OutputType = None,
         object_name: str = "",
         **fr_map,
@@ -1159,7 +1172,9 @@ class DataChain(DatasetQuery):
         def _func_fr() -> Iterator[tuple_type]:  # type: ignore[valid-type]
             yield from tuples
 
-        chain = DataChain.from_records(DataChain.DEFAULT_FILE_RECORD, session=session)
+        chain = DataChain.from_records(
+            DataChain.DEFAULT_FILE_RECORD, session=session, in_memory=in_memory
+        )
         if object_name:
             output = {object_name: dict_to_data_model(object_name, output)}  # type: ignore[arg-type]
         return chain.gen(_func_fr, output=output)
@@ -1170,6 +1185,7 @@ class DataChain(DatasetQuery):
         df: "pd.DataFrame",
         name: str = "",
         session: Optional[Session] = None,
+        in_memory: bool = False,
         object_name: str = "",
     ) -> "DataChain":
         """Generate chain from pandas data-frame.
@@ -1197,7 +1213,9 @@ class DataChain(DatasetQuery):
                     f"import from pandas error - '{column}' cannot be a column name",
                 )
 
-        return cls.from_values(name, session, object_name=object_name, **fr_map)
+        return cls.from_values(
+            name, session, object_name=object_name, in_memory=in_memory, **fr_map
+        )
 
     def to_pandas(self, flatten=False) -> "pd.DataFrame":
         """Return a pandas DataFrame from the chain.
@@ -1207,14 +1225,14 @@ class DataChain(DatasetQuery):
         """
         headers, max_length = self._effective_signals_schema.get_headers_with_length()
         if flatten or max_length < 2:
-            df = pd.DataFrame.from_records(self.to_records())
+            columns = []
             if headers:
-                df.columns = [".".join(filter(None, header)) for header in headers]
-            return df
+                columns = [".".join(filter(None, header)) for header in headers]
+            return pd.DataFrame.from_records(self.to_records(), columns=columns)
 
-        transposed_result = list(map(list, zip(*self.results())))
-        data = {tuple(n): val for n, val in zip(headers, transposed_result)}
-        return pd.DataFrame(data)
+        return pd.DataFrame(
+            self.results(), columns=pd.MultiIndex.from_tuples(map(tuple, headers))
+        )
 
     def show(
         self,
@@ -1233,6 +1251,12 @@ class DataChain(DatasetQuery):
         """
         dc = self.limit(limit) if limit > 0 else self
         df = dc.to_pandas(flatten)
+
+        if df.empty:
+            print("Empty result")
+            print(f"Columns: {list(df.columns)}")
+            return
+
         if transpose:
             df = df.T
 
@@ -1317,7 +1341,7 @@ class DataChain(DatasetQuery):
         source: bool = True,
         nrows: Optional[int] = None,
         **kwargs,
-    ) -> "DataChain":
+    ) -> "Self":
         """Generate chain from list of tabular files.
 
         Parameters:
@@ -1426,7 +1450,8 @@ class DataChain(DatasetQuery):
             dc = DataChain.from_csv("s3://mybucket/dir")
             ```
         """
-        from pyarrow.csv import ParseOptions, ReadOptions
+        from pandas.io.parsers.readers import STR_NA_VALUES
+        from pyarrow.csv import ConvertOptions, ParseOptions, ReadOptions
         from pyarrow.dataset import CsvFileFormat
 
         chain = DataChain.from_storage(path, **kwargs)
@@ -1450,7 +1475,14 @@ class DataChain(DatasetQuery):
 
         parse_options = ParseOptions(delimiter=delimiter)
         read_options = ReadOptions(column_names=column_names)
-        format = CsvFileFormat(parse_options=parse_options, read_options=read_options)
+        convert_options = ConvertOptions(
+            strings_can_be_null=True, null_values=STR_NA_VALUES
+        )
+        format = CsvFileFormat(
+            parse_options=parse_options,
+            read_options=read_options,
+            convert_options=convert_options,
+        )
         return chain.parse_tabular(
             output=output,
             object_name=object_name,
@@ -1527,6 +1559,7 @@ class DataChain(DatasetQuery):
         cls,
         to_insert: Optional[Union[dict, list[dict]]],
         session: Optional[Session] = None,
+        in_memory: bool = False,
     ) -> "DataChain":
         """Create a DataChain from the provided records. This method can be used for
         programmatically generating a chain in contrast of reading data from storages
@@ -1542,7 +1575,7 @@ class DataChain(DatasetQuery):
             single_record = DataChain.from_records(DataChain.DEFAULT_FILE_RECORD)
             ```
         """
-        session = Session.get(session)
+        session = Session.get(session, in_memory=in_memory)
         catalog = session.catalog
 
         name = session.generate_temp_dataset_name()

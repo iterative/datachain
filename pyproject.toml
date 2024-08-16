@@ -97,6 +97,16 @@ dev = [
   "types-PyYAML",
   "types-requests"
 ]
+examples = [
+  "datachain[tests]",
+  "numpy>=1,<2",
+  "defusedxml",
+  "accelerate",
+  "unstructured[pdf]",
+  "pdfplumber==0.11.3",
+  "huggingface_hub[hf_transfer]",
+  "nltk==3.8.1"
+]
 
 [project.urls]
 Documentation = "https://datachain.dvc.ai"
@@ -114,10 +124,15 @@ namespaces = false
 [tool.setuptools_scm]
 
 [tool.pytest.ini_options]
-addopts = "-rfEs -m 'not benchmark'"
+addopts = "-rfEs -m 'not benchmark and not examples'"
 markers = [
   "benchmark: benchmarks.",
-  "e2e: End-to-end tests"
+  "e2e: End-to-end tests",
+  "examples: All examples",
+  "computer_vision: Computer vision examples",
+  "get_started: Get started examples",
+  "llm_and_nlp: LLM and NLP examples",
+  "multimodal: Multimodal examples"
 ]
 asyncio_mode = "auto"
 filterwarnings = [
