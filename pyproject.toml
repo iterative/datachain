@@ -69,7 +69,7 @@ vector = [
   "usearch"
 ]
 hf = [
-  "datasets"
+  "datasets[audio,vision]"
 ]
 tests = [
   "datachain[torch,remote,vector,hf]",
