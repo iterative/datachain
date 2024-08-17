@@ -469,6 +469,12 @@ class UDFStep(Step, ABC):
 
         try:
             if workers:
+                if self.catalog.in_memory:
+                    raise RuntimeError(
+                        "In-memory databases cannot be used with "
+                        "distributed processing."
+                    )
+
                 from datachain.catalog.loader import get_distributed_class
 
                 distributor = get_distributed_class(min_task_size=self.min_task_size)
@@ -486,6 +492,10 @@ class UDFStep(Step, ABC):
                 )
             elif processes:
                 # Parallel processing (faster for more CPU-heavy UDFs)
+                if self.catalog.in_memory:
+                    raise RuntimeError(
+                        "In-memory databases cannot be used with parallel processing."
+                    )
                 udf_info = {
                     "udf_data": filtered_cloudpickle_dumps(self.udf),
                     "catalog_init": self.catalog.get_init_params(),
@@ -1053,6 +1063,7 @@ class DatasetQuery:
         indexing_feature_schema: Optional[dict] = None,
         indexing_column_types: Optional[dict[str, Any]] = None,
         update: Optional[bool] = False,
+        in_memory: bool = False,
     ):
         if client_config is None:
             client_config = {}
@@ -1061,7 +1072,7 @@ class DatasetQuery:
             client_config["anon"] = True
 
         self.session = Session.get(
-            session, catalog=catalog, client_config=client_config
+            session, catalog=catalog, client_config=client_config, in_memory=in_memory
         )
         self.catalog = catalog or self.session.catalog
         self.steps: list[Step] = []

@@ -46,6 +46,7 @@ class Session:
         name="",
         catalog: Optional["Catalog"] = None,
         client_config: Optional[dict] = None,
+        in_memory: bool = False,
     ):
         if re.match(r"^[0-9a-zA-Z]+$", name) is None:
             raise ValueError(
@@ -58,7 +59,9 @@ class Session:
         session_uuid = uuid4().hex[: self.SESSION_UUID_LEN]
         self.name = f"{name}_{session_uuid}"
         self.is_new_catalog = not catalog
-        self.catalog = catalog or get_catalog(client_config=client_config)
+        self.catalog = catalog or get_catalog(
+            client_config=client_config, in_memory=in_memory
+        )
 
     def __enter__(self):
         return self
@@ -89,6 +92,7 @@ class Session:
         session: Optional["Session"] = None,
         catalog: Optional["Catalog"] = None,
         client_config: Optional[dict] = None,
+        in_memory: bool = False,
     ) -> "Session":
         """Creates a Session() object from a catalog.
 
@@ -102,7 +106,10 @@ class Session:
 
         if cls.GLOBAL_SESSION is None:
             cls.GLOBAL_SESSION_CTX = Session(
-                cls.GLOBAL_SESSION_NAME, catalog, client_config=client_config
+                cls.GLOBAL_SESSION_NAME,
+                catalog,
+                client_config=client_config,
+                in_memory=in_memory,
             )
             cls.GLOBAL_SESSION = cls.GLOBAL_SESSION_CTX.__enter__()
             atexit.register(cls._global_cleanup)
