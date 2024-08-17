@@ -1,5 +1,4 @@
-name: Tests Studio
-run-name: Tests
+name: Studio Tests
 
 on:
   push:
