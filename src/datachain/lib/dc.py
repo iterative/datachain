@@ -4,7 +4,6 @@ import os
 import posixpath
 import re
 from collections.abc import Iterator, Sequence
-from datetime import datetime, timedelta, timezone
 from functools import wraps
 from typing import (
     TYPE_CHECKING,
@@ -22,7 +21,6 @@ from typing import (
 import pandas as pd
 import sqlalchemy
 from pydantic import BaseModel, create_model
-from sqlalchemy.sql.expression import true
 from sqlalchemy.sql.functions import GenericFunction
 from sqlalchemy.sql.sqltypes import NullType
 
@@ -34,7 +32,13 @@ from datachain.lib.data_model import DataType
 from datachain.lib.dataset_info import DatasetInfo
 from datachain.lib.file import ExportPlacement as FileExportPlacement
 from datachain.lib.file import File, IndexedFile, get_file_type
-from datachain.lib.listing import list_bucket
+from datachain.lib.listing import (
+    list_bucket,
+    listing_dataset_name,
+    listing_expired,
+    listing_subset,
+    ls,
+)
 from datachain.lib.meta_formats import read_meta, read_schema
 from datachain.lib.model_store import ModelStore
 from datachain.lib.settings import Settings
@@ -311,56 +315,6 @@ class DataChain(DatasetQuery):
         self.signals_schema |= signals_schema
         return self
 
-    @staticmethod
-    def _listing_filter(
-        dc: "DataChain",
-        path: str,
-        recursive: Optional[bool] = True,
-        object_name="file",
-    ):
-        def _file_c(name: str) -> C:
-            return C(f"{object_name}.{name}")
-
-        dc = dc.filter(_file_c("is_latest") == true())
-        if recursive:
-            root = False
-            where = _file_c("path").glob(path)
-            if not path or path == "/":
-                # root of the bucket, e.g s3://bucket/ -> getting all the nodes
-                # in the bucket
-                root = True
-
-            if not root and not glob.has_magic(
-                os.path.basename(os.path.normpath(path))
-            ):
-                # not a root and not a explicit glob, so it's pointing to some directory
-                # and we are adding a proper glob syntax for it
-                # e.g s3://bucket/dir1 -> s3://bucket/dir1/*
-                dir_path = path.rstrip("/") + "/*"
-                where = where | _file_c("path").glob(dir_path)
-
-            if not root:
-                # not a root, so running glob query
-                dc = dc.filter(where)
-        else:
-            dc = dc.filter(
-                pathfunc.parent(_file_c("path")) == path.lstrip("/").rstrip("/*")
-            )
-
-        return dc
-
-    @staticmethod
-    def _listing_dataset_name(uri: str, path: str) -> str:
-        return f"{LISTING_PREFIX}/{uri}/{path.lstrip('/')}"
-
-    @staticmethod
-    def _listing_expired(created_at: datetime) -> bool:
-        return datetime.now(timezone.utc) > created_at + timedelta(seconds=LISTING_TTL)
-
-    @staticmethod
-    def _listing_subset(ds1_name: str, ds2_name: str) -> bool:
-        return ds2_name.startswith(ds1_name)
-
     @classmethod
     def from_storage(
         cls,
@@ -420,17 +374,17 @@ class DataChain(DatasetQuery):
         )
         lst_uri = f"{client.uri}/{lst_path.lstrip('/')}"
 
-        ds_name = cls._listing_dataset_name(client.uri, posixpath.join(lst_path, ""))
+        ds_name = listing_dataset_name(client.uri, posixpath.join(lst_path, ""))
 
         for ds in cls.datasets(session=session, in_memory=in_memory).collect("dataset"):
-            if cls._listing_expired(ds.created_at):  # type: ignore[union-attr]
+            if listing_expired(ds.created_at):  # type: ignore[union-attr]
                 continue
             if (
-                cls._listing_subset(ds.name, ds_name)  # type: ignore[union-attr]
+                listing_subset(ds.name, ds_name)  # type: ignore[union-attr]
                 and not update
             ):
                 # we can use found listing as it contains the one from input
-                return cls._listing_filter(
+                return ls(
                     cls.from_dataset(ds.name, **kwargs),  # type: ignore[union-attr]
                     path,
                     recursive=recursive,
@@ -451,7 +405,7 @@ class DataChain(DatasetQuery):
             .save(ds_name, listing=True)
         )
 
-        return cls._listing_filter(
+        return ls(
             cls.from_dataset(ds_name, session=session, **kwargs),
             path,
             recursive=recursive,

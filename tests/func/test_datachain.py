@@ -13,6 +13,7 @@ from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.dataset import DatasetStats
 from datachain.lib.dc import LISTING_PREFIX, DataChain
 from datachain.lib.file import File, ImageFile
+from datachain.lib.listing import listing_dataset_name
 from tests.utils import images_equal
 
 
@@ -61,46 +62,46 @@ def test_from_storage_partials(cloud_test_catalog, test_session):
 
     DataChain.from_storage(f"{src_uri}/dogs", session=test_session)
     assert _datasets(test_session) == [
-        f"{DataChain._listing_dataset_name(src_uri, 'dogs/')}@v1",
+        f"{listing_dataset_name(src_uri, 'dogs/')}@v1",
     ]
 
     DataChain.from_storage(f"{src_uri}/dogs/others", session=test_session)
     assert _datasets(test_session) == [
-        f"{DataChain._listing_dataset_name(src_uri, 'dogs/')}@v1",
+        f"{listing_dataset_name(src_uri, 'dogs/')}@v1",
     ]
 
     DataChain.from_storage(f"{src_uri}", session=test_session)
     assert _datasets(test_session) == sorted(
         [
-            f"{DataChain._listing_dataset_name(src_uri, 'dogs/')}@v1",
-            f"{DataChain._listing_dataset_name(src_uri, '')}@v1",
+            f"{listing_dataset_name(src_uri, 'dogs/')}@v1",
+            f"{listing_dataset_name(src_uri, '')}@v1",
         ]
     )
 
     DataChain.from_storage(f"{src_uri}/cats", session=test_session)
     assert _datasets(test_session) == sorted(
         [
-            f"{DataChain._listing_dataset_name(src_uri, 'dogs/')}@v1",
-            f"{DataChain._listing_dataset_name(src_uri, '')}@v1",
+            f"{listing_dataset_name(src_uri, 'dogs/')}@v1",
+            f"{listing_dataset_name(src_uri, '')}@v1",
         ]
     )
 
     DataChain.from_storage(f"{src_uri}/cats", session=test_session, update=True)
     assert _datasets(test_session) == sorted(
         [
-            f"{DataChain._listing_dataset_name(src_uri, 'dogs/')}@v1",
-            f"{DataChain._listing_dataset_name(src_uri, 'cats/')}@v1",
-            f"{DataChain._listing_dataset_name(src_uri, '')}@v1",
+            f"{listing_dataset_name(src_uri, 'dogs/')}@v1",
+            f"{listing_dataset_name(src_uri, 'cats/')}@v1",
+            f"{listing_dataset_name(src_uri, '')}@v1",
         ]
     )
 
     DataChain.from_storage(f"{src_uri}/cats", session=test_session, update=True)
     assert _datasets(test_session) == sorted(
         [
-            f"{DataChain._listing_dataset_name(src_uri, 'dogs/')}@v1",
-            f"{DataChain._listing_dataset_name(src_uri, 'cats/')}@v1",
-            f"{DataChain._listing_dataset_name(src_uri, 'cats/')}@v2",
-            f"{DataChain._listing_dataset_name(src_uri, '')}@v1",
+            f"{listing_dataset_name(src_uri, 'dogs/')}@v1",
+            f"{listing_dataset_name(src_uri, 'cats/')}@v1",
+            f"{listing_dataset_name(src_uri, 'cats/')}@v2",
+            f"{listing_dataset_name(src_uri, '')}@v1",
         ]
     )
 
