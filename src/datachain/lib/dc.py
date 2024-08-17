@@ -859,6 +859,17 @@ class DataChain(DatasetQuery):
                 dist=cosine_distance(embedding_text, embedding_image)
         )
         ```
+
+        This method also has enhanced capabilities for renaming the columns. If column
+        with the current name exists then its renamed. Orelse a new column is created
+        from the existing one.
+
+        Example:
+        ```py
+         dc.mutate(
+                oldkey=Column("newkey")
+        )
+        ```
         """
         for col_name, expr in kwargs.items():
             if not isinstance(expr, Column) and isinstance(expr.type, NullType):
