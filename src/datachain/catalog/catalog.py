@@ -120,13 +120,25 @@ def noop(_: str):
 
 @contextmanager
 def print_and_capture(
-    stream: "IO[str]", callback: Callable[[str], None] = noop
+    stream: "IO[bytes]|IO[str]", callback: Callable[[str], None] = noop
 ) -> "Iterator[list[str]]":
     lines: list[str] = []
     append = lines.append
 
     def loop() -> None:
-        for line in iter(stream.readline, ""):
+        buffer = b""
+        while byt := stream.read(1):  # Read one byte at a time
+            buffer += byt.encode("utf-8") if isinstance(byt, str) else byt
+
+            if byt in (b"\n", b"\r"):  # Check for newline or carriage return
+                line = buffer.decode("utf-8")
+                print(line, end="")
+                callback(line)
+                append(line)
+                buffer = b""  # Clear buffer for next line
+
+        if buffer:  # Handle any remaining data in the buffer
+            line = buffer.decode("utf-8")
             print(line, end="")
             callback(line)
             append(line)
@@ -2128,7 +2140,7 @@ class Catalog:
             stdout=subprocess.PIPE if capture_output else None,
             stderr=subprocess.STDOUT if capture_output else None,
             bufsize=1,
-            text=True,
+            text=False,
             **kwargs,
         ) as proc:
             os.close(w)
