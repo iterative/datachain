@@ -1,9 +1,17 @@
 import posixpath
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from datachain.catalog import Catalog
 from datachain.catalog.catalog import DataSource
+from datachain.lib.listing import (
+    LISTING_PREFIX,
+    LISTING_TTL,
+    listing_dataset_name,
+    listing_expired,
+    listing_subset,
+)
 from datachain.node import DirType, Entry, get_path
 from tests.utils import skip_if_not_sqlite
 
@@ -138,3 +146,65 @@ def test_subtree(listing):
 def test_subdirs(listing):
     dirs = list(listing.get_dirs_by_parent_path(""))
     _match_filenames(dirs, ["dir1", "dir2"])
+
+
+def test_listing_dataset_name():
+    assert listing_dataset_name("s3://my-bucket", "animals/dogs") == (
+        f"{LISTING_PREFIX}s3://my-bucket/animals/dogs"
+    )
+
+
+def test_listing_dataset_name_empty_path():
+    assert listing_dataset_name("s3://my-bucket", "") == (
+        f"{LISTING_PREFIX}s3://my-bucket/"
+    )
+
+
+def test_listing_expired():
+    assert listing_expired(datetime.now(timezone.utc)) is False
+    assert (
+        listing_expired(datetime.now(timezone.utc) - timedelta(seconds=LISTING_TTL + 1))
+        is True
+    )
+
+
+def test_listing_subset():
+    assert (
+        listing_subset(
+            listing_dataset_name("s3://my-bucket", "/animals"),
+            listing_dataset_name("s3://my-bucket", "/animals/dogs"),
+        )
+        is True
+    )
+
+    assert (
+        listing_subset(
+            listing_dataset_name("s3://my-bucket", "/animals"),
+            listing_dataset_name("s3://my-bucket", "/animals"),
+        )
+        is True
+    )
+
+    assert (
+        listing_subset(
+            listing_dataset_name("s3://my-bucket", ""),
+            listing_dataset_name("s3://my-bucket", ""),
+        )
+        is True
+    )
+
+    assert (
+        listing_subset(
+            listing_dataset_name("s3://my-bucket", "/animals/cats"),
+            listing_dataset_name("s3://my-bucket", "/animals/dogs"),
+        )
+        is False
+    )
+
+    assert (
+        listing_subset(
+            listing_dataset_name("s3://my-bucket", "/animals/dogs"),
+            listing_dataset_name("s3://my-bucket", "/animals"),
+        )
+        is False
+    )

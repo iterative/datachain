@@ -167,7 +167,7 @@ def ls(
 
 def listing_dataset_name(uri: str, path: str) -> str:
     """Returns special listing dataset name from uri and path"""
-    return f"{LISTING_PREFIX}/{uri}/{path.lstrip('/')}"
+    return f"{LISTING_PREFIX}{uri}/{path.lstrip('/')}"
 
 
 def listing_expired(created_at: datetime) -> bool:

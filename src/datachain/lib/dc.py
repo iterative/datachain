@@ -376,7 +376,9 @@ class DataChain(DatasetQuery):
 
         ds_name = listing_dataset_name(client.uri, posixpath.join(lst_path, ""))
 
-        for ds in cls.datasets(session=session, in_memory=in_memory).collect("dataset"):
+        for ds in cls.datasets(
+            session=session, in_memory=in_memory, include_listing=True
+        ).collect("dataset"):
             if listing_expired(ds.created_at):  # type: ignore[union-attr]
                 continue
             if (
@@ -564,6 +566,7 @@ class DataChain(DatasetQuery):
         session: Optional[Session] = None,
         in_memory: bool = False,
         object_name: str = "dataset",
+        **kwargs,
     ) -> "DataChain":
         """Generate chain with list of registered datasets.
 
@@ -581,7 +584,7 @@ class DataChain(DatasetQuery):
 
         datasets = [
             DatasetInfo.from_models(d, v, j)
-            for d, v, j in catalog.list_datasets_versions()
+            for d, v, j in catalog.list_datasets_versions(**kwargs)
         ]
 
         return cls.from_values(

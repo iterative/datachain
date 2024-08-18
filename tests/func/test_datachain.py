@@ -52,7 +52,9 @@ def test_from_storage_partials(cloud_test_catalog, test_session):
         return sorted(
             [
                 f"{ds.name}@v{ds.version}"
-                for ds in DataChain.datasets(session=session).collect("dataset")
+                for ds in DataChain.datasets(
+                    session=session, include_listing=True
+                ).collect("dataset")
                 if ds.name.startswith(LISTING_PREFIX)
             ]
         )

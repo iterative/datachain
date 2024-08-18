@@ -1410,17 +1410,19 @@ class Catalog:
 
         return direct_dependencies
 
-    def ls_datasets(self) -> Iterator[DatasetRecord]:
+    def ls_datasets(self, include_listing: bool = False) -> Iterator[DatasetRecord]:
         datasets = self.metastore.list_datasets()
         for d in datasets:
-            if not d.is_bucket_listing:
-                yield d
+            if not include_listing and d.is_bucket_listing:
+                continue
+            yield d
 
     def list_datasets_versions(
         self,
+        include_listing: bool = False,
     ) -> Iterator[tuple[DatasetRecord, "DatasetVersion", Optional["Job"]]]:
         """Iterate over all dataset versions with related jobs."""
-        datasets = list(self.ls_datasets())
+        datasets = list(self.ls_datasets(include_listing=include_listing))
 
         # preselect dataset versions jobs from db to avoid multiple queries
         jobs_ids: set[str] = {
