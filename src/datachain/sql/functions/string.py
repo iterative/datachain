@@ -26,5 +26,18 @@ class split(GenericFunction):  # noqa: N801
     inherit_cache = True
 
 
+class regexp_replace(GenericFunction):  # noqa: N801
+    """
+    Replaces substring that match a regular expression.
+    """
+
+    type = String()
+    package = "string"
+    name = "regexp_replace"
+    inherit_cache = True
+
+
+compiler_not_implemented(regexp_replace)
+
 compiler_not_implemented(length)
 compiler_not_implemented(split)
