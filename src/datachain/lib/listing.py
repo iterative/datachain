@@ -129,40 +129,36 @@ def ls(
     object_name="file",
 ):
     """
-    Return files by some path from DataChain instance which contains bucket listing
+    Return files by some path from DataChain instance which contains bucket listing.
     Path can have globs.
-    If recursive is set to False, only first level children will be returned from
-    defined path
+    If recursive is set to False, only first level children will be returned by
+    specified path
     """
 
     def _file_c(name: str) -> Column:
         return Column(f"{object_name}.{name}")
 
     dc = dc.filter(_file_c("is_latest") == true())
+
     if recursive:
-        root = False
-        where = _file_c("path").glob(path)
         if not path or path == "/":
-            # root of the bucket, e.g s3://bucket/ -> getting all the nodes
-            # in the bucket
-            root = True
+            # root of a bucket, returning all latest files from it
+            return dc
 
-        if not root and not glob.has_magic(os.path.basename(os.path.normpath(path))):
-            # not a root and not a explicit glob, so it's pointing to some directory
-            # and we are adding a proper glob syntax for it
-            # e.g s3://bucket/dir1 -> s3://bucket/dir1/*
-            dir_path = path.rstrip("/") + "/*"
-            where = where | _file_c("path").glob(dir_path)
+        if not glob.has_magic(os.path.basename(os.path.normpath(path))):
+            # not a explicit glob, so it's pointing to some directory or a specific
+            # file and we are adding a proper filter for it
+            # e.g path = s3://bucket/dir1
+            #  ->  query: path GLOB s3://bucket/dir1/* OR path == s3://bucket/dir1
+            return dc.filter(
+                (_file_c("path") == path)
+                | (_file_c("path").glob(path.rstrip("/") + "/*"))
+            )
 
-        if not root:
-            # not a root, so running glob query
-            dc = dc.filter(where)
-    else:
-        dc = dc.filter(
-            pathfunc.parent(_file_c("path")) == path.lstrip("/").rstrip("/*")
-        )
-
-    return dc
+        # path has glob syntax so we are returning glob filter
+        return dc.filter(_file_c("path").glob(path))
+    # returning only first level children by path
+    return dc.filter(pathfunc.parent(_file_c("path")) == path.lstrip("/").rstrip("/*"))
 
 
 def listing_dataset_name(uri: str, path: str) -> str:
