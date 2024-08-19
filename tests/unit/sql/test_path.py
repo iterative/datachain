@@ -25,7 +25,8 @@ def split_parent(path):
 
 
 def file_stem(path):
-    return pp.splitext(path)[0].rstrip(".")
+    name = split_parent(path)[1]
+    return pp.splitext(name)[0].rstrip(".")
 
 
 def file_ext(path):

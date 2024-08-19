@@ -221,18 +221,44 @@ def path_name(path):
     return func.ltrim(func.substr(path, func.length(path_parent(path)) + 1), slash)
 
 
-def path_file_ext_length(path):
-    name = path_name(path)
+def name_file_ext_length(name):
     expr = func.length(name) - func.length(
         func.rtrim(name, func.replace(name, dot, empty_str))
     )
     return case((func.instr(name, dot) == 0, 0), else_=expr)
 
 
+def path_file_ext_length(path):
+    name = path_name(path)
+    return name_file_ext_length(name)
+
+
 def path_file_stem(path):
-    return func.rtrim(
-        func.substr(path, 1, func.length(path) - path_file_ext_length(path)), dot
+    path_length = func.length(path)
+    parent_length = func.length(path_parent(path))
+
+    name_expr = func.rtrim(
+        func.substr(
+            path,
+            1,
+            path_length - name_file_ext_length(path),
+        ),
+        dot,
     )
+
+    full_path_expr = func.ltrim(
+        func.rtrim(
+            func.substr(
+                path,
+                parent_length + 1,
+                path_length - parent_length - path_file_ext_length(path),
+            ),
+            dot,
+        ),
+        slash,
+    )
+
+    return case((func.instr(path, slash) == 0, name_expr), else_=full_path_expr)
 
 
 def path_file_ext(path):
