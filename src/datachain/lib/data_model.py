@@ -18,6 +18,7 @@ StandardType = Union[
 ]
 DataType = Union[type[BaseModel], StandardType]
 DataTypeNames = "BaseModel, int, str, float, bool, list, dict, bytes, datetime"
+DataValuesType = Union[BaseModel, int, str, float, bool, list, dict, bytes, datetime]
 
 
 class DataModel(BaseModel):

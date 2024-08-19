@@ -122,7 +122,7 @@ def arrow_type_mapper(col_type: pa.DataType) -> type:  # noqa: PLR0911
     if pa.types.is_string(col_type) or pa.types.is_large_string(col_type):
         return str
     if pa.types.is_list(col_type):
-        return list[arrow_type_mapper(col_type.value_type)]  # type: ignore[misc]
+        return list[arrow_type_mapper(col_type.value_type)]  # type: ignore[return-value, misc]
     if pa.types.is_struct(col_type) or pa.types.is_map(col_type):
         return dict
     if isinstance(col_type, pa.lib.DictionaryType):
