@@ -486,7 +486,7 @@ class DataChain(DatasetQuery):
             object_name = jmespath_to_name(jmespath)
         if not object_name:
             object_name = meta_type
-        chain = DataChain.from_storage(path=path, type=type, **kwargs)
+        chain = DataChain.from_storage(uri=path, type=type, **kwargs)
         signal_dict = {
             object_name: read_meta(
                 schema_from=schema_from,
@@ -546,7 +546,7 @@ class DataChain(DatasetQuery):
             object_name = jmespath_to_name(jmespath)
         if not object_name:
             object_name = meta_type
-        chain = DataChain.from_storage(path=path, type=type, **kwargs)
+        chain = DataChain.from_storage(uri=path, type=type, **kwargs)
         signal_dict = {
             object_name: read_meta(
                 schema_from=schema_from,
