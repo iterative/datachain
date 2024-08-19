@@ -180,7 +180,7 @@ def register_user_defined_sql_functions() -> None:
     _registered_function_creators["vector_functions"] = create_vector_functions
 
     def sqlite_regexp_replace(string: str, pattern: str, replacement: str) -> str:
-        return re.sub(pattern, replacement, string)
+        return re.sub(pattern, replacement, string, flags=re.IGNORECASE)
 
     def create_string_functions(conn):
         conn.create_function("split", 2, sqlite_string_split, deterministic=True)
