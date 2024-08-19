@@ -306,6 +306,10 @@ class SignalSchema:
                 # renaming existing signal
                 del new_values[value.name]
                 new_values[name] = self.values[value.name]
+            elif name in self.values:
+                # changing the type of existing signal, e.g File -> ImageFile
+                del new_values[name]
+                new_values[name] = args_map[name]
             else:
                 # adding new signal
                 new_values.update(sql_to_python({name: value}))

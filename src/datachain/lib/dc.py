@@ -386,11 +386,11 @@ class DataChain(DatasetQuery):
                 and not update
             ):
                 # we can use found listing as it contains the one from input
-                return ls(
-                    cls.from_dataset(ds.name, **kwargs),  # type: ignore[union-attr]
-                    path,
-                    recursive=recursive,
+                dc = cls.from_dataset(ds.name, **kwargs)  # type: ignore[union-attr]
+                dc.signals_schema = dc.signals_schema.mutate(
+                    {f"{object_name}": file_type}
                 )
+                return ls(dc, path, recursive=recursive)
 
         # caching new listing to special listing dataset
         (
@@ -402,17 +402,15 @@ class DataChain(DatasetQuery):
             )
             .gen(
                 list_bucket(lst_uri, **session.catalog.client_config),
-                output={f"{object_name}": file_type},
+                output={f"{object_name}": File},
             )
             .save(ds_name, listing=True)
         )
 
-        return ls(
-            cls.from_dataset(ds_name, session=session, **kwargs),
-            path,
-            recursive=recursive,
-            object_name=object_name,
-        )
+        dc = cls.from_dataset(ds_name, session=session, **kwargs)
+        dc.signals_schema = dc.signals_schema.mutate({f"{object_name}": file_type})
+
+        return ls(dc, path, recursive=recursive, object_name=object_name)
 
     @classmethod
     def from_dataset(

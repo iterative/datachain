@@ -29,6 +29,15 @@ def test_from_storage(cloud_test_catalog):
     assert dc.count() == 7
 
 
+def test_from_storage_as_image(cloud_test_catalog):
+    ctc = cloud_test_catalog
+    dc = DataChain.from_storage(
+        ctc.src_uri, client_config=ctc.catalog.client_config, type="image"
+    )
+    for im in dc.collect("file"):
+        assert isinstance(im, ImageFile)
+
+
 def test_from_storage_reindex(tmp_dir, test_session):
     tmp_dir = tmp_dir / "parquets"
     path = tmp_dir.as_uri()
