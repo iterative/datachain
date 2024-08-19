@@ -78,6 +78,7 @@ def setup():
     compiles(array.length, "sqlite")(compile_array_length)
     compiles(string.length, "sqlite")(compile_string_length)
     compiles(string.split, "sqlite")(compile_string_split)
+    compiles(string.regexp_replace, "sqlite")(compile_regexp_replace)
     compiles(conditional.greatest, "sqlite")(compile_greatest)
     compiles(conditional.least, "sqlite")(compile_least)
     compiles(Values, "sqlite")(compile_values)
@@ -180,7 +181,7 @@ def register_user_defined_sql_functions() -> None:
     _registered_function_creators["vector_functions"] = create_vector_functions
 
     def sqlite_regexp_replace(string: str, pattern: str, replacement: str) -> str:
-        return re.sub(pattern, replacement, string, flags=re.IGNORECASE)
+        return re.sub(pattern, replacement, string)
 
     def create_string_functions(conn):
         conn.create_function("split", 2, sqlite_string_split, deterministic=True)
@@ -407,8 +408,3 @@ def load_usearch_extension(conn) -> bool:
 
     except Exception:  # noqa: BLE001
         return False
-
-
-@compiles(string.regexp_replace, "sqlite")
-def _compile_regexp_replace_sqlite(element, compiler, **kwargs):
-    return compile_regexp_replace(element, compiler, **kwargs)

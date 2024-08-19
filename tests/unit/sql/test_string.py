@@ -30,10 +30,10 @@ def test_split(warehouse, args, expected):
         ("abc123def456", r"\d+", "X", "abcXdefX"),
         ("cat.1001.jpg", r"\.(\w+)\.", r"_\1_", "cat_1001_jpg"),
         (
-            "dog_photo.JPG",
+            "dog_photo.jpg",
             r"(\w+)\.(jpg|jpeg|png|gif)$",
             r"\1_thumb.\2",
-            "dog_photo_thumb.JPG",
+            "dog_photo_thumb.jpg",
         ),
         ("file.with...dots.txt", r"\.+", ".", "file.with.dots.txt"),
     ],
