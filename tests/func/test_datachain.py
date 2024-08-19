@@ -1,7 +1,8 @@
 import math
 import os
+import posixpath
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -9,9 +10,10 @@ import pytest
 import pytz
 from PIL import Image
 
+from datachain.client.local import FileClient
 from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.dataset import DatasetStats
-from datachain.lib.dc import LISTING_PREFIX, DataChain
+from datachain.lib.dc import LISTING_PREFIX, LISTING_TTL, DataChain
 from datachain.lib.file import File, ImageFile
 from datachain.lib.listing import listing_dataset_name
 from tests.utils import images_equal
@@ -23,10 +25,26 @@ def test_catalog_anon(tmp_dir, catalog, anon):
     assert chain.catalog.client_config.get("anon", False) is anon
 
 
-def test_from_storage(cloud_test_catalog):
+def test_from_sstorage(cloud_test_catalog):
     ctc = cloud_test_catalog
     dc = DataChain.from_storage(ctc.src_uri, client_config=ctc.catalog.client_config)
     assert dc.count() == 7
+
+
+def test_from_storage_non_recursive(cloud_test_catalog):
+    ctc = cloud_test_catalog
+    dc = DataChain.from_storage(
+        f"{ctc.src_uri}/dogs", client_config=ctc.catalog.client_config, recursive=False
+    )
+    assert dc.count() == 3
+
+
+def test_from_storage_glob(cloud_test_catalog):
+    ctc = cloud_test_catalog
+    dc = DataChain.from_storage(
+        f"{ctc.src_uri}/dogs*", client_config=ctc.catalog.client_config
+    )
+    assert dc.count() == 4
 
 
 def test_from_storage_as_image(cloud_test_catalog):
@@ -49,6 +67,33 @@ def test_from_storage_reindex(tmp_dir, test_session):
     pd.DataFrame({"name": ["Charlie", "David"]}).to_parquet(tmp_dir / "test2.parquet")
     assert DataChain.from_storage(path, session=test_session).count() == 1
     assert DataChain.from_storage(path, session=test_session, update=True).count() == 2
+
+
+@pytest.mark.parametrize(
+    "cloud_type,version_aware",
+    [("file", False)],
+    indirect=True,
+)
+def test_from_storage_reindex_expired(tmp_dir, test_session):
+    tmp_dir = tmp_dir / "parquets"
+    path = tmp_dir.as_uri()
+    os.mkdir(tmp_dir)
+    lst_ds_name = listing_dataset_name(
+        FileClient.root_path().as_uri(), posixpath.join(str(tmp_dir), "")
+    )
+
+    pd.DataFrame({"name": ["Alice", "Bob"]}).to_parquet(tmp_dir / "test1.parquet")
+    assert DataChain.from_storage(path, session=test_session).count() == 1
+    pd.DataFrame({"name": ["Charlie", "David"]}).to_parquet(tmp_dir / "test2.parquet")
+    # mark dataset as expired
+    test_session.catalog.metastore.update_dataset_version(
+        test_session.catalog.get_dataset(lst_ds_name),
+        1,
+        created_at=datetime.now(timezone.utc) - timedelta(seconds=LISTING_TTL + 20),
+    )
+
+    # listing was updated because listing dataset was expired
+    assert DataChain.from_storage(path, session=test_session).count() == 2
 
 
 @pytest.mark.parametrize(

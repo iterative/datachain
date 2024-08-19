@@ -146,10 +146,8 @@ def ls(
             return dc
 
         if not glob.has_magic(os.path.basename(os.path.normpath(path))):
-            # not a explicit glob, so it's pointing to some directory or a specific
-            # file and we are adding a proper filter for it
-            # e.g path = s3://bucket/dir1
-            #  ->  query: path GLOB s3://bucket/dir1/* OR path == s3://bucket/dir1
+            # path is not glob, so it's pointing to some directory or a specific
+            # file and we are adding proper filter for it
             return dc.filter(
                 (_file_c("path") == path)
                 | (_file_c("path").glob(path.rstrip("/") + "/*"))
