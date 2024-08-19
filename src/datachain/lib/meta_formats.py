@@ -120,7 +120,7 @@ def read_meta(  # noqa: C901
         sys.stdout = captured_output
         try:
             chain = (
-                DataChain.from_storage(schema_from)
+                DataChain.from_storage(schema_from, type="text")
                 .limit(1)
                 .map(  # dummy column created (#1615)
                     meta_schema=lambda file: read_schema(
