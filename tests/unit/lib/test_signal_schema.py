@@ -2,7 +2,7 @@ import json
 from typing import Optional, Union
 
 import pytest
-from sqlalchemy import Column
+import sqlalchemy as sa
 
 from datachain import DataModel
 from datachain.lib.convert.flatten import flatten
@@ -13,6 +13,7 @@ from datachain.lib.signal_schema import (
     SignalSchema,
     SignalSchemaError,
 )
+from datachain.query.schema import Column
 from datachain.sql.types import Float, Int64, String
 
 
@@ -281,7 +282,7 @@ def test_db_signals_as_columns():
     spec = {"name": str, "age": float, "fr": MyType2}
     lst = list(SignalSchema(spec).db_signals(as_columns=True))
 
-    assert all(isinstance(s, Column) for s in lst)
+    assert all(isinstance(s, sa.Column) for s in lst)
 
     assert [(c.name, type(c.type)) for c in lst] == [
         ("name", String),
