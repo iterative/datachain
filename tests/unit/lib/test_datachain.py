@@ -159,6 +159,52 @@ def test_from_features(test_session):
         assert t1 == features[i]
 
 
+def test_from_records_empty_chain_with_schema(test_session):
+    schema = {"my_file": File, "my_col": int}
+    ds = DataChain.from_records([], schema=schema, session=test_session)
+    ds_sys = ds.settings(sys=True)
+
+    ds_name = "my_ds"
+    ds.save(ds_name)
+    ds = DataChain(name=ds_name)
+
+    assert isinstance(ds.feature_schema, dict)
+    assert isinstance(ds.signals_schema, SignalSchema)
+    assert ds.schema.keys() == {"my_file", "my_col"}
+    assert set(ds.schema.values()) == {File, int}
+    assert ds.count() == 0
+
+    # check that columns have actually been created from schema
+    dr = ds_sys.catalog.warehouse.dataset_rows(ds_sys.catalog.get_dataset(ds_name))
+    assert sorted([c.name for c in dr.c]) == sorted(ds.signals_schema.db_signals())
+
+
+def test_from_records_empty_chain_without_schema(test_session):
+    ds = DataChain.from_records([], schema=None, session=test_session)
+    ds_sys = ds.settings(sys=True)
+
+    ds_name = "my_ds"
+    ds.save(ds_name)
+    ds = DataChain(name=ds_name)
+
+    assert ds.schema.keys() == {
+        "source",
+        "path",
+        "size",
+        "version",
+        "etag",
+        "is_latest",
+        "last_modified",
+        "location",
+        "vtype",
+    }
+    assert ds.count() == 0
+
+    # check that columns have actually been created from schema
+    dr = ds_sys.catalog.warehouse.dataset_rows(ds_sys.catalog.get_dataset(ds_name))
+    assert sorted([c.name for c in dr.c]) == sorted(ds.signals_schema.db_signals())
+
+
 def test_datasets(test_session):
     ds = DataChain.datasets(session=test_session)
     datasets = [d for d in ds.collect("dataset") if d.name == "fibonacci"]
