@@ -272,10 +272,14 @@ def test_listings(test_session, tmp_dir):
 
     DataChain.from_storage(uri, session=test_session)
 
-    ds_names = [
-        ds.name for ds in DataChain.datasets(session=test_session).collect("dataset")
-    ]
-    assert not any(n.startswith(LISTING_PREFIX) for n in ds_names)
+    # check that listing is not returned as normal dataset
+    assert not any(
+        n.startswith(LISTING_PREFIX)
+        for n in [
+            ds.name
+            for ds in DataChain.datasets(session=test_session).collect("dataset")
+        ]
+    )
 
     listings = list(DataChain.listings(session=test_session).collect("listing"))
     assert len(listings) == 1
