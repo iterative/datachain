@@ -81,6 +81,6 @@ if __name__ == "__main__":
             loss.backward()
             optimizer.step()
 
-            print("[%d, %5d] loss: %.3f" % (epoch + 1, i + 1, loss.item()))
+            print(f"[{epoch + 1}, {i + 1:5d}] loss: {loss.item():.3f}")
 
     print("Finished Training")
