@@ -1424,7 +1424,7 @@ def test_union_different_column_order(test_session):
     chain2 = DataChain.from_values(
         name=["different", "order"], value=[9, 10], session=test_session
     )
-    assert list(chain1.union(chain2).collect()) == [
+    assert sorted(chain1.union(chain2).collect()) == [
         (1, "chain"),
         (2, "more"),
         (9, "different"),
