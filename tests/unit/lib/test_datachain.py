@@ -179,9 +179,30 @@ def test_from_records_empty_chain_with_schema(test_session):
     assert sorted([c.name for c in dr.c]) == sorted(ds.signals_schema.db_signals())
 
 
-def test_from_records_empty_chain_without_schema():
-    with pytest.raises(ValueError):
-        DataChain.from_records([], schema=None)
+def test_from_records_empty_chain_without_schema(test_session):
+    ds = DataChain.from_records([], schema=None, session=test_session)
+    ds_sys = ds.settings(sys=True)
+
+    ds_name = "my_ds"
+    ds.save(ds_name)
+    ds = DataChain(name=ds_name)
+
+    assert ds.schema.keys() == {
+        "source",
+        "path",
+        "size",
+        "version",
+        "etag",
+        "is_latest",
+        "last_modified",
+        "location",
+        "vtype",
+    }
+    assert ds.count() == 0
+
+    # check that columns have actually been created from schema
+    dr = ds_sys.catalog.warehouse.dataset_rows(ds_sys.catalog.get_dataset(ds_name))
+    assert sorted([c.name for c in dr.c]) == sorted(ds.signals_schema.db_signals())
 
 
 def test_datasets(test_session):

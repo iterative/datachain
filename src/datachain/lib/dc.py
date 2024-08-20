@@ -1543,9 +1543,6 @@ class DataChain(DatasetQuery):
         session = Session.get(session, in_memory=in_memory)
         catalog = session.catalog
 
-        if not to_insert and not schema:
-            raise ValueError("Non empty records to insert or schema must be defined")
-
         name = session.generate_temp_dataset_name()
         signal_schema = None
         columns: list[sqlalchemy.Column] = []
