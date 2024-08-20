@@ -1336,6 +1336,17 @@ def test_to_pandas_multi_level(test_session):
     assert df["t1"]["count"].tolist() == [3, 5, 1]
 
 
+def test_to_pandas_multi_level_flatten(test_session):
+    df = DataChain.from_values(t1=features, session=test_session).to_pandas(
+        flatten=True
+    )
+
+    assert "t1__nnn" in df.columns
+    assert "t1__count" in df.columns
+    assert len(df.columns) == 2
+    assert df["t1__count"].tolist() == [3, 5, 1]
+
+
 def test_to_pandas_empty(test_session):
     df = (
         DataChain.from_values(t1=[1, 2, 3], session=test_session)
