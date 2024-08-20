@@ -38,6 +38,7 @@ from datachain.lib.listing import (
     ls,
     parse_listing_uri,
 )
+from datachain.lib.listing_info import ListingInfo
 from datachain.lib.meta_formats import read_meta, read_schema
 from datachain.lib.model_store import ModelStore
 from datachain.lib.settings import Settings
@@ -610,6 +611,45 @@ class DataChain(DatasetQuery):
             in_memory=in_memory,
             output={object_name: DatasetInfo},
             **{object_name: datasets},  # type: ignore[arg-type]
+        )
+
+    @classmethod
+    def listings(
+        cls,
+        session: Optional[Session] = None,
+        in_memory: bool = False,
+        object_name: str = "listing",
+        expired: bool = False,
+        status: Optional[int] = None,
+        **kwargs,
+    ) -> "DataChain":
+        """Generate chain with list of cached listing.
+
+        Example:
+            ```py
+            from datachain import DataChain
+
+            chain = DataChain.listings()
+            for ls in chain.collect("listing"):
+                print(f"{ls.uri}@v{ls.version}")
+            ```
+        """
+        session = Session.get(session, in_memory=in_memory)
+        catalog = session.catalog
+
+        listings = [
+            ListingInfo.from_models(d, v, j)
+            for d, v, j in catalog.list_datasets_versions(
+                include_listing=True, **kwargs
+            )
+            if is_listing_dataset(d.name)
+        ]
+
+        return cls.from_values(
+            session=session,
+            in_memory=in_memory,
+            output={object_name: ListingInfo},
+            **{object_name: listings},  # type: ignore[arg-type]
         )
 
     def print_json_schema(  # type: ignore[override]

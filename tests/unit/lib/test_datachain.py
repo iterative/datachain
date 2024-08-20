@@ -13,9 +13,12 @@ from datasets.exceptions import DatasetNotFoundError
 from pydantic import BaseModel
 
 from datachain import Column
+from datachain.client import Client
 from datachain.lib.data_model import DataModel
 from datachain.lib.dc import C, DataChain, DataChainColumnError, Sys
 from datachain.lib.file import File
+from datachain.lib.listing import LISTING_PREFIX
+from datachain.lib.listing_info import ListingInfo
 from datachain.lib.signal_schema import (
     SignalResolvingError,
     SignalResolvingTypeError,
@@ -253,6 +256,38 @@ def test_datasets_in_memory():
     datasets = [d for d in ds.collect("foo") if d.name == "fibonacci"]
     assert len(datasets) == 1
     assert datasets[0].num_objects == 6
+
+
+@pytest.mark.parametrize(
+    "cloud_type,version_aware",
+    [("file", False)],
+    indirect=True,
+)
+def test_listings(test_session, tmp_dir):
+    df = pd.DataFrame(DF_DATA)
+    df.to_parquet(tmp_dir / "df.parquet")
+
+    uri = tmp_dir.as_uri()
+
+    DataChain.from_storage(uri, session=test_session)
+    client, _ = Client.parse_url(uri, test_session.catalog.cache)
+
+    ds_names = [
+        ds.name for ds in DataChain.datasets(session=test_session).collect("dataset")
+    ]
+    assert not any(n.startswith(LISTING_PREFIX) for n in ds_names)
+
+    listings = list(DataChain.listings(session=test_session).collect("listing"))
+    assert len(listings) == 1
+    listing = listings[0]
+    assert isinstance(listing, ListingInfo)
+    assert listing.uri == client.uri
+    assert listing.is_expired is False
+    assert listing.expires
+    assert listing.version == 1
+    assert listing.num_objects == 1
+    assert listing.size == 2912
+    assert listing.status == 4
 
 
 def test_preserve_feature_schema(test_session):
