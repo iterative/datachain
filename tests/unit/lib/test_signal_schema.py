@@ -2,8 +2,9 @@ import json
 from typing import Optional, Union
 
 import pytest
+from sqlalchemy import Column
 
-from datachain import Column, DataModel
+from datachain import DataModel
 from datachain.lib.convert.flatten import flatten
 from datachain.lib.file import File, TextFile
 from datachain.lib.signal_schema import (

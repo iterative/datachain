@@ -159,6 +159,52 @@ def test_from_features(test_session):
         assert t1 == features[i]
 
 
+def test_from_records_empty_chain_with_schema(test_session):
+    schema = {"my_file": File, "my_col": int}
+    ds = DataChain.from_records([], schema=schema, session=test_session)
+    ds_sys = ds.settings(sys=True)
+
+    ds_name = "my_ds"
+    ds.save(ds_name)
+    ds = DataChain(name=ds_name)
+
+    assert isinstance(ds.feature_schema, dict)
+    assert isinstance(ds.signals_schema, SignalSchema)
+    assert ds.schema.keys() == {"my_file", "my_col"}
+    assert set(ds.schema.values()) == {File, int}
+    assert ds.count() == 0
+
+    # check that columns have actually been created from schema
+    dr = ds_sys.catalog.warehouse.dataset_rows(ds_sys.catalog.get_dataset(ds_name))
+    assert sorted([c.name for c in dr.c]) == sorted(ds.signals_schema.db_signals())
+
+
+def test_from_records_empty_chain_without_schema(test_session):
+    ds = DataChain.from_records([], schema=None, session=test_session)
+    ds_sys = ds.settings(sys=True)
+
+    ds_name = "my_ds"
+    ds.save(ds_name)
+    ds = DataChain(name=ds_name)
+
+    assert ds.schema.keys() == {
+        "source",
+        "path",
+        "size",
+        "version",
+        "etag",
+        "is_latest",
+        "last_modified",
+        "location",
+        "vtype",
+    }
+    assert ds.count() == 0
+
+    # check that columns have actually been created from schema
+    dr = ds_sys.catalog.warehouse.dataset_rows(ds_sys.catalog.get_dataset(ds_name))
+    assert sorted([c.name for c in dr.c]) == sorted(ds.signals_schema.db_signals())
+
+
 def test_datasets(test_session):
     ds = DataChain.datasets(session=test_session)
     datasets = [d for d in ds.collect("dataset") if d.name == "fibonacci"]
@@ -1390,6 +1436,46 @@ def test_union(test_session):
     chain3 = chain1 | chain2
     assert chain3.count() == 4
     assert sorted(chain3.collect("value")) == [1, 2, 3, 4]
+
+
+def test_union_different_columns(test_session):
+    chain1 = DataChain.from_values(
+        value=[1, 2], name=["chain", "more"], session=test_session
+    )
+    chain2 = DataChain.from_values(value=[3, 4], session=test_session)
+    chain3 = DataChain.from_values(
+        other=["a", "different", "thing"], session=test_session
+    )
+    with pytest.raises(
+        ValueError, match="Cannot perform union. name only present in left"
+    ):
+        chain1.union(chain2).show()
+    with pytest.raises(
+        ValueError, match="Cannot perform union. name only present in right"
+    ):
+        chain2.union(chain1).show()
+    with pytest.raises(
+        ValueError,
+        match="Cannot perform union. "
+        "other only present in left. "
+        "name, value only present in right",
+    ):
+        chain3.union(chain1).show()
+
+
+def test_union_different_column_order(test_session):
+    chain1 = DataChain.from_values(
+        value=[1, 2], name=["chain", "more"], session=test_session
+    )
+    chain2 = DataChain.from_values(
+        name=["different", "order"], value=[9, 10], session=test_session
+    )
+    assert sorted(chain1.union(chain2).collect()) == [
+        (1, "chain"),
+        (2, "more"),
+        (9, "different"),
+        (10, "order"),
+    ]
 
 
 def test_subtract(test_session):
