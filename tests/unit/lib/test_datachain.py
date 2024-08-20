@@ -268,9 +268,9 @@ def test_listings(test_session, tmp_dir):
     df.to_parquet(tmp_dir / "df.parquet")
 
     uri = tmp_dir.as_uri()
+    client, _ = Client.parse_url(uri, test_session.catalog.cache)
 
     DataChain.from_storage(uri, session=test_session)
-    client, _ = Client.parse_url(uri, test_session.catalog.cache)
 
     ds_names = [
         ds.name for ds in DataChain.datasets(session=test_session).collect("dataset")
@@ -288,6 +288,34 @@ def test_listings(test_session, tmp_dir):
     assert listing.num_objects == 1
     assert listing.size == 2912
     assert listing.status == 4
+
+
+@pytest.mark.parametrize(
+    "cloud_type,version_aware",
+    [("file", False)],
+    indirect=True,
+)
+def test_listings_reindex(test_session, tmp_dir):
+    df = pd.DataFrame(DF_DATA)
+    df.to_parquet(tmp_dir / "df.parquet")
+
+    uri = tmp_dir.as_uri()
+    client, _ = Client.parse_url(uri, test_session.catalog.cache)
+
+    DataChain.from_storage(uri, session=test_session)
+    assert len(list(DataChain.listings(session=test_session).collect("listing"))) == 1
+
+    DataChain.from_storage(uri, session=test_session)
+    assert len(list(DataChain.listings(session=test_session).collect("listing"))) == 1
+
+    DataChain.from_storage(uri, session=test_session, update=True)
+    listings = list(DataChain.listings(session=test_session).collect("listing"))
+    assert len(listings) == 2
+    listings.sort(key=lambda lst: lst.version)
+    assert listings[0].uri == client.uri
+    assert listings[0].version == 1
+    assert listings[1].uri == client.uri
+    assert listings[1].version == 2
 
 
 def test_preserve_feature_schema(test_session):
