@@ -619,8 +619,6 @@ class DataChain(DatasetQuery):
         session: Optional[Session] = None,
         in_memory: bool = False,
         object_name: str = "listing",
-        expired: bool = False,
-        status: Optional[int] = None,
         **kwargs,
     ) -> "DataChain":
         """Generate chain with list of cached listing.
