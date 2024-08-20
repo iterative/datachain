@@ -5,6 +5,8 @@ from unittest.mock import ANY
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 import pytest
 from pydantic import BaseModel
 
@@ -58,6 +60,17 @@ def test_pandas_conversion(test_session):
     assert df1.equals(df)
 
 
+@skip_if_not_sqlite
+def test_pandas_conversion_in_memory():
+    df = pd.DataFrame(DF_DATA)
+    dc = DataChain.from_pandas(df, in_memory=True)
+    assert dc.session.catalog.in_memory is True
+    assert dc.session.catalog.metastore.db.db_file == ":memory:"
+    assert dc.session.catalog.warehouse.db.db_file == ":memory:"
+    dc = dc.select("first_name", "age", "city").to_pandas()
+    assert dc.equals(df)
+
+
 def test_pandas_file_column_conflict(test_session):
     file_records = {"path": ["aa.txt", "bb.txt", "ccc.jpg", "dd", "e.txt"]}
     with pytest.raises(DataChainParamsError):
@@ -105,6 +118,24 @@ def test_pandas_incorrect_column_names(test_session):
 
 def test_from_features_basic(test_session):
     ds = DataChain.from_records(DataChain.DEFAULT_FILE_RECORD, session=test_session)
+    ds = ds.gen(lambda prm: [File(path="")] * 5, params="path", output={"file": File})
+
+    ds_name = "my_ds"
+    ds.save(ds_name)
+    ds = DataChain(name=ds_name)
+
+    assert isinstance(ds.feature_schema, dict)
+    assert isinstance(ds.signals_schema, SignalSchema)
+    assert ds.schema.keys() == {"file"}
+    assert set(ds.schema.values()) == {File}
+
+
+@skip_if_not_sqlite
+def test_from_features_basic_in_memory():
+    ds = DataChain.from_records(DataChain.DEFAULT_FILE_RECORD, in_memory=True)
+    assert ds.session.catalog.in_memory is True
+    assert ds.session.catalog.metastore.db.db_file == ":memory:"
+    assert ds.session.catalog.warehouse.db.db_file == ":memory:"
     ds = ds.gen(lambda prm: [File(path="")] * 5, params="path", output={"file": File})
 
     ds_name = "my_ds"
@@ -173,6 +204,34 @@ def test_datasets(test_session):
     assert datasets[0].num_objects == 6
 
 
+@skip_if_not_sqlite
+def test_datasets_in_memory():
+    ds = DataChain.datasets(in_memory=True)
+    assert ds.session.catalog.in_memory is True
+    assert ds.session.catalog.metastore.db.db_file == ":memory:"
+    assert ds.session.catalog.warehouse.db.db_file == ":memory:"
+    datasets = [d for d in ds.collect("dataset") if d.name == "fibonacci"]
+    assert len(datasets) == 0
+
+    DataChain.from_values(fib=[1, 1, 2, 3, 5, 8]).save("fibonacci")
+
+    ds = DataChain.datasets()
+    assert ds.session.catalog.in_memory is True
+    assert ds.session.catalog.metastore.db.db_file == ":memory:"
+    assert ds.session.catalog.warehouse.db.db_file == ":memory:"
+    datasets = [d for d in ds.collect("dataset") if d.name == "fibonacci"]
+    assert len(datasets) == 1
+    assert datasets[0].num_objects == 6
+
+    ds = DataChain.datasets(object_name="foo")
+    assert ds.session.catalog.in_memory is True
+    assert ds.session.catalog.metastore.db.db_file == ":memory:"
+    assert ds.session.catalog.warehouse.db.db_file == ":memory:"
+    datasets = [d for d in ds.collect("foo") if d.name == "fibonacci"]
+    assert len(datasets) == 1
+    assert datasets[0].num_objects == 6
+
+
 def test_preserve_feature_schema(test_session):
     ds = DataChain.from_records(DataChain.DEFAULT_FILE_RECORD, session=test_session)
     ds = ds.gen(
@@ -196,6 +255,22 @@ def test_from_features_simple_types(test_session):
     values = ["odd" if num % 2 else "even" for num in fib]
 
     ds = DataChain.from_values(fib=fib, odds=values, session=test_session)
+
+    df = ds.to_pandas()
+    assert len(df) == len(fib)
+    assert df["fib"].tolist() == fib
+    assert df["odds"].tolist() == values
+
+
+@skip_if_not_sqlite
+def test_from_features_simple_types_in_memory():
+    fib = [1, 1, 2, 3, 5, 8]
+    values = ["odd" if num % 2 else "even" for num in fib]
+
+    ds = DataChain.from_values(fib=fib, odds=values, in_memory=True)
+    assert ds.session.catalog.in_memory is True
+    assert ds.session.catalog.metastore.db.db_file == ":memory:"
+    assert ds.session.catalog.warehouse.db.db_file == ":memory:"
 
     df = ds.to_pandas()
     assert len(df) == len(fib)
@@ -809,6 +884,20 @@ def test_parse_tabular(tmp_dir, test_session):
     assert df1.equals(df)
 
 
+@skip_if_not_sqlite
+def test_parse_tabular_in_memory(tmp_dir):
+    df = pd.DataFrame(DF_DATA)
+    path = tmp_dir / "test.parquet"
+    df.to_parquet(path)
+    dc = DataChain.from_storage(path.as_uri(), in_memory=True).parse_tabular()
+    assert dc.session.catalog.in_memory is True
+    assert dc.session.catalog.metastore.db.db_file == ":memory:"
+    assert dc.session.catalog.warehouse.db.db_file == ":memory:"
+    df1 = dc.select("first_name", "age", "city").to_pandas()
+
+    assert df1.equals(df)
+
+
 def test_parse_tabular_format(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.jsonl"
@@ -942,6 +1031,16 @@ def test_from_csv(tmp_dir, test_session):
     assert df1.equals(df)
 
 
+@skip_if_not_sqlite
+def test_from_csv_in_memory(tmp_dir):
+    df = pd.DataFrame(DF_DATA)
+    path = tmp_dir / "test.csv"
+    df.to_csv(path, index=False)
+    dc = DataChain.from_csv(path.as_uri(), in_memory=True)
+    df1 = dc.select("first_name", "age", "city").to_pandas()
+    assert df1.equals(df)
+
+
 def test_from_csv_no_header_error(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA.values()).transpose()
     path = tmp_dir / "test.csv"
@@ -1009,12 +1108,19 @@ def test_from_csv_null_collect(tmp_dir, test_session):
     # See https://github.com/xzkostyan/clickhouse-sqlalchemy/issues/189.
     df = pd.DataFrame(DF_DATA)
     height = [70, 65, None, 72, 68]
+    gender = ["f", "m", None, "m", "f"]
     df["height"] = height
+    df["gender"] = gender
     path = tmp_dir / "test.csv"
     df.to_csv(path, index=False)
     dc = DataChain.from_csv(path.as_uri(), object_name="csv", session=test_session)
     for i, row in enumerate(dc.collect()):
-        assert row[1].height == height[i]
+        # None value in numeric column will get converted to nan.
+        if not height[i]:
+            assert math.isnan(row[1].height)
+        else:
+            assert row[1].height == height[i]
+        assert row[1].gender == gender[i]
 
 
 def test_from_csv_nrows(tmp_dir, test_session):
@@ -1031,6 +1137,17 @@ def test_from_parquet(tmp_dir, test_session):
     path = tmp_dir / "test.parquet"
     df.to_parquet(path)
     dc = DataChain.from_parquet(path.as_uri(), session=test_session)
+    df1 = dc.select("first_name", "age", "city").to_pandas()
+
+    assert df1.equals(df)
+
+
+@skip_if_not_sqlite
+def test_from_parquet_in_memory(tmp_dir):
+    df = pd.DataFrame(DF_DATA)
+    path = tmp_dir / "test.parquet"
+    df.to_parquet(path)
+    dc = DataChain.from_parquet(path.as_uri(), in_memory=True)
     df1 = dc.select("first_name", "age", "city").to_pandas()
 
     assert df1.equals(df)
@@ -1087,6 +1204,20 @@ def test_parallel(processes, test_session_tmpfile):
     )
 
     assert res == [prefix + v for v in vals]
+
+
+@skip_if_not_sqlite
+def test_parallel_in_memory():
+    prefix = "t & "
+    vals = ["a", "b", "c", "d", "e", "f", "g", "h", "i"]
+
+    with pytest.raises(RuntimeError):
+        list(
+            DataChain.from_values(key=vals, in_memory=True)
+            .settings(parallel=True)
+            .map(res=lambda key: prefix + key)
+            .collect("res")
+        )
 
 
 def test_exec(test_session):
@@ -1184,6 +1315,42 @@ def test_to_pandas_multi_level(test_session):
     assert df["t1"]["count"].tolist() == [3, 5, 1]
 
 
+def test_to_pandas_empty(test_session):
+    df = (
+        DataChain.from_values(t1=[1, 2, 3], session=test_session)
+        .limit(0)
+        .to_pandas(flatten=True)
+    )
+
+    assert df.empty
+    assert "t1" in df.columns
+    assert df["t1"].tolist() == []
+
+    df = (
+        DataChain.from_values(my_n=features_nested, session=test_session)
+        .limit(0)
+        .to_pandas(flatten=False)
+    )
+
+    assert df.empty
+    assert df["my_n"].empty
+    assert list(df.columns) == [
+        ("my_n", "label", ""),
+        ("my_n", "fr", "nnn"),
+        ("my_n", "fr", "count"),
+    ]
+
+    df = (
+        DataChain.from_values(my_n=features_nested, session=test_session)
+        .limit(0)
+        .to_pandas(flatten=True)
+    )
+
+    assert df.empty
+    assert df["my_n.fr.nnn"].tolist() == []
+    assert list(df.columns) == ["my_n.label", "my_n.fr.nnn", "my_n.fr.count"]
+
+
 def test_mutate(test_session):
     chain = DataChain.from_values(t1=features, session=test_session).mutate(
         circle=2 * 3.14 * Column("t1.count"), place="pref_" + Column("t1.nnn")
@@ -1248,6 +1415,46 @@ def test_union(test_session):
     chain3 = chain1 | chain2
     assert chain3.count() == 4
     assert sorted(chain3.collect("value")) == [1, 2, 3, 4]
+
+
+def test_union_different_columns(test_session):
+    chain1 = DataChain.from_values(
+        value=[1, 2], name=["chain", "more"], session=test_session
+    )
+    chain2 = DataChain.from_values(value=[3, 4], session=test_session)
+    chain3 = DataChain.from_values(
+        other=["a", "different", "thing"], session=test_session
+    )
+    with pytest.raises(
+        ValueError, match="Cannot perform union. name only present in left"
+    ):
+        chain1.union(chain2).show()
+    with pytest.raises(
+        ValueError, match="Cannot perform union. name only present in right"
+    ):
+        chain2.union(chain1).show()
+    with pytest.raises(
+        ValueError,
+        match="Cannot perform union. "
+        "other only present in left. "
+        "name, value only present in right",
+    ):
+        chain3.union(chain1).show()
+
+
+def test_union_different_column_order(test_session):
+    chain1 = DataChain.from_values(
+        value=[1, 2], name=["chain", "more"], session=test_session
+    )
+    chain2 = DataChain.from_values(
+        name=["different", "order"], value=[9, 10], session=test_session
+    )
+    assert sorted(chain1.union(chain2).collect()) == [
+        (1, "chain"),
+        (2, "more"),
+        (9, "different"),
+        (10, "order"),
+    ]
 
 
 def test_subtract(test_session):
@@ -1339,8 +1546,8 @@ def test_custom_model_with_nested_lists(test_session):
     ]
 
 
-def test_min_limit():
-    dc = DataChain.from_values(a=[1, 2, 3, 4, 5])
+def test_min_limit(test_session):
+    dc = DataChain.from_values(a=[1, 2, 3, 4, 5], session=test_session)
     assert dc.count() == 5
     assert dc.limit(4).count() == 4
     assert dc.count() == 5
@@ -1352,8 +1559,8 @@ def test_min_limit():
     assert dc.count() == 5
 
 
-def test_show_limit():
-    dc = DataChain.from_values(a=[1, 2, 3, 4, 5])
+def test_show_limit(test_session):
+    dc = DataChain.from_values(a=[1, 2, 3, 4, 5], session=test_session)
     assert dc.count() == 5
     assert dc.limit(4).count() == 4
     dc.show(1)
@@ -1369,7 +1576,7 @@ def test_show_limit():
     assert dc.count() == 5
 
 
-def test_gen_limit(catalog):
+def test_gen_limit(test_session):
     def func(key, val) -> Iterator[tuple[File, str]]:
         for i in range(val):
             yield File(path=""), f"{key}_{i}"
@@ -1377,7 +1584,7 @@ def test_gen_limit(catalog):
     keys = ["a", "b", "c", "d"]
     values = [3, 3, 3, 3]
 
-    ds = DataChain.from_values(key=keys, val=values)
+    ds = DataChain.from_values(key=keys, val=values, session=test_session)
 
     assert ds.count() == 4
     assert ds.gen(res=func).count() == 12
@@ -1388,8 +1595,8 @@ def test_gen_limit(catalog):
     assert ds.limit(3).gen(res=func).limit(10).count() == 9
 
 
-def test_rename_non_object_column_name_with_mutate(catalog):
-    ds = DataChain.from_values(ids=[1, 2, 3])
+def test_rename_non_object_column_name_with_mutate(test_session):
+    ds = DataChain.from_values(ids=[1, 2, 3], session=test_session)
     ds = ds.mutate(my_ids=Column("ids"))
 
     assert ds.signals_schema.values == {"my_ids": int}
@@ -1397,18 +1604,18 @@ def test_rename_non_object_column_name_with_mutate(catalog):
 
     ds.save("mutated")
 
-    ds = DataChain(name="mutated")
+    ds = DataChain(name="mutated", session=test_session)
     assert ds.signals_schema.values.get("my_ids") is int
     assert "ids" not in ds.signals_schema.values
     assert list(ds.order_by("my_ids").collect("my_ids")) == [1, 2, 3]
 
 
-def test_rename_object_column_name_with_mutate(catalog):
+def test_rename_object_column_name_with_mutate(test_session):
     names = ["a", "b", "c"]
     sizes = [1, 2, 3]
     files = [File(path=name, size=size) for name, size in zip(names, sizes)]
 
-    ds = DataChain.from_values(file=files, ids=[1, 2, 3])
+    ds = DataChain.from_values(file=files, ids=[1, 2, 3], session=test_session)
     ds = ds.mutate(fname=Column("file.path"))
 
     assert list(ds.order_by("fname").collect("fname")) == ["a", "b", "c"]
@@ -1417,19 +1624,19 @@ def test_rename_object_column_name_with_mutate(catalog):
     # check that persist after saving
     ds.save("mutated")
 
-    ds = DataChain(name="mutated")
+    ds = DataChain(name="mutated", session=test_session)
     assert ds.signals_schema.values.get("file") is File
     assert ds.signals_schema.values.get("ids") is int
     assert ds.signals_schema.values.get("fname") is str
     assert list(ds.order_by("fname").collect("fname")) == ["a", "b", "c"]
 
 
-def test_rename_object_name_with_mutate(catalog):
+def test_rename_object_name_with_mutate(test_session):
     names = ["a", "b", "c"]
     sizes = [1, 2, 3]
     files = [File(path=name, size=size) for name, size in zip(names, sizes)]
 
-    ds = DataChain.from_values(file=files, ids=[1, 2, 3])
+    ds = DataChain.from_values(file=files, ids=[1, 2, 3], session=test_session)
     ds = ds.mutate(my_file=Column("file"))
 
     assert list(ds.order_by("my_file.path").collect("my_file.path")) == ["a", "b", "c"]
@@ -1437,16 +1644,19 @@ def test_rename_object_name_with_mutate(catalog):
 
     ds.save("mutated")
 
-    ds = DataChain(name="mutated")
+    ds = DataChain(name="mutated", session=test_session)
     assert ds.signals_schema.values.get("my_file") is File
     assert ds.signals_schema.values.get("ids") is int
     assert "file" not in ds.signals_schema.values
     assert list(ds.order_by("my_file.path").collect("my_file.path")) == ["a", "b", "c"]
 
 
-def test_column(catalog):
+def test_column(test_session):
     ds = DataChain.from_values(
-        ints=[1, 2], floats=[0.5, 0.5], file=[File(path="a"), File(path="b")]
+        ints=[1, 2],
+        floats=[0.5, 0.5],
+        file=[File(path="a"), File(path="b")],
+        session=test_session,
     )
 
     c = ds.column("ints")
@@ -1468,35 +1678,35 @@ def test_column(catalog):
         c = ds.column("missing")
 
 
-def test_mutate_with_subtraction():
-    ds = DataChain.from_values(id=[1, 2])
+def test_mutate_with_subtraction(test_session):
+    ds = DataChain.from_values(id=[1, 2], session=test_session)
     assert ds.mutate(new=ds.column("id") - 1).signals_schema.values["new"] is int
 
 
-def test_mutate_with_addition():
-    ds = DataChain.from_values(id=[1, 2])
+def test_mutate_with_addition(test_session):
+    ds = DataChain.from_values(id=[1, 2], session=test_session)
     assert ds.mutate(new=ds.column("id") + 1).signals_schema.values["new"] is int
 
 
-def test_mutate_with_division():
-    ds = DataChain.from_values(id=[1, 2])
+def test_mutate_with_division(test_session):
+    ds = DataChain.from_values(id=[1, 2], session=test_session)
     assert ds.mutate(new=ds.column("id") / 10).signals_schema.values["new"] is float
 
 
-def test_mutate_with_multiplication():
-    ds = DataChain.from_values(id=[1, 2])
+def test_mutate_with_multiplication(test_session):
+    ds = DataChain.from_values(id=[1, 2], session=test_session)
     assert ds.mutate(new=ds.column("id") * 10).signals_schema.values["new"] is int
 
 
-def test_mutate_with_func():
-    ds = DataChain.from_values(id=[1, 2])
+def test_mutate_with_func(test_session):
+    ds = DataChain.from_values(id=[1, 2], session=test_session)
     assert (
         ds.mutate(new=func.avg(ds.column("id"))).signals_schema.values["new"] is float
     )
 
 
-def test_mutate_with_complex_expression():
-    ds = DataChain.from_values(id=[1, 2], name=["Jim", "Jon"])
+def test_mutate_with_complex_expression(test_session):
+    ds = DataChain.from_values(id=[1, 2], name=["Jim", "Jon"], session=test_session)
     assert (
         ds.mutate(
             new=(func.sum(ds.column("id"))) * (5 - func.min(ds.column("id")))
@@ -1506,19 +1716,66 @@ def test_mutate_with_complex_expression():
 
 
 @skip_if_not_sqlite
-def test_mutate_with_saving():
-    ds = DataChain.from_values(id=[1, 2])
+def test_mutate_with_saving(test_session):
+    ds = DataChain.from_values(id=[1, 2], session=test_session)
     ds = ds.mutate(new=ds.column("id") / 2).save("mutated")
 
-    ds = DataChain(name="mutated")
+    ds = DataChain(name="mutated", session=test_session)
     assert ds.signals_schema.values["new"] is float
     assert list(ds.collect("new")) == [0.5, 1.0]
 
 
-def test_mutate_with_expression_without_type(catalog):
+def test_mutate_with_expression_without_type(test_session):
     with pytest.raises(DataChainColumnError) as excinfo:
-        DataChain.from_values(id=[1, 2]).mutate(new=(Column("id") - 1)).save()
+        DataChain.from_values(id=[1, 2], session=test_session).mutate(
+            new=(Column("id") - 1)
+        ).save()
 
     assert str(excinfo.value) == (
         "Error for column new: Cannot infer type with expression id - :id_1"
     )
+
+
+def test_from_values_nan_inf(test_session):
+    vals = [float("nan"), float("inf"), float("-inf")]
+    dc = DataChain.from_values(vals=vals, session=test_session)
+    res = list(dc.collect("vals"))
+    assert np.isnan(res[0])
+    assert np.isposinf(res[1])
+    assert np.isneginf(res[2])
+
+
+def test_from_pandas_nan_inf(test_session):
+    vals = [float("nan"), float("inf"), float("-inf")]
+    df = pd.DataFrame({"vals": vals})
+    dc = DataChain.from_pandas(df, session=test_session)
+    res = list(dc.collect("vals"))
+    assert np.isnan(res[0])
+    assert np.isposinf(res[1])
+    assert np.isneginf(res[2])
+
+
+def test_from_parquet_nan_inf(tmp_dir, test_session):
+    vals = [float("nan"), float("inf"), float("-inf")]
+    tbl = pa.table({"vals": vals})
+    path = tmp_dir / "test.parquet"
+    pq.write_table(tbl, path)
+    dc = DataChain.from_parquet(path.as_uri(), session=test_session)
+
+    res = list(dc.collect("vals"))
+    assert np.isnan(res[0])
+    assert np.isposinf(res[1])
+    assert np.isneginf(res[2])
+
+
+def test_from_csv_nan_inf(tmp_dir, test_session):
+    vals = [float("nan"), float("inf"), float("-inf")]
+    df = pd.DataFrame({"vals": vals})
+    path = tmp_dir / "test.csv"
+    df.to_csv(path, index=False)
+    dc = DataChain.from_csv(path.as_uri(), session=test_session)
+
+    res = list(dc.collect("vals"))
+    assert np.isnan(res[0])
+    assert np.isposinf(res[1])
+    assert np.isneginf(res[2])

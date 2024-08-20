@@ -3,7 +3,7 @@ from sqlalchemy import Integer
 
 from datachain.dataset import RowDict
 from datachain.query import udf
-from datachain.query.batch import RowBatch
+from datachain.query.batch import UDFInputBatch
 from datachain.query.schema import ColumnParameter
 
 
@@ -36,7 +36,7 @@ def test_udf_batching():
     results = []
     for row_id, (size, id) in enumerate(inputs):
         row = RowDict(sys__id=row_id, sys__rand=1234 + row_id, id=id, size=size)
-        batch = RowBatch([row])
+        batch = UDFInputBatch([row])
         result = t.run_once(None, batch)
         if result:
             assert len(result) == 1  # Matches batch size.

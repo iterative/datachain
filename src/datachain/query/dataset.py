@@ -34,6 +34,7 @@ from sqlalchemy.sql.elements import ColumnClause, ColumnElement
 from sqlalchemy.sql.expression import label
 from sqlalchemy.sql.schema import TableClause
 from sqlalchemy.sql.selectable import Select
+from tqdm import tqdm
 
 from datachain.asyn import ASYNC_WORKERS, AsyncMapper, OrderedMapper
 from datachain.catalog import (
@@ -125,7 +126,10 @@ class QueryGenerator:
     func: QueryGeneratorFunc
     columns: tuple[ColumnElement, ...]
 
-    def exclude(self, column_names) -> Select:
+    def only(self, column_names: Sequence[str]) -> Select:
+        return self.func(*(c for c in self.columns if c.name in column_names))
+
+    def exclude(self, column_names: Sequence[str]) -> Select:
         return self.func(*(c for c in self.columns if c.name not in column_names))
 
     def select(self, column_names=None) -> Select:
@@ -461,8 +465,16 @@ class UDFStep(Step, ABC):
 
         processes = determine_processes(self.parallel)
 
+        udf_fields = [str(c.name) for c in query.selected_columns]
+
         try:
             if workers:
+                if self.catalog.in_memory:
+                    raise RuntimeError(
+                        "In-memory databases cannot be used with "
+                        "distributed processing."
+                    )
+
                 from datachain.catalog.loader import get_distributed_class
 
                 distributor = get_distributed_class(min_task_size=self.min_task_size)
@@ -473,12 +485,17 @@ class UDFStep(Step, ABC):
                     query,
                     workers,
                     processes,
+                    udf_fields=udf_fields,
                     is_generator=self.is_generator,
                     use_partitioning=use_partitioning,
                     cache=self.cache,
                 )
             elif processes:
                 # Parallel processing (faster for more CPU-heavy UDFs)
+                if self.catalog.in_memory:
+                    raise RuntimeError(
+                        "In-memory databases cannot be used with parallel processing."
+                    )
                 udf_info = {
                     "udf_data": filtered_cloudpickle_dumps(self.udf),
                     "catalog_init": self.catalog.get_init_params(),
@@ -489,6 +506,7 @@ class UDFStep(Step, ABC):
                     "warehouse_clone_params": self.catalog.warehouse.clone_params(),
                     "table": udf_table,
                     "query": query,
+                    "udf_fields": udf_fields,
                     "batching": batching,
                     "processes": processes,
                     "is_generator": self.is_generator,
@@ -528,6 +546,7 @@ class UDFStep(Step, ABC):
                     generated_cb = get_generated_callback(self.is_generator)
                     try:
                         udf_results = udf.run(
+                            udf_fields,
                             udf_inputs,
                             self.catalog,
                             self.is_generator,
@@ -859,17 +878,14 @@ class SQLUnion(Step):
         temp_tables.extend(self.query1.temp_table_names)
         q2 = self.query2.apply_steps().select().subquery()
         temp_tables.extend(self.query2.temp_table_names)
-        columns1, columns2 = fill_columns(q1.columns, q2.columns)
+
+        columns1, columns2 = _order_columns(q1.columns, q2.columns)
 
         def q(*columns):
             names = {c.name for c in columns}
             col1 = [c for c in columns1 if c.name in names]
             col2 = [c for c in columns2 if c.name in names]
-            res = (
-                sqlalchemy.select(*col1)
-                .select_from(q1)
-                .union_all(sqlalchemy.select(*col2).select_from(q2))
-            )
+            res = sqlalchemy.select(*col1).union_all(sqlalchemy.select(*col2))
 
             subquery = res.subquery()
             return sqlalchemy.select(*subquery.c).select_from(subquery)
@@ -1002,23 +1018,46 @@ class GroupBy(Step):
         return step_result(q, grouped_query.selected_columns)
 
 
-def fill_columns(
-    *column_iterables: Iterable[ColumnElement],
-) -> list[list[ColumnElement]]:
-    column_dicts = [{c.name: c for c in columns} for columns in column_iterables]
-    combined_columns = {n: c for col_dict in column_dicts for n, c in col_dict.items()}
+def _validate_columns(
+    left_columns: Iterable[ColumnElement], right_columns: Iterable[ColumnElement]
+) -> set[str]:
+    left_names = {c.name for c in left_columns}
+    right_names = {c.name for c in right_columns}
 
-    result: list[list[ColumnElement]] = [[] for _ in column_dicts]
-    for n in combined_columns:
-        col = next(col_dict[n] for col_dict in column_dicts if n in col_dict)
-        for col_dict, out in zip(column_dicts, result):
-            if n in col_dict:
-                out.append(col_dict[n])
-            else:
-                # Cast the NULL to ensure all columns are aware of their type
-                # Label it to ensure it's aware of its name
-                out.append(sqlalchemy.cast(sqlalchemy.null(), col.type).label(n))
-    return result
+    if left_names == right_names:
+        return left_names
+
+    missing_right = left_names - right_names
+    missing_left = right_names - left_names
+
+    def _prepare_msg_part(missing_columns: set[str], side: str) -> str:
+        return f"{', '.join(sorted(missing_columns))} only present in {side}"
+
+    msg_parts = [
+        _prepare_msg_part(missing_columns, found_side)
+        for missing_columns, found_side in zip(
+            [
+                missing_right,
+                missing_left,
+            ],
+            ["left", "right"],
+        )
+        if missing_columns
+    ]
+    msg = f"Cannot perform union. {'. '.join(msg_parts)}"
+
+    raise ValueError(msg)
+
+
+def _order_columns(
+    left_columns: Iterable[ColumnElement], right_columns: Iterable[ColumnElement]
+) -> list[list[ColumnElement]]:
+    column_order = _validate_columns(left_columns, right_columns)
+    column_dicts = [
+        {c.name: c for c in columns} for columns in [left_columns, right_columns]
+    ]
+
+    return [[d[n] for n in column_order] for d in column_dicts]
 
 
 @attrs.define
@@ -1044,6 +1083,7 @@ class DatasetQuery:
         indexing_feature_schema: Optional[dict] = None,
         indexing_column_types: Optional[dict[str, Any]] = None,
         update: Optional[bool] = False,
+        in_memory: bool = False,
     ):
         if client_config is None:
             client_config = {}
@@ -1052,7 +1092,7 @@ class DatasetQuery:
             client_config["anon"] = True
 
         self.session = Session.get(
-            session, catalog=catalog, client_config=client_config
+            session, catalog=catalog, client_config=client_config, in_memory=in_memory
         )
         self.catalog = catalog or self.session.catalog
         self.steps: list[Step] = []
@@ -1244,21 +1284,23 @@ class DatasetQuery:
         actual_params = [normalize_param(p) for p in params]
         try:
             query = self.apply_steps().select()
+            query_fields = [str(c.name) for c in query.selected_columns]
 
-            def row_iter() -> Generator[RowDict, None, None]:
+            def row_iter() -> Generator[Sequence, None, None]:
                 # warehouse isn't threadsafe, we need to clone() it
                 # in the thread that uses the results
                 with self.catalog.warehouse.clone() as warehouse:
-                    gen = warehouse.dataset_select_paginated(
-                        query, limit=query._limit, order_by=query._order_by_clauses
-                    )
+                    gen = warehouse.dataset_select_paginated(query)
                     with contextlib.closing(gen) as rows:
                         yield from rows
 
-            async def get_params(row: RowDict) -> tuple:
+            async def get_params(row: Sequence) -> tuple:
+                row_dict = RowDict(zip(query_fields, row))
                 return tuple(
                     [
-                        await p.get_value_async(self.catalog, row, mapper, **kwargs)
+                        await p.get_value_async(
+                            self.catalog, row_dict, mapper, **kwargs
+                        )
                         for p in actual_params
                     ]
                 )
@@ -1641,18 +1683,13 @@ class DatasetQuery:
 
             dr = self.catalog.warehouse.dataset_rows(dataset)
 
-            # Exclude the id column and let the db create it to avoid unique
-            # constraint violations.
-            q = query.exclude(("sys__id",))
-            if q._order_by_clauses:
-                # ensuring we have id sorted by order by clause if it exists in a query
-                q = q.add_columns(
-                    f.row_number().over(order_by=q._order_by_clauses).label("sys__id")
+            with tqdm(desc="Saving", unit=" rows") as pbar:
+                self.catalog.warehouse.copy_table(
+                    dr.get_table(),
+                    query.select(),
+                    progress_cb=pbar.update,
                 )
 
-            cols = tuple(c.name for c in q.selected_columns)
-            insert_q = sqlalchemy.insert(dr.get_table()).from_select(cols, q)
-            self.catalog.warehouse.db.execute(insert_q, **kwargs)
             self.catalog.metastore.update_dataset_status(
                 dataset, DatasetStatus.COMPLETE, version=version
             )

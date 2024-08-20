@@ -10,13 +10,13 @@ def num_chars_udf(file):
     return ([],)
 
 
-ds = DataChain.from_storage("gs://datachain-demo/dogs-and-cats/")
-ds.map(num_chars_udf, params=["file"], output={"num_chars": list[str]}).select(
+dc = DataChain.from_storage("gs://datachain-demo/dogs-and-cats/")
+dc.map(num_chars_udf, params=["file"], output={"num_chars": list[str]}).select(
     "file.path", "num_chars"
 ).show(5)
 
 (
-    ds.mutate(
+    dc.mutate(
         length=string.length(path.name(C("file.path"))),
         parts=string.split(path.name(C("file.path")), literal(".")),
     )
@@ -25,22 +25,24 @@ ds.map(num_chars_udf, params=["file"], output={"num_chars": list[str]}).select(
 )
 
 (
-    ds.mutate(
-        stem=path.file_stem(path.name(C("file.path"))),
-        ext=path.file_ext(path.name(C("file.path"))),
+    dc.mutate(
+        stem=path.file_stem(C("file.path")),
+        ext=path.file_ext(C("file.path")),
     )
     .select("file.path", "stem", "ext")
     .show(5)
 )
 
+
+chain = dc.mutate(
+    a=array.length(string.split(C("file.path"), literal("/"))),
+    b=array.length(string.split(path.name(C("file.path")), literal("0"))),
+)
+
 (
-    ds.mutate(
-        a=array.length(string.split(C("file.path"), literal("/"))),
-        b=array.length(string.split(path.name(C("file.path")), literal("0"))),
-    )
-    .mutate(
-        greatest=greatest(C("a"), C("b")),
-        least=least(C("a"), C("b")),
+    chain.mutate(
+        greatest=greatest(chain.column("a"), C("b")),
+        least=least(chain.column("a"), C("b")),
     )
     .select("a", "b", "greatest", "least")
     .show(10)
