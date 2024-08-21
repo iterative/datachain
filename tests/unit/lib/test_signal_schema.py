@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from typing import Optional, Union
 
 import pytest
@@ -13,7 +14,21 @@ from datachain.lib.signal_schema import (
     SignalSchema,
     SignalSchemaError,
 )
-from datachain.sql.types import Float, Int64, String
+from datachain.sql.types import (
+    JSON,
+    Array,
+    Binary,
+    Boolean,
+    DateTime,
+    Float,
+    Float32,
+    Float64,
+    Int,
+    Int32,
+    Int64,
+    String,
+    UInt64,
+)
 
 
 @pytest.fixture
@@ -339,3 +354,28 @@ def test_slice_nested():
     keys = ["feature.aa"]
     sliced = SignalSchema(schema).slice(keys)
     assert list(sliced.values.items()) == [("feature.aa", int)]
+
+
+@pytest.mark.parametrize(
+    "column_type,signal_type",
+    [
+        [String, str],
+        [Boolean, bool],
+        [Int, int],
+        [Int32, int],
+        [Int64, int],
+        [UInt64, int],
+        [Float, float],
+        [Float32, float],
+        [Float64, float],
+        [Array(Int), list],
+        [JSON, dict],
+        [DateTime, datetime],
+        [Binary, bytes],
+    ],
+)
+def test_column_types(column_type, signal_type):
+    signals = SignalSchema.from_column_types({"val": column_type}).values
+
+    assert len(signals) == 1
+    assert signals["val"] is signal_type
