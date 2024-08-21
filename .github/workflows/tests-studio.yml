@@ -17,7 +17,7 @@ concurrency:
 jobs:
   studio:
     if: '!github.event.pull_request.head.repo.fork'
-    runs-on: ubuntu-latest-16-cores
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         pyv: ['3.12']
