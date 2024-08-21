@@ -118,11 +118,15 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         pyv: ['3.9', '3.12']
-        group: ['get_started', 'llm_and_nlp or computer_vision']
+        group: ['get_started', 'llm_and_nlp or computer_vision', 'multimodal']
+        exclude:
+          - {os: ubuntu-latest, pyv: '3.9', group: 'multimodal'}
+          - {os: ubuntu-latest, pyv: '3.12', group: 'multimodal'}
         include:
-          - {group: multimodal, os: ubuntu-latest-4-cores}
-          - {group: multimodal, os: macos-latest}
-          - {group: multimodal, os: windows-latest}
+          - {os: ubuntu-latest-4-cores, pyv: "3.9", group: multimodal}
+          - {os: ubuntu-latest-4-cores, pyv: "3.12", group: multimodal}
+
+
     steps:
       - uses: actions/checkout@v4
 
