@@ -8,10 +8,11 @@ import pandas as pd
 import pytest
 import pytz
 from PIL import Image
+from sqlalchemy import Column
 
 from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.dataset import DatasetStats
-from datachain.lib.dc import DataChain
+from datachain.lib.dc import DataChain, DataChainColumnError
 from datachain.lib.file import File, ImageFile
 from tests.utils import images_equal
 
@@ -314,3 +315,16 @@ def test_from_storage_check_rows(tmp_dir, test_session):
             location=None,
             vtype="",
         )
+
+
+def test_mutate_existing_column(catalog):
+    ds = DataChain.from_values(ids=[1, 2, 3])
+
+    with pytest.raises(DataChainColumnError) as excinfo:
+        ds.mutate(ids=Column("ids") + 1)
+
+    assert (
+        str(excinfo.value)
+        == "Error for column ids: Cannot modify existing column with mutate()."
+        " Use a different name for the new column."
+    )
