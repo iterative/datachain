@@ -860,14 +860,14 @@ class DataChain(DatasetQuery):
         )
         ```
 
-        This method also has enhanced capabilities for renaming the columns. If column
-        with the current name exists then its renamed. Orelse a new column is created
-        from the existing one.
+        This method can be also used to rename signals. If the Column("name") provided
+        as value for the new signal - the old column will be dropped. Otherwise a new
+        column is created.
 
         Example:
         ```py
          dc.mutate(
-                oldkey=Column("newkey")
+                newkey=Column("oldkey")
         )
         ```
         """
