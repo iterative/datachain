@@ -100,8 +100,7 @@ examples = [
   "accelerate",
   "unstructured[pdf]",
   "pdfplumber==0.11.3",
-  "huggingface_hub[hf_transfer]",
-  "nltk==3.8.1"
+  "huggingface_hub[hf_transfer]"
 ]
 
 [project.urls]
