@@ -54,7 +54,7 @@ source = "gs://datachain-demo/openimages-v6-test-jsonpairs/"
     .filter(C("file.path").glob("*.jpg") | C("file.path").glob("*.json"))
     .agg(
         openimage_detect,
-        partition_by=path.file_stem(path.name(C("file.path"))),
+        partition_by=path.file_stem(C("file.path")),
         params=["file"],
         output={"file": File, "bbox": BBox},
     )

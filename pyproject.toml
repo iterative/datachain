@@ -87,7 +87,7 @@ tests = [
 ]
 dev = [
   "datachain[docs,tests]",
-  "mypy==1.10.1",
+  "mypy==1.11.1",
   "types-python-dateutil",
   "types-pytz",
   "types-PyYAML",
@@ -100,8 +100,7 @@ examples = [
   "accelerate",
   "unstructured[pdf]",
   "pdfplumber==0.11.3",
-  "huggingface_hub[hf_transfer]",
-  "nltk==3.8.1"
+  "huggingface_hub[hf_transfer]"
 ]
 
 [project.urls]
