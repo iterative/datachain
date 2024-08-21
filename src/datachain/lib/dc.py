@@ -48,7 +48,7 @@ from datachain.query.dataset import (
     PartitionByType,
     detach,
 )
-from datachain.query.schema import DEFAULT_DELIMITER, Column, DatasetRow
+from datachain.query.schema import Column, DatasetRow
 from datachain.sql.functions import path as pathfunc
 from datachain.utils import inside_notebook
 
@@ -1224,16 +1224,11 @@ class DataChain(DatasetQuery):
         """
         headers, max_length = self._effective_signals_schema.get_headers_with_length()
         if flatten or max_length < 2:
-            columns = []
-            if headers:
-                columns = [
-                    DEFAULT_DELIMITER.join(filter(None, header)) for header in headers
-                ]
-            return pd.DataFrame.from_records(self.to_records(), columns=columns)
+            columns = [".".join(filter(None, header)) for header in headers]
+        else:
+            columns = pd.MultiIndex.from_tuples(map(tuple, headers))
 
-        return pd.DataFrame(
-            self.results(), columns=pd.MultiIndex.from_tuples(map(tuple, headers))
-        )
+        return pd.DataFrame.from_records(self.results(), columns=columns)
 
     def show(
         self,
