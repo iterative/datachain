@@ -1,0 +1,103 @@
+name: Studio Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  FORCE_COLOR: "1"
+  BRANCH: ${{ github.head_ref || github.ref_name }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  studio:
+    if: '!github.event.pull_request.head.repo.fork'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        pyv: ['3.12']
+        group: [1, 2, 3, 4, 5, 6]
+    services:
+      postgres:
+        image: postgres:16.3
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: test
+          POSTGRES_DB: database
+          POSTGRES_HOST_AUTH_METHOD: trust
+      clickhouse:
+        image: clickhouse/clickhouse-server:24
+        ports:
+          - 8123:8123
+          - 9010:9000
+        env:
+          CLICKHOUSE_DB: studio_local_db
+          CLICKHOUSE_USER: studio_local
+          CLICKHOUSE_PASSWORD: ch123456789!
+          CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+      redis:
+        image: redis:7.2.5
+        ports:
+          - 6379:6379
+    steps:
+      - name: Studio branch name
+        env:
+          BRANCH: ${{ env.BRANCH }}
+          STUDIO_READ_ACCESS_TOKEN: ${{ secrets.ITERATIVE_STUDIO_READ_ACCESS_TOKEN }}
+        run: |
+          echo "DataChain branch: $BRANCH"
+          if [[ "$BRANCH" == "main" ]]
+          then
+              STUDIO_BRANCH=develop
+          elif git ls-remote --heads https://"$STUDIO_READ_ACCESS_TOKEN"@github.com/iterative/studio.git "$BRANCH" | grep -F "$BRANCH" 2>&1>/dev/null
+          then
+              STUDIO_BRANCH="$BRANCH"
+          else
+              STUDIO_BRANCH=develop
+          fi
+          echo "STUDIO_BRANCH=$STUDIO_BRANCH" >> $GITHUB_ENV
+          echo "Studio branch: $STUDIO_BRANCH"
+
+      - name: Check out Studio
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          repository: iterative/studio
+          ref: ${{ env.STUDIO_BRANCH }}
+          token: ${{ secrets.ITERATIVE_STUDIO_READ_ACCESS_TOKEN }}
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          path: './backend/datachain'
+          fetch-depth: 0
+
+      - name: Set up Python ${{ matrix.pyv }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.pyv }}
+          cache: 'pip'
+
+      - name: Install uv
+        run: |
+          python -m pip install --upgrade uv
+          uv --version
+
+      - name: Install dependencies
+        run: uv pip install --system ./backend/datachain_server[tests] ./backend/datachain[tests]
+
+      - name: Run tests
+        # Generate `.test_durations` file with `pytest --store-durations --durations-path ../.github/.test_durations ...`
+        run: >
+          pytest
+          --config-file=pyproject.toml -rs
+          --splits=6 --group=${{ matrix.group }} --durations-path=../../.github/.test_durations
+          -m 'not benchmark'
+          tests ../datachain/tests
+        working-directory: backend/datachain_server

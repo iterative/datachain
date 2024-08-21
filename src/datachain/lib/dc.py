@@ -1235,14 +1235,11 @@ class DataChain(DatasetQuery):
         """
         headers, max_length = self._effective_signals_schema.get_headers_with_length()
         if flatten or max_length < 2:
-            columns = []
-            if headers:
-                columns = [".".join(filter(None, header)) for header in headers]
-            return pd.DataFrame.from_records(self.to_records(), columns=columns)
+            columns = [".".join(filter(None, header)) for header in headers]
+        else:
+            columns = pd.MultiIndex.from_tuples(map(tuple, headers))
 
-        return pd.DataFrame(
-            self.results(), columns=pd.MultiIndex.from_tuples(map(tuple, headers))
-        )
+        return pd.DataFrame.from_records(self.results(), columns=columns)
 
     def show(
         self,
@@ -1535,6 +1532,7 @@ class DataChain(DatasetQuery):
         to_insert: Optional[Union[dict, list[dict]]],
         session: Optional[Session] = None,
         in_memory: bool = False,
+        schema: Optional[dict[str, DataType]] = None,
     ) -> "DataChain":
         """Create a DataChain from the provided records. This method can be used for
         programmatically generating a chain in contrast of reading data from storages
@@ -1543,10 +1541,10 @@ class DataChain(DatasetQuery):
         Parameters:
             to_insert : records (or a single record) to insert. Each record is
                         a dictionary of signals and theirs values.
+            schema : describes chain signals and their corresponding types
 
         Example:
             ```py
-            empty = DataChain.from_records()
             single_record = DataChain.from_records(DataChain.DEFAULT_FILE_RECORD)
             ```
         """
@@ -1554,11 +1552,27 @@ class DataChain(DatasetQuery):
         catalog = session.catalog
 
         name = session.generate_temp_dataset_name()
-        columns: tuple[sqlalchemy.Column[Any], ...] = tuple(
-            sqlalchemy.Column(name, typ)
-            for name, typ in File._datachain_column_types.items()
+        signal_schema = None
+        columns: list[sqlalchemy.Column] = []
+
+        if schema:
+            signal_schema = SignalSchema(schema)
+            columns = signal_schema.db_signals(as_columns=True)  # type: ignore[assignment]
+        else:
+            columns = [
+                sqlalchemy.Column(name, typ)
+                for name, typ in File._datachain_column_types.items()
+            ]
+
+        dsr = catalog.create_dataset(
+            name,
+            columns=columns,
+            feature_schema=(
+                signal_schema.clone_without_sys_signals().serialize()
+                if signal_schema
+                else None
+            ),
         )
-        dsr = catalog.create_dataset(name, columns=columns)
 
         if isinstance(to_insert, dict):
             to_insert = [to_insert]
