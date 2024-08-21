@@ -863,6 +863,17 @@ class DataChain(DatasetQuery):
                 dist=cosine_distance(embedding_text, embedding_image)
         )
         ```
+
+        This method can be also used to rename signals. If the Column("name") provided
+        as value for the new signal - the old column will be dropped. Otherwise a new
+        column is created.
+
+        Example:
+        ```py
+         dc.mutate(
+                newkey=Column("oldkey")
+        )
+        ```
         """
         existing_columns = set(self.signals_schema.values.keys())
         for col_name in kwargs:
