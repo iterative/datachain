@@ -383,9 +383,10 @@ def process_udf_outputs(
     udf_table: "Table",
     udf_results: Iterator[Iterable["UDFResult"]],
     udf: UDFBase,
-    batch_size=INSERT_BATCH_SIZE,
+    batch_size: Optional[int] = None,
     cb: Callback = DEFAULT_CALLBACK,
 ) -> None:
+    batch_size = batch_size or INSERT_BATCH_SIZE
     rows: list[UDFResult] = []
     # Optimization: Compute row types once, rather than for every row.
     udf_col_types = get_udf_col_types(warehouse, udf)
@@ -432,6 +433,7 @@ class UDFStep(Step, ABC):
     min_task_size: Optional[int] = None
     is_generator = False
     cache: bool = False
+    flush: Optional[int] = None
 
     @abstractmethod
     def create_udf_table(self, query: Select) -> "Table":
@@ -559,6 +561,7 @@ class UDFStep(Step, ABC):
                             udf_table,
                             udf_results,
                             udf,
+                            batch_size=self.flush,
                             cb=generated_cb,
                         )
                     finally:
@@ -1534,6 +1537,7 @@ class DatasetQuery:
         min_task_size: Optional[int] = None,
         partition_by: Optional[PartitionByType] = None,
         cache: bool = False,
+        flush: Optional[int] = None,
     ) -> "Self":
         """
         Adds one or more signals based on the results from the provided UDF.
@@ -1562,6 +1566,7 @@ class DatasetQuery:
                 workers=workers,
                 min_task_size=min_task_size,
                 cache=cache,
+                flush=flush,
             )
         )
         return query
@@ -1591,6 +1596,7 @@ class DatasetQuery:
         min_task_size: Optional[int] = None,
         partition_by: Optional[PartitionByType] = None,
         cache: bool = False,
+        flush: Optional[int] = None,
     ) -> "Self":
         if isinstance(udf, UDFClassWrapper):  # type: ignore[unreachable]
             # This is a bare decorated class, "instantiate" it now.
@@ -1606,6 +1612,7 @@ class DatasetQuery:
                 workers=workers,
                 min_task_size=min_task_size,
                 cache=cache,
+                flush=flush,
             )
         )
         return query

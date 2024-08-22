@@ -208,17 +208,20 @@ class DataChain(DatasetQuery):
         "size": 0,
     }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, settings: Optional[dict] = None, **kwargs):
         """This method needs to be redefined as a part of Dataset and DataChain
         decoupling.
         """
-        super().__init__(
+        super().__init__(  # type: ignore[misc]
             *args,
             **kwargs,
             indexing_column_types=File._datachain_column_types,
         )
-        self._settings = Settings()
-        self._setup = {}
+        if settings:
+            self._settings = Settings(**settings)
+        else:
+            self._settings = Settings()
+        self._setup: dict = {}
 
         self.signals_schema = SignalSchema({"sys": Sys})
         if self.feature_schema:
@@ -260,6 +263,7 @@ class DataChain(DatasetQuery):
         parallel=None,
         workers=None,
         min_task_size=None,
+        flush=None,
         sys: Optional[bool] = None,
     ) -> "Self":
         """Change settings for chain.
@@ -273,6 +277,8 @@ class DataChain(DatasetQuery):
                 enable all available CPUs (default=1)
             workers : number of distributed workers. Only for Studio mode. (default=1)
             min_task_size : minimum number of tasks (default=1)
+            flush : maximum number of rows at which to flush data to warehouse
+                (default=10000)
 
         Example:
             ```py
@@ -286,7 +292,7 @@ class DataChain(DatasetQuery):
         chain = self.clone()
         if sys is not None:
             chain._sys = sys
-        chain._settings.add(Settings(cache, parallel, workers, min_task_size))
+        chain._settings.add(Settings(cache, parallel, workers, min_task_size, flush))
         return chain
 
     def reset_settings(self, settings: Optional[Settings] = None) -> "Self":
@@ -309,6 +315,7 @@ class DataChain(DatasetQuery):
         *,
         type: Literal["binary", "text", "image"] = "binary",
         session: Optional[Session] = None,
+        settings: Optional[dict] = None,
         in_memory: bool = False,
         recursive: Optional[bool] = True,
         object_name: str = "file",
@@ -336,6 +343,7 @@ class DataChain(DatasetQuery):
             cls(
                 path,
                 session=session,
+                settings=settings,
                 recursive=recursive,
                 update=update,
                 in_memory=in_memory,
@@ -489,6 +497,7 @@ class DataChain(DatasetQuery):
     def datasets(
         cls,
         session: Optional[Session] = None,
+        settings: Optional[dict] = None,
         in_memory: bool = False,
         object_name: str = "dataset",
     ) -> "DataChain":
@@ -513,6 +522,7 @@ class DataChain(DatasetQuery):
 
         return cls.from_values(
             session=session,
+            settings=settings,
             in_memory=in_memory,
             output={object_name: DatasetInfo},
             **{object_name: datasets},  # type: ignore[arg-type]
@@ -1177,6 +1187,7 @@ class DataChain(DatasetQuery):
         cls,
         ds_name: str = "",
         session: Optional[Session] = None,
+        settings: Optional[dict] = None,
         in_memory: bool = False,
         output: OutputType = None,
         object_name: str = "",
@@ -1195,7 +1206,10 @@ class DataChain(DatasetQuery):
             yield from tuples
 
         chain = DataChain.from_records(
-            DataChain.DEFAULT_FILE_RECORD, session=session, in_memory=in_memory
+            DataChain.DEFAULT_FILE_RECORD,
+            session=session,
+            settings=settings,
+            in_memory=in_memory,
         )
         if object_name:
             output = {object_name: DataChain._dict_to_data_model(object_name, output)}  # type: ignore[arg-type]
@@ -1207,6 +1221,7 @@ class DataChain(DatasetQuery):
         df: "pd.DataFrame",
         name: str = "",
         session: Optional[Session] = None,
+        settings: Optional[dict] = None,
         in_memory: bool = False,
         object_name: str = "",
     ) -> "DataChain":
@@ -1236,7 +1251,12 @@ class DataChain(DatasetQuery):
                 )
 
         return cls.from_values(
-            name, session, object_name=object_name, in_memory=in_memory, **fr_map
+            name,
+            session,
+            settings=settings,
+            object_name=object_name,
+            in_memory=in_memory,
+            **fr_map,
         )
 
     def to_pandas(self, flatten=False) -> "pd.DataFrame":
@@ -1543,6 +1563,7 @@ class DataChain(DatasetQuery):
         cls,
         to_insert: Optional[Union[dict, list[dict]]],
         session: Optional[Session] = None,
+        settings: Optional[dict] = None,
         in_memory: bool = False,
         schema: Optional[dict[str, DataType]] = None,
     ) -> "DataChain":
@@ -1597,7 +1618,7 @@ class DataChain(DatasetQuery):
         insert_q = dr.get_table().insert()
         for record in to_insert:
             db.execute(insert_q.values(**record))
-        return DataChain(name=dsr.name)
+        return DataChain(name=dsr.name, settings=settings)
 
     def sum(self, fr: DataType):  # type: ignore[override]
         """Compute the sum of a column."""
