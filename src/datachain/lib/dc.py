@@ -265,7 +265,6 @@ class DataChain(DatasetQuery):
         parallel=None,
         workers=None,
         min_task_size=None,
-        flush=None,
         sys: Optional[bool] = None,
     ) -> "Self":
         """Change settings for chain.
@@ -279,8 +278,6 @@ class DataChain(DatasetQuery):
                 enable all available CPUs (default=1)
             workers : number of distributed workers. Only for Studio mode. (default=1)
             min_task_size : minimum number of tasks (default=1)
-            flush : maximum number of rows at which to flush data to warehouse
-                (default=10000)
 
         Example:
             ```py
@@ -294,7 +291,7 @@ class DataChain(DatasetQuery):
         chain = self.clone()
         if sys is not None:
             chain._sys = sys
-        chain._settings.add(Settings(cache, parallel, workers, min_task_size, flush))
+        chain._settings.add(Settings(cache, parallel, workers, min_task_size))
         return chain
 
     def reset_settings(self, settings: Optional[Settings] = None) -> "Self":
