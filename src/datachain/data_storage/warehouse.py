@@ -313,12 +313,18 @@ class AbstractWarehouse(ABC, Serializable):
         Merge results should not contain duplicates.
         """
 
-    @abstractmethod
-    def dataset_rows_select(self, select_query: sa.sql.selectable.Select, **kwargs):
+    def dataset_rows_select(
+        self,
+        query: sa.sql.selectable.Select,
+        **kwargs,
+    ) -> Iterator[tuple[Any, ...]]:
         """
-        Method for fetching dataset rows from database. This is abstract since
-        in some DBs we need to use special settings
+        Fetch dataset rows from database.
         """
+        rows = self.db.execute(query, **kwargs)
+        yield from convert_rows_custom_column_types(
+            query.selected_columns, rows, self.db.dialect
+        )
 
     @abstractmethod
     def get_dataset_sources(
