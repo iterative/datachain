@@ -219,7 +219,7 @@ class IndexingStep(StartingStep):
                 recursive=self.recursive,
             )
 
-        storage = self.catalog.get_storage(uri)
+        storage = self.catalog.metastore.get_storage(uri)
 
         return step_result(q, dataset_rows.c, dependencies=[storage.uri])
 
@@ -1634,7 +1634,7 @@ class DatasetQuery:
                 )
             else:
                 # storage dependency - its name is a valid StorageURI
-                storage = self.catalog.get_storage(dependency)
+                storage = self.catalog.metastore.get_storage(dependency)
                 self.catalog.metastore.add_storage_dependency(
                     StorageURI(dataset.name),
                     version,

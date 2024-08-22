@@ -633,7 +633,7 @@ class DataChain(DatasetQuery):
             ```
         """
         session = Session.get(session, in_memory=in_memory)
-        catalog = session.catalog
+        catalog = kwargs.get("catalog") or session.catalog
 
         listings = [
             ListingInfo.from_models(d, v, j)

@@ -810,7 +810,7 @@ def test_dataset_dependencies_registered(
     listed_bucket, cloud_test_catalog, dogs_dataset, indirect
 ):
     catalog = cloud_test_catalog.catalog
-    storage = catalog.get_storage(cloud_test_catalog.storage_uri)
+    storage = catalog.metastore.get_storage(cloud_test_catalog.storage_uri)
 
     assert [
         dataset_dependency_asdict(d)

@@ -23,6 +23,8 @@ class DatasetInfo(DataModel):
     size: Optional[int] = Field(default=None)
     params: dict[str, str] = Field(default=dict)
     metrics: dict[str, Any] = Field(default=dict)
+    error_message: str = Field(default="")
+    error_stack: str = Field(default="")
 
     @staticmethod
     def _validate_dict(
@@ -67,4 +69,6 @@ class DatasetInfo(DataModel):
             size=version.size,
             params=job.params if job else {},
             metrics=job.metrics if job else {},
+            error_message=version.error_message,
+            error_stack=version.error_stack,
         )

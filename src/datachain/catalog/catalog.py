@@ -1023,17 +1023,6 @@ class Catalog:
     def unlist_source(self, uri: StorageURI) -> None:
         self.metastore.clone(uri=uri).mark_storage_not_indexed(uri)
 
-    def storage_stats(self, uri: StorageURI) -> Optional[DatasetStats]:
-        """
-        Returns tuple with storage stats: total number of rows and total dataset size.
-        """
-        partial_path = self.metastore.get_last_partial_path(uri)
-        if partial_path is None:
-            return None
-        dataset = self.get_dataset(Storage.dataset_name(uri, partial_path))
-
-        return self.dataset_stats(dataset.name, dataset.latest_version)
-
     def create_dataset(
         self,
         name: str,
@@ -1632,15 +1621,6 @@ class Catalog:
 
         for source in data_sources:  # type: ignore [union-attr]
             yield source, source.ls(fields)
-
-    def ls_storage_uris(self) -> Iterator[str]:
-        yield from self.metastore.get_all_storage_uris()
-
-    def get_storage(self, uri: StorageURI) -> Storage:
-        return self.metastore.get_storage(uri)
-
-    def ls_storages(self) -> list[Storage]:
-        return self.metastore.list_storages()
 
     def pull_dataset(
         self,

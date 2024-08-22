@@ -3453,7 +3453,7 @@ def test_dataset_dependencies_one_storage_as_dependency(
 ):
     ds_name = uuid.uuid4().hex
     catalog = cloud_test_catalog.catalog
-    storage = catalog.get_storage(cloud_test_catalog.storage_uri)
+    storage = catalog.metastore.get_storage(cloud_test_catalog.storage_uri)
 
     path = f"{cloud_test_catalog.src_uri}/cats"
 
@@ -3480,7 +3480,7 @@ def test_dataset_dependencies_one_registered_dataset_as_dependency(
 ):
     ds_name = uuid.uuid4().hex
     catalog = cloud_test_catalog.catalog
-    storage = catalog.get_storage(cloud_test_catalog.storage_uri)
+    storage = catalog.metastore.get_storage(cloud_test_catalog.storage_uri)
 
     DatasetQuery(name=dogs_dataset.name, catalog=catalog).save(ds_name)
 
@@ -3525,7 +3525,7 @@ def test_dataset_dependencies_multiple_direct_dataset_dependencies(
     # combining multiple DatasetQuery instances into new one like union or join
     ds_name = uuid.uuid4().hex
     catalog = cloud_test_catalog.catalog
-    storage = catalog.get_storage(cloud_test_catalog.storage_uri)
+    storage = catalog.metastore.get_storage(cloud_test_catalog.storage_uri)
 
     dogs = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
     cats = DatasetQuery(name=cats_dataset.name, version=1, catalog=catalog)
@@ -3594,7 +3594,7 @@ def test_dataset_dependencies_multiple_union(
 ):
     ds_name = uuid.uuid4().hex
     catalog = cloud_test_catalog.catalog
-    storage = catalog.get_storage(cloud_test_catalog.storage_uri)
+    storage = catalog.metastore.get_storage(cloud_test_catalog.storage_uri)
 
     dogs = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
     cats = DatasetQuery(name=cats_dataset.name, version=1, catalog=catalog)

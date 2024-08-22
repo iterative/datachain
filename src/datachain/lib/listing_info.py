@@ -9,10 +9,11 @@ from datachain.lib.listing import LISTING_PREFIX, LISTING_TTL
 class ListingInfo(DatasetInfo):
     @property
     def uri(self) -> str:
-        client, _ = Client.parse_url(
-            self.name.removeprefix(LISTING_PREFIX),
-            None,  # type: ignore[arg-type]
-        )
+        return self.name.removeprefix(LISTING_PREFIX)
+
+    @property
+    def storage_uri(self) -> str:
+        client, _ = Client.parse_url(self.uri, None)  # type: ignore[arg-type]
         return client.uri
 
     @property

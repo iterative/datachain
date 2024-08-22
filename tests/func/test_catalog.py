@@ -18,6 +18,7 @@ from datachain.error import (
     QueryScriptRunError,
     StorageNotFoundError,
 )
+from datachain.storage import Storage
 from tests.data import ENTRIES
 from tests.utils import (
     DEFAULT_TREE,
@@ -28,6 +29,15 @@ from tests.utils import (
     skip_if_not_sqlite,
     tree_from_path,
 )
+
+
+def storage_stats(uri, catalog):
+    partial_path = catalog.metastore.get_last_partial_path(uri)
+    if partial_path is None:
+        return None
+    dataset = catalog.get_dataset(Storage.dataset_name(uri, partial_path))
+
+    return catalog.dataset_stats(dataset.name, dataset.latest_version)
 
 
 @pytest.fixture
@@ -1050,20 +1060,20 @@ def test_storage_stats(cloud_test_catalog):
     src_uri = cloud_test_catalog.src_uri
 
     with pytest.raises(StorageNotFoundError):
-        catalog.storage_stats(src_uri)
+        storage_stats(src_uri, catalog)
 
     catalog.enlist_source(src_uri, ttl=1234)
-    stats = catalog.storage_stats(src_uri)
+    stats = storage_stats(src_uri, catalog)
     assert stats.num_objects == 7
     assert stats.size == 36
 
     catalog.enlist_source(f"{src_uri}/dogs/", ttl=1234, force_update=True)
-    stats = catalog.storage_stats(src_uri)
+    stats = storage_stats(src_uri, catalog)
     assert stats.num_objects == 4
     assert stats.size == 15
 
     catalog.enlist_source(f"{src_uri}/dogs/", ttl=1234)
-    stats = catalog.storage_stats(src_uri)
+    stats = storage_stats(src_uri, catalog)
     assert stats.num_objects == 4
     assert stats.size == 15
 
@@ -1074,12 +1084,12 @@ def test_enlist_source_handles_slash(cloud_test_catalog):
     src_uri = cloud_test_catalog.src_uri
 
     catalog.enlist_source(f"{src_uri}/dogs", ttl=1234)
-    stats = catalog.storage_stats(src_uri)
+    stats = storage_stats(src_uri, catalog)
     assert stats.num_objects == len(DEFAULT_TREE["dogs"])
     assert stats.size == 15
 
     catalog.enlist_source(f"{src_uri}/dogs/", ttl=1234, force_update=True)
-    stats = catalog.storage_stats(src_uri)
+    stats = storage_stats(src_uri, catalog)
     assert stats.num_objects == len(DEFAULT_TREE["dogs"])
     assert stats.size == 15
 
@@ -1090,7 +1100,7 @@ def test_enlist_source_handles_glob(cloud_test_catalog):
     src_uri = cloud_test_catalog.src_uri
 
     catalog.enlist_source(f"{src_uri}/dogs/*.jpg", ttl=1234)
-    stats = catalog.storage_stats(src_uri)
+    stats = storage_stats(src_uri, catalog)
 
     assert stats.num_objects == len(DEFAULT_TREE["dogs"])
     assert stats.size == 15
@@ -1102,7 +1112,7 @@ def test_enlist_source_handles_file(cloud_test_catalog):
     src_uri = cloud_test_catalog.src_uri
 
     catalog.enlist_source(f"{src_uri}/dogs/dog1", ttl=1234)
-    stats = catalog.storage_stats(src_uri)
+    stats = storage_stats(src_uri, catalog)
     assert stats.num_objects == len(DEFAULT_TREE["dogs"])
     assert stats.size == 15
 

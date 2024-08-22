@@ -285,7 +285,7 @@ def test_listings(test_session, tmp_dir):
     assert len(listings) == 1
     listing = listings[0]
     assert isinstance(listing, ListingInfo)
-    assert listing.uri == client.uri
+    assert listing.storage_uri == client.uri
     assert listing.is_expired is False
     assert listing.expires
     assert listing.version == 1
@@ -316,9 +316,9 @@ def test_listings_reindex(test_session, tmp_dir):
     listings = list(DataChain.listings(session=test_session).collect("listing"))
     assert len(listings) == 2
     listings.sort(key=lambda lst: lst.version)
-    assert listings[0].uri == client.uri
+    assert listings[0].storage_uri == client.uri
     assert listings[0].version == 1
-    assert listings[1].uri == client.uri
+    assert listings[1].storage_uri == client.uri
     assert listings[1].version == 2
 
 

@@ -206,7 +206,7 @@ def test_unlist_source(
     )
 
     # list source
-    storage = catalog.get_storage(cloud_test_catalog.storage_uri)
+    storage = catalog.metastore.get_storage(cloud_test_catalog.storage_uri)
     if cloud_type == "file":
         assert storage.status == StorageStatus.PARTIAL
     else:
@@ -217,6 +217,6 @@ def test_unlist_source(
     # unlist source
     catalog.unlist_source(source_uri)
     with pytest.raises(StorageNotFoundError):
-        catalog.get_storage(source_uri)
+        catalog.metastore.get_storage(source_uri)
     # we preserve the table for dataset lineage
     catalog.get_dataset(storage_dataset_name)
