@@ -7,14 +7,11 @@ class SettingsError(DataChainParamsError):
 
 
 class Settings:
-    def __init__(
-        self, cache=None, parallel=None, workers=None, min_task_size=None, flush=None
-    ):
+    def __init__(self, cache=None, parallel=None, workers=None, min_task_size=None):
         self._cache = cache
         self.parallel = parallel
         self._workers = workers
         self.min_task_size = min_task_size
-        self.flush = flush
 
         if not isinstance(cache, bool) and cache is not None:
             raise SettingsError(
@@ -44,12 +41,6 @@ class Settings:
                 f", {min_task_size.__class__.__name__} was given"
             )
 
-        if not isinstance(flush, int) and flush is not None:
-            raise SettingsError(
-                "'flush' argument must be int or None"
-                f" while {flush.__class__.__name__} was given"
-            )
-
     @property
     def cache(self):
         return self._cache if self._cache is not None else False
@@ -68,8 +59,6 @@ class Settings:
             res["workers"] = self.workers
         if self.min_task_size is not None:
             res["min_task_size"] = self.min_task_size
-        if self.flush is not None:
-            res["flush"] = self.flush
         return res
 
     def add(self, settings: "Settings"):
@@ -77,4 +66,3 @@ class Settings:
         self.parallel = settings.parallel or self.parallel
         self._workers = settings._workers or self._workers
         self.min_task_size = settings.min_task_size or self.min_task_size
-        self.flush = settings.flush or self.flush
