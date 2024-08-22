@@ -2,6 +2,7 @@ import copy
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from inspect import isclass
 from typing import (
     TYPE_CHECKING,
     Annotated,
@@ -18,7 +19,6 @@ import sqlalchemy as sa
 from pydantic import BaseModel, create_model
 from typing_extensions import Literal as LiteralEx
 
-from datachain.lib.convert.flatten import DATACHAIN_TO_TYPE
 from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.convert.sql_to_python import sql_to_python
 from datachain.lib.convert.unflatten import unflatten_to_json_pos
@@ -27,6 +27,7 @@ from datachain.lib.file import File
 from datachain.lib.model_store import ModelStore
 from datachain.lib.utils import DataChainParamsError
 from datachain.query.schema import DEFAULT_DELIMITER, Column
+from datachain.sql.types import SQLType
 
 if TYPE_CHECKING:
     from datachain.catalog import Catalog
@@ -105,12 +106,15 @@ class SignalSchema:
     def from_column_types(col_types: dict[str, Any]) -> "SignalSchema":
         signals: dict[str, DataType] = {}
         for field, col_type in col_types.items():
-            if (py_type := DATACHAIN_TO_TYPE.get(col_type, None)) is None:
+            if isinstance(col_type, SQLType):
+                signals[field] = col_type.python_type
+            elif isclass(col_type) and issubclass(col_type, SQLType):
+                signals[field] = col_type().python_type
+            else:
                 raise SignalSchemaError(
                     f"signal schema cannot be obtained for column '{field}':"
-                    f" unsupported type '{py_type}'"
+                    f" unsupported type '{col_type}'"
                 )
-            signals[field] = py_type
         return SignalSchema(signals)
 
     def serialize(self) -> dict[str, str]:

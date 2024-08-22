@@ -913,6 +913,10 @@ class DataChain(DatasetQuery):
     def mutate(self, **kwargs) -> "Self":
         """Create new signals based on existing signals.
 
+        This method cannot modify existing columns. If you need to modify an
+        existing column, use a different name for the new column and then use
+        `select()` to choose which columns to keep.
+
         This method is vectorized and more efficient compared to map(), and it does not
         extract or download any data from the internal database. However, it can only
         utilize predefined built-in functions and their combinations.
@@ -933,7 +937,26 @@ class DataChain(DatasetQuery):
                 dist=cosine_distance(embedding_text, embedding_image)
         )
         ```
+
+        This method can be also used to rename signals. If the Column("name") provided
+        as value for the new signal - the old column will be dropped. Otherwise a new
+        column is created.
+
+        Example:
+        ```py
+         dc.mutate(
+                newkey=Column("oldkey")
+        )
+        ```
         """
+        existing_columns = set(self.signals_schema.values.keys())
+        for col_name in kwargs:
+            if col_name in existing_columns:
+                raise DataChainColumnError(
+                    col_name,
+                    "Cannot modify existing column with mutate(). "
+                    "Use a different name for the new column.",
+                )
         for col_name, expr in kwargs.items():
             if not isinstance(expr, Column) and isinstance(expr.type, NullType):
                 raise DataChainColumnError(
@@ -1298,14 +1321,11 @@ class DataChain(DatasetQuery):
         """
         headers, max_length = self._effective_signals_schema.get_headers_with_length()
         if flatten or max_length < 2:
-            columns = []
-            if headers:
-                columns = [".".join(filter(None, header)) for header in headers]
-            return pd.DataFrame.from_records(self.to_records(), columns=columns)
+            columns = [".".join(filter(None, header)) for header in headers]
+        else:
+            columns = pd.MultiIndex.from_tuples(map(tuple, headers))
 
-        return pd.DataFrame(
-            self.results(), columns=pd.MultiIndex.from_tuples(map(tuple, headers))
-        )
+        return pd.DataFrame.from_records(self.results(), columns=columns)
 
     def show(
         self,

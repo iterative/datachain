@@ -1,34 +1,6 @@
-from datetime import datetime
-
 from pydantic import BaseModel
 
 from datachain.lib.model_store import ModelStore
-from datachain.sql.types import (
-    JSON,
-    Array,
-    Binary,
-    Boolean,
-    DateTime,
-    Float,
-    Int,
-    Int32,
-    Int64,
-    NullType,
-    String,
-)
-
-DATACHAIN_TO_TYPE = {
-    Int: int,
-    Int32: int,
-    Int64: int,
-    String: str,
-    Float: float,
-    Boolean: bool,
-    DateTime: datetime,
-    Binary: bytes,
-    Array(NullType): list,
-    JSON: dict,
-}
 
 
 def flatten(obj: BaseModel):
