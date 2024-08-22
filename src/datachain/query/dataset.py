@@ -186,6 +186,43 @@ class QueryStep(StartingStep):
         )
 
 
+@frozen
+class IndexingStep(StartingStep):
+    path: str
+    catalog: "Catalog"
+    kwargs: dict[str, Any]
+    recursive: Optional[bool] = True
+
+    def apply(self):
+        self.catalog.index([self.path], **self.kwargs)
+        uri, path = self.parse_path()
+        _partial_id, partial_path = self.catalog.metastore.get_valid_partial_id(
+            uri, path
+        )
+        dataset = self.catalog.get_dataset(Storage.dataset_name(uri, partial_path))
+        dataset_rows = self.catalog.warehouse.dataset_rows(
+            dataset, dataset.latest_version
+        )
+
+        def q(*columns):
+            col_names = [c.name for c in columns]
+            return self.catalog.warehouse.nodes_dataset_query(
+                dataset_rows,
+                column_names=col_names,
+                path=path,
+                recursive=self.recursive,
+            )
+
+        storage = self.catalog.metastore.get_storage(uri)
+
+        return step_result(q, dataset_rows.c, dependencies=[storage.uri])
+
+    def parse_path(self):
+        client_config = self.kwargs.get("client_config") or {}
+        client, path = self.catalog.parse_url(self.path, **client_config)
+        return client.uri, path
+
+
 def generator_then_call(generator, func: Callable):
     """
     Yield items from generator then execute a function and yield
