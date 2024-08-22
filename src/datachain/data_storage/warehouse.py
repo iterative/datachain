@@ -227,10 +227,7 @@ class AbstractWarehouse(ABC, Serializable):
                     if limit < page_size:
                         paginated_query = paginated_query.limit(None).limit(limit)
 
-                results = self.db.execute(paginated_query.offset(offset))
-                results = convert_rows_custom_column_types(
-                    query.selected_columns, results, self.db.dialect
-                )
+                results = self.dataset_rows_select(paginated_query.offset(offset))
 
                 processed = False
                 for row in results:
