@@ -29,6 +29,7 @@ from io import BytesIO
 from typing import TYPE_CHECKING, Any, Union
 
 import PIL
+from tqdm import tqdm
 
 from datachain.lib.arrow import arrow_type_mapper
 from datachain.lib.data_model import DataModel, DataType, dict_to_data_model
@@ -76,18 +77,26 @@ class HFGenerator(Generator):
             yield from self._process_ds(self.ds)
 
     def _process_ds(self, ds: Union[Dataset, IterableDataset], split=False):
-        for row in ds:
-            output_dict = {}
-            if split:
-                output_dict["split"] = split
-            for name, feat in ds.features.items():
-                anno = self.output_schema.model_fields[name].annotation
-                output_dict[name] = _convert_feature(row[name], feat, anno)
-            yield self.output_schema(**output_dict)
+        desc = "Parsed Hugging Face dataset"
+        if split:
+            desc += f" split '{split}'"
+        with tqdm(desc=desc, unit=" rows") as pbar:
+            for row in ds:
+                output_dict = {}
+                if split:
+                    output_dict["split"] = split
+                for name, feat in ds.features.items():
+                    anno = self.output_schema.model_fields[name].annotation
+                    output_dict[name] = _convert_feature(row[name], feat, anno)
+                yield [self.output_schema(**output_dict)]
+                pbar.update(1)
 
 
 def stream_dataset(path: str, **kwargs):
-    return load_dataset(path, streaming=True, **kwargs)
+    ds = load_dataset(path, **kwargs)
+    if isinstance(ds, Dataset):
+        ds = ds.to_iterable_dataset()
+    return ds
 
 
 def _convert_feature(val: Any, feat: Any, anno: Any) -> Any:
@@ -132,7 +141,7 @@ def _feature_to_chain_type(name: str, val: Any) -> type:  # noqa: PLR0911
                 dtype = _feature_to_chain_type(sname, sval)
                 sequence_dict[sname] = list[dtype]  # type: ignore[valid-type]
             return dict_to_data_model(name, sequence_dict)  # type: ignore[arg-type]
-        return list[_feature_to_chain_type(name, val.feature)]  # type: ignore[arg-type,misc]
+        return list[_feature_to_chain_type(name, val.feature)]  # type: ignore[arg-type,misc,return-value]
     if isinstance(val, Array2D):
         dtype = arrow_type_mapper(string_to_arrow(val.dtype))
         return list[list[dtype]]  # type: ignore[valid-type]

@@ -1291,6 +1291,7 @@ class DataChain(DatasetQuery):
     def from_hf(
         cls,
         dataset: Union[str, "HFDatasetType"],
+        *args,
         session: Optional[Session] = None,
         object_name: str = "",
         model_name: str = "",
@@ -1322,7 +1323,7 @@ class DataChain(DatasetQuery):
         from datachain.lib.hf import HFGenerator, get_output_schema, stream_dataset
 
         if isinstance(dataset, str):
-            dataset = stream_dataset(dataset, **kwargs)
+            dataset = stream_dataset(dataset, *args, **kwargs)
 
         model_name = model_name or object_name or ""
         output = get_output_schema(dataset, model_name)
