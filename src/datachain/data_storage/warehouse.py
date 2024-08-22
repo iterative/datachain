@@ -17,6 +17,7 @@ from sqlalchemy.sql.expression import true
 from tqdm import tqdm
 
 from datachain.client import Client
+from datachain.data_storage.schema import convert_rows_custom_column_types
 from datachain.data_storage.serializer import Serializable
 from datachain.dataset import DatasetRecord
 from datachain.node import DirType, DirTypeGroup, Entry, Node, NodeWithPath, get_path
@@ -227,6 +228,9 @@ class AbstractWarehouse(ABC, Serializable):
                         paginated_query = paginated_query.limit(None).limit(limit)
 
                 results = self.db.execute(paginated_query.offset(offset))
+                results = convert_rows_custom_column_types(
+                    query.selected_columns, results, self.db.dialect
+                )
 
                 processed = False
                 for row in results:
