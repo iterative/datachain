@@ -77,12 +77,12 @@ def resolve_columns(
     @wraps(method)
     def _inner(self: D, *args: "P.args", **kwargs: "P.kwargs") -> D:
         resolved_args = self.signals_schema.resolve(
-            *[arg for arg in args if not isinstance(arg, GenericFunction)]
+            *[arg for arg in args if not isinstance(arg, GenericFunction)]  # type: ignore[arg-type]
         ).db_signals()
 
         for idx, arg in enumerate(args):
             if isinstance(arg, GenericFunction):
-                resolved_args.insert(idx, arg)
+                resolved_args.insert(idx, arg)  # type: ignore[arg-type]
 
         return method(self, *resolved_args, **kwargs)
 
@@ -227,7 +227,9 @@ class DataChain(DatasetQuery):
         if self.feature_schema:
             self.signals_schema |= SignalSchema.deserialize(self.feature_schema)
         else:
-            self.signals_schema |= SignalSchema.from_column_types(self.column_types)
+            self.signals_schema |= SignalSchema.from_column_types(
+                self.column_types or {}
+            )
 
         self._sys = False
 
@@ -905,7 +907,7 @@ class DataChain(DatasetQuery):
             if isinstance(value, Column):
                 # renaming existing column
                 for signal in schema.db_signals(name=value.name, as_columns=True):
-                    mutated[signal.name.replace(value.name, name, 1)] = signal
+                    mutated[signal.name.replace(value.name, name, 1)] = signal  # type: ignore[union-attr]
             else:
                 # adding new signal
                 mutated[name] = value
@@ -1096,7 +1098,7 @@ class DataChain(DatasetQuery):
             )
 
         signals_schema = self.signals_schema.clone_without_sys_signals()
-        on_columns = signals_schema.resolve(*on).db_signals()
+        on_columns: list[str] = signals_schema.resolve(*on).db_signals()  # type: ignore[assignment]
 
         right_signals_schema = right_ds.signals_schema.clone_without_sys_signals()
         if right_on is not None:
@@ -1115,7 +1117,9 @@ class DataChain(DatasetQuery):
                     on, right_on, "'on' and 'right_on' must have the same length'"
                 )
 
-            right_on_columns = right_signals_schema.resolve(*right_on).db_signals()
+            right_on_columns: list[str] = right_signals_schema.resolve(
+                *right_on
+            ).db_signals()  # type: ignore[assignment]
 
             if len(right_on_columns) != len(on_columns):
                 on_str = ", ".join(right_on_columns)
@@ -1179,7 +1183,7 @@ class DataChain(DatasetQuery):
                 "'on' cannot be empty",
             )
         else:
-            signals = self.signals_schema.resolve(*on).db_signals()
+            signals = self.signals_schema.resolve(*on).db_signals()  # type: ignore[assignment]
         return super()._subtract(other, signals)  # type: ignore[arg-type]
 
     @classmethod
