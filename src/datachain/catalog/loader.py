@@ -14,7 +14,7 @@ from datachain.data_storage.sqlite import (
     SQLiteMetastore,
     SQLiteWarehouse,
 )
-from datachain.utils import get_envs_by_prefix
+from datachain.environ import get_envs_by_prefix
 
 ID_GENERATOR_SERIALIZED = "DATACHAIN__ID_GENERATOR"
 ID_GENERATOR_IMPORT_PATH = "DATACHAIN_ID_GENERATOR"

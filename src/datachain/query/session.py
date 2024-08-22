@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Optional
 from uuid import uuid4
 
 from datachain.catalog import get_catalog
+from datachain.environ import get_bool_env
 from datachain.error import TableMissingError
 
 if TYPE_CHECKING:
@@ -40,6 +41,7 @@ class Session:
     GLOBAL_SESSION_NAME = "global"
     SESSION_UUID_LEN = 6
     TEMP_TABLE_UUID_LEN = 6
+    DATACHAIN_SESSION_CLEANUP_ON_EXIT = "DATACHAIN_SESSION_CLEANUP_ON_EXIT"
 
     def __init__(
         self,
@@ -62,12 +64,16 @@ class Session:
         self.catalog = catalog or get_catalog(
             client_config=client_config, in_memory=in_memory
         )
+        self._cleanup_on_exit = get_bool_env(
+            self.DATACHAIN_SESSION_CLEANUP_ON_EXIT, True
+        )
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self._cleanup_temp_datasets()
+        if self._cleanup_on_exit:
+            self._cleanup_temp_datasets()
         if self.is_new_catalog:
             self.catalog.metastore.close_on_exit()
             self.catalog.warehouse.close_on_exit()

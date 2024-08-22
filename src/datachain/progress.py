@@ -1,8 +1,6 @@
 """Manages progress bars."""
 
 import logging
-import os
-import re
 import sys
 from threading import RLock
 from typing import Any, ClassVar
@@ -10,18 +8,10 @@ from typing import Any, ClassVar
 from fsspec.callbacks import TqdmCallback
 from tqdm import tqdm
 
+from datachain.environ import get_bool_env
+
 logger = logging.getLogger(__name__)
 tqdm.set_lock(RLock())
-
-
-def env2bool(var, undefined=False):
-    """
-    undefined: return value if env var is unset
-    """
-    var = os.getenv(var, None)
-    if var is None:
-        return undefined
-    return bool(re.search("1|y|yes|true", var, flags=re.IGNORECASE))
 
 
 class Tqdm(tqdm):
@@ -87,7 +77,7 @@ class Tqdm(tqdm):
         # auto-disable based on TTY
         if (
             not disable
-            and not env2bool("DVC_IGNORE_ISATTY")
+            and not get_bool_env("DVC_IGNORE_ISATTY")
             and hasattr(file, "isatty")
         ):
             disable = not file.isatty()

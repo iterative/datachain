@@ -8,7 +8,7 @@ import random
 import stat
 import sys
 import time
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Iterable, Iterator
 from datetime import date, datetime, timezone
 from itertools import chain, islice
 from typing import TYPE_CHECKING, Any, Optional, TypeVar, Union
@@ -185,19 +185,6 @@ def sql_escape_like(search: str, escape: str = "\\") -> str:
     )
 
 
-def get_envs_by_prefix(prefix: str) -> dict[str, str]:
-    """
-    Function that searches env variables by some name prefix and returns
-    the ones found, but with prefix being excluded from it's names
-    """
-    variables: dict[str, str] = {}
-    for env_name, env_value in os.environ.items():
-        if env_name.startswith(prefix):
-            variables[env_name[len(prefix) :]] = env_value
-
-    return variables
-
-
 def import_object(object_spec):
     filename, identifier = object_spec.rsplit(":", 1)
     filename = filename.strip()
@@ -307,16 +294,6 @@ def determine_processes(parallel: Optional[Union[bool, int]]) -> Union[bool, int
     if parallel < 0:
         return True
     return parallel
-
-
-def get_env_list(
-    key: str, default: Optional[Sequence] = None, sep: str = ","
-) -> Optional[Sequence[str]]:
-    try:
-        str_val = os.environ[key]
-    except KeyError:
-        return default
-    return str_val.split(sep=sep)
 
 
 def show_df(

@@ -1,4 +1,5 @@
 import re
+from contextlib import nullcontext as does_not_raise
 
 import pytest
 import sqlalchemy as sa
@@ -59,4 +60,23 @@ def test_ephemeral_dataset_lifecycle(catalog):
         assert ds is not None
 
     with pytest.raises(DatasetNotFoundError):
+        catalog.get_dataset(ds_tmp.name)
+
+
+@pytest.mark.parametrize(
+    "value,expectation",
+    [
+        (True, pytest.raises(DatasetNotFoundError)),
+        (False, does_not_raise()),
+    ],
+    ids=(True, False),
+)
+def test_session_cleanup_envvar(catalog, monkeypatch, value, expectation):
+    monkeypatch.setenv(Session.DATACHAIN_SESSION_CLEANUP_ON_EXIT, str(value))
+
+    with Session("asd3d4", catalog=catalog) as session:
+        session.catalog.create_dataset("test_ds", columns=(sa.Column("name", String),))
+        ds_tmp = DatasetQuery(name="test_ds", session=session).save()
+
+    with expectation:
         catalog.get_dataset(ds_tmp.name)
