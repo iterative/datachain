@@ -168,13 +168,6 @@ class AbstractMetastore(ABC, Serializable):
         """
 
     @abstractmethod
-    def mark_storage_not_indexed(self, uri: StorageURI) -> None:
-        """
-        Mark storage as not indexed.
-        This method should be called when storage index is deleted.
-        """
-
-    @abstractmethod
     def update_last_inserted_at(self, uri: Optional[StorageURI] = None) -> None:
         """Updates last inserted datetime in bucket with current time."""
 

@@ -1020,9 +1020,6 @@ class Catalog:
 
         return node_groups
 
-    def unlist_source(self, uri: StorageURI) -> None:
-        self.metastore.clone(uri=uri).mark_storage_not_indexed(uri)
-
     def create_dataset(
         self,
         name: str,

@@ -6,7 +6,6 @@ from sqlalchemy import func
 from datachain import utils
 from datachain.error import StorageNotFoundError
 from datachain.storage import STALE_MINUTES_LIMIT, Storage, StorageStatus, StorageURI
-from tests.utils import skip_if_not_sqlite
 
 TS = datetime(2022, 8, 1)
 EXPIRES = datetime(2022, 8, 2)
@@ -187,36 +186,3 @@ def test_failed_storage(metastore):
     assert storage.status == StorageStatus.FAILED
     assert storage.error_message == error_message
     assert storage.error_stack == error_stack
-
-
-@skip_if_not_sqlite
-def test_unlist_source(
-    listed_bucket,
-    cloud_test_catalog,
-    cloud_type,
-):
-    # TODO remove when https://github.com/iterative/dvcx/pull/868 is merged
-    source_uri = cloud_test_catalog.src_uri
-    catalog = cloud_test_catalog.catalog
-    _partial_id, partial_path = catalog.metastore.get_valid_partial_id(
-        cloud_test_catalog.storage_uri, cloud_test_catalog.partial_path
-    )
-    storage_dataset_name = Storage.dataset_name(
-        cloud_test_catalog.storage_uri, partial_path
-    )
-
-    # list source
-    storage = catalog.metastore.get_storage(cloud_test_catalog.storage_uri)
-    if cloud_type == "file":
-        assert storage.status == StorageStatus.PARTIAL
-    else:
-        assert storage.status == StorageStatus.COMPLETE
-
-    catalog.get_dataset(storage_dataset_name)
-
-    # unlist source
-    catalog.unlist_source(source_uri)
-    with pytest.raises(StorageNotFoundError):
-        catalog.metastore.get_storage(source_uri)
-    # we preserve the table for dataset lineage
-    catalog.get_dataset(storage_dataset_name)

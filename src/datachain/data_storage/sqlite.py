@@ -518,17 +518,6 @@ class SQLiteMetastore(AbstractDBMetastore):
         return sqlite.insert(self._datasets_dependencies)
 
     #
-    # Storages
-    #
-
-    def mark_storage_not_indexed(self, uri: StorageURI) -> None:
-        """
-        Mark storage as not indexed.
-        This method should be called when storage index is deleted.
-        """
-        self.db.execute(self._storages_delete().where(self._storages.c.uri == uri))
-
-    #
     # Dataset dependencies
     #
 
