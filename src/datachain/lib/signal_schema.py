@@ -1,4 +1,5 @@
 import copy
+import warnings
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -49,6 +50,10 @@ class SignalSchemaError(DataChainParamsError):
     pass
 
 
+class SignalSchemaWarning(RuntimeWarning):
+    pass
+
+
 class SignalResolvingError(SignalSchemaError):
     def __init__(self, path: Optional[list[str]], msg: str):
         name = " '" + ".".join(path) + "'" if path else ""
@@ -67,6 +72,29 @@ class SignalResolvingTypeError(SignalResolvingError):
             f"{method} supports only `str` type"
             f" while '{field}' has type '{type(field)}'",
         )
+
+
+dynamic_feature_models: dict[str, type[BaseModel]] = {}
+
+
+def get_or_create_feature_model(name: str, fields: dict[str, type]) -> type[BaseModel]:
+    """
+    This gets or returns a dynamic feature model for use in restoring a model
+    from the custom_types stored within a serialized SignalSchema. This is useful
+    when using a custom feature model where the original definition is not available.
+    This happens in Studio and if a custom model is used in a dataset, then that dataset
+    is used in a DataChain in a separate script where that model is not declared.
+    """
+    name = name.replace("@", "_")
+    if name not in dynamic_feature_models:
+        cls = create_model(
+            name,
+            __base__=DataModel,  # type: ignore[call-overload]
+            # These are tuples for each field of: annotation, default (if any)
+            **{field_name: (anno, None) for field_name, anno in fields.items()},
+        )
+        dynamic_feature_models[name] = cls
+    return dynamic_feature_models[name]
 
 
 @dataclass
@@ -117,12 +145,42 @@ class SignalSchema:
                 )
         return SignalSchema(signals)
 
-    def serialize(self) -> dict[str, str]:
-        signals = {}
+    @staticmethod
+    def serialize_custom_model_fields(fr: type, custom_types: dict[str, Any]) -> str:
+        """This serializes any custom type information to the provided custom_types
+        dict, and returns the name of the type provided."""
+        name = fr.__name__
+        if (
+            not ModelStore.is_pydantic(fr)
+            or not issubclass(fr, BaseModel)
+            or name in ("File", "TextFile", "ImageFile")
+        ):
+            # Don't store non-feature types, as well as built-in types.
+            return name
+        version_name = ModelStore.get_name(fr)
+        if version_name in custom_types:
+            # This type is already stored in custom_types.
+            return version_name
+        fields = {}
+        for field_name, info in fr.model_fields.items():
+            field_type = info.annotation
+            # Only typed fields should be stored.
+            if field_type:
+                # Serialize this type to custom_types if it is a custom type as well.
+                fields[field_name] = SignalSchema.serialize_custom_model_fields(
+                    field_type, custom_types
+                )
+        custom_types[version_name] = fields
+        return version_name
+
+    def serialize(self) -> dict[str, Any]:
+        signals: dict[str, Any] = {}
+        custom_types: dict[str, Any] = {}
         for name, fr_type in self.values.items():
             if (fr := ModelStore.to_pydantic(fr_type)) is not None:
                 ModelStore.register(fr)
                 signals[name] = ModelStore.get_name(fr)
+                self.serialize_custom_model_fields(fr, custom_types)
             else:
                 orig = get_origin(fr_type)
                 args = get_args(fr_type)
@@ -130,27 +188,56 @@ class SignalSchema:
                 if orig == Union and len(args) == 2 and (type(None) in args):
                     fr_type = args[0]
                 signals[name] = str(fr_type.__name__)  # type: ignore[union-attr]
+                self.serialize_custom_model_fields(fr_type, custom_types)
+        if custom_types:
+            signals["_custom_types"] = custom_types
         return signals
 
     @staticmethod
-    def deserialize(schema: dict[str, str]) -> "SignalSchema":
+    def _resolve_type(type_name: str, custom_types: dict[str, Any]) -> Optional[type]:
+        """Convert a string-based type back into a python type."""
+        fr = NAMES_TO_TYPES.get(type_name)
+        if fr:
+            return fr
+
+        model_name, version = ModelStore.parse_name_version(type_name)
+        fr = ModelStore.get(model_name, version)
+        if fr:
+            return fr
+
+        if type_name in custom_types:
+            fields = custom_types[type_name]
+            fields = {
+                field_name: SignalSchema._resolve_type(field_type_str, custom_types)
+                for field_name, field_type_str in fields.items()
+            }
+            return get_or_create_feature_model(type_name, fields)
+        return None
+
+    @staticmethod
+    def deserialize(schema: dict[str, Any]) -> "SignalSchema":
         if not isinstance(schema, dict):
             raise SignalSchemaError(f"cannot deserialize signal schema: {schema}")
 
         signals: dict[str, DataType] = {}
+        custom_types: dict[str, Any] = schema.get("_custom_types", {})
         for signal, type_name in schema.items():
+            if signal == "_custom_types":
+                # This entry is used as a lookup for custom types,
+                # and is not an actual field.
+                continue
             try:
-                fr = NAMES_TO_TYPES.get(type_name)
-                if not fr:
-                    type_name, version = ModelStore.parse_name_version(type_name)
-                    fr = ModelStore.get(type_name, version)
-
-                    if not fr:
-                        raise SignalSchemaError(
-                            f"cannot deserialize '{signal}': "
-                            f"unknown type '{type_name}'."
-                            f" Try to add it with `ModelStore.register({type_name})`."
-                        )
+                fr = SignalSchema._resolve_type(type_name, custom_types)
+                if fr is None:
+                    # Skip if the type is not found, so all data can be displayed.
+                    warnings.warn(
+                        f"In signal '{signal}': "
+                        f"unknown type '{type_name}'."
+                        f" Try to add it with `ModelStore.register({type_name})`.",
+                        SignalSchemaWarning,
+                        stacklevel=2,
+                    )
+                    continue
             except TypeError as err:
                 raise SignalSchemaError(
                     f"cannot deserialize '{signal}': {err}"
