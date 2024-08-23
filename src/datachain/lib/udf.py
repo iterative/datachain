@@ -242,26 +242,8 @@ class UDFBase(AbstractUDF):
         if not self.is_output_batched:
             result_objs = [result_objs]
 
-        if len(self.output.values) > 1:
-            res = []
-            for tuple_ in result_objs:
-                flat = []
-                for obj in tuple_:
-                    if isinstance(obj, BaseModel):
-                        flat.extend(flatten(obj))
-                    else:
-                        flat.append(obj)
-                res.append(tuple(flat))
-        else:
-            # Generator expression is required, otherwise the value will be materialized
-            res = (
-                flatten(obj)
-                if isinstance(obj, BaseModel)
-                else obj
-                if isinstance(obj, tuple)
-                else (obj,)
-                for obj in result_objs
-            )
+        # Generator expression is required, otherwise the value will be materialized
+        res = (self._flatten_row(row) for row in result_objs)
 
         if not self.is_output_batched:
             res = list(res)
@@ -281,6 +263,18 @@ class UDFBase(AbstractUDF):
             ), f"{self.name} returns {len(res)} rows while len(rows[0]) expected"
 
         return res
+
+    def _flatten_row(self, row):
+        if len(self.output.values) > 1 and not isinstance(row, BaseModel):
+            flat = []
+            for obj in row:
+                flat.extend(self._obj_to_list(obj))
+            return tuple(flat)
+        return row if isinstance(row, tuple) else tuple(self._obj_to_list(row))
+
+    @staticmethod
+    def _obj_to_list(obj):
+        return flatten(obj) if isinstance(obj, BaseModel) else [obj]
 
     def _parse_rows(self, rows, cache, download_cb):
         objs = []
