@@ -73,6 +73,9 @@ def python_to_sql(typ):  # noqa: PLR0911
         if len(args) == 2 and (type(None) in args):
             return python_to_sql(args[0])
 
+        if _is_union_str_literal(orig, args):
+            return String
+
         if _is_json_inside_union(orig, args):
             return JSON
 
@@ -94,3 +97,9 @@ def _is_json_inside_union(orig, args) -> bool:
         if any(inspect.isclass(arg) and issubclass(arg, BaseModel) for arg in args):
             return True
     return False
+
+
+def _is_union_str_literal(orig, args) -> bool:
+    if orig != Union:
+        return False
+    return all(arg is str or get_origin(arg) in (Literal, LiteralEx) for arg in args)

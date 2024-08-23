@@ -50,7 +50,7 @@ jobs:
         run: nox -s lint
 
   datachain:
-    timeout-minutes: 25
+    timeout-minutes: 30
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -62,9 +62,9 @@ jobs:
             pyv: '3.9'
           - os: macos-latest
             pyv: '3.12'
-          - os: windows-latest-8-cores
+          - os: windows-latest
             pyv: '3.9'
-          - os: windows-latest-8-cores
+          - os: windows-latest
             pyv: '3.12'
 
     steps:
@@ -116,9 +116,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest-16-cores, macos-latest, windows-latest-8-cores]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         pyv: ['3.9', '3.12']
         group: ['get_started', 'llm_and_nlp or computer_vision', 'multimodal']
+        exclude:
+          - {os: ubuntu-latest, pyv: '3.9', group: 'multimodal'}
+          - {os: ubuntu-latest, pyv: '3.12', group: 'multimodal'}
+        include:
+          - {os: ubuntu-latest-4-cores, pyv: "3.9", group: multimodal}
+          - {os: ubuntu-latest-4-cores, pyv: "3.12", group: multimodal}
+
+
     steps:
       - uses: actions/checkout@v4
 

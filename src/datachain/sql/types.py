@@ -20,6 +20,8 @@ from typing import Any, Union
 import sqlalchemy as sa
 from sqlalchemy import TypeDecorator, types
 
+from datachain.lib.data_model import StandardType
+
 _registry: dict[str, "TypeConverter"] = {}
 registry = MappingProxyType(_registry)
 
@@ -91,6 +93,10 @@ class SQLType(TypeDecorator):
     impl: type[types.TypeEngine[Any]] = types.TypeEngine
     cache_ok = True
 
+    @property
+    def python_type(self) -> StandardType:
+        raise NotImplementedError
+
     def to_dict(self) -> dict[str, Any]:
         return {"type": self.__class__.__name__}
 
@@ -103,7 +109,7 @@ class String(SQLType):
     impl = types.String
 
     @property
-    def python_type(self):
+    def python_type(self) -> StandardType:
         return str
 
     def load_dialect_impl(self, dialect):
@@ -125,7 +131,7 @@ class Boolean(SQLType):
     impl = types.Boolean
 
     @property
-    def python_type(self):
+    def python_type(self) -> StandardType:
         return bool
 
     def load_dialect_impl(self, dialect):
@@ -147,7 +153,7 @@ class Int(SQLType):
     impl = types.INTEGER
 
     @property
-    def python_type(self):
+    def python_type(self) -> StandardType:
         return int
 
     def load_dialect_impl(self, dialect):
@@ -217,7 +223,7 @@ class Float(SQLType):
     impl = types.FLOAT
 
     @property
-    def python_type(self):
+    def python_type(self) -> StandardType:
         return float
 
     def load_dialect_impl(self, dialect):
@@ -271,7 +277,7 @@ class Array(SQLType):
     impl = types.ARRAY
 
     @property
-    def python_type(self):
+    def python_type(self) -> StandardType:
         return list
 
     def load_dialect_impl(self, dialect):
@@ -314,7 +320,7 @@ class JSON(SQLType):
     impl = types.JSON
 
     @property
-    def python_type(self):
+    def python_type(self) -> StandardType:
         return dict
 
     def load_dialect_impl(self, dialect):
@@ -336,7 +342,7 @@ class DateTime(SQLType):
     impl = types.DATETIME
 
     @property
-    def python_type(self):
+    def python_type(self) -> StandardType:
         return datetime
 
     def load_dialect_impl(self, dialect):
@@ -358,7 +364,7 @@ class Binary(SQLType):
     impl = types.BINARY
 
     @property
-    def python_type(self):
+    def python_type(self) -> StandardType:
         return bytes
 
     def load_dialect_impl(self, dialect):

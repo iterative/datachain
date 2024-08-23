@@ -24,6 +24,7 @@ from typing import (
 )
 
 import attrs
+import psutil
 import sqlalchemy
 import sqlalchemy as sa
 from attrs import frozen
@@ -383,7 +384,7 @@ def process_udf_outputs(
     udf_table: "Table",
     udf_results: Iterator[Iterable["UDFResult"]],
     udf: UDFBase,
-    batch_size=INSERT_BATCH_SIZE,
+    batch_size: int = INSERT_BATCH_SIZE,
     cb: Callback = DEFAULT_CALLBACK,
 ) -> None:
     rows: list[UDFResult] = []
@@ -396,7 +397,9 @@ def process_udf_outputs(
         for row in udf_output:
             cb.relative_update()
             rows.append(adjust_outputs(warehouse, row, udf_col_types))
-            if len(rows) >= batch_size:
+            if len(rows) >= batch_size or (
+                len(rows) % 10 == 0 and psutil.virtual_memory().percent > 80
+            ):
                 for row_chunk in batched(rows, batch_size):
                     warehouse.insert_rows(udf_table, row_chunk)
                 rows.clear()
@@ -878,17 +881,14 @@ class SQLUnion(Step):
         temp_tables.extend(self.query1.temp_table_names)
         q2 = self.query2.apply_steps().select().subquery()
         temp_tables.extend(self.query2.temp_table_names)
-        columns1, columns2 = fill_columns(q1.columns, q2.columns)
+
+        columns1, columns2 = _order_columns(q1.columns, q2.columns)
 
         def q(*columns):
             names = {c.name for c in columns}
             col1 = [c for c in columns1 if c.name in names]
             col2 = [c for c in columns2 if c.name in names]
-            res = (
-                sqlalchemy.select(*col1)
-                .select_from(q1)
-                .union_all(sqlalchemy.select(*col2).select_from(q2))
-            )
+            res = sqlalchemy.select(*col1).union_all(sqlalchemy.select(*col2))
 
             subquery = res.subquery()
             return sqlalchemy.select(*subquery.c).select_from(subquery)
@@ -1021,23 +1021,46 @@ class GroupBy(Step):
         return step_result(q, grouped_query.selected_columns)
 
 
-def fill_columns(
-    *column_iterables: Iterable[ColumnElement],
-) -> list[list[ColumnElement]]:
-    column_dicts = [{c.name: c for c in columns} for columns in column_iterables]
-    combined_columns = {n: c for col_dict in column_dicts for n, c in col_dict.items()}
+def _validate_columns(
+    left_columns: Iterable[ColumnElement], right_columns: Iterable[ColumnElement]
+) -> set[str]:
+    left_names = {c.name for c in left_columns}
+    right_names = {c.name for c in right_columns}
 
-    result: list[list[ColumnElement]] = [[] for _ in column_dicts]
-    for n in combined_columns:
-        col = next(col_dict[n] for col_dict in column_dicts if n in col_dict)
-        for col_dict, out in zip(column_dicts, result):
-            if n in col_dict:
-                out.append(col_dict[n])
-            else:
-                # Cast the NULL to ensure all columns are aware of their type
-                # Label it to ensure it's aware of its name
-                out.append(sqlalchemy.cast(sqlalchemy.null(), col.type).label(n))
-    return result
+    if left_names == right_names:
+        return left_names
+
+    missing_right = left_names - right_names
+    missing_left = right_names - left_names
+
+    def _prepare_msg_part(missing_columns: set[str], side: str) -> str:
+        return f"{', '.join(sorted(missing_columns))} only present in {side}"
+
+    msg_parts = [
+        _prepare_msg_part(missing_columns, found_side)
+        for missing_columns, found_side in zip(
+            [
+                missing_right,
+                missing_left,
+            ],
+            ["left", "right"],
+        )
+        if missing_columns
+    ]
+    msg = f"Cannot perform union. {'. '.join(msg_parts)}"
+
+    raise ValueError(msg)
+
+
+def _order_columns(
+    left_columns: Iterable[ColumnElement], right_columns: Iterable[ColumnElement]
+) -> list[list[ColumnElement]]:
+    column_order = _validate_columns(left_columns, right_columns)
+    column_dicts = [
+        {c.name: c for c in columns} for columns in [left_columns, right_columns]
+    ]
+
+    return [[d[n] for n in column_order] for d in column_dicts]
 
 
 @attrs.define

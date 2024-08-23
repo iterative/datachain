@@ -27,10 +27,7 @@ import datachain.sql.sqlite
 from datachain.data_storage import AbstractDBMetastore, AbstractWarehouse
 from datachain.data_storage.db_engine import DatabaseEngine
 from datachain.data_storage.id_generator import AbstractDBIDGenerator
-from datachain.data_storage.schema import (
-    DefaultSchema,
-    convert_rows_custom_column_types,
-)
+from datachain.data_storage.schema import DefaultSchema
 from datachain.dataset import DatasetRecord
 from datachain.error import DataChainError
 from datachain.sql.sqlite import create_user_defined_sql_functions, sqlite_dialect
@@ -209,6 +206,7 @@ class SQLiteDatabaseEngine(DatabaseEngine):
             return cursor.executemany(self.compile(query).string, params)
         return self.db.executemany(self.compile(query).string, params)
 
+    @retry_sqlite_locks
     def execute_str(self, sql: str, parameters=None) -> sqlite3.Cursor:
         if parameters is None:
             return self.db.execute(sql)
@@ -649,12 +647,6 @@ class SQLiteWarehouse(AbstractWarehouse):
         )
         self.db.create_table(table, if_not_exists=if_not_exists)
         return table
-
-    def dataset_rows_select(self, select_query: Select, **kwargs):
-        rows = self.db.execute(select_query, **kwargs)
-        yield from convert_rows_custom_column_types(
-            select_query.selected_columns, rows, sqlite_dialect
-        )
 
     def get_dataset_sources(
         self, dataset: DatasetRecord, version: int

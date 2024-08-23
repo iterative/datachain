@@ -50,7 +50,7 @@ def convert_rows_custom_column_types(
     columns: "ColumnCollection[str, ColumnElement[Any]]",
     rows: Iterator[tuple[Any, ...]],
     dialect: "Dialect",
-):
+) -> Iterator[tuple[Any, ...]]:
     """
     This function converts values of rows columns based on their types which are
     defined in columns. We are only converting column values for which types are

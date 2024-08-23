@@ -1,4 +1,5 @@
 import logging
+import re
 import sqlite3
 from collections.abc import Iterable
 from datetime import MAXYEAR, MINYEAR, datetime, timezone
@@ -77,6 +78,7 @@ def setup():
     compiles(array.length, "sqlite")(compile_array_length)
     compiles(string.length, "sqlite")(compile_string_length)
     compiles(string.split, "sqlite")(compile_string_split)
+    compiles(string.regexp_replace, "sqlite")(compile_regexp_replace)
     compiles(conditional.greatest, "sqlite")(compile_greatest)
     compiles(conditional.least, "sqlite")(compile_least)
     compiles(Values, "sqlite")(compile_values)
@@ -178,9 +180,15 @@ def register_user_defined_sql_functions() -> None:
 
     _registered_function_creators["vector_functions"] = create_vector_functions
 
+    def sqlite_regexp_replace(string: str, pattern: str, replacement: str) -> str:
+        return re.sub(pattern, replacement, string)
+
     def create_string_functions(conn):
         conn.create_function("split", 2, sqlite_string_split, deterministic=True)
         conn.create_function("split", 3, sqlite_string_split, deterministic=True)
+        conn.create_function(
+            "regexp_replace", 3, sqlite_regexp_replace, deterministic=True
+        )
 
     _registered_function_creators["string_functions"] = create_string_functions
 
@@ -263,6 +271,10 @@ def path_file_stem(path):
 
 def path_file_ext(path):
     return func.substr(path, func.length(path) - path_file_ext_length(path) + 1)
+
+
+def compile_regexp_replace(element, compiler, **kwargs):
+    return f"regexp_replace({compiler.process(element.clauses, **kwargs)})"
 
 
 def compile_path_parent(element, compiler, **kwargs):

@@ -17,6 +17,7 @@ from sqlalchemy.sql.expression import true
 from tqdm import tqdm
 
 from datachain.client import Client
+from datachain.data_storage.schema import convert_rows_custom_column_types
 from datachain.data_storage.serializer import Serializable
 from datachain.dataset import DatasetRecord
 from datachain.node import DirType, DirTypeGroup, Entry, Node, NodeWithPath, get_path
@@ -226,7 +227,7 @@ class AbstractWarehouse(ABC, Serializable):
                     if limit < page_size:
                         paginated_query = paginated_query.limit(None).limit(limit)
 
-                results = self.db.execute(paginated_query.offset(offset))
+                results = self.dataset_rows_select(paginated_query.offset(offset))
 
                 processed = False
                 for row in results:
@@ -309,12 +310,18 @@ class AbstractWarehouse(ABC, Serializable):
         Merge results should not contain duplicates.
         """
 
-    @abstractmethod
-    def dataset_rows_select(self, select_query: sa.sql.selectable.Select, **kwargs):
+    def dataset_rows_select(
+        self,
+        query: sa.sql.selectable.Select,
+        **kwargs,
+    ) -> Iterator[tuple[Any, ...]]:
         """
-        Method for fetching dataset rows from database. This is abstract since
-        in some DBs we need to use special settings
+        Fetch dataset rows from database.
         """
+        rows = self.db.execute(query, **kwargs)
+        yield from convert_rows_custom_column_types(
+            query.selected_columns, rows, self.db.dialect
+        )
 
     @abstractmethod
     def get_dataset_sources(

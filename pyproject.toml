@@ -43,7 +43,9 @@ dependencies = [
   "pydantic>=2,<3",
   "jmespath>=1.0",
   "datamodel-code-generator>=0.25",
-  "Pillow>=10.0.0,<11"
+  "Pillow>=10.0.0,<11",
+  "msgpack>=1.0.4,<2",
+  "psutil"
 ]
 
 [project.optional-dependencies]
@@ -62,7 +64,6 @@ torch = [
 ]
 remote = [
   "lz4",
-  "msgpack>=1.0.4,<2",
   "requests>=2.22.0"
 ]
 vector = [
@@ -103,9 +104,8 @@ examples = [
   "defusedxml",
   "accelerate",
   "unstructured[pdf]",
-  "pdfplumber==0.11.3",
-  "huggingface_hub[hf_transfer]",
-  "nltk==3.8.1"
+  "pdfplumber==0.11.4",
+  "huggingface_hub[hf_transfer]"
 ]
 
 [project.urls]
