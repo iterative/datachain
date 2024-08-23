@@ -1334,6 +1334,7 @@ class DataChain(DatasetQuery):
         dataset: Union[str, "HFDatasetType"],
         *args,
         session: Optional[Session] = None,
+        settings: Optional[dict] = None,
         object_name: str = "",
         model_name: str = "",
         **kwargs,
@@ -1344,6 +1345,7 @@ class DataChain(DatasetQuery):
             dataset : Path or name of the dataset to read from Hugging Face Hub,
                 or an instance of `datasets.Dataset`-like object.
             session : Session to use for the chain.
+            settings : Settings to use for the chain.
             object_name : Generated object column name.
             model_name : Generated model name.
             kwargs : Parameters to pass to datasets.load_dataset.
@@ -1372,7 +1374,9 @@ class DataChain(DatasetQuery):
         if object_name:
             output = {object_name: model}
 
-        chain = DataChain.from_records(DataChain.DEFAULT_FILE_RECORD, session=session)
+        chain = DataChain.from_records(
+            DataChain.DEFAULT_FILE_RECORD, session=session, settings=settings
+        )
         return chain.gen(HFGenerator(dataset, model), output=output)
 
     def parse_tabular(

@@ -88,15 +88,12 @@ class HFGenerator(Generator):
                 for name, feat in ds.features.items():
                     anno = self.output_schema.model_fields[name].annotation
                     output_dict[name] = _convert_feature(row[name], feat, anno)
-                yield [self.output_schema(**output_dict)]
+                yield self.output_schema(**output_dict)
                 pbar.update(1)
 
 
-def stream_dataset(path: str, **kwargs):
-    ds = load_dataset(path, **kwargs)
-    if isinstance(ds, Dataset):
-        ds = ds.to_iterable_dataset()
-    return ds
+def stream_dataset(path: str, *args, **kwargs):
+    return load_dataset(path, *args, streaming=True, **kwargs)
 
 
 def _convert_feature(val: Any, feat: Any, anno: Any) -> Any:
