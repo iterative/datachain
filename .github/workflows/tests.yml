@@ -58,10 +58,6 @@ jobs:
         os: [ubuntu-latest-8-cores]
         pyv: ['3.9', '3.10', '3.11', '3.12']
         include:
-          - os: macos-latest
-            pyv: '3.9'
-          - os: macos-latest
-            pyv: '3.12'
           - os: windows-latest
             pyv: '3.9'
           - os: windows-latest

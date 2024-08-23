@@ -11,7 +11,7 @@ import pytz
 from PIL import Image
 from sqlalchemy import Column
 
-from datachain.client.local import FileClient
+from datachain.client import Client
 from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.dataset import DatasetStats
 from datachain.lib.dc import (
@@ -82,14 +82,28 @@ def test_from_storage_reindex(tmp_dir, test_session):
 )
 def test_from_storage_reindex_expired(tmp_dir, test_session):
     tmp_dir = tmp_dir / "parquets"
-    path = tmp_dir.as_uri()
     os.mkdir(tmp_dir)
+    uri = tmp_dir.as_uri()
+
+    print(f"Parsing uri in test {uri}")
+    client, path = Client.parse_url(
+        uri, test_session.catalog.cache, **test_session.catalog.client_config
+    )
+    print(f"Is file in test {client.fs.isfile(uri)}")
+
+    lst_ds_name = listing_dataset_name(client.uri, posixpath.join(path, ""))
+    print(f"Lst path in test is {path}")
+    print(f"Listing dataset name in test is {lst_ds_name}")
+    print("-----")
+
+    """
     lst_ds_name = listing_dataset_name(
         FileClient.root_path().as_uri(), posixpath.join(str(tmp_dir), "")
     )
+    """
 
     pd.DataFrame({"name": ["Alice", "Bob"]}).to_parquet(tmp_dir / "test1.parquet")
-    assert DataChain.from_storage(path, session=test_session).count() == 1
+    assert DataChain.from_storage(uri, session=test_session).count() == 1
     pd.DataFrame({"name": ["Charlie", "David"]}).to_parquet(tmp_dir / "test2.parquet")
     # mark dataset as expired
     test_session.catalog.metastore.update_dataset_version(
@@ -99,7 +113,7 @@ def test_from_storage_reindex_expired(tmp_dir, test_session):
     )
 
     # listing was updated because listing dataset was expired
-    assert DataChain.from_storage(path, session=test_session).count() == 2
+    assert DataChain.from_storage(uri, session=test_session).count() == 2
 
 
 @pytest.mark.parametrize(

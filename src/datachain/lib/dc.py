@@ -361,6 +361,7 @@ class DataChain(DatasetQuery):
             in_memory=in_memory,
         )
 
+        print(f"Parsing uri in from storage {uri}")
         client, path = Client.parse_url(
             uri, session.catalog.cache, **session.catalog.client_config
         )
@@ -372,9 +373,12 @@ class DataChain(DatasetQuery):
             or client.fs.isfile(uri)
             else path
         )
+        print(f"Is file in from storage {client.fs.isfile(uri)}")
         lst_uri = f"{client.uri}/{lst_path.lstrip('/')}"
 
         ds_name = listing_dataset_name(client.uri, posixpath.join(lst_path, ""))
+        print(f"Lst path in from storage is {lst_path}")
+        print(f"Listing dataset name in from storage is {ds_name}")
 
         for ds in cls.datasets(
             session=session, in_memory=in_memory, include_listing=True
