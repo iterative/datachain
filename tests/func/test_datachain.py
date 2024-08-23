@@ -85,22 +85,10 @@ def test_from_storage_reindex_expired(tmp_dir, test_session):
     os.mkdir(tmp_dir)
     uri = tmp_dir.as_uri()
 
-    print(f"Parsing uri in test {uri}")
     client, path = Client.parse_url(
         uri, test_session.catalog.cache, **test_session.catalog.client_config
     )
-    print(f"Is file in test {client.fs.isfile(uri)}")
-
     lst_ds_name = listing_dataset_name(client.uri, posixpath.join(path, ""))
-    print(f"Lst path in test is {path}")
-    print(f"Listing dataset name in test is {lst_ds_name}")
-    print("-----")
-
-    """
-    lst_ds_name = listing_dataset_name(
-        FileClient.root_path().as_uri(), posixpath.join(str(tmp_dir), "")
-    )
-    """
 
     pd.DataFrame({"name": ["Alice", "Bob"]}).to_parquet(tmp_dir / "test1.parquet")
     assert DataChain.from_storage(uri, session=test_session).count() == 1
