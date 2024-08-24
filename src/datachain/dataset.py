@@ -444,7 +444,8 @@ class DatasetRecord:
         For bucket listing we implicitly create underlying dataset to hold data. This
         method is checking if this is one of those datasets.
         """
-        # TODO remove first part of condition when we remove legacy indexing / listing
+        # TODO refactor and maybe remove method in
+        # https://github.com/iterative/datachain/issues/318
         return Client.is_data_source_uri(self.name) or self.name.startswith(
             LISTING_PREFIX
         )
