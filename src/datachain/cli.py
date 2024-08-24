@@ -336,36 +336,6 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         help="Display size using powers of 1000 not 1024",
     )
 
-    parse_merge_datasets = subp.add_parser(
-        "merge-datasets", parents=[parent_parser], description="Merges datasets"
-    )
-    parse_merge_datasets.add_argument(
-        "--src",
-        action="store",
-        default=None,
-        help="Source dataset name",
-    )
-    parse_merge_datasets.add_argument(
-        "--dst",
-        action="store",
-        default=None,
-        help="Destination dataset name",
-    )
-    parse_merge_datasets.add_argument(
-        "--src-version",
-        action="store",
-        default=None,
-        type=int,
-        help="Source dataset version",
-    )
-    parse_merge_datasets.add_argument(
-        "--dst-version",
-        action="store",
-        default=None,
-        type=int,
-        help="Destination dataset version",
-    )
-
     parse_ls = subp.add_parser(
         "ls", parents=[parent_parser], description="List storage contents"
     )
@@ -995,13 +965,6 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
                 description=args.description,
                 new_name=args.new_name,
                 labels=args.labels,
-            )
-        elif args.command == "merge-datasets":
-            catalog.merge_datasets(
-                catalog.get_dataset(args.src),
-                catalog.get_dataset(args.dst),
-                args.src_version,
-                dst_version=args.dst_version,
             )
         elif args.command == "ls":
             ls(
