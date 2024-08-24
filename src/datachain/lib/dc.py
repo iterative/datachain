@@ -72,9 +72,6 @@ C = Column
 _T = TypeVar("_T")
 D = TypeVar("D", bound="DataChain")
 
-LISTING_TTL = 4 * 60 * 60  # cached listing lasts 4 days
-LISTING_PREFIX = "lst__"  # listing datasets start with this name
-
 
 def resolve_columns(
     method: "Callable[Concatenate[D, P], D]",

@@ -14,14 +14,9 @@ from sqlalchemy import Column
 from datachain.client import Client
 from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.dataset import DatasetStats
-from datachain.lib.dc import (
-    LISTING_PREFIX,
-    LISTING_TTL,
-    DataChain,
-    DataChainColumnError,
-)
+from datachain.lib.dc import DataChain, DataChainColumnError
 from datachain.lib.file import File, ImageFile
-from datachain.lib.listing import listing_dataset_name
+from datachain.lib.listing import LISTING_PREFIX, LISTING_TTL, listing_dataset_name
 from tests.utils import images_equal
 
 
