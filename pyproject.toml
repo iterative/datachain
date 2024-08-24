@@ -44,7 +44,8 @@ dependencies = [
   "jmespath>=1.0",
   "datamodel-code-generator>=0.25",
   "Pillow>=10.0.0,<11",
-  "msgpack>=1.0.4,<2"
+  "msgpack>=1.0.4,<2",
+  "psutil"
 ]
 
 [project.optional-dependencies]

@@ -90,12 +90,12 @@ def resolve_columns(
     @wraps(method)
     def _inner(self: D, *args: "P.args", **kwargs: "P.kwargs") -> D:
         resolved_args = self.signals_schema.resolve(
-            *[arg for arg in args if not isinstance(arg, GenericFunction)]
+            *[arg for arg in args if not isinstance(arg, GenericFunction)]  # type: ignore[arg-type]
         ).db_signals()
 
         for idx, arg in enumerate(args):
             if isinstance(arg, GenericFunction):
-                resolved_args.insert(idx, arg)
+                resolved_args.insert(idx, arg)  # type: ignore[arg-type]
 
         return method(self, *resolved_args, **kwargs)
 
@@ -221,23 +221,28 @@ class DataChain(DatasetQuery):
         "size": 0,
     }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, settings: Optional[dict] = None, **kwargs):
         """This method needs to be redefined as a part of Dataset and DataChain
         decoupling.
         """
-        super().__init__(
+        super().__init__(  # type: ignore[misc]
             *args,
             **kwargs,
             indexing_column_types=File._datachain_column_types,
         )
-        self._settings = Settings()
-        self._setup = {}
+        if settings:
+            self._settings = Settings(**settings)
+        else:
+            self._settings = Settings()
+        self._setup: dict = {}
 
         self.signals_schema = SignalSchema({"sys": Sys})
         if self.feature_schema:
             self.signals_schema |= SignalSchema.deserialize(self.feature_schema)
         else:
-            self.signals_schema |= SignalSchema.from_column_types(self.column_types)
+            self.signals_schema |= SignalSchema.from_column_types(
+                self.column_types or {}
+            )
 
         self._sys = False
 
@@ -322,6 +327,7 @@ class DataChain(DatasetQuery):
         *,
         type: Literal["binary", "text", "image"] = "binary",
         session: Optional[Session] = None,
+        settings: Optional[dict] = None,
         in_memory: bool = False,
         recursive: Optional[bool] = True,
         object_name: str = "file",
@@ -397,6 +403,7 @@ class DataChain(DatasetQuery):
             cls.from_records(
                 DataChain.DEFAULT_FILE_RECORD,
                 session=session,
+                settings=settings,
                 in_memory=in_memory,
                 **kwargs,
             )
@@ -562,6 +569,7 @@ class DataChain(DatasetQuery):
     def datasets(
         cls,
         session: Optional[Session] = None,
+        settings: Optional[dict] = None,
         in_memory: bool = False,
         object_name: str = "dataset",
         **kwargs,
@@ -587,6 +595,7 @@ class DataChain(DatasetQuery):
 
         return cls.from_values(
             session=session,
+            settings=settings,
             in_memory=in_memory,
             output={object_name: DatasetInfo},
             **{object_name: datasets},  # type: ignore[arg-type]
@@ -969,7 +978,7 @@ class DataChain(DatasetQuery):
             if isinstance(value, Column):
                 # renaming existing column
                 for signal in schema.db_signals(name=value.name, as_columns=True):
-                    mutated[signal.name.replace(value.name, name, 1)] = signal
+                    mutated[signal.name.replace(value.name, name, 1)] = signal  # type: ignore[union-attr]
             else:
                 # adding new signal
                 mutated[name] = value
@@ -1160,7 +1169,7 @@ class DataChain(DatasetQuery):
             )
 
         signals_schema = self.signals_schema.clone_without_sys_signals()
-        on_columns = signals_schema.resolve(*on).db_signals()
+        on_columns: list[str] = signals_schema.resolve(*on).db_signals()  # type: ignore[assignment]
 
         right_signals_schema = right_ds.signals_schema.clone_without_sys_signals()
         if right_on is not None:
@@ -1179,7 +1188,9 @@ class DataChain(DatasetQuery):
                     on, right_on, "'on' and 'right_on' must have the same length'"
                 )
 
-            right_on_columns = right_signals_schema.resolve(*right_on).db_signals()
+            right_on_columns: list[str] = right_signals_schema.resolve(
+                *right_on
+            ).db_signals()  # type: ignore[assignment]
 
             if len(right_on_columns) != len(on_columns):
                 on_str = ", ".join(right_on_columns)
@@ -1243,7 +1254,7 @@ class DataChain(DatasetQuery):
                 "'on' cannot be empty",
             )
         else:
-            signals = self.signals_schema.resolve(*on).db_signals()
+            signals = self.signals_schema.resolve(*on).db_signals()  # type: ignore[assignment]
         return super()._subtract(other, signals)  # type: ignore[arg-type]
 
     @classmethod
@@ -1251,6 +1262,7 @@ class DataChain(DatasetQuery):
         cls,
         ds_name: str = "",
         session: Optional[Session] = None,
+        settings: Optional[dict] = None,
         in_memory: bool = False,
         output: OutputType = None,
         object_name: str = "",
@@ -1269,7 +1281,10 @@ class DataChain(DatasetQuery):
             yield from tuples
 
         chain = DataChain.from_records(
-            DataChain.DEFAULT_FILE_RECORD, session=session, in_memory=in_memory
+            DataChain.DEFAULT_FILE_RECORD,
+            session=session,
+            settings=settings,
+            in_memory=in_memory,
         )
         if object_name:
             output = {object_name: DataChain._dict_to_data_model(object_name, output)}  # type: ignore[arg-type]
@@ -1281,6 +1296,7 @@ class DataChain(DatasetQuery):
         df: "pd.DataFrame",
         name: str = "",
         session: Optional[Session] = None,
+        settings: Optional[dict] = None,
         in_memory: bool = False,
         object_name: str = "",
     ) -> "DataChain":
@@ -1310,7 +1326,12 @@ class DataChain(DatasetQuery):
                 )
 
         return cls.from_values(
-            name, session, object_name=object_name, in_memory=in_memory, **fr_map
+            name,
+            session,
+            settings=settings,
+            object_name=object_name,
+            in_memory=in_memory,
+            **fr_map,
         )
 
     def to_pandas(self, flatten=False) -> "pd.DataFrame":
@@ -1617,6 +1638,7 @@ class DataChain(DatasetQuery):
         cls,
         to_insert: Optional[Union[dict, list[dict]]],
         session: Optional[Session] = None,
+        settings: Optional[dict] = None,
         in_memory: bool = False,
         schema: Optional[dict[str, DataType]] = None,
         **kwargs,
@@ -1672,7 +1694,7 @@ class DataChain(DatasetQuery):
         insert_q = dr.get_table().insert()
         for record in to_insert:
             db.execute(insert_q.values(**record))
-        return DataChain(name=dsr.name, **kwargs)
+        return DataChain(name=dsr.name, settings=settings, **kwargs)
 
     def sum(self, fr: DataType):  # type: ignore[override]
         """Compute the sum of a column."""
