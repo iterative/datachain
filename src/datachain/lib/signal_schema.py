@@ -43,6 +43,7 @@ NAMES_TO_TYPES = {
     "dict": dict,
     "bytes": bytes,
     "datetime": datetime,
+    "Literal": Literal,
 }
 
 
@@ -149,7 +150,12 @@ class SignalSchema:
     def serialize_custom_model_fields(fr: type, custom_types: dict[str, Any]) -> str:
         """This serializes any custom type information to the provided custom_types
         dict, and returns the name of the type provided."""
-        name = fr.__name__
+        orig = get_origin(fr)
+        if orig in (Literal, LiteralEx):
+            # Literal has no __name__ in Python 3.9
+            name = "Literal"
+        else:
+            name = str(fr.__name__)
         if (
             not ModelStore.is_pydantic(fr)
             or not issubclass(fr, BaseModel)
@@ -165,11 +171,20 @@ class SignalSchema:
         for field_name, info in fr.model_fields.items():
             field_type = info.annotation
             # Only typed fields should be stored.
-            if field_type:
-                # Serialize this type to custom_types if it is a custom type as well.
-                fields[field_name] = SignalSchema.serialize_custom_model_fields(
-                    field_type, custom_types
-                )
+            if not field_type:
+                continue
+            orig = get_origin(field_type)
+            args = get_args(field_type)
+            # Check if field_type is Optional.
+            if orig == Union and len(args) == 2 and (type(None) in args):
+                field_type = args[0]
+            # Only typed fields should be stored.
+            if not field_type:
+                continue
+            # Serialize this type to custom_types if it is a custom type as well.
+            fields[field_name] = SignalSchema.serialize_custom_model_fields(
+                field_type, custom_types
+            )
         custom_types[version_name] = fields
         return version_name
 
@@ -187,7 +202,13 @@ class SignalSchema:
                 # Check if fr_type is Optional
                 if orig == Union and len(args) == 2 and (type(None) in args):
                     fr_type = args[0]
-                signals[name] = str(fr_type.__name__)  # type: ignore[union-attr]
+                    orig = get_origin(fr_type)
+                if orig in (Literal, LiteralEx):
+                    # Literal has no __name__ in Python 3.9
+                    type_name = "Literal"
+                else:
+                    type_name = str(fr_type.__name__)  # type: ignore[union-attr]
+                signals[name] = type_name
                 self.serialize_custom_model_fields(fr_type, custom_types)
         if custom_types:
             signals["_custom_types"] = custom_types
@@ -198,7 +219,7 @@ class SignalSchema:
         """Convert a string-based type back into a python type."""
         fr = NAMES_TO_TYPES.get(type_name)
         if fr:
-            return fr
+            return fr  # type: ignore[return-value]
 
         model_name, version = ModelStore.parse_name_version(type_name)
         fr = ModelStore.get(model_name, version)
