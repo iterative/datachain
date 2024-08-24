@@ -309,7 +309,7 @@ class AbstractMetastore(ABC, Serializable):
             self.add_dataset_dependency(
                 source_dataset_name,
                 source_dataset_version,
-                dependency.name,
+                dependency.dataset_name,
                 int(dependency.version),
             )
         else:

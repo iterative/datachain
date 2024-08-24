@@ -11,8 +11,6 @@ from typing import (
 )
 from urllib.parse import urlparse
 
-from dateutil.parser import isoparse
-
 from datachain.client import Client
 from datachain.sql.types import NAME_TYPES_MAPPING, SQLType
 
@@ -73,10 +71,19 @@ class DatasetDependencyType:
 class DatasetDependency:
     id: int
     type: str
-    name: str  # when the type is STORAGE, this is actually StorageURI
-    version: str  # string until we'll have proper bucket listing versions
+    name: str
+    version: str  # TODO change to int
     created_at: datetime
     dependencies: list[Optional["DatasetDependency"]]
+
+    @property
+    def dataset_name(self) -> str:
+        """Returns clean dependency dataset name"""
+        from datachain.lib.listing import listing_dataset_name
+
+        if self.type == DatasetDependencyType.DATASET:
+            return self.name
+        return listing_dataset_name(self.name.strip("/"), "")
 
     @classmethod
     def parse(
@@ -92,33 +99,31 @@ class DatasetDependency:
         dataset_version_created_at: Optional[datetime],
         bucket_uri: Optional["StorageURI"],
     ) -> Optional["DatasetDependency"]:
-        if dataset_id:
-            assert dataset_name is not None
-            return cls(
-                id,
-                DatasetDependencyType.DATASET,
-                dataset_name,
-                (
-                    str(dataset_version)  # type: ignore[arg-type]
-                    if dataset_version
-                    else None
-                ),
-                dataset_version_created_at or dataset_created_at,  # type: ignore[arg-type]
-                [],
-            )
-        if bucket_uri:
-            return cls(
-                id,
-                DatasetDependencyType.STORAGE,
-                bucket_uri,
-                bucket_version,  # type: ignore[arg-type]
-                isoparse(bucket_version),  # type: ignore[arg-type]
-                [],
-            )
-        # dependency has been removed
-        # TODO we should introduce flags for removed datasets, instead of
-        # removing them from tables so that we can still have references
-        return None
+        from datachain.lib.listing import is_listing_dataset, listing_uri_from_name
+
+        if not dataset_id:
+            return None
+
+        assert dataset_name is not None
+        dependency_type = DatasetDependencyType.DATASET
+        dependency_name = dataset_name
+
+        if is_listing_dataset(dataset_name):
+            dependency_type = DatasetDependencyType.STORAGE  # type: ignore[arg-type]
+            dependency_name = listing_uri_from_name(dataset_name)
+
+        return cls(
+            id,
+            dependency_type,
+            dependency_name,
+            (
+                str(dataset_version)  # type: ignore[arg-type]
+                if dataset_version
+                else None
+            ),
+            dataset_version_created_at or dataset_created_at,  # type: ignore[arg-type]
+            [],
+        )
 
     @property
     def is_dataset(self) -> bool:
