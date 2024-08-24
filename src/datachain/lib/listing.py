@@ -97,6 +97,11 @@ def is_listing_dataset(name: str) -> bool:
     """Returns True if it's special listing dataset"""
     return name.startswith(LISTING_PREFIX)
 
+def listing_uri_from_name(dataset_name: str) -> str:
+    """Returns clean storage URI from listing dataset name"""
+    if not is_listing_dataset(dataset_name):
+        raise ValueError(f"Dataset {dataset_name} is not a listing")
+    return dataset_name.removeprefix(LISTING_PREFIX)
 
 def listing_uri_from_name(dataset_name: str) -> str:
     """Returns clean storage URI from listing dataset name"""

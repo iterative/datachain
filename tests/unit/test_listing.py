@@ -12,6 +12,7 @@ from datachain.lib.listing import (
     is_listing_subset,
     listing_uri_from_name,
     parse_listing_uri,
+    listing_uri_from_name,
 )
 from datachain.node import DirType, Entry, get_path
 from tests.utils import skip_if_not_sqlite
