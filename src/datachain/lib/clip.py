@@ -130,17 +130,20 @@ def clip_similarity_scores(
         ```
     """
 
+    device = next(model.parameters()).device
     with torch.no_grad():
         if images is not None:
             encoder = _get_encoder(model, "image")
             image_features = convert_images(
-                images, transform=preprocess, encoder=encoder
+                images, transform=preprocess, encoder=encoder, device=device
             )
             image_features /= image_features.norm(dim=-1, keepdim=True)  # type: ignore[union-attr]
 
         if text is not None:
             encoder = _get_encoder(model, "text")
-            text_features = convert_text(text, tokenizer, encoder=encoder)
+            text_features = convert_text(
+                text, tokenizer, encoder=encoder, device=device
+            )
             text_features /= text_features.norm(dim=-1, keepdim=True)  # type: ignore[union-attr]
 
         if images is not None and text is not None:
