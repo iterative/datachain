@@ -380,43 +380,36 @@ class DataChain(DatasetQuery):
         lst_uri = f"{client.uri}/{lst_path.lstrip('/')}"
 
         ds_name = listing_dataset_name(client.uri, posixpath.join(lst_path, ""))
+        need_listing = True
 
         for ds in cls.datasets(
             session=session, in_memory=in_memory, include_listing=True
         ).collect("dataset"):
-            if listing_expired(ds.created_at):  # type: ignore[union-attr]
-                continue
             if (
-                is_listing_dataset(ds.name)  # type: ignore[union-attr]
+                not listing_expired(ds.created_at)  # type: ignore[union-attr]
+                and is_listing_dataset(ds.name)  # type: ignore[union-attr]
                 and listing_subset(ds.name, ds_name)  # type: ignore[union-attr]
                 and not update
             ):
-                # we can use found listing as it contains the one from input
-                dc = cls.from_dataset(
-                    ds.name,  # type: ignore[union-attr]
+                need_listing = False
+                ds_name = ds.name  # type: ignore[union-attr]
+
+        if need_listing:
+            # caching new listing to special listing dataset
+            (
+                cls.from_records(
+                    DataChain.DEFAULT_FILE_RECORD,
                     session=session,
+                    settings=settings,
+                    in_memory=in_memory,
                     **kwargs,
                 )
-                dc.signals_schema = dc.signals_schema.mutate(
-                    {f"{object_name}": file_type}
+                .gen(
+                    list_bucket(lst_uri, **session.catalog.client_config),
+                    output={f"{object_name}": File},
                 )
-                return ls(dc, path, recursive=recursive)
-
-        # caching new listing to special listing dataset
-        (
-            cls.from_records(
-                DataChain.DEFAULT_FILE_RECORD,
-                session=session,
-                settings=settings,
-                in_memory=in_memory,
-                **kwargs,
+                .save(ds_name, listing=True)
             )
-            .gen(
-                list_bucket(lst_uri, **session.catalog.client_config),
-                output={f"{object_name}": File},
-            )
-            .save(ds_name, listing=True)
-        )
 
         dc = cls.from_dataset(ds_name, session=session, **kwargs)
         dc.signals_schema = dc.signals_schema.mutate({f"{object_name}": file_type})
