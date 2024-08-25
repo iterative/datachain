@@ -389,7 +389,11 @@ class DataChain(DatasetQuery):
                 and not update
             ):
                 # we can use found listing as it contains the one from input
-                dc = cls.from_dataset(ds.name, **kwargs)  # type: ignore[union-attr]
+                dc = cls.from_dataset(
+                    ds.name,  # type: ignore[union-attr]
+                    session=session,
+                    **kwargs,
+                )
                 dc.signals_schema = dc.signals_schema.mutate(
                     {f"{object_name}": file_type}
                 )

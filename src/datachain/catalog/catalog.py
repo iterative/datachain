@@ -1425,9 +1425,8 @@ class Catalog:
     def ls_datasets(self, include_listing: bool = False) -> Iterator[DatasetRecord]:
         datasets = self.metastore.list_datasets()
         for d in datasets:
-            if not include_listing and d.is_bucket_listing:
-                continue
-            yield d
+            if not d.is_bucket_listing or include_listing:
+                yield d
 
     def list_datasets_versions(
         self,
