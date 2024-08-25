@@ -33,6 +33,7 @@ from datachain.lib.dataset_info import DatasetInfo
 from datachain.lib.file import ExportPlacement as FileExportPlacement
 from datachain.lib.file import File, IndexedFile, get_file_type
 from datachain.lib.listing import (
+    is_listing_dataset,
     list_bucket,
     listing_dataset_name,
     listing_expired,
@@ -343,6 +344,7 @@ class DataChain(DatasetQuery):
             recursive : search recursively for the given path.
             object_name : Created object column name.
             update : force storage reindexing. Default is False.
+            anon : If True, we will treat cloud bucket as public one
 
         Example:
             ```py
@@ -385,7 +387,8 @@ class DataChain(DatasetQuery):
             if listing_expired(ds.created_at):  # type: ignore[union-attr]
                 continue
             if (
-                listing_subset(ds.name, ds_name)  # type: ignore[union-attr]
+                is_listing_dataset(ds.name)  # type: ignore[union-attr]
+                and listing_subset(ds.name, ds_name)  # type: ignore[union-attr]
                 and not update
             ):
                 # we can use found listing as it contains the one from input

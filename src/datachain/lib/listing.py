@@ -161,7 +161,14 @@ def ls(
 
 def listing_dataset_name(uri: str, path: str) -> str:
     """Returns special listing dataset name from uri and path"""
+    if path:
+        assert path.endswith("/")
     return f"{LISTING_PREFIX}{uri}/{path.lstrip('/')}"
+
+
+def is_listing_dataset(name: str) -> bool:
+    """Returns True if it's special listing dataset"""
+    return name.startswith(LISTING_PREFIX)
 
 
 def listing_expired(created_at: datetime) -> bool:
@@ -173,4 +180,7 @@ def listing_subset(ds1_name: str, ds2_name: str) -> bool:
     """
     Checks if one listing contains another one by comparing corresponding dataset names
     """
+    assert ds1_name.endswith("/")
+    assert ds2_name.endswith("/")
+
     return ds2_name.startswith(ds1_name)
