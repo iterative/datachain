@@ -33,10 +33,10 @@ from datachain.lib.file import ExportPlacement as FileExportPlacement
 from datachain.lib.file import File, IndexedFile, get_file_type
 from datachain.lib.listing import (
     is_listing_dataset,
+    is_listing_expired,
+    is_listing_subset,
     list_bucket,
     listing_dataset_name,
-    listing_expired,
-    listing_subset,
     ls,
 )
 from datachain.lib.meta_formats import read_meta, read_schema
@@ -384,9 +384,9 @@ class DataChain(DatasetQuery):
             session=session, in_memory=in_memory, include_listing=True
         ).collect("dataset"):
             if (
-                not listing_expired(ds.created_at)  # type: ignore[union-attr]
+                not is_listing_expired(ds.created_at)  # type: ignore[union-attr]
                 and is_listing_dataset(ds.name)  # type: ignore[union-attr]
-                and listing_subset(ds.name, ds_name)  # type: ignore[union-attr]
+                and is_listing_subset(ds.name, ds_name)  # type: ignore[union-attr]
                 and not update
             ):
                 need_listing = False

@@ -170,12 +170,12 @@ def is_listing_dataset(name: str) -> bool:
     return name.startswith(LISTING_PREFIX)
 
 
-def listing_expired(created_at: datetime) -> bool:
+def is_listing_expired(created_at: datetime) -> bool:
     """Checks if listing has expired based on it's creation date"""
     return datetime.now(timezone.utc) > created_at + timedelta(seconds=LISTING_TTL)
 
 
-def listing_subset(ds1_name: str, ds2_name: str) -> bool:
+def is_listing_subset(ds1_name: str, ds2_name: str) -> bool:
     """
     Checks if one listing contains another one by comparing corresponding dataset names
     """

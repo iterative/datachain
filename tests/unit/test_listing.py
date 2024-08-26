@@ -9,9 +9,9 @@ from datachain.lib.listing import (
     LISTING_PREFIX,
     LISTING_TTL,
     is_listing_dataset,
+    is_listing_expired,
+    is_listing_subset,
     listing_dataset_name,
-    listing_expired,
-    listing_subset,
 )
 from datachain.node import DirType, Entry, get_path
 from tests.utils import skip_if_not_sqlite
@@ -149,10 +149,19 @@ def test_subdirs(listing):
     _match_filenames(dirs, ["dir1", "dir2"])
 
 
-def test_listing_dataset_name():
-    assert listing_dataset_name("s3://my-bucket", "animals/dogs/") == (
-        f"{LISTING_PREFIX}s3://my-bucket/animals/dogs/"
-    )
+@pytest.mark.parametrize(
+    "uri,path,dataset_name",
+    [
+        (
+            "s3://my-bucket",
+            "animals/dogs/",
+            f"{LISTING_PREFIX}s3://my-bucket/animals/dogs/",
+        ),
+        ("s3://my-bucket", "", f"{LISTING_PREFIX}s3://my-bucket/"),
+    ],
+)
+def test_listing_dataset_name(uri, path, dataset_name):
+    assert listing_dataset_name(uri, path) == dataset_name
 
 
 @pytest.mark.parametrize(
@@ -168,23 +177,20 @@ def test_is_listing_dataset(name, is_listing):
     assert is_listing_dataset(name) is is_listing
 
 
-def test_listing_dataset_name_empty_path():
-    assert listing_dataset_name("s3://my-bucket", "") == (
-        f"{LISTING_PREFIX}s3://my-bucket/"
-    )
-
-
-def test_listing_expired():
-    assert listing_expired(datetime.now(timezone.utc)) is False
-    assert (
-        listing_expired(datetime.now(timezone.utc) - timedelta(seconds=LISTING_TTL + 1))
-        is True
-    )
+@pytest.mark.parametrize(
+    "date,is_expired",
+    [
+        (datetime.now(timezone.utc), False),
+        (datetime.now(timezone.utc) - timedelta(seconds=LISTING_TTL + 1), True),
+    ],
+)
+def test_is_listing_expired(date, is_expired):
+    assert is_listing_expired(date) is is_expired
 
 
 def test_listing_subset():
     assert (
-        listing_subset(
+        is_listing_subset(
             listing_dataset_name("s3://my-bucket", "/animals/"),
             listing_dataset_name("s3://my-bucket", "/animals/dogs/"),
         )
@@ -192,7 +198,7 @@ def test_listing_subset():
     )
 
     assert (
-        listing_subset(
+        is_listing_subset(
             listing_dataset_name("s3://my-bucket", "/animals/"),
             listing_dataset_name("s3://my-bucket", "/animals/"),
         )
@@ -200,7 +206,7 @@ def test_listing_subset():
     )
 
     assert (
-        listing_subset(
+        is_listing_subset(
             listing_dataset_name("s3://my-bucket", ""),
             listing_dataset_name("s3://my-bucket", ""),
         )
@@ -208,7 +214,7 @@ def test_listing_subset():
     )
 
     assert (
-        listing_subset(
+        is_listing_subset(
             listing_dataset_name("s3://my-bucket", "/animals/cats/"),
             listing_dataset_name("s3://my-bucket", "/animals/dogs/"),
         )
@@ -216,9 +222,17 @@ def test_listing_subset():
     )
 
     assert (
-        listing_subset(
+        is_listing_subset(
             listing_dataset_name("s3://my-bucket", "/animals/dogs/"),
             listing_dataset_name("s3://my-bucket", "/animals/"),
+        )
+        is False
+    )
+
+    assert (
+        is_listing_subset(
+            listing_dataset_name("s3://my-bucket", "/animals/"),
+            listing_dataset_name("s3://other-bucket", "/animals/"),
         )
         is False
     )
