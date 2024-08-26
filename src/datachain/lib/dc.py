@@ -1661,7 +1661,10 @@ class DataChain(DatasetQuery):
 
         if schema:
             signal_schema = SignalSchema(schema)
-            columns = signal_schema.db_signals(as_columns=True)  # type: ignore[assignment]
+            columns = [
+                sqlalchemy.Column(c.name, c.type)  # type: ignore[union-attr]
+                for c in signal_schema.db_signals(as_columns=True)  # type: ignore[assignment]
+            ]
         else:
             columns = [
                 sqlalchemy.Column(name, typ)
