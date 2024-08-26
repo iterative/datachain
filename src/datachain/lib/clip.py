@@ -1,5 +1,5 @@
 import inspect
-from typing import TYPE_CHECKING, Any, Callable, Literal, Union
+from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union
 
 import torch
 from transformers.modeling_utils import PreTrainedModel
@@ -39,6 +39,7 @@ def clip_similarity_scores(
     tokenizer: Callable,
     prob: bool = False,
     image_to_text: bool = True,
+    device: Optional[Union[str, torch.device]] = None,
 ) -> list[list[float]]:
     """
     Calculate CLIP similarity scores between one or more images and/or text.
@@ -52,6 +53,7 @@ def clip_similarity_scores(
         prob : Compute softmax probabilities.
         image_to_text : Whether to compute for image-to-text or text-to-image. Ignored
             if only one of images or text provided.
+        device : Device to use. Defaults is None - use model's device.
 
 
     Example:
@@ -130,7 +132,13 @@ def clip_similarity_scores(
         ```
     """
 
-    device = next(model.parameters()).device
+    if device is None:
+        if hasattr(model, "device"):
+            device = model.device
+        else:
+            device = next(model.parameters()).device
+    else:
+        model = model.to(device)
     with torch.no_grad():
         if images is not None:
             encoder = _get_encoder(model, "image")
