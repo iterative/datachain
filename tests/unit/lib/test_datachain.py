@@ -1504,6 +1504,11 @@ def test_subtract(test_session):
     assert set(chain1.subtract(chain3, on="a").collect()) == {(2, "z")}
     assert set(chain1.subtract(chain3).collect()) == {(2, "z")}
 
+    chain4 = DataChain.from_values(d=[1, 2, 3], e=["x", "y", "z"], session=test_session)
+    chain5 = DataChain.from_values(a=[1, 2], b=["x", "y"], session=test_session)
+
+    assert set(chain4.subtract(chain5, on="d", right_on="a").collect()) == {(3, "z")}
+
 
 def test_subtract_error(test_session):
     chain1 = DataChain.from_values(a=[1, 1, 2], b=["x", "y", "z"], session=test_session)
@@ -1512,6 +1517,36 @@ def test_subtract_error(test_session):
         chain1.subtract(chain2, on=[])
     with pytest.raises(TypeError):
         chain1.subtract(chain2, on=42)
+
+    with pytest.raises(DataChainParamsError):
+        chain1.subtract(chain2, on="")
+
+    with pytest.raises(DataChainParamsError):
+        chain1.subtract(chain2, on="a", right_on="")
+
+    with pytest.raises(DataChainParamsError):
+        chain1.subtract(chain2, on=["a", "b"], right_on=["c", ""])
+
+    with pytest.raises(DataChainParamsError):
+        chain1.subtract(chain2, on=["a", "b"], right_on=[])
+
+    with pytest.raises(DataChainParamsError):
+        chain1.subtract(chain2, on=["a", "b"], right_on=["d"])
+
+    with pytest.raises(DataChainParamsError):
+        chain1.subtract(chain2, right_on=[])
+
+    with pytest.raises(DataChainParamsError):
+        chain1.subtract(chain2, right_on="")
+
+    with pytest.raises(DataChainParamsError):
+        chain1.subtract(chain2, right_on=42)
+
+    with pytest.raises(DataChainParamsError):
+        chain1.subtract(chain2, right_on=["a"])
+
+    with pytest.raises(TypeError):
+        chain1.subtract(chain2, on=42, right_on=42)
 
     chain3 = DataChain.from_values(c=["foo", "bar"], session=test_session)
     with pytest.raises(DataChainParamsError):
