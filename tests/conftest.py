@@ -173,8 +173,8 @@ def catalog(id_generator, metastore, warehouse):
 
 
 @pytest.fixture
-def test_session(cloud_test_catalog):
-    with Session("TestSession", catalog=cloud_test_catalog.catalog) as session:
+def test_session(catalog):
+    with Session("TestSession", catalog=catalog) as session:
         yield session
 
 
