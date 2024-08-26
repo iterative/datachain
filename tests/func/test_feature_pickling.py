@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from datachain.lib.data_model import DataModel
 from datachain.lib.dc import C, DataChain
 from datachain.lib.file import File
+from datachain.lib.signal_schema import get_or_create_feature_model
 
 
 class FileInfo(DataModel):
@@ -213,4 +214,73 @@ def test_feature_udf_parallel_local_pydantic(cloud_test_catalog_tmpfile):
     assert df["message"]["model"].tolist() == [
         "Test AI Model Local Pydantic",
         "Test AI Model Local Pydantic",
+    ]
+
+
+@pytest.mark.parametrize(
+    "cloud_type,version_aware",
+    [("s3", True)],
+    indirect=True,
+)
+def test_feature_udf_parallel_dynamic(cloud_test_catalog_tmpfile):
+    catalog = cloud_test_catalog_tmpfile.catalog
+    source = cloud_test_catalog_tmpfile.src_uri
+    catalog.index([source])
+
+    file_info_dynamic = get_or_create_feature_model(
+        "FileInfoDynamic",
+        {
+            "file_name": (str, ""),
+            "byte_size": (int, 0),
+        },
+    )
+
+    text_block_dynamic = get_or_create_feature_model(
+        "TextBlockDynamic",
+        {
+            "text": (str, ""),
+            "type": (str, "text"),
+        },
+    )
+
+    ai_message_dynamic = get_or_create_feature_model(
+        "AIMessageDynamic",
+        {
+            "id": (str, ""),
+            "content": list[text_block_dynamic],
+            "model": (str, "Test AI Model Dynamic"),
+            "type": (Literal["message"], "message"),
+            "input_file_info": (file_info_dynamic, file_info_dynamic()),
+        },
+    )
+
+    import tests.func.test_feature_pickling as tfp  # noqa: PLW0406
+
+    # This emulates having the functions and classes declared in the __main__ script.
+    cloudpickle.register_pickle_by_value(tfp)
+
+    chain = (
+        DataChain.from_storage(source, type="text", catalog=catalog)
+        .filter(C.path.glob("*cat*"))
+        .settings(parallel=2)
+        .map(
+            message=lambda file: ai_message_dynamic(
+                id=(name := file.name),
+                content=[text_block_dynamic(text=json.dumps({"file_name": name}))],
+                input_file_info=file_info_dynamic(file_name=name, byte_size=file.size),
+            )
+            if isinstance(file, File)
+            else ai_message_dynamic(),
+            output=ai_message_dynamic,
+        )
+    )
+
+    df = chain.to_pandas()
+
+    df = sort_df_for_tests(df)
+
+    common_df_asserts(df)
+    assert df["message"]["model"].tolist() == [
+        "Test AI Model Dynamic",
+        "Test AI Model Dynamic",
     ]

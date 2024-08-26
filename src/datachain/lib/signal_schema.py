@@ -75,10 +75,12 @@ class SignalResolvingTypeError(SignalResolvingError):
         )
 
 
-dynamic_feature_models: dict[str, type[BaseModel]] = {}
+_dynamic_feature_models: dict[str, type[BaseModel]] = {}
 
 
-def get_or_create_feature_model(name: str, fields: dict[str, type]) -> type[BaseModel]:
+def get_or_create_feature_model(
+    name: str, fields: dict[str, Union[type, tuple[type, Any]]]
+) -> type[BaseModel]:
     """
     This gets or returns a dynamic feature model for use in restoring a model
     from the custom_types stored within a serialized SignalSchema. This is useful
@@ -87,15 +89,18 @@ def get_or_create_feature_model(name: str, fields: dict[str, type]) -> type[Base
     is used in a DataChain in a separate script where that model is not declared.
     """
     name = name.replace("@", "_")
-    if name not in dynamic_feature_models:
+    if name not in _dynamic_feature_models:
         cls = create_model(
             name,
             __base__=DataModel,  # type: ignore[call-overload]
             # These are tuples for each field of: annotation, default (if any)
-            **{field_name: (anno, None) for field_name, anno in fields.items()},
+            **{
+                field_name: anno if isinstance(anno, tuple) else (anno, None)
+                for field_name, anno in fields.items()
+            },
         )
-        dynamic_feature_models[name] = cls
-    return dynamic_feature_models[name]
+        _dynamic_feature_models[name] = cls
+    return _dynamic_feature_models[name]
 
 
 @dataclass
@@ -147,17 +152,30 @@ class SignalSchema:
         return SignalSchema(signals)
 
     @staticmethod
-    def serialize_custom_model_fields(fr: type, custom_types: dict[str, Any]) -> str:
-        """This serializes any custom type information to the provided custom_types
-        dict, and returns the name of the type provided."""
-        orig = get_origin(fr)
+    def _get_name_original_type(fr_type: type) -> tuple[str, type]:
+        """Returns the name of and the original type for the given type,
+        based on whether the type is Optional or not."""
+        orig = get_origin(fr_type)
+        args = get_args(fr_type)
+        # Check if fr_type is Optional
+        if orig == Union and len(args) == 2 and (type(None) in args):
+            fr_type = args[0]
+            orig = get_origin(fr_type)
         if orig in (Literal, LiteralEx):
             # Literal has no __name__ in Python 3.9
-            name = "Literal"
+            type_name = "Literal"
         else:
-            name = str(fr.__name__)
+            type_name = str(fr_type.__name__)  # type: ignore[union-attr]
+        return type_name, fr_type
+
+    @staticmethod
+    def serialize_custom_model_fields(
+        name: str, fr: type, custom_types: dict[str, Any]
+    ) -> str:
+        """This serializes any custom type information to the provided custom_types
+        dict, and returns the name of the type provided."""
         if (
-            not ModelStore.is_pydantic(fr)
+            hasattr(fr, "__origin__")
             or not issubclass(fr, BaseModel)
             or name in ("File", "TextFile", "ImageFile")
         ):
@@ -170,20 +188,14 @@ class SignalSchema:
         fields = {}
         for field_name, info in fr.model_fields.items():
             field_type = info.annotation
-            # Only typed fields should be stored.
-            if not field_type:
-                continue
-            orig = get_origin(field_type)
-            args = get_args(field_type)
-            # Check if field_type is Optional.
-            if orig == Union and len(args) == 2 and (type(None) in args):
-                field_type = args[0]
-            # Only typed fields should be stored.
-            if not field_type:
-                continue
+            # All fields should be typed.
+            assert field_type
+            field_type_name, field_type = SignalSchema._get_name_original_type(
+                field_type
+            )
             # Serialize this type to custom_types if it is a custom type as well.
             fields[field_name] = SignalSchema.serialize_custom_model_fields(
-                field_type, custom_types
+                field_type_name, field_type, custom_types
             )
         custom_types[version_name] = fields
         return version_name
@@ -195,21 +207,11 @@ class SignalSchema:
             if (fr := ModelStore.to_pydantic(fr_type)) is not None:
                 ModelStore.register(fr)
                 signals[name] = ModelStore.get_name(fr)
-                self.serialize_custom_model_fields(fr, custom_types)
+                type_name, fr_type = SignalSchema._get_name_original_type(fr)
             else:
-                orig = get_origin(fr_type)
-                args = get_args(fr_type)
-                # Check if fr_type is Optional
-                if orig == Union and len(args) == 2 and (type(None) in args):
-                    fr_type = args[0]
-                    orig = get_origin(fr_type)
-                if orig in (Literal, LiteralEx):
-                    # Literal has no __name__ in Python 3.9
-                    type_name = "Literal"
-                else:
-                    type_name = str(fr_type.__name__)  # type: ignore[union-attr]
+                type_name, fr_type = SignalSchema._get_name_original_type(fr_type)
                 signals[name] = type_name
-                self.serialize_custom_model_fields(fr_type, custom_types)
+            self.serialize_custom_model_fields(type_name, fr_type, custom_types)
         if custom_types:
             signals["_custom_types"] = custom_types
         return signals
