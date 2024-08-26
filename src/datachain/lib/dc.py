@@ -1,5 +1,4 @@
 import copy
-import glob
 import os
 import posixpath
 import re
@@ -61,7 +60,7 @@ from datachain.query.dataset import (
 )
 from datachain.query.schema import Column, DatasetRow
 from datachain.sql.functions import path as pathfunc
-from datachain.utils import inside_notebook
+from datachain.utils import inside_notebook, uses_glob
 
 if TYPE_CHECKING:
     from typing_extensions import Concatenate, ParamSpec, Self
@@ -373,8 +372,7 @@ class DataChain(DatasetQuery):
         # clean path without globs
         lst_path = (
             posixpath.dirname(path)
-            if glob.has_magic(os.path.basename(os.path.normpath(path)))
-            or client.fs.isfile(uri)
+            if uses_glob(path) or client.fs.isfile(uri)
             else path
         )
         lst_uri = f"{client.uri}/{lst_path.lstrip('/')}"

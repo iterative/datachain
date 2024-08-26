@@ -1,6 +1,4 @@
 import asyncio
-import glob
-import os
 from collections.abc import AsyncIterator, Iterator, Sequence
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Callable, Optional
@@ -15,6 +13,7 @@ from datachain.error import ClientError as DataChainClientError
 from datachain.lib.file import File
 from datachain.query.schema import Column
 from datachain.sql.functions import path as pathfunc
+from datachain.utils import uses_glob
 
 if TYPE_CHECKING:
     from datachain.lib.dc import DataChain
@@ -145,7 +144,7 @@ def ls(
             # root of a bucket, returning all latest files from it
             return dc
 
-        if not glob.has_magic(os.path.basename(os.path.normpath(path))):
+        if not uses_glob(path):
             # path is not glob, so it's pointing to some directory or a specific
             # file and we are adding proper filter for it
             return dc.filter(
