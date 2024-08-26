@@ -559,7 +559,7 @@ class DataChain(DatasetQuery):
         settings: Optional[dict] = None,
         in_memory: bool = False,
         object_name: str = "dataset",
-        **kwargs,
+        include_listing: bool = False,
     ) -> "DataChain":
         """Generate chain with list of registered datasets.
 
@@ -577,7 +577,9 @@ class DataChain(DatasetQuery):
 
         datasets = [
             DatasetInfo.from_models(d, v, j)
-            for d, v, j in catalog.list_datasets_versions(**kwargs)
+            for d, v, j in catalog.list_datasets_versions(
+                include_listing=include_listing
+            )
         ]
 
         return cls.from_values(
