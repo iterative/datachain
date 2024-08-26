@@ -331,7 +331,6 @@ class DataChain(DatasetQuery):
         update: bool = False,
         client_config=None,
         anon: bool = False,
-        **kwargs,
     ) -> "Self":
         """Get data from a storage as a list of file with all file attributes.
         It returns the chain itself as usual.
@@ -358,12 +357,7 @@ class DataChain(DatasetQuery):
         if anon:
             client_config["anon"] = True
 
-        session = Session.get(
-            session,
-            catalog=kwargs.get("catalog"),
-            client_config=client_config,
-            in_memory=in_memory,
-        )
+        session = Session.get(session, client_config=client_config, in_memory=in_memory)
 
         client, path = Client.parse_url(
             uri, session.catalog.cache, **session.catalog.client_config
@@ -400,7 +394,6 @@ class DataChain(DatasetQuery):
                     session=session,
                     settings=settings,
                     in_memory=in_memory,
-                    **kwargs,
                 )
                 .gen(
                     list_bucket(lst_uri, **session.catalog.client_config),
@@ -409,7 +402,7 @@ class DataChain(DatasetQuery):
                 .save(ds_name, listing=True)
             )
 
-        dc = cls.from_dataset(ds_name, session=session, **kwargs)
+        dc = cls.from_dataset(ds_name, session=session)
         dc.signals_schema = dc.signals_schema.mutate({f"{object_name}": file_type})
 
         return ls(dc, path, recursive=recursive, object_name=object_name)
@@ -420,7 +413,6 @@ class DataChain(DatasetQuery):
         name: str,
         version: Optional[int] = None,
         session: Optional[Session] = None,
-        **kwargs,
     ) -> "DataChain":
         """Get data from a saved Dataset. It returns the chain itself.
 
@@ -433,7 +425,7 @@ class DataChain(DatasetQuery):
             chain = DataChain.from_dataset("my_cats")
             ```
         """
-        return DataChain(name=name, version=version, session=session, **kwargs)
+        return DataChain(name=name, version=version, session=session)
 
     @classmethod
     def from_json(
