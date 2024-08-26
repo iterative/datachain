@@ -1160,9 +1160,10 @@ class DataChain(DatasetQuery):
         Parameters:
             other: chain whose rows will be removed from `self`
             on: columns to consider for determining row equality in `self`.
-            If unspecified,defaults to all common columns between `self` and `other`.
+                If unspecified, defaults to all common columns
+                between `self` and `other`.
             right_on: columns to consider for determining row equality in `other`.
-            If unspecified,defaults to the same values as `on`.
+                If unspecified, defaults to the same values as `on`.
         """
         if isinstance(on, str):
             if not on:
