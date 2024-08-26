@@ -173,8 +173,8 @@ def catalog(id_generator, metastore, warehouse):
 
 
 @pytest.fixture
-def test_session(cloud_test_catalog):
-    with Session("TestSession", catalog=cloud_test_catalog.catalog) as session:
+def test_session(catalog):
+    with Session("TestSession", catalog=catalog) as session:
         yield session
 
 
@@ -393,6 +393,10 @@ class CloudTestCatalog:
     @property
     def client_config(self):
         return self.server.client_config
+
+    @property
+    def session(self) -> Session:
+        return Session("CTCSession", catalog=self.catalog)
 
 
 cloud_types = ["s3", "gs", "azure"]

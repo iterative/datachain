@@ -70,11 +70,6 @@ def test_from_storage_reindex(tmp_dir, test_session):
     assert DataChain.from_storage(path, session=test_session, update=True).count() == 2
 
 
-@pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("file", False)],
-    indirect=True,
-)
 def test_from_storage_reindex_expired(tmp_dir, test_session):
     tmp_dir = tmp_dir / "parquets"
     os.mkdir(tmp_dir)
@@ -104,7 +99,7 @@ def test_from_storage_reindex_expired(tmp_dir, test_session):
     ["s3", "azure", "gs"],
     indirect=True,
 )
-def test_from_storage_partials(cloud_test_catalog, test_session):
+def test_from_storage_partials(cloud_test_catalog):
     def _datasets(session):
         return sorted(
             [
@@ -118,35 +113,36 @@ def test_from_storage_partials(cloud_test_catalog, test_session):
 
     ctc = cloud_test_catalog
     src_uri = ctc.src_uri
+    session = ctc.session
 
-    DataChain.from_storage(f"{src_uri}/dogs", session=test_session)
-    assert _datasets(test_session) == [
+    DataChain.from_storage(f"{src_uri}/dogs", session=session)
+    assert _datasets(session) == [
         f"{listing_dataset_name(src_uri, 'dogs/')}@v1",
     ]
 
-    DataChain.from_storage(f"{src_uri}/dogs/others", session=test_session)
-    assert _datasets(test_session) == [
+    DataChain.from_storage(f"{src_uri}/dogs/others", session=session)
+    assert _datasets(session) == [
         f"{listing_dataset_name(src_uri, 'dogs/')}@v1",
     ]
 
-    DataChain.from_storage(f"{src_uri}", session=test_session)
-    assert _datasets(test_session) == sorted(
+    DataChain.from_storage(f"{src_uri}", session=session)
+    assert _datasets(session) == sorted(
         [
             f"{listing_dataset_name(src_uri, 'dogs/')}@v1",
             f"{listing_dataset_name(src_uri, '')}@v1",
         ]
     )
 
-    DataChain.from_storage(f"{src_uri}/cats", session=test_session)
-    assert _datasets(test_session) == sorted(
+    DataChain.from_storage(f"{src_uri}/cats", session=session)
+    assert _datasets(session) == sorted(
         [
             f"{listing_dataset_name(src_uri, 'dogs/')}@v1",
             f"{listing_dataset_name(src_uri, '')}@v1",
         ]
     )
 
-    DataChain.from_storage(f"{src_uri}/cats", session=test_session, update=True)
-    assert _datasets(test_session) == sorted(
+    DataChain.from_storage(f"{src_uri}/cats", session=session, update=True)
+    assert _datasets(session) == sorted(
         [
             f"{listing_dataset_name(src_uri, 'dogs/')}@v1",
             f"{listing_dataset_name(src_uri, 'cats/')}@v1",
@@ -154,8 +150,8 @@ def test_from_storage_partials(cloud_test_catalog, test_session):
         ]
     )
 
-    DataChain.from_storage(f"{src_uri}/cats", session=test_session, update=True)
-    assert _datasets(test_session) == sorted(
+    DataChain.from_storage(f"{src_uri}/cats", session=session, update=True)
+    assert _datasets(session) == sorted(
         [
             f"{listing_dataset_name(src_uri, 'dogs/')}@v1",
             f"{listing_dataset_name(src_uri, 'cats/')}@v1",
@@ -166,7 +162,7 @@ def test_from_storage_partials(cloud_test_catalog, test_session):
 
 
 @pytest.mark.parametrize("use_cache", [True, False])
-def test_map_file(cloud_test_catalog, test_session, use_cache):
+def test_map_file(cloud_test_catalog, use_cache):
     ctc = cloud_test_catalog
 
     def new_signal(file: File) -> str:
@@ -174,7 +170,7 @@ def test_map_file(cloud_test_catalog, test_session, use_cache):
             return file.name + " -> " + f.read().decode("utf-8")
 
     dc = (
-        DataChain.from_storage(ctc.src_uri, session=test_session)
+        DataChain.from_storage(ctc.src_uri, session=ctc.session)
         .settings(cache=use_cache)
         .map(signal=new_signal)
     )
@@ -194,10 +190,10 @@ def test_map_file(cloud_test_catalog, test_session, use_cache):
 
 
 @pytest.mark.parametrize("use_cache", [False, True])
-def test_read_file(cloud_test_catalog, test_session, use_cache):
+def test_read_file(cloud_test_catalog, use_cache):
     ctc = cloud_test_catalog
 
-    dc = DataChain.from_storage(ctc.src_uri, session=test_session)
+    dc = DataChain.from_storage(ctc.src_uri, session=ctc.session)
     for file in dc.settings(cache=use_cache).collect("file"):
         assert file.get_local_path() is None
         file.read()
