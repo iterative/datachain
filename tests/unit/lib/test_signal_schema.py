@@ -4,7 +4,7 @@ from typing import Optional, Union
 
 import pytest
 
-from datachain import DataModel
+from datachain import Column, DataModel
 from datachain.lib.convert.flatten import flatten
 from datachain.lib.file import File, TextFile
 from datachain.lib.signal_schema import (
@@ -13,7 +13,6 @@ from datachain.lib.signal_schema import (
     SignalSchema,
     SignalSchemaError,
 )
-from datachain.query.schema import Column
 from datachain.sql.types import (
     JSON,
     Array,
