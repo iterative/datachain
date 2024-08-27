@@ -7,12 +7,11 @@ import pytest
 import sqlalchemy as sa
 
 from datachain.catalog.catalog import DATASET_INTERNAL_ERROR_MESSAGE
-from datachain.client import Client
 from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.dataset import LISTING_PREFIX, DatasetDependencyType, DatasetStatus
 from datachain.error import DatasetInvalidVersionError, DatasetNotFoundError
 from datachain.lib.dc import DataChain
-from datachain.lib.listing import listing_dataset_name
+from datachain.lib.listing import parse_listing_uri
 from datachain.query import DatasetQuery, udf
 from datachain.query.schema import DatasetRow
 from datachain.sql.types import (
@@ -809,14 +808,15 @@ def test_dataset_stats_registered_ds(cloud_test_catalog, dogs_dataset):
 
 @pytest.mark.parametrize("indirect", [True, False])
 def test_dataset_storage_dependencies(cloud_test_catalog, indirect):
-    catalog = cloud_test_catalog.catalog
+    ctc = cloud_test_catalog
+    session = ctc.session
+    catalog = session.catalog
     uri = cloud_test_catalog.src_uri
 
     ds_name = "some_ds"
-    DataChain.from_storage(uri, catalog=catalog).save(ds_name)
+    DataChain.from_storage(uri, session=session).save(ds_name)
 
-    client, path = Client.parse_url(uri, catalog.cache, **catalog.client_config)
-    lst_ds_name = listing_dataset_name(client.uri, posixpath.join(path, ""))
+    lst_ds_name, _, _ = parse_listing_uri(uri, catalog.cache, catalog.client_config)
     lst_dataset = catalog.metastore.get_dataset(lst_ds_name)
 
     assert [
