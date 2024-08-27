@@ -6,12 +6,11 @@ import pytest
 from datachain.catalog import Catalog
 from datachain.catalog.catalog import DataSource
 from datachain.lib.listing import (
-    LISTING_PREFIX,
     LISTING_TTL,
     is_listing_dataset,
     is_listing_expired,
     is_listing_subset,
-    listing_dataset_name,
+    parse_listing_uri,
 )
 from datachain.node import DirType, Entry, get_path
 from tests.utils import skip_if_not_sqlite
@@ -150,18 +149,35 @@ def test_subdirs(listing):
 
 
 @pytest.mark.parametrize(
-    "uri,path,dataset_name",
-    [
-        (
-            "s3://my-bucket",
-            "animals/dogs/",
-            f"{LISTING_PREFIX}s3://my-bucket/animals/dogs/",
-        ),
-        ("s3://my-bucket", "", f"{LISTING_PREFIX}s3://my-bucket/"),
-    ],
+    "cloud_type",
+    ["s3", "azure", "gs"],
+    indirect=True,
 )
-def test_listing_dataset_name(uri, path, dataset_name):
-    assert listing_dataset_name(uri, path) == dataset_name
+def test_parse_listing_uri(cloud_test_catalog):
+    ctc = cloud_test_catalog
+    catalog = ctc.catalog
+    dataset_name, listing_uri, listing_path = parse_listing_uri(
+        f"{ctc.src_uri}/dogs", catalog.cache, catalog.client_config
+    )
+    assert dataset_name == f"lst__{ctc.src_uri}/dogs/"
+    assert listing_uri == f"{ctc.src_uri}/dogs"
+    assert listing_path == "dogs"
+
+
+@pytest.mark.parametrize(
+    "cloud_type",
+    ["s3", "azure", "gs"],
+    indirect=True,
+)
+def test_parse_listing_uri_with_glob(cloud_test_catalog):
+    ctc = cloud_test_catalog
+    catalog = ctc.catalog
+    dataset_name, listing_uri, listing_path = parse_listing_uri(
+        f"{ctc.src_uri}/dogs/*", catalog.cache, catalog.client_config
+    )
+    assert dataset_name == f"lst__{ctc.src_uri}/dogs/"
+    assert listing_uri == f"{ctc.src_uri}/dogs"
+    assert listing_path == "dogs/*"
 
 
 @pytest.mark.parametrize(
@@ -188,51 +204,16 @@ def test_is_listing_expired(date, is_expired):
     assert is_listing_expired(date) is is_expired
 
 
-def test_listing_subset():
-    assert (
-        is_listing_subset(
-            listing_dataset_name("s3://my-bucket", "/animals/"),
-            listing_dataset_name("s3://my-bucket", "/animals/dogs/"),
-        )
-        is True
-    )
-
-    assert (
-        is_listing_subset(
-            listing_dataset_name("s3://my-bucket", "/animals/"),
-            listing_dataset_name("s3://my-bucket", "/animals/"),
-        )
-        is True
-    )
-
-    assert (
-        is_listing_subset(
-            listing_dataset_name("s3://my-bucket", ""),
-            listing_dataset_name("s3://my-bucket", ""),
-        )
-        is True
-    )
-
-    assert (
-        is_listing_subset(
-            listing_dataset_name("s3://my-bucket", "/animals/cats/"),
-            listing_dataset_name("s3://my-bucket", "/animals/dogs/"),
-        )
-        is False
-    )
-
-    assert (
-        is_listing_subset(
-            listing_dataset_name("s3://my-bucket", "/animals/dogs/"),
-            listing_dataset_name("s3://my-bucket", "/animals/"),
-        )
-        is False
-    )
-
-    assert (
-        is_listing_subset(
-            listing_dataset_name("s3://my-bucket", "/animals/"),
-            listing_dataset_name("s3://other-bucket", "/animals/"),
-        )
-        is False
-    )
+@pytest.mark.parametrize(
+    "ds1_name,ds2_name,is_subset",
+    [
+        ("lst__s3://my-bucket/animals/", "lst__s3://my-bucket/animals/dogs/", True),
+        ("lst__s3://my-bucket/animals/", "lst__s3://my-bucket/animals/", True),
+        ("lst__s3://my-bucket/", "lst__s3://my-bucket/", True),
+        ("lst__s3://my-bucket/cats/", "lst__s3://my-bucket/animals/dogs/", False),
+        ("lst__s3://my-bucket/dogs/", "lst__s3://my-bucket/animals/", False),
+        ("lst__s3://my-bucket/animals/", "lst__s3://other-bucket/animals/", False),
+    ],
+)
+def test_listing_subset(ds1_name, ds2_name, is_subset):
+    assert is_listing_subset(ds1_name, ds2_name) is is_subset

@@ -1,6 +1,5 @@
 import math
 import os
-import posixpath
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -11,7 +10,6 @@ import pytz
 from PIL import Image
 from sqlalchemy import Column
 
-from datachain.client import Client
 from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.dataset import DatasetStats
 from datachain.lib.dc import DataChain, DataChainColumnError
@@ -19,7 +17,7 @@ from datachain.lib.file import File, ImageFile
 from datachain.lib.listing import (
     LISTING_TTL,
     is_listing_dataset,
-    listing_dataset_name,
+    parse_listing_uri,
 )
 from tests.utils import images_equal
 
@@ -87,14 +85,12 @@ def test_from_storage_reindex(tmp_dir, test_session):
 
 
 def test_from_storage_reindex_expired(tmp_dir, test_session):
+    catalog = test_session.catalog
     tmp_dir = tmp_dir / "parquets"
     os.mkdir(tmp_dir)
     uri = tmp_dir.as_uri()
 
-    client, path = Client.parse_url(
-        uri, test_session.catalog.cache, **test_session.catalog.client_config
-    )
-    lst_ds_name = listing_dataset_name(client.uri, posixpath.join(path, ""))
+    lst_ds_name = parse_listing_uri(uri, catalog.cache, catalog.client_config)[0]
 
     pd.DataFrame({"name": ["Alice", "Bob"]}).to_parquet(tmp_dir / "test1.parquet")
     assert DataChain.from_storage(uri, session=test_session).count() == 1
@@ -119,30 +115,35 @@ def test_from_storage_partials(cloud_test_catalog):
     ctc = cloud_test_catalog
     src_uri = ctc.src_uri
     session = ctc.session
+    catalog = session.catalog
 
-    DataChain.from_storage(f"{src_uri}/dogs", session=session)
+    def _list_dataset_name(uri: str) -> str:
+        return parse_listing_uri(uri, catalog.cache, catalog.client_config)[0]
+
+    dogs_uri = f"{src_uri}/dogs"
+    DataChain.from_storage(dogs_uri, session=session)
     assert _get_listing_datasets(session) == [
-        f"{listing_dataset_name(src_uri, 'dogs/')}@v1",
+        f"{_list_dataset_name(dogs_uri)}@v1",
     ]
 
     DataChain.from_storage(f"{src_uri}/dogs/others", session=session)
     assert _get_listing_datasets(session) == [
-        f"{listing_dataset_name(src_uri, 'dogs/')}@v1",
+        f"{_list_dataset_name(dogs_uri)}@v1",
     ]
 
-    DataChain.from_storage(f"{src_uri}", session=session)
+    DataChain.from_storage(src_uri, session=session)
     assert _get_listing_datasets(session) == sorted(
         [
-            f"{listing_dataset_name(src_uri, 'dogs/')}@v1",
-            f"{listing_dataset_name(src_uri, '')}@v1",
+            f"{_list_dataset_name(dogs_uri)}@v1",
+            f"{_list_dataset_name(src_uri)}@v1",
         ]
     )
 
     DataChain.from_storage(f"{src_uri}/cats", session=session)
     assert _get_listing_datasets(session) == sorted(
         [
-            f"{listing_dataset_name(src_uri, 'dogs/')}@v1",
-            f"{listing_dataset_name(src_uri, '')}@v1",
+            f"{_list_dataset_name(dogs_uri)}@v1",
+            f"{_list_dataset_name(src_uri)}@v1",
         ]
     )
 
@@ -156,19 +157,24 @@ def test_from_storage_partials_with_update(cloud_test_catalog):
     ctc = cloud_test_catalog
     src_uri = ctc.src_uri
     session = ctc.session
+    catalog = session.catalog
 
-    DataChain.from_storage(f"{src_uri}/cats", session=session)
+    def _list_dataset_name(uri: str) -> str:
+        return parse_listing_uri(uri, catalog.cache, catalog.client_config)[0]
+
+    uri = f"{src_uri}/cats"
+    DataChain.from_storage(uri, session=session)
     assert _get_listing_datasets(session) == sorted(
         [
-            f"{listing_dataset_name(src_uri, 'cats/')}@v1",
+            f"{_list_dataset_name(uri)}@v1",
         ]
     )
 
-    DataChain.from_storage(f"{src_uri}/cats", session=session, update=True)
+    DataChain.from_storage(uri, session=session, update=True)
     assert _get_listing_datasets(session) == sorted(
         [
-            f"{listing_dataset_name(src_uri, 'cats/')}@v1",
-            f"{listing_dataset_name(src_uri, 'cats/')}@v2",
+            f"{_list_dataset_name(uri)}@v1",
+            f"{_list_dataset_name(uri)}@v2",
         ]
     )
 

@@ -1,4 +1,5 @@
 import asyncio
+import posixpath
 from collections.abc import AsyncIterator, Iterator, Sequence
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Callable, Optional
@@ -158,11 +159,23 @@ def ls(
     return dc.filter(pathfunc.parent(_file_c("path")) == path.lstrip("/").rstrip("/*"))
 
 
-def listing_dataset_name(uri: str, path: str) -> str:
-    """Returns special listing dataset name from uri and path"""
-    if path:
-        assert path.endswith("/")
-    return f"{LISTING_PREFIX}{uri}/{path.lstrip('/')}"
+def parse_listing_uri(uri: str, cache, client_config) -> tuple[str, str, str]:
+    """
+    Parsing uri and returns listing dataset name, listing uri and listing path
+    """
+    client, path = Client.parse_url(uri, cache, **client_config)
+
+    # clean path without globs
+    lst_uri_path = (
+        posixpath.dirname(path) if uses_glob(path) or client.fs.isfile(uri) else path
+    )
+
+    lst_uri = f"{client.uri}/{lst_uri_path.lstrip('/')}"
+    ds_name = (
+        f"{LISTING_PREFIX}{client.uri}/{posixpath.join(lst_uri_path, '').lstrip('/')}"
+    )
+
+    return ds_name, lst_uri, path
 
 
 def is_listing_dataset(name: str) -> bool:

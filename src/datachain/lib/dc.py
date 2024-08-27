@@ -1,6 +1,5 @@
 import copy
 import os
-import posixpath
 import re
 from collections.abc import Iterator, Sequence
 from functools import wraps
@@ -24,7 +23,6 @@ from sqlalchemy.sql.functions import GenericFunction
 from sqlalchemy.sql.sqltypes import NullType
 
 from datachain import DataModel
-from datachain.client import Client
 from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import DataType
@@ -36,8 +34,8 @@ from datachain.lib.listing import (
     is_listing_expired,
     is_listing_subset,
     list_bucket,
-    listing_dataset_name,
     ls,
+    parse_listing_uri,
 )
 from datachain.lib.meta_formats import read_meta, read_schema
 from datachain.lib.model_store import ModelStore
@@ -60,7 +58,7 @@ from datachain.query.dataset import (
 )
 from datachain.query.schema import Column, DatasetRow
 from datachain.sql.functions import path as pathfunc
-from datachain.utils import inside_notebook, uses_glob
+from datachain.utils import inside_notebook
 
 if TYPE_CHECKING:
     from typing_extensions import Concatenate, ParamSpec, Self
@@ -359,19 +357,9 @@ class DataChain(DatasetQuery):
 
         session = Session.get(session, client_config=client_config, in_memory=in_memory)
 
-        client, path = Client.parse_url(
-            uri, session.catalog.cache, **session.catalog.client_config
+        list_dataset_name, list_uri, list_path = parse_listing_uri(
+            uri, session.catalog.cache, session.catalog.client_config
         )
-
-        # clean path without globs
-        lst_path = (
-            posixpath.dirname(path)
-            if uses_glob(path) or client.fs.isfile(uri)
-            else path
-        )
-        lst_uri = f"{client.uri}/{lst_path.lstrip('/')}"
-
-        ds_name = listing_dataset_name(client.uri, posixpath.join(lst_path, ""))
         need_listing = True
 
         for ds in cls.datasets(
@@ -380,11 +368,11 @@ class DataChain(DatasetQuery):
             if (
                 not is_listing_expired(ds.created_at)  # type: ignore[union-attr]
                 and is_listing_dataset(ds.name)  # type: ignore[union-attr]
-                and is_listing_subset(ds.name, ds_name)  # type: ignore[union-attr]
+                and is_listing_subset(ds.name, list_dataset_name)  # type: ignore[union-attr]
                 and not update
             ):
                 need_listing = False
-                ds_name = ds.name  # type: ignore[union-attr]
+                list_dataset_name = ds.name  # type: ignore[union-attr]
 
         if need_listing:
             # caching new listing to special listing dataset
@@ -396,16 +384,16 @@ class DataChain(DatasetQuery):
                     in_memory=in_memory,
                 )
                 .gen(
-                    list_bucket(lst_uri, **session.catalog.client_config),
+                    list_bucket(list_uri, **session.catalog.client_config),
                     output={f"{object_name}": File},
                 )
-                .save(ds_name, listing=True)
+                .save(list_dataset_name, listing=True)
             )
 
-        dc = cls.from_dataset(ds_name, session=session)
+        dc = cls.from_dataset(list_dataset_name, session=session)
         dc.signals_schema = dc.signals_schema.mutate({f"{object_name}": file_type})
 
-        return ls(dc, path, recursive=recursive, object_name=object_name)
+        return ls(dc, list_path, recursive=recursive, object_name=object_name)
 
     @classmethod
     def from_dataset(
