@@ -296,7 +296,7 @@ class DatasetDiffOperation(Step):
 
 @frozen
 class Subtract(DatasetDiffOperation):
-    on: Sequence[Union[str, tuple[str, str]]]
+    on: Sequence[tuple[str, str]]
 
     def query(self, source_query: Select, target_query: Select) -> sa.Selectable:
         sq = source_query.alias("source_query")
@@ -1579,12 +1579,10 @@ class DatasetQuery:
 
     @detach
     def subtract(self, dq: "DatasetQuery") -> "Self":
-        return self._subtract(dq, on=["source", "path"])
+        return self._subtract(dq, on=[("source", "source"), ("path", "path")])
 
     @detach
-    def _subtract(
-        self, dq: "DatasetQuery", on: Sequence[Union[str, tuple[str, str]]]
-    ) -> "Self":
+    def _subtract(self, dq: "DatasetQuery", on: Sequence[tuple[str, str]]) -> "Self":
         query = self.clone()
         query.steps.append(Subtract(dq, self.catalog, on=on))
         return query
