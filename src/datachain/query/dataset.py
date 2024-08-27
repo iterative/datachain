@@ -1778,6 +1778,10 @@ def query_wrapper(dataset_query: DatasetQuery) -> DatasetQuery:
     save = bool(os.getenv("DATACHAIN_QUERY_SAVE"))
     save_as = os.getenv("DATACHAIN_QUERY_SAVE_AS")
 
+    is_session_dataset = dataset_query.name and dataset_query.name.startswith(
+        Session.DATASET_PREFIX + dataset_query.session.name + "_"
+    )
+
     if save_as:
         if dataset_query.attached:
             dataset_name = dataset_query.name
@@ -1804,7 +1808,7 @@ def query_wrapper(dataset_query: DatasetQuery) -> DatasetQuery:
             )
         else:
             dataset_query = dataset_query.save(save_as)
-    elif save and not dataset_query.attached:
+    elif save and (is_session_dataset or not dataset_query.attached):
         name = catalog.generate_query_dataset_name()
         dataset_query = dataset_query.save(name)
 
