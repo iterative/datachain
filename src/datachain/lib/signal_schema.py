@@ -44,6 +44,7 @@ NAMES_TO_TYPES = {
     "bytes": bytes,
     "datetime": datetime,
     "Literal": Literal,
+    "Union": Union,
 }
 
 
@@ -158,6 +159,9 @@ class SignalSchema:
         if orig in (Literal, LiteralEx):
             # Literal has no __name__ in Python 3.9
             type_name = "Literal"
+        elif orig == Union:
+            # Union also has no __name__ in Python 3.9
+            type_name = "Union"
         else:
             type_name = str(fr_type.__name__)  # type: ignore[union-attr]
         return type_name, fr_type
