@@ -1,40 +1,35 @@
 from collections.abc import Iterator
-from typing import List
 
-from unstructured.cleaners.core import (
-    clean,
-    group_broken_paragraphs,
-    replace_unicode_quotes,
-)
+from datachain import DataChain, C, File, DataModel
+
+from unstructured.partition.pdf import partition_pdf
+
+from unstructured.cleaners.core import clean
+from unstructured.cleaners.core import replace_unicode_quotes
+from unstructured.cleaners.core import group_broken_paragraphs
+
 from unstructured.embed.huggingface import (
     HuggingFaceEmbeddingConfig,
     HuggingFaceEmbeddingEncoder,
 )
-from unstructured.partition.pdf import partition_pdf
 
-from datachain import C, DataChain, DataModel, File
-
+source = "gs://datachain-demo/neurips"
 
 # Define the output as a DataModel class
 class Chunk(DataModel):
     key: str
     text: str
-    summary: str
-    embeddings: List[float]
-
+    embeddings: list[float]
 
 # Define embedding encoder
 
 embedding_encoder = HuggingFaceEmbeddingEncoder(config=HuggingFaceEmbeddingConfig())
-
 
 # Use signatures to define UDF input/output (these can be pydantic model or regular Python types)
 def process_pdf(file: File) -> Iterator[Chunk]:
     # Ingest the file
     with file.open() as f:
         chunks = partition_pdf(file=f, chunking_strategy="by_title", strategy="fast")
-
-    title = str(chunks[0])
 
     # Clean the chunks and add new columns
     for chunk in chunks:
@@ -46,10 +41,6 @@ def process_pdf(file: File) -> Iterator[Chunk]:
         chunk.apply(replace_unicode_quotes)
         chunk.apply(group_broken_paragraphs)
 
-    cleaned_text = "\n\n".join([str(el) for el in chunks])
-    helper = pipeline(model=model, device=device)
-    summary = helper(clean, max_length=200)[0]["summary_text"]
-
     # create embeddings
     chunks_embedded = embedding_encoder.embed_documents(chunks)
 
@@ -58,10 +49,8 @@ def process_pdf(file: File) -> Iterator[Chunk]:
         yield Chunk(
             key=file.path,
             text=chunk.text,
-            summary=summary,
             embeddings=chunk.embeddings,
         )
-
 
 dc = (
     DataChain.from_storage(source)
