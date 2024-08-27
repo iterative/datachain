@@ -28,7 +28,8 @@ class Chunk(DataModel):
 embedding_encoder = HuggingFaceEmbeddingEncoder(config=HuggingFaceEmbeddingConfig())
 
 
-# Use signatures to define UDF input/output (these can be pydantic model or regular Python types)
+# Use signatures to define UDF input/output
+# these can be pydantic model or regular Python types
 def process_pdf(file: File) -> Iterator[Chunk]:
     # Ingest the file
     with file.open() as f:
