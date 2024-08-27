@@ -85,10 +85,11 @@ def test_serialize_basic():
     }
     signals = SignalSchema(schema).serialize()
 
-    assert len(signals) == 3
+    assert len(signals) == 4
     assert signals["name"] == "str"
     assert signals["age"] == "float"
     assert signals["f"] == "File@v1"
+    assert "File@v1" in signals["_custom_types"]
 
 
 def test_feature_schema_serialize_optional():

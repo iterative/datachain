@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from datachain.lib.data_model import DataModel
 from datachain.lib.dc import C, DataChain
 from datachain.lib.file import File
-from datachain.lib.signal_schema import get_or_create_feature_model
+from datachain.lib.signal_schema import create_feature_model
 
 
 class FileInfo(DataModel):
@@ -227,7 +227,7 @@ def test_feature_udf_parallel_dynamic(cloud_test_catalog_tmpfile):
     source = cloud_test_catalog_tmpfile.src_uri
     catalog.index([source])
 
-    file_info_dynamic = get_or_create_feature_model(
+    file_info_dynamic = create_feature_model(
         "FileInfoDynamic",
         {
             "file_name": (str, ""),
@@ -235,7 +235,7 @@ def test_feature_udf_parallel_dynamic(cloud_test_catalog_tmpfile):
         },
     )
 
-    text_block_dynamic = get_or_create_feature_model(
+    text_block_dynamic = create_feature_model(
         "TextBlockDynamic",
         {
             "text": (str, ""),
@@ -243,7 +243,7 @@ def test_feature_udf_parallel_dynamic(cloud_test_catalog_tmpfile):
         },
     )
 
-    ai_message_dynamic = get_or_create_feature_model(
+    ai_message_dynamic = create_feature_model(
         "AIMessageDynamic",
         {
             "id": (str, ""),

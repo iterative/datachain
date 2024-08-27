@@ -75,10 +75,7 @@ class SignalResolvingTypeError(SignalResolvingError):
         )
 
 
-_dynamic_feature_models: dict[str, type[BaseModel]] = {}
-
-
-def get_or_create_feature_model(
+def create_feature_model(
     name: str, fields: dict[str, Union[type, tuple[type, Any]]]
 ) -> type[BaseModel]:
     """
@@ -89,18 +86,15 @@ def get_or_create_feature_model(
     is used in a DataChain in a separate script where that model is not declared.
     """
     name = name.replace("@", "_")
-    if name not in _dynamic_feature_models:
-        cls = create_model(
-            name,
-            __base__=DataModel,  # type: ignore[call-overload]
-            # These are tuples for each field of: annotation, default (if any)
-            **{
-                field_name: anno if isinstance(anno, tuple) else (anno, None)
-                for field_name, anno in fields.items()
-            },
-        )
-        _dynamic_feature_models[name] = cls
-    return _dynamic_feature_models[name]
+    return create_model(
+        name,
+        __base__=DataModel,  # type: ignore[call-overload]
+        # These are tuples for each field of: annotation, default (if any)
+        **{
+            field_name: anno if isinstance(anno, tuple) else (anno, None)
+            for field_name, anno in fields.items()
+        },
+    )
 
 
 @dataclass
@@ -174,12 +168,8 @@ class SignalSchema:
     ) -> str:
         """This serializes any custom type information to the provided custom_types
         dict, and returns the name of the type provided."""
-        if (
-            hasattr(fr, "__origin__")
-            or not issubclass(fr, BaseModel)
-            or name in ("File", "TextFile", "ImageFile")
-        ):
-            # Don't store non-feature types, as well as built-in types.
+        if hasattr(fr, "__origin__") or not issubclass(fr, BaseModel):
+            # Don't store non-feature types.
             return name
         version_name = ModelStore.get_name(fr)
         if version_name in custom_types:
@@ -234,7 +224,7 @@ class SignalSchema:
                 field_name: SignalSchema._resolve_type(field_type_str, custom_types)
                 for field_name, field_type_str in fields.items()
             }
-            return get_or_create_feature_model(type_name, fields)
+            return create_feature_model(type_name, fields)
         return None
 
     @staticmethod
