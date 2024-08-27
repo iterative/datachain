@@ -1779,7 +1779,7 @@ def query_wrapper(dataset_query: DatasetQuery) -> DatasetQuery:
     save_as = os.getenv("DATACHAIN_QUERY_SAVE_AS")
 
     is_session_temp_dataset = dataset_query.name and dataset_query.name.startswith(
-        Session.DATASET_PREFIX + dataset_query.session.name + "_"
+        dataset_query.session.get_temp_prefix()
     )
 
     if save_as:
