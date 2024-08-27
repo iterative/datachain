@@ -22,10 +22,11 @@ def same_lines(lines1, lines2):
 
 
 def test_ls_no_args(cloud_test_catalog, cloud_type, capsys):
-    catalog = cloud_test_catalog.catalog
+    session = cloud_test_catalog.session
+    catalog = session.catalog
     src = cloud_test_catalog.src_uri
 
-    DataChain.from_storage(src, catalog=catalog).collect()
+    DataChain.from_storage(src, session=session).collect()
     ls([], catalog=catalog)
     captured = capsys.readouterr()
     if cloud_type == "file":
