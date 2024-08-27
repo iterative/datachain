@@ -11,6 +11,7 @@ from datachain.lib.hf import (
     HFGenerator,
     HFImage,
     get_output_schema,
+    stream_splits,
 )
 
 
@@ -20,19 +21,22 @@ def test_hf():
     assert schema["pokemon"] is str
 
     gen = HFGenerator(ds, dict_to_data_model("", schema))
+    gen.setup()
     row = next(iter(gen.process()))
     assert row.pokemon == "bulbasaur"
 
 
 def test_hf_split():
-    ds = Dataset.from_dict({"pokemon": ["bulbasaur", "squirtle"]})
-    ds_dict = DatasetDict({"train": ds})
-    schema = get_output_schema(ds_dict)
-    assert schema["split"] is str
-    assert schema["pokemon"] is str
+    ds_train = Dataset.from_dict({"pokemon": ["bulbasaur", "squirtle"]})
+    ds_test = Dataset.from_dict({"pokemon": ["charizard", "pikachu"]})
+    ds_dict = DatasetDict({"train": ds_train, "test": ds_test})
+    ds_dict = stream_splits(ds_dict)
+    schema = {"split": str} | get_output_schema(next(iter(ds_dict.values())))
 
     gen = HFGenerator(ds_dict, dict_to_data_model("", schema))
-    row = next(iter(gen.process()))
+    gen.setup()
+    row = next(iter(gen.process("train")))
+
     assert row.split == "train"
     assert row.pokemon == "bulbasaur"
 
@@ -44,6 +48,7 @@ def test_hf_class_label():
     assert schema["pokemon"] is HFClassLabel
 
     gen = HFGenerator(ds, dict_to_data_model("", schema))
+    gen.setup()
     row = next(iter(gen.process()))
     assert row.pokemon.string == "bulbasaur"
     assert row.pokemon.integer == 0
@@ -55,6 +60,7 @@ def test_hf_sequence_list():
     assert schema["seq"] == list[int]
 
     gen = HFGenerator(ds, dict_to_data_model("", schema))
+    gen.setup()
     row = next(iter(gen.process()))
     assert row.seq == [0, 1]
 
@@ -70,6 +76,7 @@ def test_hf_sequence_dict():
     assert schema["pokemon"].model_fields["name"].annotation == list[str]
 
     gen = HFGenerator(ds, dict_to_data_model("", schema))
+    gen.setup()
     row = next(iter(gen.process()))
     assert row.pokemon.name == ["bulbasaur"]
 
@@ -83,6 +90,7 @@ def test_hf_array():
     assert schema["arr"] == list[list[int]]
 
     gen = HFGenerator(ds, dict_to_data_model("", schema))
+    gen.setup()
     row = next(iter(gen.process()))
     assert row.arr == [[0, 1], [2, 3]]
 
@@ -94,13 +102,12 @@ def test_hf_image(tmp_path):
     img.save(train_dir / "img1.png")
 
     ds = load_dataset("imagefolder", data_dir=tmp_path)
-    schema = get_output_schema(ds)
-    assert schema["split"] is str
+    schema = get_output_schema(next(iter(ds.values())))
     assert schema["image"] is HFImage
 
     gen = HFGenerator(ds, dict_to_data_model("", schema))
-    row = next(iter(gen.process()))
-    assert row.split == "train"
+    gen.setup()
+    row = next(iter(gen.process("train")))
     assert row.image.img == image_to_bytes(img)
 
 

@@ -64,20 +64,25 @@ class HFAudio(DataModel):
 
 
 class HFGenerator(Generator):
-    def __init__(self, ds: HFDatasetType, output_schema: type["BaseModel"]):
+    def __init__(
+        self,
+        ds: Union[str, HFDatasetType],
+        output_schema: type["BaseModel"],
+        *args,
+        **kwargs,
+    ):
         super().__init__()
         self.ds = ds
         self.output_schema = output_schema
+        self.args = args
+        self.kwargs = kwargs
 
-    def process(self):
-        if isinstance(self.ds, (DatasetDict, IterableDatasetDict)):
-            for split in self.ds:
-                yield from self._process_ds(self.ds[split], split)
-        else:
-            yield from self._process_ds(self.ds)
+    def setup(self):
+        self.ds_dict = stream_splits(self.ds, *self.args, **self.kwargs)
 
-    def _process_ds(self, ds: Union[Dataset, IterableDataset], split=False):
+    def process(self, split: str = ""):
         desc = "Parsed Hugging Face dataset"
+        ds = self.ds_dict[split]
         if split:
             desc += f" split '{split}'"
         with tqdm(desc=desc, unit=" rows") as pbar:
@@ -92,8 +97,12 @@ class HFGenerator(Generator):
                 pbar.update(1)
 
 
-def stream_dataset(path: str, *args, **kwargs):
-    return load_dataset(path, *args, streaming=True, **kwargs)
+def stream_splits(ds: Union[str, HFDatasetType], *args, **kwargs):
+    if isinstance(ds, str):
+        ds = load_dataset(ds, *args, streaming=True, **kwargs)
+    if isinstance(ds, (DatasetDict, IterableDatasetDict)):
+        return ds
+    return {"": ds}
 
 
 def _convert_feature(val: Any, feat: Any, anno: Any) -> Any:
@@ -116,11 +125,10 @@ def _convert_feature(val: Any, feat: Any, anno: Any) -> Any:
         return HFAudio(**val)
 
 
-def get_output_schema(ds: HFDatasetType, model_name: str = "") -> dict[str, DataType]:
+def get_output_schema(
+    ds: Union[Dataset, IterableDataset], model_name: str = ""
+) -> dict[str, DataType]:
     fields_dict = {}
-    if isinstance(ds, (DatasetDict, IterableDatasetDict)):
-        fields_dict["split"] = str
-        ds = ds[next(iter(ds.keys()))]
     for name, val in ds.features.items():
         fields_dict[name] = _feature_to_chain_type(name, val)  # type: ignore[assignment]
     return fields_dict  # type: ignore[return-value]

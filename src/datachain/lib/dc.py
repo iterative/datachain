@@ -1363,21 +1363,23 @@ class DataChain(DatasetQuery):
             DataChain.from_hf(ds)
             ```
         """
-        from datachain.lib.hf import HFGenerator, get_output_schema, stream_dataset
+        from datachain.lib.hf import HFGenerator, get_output_schema, stream_splits
 
-        if isinstance(dataset, str):
-            dataset = stream_dataset(dataset, *args, **kwargs)
+        output: dict[str, DataType] = {}
+        ds_dict = stream_splits(dataset, *args, **kwargs)
+        if len(ds_dict) > 1:
+            output = {"split": str}
 
         model_name = model_name or object_name or ""
-        output = get_output_schema(dataset, model_name)
+        output = output | get_output_schema(next(iter(ds_dict.values())), model_name)
         model = dict_to_data_model(model_name, output)
         if object_name:
             output = {object_name: model}
 
-        chain = DataChain.from_records(
-            DataChain.DEFAULT_FILE_RECORD, session=session, settings=settings
+        chain = DataChain.from_values(
+            split=list(ds_dict.keys()), session=session, settings=settings
         )
-        return chain.gen(HFGenerator(dataset, model), output=output)
+        return chain.gen(HFGenerator(dataset, model, *args, **kwargs), output=output)
 
     def parse_tabular(
         self,
