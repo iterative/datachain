@@ -70,6 +70,7 @@ vector = [
   "usearch"
 ]
 hf = [
+  "numba>=0.60.0",
   "datasets[audio,vision]"
 ]
 tests = [
