@@ -2,7 +2,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import ClassVar, Union, get_args, get_origin
 
-from pydantic import BaseModel
+from pydantic import BaseModel, create_model
 
 from datachain.lib.model_store import ModelStore
 
@@ -57,3 +57,12 @@ def is_chain_type(t: type) -> bool:
         return is_chain_type(args[0])
 
     return False
+
+
+def dict_to_data_model(name: str, data_dict: dict[str, DataType]) -> type[BaseModel]:
+    fields = {name: (anno, ...) for name, anno in data_dict.items()}
+    return create_model(
+        name,
+        __base__=(DataModel,),  # type: ignore[call-overload]
+        **fields,
+    )  # type: ignore[call-overload]

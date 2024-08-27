@@ -18,14 +18,13 @@ from typing import (
 
 import pandas as pd
 import sqlalchemy
-from pydantic import BaseModel, create_model
+from pydantic import BaseModel
 from sqlalchemy.sql.functions import GenericFunction
 from sqlalchemy.sql.sqltypes import NullType
 
-from datachain import DataModel
 from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.convert.values_to_tuples import values_to_tuples
-from datachain.lib.data_model import DataType
+from datachain.lib.data_model import DataModel, DataType, dict_to_data_model
 from datachain.lib.dataset_info import DatasetInfo
 from datachain.lib.file import ExportPlacement as FileExportPlacement
 from datachain.lib.file import File, IndexedFile, get_file
@@ -54,6 +53,8 @@ from datachain.utils import inside_notebook
 
 if TYPE_CHECKING:
     from typing_extensions import Concatenate, ParamSpec, Self
+
+    from datachain.lib.hf import HFDatasetType
 
     P = ParamSpec("P")
 
@@ -1213,7 +1214,7 @@ class DataChain(DatasetQuery):
             in_memory=in_memory,
         )
         if object_name:
-            output = {object_name: DataChain._dict_to_data_model(object_name, output)}  # type: ignore[arg-type]
+            output = {object_name: dict_to_data_model(object_name, output)}  # type: ignore[arg-type]
         return chain.gen(_func_fr, output=output)
 
     @classmethod
@@ -1327,6 +1328,59 @@ class DataChain(DatasetQuery):
         if len(df) == limit:
             print(f"\n[Limited by {len(df)} rows]")
 
+    @classmethod
+    def from_hf(
+        cls,
+        dataset: Union[str, "HFDatasetType"],
+        *args,
+        session: Optional[Session] = None,
+        settings: Optional[dict] = None,
+        object_name: str = "",
+        model_name: str = "",
+        **kwargs,
+    ) -> "DataChain":
+        """Generate chain from huggingface hub dataset.
+
+        Parameters:
+            dataset : Path or name of the dataset to read from Hugging Face Hub,
+                or an instance of `datasets.Dataset`-like object.
+            session : Session to use for the chain.
+            settings : Settings to use for the chain.
+            object_name : Generated object column name.
+            model_name : Generated model name.
+            kwargs : Parameters to pass to datasets.load_dataset.
+
+        Example:
+            Load from Hugging Face Hub:
+            ```py
+            DataChain.from_hf("beans", split="train")
+            ```
+
+            Generate chain from loaded dataset:
+            ```py
+            from datasets import load_dataset
+            ds = load_dataset("beans", split="train")
+            DataChain.from_hf(ds)
+            ```
+        """
+        from datachain.lib.hf import HFGenerator, get_output_schema, stream_splits
+
+        output: dict[str, DataType] = {}
+        ds_dict = stream_splits(dataset, *args, **kwargs)
+        if len(ds_dict) > 1:
+            output = {"split": str}
+
+        model_name = model_name or object_name or ""
+        output = output | get_output_schema(next(iter(ds_dict.values())), model_name)
+        model = dict_to_data_model(model_name, output)
+        if object_name:
+            output = {object_name: model}
+
+        chain = DataChain.from_values(
+            split=list(ds_dict.keys()), session=session, settings=settings
+        )
+        return chain.gen(HFGenerator(dataset, model, *args, **kwargs), output=output)
+
     def parse_tabular(
         self,
         output: OutputType = None,
@@ -1388,7 +1442,7 @@ class DataChain(DatasetQuery):
 
         if isinstance(output, dict):
             model_name = model_name or object_name or ""
-            model = DataChain._dict_to_data_model(model_name, output)
+            model = dict_to_data_model(model_name, output)
         else:
             model = output  # type: ignore[assignment]
 
@@ -1404,17 +1458,6 @@ class DataChain(DatasetQuery):
         return self.gen(
             ArrowGenerator(schema, model, source, nrows, **kwargs), output=output
         )
-
-    @staticmethod
-    def _dict_to_data_model(
-        name: str, data_dict: dict[str, DataType]
-    ) -> type[BaseModel]:
-        fields = {name: (anno, ...) for name, anno in data_dict.items()}
-        return create_model(
-            name,
-            __base__=(DataModel,),  # type: ignore[call-overload]
-            **fields,
-        )  # type: ignore[call-overload]
 
     @classmethod
     def from_csv(
