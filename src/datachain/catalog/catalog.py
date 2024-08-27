@@ -1916,7 +1916,7 @@ class Catalog:
         """
         from datachain.query.dataset import ExecutionResult
 
-        feature_file = tempfile.NamedTemporaryFile(
+        feature_file = tempfile.NamedTemporaryFile(  # noqa: SIM115
             dir=os.getcwd(), suffix=".py", delete=False
         )
         _, feature_module = os.path.split(feature_file.name)
