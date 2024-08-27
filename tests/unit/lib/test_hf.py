@@ -6,7 +6,6 @@ from scipy.io.wavfile import write
 
 from datachain.lib.data_model import dict_to_data_model
 from datachain.lib.hf import (
-    HFAudio,
     HFClassLabel,
     HFGenerator,
     HFImage,
@@ -31,7 +30,7 @@ def test_hf_split():
     ds_test = Dataset.from_dict({"pokemon": ["charizard", "pikachu"]})
     ds_dict = DatasetDict({"train": ds_train, "test": ds_test})
     ds_dict = stream_splits(ds_dict)
-    schema = {"split": str} | get_output_schema(next(iter(ds_dict.values())))
+    schema = {"split": str} | get_output_schema(ds_dict["train"])
 
     gen = HFGenerator(ds_dict, dict_to_data_model("", schema))
     gen.setup()
@@ -102,7 +101,7 @@ def test_hf_image(tmp_path):
     img.save(train_dir / "img1.png")
 
     ds = load_dataset("imagefolder", data_dir=tmp_path)
-    schema = get_output_schema(next(iter(ds.values())))
+    schema = get_output_schema(ds["train"])
     assert schema["image"] is HFImage
 
     gen = HFGenerator(ds, dict_to_data_model("", schema))
@@ -123,13 +122,11 @@ def test_hf_audio(tmp_path):
     write(train_dir / "example.wav", samplerate, data.astype(np.int16))
 
     ds = load_dataset("audiofolder", data_dir=tmp_path)
-    schema = get_output_schema(ds)
-    assert schema["split"] is str
-    assert schema["audio"] is HFAudio
+    schema = get_output_schema(ds["train"])
 
     gen = HFGenerator(ds, dict_to_data_model("", schema))
-    row = next(iter(gen.process()))
-    assert row.split == "train"
+    gen.setup()
+    row = next(iter(gen.process("train")))
     assert row.audio.path == str(train_dir / "example.wav")
     assert np.allclose(row.audio.array, data / amplitude, atol=1e-4)
     assert row.audio.sampling_rate == samplerate

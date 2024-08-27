@@ -77,7 +77,6 @@ def test_hf_to_pytorch(catalog, fake_image_dir):
     hf_ds = load_dataset("imagefolder", data_dir=fake_image_dir)
     chain = DataChain.from_hf(hf_ds)
     pt_ds = chain.to_pytorch()
-    split, img, label = next(iter(pt_ds))
-    assert split == "train"
+    img, label = next(iter(pt_ds))
     assert isinstance(img, Tensor)
     assert label == 0
