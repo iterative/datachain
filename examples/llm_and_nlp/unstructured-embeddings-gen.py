@@ -1,19 +1,20 @@
 from collections.abc import Iterator
 
-from datachain import DataChain, C, File, DataModel
-
-from unstructured.partition.pdf import partition_pdf
-
-from unstructured.cleaners.core import clean
-from unstructured.cleaners.core import replace_unicode_quotes
-from unstructured.cleaners.core import group_broken_paragraphs
-
+from unstructured.cleaners.core import (
+    clean,
+    group_broken_paragraphs,
+    replace_unicode_quotes,
+)
 from unstructured.embed.huggingface import (
     HuggingFaceEmbeddingConfig,
     HuggingFaceEmbeddingEncoder,
 )
+from unstructured.partition.pdf import partition_pdf
+
+from datachain import C, DataChain, DataModel, File
 
 source = "gs://datachain-demo/neurips"
+
 
 # Define the output as a DataModel class
 class Chunk(DataModel):
@@ -21,9 +22,11 @@ class Chunk(DataModel):
     text: str
     embeddings: list[float]
 
+
 # Define embedding encoder
 
 embedding_encoder = HuggingFaceEmbeddingEncoder(config=HuggingFaceEmbeddingConfig())
+
 
 # Use signatures to define UDF input/output (these can be pydantic model or regular Python types)
 def process_pdf(file: File) -> Iterator[Chunk]:
@@ -51,6 +54,7 @@ def process_pdf(file: File) -> Iterator[Chunk]:
             text=chunk.text,
             embeddings=chunk.embeddings,
         )
+
 
 dc = (
     DataChain.from_storage(source)
