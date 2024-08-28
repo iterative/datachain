@@ -45,7 +45,8 @@ dependencies = [
   "datamodel-code-generator>=0.25",
   "Pillow>=10.0.0,<11",
   "msgpack>=1.0.4,<2",
-  "psutil"
+  "psutil",
+  "huggingface_hub"
 ]
 
 [project.optional-dependencies]
