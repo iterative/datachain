@@ -73,7 +73,6 @@ from datachain.utils import (
     batched,
     datachain_paths_join,
     import_object,
-    parse_params_string,
 )
 
 from .datasource import DataSource
@@ -1814,22 +1813,25 @@ class Catalog:
         udf_location: str,
         source: str,
         target_name: str,
+        signal_name: str,
         parallel: Optional[int] = None,
-        params: Optional[str] = None,
     ):
-        # TODO refactor with DataChain
-        from datachain.query import DatasetQuery
+        from datachain.lib.dc import DataChain
+        from datachain.query.session import Session
+
+        session = Session.get(catalog=self)
 
         if source.startswith(DATASET_PREFIX):
-            ds = DatasetQuery(name=source[len(DATASET_PREFIX) :], catalog=self)
+            dc = DataChain.from_dataset(source[len(DATASET_PREFIX) :], session=session)
         else:
-            pass
-            # ds = DatasetQuery(path=source, catalog=self)
+            dc = DataChain.from_storage(source, session=session)
+
+        if parallel:
+            dc = dc.settings(parallel=parallel)
+
         udf = import_object(udf_location)
-        if params:
-            args, kwargs = parse_params_string(params)
-            udf = udf(*args, **kwargs)
-        ds.add_signals(udf, parallel=parallel).save(target_name)
+
+        dc.map(**{signal_name: udf}).save(target_name)
 
     def query(
         self,

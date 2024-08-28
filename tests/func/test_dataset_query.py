@@ -1295,34 +1295,33 @@ def test_udf_distributed_cancel(cloud_test_catalog_tmpfile, capfd, datachain_job
     assert "semaphore" not in captured.err
 
 
-def test_apply_udf(cloud_test_catalog, tmp_path):
-    pytest.skip("Catalog.apply_udf() must be refactored with DataChain")
-    catalog = cloud_test_catalog.catalog
-    sources = [cloud_test_catalog.src_uri]
-    globs = [s.rstrip("/") + "/*" for s in sources]
-    catalog.index(sources)
-    catalog.create_dataset_from_sources("animals", globs, recursive=True)
+def test_apply_udf(cloud_test_catalog, tmp_path, animal_dataset):
+    ctc = cloud_test_catalog
+    session = ctc.session
+    catalog = session.catalog
 
     code = """\
         import posixpath
-        from datachain.query import C, udf
-        from datachain.sql.types import Int
+        from datachain import File
 
-        @udf(("file__path",), {"name_len": Int})
-        def name_len(path):
-            return (len(posixpath.basename(path)),)
+        def name_len(file: File) -> int:
+            return len(posixpath.basename(file.path))
 
     """
     script = tmp_path / "foo.py"
     script.write_text(dedent(code))
 
-    catalog.apply_udf(f"{script}:name_len", cloud_test_catalog.src_uri, "from-storage")
+    catalog.apply_udf(
+        f"{script}:name_len", cloud_test_catalog.src_uri, "from-storage", "name_len"
+    )
     q = DatasetQuery(name="from-storage", version=1, catalog=catalog).filter(
         C.name_len == 4
     )
     assert len(q.db_results()) == 6
 
-    catalog.apply_udf(f"{script}:name_len", "ds://animals", "from-dataset")
+    catalog.apply_udf(
+        f"{script}:name_len", f"ds://{animal_dataset.name}", "from-dataset", "name_len"
+    )
     q = DatasetQuery(name="from-dataset", version=1, catalog=catalog).filter(
         C.name_len == 4
     )
