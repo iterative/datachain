@@ -144,7 +144,7 @@ def arrow_type_mapper(col_type: pa.DataType, column: str = "") -> type:  # noqa:
 
 
 def _nrows_file(file: File, nrows: int) -> str:
-    tf = NamedTemporaryFile(delete=False)
+    tf = NamedTemporaryFile(delete=False)  # noqa: SIM115
     with file.open(mode="r") as reader:
         with open(tf.name, "a") as writer:
             for row, line in enumerate(reader):

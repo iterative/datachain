@@ -1560,17 +1560,8 @@ class Catalog:
         version = self.get_dataset(dataset_name).get_version(dataset_version)
 
         file_signals_values = {}
-        file_schemas = {}
-        # TODO: To remove after we properly fix deserialization
-        for signal, type_name in version.feature_schema.items():
-            from datachain.lib.model_store import ModelStore
 
-            type_name_parsed, v = ModelStore.parse_name_version(type_name)
-            fr = ModelStore.get(type_name_parsed, v)
-            if fr and issubclass(fr, File):
-                file_schemas[signal] = type_name
-
-        schema = SignalSchema.deserialize(file_schemas)
+        schema = SignalSchema.deserialize(version.feature_schema)
         for file_signals in schema.get_signals(File):
             prefix = file_signals.replace(".", DEFAULT_DELIMITER) + DEFAULT_DELIMITER
             file_signals_values[file_signals] = {
@@ -1916,7 +1907,7 @@ class Catalog:
         """
         from datachain.query.dataset import ExecutionResult
 
-        feature_file = tempfile.NamedTemporaryFile(
+        feature_file = tempfile.NamedTemporaryFile(  # noqa: SIM115
             dir=os.getcwd(), suffix=".py", delete=False
         )
         _, feature_module = os.path.split(feature_file.name)
