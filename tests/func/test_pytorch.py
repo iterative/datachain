@@ -1,5 +1,6 @@
 import open_clip
 import pytest
+from datasets import load_dataset
 from torch import Size, Tensor
 from torchvision.datasets import FakeData
 from torchvision.transforms import v2
@@ -9,15 +10,20 @@ from datachain.lib.pytorch import PytorchDataset
 
 
 @pytest.fixture
-def fake_dataset(catalog, tmp_path):
+def fake_image_dir(catalog, tmp_path):
     # Create fake images in labeled dirs
     data_path = tmp_path / "data" / ""
     for i, (img, label) in enumerate(FakeData()):
         label = str(label)
         (data_path / label).mkdir(parents=True, exist_ok=True)
         img.save(data_path / label / f"{i}.jpg")
+    return data_path
+
+
+@pytest.fixture
+def fake_dataset(catalog, fake_image_dir):
     # Create dataset from images
-    uri = data_path.as_uri()
+    uri = fake_image_dir.as_uri()
     return (
         DataChain.from_storage(uri, type="image")
         .map(text=lambda file: file.parent.split("/")[-1], output=str)
@@ -65,3 +71,12 @@ def test_to_pytorch(fake_dataset):
     assert isinstance(text, Tensor)
     assert isinstance(label, int)
     assert img.size() == Size([3, 64, 64])
+
+
+def test_hf_to_pytorch(catalog, fake_image_dir):
+    hf_ds = load_dataset("imagefolder", data_dir=fake_image_dir)
+    chain = DataChain.from_hf(hf_ds)
+    pt_ds = chain.to_pytorch()
+    img, label = next(iter(pt_ds))
+    assert isinstance(img, Tensor)
+    assert label == 0

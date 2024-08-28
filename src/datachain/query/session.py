@@ -74,11 +74,13 @@ class Session:
             self.catalog.id_generator.close_on_exit()
 
     def generate_temp_dataset_name(self) -> str:
-        tmp_table_uid = uuid4().hex[: self.TEMP_TABLE_UUID_LEN]
-        return f"{self.DATASET_PREFIX}{self.name}_{tmp_table_uid}"
+        return self.get_temp_prefix() + uuid4().hex[: self.TEMP_TABLE_UUID_LEN]
+
+    def get_temp_prefix(self) -> str:
+        return f"{self.DATASET_PREFIX}{self.name}_"
 
     def _cleanup_temp_datasets(self) -> None:
-        prefix = f"{self.DATASET_PREFIX}{self.name}"
+        prefix = self.get_temp_prefix()
         try:
             for dataset in list(self.catalog.metastore.list_datasets_by_prefix(prefix)):
                 self.catalog.remove_dataset(dataset.name, force=True)

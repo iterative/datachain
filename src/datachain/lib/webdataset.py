@@ -222,7 +222,7 @@ class TarStream(File):
         self._tar = None
 
     def open(self):
-        self._tar = tarfile.open(fileobj=super().open())
+        self._tar = tarfile.open(fileobj=super().open())  # noqa: SIM115
         return self
 
     def getmembers(self) -> list[tarfile.TarInfo]:

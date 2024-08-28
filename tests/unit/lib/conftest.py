@@ -15,7 +15,10 @@ TO_TENSOR = v2.Compose(
 
 @pytest.fixture()
 def fake_clip_model():
-    class Model:
+    class Model(torch.nn.Module):
+        def __init__(self, *args, **kwargs):
+            self._parameters = {"p_1": torch.nn.Parameter(torch.tensor(1.0))}
+
         def encode_image(self, tensor):
             return torch.randn(len(tensor), 512)
 
@@ -34,7 +37,7 @@ def fake_clip_model():
 def fake_hf_model():
     class Model(PreTrainedModel):
         def __init__(self, *args, **kwargs):
-            pass
+            self._parameters = {"p_1": torch.nn.Parameter(torch.tensor(1.0))}
 
         def get_text_features(self, tensor):
             return torch.randn(len(tensor), 512)

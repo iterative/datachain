@@ -95,7 +95,7 @@ def schema_to_output(schema: pa.Schema, col_names: Optional[Sequence[str]] = Non
         if not column:
             column = f"c{default_column}"
             default_column += 1
-        dtype = _arrow_type_mapper(field.type)  # type: ignore[assignment]
+        dtype = arrow_type_mapper(field.type)  # type: ignore[assignment]
         if field.nullable:
             dtype = Optional[dtype]  # type: ignore[assignment]
         output[column] = dtype
@@ -103,7 +103,7 @@ def schema_to_output(schema: pa.Schema, col_names: Optional[Sequence[str]] = Non
     return output
 
 
-def _arrow_type_mapper(col_type: pa.DataType) -> type:  # noqa: PLR0911
+def arrow_type_mapper(col_type: pa.DataType) -> type:  # noqa: PLR0911
     """Convert pyarrow types to basic types."""
     from datetime import datetime
 
@@ -122,16 +122,16 @@ def _arrow_type_mapper(col_type: pa.DataType) -> type:  # noqa: PLR0911
     if pa.types.is_string(col_type) or pa.types.is_large_string(col_type):
         return str
     if pa.types.is_list(col_type):
-        return list[_arrow_type_mapper(col_type.value_type)]  # type: ignore[return-value, misc]
+        return list[arrow_type_mapper(col_type.value_type)]  # type: ignore[return-value, misc]
     if pa.types.is_struct(col_type) or pa.types.is_map(col_type):
         return dict
     if isinstance(col_type, pa.lib.DictionaryType):
-        return _arrow_type_mapper(col_type.value_type)  # type: ignore[return-value]
+        return arrow_type_mapper(col_type.value_type)  # type: ignore[return-value]
     raise TypeError(f"{col_type!r} datatypes not supported")
 
 
 def _nrows_file(file: File, nrows: int) -> str:
-    tf = NamedTemporaryFile(delete=False)
+    tf = NamedTemporaryFile(delete=False)  # noqa: SIM115
     with file.open(mode="r") as reader:
         with open(tf.name, "a") as writer:
             for row, line in enumerate(reader):
