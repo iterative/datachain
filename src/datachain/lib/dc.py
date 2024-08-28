@@ -1153,17 +1153,35 @@ class DataChain(DatasetQuery):
         self,
         other: "DataChain",
         on: Optional[Union[str, Sequence[str]]] = None,
+        right_on: Optional[Union[str, Sequence[str]]] = None,
     ) -> "Self":
         """Remove rows that appear in another chain.
 
         Parameters:
             other: chain whose rows will be removed from `self`
-            on: columns to consider for determining row equality. If unspecified,
-                defaults to all common columns between `self` and `other`.
+            on: columns to consider for determining row equality in `self`.
+                If unspecified, defaults to all common columns
+                between `self` and `other`.
+            right_on: columns to consider for determining row equality in `other`.
+                If unspecified, defaults to the same values as `on`.
         """
         if isinstance(on, str):
+            if not on:
+                raise DataChainParamsError("'on' cannot be an empty string")
             on = [on]
-        if on is None:
+        elif isinstance(on, Sequence):
+            if not on or any(not col for col in on):
+                raise DataChainParamsError("'on' cannot contain empty strings")
+
+        if isinstance(right_on, str):
+            if not right_on:
+                raise DataChainParamsError("'right_on' cannot be an empty string")
+            right_on = [right_on]
+        elif isinstance(right_on, Sequence):
+            if not right_on or any(not col for col in right_on):
+                raise DataChainParamsError("'right_on' cannot contain empty strings")
+
+        if on is None and right_on is None:
             other_columns = set(other._effective_signals_schema.db_signals())
             signals = [
                 c
@@ -1172,16 +1190,29 @@ class DataChain(DatasetQuery):
             ]
             if not signals:
                 raise DataChainParamsError("subtract(): no common columns")
-        elif not isinstance(on, Sequence):
-            raise TypeError(
-                f"'on' must be 'str' or 'Sequence' object but got type '{type(on)}'",
-            )
-        elif not on:
+        elif on is not None and right_on is None:
+            right_on = on
+            signals = list(self.signals_schema.resolve(*on).db_signals())
+        elif on is None and right_on is not None:
             raise DataChainParamsError(
-                "'on' cannot be empty",
+                "'on' must be specified when 'right_on' is provided"
             )
         else:
-            signals = self.signals_schema.resolve(*on).db_signals()  # type: ignore[assignment]
+            if not isinstance(on, Sequence) or not isinstance(right_on, Sequence):
+                raise TypeError(
+                    "'on' and 'right_on' must be 'str' or 'Sequence' object"
+                )
+            if len(on) != len(right_on):
+                raise DataChainParamsError(
+                    "'on' and 'right_on' must have the same length"
+                )
+            signals = list(
+                zip(
+                    self.signals_schema.resolve(*on).db_signals(),
+                    other.signals_schema.resolve(*right_on).db_signals(),
+                )  # type: ignore[arg-type]
+            )
+
         return super()._subtract(other, signals)  # type: ignore[arg-type]
 
     @classmethod
