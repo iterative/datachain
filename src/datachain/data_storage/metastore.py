@@ -305,30 +305,12 @@ class AbstractMetastore(ABC, Serializable):
         source_dataset_version: int,
     ) -> None:
         """Add dependency to dataset or storage."""
-        if dependency.is_dataset:
-            self.add_dataset_dependency(
-                source_dataset_name,
-                source_dataset_version,
-                dependency.dataset_name,
-                int(dependency.version),
-            )
-        else:
-            self.add_storage_dependency(
-                source_dataset_name,
-                source_dataset_version,
-                StorageURI(dependency.name),
-                dependency.version,
-            )
-
-    @abstractmethod
-    def add_storage_dependency(
-        self,
-        source_dataset_name: str,
-        source_dataset_version: int,
-        storage_uri: StorageURI,
-        storage_timestamp_str: Optional[str] = None,
-    ) -> None:
-        """Adds storage dependency to dataset."""
+        self.add_dataset_dependency(
+            source_dataset_name,
+            source_dataset_version,
+            dependency.dataset_name,
+            int(dependency.version),
+        )
 
     @abstractmethod
     def add_dataset_dependency(
@@ -1272,27 +1254,6 @@ class AbstractDBMetastore(AbstractMetastore):
     def _insert_dataset_dependency(self, data: dict[str, Any]) -> None:
         """Method for inserting dependencies."""
         self.db.execute(self._datasets_dependencies_insert().values(**data))
-
-    def add_storage_dependency(
-        self,
-        source_dataset_name: str,
-        source_dataset_version: int,
-        storage_uri: StorageURI,
-        storage_timestamp_str: Optional[str] = None,
-    ) -> None:
-        source_dataset = self.get_dataset(source_dataset_name)
-        storage = self.get_storage(storage_uri)
-
-        self._insert_dataset_dependency(
-            {
-                "source_dataset_id": source_dataset.id,
-                "source_dataset_version_id": (
-                    source_dataset.get_version(source_dataset_version).id
-                ),
-                "bucket_id": storage.id,
-                "bucket_version": storage_timestamp_str,
-            }
-        )
 
     def add_dataset_dependency(
         self,

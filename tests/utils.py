@@ -116,6 +116,7 @@ def create_tar_dataset(catalog, uri: str, ds_name: str) -> DatasetQuery:
     The resulting dataset contains both the original files (as regular objects)
     and the tar members (as v-objects).
     """
+    # TODO refactor
     ds1 = DatasetQuery(path=uri, catalog=catalog)
     tar_entries = ds1.filter(C.path.glob("*.tar")).generate(index_tar)
     return ds1.filter(~C.path.glob("*.tar")).union(tar_entries).save(ds_name)
@@ -260,8 +261,10 @@ def assert_row_names(
     preview = dataset.get_version(version).preview
     assert preview
 
-    assert {r["path"] for r in dataset_rows} == {r.get("path") for r in preview}
-    assert {posixpath.basename(r["path"]) for r in dataset_rows} == expected_names
+    assert {r["file__path"] for r in dataset_rows} == {
+        r.get("file__path") for r in preview
+    }
+    assert {posixpath.basename(r["file__path"]) for r in dataset_rows} == expected_names
 
 
 def images_equal(img1: Image.Image, img2: Image.Image):

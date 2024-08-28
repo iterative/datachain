@@ -1228,30 +1228,28 @@ class Catalog:
         if not sources:
             raise ValueError("Sources needs to be non empty list")
 
-        from datachain.query import DatasetQuery
+        from datachain.lib.dc import DataChain
+        from datachain.query.session import Session
 
-        dataset_queries = []
+        session = Session.get(catalog=self, client_config=client_config)
+
+        chains = []
         for source in sources:
             if source.startswith(DATASET_PREFIX):
-                dq = DatasetQuery(
-                    name=source[len(DATASET_PREFIX) :],
-                    catalog=self,
-                    client_config=client_config,
+                dc = DataChain.from_dataset(
+                    source[len(DATASET_PREFIX) :], session=session
                 )
             else:
-                dq = DatasetQuery(
-                    path=source,
-                    catalog=self,
-                    client_config=client_config,
-                    recursive=recursive,
+                dc = DataChain.from_storage(
+                    source, session=session, recursive=recursive
                 )
 
-            dataset_queries.append(dq)
+            chains.append(dc)
 
         # create union of all dataset queries created from sources
-        dq = reduce(lambda ds1, ds2: ds1.union(ds2), dataset_queries)
+        dc = reduce(lambda dc1, dc2: dc1.union(dc2), chains)
         try:
-            dq.save(name)
+            dc.save(name)
         except Exception as e:  # noqa: BLE001
             try:
                 ds = self.get_dataset(name)
@@ -1819,12 +1817,14 @@ class Catalog:
         parallel: Optional[int] = None,
         params: Optional[str] = None,
     ):
+        # TODO refactor with DataChain
         from datachain.query import DatasetQuery
 
         if source.startswith(DATASET_PREFIX):
             ds = DatasetQuery(name=source[len(DATASET_PREFIX) :], catalog=self)
         else:
-            ds = DatasetQuery(path=source, catalog=self)
+            pass
+            # ds = DatasetQuery(path=source, catalog=self)
         udf = import_object(udf_location)
         if params:
             args, kwargs = parse_params_string(params)

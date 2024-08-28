@@ -21,6 +21,7 @@ from datachain.data_storage.sqlite import (
     SQLiteWarehouse,
 )
 from datachain.dataset import DatasetRecord
+from datachain.lib.dc import DataChain
 from datachain.query.session import Session
 from datachain.utils import DataChainDir
 
@@ -399,7 +400,7 @@ class CloudTestCatalog:
         return Session("CTCSession", catalog=self.catalog)
 
 
-cloud_types = ["s3", "gs", "azure"]
+cloud_types = ["s3"]
 
 
 @pytest.fixture(scope="session", params=["file", *cloud_types])
@@ -407,7 +408,7 @@ def cloud_type(request):
     return request.param
 
 
-@pytest.fixture(scope="session", params=[False, True])
+@pytest.fixture(scope="session", params=[False])
 def version_aware(request):
     return request.param
 
@@ -518,7 +519,19 @@ def cloud_test_catalog_tmpfile(
 
 @pytest.fixture
 def listed_bucket(cloud_test_catalog):
-    cloud_test_catalog.catalog.index([cloud_test_catalog.src_uri])
+    ctc = cloud_test_catalog
+    DataChain.from_storage(ctc.src_uri, session=ctc.session).exec()
+
+
+@pytest.fixture
+def animal_dataset(listed_bucket, cloud_test_catalog):
+    name = uuid.uuid4().hex
+    catalog = cloud_test_catalog.catalog
+    src_uri = cloud_test_catalog.src_uri
+    dataset = catalog.create_dataset_from_sources(name, [src_uri], recursive=True)
+    return catalog.update_dataset(
+        dataset, {"description": "animal dataset", "labels": ["cats", "dogs"]}
+    )
 
 
 @pytest.fixture

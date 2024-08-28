@@ -4,7 +4,6 @@ import json
 import logging
 import os
 import random
-import re
 import string
 import subprocess
 import sys
@@ -51,7 +50,6 @@ from datachain.dataset import DatasetStatus, RowDict
 from datachain.error import DatasetNotFoundError, QueryScriptCancelError
 from datachain.progress import CombinedDownloadCallback
 from datachain.sql.functions import rand
-from datachain.storage import Storage, StorageURI
 from datachain.utils import (
     batched,
     determine_processes,
@@ -82,9 +80,7 @@ INSERT_BATCH_SIZE = 10000
 
 PartitionByType = Union[ColumnElement, Sequence[ColumnElement]]
 JoinPredicateType = Union[str, ColumnClause, ColumnElement]
-# dependency can be either dataset_name + dataset_version tuple or just storage uri
-# depending what type of dependency we are adding
-DatasetDependencyType = Union[tuple[str, int], StorageURI]
+DatasetDependencyType = tuple[str, int]
 
 logger = logging.getLogger("datachain")
 
@@ -188,43 +184,6 @@ class QueryStep(StartingStep):
         return step_result(
             q, table.c, dependencies=[(self.dataset_name, self.dataset_version)]
         )
-
-
-@frozen
-class IndexingStep(StartingStep):
-    path: str
-    catalog: "Catalog"
-    kwargs: dict[str, Any]
-    recursive: Optional[bool] = True
-
-    def apply(self):
-        self.catalog.index([self.path], **self.kwargs)
-        uri, path = self.parse_path()
-        _partial_id, partial_path = self.catalog.metastore.get_valid_partial_id(
-            uri, path
-        )
-        dataset = self.catalog.get_dataset(Storage.dataset_name(uri, partial_path))
-        dataset_rows = self.catalog.warehouse.dataset_rows(
-            dataset, dataset.latest_version
-        )
-
-        def q(*columns):
-            col_names = [c.name for c in columns]
-            return self.catalog.warehouse.nodes_dataset_query(
-                dataset_rows,
-                column_names=col_names,
-                path=path,
-                recursive=self.recursive,
-            )
-
-        storage = self.catalog.metastore.get_storage(uri)
-
-        return step_result(q, dataset_rows.c, dependencies=[storage.uri])
-
-    def parse_path(self):
-        client_config = self.kwargs.get("client_config") or {}
-        client, path = self.catalog.parse_url(self.path, **client_config)
-        return client.uri, path
 
 
 def generator_then_call(generator, func: Callable):
@@ -1081,8 +1040,7 @@ class ResultIter:
 class DatasetQuery:
     def __init__(
         self,
-        path: str = "",
-        name: str = "",
+        name: str,
         version: Optional[int] = None,
         catalog: Optional["Catalog"] = None,
         client_config=None,
@@ -1116,26 +1074,14 @@ class DatasetQuery:
         self.feature_schema: Optional[dict] = None
         self.column_types: Optional[dict[str, Any]] = None
 
-        if path:
-            kwargs = {"update": True} if update else {}
-            self.starting_step = IndexingStep(path, self.catalog, kwargs, recursive)
-            self.feature_schema = indexing_feature_schema
-            self.column_types = indexing_column_types
-        elif name:
-            self.name = name
-            ds = self.catalog.get_dataset(name)
-            self.version = version or ds.latest_version
-            self.feature_schema = ds.get_version(self.version).feature_schema
-            self.column_types = copy(ds.schema)
-            if "sys__id" in self.column_types:
-                self.column_types.pop("sys__id")
-            self.starting_step = QueryStep(self.catalog, name, self.version)
-        else:
-            raise ValueError("must provide path or name")
-
-    @staticmethod
-    def is_storage_path(path):
-        return bool(re.compile(r"^[a-zA-Z0-9]+://").match(path))
+        self.name = name
+        ds = self.catalog.get_dataset(name)
+        self.version = version or ds.latest_version
+        self.feature_schema = ds.get_version(self.version).feature_schema
+        self.column_types = copy(ds.schema)
+        if "sys__id" in self.column_types:
+            self.column_types.pop("sys__id")
+        self.starting_step = QueryStep(self.catalog, name, self.version)
 
     def __iter__(self):
         return iter(self.db_results())
@@ -1621,24 +1567,13 @@ class DatasetQuery:
 
     def _add_dependencies(self, dataset: "DatasetRecord", version: int):
         for dependency in self.dependencies:
-            if isinstance(dependency, tuple):
-                # dataset dependency
-                ds_dependency_name, ds_dependency_version = dependency
-                self.catalog.metastore.add_dataset_dependency(
-                    dataset.name,
-                    version,
-                    ds_dependency_name,
-                    ds_dependency_version,
-                )
-            else:
-                # storage dependency - its name is a valid StorageURI
-                storage = self.catalog.metastore.get_storage(dependency)
-                self.catalog.metastore.add_storage_dependency(
-                    StorageURI(dataset.name),
-                    version,
-                    storage.uri,
-                    storage.timestamp_str,
-                )
+            ds_dependency_name, ds_dependency_version = dependency
+            self.catalog.metastore.add_dataset_dependency(
+                dataset.name,
+                version,
+                ds_dependency_name,
+                ds_dependency_version,
+            )
 
     def exec(self) -> "Self":
         """Execute the query."""
