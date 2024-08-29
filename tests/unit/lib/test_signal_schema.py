@@ -12,6 +12,7 @@ from datachain.lib.signal_schema import (
     SignalResolvingError,
     SignalSchema,
     SignalSchemaError,
+    SignalSchemaWarning,
 )
 from datachain.sql.types import (
     JSON,
@@ -69,7 +70,9 @@ def test_deserialize_error():
     with pytest.raises(SignalSchemaError):
         SignalSchema.deserialize({"name": [1, 2, 3]})
 
-    with pytest.raises(SignalSchemaError):
+    with pytest.warns(SignalSchemaWarning):
+        # Warn if unknown fields are encountered - don't throw an exception to ensure
+        # that all data can be shown.
         SignalSchema.deserialize({"name": "unknown"})
 
 
@@ -81,10 +84,11 @@ def test_serialize_basic():
     }
     signals = SignalSchema(schema).serialize()
 
-    assert len(signals) == 3
+    assert len(signals) == 4
     assert signals["name"] == "str"
     assert signals["age"] == "float"
     assert signals["f"] == "File@v1"
+    assert "File@v1" in signals["_custom_types"]
 
 
 def test_feature_schema_serialize_optional():
@@ -94,9 +98,44 @@ def test_feature_schema_serialize_optional():
     }
     signals = SignalSchema(schema).serialize()
 
-    assert len(signals) == 2
+    assert len(signals) == 3
     assert signals["name"] == "str"
     assert signals["feature"] == "MyType1"
+    assert signals["_custom_types"] == {"MyType1@v1": {"aa": "int", "bb": "str"}}
+
+
+def test_feature_schema_serialize_nested_types():
+    schema = {
+        "name": Optional[str],
+        "feature_nested": Optional[MyType2],
+    }
+    signals = SignalSchema(schema).serialize()
+
+    assert len(signals) == 3
+    assert signals["name"] == "str"
+    assert signals["feature_nested"] == "MyType2"
+    assert signals["_custom_types"] == {
+        "MyType1@v1": {"aa": "int", "bb": "str"},
+        "MyType2@v1": {"deep": "MyType1@v1", "name": "str"},
+    }
+
+
+def test_feature_schema_serialize_nested_duplicate_types():
+    schema = {
+        "name": Optional[str],
+        "feature_nested": Optional[MyType2],
+        "feature_not_nested": Optional[MyType1],
+    }
+    signals = SignalSchema(schema).serialize()
+
+    assert len(signals) == 4
+    assert signals["name"] == "str"
+    assert signals["feature_nested"] == "MyType2"
+    assert signals["feature_not_nested"] == "MyType1"
+    assert signals["_custom_types"] == {
+        "MyType1@v1": {"aa": "int", "bb": "str"},
+        "MyType2@v1": {"deep": "MyType1@v1", "name": "str"},
+    }
 
 
 def test_serialize_from_column():
@@ -158,6 +197,27 @@ def test_select():
     assert signals["f.bb"] is str
 
 
+def test_select_custom_type():
+    schema = SignalSchema.deserialize(
+        {
+            "age": "float",
+            "address": "str",
+            "f": "ExternalCustomType1@v1",
+            "_custom_types": {"ExternalCustomType1@v1": {"aa": "int", "bb": "str"}},
+        }
+    )
+
+    new = schema.resolve("age", "f.aa", "f.bb")
+    assert isinstance(new, SignalSchema)
+
+    signals = new.values
+    assert len(signals) == 3
+    assert {"age", "f.aa", "f.bb"} == signals.keys()
+    assert signals["age"] is float
+    assert signals["f.aa"] is int
+    assert signals["f.bb"] is str
+
+
 def test_select_nested_names():
     schema = SignalSchema.deserialize(
         {
@@ -169,6 +229,35 @@ def test_select_nested_names():
     fr_signals = schema.resolve("fr.deep").values
     assert "fr.deep" in fr_signals
     assert fr_signals["fr.deep"] == MyType1
+
+    basic_signals = schema.resolve("fr.deep.aa", "fr.deep.bb").values
+    assert "fr.deep.aa" in basic_signals
+    assert "fr.deep.bb" in basic_signals
+    assert basic_signals["fr.deep.aa"] is int
+    assert basic_signals["fr.deep.bb"] is str
+
+
+def test_select_nested_names_custom_types():
+    schema = SignalSchema.deserialize(
+        {
+            "address": "str",
+            "fr": "NestedType2@v1",
+            "_custom_types": {
+                "NestedType1@v1": {"aa": "int", "bb": "str"},
+                "NestedType2@v1": {"deep": "NestedType1@v1", "name": "str"},
+            },
+        }
+    )
+
+    fr_signals = schema.resolve("fr.deep").values
+    assert "fr.deep" in fr_signals
+    # This is a dynamically restored model
+    nested_type_1 = fr_signals["fr.deep"]
+    assert issubclass(nested_type_1, DataModel)
+    assert {n: fi.annotation for n, fi in nested_type_1.model_fields.items()} == {
+        "aa": int,
+        "bb": str,
+    }
 
     basic_signals = schema.resolve("fr.deep.aa", "fr.deep.bb").values
     assert "fr.deep.aa" in basic_signals

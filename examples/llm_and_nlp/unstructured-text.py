@@ -1,5 +1,5 @@
 #
-# pip install unstructured[pdf] nltk==3.8.1 huggingface_hub[hf_transfer]
+# pip install unstructured[pdf] huggingface_hub[hf_transfer]
 #
 import os
 

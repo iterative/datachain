@@ -296,15 +296,23 @@ class DatasetDiffOperation(Step):
 
 @frozen
 class Subtract(DatasetDiffOperation):
-    on: Sequence[str]
+    on: Sequence[tuple[str, str]]
 
     def query(self, source_query: Select, target_query: Select) -> sa.Selectable:
         sq = source_query.alias("source_query")
         tq = target_query.alias("target_query")
         where_clause = sa.and_(
-            getattr(sq.c, col_name).is_not_distinct_from(getattr(tq.c, col_name))
-            for col_name in self.on
-        )  # type: ignore[arg-type]
+            *[
+                getattr(
+                    sq.c, col_name[0] if isinstance(col_name, tuple) else col_name
+                ).is_not_distinct_from(
+                    getattr(
+                        tq.c, col_name[1] if isinstance(col_name, tuple) else col_name
+                    )
+                )
+                for col_name in self.on
+            ]
+        )
         return sq.select().except_(sq.select().where(where_clause))
 
 
@@ -1571,10 +1579,10 @@ class DatasetQuery:
 
     @detach
     def subtract(self, dq: "DatasetQuery") -> "Self":
-        return self._subtract(dq, on=["source", "path"])
+        return self._subtract(dq, on=[("source", "source"), ("path", "path")])
 
     @detach
-    def _subtract(self, dq: "DatasetQuery", on: Sequence[str]) -> "Self":
+    def _subtract(self, dq: "DatasetQuery", on: Sequence[tuple[str, str]]) -> "Self":
         query = self.clone()
         query.steps.append(Subtract(dq, self.catalog, on=on))
         return query

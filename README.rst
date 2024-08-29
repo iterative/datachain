@@ -18,31 +18,30 @@ AI 🔗 DataChain
 
 DataChain is a modern Pythonic data-frame library designed for artificial intelligence.
 It is made to organize your unstructured data into datasets and wrangle it at scale on
-your local machine.
+your local machine. Datachain does not abstract or hide the AI models and API calls, but helps to integrate them into the postmodern data stack.
 
 Key Features
 ============
 
 📂 **Storage as a Source of Truth.**
-   - Process unstructured data without redundant copies: S3, GCP, Azure, and local
+   - Process unstructured data without redundant copies from S3, GCP, Azure, and local
      file systems.
-   - Multimodal data: images, video, text, PDFs, JSONs, CSVs, parquet.
-   - Join files and metadata together into persistent, versioned, columnar datasets.
+   - Multimodal data support: images, video, text, PDFs, JSONs, CSVs, parquet.
+   - Unite files and metadata together into persistent, versioned, columnar datasets.
 
 🐍 **Python-friendly data pipelines.**
    - Operate on Python objects and object fields.
-   - Built-in parallelization and out-of-memory compute without a need in SQL or
-     Spark jobs.
+   - Built-in parallelization and out-of-memory compute without SQL or Spark.
 
 🧠 **Data Enrichment and Processing.**
-   - Generate metadata columns using local AI models and LLM APIs.
-   - Filter, join, and group by AI metadata. Vector similarity search.
-   - Pass datasets to Pytorch and Tensorflow, or export back into storage.
+   - Generate metadata using local AI models and LLM APIs.
+   - Filter, join, and group by metadata. Search by vector embeddings.
+   - Pass datasets to Pytorch and Tensorflow, or export them back into storage.
 
 🚀 **Efficiency.**
    - Parallelization, out-of-memory workloads and data caching.
    - Vectorized operations on Python object fields: sum, count, avg, etc.
-   - Vector search on embeddings.
+   - Optimized vector search.
 
 
 Quick Start
@@ -67,7 +66,7 @@ where each image has a matching JSON file like `cat.1009.json`:
         "inference": {"class": "dog", "confidence": 0.68}
     }
 
-Example of downloading only high-confidence cat images using JSON metadata:
+Example of downloading only "high-confidence cat" inferred images using JSON metadata:
 
 
 .. code:: py
@@ -137,7 +136,7 @@ detected are then copied to the local directory.
 LLM judging chatbots
 =============================
 
-LLMs can work as efficient universal classifiers. In the example below,
+LLMs can work as universal classifiers. In the example below,
 we employ a free API from Mistral to judge the `publicly available`_ chatbot dialogs. Please get a free
 Mistral API key at https://console.mistral.ai
 

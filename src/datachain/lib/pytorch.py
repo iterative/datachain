@@ -10,7 +10,6 @@ from torchvision.transforms import v2
 
 from datachain.catalog import Catalog, get_catalog
 from datachain.lib.dc import DataChain
-from datachain.lib.file import File
 from datachain.lib.text import convert_text
 
 if TYPE_CHECKING:
@@ -97,7 +96,7 @@ class PytorchDataset(IterableDataset):
         for row_features in ds.collect():
             row = []
             for fr in row_features:
-                if isinstance(fr, File):
+                if hasattr(fr, "read"):
                     row.append(fr.read())  # type: ignore[unreachable]
                 else:
                     row.append(fr)

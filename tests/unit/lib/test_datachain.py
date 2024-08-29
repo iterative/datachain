@@ -8,6 +8,8 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+from datasets import Dataset
+from datasets.exceptions import DatasetNotFoundError
 from pydantic import BaseModel
 
 from datachain import Column
@@ -1502,6 +1504,11 @@ def test_subtract(test_session):
     assert set(chain1.subtract(chain3, on="a").collect()) == {(2, "z")}
     assert set(chain1.subtract(chain3).collect()) == {(2, "z")}
 
+    chain4 = DataChain.from_values(d=[1, 2, 3], e=["x", "y", "z"], session=test_session)
+    chain5 = DataChain.from_values(a=[1, 2], b=["x", "y"], session=test_session)
+
+    assert set(chain4.subtract(chain5, on="d", right_on="a").collect()) == {(3, "z")}
+
 
 def test_subtract_error(test_session):
     chain1 = DataChain.from_values(a=[1, 1, 2], b=["x", "y", "z"], session=test_session)
@@ -1510,6 +1517,36 @@ def test_subtract_error(test_session):
         chain1.subtract(chain2, on=[])
     with pytest.raises(TypeError):
         chain1.subtract(chain2, on=42)
+
+    with pytest.raises(DataChainParamsError):
+        chain1.subtract(chain2, on="")
+
+    with pytest.raises(DataChainParamsError):
+        chain1.subtract(chain2, on="a", right_on="")
+
+    with pytest.raises(DataChainParamsError):
+        chain1.subtract(chain2, on=["a", "b"], right_on=["c", ""])
+
+    with pytest.raises(DataChainParamsError):
+        chain1.subtract(chain2, on=["a", "b"], right_on=[])
+
+    with pytest.raises(DataChainParamsError):
+        chain1.subtract(chain2, on=["a", "b"], right_on=["d"])
+
+    with pytest.raises(DataChainParamsError):
+        chain1.subtract(chain2, right_on=[])
+
+    with pytest.raises(DataChainParamsError):
+        chain1.subtract(chain2, right_on="")
+
+    with pytest.raises(DataChainParamsError):
+        chain1.subtract(chain2, right_on=42)
+
+    with pytest.raises(DataChainParamsError):
+        chain1.subtract(chain2, right_on=["a"])
+
+    with pytest.raises(TypeError):
+        chain1.subtract(chain2, on=42, right_on=42)
 
     chain3 = DataChain.from_values(c=["foo", "bar"], session=test_session)
     with pytest.raises(DataChainParamsError):
@@ -1811,3 +1848,20 @@ def test_from_csv_nan_inf(tmp_dir, test_session):
     assert np.isnan(res[0])
     assert np.isposinf(res[1])
     assert np.isneginf(res[2])
+
+
+def test_from_hf(test_session):
+    ds = Dataset.from_dict(DF_DATA)
+    df = DataChain.from_hf(ds, session=test_session).to_pandas()
+    assert df.equals(pd.DataFrame(DF_DATA))
+
+
+def test_from_hf_object_name(test_session):
+    ds = Dataset.from_dict(DF_DATA)
+    df = DataChain.from_hf(ds, session=test_session, object_name="obj").to_pandas()
+    assert df["obj"].equals(pd.DataFrame(DF_DATA))
+
+
+def test_from_hf_invalid(test_session):
+    with pytest.raises(DatasetNotFoundError):
+        DataChain.from_hf("invalid_dataset", session=test_session)
