@@ -943,28 +943,6 @@ class AbstractWarehouse(ABC, Serializable):
                 self.db.drop_table(Table(name, self.db.metadata), if_exists=True)
                 pbar.update(1)
 
-    def changed_query(
-        self,
-        source_query: sa.sql.selectable.Select,
-        target_query: sa.sql.selectable.Select,
-    ) -> sa.sql.selectable.Select:
-        sq = source_query.alias("source_query")
-        tq = target_query.alias("target_query")
-
-        source_target_join = sa.join(
-            sq, tq, (sq.c.source == tq.c.source) & (sq.c.path == tq.c.path)
-        )
-
-        return (
-            select(*sq.c)
-            .select_from(source_target_join)
-            .where(
-                (sq.c.last_modified > tq.c.last_modified)
-                & (sq.c.is_latest == true())
-                & (tq.c.is_latest == true())
-            )
-        )
-
 
 def _random_string(length: int) -> str:
     return "".join(

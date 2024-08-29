@@ -199,7 +199,7 @@ def generator_then_call(generator, func: Callable):
 class DatasetDiffOperation(Step):
     """
     Abstract class for operations that are calculation some kind of diff between
-    datasets queries like subtract, changed etc.
+    datasets queries like subtract etc.
     """
 
     dq: "DatasetQuery"
@@ -271,28 +271,6 @@ class Subtract(DatasetDiffOperation):
             ]
         )
         return sq.select().except_(sq.select().where(where_clause))
-
-
-@frozen
-class Changed(DatasetDiffOperation):
-    """
-    Calculates rows that are changed in a source query compared to target query
-    Changed means it has same source + path but different last_modified
-    Example:
-        >>> ds = DatasetQuery(name="dogs_cats") # some older dataset with embeddings
-        >>> ds_updated = (
-                DatasetQuery("gs://dvcx-datalakes/dogs-and-cats")
-                .filter(C.size > 1000) # we can also filter out source query
-                .changed(ds)
-                .add_signals(calc_embeddings) # calculae embeddings only on changed rows
-                .union(ds) # union with old dataset that's missing updated rows
-                .save("dogs_cats_updated")
-            )
-
-    """
-
-    def query(self, source_query: Select, target_query: Select) -> Select:
-        return self.catalog.warehouse.changed_query(source_query, target_query)
 
 
 def adjust_outputs(
@@ -1043,24 +1021,11 @@ class DatasetQuery:
         name: str,
         version: Optional[int] = None,
         catalog: Optional["Catalog"] = None,
-        client_config=None,
-        recursive: Optional[bool] = True,
         session: Optional[Session] = None,
-        anon: bool = False,
-        indexing_feature_schema: Optional[dict] = None,
         indexing_column_types: Optional[dict[str, Any]] = None,
-        update: Optional[bool] = False,
         in_memory: bool = False,
     ):
-        if client_config is None:
-            client_config = {}
-
-        if anon:
-            client_config["anon"] = True
-
-        self.session = Session.get(
-            session, catalog=catalog, client_config=client_config, in_memory=in_memory
-        )
+        self.session = Session.get(session, catalog=catalog, in_memory=in_memory)
         self.catalog = catalog or self.session.catalog
         self.steps: list[Step] = []
         self._chunk_index: Optional[int] = None
@@ -1522,19 +1487,9 @@ class DatasetQuery:
         return query
 
     @detach
-    def subtract(self, dq: "DatasetQuery") -> "Self":
-        return self._subtract(dq, on=[("source", "source"), ("path", "path")])
-
-    @detach
-    def _subtract(self, dq: "DatasetQuery", on: Sequence[tuple[str, str]]) -> "Self":
+    def subtract(self, dq: "DatasetQuery", on: Sequence[tuple[str, str]]) -> "Self":
         query = self.clone()
         query.steps.append(Subtract(dq, self.catalog, on=on))
-        return query
-
-    @detach
-    def changed(self, dq: "DatasetQuery") -> "Self":
-        query = self.clone()
-        query.steps.append(Changed(dq, self.catalog))
         return query
 
     @detach

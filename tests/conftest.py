@@ -25,7 +25,7 @@ from datachain.lib.dc import DataChain
 from datachain.query.session import Session
 from datachain.utils import DataChainDir
 
-from .utils import DEFAULT_TREE, get_simple_ds_query, instantiate_tree
+from .utils import DEFAULT_TREE, instantiate_tree
 
 DEFAULT_DATACHAIN_BIN = "datachain"
 DEFAULT_DATACHAIN_GIT_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -400,7 +400,7 @@ class CloudTestCatalog:
         return Session("CTCSession", catalog=self.catalog)
 
 
-cloud_types = ["s3"]
+cloud_types = ["s3", "azure", "gs"]
 
 
 @pytest.fixture(scope="session", params=["file", *cloud_types])
@@ -557,13 +557,6 @@ def cats_dataset(listed_bucket, cloud_test_catalog):
     )
     return catalog.update_dataset(
         dataset, {"description": "cats dataset", "labels": ["cats", "dataset"]}
-    )
-
-
-@pytest.fixture
-def simple_ds_query(cloud_test_catalog):
-    return get_simple_ds_query(
-        path=cloud_test_catalog.src_uri, catalog=cloud_test_catalog.catalog
     )
 
 

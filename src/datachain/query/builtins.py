@@ -2,9 +2,10 @@ import hashlib
 import tarfile
 from functools import partial
 
-from datachain.sql.types import String
+from datachain.lib.file import File
+from datachain.sql.types import JSON, Boolean, DateTime, Int64, String
 
-from .schema import C, DatasetRow, Object
+from .schema import C, Object
 from .udf import udf
 
 md5 = partial(hashlib.md5, usedforsecurity=False)
@@ -19,73 +20,78 @@ def load_tar(raw):
 
 @udf(
     (
-        C.source,
-        C.path,
-        C.size,
-        C.vtype,
-        C.dir_type,
-        C.owner_name,
-        C.owner_id,
-        C.is_latest,
-        C.last_modified,
-        C.version,
-        C.etag,
+        C("file.source"),
+        C("file.path"),
+        C("file.size"),
+        C("file.version"),
+        C("file.etag"),
+        C("file.is_latest"),
+        C("file.last_modified"),
+        C("file.vtype"),
         Object(load_tar),
     ),
-    DatasetRow.schema,
+    {
+        "file__source": String,
+        "file__path": String,
+        "file__size": Int64,
+        "file__version": String,
+        "file__etag": String,
+        "file__is_latest": Boolean,
+        "file__last_modified": DateTime,
+        "file__location": JSON,
+        "file__vtype": String,
+    },
 )
 def index_tar(
     source,
     parent_path,
     size,
-    vtype,
-    dir_type,
-    owner_name,
-    owner_id,
-    is_latest,
-    last_modified,
     version,
     etag,
+    is_latest,
+    last_modified,
+    vtype,
     tar_entries,
 ):
     # generate original tar files as well, along with subobjects
-    yield DatasetRow.create(
+    file = File(
         source=source,
         path=parent_path,
         size=size,
-        vtype=vtype,
-        dir_type=dir_type,
-        owner_name=owner_name,
-        owner_id=owner_id,
-        is_latest=bool(is_latest),
-        last_modified=last_modified,
         version=version,
         etag=etag,
+        is_latest=is_latest,
+        last_modified=last_modified,
+        vtype=vtype,
     )
+    yield tuple(f[1] for f in list(file))
 
     for info in tar_entries:
         if info.isfile():
             full_path = f"{parent_path}/{info.name}"
-            yield DatasetRow.create(
+            file = File(
                 source=source,
                 path=full_path,
                 size=info.size,
                 vtype="tar",
-                location={
-                    "vtype": "tar",
-                    "offset": info.offset_data,
-                    "size": info.size,
-                    "parent": {
-                        "source": source,
-                        "path": parent_path,
-                        "version": version,
-                        "size": size,
-                        "etag": etag,
-                        "vtype": "",
-                        "location": None,
-                    },
-                },
+                location=[
+                    {
+                        "vtype": "tar",
+                        "offset": info.offset_data,
+                        "size": info.size,
+                        "parent": {
+                            "source": source,
+                            "path": parent_path,
+                            "version": version,
+                            "size": size,
+                            "etag": etag,
+                            "vtype": "",
+                            "location": None,
+                        },
+                    }
+                ],
             )
+            yield tuple(f[1] for f in list(file))
 
 
 BUFSIZE = 2**18

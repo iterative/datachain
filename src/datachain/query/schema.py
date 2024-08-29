@@ -19,6 +19,17 @@ if TYPE_CHECKING:
 DEFAULT_DELIMITER = "__"
 
 
+def file_signals(row, signal_name="file"):
+    # TODO this is workaround until we decide what to do with these classes
+    prefix = f"{signal_name}{DEFAULT_DELIMITER}"
+    return {
+        c_name.removeprefix(prefix): c_value
+        for c_name, c_value in row.items()
+        if c_name.startswith(prefix)
+        and DEFAULT_DELIMITER not in c_name.removeprefix(prefix)
+    }
+
+
 class ColumnMeta(type):
     @staticmethod
     def to_db_name(name: str) -> str:
@@ -86,8 +97,8 @@ class Object(UDFParameter):
         cb: Callback = DEFAULT_CALLBACK,
         **kwargs,
     ) -> Any:
-        client = catalog.get_client(row["source"])
-        uid = catalog._get_row_uid(row)
+        client = catalog.get_client(row["file__source"])
+        uid = catalog._get_row_uid(file_signals(row))
         if cache:
             client.download(uid, callback=cb)
         with client.open_object(uid, use_cache=cache, cb=cb) as f:
@@ -103,8 +114,8 @@ class Object(UDFParameter):
         cb: Callback = DEFAULT_CALLBACK,
         **kwargs,
     ) -> Any:
-        client = catalog.get_client(row["source"])
-        uid = catalog._get_row_uid(row)
+        client = catalog.get_client(row["file__source"])
+        uid = catalog._get_row_uid(file_signals(row))
         if cache:
             await client._download(uid, callback=cb)
         obj = await mapper.to_thread(
@@ -129,8 +140,8 @@ class Stream(UDFParameter):
         cb: Callback = DEFAULT_CALLBACK,
         **kwargs,
     ) -> Any:
-        client = catalog.get_client(row["source"])
-        uid = catalog._get_row_uid(row)
+        client = catalog.get_client(row["file__source"])
+        uid = catalog._get_row_uid(file_signals(row))
         if cache:
             client.download(uid, callback=cb)
         return client.open_object(uid, use_cache=cache, cb=cb)
@@ -145,8 +156,8 @@ class Stream(UDFParameter):
         cb: Callback = DEFAULT_CALLBACK,
         **kwargs,
     ) -> Any:
-        client = catalog.get_client(row["source"])
-        uid = catalog._get_row_uid(row)
+        client = catalog.get_client(row["file__source"])
+        uid = catalog._get_row_uid(file_signals(row))
         if cache:
             await client._download(uid, callback=cb)
         return await mapper.to_thread(
@@ -178,8 +189,8 @@ class LocalFilename(UDFParameter):
             # If the glob pattern is specified and the row filename
             # does not match it, then return None
             return None
-        client = catalog.get_client(row["source"])
-        uid = catalog._get_row_uid(row)
+        client = catalog.get_client(row["file__source"])
+        uid = catalog._get_row_uid(file_signals(row))
         client.download(uid, callback=cb)
         return client.cache.get_path(uid)
 
@@ -197,8 +208,8 @@ class LocalFilename(UDFParameter):
             # If the glob pattern is specified and the row filename
             # does not match it, then return None
             return None
-        client = catalog.get_client(row["source"])
-        uid = catalog._get_row_uid(row)
+        client = catalog.get_client(row["file__source"])
+        uid = catalog._get_row_uid(file_signals(row))
         await client._download(uid, callback=cb)
         return client.cache.get_path(uid)
 

@@ -5,9 +5,10 @@ import os
 import pickle
 import posixpath
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from json import dumps
 from textwrap import dedent
+from typing import Any, Optional
 from unittest.mock import ANY
 
 import numpy as np
@@ -19,11 +20,9 @@ from datachain.catalog import QUERY_SCRIPT_CANCELED_EXIT_CODE
 from datachain.dataset import DatasetDependencyType, DatasetStatus
 from datachain.error import DatasetInvalidVersionError, DatasetNotFoundError
 from datachain.lib.file import File
-from datachain.node import Node
 from datachain.query import (
     C,
     DatasetQuery,
-    DatasetRow,
     LocalFilename,
     Object,
     Stream,
@@ -31,6 +30,7 @@ from datachain.query import (
 )
 from datachain.query.builtins import checksum, index_tar
 from datachain.query.dataset import QueryStep
+from datachain.query.schema import file_signals
 from datachain.sql import functions
 from datachain.sql.functions import path as pathfunc
 from datachain.sql.functions.array import cosine_distance, euclidean_distance
@@ -49,17 +49,14 @@ from datachain.sql.types import (
     SQLType,
     String,
 )
-from tests.data import ENTRIES
 from tests.utils import (
     DEFAULT_TREE,
     NUM_TREE,
-    SIMPLE_DS_QUERY_RECORDS,
     TARRED_TREE,
     WEBFORMAT_TREE,
     assert_row_names,
     create_tar_dataset,
     dataset_dependency_asdict,
-    make_index,
     text_embedding,
 )
 
@@ -67,6 +64,36 @@ FILE_SCHEMA = {
     f"file__{name}": _type if _type != Int else Int64
     for name, _type in File._datachain_column_types.items()
 }
+
+
+def create_row(
+    path: str,
+    source: str = "",
+    size: int = 0,
+    location: Optional[dict[str, Any]] = None,
+    vtype: str = "",
+    is_latest: bool = True,
+    last_modified: Optional[datetime] = None,
+    version: str = "",
+    etag: str = "",
+    prefix: str = "file",
+):
+    if location:
+        location = json.dumps([location])  # type: ignore [assignment]
+
+    last_modified = last_modified or datetime.now(timezone.utc)
+
+    return (  # type: ignore [return-value]
+        source,
+        path,
+        size,
+        version,
+        etag,
+        is_latest,
+        last_modified,
+        location,
+        vtype,
+    )
 
 
 def from_result_row(col_names, row):
@@ -432,9 +459,11 @@ def test_select_except(cloud_test_catalog, animal_dataset):
     [("s3", True)],
     indirect=True,
 )
-def test_distinct(cloud_test_catalog, animal_dataset):
-    catalog = cloud_test_catalog.catalog
-    ds = DatasetQuery(animal_dataset.name, catalog=catalog)
+def test_distinct(cloud_test_catalog):
+    ctc = cloud_test_catalog
+    catalog = ctc.catalog
+    catalog.create_dataset_from_sources("animals", [ctc.src_uri], recursive=True)
+    ds = DatasetQuery("animals", catalog=catalog)
 
     q = (
         ds.select(pathfunc.name(C("file.path")), C("file.size"))
@@ -570,12 +599,11 @@ def test_order_by_limit(cloud_test_catalog, save, animal_dataset):
 )
 def test_row_number_without_explicit_order_by(cloud_test_catalog, animal_dataset):
     catalog = cloud_test_catalog.catalog
-    conf = cloud_test_catalog.client_config
     ds_name = uuid.uuid4().hex
 
-    DatasetQuery(animal_dataset.name, catalog=catalog, client_config=conf).filter(
-        C("file.size") > 0
-    ).save(ds_name)
+    DatasetQuery(animal_dataset.name, catalog=catalog).filter(C("file.size") > 0).save(
+        ds_name
+    )
 
     results = DatasetQuery(name=ds_name, catalog=catalog).to_db_records()
     assert len(results) == 7  # unordered, just checking num of results
@@ -588,10 +616,9 @@ def test_row_number_without_explicit_order_by(cloud_test_catalog, animal_dataset
 )
 def test_row_number_with_order_by_name_descending(cloud_test_catalog, animal_dataset):
     catalog = cloud_test_catalog.catalog
-    conf = cloud_test_catalog.client_config
     ds_name = uuid.uuid4().hex
 
-    DatasetQuery(animal_dataset.name, catalog=catalog, client_config=conf).order_by(
+    DatasetQuery(animal_dataset.name, catalog=catalog).order_by(
         pathfunc.name(C("file.path")).desc()
     ).save(ds_name)
 
@@ -617,10 +644,9 @@ def test_row_number_with_order_by_name_descending(cloud_test_catalog, animal_dat
 )
 def test_row_number_with_order_by_name_ascending(cloud_test_catalog, animal_dataset):
     catalog = cloud_test_catalog.catalog
-    conf = cloud_test_catalog.client_config
     ds_name = uuid.uuid4().hex
 
-    DatasetQuery(animal_dataset.name, catalog=catalog, client_config=conf).order_by(
+    DatasetQuery(animal_dataset.name, catalog=catalog).order_by(
         pathfunc.name(C("file.path")).asc()
     ).save(ds_name)
 
@@ -648,16 +674,15 @@ def test_row_number_with_order_by_name_len_desc_and_name_asc(
     cloud_test_catalog, animal_dataset
 ):
     catalog = cloud_test_catalog.catalog
-    conf = cloud_test_catalog.client_config
     ds_name = uuid.uuid4().hex
 
     @udf(("file__path",), {"name_len": Int})
     def name_len(path):
         return (len(posixpath.basename(path)),)
 
-    DatasetQuery(animal_dataset.name, catalog=catalog, client_config=conf).add_signals(
-        name_len
-    ).order_by(C.name_len.desc(), pathfunc.name(C("file.path")).asc()).save(ds_name)
+    DatasetQuery(animal_dataset.name, catalog=catalog).add_signals(name_len).order_by(
+        C.name_len.desc(), pathfunc.name(C("file.path")).asc()
+    ).save(ds_name)
 
     results = DatasetQuery(name=ds_name, catalog=catalog).to_db_records()
     results_name_id = [
@@ -683,14 +708,13 @@ def test_row_number_with_order_by_before_add_signals(
     cloud_test_catalog, animal_dataset
 ):
     catalog = cloud_test_catalog.catalog
-    conf = cloud_test_catalog.client_config
     ds_name = uuid.uuid4().hex
 
     @udf(("file__path",), {"name_len": Int})
     def name_len(path):
         return (len(posixpath.basename(path)),)
 
-    DatasetQuery(animal_dataset.name, catalog=catalog, client_config=conf).order_by(
+    DatasetQuery(animal_dataset.name, catalog=catalog).order_by(
         pathfunc.name(C("file.path")).asc()
     ).add_signals(name_len).save(ds_name)
 
@@ -1354,13 +1378,13 @@ def test_udf_object_param(cloud_test_catalog, dogs_dataset, param, use_cache):
     q = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog).add_signals(
         signal, cache=use_cache
     )
-    result = q.db_results()
+    result = q.db_results(row_factory=from_result_row)
 
     assert len(result) == 4
-    signals = {r[-1] for r in result}
+    signals = {r["signal"] for r in result}
     assert signals == {"dog1 -> woof", "dog2 -> arf", "dog3 -> bark", "dog4 -> ruff"}
 
-    uid = Node(*result[0][:-1]).as_uid()
+    uid = catalog._get_row_uid(file_signals(result[0]))
     assert catalog.cache.contains(uid) is (
         use_cache or isinstance(param, LocalFilename)
     )
@@ -1378,13 +1402,13 @@ def test_udf_stream_param(cloud_test_catalog, dogs_dataset, use_cache):
     q = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog).add_signals(
         signal, cache=use_cache
     )
-    result = q.db_results()
+    result = q.db_results(row_factory=from_result_row)
 
     assert len(result) == 4
-    signals = {r[-1] for r in result}
+    signals = {r["signal"] for r in result}
     assert signals == {"dog1 -> woof", "dog2 -> arf", "dog3 -> bark", "dog4 -> ruff"}
 
-    uid = Node(*result[0][:-1]).as_uid()
+    uid = catalog._get_row_uid(file_signals(result[0]))
     assert catalog.cache.contains(uid) is use_cache
 
 
@@ -1646,10 +1670,10 @@ def test_join_with_binary_expression(
     dogs_cats = DatasetQuery(name=dogs_cats_dataset.name, version=1, catalog=catalog)
 
     if n_columns == 1:
-        predicate = dogs_cats.c("file.path") == dogs.c("file.path")
+        predicate = dogs_cats.c("file__path") == dogs.c("file__path")
     else:
-        predicate = (dogs_cats.c("file.path") == dogs.c("file.path")) & (
-            dogs_cats.c("file.size") == dogs.c("file.size")
+        predicate = (dogs_cats.c("file__path") == dogs.c("file__path")) & (
+            dogs_cats.c("file__size") == dogs.c("file__size")
         )
 
     res = dogs_cats.join(
@@ -1704,7 +1728,7 @@ def test_join_with_combination_binary_expression_and_column_predicates(
 
     res = dogs_cats.join(
         dogs,
-        [column_predicate, dogs_cats.c("file.size") == dogs.c("file.size")],
+        [column_predicate, dogs_cats.c("file__size") == dogs.c("file__size")],
         inner=inner,
     ).to_db_records()
 
@@ -1751,7 +1775,7 @@ def test_join_with_binary_expression_with_arithmetics(
     cats = DatasetQuery(name=cats_dataset.name, version=1, catalog=catalog)
 
     res = cats.join(
-        dogs, cats.c("file.size") == dogs.c("file.size") + 1, inner=inner
+        dogs, cats.c("file__size") == dogs.c("file__size") + 1, inner=inner
     ).to_db_records()
 
     assert sorted(
@@ -1956,17 +1980,17 @@ def test_join_with_missing_columns_in_expression(
     cats = DatasetQuery(name=cats_dataset.name, version=1, catalog=catalog)
 
     with pytest.raises(ValueError) as excinfo:
-        dogs1.join(dogs2, dogs1.c("wrong") == dogs2.c("file.path")).to_db_records()
+        dogs1.join(dogs2, dogs1.c("wrong") == dogs2.c("file__path")).to_db_records()
     assert str(excinfo.value) == "Column wrong was not found in left part of the join"
 
     with pytest.raises(ValueError) as excinfo:
-        dogs1.join(dogs2, dogs1.c("file.path") == dogs2.c("wrong")).to_db_records()
+        dogs1.join(dogs2, dogs1.c("file__path") == dogs2.c("wrong")).to_db_records()
     assert str(excinfo.value) == "Column wrong was not found in right part of the join"
 
     with pytest.raises(ValueError) as excinfo:
-        dogs1.join(dogs2, dogs1.c("file.path") == cats.c("file.path")).to_db_records()
+        dogs1.join(dogs2, dogs1.c("file__path") == cats.c("file__path")).to_db_records()
     assert str(excinfo.value) == (
-        "Column path was not found in left or right part of the join"
+        "Column file__path was not found in left or right part of the join"
     )
 
 
@@ -1986,8 +2010,8 @@ def test_join_with_using_functions_in_expression(
     res = dogs_cats.join(
         dogs,
         (
-            sqlalchemy.func.upper(dogs_cats.c("file.path"))
-            == sqlalchemy.func.upper(dogs.c("file.path"))
+            sqlalchemy.func.upper(dogs_cats.c("file__path"))
+            == sqlalchemy.func.upper(dogs.c("file__path"))
         ),
         inner=inner,
     ).to_db_records()
@@ -2026,11 +2050,13 @@ def test_join_with_using_functions_in_expression(
 def test_row_generator(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
 
-    @udf(("file__path",), DatasetRow.schema)
+    @udf(("file__path",), FILE_SCHEMA)
     def gen(path):
         # A very simple file row generator.
-        yield DatasetRow.create(f"{path}/subobject", size=50)
-        yield DatasetRow.create(f"{path}/subobject2", size=70)
+        from datachain.lib.file import File
+
+        yield tuple(f[1] for f in list(File(path=f"{path}/subobject", size=50)))
+        yield tuple(f[1] for f in list(File(path=f"{path}/subobject2", size=70)))
 
     q = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog).generate(gen)
     result = q.to_db_records()
@@ -2051,7 +2077,7 @@ def test_row_generator(cloud_test_catalog, dogs_dataset):
     schema = dataset.schema
     dr = catalog.warehouse.schema.dataset_row_cls
     sys_schema = {c.name: type(c.type) for c in dr.sys_columns()}
-    assert schema == DatasetRow.schema | sys_schema
+    assert schema == FILE_SCHEMA | sys_schema
 
 
 @pytest.mark.parametrize(
@@ -2062,11 +2088,13 @@ def test_row_generator(cloud_test_catalog, dogs_dataset):
 def test_row_generator_with_filter(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
 
-    @udf(("file__path",), DatasetRow.schema)
+    @udf(("file__path",), FILE_SCHEMA)
     def gen(path):
         # A very simple file row generator.
-        yield DatasetRow.create(f"{path}/subobject", size=50)
-        yield DatasetRow.create(f"{path}/subobject2", size=70)
+        from datachain.lib.file import File
+
+        yield tuple(f[1] for f in list(File(path=f"{path}/subobject", size=50)))
+        yield tuple(f[1] for f in list(File(path=f"{path}/subobject2", size=70)))
 
     q = (
         DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
@@ -2091,11 +2119,13 @@ def test_row_generator_with_filter(cloud_test_catalog, dogs_dataset):
 def test_row_generator_with_limit(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
 
-    @udf(("file__path",), DatasetRow.schema)
+    @udf(("file__path",), FILE_SCHEMA)
     def gen(path):
         # A very simple file row generator.
-        yield DatasetRow.create(f"{path}/subobject", size=50)
-        yield DatasetRow.create(f"{path}/subobject2", size=70)
+        from datachain.lib.file import File
+
+        yield tuple(f[1] for f in list(File(path=f"{path}/subobject", size=50)))
+        yield tuple(f[1] for f in list(File(path=f"{path}/subobject2", size=70)))
 
     q = (
         DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
@@ -2120,18 +2150,19 @@ def test_row_generator_parallel(cloud_test_catalog_tmpfile):
     # Setup catalog.
     dogs_dataset_name = uuid.uuid4().hex
     catalog = cloud_test_catalog_tmpfile.catalog
-    catalog.index([cloud_test_catalog_tmpfile.src_uri])
     src_uri = cloud_test_catalog_tmpfile.src_uri
 
     dogs_dataset = catalog.create_dataset_from_sources(
         dogs_dataset_name, [f"{src_uri}/dogs/*"], recursive=True
     )
 
-    @udf(("file__path",), DatasetRow.schema)
+    @udf(("file__path",), FILE_SCHEMA)
     def gen(path):
         # A very simple file row generator.
-        yield DatasetRow.create(f"{path}/subobject", size=50)
-        yield DatasetRow.create(f"{path}/subobject2", size=70)
+        from datachain.lib.file import File
+
+        yield tuple(f[1] for f in list(File(path=f"{path}/subobject", size=50)))
+        yield tuple(f[1] for f in list(File(path=f"{path}/subobject2", size=70)))
 
     q = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog).generate(
         gen, parallel=-1
@@ -2158,11 +2189,13 @@ def test_row_generator_parallel(cloud_test_catalog_tmpfile):
 def test_row_generator_batch(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
 
-    @udf(("file__path"), DatasetRow.schema, batch=4)
+    @udf(("file__path"), FILE_SCHEMA, batch=4)
     def gen(inputs):
+        from datachain.lib.file import File
+
         for (path,) in inputs:
-            yield DatasetRow.create(f"{path}/subobject", size=50)
-            yield DatasetRow.create(f"{path}/subobject2", size=70)
+            yield tuple(f[1] for f in list(File(path=f"{path}/subobject", size=50)))
+            yield tuple(f[1] for f in list(File(path=f"{path}/subobject2", size=70)))
 
     q = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog).generate(gen)
     result = q.to_db_records()
@@ -2189,7 +2222,7 @@ def test_row_generator_class(cloud_test_catalog, dogs_dataset):
 
     @udf(
         params=(C("file.path"),),
-        output=DatasetRow.schema,
+        output=FILE_SCHEMA,
         method="generate_subobjects",
     )
     class Subobjects:
@@ -2197,8 +2230,10 @@ def test_row_generator_class(cloud_test_catalog, dogs_dataset):
             pass
 
         def generate_subobjects(self, path):
-            yield DatasetRow.create(f"{path}/subobject", size=50)
-            yield DatasetRow.create(f"{path}/subobject2", size=70)
+            from datachain.lib.file import File
+
+            yield tuple(f[1] for f in list(File(path=f"{path}/subobject", size=50)))
+            yield tuple(f[1] for f in list(File(path=f"{path}/subobject2", size=70)))
 
     q = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog).generate(
         Subobjects
@@ -2227,7 +2262,7 @@ def test_row_generator_class_batch(cloud_test_catalog, dogs_dataset):
 
     @udf(
         params=(C("file.path"),),
-        output=DatasetRow.schema,
+        output=FILE_SCHEMA,
         method="generate_subobjects",
         batch=4,
     )
@@ -2236,9 +2271,13 @@ def test_row_generator_class_batch(cloud_test_catalog, dogs_dataset):
             pass
 
         def generate_subobjects(self, inputs):
+            from datachain.lib.file import File
+
             for (path,) in inputs:
-                yield DatasetRow.create(f"{path}/subobject", size=50)
-                yield DatasetRow.create(f"{path}/subobject2", size=70)
+                yield tuple(f[1] for f in list(File(path=f"{path}/subobject", size=50)))
+                yield tuple(
+                    f[1] for f in list(File(path=f"{path}/subobject2", size=70))
+                )
 
     q = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog).generate(
         Subobjects
@@ -2265,12 +2304,20 @@ def test_row_generator_class_batch(cloud_test_catalog, dogs_dataset):
 def test_row_generator_partition_by(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
 
-    @udf(("file__path",), DatasetRow.extend(cnt=Int))
+    @udf(("file__path",), FILE_SCHEMA | {"cnt": Int})
     def gen(inputs):
+        from datachain.lib.file import File
+
         cnt = len(inputs)
         for (path,) in inputs:
-            yield (*DatasetRow.create(f"{path}/subobject", size=50), cnt)
-            yield (*DatasetRow.create(f"{path}/subobject2", size=70), cnt)
+            yield (
+                *tuple(f[1] for f in list(File(path=f"{path}/subobject", size=50))),
+                cnt,
+            )
+            yield (
+                *tuple(f[1] for f in list(File(path=f"{path}/subobject2", size=70))),
+                cnt,
+            )
 
     result = (
         DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
@@ -2300,19 +2347,26 @@ def test_row_generator_partition_by_parallel(cloud_test_catalog_tmpfile):
     # Setup catalog.
     dogs_dataset_name = uuid.uuid4().hex
     catalog = cloud_test_catalog_tmpfile.catalog
-    catalog.index([cloud_test_catalog_tmpfile.src_uri])
     src_uri = cloud_test_catalog_tmpfile.src_uri
 
     dogs_dataset = catalog.create_dataset_from_sources(
         dogs_dataset_name, [f"{src_uri}/dogs/*"], recursive=True
     )
 
-    @udf(("file__path",), DatasetRow.extend(cnt=Int))
+    @udf(("file__path",), FILE_SCHEMA | {"cnt": Int})
     def gen(inputs):
+        from datachain.lib.file import File
+
         cnt = len(inputs)
         for (path,) in inputs:
-            yield (*DatasetRow.create(f"{path}/subobject", size=50), cnt)
-            yield (*DatasetRow.create(f"{path}/subobject2", size=70), cnt)
+            yield (
+                *tuple(f[1] for f in list(File(path=f"{path}/subobject", size=50))),
+                cnt,
+            )
+            yield (
+                *tuple(f[1] for f in list(File(path=f"{path}/subobject2", size=70))),
+                cnt,
+            )
 
     result = (
         DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
@@ -2341,12 +2395,20 @@ def test_row_generator_partition_by_parallel(cloud_test_catalog_tmpfile):
 def test_row_generator_partition_by_batch(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
 
-    @udf(("file__path",), DatasetRow.extend(cnt=Int), batch=2)
+    @udf(("file__path",), FILE_SCHEMA | {"cnt": Int}, batch=2)
     def gen(inputs):
+        from datachain.lib.file import File
+
         cnt = len(inputs)
         for (path,) in inputs:
-            yield (*DatasetRow.create(f"{path}/subobject", size=50), cnt)
-            yield (*DatasetRow.create(f"{path}/subobject2", size=70), cnt)
+            yield (
+                *tuple(f[1] for f in list(File(path=f"{path}/subobject", size=50))),
+                cnt,
+            )
+            yield (
+                *tuple(f[1] for f in list(File(path=f"{path}/subobject2", size=70))),
+                cnt,
+            )
 
     result = (
         DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
@@ -2398,7 +2460,7 @@ def test_row_generator_with_new_columns(cloud_test_catalog, dogs_dataset):
 
     @udf(
         params=(C("file.path"),),
-        output=DatasetRow.schema | new_columns,
+        output=FILE_SCHEMA | new_columns,
         method="generate_subobjects",
     )
     class Subobjects:
@@ -2406,8 +2468,10 @@ def test_row_generator_with_new_columns(cloud_test_catalog, dogs_dataset):
             pass
 
         def generate_subobjects(self, path):
+            from datachain.lib.file import File
+
             yield (
-                *DatasetRow.create(f"{path}/subobject", size=50),
+                *tuple(f[1] for f in list(File(path=f"{path}/subobject", size=50))),
                 "some_string",
                 10,
                 11,
@@ -2482,7 +2546,7 @@ def test_row_generator_with_new_columns(cloud_test_catalog, dogs_dataset):
     ]
 
     dataset = catalog.get_dataset("dogs_with_rows_and_signals")
-    expected_schema = DatasetRow.schema | new_columns
+    expected_schema = FILE_SCHEMA | new_columns
 
     dr = catalog.warehouse.schema.dataset_row_cls
     schema = dataset.schema
@@ -2506,18 +2570,18 @@ def test_row_generator_with_new_columns(cloud_test_catalog, dogs_dataset):
 def test_row_generators_sequence_with_new_columns(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
 
-    @udf(params="path", output=DatasetRow.schema | {"path_upper": String, "p1": Int})
+    @udf(params="file__path", output=FILE_SCHEMA | {"path_upper": String, "p1": Int})
     def upper(path):
-        yield *DatasetRow.create(path), path.upper(), 1
+        yield *tuple(f[1] for f in list(File(path=path))), path.upper(), 1
 
-    @udf(params="path", output=DatasetRow.schema | {"path_lower": String, "p2": Int})
+    @udf(params="file__path", output=FILE_SCHEMA | {"path_lower": String, "p2": Int})
     def lower(path):
-        yield *DatasetRow.create(path), path.lower(), 2
+        yield *tuple(f[1] for f in list(File(path=path))), path.lower(), 2
 
     DatasetQuery(name=dogs_dataset.name, catalog=catalog).generate(upper).save("upper")
     for res in DatasetQuery(name="upper", catalog=catalog).to_db_records():
         assert "path_upper" in res
-        assert res["path_upper"] == res["path"].upper()
+        assert res["path_upper"] == res["file__path"].upper()
         assert "p1" in res
         assert res["p1"] == 1
 
@@ -2525,7 +2589,7 @@ def test_row_generators_sequence_with_new_columns(cloud_test_catalog, dogs_datas
     for res in DatasetQuery(name="lower", catalog=catalog).to_db_records():
         assert "path_upper" not in res
         assert "path_lower" in res
-        assert res["path_lower"] == res["path"].lower()
+        assert res["path_lower"] == res["file__path"].lower()
         assert "p1" not in res
         assert "p2" in res
         assert res["p2"] == 2
@@ -2560,7 +2624,7 @@ def test_row_generator_with_new_columns_empty_values(cloud_test_catalog, dogs_da
 
     @udf(
         params=(C("file.path"),),
-        output=DatasetRow.schema | new_columns,
+        output=FILE_SCHEMA | new_columns,
         method="generate_subobjects",
     )
     class Subobjects:
@@ -2568,8 +2632,11 @@ def test_row_generator_with_new_columns_empty_values(cloud_test_catalog, dogs_da
             pass
 
         def generate_subobjects(self, path):
+            from datachain.lib.file import File
+
             yield (
-                DatasetRow.create(f"{path}/subobject", size=50) + new_col_values_empty
+                tuple(f[1] for f in list(File(path=f"{path}/subobject", size=50)))
+                + new_col_values_empty
             )
 
     DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog).generate(
@@ -2612,7 +2679,7 @@ def test_row_generator_with_new_columns_numpy(cloud_test_catalog, dogs_dataset):
 
     @udf(
         params=(C("file.path"),),
-        output=DatasetRow.schema | new_columns,
+        output=FILE_SCHEMA | new_columns,
         method="generate_subobjects",
     )
     class Subobjects:
@@ -2620,8 +2687,10 @@ def test_row_generator_with_new_columns_numpy(cloud_test_catalog, dogs_dataset):
             pass
 
         def generate_subobjects(self, path):
+            from datachain.lib.file import File
+
             yield (
-                *DatasetRow.create(f"{path}/subobject", size=50),
+                *tuple(f[1] for f in list(File(path=f"{path}/subobject", size=50))),
                 np.int32(11),
                 np.int64(12),
                 np.float32(0.5),
@@ -2643,7 +2712,7 @@ def test_row_generator_with_new_columns_numpy(cloud_test_catalog, dogs_dataset):
 
     col_values = [
         (
-            r["path"],
+            r["file__path"],
             r["int_col_32"],
             r["int_col_64"],
             r["float_col_32"],
@@ -2690,7 +2759,7 @@ def test_row_generator_with_new_columns_wrong_type(cloud_test_catalog, dogs_data
 
     @udf(
         params=(C("file.path"),),
-        output={**DatasetRow.schema, "int_col": Int},
+        output={**FILE_SCHEMA, "int_col": Int},
         method="generate_subobjects",
     )
     class Subobjects:
@@ -2698,7 +2767,12 @@ def test_row_generator_with_new_columns_wrong_type(cloud_test_catalog, dogs_data
             pass
 
         def generate_subobjects(self, path):
-            yield (*DatasetRow.create(f"{path}/subobject", size=50), 0.5)
+            from datachain.lib.file import File
+
+            yield (
+                *tuple(f[1] for f in list(File(path=f"{path}/subobject", size=50))),
+                0.5,
+            )
 
     with pytest.raises(ValueError):
         DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog).generate(
@@ -2710,7 +2784,6 @@ def test_row_generator_with_new_columns_wrong_type(cloud_test_catalog, dogs_data
 def test_index_tar(cloud_test_catalog):
     ctc = cloud_test_catalog
     catalog = ctc.catalog
-    catalog.index([ctc.src_uri])
     catalog.create_dataset_from_sources("animals", [ctc.src_uri])
 
     q = DatasetQuery(name="animals", version=1, catalog=catalog).generate(index_tar)
@@ -2735,16 +2808,18 @@ def test_index_tar(cloud_test_catalog):
     rows = catalog.ls_dataset_rows("extracted", 1)
 
     offsets = [
-        json.loads(row["location"])[0]["offset"]
+        json.loads(row["file__location"])[0]["offset"]
         for row in rows
-        if not row["path"].endswith("animals.tar")
+        if not row["file__path"].endswith("animals.tar")
     ]
     # Check that offsets are unique integers
     assert all(isinstance(offset, int) for offset in offsets)
     assert len(set(offsets)) == len(offsets)
 
     assert all(
-        row["vtype"] == "tar" for row in rows if not row["path"].endswith("animals.tar")
+        row["file__vtype"] == "tar"
+        for row in rows
+        if not row["file__path"].endswith("animals.tar")
     )
 
 
@@ -2768,7 +2843,6 @@ def test_checksum_udf(cloud_test_catalog, dogs_dataset):
 def test_tar_loader(cloud_test_catalog):
     ctc = cloud_test_catalog
     catalog = ctc.catalog
-    catalog.index([ctc.src_uri])
     catalog.create_dataset_from_sources("animals", [ctc.src_uri])
     q = DatasetQuery(name="animals", version=1, catalog=catalog).generate(index_tar)
     q.save("extracted")
@@ -2778,7 +2852,7 @@ def test_tar_loader(cloud_test_catalog):
     )
     assert len(q.db_results()) == 2
 
-    ds = q.extract(Object(to_str), "path")
+    ds = q.extract(Object(to_str), "file__path")
     assert {(value, posixpath.basename(path)) for value, path in ds} == {
         ("meow", "cat1"),
         ("mrow", "cat2"),
@@ -2799,7 +2873,7 @@ def test_simple_dataset_query(cloud_test_catalog):
     for ds_name in ("ds1", "ds2"):
         ds = metastore.get_dataset(ds_name)
         dr = warehouse.dataset_rows(ds)
-        dq = dr.select().order_by(dr.c.path)
+        dq = dr.select().order_by(dr.c.file__path)
         ds_queries.append(dq)
 
     ds1, ds2 = (
@@ -2812,7 +2886,7 @@ def test_simple_dataset_query(cloud_test_catalog):
 
     # everything except the id field should match
     assert ds1 == ds2
-    assert [r["path"] for r in ds1] == [
+    assert [r["file__path"] for r in ds1] == [
         ("animals.tar"),
         ("animals.tar/cats/cat1"),
         ("animals.tar/cats/cat2"),
@@ -2838,7 +2912,7 @@ def test_similarity_search(cloud_test_catalog):
     create_tar_dataset(catalog, ctc.src_uri, "ds1")
 
     @udf(
-        params=(Object(to_str), "path"),
+        params=(Object(to_str), "file__path"),
         output={"embedding": Array(Float32)},
         method="embedding",
     )
@@ -2903,13 +2977,12 @@ def test_similarity_search(cloud_test_catalog):
     indirect=True,
 )
 def test_subtract(cloud_test_catalog):
-    @udf(("path",), {"name_len": Int})
+    @udf(("file__path",), {"name_len": Int})
     def name_len(path):
         return (len(posixpath.basename(path)),)
 
     catalog = cloud_test_catalog.catalog
-    sources = [str(cloud_test_catalog.src_uri)]
-    catalog.index(sources)
+    on = ["file__source", "file__path"]
 
     src = cloud_test_catalog.src_uri
     catalog.create_dataset_from_sources("dogs", [f"{src}/dogs/*"], recursive=True)
@@ -2923,40 +2996,21 @@ def test_subtract(cloud_test_catalog):
     dogs_cats = DatasetQuery(name="dogs_cats", catalog=catalog)
 
     # subtracting dataset from dataset
-    q = dogs_cats.subtract(dogs)
+    q = dogs_cats.subtract(dogs, on=on)
     result = q.db_results(row_factory=from_result_row)
-    assert sorted(posixpath.basename(r["path"]) for r in result) == ["cat1", "cat2"]
-
-    # subtracting dataset out of index
-    q = DatasetQuery(f"{src}", catalog=catalog).subtract(cats)
-    result = q.db_results(row_factory=from_result_row)
-    assert sorted(posixpath.basename(r["path"]) for r in result) == [
-        "description",
-        "dog1",
-        "dog2",
-        "dog3",
-        "dog4",
-    ]
-
-    # subtracting index out of index
-    q = DatasetQuery(f"{src}", catalog=catalog).subtract(
-        DatasetQuery(f"{src}/dogs/*", catalog=catalog)
-    )
-    result = q.db_results(row_factory=from_result_row)
-    assert sorted(posixpath.basename(r["path"]) for r in result) == [
+    assert sorted(posixpath.basename(r["file__path"]) for r in result) == [
         "cat1",
         "cat2",
-        "description",
     ]
 
     # subtracting with filter
     q = (
-        DatasetQuery(f"{src}", catalog=catalog)
+        DatasetQuery(dogs_cats.name, catalog=catalog)
         .filter(C("file.path").glob("*dog*"))
-        .subtract(cats)
+        .subtract(cats, on=on)
     )
     result = q.db_results(row_factory=from_result_row)
-    assert sorted(posixpath.basename(r["path"]) for r in result) == [
+    assert sorted(posixpath.basename(r["file__path"]) for r in result) == [
         "dog1",
         "dog2",
         "dog3",
@@ -2964,7 +3018,7 @@ def test_subtract(cloud_test_catalog):
     ]
 
     # chain subtracting
-    q = dogs_cats.subtract(dogs).subtract(cats)
+    q = dogs_cats.subtract(dogs, on=on).subtract(cats, on=on)
     result = q.db_results()
     count = q.count()
     assert len(result) == 0
@@ -2972,12 +3026,12 @@ def test_subtract(cloud_test_catalog):
 
     # filtering after subtract
     q = (
-        DatasetQuery(f"{src}", catalog=catalog)
-        .subtract(cats)
+        DatasetQuery(dogs_cats.name, catalog=catalog)
+        .subtract(cats, on=on)
         .filter(C("file.path").glob("*dog*"))
     )
     result = q.db_results(row_factory=from_result_row)
-    assert sorted(posixpath.basename(r["path"]) for r in result) == [
+    assert sorted(posixpath.basename(r["file__path"]) for r in result) == [
         "dog1",
         "dog2",
         "dog3",
@@ -2990,37 +3044,41 @@ def test_subtract(cloud_test_catalog):
     cats.add_signals(name_len).save("cats_with_signals")
     cats_with_signals = DatasetQuery(name="cats_with_signals", catalog=catalog)
     q = (
-        DatasetQuery(f"{src}", catalog=catalog)
-        .subtract(cats_with_signals)
+        DatasetQuery(dogs_cats.name, catalog=catalog)
+        .subtract(cats_with_signals, on=on)
         .add_signals(name_len)
         .union(cats_with_signals)
     )
     result = q.db_results(row_factory=from_result_row)
-    assert sorted(posixpath.basename(r["path"]) for r in result) == sorted(
-        ["description", "dog1", "dog2", "dog3", "dog4", "cat1", "cat2"]
+    assert sorted(posixpath.basename(r["file__path"]) for r in result) == sorted(
+        ["dog1", "dog2", "dog3", "dog4", "cat1", "cat2"]
     )
     assert all(r["name_len"] > 0 for r in result)
 
     # subtracting with source and target filter
     # only dog2 file has size less then 4
-    all_except_dog2 = DatasetQuery(f"{src}", catalog=catalog).filter(C("file.size") > 3)
+    all_except_dog2 = DatasetQuery(dogs_cats.name, catalog=catalog).filter(
+        C("file.size") > 3
+    )
     only_cats = dogs_cats.filter(C("file.path").glob("*cat*"))
-    q = all_except_dog2.subtract(only_cats)
+    q = all_except_dog2.subtract(only_cats, on=on)
     result = q.db_results(row_factory=from_result_row)
-    assert sorted(posixpath.basename(r["path"]) for r in result) == [
-        "description",
+    assert sorted(posixpath.basename(r["file__path"]) for r in result) == [
         "dog1",
         "dog3",
         "dog4",
     ]
 
     # subtracting after union
-    q = dogs.union(cats).subtract(dogs)
+    q = dogs.union(cats).subtract(dogs, on=on)
     result = q.db_results(row_factory=from_result_row)
-    assert sorted(posixpath.basename(r["path"]) for r in result) == ["cat1", "cat2"]
+    assert sorted(posixpath.basename(r["file__path"]) for r in result) == [
+        "cat1",
+        "cat2",
+    ]
 
     # subtract with itself
-    q = dogs.subtract(dogs)
+    q = dogs.subtract(dogs, on=on)
     result = q.db_results()
     count = q.count()
     assert len(result) == 0
@@ -3073,7 +3131,9 @@ def test_group_by(cloud_test_catalog, cloud_type, dogs_dataset):
 
 @pytest.mark.parametrize("tree", [WEBFORMAT_TREE], indirect=True)
 def test_json_loader(cloud_test_catalog):
-    catalog = cloud_test_catalog.catalog
+    ctc = cloud_test_catalog
+    catalog = ctc.catalog
+    catalog.create_dataset_from_sources("animals", [ctc.src_uri])
 
     @udf(
         params=(C.name,),
@@ -3112,7 +3172,7 @@ def test_json_loader(cloud_test_catalog):
     ]
 
     q = (
-        DatasetQuery(cloud_test_catalog.src_uri, catalog=catalog)
+        DatasetQuery("animals", catalog=catalog)
         .mutate(name=pathfunc.name(C("file.path")))
         .add_signals(split_name)
         .add_signals(attach_json, partition_by=C.basename)
@@ -3133,136 +3193,22 @@ def test_json_loader(cloud_test_catalog):
     [("s3", True)],
     indirect=True,
 )
-def test_changed(cloud_test_catalog):
-    now = datetime.now(timezone.utc)
-
-    @udf(("path",), {"name_len": Int})
-    def name_len(path):
-        return (len(posixpath.basename(path)),)
-
-    def _index(catalog, uri, entries_updated_last_mod):
-        """
-        Custom indexing with setting some of the files to future last modified
-        to simulate scenario where they are updated in cloud
-        """
-
-        catalog.metastore.create_storage_if_not_registered(uri)
-        entries = []
-
-        for entry in ENTRIES:
-            if posixpath.basename(entry.path) in entries_updated_last_mod:
-                entry.last_modified = now + timedelta(days=2)
-            else:
-                entry.last_modified = now
-            entries.append(entry)
-
-        make_index(catalog, uri, entries)
-
-    catalog = cloud_test_catalog.catalog
-    src = cloud_test_catalog.src_uri
-
-    # first index
-    _index(catalog, src, [])
-
-    catalog.create_dataset_from_sources("dogs", [f"{src}/dogs/*"], recursive=True)
-    catalog.create_dataset_from_sources("cats", [f"{src}/cats/*"], recursive=True)
-
-    dogs = DatasetQuery(name="dogs", version=1, catalog=catalog)
-    cats = DatasetQuery(name="cats", version=1, catalog=catalog)
-
-    # re-index with simulating dog2 to be updated
-    _index(catalog, src, ["dog2"])
-
+def test_to_db_records(cloud_test_catalog):
+    ctc = cloud_test_catalog
+    catalog = ctc.catalog
     catalog.create_dataset_from_sources(
-        "dogs_updated_1", [f"{src}/dogs/*"], recursive=True
+        "cats", [f"{ctc.src_uri}/cats/*"], recursive=True
+    )
+    ds = (
+        DatasetQuery("cats", catalog=catalog)
+        .select(C("file__path"), C("file__size"))
+        .order_by(C("file__path"))
     )
 
-    # re-index with simulating dog1 and dog2 to be updated
-    _index(catalog, src, ["dog1", "dog2"])
-
-    catalog.create_dataset_from_sources(
-        "dogs_updated_2", [f"{src}/dogs/*"], recursive=True
-    )
-
-    dogs_updated_1 = DatasetQuery(name="dogs_updated_1", version=1, catalog=catalog)
-    dogs_updated_2 = DatasetQuery(name="dogs_updated_2", version=1, catalog=catalog)
-
-    # changed between dataset and dataset
-    q = dogs_updated_1.changed(dogs)
-    result = q.db_results(row_factory=from_result_row)
-    assert sorted(posixpath.basename(r["path"]) for r in result) == ["dog2"]
-
-    q = dogs_updated_2.changed(dogs)
-    result = q.db_results(row_factory=from_result_row)
-    assert sorted(posixpath.basename(r["path"]) for r in result) == ["dog1", "dog2"]
-
-    # changed between dataset and dataset, no change
-    q = dogs.changed(dogs)
-    result = q.db_results()
-    count = q.count()
-    assert len(result) == 0
-    assert count == 0
-
-    # changed between index and dataset
-    q = DatasetQuery(f"{src}/dogs/*", catalog=catalog).changed(dogs)
-    result = q.db_results(row_factory=from_result_row)
-    assert sorted(posixpath.basename(r["path"]) for r in result) == ["dog1", "dog2"]
-
-    # changed with filters
-    q = (
-        DatasetQuery(f"{src}", catalog=catalog)
-        .filter(C("file.path").glob("*dog*"))
-        .changed(dogs)
-    )
-    result = q.db_results(row_factory=from_result_row)
-    assert sorted(posixpath.basename(r["path"]) for r in result) == ["dog1", "dog2"]
-
-    # chain changed
-    q = dogs_updated_2.changed(dogs).changed(dogs_updated_1)
-    result = q.db_results(row_factory=from_result_row)
-    assert sorted(posixpath.basename(r["path"]) for r in result) == ["dog1"]
-
-    # filtering after changed
-    q = (
-        DatasetQuery(f"{src}/dogs/*", catalog=catalog)
-        .changed(dogs)
-        .filter(C("file.path").glob("*dog1"))
-    )
-    result = q.db_results(row_factory=from_result_row)
-    assert sorted(posixpath.basename(r["path"]) for r in result) == ["dog1"]
-
-    # changed with usage of udfs
-    q = (
-        DatasetQuery(f"{src}/dogs/*", catalog=catalog)
-        .changed(dogs)
-        .add_signals(name_len)
-    )
-    result = q.db_results(row_factory=from_result_row)
-    assert sorted(posixpath.basename(r["path"]) for r in result) == sorted(
-        ["dog1", "dog2"]
-    )
-    assert all(r["name_len"] > 0 for r in result)
-
-    # changed after union
-    q = dogs_updated_2.union(cats).changed(dogs)
-    result = q.db_results(row_factory=from_result_row)
-    assert sorted(posixpath.basename(r["path"]) for r in result) == ["dog1", "dog2"]
-
-    # changed with itself
-    q = dogs.changed(dogs)
-    result = q.db_results()
-    count = q.count()
-    assert len(result) == 0
-    assert count == 0
-
-
-@pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
-    indirect=True,
-)
-def test_to_db_records(simple_ds_query):
-    assert simple_ds_query.to_db_records() == SIMPLE_DS_QUERY_RECORDS
+    assert ds.to_db_records() == [
+        {"file__path": "cats/cat1", "file__size": 4},
+        {"file__path": "cats/cat2", "file__size": 4},
+    ]
 
 
 @pytest.mark.parametrize("method", ["to_db_records"])
@@ -3276,10 +3222,10 @@ def test_udf_after_union(cloud_test_catalog, save, method):
     catalog = cloud_test_catalog.catalog
     sources = [cloud_test_catalog.src_uri]
     globs = [s.rstrip("/") + "/*" for s in sources]
-    catalog.index(sources)
+    # catalog.index(sources)
     catalog.create_dataset_from_sources("animals", globs, recursive=True)
 
-    @udf(("path",), {"name_len": Int})
+    @udf(("file__path",), {"name_len": Int})
     def name_len(path):
         return (len(posixpath.basename(path)),)
 
@@ -3344,10 +3290,9 @@ def test_udf_after_union_same_rows_with_mutate(cloud_test_catalog, method):
     catalog = cloud_test_catalog.catalog
     sources = [cloud_test_catalog.src_uri]
     globs = [s.rstrip("/") + "/*" for s in sources]
-    catalog.index(sources)
     catalog.create_dataset_from_sources("animals", globs, recursive=True)
 
-    @udf(("path",), {"name_len": Int})
+    @udf(("file__path",), {"name_len": Int})
     def name_len(path):
         return (len(posixpath.basename(path)),)
 
@@ -3415,7 +3360,6 @@ def test_udf_after_limit(cloud_test_catalog, method):
     catalog = cloud_test_catalog.catalog
     sources = [cloud_test_catalog.src_uri]
     globs = [s.rstrip("/") + "/*" for s in sources]
-    catalog.index(sources)
     catalog.create_dataset_from_sources("animals", globs, recursive=True)
 
     @udf(("name",), {"name_int": Int})
@@ -3673,21 +3617,4 @@ def test_save_subset_of_columns(cloud_test_catalog, cats_dataset):
     )
 
     dataset = catalog.get_dataset("cats")
-    assert dataset.schema == {"path": String}
-
-
-@pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
-    indirect=True,
-)
-def test_single_file(cloud_test_catalog, cats_dataset):
-    catalog = cloud_test_catalog.catalog
-    ds = DatasetQuery(cats_dataset.name, catalog=catalog)
-    assert ds.count() == 1
-
-
-def test_recursive(cloud_test_catalog, animal_dataset):
-    catalog = cloud_test_catalog.catalog
-    ds = DatasetQuery(animal_dataset.name, catalog=catalog, recursive=False)
-    assert ds.count() == 1
+    assert dataset.schema == {"file__path": String}
