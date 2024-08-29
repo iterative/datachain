@@ -24,7 +24,7 @@ ResultQueue = asyncio.Queue[Optional[Sequence[File]]]
 
 DELIMITER = "/"  # Path delimiter
 FETCH_WORKERS = 100
-LISTING_TTL = 4 * 60 * 60  # cached listing lasts 4 days
+LISTING_TTL = 4 * 60 * 60  # cached listing lasts 4 hours
 LISTING_PREFIX = "lst__"  # listing datasets start with this name
 
 
