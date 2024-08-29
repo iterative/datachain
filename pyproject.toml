@@ -69,8 +69,12 @@ remote = [
 vector = [
   "usearch"
 ]
+hf = [
+  "numba>=0.60.0",
+  "datasets[audio,vision]"
+]
 tests = [
-  "datachain[torch,remote,vector]",
+  "datachain[torch,remote,vector,hf]",
   "pytest>=8,<9",
   "pytest-sugar>=0.9.6",
   "pytest-cov>=4.1.0",
@@ -84,11 +88,12 @@ tests = [
   "hypothesis",
   "open_clip_torch",
   "aiotools>=1.7.0",
-  "requests-mock"
+  "requests-mock",
+  "scipy"
 ]
 dev = [
   "datachain[docs,tests]",
-  "mypy==1.11.1",
+  "mypy==1.11.2",
   "types-python-dateutil",
   "types-pytz",
   "types-PyYAML",

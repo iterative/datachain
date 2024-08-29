@@ -1151,6 +1151,36 @@ def test_get_file_signals(cloud_test_catalog, dogs_dataset):
     }
 
 
+def test_get_file_signals_with_custom_types(cloud_test_catalog, dogs_dataset):
+    catalog = cloud_test_catalog.catalog
+    catalog.metastore.update_dataset_version(
+        dogs_dataset,
+        1,
+        feature_schema={
+            "name": "str",
+            "age": "str",
+            "f1": "File@v1",
+            "f2": "File@v1",
+            "_custom_types": {
+                "File@v1": {"source": "str", "name": "str"},
+            },
+        },
+    )
+    row = {
+        "name": "Jon",
+        "age": 25,
+        "f1__source": "s3://first_bucket",
+        "f1__name": "image1.jpg",
+        "f2__source": "s3://second_bucket",
+        "f2__name": "image2.jpg",
+    }
+
+    assert catalog.get_file_signals(dogs_dataset.name, 1, row) == {
+        "source": "s3://first_bucket",
+        "name": "image1.jpg",
+    }
+
+
 def test_get_file_signals_no_signals(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
     catalog.metastore.update_dataset_version(

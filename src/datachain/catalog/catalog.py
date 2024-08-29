@@ -1540,87 +1540,6 @@ class Catalog:
         dataset = self.get_dataset(name)
         return self.update_dataset(dataset, **update_data)
 
-    def merge_datasets(
-        self,
-        src: DatasetRecord,
-        dst: DatasetRecord,
-        src_version: int,
-        dst_version: Optional[int] = None,
-    ) -> DatasetRecord:
-        """
-        Merges records from source to destination dataset.
-        It will create new version
-        of a dataset with records merged from old version and the source, unless
-        existing version is specified for destination in which case it must
-        be in non final status as datasets are immutable
-        """
-        if (
-            dst_version
-            and not dst.is_valid_next_version(dst_version)
-            and dst.get_version(dst_version).is_final_status()
-        ):
-            raise DatasetInvalidVersionError(
-                f"Version {dst_version} must be higher than the current latest one"
-            )
-
-        src_dep = self.get_dataset_dependencies(src.name, src_version)
-        dst_dep = self.get_dataset_dependencies(
-            dst.name,
-            dst.latest_version,  # type: ignore[arg-type]
-        )
-
-        if dst.has_version(dst_version):  # type: ignore[arg-type]
-            # case where we don't create new version, but append to the existing one
-            self.warehouse.merge_dataset_rows(
-                src,
-                dst,
-                src_version,
-                dst_version=dst_version,  # type: ignore[arg-type]
-            )
-            merged_schema = src.serialized_schema | dst.serialized_schema
-            self.update_dataset(dst, schema=merged_schema)
-            self.update_dataset_version_with_warehouse_info(
-                dst,
-                dst_version,  # type: ignore[arg-type]
-                schema=merged_schema,
-            )
-            for dep in src_dep:
-                if dep and dep not in dst_dep:
-                    self.metastore.add_dependency(
-                        dep,
-                        dst.name,
-                        dst_version,  # type: ignore[arg-type]
-                    )
-        else:
-            # case where we create new version of merged results
-            src_dr = self.warehouse.dataset_rows(src, src_version)
-            dst_dr = self.warehouse.dataset_rows(dst)
-
-            merge_result_columns = list(
-                {
-                    c.name: c for c in list(src_dr.table.c) + list(dst_dr.table.c)
-                }.values()
-            )
-
-            dst_version = dst_version or dst.next_version
-            dst = self.create_new_dataset_version(
-                dst,
-                dst_version,
-                columns=merge_result_columns,
-            )
-            self.warehouse.merge_dataset_rows(
-                src,
-                dst,
-                src_version,
-                dst_version,
-            )
-            self.update_dataset_version_with_warehouse_info(dst, dst_version)
-            for dep in set(src_dep + dst_dep):
-                if dep:
-                    self.metastore.add_dependency(dep, dst.name, dst_version)
-
-        return dst
-
     def get_file_signals(
         self, dataset_name: str, dataset_version: int, row: RowDict
     ) -> Optional[dict]:
@@ -1641,17 +1560,8 @@ class Catalog:
         version = self.get_dataset(dataset_name).get_version(dataset_version)
 
         file_signals_values = {}
-        file_schemas = {}
-        # TODO: To remove after we properly fix deserialization
-        for signal, type_name in version.feature_schema.items():
-            from datachain.lib.model_store import ModelStore
 
-            type_name_parsed, v = ModelStore.parse_name_version(type_name)
-            fr = ModelStore.get(type_name_parsed, v)
-            if fr and issubclass(fr, File):
-                file_schemas[signal] = type_name
-
-        schema = SignalSchema.deserialize(file_schemas)
+        schema = SignalSchema.deserialize(version.feature_schema)
         for file_signals in schema.get_signals(File):
             prefix = file_signals.replace(".", DEFAULT_DELIMITER) + DEFAULT_DELIMITER
             file_signals_values[file_signals] = {
@@ -1997,7 +1907,7 @@ class Catalog:
         """
         from datachain.query.dataset import ExecutionResult
 
-        feature_file = tempfile.NamedTemporaryFile(
+        feature_file = tempfile.NamedTemporaryFile(  # noqa: SIM115
             dir=os.getcwd(), suffix=".py", delete=False
         )
         _, feature_module = os.path.split(feature_file.name)
