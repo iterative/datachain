@@ -42,31 +42,27 @@ def test_catalog_anon(tmp_dir, catalog, anon):
 
 def test_from_storage(cloud_test_catalog):
     ctc = cloud_test_catalog
-    dc = DataChain.from_storage(ctc.src_uri, client_config=ctc.catalog.client_config)
+    dc = DataChain.from_storage(ctc.src_uri, session=ctc.session)
     assert dc.count() == 7
 
 
 def test_from_storage_non_recursive(cloud_test_catalog):
     ctc = cloud_test_catalog
     dc = DataChain.from_storage(
-        f"{ctc.src_uri}/dogs", client_config=ctc.catalog.client_config, recursive=False
+        f"{ctc.src_uri}/dogs", session=ctc.session, recursive=False
     )
     assert dc.count() == 3
 
 
 def test_from_storage_glob(cloud_test_catalog):
     ctc = cloud_test_catalog
-    dc = DataChain.from_storage(
-        f"{ctc.src_uri}/dogs*", client_config=ctc.catalog.client_config
-    )
+    dc = DataChain.from_storage(f"{ctc.src_uri}/dogs*", session=ctc.session)
     assert dc.count() == 4
 
 
 def test_from_storage_as_image(cloud_test_catalog):
     ctc = cloud_test_catalog
-    dc = DataChain.from_storage(
-        ctc.src_uri, client_config=ctc.catalog.client_config, type="image"
-    )
+    dc = DataChain.from_storage(ctc.src_uri, session=ctc.session, type="image")
     for im in dc.collect("file"):
         assert isinstance(im, ImageFile)
 

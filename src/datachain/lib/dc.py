@@ -327,7 +327,6 @@ class DataChain(DatasetQuery):
         recursive: Optional[bool] = True,
         object_name: str = "file",
         update: bool = False,
-        client_config=None,
         anon: bool = False,
     ) -> "Self":
         """Get data from a storage as a list of file with all file attributes.
@@ -349,11 +348,10 @@ class DataChain(DatasetQuery):
         """
         file_type = get_file_type(type)
 
-        if client_config is None:
-            client_config = {}
-
         if anon:
-            client_config["anon"] = True
+            client_config = {"anon": True}
+        else:
+            client_config = None
 
         session = Session.get(session, client_config=client_config, in_memory=in_memory)
 
