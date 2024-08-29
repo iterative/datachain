@@ -1616,7 +1616,6 @@ class DataChain(DatasetQuery):
         settings: Optional[dict] = None,
         in_memory: bool = False,
         schema: Optional[dict[str, DataType]] = None,
-        **kwargs,
     ) -> "DataChain":
         """Create a DataChain from the provided records. This method can be used for
         programmatically generating a chain in contrast of reading data from storages
@@ -1633,7 +1632,7 @@ class DataChain(DatasetQuery):
             ```
         """
         session = Session.get(session, in_memory=in_memory)
-        catalog = kwargs.get("catalog") or session.catalog
+        catalog = session.catalog
 
         name = session.generate_temp_dataset_name()
         signal_schema = None
@@ -1672,7 +1671,7 @@ class DataChain(DatasetQuery):
         insert_q = dr.get_table().insert()
         for record in to_insert:
             db.execute(insert_q.values(**record))
-        return DataChain(name=dsr.name, settings=settings, **kwargs)
+        return DataChain(name=dsr.name, settings=settings)
 
     def sum(self, fr: DataType):  # type: ignore[override]
         """Compute the sum of a column."""
