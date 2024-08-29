@@ -116,7 +116,7 @@ def test_arrow_type_mapper_struct():
     fields = arrow_type_mapper(col_type).model_fields
     assert list(fields.keys()) == ["x", "y"]
     dtypes = [field.annotation for field in fields.values()]
-    assert dtypes == [int, str]
+    assert dtypes == [Optional[int], Optional[str]]
 
 
 def test_arrow_type_error():

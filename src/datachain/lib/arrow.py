@@ -132,9 +132,12 @@ def arrow_type_mapper(col_type: pa.DataType, column: str = "") -> type:  # noqa:
     if pa.types.is_list(col_type):
         return list[arrow_type_mapper(col_type.value_type)]  # type: ignore[return-value, misc]
     if pa.types.is_struct(col_type):
-        type_dict = {
-            field.name: arrow_type_mapper(field.type, field.name) for field in col_type
-        }
+        type_dict = {}
+        for field in col_type:
+            dtype = arrow_type_mapper(field.type, field.name)
+            if field.nullable and not ModelStore.is_pydantic(dtype):
+                dtype = Optional[dtype]  # type: ignore[assignment]
+            type_dict[field.name] = dtype
         return dict_to_data_model(column, type_dict)
     if pa.types.is_map(col_type):
         return dict
