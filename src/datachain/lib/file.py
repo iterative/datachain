@@ -359,7 +359,7 @@ class IndexedFile(DataModel):
     index: int
 
 
-def get_file_type(type_: Literal["binary", "text", "image"] = "binary"):
+def get_file_type(type_: Literal["binary", "text", "image"] = "binary") -> type[File]:
     file: type[File] = File
     if type_ == "text":
         file = TextFile
