@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any, Optional
 import attrs
 
 from datachain.cache import UniqueId
+from datachain.lib.file import File
 from datachain.storage import StorageURI
 from datachain.utils import TIME_ZERO, time_to_str
 
@@ -188,6 +189,18 @@ class Entry:
         if len(split) <= 1:
             return ""
         return split[0]
+
+    def to_file(self, source: str) -> File:
+        return File(
+            source=source,
+            path=self.path,
+            size=self.size,
+            version=self.version,
+            etag=self.etag,
+            is_latest=self.is_latest,
+            last_modified=self.last_modified,
+            location=self.location,
+        )
 
 
 def get_path(parent: str, name: str):
