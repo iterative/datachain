@@ -22,6 +22,7 @@ from pydantic import BaseModel
 from sqlalchemy.sql.functions import GenericFunction
 from sqlalchemy.sql.sqltypes import NullType
 
+from datachain.client.local import FileClient
 from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import DataModel, DataType, dict_to_data_model
@@ -1409,7 +1410,7 @@ class DataChain(DatasetQuery):
             print(f"\n[Limited by {len(df)} rows]")
 
     @classmethod
-    def from_hf(
+    def from_hf_streaming(
         cls,
         dataset: Union[str, "HFDatasetType"],
         *args,
@@ -1419,7 +1420,7 @@ class DataChain(DatasetQuery):
         model_name: str = "",
         **kwargs,
     ) -> "DataChain":
-        """Generate chain from huggingface hub dataset.
+        """Generate chain by streaming from huggingface dataset.
 
         Parameters:
             dataset : Path or name of the dataset to read from Hugging Face Hub,
@@ -1443,10 +1444,10 @@ class DataChain(DatasetQuery):
             DataChain.from_hf(ds)
             ```
         """
-        from datachain.lib.hf import HFGenerator, get_output_schema, stream_splits
+        from datachain.lib.hf import HFGeneratorStream, get_output_schema, get_splits
 
         output: dict[str, DataType] = {}
-        ds_dict = stream_splits(dataset, *args, **kwargs)
+        ds_dict = get_splits(dataset, *args, streaming=True, **kwargs)
         if len(ds_dict) > 1:
             output = {"split": str}
 
@@ -1459,7 +1460,77 @@ class DataChain(DatasetQuery):
         chain = DataChain.from_values(
             split=list(ds_dict.keys()), session=session, settings=settings
         )
-        return chain.gen(HFGenerator(dataset, model, *args, **kwargs), output=output)
+        return chain.gen(
+            HFGeneratorStream(dataset, model, *args, **kwargs), output=output
+        )
+
+    @classmethod
+    def from_hf_download(
+        cls,
+        dataset: Union[str, "HFDatasetType"],
+        *args,
+        session: Optional[Session] = None,
+        settings: Optional[dict] = None,
+        object_name: str = "",
+        model_name: str = "",
+        **kwargs,
+    ) -> "DataChain":
+        """Generate chain by downloading huggingface dataset.
+
+        Parameters:
+            dataset : Path or name of the dataset to read from Hugging Face Hub,
+                or an instance of `datasets.Dataset`-like object.
+            session : Session to use for the chain.
+            settings : Settings to use for the chain.
+            object_name : Generated object column name.
+            model_name : Generated model name.
+            kwargs : Parameters to pass to datasets.load_dataset.
+
+        Example:
+            Load from Hugging Face Hub:
+            ```py
+            DataChain.from_hf("beans", split="train")
+            ```
+
+            Generate chain from loaded dataset:
+            ```py
+            from datasets import load_dataset
+            ds = load_dataset("beans", split="train")
+            DataChain.from_hf(ds)
+            ```
+        """
+        from datachain.lib.hf import HFGeneratorCache, get_output_schema, get_splits
+
+        ds_dict = get_splits(dataset, *args, **kwargs)
+
+        chain = None
+        input_schema = None
+        for split, ds in ds_dict.items():
+            for file in ds.cache_files:
+                if not input_schema:
+                    input_schema = ds.features
+                uri = FileClient.path_to_uri(file["filename"])
+                file_chain = DataChain.from_storage(
+                    uri, session=session, settings=settings
+                )
+                file_chain = file_chain.mutate(split=sqlalchemy.literal(split))
+                if chain:
+                    chain = chain.union(file_chain)  # type: ignore[unreachable]
+                else:
+                    chain = file_chain
+
+        output: dict[str, DataType] = {}
+        if len(ds_dict) > 1:
+            output = {"split": str}
+        model_name = model_name or object_name or ""
+        output = output | get_output_schema(ds, model_name, stream=False)
+        model = dict_to_data_model(model_name, output)
+        if object_name:
+            output = {object_name: model}
+
+        return chain.gen(  # type: ignore[union-attr]
+            HFGeneratorCache(input_schema, model, *args, **kwargs), output=output
+        )
 
     def parse_tabular(
         self,
