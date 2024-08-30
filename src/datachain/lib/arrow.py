@@ -7,7 +7,9 @@ import pyarrow as pa
 from pyarrow.dataset import dataset
 from tqdm import tqdm
 
+from datachain.lib.data_model import dict_to_data_model
 from datachain.lib.file import File, IndexedFile
+from datachain.lib.model_store import ModelStore
 from datachain.lib.udf import Generator
 
 if TYPE_CHECKING:
@@ -59,7 +61,13 @@ class ArrowGenerator(Generator):
                     vals = list(record.values())
                     if self.output_schema:
                         fields = self.output_schema.model_fields
-                        vals = [self.output_schema(**dict(zip(fields, vals)))]
+                        vals_dict = {}
+                        for (field, field_info), val in zip(fields.items(), vals):
+                            if ModelStore.is_pydantic(field_info.annotation):
+                                vals_dict[field] = field_info.annotation(**val)  # type: ignore[misc]
+                            else:
+                                vals_dict[field] = val
+                        vals = [self.output_schema(**vals_dict)]
                     if self.source:
                         yield [IndexedFile(file=file, index=index), *vals]
                     else:
@@ -95,15 +103,15 @@ def schema_to_output(schema: pa.Schema, col_names: Optional[Sequence[str]] = Non
         if not column:
             column = f"c{default_column}"
             default_column += 1
-        dtype = arrow_type_mapper(field.type)  # type: ignore[assignment]
-        if field.nullable:
+        dtype = arrow_type_mapper(field.type, column)  # type: ignore[assignment]
+        if field.nullable and not ModelStore.is_pydantic(dtype):
             dtype = Optional[dtype]  # type: ignore[assignment]
         output[column] = dtype
 
     return output
 
 
-def arrow_type_mapper(col_type: pa.DataType) -> type:  # noqa: PLR0911
+def arrow_type_mapper(col_type: pa.DataType, column: str = "") -> type:  # noqa: PLR0911
     """Convert pyarrow types to basic types."""
     from datetime import datetime
 
@@ -123,7 +131,15 @@ def arrow_type_mapper(col_type: pa.DataType) -> type:  # noqa: PLR0911
         return str
     if pa.types.is_list(col_type):
         return list[arrow_type_mapper(col_type.value_type)]  # type: ignore[return-value, misc]
-    if pa.types.is_struct(col_type) or pa.types.is_map(col_type):
+    if pa.types.is_struct(col_type):
+        type_dict = {}
+        for field in col_type:
+            dtype = arrow_type_mapper(field.type, field.name)
+            if field.nullable and not ModelStore.is_pydantic(dtype):
+                dtype = Optional[dtype]  # type: ignore[assignment]
+            type_dict[field.name] = dtype
+        return dict_to_data_model(column, type_dict)
+    if pa.types.is_map(col_type):
         return dict
     if isinstance(col_type, pa.lib.DictionaryType):
         return arrow_type_mapper(col_type.value_type)  # type: ignore[return-value]
