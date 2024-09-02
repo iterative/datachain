@@ -1,7 +1,5 @@
 import copy
-import glob
 import os
-import posixpath
 import re
 from collections.abc import Iterator, Sequence
 from functools import wraps
@@ -318,39 +316,6 @@ class DataChain(DatasetQuery):
     def add_schema(self, signals_schema: SignalSchema) -> "Self":  # noqa: D102
         self.signals_schema |= signals_schema
         return self
-
-    @classmethod
-    def _listing_chain(
-        cls, dc: "DataChain", path: str, recursive: Optional[bool] = True
-    ):
-        # TODO generalize "file" to arbitrary name
-        dc = dc.filter(C("file.is_latest") == true())
-        if recursive:
-            root = False
-            where = C("file.path").glob(path)
-            if not path or path == "/":
-                # root of the bucket, e.g s3://bucket/ -> getting all the nodes
-                # in the bucket
-                root = True
-
-            if not root and not glob.has_magic(
-                os.path.basename(os.path.normpath(path))
-            ):
-                # not a root and not a explicit glob, so it's pointing to some directory
-                # and we are adding a proper glob syntax for it
-                # e.g s3://bucket/dir1 -> s3://bucket/dir1/*
-                dir_path = path.rstrip("/") + "/*"
-                where = where | C("file.path").glob(dir_path)
-
-            if not root:
-                # not a root, so running glob query
-                print(f"Not a root, where clause is {where}")
-                dc = dc.filter(where)
-        else:
-            # TODO fix non recursive queries
-            pass
-
-        return dc
 
     @classmethod
     def from_storage(
