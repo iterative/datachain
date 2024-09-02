@@ -143,7 +143,9 @@ class SQLiteDatabaseEngine(DatabaseEngine):
             db.execute("PRAGMA synchronous = NORMAL")
             db.execute("PRAGMA case_sensitive_like = ON")
             if os.environ.get("DEBUG_SHOW_SQL_QUERIES"):
-                db.set_trace_callback(print)
+                import sys
+
+                db.set_trace_callback(sys.stderr.write)
 
             load_usearch_extension(db)
 
