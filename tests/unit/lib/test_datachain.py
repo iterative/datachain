@@ -258,11 +258,6 @@ def test_datasets_in_memory():
     assert datasets[0].num_objects == 6
 
 
-@pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("file", False)],
-    indirect=True,
-)
 def test_listings(test_session, tmp_dir):
     df = pd.DataFrame(DF_DATA)
     df.to_parquet(tmp_dir / "df.parquet")
@@ -294,11 +289,6 @@ def test_listings(test_session, tmp_dir):
     assert listing.status == 4
 
 
-@pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("file", False)],
-    indirect=True,
-)
 def test_listings_reindex(test_session, tmp_dir):
     df = pd.DataFrame(DF_DATA)
     df.to_parquet(tmp_dir / "df.parquet")

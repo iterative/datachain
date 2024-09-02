@@ -79,11 +79,13 @@ class DatasetDependency:
     @property
     def dataset_name(self) -> str:
         """Returns clean dependency dataset name"""
-        from datachain.lib.listing import listing_dataset_name
+        from datachain.lib.listing import parse_listing_uri
 
         if self.type == DatasetDependencyType.DATASET:
             return self.name
-        return listing_dataset_name(self.name.strip("/"), "")
+
+        list_dataset_name, _, _ = parse_listing_uri(self.name.strip("/"), None, {})
+        return list_dataset_name
 
     @classmethod
     def parse(
