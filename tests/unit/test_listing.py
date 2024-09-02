@@ -1,9 +1,17 @@
 import posixpath
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from datachain.catalog import Catalog
 from datachain.catalog.catalog import DataSource
+from datachain.lib.listing import (
+    LISTING_TTL,
+    is_listing_dataset,
+    is_listing_expired,
+    is_listing_subset,
+    parse_listing_uri,
+)
 from datachain.node import DirType, Entry, get_path
 from tests.utils import skip_if_not_sqlite
 
@@ -138,3 +146,74 @@ def test_subtree(listing):
 def test_subdirs(listing):
     dirs = list(listing.get_dirs_by_parent_path(""))
     _match_filenames(dirs, ["dir1", "dir2"])
+
+
+@pytest.mark.parametrize(
+    "cloud_type",
+    ["s3", "azure", "gs"],
+    indirect=True,
+)
+def test_parse_listing_uri(cloud_test_catalog):
+    ctc = cloud_test_catalog
+    catalog = ctc.catalog
+    dataset_name, listing_uri, listing_path = parse_listing_uri(
+        f"{ctc.src_uri}/dogs", catalog.cache, catalog.client_config
+    )
+    assert dataset_name == f"lst__{ctc.src_uri}/dogs/"
+    assert listing_uri == f"{ctc.src_uri}/dogs"
+    assert listing_path == "dogs"
+
+
+@pytest.mark.parametrize(
+    "cloud_type",
+    ["s3", "azure", "gs"],
+    indirect=True,
+)
+def test_parse_listing_uri_with_glob(cloud_test_catalog):
+    ctc = cloud_test_catalog
+    catalog = ctc.catalog
+    dataset_name, listing_uri, listing_path = parse_listing_uri(
+        f"{ctc.src_uri}/dogs/*", catalog.cache, catalog.client_config
+    )
+    assert dataset_name == f"lst__{ctc.src_uri}/dogs/"
+    assert listing_uri == f"{ctc.src_uri}/dogs"
+    assert listing_path == "dogs/*"
+
+
+@pytest.mark.parametrize(
+    "name,is_listing",
+    [
+        ("lst__s3://my-bucket", True),
+        ("lst__file:///my-folder/dir1", True),
+        ("s3://my-bucket", False),
+        ("my-dataset", False),
+    ],
+)
+def test_is_listing_dataset(name, is_listing):
+    assert is_listing_dataset(name) is is_listing
+
+
+@pytest.mark.parametrize(
+    "date,is_expired",
+    [
+        (datetime.now(timezone.utc), False),
+        (datetime.now(timezone.utc) - timedelta(seconds=LISTING_TTL + 1), True),
+    ],
+)
+def test_is_listing_expired(date, is_expired):
+    assert is_listing_expired(date) is is_expired
+
+
+@pytest.mark.parametrize(
+    "ds1_name,ds2_name,is_subset",
+    [
+        ("lst__s3://my-bucket/animals/", "lst__s3://my-bucket/animals/dogs/", True),
+        ("lst__s3://my-bucket/animals/", "lst__s3://my-bucket/animals/", True),
+        ("lst__s3://my-bucket/", "lst__s3://my-bucket/", True),
+        ("lst__s3://my-bucket/cats/", "lst__s3://my-bucket/animals/dogs/", False),
+        ("lst__s3://my-bucket/dogs/", "lst__s3://my-bucket/animals/", False),
+        ("lst__s3://my-bucket/animals/", "lst__s3://other-bucket/animals/", False),
+    ],
+)
+def test_listing_subset(ds1_name, ds2_name, is_subset):
+    assert is_listing_subset(ds1_name, ds2_name) is is_subset

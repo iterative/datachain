@@ -51,6 +51,7 @@ E2E_STEPS = (
             dogs-and-cats/cat.1001.jpg
             """
         ),
+        "listing": True,
     },
     {
         "command": (

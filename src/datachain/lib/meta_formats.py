@@ -54,10 +54,10 @@ def read_schema(source_file, data_type="csv", expr=None, model_name=None):
     try:
         with source_file.open() as fd:  # CSV can be larger than memory
             if data_type == "csv":
-                data_string += fd.readline().decode("utf-8", "ignore").replace("\r", "")
-                data_string += fd.readline().decode("utf-8", "ignore").replace("\r", "")
+                data_string += fd.readline().replace("\r", "")
+                data_string += fd.readline().replace("\r", "")
             elif data_type == "jsonl":
-                data_string = fd.readline().decode("utf-8", "ignore").replace("\r", "")
+                data_string = fd.readline().replace("\r", "")
             else:
                 data_string = fd.read()  # other meta must fit into RAM
     except OSError as e:
@@ -120,7 +120,7 @@ def read_meta(  # noqa: C901
         sys.stdout = captured_output
         try:
             chain = (
-                DataChain.from_storage(schema_from)
+                DataChain.from_storage(schema_from, type="text")
                 .limit(1)
                 .map(  # dummy column created (#1615)
                     meta_schema=lambda file: read_schema(

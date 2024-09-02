@@ -394,6 +394,10 @@ class CloudTestCatalog:
     def client_config(self):
         return self.server.client_config
 
+    @property
+    def session(self) -> Session:
+        return Session("CTCSession", catalog=self.catalog)
+
 
 cloud_types = ["s3", "gs", "azure"]
 

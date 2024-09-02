@@ -10,7 +10,7 @@ class Embedding(BaseModel):
 ds_name = "feature_class"
 ds = (
     DataChain.from_storage("gs://dvcx-datalakes/dogs-and-cats/")
-    .filter(C.path.glob("*cat*.jpg"))
+    .filter(C("file.path").glob("*cat*.jpg"))
     .limit(5)
     .map(emd=lambda file: Embedding(value=512), output=Embedding)
 )

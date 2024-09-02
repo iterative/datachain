@@ -11,7 +11,7 @@ def path_len(path):
 if __name__ == "__main__":
     # Run in chain
     DataChain.from_storage(
-        path="gs://datachain-demo/dogs-and-cats/",
+        uri="gs://datachain-demo/dogs-and-cats/",
     ).map(
         path_len,
         params=["file.path"],

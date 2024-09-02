@@ -25,6 +25,7 @@ DD = TypeVar("DD", bound="DatasetDependency")
 
 DATASET_PREFIX = "ds://"
 QUERY_DATASET_PREFIX = "ds_query_"
+LISTING_PREFIX = "lst__"
 
 
 def parse_dataset_uri(uri: str) -> tuple[str, Optional[int]]:
@@ -443,7 +444,11 @@ class DatasetRecord:
         For bucket listing we implicitly create underlying dataset to hold data. This
         method is checking if this is one of those datasets.
         """
-        return Client.is_data_source_uri(self.name)
+        # TODO refactor and maybe remove method in
+        # https://github.com/iterative/datachain/issues/318
+        return Client.is_data_source_uri(self.name) or self.name.startswith(
+            LISTING_PREFIX
+        )
 
     @property
     def versions_values(self) -> list[int]:

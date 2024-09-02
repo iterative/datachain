@@ -27,7 +27,15 @@ from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import DataModel, DataType, dict_to_data_model
 from datachain.lib.dataset_info import DatasetInfo
 from datachain.lib.file import ExportPlacement as FileExportPlacement
-from datachain.lib.file import File, IndexedFile, get_file
+from datachain.lib.file import File, IndexedFile, get_file_type
+from datachain.lib.listing import (
+    is_listing_dataset,
+    is_listing_expired,
+    is_listing_subset,
+    list_bucket,
+    ls,
+    parse_listing_uri,
+)
 from datachain.lib.meta_formats import read_meta, read_schema
 from datachain.lib.model_store import ModelStore
 from datachain.lib.settings import Settings
@@ -311,7 +319,7 @@ class DataChain(DatasetQuery):
     @classmethod
     def from_storage(
         cls,
-        path,
+        uri,
         *,
         type: Literal["binary", "text", "image"] = "binary",
         session: Optional[Session] = None,
@@ -320,41 +328,79 @@ class DataChain(DatasetQuery):
         recursive: Optional[bool] = True,
         object_name: str = "file",
         update: bool = False,
-        **kwargs,
+        anon: bool = False,
     ) -> "Self":
         """Get data from a storage as a list of file with all file attributes.
         It returns the chain itself as usual.
 
         Parameters:
-            path : storage URI with directory. URI must start with storage prefix such
+            uri : storage URI with directory. URI must start with storage prefix such
                 as `s3://`, `gs://`, `az://` or "file:///"
             type : read file as "binary", "text", or "image" data. Default is "binary".
             recursive : search recursively for the given path.
             object_name : Created object column name.
             update : force storage reindexing. Default is False.
+            anon : If True, we will treat cloud bucket as public one
 
         Example:
             ```py
             chain = DataChain.from_storage("s3://my-bucket/my-dir")
             ```
         """
-        func = get_file(type)
-        return (
-            cls(
-                path,
-                session=session,
-                settings=settings,
-                recursive=recursive,
-                update=update,
-                in_memory=in_memory,
-                **kwargs,
-            )
-            .map(**{object_name: func})
-            .select(object_name)
+        file_type = get_file_type(type)
+
+        if anon:
+            client_config = {"anon": True}
+        else:
+            client_config = None
+
+        session = Session.get(session, client_config=client_config, in_memory=in_memory)
+
+        list_dataset_name, list_uri, list_path = parse_listing_uri(
+            uri, session.catalog.cache, session.catalog.client_config
         )
+        need_listing = True
+
+        for ds in cls.datasets(
+            session=session, in_memory=in_memory, include_listing=True
+        ).collect("dataset"):
+            if (
+                not is_listing_expired(ds.created_at)  # type: ignore[union-attr]
+                and is_listing_dataset(ds.name)  # type: ignore[union-attr]
+                and is_listing_subset(ds.name, list_dataset_name)  # type: ignore[union-attr]
+                and not update
+            ):
+                need_listing = False
+                list_dataset_name = ds.name  # type: ignore[union-attr]
+
+        if need_listing:
+            # caching new listing to special listing dataset
+            (
+                cls.from_records(
+                    DataChain.DEFAULT_FILE_RECORD,
+                    session=session,
+                    settings=settings,
+                    in_memory=in_memory,
+                )
+                .gen(
+                    list_bucket(list_uri, client_config=session.catalog.client_config),
+                    output={f"{object_name}": File},
+                )
+                .save(list_dataset_name, listing=True)
+            )
+
+        dc = cls.from_dataset(list_dataset_name, session=session)
+        dc.signals_schema = dc.signals_schema.mutate({f"{object_name}": file_type})
+
+        return ls(dc, list_path, recursive=recursive, object_name=object_name)
 
     @classmethod
-    def from_dataset(cls, name: str, version: Optional[int] = None) -> "DataChain":
+    def from_dataset(
+        cls,
+        name: str,
+        version: Optional[int] = None,
+        session: Optional[Session] = None,
+    ) -> "DataChain":
         """Get data from a saved Dataset. It returns the chain itself.
 
         Parameters:
@@ -366,7 +412,7 @@ class DataChain(DatasetQuery):
             chain = DataChain.from_dataset("my_cats")
             ```
         """
-        return DataChain(name=name, version=version)
+        return DataChain(name=name, version=version, session=session)
 
     @classmethod
     def from_json(
@@ -419,7 +465,7 @@ class DataChain(DatasetQuery):
             object_name = jmespath_to_name(jmespath)
         if not object_name:
             object_name = meta_type
-        chain = DataChain.from_storage(path=path, type=type, **kwargs)
+        chain = DataChain.from_storage(uri=path, type=type, **kwargs)
         signal_dict = {
             object_name: read_meta(
                 schema_from=schema_from,
@@ -479,7 +525,7 @@ class DataChain(DatasetQuery):
             object_name = jmespath_to_name(jmespath)
         if not object_name:
             object_name = meta_type
-        chain = DataChain.from_storage(path=path, type=type, **kwargs)
+        chain = DataChain.from_storage(uri=path, type=type, **kwargs)
         signal_dict = {
             object_name: read_meta(
                 schema_from=schema_from,
@@ -500,6 +546,7 @@ class DataChain(DatasetQuery):
         settings: Optional[dict] = None,
         in_memory: bool = False,
         object_name: str = "dataset",
+        include_listing: bool = False,
     ) -> "DataChain":
         """Generate chain with list of registered datasets.
 
@@ -517,7 +564,9 @@ class DataChain(DatasetQuery):
 
         datasets = [
             DatasetInfo.from_models(d, v, j)
-            for d, v, j in catalog.list_datasets_versions()
+            for d, v, j in catalog.list_datasets_versions(
+                include_listing=include_listing
+            )
         ]
 
         return cls.from_values(
@@ -570,7 +619,7 @@ class DataChain(DatasetQuery):
         )
 
     def save(  # type: ignore[override]
-        self, name: Optional[str] = None, version: Optional[int] = None
+        self, name: Optional[str] = None, version: Optional[int] = None, **kwargs
     ) -> "Self":
         """Save to a Dataset. It returns the chain itself.
 
@@ -580,7 +629,7 @@ class DataChain(DatasetQuery):
             version : version of a dataset. Default - the last version that exist.
         """
         schema = self.signals_schema.clone_without_sys_signals().serialize()
-        return super().save(name=name, version=version, feature_schema=schema)
+        return super().save(name=name, version=version, feature_schema=schema, **kwargs)
 
     def apply(self, func, *args, **kwargs):
         """Apply any function to the chain.
@@ -1665,7 +1714,10 @@ class DataChain(DatasetQuery):
 
         if schema:
             signal_schema = SignalSchema(schema)
-            columns = signal_schema.db_signals(as_columns=True)  # type: ignore[assignment]
+            columns = [
+                sqlalchemy.Column(c.name, c.type)  # type: ignore[union-attr]
+                for c in signal_schema.db_signals(as_columns=True)  # type: ignore[assignment]
+            ]
         else:
             columns = [
                 sqlalchemy.Column(name, typ)

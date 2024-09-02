@@ -11,6 +11,7 @@ from datachain.utils import (
     sizeof_fmt,
     sql_escape_like,
     suffix_to_number,
+    uses_glob,
 )
 
 DATACHAIN_TEST_PATHS = ["/file1", "file2", "/dir/file3", "dir/file4"]
@@ -178,3 +179,19 @@ def test_determine_processes(parallel, settings, expected):
     if settings is not None:
         os.environ["DATACHAIN_SETTINGS_PARALLEL"] = settings
     assert determine_processes(parallel) == expected
+
+
+@pytest.mark.parametrize(
+    "path,expected",
+    (
+        ("/dogs", False),
+        ("/dogs/", False),
+        ("/dogs/*", True),
+        ("/home/user/bucket/animals/", False),
+        ("/home/user/bucket/animals/*", True),
+        ("", False),
+        ("*", True),
+    ),
+)
+def test_uses_glob(path, expected):
+    assert uses_glob(path) is expected

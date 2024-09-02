@@ -938,7 +938,7 @@ def test_parse_tabular_partitions(tmp_dir, test_session):
     df.to_parquet(path, partition_cols=["first_name"])
     dc = (
         DataChain.from_storage(path.as_uri(), session=test_session)
-        .filter(C("path").glob("*first_name=Alice*"))
+        .filter(C("file.path").glob("*first_name=Alice*"))
         .parse_tabular(partitioning="hive")
     )
     df1 = dc.select("first_name", "age", "city").to_pandas()
@@ -968,7 +968,7 @@ def test_parse_tabular_unify_schema(tmp_dir, test_session):
     )
     dc = (
         DataChain.from_storage(tmp_dir.as_uri(), session=test_session)
-        .filter(C("path").glob("*.parquet"))
+        .filter(C("file.path").glob("*.parquet"))
         .parse_tabular()
     )
     df = dc.select("first_name", "age", "city", "last_name", "country").to_pandas()
