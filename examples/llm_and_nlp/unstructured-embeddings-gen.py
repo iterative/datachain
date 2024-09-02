@@ -13,7 +13,7 @@ from unstructured.partition.pdf import partition_pdf
 
 from datachain import C, DataChain, DataModel, File
 
-source = "gs://datachain-demo/neurips"
+source = "gs://datachain-demo/neurips/1987/"
 
 
 # Define the output as a DataModel class
