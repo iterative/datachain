@@ -16,8 +16,12 @@ class NodesFetcher(NodesThreadPool):
         for task in done:
             try:
                 task.result()
+            except TimeoutError as e:
+                logger.error("Task timed out: %s", e)
+            except CancelledError as e:
+                logger.error("Task was cancelled: %s", e)
             except Exception as e:
-                logger.error("Task resulted in an error: %s", e)
+                logger.error("Task resulted in an unexpected error: %s", e)
 
     def do_task(self, chunk):
         from fsspec import Callback
