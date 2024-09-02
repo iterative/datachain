@@ -1,7 +1,6 @@
 import copy
 import glob
 import os
-import posixpath
 import re
 from collections.abc import Iterator, Sequence
 from functools import wraps
