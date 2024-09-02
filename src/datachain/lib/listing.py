@@ -29,7 +29,7 @@ def list_bucket(uri: str, client_config=None) -> Callable:
     def list_func() -> Iterator[File]:
         config = client_config or {}
         client, path = Client.parse_url(uri, None, **config)  # type: ignore[arg-type]
-        for entries in iter_over_async(client.scandir(path), get_loop()):
+        for entries in iter_over_async(client.scandir(path.rstrip("/")), get_loop()):
             for entry in entries:
                 yield entry.to_file(client.uri)
 
