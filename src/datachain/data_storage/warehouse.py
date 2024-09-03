@@ -218,35 +218,26 @@ class AbstractWarehouse(ABC, Serializable):
         results = None
         offset = 0
         num_yielded = 0
-        try:
-            while True:
-                if limit is not None:
-                    limit -= num_yielded
-                    if limit == 0:
-                        break
-                    if limit < page_size:
-                        paginated_query = paginated_query.limit(None).limit(limit)
 
-                results = self.dataset_rows_select(paginated_query.offset(offset))
+        while True:
+            if limit is not None:
+                limit -= num_yielded
+                if limit == 0:
+                    break
+                if limit < page_size:
+                    paginated_query = paginated_query.limit(None).limit(limit)
 
-                processed = False
-                for row in results:
-                    processed = True
-                    yield row
-                    num_yielded += 1
+            results = self.dataset_rows_select(paginated_query.offset(offset))
 
-                if not processed:
-                    break  # no more results
-                offset += page_size
-        finally:
-            # https://www2.sqlite.org/cvstrac/wiki?p=DatabaseIsLocked (SELECT not
-            # finalized or reset) to prevent database table is locked error when an
-            # exception is raised in the middle of processing the results (e.g.
-            # https://github.com/iterative/dvcx/issues/924). Connections close
-            # apparently is not enough in some cases, at least on sqlite
-            # https://www.sqlite.org/c3ref/close.html
-            if results and hasattr(results, "close"):
-                results.close()
+            processed = False
+            for row in results:
+                processed = True
+                yield row
+                num_yielded += 1
+
+            if not processed:
+                break  # no more results
+            offset += page_size
 
     #
     # Table Name Internal Functions
