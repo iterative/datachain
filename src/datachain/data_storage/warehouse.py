@@ -309,21 +309,10 @@ class AbstractWarehouse(ABC, Serializable):
         """
         Fetch dataset rows from database.
         """
-        rows = None
-        try:
-            rows = self.db.execute(query, **kwargs)
-            yield from convert_rows_custom_column_types(
-                query.selected_columns, rows, self.db.dialect
-            )
-        finally:
-            # https://www2.sqlite.org/cvstrac/wiki?p=DatabaseIsLocked (SELECT not
-            # finalized or reset) to prevent database table is locked error when an
-            # exception is raised in the middle of processing the results (e.g.
-            # https://github.com/iterative/dvcx/issues/924). Connections close
-            # apparently is not enough in some cases, at least on sqlite
-            # https://www.sqlite.org/c3ref/close.html
-            if rows and hasattr(rows, "close"):
-                rows.close()
+        rows = self.db.execute(query, **kwargs)
+        yield from convert_rows_custom_column_types(
+            query.selected_columns, rows, self.db.dialect
+        )
 
     @abstractmethod
     def get_dataset_sources(
