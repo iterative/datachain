@@ -1784,39 +1784,12 @@ def query_wrapper(dataset_query: DatasetQuery) -> DatasetQuery:
 
     catalog = dataset_query.catalog
     save = bool(os.getenv("DATACHAIN_QUERY_SAVE"))
-    save_as = os.getenv("DATACHAIN_QUERY_SAVE_AS")
 
     is_session_temp_dataset = dataset_query.name and dataset_query.name.startswith(
         dataset_query.session.get_temp_prefix()
     )
 
-    if save_as:
-        if dataset_query.attached:
-            dataset_name = dataset_query.name
-            version = dataset_query.version
-            assert dataset_name, "Dataset name should be provided in attached mode"
-            assert version, "Dataset version should be provided in attached mode"
-
-            dataset = catalog.get_dataset(dataset_name)
-
-            try:
-                target_dataset = catalog.get_dataset(save_as)
-            except DatasetNotFoundError:
-                target_dataset = None
-
-            if target_dataset:
-                dataset = catalog.register_dataset(dataset, version, target_dataset)
-            else:
-                dataset = catalog.register_new_dataset(dataset, version, save_as)
-
-            dataset_query = DatasetQuery(
-                name=dataset.name,
-                version=dataset.latest_version,
-                catalog=catalog,
-            )
-        else:
-            dataset_query = dataset_query.save(save_as)
-    elif save and (is_session_temp_dataset or not dataset_query.attached):
+    if save and (is_session_temp_dataset or not dataset_query.attached):
         name = catalog.generate_query_dataset_name()
         dataset_query = dataset_query.save(name)
 

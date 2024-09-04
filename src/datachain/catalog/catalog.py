@@ -1297,19 +1297,6 @@ class Catalog:
 
         return self.get_dataset(name)
 
-    def register_new_dataset(
-        self,
-        source_dataset: DatasetRecord,
-        source_version: int,
-        target_name: str,
-    ) -> DatasetRecord:
-        target_dataset = self.metastore.create_dataset(
-            target_name,
-            query_script=source_dataset.query_script,
-            schema=source_dataset.serialized_schema,
-        )
-        return self.register_dataset(source_dataset, source_version, target_dataset, 1)
-
     def register_dataset(
         self,
         dataset: DatasetRecord,
@@ -1875,7 +1862,6 @@ class Catalog:
         envs: Optional[Mapping[str, str]] = None,
         python_executable: Optional[str] = None,
         save: bool = False,
-        save_as: Optional[str] = None,
         preview_limit: int = 10,
         preview_offset: int = 0,
         preview_columns: Optional[list[str]] = None,
@@ -1927,7 +1913,6 @@ class Catalog:
                 preview_limit,
                 preview_offset,
                 save,
-                save_as,
                 job_id,
             )
         finally:
@@ -1963,7 +1948,7 @@ class Catalog:
 
         dataset: Optional[DatasetRecord] = None
         version: Optional[int] = None
-        if save or save_as:
+        if save:
             dataset, version = self.save_result(
                 query_script, exec_result, output, version, job_id
             )
@@ -1990,7 +1975,6 @@ class Catalog:
         preview_limit: int,
         preview_offset: int,
         save: bool,
-        save_as: Optional[str],
         job_id: Optional[str],
     ) -> tuple[list[str], subprocess.Popen, str]:
         try:
@@ -2005,10 +1989,6 @@ class Catalog:
             raise QueryScriptCompileError(
                 f"Query script failed to compile, reason: {exc}"
             ) from exc
-        if save_as and save_as.startswith(QUERY_DATASET_PREFIX):
-            raise ValueError(
-                f"Cannot use {QUERY_DATASET_PREFIX} prefix for dataset name"
-            )
         r, w = os.pipe()
         if os.name == "nt":
             import msvcrt
@@ -2039,7 +2019,6 @@ class Catalog:
                     }
                 ),
                 "DATACHAIN_QUERY_SAVE": "1" if save else "",
-                "DATACHAIN_QUERY_SAVE_AS": save_as or "",
                 "PYTHONUNBUFFERED": "1",
                 "DATACHAIN_OUTPUT_FD": str(handle),
                 "DATACHAIN_JOB_ID": job_id or "",
