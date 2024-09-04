@@ -580,15 +580,14 @@ class DataChain(DatasetQuery):
         object_name: str = "listing",
         **kwargs,
     ) -> "DataChain":
-        """Generate chain with list of cached listing.
+        """Generate chain with list of cached listings.
+        Listing is a special kind of dataset which has directory listing data of
+        some underlying storage (e.g S3 bucket).
 
         Example:
             ```py
             from datachain import DataChain
-
-            chain = DataChain.listings()
-            for ls in chain.collect("listing"):
-                print(f"{ls.uri}@v{ls.version}")
+            DataChain.listings().show()
             ```
         """
         session = Session.get(session, in_memory=in_memory)
