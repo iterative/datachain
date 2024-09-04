@@ -1,5 +1,4 @@
 import contextlib
-import datetime
 import inspect
 import json
 import logging
@@ -1724,53 +1723,6 @@ def _get_output_fd_for_write() -> Union[str, int]:
     return msvcrt.open_osfhandle(int(handle), os.O_WRONLY)  # type: ignore[attr-defined]
 
 
-@attrs.define
-class ExecutionResult:
-    preview: list[dict] = attrs.field(factory=list)
-    dataset: Optional[tuple[str, int]] = None
-
-
-def _send_result(dataset_query: DatasetQuery) -> None:
-    class JSONSerialize(json.JSONEncoder):
-        def default(self, obj):
-            if isinstance(obj, (datetime.datetime, datetime.date)):
-                return obj.isoformat()
-            if isinstance(obj, bytes):
-                return list(obj[:1024])
-            return super().default(obj)
-
-    try:
-        preview_args: dict[str, Any] = json.loads(
-            os.getenv("DATACHAIN_QUERY_PREVIEW_ARGS", "")
-        )
-    except ValueError:
-        preview_args = {}
-
-    columns = preview_args.get("columns") or []
-
-    if type(dataset_query) is DatasetQuery:
-        preview_query = dataset_query.select(*columns)
-    else:
-        preview_query = dataset_query.select(*columns, _sys=False)
-
-    preview_query = preview_query.limit(preview_args.get("limit", 10)).offset(
-        preview_args.get("offset", 0)
-    )
-
-    dataset: Optional[tuple[str, int]] = None
-    if dataset_query.attached:
-        assert dataset_query.name, "Dataset name should be provided"
-        assert dataset_query.version, "Dataset version should be provided"
-        dataset = dataset_query.name, dataset_query.version
-
-    preview = preview_query.to_db_records()
-    result = ExecutionResult(preview, dataset)
-    data = attrs.asdict(result)
-
-    with open(_get_output_fd_for_write(), mode="w") as f:
-        json.dump(data, f, cls=JSONSerialize)
-
-
 def query_wrapper(dataset_query: DatasetQuery) -> DatasetQuery:
     """
     Wrapper function that wraps the last statement of user query script.
@@ -1791,5 +1743,12 @@ def query_wrapper(dataset_query: DatasetQuery) -> DatasetQuery:
         name = catalog.generate_query_dataset_name()
         dataset_query = dataset_query.save(name)
 
-    _send_result(dataset_query)
+    dataset: Optional[tuple[str, int]] = None
+    if dataset_query.attached:
+        assert dataset_query.name, "Dataset name should be provided"
+        assert dataset_query.version, "Dataset version should be provided"
+        dataset = dataset_query.name, dataset_query.version
+
+    with open(_get_output_fd_for_write(), mode="w") as f:
+        json.dump(dataset, f)
     return dataset_query

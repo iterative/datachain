@@ -14,5 +14,5 @@ ds = (
     .limit(5)
     .map(emd=lambda file: Embedding(value=512), output=Embedding)
 )
-
+ds.select("file.path", "emd.value").show(limit=5, flatten=True)
 ds.save(ds_name)

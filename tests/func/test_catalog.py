@@ -85,7 +85,7 @@ def mock_popen_dataset_created(
 
     _, w = mock_os_pipe
     with open(w, mode="w", closefd=False) as f:
-        f.write(json.dumps({"dataset": (ds_name, ds_version)}))
+        f.write(json.dumps((ds_name, ds_version)))
 
     mock_popen.configure_mock(stdout=io.StringIO("user log 1\nuser log 2"))
     yield mock_popen
