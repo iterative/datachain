@@ -864,8 +864,7 @@ def query(
             error_stack=error_stack,
         )
         raise
-
-    catalog.metastore.set_job_status(job_id, JobStatus.COMPLETE, metrics=result.metrics)
+    catalog.metastore.set_job_status(job_id, JobStatus.COMPLETE)
 
     show_records(result.preview, collapse_columns=not no_collapse)
 
