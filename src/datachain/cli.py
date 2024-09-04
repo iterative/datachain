@@ -484,7 +484,6 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
             "N defaults to the CPU count."
         ),
     )
-    add_show_args(query_parser)
     query_parser.add_argument(
         "-p",
         "--param",
@@ -811,14 +810,9 @@ def query(
     catalog: "Catalog",
     script: str,
     parallel: Optional[int] = None,
-    limit: int = 10,
-    offset: int = 0,
-    columns: Optional[list[str]] = None,
-    no_collapse: bool = False,
     params: Optional[dict[str, str]] = None,
 ) -> None:
     from datachain.data_storage import JobQueryType, JobStatus
-    from datachain.utils import show_records
 
     with open(script, encoding="utf-8") as f:
         script_content = f.read()
@@ -839,12 +833,9 @@ def query(
     )
 
     try:
-        result = catalog.query(
+        catalog.query(
             script_content,
             python_executable=python_executable,
-            preview_limit=limit,
-            preview_offset=offset,
-            preview_columns=columns,
             capture_output=False,
             params=params,
             job_id=job_id,
@@ -860,8 +851,6 @@ def query(
         )
         raise
     catalog.metastore.set_job_status(job_id, JobStatus.COMPLETE)
-
-    show_records(result.preview, collapse_columns=not no_collapse)
 
 
 def clear_cache(catalog: "Catalog"):
@@ -1037,10 +1026,6 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
                 catalog,
                 args.script,
                 parallel=args.parallel,
-                limit=args.limit,
-                offset=args.offset,
-                columns=args.columns,
-                no_collapse=args.no_collapse,
                 params=args.param,
             )
         elif args.command == "apply-udf":

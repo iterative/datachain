@@ -156,7 +156,6 @@ class QueryResult(NamedTuple):
     dataset: Optional[DatasetRecord]
     version: Optional[int]
     output: str
-    preview: Optional[list[dict]]
 
 
 class DatasetRowsFetcher(NodesThreadPool):
@@ -1861,9 +1860,6 @@ class Catalog:
         envs: Optional[Mapping[str, str]] = None,
         python_executable: Optional[str] = None,
         save: bool = False,
-        preview_limit: int = 10,
-        preview_offset: int = 0,
-        preview_columns: Optional[list[str]] = None,
         capture_output: bool = True,
         output_hook: Callable[[str], None] = noop,
         params: Optional[dict[str, str]] = None,
@@ -1891,7 +1887,6 @@ class Catalog:
                 C.size > 1000
             )
         """
-        from datachain.query.dataset import ExecutionResult
 
         feature_file = tempfile.NamedTemporaryFile(  # noqa: SIM115
             dir=os.getcwd(), suffix=".py", delete=False
@@ -1908,9 +1903,6 @@ class Catalog:
                 feature_module,
                 output_hook,
                 params,
-                preview_columns,
-                preview_limit,
-                preview_offset,
                 save,
                 job_id,
             )
@@ -1940,24 +1932,18 @@ class Catalog:
             )
 
         try:
-            response = json.loads(response_text)
+            result = json.loads(response_text)
         except ValueError:
-            response = {}
-        exec_result = ExecutionResult(**response)
+            result = None
 
         dataset: Optional[DatasetRecord] = None
         version: Optional[int] = None
         if save:
             dataset, version = self.save_result(
-                query_script, exec_result, output, version, job_id
+                query_script, result, output, version, job_id
             )
 
-        return QueryResult(
-            dataset=dataset,
-            version=version,
-            output=output,
-            preview=exec_result.preview,
-        )
+        return QueryResult(dataset=dataset, version=version, output=output)
 
     def run_query(
         self,
@@ -1969,9 +1955,6 @@ class Catalog:
         feature_module: str,
         output_hook: Callable[[str], None],
         params: Optional[dict[str, str]],
-        preview_columns: Optional[list[str]],
-        preview_limit: int,
-        preview_offset: int,
         save: bool,
         job_id: Optional[str],
     ) -> tuple[list[str], subprocess.Popen, str]:
@@ -2009,13 +1992,6 @@ class Catalog:
             {
                 "DATACHAIN_QUERY_PARAMS": json.dumps(params or {}),
                 "PYTHONPATH": os.getcwd(),  # For local imports
-                "DATACHAIN_QUERY_PREVIEW_ARGS": json.dumps(
-                    {
-                        "limit": preview_limit,
-                        "offset": preview_offset,
-                        "columns": preview_columns,
-                    }
-                ),
                 "DATACHAIN_QUERY_SAVE": "1" if save else "",
                 "PYTHONUNBUFFERED": "1",
                 "DATACHAIN_OUTPUT_FD": str(handle),
@@ -2046,12 +2022,12 @@ class Catalog:
         return lines, proc, response_text
 
     def save_result(self, query_script, exec_result, output, version, job_id):
-        if not exec_result.dataset:
+        if not exec_result:
             raise QueryScriptDatasetNotFound(
                 "No dataset found after running Query script",
                 output=output,
             )
-        name, version = exec_result.dataset
+        name, version = exec_result
         # finding returning dataset
         try:
             dataset = self.get_dataset(name)
