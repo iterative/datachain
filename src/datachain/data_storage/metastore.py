@@ -1503,7 +1503,7 @@ class AbstractDBMetastore(AbstractMetastore):
         return self._jobs.update().where(*where)
 
     def _parse_job(self, rows) -> Job:
-        return Job.parse(*rows)
+        return self.job_class.parse(*rows)
 
     def _parse_jobs(self, rows) -> Iterator["Job"]:
         for _, g in groupby(rows, lambda r: r[0]):
