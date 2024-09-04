@@ -186,15 +186,16 @@ def test_query(
     query_script = setup_catalog(query_script, catalog_info_filepath)
 
     result = catalog.query(query_script, save=save)
-    if not save:
-        assert result.dataset is None
-        return
-
     if save_dataset:
         assert result.dataset.name == save_dataset
         assert catalog.get_dataset(save_dataset)
-    else:
+    elif save:
         assert result.dataset.name.startswith(QUERY_DATASET_PREFIX)
+    else:
+        assert result.dataset is None
+        assert result.version is None
+        return
+
     assert result.version == 1
     assert result.dataset.versions_values == [1]
     assert result.dataset.query_script == query_script

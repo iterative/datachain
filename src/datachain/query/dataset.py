@@ -1,6 +1,5 @@
 import contextlib
 import inspect
-import json
 import logging
 import os
 import random
@@ -1710,19 +1709,6 @@ class DatasetQuery:
         return self.__class__(name=name, version=version, catalog=self.catalog)
 
 
-def _get_output_fd_for_write() -> Union[str, int]:
-    handle = os.getenv("DATACHAIN_OUTPUT_FD")
-    if not handle:
-        return os.devnull
-
-    if os.name != "nt":
-        return int(handle)
-
-    import msvcrt
-
-    return msvcrt.open_osfhandle(int(handle), os.O_WRONLY)  # type: ignore[attr-defined]
-
-
 def query_wrapper(dataset_query: DatasetQuery) -> DatasetQuery:
     """
     Wrapper function that wraps the last statement of user query script.
@@ -1742,13 +1728,4 @@ def query_wrapper(dataset_query: DatasetQuery) -> DatasetQuery:
     if save and (is_session_temp_dataset or not dataset_query.attached):
         name = catalog.generate_query_dataset_name()
         dataset_query = dataset_query.save(name)
-
-    dataset: Optional[tuple[str, int]] = None
-    if dataset_query.attached:
-        assert dataset_query.name, "Dataset name should be provided"
-        assert dataset_query.version, "Dataset version should be provided"
-        dataset = dataset_query.name, dataset_query.version
-
-    with open(_get_output_fd_for_write(), mode="w") as f:
-        json.dump(dataset, f)
     return dataset_query
