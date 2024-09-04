@@ -60,7 +60,6 @@ from datachain.utils import (
     get_datachain_executable,
 )
 
-from .metrics import metrics
 from .schema import C, UDFParamSpec, normalize_param
 from .session import Session
 from .udf import UDFBase, UDFClassWrapper, UDFFactory, UDFType
@@ -1729,7 +1728,6 @@ def _get_output_fd_for_write() -> Union[str, int]:
 class ExecutionResult:
     preview: list[dict] = attrs.field(factory=list)
     dataset: Optional[tuple[str, int]] = None
-    metrics: dict[str, Any] = attrs.field(factory=dict)
 
 
 def _send_result(dataset_query: DatasetQuery) -> None:
@@ -1766,7 +1764,7 @@ def _send_result(dataset_query: DatasetQuery) -> None:
         dataset = dataset_query.name, dataset_query.version
 
     preview = preview_query.to_db_records()
-    result = ExecutionResult(preview, dataset, metrics)
+    result = ExecutionResult(preview, dataset)
     data = attrs.asdict(result)
 
     with open(_get_output_fd_for_write(), mode="w") as f:

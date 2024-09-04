@@ -157,7 +157,6 @@ class QueryResult(NamedTuple):
     version: Optional[int]
     output: str
     preview: Optional[list[dict]]
-    metrics: dict[str, Any]
 
 
 class DatasetRowsFetcher(NodesThreadPool):
@@ -1973,7 +1972,6 @@ class Catalog:
             version=version,
             output=output,
             preview=exec_result.preview,
-            metrics=exec_result.metrics,
         )
 
     def run_query(
