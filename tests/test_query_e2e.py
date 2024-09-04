@@ -89,17 +89,17 @@ E2E_STEPS = (
             "datachain",
             "query",
             os.path.join(tests_dir, "scripts", "feature_class.py"),
-            "--columns",
-            "file.path,emd.value",
         ),
         "expected_rows": dedent(
             """
-                               file__path  emd__value
+                               file.path  emd.value
             0     dogs-and-cats/cat.1.jpg       512.0
             1    dogs-and-cats/cat.10.jpg       512.0
             2   dogs-and-cats/cat.100.jpg       512.0
             3  dogs-and-cats/cat.1000.jpg       512.0
             4  dogs-and-cats/cat.1001.jpg       512.0
+
+            [Limited by 5 rows]
             """
         ),
     },

@@ -107,13 +107,10 @@ def test_query_cli(cloud_test_catalog_tmpfile, tmp_path, catalog_info_filepath, 
     filepath = tmp_path / "query_script.py"
     filepath.write_text(query_script)
 
-    query(catalog, str(filepath), columns=["name"])
-    captured = capsys.readouterr()
-
-    header, *rows = captured.out.splitlines()
-    assert header.strip() == "name"
-    name_rows = {row.split()[1] for row in rows}
-    assert name_rows == {"cat1", "cat2", "description", "dog1", "dog2", "dog3", "dog4"}
+    query(catalog, str(filepath))
+    out, err = capsys.readouterr()
+    assert not out
+    assert not err
 
     dataset = catalog.get_dataset("my-ds")
     assert dataset
@@ -152,7 +149,7 @@ def test_query_cli_no_dataset_returned(
         QueryScriptRunError,
         match="Last line in a script was not an instance of DataChain",
     ):
-        query(catalog, str(filepath), columns=["name"])
+        query(catalog, str(filepath))
 
     latest_job = get_latest_job(catalog.metastore)
     assert latest_job
