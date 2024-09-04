@@ -100,15 +100,14 @@ def test_query_cli(cloud_test_catalog_tmpfile, tmp_path, catalog_info_filepath, 
     from datachain import C
     from datachain.sql.functions.path import name
 
-    DatasetQuery({src_uri!r}, catalog=catalog).mutate(name=name(C.path))
+    DatasetQuery({src_uri!r}, catalog=catalog).mutate(name=name(C.path)).save("my-ds")
     """
     query_script = setup_catalog(query_script, catalog_info_filepath)
 
     filepath = tmp_path / "query_script.py"
     filepath.write_text(query_script)
 
-    ds_name = "my-dataset"
-    query(catalog, str(filepath), ds_name, columns=["name"])
+    query(catalog, str(filepath), columns=["name"])
     captured = capsys.readouterr()
 
     header, *rows = captured.out.splitlines()
@@ -116,7 +115,7 @@ def test_query_cli(cloud_test_catalog_tmpfile, tmp_path, catalog_info_filepath, 
     name_rows = {row.split()[1] for row in rows}
     assert name_rows == {"cat1", "cat2", "description", "dog1", "dog2", "dog3", "dog4"}
 
-    dataset = catalog.get_dataset(ds_name)
+    dataset = catalog.get_dataset("my-ds")
     assert dataset
     result_job_id = dataset.get_version(dataset.latest_version).job_id
     assert result_job_id
@@ -153,7 +152,7 @@ def test_query_cli_no_dataset_returned(
         QueryScriptRunError,
         match="Last line in a script was not an instance of DataChain",
     ):
-        query(catalog, str(filepath), "my-dataset", columns=["name"])
+        query(catalog, str(filepath), columns=["name"])
 
     latest_job = get_latest_job(catalog.metastore)
     assert latest_job
@@ -166,17 +165,12 @@ def test_query_cli_no_dataset_returned(
 
 
 @pytest.mark.parametrize(
-    "save,save_as",
-    (
-        (True, None),
-        (None, "my-dataset"),
-        (True, "my-dataset"),
-    ),
+    "save",
+    (True, False),
 )
 @pytest.mark.parametrize("save_dataset", (None, "new-dataset"))
 def test_query(
     save,
-    save_as,
     save_dataset,
     cloud_test_catalog_tmpfile,
     tmp_path,
@@ -194,11 +188,12 @@ def test_query(
     """
     query_script = setup_catalog(query_script, catalog_info_filepath)
 
-    result = catalog.query(query_script, save=save, save_as=save_as)
-    if save_as:
-        assert result.dataset.name == save_as
-        assert catalog.get_dataset(save_as)
-    elif save_dataset:
+    result = catalog.query(query_script, save=save)
+    if not save:
+        assert result.dataset is None
+        return
+
+    if save_dataset:
         assert result.dataset.name == save_dataset
         assert catalog.get_dataset(save_dataset)
     else:

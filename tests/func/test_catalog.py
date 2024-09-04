@@ -963,21 +963,6 @@ def test_query_fail_to_compile(cloud_test_catalog):
         catalog.query(query_script)
 
 
-def test_query_fail_wrong_dataset_name(cloud_test_catalog):
-    catalog = cloud_test_catalog.catalog
-
-    query_script = """\
-    from datachain.query import DatasetQuery
-    DatasetQuery("s3://bucket-name")
-    """
-    query_script = dedent(query_script)
-
-    with pytest.raises(
-        ValueError, match="Cannot use ds_query_ prefix for dataset name"
-    ):
-        catalog.query(query_script, save_as="ds_query_dataset")
-
-
 def test_query_subprocess_wrong_return_code(mock_popen, cloud_test_catalog):
     mock_popen.configure_mock(returncode=1)
     catalog = cloud_test_catalog.catalog
