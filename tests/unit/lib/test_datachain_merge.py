@@ -5,8 +5,7 @@ import pandas as pd
 import pytest
 from pydantic import BaseModel
 
-from datachain.lib.dc import DataChain, DatasetMergeError
-from datachain.lib.signal_schema import SignalResolvingError
+from datachain.lib.dc import C, DataChain, DatasetMergeError
 from datachain.sql.types import String
 from tests.utils import skip_if_not_sqlite
 
@@ -213,7 +212,7 @@ def test_merge_errors(test_session):
     ch1 = DataChain.from_values(emp=employees, session=test_session)
     ch2 = DataChain.from_values(team=team, session=test_session)
 
-    with pytest.raises(SignalResolvingError):
+    with pytest.raises(ValueError):
         ch1.merge(ch2, "unknown")
 
     ch1.merge(ch2, ["emp.person.name"], ["team.sport"])
@@ -231,6 +230,20 @@ def test_merge_errors(test_session):
 def test_merge_with_itself(test_session):
     ch = DataChain.from_values(emp=employees, session=test_session)
     merged = ch.merge(ch, "emp.id")
+
+    count = 0
+    for left, right in merged.collect():
+        assert isinstance(left, Employee)
+        assert isinstance(right, Employee)
+        assert left == right == employees[count]
+        count += 1
+
+    assert count == len(employees)
+
+
+def test_merge_with_itself_column(test_session):
+    ch = DataChain.from_values(emp=employees, session=test_session)
+    merged = ch.merge(ch, C("emp.id"))
 
     count = 0
     for left, right in merged.collect():

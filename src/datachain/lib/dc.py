@@ -113,10 +113,29 @@ class DatasetFromValuesError(DataChainParamsError):  # noqa: D101
 
 
 class DatasetMergeError(DataChainParamsError):  # noqa: D101
-    def __init__(self, on: Sequence[str], right_on: Optional[Sequence[str]], msg: str):  # noqa: D107
-        on_str = ", ".join(on) if isinstance(on, Sequence) else ""
+    def __init__(  # noqa: D107
+        self,
+        on: Sequence[Union[str, sqlalchemy.ColumnElement]],
+        right_on: Optional[Sequence[Union[str, sqlalchemy.ColumnElement]]],
+        msg: str,
+    ):
+        def get_str(on: Sequence[Union[str, sqlalchemy.ColumnElement]]) -> str:
+            str_list = []
+            if not isinstance(on, Sequence):
+                return str(on)  # type: ignore[unreachable]
+            for col in on:
+                if isinstance(col, sqlalchemy.ColumnElement):
+                    str_list.append(col.name)
+                if isinstance(col, str):
+                    str_list.append(col)
+                if isinstance(col, GenericFunction):
+                    str_list.append(f"{col.name} expression")
+
+            return ", ".join(str_list)
+
+        on_str = get_str(on)
         right_on_str = (
-            ", right_on='" + ", ".join(right_on) + "'"
+            ", right_on='" + get_str(right_on) + "'"
             if right_on and isinstance(right_on, Sequence)
             else ""
         )
@@ -258,6 +277,11 @@ class DataChain(DatasetQuery):
                 return Column(name, python_to_sql(type_))
 
         raise ValueError(f"Column with name {name} not found in the schema")
+
+    def c(self, name: Union[str, Column]) -> "sqlalchemy.ColumnClause":
+        """Returns ColumnClause instance attached to the current chain."""
+        column = self.column(name) if isinstance(name, str) else name
+        return super().c(column)
 
     def print_schema(self) -> None:
         """Print schema of the chain."""
@@ -1140,8 +1164,17 @@ class DataChain(DatasetQuery):
     def merge(
         self,
         right_ds: "DataChain",
-        on: Union[str, Sequence[str]],
-        right_on: Union[str, Sequence[str], None] = None,
+        on: Union[
+            str,
+            sqlalchemy.ColumnElement,
+            Sequence[Union[str, sqlalchemy.ColumnElement]],
+        ],
+        right_on: Union[
+            str,
+            sqlalchemy.ColumnElement,
+            Sequence[Union[str, sqlalchemy.ColumnElement]],
+            None,
+        ] = None,
         inner=False,
         rname="right_",
     ) -> "Self":
@@ -1166,7 +1199,7 @@ class DataChain(DatasetQuery):
         if on is None:
             raise DatasetMergeError(["None"], None, "'on' must be specified")
 
-        if isinstance(on, str):
+        if isinstance(on, (str, sqlalchemy.ColumnElement)):
             on = [on]
         elif not isinstance(on, Sequence):
             raise DatasetMergeError(
@@ -1176,11 +1209,10 @@ class DataChain(DatasetQuery):
             )
 
         signals_schema = self.signals_schema.clone_without_sys_signals()
-        on_columns: list[str] = signals_schema.resolve(*on).db_signals()  # type: ignore[assignment]
 
         right_signals_schema = right_ds.signals_schema.clone_without_sys_signals()
         if right_on is not None:
-            if isinstance(right_on, str):
+            if isinstance(right_on, (str, sqlalchemy.ColumnElement)):
                 right_on = [right_on]
             elif not isinstance(right_on, Sequence):
                 raise DatasetMergeError(
@@ -1194,30 +1226,16 @@ class DataChain(DatasetQuery):
                 raise DatasetMergeError(
                     on, right_on, "'on' and 'right_on' must have the same length'"
                 )
-
-            right_on_columns: list[str] = right_signals_schema.resolve(
-                *right_on
-            ).db_signals()  # type: ignore[assignment]
-
-            if len(right_on_columns) != len(on_columns):
-                on_str = ", ".join(right_on_columns)
-                right_on_str = ", ".join(right_on_columns)
-                raise DatasetMergeError(
-                    on,
-                    right_on,
-                    "'on' and 'right_on' must have the same number of columns in db'."
-                    f" on -> {on_str}, right_on -> {right_on_str}",
-                )
         else:
             right_on = on
-            right_on_columns = on_columns
 
         if self == right_ds:
             right_ds = right_ds.clone(new_table=True)
 
         ops = [
-            self.c(left) == right_ds.c(right)
-            for left, right in zip(on_columns, right_on_columns)
+            (self.c(left) if isinstance(left, (str, C)) else left)
+            == (right_ds.c(right) if isinstance(right, (str, C)) else right)  # type: ignore[assignment]
+            for left, right in zip(on, right_on)
         ]
 
         ds = self.join(right_ds, sqlalchemy.and_(*ops), inner, rname + "{name}")
