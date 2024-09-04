@@ -474,9 +474,6 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         "script", metavar="<script.py>", type=str, help="Filepath for script"
     )
     query_parser.add_argument(
-        "dataset_name", nargs="?", type=str, help="Save result dataset as"
-    )
-    query_parser.add_argument(
         "--parallel",
         nargs="?",
         type=int,
@@ -803,7 +800,6 @@ def show(
 def query(
     catalog: "Catalog",
     script: str,
-    dataset_name: Optional[str] = None,
     parallel: Optional[int] = None,
     limit: int = 10,
     offset: int = 0,
@@ -836,7 +832,6 @@ def query(
         result = catalog.query(
             script_content,
             python_executable=python_executable,
-            save_as=dataset_name,
             preview_limit=limit,
             preview_offset=offset,
             preview_columns=columns,
@@ -854,8 +849,7 @@ def query(
             error_stack=error_stack,
         )
         raise
-
-    catalog.metastore.set_job_status(job_id, JobStatus.COMPLETE, metrics=result.metrics)
+    catalog.metastore.set_job_status(job_id, JobStatus.COMPLETE)
 
     show_records(result.preview, collapse_columns=not no_collapse)
 
@@ -1032,7 +1026,6 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
             query(
                 catalog,
                 args.script,
-                dataset_name=args.dataset_name,
                 parallel=args.parallel,
                 limit=args.limit,
                 offset=args.offset,
