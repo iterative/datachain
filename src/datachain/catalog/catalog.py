@@ -1416,7 +1416,8 @@ class Catalog:
 
         for d in datasets:
             yield from (
-                (d, v, jobs.get(v.job_id) if v.job_id else None) for v in d.versions
+                (d, v, jobs.get(str(v.job_id)) if v.job_id else None)
+                for v in d.versions
             )
 
     def ls_dataset_rows(
@@ -1864,14 +1865,22 @@ class Catalog:
                 C.size > 1000
             )
         """
-
         feature_file = tempfile.NamedTemporaryFile(  # noqa: SIM115
             dir=os.getcwd(), suffix=".py", delete=False
         )
         _, feature_module = os.path.split(feature_file.name)
 
+        if not job_id:
+            python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
+            job_id = self.metastore.create_job(
+                name="",
+                query=query_script,
+                params=params,
+                python_version=python_version,
+            )
+
         try:
-            lines, proc, response_text = self.run_query(
+            lines, proc = self.run_query(
                 python_executable or sys.executable,
                 query_script,
                 envs,
@@ -1908,19 +1917,38 @@ class Catalog:
                 output=output,
             )
 
+        def _get_dataset_versions_by_job_id():
+            for dr, dv, job in self.list_datasets_versions():
+                if job and str(job.id) == job_id:
+                    yield dr, dv
+
         try:
-            result = json.loads(response_text)
-        except ValueError:
-            result = None
-
-        dataset: Optional[DatasetRecord] = None
-        version: Optional[int] = None
-        if save:
-            dataset, version = self.save_result(
-                query_script, result, output, version, job_id
+            dr, dv = max(
+                _get_dataset_versions_by_job_id(), key=lambda x: x[1].created_at
             )
+        except ValueError as e:
+            if not save:
+                return QueryResult(dataset=None, version=None, output=output)
 
-        return QueryResult(dataset=dataset, version=version, output=output)
+            raise QueryScriptDatasetNotFound(
+                "No dataset found after running Query script",
+                output=output,
+            ) from e
+
+        dr = self.update_dataset(
+            dr,
+            script_output=output,
+            query_script=query_script,
+        )
+        self.update_dataset_version_with_warehouse_info(
+            dr,
+            dv.version,
+            script_output=output,
+            query_script=query_script,
+            job_id=job_id,
+            is_job_result=True,
+        )
+        return QueryResult(dataset=dr, version=dv.version, output=output)
 
     def run_query(
         self,
@@ -1934,7 +1962,7 @@ class Catalog:
         params: Optional[dict[str, str]],
         save: bool,
         job_id: Optional[str],
-    ) -> tuple[list[str], subprocess.Popen, str]:
+    ) -> tuple[list[str], subprocess.Popen]:
         try:
             feature_code, query_script_compiled = self.compile_query_script(
                 query_script, feature_module[:-3]
@@ -1947,19 +1975,6 @@ class Catalog:
             raise QueryScriptCompileError(
                 f"Query script failed to compile, reason: {exc}"
             ) from exc
-        r, w = os.pipe()
-        if os.name == "nt":
-            import msvcrt
-
-            os.set_inheritable(w, True)
-
-            startupinfo = subprocess.STARTUPINFO()  # type: ignore[attr-defined]
-            handle = msvcrt.get_osfhandle(w)  # type: ignore[attr-defined]
-            startupinfo.lpAttributeList["handle_list"].append(handle)
-            kwargs: dict[str, Any] = {"startupinfo": startupinfo}
-        else:
-            handle = w
-            kwargs = {"pass_fds": [w]}
         envs = dict(envs or os.environ)
         if feature_code:
             envs["DATACHAIN_FEATURE_CLASS_SOURCE"] = json.dumps(
@@ -1971,7 +1986,6 @@ class Catalog:
                 "PYTHONPATH": os.getcwd(),  # For local imports
                 "DATACHAIN_QUERY_SAVE": "1" if save else "",
                 "PYTHONUNBUFFERED": "1",
-                "DATACHAIN_OUTPUT_FD": str(handle),
                 "DATACHAIN_JOB_ID": job_id or "",
             },
         )
@@ -1982,52 +1996,12 @@ class Catalog:
             stderr=subprocess.STDOUT if capture_output else None,
             bufsize=1,
             text=False,
-            **kwargs,
         ) as proc:
-            os.close(w)
-
             out = proc.stdout
             _lines: list[str] = []
             ctx = print_and_capture(out, output_hook) if out else nullcontext(_lines)
-
-            with ctx as lines, open(r) as f:
-                response_text = ""
-                while proc.poll() is None:
-                    response_text += f.readline()
-                    time.sleep(0.1)
-                response_text += f.readline()
-        return lines, proc, response_text
-
-    def save_result(self, query_script, exec_result, output, version, job_id):
-        if not exec_result:
-            raise QueryScriptDatasetNotFound(
-                "No dataset found after running Query script",
-                output=output,
-            )
-        name, version = exec_result
-        # finding returning dataset
-        try:
-            dataset = self.get_dataset(name)
-            dataset.get_version(version)
-        except (DatasetNotFoundError, ValueError) as e:
-            raise QueryScriptDatasetNotFound(
-                "No dataset found after running Query script",
-                output=output,
-            ) from e
-        dataset = self.update_dataset(
-            dataset,
-            script_output=output,
-            query_script=query_script,
-        )
-        self.update_dataset_version_with_warehouse_info(
-            dataset,
-            version,
-            script_output=output,
-            query_script=query_script,
-            job_id=job_id,
-            is_job_result=True,
-        )
-        return dataset, version
+            with ctx as lines:
+                return lines, proc
 
     def cp(
         self,

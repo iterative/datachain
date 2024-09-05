@@ -1,7 +1,5 @@
 import io
-import json
 import os
-from contextlib import suppress
 from pathlib import Path
 from textwrap import dedent
 from urllib.parse import urlparse
@@ -46,20 +44,6 @@ def pre_created_ds_name():
 
 
 @pytest.fixture
-def mock_os_pipe(mocker):
-    r, w = os.pipe()
-    mocker.patch("os.pipe", return_value=(r, w))
-
-    try:
-        yield (r, w)
-    finally:
-        with suppress(OSError):
-            os.close(r)
-        with suppress(OSError):
-            os.close(w)
-
-
-@pytest.fixture
 def mock_popen(mocker):
     m = mocker.patch(
         "subprocess.Popen", returncode=0, stdout=io.StringIO(), stderr=io.StringIO()
@@ -72,21 +56,20 @@ def mock_popen(mocker):
 
 @pytest.fixture
 def mock_popen_dataset_created(
-    mock_popen, cloud_test_catalog, mock_os_pipe, listed_bucket
+    mocker, monkeypatch, mock_popen, cloud_test_catalog, listed_bucket
 ):
     # create dataset which would be created in subprocess
     ds_name = cloud_test_catalog.catalog.generate_query_dataset_name()
-    ds_version = 1
+    job_id = cloud_test_catalog.catalog.metastore.create_job(name="", query="")
+    mocker.patch.object(
+        cloud_test_catalog.catalog.metastore, "create_job", return_value=job_id
+    )
+    monkeypatch.setenv("DATACHAIN_JOB_ID", str(job_id))
     cloud_test_catalog.catalog.create_dataset_from_sources(
         ds_name,
         [f"{cloud_test_catalog.src_uri}/dogs/*"],
         recursive=True,
     )
-
-    _, w = mock_os_pipe
-    with open(w, mode="w", closefd=False) as f:
-        f.write(json.dumps((ds_name, ds_version)))
-
     mock_popen.configure_mock(stdout=io.StringIO("user log 1\nuser log 2"))
     yield mock_popen
 
