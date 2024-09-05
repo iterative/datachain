@@ -658,8 +658,6 @@ class Catalog:
                     ),
                 ]
                 code_ast.body[-1:] = new_expressions
-            else:
-                raise Exception("Last line in a script was not an expression")
         return code_ast
 
     def compile_query_script(
@@ -1902,12 +1900,6 @@ class Catalog:
             if proc.returncode == QUERY_SCRIPT_CANCELED_EXIT_CODE:
                 raise QueryScriptCancelError(
                     "Query script was canceled by user",
-                    return_code=proc.returncode,
-                    output=output,
-                )
-            if proc.returncode == QUERY_SCRIPT_INVALID_LAST_STATEMENT_EXIT_CODE:
-                raise QueryScriptRunError(
-                    "Last line in a script was not an instance of DataChain",
                     return_code=proc.returncode,
                     output=output,
                 )

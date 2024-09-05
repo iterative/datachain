@@ -36,11 +36,7 @@ from sqlalchemy.sql.selectable import Select
 from tqdm import tqdm
 
 from datachain.asyn import ASYNC_WORKERS, AsyncMapper, OrderedMapper
-from datachain.catalog import (
-    QUERY_SCRIPT_CANCELED_EXIT_CODE,
-    QUERY_SCRIPT_INVALID_LAST_STATEMENT_EXIT_CODE,
-    get_catalog,
-)
+from datachain.catalog import QUERY_SCRIPT_CANCELED_EXIT_CODE, get_catalog
 from datachain.data_storage.schema import (
     PARTITION_COLUMN_ID,
     partition_col_names,
@@ -1709,14 +1705,14 @@ class DatasetQuery:
         return self.__class__(name=name, version=version, catalog=self.catalog)
 
 
-def query_wrapper(dataset_query: DatasetQuery) -> DatasetQuery:
+def query_wrapper(dataset_query: Any) -> Any:
     """
     Wrapper function that wraps the last statement of user query script.
     Last statement MUST be instance of DatasetQuery, otherwise script exits with
     error code 10
     """
     if not isinstance(dataset_query, DatasetQuery):
-        sys.exit(QUERY_SCRIPT_INVALID_LAST_STATEMENT_EXIT_CODE)
+        return dataset_query
 
     catalog = dataset_query.catalog
     save = bool(os.getenv("DATACHAIN_QUERY_SAVE"))
