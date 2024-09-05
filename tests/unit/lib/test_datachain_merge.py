@@ -269,21 +269,27 @@ def test_merge_with_itself_column(test_session):
 
 
 def test_merge_on_expression(test_session):
-    ch = DataChain.from_values(team=team, session=test_session)
-    # cross join on "ball" from sport
-    c = ch.c("team.sport")
-    expr = func.substr(c, func.length(c) - 4)
-    merged = ch.merge(ch, on=expr)
+    def _get_expr(dc):
+        c = dc.c("team.sport")
+        return func.substr(c, func.length(c) - 3)
 
-    cross_team = [(l_member, r_member) for l_member in team for r_member in team]
+    dc = DataChain.from_values(team=team, session=test_session)
+    right_dc = dc.clone(new_table=True)
+
+    # cross join on "ball" from sport
+    merged = dc.merge(right_dc, on=_get_expr(dc), right_on=_get_expr(right_dc))
+
+    cross_team = [
+        (left_member, right_member) for left_member in team for right_member in team
+    ]
 
     count = 0
-    for left, right in merged.collect():
+    for left, right_dc in merged.collect():
         assert isinstance(left, TeamMember)
-        assert isinstance(right, TeamMember)
-        l_member, r_member = cross_team[count]
-        assert left == l_member
-        assert right == r_member
+        assert isinstance(right_dc, TeamMember)
+        left_member, right_member = cross_team[count]
+        assert left == left_member
+        assert right_dc == right_member
         count += 1
 
     assert count == len(team) * len(team)

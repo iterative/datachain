@@ -129,14 +129,14 @@ class DatasetMergeError(DataChainParamsError):  # noqa: D101
         right_on: Optional[Sequence[Union[str, sqlalchemy.ColumnElement]]],
         msg: str,
     ):
-        def get_str(on: Sequence[Union[str, sqlalchemy.ColumnElement]]) -> str:
+        def _get_str(on: Sequence[Union[str, sqlalchemy.ColumnElement]]) -> str:
             if not isinstance(on, Sequence):
                 return str(on)  # type: ignore[unreachable]
             return ", ".join([_get_merge_error_str(col) for col in on])
 
-        on_str = get_str(on)
+        on_str = _get_str(on)
         right_on_str = (
-            ", right_on='" + get_str(right_on) + "'"
+            ", right_on='" + _get_str(right_on) + "'"
             if right_on and isinstance(right_on, Sequence)
             else ""
         )
@@ -284,8 +284,8 @@ class DataChain(DatasetQuery):
 
         raise ValueError(f"Column with name {name} not found in the schema")
 
-    def c(self, column: Union[str, Column]) -> "sqlalchemy.ColumnClause":
-        """Returns ColumnClause instance attached to the current chain."""
+    def c(self, column: Union[str, Column]) -> Column:
+        """Returns Column instance attached to the current chain."""
         c = self.column(column) if isinstance(column, str) else self.column(column.name)
         c.table = self.table
         return c
@@ -1236,7 +1236,7 @@ class DataChain(DatasetQuery):
 
         errors = []
 
-        def resolve(
+        def _resolve(
             ds: DataChain,
             col: Union[str, sqlalchemy.ColumnElement],
             side: Union[str, None],
@@ -1248,8 +1248,8 @@ class DataChain(DatasetQuery):
                     errors.append(f"{_get_merge_error_str(col)} in {side}")
 
         ops = [
-            resolve(self, left, "left")
-            == resolve(right_ds, right, "right" if right_on else None)
+            _resolve(self, left, "left")
+            == _resolve(right_ds, right, "right" if right_on else None)
             for left, right in zip(on, right_on or on)
         ]
 
