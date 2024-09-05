@@ -280,17 +280,15 @@ class DataChain(DatasetQuery):
             name_path = [name]
         for path, type_, _, _ in self.signals_schema.get_flat_tree():
             if path == name_path:
-                col = Column(name, python_to_sql(type_))
-                col.table = self.table
-                return col
+                return Column(name, python_to_sql(type_))
 
         raise ValueError(f"Column with name {name} not found in the schema")
 
-    def c(self, c: Union[str, Column]) -> "sqlalchemy.ColumnClause":
+    def c(self, column: Union[str, Column]) -> "sqlalchemy.ColumnClause":
         """Returns ColumnClause instance attached to the current chain."""
-        if isinstance(c, str):
-            return self.column(c)
-        return self.column(c.name)
+        c = self.column(column) if isinstance(column, str) else self.column(column.name)
+        c.table = self.table
+        return c
 
     def print_schema(self) -> None:
         """Print schema of the chain."""
