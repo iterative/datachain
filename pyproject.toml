@@ -72,7 +72,7 @@ vector = [
 ]
 hf = [
   "numba>=0.60.0",
-  "datasets[audio,vision]"
+  "datasets[audio,vision]>=2.21.0"
 ]
 tests = [
   "datachain[torch,remote,vector,hf]",

@@ -9,7 +9,6 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 from datasets import Dataset
-from datasets.exceptions import DatasetNotFoundError
 from pydantic import BaseModel
 
 from datachain import Column
@@ -1863,5 +1862,5 @@ def test_from_hf_object_name(test_session):
 
 
 def test_from_hf_invalid(test_session):
-    with pytest.raises(DatasetNotFoundError):
+    with pytest.raises(FileNotFoundError):
         DataChain.from_hf("invalid_dataset", session=test_session)
