@@ -222,6 +222,11 @@ def test_merge_errors(test_session):
     with pytest.raises(DatasetMergeError):
         ch1.merge(ch2, ["emp.person.name"], ["unknown"])
 
+    with pytest.raises(DatasetMergeError):
+        ch1.merge(
+            ch2, ("emp.person.age", func.substr(["emp.person.name"], 2)), "unknown"
+        )
+
     ch1.merge(ch2, ["emp.person.name"], ["team.sport"])
     ch1.merge(ch2, ["emp.person.name"], ["team.sport"])
 
