@@ -116,7 +116,7 @@ def _get_merge_error_str(col: Union[str, sqlalchemy.ColumnElement]) -> str:
     if isinstance(col, str):
         return col
     if isinstance(col, sqlalchemy.Column):
-        return col.name
+        return col.name.replace(DEFAULT_DELIMITER, ".")
     if isinstance(col, GenericFunction):
         return f"{col.name} expression"
     return str(col)
@@ -1238,20 +1238,26 @@ class DataChain(DatasetQuery):
 
         errors = []
 
-        def resolve(ds: DataChain, col: Union[str, sqlalchemy.ColumnElement], frm: str):
+        def resolve(
+            ds: DataChain,
+            col: Union[str, sqlalchemy.ColumnElement],
+            side: Union[str, None],
+        ):
             try:
                 return ds.c(col) if isinstance(col, (str, C)) else col
             except ValueError:
-                errors.append(f"{_get_merge_error_str(col)} from {frm}")
+                if side:
+                    errors.append(f"{_get_merge_error_str(col)} in {side}")
 
         ops = [
-            resolve(self, left, "left") == resolve(right_ds, right, "right")
+            resolve(self, left, "left")
+            == resolve(right_ds, right, "right" if right_on else None)
             for left, right in zip(on, right_on or on)
         ]
 
         if errors:
             raise DatasetMergeError(
-                on, right_on, f"Could not resolve {", ".join(errors)}"
+                on, right_on, f"Could not resolve {', '.join(errors)}"
             )
 
         ds = self.join(right_ds, sqlalchemy.and_(*ops), inner, rname + "{name}")

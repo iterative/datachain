@@ -4,6 +4,7 @@ from typing import Optional
 import pandas as pd
 import pytest
 from pydantic import BaseModel
+from sqlalchemy import func
 
 from datachain.lib.dc import C, DataChain, DatasetMergeError
 from datachain.sql.types import String
@@ -215,8 +216,15 @@ def test_merge_errors(test_session):
     with pytest.raises(DatasetMergeError):
         ch1.merge(ch2, "unknown")
 
+    with pytest.raises(DatasetMergeError):
+        ch1.merge(ch2, ["emp.person.name"], "unknown")
+
+    with pytest.raises(DatasetMergeError):
+        ch1.merge(ch2, ["emp.person.name"], ["unknown"])
+
     ch1.merge(ch2, ["emp.person.name"], ["team.sport"])
     ch1.merge(ch2, ["emp.person.name"], ["team.sport"])
+
     with pytest.raises(DatasetMergeError):
         ch1.merge(ch2, ["emp.person.name"], ["team.player", "team.sport"])
 
@@ -253,3 +261,24 @@ def test_merge_with_itself_column(test_session):
         count += 1
 
     assert count == len(employees)
+
+
+def test_merge_on_expression(test_session):
+    ch = DataChain.from_values(team=team, session=test_session)
+    # cross join on "ball" from sport
+    c = ch.c("team.sport")
+    expr = func.substr(c, func.length(c) - 4)
+    merged = ch.merge(ch, on=expr)
+
+    cross_team = [(l_member, r_member) for l_member in team for r_member in team]
+
+    count = 0
+    for left, right in merged.collect():
+        assert isinstance(left, TeamMember)
+        assert isinstance(right, TeamMember)
+        l_member, r_member = cross_team[count]
+        assert left == l_member
+        assert right == r_member
+        count += 1
+
+    assert count == len(team) * len(team)
