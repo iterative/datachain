@@ -99,8 +99,7 @@ class HFGenerator(Generator):
 
 def stream_splits(ds: Union[str, HFDatasetType], *args, **kwargs):
     if isinstance(ds, str):
-        if "streaming" not in kwargs:
-            kwargs["streaming"] = True
+        kwargs["streaming"] = True
         ds = load_dataset(ds, *args, **kwargs)
     if isinstance(ds, (DatasetDict, IterableDatasetDict)):
         return ds
