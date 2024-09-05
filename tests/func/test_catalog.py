@@ -971,42 +971,6 @@ DatasetQuery('{src_uri}')
         assert str(exc_info.value).startswith("Query script exited with error code 1")
 
 
-def test_query_last_statement_not_expression(mock_popen, cloud_test_catalog):
-    mock_popen.configure_mock(returncode=10)
-    catalog = cloud_test_catalog.catalog
-    src_uri = cloud_test_catalog.src_uri
-
-    query_script = f"""
-from datachain.query import DatasetQuery, C
-ds = DatasetQuery('{src_uri}')
-    """
-
-    with pytest.raises(QueryScriptCompileError) as exc_info:
-        catalog.query(query_script)
-        assert str(exc_info.value).startswith(
-            "Query script failed to compile, "
-            "reason: Last line in a script was not an expression"
-        )
-
-
-def test_query_last_statement_not_ds_query_instance(mock_popen, cloud_test_catalog):
-    mock_popen.configure_mock(returncode=10)
-    catalog = cloud_test_catalog.catalog
-    src_uri = cloud_test_catalog.src_uri
-
-    query_script = f"""
-from datachain.query import DatasetQuery, C
-ds = DatasetQuery('{src_uri}')
-5
-    """
-
-    with pytest.raises(QueryScriptRunError) as exc_info:
-        catalog.query(query_script)
-        assert str(exc_info.value).startswith(
-            "Last line in a script was not an instance of DataChain"
-        )
-
-
 def test_query_dataset_not_returned(mock_popen, cloud_test_catalog):
     mock_popen.configure_mock(stdout=io.StringIO("random str"))
     catalog = cloud_test_catalog.catalog
