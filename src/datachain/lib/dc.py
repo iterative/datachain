@@ -359,9 +359,7 @@ class DataChain(DatasetQuery):
         )
         need_listing = True
 
-        for ds in cls.listings(
-            session=session, settings=settings, in_memory=in_memory
-        ).collect("listing"):
+        for ds in cls.listings(session=session, in_memory=in_memory).collect("listing"):
             if (
                 not is_listing_expired(ds.created_at)  # type: ignore[union-attr]
                 and is_listing_subset(ds.name, list_dataset_name)  # type: ignore[union-attr]
