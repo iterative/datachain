@@ -1292,8 +1292,6 @@ class DataChain(DatasetQuery):
                     other.signals_schema.resolve(*right_on).db_signals(),
                 )  # type: ignore[arg-type]
             )
-        else:
-            signals = self.signals_schema.resolve(*on).db_signals()  # type: ignore[assignment]
         return super().subtract(other, signals)  # type: ignore[arg-type]
 
     @classmethod
