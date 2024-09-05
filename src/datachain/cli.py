@@ -14,6 +14,7 @@ import shtab
 
 from datachain import utils
 from datachain.cli_utils import BooleanOptionalAction, CommaSeparatedArgs, KeyValueArgs
+from datachain.lib.dc import DataChain
 from datachain.utils import DataChainDir
 
 if TYPE_CHECKING:
@@ -615,18 +616,6 @@ def _ls_urls_flat(
                 raise FileNotFoundError(f"No such file or directory: {source}")
 
 
-def ls_indexed_storages(catalog: "Catalog", long: bool = False) -> Iterator[str]:
-    from datachain.node import long_line_str
-
-    storage_uris = catalog.ls_storage_uris()
-    if long:
-        for uri in storage_uris:
-            # TODO: add Storage.created so it can be used here
-            yield long_line_str(uri, None, "")
-    else:
-        yield from storage_uris
-
-
 def ls_local(
     sources,
     long: bool = False,
@@ -657,8 +646,9 @@ def ls_local(
                 for entry in entries:
                     print(format_ls_entry(entry))
     else:
-        for entry in ls_indexed_storages(catalog, long=long):
-            print(format_ls_entry(entry))
+        chain = DataChain.listings()
+        for ls in chain.collect("listing"):
+            print(format_ls_entry(f"{ls.uri}@v{ls.version}"))  # type: ignore[union-attr]
 
 
 def format_ls_entry(entry: str) -> str:

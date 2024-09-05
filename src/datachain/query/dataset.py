@@ -1,6 +1,5 @@
 import contextlib
 import inspect
-import json
 import logging
 import os
 import random
@@ -37,11 +36,7 @@ from sqlalchemy.sql.selectable import Select
 from tqdm import tqdm
 
 from datachain.asyn import ASYNC_WORKERS, AsyncMapper, OrderedMapper
-from datachain.catalog import (
-    QUERY_SCRIPT_CANCELED_EXIT_CODE,
-    QUERY_SCRIPT_INVALID_LAST_STATEMENT_EXIT_CODE,
-    get_catalog,
-)
+from datachain.catalog import QUERY_SCRIPT_CANCELED_EXIT_CODE, get_catalog
 from datachain.data_storage.schema import (
     PARTITION_COLUMN_ID,
     partition_col_names,
@@ -217,7 +212,7 @@ class IndexingStep(StartingStep):
                 recursive=self.recursive,
             )
 
-        storage = self.catalog.get_storage(uri)
+        storage = self.catalog.metastore.get_storage(uri)
 
         return step_result(q, dataset_rows.c, dependencies=[storage.uri])
 
@@ -1632,7 +1627,7 @@ class DatasetQuery:
                 )
             else:
                 # storage dependency - its name is a valid StorageURI
-                storage = self.catalog.get_storage(dependency)
+                storage = self.catalog.metastore.get_storage(dependency)
                 self.catalog.metastore.add_storage_dependency(
                     StorageURI(dataset.name),
                     version,
@@ -1710,27 +1705,14 @@ class DatasetQuery:
         return self.__class__(name=name, version=version, catalog=self.catalog)
 
 
-def _get_output_fd_for_write() -> Union[str, int]:
-    handle = os.getenv("DATACHAIN_OUTPUT_FD")
-    if not handle:
-        return os.devnull
-
-    if os.name != "nt":
-        return int(handle)
-
-    import msvcrt
-
-    return msvcrt.open_osfhandle(int(handle), os.O_WRONLY)  # type: ignore[attr-defined]
-
-
-def query_wrapper(dataset_query: DatasetQuery) -> DatasetQuery:
+def query_wrapper(dataset_query: Any) -> Any:
     """
     Wrapper function that wraps the last statement of user query script.
     Last statement MUST be instance of DatasetQuery, otherwise script exits with
     error code 10
     """
     if not isinstance(dataset_query, DatasetQuery):
-        sys.exit(QUERY_SCRIPT_INVALID_LAST_STATEMENT_EXIT_CODE)
+        return dataset_query
 
     catalog = dataset_query.catalog
     save = bool(os.getenv("DATACHAIN_QUERY_SAVE"))
@@ -1742,13 +1724,4 @@ def query_wrapper(dataset_query: DatasetQuery) -> DatasetQuery:
     if save and (is_session_temp_dataset or not dataset_query.attached):
         name = catalog.generate_query_dataset_name()
         dataset_query = dataset_query.save(name)
-
-    dataset: Optional[tuple[str, int]] = None
-    if dataset_query.attached:
-        assert dataset_query.name, "Dataset name should be provided"
-        assert dataset_query.version, "Dataset version should be provided"
-        dataset = dataset_query.name, dataset_query.version
-
-    with open(_get_output_fd_for_write(), mode="w") as f:
-        json.dump(dataset, f)
     return dataset_query
