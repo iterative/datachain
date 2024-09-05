@@ -72,6 +72,15 @@ class HFGenerator(Generator):
         *args,
         **kwargs,
     ):
+        """
+        Generator for chain from huggingface datasets.
+
+        Parameters:
+
+        ds : Path or name of the dataset to read from Hugging Face Hub,
+            or an instance of `datasets.Dataset`-like object.
+        output_schema : Pydantic model for validation.
+        """
         super().__init__()
         self.ds = ds
         self.output_schema = output_schema
@@ -131,6 +140,7 @@ def convert_feature(val: Any, feat: Any, anno: Any) -> Any:  # noqa: PLR0911
 def get_output_schema(
     features: Features, model_name: str = "", stream: bool = True
 ) -> dict[str, DataType]:
+    """Generate UDF output schema from huggingface datasets features."""
     fields_dict = {}
     for name, val in features.items():
         fields_dict[name] = _feature_to_chain_type(name, val)  # type: ignore[assignment]

@@ -182,7 +182,7 @@ def _nrows_file(file: File, nrows: int) -> str:
 def _get_hf_schema(
     schema: "pa.Schema",
 ) -> Optional[tuple["Features", dict[str, "DataType"]]]:
-    if b"huggingface" in schema.metadata:
+    if schema.metadata and b"huggingface" in schema.metadata:
         from datachain.lib.hf import get_output_schema, schema_from_arrow
 
         features = schema_from_arrow(schema)
