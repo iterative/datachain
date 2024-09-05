@@ -9,7 +9,6 @@ import pytest
 from datachain.catalog import QUERY_DATASET_PREFIX
 from datachain.cli import query
 from datachain.data_storage import AbstractDBMetastore, JobQueryType, JobStatus
-from datachain.error import QueryScriptRunError
 from tests.utils import assert_row_names
 
 
@@ -128,37 +127,29 @@ def test_query_cli(cloud_test_catalog_tmpfile, tmp_path, catalog_info_filepath, 
     assert latest_job[5] == ""
 
 
-def test_query_cli_no_dataset_returned(
+def test_query_cli_without_dataset_query_as_a_last_statement(
     cloud_test_catalog_tmpfile, tmp_path, catalog_info_filepath, capsys
 ):
     catalog = cloud_test_catalog_tmpfile.catalog
+    src_uri = cloud_test_catalog_tmpfile.src_uri
 
-    query_script = """\
+    query_script = f"""\
     from datachain.query import DatasetQuery
 
-    DatasetQuery("test", catalog=catalog)
+    DatasetQuery({src_uri!r}, catalog=catalog).save("temp")
 
     print("test")
     """
     query_script = setup_catalog(query_script, catalog_info_filepath)
 
-    filepath = tmp_path / "query_script.py"
-    filepath.write_text(query_script)
+    result = catalog.query(query_script)
+    assert result.dataset
+    assert result.dataset.name == "temp"
+    assert result.version == 1
 
-    with pytest.raises(
-        QueryScriptRunError,
-        match="Last line in a script was not an instance of DataChain",
-    ):
-        query(catalog, str(filepath))
-
-    latest_job = get_latest_job(catalog.metastore)
-    assert latest_job
-
-    assert latest_job[1] == os.path.basename(filepath)
-    assert latest_job[2] == JobStatus.FAILED
-    assert latest_job[3] == JobQueryType.PYTHON
-    assert latest_job[4] == "Last line in a script was not an instance of DataChain"
-    assert latest_job[5].find("datachain.error.QueryScriptRunError")
+    out, err = capsys.readouterr()
+    assert "test" in out
+    assert not err
 
 
 @pytest.mark.parametrize(
@@ -186,15 +177,16 @@ def test_query(
     query_script = setup_catalog(query_script, catalog_info_filepath)
 
     result = catalog.query(query_script, save=save)
-    if not save:
-        assert result.dataset is None
-        return
-
     if save_dataset:
         assert result.dataset.name == save_dataset
         assert catalog.get_dataset(save_dataset)
-    else:
+    elif save:
         assert result.dataset.name.startswith(QUERY_DATASET_PREFIX)
+    else:
+        assert result.dataset is None
+        assert result.version is None
+        return
+
     assert result.version == 1
     assert result.dataset.versions_values == [1]
     assert result.dataset.query_script == query_script

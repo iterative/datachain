@@ -10,6 +10,7 @@ from datachain.lib.listing import (
     is_listing_dataset,
     is_listing_expired,
     is_listing_subset,
+    listing_uri_from_name,
     parse_listing_uri,
 )
 from datachain.node import DirType, Entry, get_path
@@ -191,6 +192,12 @@ def test_parse_listing_uri_with_glob(cloud_test_catalog):
 )
 def test_is_listing_dataset(name, is_listing):
     assert is_listing_dataset(name) is is_listing
+
+
+def test_listing_uri_from_name():
+    assert listing_uri_from_name("lst__s3://my-bucket") == "s3://my-bucket"
+    with pytest.raises(ValueError):
+        listing_uri_from_name("s3://my-bucket")
 
 
 @pytest.mark.parametrize(
