@@ -56,7 +56,7 @@ from datachain.query.dataset import (
     PartitionByType,
     detach,
 )
-from datachain.query.schema import Column, DatasetRow
+from datachain.query.schema import DEFAULT_DELIMITER, Column, DatasetRow
 from datachain.sql.functions import path as pathfunc
 from datachain.utils import inside_notebook
 
@@ -112,6 +112,16 @@ class DatasetFromValuesError(DataChainParamsError):  # noqa: D101
         super().__init__(f"Dataset{name} from values error: {msg}")
 
 
+def _get_merge_error_str(col: Union[str, sqlalchemy.ColumnElement]) -> str:
+    if isinstance(col, str):
+        return col
+    if isinstance(col, sqlalchemy.Column):
+        return col.name
+    if isinstance(col, GenericFunction):
+        return f"{col.name} expression"
+    return str(col)
+
+
 class DatasetMergeError(DataChainParamsError):  # noqa: D101
     def __init__(  # noqa: D107
         self,
@@ -120,18 +130,9 @@ class DatasetMergeError(DataChainParamsError):  # noqa: D101
         msg: str,
     ):
         def get_str(on: Sequence[Union[str, sqlalchemy.ColumnElement]]) -> str:
-            str_list = []
             if not isinstance(on, Sequence):
                 return str(on)  # type: ignore[unreachable]
-            for col in on:
-                if isinstance(col, sqlalchemy.ColumnElement):
-                    str_list.append(col.name)
-                if isinstance(col, str):
-                    str_list.append(col)
-                if isinstance(col, GenericFunction):
-                    str_list.append(f"{col.name} expression")
-
-            return ", ".join(str_list)
+            return ", ".join([_get_merge_error_str(col) for col in on])
 
         on_str = get_str(on)
         right_on_str = (
@@ -271,17 +272,25 @@ class DataChain(DatasetQuery):
         """Returns Column instance with a type if name is found in current schema,
         otherwise raises an exception.
         """
-        name_path = name.split(".")
+        if "." in name:
+            name_path = name.split(".")
+        elif DEFAULT_DELIMITER in name:
+            name_path = name.split(DEFAULT_DELIMITER)
+        else:
+            name_path = [name]
         for path, type_, _, _ in self.signals_schema.get_flat_tree():
             if path == name_path:
-                return Column(name, python_to_sql(type_))
+                col = Column(name, python_to_sql(type_))
+                col.table = self.table
+                return col
 
         raise ValueError(f"Column with name {name} not found in the schema")
 
-    def c(self, name: Union[str, Column]) -> "sqlalchemy.ColumnClause":
+    def c(self, c: Union[str, Column]) -> "sqlalchemy.ColumnClause":
         """Returns ColumnClause instance attached to the current chain."""
-        column = self.column(name) if isinstance(name, str) else name
-        return super().c(column)
+        if isinstance(c, str):
+            return self.column(c)
+        return self.column(c.name)
 
     def print_schema(self) -> None:
         """Print schema of the chain."""
@@ -1208,9 +1217,6 @@ class DataChain(DatasetQuery):
                 f"'on' must be 'str' or 'Sequence' object but got type '{type(on)}'",
             )
 
-        signals_schema = self.signals_schema.clone_without_sys_signals()
-
-        right_signals_schema = right_ds.signals_schema.clone_without_sys_signals()
         if right_on is not None:
             if isinstance(right_on, (str, sqlalchemy.ColumnElement)):
                 right_on = [right_on]
@@ -1219,28 +1225,41 @@ class DataChain(DatasetQuery):
                     on,
                     right_on,
                     "'right_on' must be 'str' or 'Sequence' object"
-                    f" but got type '{right_on}'",
+                    f" but got type '{type(right_on)}'",
                 )
 
             if len(right_on) != len(on):
                 raise DatasetMergeError(
                     on, right_on, "'on' and 'right_on' must have the same length'"
                 )
-        else:
-            right_on = on
 
         if self == right_ds:
             right_ds = right_ds.clone(new_table=True)
 
+        errors = []
+
+        def resolve(ds: DataChain, col: Union[str, sqlalchemy.ColumnElement], frm: str):
+            try:
+                return ds.c(col) if isinstance(col, (str, C)) else col
+            except ValueError:
+                errors.append(f"{_get_merge_error_str(col)} from {frm}")
+
         ops = [
-            (self.c(left) if isinstance(left, (str, C)) else left)
-            == (right_ds.c(right) if isinstance(right, (str, C)) else right)  # type: ignore[assignment]
-            for left, right in zip(on, right_on)
+            resolve(self, left, "left") == resolve(right_ds, right, "right")
+            for left, right in zip(on, right_on or on)
         ]
+
+        if errors:
+            raise DatasetMergeError(
+                on, right_on, f"Could not resolve {", ".join(errors)}"
+            )
 
         ds = self.join(right_ds, sqlalchemy.and_(*ops), inner, rname + "{name}")
 
         ds.feature_schema = None
+
+        signals_schema = self.signals_schema.clone_without_sys_signals()
+        right_signals_schema = right_ds.signals_schema.clone_without_sys_signals()
         ds.signals_schema = SignalSchema({"sys": Sys}) | signals_schema.merge(
             right_signals_schema, rname
         )

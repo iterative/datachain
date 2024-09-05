@@ -195,7 +195,7 @@ def test_merge_multi_conditions(test_session):
         id=delivery_ids, d_name=delivery_name, time=delivery_time, session=test_session
     )
 
-    ch = ch1.merge(ch2, ("id", "name"), ("id", "d_name"))
+    ch = ch1.merge(ch2, ("id", "name"), ("id", C("d_name")))
 
     res = list(ch.collect())
 
@@ -212,7 +212,7 @@ def test_merge_errors(test_session):
     ch1 = DataChain.from_values(emp=employees, session=test_session)
     ch2 = DataChain.from_values(team=team, session=test_session)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(DatasetMergeError):
         ch1.merge(ch2, "unknown")
 
     ch1.merge(ch2, ["emp.person.name"], ["team.sport"])
