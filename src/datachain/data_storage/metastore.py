@@ -168,19 +168,8 @@ class AbstractMetastore(ABC, Serializable):
         """
 
     @abstractmethod
-    def mark_storage_not_indexed(self, uri: StorageURI) -> None:
-        """
-        Mark storage as not indexed.
-        This method should be called when storage index is deleted.
-        """
-
-    @abstractmethod
     def update_last_inserted_at(self, uri: Optional[StorageURI] = None) -> None:
         """Updates last inserted datetime in bucket with current time."""
-
-    @abstractmethod
-    def get_all_storage_uris(self) -> Iterator[StorageURI]:
-        """Returns all storage uris."""
 
     @abstractmethod
     def get_storage(self, uri: StorageURI) -> Storage:
@@ -188,10 +177,6 @@ class AbstractMetastore(ABC, Serializable):
         Gets storage representation from database.
         E.g. if s3 is used as storage this would be s3 bucket data.
         """
-
-    @abstractmethod
-    def list_storages(self) -> list[Storage]:
-        """Returns all storages."""
 
     @abstractmethod
     def mark_storage_pending(self, storage: Storage) -> Storage:
@@ -324,7 +309,7 @@ class AbstractMetastore(ABC, Serializable):
             self.add_dataset_dependency(
                 source_dataset_name,
                 source_dataset_version,
-                dependency.name,
+                dependency.dataset_name,
                 int(dependency.version),
             )
         else:
@@ -906,11 +891,6 @@ class AbstractDBMetastore(AbstractMetastore):
             self._storages_update().where(s.c.uri == uri).values(**updates)  # type: ignore [attr-defined]
         )
 
-    def get_all_storage_uris(self) -> Iterator[StorageURI]:
-        """Returns all storage uris."""
-        s = self._storages
-        yield from (r[0] for r in self.db.execute(self._storages_select(s.c.uri)))
-
     def get_storage(self, uri: StorageURI, conn=None) -> Storage:
         """
         Gets storage representation from database.
@@ -925,13 +905,6 @@ class AbstractDBMetastore(AbstractMetastore):
             raise StorageNotFoundError(f"Storage {uri} not found.")
 
         return self.storage_class._make(result)
-
-    def list_storages(self) -> list[Storage]:
-        result = self.db.execute(self._storages_select())
-        if not result:
-            return []
-
-        return [self.storage_class._make(r) for r in result]
 
     def mark_storage_pending(self, storage: Storage, conn=None) -> Storage:
         # Update status to pending and dates
