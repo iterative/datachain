@@ -15,7 +15,7 @@ validation:
 
 theme:
   name: material
-  logo: assets/datachain.svg
+  logo: assets/datachain_logotype.svg
   favicon: assets/datachain.svg
   icon:
     repo: fontawesome/brands/github
