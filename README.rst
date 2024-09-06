@@ -1,3 +1,5 @@
+![DataChain](https://static.datachain.ai/images/logo/datachain-readme-banner.svg)
+
 |PyPI| |Python Version| |Codecov| |Tests|
 
 .. |PyPI| image:: https://img.shields.io/pypi/v/datachain.svg
