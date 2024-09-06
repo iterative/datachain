@@ -1,7 +1,5 @@
 import io
-import json
 import os
-from contextlib import suppress
 from pathlib import Path
 from textwrap import dedent
 from urllib.parse import urlparse
@@ -46,20 +44,6 @@ def pre_created_ds_name():
 
 
 @pytest.fixture
-def mock_os_pipe(mocker):
-    r, w = os.pipe()
-    mocker.patch("os.pipe", return_value=(r, w))
-
-    try:
-        yield (r, w)
-    finally:
-        with suppress(OSError):
-            os.close(r)
-        with suppress(OSError):
-            os.close(w)
-
-
-@pytest.fixture
 def mock_popen(mocker):
     m = mocker.patch(
         "subprocess.Popen", returncode=0, stdout=io.StringIO(), stderr=io.StringIO()
@@ -72,21 +56,20 @@ def mock_popen(mocker):
 
 @pytest.fixture
 def mock_popen_dataset_created(
-    mock_popen, cloud_test_catalog, mock_os_pipe, listed_bucket
+    mocker, monkeypatch, mock_popen, cloud_test_catalog, listed_bucket
 ):
     # create dataset which would be created in subprocess
     ds_name = cloud_test_catalog.catalog.generate_query_dataset_name()
-    ds_version = 1
+    job_id = cloud_test_catalog.catalog.metastore.create_job(name="", query="")
+    mocker.patch.object(
+        cloud_test_catalog.catalog.metastore, "create_job", return_value=job_id
+    )
+    monkeypatch.setenv("DATACHAIN_JOB_ID", str(job_id))
     cloud_test_catalog.catalog.create_dataset_from_sources(
         ds_name,
         [f"{cloud_test_catalog.src_uri}/dogs/*"],
         recursive=True,
     )
-
-    _, w = mock_os_pipe
-    with open(w, mode="w", closefd=False) as f:
-        f.write(json.dumps((ds_name, ds_version)))
-
     mock_popen.configure_mock(stdout=io.StringIO("user log 1\nuser log 2"))
     yield mock_popen
 
@@ -986,42 +969,6 @@ DatasetQuery('{src_uri}')
     with pytest.raises(QueryScriptRunError) as exc_info:
         catalog.query(query_script)
         assert str(exc_info.value).startswith("Query script exited with error code 1")
-
-
-def test_query_last_statement_not_expression(mock_popen, cloud_test_catalog):
-    mock_popen.configure_mock(returncode=10)
-    catalog = cloud_test_catalog.catalog
-    src_uri = cloud_test_catalog.src_uri
-
-    query_script = f"""
-from datachain.query import DatasetQuery, C
-ds = DatasetQuery('{src_uri}')
-    """
-
-    with pytest.raises(QueryScriptCompileError) as exc_info:
-        catalog.query(query_script)
-        assert str(exc_info.value).startswith(
-            "Query script failed to compile, "
-            "reason: Last line in a script was not an expression"
-        )
-
-
-def test_query_last_statement_not_ds_query_instance(mock_popen, cloud_test_catalog):
-    mock_popen.configure_mock(returncode=10)
-    catalog = cloud_test_catalog.catalog
-    src_uri = cloud_test_catalog.src_uri
-
-    query_script = f"""
-from datachain.query import DatasetQuery, C
-ds = DatasetQuery('{src_uri}')
-5
-    """
-
-    with pytest.raises(QueryScriptRunError) as exc_info:
-        catalog.query(query_script)
-        assert str(exc_info.value).startswith(
-            "Last line in a script was not an instance of DataChain"
-        )
 
 
 def test_query_dataset_not_returned(mock_popen, cloud_test_catalog):
