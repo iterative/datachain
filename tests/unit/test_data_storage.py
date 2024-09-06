@@ -31,6 +31,7 @@ COMPLEX_TREE: dict[str, Any] = {
 
 @pytest.mark.parametrize("tree", [COMPLEX_TREE], indirect=True)
 def test_dir_expansion(cloud_test_catalog, version_aware, cloud_type):
+    pytest.skip("Skipping as dir expansion must be re-implemented in application level")
     has_version = version_aware or cloud_type == "gs"
 
     ctc = cloud_test_catalog

@@ -136,6 +136,7 @@ E2E_STEPS = (
         "files": {
             "mnt": MNT_FILE_TREE,
         },
+        "listing": True,
     },
     {
         "command": ("datachain", "ls-datasets"),
