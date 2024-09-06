@@ -1,4 +1,4 @@
-# 🔗 DataChain Getting Started
+# Getting Started with DataChain
 
 🔨Wrangle unstructured AI data at scale
 
