@@ -13,7 +13,7 @@
    :target: https://github.com/iterative/datachain/actions/workflows/tests.yml
    :alt: Tests
 
-AI 🔗 DataChain
+![Logo](/docs/assets/datachain.svg) DataChain
 ----------------
 
 DataChain is a modern Pythonic data-frame library designed for artificial intelligence.
