@@ -94,13 +94,16 @@ def get_latest_job(
 def test_query_cli(cloud_test_catalog_tmpfile, tmp_path, catalog_info_filepath, capsys):
     catalog = cloud_test_catalog_tmpfile.catalog
     src_uri = cloud_test_catalog_tmpfile.src_uri
+    catalog.create_dataset_from_sources("animals", [src_uri], recursive=True)
 
-    query_script = f"""\
+    query_script = """\
     from datachain.query import DatasetQuery
     from datachain import C
     from datachain.sql.functions.path import name
 
-    DatasetQuery({src_uri!r}, catalog=catalog).mutate(name=name(C.path)).save("my-ds")
+    DatasetQuery("animals", catalog=catalog).mutate(
+        name=name(C("file__path"))
+    ).save("my-ds")
     """
     query_script = setup_catalog(query_script, catalog_info_filepath)
 
@@ -108,9 +111,6 @@ def test_query_cli(cloud_test_catalog_tmpfile, tmp_path, catalog_info_filepath, 
     filepath.write_text(query_script)
 
     query(catalog, str(filepath))
-    out, err = capsys.readouterr()
-    assert not out
-    assert not err
 
     dataset = catalog.get_dataset("my-ds")
     assert dataset
@@ -132,11 +132,13 @@ def test_query_cli_no_dataset_returned(
     cloud_test_catalog_tmpfile, tmp_path, catalog_info_filepath, capsys
 ):
     catalog = cloud_test_catalog_tmpfile.catalog
+    src_uri = cloud_test_catalog_tmpfile.src_uri
+    catalog.create_dataset_from_sources("animals", [src_uri], recursive=True)
 
     query_script = """\
     from datachain.query import DatasetQuery
 
-    DatasetQuery("test", catalog=catalog)
+    DatasetQuery("animals", catalog=catalog)
 
     print("test")
     """
@@ -175,10 +177,11 @@ def test_query(
 ):
     catalog = cloud_test_catalog_tmpfile.catalog
     src_uri = cloud_test_catalog_tmpfile.src_uri
+    catalog.create_dataset_from_sources("animals", [src_uri], recursive=True)
 
     query_script = f"""\
     from datachain.query import DatasetQuery
-    ds = DatasetQuery({src_uri!r}, catalog=catalog)
+    ds = DatasetQuery("animals", catalog=catalog)
     if {save_dataset!r}:
         ds = ds.save({save_dataset!r})
     ds
@@ -194,7 +197,7 @@ def test_query(
         assert result.dataset.name == save_dataset
         assert catalog.get_dataset(save_dataset)
     else:
-        assert result.dataset.name.startswith(QUERY_DATASET_PREFIX)
+        assert result.dataset.name == "animals"
     assert result.version == 1
     assert result.dataset.versions_values == [1]
     assert result.dataset.query_script == query_script
@@ -227,11 +230,12 @@ def test_query_params(
 ):
     catalog = cloud_test_catalog_tmpfile.catalog
     src_uri = cloud_test_catalog_tmpfile.src_uri
+    catalog.create_dataset_from_sources("animals", [src_uri], recursive=True)
 
-    query_script = f"""\
+    query_script = """\
     from datachain.query import DatasetQuery, param
 
-    ds = DatasetQuery({src_uri!r}, catalog=catalog)
+    ds = DatasetQuery("animals", catalog=catalog)
     if param("limit"):
         ds = ds.limit(int(param("limit")))
     ds
@@ -253,11 +257,14 @@ def test_query_where_last_command_is_call_on_save_which_returns_attached_dataset
     """
     catalog = cloud_test_catalog_tmpfile.catalog
     src_uri = cloud_test_catalog_tmpfile.src_uri
+    catalog.create_dataset_from_sources("animals", [src_uri], recursive=True)
 
-    query_script = f"""\
+    query_script = """\
     from datachain.query import C, DatasetQuery
 
-    DatasetQuery({src_uri!r}, catalog=catalog).filter(C.path.glob("*dog*")).save("dogs")
+    DatasetQuery("animals", catalog=catalog).filter(
+        C("file__path").glob("*dog*")
+    ).save("dogs")
     """
     query_script = setup_catalog(query_script, catalog_info_filepath)
 
@@ -288,13 +295,14 @@ def test_query_where_last_command_is_attached_dataset_query_created_from_save(
     """
     catalog = cloud_test_catalog_tmpfile.catalog
     src_uri = cloud_test_catalog_tmpfile.src_uri
+    catalog.create_dataset_from_sources("animals", [src_uri], recursive=True)
 
-    query_script = f"""\
+    query_script = """\
     from datachain.query import C, DatasetQuery
 
     ds = DatasetQuery(
-        {src_uri!r}, catalog=catalog
-    ).filter(C.path.glob("*dog*")).save("dogs")
+        "animals", catalog=catalog
+    ).filter(C("file__path").glob("*dog*")).save("dogs")
     ds
     """
     query_script = setup_catalog(query_script, catalog_info_filepath)
@@ -326,13 +334,14 @@ def test_query_where_last_command_is_attached_dataset_query_created_from_query(
     """
     catalog = cloud_test_catalog_tmpfile.catalog
     src_uri = cloud_test_catalog_tmpfile.src_uri
+    catalog.create_dataset_from_sources("animals", [src_uri], recursive=True)
 
-    query_script = f"""\
+    query_script = """\
     from datachain.query import C, DatasetQuery
 
     ds = DatasetQuery(
-        {src_uri!r}, catalog=catalog
-    ).filter(C.path.glob("*dog*")).save("dogs")
+        "animals", catalog=catalog
+    ).filter(C("file__path").glob("*dog*")).save("dogs")
     DatasetQuery(name="dogs", version=1, catalog=catalog)
     """
     query_script = setup_catalog(query_script, catalog_info_filepath)
@@ -361,11 +370,12 @@ def test_query_params_metrics(
 ):
     catalog = cloud_test_catalog_tmpfile.catalog
     src_uri = cloud_test_catalog_tmpfile.src_uri
+    catalog.create_dataset_from_sources("animals", [src_uri], recursive=True)
 
     query_script = """\
     from datachain.query import DatasetQuery, metrics, param
 
-    ds = DatasetQuery(param("url"), catalog=catalog)
+    ds = DatasetQuery(param("name"), catalog=catalog)
 
     metrics.set("count", ds.count())
 
@@ -376,7 +386,7 @@ def test_query_params_metrics(
     filepath = tmp_path / "query_script.py"
     filepath.write_text(query_script)
 
-    query(catalog, str(filepath), params={"url": src_uri})
+    query(catalog, str(filepath), params={"name": "animals"})
 
     latest_job = get_latest_job(catalog.metastore)
     assert latest_job

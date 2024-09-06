@@ -922,7 +922,7 @@ class Catalog:
         from datachain.query import DatasetQuery
 
         def _row_to_node(d: dict[str, Any]) -> Node:
-            del d["source"]
+            del d["file__source"]
             return Node.from_dict(d)
 
         enlisted_sources: list[tuple[bool, bool, Any]] = []

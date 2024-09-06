@@ -119,9 +119,24 @@ class Node:
         )
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "Self":
-        kw = {f.name: d[f.name] for f in attrs.fields(cls) if f.name in d}
-        return cls(**kw)
+    def from_dict(cls, d: dict[str, Any], file_prefix: str = "file") -> "Self":
+        def _dval(field_name: str):
+            return d.get(f"{file_prefix}__{field_name}")
+
+        return cls(
+            sys__id=d["sys__id"],
+            sys__rand=d["sys__rand"],
+            source=_dval("source"),
+            vtype=_dval("vtype"),
+            path=_dval("path"),
+            etag=_dval("etag"),
+            is_latest=_dval("is_latest"),
+            size=_dval("size"),
+            last_modified=_dval("last_modified"),
+            version=_dval("version"),
+            location=_dval("location"),
+            dir_type=DirType.FILE,
+        )
 
     @classmethod
     def from_dir(cls, path, **kwargs) -> "Node":
