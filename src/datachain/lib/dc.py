@@ -117,7 +117,7 @@ def _get_merge_error_str(col: Union[str, sqlalchemy.ColumnElement]) -> str:
         return col
     if isinstance(col, sqlalchemy.Column):
         return col.name.replace(DEFAULT_DELIMITER, ".")
-    if isinstance(col, GenericFunction):
+    if isinstance(col, sqlalchemy.ColumnElement) and hasattr(col, "name"):
         return f"{col.name} expression"
     return str(col)
 
