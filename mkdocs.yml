@@ -1,4 +1,4 @@
-site_name: DataChain
+site_name: ''
 site_url: https://datachain.dvc.ai
 site_description: Wrangle unstructured AI data at scale
 
@@ -15,8 +15,8 @@ validation:
 
 theme:
   name: material
-  logo: assets/datachain.png
-  favicon: assets/datachain.png
+  logo: assets/datachain_logotype.svg
+  favicon: assets/datachain.svg
   icon:
     repo: fontawesome/brands/github
   features:
