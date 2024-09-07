@@ -1,12 +1,15 @@
 import json
+from unittest.mock import Mock
 
 import pytest
 from fsspec.implementations.local import LocalFileSystem
 from PIL import Image
 
+from datachain import DataChain
 from datachain.cache import UniqueId
 from datachain.catalog import Catalog
-from datachain.lib.file import File, ImageFile, TextFile
+from datachain.lib.file import File, ImageFile, TextFile, resolve
+from datachain.utils import TIME_ZERO
 
 
 def create_file(source: str):
@@ -319,3 +322,56 @@ def test_read_text(tmp_path, catalog):
     file = File(path=file_name, source=f"file://{tmp_path}")
     file._set_stream(catalog, True)
     assert file.read_text() == data
+
+
+def test_resolve_file(cloud_test_catalog):
+    ctc = cloud_test_catalog
+
+    dc = DataChain.from_storage(ctc.src_uri, session=ctc.session)
+    for orig_file in dc.collect("file"):
+        resolved_file = File(source=orig_file.source, path=orig_file.path)
+        resolved_file._catalog = ctc.catalog
+        assert orig_file == resolved_file.resolve()
+
+
+def test_resolve_file_no_exist(cloud_test_catalog):
+    ctc = cloud_test_catalog
+
+    non_existent_file = File(source=ctc.src_uri, path="non_existent_file.txt")
+    non_existent_file._catalog = ctc.catalog
+    resolved_non_existent = non_existent_file.resolve()
+    assert resolved_non_existent.size == 0
+    assert resolved_non_existent.etag == ""
+    assert resolved_non_existent.last_modified == TIME_ZERO
+
+
+def test_resolve_unsupported_protocol():
+    mock_catalog = Mock()
+    mock_catalog.get_client.side_effect = NotImplementedError("Unsupported protocol")
+
+    file = File(source="unsupported://example.com", path="test.txt")
+    file._catalog = mock_catalog
+
+    with pytest.raises(RuntimeError) as exc_info:
+        file.resolve()
+
+    assert (
+        str(exc_info.value)
+        == "Unsupported protocol for file source: unsupported://example.com"
+    )
+
+
+def test_file_resolve_no_catalog():
+    file = File(path="test.txt", source="s3://mybucket")
+    with pytest.raises(RuntimeError, match="Cannot resolve file: catalog is not set"):
+        file.resolve()
+
+
+def test_resolve_function():
+    mock_file = Mock(spec=File)
+    mock_file.resolve.return_value = "resolved_file"
+
+    result = resolve(mock_file)
+
+    assert result == "resolved_file"
+    mock_file.resolve.assert_called_once()
