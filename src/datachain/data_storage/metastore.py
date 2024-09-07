@@ -1250,11 +1250,6 @@ class AbstractDBMetastore(AbstractMetastore):
     #
     # Dataset dependencies
     #
-
-    def _insert_dataset_dependency(self, data: dict[str, Any]) -> None:
-        """Method for inserting dependencies."""
-        self.db.execute(self._datasets_dependencies_insert().values(**data))
-
     def add_dataset_dependency(
         self,
         source_dataset_name: str,
@@ -1266,15 +1261,15 @@ class AbstractDBMetastore(AbstractMetastore):
         source_dataset = self.get_dataset(source_dataset_name)
         dataset = self.get_dataset(dataset_name)
 
-        self._insert_dataset_dependency(
-            {
-                "source_dataset_id": source_dataset.id,
-                "source_dataset_version_id": (
+        self.db.execute(
+            self._datasets_dependencies_insert().values(
+                source_dataset_id=source_dataset.id,
+                source_dataset_version_id=(
                     source_dataset.get_version(source_dataset_version).id
                 ),
-                "dataset_id": dataset.id,
-                "dataset_version_id": dataset.get_version(dataset_version).id,
-            }
+                dataset_id=dataset.id,
+                dataset_version_id=dataset.get_version(dataset_version).id,
+            )
         )
 
     def update_dataset_dependency_source(
