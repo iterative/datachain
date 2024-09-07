@@ -139,7 +139,7 @@ class Sys(DataModel):
 
 
 class DataChain(DatasetQuery):
-    """AI 🔗 DataChain - a data structure for batch data processing and evaluation.
+    """DataChain - a data structure for batch data processing and evaluation.
 
     It represents a sequence of data manipulation steps such as reading data from
     storages, running AI or LLM models or calling external services API to validate or
