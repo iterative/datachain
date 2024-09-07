@@ -127,6 +127,7 @@ namespaces = false
 
 [tool.pytest.ini_options]
 addopts = "-rfEs -m 'not benchmark and not examples'"
+asyncio_default_fixture_loop_scope = "function"
 markers = [
   "benchmark: benchmarks.",
   "e2e: End-to-end tests",
