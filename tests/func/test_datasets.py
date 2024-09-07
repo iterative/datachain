@@ -760,7 +760,6 @@ def test_row_random(cloud_test_catalog):
     # of accidental failure is < 1e-10
     ctc = cloud_test_catalog
     catalog = ctc.catalog
-    catalog.index([ctc.src_uri])
     catalog.create_dataset_from_sources("test", [ctc.src_uri])
     random_values = [row["sys__rand"] for row in catalog.ls_dataset_rows("test", 1)]
 

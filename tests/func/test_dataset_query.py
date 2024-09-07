@@ -459,11 +459,10 @@ def test_select_except(cloud_test_catalog, animal_dataset):
     [("s3", True)],
     indirect=True,
 )
-def test_distinct(cloud_test_catalog):
+def test_distinct(cloud_test_catalog, animal_dataset):
     ctc = cloud_test_catalog
     catalog = ctc.catalog
-    catalog.create_dataset_from_sources("animals", [ctc.src_uri], recursive=True)
-    ds = DatasetQuery("animals", catalog=catalog)
+    ds = DatasetQuery(animal_dataset.name, catalog=catalog)
 
     q = (
         ds.select(pathfunc.name(C("file.path")), C("file.size"))
@@ -740,19 +739,15 @@ def test_row_number_with_order_by_before_add_signals(
     [("s3", True)],
     indirect=True,
 )
-def test_udf(cloud_test_catalog):
+def test_udf(cloud_test_catalog, animal_dataset):
     catalog = cloud_test_catalog.catalog
-    sources = [cloud_test_catalog.src_uri]
-    globs = [s.rstrip("/") + "/*" for s in sources]
-    catalog.index(sources)
-    catalog.create_dataset_from_sources("animals", globs, recursive=True)
 
     @udf(("file__path",), {"name_len": Int})
     def name_len(path):
         return (len(posixpath.basename(path)),)
 
     q = (
-        DatasetQuery(name="animals", version=1, catalog=catalog)
+        DatasetQuery(name=animal_dataset.name, version=1, catalog=catalog)
         .filter(C("file.size") < 13)
         .filter(C("file.path").glob("cats*") | (C("file.size") < 4))
         .add_signals(name_len)
@@ -783,12 +778,8 @@ def test_udf(cloud_test_catalog):
     [("s3", True)],
     indirect=True,
 )
-def test_udf_different_types(cloud_test_catalog):
+def test_udf_different_types(cloud_test_catalog, animal_dataset):
     catalog = cloud_test_catalog.catalog
-    sources = [cloud_test_catalog.src_uri]
-    globs = [s.rstrip("/") + "/*" for s in sources]
-    catalog.index(sources)
-    catalog.create_dataset_from_sources("animals", globs, recursive=True)
 
     obj = {"name": "John", "age": 30}
 
@@ -830,7 +821,7 @@ def test_udf_different_types(cloud_test_catalog):
         )
 
     q = (
-        DatasetQuery(name="animals", version=1, catalog=catalog)
+        DatasetQuery(name=animal_dataset.name, version=1, catalog=catalog)
         .filter(pathfunc.name(C("file.path")) == "cat1")
         .add_signals(test_types)
     )
@@ -917,12 +908,8 @@ def test_udf_different_types(cloud_test_catalog):
     indirect=True,
 )
 @pytest.mark.parametrize("batch", [1, 4])
-def test_class_udf(cloud_test_catalog, batch):
+def test_class_udf(cloud_test_catalog, batch, animal_dataset):
     catalog = cloud_test_catalog.catalog
-    sources = [cloud_test_catalog.src_uri]
-    globs = [s.rstrip("/") + "/*" for s in sources]
-    catalog.index(sources)
-    catalog.create_dataset_from_sources("animals", globs, recursive=True)
 
     @udf(("file__size",), {"total": Int}, method="sum", batch=batch)
     class MyUDF:
@@ -937,7 +924,7 @@ def test_class_udf(cloud_test_catalog, batch):
             return (self.constant + size * self.multiplier,)
 
     q = (
-        DatasetQuery(name="animals", version=1, catalog=catalog)
+        DatasetQuery(name=animal_dataset.name, version=1, catalog=catalog)
         .filter(C("file.size") < 13)
         .add_signals(MyUDF(5, multiplier=2))
     )
@@ -961,7 +948,6 @@ def test_udf_reuse_on_error(cloud_test_catalog_tmpfile):
     catalog = cloud_test_catalog_tmpfile.catalog
     sources = [cloud_test_catalog_tmpfile.src_uri]
     globs = [s.rstrip("/") + "/*" for s in sources]
-    catalog.index(sources)
     catalog.create_dataset_from_sources("animals", globs, recursive=True)
 
     error_state = {"error": True}
@@ -1005,7 +991,6 @@ def test_udf_parallel(cloud_test_catalog_tmpfile, batch):
     catalog = cloud_test_catalog_tmpfile.catalog
     sources = [cloud_test_catalog_tmpfile.src_uri]
     globs = [s.rstrip("/") + "/*" for s in sources]
-    catalog.index(sources)
     catalog.create_dataset_from_sources("animals", globs, recursive=True)
 
     @udf(("file__path",), {"name_len": Int})
@@ -1050,7 +1035,6 @@ def test_class_udf_parallel(cloud_test_catalog_tmpfile, batch):
     catalog = cloud_test_catalog_tmpfile.catalog
     sources = [cloud_test_catalog_tmpfile.src_uri]
     globs = [s.rstrip("/") + "/*" for s in sources]
-    catalog.index(sources)
     catalog.create_dataset_from_sources("animals", globs, recursive=True)
 
     @udf(("file__size",), {"total": Int}, method="sum", batch=batch)
@@ -1090,7 +1074,6 @@ def test_udf_parallel_exec_error(cloud_test_catalog_tmpfile):
     catalog = cloud_test_catalog_tmpfile.catalog
     sources = [cloud_test_catalog_tmpfile.src_uri]
     globs = [s.rstrip("/") + "/*" for s in sources]
-    catalog.index(sources)
     catalog.create_dataset_from_sources("animals", globs, recursive=True)
 
     @udf((C("file.path"),), {"name_len": Int})
@@ -1117,7 +1100,6 @@ def test_udf_parallel_interrupt(cloud_test_catalog_tmpfile, capfd):
     catalog = cloud_test_catalog_tmpfile.catalog
     sources = [cloud_test_catalog_tmpfile.src_uri]
     globs = [s.rstrip("/") + "/*" for s in sources]
-    catalog.index(sources)
     catalog.create_dataset_from_sources("animals", globs, recursive=True)
 
     @udf(("file__path",), {"name_len": Int})
@@ -1154,7 +1136,6 @@ def test_udf_distributed(cloud_test_catalog_tmpfile, batch, workers, datachain_j
     catalog = cloud_test_catalog_tmpfile.catalog
     sources = [cloud_test_catalog_tmpfile.src_uri]
     globs = [s.rstrip("/") + "/*" for s in sources]
-    catalog.index(sources)
     catalog.create_dataset_from_sources("animals", globs, recursive=True)
 
     @udf(("file__path",), {"name_len": Int, "blank": String})
@@ -1207,7 +1188,6 @@ def test_udf_distributed_exec_error(
     catalog = cloud_test_catalog_tmpfile.catalog
     sources = [cloud_test_catalog_tmpfile.src_uri]
     globs = [s.rstrip("/") + "/*" for s in sources]
-    catalog.index(sources)
     catalog.create_dataset_from_sources("animals", globs, recursive=True)
 
     @udf((C("file.path"),), {"name_len": Int})
@@ -1239,7 +1219,6 @@ def test_udf_distributed_interrupt(cloud_test_catalog_tmpfile, capfd, datachain_
     catalog = cloud_test_catalog_tmpfile.catalog
     sources = [cloud_test_catalog_tmpfile.src_uri]
     globs = [s.rstrip("/") + "/*" for s in sources]
-    catalog.index(sources)
     catalog.create_dataset_from_sources("animals", globs, recursive=True)
 
     @udf(("file__path",), {"name_len": Int})
@@ -1275,7 +1254,6 @@ def test_udf_distributed_cancel(cloud_test_catalog_tmpfile, capfd, datachain_job
     metastore = catalog.metastore
     sources = [cloud_test_catalog_tmpfile.src_uri]
     globs = [s.rstrip("/") + "/*" for s in sources]
-    catalog.index(sources)
     catalog.create_dataset_from_sources("animals", globs, recursive=True)
 
     job_id = os.environ.get("DATACHAIN_JOB_ID")
@@ -1504,17 +1482,10 @@ def test_extract_order_by(cloud_test_catalog, dogs_dataset):
     [("s3", True)],
     indirect=True,
 )
-def test_union(cloud_test_catalog):
+def test_union(cloud_test_catalog, cats_dataset, dogs_dataset):
     catalog = cloud_test_catalog.catalog
-    sources = [str(cloud_test_catalog.src_uri)]
-    catalog.index(sources)
-
-    src = cloud_test_catalog.src_uri
-    catalog.create_dataset_from_sources("dogs", [f"{src}/dogs/*"], recursive=True)
-    catalog.create_dataset_from_sources("cats", [f"{src}/cats/*"], recursive=True)
-
-    dogs = DatasetQuery(name="dogs", version=1, catalog=catalog)
-    cats = DatasetQuery(name="cats", version=1, catalog=catalog)
+    dogs = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
+    cats = DatasetQuery(name=cats_dataset.name, version=1, catalog=catalog)
 
     (dogs | cats).save("dogs_cats")
 
@@ -2781,12 +2752,13 @@ def test_row_generator_with_new_columns_wrong_type(cloud_test_catalog, dogs_data
 
 
 @pytest.mark.parametrize("tree", [TARRED_TREE], indirect=True)
-def test_index_tar(cloud_test_catalog):
+def test_index_tar(cloud_test_catalog, animal_dataset):
     ctc = cloud_test_catalog
     catalog = ctc.catalog
-    catalog.create_dataset_from_sources("animals", [ctc.src_uri])
 
-    q = DatasetQuery(name="animals", version=1, catalog=catalog).generate(index_tar)
+    q = DatasetQuery(name=animal_dataset.name, version=1, catalog=catalog).generate(
+        index_tar
+    )
     q.save("extracted")
 
     assert_row_names(
@@ -2840,11 +2812,12 @@ def test_checksum_udf(cloud_test_catalog, dogs_dataset):
 
 
 @pytest.mark.parametrize("tree", [TARRED_TREE], indirect=True)
-def test_tar_loader(cloud_test_catalog):
+def test_tar_loader(cloud_test_catalog, animal_dataset):
     ctc = cloud_test_catalog
     catalog = ctc.catalog
-    catalog.create_dataset_from_sources("animals", [ctc.src_uri])
-    q = DatasetQuery(name="animals", version=1, catalog=catalog).generate(index_tar)
+    q = DatasetQuery(name=animal_dataset.name, version=1, catalog=catalog).generate(
+        index_tar
+    )
     q.save("extracted")
 
     q = DatasetQuery(name="extracted", catalog=catalog).filter(
@@ -2976,7 +2949,7 @@ def test_similarity_search(cloud_test_catalog):
     [("s3", True), ("file", False)],
     indirect=True,
 )
-def test_subtract(cloud_test_catalog):
+def test_subtract(cloud_test_catalog, dogs_dataset, cats_dataset):
     @udf(("file__path",), {"name_len": Int})
     def name_len(path):
         return (len(posixpath.basename(path)),)
@@ -2984,12 +2957,8 @@ def test_subtract(cloud_test_catalog):
     catalog = cloud_test_catalog.catalog
     on = ["file__source", "file__path"]
 
-    src = cloud_test_catalog.src_uri
-    catalog.create_dataset_from_sources("dogs", [f"{src}/dogs/*"], recursive=True)
-    catalog.create_dataset_from_sources("cats", [f"{src}/cats/*"], recursive=True)
-
-    dogs = DatasetQuery(name="dogs", version=1, catalog=catalog)
-    cats = DatasetQuery(name="cats", version=1, catalog=catalog)
+    dogs = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
+    cats = DatasetQuery(name=cats_dataset.name, version=1, catalog=catalog)
 
     (dogs | cats).save("dogs_cats")
 
@@ -3130,10 +3099,9 @@ def test_group_by(cloud_test_catalog, cloud_type, dogs_dataset):
 
 
 @pytest.mark.parametrize("tree", [WEBFORMAT_TREE], indirect=True)
-def test_json_loader(cloud_test_catalog):
+def test_json_loader(cloud_test_catalog, animal_dataset):
     ctc = cloud_test_catalog
     catalog = ctc.catalog
-    catalog.create_dataset_from_sources("animals", [ctc.src_uri])
 
     @udf(
         params=(C.name,),
@@ -3172,7 +3140,7 @@ def test_json_loader(cloud_test_catalog):
     ]
 
     q = (
-        DatasetQuery("animals", catalog=catalog)
+        DatasetQuery(animal_dataset.name, catalog=catalog)
         .mutate(name=pathfunc.name(C("file.path")))
         .add_signals(split_name)
         .add_signals(attach_json, partition_by=C.basename)
@@ -3193,14 +3161,11 @@ def test_json_loader(cloud_test_catalog):
     [("s3", True)],
     indirect=True,
 )
-def test_to_db_records(cloud_test_catalog):
+def test_to_db_records(cloud_test_catalog, cats_dataset):
     ctc = cloud_test_catalog
     catalog = ctc.catalog
-    catalog.create_dataset_from_sources(
-        "cats", [f"{ctc.src_uri}/cats/*"], recursive=True
-    )
     ds = (
-        DatasetQuery("cats", catalog=catalog)
+        DatasetQuery(cats_dataset.name, catalog=catalog)
         .select(C("file__path"), C("file__size"))
         .order_by(C("file__path"))
     )
@@ -3218,24 +3183,20 @@ def test_to_db_records(cloud_test_catalog):
     [("s3", True), ("file", False)],
     indirect=True,
 )
-def test_udf_after_union(cloud_test_catalog, save, method):
+def test_udf_after_union(cloud_test_catalog, save, method, animal_dataset):
     catalog = cloud_test_catalog.catalog
-    sources = [cloud_test_catalog.src_uri]
-    globs = [s.rstrip("/") + "/*" for s in sources]
-    # catalog.index(sources)
-    catalog.create_dataset_from_sources("animals", globs, recursive=True)
 
     @udf(("file__path",), {"name_len": Int})
     def name_len(path):
         return (len(posixpath.basename(path)),)
 
-    ds_cats = DatasetQuery(name="animals", version=1, catalog=catalog).filter(
+    ds_cats = DatasetQuery(name=animal_dataset.name, version=1, catalog=catalog).filter(
         C("file.path").glob("*cats*")
     )
     if save:
         ds_cats.save("cats")
         ds_cats = DatasetQuery(name="cats", version=1, catalog=catalog)
-    ds_dogs = DatasetQuery(name="animals", version=1, catalog=catalog).filter(
+    ds_dogs = DatasetQuery(name=animal_dataset.name, version=1, catalog=catalog).filter(
         C("file.path").glob("*dogs*")
     )
     if save:
@@ -3286,17 +3247,16 @@ def test_udf_after_union(cloud_test_catalog, save, method):
     [("s3", True), ("file", False)],
     indirect=True,
 )
-def test_udf_after_union_same_rows_with_mutate(cloud_test_catalog, method):
+def test_udf_after_union_same_rows_with_mutate(
+    cloud_test_catalog, method, animal_dataset
+):
     catalog = cloud_test_catalog.catalog
-    sources = [cloud_test_catalog.src_uri]
-    globs = [s.rstrip("/") + "/*" for s in sources]
-    catalog.create_dataset_from_sources("animals", globs, recursive=True)
 
     @udf(("file__path",), {"name_len": Int})
     def name_len(path):
         return (len(posixpath.basename(path)),)
 
-    q_base = DatasetQuery(name="animals", version=1, catalog=catalog).filter(
+    q_base = DatasetQuery(name=animal_dataset.name, version=1, catalog=catalog).filter(
         C("file.path").glob("*dogs*")
     )
     q1 = q_base.mutate(
@@ -3356,11 +3316,8 @@ def test_udf_after_union_same_rows_with_mutate(cloud_test_catalog, method):
     [("s3", True, NUM_TREE), ("file", False, NUM_TREE)],
     indirect=True,
 )
-def test_udf_after_limit(cloud_test_catalog, method):
+def test_udf_after_limit(cloud_test_catalog, method, animal_dataset):
     catalog = cloud_test_catalog.catalog
-    sources = [cloud_test_catalog.src_uri]
-    globs = [s.rstrip("/") + "/*" for s in sources]
-    catalog.create_dataset_from_sources("animals", globs, recursive=True)
 
     @udf(("name",), {"name_int": Int})
     def name_int(name):
@@ -3381,7 +3338,7 @@ def test_udf_after_limit(cloud_test_catalog, method):
 
     expected = [{"name": f"{i:06d}", "name_int": i} for i in range(100)]
     ds = (
-        DatasetQuery(name="animals", version=1, catalog=catalog)
+        DatasetQuery(name=animal_dataset.name, version=1, catalog=catalog)
         .mutate(name=pathfunc.name(C("file.path")))
         .save()
     )
