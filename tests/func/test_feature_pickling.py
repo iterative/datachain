@@ -75,9 +75,7 @@ def sort_df_for_tests(df):
 )
 def test_feature_udf_parallel(cloud_test_catalog_tmpfile):
     ctc = cloud_test_catalog_tmpfile
-    catalog = ctc.catalog
     source = ctc.src_uri
-    catalog.index([source])
 
     import tests.func.test_feature_pickling as tfp  # noqa: PLW0406
 
@@ -109,9 +107,7 @@ def test_feature_udf_parallel(cloud_test_catalog_tmpfile):
 )
 def test_feature_udf_parallel_local(cloud_test_catalog_tmpfile):
     ctc = cloud_test_catalog_tmpfile
-    catalog = ctc.catalog
     source = ctc.src_uri
-    catalog.index([source])
 
     class FileInfoLocal(DataModel):
         file_name: str = ""
@@ -167,9 +163,7 @@ def test_feature_udf_parallel_local(cloud_test_catalog_tmpfile):
 )
 def test_feature_udf_parallel_local_pydantic(cloud_test_catalog_tmpfile):
     ctc = cloud_test_catalog_tmpfile
-    catalog = ctc.catalog
     source = ctc.src_uri
-    catalog.index([source])
 
     class FileInfoLocalPydantic(BaseModel):
         file_name: str = ""
@@ -227,10 +221,8 @@ def test_feature_udf_parallel_local_pydantic(cloud_test_catalog_tmpfile):
 )
 def test_feature_udf_parallel_dynamic(cloud_test_catalog_tmpfile):
     ctc = cloud_test_catalog_tmpfile
-    catalog = ctc.catalog
     source = ctc.src_uri
     session = ctc.session
-    catalog.index([source])
 
     file_info_dynamic = create_feature_model(
         "FileInfoDynamic",
