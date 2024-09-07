@@ -12,7 +12,6 @@ import sys
 import time
 import traceback
 from collections.abc import Iterable, Iterator, Mapping, Sequence
-from contextlib import contextmanager, nullcontext
 from copy import copy
 from dataclasses import dataclass
 from functools import cached_property, reduce
@@ -58,7 +57,6 @@ from datachain.error import (
     PendingIndexingError,
     QueryScriptCancelError,
     QueryScriptCompileError,
-    QueryScriptDatasetNotFound,
     QueryScriptRunError,
 )
 from datachain.listing import Listing
@@ -115,38 +113,19 @@ def noop(_: str):
     pass
 
 
-@contextmanager
-def print_and_capture(
-    stream: "IO[bytes]|IO[str]", callback: Callable[[str], None] = noop
-) -> "Iterator[list[str]]":
-    lines: list[str] = []
-    append = lines.append
+def _process_stream(stream: "IO[bytes]", callback: Callable[[str], None]) -> None:
+    buffer = b""
+    while byt := stream.read(1):  # Read one byte at a time
+        buffer += byt
 
-    def loop() -> None:
-        buffer = b""
-        while byt := stream.read(1):  # Read one byte at a time
-            buffer += byt.encode("utf-8") if isinstance(byt, str) else byt
-
-            if byt in (b"\n", b"\r"):  # Check for newline or carriage return
-                line = buffer.decode("utf-8")
-                print(line, end="")
-                callback(line)
-                append(line)
-                buffer = b""  # Clear buffer for next line
-
-        if buffer:  # Handle any remaining data in the buffer
+        if byt in (b"\n", b"\r"):  # Check for newline or carriage return
             line = buffer.decode("utf-8")
-            print(line, end="")
             callback(line)
-            append(line)
+            buffer = b""  # Clear buffer for next line
 
-    thread = Thread(target=loop, daemon=True)
-    thread.start()
-
-    try:
-        yield lines
-    finally:
-        thread.join()
+    if buffer:  # Handle any remaining data in the buffer
+        line = buffer.decode("utf-8")
+        callback(line)
 
 
 class QueryResult(NamedTuple):
@@ -650,11 +629,6 @@ class Catalog:
                 ]
                 code_ast.body[-1:] = new_expressions
         return code_ast
-
-    def compile_query_script(self, script: str) -> str:
-        code_ast = ast.parse(script)
-        code_ast = self.attach_query_wrapper(code_ast)
-        return ast.unparse(code_ast)
 
     def parse_url(self, uri: str, **config: Any) -> tuple[Client, str]:
         config = config or self.client_config
@@ -1806,13 +1780,13 @@ class Catalog:
         self,
         query_script: str,
         envs: Optional[Mapping[str, str]] = None,
-        python_executable: Optional[str] = None,
+        python_executable: str = sys.executable,
         save: bool = False,
         capture_output: bool = True,
         output_hook: Callable[[str], None] = noop,
         params: Optional[dict[str, str]] = None,
         job_id: Optional[str] = None,
-    ) -> QueryResult:
+    ) -> None:
         """
         Method to run custom user Python script to run a query and, as result,
         creates new dataset from the results of a query.
@@ -1835,76 +1809,15 @@ class Catalog:
                 C.size > 1000
             )
         """
-        if not job_id:
-            python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
-            job_id = self.metastore.create_job(
-                name="",
-                query=query_script,
-                params=params,
-                python_version=python_version,
-            )
-
-        lines, proc = self.run_query(
-            python_executable or sys.executable,
-            query_script,
-            envs,
-            capture_output,
-            output_hook,
-            params,
-            save,
-            job_id,
-        )
-        output = "".join(lines)
-
-        if proc.returncode:
-            if proc.returncode == QUERY_SCRIPT_CANCELED_EXIT_CODE:
-                raise QueryScriptCancelError(
-                    "Query script was canceled by user",
-                    return_code=proc.returncode,
-                    output=output,
-                )
-            raise QueryScriptRunError(
-                f"Query script exited with error code {proc.returncode}",
-                return_code=proc.returncode,
-                output=output,
-            )
-
-        def _get_dataset_versions_by_job_id():
-            for dr, dv, job in self.list_datasets_versions():
-                if job and str(job.id) == job_id:
-                    yield dr, dv
-
         try:
-            dr, dv = max(
-                _get_dataset_versions_by_job_id(), key=lambda x: x[1].created_at
-            )
-        except ValueError as e:
-            if not save:
-                return QueryResult(dataset=None, version=None, output=output)
-
-            raise QueryScriptDatasetNotFound(
-                "No dataset found after running Query script",
-                output=output,
-            ) from e
-        return QueryResult(dataset=dr, version=dv.version, output=output)
-
-    def run_query(
-        self,
-        python_executable: str,
-        query_script: str,
-        envs: Optional[Mapping[str, str]],
-        capture_output: bool,
-        output_hook: Callable[[str], None],
-        params: Optional[dict[str, str]],
-        save: bool,
-        job_id: Optional[str],
-    ) -> tuple[list[str], subprocess.Popen]:
-        try:
-            query_script_compiled = self.compile_query_script(query_script)
+            code_ast = ast.parse(query_script)
+            code_ast = self.attach_query_wrapper(code_ast)
+            query_script_compiled = ast.unparse(code_ast)
         except Exception as exc:
             raise QueryScriptCompileError(
                 f"Query script failed to compile, reason: {exc}"
             ) from exc
+
         envs = dict(envs or os.environ)
         envs.update(
             {
@@ -1915,19 +1828,34 @@ class Catalog:
                 "DATACHAIN_JOB_ID": job_id or "",
             },
         )
-        with subprocess.Popen(  # noqa: S603
+        popen_kwargs = {}
+        if capture_output:
+            popen_kwargs = {"stdout": subprocess.PIPE, "stderr": subprocess.STDOUT}
+
+        with subprocess.Popen(  # type: ignore[call-overload]  # noqa: S603
             [python_executable, "-c", query_script_compiled],
             env=envs,
-            stdout=subprocess.PIPE if capture_output else None,
-            stderr=subprocess.STDOUT if capture_output else None,
-            bufsize=1,
-            text=False,
+            **popen_kwargs,
         ) as proc:
-            out = proc.stdout
-            _lines: list[str] = []
-            ctx = print_and_capture(out, output_hook) if out else nullcontext(_lines)
-            with ctx as lines:
-                return lines, proc
+            if capture_output:
+                thread = Thread(
+                    target=_process_stream,
+                    daemon=True,
+                    args=(proc.stdout, output_hook),
+                )
+                thread.start()
+                thread.join()
+
+        if proc.returncode == QUERY_SCRIPT_CANCELED_EXIT_CODE:
+            raise QueryScriptCancelError(
+                "Query script was canceled by user",
+                return_code=proc.returncode,
+            )
+        if proc.returncode:
+            raise QueryScriptRunError(
+                f"Query script exited with error code {proc.returncode}",
+                return_code=proc.returncode,
+            )
 
     def cp(
         self,

@@ -136,16 +136,16 @@ def test_query_cli_without_dataset_query_as_a_last_statement(
     query_script = f"""\
     from datachain.query import DatasetQuery
 
-    DatasetQuery({src_uri!r}, catalog=catalog).save("temp")
+    DatasetQuery({src_uri!r}, catalog=catalog).save("my-ds")
 
     print("test")
     """
     query_script = setup_catalog(query_script, catalog_info_filepath)
 
-    result = catalog.query(query_script)
-    assert result.dataset
-    assert result.dataset.name == "temp"
-    assert result.version == 1
+    catalog.query(query_script)
+    dataset = catalog.get_dataset("my-ds")
+    assert dataset
+    assert dataset.versions_values == [1]
 
     out, err = capsys.readouterr()
     assert "test" in out
