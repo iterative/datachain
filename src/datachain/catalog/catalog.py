@@ -1886,20 +1886,6 @@ class Catalog:
                 "No dataset found after running Query script",
                 output=output,
             ) from e
-
-        dr = self.update_dataset(
-            dr,
-            script_output=output,
-            query_script=query_script,
-        )
-        self.update_dataset_version_with_warehouse_info(
-            dr,
-            dv.version,
-            script_output=output,
-            query_script=query_script,
-            job_id=job_id,
-            is_job_result=True,
-        )
         return QueryResult(dataset=dr, version=dv.version, output=output)
 
     def run_query(

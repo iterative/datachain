@@ -927,7 +927,6 @@ def test_query(cloud_test_catalog, mock_popen_dataset_created):
             "dog4",
         },
     )
-    assert result.dataset.query_script == query_script
     assert result.dataset.sources == ""
 
 

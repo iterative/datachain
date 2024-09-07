@@ -189,7 +189,6 @@ def test_query(
 
     assert result.version == 1
     assert result.dataset.versions_values == [1]
-    assert result.dataset.query_script == query_script
     assert_row_names(
         catalog,
         result.dataset,
@@ -255,7 +254,6 @@ def test_query_where_last_command_is_call_on_save_which_returns_attached_dataset
 
     result = catalog.query(query_script, save=True)
     assert not result.dataset.name.startswith(QUERY_DATASET_PREFIX)
-    assert result.dataset.query_script == query_script
     assert result.version == 1
     assert result.dataset.versions_values == [1]
     assert_row_names(
@@ -293,7 +291,6 @@ def test_query_where_last_command_is_attached_dataset_query_created_from_save(
 
     result = catalog.query(query_script, save=True)
     assert result.dataset.name == "dogs"
-    assert result.dataset.query_script == query_script
     assert result.version == 1
     assert result.dataset.versions_values == [1]
     assert_row_names(
@@ -331,7 +328,6 @@ def test_query_where_last_command_is_attached_dataset_query_created_from_query(
 
     result = catalog.query(query_script, save=True)
     assert result.dataset.name == "dogs"
-    assert result.dataset.query_script == query_script
     assert result.version == 1
     assert result.dataset.versions_values == [1]
     assert_row_names(
