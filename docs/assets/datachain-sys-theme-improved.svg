@@ -5,7 +5,7 @@
                     fill:#fff;
                 }
             }
-        
+
             @media (prefers-color-scheme:light) {
                 .prefix__logo-fill {
                     fill:#000;
