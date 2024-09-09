@@ -948,7 +948,7 @@ def test_query_fail_to_compile(cloud_test_catalog):
     query_script = "syntax error"
 
     with pytest.raises(QueryScriptCompileError):
-        catalog.query(query_script)
+        catalog.query(query_script, _execute_last_expression=True)
 
 
 def test_query_subprocess_wrong_return_code(mock_popen, cloud_test_catalog):

@@ -42,10 +42,6 @@ class QueryScriptRunError(Exception):
         super().__init__(self.message)
 
 
-class QueryScriptDatasetNotFound(QueryScriptRunError):  # noqa: N818
-    pass
-
-
 class QueryScriptCancelError(QueryScriptRunError):
     pass
 

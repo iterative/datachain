@@ -22,7 +22,6 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
-    NamedTuple,
     NoReturn,
     Optional,
     Union,
@@ -126,12 +125,6 @@ def _process_stream(stream: "IO[bytes]", callback: Callable[[str], None]) -> Non
     if buffer:  # Handle any remaining data in the buffer
         line = buffer.decode("utf-8")
         callback(line)
-
-
-class QueryResult(NamedTuple):
-    dataset: Optional[DatasetRecord]
-    version: Optional[int]
-    output: str
 
 
 class DatasetRowsFetcher(NodesThreadPool):
@@ -1779,13 +1772,14 @@ class Catalog:
     def query(
         self,
         query_script: str,
-        envs: Optional[Mapping[str, str]] = None,
+        env: Optional[Mapping[str, str]] = None,
         python_executable: str = sys.executable,
         save: bool = False,
         capture_output: bool = True,
         output_hook: Callable[[str], None] = noop,
         params: Optional[dict[str, str]] = None,
         job_id: Optional[str] = None,
+        _execute_last_expression: bool = False,
     ) -> None:
         """
         Method to run custom user Python script to run a query and, as result,
@@ -1809,17 +1803,21 @@ class Catalog:
                 C.size > 1000
             )
         """
-        try:
-            code_ast = ast.parse(query_script)
-            code_ast = self.attach_query_wrapper(code_ast)
-            query_script_compiled = ast.unparse(code_ast)
-        except Exception as exc:
-            raise QueryScriptCompileError(
-                f"Query script failed to compile, reason: {exc}"
-            ) from exc
+        if _execute_last_expression:
+            try:
+                code_ast = ast.parse(query_script)
+                code_ast = self.attach_query_wrapper(code_ast)
+                query_script_compiled = ast.unparse(code_ast)
+            except Exception as exc:
+                raise QueryScriptCompileError(
+                    f"Query script failed to compile, reason: {exc}"
+                ) from exc
+        else:
+            query_script_compiled = query_script
+            assert not save
 
-        envs = dict(envs or os.environ)
-        envs.update(
+        env = dict(env or os.environ)
+        env.update(
             {
                 "DATACHAIN_QUERY_PARAMS": json.dumps(params or {}),
                 "PYTHONPATH": os.getcwd(),  # For local imports
@@ -1832,19 +1830,13 @@ class Catalog:
         if capture_output:
             popen_kwargs = {"stdout": subprocess.PIPE, "stderr": subprocess.STDOUT}
 
-        with subprocess.Popen(  # type: ignore[call-overload]  # noqa: S603
-            [python_executable, "-c", query_script_compiled],
-            env=envs,
-            **popen_kwargs,
-        ) as proc:
+        cmd = [python_executable, "-c", query_script_compiled]
+        with subprocess.Popen(cmd, env=env, **popen_kwargs) as proc:  # type: ignore[call-overload]  # noqa: S603
             if capture_output:
-                thread = Thread(
-                    target=_process_stream,
-                    daemon=True,
-                    args=(proc.stdout, output_hook),
-                )
+                args = (proc.stdout, output_hook)
+                thread = Thread(target=_process_stream, args=args, daemon=True)
                 thread.start()
-                thread.join()
+                thread.join()  # wait for the reader thread
 
         if proc.returncode == QUERY_SCRIPT_CANCELED_EXIT_CODE:
             raise QueryScriptCancelError(

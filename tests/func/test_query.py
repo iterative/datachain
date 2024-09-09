@@ -1,15 +1,16 @@
-import json
 import os.path
 from textwrap import dedent
-from typing import Optional
+from typing import TYPE_CHECKING
 
 import dill
 import pytest
 
-from datachain.catalog import QUERY_DATASET_PREFIX
 from datachain.cli import query
 from datachain.data_storage import AbstractDBMetastore, JobQueryType, JobStatus
 from tests.utils import assert_row_names
+
+if TYPE_CHECKING:
+    from datachain.job import Job
 
 
 @pytest.fixture
@@ -67,26 +68,11 @@ def setup_catalog(query: str, catalog_info_filepath: str) -> str:
 
 def get_latest_job(
     metastore: AbstractDBMetastore,
-) -> Optional[tuple[str, str, int, int, str, str]]:
+) -> "Job":
     j = metastore._jobs
-
-    latest_jobs_query = (
-        metastore._jobs_select(
-            j.c.id,
-            j.c.name,
-            j.c.status,
-            j.c.query_type,
-            j.c.error_message,
-            j.c.error_stack,
-            j.c.metrics,
-        )
-        .order_by(j.c.created_at.desc())
-        .limit(1)
-    )
-    latest_jobs = list(metastore.db.execute(latest_jobs_query))
-    if len(latest_jobs) == 0:
-        return None
-    return latest_jobs[0]
+    query = metastore._jobs_select().order_by(j.c.created_at.desc()).limit(1)
+    (row,) = metastore.db.execute(query)
+    return metastore._parse_job(row)
 
 
 @pytest.mark.parametrize("cloud_type,version_aware", [("file", False)], indirect=True)
@@ -119,80 +105,31 @@ def test_query_cli(cloud_test_catalog_tmpfile, tmp_path, catalog_info_filepath, 
     latest_job = get_latest_job(catalog.metastore)
     assert latest_job
 
-    assert str(latest_job[0]) == str(result_job_id)
-    assert latest_job[1] == os.path.basename(filepath)
-    assert latest_job[2] == JobStatus.COMPLETE
-    assert latest_job[3] == JobQueryType.PYTHON
-    assert latest_job[4] == ""
-    assert latest_job[5] == ""
+    assert str(latest_job.id) == str(result_job_id)
+    assert latest_job.name == os.path.basename(filepath)
+    assert latest_job.status == JobStatus.COMPLETE
+    assert latest_job.query_type == JobQueryType.PYTHON
+    assert latest_job.error_message == ""
+    assert latest_job.error_stack == ""
 
 
-def test_query_cli_without_dataset_query_as_a_last_statement(
-    cloud_test_catalog_tmpfile, tmp_path, catalog_info_filepath, capsys
-):
+def test_query(cloud_test_catalog_tmpfile, tmp_path, catalog_info_filepath):
     catalog = cloud_test_catalog_tmpfile.catalog
     src_uri = cloud_test_catalog_tmpfile.src_uri
 
     query_script = f"""\
     from datachain.query import DatasetQuery
-
     DatasetQuery({src_uri!r}, catalog=catalog).save("my-ds")
-
-    print("test")
     """
     query_script = setup_catalog(query_script, catalog_info_filepath)
-
     catalog.query(query_script)
+
     dataset = catalog.get_dataset("my-ds")
-    assert dataset
     assert dataset.versions_values == [1]
-
-    out, err = capsys.readouterr()
-    assert "test" in out
-    assert not err
-
-
-@pytest.mark.parametrize(
-    "save",
-    (True, False),
-)
-@pytest.mark.parametrize("save_dataset", (None, "new-dataset"))
-def test_query(
-    save,
-    save_dataset,
-    cloud_test_catalog_tmpfile,
-    tmp_path,
-    catalog_info_filepath,
-):
-    catalog = cloud_test_catalog_tmpfile.catalog
-    src_uri = cloud_test_catalog_tmpfile.src_uri
-
-    query_script = f"""\
-    from datachain.query import DatasetQuery
-    ds = DatasetQuery({src_uri!r}, catalog=catalog)
-    if {save_dataset!r}:
-        ds = ds.save({save_dataset!r})
-    ds
-    """
-    query_script = setup_catalog(query_script, catalog_info_filepath)
-
-    result = catalog.query(query_script, save=save)
-    if save_dataset:
-        assert result.dataset.name == save_dataset
-        assert catalog.get_dataset(save_dataset)
-    elif save:
-        assert result.dataset.name.startswith(QUERY_DATASET_PREFIX)
-    else:
-        assert result.dataset is None
-        assert result.version is None
-        return
-
-    assert result.version == 1
-    assert result.dataset.versions_values == [1]
     assert_row_names(
         catalog,
-        result.dataset,
-        result.version,
+        dataset,
+        1,
         {
             "cat1",
             "cat2",
@@ -205,146 +142,8 @@ def test_query(
     )
 
 
-@pytest.mark.parametrize(
-    "params,count",
-    (
-        (None, 7),
-        ({"limit": 1}, 1),
-        ({"limit": 5}, 5),
-    ),
-)
-def test_query_params(
-    params, count, cloud_test_catalog_tmpfile, tmp_path, catalog_info_filepath
-):
-    catalog = cloud_test_catalog_tmpfile.catalog
-    src_uri = cloud_test_catalog_tmpfile.src_uri
-
-    query_script = f"""\
-    from datachain.query import DatasetQuery, param
-
-    ds = DatasetQuery({src_uri!r}, catalog=catalog)
-    if param("limit"):
-        ds = ds.limit(int(param("limit")))
-    ds
-    """
-    query_script = setup_catalog(query_script, catalog_info_filepath)
-
-    result = catalog.query(query_script, save=True, params=params)
-    assert (
-        len(list(catalog.ls_dataset_rows(result.dataset.name, result.version))) == count
-    )
-
-
-def test_query_where_last_command_is_call_on_save_which_returns_attached_dataset(
-    cloud_test_catalog_tmpfile, tmp_path, catalog_info_filepath
-):
-    """
-    Testing use case where last command is call on DatasetQuery save which returns
-    attached instance to underlying saved dataset
-    """
-    catalog = cloud_test_catalog_tmpfile.catalog
-    src_uri = cloud_test_catalog_tmpfile.src_uri
-
-    query_script = f"""\
-    from datachain.query import C, DatasetQuery
-
-    DatasetQuery({src_uri!r}, catalog=catalog).filter(C.path.glob("*dog*")).save("dogs")
-    """
-    query_script = setup_catalog(query_script, catalog_info_filepath)
-
-    result = catalog.query(query_script, save=True)
-    assert not result.dataset.name.startswith(QUERY_DATASET_PREFIX)
-    assert result.version == 1
-    assert result.dataset.versions_values == [1]
-    assert_row_names(
-        catalog,
-        result.dataset,
-        result.version,
-        {
-            "dog1",
-            "dog2",
-            "dog3",
-            "dog4",
-        },
-    )
-
-
-def test_query_where_last_command_is_attached_dataset_query_created_from_save(
-    cloud_test_catalog_tmpfile, tmp_path, catalog_info_filepath
-):
-    """
-    Testing use case where last command is instance of DatasetQuery which is
-    attached to underlying dataset by calling save just before
-    """
-    catalog = cloud_test_catalog_tmpfile.catalog
-    src_uri = cloud_test_catalog_tmpfile.src_uri
-
-    query_script = f"""\
-    from datachain.query import C, DatasetQuery
-
-    ds = DatasetQuery(
-        {src_uri!r}, catalog=catalog
-    ).filter(C.path.glob("*dog*")).save("dogs")
-    ds
-    """
-    query_script = setup_catalog(query_script, catalog_info_filepath)
-
-    result = catalog.query(query_script, save=True)
-    assert result.dataset.name == "dogs"
-    assert result.version == 1
-    assert result.dataset.versions_values == [1]
-    assert_row_names(
-        catalog,
-        result.dataset,
-        result.version,
-        {
-            "dog1",
-            "dog2",
-            "dog3",
-            "dog4",
-        },
-    )
-
-
-def test_query_where_last_command_is_attached_dataset_query_created_from_query(
-    cloud_test_catalog_tmpfile, tmp_path, catalog_info_filepath
-):
-    """
-    Testing use case where last command is instance of DatasetQuery which is
-    attached to underlying dataset by creating query pointing to it
-    """
-    catalog = cloud_test_catalog_tmpfile.catalog
-    src_uri = cloud_test_catalog_tmpfile.src_uri
-
-    query_script = f"""\
-    from datachain.query import C, DatasetQuery
-
-    ds = DatasetQuery(
-        {src_uri!r}, catalog=catalog
-    ).filter(C.path.glob("*dog*")).save("dogs")
-    DatasetQuery(name="dogs", version=1, catalog=catalog)
-    """
-    query_script = setup_catalog(query_script, catalog_info_filepath)
-
-    result = catalog.query(query_script, save=True)
-    assert result.dataset.name == "dogs"
-    assert result.version == 1
-    assert result.dataset.versions_values == [1]
-    assert_row_names(
-        catalog,
-        result.dataset,
-        result.version,
-        {
-            "dog1",
-            "dog2",
-            "dog3",
-            "dog4",
-        },
-    )
-
-
 @pytest.mark.parametrize("cloud_type,version_aware", [("file", False)], indirect=True)
-def test_query_params_metrics(
+def test_cli_query_params_metrics(
     cloud_test_catalog_tmpfile, tmp_path, catalog_info_filepath, capsys
 ):
     catalog = cloud_test_catalog_tmpfile.catalog
@@ -357,7 +156,7 @@ def test_query_params_metrics(
 
     metrics.set("count", ds.count())
 
-    ds
+    ds.save("my-ds")
     """
     query_script = setup_catalog(query_script, catalog_info_filepath)
 
@@ -369,5 +168,6 @@ def test_query_params_metrics(
     latest_job = get_latest_job(catalog.metastore)
     assert latest_job
 
-    assert latest_job[2] == JobStatus.COMPLETE
-    assert json.loads(latest_job[6]) == {"count": 7}
+    assert latest_job.status == JobStatus.COMPLETE
+    assert latest_job.params == {"url": src_uri}
+    assert latest_job.metrics == {"count": 7}
