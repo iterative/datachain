@@ -1,17 +1,16 @@
 <svg width="180" height="33" fill="none" xmlns="http://www.w3.org/2000/svg">
   <style>
-    @media (prefers-color-scheme:dark) {
-      .prefix__logo-fill {
-        fill: #fff
-      }
+    .prefix__logo-fill {
+      fill: #000; /* Default to light mode fill */
     }
-    @media (prefers-color-scheme:light) {
+
+    @media (prefers-color-scheme: dark) {
       .prefix__logo-fill {
-        fill:#000
+        fill: #fff; /* Change fill to white for dark mode */
       }
     }
   </style>
-    
+
   <path fill-rule="evenodd" clip-rule="evenodd" d="M23.997 24.53l2.34-2.342 3.14 3.135-2.357 2.342a5.533 5.533 0 01-7.822 0l-4.704-4.7a5.536 5.536 0 010-7.823l4.76-4.763 3.124 3.14-4.745 4.747a1.106 1.106 0 000 1.57l4.699 4.694a1.107 1.107 0 001.565 0z" fill="url(#prefix__paint0_linear_449_28)"/>
   <path fill-rule="evenodd" clip-rule="evenodd" d="M37.733 10.65a1.184 1.184 0 01-.234.357L26.253 22.255l3.13 3.135 11.234-11.242a5.536 5.536 0 000-7.824l-4.699-4.705a5.534 5.534 0 00-7.822 0l-3.278 3.263 3.134 3.135 3.268-3.268a1.107 1.107 0 011.564 0l4.694 4.694a1.108 1.108 0 01.244 1.208h.011z" fill="url(#prefix__paint1_linear_449_28)"/>
   <path d="M24.54 14.722L22.2 17.063v.016l-2.405 2.388 3.14 3.134 4.741-4.75a5.534 5.534 0 000-7.822l-4.704-4.704a5.535 5.535 0 00-7.824 0l-5.955 5.954 3.14 3.13 5.944-5.945a1.107 1.107 0 011.565 0l4.7 4.694a1.107 1.107 0 010 1.564z" fill="url(#prefix__paint2_linear_449_28)"/><path d="M4.514 22.335c.054-.133.139-.256.24-.357L7.1 19.632l-.005-.011 3.14-3.129 2.147-2.135-3.135-3.14-7.629 7.638a5.534 5.534 0 000 7.822l4.705 4.704a5.536 5.536 0 007.824 0l3.175-3.18-3.134-3.13-3.165 3.165a1.106 1.106 0 01-1.57 0l-4.7-4.693a1.107 1.107 0 01-.24-1.208z" fill="url(#prefix__paint3_linear_449_28)"/>
