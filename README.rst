@@ -2,8 +2,9 @@
 
    <picture>
      <source media="(prefers-color-scheme: dark)" srcset="./docs/assets/datachain-white.svg">
-     <img alt="DataChain logo" src="./docs/assets/datachain-black.svg">
+     <img alt="DataChain logo" src="./docs/assets/datachain-black.svg" style="height: 48px; padding: 10px;">
    </picture>
+
 
 |PyPI| |Python Version| |Codecov| |Tests|
 
