@@ -242,6 +242,7 @@ def run_step(step):  # noqa: PLR0912
         assert "Listing" not in stderr
 
 
+@pytest.mark.timeout(len(E2E_STEPS) * E2E_STEP_TIMEOUT_SEC)
 @pytest.mark.e2e
 def test_query_e2e(tmp_dir, catalog):
     """End-to-end CLI Query Test"""

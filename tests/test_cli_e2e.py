@@ -212,6 +212,7 @@ def run_step(step):
         verify_files(files)
 
 
+@pytest.mark.timeout(len(E2E_STEPS) * 90)
 @pytest.mark.e2e
 def test_cli_e2e(tmp_dir, catalog):
     """End-to-end CLI Test"""
