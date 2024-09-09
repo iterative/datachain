@@ -1,14 +1,10 @@
 .. raw:: html
 
-    <object data="docs/assets/datachain-sys-theme-improved.svg" type="image/svg+xml" height="48"></object>
+    <object data="docs/assets/datachain-sys-theme-improved.svg" type="image/svg+xml" height="48" width="262"></object>
 
 .. raw:: html
 
     <p>Hello, world!</p>
-
-.. figure:: docs/assets/datachain-sys-theme-improved.svg
-    :height: 48
-    :alt: DataChain logo
 
 .. .. image:: docs/assets/datachain-sys-theme.svg
 ..    :height: 48
