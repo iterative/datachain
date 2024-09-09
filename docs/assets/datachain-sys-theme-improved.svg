@@ -1,12 +1,12 @@
 <svg width="180" height="33" fill="none" xmlns="http://www.w3.org/2000/svg">
   <style>
     .logo-fill {
-      fill: red; /* Default to light mode fill */
+      fill: #000000; /* Default to light mode fill */
     }
 
     @media (prefers-color-scheme: dark) {
       .logo-fill {
-        fill: #fff; /* Change fill to white for dark mode */
+        fill: #ffffff; /* Change fill to white for dark mode */
       }
     }
   </style>
