@@ -1,7 +1,7 @@
 <svg width="180" height="33" fill="none" xmlns="http://www.w3.org/2000/svg">
   <style>
     .logo-fill {
-      fill: #000; /* Default to light mode fill */
+      fill: red; /* Default to light mode fill */
     }
 
     @media (prefers-color-scheme: dark) {
