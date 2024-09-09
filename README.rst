@@ -1,6 +1,6 @@
 .. raw:: html
 
-    <object data="/docs/assets/datachain-sys-theme-improved.svg" type="image/svg+xml"></object>
+    <object data="docs/assets/datachain-sys-theme-improved.svg" type="image/svg+xml" height="48"></object>
 
 .. raw:: html
 
