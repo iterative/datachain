@@ -1,9 +1,6 @@
-.. image:: docs/assets/datachain.svg
+.. image:: docs/assets/datachain-with-label.svg
    :height: 48
    :alt: DataChain logo
-
-**DataChain**
-============
 
 
 |PyPI| |Python Version| |Codecov| |Tests|
