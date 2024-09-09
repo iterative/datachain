@@ -33,7 +33,6 @@ from sqlalchemy.sql.elements import ColumnClause, ColumnElement
 from sqlalchemy.sql.expression import label
 from sqlalchemy.sql.schema import TableClause
 from sqlalchemy.sql.selectable import Select
-from tqdm import tqdm
 
 from datachain.asyn import ASYNC_WORKERS, AsyncMapper, OrderedMapper
 from datachain.catalog import QUERY_SCRIPT_CANCELED_EXIT_CODE, get_catalog
@@ -899,11 +898,37 @@ class SQLUnion(Step):
 
 @frozen
 class SQLJoin(Step):
+    catalog: "Catalog"
     query1: "DatasetQuery"
     query2: "DatasetQuery"
     predicates: Union[JoinPredicateType, tuple[JoinPredicateType, ...]]
     inner: bool
     rname: str
+
+    def get_query(self, query: "DatasetQuery", temp_tables: list[str]) -> sa.Subquery:
+        select_query = query.apply_steps().select()
+        temp_tables.extend(query.temp_table_names)
+
+        if not any(isinstance(step, (SQLJoin, SQLUnion)) for step in query.steps):
+            return select_query.subquery(query.table.name)
+
+        warehouse = self.catalog.warehouse
+
+        table_name = warehouse.temp_table_name()
+        columns = [
+            c if isinstance(c, Column) else Column(c.name, c.type)
+            for c in select_query.columns
+        ]
+        temp_table = warehouse.create_dataset_rows_table(
+            table_name,
+            columns=columns,
+            if_not_exists=False,
+        )
+        temp_tables.append(temp_table.name)
+
+        warehouse.copy_table(temp_table, select_query)
+
+        return temp_table.select().subquery(query.table.name)
 
     def validate_expression(self, exp: "ClauseElement", q1, q2):
         """
@@ -937,10 +962,8 @@ class SQLJoin(Step):
     def apply(
         self, query_generator: QueryGenerator, temp_tables: list[str]
     ) -> StepResult:
-        q1 = self.query1.apply_steps().select().subquery(self.query1.table.name)
-        temp_tables.extend(self.query1.temp_table_names)
-        q2 = self.query2.apply_steps().select().subquery(self.query2.table.name)
-        temp_tables.extend(self.query2.temp_table_names)
+        q1 = self.get_query(self.query1, temp_tables)
+        q2 = self.get_query(self.query2, temp_tables)
 
         q1_columns = list(q1.c)
         q1_column_names = {c.name for c in q1_columns}
@@ -979,15 +1002,13 @@ class SQLJoin(Step):
         self.validate_expression(join_expression, q1, q2)
 
         def q(*columns):
-            join_query = sqlalchemy.join(
+            join_query = self.catalog.warehouse.join(
                 q1,
                 q2,
                 join_expression,
-                isouter=not self.inner,
+                inner=self.inner,
             )
-
-            res = sqlalchemy.select(*columns).select_from(join_query)
-            subquery = res.subquery()
+            subquery = sqlalchemy.select(*columns).select_from(join_query).subquery()
             return sqlalchemy.select(*subquery.c).select_from(subquery)
 
         return step_result(
@@ -1511,7 +1532,7 @@ class DatasetQuery:
             if isinstance(predicates, (str, ColumnClause, ColumnElement))
             else tuple(predicates)
         )
-        new_query.steps = [SQLJoin(left, right, predicates, inner, rname)]
+        new_query.steps = [SQLJoin(self.catalog, left, right, predicates, inner, rname)]
         return new_query
 
     @detach
@@ -1687,12 +1708,7 @@ class DatasetQuery:
 
             dr = self.catalog.warehouse.dataset_rows(dataset)
 
-            with tqdm(desc="Saving", unit=" rows") as pbar:
-                self.catalog.warehouse.copy_table(
-                    dr.get_table(),
-                    query.select(),
-                    progress_cb=pbar.update,
-                )
+            self.catalog.warehouse.copy_table(dr.get_table(), query.select())
 
             self.catalog.metastore.update_dataset_status(
                 dataset, DatasetStatus.COMPLETE, version=version

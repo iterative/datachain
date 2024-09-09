@@ -27,8 +27,13 @@ from datachain.storage import StorageURI
 from datachain.utils import sql_escape_like
 
 if TYPE_CHECKING:
-    from sqlalchemy.sql._typing import _ColumnsClauseArgument
-    from sqlalchemy.sql.selectable import Select
+    from sqlalchemy.sql._typing import (
+        _ColumnsClauseArgument,
+        _FromClauseArgument,
+        _OnClauseArgument,
+    )
+    from sqlalchemy.sql.elements import ColumnElement
+    from sqlalchemy.sql.selectable import Join, Select
     from sqlalchemy.types import TypeEngine
 
     from datachain.data_storage import AbstractIDGenerator, schema
@@ -892,6 +897,18 @@ class AbstractWarehouse(ABC, Serializable):
     ) -> None:
         """
         Copy the results of a query into a table.
+        """
+
+    @abstractmethod
+    def join(
+        self,
+        left: "_FromClauseArgument",
+        right: "_FromClauseArgument",
+        onclause: "_OnClauseArgument",
+        inner: bool = True,
+    ) -> "Join":
+        """
+        Join two tables together.
         """
 
     @abstractmethod
