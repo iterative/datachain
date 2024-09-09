@@ -1,7 +1,7 @@
 .. raw:: html
     <object data="docs/assets/datachain-sys-theme-improved.svg" type="image/svg+xml"></object>
 
-.. image:: docs/assets/datachain-sys-theme-improved.svg
+.. image:: docs/assets/datachain-sys-theme.svg
    :height: 48
    :alt: DataChain logo
 
