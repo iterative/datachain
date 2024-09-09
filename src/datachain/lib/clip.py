@@ -18,7 +18,7 @@ def _get_encoder(model: Any, type: Literal["image", "text"]) -> Callable:
         hasattr(model, method_name) and inspect.ismethod(getattr(model, method_name))
     ):
         method = getattr(model, method_name)
-        return lambda x: method(torch.tensor(x))
+        return lambda x: method(torch.as_tensor(x).clone().detach())
 
     # Check for model from clip or open_clip library
     method_name = f"encode_{type}"

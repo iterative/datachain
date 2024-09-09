@@ -1,5 +1,6 @@
 import open_clip
 import pytest
+import torch
 from datasets import load_dataset
 from torch import Size, Tensor
 from torchvision.datasets import FakeData
@@ -33,7 +34,9 @@ def fake_dataset(catalog, fake_image_dir):
 
 
 def test_pytorch_dataset(fake_dataset):
-    transform = v2.Compose([v2.ToTensor(), v2.Resize((64, 64))])
+    transform = v2.Compose(
+        [v2.ToImage(), v2.ToDtype(torch.float32, scale=True), v2.Resize((64, 64))]
+    )
     tokenizer = open_clip.get_tokenizer("ViT-B-32")
     pt_dataset = PytorchDataset(
         name=fake_dataset.name,
@@ -49,7 +52,9 @@ def test_pytorch_dataset(fake_dataset):
 
 
 def test_pytorch_dataset_sample(fake_dataset):
-    transform = v2.Compose([v2.ToTensor(), v2.Resize((64, 64))])
+    transform = v2.Compose(
+        [v2.ToImage(), v2.ToDtype(torch.float32, scale=True), v2.Resize((64, 64))]
+    )
     pt_dataset = PytorchDataset(
         name=fake_dataset.name,
         version=fake_dataset.version,
@@ -62,7 +67,9 @@ def test_pytorch_dataset_sample(fake_dataset):
 def test_to_pytorch(fake_dataset):
     from torch.utils.data import IterableDataset
 
-    transform = v2.Compose([v2.ToTensor(), v2.Resize((64, 64))])
+    transform = v2.Compose(
+        [v2.ToImage(), v2.ToDtype(torch.float32, scale=True), v2.Resize((64, 64))]
+    )
     tokenizer = open_clip.get_tokenizer("ViT-B-32")
     pt_dataset = fake_dataset.to_pytorch(transform=transform, tokenizer=tokenizer)
     assert isinstance(pt_dataset, IterableDataset)
