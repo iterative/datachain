@@ -81,6 +81,7 @@ tests = [
   "pytest-cov>=4.1.0",
   "pytest-mock>=3.12.0",
   "pytest-servers[all]>=0.5.5",
+  "pytest-timeout>2",
   "pytest-benchmark[histogram]",
   "pytest-xdist>=3.3.1",
   "virtualenv",

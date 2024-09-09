@@ -55,17 +55,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest-8-cores]
-        pyv: ['3.9', '3.10', '3.11', '3.12']
-        include:
-          - os: macos-latest
-            pyv: '3.9'
-          - os: macos-latest
-            pyv: '3.12'
-          - os: windows-latest
-            pyv: '3.9'
-          - os: windows-latest
-            pyv: '3.12'
+        os: [windows-latest]
+        pyv: ['3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12', '3.12']
 
     steps:
       - name: Check out the repository
@@ -94,7 +85,7 @@ jobs:
         run: echo 'DISABLE_REMOTES_ARG=--disable-remotes=azure,gs' >> $env:GITHUB_ENV
 
       - name: Run tests
-        run: nox -s tests-${{ matrix.pyv }} -- $DISABLE_REMOTES_ARG
+        run: nox -s tests-${{ matrix.pyv }} -- $DISABLE_REMOTES_ARG --timeout 250
         shell: bash
 
       - name: Upload coverage report
