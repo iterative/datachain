@@ -5,6 +5,7 @@ import json
 import os
 import os.path as osp
 import random
+import re
 import stat
 import sys
 import time
@@ -450,3 +451,13 @@ def get_datachain_executable() -> list[str]:
 def uses_glob(path: str) -> bool:
     """Checks if some URI path has glob syntax in it"""
     return glob.has_magic(os.path.basename(os.path.normpath(path)))
+
+
+def env2bool(var, undefined=False):
+    """
+    undefined: return value if env var is unset
+    """
+    var = os.getenv(var, None)
+    if var is None:
+        return undefined
+    return bool(re.search("1|y|yes|true", var, flags=re.IGNORECASE))

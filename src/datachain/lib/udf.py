@@ -17,6 +17,7 @@ from datachain.query.batch import UDFInputBatch
 from datachain.query.schema import ColumnParameter
 from datachain.query.udf import UDFBase as _UDFBase
 from datachain.query.udf import UDFProperties
+from datachain.telemetry import api_telemetry
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Sequence
@@ -42,6 +43,7 @@ class UDFAdapter(_UDFBase):
         self.inner = inner
         super().__init__(properties)
 
+    @api_telemetry
     def run(
         self,
         udf_fields: "Sequence[str]",
@@ -69,6 +71,7 @@ class UDFAdapter(_UDFBase):
         if hasattr(self.inner, "teardown") and callable(self.inner.teardown):
             self.inner.teardown()
 
+    @api_telemetry
     def run_once(
         self,
         catalog: "Catalog",

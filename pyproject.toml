@@ -46,7 +46,8 @@ dependencies = [
   "Pillow>=10.0.0,<11",
   "msgpack>=1.0.4,<2",
   "psutil",
-  "huggingface_hub"
+  "huggingface_hub",
+  "iterative-telemetry>=0.0.8"
 ]
 
 [project.optional-dependencies]
