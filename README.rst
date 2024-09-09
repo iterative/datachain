@@ -1,4 +1,4 @@
-.. image:: docs/assets/datachain-with-label.svg
+.. image:: docs/assets/datachain-sys-theme.svg
    :height: 48
    :alt: DataChain logo
 
