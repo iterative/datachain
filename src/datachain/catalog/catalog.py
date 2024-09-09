@@ -64,6 +64,7 @@ from datachain.nodes_thread_pool import NodesThreadPool
 from datachain.remote.studio import StudioClient
 from datachain.sql.types import JSON, Boolean, DateTime, Int64, SQLType, String
 from datachain.storage import Storage, StorageStatus, StorageURI
+from datachain.telemetry import api_telemetry
 from datachain.utils import (
     DataChainDir,
     batched,
@@ -1415,6 +1416,7 @@ class Catalog:
                 version,
             )
 
+    @api_telemetry
     def edit_dataset(
         self,
         name: str,
@@ -1524,6 +1526,7 @@ class Catalog:
         for source in data_sources:  # type: ignore [union-attr]
             yield source, source.ls(fields)
 
+    @api_telemetry
     def pull_dataset(
         self,
         dataset_uri: str,
@@ -1681,6 +1684,7 @@ class Catalog:
 
         _instantiate_dataset()
 
+    @api_telemetry
     def clone(
         self,
         sources: list[str],
@@ -1731,6 +1735,7 @@ class Catalog:
             output, sources, client_config=client_config, recursive=recursive
         )
 
+    @api_telemetry
     def apply_udf(
         self,
         udf_location: str,
@@ -1831,6 +1836,7 @@ class Catalog:
                 return_code=proc.returncode,
             )
 
+    @api_telemetry
     def cp(
         self,
         sources: list[str],
@@ -1938,6 +1944,7 @@ class Catalog:
         for src in sources:
             yield from du_dirs(src, src.node, depth)
 
+    @api_telemetry
     def find(
         self,
         sources,
@@ -2023,5 +2030,6 @@ class Catalog:
             only_index=True,
         )
 
+    @api_telemetry
     def find_stale_storages(self) -> None:
         self.metastore.find_stale_storages()

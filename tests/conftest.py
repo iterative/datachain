@@ -33,6 +33,11 @@ DEFAULT_DATACHAIN_GIT_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__f
 collect_ignore = ["setup.py"]
 
 
+@pytest.fixture(scope="session", autouse=True)
+def add_test_env():
+    os.environ["DATACHAIN_TEST"] = "true"
+
+
 @pytest.fixture(autouse=True)
 def virtual_memory(mocker):
     class VirtualMemory(NamedTuple):

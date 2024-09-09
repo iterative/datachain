@@ -1,3 +1,4 @@
+import contextlib
 import logging
 from functools import wraps
 from importlib.metadata import PackageNotFoundError, version
@@ -44,6 +45,18 @@ except PackageNotFoundError:
 telemetry = IterativeTelemetryLogger("datachain", __version__, is_enabled)
 _is_api_running = False
 _pass_params = True
+
+
+@contextlib.contextmanager
+def track_cli_telemetry(command: str):
+    global _pass_params  # noqa: PLW0603
+    pass_params = _pass_params
+    try:
+        telemetry.log_param("cli_command", command)
+        _pass_params = True
+        yield
+    finally:
+        _pass_params = pass_params
 
 
 def api_telemetry(f):
