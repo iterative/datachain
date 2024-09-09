@@ -1,6 +1,12 @@
-.. image:: docs/assets/datachain_logotype.svg
+.. image:: docs/assets/datachain-white.svg
    :height: 48
    :alt: DataChain logo
+   :class: only-dark
+
+.. image:: docs/assets/datachain-black.svg
+   :height: 48
+   :alt: DataChain logo
+   :class: only-light
 
 |PyPI| |Python Version| |Codecov| |Tests|
 
