@@ -1079,8 +1079,12 @@ class DatasetQuery:
         """
         return self.name is not None and self.version is not None
 
-    def c(self, name: Union[C, str]) -> "ColumnClause[Any]":
-        col = sqlalchemy.column(name) if isinstance(name, str) else name
+    def c(self, column: Union[C, str]) -> "ColumnClause[Any]":
+        col: sqlalchemy.ColumnClause = (
+            sqlalchemy.column(column)
+            if isinstance(column, str)
+            else sqlalchemy.column(column.name, column.type)
+        )
         col.table = self.table
         return col
 

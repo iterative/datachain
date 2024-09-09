@@ -9,7 +9,6 @@ import os.path
 import posixpath
 import subprocess
 import sys
-import tempfile
 import time
 import traceback
 from collections.abc import Iterable, Iterator, Mapping, Sequence
@@ -76,7 +75,6 @@ from datachain.utils import (
 )
 
 from .datasource import DataSource
-from .subclass import SubclassFinder
 
 if TYPE_CHECKING:
     from datachain.data_storage import (
@@ -91,7 +89,6 @@ logger = logging.getLogger("datachain")
 
 DEFAULT_DATASET_DIR = "dataset"
 DATASET_FILE_SUFFIX = ".edatachain"
-FEATURE_CLASSES = ["DataModel"]
 
 TTL_INT = 4 * 60 * 60
 
@@ -568,12 +565,6 @@ def find_column_to_str(  # noqa: PLR0911
     return ""
 
 
-def form_module_source(source_ast):
-    module = ast.Module(body=source_ast, type_ignores=[])
-    module = ast.fix_missing_locations(module)
-    return ast.unparse(module)
-
-
 class Catalog:
     def __init__(
         self,
@@ -659,29 +650,10 @@ class Catalog:
                 code_ast.body[-1:] = new_expressions
         return code_ast
 
-    def compile_query_script(
-        self, script: str, feature_module_name: str
-    ) -> tuple[Union[str, None], str]:
+    def compile_query_script(self, script: str) -> str:
         code_ast = ast.parse(script)
         code_ast = self.attach_query_wrapper(code_ast)
-        finder = SubclassFinder(FEATURE_CLASSES)
-        finder.visit(code_ast)
-
-        if not finder.feature_class:
-            main_module = form_module_source([*finder.imports, *finder.main_body])
-            return None, main_module
-
-        feature_import = ast.ImportFrom(
-            module=feature_module_name,
-            names=[ast.alias(name="*", asname=None)],
-            level=0,
-        )
-        feature_module = form_module_source([*finder.imports, *finder.feature_class])
-        main_module = form_module_source(
-            [*finder.imports, feature_import, *finder.main_body]
-        )
-
-        return feature_module, main_module
+        return ast.unparse(code_ast)
 
     def parse_url(self, uri: str, **config: Any) -> tuple[Client, str]:
         config = config or self.client_config
@@ -1865,11 +1837,6 @@ class Catalog:
                 C.size > 1000
             )
         """
-        feature_file = tempfile.NamedTemporaryFile(  # noqa: SIM115
-            dir=os.getcwd(), suffix=".py", delete=False
-        )
-        _, feature_module = os.path.split(feature_file.name)
-
         if not job_id:
             python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
             job_id = self.metastore.create_job(
@@ -1879,23 +1846,16 @@ class Catalog:
                 python_version=python_version,
             )
 
-        try:
-            lines, proc = self.run_query(
-                python_executable or sys.executable,
-                query_script,
-                envs,
-                feature_file,
-                capture_output,
-                feature_module,
-                output_hook,
-                params,
-                save,
-                job_id,
-            )
-        finally:
-            feature_file.close()
-            os.unlink(feature_file.name)
-
+        lines, proc = self.run_query(
+            python_executable or sys.executable,
+            query_script,
+            envs,
+            capture_output,
+            output_hook,
+            params,
+            save,
+            job_id,
+        )
         output = "".join(lines)
 
         if proc.returncode:
@@ -1949,31 +1909,19 @@ class Catalog:
         python_executable: str,
         query_script: str,
         envs: Optional[Mapping[str, str]],
-        feature_file: IO[bytes],
         capture_output: bool,
-        feature_module: str,
         output_hook: Callable[[str], None],
         params: Optional[dict[str, str]],
         save: bool,
         job_id: Optional[str],
     ) -> tuple[list[str], subprocess.Popen]:
         try:
-            feature_code, query_script_compiled = self.compile_query_script(
-                query_script, feature_module[:-3]
-            )
-            if feature_code:
-                feature_file.write(feature_code.encode())
-                feature_file.flush()
-
+            query_script_compiled = self.compile_query_script(query_script)
         except Exception as exc:
             raise QueryScriptCompileError(
                 f"Query script failed to compile, reason: {exc}"
             ) from exc
         envs = dict(envs or os.environ)
-        if feature_code:
-            envs["DATACHAIN_FEATURE_CLASS_SOURCE"] = json.dumps(
-                {feature_module: feature_code}
-            )
         envs.update(
             {
                 "DATACHAIN_QUERY_PARAMS": json.dumps(params or {}),
