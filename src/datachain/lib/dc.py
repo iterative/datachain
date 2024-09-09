@@ -415,7 +415,7 @@ class DataChain(DatasetQuery):
                 .save(list_dataset_name, listing=True)
             )
 
-        dc = cls.from_dataset(list_dataset_name, session=session)
+        dc = cls.from_dataset(list_dataset_name, session=session, settings=settings)
         dc.signals_schema = dc.signals_schema.mutate({f"{object_name}": file_type})
 
         return ls(dc, list_path, recursive=recursive, object_name=object_name)
@@ -426,6 +426,7 @@ class DataChain(DatasetQuery):
         name: str,
         version: Optional[int] = None,
         session: Optional[Session] = None,
+        settings: Optional[dict] = None,
     ) -> "DataChain":
         """Get data from a saved Dataset. It returns the chain itself.
 
@@ -438,7 +439,7 @@ class DataChain(DatasetQuery):
             chain = DataChain.from_dataset("my_cats")
             ```
         """
-        return DataChain(name=name, version=version, session=session)
+        return DataChain(name=name, version=version, session=session, settings=settings)
 
     @classmethod
     def from_json(
@@ -1622,6 +1623,8 @@ class DataChain(DatasetQuery):
         model_name: str = "",
         source: bool = True,
         nrows=None,
+        session: Optional[Session] = None,
+        settings: Optional[dict] = None,
         **kwargs,
     ) -> "DataChain":
         """Generate chain from csv files.
@@ -1638,6 +1641,8 @@ class DataChain(DatasetQuery):
             model_name : Generated model name.
             source : Whether to include info about the source file.
             nrows : Optional row limit.
+            session : Session to use for the chain.
+            settings : Settings to use for the chain.
 
         Example:
             Reading a csv file:
@@ -1654,7 +1659,9 @@ class DataChain(DatasetQuery):
         from pyarrow.csv import ConvertOptions, ParseOptions, ReadOptions
         from pyarrow.dataset import CsvFileFormat
 
-        chain = DataChain.from_storage(path, **kwargs)
+        chain = DataChain.from_storage(
+            path, session=session, settings=settings, **kwargs
+        )
 
         column_names = None
         if not header:
@@ -1701,6 +1708,8 @@ class DataChain(DatasetQuery):
         object_name: str = "",
         model_name: str = "",
         source: bool = True,
+        session: Optional[Session] = None,
+        settings: Optional[dict] = None,
         **kwargs,
     ) -> "DataChain":
         """Generate chain from parquet files.
@@ -1713,6 +1722,8 @@ class DataChain(DatasetQuery):
             object_name : Created object column name.
             model_name : Generated model name.
             source : Whether to include info about the source file.
+            session : Session to use for the chain.
+            settings : Settings to use for the chain.
 
         Example:
             Reading a single file:
@@ -1725,7 +1736,9 @@ class DataChain(DatasetQuery):
             dc = DataChain.from_parquet("s3://mybucket/dir")
             ```
         """
-        chain = DataChain.from_storage(path, **kwargs)
+        chain = DataChain.from_storage(
+            path, session=session, settings=settings, **kwargs
+        )
         return chain.parse_tabular(
             output=output,
             object_name=object_name,
