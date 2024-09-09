@@ -1,14 +1,6 @@
 .. raw:: html
 
-    <object data="docs/assets/datachain-sys-theme-improved.svg" type="image/svg+xml" height="48" width="262"></object>
-
-.. raw:: html
-
-    <p>Hello, world!</p>
-
-.. .. image:: docs/assets/datachain-sys-theme.svg
-..    :height: 48
-..    :alt: DataChain logo
+    <object data="docs/assets/datachain-sys-theme-improved.svg" type="image/svg+xml" height="48"></object>
 
 |PyPI| |Python Version| |Codecov| |Tests|
 
