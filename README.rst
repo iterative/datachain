@@ -1,6 +1,10 @@
+.. .. raw:: html
+
+..     <object data="docs/assets/datachain-sys-theme-improved.svg" type="image/svg+xml"></object>
+
 .. raw:: html
 
-    <object data="docs/assets/datachain-sys-theme-improved.svg" type="image/svg+xml"></object>
+    <p>Hello, world!</p>
 
 .. .. image:: docs/assets/datachain-sys-theme.svg
 ..    :height: 48
