@@ -1,9 +1,9 @@
-.. raw:: html
+.. image:: docs/assets/datachain.svg
+   :height: 48
+   :alt: DataChain logo
 
-   <picture>
-     <source media="(prefers-color-scheme: dark)" srcset="./docs/assets/datachain-white.svg">
-     <img alt="DataChain logo" src="./docs/assets/datachain-black.svg" style="height: 48px; padding: 10px;">
-   </picture>
+**DataChain**
+============
 
 
 |PyPI| |Python Version| |Codecov| |Tests|
