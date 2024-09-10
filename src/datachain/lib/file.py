@@ -13,6 +13,7 @@ from urllib.request import url2pathname
 
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 from PIL import Image
+from pyarrow.dataset import dataset
 from pydantic import Field, field_validator
 
 from datachain.cache import UniqueId
@@ -350,14 +351,41 @@ class ImageFile(File):
         self.read().save(destination)
 
 
-class IndexedFile(DataModel):
-    """Metadata indexed from tabular files.
+class ArrowFile(File):
+    """`DataModel` for reading arrow files."""
 
-    Includes `file` and `index` signals.
-    """
+    @contextmanager
+    def open(self):
+        """Stream row contents based on location in file."""
+        if len(self.location) > 1:
+            FileError(self, "multiple 'location's are not supported yet")
 
-    file: File
-    index: int
+        loc = self.location[0]
+
+        if (index := loc.get("index", None)) is None:
+            FileError(self, "'index' is not specified")
+
+        kwargs = loc.get("kwargs", {})
+
+        if self._caching_enabled:
+            client = self._catalog.get_client(self.source)
+            file_model = self.model_dump()
+            del file_model["location"]
+            file = File(**file_model)
+            client.download(file.get_uid(), callback=self._download_cb)
+            path = file.get_local_path()
+            ds = dataset(path, **kwargs)
+
+        else:
+            path = self.get_path()
+            ds = dataset(path, filesystem=self.get_fs(), **kwargs)
+
+        return ds.take([index]).to_reader()
+
+    def read(self):
+        """Returns row contents."""
+        with self.open() as record_batch:
+            return record_batch.to_pylist()[0]
 
 
 def get_file_type(type_: Literal["binary", "text", "image"] = "binary") -> type[File]:

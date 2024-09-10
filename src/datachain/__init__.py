@@ -1,10 +1,10 @@
 from datachain.lib.data_model import DataModel, DataType, is_chain_type
 from datachain.lib.dc import C, Column, DataChain, Sys
 from datachain.lib.file import (
+    ArrowFile,
     File,
     FileError,
     ImageFile,
-    IndexedFile,
     TarVFile,
     TextFile,
 )
@@ -16,6 +16,7 @@ from datachain.query.session import Session
 __all__ = [
     "AbstractUDF",
     "Aggregator",
+    "ArrowFile",
     "C",
     "Column",
     "DataChain",
@@ -26,7 +27,6 @@ __all__ = [
     "FileError",
     "Generator",
     "ImageFile",
-    "IndexedFile",
     "Mapper",
     "ModelStore",
     "Session",

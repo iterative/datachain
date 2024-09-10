@@ -8,7 +8,7 @@ from pyarrow.dataset import dataset
 from tqdm import tqdm
 
 from datachain.lib.data_model import dict_to_data_model
-from datachain.lib.file import File, IndexedFile
+from datachain.lib.file import ArrowFile, File
 from datachain.lib.model_store import ModelStore
 from datachain.lib.udf import Generator
 
@@ -69,7 +69,11 @@ class ArrowGenerator(Generator):
                                 vals_dict[field] = val
                         vals = [self.output_schema(**vals_dict)]
                     if self.source:
-                        yield [IndexedFile(file=file, index=index), *vals]
+                        file_model = file.model_dump()
+                        file_model["location"] = [
+                            {"index": index, "kwargs": self.kwargs}
+                        ]
+                        yield [ArrowFile(**file_model), *vals]
                     else:
                         yield vals
                     index += 1

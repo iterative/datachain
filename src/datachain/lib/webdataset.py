@@ -204,39 +204,6 @@ class Builder:
         return anno
 
 
-class TarStream(File):
-    @staticmethod
-    def to_text(data):
-        return data.decode("utf-8")
-
-    _DATA_CONVERTERS: ClassVar[dict[type, Any]] = {
-        str: lambda data: TarStream.to_text(data),
-        int: lambda data: int(TarStream.to_text(data)),
-        float: lambda data: float(TarStream.to_text(data)),
-        bytes: lambda data: data,
-        dict: lambda data: json.loads(TarStream.to_text(data)),
-    }
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self._tar = None
-
-    def open(self):
-        self._tar = tarfile.open(fileobj=super().open())  # noqa: SIM115
-        return self
-
-    def getmembers(self) -> list[tarfile.TarInfo]:
-        return self._tar.getmembers()
-
-    def read_member(self, member: tarfile.TarInfo, type):
-        fd = self._tar.extractfile(member)
-        data = fd.read()
-        converter = self._DATA_CONVERTERS.get(type, None)
-        if not converter:
-            raise ValueError("")
-        return converter(data)
-
-
 def get_tar_groups(stream, tar, core_extensions, spec, encoding="utf-8"):
     builder = Builder(stream, core_extensions, spec, tar, encoding)
 
