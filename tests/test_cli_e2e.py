@@ -214,6 +214,7 @@ def run_step(step):
 
 @pytest.mark.timeout(len(E2E_STEPS) * 90)
 @pytest.mark.e2e
+@pytest.mark.xdist_group("e2e")
 def test_cli_e2e(tmp_dir, catalog):
     """End-to-end CLI Test"""
     for step in E2E_STEPS:

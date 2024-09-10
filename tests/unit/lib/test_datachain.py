@@ -1271,6 +1271,7 @@ def test_to_parquet_partitioned(tmp_dir, test_session):
 
 
 @pytest.mark.parametrize("processes", [False, 2, True])
+@pytest.mark.xdist_group("parallel")
 def test_parallel(processes, test_session_tmpfile):
     prefix = "t & "
     vals = ["a", "b", "c", "d", "e", "f", "g", "h", "i"]
@@ -1286,6 +1287,7 @@ def test_parallel(processes, test_session_tmpfile):
 
 
 @skip_if_not_sqlite
+@pytest.mark.xdist_group("parallel")
 def test_parallel_in_memory():
     prefix = "t & "
     vals = ["a", "b", "c", "d", "e", "f", "g", "h", "i"]

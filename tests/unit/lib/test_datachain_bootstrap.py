@@ -36,6 +36,7 @@ def test_udf():
 
 
 @pytest.mark.skip(reason="Skip until tests module will be importer for unit-tests")
+@pytest.mark.xdist_group("parallel")
 def test_udf_parallel():
     vals = ["a", "b", "c", "d", "e", "f"]
     chain = DataChain.from_values(key=vals)
