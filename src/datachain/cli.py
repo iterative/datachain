@@ -15,7 +15,7 @@ import shtab
 from datachain import utils
 from datachain.cli_utils import BooleanOptionalAction, CommaSeparatedArgs, KeyValueArgs
 from datachain.lib.dc import DataChain
-from datachain.telemetry import api_telemetry, telemetry, track_cli_telemetry
+from datachain.telemetry import telemetry
 from datachain.utils import DataChainDir
 
 if TYPE_CHECKING:
@@ -692,7 +692,6 @@ def ls_remote(
         first = False
 
 
-@api_telemetry
 def ls(
     sources,
     long: bool = False,
@@ -718,14 +717,12 @@ def ls(
         )
 
 
-@api_telemetry
 def ls_datasets(catalog: "Catalog"):
     for d in catalog.ls_datasets():
         for v in d.versions:
             print(f"{d.name} (v{v.version})")
 
 
-@api_telemetry
 def rm_dataset(
     catalog: "Catalog",
     name: str,
@@ -735,7 +732,6 @@ def rm_dataset(
     catalog.remove_dataset(name, version=version, force=force)
 
 
-@api_telemetry
 def dataset_stats(
     catalog: "Catalog",
     name: str,
@@ -753,7 +749,6 @@ def dataset_stats(
             print(f"Total objects size: {utils.sizeof_fmt(stats.size, si=si): >7}")
 
 
-@api_telemetry
 def du(catalog: "Catalog", sources, show_bytes=False, si=False, **kwargs):
     for path, size in catalog.du(sources, **kwargs):
         if show_bytes:
@@ -762,7 +757,6 @@ def du(catalog: "Catalog", sources, show_bytes=False, si=False, **kwargs):
             print(f"{utils.sizeof_fmt(size, si=si): >7} {path}")
 
 
-@api_telemetry
 def index(
     catalog: "Catalog",
     sources,
@@ -771,7 +765,6 @@ def index(
     catalog.index(sources, **kwargs)
 
 
-@api_telemetry
 def show(
     catalog: "Catalog",
     name: str,
@@ -803,7 +796,6 @@ def show(
         dc.print_schema()
 
 
-@api_telemetry
 def query(
     catalog: "Catalog",
     script: str,
@@ -851,12 +843,10 @@ def query(
     catalog.metastore.set_job_status(job_id, JobStatus.COMPLETE)
 
 
-@api_telemetry
 def clear_cache(catalog: "Catalog"):
     catalog.cache.clear()
 
 
-@api_telemetry
 def garbage_collect(catalog: "Catalog"):
     temp_tables = catalog.get_temp_table_names()
     if not temp_tables:
@@ -905,150 +895,152 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
         # This also sets this environment variable for any subprocesses
         os.environ["DEBUG_SHOW_SQL_QUERIES"] = "True"
 
+    error = None
     try:
         catalog = get_catalog(client_config=client_config)
-        with track_cli_telemetry(args.command):
-            if args.command == "cp":
-                catalog.cp(
-                    args.sources,
-                    args.output,
-                    force=bool(args.force),
-                    update=bool(args.update),
-                    recursive=bool(args.recursive),
-                    edatachain_file=None,
-                    edatachain_only=False,
-                    no_edatachain_file=True,
-                    no_glob=args.no_glob,
-                    ttl=args.ttl,
-                )
-            elif args.command == "clone":
-                catalog.clone(
-                    args.sources,
-                    args.output,
-                    force=bool(args.force),
-                    update=bool(args.update),
-                    recursive=bool(args.recursive),
-                    no_glob=args.no_glob,
-                    ttl=args.ttl,
-                    no_cp=args.no_cp,
-                    edatachain=args.edatachain,
-                    edatachain_file=args.edatachain_file,
-                )
-            elif args.command == "pull":
-                catalog.pull_dataset(
-                    args.dataset,
-                    args.output,
-                    no_cp=args.no_cp,
-                    force=bool(args.force),
-                    edatachain=args.edatachain,
-                    edatachain_file=args.edatachain_file,
-                )
-            elif args.command == "edit-dataset":
-                catalog.edit_dataset(
-                    args.name,
-                    description=args.description,
-                    new_name=args.new_name,
-                    labels=args.labels,
-                )
-            elif args.command == "ls":
-                ls(
-                    args.sources,
-                    long=bool(args.long),
-                    remote=args.remote,
-                    ttl=args.ttl,
-                    update=bool(args.update),
-                    client_config=client_config,
-                )
-            elif args.command == "ls-datasets":
-                ls_datasets(catalog)
-            elif args.command == "show":
-                show(
-                    catalog,
-                    args.name,
-                    args.version,
-                    limit=args.limit,
-                    offset=args.offset,
-                    columns=args.columns,
-                    no_collapse=args.no_collapse,
-                    schema=args.schema,
-                )
-            elif args.command == "rm-dataset":
-                rm_dataset(catalog, args.name, version=args.version, force=args.force)
-            elif args.command == "dataset-stats":
-                dataset_stats(
-                    catalog,
-                    args.name,
-                    args.version,
-                    show_bytes=args.bytes,
-                    si=args.si,
-                )
-            elif args.command == "du":
-                du(
-                    catalog,
-                    args.sources,
-                    show_bytes=args.bytes,
-                    depth=args.depth,
-                    si=args.si,
-                    ttl=args.ttl,
-                    update=bool(args.update),
-                    client_config=client_config,
-                )
-            elif args.command == "find":
-                results_found = False
-                for result in catalog.find(
-                    args.sources,
-                    ttl=args.ttl,
-                    update=bool(args.update),
-                    names=args.name,
-                    inames=args.iname,
-                    paths=args.path,
-                    ipaths=args.ipath,
-                    size=args.size,
-                    typ=args.type,
-                    columns=args.columns,
-                ):
-                    print(result)
-                    results_found = True
-                if not results_found:
-                    print("No results")
-            elif args.command == "index":
-                index(
-                    catalog,
-                    args.sources,
-                    ttl=args.ttl,
-                    update=bool(args.update),
-                )
-            elif args.command == "completion":
-                print(completion(args.shell))
-            elif args.command == "find-stale-storages":
-                catalog.find_stale_storages()
-            elif args.command == "query":
-                query(
-                    catalog,
-                    args.script,
-                    parallel=args.parallel,
-                    params=args.param,
-                )
-            elif args.command == "apply-udf":
-                catalog.apply_udf(
-                    args.udf, args.source, args.target, args.parallel, args.udf_params
-                )
-            elif args.command == "clear-cache":
-                clear_cache(catalog)
-            elif args.command == "gc":
-                garbage_collect(catalog)
-            else:
-                print(f"invalid command: {args.command}", file=sys.stderr)
-                return 1
-            return 0
-    except BrokenPipeError:
+        if args.command == "cp":
+            catalog.cp(
+                args.sources,
+                args.output,
+                force=bool(args.force),
+                update=bool(args.update),
+                recursive=bool(args.recursive),
+                edatachain_file=None,
+                edatachain_only=False,
+                no_edatachain_file=True,
+                no_glob=args.no_glob,
+                ttl=args.ttl,
+            )
+        elif args.command == "clone":
+            catalog.clone(
+                args.sources,
+                args.output,
+                force=bool(args.force),
+                update=bool(args.update),
+                recursive=bool(args.recursive),
+                no_glob=args.no_glob,
+                ttl=args.ttl,
+                no_cp=args.no_cp,
+                edatachain=args.edatachain,
+                edatachain_file=args.edatachain_file,
+            )
+        elif args.command == "pull":
+            catalog.pull_dataset(
+                args.dataset,
+                args.output,
+                no_cp=args.no_cp,
+                force=bool(args.force),
+                edatachain=args.edatachain,
+                edatachain_file=args.edatachain_file,
+            )
+        elif args.command == "edit-dataset":
+            catalog.edit_dataset(
+                args.name,
+                description=args.description,
+                new_name=args.new_name,
+                labels=args.labels,
+            )
+        elif args.command == "ls":
+            ls(
+                args.sources,
+                long=bool(args.long),
+                remote=args.remote,
+                ttl=args.ttl,
+                update=bool(args.update),
+                client_config=client_config,
+            )
+        elif args.command == "ls-datasets":
+            ls_datasets(catalog)
+        elif args.command == "show":
+            show(
+                catalog,
+                args.name,
+                args.version,
+                limit=args.limit,
+                offset=args.offset,
+                columns=args.columns,
+                no_collapse=args.no_collapse,
+                schema=args.schema,
+            )
+        elif args.command == "rm-dataset":
+            rm_dataset(catalog, args.name, version=args.version, force=args.force)
+        elif args.command == "dataset-stats":
+            dataset_stats(
+                catalog,
+                args.name,
+                args.version,
+                show_bytes=args.bytes,
+                si=args.si,
+            )
+        elif args.command == "du":
+            du(
+                catalog,
+                args.sources,
+                show_bytes=args.bytes,
+                depth=args.depth,
+                si=args.si,
+                ttl=args.ttl,
+                update=bool(args.update),
+                client_config=client_config,
+            )
+        elif args.command == "find":
+            results_found = False
+            for result in catalog.find(
+                args.sources,
+                ttl=args.ttl,
+                update=bool(args.update),
+                names=args.name,
+                inames=args.iname,
+                paths=args.path,
+                ipaths=args.ipath,
+                size=args.size,
+                typ=args.type,
+                columns=args.columns,
+            ):
+                print(result)
+                results_found = True
+            if not results_found:
+                print("No results")
+        elif args.command == "index":
+            index(
+                catalog,
+                args.sources,
+                ttl=args.ttl,
+                update=bool(args.update),
+            )
+        elif args.command == "completion":
+            print(completion(args.shell))
+        elif args.command == "find-stale-storages":
+            catalog.find_stale_storages()
+        elif args.command == "query":
+            query(
+                catalog,
+                args.script,
+                parallel=args.parallel,
+                params=args.param,
+            )
+        elif args.command == "apply-udf":
+            catalog.apply_udf(
+                args.udf, args.source, args.target, args.parallel, args.udf_params
+            )
+        elif args.command == "clear-cache":
+            clear_cache(catalog)
+        elif args.command == "gc":
+            garbage_collect(catalog)
+        else:
+            print(f"invalid command: {args.command}", file=sys.stderr)
+            return 1
+        return 0
+    except BrokenPipeError as exc:
         # Python flushes standard streams on exit; redirect remaining output
         # to devnull to avoid another BrokenPipeError at shutdown
         # See: https://docs.python.org/3/library/signal.html#note-on-sigpipe
+        error = str(exc)
         devnull = os.open(os.devnull, os.O_WRONLY)
         os.dup2(devnull, sys.stdout.fileno())
         return 141  # 128 + 13 (SIGPIPE)
     except (KeyboardInterrupt, Exception) as exc:
+        error = str(exc)
         if isinstance(exc, KeyboardInterrupt):
             msg = "Operation cancelled by the user"
         else:
@@ -1066,3 +1058,5 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
 
             pdb.post_mortem()
         return 1
+    finally:
+        telemetry.send_cli_call(args.command, error=error)

@@ -5,7 +5,6 @@ from typing import ClassVar, Union, get_args, get_origin
 from pydantic import BaseModel, create_model
 
 from datachain.lib.model_store import ModelStore
-from datachain.telemetry import api_telemetry
 
 StandardType = Union[
     type[int],
@@ -33,7 +32,6 @@ class DataModel(BaseModel):
         ModelStore.register(cls)
 
     @staticmethod
-    @api_telemetry
     def register(models: Union[DataType, Sequence[DataType]]):
         """For registering classes manually. It accepts a single class or a sequence of
         classes."""

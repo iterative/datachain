@@ -58,7 +58,7 @@ from datachain.query.dataset import (
 )
 from datachain.query.schema import DEFAULT_DELIMITER, Column, DatasetRow
 from datachain.sql.functions import path as pathfunc
-from datachain.telemetry import api_telemetry
+from datachain.telemetry import send_telemetry_once
 from datachain.utils import inside_notebook
 
 if TYPE_CHECKING:
@@ -247,6 +247,8 @@ class DataChain(DatasetQuery):
             **kwargs,
             indexing_column_types=File._datachain_column_types,
         )
+        send_telemetry_once("datachain_init", **kwargs)
+
         if settings:
             self._settings = Settings(**settings)
         else:
@@ -349,7 +351,6 @@ class DataChain(DatasetQuery):
         return self
 
     @classmethod
-    @api_telemetry
     def from_storage(
         cls,
         uri,
@@ -426,7 +427,6 @@ class DataChain(DatasetQuery):
         return ls(dc, list_path, recursive=recursive, object_name=object_name)
 
     @classmethod
-    @api_telemetry
     def from_dataset(
         cls,
         name: str,
@@ -448,7 +448,6 @@ class DataChain(DatasetQuery):
         return DataChain(name=name, version=version, session=session, settings=settings)
 
     @classmethod
-    @api_telemetry
     def from_json(
         cls,
         path,
@@ -514,7 +513,6 @@ class DataChain(DatasetQuery):
         return chain.gen(**signal_dict)  # type: ignore[misc, arg-type]
 
     @classmethod
-    @api_telemetry
     def from_jsonl(
         cls,
         path,
@@ -575,7 +573,6 @@ class DataChain(DatasetQuery):
         return chain.gen(**signal_dict)  # type: ignore[misc, arg-type]
 
     @classmethod
-    @api_telemetry
     def datasets(
         cls,
         session: Optional[Session] = None,
@@ -690,7 +687,6 @@ class DataChain(DatasetQuery):
             output=str,
         )
 
-    @api_telemetry
     def save(  # type: ignore[override]
         self, name: Optional[str] = None, version: Optional[int] = None, **kwargs
     ) -> "Self":
@@ -704,7 +700,6 @@ class DataChain(DatasetQuery):
         schema = self.signals_schema.clone_without_sys_signals().serialize()
         return super().save(name=name, version=version, feature_schema=schema, **kwargs)
 
-    @api_telemetry
     def apply(self, func, *args, **kwargs):
         """Apply any function to the chain.
 
@@ -727,7 +722,6 @@ class DataChain(DatasetQuery):
         """
         return func(self, *args, **kwargs)
 
-    @api_telemetry
     def map(
         self,
         func: Optional[Callable] = None,
@@ -777,7 +771,6 @@ class DataChain(DatasetQuery):
 
         return chain.add_schema(udf_obj.output).reset_settings(self._settings)
 
-    @api_telemetry
     def gen(
         self,
         func: Optional[Callable] = None,
@@ -814,7 +807,6 @@ class DataChain(DatasetQuery):
 
         return chain.reset_schema(udf_obj.output).reset_settings(self._settings)
 
-    @api_telemetry
     def agg(
         self,
         func: Optional[Callable] = None,
@@ -856,7 +848,6 @@ class DataChain(DatasetQuery):
 
         return chain.reset_schema(udf_obj.output).reset_settings(self._settings)
 
-    @api_telemetry
     def batch_map(
         self,
         func: Optional[Callable] = None,
@@ -972,7 +963,6 @@ class DataChain(DatasetQuery):
         chain.signals_schema = new_schema
         return chain
 
-    @api_telemetry
     @detach
     def mutate(self, **kwargs) -> "Self":
         """Create new signals based on existing signals.
@@ -1102,7 +1092,6 @@ class DataChain(DatasetQuery):
     @overload
     def collect(self, *cols: str) -> Iterator[tuple[DataType, ...]]: ...
 
-    @api_telemetry
     def collect(self, *cols: str) -> Iterator[Union[DataType, tuple[DataType, ...]]]:  # type: ignore[overload-overlap,misc]
         """Yields rows of values, optionally limited to the specified columns.
 
@@ -1185,7 +1174,6 @@ class DataChain(DatasetQuery):
         schema = self.signals_schema.clone_without_file_signals()
         return self.select(*schema.values.keys())
 
-    @api_telemetry
     @detach
     def merge(
         self,
@@ -1356,7 +1344,6 @@ class DataChain(DatasetQuery):
         return super()._subtract(other, signals)  # type: ignore[arg-type]
 
     @classmethod
-    @api_telemetry
     def from_values(
         cls,
         ds_name: str = "",
@@ -1390,7 +1377,6 @@ class DataChain(DatasetQuery):
         return chain.gen(_func_fr, output=output)
 
     @classmethod
-    @api_telemetry
     def from_pandas(  # type: ignore[override]
         cls,
         df: "pd.DataFrame",
@@ -1434,7 +1420,6 @@ class DataChain(DatasetQuery):
             **fr_map,
         )
 
-    @api_telemetry
     def to_pandas(self, flatten=False) -> "pd.DataFrame":
         """Return a pandas DataFrame from the chain.
 
@@ -1449,7 +1434,6 @@ class DataChain(DatasetQuery):
 
         return pd.DataFrame.from_records(self.results(), columns=columns)
 
-    @api_telemetry
     def show(
         self,
         limit: int = 20,
@@ -1504,7 +1488,6 @@ class DataChain(DatasetQuery):
             print(f"\n[Limited by {len(df)} rows]")
 
     @classmethod
-    @api_telemetry
     def from_hf(
         cls,
         dataset: Union[str, "HFDatasetType"],
@@ -1636,7 +1619,6 @@ class DataChain(DatasetQuery):
         )
 
     @classmethod
-    @api_telemetry
     def from_csv(
         cls,
         path,
@@ -1724,7 +1706,6 @@ class DataChain(DatasetQuery):
         )
 
     @classmethod
-    @api_telemetry
     def from_parquet(
         cls,
         path,
@@ -1793,7 +1774,6 @@ class DataChain(DatasetQuery):
         )
 
     @classmethod
-    @api_telemetry
     def from_records(
         cls,
         to_insert: Optional[Union[dict, list[dict]]],
