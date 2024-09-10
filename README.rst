@@ -1,4 +1,5 @@
 |logo| DataChain
+================
 
 |PyPI| |Python Version| |Codecov| |Tests|
 
