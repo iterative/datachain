@@ -195,14 +195,15 @@ class File(DataModel):
             with VFileRegistry.resolve(self, self.location) as f:  # type: ignore[arg-type]
                 yield f
 
-        uid = self.get_uid()
-        client = self._catalog.get_client(self.source)
-        if self._caching_enabled:
-            client.download(uid, callback=self._download_cb)
-        with client.open_object(
-            uid, use_cache=self._caching_enabled, cb=self._download_cb
-        ) as f:
-            yield io.TextIOWrapper(f) if mode == "r" else f
+        else:
+            uid = self.get_uid()
+            client = self._catalog.get_client(self.source)
+            if self._caching_enabled:
+                client.download(uid, callback=self._download_cb)
+            with client.open_object(
+                uid, use_cache=self._caching_enabled, cb=self._download_cb
+            ) as f:
+                yield io.TextIOWrapper(f) if mode == "r" else f
 
     def read(self, length: int = -1):
         """Returns file contents."""
