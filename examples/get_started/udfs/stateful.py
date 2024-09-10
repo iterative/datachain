@@ -5,6 +5,10 @@ To install dependencies:
 
 """
 
+import os
+
+os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
+
 import open_clip
 
 from datachain import C, DataChain, Mapper
