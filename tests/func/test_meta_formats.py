@@ -56,7 +56,6 @@ class Image(UserModel):
     image_id: ImageId
     classifications: list[Classification]
 
-Image.model_rebuild()
 DataModel.register(Image)
 spec = Image"""
 

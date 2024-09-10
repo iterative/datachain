@@ -1,13 +1,10 @@
-# pip install datamodel-code-generator
-# pip install jmespath
-#
 import csv
 import json
 import tempfile
 import uuid
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Callable
+from typing import Callable
 
 import datamodel_code_generator
 import jmespath as jsp
@@ -85,7 +82,6 @@ def read_schema(source_file, data_type="csv", expr=None, model_name=None):
             use_standard_collections=True,
         )
         epilogue = f"""
-{model_name}.model_rebuild()
 DataModel.register({model_name})
 spec = {model_name}
 """
@@ -122,9 +118,9 @@ def read_meta(  # noqa: C901
             print(f"{model_output}")
         # Below 'spec' should be a dynamically converted DataModel from Pydantic
         if not spec:
-            local_vars: dict[str, Any] = {}
-            exec(model_output, globals(), local_vars)  # type: ignore[arg-type] # noqa: S102
-            spec = local_vars["spec"]
+            gl = globals()
+            exec(model_output, gl)  # type: ignore[arg-type] # noqa: S102
+            spec = gl["spec"]
 
     if not (spec) and not (schema_from):
         raise ValueError(
