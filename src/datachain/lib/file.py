@@ -255,14 +255,18 @@ class File(DataModel):
         dump = self.model_dump()
         return UniqueId(*(dump[k] for k in self._unique_id_keys))
 
-    def get_local_path(self) -> Optional[str]:
+    def get_local_path(self, download: bool = False) -> Optional[str]:
         """Returns path to a file in a local cache.
         Return None if file is not cached. Throws an exception if cache is not setup."""
         if self._catalog is None:
             raise RuntimeError(
                 "cannot resolve local file path because catalog is not setup"
             )
-        return self._catalog.cache.get_path(self.get_uid())
+        uid = self.get_uid()
+        if download:
+            client = self._catalog.get_client(self.source)
+            client.download(uid, callback=self._download_cb)
+        return self._catalog.cache.get_path(uid)
 
     def get_file_suffix(self):
         """Returns last part of file name with `.`."""
@@ -354,6 +358,13 @@ class ImageFile(File):
 class ArrowFile(File):
     """`DataModel` for reading arrow files."""
 
+    def get_uid(self) -> UniqueId:
+        """Returns unique ID for file."""
+        dump = self.model_dump()
+        # Skip location to avoid duplicating arrow files.
+        dump["location"] = None
+        return UniqueId(*(dump[k] for k in self._unique_id_keys))
+
     @contextmanager
     def open(self):
         """Stream row contents based on location in file."""
@@ -368,12 +379,7 @@ class ArrowFile(File):
         kwargs = loc.get("kwargs", {})
 
         if self._caching_enabled:
-            client = self._catalog.get_client(self.source)
-            file_model = self.model_dump()
-            del file_model["location"]
-            file = File(**file_model)
-            client.download(file.get_uid(), callback=self._download_cb)
-            path = file.get_local_path()
+            path = self.get_local_path(download=True)
             ds = dataset(path, **kwargs)
 
         else:
