@@ -43,6 +43,8 @@ if TYPE_CHECKING:
     from sqlalchemy.sql.elements import ColumnElement
     from sqlalchemy.types import TypeEngine
 
+    from datachain.lib.file import File
+
 
 logger = logging.getLogger("datachain")
 
@@ -703,6 +705,9 @@ class SQLiteWarehouse(AbstractWarehouse):
             )
 
         self.db.execute(insert_query)
+
+    def prepare_entries(self, entries: "Iterable[File]") -> Iterable[dict[str, Any]]:
+        return (e.model_dump() for e in entries)
 
     def insert_rows(self, table: Table, rows: Iterable[dict[str, Any]]) -> None:
         rows = list(rows)

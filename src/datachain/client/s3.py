@@ -1,12 +1,11 @@
 import asyncio
-from typing import Any, cast
+from typing import Any, Optional, cast
 
 from botocore.exceptions import NoCredentialsError
 from s3fs import S3FileSystem
 from tqdm import tqdm
 
 from datachain.lib.file import File
-from datachain.node import Entry
 
 from .fsspec import DELIMITER, Client, ResultQueue
 
@@ -111,8 +110,9 @@ class ClientS3(Client):
     ) -> None:
         await self._fetch_flat(start_prefix, result_queue)
 
-    def _entry_from_boto(self, v, bucket, versions=False):
-        return Entry.from_file(
+    def _entry_from_boto(self, v, bucket, versions=False) -> File:
+        return File(
+            source=self.uri,
             path=v["Key"],
             etag=v.get("ETag", "").strip('"'),
             version=ClientS3.clean_s3_version(v.get("VersionId", "")),
@@ -125,8 +125,8 @@ class ClientS3(Client):
         self,
         prefix,
         pbar,
-        result_queue,
-    ):
+        result_queue: ResultQueue,
+    ) -> set[str]:
         if prefix:
             prefix = prefix.lstrip(DELIMITER) + DELIMITER
         files = []
@@ -141,7 +141,7 @@ class ClientS3(Client):
             if info["type"] == "directory":
                 subdirs.add(subprefix)
             else:
-                files.append(self.convert_info(info, subprefix))
+                files.append(self.info_to_file(info, subprefix))
                 pbar.update()
             found = True
         if not found:
@@ -152,18 +152,8 @@ class ClientS3(Client):
         return subdirs
 
     @staticmethod
-    def clean_s3_version(ver):
-        return ver if ver != "null" else ""
-
-    def convert_info(self, v: dict[str, Any], path: str) -> Entry:
-        return Entry.from_file(
-            path=path,
-            etag=v.get("ETag", "").strip('"'),
-            version=ClientS3.clean_s3_version(v.get("VersionId", "")),
-            is_latest=v.get("IsLatest", True),
-            last_modified=v.get("LastModified", ""),
-            size=v["size"],
-        )
+    def clean_s3_version(ver: Optional[str]) -> str:
+        return ver if (ver is not None and ver != "null") else ""
 
     def info_to_file(self, v: dict[str, Any], path: str) -> File:
         return File(

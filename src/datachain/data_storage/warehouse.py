@@ -20,7 +20,7 @@ from datachain.client import Client
 from datachain.data_storage.schema import convert_rows_custom_column_types
 from datachain.data_storage.serializer import Serializable
 from datachain.dataset import DatasetRecord
-from datachain.node import DirType, DirTypeGroup, Entry, Node, NodeWithPath, get_path
+from datachain.node import DirType, DirTypeGroup, Node, NodeWithPath, get_path
 from datachain.sql.functions import path as pathfunc
 from datachain.sql.types import Int, SQLType
 from datachain.storage import StorageURI
@@ -34,6 +34,7 @@ if TYPE_CHECKING:
     from datachain.data_storage import AbstractIDGenerator, schema
     from datachain.data_storage.db_engine import DatabaseEngine
     from datachain.data_storage.schema import DataTable
+    from datachain.lib.file import File
 
 try:
     import numpy as np
@@ -409,17 +410,9 @@ class AbstractWarehouse(ABC, Serializable):
         ((nrows, *rest),) = self.db.execute(query)
         return nrows, rest[0] if rest else None
 
-    def prepare_entries(
-        self, uri: str, entries: Iterable[Entry]
-    ) -> list[dict[str, Any]]:
-        """
-        Prepares bucket listing entry (row) for inserting into database
-        """
-
-        def _prepare_entry(entry: Entry):
-            return attrs.asdict(entry) | {"source": uri}
-
-        return [_prepare_entry(e) for e in entries]
+    @abstractmethod
+    def prepare_entries(self, entries: "Iterable[File]") -> Iterable[dict[str, Any]]:
+        """Convert File entries so they can be passed on to `insert_rows()`"""
 
     @abstractmethod
     def insert_rows(self, table: Table, rows: Iterable[dict[str, Any]]) -> None:
