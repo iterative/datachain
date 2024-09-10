@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING, Any, Optional
 import attrs
 
 from datachain.cache import UniqueId
-from datachain.lib.file import File
 from datachain.storage import StorageURI
 from datachain.utils import TIME_ZERO, time_to_str
 
@@ -137,48 +136,6 @@ class Node:
         if len(split) <= 1:
             return ""
         return split[0]
-
-
-@attrs.define
-class Entry:
-    path: str = ""
-    etag: str = ""
-    version: str = ""
-    is_latest: bool = True
-    last_modified: Optional[datetime] = None
-    size: int = 0
-    location: Optional[str] = None
-
-    @classmethod
-    def from_file(cls, path: str, **kwargs) -> "Entry":
-        return cls(path=path, **kwargs)
-
-    @property
-    def full_path(self) -> str:
-        return self.path
-
-    @property
-    def name(self):
-        return self.path.rsplit("/", 1)[-1]
-
-    @property
-    def parent(self):
-        split = self.path.rsplit("/", 1)
-        if len(split) <= 1:
-            return ""
-        return split[0]
-
-    def to_file(self, source: str) -> File:
-        return File(
-            source=source,
-            path=self.path,
-            size=self.size,
-            version=self.version,
-            etag=self.etag,
-            is_latest=self.is_latest,
-            last_modified=self.last_modified,
-            location=self.location,
-        )
 
 
 def get_path(parent: str, name: str):

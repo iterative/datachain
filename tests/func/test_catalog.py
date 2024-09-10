@@ -84,7 +84,7 @@ def fake_index(catalog):
 def test_find(catalog, fake_index):
     src_uri = fake_index
     dirs = ["cats/", "dogs/", "dogs/others/"]
-    expected_paths = dirs + [entry.full_path for entry in ENTRIES]
+    expected_paths = dirs + [entry.path for entry in ENTRIES]
     assert set(catalog.find([src_uri])) == {
         f"{src_uri}/{path}" for path in expected_paths
     }
