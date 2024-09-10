@@ -144,6 +144,7 @@ filterwarnings = [
   "error::sqlalchemy.exc.SADeprecationWarning",
   "ignore:Field name .* shadows an attribute in parent:UserWarning"  # datachain.lib.feature
 ]
+timeout_func_only = true
 
 [tool.coverage.run]
 branch = true
