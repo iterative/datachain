@@ -112,7 +112,11 @@ class DatasetDependency:
 
         if is_listing_dataset(dataset_name):
             dependency_type = DatasetDependencyType.STORAGE  # type: ignore[arg-type]
-            dependency_name = listing_uri_from_name(dataset_name)
+            client, _ = Client.parse_url(
+                listing_uri_from_name(dataset_name),
+                None,  # type: ignore[arg-type]
+            )
+            dependency_name = client.uri
 
         return cls(
             id,

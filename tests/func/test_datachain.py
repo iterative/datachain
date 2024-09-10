@@ -10,8 +10,9 @@ import pytz
 from PIL import Image
 from sqlalchemy import Column
 
+from datachain.client.local import FileClient
 from datachain.data_storage.sqlite import SQLiteWarehouse
-from datachain.dataset import DatasetStats
+from datachain.dataset import DatasetDependencyType, DatasetStats
 from datachain.lib.dc import DataChain, DataChainColumnError
 from datachain.lib.file import File, ImageFile
 from datachain.lib.listing import (
@@ -173,6 +174,21 @@ def test_from_storage_partials_with_update(cloud_test_catalog):
             f"{_list_dataset_name(uri)}@v2",
         ]
     )
+
+
+def test_from_storage_dependencies(cloud_test_catalog, cloud_type):
+    ctc = cloud_test_catalog
+    src_uri = ctc.src_uri
+    uri = f"{src_uri}/cats"
+    ds_name = "dep"
+    DataChain.from_storage(uri, session=ctc.session).save(ds_name)
+    dependencies = ctc.session.catalog.get_dataset_dependencies(ds_name, 1)
+    assert len(dependencies) == 1
+    assert dependencies[0].type == DatasetDependencyType.STORAGE
+    if cloud_type == "file":
+        assert dependencies[0].name == FileClient.root_path().as_uri()
+    else:
+        assert dependencies[0].name == src_uri
 
 
 @pytest.mark.parametrize("use_cache", [True, False])
