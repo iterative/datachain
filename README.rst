@@ -18,8 +18,6 @@
    :target: https://github.com/iterative/datachain/actions/workflows/tests.yml
    :alt: Tests
 
-----------------
-
 DataChain is a modern Pythonic data-frame library designed for artificial intelligence.
 It is made to organize your unstructured data into datasets and wrangle it at scale on
 your local machine. Datachain does not abstract or hide the AI models and API calls, but helps to integrate them into the postmodern data stack.
