@@ -34,7 +34,7 @@ def convert_image(
             from transformers.image_processing_utils import BaseImageProcessor
 
             if isinstance(transform, BaseImageProcessor):
-                img = torch.tensor(img.pixel_values[0])  # type: ignore[assignment,attr-defined]
+                img = torch.as_tensor(img.pixel_values[0]).clone().detach()  # type: ignore[assignment,attr-defined]
         except ImportError:
             pass
         if device:
