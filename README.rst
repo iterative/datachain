@@ -1,9 +1,9 @@
-.. raw:: html
-
-    <object data="docs/assets/datachain-sys-theme-improved.svg" type="image/svg+xml" height="48"></object>
+|logo| DataChain
 
 |PyPI| |Python Version| |Codecov| |Tests|
 
+.. |logo| image:: docs/assets/datachain.svg
+   :height: 48
 .. |PyPI| image:: https://img.shields.io/pypi/v/datachain.svg
    :target: https://pypi.org/project/datachain/
    :alt: PyPI
