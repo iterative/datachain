@@ -704,7 +704,6 @@ def ls(
 
         config = get_remote_config(read_config(DataChainDir.find().root), remote=remote)
     remote_type = config["type"]
-    telemetry.log_param("remote_type", remote_type)
     if remote_type == "local":
         ls_local(sources, long=long, **kwargs)
     else:
