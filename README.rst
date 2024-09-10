@@ -5,7 +5,7 @@
 |PyPI| |Python Version| |Codecov| |Tests|
 
 .. |logo| image:: docs/assets/datachain.svg
-   :height: 48
+   :height: 24
 .. |PyPI| image:: https://img.shields.io/pypi/v/datachain.svg
    :target: https://pypi.org/project/datachain/
    :alt: PyPI
@@ -18,8 +18,6 @@
 .. |Tests| image:: https://github.com/iterative/datachain/actions/workflows/tests.yml/badge.svg
    :target: https://github.com/iterative/datachain/actions/workflows/tests.yml
    :alt: Tests
-
-----------------
 
 DataChain is a modern Pythonic data-frame library designed for artificial intelligence.
 It is made to organize your unstructured data into datasets and wrangle it at scale on
