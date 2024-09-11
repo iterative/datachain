@@ -118,7 +118,6 @@ class File(DataModel):
     is_latest: bool = Field(default=True)
     last_modified: datetime = Field(default=TIME_ZERO)
     location: Optional[Union[dict, list[dict]]] = Field(default=None)
-    vtype: str = Field(default="")
 
     _datachain_column_types: ClassVar[dict[str, Any]] = {
         "source": String,
@@ -129,7 +128,6 @@ class File(DataModel):
         "is_latest": Boolean,
         "last_modified": DateTime,
         "location": JSON,
-        "vtype": String,
     }
 
     _unique_id_keys: ClassVar[list[str]] = [
@@ -139,7 +137,6 @@ class File(DataModel):
         "etag",
         "version",
         "is_latest",
-        "vtype",
         "location",
         "last_modified",
     ]
@@ -195,14 +192,15 @@ class File(DataModel):
             with VFileRegistry.resolve(self, self.location) as f:  # type: ignore[arg-type]
                 yield f
 
-        uid = self.get_uid()
-        client = self._catalog.get_client(self.source)
-        if self._caching_enabled:
-            client.download(uid, callback=self._download_cb)
-        with client.open_object(
-            uid, use_cache=self._caching_enabled, cb=self._download_cb
-        ) as f:
-            yield io.TextIOWrapper(f) if mode == "r" else f
+        else:
+            uid = self.get_uid()
+            client = self._catalog.get_client(self.source)
+            if self._caching_enabled:
+                client.download(uid, callback=self._download_cb)
+            with client.open_object(
+                uid, use_cache=self._caching_enabled, cb=self._download_cb
+            ) as f:
+                yield io.TextIOWrapper(f) if mode == "r" else f
 
     def read(self, length: int = -1):
         """Returns file contents."""

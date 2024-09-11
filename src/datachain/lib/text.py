@@ -33,7 +33,7 @@ def convert_text(
         res = tokenizer(text)
 
     tokens = res.input_ids if isinstance(tokenizer, PreTrainedTokenizerBase) else res
-    tokens = torch.tensor(tokens)
+    tokens = torch.as_tensor(tokens).clone().detach()
     if device:
         tokens = tokens.to(device)
 

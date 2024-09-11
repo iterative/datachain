@@ -12,7 +12,6 @@ from datachain.catalog import parse_edatachain_file
 from datachain.cli import garbage_collect
 from datachain.error import (
     QueryScriptCompileError,
-    QueryScriptDatasetNotFound,
     QueryScriptRunError,
     StorageNotFoundError,
 )
@@ -59,7 +58,7 @@ def mock_popen_dataset_created(
     mocker, monkeypatch, mock_popen, cloud_test_catalog, listed_bucket
 ):
     # create dataset which would be created in subprocess
-    ds_name = cloud_test_catalog.catalog.generate_query_dataset_name()
+    ds_name = "my-ds"
     job_id = cloud_test_catalog.catalog.metastore.create_job(name="", query="")
     mocker.patch.object(
         cloud_test_catalog.catalog.metastore, "create_job", return_value=job_id
@@ -139,8 +138,6 @@ def test_find_names_columns(cloud_test_catalog, cloud_type):
     src_uri = cloud_test_catalog.src_uri
     catalog = cloud_test_catalog.catalog
 
-    owner = "webfile" if cloud_type == "s3" else ""
-
     src_uri_path = src_uri
     if cloud_type == "file":
         src_uri_path = LocalFileSystem._strip_protocol(src_uri)
@@ -149,14 +146,14 @@ def test_find_names_columns(cloud_test_catalog, cloud_type):
         catalog.find(
             [src_uri],
             names=["*cat*"],
-            columns=["du", "name", "owner", "path", "size", "type"],
+            columns=["du", "name", "path", "size", "type"],
         )
     ) == {
         "\t".join(columns)
         for columns in [
-            ["8", "cats", "", f"{src_uri_path}/cats/", "0", "d"],
-            ["4", "cat1", owner, f"{src_uri_path}/cats/cat1", "4", "f"],
-            ["4", "cat2", owner, f"{src_uri_path}/cats/cat2", "4", "f"],
+            ["8", "cats", f"{src_uri_path}/cats/", "0", "d"],
+            ["4", "cat1", f"{src_uri_path}/cats/cat1", "4", "f"],
+            ["4", "cat2", f"{src_uri_path}/cats/cat2", "4", "f"],
         ]
     }
 
@@ -910,25 +907,16 @@ def test_query(cloud_test_catalog, mock_popen_dataset_created):
 
     query_script = f"""\
     from datachain.query import C, DatasetQuery
-    DatasetQuery({src_uri!r})
+    DatasetQuery({src_uri!r}).save("my-ds")
     """
     query_script = dedent(query_script)
 
-    result = catalog.query(query_script, save=True)
-    assert result.dataset
-    assert_row_names(
-        catalog,
-        result.dataset,
-        result.version,
-        {
-            "dog1",
-            "dog2",
-            "dog3",
-            "dog4",
-        },
-    )
-    assert result.dataset.query_script == query_script
-    assert result.dataset.sources == ""
+    catalog.query(query_script)
+
+    dataset = catalog.get_dataset("my-ds")
+    assert dataset
+    assert dataset.versions_values == [1]
+    assert_row_names(catalog, dataset, 1, {"dog1", "dog2", "dog3", "dog4"})
 
 
 def test_query_save_size(cloud_test_catalog, mock_popen_dataset_created):
@@ -937,12 +925,17 @@ def test_query_save_size(cloud_test_catalog, mock_popen_dataset_created):
 
     query_script = f"""\
     from datachain.query import C, DatasetQuery
-    DatasetQuery({src_uri!r})
+    DatasetQuery({src_uri!r}).save("my-ds")
     """
     query_script = dedent(query_script)
 
-    result = catalog.query(query_script, save=True)
-    dataset_version = result.dataset.get_version(result.version)
+    catalog.query(query_script)
+
+    dataset = catalog.get_dataset("my-ds")
+    assert dataset
+    assert dataset.versions_values == [1]
+
+    dataset_version = dataset.get_version(1)
     assert dataset_version.num_objects == 4
     assert dataset_version.size == 15
 
@@ -953,7 +946,7 @@ def test_query_fail_to_compile(cloud_test_catalog):
     query_script = "syntax error"
 
     with pytest.raises(QueryScriptCompileError):
-        catalog.query(query_script)
+        catalog.query(query_script, _execute_last_expression=True)
 
 
 def test_query_subprocess_wrong_return_code(mock_popen, cloud_test_catalog):
@@ -969,21 +962,6 @@ DatasetQuery('{src_uri}')
     with pytest.raises(QueryScriptRunError) as exc_info:
         catalog.query(query_script)
         assert str(exc_info.value).startswith("Query script exited with error code 1")
-
-
-def test_query_dataset_not_returned(mock_popen, cloud_test_catalog):
-    mock_popen.configure_mock(stdout=io.StringIO("random str"))
-    catalog = cloud_test_catalog.catalog
-    src_uri = cloud_test_catalog.src_uri
-
-    query_script = f"""
-from datachain.query import DatasetQuery, C
-DatasetQuery('{src_uri}')
-    """
-
-    with pytest.raises(QueryScriptDatasetNotFound) as e:
-        catalog.query(query_script, save=True)
-    assert e.value.output == "random str"
 
 
 @pytest.mark.parametrize("cloud_type", ["s3", "azure", "gs"], indirect=True)

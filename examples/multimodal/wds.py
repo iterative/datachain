@@ -1,6 +1,6 @@
 import os
 
-from datachain import C, DataChain
+from datachain import DataChain
 from datachain.lib.webdataset import process_webdataset
 from datachain.lib.webdataset_laion import WDSLaion, process_laion_meta
 from datachain.sql.functions import path
@@ -16,7 +16,7 @@ NPZ_METADATA = os.getenv(
 )
 
 wds_images = (
-    DataChain.from_storage(IMAGE_TARS)
+    DataChain.from_storage(IMAGE_TARS, type="image")
     .settings(cache=True)
     .gen(laion=process_webdataset(spec=WDSLaion), params="file")
 )
@@ -25,21 +25,20 @@ wds_with_pq = (
     DataChain.from_parquet(PARQUET_METADATA)
     .settings(cache=True)
     .merge(wds_images, on="uid", right_on="laion.json.uid", inner=True)
-    .mutate(stem=path.file_stem(C("source.file.path")))
 )
 
-res = (
+wds_npz = (
     DataChain.from_storage(NPZ_METADATA)
     .settings(cache=True)
     .gen(emd=process_laion_meta)
-    .mutate(stem=path.file_stem(C("emd.file.path")))
-    .merge(
-        wds_with_pq,
-        on=["stem", "emd.index"],
-        right_on=["stem", "source.index"],
-        inner=True,
-    )
-    .save("wds")
 )
+
+
+res = wds_npz.merge(
+    wds_with_pq,
+    on=[path.file_stem(wds_npz.c("emd.file.path")), "emd.index"],
+    right_on=[path.file_stem(wds_with_pq.c("source.file.path")), "source.index"],
+    inner=True,
+).save("wds")
 
 res.show(5)

@@ -82,7 +82,6 @@ tests = [
   "pytest-mock>=3.12.0",
   "pytest-servers[all]>=0.5.5",
   "pytest-benchmark[histogram]",
-  "pytest-asyncio>=0.23.2",
   "pytest-xdist>=3.3.1",
   "virtualenv",
   "dulwich",
@@ -136,13 +135,16 @@ markers = [
   "llm_and_nlp: LLM and NLP examples",
   "multimodal: Multimodal examples"
 ]
-asyncio_mode = "auto"
 filterwarnings = [
   "error::pandas.errors.PerformanceWarning",
   "error::pydantic.warnings.PydanticDeprecatedSince20",
   "error::pytest_mock.PytestMockWarning",
   "error::pytest.PytestCollectionWarning",
   "error::sqlalchemy.exc.SADeprecationWarning",
+  "ignore::DeprecationWarning:timm.*",
+  "ignore::DeprecationWarning:botocore.auth",
+  "ignore::DeprecationWarning:datasets.utils._dill",
+  "ignore::DeprecationWarning:librosa.core.intervals",
   "ignore:Field name .* shadows an attribute in parent:UserWarning"  # datachain.lib.feature
 ]
 

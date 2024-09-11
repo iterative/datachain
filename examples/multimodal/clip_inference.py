@@ -4,22 +4,23 @@ from torch.nn.functional import cosine_similarity
 from torch.utils.data import DataLoader
 
 from datachain import C, DataChain
+from datachain.sql.functions import path
 
 source = "gs://datachain-demo/50k-laion-files/000000/00000000*"
 
 
 def create_dataset():
-    imgs = (
-        DataChain.from_storage(source, type="image")
-        .filter(C("file.path").glob("*.jpg"))
-        .map(stem=lambda file: file.get_file_stem(), params=["file"], output=str)
+    imgs = DataChain.from_storage(source, type="image").filter(
+        C("file.path").glob("*.jpg")
     )
-    captions = (
-        DataChain.from_storage(source, type="text")
-        .filter(C("file.path").glob("*.txt"))
-        .map(stem=lambda file: file.get_file_stem(), params=["file"], output=str)
+    captions = DataChain.from_storage(source, type="text").filter(
+        C("file.path").glob("*.txt")
     )
-    return imgs.merge(captions, on="stem")
+    return imgs.merge(
+        captions,
+        on=path.file_stem(imgs.c("file.path")),
+        right_on=path.file_stem(captions.c("file.path")),
+    )
 
 
 if __name__ == "__main__":

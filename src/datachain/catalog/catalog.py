@@ -9,11 +9,9 @@ import os.path
 import posixpath
 import subprocess
 import sys
-import tempfile
 import time
 import traceback
 from collections.abc import Iterable, Iterator, Mapping, Sequence
-from contextlib import contextmanager, nullcontext
 from copy import copy
 from dataclasses import dataclass
 from functools import cached_property, reduce
@@ -24,7 +22,6 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
-    NamedTuple,
     NoReturn,
     Optional,
     Union,
@@ -59,14 +56,13 @@ from datachain.error import (
     PendingIndexingError,
     QueryScriptCancelError,
     QueryScriptCompileError,
-    QueryScriptDatasetNotFound,
     QueryScriptRunError,
 )
 from datachain.listing import Listing
 from datachain.node import DirType, Node, NodeWithPath
 from datachain.nodes_thread_pool import NodesThreadPool
 from datachain.remote.studio import StudioClient
-from datachain.sql.types import JSON, Boolean, DateTime, Int, Int64, SQLType, String
+from datachain.sql.types import JSON, Boolean, DateTime, Int64, SQLType, String
 from datachain.storage import Storage, StorageStatus, StorageURI
 from datachain.utils import (
     DataChainDir,
@@ -77,7 +73,6 @@ from datachain.utils import (
 )
 
 from .datasource import DataSource
-from .subclass import SubclassFinder
 
 if TYPE_CHECKING:
     from datachain.data_storage import (
@@ -92,7 +87,6 @@ logger = logging.getLogger("datachain")
 
 DEFAULT_DATASET_DIR = "dataset"
 DATASET_FILE_SUFFIX = ".edatachain"
-FEATURE_CLASSES = ["DataModel"]
 
 TTL_INT = 4 * 60 * 60
 
@@ -118,44 +112,19 @@ def noop(_: str):
     pass
 
 
-@contextmanager
-def print_and_capture(
-    stream: "IO[bytes]|IO[str]", callback: Callable[[str], None] = noop
-) -> "Iterator[list[str]]":
-    lines: list[str] = []
-    append = lines.append
+def _process_stream(stream: "IO[bytes]", callback: Callable[[str], None]) -> None:
+    buffer = b""
+    while byt := stream.read(1):  # Read one byte at a time
+        buffer += byt
 
-    def loop() -> None:
-        buffer = b""
-        while byt := stream.read(1):  # Read one byte at a time
-            buffer += byt.encode("utf-8") if isinstance(byt, str) else byt
-
-            if byt in (b"\n", b"\r"):  # Check for newline or carriage return
-                line = buffer.decode("utf-8")
-                print(line, end="")
-                callback(line)
-                append(line)
-                buffer = b""  # Clear buffer for next line
-
-        if buffer:  # Handle any remaining data in the buffer
+        if byt in (b"\n", b"\r"):  # Check for newline or carriage return
             line = buffer.decode("utf-8")
-            print(line, end="")
             callback(line)
-            append(line)
+            buffer = b""  # Clear buffer for next line
 
-    thread = Thread(target=loop, daemon=True)
-    thread.start()
-
-    try:
-        yield lines
-    finally:
-        thread.join()
-
-
-class QueryResult(NamedTuple):
-    dataset: Optional[DatasetRecord]
-    version: Optional[int]
-    output: str
+    if buffer:  # Handle any remaining data in the buffer
+        line = buffer.decode("utf-8")
+        callback(line)
 
 
 class DatasetRowsFetcher(NodesThreadPool):
@@ -544,8 +513,6 @@ def find_column_to_str(  # noqa: PLR0911
         )
     if column == "name":
         return posixpath.basename(row[field_lookup["path"]]) or ""
-    if column == "owner":
-        return row[field_lookup["owner_name"]] or ""
     if column == "path":
         is_dir = row[field_lookup["dir_type"]] == DirType.DIR
         path = row[field_lookup["path"]]
@@ -567,12 +534,6 @@ def find_column_to_str(  # noqa: PLR0911
         # Unknown - this only happens if a type was added elsewhere but not here
         return "u"
     return ""
-
-
-def form_module_source(source_ast):
-    module = ast.Module(body=source_ast, type_ignores=[])
-    module = ast.fix_missing_locations(module)
-    return ast.unparse(module)
 
 
 class Catalog:
@@ -660,30 +621,6 @@ class Catalog:
                 code_ast.body[-1:] = new_expressions
         return code_ast
 
-    def compile_query_script(
-        self, script: str, feature_module_name: str
-    ) -> tuple[Union[str, None], str]:
-        code_ast = ast.parse(script)
-        code_ast = self.attach_query_wrapper(code_ast)
-        finder = SubclassFinder(FEATURE_CLASSES)
-        finder.visit(code_ast)
-
-        if not finder.feature_class:
-            main_module = form_module_source([*finder.imports, *finder.main_body])
-            return None, main_module
-
-        feature_import = ast.ImportFrom(
-            module=feature_module_name,
-            names=[ast.alias(name="*", asname=None)],
-            level=0,
-        )
-        feature_module = form_module_source([*finder.imports, *finder.feature_class])
-        main_module = form_module_source(
-            [*finder.imports, feature_import, *finder.main_body]
-        )
-
-        return feature_module, main_module
-
     def parse_url(self, uri: str, **config: Any) -> tuple[Client, str]:
         config = config or self.client_config
         return Client.parse_url(uri, self.cache, **config)
@@ -727,16 +664,12 @@ class Catalog:
         source_metastore = self.metastore.clone(client.uri)
 
         columns = [
-            Column("vtype", String),
-            Column("dir_type", Int),
             Column("path", String),
             Column("etag", String),
             Column("version", String),
             Column("is_latest", Boolean),
             Column("last_modified", DateTime(timezone=True)),
             Column("size", Int64),
-            Column("owner_name", String),
-            Column("owner_id", String),
             Column("location", JSON),
             Column("source", String),
         ]
@@ -1577,7 +1510,6 @@ class Catalog:
             row["etag"],
             row["version"],
             row["is_latest"],
-            row["vtype"],
             row["location"],
             row["last_modified"],
         )
@@ -1833,14 +1765,15 @@ class Catalog:
     def query(
         self,
         query_script: str,
-        envs: Optional[Mapping[str, str]] = None,
-        python_executable: Optional[str] = None,
+        env: Optional[Mapping[str, str]] = None,
+        python_executable: str = sys.executable,
         save: bool = False,
         capture_output: bool = True,
         output_hook: Callable[[str], None] = noop,
         params: Optional[dict[str, str]] = None,
         job_id: Optional[str] = None,
-    ) -> QueryResult:
+        _execute_last_expression: bool = False,
+    ) -> None:
         """
         Method to run custom user Python script to run a query and, as result,
         creates new dataset from the results of a query.
@@ -1863,116 +1796,21 @@ class Catalog:
                 C.size > 1000
             )
         """
-        feature_file = tempfile.NamedTemporaryFile(  # noqa: SIM115
-            dir=os.getcwd(), suffix=".py", delete=False
-        )
-        _, feature_module = os.path.split(feature_file.name)
+        if _execute_last_expression:
+            try:
+                code_ast = ast.parse(query_script)
+                code_ast = self.attach_query_wrapper(code_ast)
+                query_script_compiled = ast.unparse(code_ast)
+            except Exception as exc:
+                raise QueryScriptCompileError(
+                    f"Query script failed to compile, reason: {exc}"
+                ) from exc
+        else:
+            query_script_compiled = query_script
+            assert not save
 
-        if not job_id:
-            python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
-            job_id = self.metastore.create_job(
-                name="",
-                query=query_script,
-                params=params,
-                python_version=python_version,
-            )
-
-        try:
-            lines, proc = self.run_query(
-                python_executable or sys.executable,
-                query_script,
-                envs,
-                feature_file,
-                capture_output,
-                feature_module,
-                output_hook,
-                params,
-                save,
-                job_id,
-            )
-        finally:
-            feature_file.close()
-            os.unlink(feature_file.name)
-
-        output = "".join(lines)
-
-        if proc.returncode:
-            if proc.returncode == QUERY_SCRIPT_CANCELED_EXIT_CODE:
-                raise QueryScriptCancelError(
-                    "Query script was canceled by user",
-                    return_code=proc.returncode,
-                    output=output,
-                )
-            raise QueryScriptRunError(
-                f"Query script exited with error code {proc.returncode}",
-                return_code=proc.returncode,
-                output=output,
-            )
-
-        def _get_dataset_versions_by_job_id():
-            for dr, dv, job in self.list_datasets_versions():
-                if job and str(job.id) == job_id:
-                    yield dr, dv
-
-        try:
-            dr, dv = max(
-                _get_dataset_versions_by_job_id(), key=lambda x: x[1].created_at
-            )
-        except ValueError as e:
-            if not save:
-                return QueryResult(dataset=None, version=None, output=output)
-
-            raise QueryScriptDatasetNotFound(
-                "No dataset found after running Query script",
-                output=output,
-            ) from e
-
-        dr = self.update_dataset(
-            dr,
-            script_output=output,
-            query_script=query_script,
-        )
-        self.update_dataset_version_with_warehouse_info(
-            dr,
-            dv.version,
-            script_output=output,
-            query_script=query_script,
-            job_id=job_id,
-            is_job_result=True,
-        )
-        return QueryResult(dataset=dr, version=dv.version, output=output)
-
-    def run_query(
-        self,
-        python_executable: str,
-        query_script: str,
-        envs: Optional[Mapping[str, str]],
-        feature_file: IO[bytes],
-        capture_output: bool,
-        feature_module: str,
-        output_hook: Callable[[str], None],
-        params: Optional[dict[str, str]],
-        save: bool,
-        job_id: Optional[str],
-    ) -> tuple[list[str], subprocess.Popen]:
-        try:
-            feature_code, query_script_compiled = self.compile_query_script(
-                query_script, feature_module[:-3]
-            )
-            if feature_code:
-                feature_file.write(feature_code.encode())
-                feature_file.flush()
-
-        except Exception as exc:
-            raise QueryScriptCompileError(
-                f"Query script failed to compile, reason: {exc}"
-            ) from exc
-        envs = dict(envs or os.environ)
-        if feature_code:
-            envs["DATACHAIN_FEATURE_CLASS_SOURCE"] = json.dumps(
-                {feature_module: feature_code}
-            )
-        envs.update(
+        env = dict(env or os.environ)
+        env.update(
             {
                 "DATACHAIN_QUERY_PARAMS": json.dumps(params or {}),
                 "PYTHONPATH": os.getcwd(),  # For local imports
@@ -1981,19 +1819,28 @@ class Catalog:
                 "DATACHAIN_JOB_ID": job_id or "",
             },
         )
-        with subprocess.Popen(  # noqa: S603
-            [python_executable, "-c", query_script_compiled],
-            env=envs,
-            stdout=subprocess.PIPE if capture_output else None,
-            stderr=subprocess.STDOUT if capture_output else None,
-            bufsize=1,
-            text=False,
-        ) as proc:
-            out = proc.stdout
-            _lines: list[str] = []
-            ctx = print_and_capture(out, output_hook) if out else nullcontext(_lines)
-            with ctx as lines:
-                return lines, proc
+        popen_kwargs = {}
+        if capture_output:
+            popen_kwargs = {"stdout": subprocess.PIPE, "stderr": subprocess.STDOUT}
+
+        cmd = [python_executable, "-c", query_script_compiled]
+        with subprocess.Popen(cmd, env=env, **popen_kwargs) as proc:  # type: ignore[call-overload]  # noqa: S603
+            if capture_output:
+                args = (proc.stdout, output_hook)
+                thread = Thread(target=_process_stream, args=args, daemon=True)
+                thread.start()
+                thread.join()  # wait for the reader thread
+
+        if proc.returncode == QUERY_SCRIPT_CANCELED_EXIT_CODE:
+            raise QueryScriptCancelError(
+                "Query script was canceled by user",
+                return_code=proc.returncode,
+            )
+        if proc.returncode:
+            raise QueryScriptRunError(
+                f"Query script exited with error code {proc.returncode}",
+                return_code=proc.returncode,
+            )
 
     def cp(
         self,
@@ -2133,8 +1980,6 @@ class Catalog:
                 field_set.add("path")
             elif column == "name":
                 field_set.add("path")
-            elif column == "owner":
-                field_set.add("owner_name")
             elif column == "path":
                 field_set.add("dir_type")
                 field_set.add("path")

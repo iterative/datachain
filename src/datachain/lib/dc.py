@@ -56,7 +56,7 @@ from datachain.query.dataset import (
     PartitionByType,
     detach,
 )
-from datachain.query.schema import Column, DatasetRow
+from datachain.query.schema import DEFAULT_DELIMITER, Column, DatasetRow
 from datachain.sql.functions import path as pathfunc
 from datachain.utils import inside_notebook
 
@@ -112,11 +112,31 @@ class DatasetFromValuesError(DataChainParamsError):  # noqa: D101
         super().__init__(f"Dataset{name} from values error: {msg}")
 
 
+def _get_merge_error_str(col: Union[str, sqlalchemy.ColumnElement]) -> str:
+    if isinstance(col, str):
+        return col
+    if isinstance(col, sqlalchemy.Column):
+        return col.name.replace(DEFAULT_DELIMITER, ".")
+    if isinstance(col, sqlalchemy.ColumnElement) and hasattr(col, "name"):
+        return f"{col.name} expression"
+    return str(col)
+
+
 class DatasetMergeError(DataChainParamsError):  # noqa: D101
-    def __init__(self, on: Sequence[str], right_on: Optional[Sequence[str]], msg: str):  # noqa: D107
-        on_str = ", ".join(on) if isinstance(on, Sequence) else ""
+    def __init__(  # noqa: D107
+        self,
+        on: Sequence[Union[str, sqlalchemy.ColumnElement]],
+        right_on: Optional[Sequence[Union[str, sqlalchemy.ColumnElement]]],
+        msg: str,
+    ):
+        def _get_str(on: Sequence[Union[str, sqlalchemy.ColumnElement]]) -> str:
+            if not isinstance(on, Sequence):
+                return str(on)  # type: ignore[unreachable]
+            return ", ".join([_get_merge_error_str(col) for col in on])
+
+        on_str = _get_str(on)
         right_on_str = (
-            ", right_on='" + ", ".join(right_on) + "'"
+            ", right_on='" + _get_str(right_on) + "'"
             if right_on and isinstance(right_on, Sequence)
             else ""
         )
@@ -139,7 +159,7 @@ class Sys(DataModel):
 
 
 class DataChain(DatasetQuery):
-    """AI 🔗 DataChain - a data structure for batch data processing and evaluation.
+    """DataChain - a data structure for batch data processing and evaluation.
 
     It represents a sequence of data manipulation steps such as reading data from
     storages, running AI or LLM models or calling external services API to validate or
@@ -214,7 +234,6 @@ class DataChain(DatasetQuery):
     DEFAULT_FILE_RECORD: ClassVar[dict] = {
         "source": "",
         "path": "",
-        "vtype": "",
         "size": 0,
     }
 
@@ -252,12 +271,23 @@ class DataChain(DatasetQuery):
         """Returns Column instance with a type if name is found in current schema,
         otherwise raises an exception.
         """
-        name_path = name.split(".")
+        if "." in name:
+            name_path = name.split(".")
+        elif DEFAULT_DELIMITER in name:
+            name_path = name.split(DEFAULT_DELIMITER)
+        else:
+            name_path = [name]
         for path, type_, _, _ in self.signals_schema.get_flat_tree():
             if path == name_path:
                 return Column(name, python_to_sql(type_))
 
         raise ValueError(f"Column with name {name} not found in the schema")
+
+    def c(self, column: Union[str, Column]) -> Column:
+        """Returns Column instance attached to the current chain."""
+        c = self.column(column) if isinstance(column, str) else self.column(column.name)
+        c.table = self.table
+        return c
 
     def print_schema(self) -> None:
         """Print schema of the chain."""
@@ -384,7 +414,7 @@ class DataChain(DatasetQuery):
                 .save(list_dataset_name, listing=True)
             )
 
-        dc = cls.from_dataset(list_dataset_name, session=session)
+        dc = cls.from_dataset(list_dataset_name, session=session, settings=settings)
         dc.signals_schema = dc.signals_schema.mutate({f"{object_name}": file_type})
 
         return ls(dc, list_path, recursive=recursive, object_name=object_name)
@@ -395,6 +425,7 @@ class DataChain(DatasetQuery):
         name: str,
         version: Optional[int] = None,
         session: Optional[Session] = None,
+        settings: Optional[dict] = None,
     ) -> "DataChain":
         """Get data from a saved Dataset. It returns the chain itself.
 
@@ -407,7 +438,7 @@ class DataChain(DatasetQuery):
             chain = DataChain.from_dataset("my_cats")
             ```
         """
-        return DataChain(name=name, version=version, session=session)
+        return DataChain(name=name, version=version, session=session, settings=settings)
 
     @classmethod
     def from_json(
@@ -1140,8 +1171,17 @@ class DataChain(DatasetQuery):
     def merge(
         self,
         right_ds: "DataChain",
-        on: Union[str, Sequence[str]],
-        right_on: Union[str, Sequence[str], None] = None,
+        on: Union[
+            str,
+            sqlalchemy.ColumnElement,
+            Sequence[Union[str, sqlalchemy.ColumnElement]],
+        ],
+        right_on: Union[
+            str,
+            sqlalchemy.ColumnElement,
+            Sequence[Union[str, sqlalchemy.ColumnElement]],
+            None,
+        ] = None,
         inner=False,
         rname="right_",
     ) -> "Self":
@@ -1166,7 +1206,7 @@ class DataChain(DatasetQuery):
         if on is None:
             raise DatasetMergeError(["None"], None, "'on' must be specified")
 
-        if isinstance(on, str):
+        if isinstance(on, (str, sqlalchemy.ColumnElement)):
             on = [on]
         elif not isinstance(on, Sequence):
             raise DatasetMergeError(
@@ -1175,19 +1215,15 @@ class DataChain(DatasetQuery):
                 f"'on' must be 'str' or 'Sequence' object but got type '{type(on)}'",
             )
 
-        signals_schema = self.signals_schema.clone_without_sys_signals()
-        on_columns: list[str] = signals_schema.resolve(*on).db_signals()  # type: ignore[assignment]
-
-        right_signals_schema = right_ds.signals_schema.clone_without_sys_signals()
         if right_on is not None:
-            if isinstance(right_on, str):
+            if isinstance(right_on, (str, sqlalchemy.ColumnElement)):
                 right_on = [right_on]
             elif not isinstance(right_on, Sequence):
                 raise DatasetMergeError(
                     on,
                     right_on,
                     "'right_on' must be 'str' or 'Sequence' object"
-                    f" but got type '{right_on}'",
+                    f" but got type '{type(right_on)}'",
                 )
 
             if len(right_on) != len(on):
@@ -1195,34 +1231,39 @@ class DataChain(DatasetQuery):
                     on, right_on, "'on' and 'right_on' must have the same length'"
                 )
 
-            right_on_columns: list[str] = right_signals_schema.resolve(
-                *right_on
-            ).db_signals()  # type: ignore[assignment]
-
-            if len(right_on_columns) != len(on_columns):
-                on_str = ", ".join(right_on_columns)
-                right_on_str = ", ".join(right_on_columns)
-                raise DatasetMergeError(
-                    on,
-                    right_on,
-                    "'on' and 'right_on' must have the same number of columns in db'."
-                    f" on -> {on_str}, right_on -> {right_on_str}",
-                )
-        else:
-            right_on = on
-            right_on_columns = on_columns
-
         if self == right_ds:
             right_ds = right_ds.clone(new_table=True)
 
+        errors = []
+
+        def _resolve(
+            ds: DataChain,
+            col: Union[str, sqlalchemy.ColumnElement],
+            side: Union[str, None],
+        ):
+            try:
+                return ds.c(col) if isinstance(col, (str, C)) else col
+            except ValueError:
+                if side:
+                    errors.append(f"{_get_merge_error_str(col)} in {side}")
+
         ops = [
-            self.c(left) == right_ds.c(right)
-            for left, right in zip(on_columns, right_on_columns)
+            _resolve(self, left, "left")
+            == _resolve(right_ds, right, "right" if right_on else None)
+            for left, right in zip(on, right_on or on)
         ]
+
+        if errors:
+            raise DatasetMergeError(
+                on, right_on, f"Could not resolve {', '.join(errors)}"
+            )
 
         ds = self.join(right_ds, sqlalchemy.and_(*ops), inner, rname + "{name}")
 
         ds.feature_schema = None
+
+        signals_schema = self.signals_schema.clone_without_sys_signals()
+        right_signals_schema = right_ds.signals_schema.clone_without_sys_signals()
         ds.signals_schema = SignalSchema({"sys": Sys}) | signals_schema.merge(
             right_signals_schema, rname
         )
@@ -1582,6 +1623,8 @@ class DataChain(DatasetQuery):
         model_name: str = "",
         source: bool = True,
         nrows=None,
+        session: Optional[Session] = None,
+        settings: Optional[dict] = None,
         **kwargs,
     ) -> "DataChain":
         """Generate chain from csv files.
@@ -1598,6 +1641,8 @@ class DataChain(DatasetQuery):
             model_name : Generated model name.
             source : Whether to include info about the source file.
             nrows : Optional row limit.
+            session : Session to use for the chain.
+            settings : Settings to use for the chain.
 
         Example:
             Reading a csv file:
@@ -1614,7 +1659,9 @@ class DataChain(DatasetQuery):
         from pyarrow.csv import ConvertOptions, ParseOptions, ReadOptions
         from pyarrow.dataset import CsvFileFormat
 
-        chain = DataChain.from_storage(path, **kwargs)
+        chain = DataChain.from_storage(
+            path, session=session, settings=settings, **kwargs
+        )
 
         column_names = None
         if not header:
@@ -1661,6 +1708,8 @@ class DataChain(DatasetQuery):
         object_name: str = "",
         model_name: str = "",
         source: bool = True,
+        session: Optional[Session] = None,
+        settings: Optional[dict] = None,
         **kwargs,
     ) -> "DataChain":
         """Generate chain from parquet files.
@@ -1673,6 +1722,8 @@ class DataChain(DatasetQuery):
             object_name : Created object column name.
             model_name : Generated model name.
             source : Whether to include info about the source file.
+            session : Session to use for the chain.
+            settings : Settings to use for the chain.
 
         Example:
             Reading a single file:
@@ -1685,7 +1736,9 @@ class DataChain(DatasetQuery):
             dc = DataChain.from_parquet("s3://mybucket/dir")
             ```
         """
-        chain = DataChain.from_storage(path, **kwargs)
+        chain = DataChain.from_storage(
+            path, session=session, settings=settings, **kwargs
+        )
         return chain.parse_tabular(
             output=output,
             object_name=object_name,
