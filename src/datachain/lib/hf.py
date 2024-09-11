@@ -25,14 +25,15 @@ except ImportError as exc:
         "  pip install 'datachain[hf]'\n"
     ) from exc
 
-from io import BytesIO
+import hashlib
 from typing import TYPE_CHECKING, Any, Union
 
-import PIL
+from fsspec.implementations.memory import MemoryFileSystem
 from tqdm import tqdm
 
 from datachain.lib.arrow import arrow_type_mapper
 from datachain.lib.data_model import DataModel, DataType, dict_to_data_model
+from datachain.lib.file import ImageFile
 from datachain.lib.udf import Generator
 
 if TYPE_CHECKING:
@@ -50,17 +51,16 @@ class HFClassLabel(DataModel):
         return self.integer
 
 
-class HFImage(DataModel):
-    img: bytes
-
-    def read(self):
-        return PIL.Image.open(BytesIO(self.img))
-
-
 class HFAudio(DataModel):
     path: str
     array: list[float]
     sampling_rate: int
+
+
+class HFImageFile(ImageFile):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._caching_enabled = True
 
 
 class HFGenerator(Generator):
@@ -93,6 +93,11 @@ class HFGenerator(Generator):
                 for name, feat in ds.features.items():
                     anno = self.output_schema.model_fields[name].annotation
                     output_dict[name] = _convert_feature(row[name], feat, anno)
+                    if isinstance(feat, Image):
+                        file: ImageFile = output_dict[name]  # type: ignore[assignment]
+                        file._set_stream(self.catalog)
+                        client = self._catalog.get_client(file.source)
+                        client.download(file.get_uid(), callback=file._download_cb)
                 yield self.output_schema(**output_dict)
                 pbar.update(1)
 
@@ -121,7 +126,11 @@ def _convert_feature(val: Any, feat: Any, anno: Any) -> Any:
             return anno(**sdict)
         return val
     if isinstance(feat, Image):
-        return HFImage(img=image_to_bytes(val))
+        img = image_to_bytes(val)
+        etag = hashlib.md5(img, usedforsecurity=False).hexdigest()
+        fs = MemoryFileSystem()
+        fs.write_bytes(etag, img)
+        return HFImageFile(source="memory://", path=etag)
     if isinstance(feat, Audio):
         return HFAudio(**val)
 
@@ -161,7 +170,7 @@ def _feature_to_chain_type(name: str, val: Any) -> type:  # noqa: PLR0911
         dtype = arrow_type_mapper(string_to_arrow(val.dtype))
         return list[list[list[list[list[dtype]]]]]  # type: ignore[valid-type]
     if isinstance(val, Image):
-        return HFImage
+        return HFImageFile
     if isinstance(val, Audio):
         return HFAudio
     raise TypeError(f"Unknown huggingface datasets type {type(val)}")

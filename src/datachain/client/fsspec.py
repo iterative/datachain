@@ -84,11 +84,12 @@ class Client(ABC):
         self.uri = self.get_uri(self.name)
 
     @staticmethod
-    def get_implementation(url: str) -> type["Client"]:
+    def get_implementation(url: str) -> type["Client"]:  # noqa: PLR0911
         from .azure import AzureClient
         from .gcs import GCSClient
         from .hf import HfClient
         from .local import FileClient
+        from .memory import MemoryClient
         from .s3 import ClientS3
 
         protocol = urlparse(url).scheme
@@ -107,6 +108,8 @@ class Client(ABC):
             return FileClient
         if protocol == HfClient.protocol:
             return HfClient
+        if protocol == MemoryClient.protocol:
+            return MemoryClient
 
         raise NotImplementedError(f"Unsupported protocol: {protocol}")
 
