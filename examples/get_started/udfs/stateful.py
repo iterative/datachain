@@ -1,7 +1,7 @@
 """
-To install dependencies:
+To install the required dependencies:
 
-  pip install open_clip_torch
+  pip install datachain[examples]
 
 """
 
