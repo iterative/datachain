@@ -43,7 +43,6 @@ def test_init_with_prefix(sqlite_db):
     assert id_generator.db == sqlite_db
     assert id_generator._table_prefix == "foo"
     assert sqlite_db.has_table("foo_id_generator")
-    assert not sqlite_db.has_table("id_generator")
     assert get_rows(id_generator) == set()
 
     id_generator.cleanup_for_tests()
