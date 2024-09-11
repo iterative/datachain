@@ -27,7 +27,16 @@ from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import DataModel, DataType, dict_to_data_model
 from datachain.lib.dataset_info import DatasetInfo
 from datachain.lib.file import ExportPlacement as FileExportPlacement
-from datachain.lib.file import File, IndexedFile, get_file
+from datachain.lib.file import File, IndexedFile, get_file_type
+from datachain.lib.listing import (
+    is_listing_dataset,
+    is_listing_expired,
+    is_listing_subset,
+    list_bucket,
+    ls,
+    parse_listing_uri,
+)
+from datachain.lib.listing_info import ListingInfo
 from datachain.lib.meta_formats import read_meta, read_schema
 from datachain.lib.model_store import ModelStore
 from datachain.lib.settings import Settings
@@ -47,7 +56,7 @@ from datachain.query.dataset import (
     PartitionByType,
     detach,
 )
-from datachain.query.schema import Column, DatasetRow
+from datachain.query.schema import DEFAULT_DELIMITER, Column, DatasetRow
 from datachain.sql.functions import path as pathfunc
 from datachain.utils import inside_notebook
 
@@ -103,11 +112,31 @@ class DatasetFromValuesError(DataChainParamsError):  # noqa: D101
         super().__init__(f"Dataset{name} from values error: {msg}")
 
 
+def _get_merge_error_str(col: Union[str, sqlalchemy.ColumnElement]) -> str:
+    if isinstance(col, str):
+        return col
+    if isinstance(col, sqlalchemy.Column):
+        return col.name.replace(DEFAULT_DELIMITER, ".")
+    if isinstance(col, sqlalchemy.ColumnElement) and hasattr(col, "name"):
+        return f"{col.name} expression"
+    return str(col)
+
+
 class DatasetMergeError(DataChainParamsError):  # noqa: D101
-    def __init__(self, on: Sequence[str], right_on: Optional[Sequence[str]], msg: str):  # noqa: D107
-        on_str = ", ".join(on) if isinstance(on, Sequence) else ""
+    def __init__(  # noqa: D107
+        self,
+        on: Sequence[Union[str, sqlalchemy.ColumnElement]],
+        right_on: Optional[Sequence[Union[str, sqlalchemy.ColumnElement]]],
+        msg: str,
+    ):
+        def _get_str(on: Sequence[Union[str, sqlalchemy.ColumnElement]]) -> str:
+            if not isinstance(on, Sequence):
+                return str(on)  # type: ignore[unreachable]
+            return ", ".join([_get_merge_error_str(col) for col in on])
+
+        on_str = _get_str(on)
         right_on_str = (
-            ", right_on='" + ", ".join(right_on) + "'"
+            ", right_on='" + _get_str(right_on) + "'"
             if right_on and isinstance(right_on, Sequence)
             else ""
         )
@@ -130,7 +159,7 @@ class Sys(DataModel):
 
 
 class DataChain(DatasetQuery):
-    """AI 🔗 DataChain - a data structure for batch data processing and evaluation.
+    """DataChain - a data structure for batch data processing and evaluation.
 
     It represents a sequence of data manipulation steps such as reading data from
     storages, running AI or LLM models or calling external services API to validate or
@@ -243,12 +272,23 @@ class DataChain(DatasetQuery):
         """Returns Column instance with a type if name is found in current schema,
         otherwise raises an exception.
         """
-        name_path = name.split(".")
+        if "." in name:
+            name_path = name.split(".")
+        elif DEFAULT_DELIMITER in name:
+            name_path = name.split(DEFAULT_DELIMITER)
+        else:
+            name_path = [name]
         for path, type_, _, _ in self.signals_schema.get_flat_tree():
             if path == name_path:
                 return Column(name, python_to_sql(type_))
 
         raise ValueError(f"Column with name {name} not found in the schema")
+
+    def c(self, column: Union[str, Column]) -> Column:
+        """Returns Column instance attached to the current chain."""
+        c = self.column(column) if isinstance(column, str) else self.column(column.name)
+        c.table = self.table
+        return c
 
     def print_schema(self) -> None:
         """Print schema of the chain."""
@@ -311,7 +351,7 @@ class DataChain(DatasetQuery):
     @classmethod
     def from_storage(
         cls,
-        path,
+        uri,
         *,
         type: Literal["binary", "text", "image"] = "binary",
         session: Optional[Session] = None,
@@ -320,41 +360,74 @@ class DataChain(DatasetQuery):
         recursive: Optional[bool] = True,
         object_name: str = "file",
         update: bool = False,
-        **kwargs,
+        anon: bool = False,
     ) -> "Self":
         """Get data from a storage as a list of file with all file attributes.
         It returns the chain itself as usual.
 
         Parameters:
-            path : storage URI with directory. URI must start with storage prefix such
+            uri : storage URI with directory. URI must start with storage prefix such
                 as `s3://`, `gs://`, `az://` or "file:///"
             type : read file as "binary", "text", or "image" data. Default is "binary".
             recursive : search recursively for the given path.
             object_name : Created object column name.
             update : force storage reindexing. Default is False.
+            anon : If True, we will treat cloud bucket as public one
 
         Example:
             ```py
             chain = DataChain.from_storage("s3://my-bucket/my-dir")
             ```
         """
-        func = get_file(type)
-        return (
-            cls(
-                path,
-                session=session,
-                settings=settings,
-                recursive=recursive,
-                update=update,
-                in_memory=in_memory,
-                **kwargs,
-            )
-            .map(**{object_name: func})
-            .select(object_name)
+        file_type = get_file_type(type)
+
+        client_config = {"anon": True} if anon else None
+
+        session = Session.get(session, client_config=client_config, in_memory=in_memory)
+
+        list_dataset_name, list_uri, list_path = parse_listing_uri(
+            uri, session.catalog.cache, session.catalog.client_config
         )
+        need_listing = True
+
+        for ds in cls.listings(session=session, in_memory=in_memory).collect("listing"):
+            if (
+                not is_listing_expired(ds.created_at)  # type: ignore[union-attr]
+                and is_listing_subset(ds.name, list_dataset_name)  # type: ignore[union-attr]
+                and not update
+            ):
+                need_listing = False
+                list_dataset_name = ds.name  # type: ignore[union-attr]
+
+        if need_listing:
+            # caching new listing to special listing dataset
+            (
+                cls.from_records(
+                    DataChain.DEFAULT_FILE_RECORD,
+                    session=session,
+                    settings=settings,
+                    in_memory=in_memory,
+                )
+                .gen(
+                    list_bucket(list_uri, client_config=session.catalog.client_config),
+                    output={f"{object_name}": File},
+                )
+                .save(list_dataset_name, listing=True)
+            )
+
+        dc = cls.from_dataset(list_dataset_name, session=session, settings=settings)
+        dc.signals_schema = dc.signals_schema.mutate({f"{object_name}": file_type})
+
+        return ls(dc, list_path, recursive=recursive, object_name=object_name)
 
     @classmethod
-    def from_dataset(cls, name: str, version: Optional[int] = None) -> "DataChain":
+    def from_dataset(
+        cls,
+        name: str,
+        version: Optional[int] = None,
+        session: Optional[Session] = None,
+        settings: Optional[dict] = None,
+    ) -> "DataChain":
         """Get data from a saved Dataset. It returns the chain itself.
 
         Parameters:
@@ -366,7 +439,7 @@ class DataChain(DatasetQuery):
             chain = DataChain.from_dataset("my_cats")
             ```
         """
-        return DataChain(name=name, version=version)
+        return DataChain(name=name, version=version, session=session, settings=settings)
 
     @classmethod
     def from_json(
@@ -419,7 +492,7 @@ class DataChain(DatasetQuery):
             object_name = jmespath_to_name(jmespath)
         if not object_name:
             object_name = meta_type
-        chain = DataChain.from_storage(path=path, type=type, **kwargs)
+        chain = DataChain.from_storage(uri=path, type=type, **kwargs)
         signal_dict = {
             object_name: read_meta(
                 schema_from=schema_from,
@@ -479,7 +552,7 @@ class DataChain(DatasetQuery):
             object_name = jmespath_to_name(jmespath)
         if not object_name:
             object_name = meta_type
-        chain = DataChain.from_storage(path=path, type=type, **kwargs)
+        chain = DataChain.from_storage(uri=path, type=type, **kwargs)
         signal_dict = {
             object_name: read_meta(
                 schema_from=schema_from,
@@ -500,6 +573,7 @@ class DataChain(DatasetQuery):
         settings: Optional[dict] = None,
         in_memory: bool = False,
         object_name: str = "dataset",
+        include_listing: bool = False,
     ) -> "DataChain":
         """Generate chain with list of registered datasets.
 
@@ -517,7 +591,9 @@ class DataChain(DatasetQuery):
 
         datasets = [
             DatasetInfo.from_models(d, v, j)
-            for d, v, j in catalog.list_datasets_versions()
+            for d, v, j in catalog.list_datasets_versions(
+                include_listing=include_listing
+            )
         ]
 
         return cls.from_values(
@@ -526,6 +602,42 @@ class DataChain(DatasetQuery):
             in_memory=in_memory,
             output={object_name: DatasetInfo},
             **{object_name: datasets},  # type: ignore[arg-type]
+        )
+
+    @classmethod
+    def listings(
+        cls,
+        session: Optional[Session] = None,
+        in_memory: bool = False,
+        object_name: str = "listing",
+        **kwargs,
+    ) -> "DataChain":
+        """Generate chain with list of cached listings.
+        Listing is a special kind of dataset which has directory listing data of
+        some underlying storage (e.g S3 bucket).
+
+        Example:
+            ```py
+            from datachain import DataChain
+            DataChain.listings().show()
+            ```
+        """
+        session = Session.get(session, in_memory=in_memory)
+        catalog = kwargs.get("catalog") or session.catalog
+
+        listings = [
+            ListingInfo.from_models(d, v, j)
+            for d, v, j in catalog.list_datasets_versions(
+                include_listing=True, **kwargs
+            )
+            if is_listing_dataset(d.name)
+        ]
+
+        return cls.from_values(
+            session=session,
+            in_memory=in_memory,
+            output={object_name: ListingInfo},
+            **{object_name: listings},  # type: ignore[arg-type]
         )
 
     def print_json_schema(  # type: ignore[override]
@@ -570,7 +682,7 @@ class DataChain(DatasetQuery):
         )
 
     def save(  # type: ignore[override]
-        self, name: Optional[str] = None, version: Optional[int] = None
+        self, name: Optional[str] = None, version: Optional[int] = None, **kwargs
     ) -> "Self":
         """Save to a Dataset. It returns the chain itself.
 
@@ -580,7 +692,7 @@ class DataChain(DatasetQuery):
             version : version of a dataset. Default - the last version that exist.
         """
         schema = self.signals_schema.clone_without_sys_signals().serialize()
-        return super().save(name=name, version=version, feature_schema=schema)
+        return super().save(name=name, version=version, feature_schema=schema, **kwargs)
 
     def apply(self, func, *args, **kwargs):
         """Apply any function to the chain.
@@ -1060,8 +1172,17 @@ class DataChain(DatasetQuery):
     def merge(
         self,
         right_ds: "DataChain",
-        on: Union[str, Sequence[str]],
-        right_on: Union[str, Sequence[str], None] = None,
+        on: Union[
+            str,
+            sqlalchemy.ColumnElement,
+            Sequence[Union[str, sqlalchemy.ColumnElement]],
+        ],
+        right_on: Union[
+            str,
+            sqlalchemy.ColumnElement,
+            Sequence[Union[str, sqlalchemy.ColumnElement]],
+            None,
+        ] = None,
         inner=False,
         rname="right_",
     ) -> "Self":
@@ -1086,7 +1207,7 @@ class DataChain(DatasetQuery):
         if on is None:
             raise DatasetMergeError(["None"], None, "'on' must be specified")
 
-        if isinstance(on, str):
+        if isinstance(on, (str, sqlalchemy.ColumnElement)):
             on = [on]
         elif not isinstance(on, Sequence):
             raise DatasetMergeError(
@@ -1095,19 +1216,15 @@ class DataChain(DatasetQuery):
                 f"'on' must be 'str' or 'Sequence' object but got type '{type(on)}'",
             )
 
-        signals_schema = self.signals_schema.clone_without_sys_signals()
-        on_columns: list[str] = signals_schema.resolve(*on).db_signals()  # type: ignore[assignment]
-
-        right_signals_schema = right_ds.signals_schema.clone_without_sys_signals()
         if right_on is not None:
-            if isinstance(right_on, str):
+            if isinstance(right_on, (str, sqlalchemy.ColumnElement)):
                 right_on = [right_on]
             elif not isinstance(right_on, Sequence):
                 raise DatasetMergeError(
                     on,
                     right_on,
                     "'right_on' must be 'str' or 'Sequence' object"
-                    f" but got type '{right_on}'",
+                    f" but got type '{type(right_on)}'",
                 )
 
             if len(right_on) != len(on):
@@ -1115,34 +1232,39 @@ class DataChain(DatasetQuery):
                     on, right_on, "'on' and 'right_on' must have the same length'"
                 )
 
-            right_on_columns: list[str] = right_signals_schema.resolve(
-                *right_on
-            ).db_signals()  # type: ignore[assignment]
-
-            if len(right_on_columns) != len(on_columns):
-                on_str = ", ".join(right_on_columns)
-                right_on_str = ", ".join(right_on_columns)
-                raise DatasetMergeError(
-                    on,
-                    right_on,
-                    "'on' and 'right_on' must have the same number of columns in db'."
-                    f" on -> {on_str}, right_on -> {right_on_str}",
-                )
-        else:
-            right_on = on
-            right_on_columns = on_columns
-
         if self == right_ds:
             right_ds = right_ds.clone(new_table=True)
 
+        errors = []
+
+        def _resolve(
+            ds: DataChain,
+            col: Union[str, sqlalchemy.ColumnElement],
+            side: Union[str, None],
+        ):
+            try:
+                return ds.c(col) if isinstance(col, (str, C)) else col
+            except ValueError:
+                if side:
+                    errors.append(f"{_get_merge_error_str(col)} in {side}")
+
         ops = [
-            self.c(left) == right_ds.c(right)
-            for left, right in zip(on_columns, right_on_columns)
+            _resolve(self, left, "left")
+            == _resolve(right_ds, right, "right" if right_on else None)
+            for left, right in zip(on, right_on or on)
         ]
+
+        if errors:
+            raise DatasetMergeError(
+                on, right_on, f"Could not resolve {', '.join(errors)}"
+            )
 
         ds = self.join(right_ds, sqlalchemy.and_(*ops), inner, rname + "{name}")
 
         ds.feature_schema = None
+
+        signals_schema = self.signals_schema.clone_without_sys_signals()
+        right_signals_schema = right_ds.signals_schema.clone_without_sys_signals()
         ds.signals_schema = SignalSchema({"sys": Sys}) | signals_schema.merge(
             right_signals_schema, rname
         )
@@ -1501,6 +1623,8 @@ class DataChain(DatasetQuery):
         model_name: str = "",
         source: bool = True,
         nrows=None,
+        session: Optional[Session] = None,
+        settings: Optional[dict] = None,
         **kwargs,
     ) -> "DataChain":
         """Generate chain from csv files.
@@ -1517,6 +1641,8 @@ class DataChain(DatasetQuery):
             model_name : Generated model name.
             source : Whether to include info about the source file.
             nrows : Optional row limit.
+            session : Session to use for the chain.
+            settings : Settings to use for the chain.
 
         Example:
             Reading a csv file:
@@ -1533,7 +1659,9 @@ class DataChain(DatasetQuery):
         from pyarrow.csv import ConvertOptions, ParseOptions, ReadOptions
         from pyarrow.dataset import CsvFileFormat
 
-        chain = DataChain.from_storage(path, **kwargs)
+        chain = DataChain.from_storage(
+            path, session=session, settings=settings, **kwargs
+        )
 
         column_names = None
         if not header:
@@ -1580,6 +1708,8 @@ class DataChain(DatasetQuery):
         object_name: str = "",
         model_name: str = "",
         source: bool = True,
+        session: Optional[Session] = None,
+        settings: Optional[dict] = None,
         **kwargs,
     ) -> "DataChain":
         """Generate chain from parquet files.
@@ -1592,6 +1722,8 @@ class DataChain(DatasetQuery):
             object_name : Created object column name.
             model_name : Generated model name.
             source : Whether to include info about the source file.
+            session : Session to use for the chain.
+            settings : Settings to use for the chain.
 
         Example:
             Reading a single file:
@@ -1604,7 +1736,9 @@ class DataChain(DatasetQuery):
             dc = DataChain.from_parquet("s3://mybucket/dir")
             ```
         """
-        chain = DataChain.from_storage(path, **kwargs)
+        chain = DataChain.from_storage(
+            path, session=session, settings=settings, **kwargs
+        )
         return chain.parse_tabular(
             output=output,
             object_name=object_name,
@@ -1665,7 +1799,10 @@ class DataChain(DatasetQuery):
 
         if schema:
             signal_schema = SignalSchema(schema)
-            columns = signal_schema.db_signals(as_columns=True)  # type: ignore[assignment]
+            columns = [
+                sqlalchemy.Column(c.name, c.type)  # type: ignore[union-attr]
+                for c in signal_schema.db_signals(as_columns=True)  # type: ignore[assignment]
+            ]
         else:
             columns = [
                 sqlalchemy.Column(name, typ)

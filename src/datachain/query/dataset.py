@@ -1,7 +1,5 @@
 import contextlib
-import datetime
 import inspect
-import json
 import logging
 import os
 import random
@@ -38,11 +36,7 @@ from sqlalchemy.sql.selectable import Select
 from tqdm import tqdm
 
 from datachain.asyn import ASYNC_WORKERS, AsyncMapper, OrderedMapper
-from datachain.catalog import (
-    QUERY_SCRIPT_CANCELED_EXIT_CODE,
-    QUERY_SCRIPT_INVALID_LAST_STATEMENT_EXIT_CODE,
-    get_catalog,
-)
+from datachain.catalog import QUERY_SCRIPT_CANCELED_EXIT_CODE, get_catalog
 from datachain.data_storage.schema import (
     PARTITION_COLUMN_ID,
     partition_col_names,
@@ -60,7 +54,6 @@ from datachain.utils import (
     get_datachain_executable,
 )
 
-from .metrics import metrics
 from .schema import C, UDFParamSpec, normalize_param
 from .session import Session
 from .udf import UDFBase, UDFClassWrapper, UDFFactory, UDFType
@@ -219,7 +212,7 @@ class IndexingStep(StartingStep):
                 recursive=self.recursive,
             )
 
-        storage = self.catalog.get_storage(uri)
+        storage = self.catalog.metastore.get_storage(uri)
 
         return step_result(q, dataset_rows.c, dependencies=[storage.uri])
 
@@ -1175,8 +1168,12 @@ class DatasetQuery:
         """
         return self.name is not None and self.version is not None
 
-    def c(self, name: Union[C, str]) -> "ColumnClause[Any]":
-        col = sqlalchemy.column(name) if isinstance(name, str) else name
+    def c(self, column: Union[C, str]) -> "ColumnClause[Any]":
+        col: sqlalchemy.ColumnClause = (
+            sqlalchemy.column(column)
+            if isinstance(column, str)
+            else sqlalchemy.column(column.name, column.type)
+        )
         col.table = self.table
         return col
 
@@ -1634,7 +1631,7 @@ class DatasetQuery:
                 )
             else:
                 # storage dependency - its name is a valid StorageURI
-                storage = self.catalog.get_storage(dependency)
+                storage = self.catalog.metastore.get_storage(dependency)
                 self.catalog.metastore.add_storage_dependency(
                     StorageURI(dataset.name),
                     version,
@@ -1712,113 +1709,23 @@ class DatasetQuery:
         return self.__class__(name=name, version=version, catalog=self.catalog)
 
 
-def _get_output_fd_for_write() -> Union[str, int]:
-    handle = os.getenv("DATACHAIN_OUTPUT_FD")
-    if not handle:
-        return os.devnull
-
-    if os.name != "nt":
-        return int(handle)
-
-    import msvcrt
-
-    return msvcrt.open_osfhandle(int(handle), os.O_WRONLY)  # type: ignore[attr-defined]
-
-
-@attrs.define
-class ExecutionResult:
-    preview: list[dict] = attrs.field(factory=list)
-    dataset: Optional[tuple[str, int]] = None
-    metrics: dict[str, Any] = attrs.field(factory=dict)
-
-
-def _send_result(dataset_query: DatasetQuery) -> None:
-    class JSONSerialize(json.JSONEncoder):
-        def default(self, obj):
-            if isinstance(obj, (datetime.datetime, datetime.date)):
-                return obj.isoformat()
-            if isinstance(obj, bytes):
-                return list(obj[:1024])
-            return super().default(obj)
-
-    try:
-        preview_args: dict[str, Any] = json.loads(
-            os.getenv("DATACHAIN_QUERY_PREVIEW_ARGS", "")
-        )
-    except ValueError:
-        preview_args = {}
-
-    columns = preview_args.get("columns") or []
-
-    if type(dataset_query) is DatasetQuery:
-        preview_query = dataset_query.select(*columns)
-    else:
-        preview_query = dataset_query.select(*columns, _sys=False)
-
-    preview_query = preview_query.limit(preview_args.get("limit", 10)).offset(
-        preview_args.get("offset", 0)
-    )
-
-    dataset: Optional[tuple[str, int]] = None
-    if dataset_query.attached:
-        assert dataset_query.name, "Dataset name should be provided"
-        assert dataset_query.version, "Dataset version should be provided"
-        dataset = dataset_query.name, dataset_query.version
-
-    preview = preview_query.to_db_records()
-    result = ExecutionResult(preview, dataset, metrics)
-    data = attrs.asdict(result)
-
-    with open(_get_output_fd_for_write(), mode="w") as f:
-        json.dump(data, f, cls=JSONSerialize)
-
-
-def query_wrapper(dataset_query: DatasetQuery) -> DatasetQuery:
+def query_wrapper(dataset_query: Any) -> Any:
     """
     Wrapper function that wraps the last statement of user query script.
     Last statement MUST be instance of DatasetQuery, otherwise script exits with
     error code 10
     """
     if not isinstance(dataset_query, DatasetQuery):
-        sys.exit(QUERY_SCRIPT_INVALID_LAST_STATEMENT_EXIT_CODE)
+        return dataset_query
 
     catalog = dataset_query.catalog
     save = bool(os.getenv("DATACHAIN_QUERY_SAVE"))
-    save_as = os.getenv("DATACHAIN_QUERY_SAVE_AS")
 
     is_session_temp_dataset = dataset_query.name and dataset_query.name.startswith(
         dataset_query.session.get_temp_prefix()
     )
 
-    if save_as:
-        if dataset_query.attached:
-            dataset_name = dataset_query.name
-            version = dataset_query.version
-            assert dataset_name, "Dataset name should be provided in attached mode"
-            assert version, "Dataset version should be provided in attached mode"
-
-            dataset = catalog.get_dataset(dataset_name)
-
-            try:
-                target_dataset = catalog.get_dataset(save_as)
-            except DatasetNotFoundError:
-                target_dataset = None
-
-            if target_dataset:
-                dataset = catalog.register_dataset(dataset, version, target_dataset)
-            else:
-                dataset = catalog.register_new_dataset(dataset, version, save_as)
-
-            dataset_query = DatasetQuery(
-                name=dataset.name,
-                version=dataset.latest_version,
-                catalog=catalog,
-            )
-        else:
-            dataset_query = dataset_query.save(save_as)
-    elif save and (is_session_temp_dataset or not dataset_query.attached):
+    if save and (is_session_temp_dataset or not dataset_query.attached):
         name = catalog.generate_query_dataset_name()
         dataset_query = dataset_query.save(name)
-
-    _send_result(dataset_query)
     return dataset_query

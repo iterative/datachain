@@ -1,7 +1,7 @@
 import math
 import os
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -14,7 +14,24 @@ from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.dataset import DatasetStats
 from datachain.lib.dc import DataChain, DataChainColumnError
 from datachain.lib.file import File, ImageFile
+from datachain.lib.listing import (
+    LISTING_TTL,
+    is_listing_dataset,
+    parse_listing_uri,
+)
 from tests.utils import images_equal
+
+
+def _get_listing_datasets(session):
+    return sorted(
+        [
+            f"{ds.name}@v{ds.version}"
+            for ds in DataChain.datasets(session=session, include_listing=True).collect(
+                "dataset"
+            )
+            if is_listing_dataset(ds.name)
+        ]
+    )
 
 
 @pytest.mark.parametrize("anon", [True, False])
@@ -25,22 +42,140 @@ def test_catalog_anon(tmp_dir, catalog, anon):
 
 def test_from_storage(cloud_test_catalog):
     ctc = cloud_test_catalog
-    dc = DataChain.from_storage(ctc.src_uri, catalog=ctc.catalog)
+    dc = DataChain.from_storage(ctc.src_uri, session=ctc.session)
     assert dc.count() == 7
 
 
-def test_from_storage_reindex(tmp_dir, catalog):
+def test_from_storage_non_recursive(cloud_test_catalog):
+    ctc = cloud_test_catalog
+    dc = DataChain.from_storage(
+        f"{ctc.src_uri}/dogs", session=ctc.session, recursive=False
+    )
+    assert dc.count() == 3
+
+
+def test_from_storage_glob(cloud_test_catalog):
+    ctc = cloud_test_catalog
+    dc = DataChain.from_storage(f"{ctc.src_uri}/dogs*", session=ctc.session)
+    assert dc.count() == 4
+
+
+def test_from_storage_as_image(cloud_test_catalog):
+    ctc = cloud_test_catalog
+    dc = DataChain.from_storage(ctc.src_uri, session=ctc.session, type="image")
+    for im in dc.collect("file"):
+        assert isinstance(im, ImageFile)
+
+
+def test_from_storage_reindex(tmp_dir, test_session):
+    tmp_dir = tmp_dir / "parquets"
     path = tmp_dir.as_uri()
+    os.mkdir(tmp_dir)
 
     pd.DataFrame({"name": ["Alice", "Bob"]}).to_parquet(tmp_dir / "test1.parquet")
-    assert DataChain.from_storage(path, catalog=catalog).count() == 1
+    assert DataChain.from_storage(path, session=test_session).count() == 1
 
     pd.DataFrame({"name": ["Charlie", "David"]}).to_parquet(tmp_dir / "test2.parquet")
-    assert DataChain.from_storage(path, catalog=catalog).count() == 1
-    assert DataChain.from_storage(path, catalog=catalog, update=True).count() == 2
+    assert DataChain.from_storage(path, session=test_session).count() == 1
+    assert DataChain.from_storage(path, session=test_session, update=True).count() == 2
 
 
-@pytest.mark.parametrize("use_cache", [False, True])
+def test_from_storage_reindex_expired(tmp_dir, test_session):
+    catalog = test_session.catalog
+    tmp_dir = tmp_dir / "parquets"
+    os.mkdir(tmp_dir)
+    uri = tmp_dir.as_uri()
+
+    lst_ds_name = parse_listing_uri(uri, catalog.cache, catalog.client_config)[0]
+
+    pd.DataFrame({"name": ["Alice", "Bob"]}).to_parquet(tmp_dir / "test1.parquet")
+    assert DataChain.from_storage(uri, session=test_session).count() == 1
+    pd.DataFrame({"name": ["Charlie", "David"]}).to_parquet(tmp_dir / "test2.parquet")
+    # mark dataset as expired
+    test_session.catalog.metastore.update_dataset_version(
+        test_session.catalog.get_dataset(lst_ds_name),
+        1,
+        created_at=datetime.now(timezone.utc) - timedelta(seconds=LISTING_TTL + 20),
+    )
+
+    # listing was updated because listing dataset was expired
+    assert DataChain.from_storage(uri, session=test_session).count() == 2
+
+
+@pytest.mark.parametrize(
+    "cloud_type",
+    ["s3", "azure", "gs"],
+    indirect=True,
+)
+def test_from_storage_partials(cloud_test_catalog):
+    ctc = cloud_test_catalog
+    src_uri = ctc.src_uri
+    session = ctc.session
+    catalog = session.catalog
+
+    def _list_dataset_name(uri: str) -> str:
+        return parse_listing_uri(uri, catalog.cache, catalog.client_config)[0]
+
+    dogs_uri = f"{src_uri}/dogs"
+    DataChain.from_storage(dogs_uri, session=session)
+    assert _get_listing_datasets(session) == [
+        f"{_list_dataset_name(dogs_uri)}@v1",
+    ]
+
+    DataChain.from_storage(f"{src_uri}/dogs/others", session=session)
+    assert _get_listing_datasets(session) == [
+        f"{_list_dataset_name(dogs_uri)}@v1",
+    ]
+
+    DataChain.from_storage(src_uri, session=session)
+    assert _get_listing_datasets(session) == sorted(
+        [
+            f"{_list_dataset_name(dogs_uri)}@v1",
+            f"{_list_dataset_name(src_uri)}@v1",
+        ]
+    )
+
+    DataChain.from_storage(f"{src_uri}/cats", session=session)
+    assert _get_listing_datasets(session) == sorted(
+        [
+            f"{_list_dataset_name(dogs_uri)}@v1",
+            f"{_list_dataset_name(src_uri)}@v1",
+        ]
+    )
+
+
+@pytest.mark.parametrize(
+    "cloud_type",
+    ["s3", "azure", "gs"],
+    indirect=True,
+)
+def test_from_storage_partials_with_update(cloud_test_catalog):
+    ctc = cloud_test_catalog
+    src_uri = ctc.src_uri
+    session = ctc.session
+    catalog = session.catalog
+
+    def _list_dataset_name(uri: str) -> str:
+        return parse_listing_uri(uri, catalog.cache, catalog.client_config)[0]
+
+    uri = f"{src_uri}/cats"
+    DataChain.from_storage(uri, session=session)
+    assert _get_listing_datasets(session) == sorted(
+        [
+            f"{_list_dataset_name(uri)}@v1",
+        ]
+    )
+
+    DataChain.from_storage(uri, session=session, update=True)
+    assert _get_listing_datasets(session) == sorted(
+        [
+            f"{_list_dataset_name(uri)}@v1",
+            f"{_list_dataset_name(uri)}@v2",
+        ]
+    )
+
+
+@pytest.mark.parametrize("use_cache", [True, False])
 def test_map_file(cloud_test_catalog, use_cache):
     ctc = cloud_test_catalog
 
@@ -49,10 +184,11 @@ def test_map_file(cloud_test_catalog, use_cache):
             return file.name + " -> " + f.read().decode("utf-8")
 
     dc = (
-        DataChain.from_storage(ctc.src_uri, catalog=ctc.catalog)
+        DataChain.from_storage(ctc.src_uri, session=ctc.session)
         .settings(cache=use_cache)
         .map(signal=new_signal)
     )
+
     expected = {
         "description -> Cats and Dogs",
         "cat1 -> meow",
@@ -71,7 +207,7 @@ def test_map_file(cloud_test_catalog, use_cache):
 def test_read_file(cloud_test_catalog, use_cache):
     ctc = cloud_test_catalog
 
-    dc = DataChain.from_storage(ctc.src_uri, catalog=ctc.catalog)
+    dc = DataChain.from_storage(ctc.src_uri, session=ctc.session)
     for file in dc.settings(cache=use_cache).collect("file"):
         assert file.get_local_path() is None
         file.read()
@@ -84,10 +220,10 @@ def test_read_file(cloud_test_catalog, use_cache):
 @pytest.mark.parametrize("file_type", ["", "binary", "text"])
 @pytest.mark.parametrize("cloud_type", ["file"], indirect=True)
 def test_export_files(
-    tmp_dir, cloud_test_catalog, placement, use_map, use_cache, file_type
+    tmp_dir, cloud_test_catalog, test_session, placement, use_map, use_cache, file_type
 ):
     ctc = cloud_test_catalog
-    df = DataChain.from_storage(ctc.src_uri, type=file_type, catalog=ctc.catalog)
+    df = DataChain.from_storage(ctc.src_uri, type=file_type, session=test_session)
     if use_map:
         df.export_files(tmp_dir / "output", placement=placement, use_cache=use_cache)
         df.map(

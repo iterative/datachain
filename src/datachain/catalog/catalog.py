@@ -9,7 +9,6 @@ import os.path
 import posixpath
 import subprocess
 import sys
-import tempfile
 import time
 import traceback
 from collections.abc import Iterable, Iterator, Mapping, Sequence
@@ -77,7 +76,6 @@ from datachain.utils import (
 )
 
 from .datasource import DataSource
-from .subclass import SubclassFinder
 
 if TYPE_CHECKING:
     from datachain.data_storage import (
@@ -92,7 +90,6 @@ logger = logging.getLogger("datachain")
 
 DEFAULT_DATASET_DIR = "dataset"
 DATASET_FILE_SUFFIX = ".edatachain"
-FEATURE_CLASSES = ["DataModel"]
 
 TTL_INT = 4 * 60 * 60
 
@@ -156,8 +153,6 @@ class QueryResult(NamedTuple):
     dataset: Optional[DatasetRecord]
     version: Optional[int]
     output: str
-    preview: Optional[list[dict]]
-    metrics: dict[str, Any]
 
 
 class DatasetRowsFetcher(NodesThreadPool):
@@ -571,12 +566,6 @@ def find_column_to_str(  # noqa: PLR0911
     return ""
 
 
-def form_module_source(source_ast):
-    module = ast.Module(body=source_ast, type_ignores=[])
-    module = ast.fix_missing_locations(module)
-    return ast.unparse(module)
-
-
 class Catalog:
     def __init__(
         self,
@@ -660,33 +649,12 @@ class Catalog:
                     ),
                 ]
                 code_ast.body[-1:] = new_expressions
-            else:
-                raise Exception("Last line in a script was not an expression")
         return code_ast
 
-    def compile_query_script(
-        self, script: str, feature_module_name: str
-    ) -> tuple[Union[str, None], str]:
+    def compile_query_script(self, script: str) -> str:
         code_ast = ast.parse(script)
         code_ast = self.attach_query_wrapper(code_ast)
-        finder = SubclassFinder(FEATURE_CLASSES)
-        finder.visit(code_ast)
-
-        if not finder.feature_class:
-            main_module = form_module_source([*finder.imports, *finder.main_body])
-            return None, main_module
-
-        feature_import = ast.ImportFrom(
-            module=feature_module_name,
-            names=[ast.alias(name="*", asname=None)],
-            level=0,
-        )
-        feature_module = form_module_source([*finder.imports, *finder.feature_class])
-        main_module = form_module_source(
-            [*finder.imports, feature_import, *finder.main_body]
-        )
-
-        return feature_module, main_module
+        return ast.unparse(code_ast)
 
     def parse_url(self, uri: str, **config: Any) -> tuple[Client, str]:
         config = config or self.client_config
@@ -1020,20 +988,6 @@ class Catalog:
 
         return node_groups
 
-    def unlist_source(self, uri: StorageURI) -> None:
-        self.metastore.clone(uri=uri).mark_storage_not_indexed(uri)
-
-    def storage_stats(self, uri: StorageURI) -> Optional[DatasetStats]:
-        """
-        Returns tuple with storage stats: total number of rows and total dataset size.
-        """
-        partial_path = self.metastore.get_last_partial_path(uri)
-        if partial_path is None:
-            return None
-        dataset = self.get_dataset(Storage.dataset_name(uri, partial_path))
-
-        return self.dataset_stats(dataset.name, dataset.latest_version)
-
     def create_dataset(
         self,
         name: str,
@@ -1297,19 +1251,6 @@ class Catalog:
 
         return self.get_dataset(name)
 
-    def register_new_dataset(
-        self,
-        source_dataset: DatasetRecord,
-        source_version: int,
-        target_name: str,
-    ) -> DatasetRecord:
-        target_dataset = self.metastore.create_dataset(
-            target_name,
-            query_script=source_dataset.query_script,
-            schema=source_dataset.serialized_schema,
-        )
-        return self.register_dataset(source_dataset, source_version, target_dataset, 1)
-
     def register_dataset(
         self,
         dataset: DatasetRecord,
@@ -1422,17 +1363,18 @@ class Catalog:
 
         return direct_dependencies
 
-    def ls_datasets(self) -> Iterator[DatasetRecord]:
+    def ls_datasets(self, include_listing: bool = False) -> Iterator[DatasetRecord]:
         datasets = self.metastore.list_datasets()
         for d in datasets:
-            if not d.is_bucket_listing:
+            if not d.is_bucket_listing or include_listing:
                 yield d
 
     def list_datasets_versions(
         self,
+        include_listing: bool = False,
     ) -> Iterator[tuple[DatasetRecord, "DatasetVersion", Optional["Job"]]]:
         """Iterate over all dataset versions with related jobs."""
-        datasets = list(self.ls_datasets())
+        datasets = list(self.ls_datasets(include_listing=include_listing))
 
         # preselect dataset versions jobs from db to avoid multiple queries
         jobs_ids: set[str] = {
@@ -1444,7 +1386,8 @@ class Catalog:
 
         for d in datasets:
             yield from (
-                (d, v, jobs.get(v.job_id) if v.job_id else None) for v in d.versions
+                (d, v, jobs.get(str(v.job_id)) if v.job_id else None)
+                for v in d.versions
             )
 
     def ls_dataset_rows(
@@ -1631,15 +1574,6 @@ class Catalog:
 
         for source in data_sources:  # type: ignore [union-attr]
             yield source, source.ls(fields)
-
-    def ls_storage_uris(self) -> Iterator[str]:
-        yield from self.metastore.get_all_storage_uris()
-
-    def get_storage(self, uri: StorageURI) -> Storage:
-        return self.metastore.get_storage(uri)
-
-    def ls_storages(self) -> list[Storage]:
-        return self.metastore.list_storages()
 
     def pull_dataset(
         self,
@@ -1874,10 +1808,6 @@ class Catalog:
         envs: Optional[Mapping[str, str]] = None,
         python_executable: Optional[str] = None,
         save: bool = False,
-        save_as: Optional[str] = None,
-        preview_limit: int = 10,
-        preview_offset: int = 0,
-        preview_columns: Optional[list[str]] = None,
         capture_output: bool = True,
         output_hook: Callable[[str], None] = noop,
         params: Optional[dict[str, str]] = None,
@@ -1905,34 +1835,25 @@ class Catalog:
                 C.size > 1000
             )
         """
-        from datachain.query.dataset import ExecutionResult
-
-        feature_file = tempfile.NamedTemporaryFile(  # noqa: SIM115
-            dir=os.getcwd(), suffix=".py", delete=False
-        )
-        _, feature_module = os.path.split(feature_file.name)
-
-        try:
-            lines, proc, response_text = self.run_query(
-                python_executable or sys.executable,
-                query_script,
-                envs,
-                feature_file,
-                capture_output,
-                feature_module,
-                output_hook,
-                params,
-                preview_columns,
-                preview_limit,
-                preview_offset,
-                save,
-                save_as,
-                job_id,
+        if not job_id:
+            python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
+            job_id = self.metastore.create_job(
+                name="",
+                query=query_script,
+                params=params,
+                python_version=python_version,
             )
-        finally:
-            feature_file.close()
-            os.unlink(feature_file.name)
 
+        lines, proc = self.run_query(
+            python_executable or sys.executable,
+            query_script,
+            envs,
+            capture_output,
+            output_hook,
+            params,
+            save,
+            job_id,
+        )
         output = "".join(lines)
 
         if proc.returncode:
@@ -1942,105 +1863,69 @@ class Catalog:
                     return_code=proc.returncode,
                     output=output,
                 )
-            if proc.returncode == QUERY_SCRIPT_INVALID_LAST_STATEMENT_EXIT_CODE:
-                raise QueryScriptRunError(
-                    "Last line in a script was not an instance of DataChain",
-                    return_code=proc.returncode,
-                    output=output,
-                )
             raise QueryScriptRunError(
                 f"Query script exited with error code {proc.returncode}",
                 return_code=proc.returncode,
                 output=output,
             )
 
+        def _get_dataset_versions_by_job_id():
+            for dr, dv, job in self.list_datasets_versions():
+                if job and str(job.id) == job_id:
+                    yield dr, dv
+
         try:
-            response = json.loads(response_text)
-        except ValueError:
-            response = {}
-        exec_result = ExecutionResult(**response)
-
-        dataset: Optional[DatasetRecord] = None
-        version: Optional[int] = None
-        if save or save_as:
-            dataset, version = self.save_result(
-                query_script, exec_result, output, version, job_id
+            dr, dv = max(
+                _get_dataset_versions_by_job_id(), key=lambda x: x[1].created_at
             )
+        except ValueError as e:
+            if not save:
+                return QueryResult(dataset=None, version=None, output=output)
 
-        return QueryResult(
-            dataset=dataset,
-            version=version,
-            output=output,
-            preview=exec_result.preview,
-            metrics=exec_result.metrics,
+            raise QueryScriptDatasetNotFound(
+                "No dataset found after running Query script",
+                output=output,
+            ) from e
+
+        dr = self.update_dataset(
+            dr,
+            script_output=output,
+            query_script=query_script,
         )
+        self.update_dataset_version_with_warehouse_info(
+            dr,
+            dv.version,
+            script_output=output,
+            query_script=query_script,
+            job_id=job_id,
+            is_job_result=True,
+        )
+        return QueryResult(dataset=dr, version=dv.version, output=output)
 
     def run_query(
         self,
         python_executable: str,
         query_script: str,
         envs: Optional[Mapping[str, str]],
-        feature_file: IO[bytes],
         capture_output: bool,
-        feature_module: str,
         output_hook: Callable[[str], None],
         params: Optional[dict[str, str]],
-        preview_columns: Optional[list[str]],
-        preview_limit: int,
-        preview_offset: int,
         save: bool,
-        save_as: Optional[str],
         job_id: Optional[str],
-    ) -> tuple[list[str], subprocess.Popen, str]:
+    ) -> tuple[list[str], subprocess.Popen]:
         try:
-            feature_code, query_script_compiled = self.compile_query_script(
-                query_script, feature_module[:-3]
-            )
-            if feature_code:
-                feature_file.write(feature_code.encode())
-                feature_file.flush()
-
+            query_script_compiled = self.compile_query_script(query_script)
         except Exception as exc:
             raise QueryScriptCompileError(
                 f"Query script failed to compile, reason: {exc}"
             ) from exc
-        if save_as and save_as.startswith(QUERY_DATASET_PREFIX):
-            raise ValueError(
-                f"Cannot use {QUERY_DATASET_PREFIX} prefix for dataset name"
-            )
-        r, w = os.pipe()
-        if os.name == "nt":
-            import msvcrt
-
-            os.set_inheritable(w, True)
-
-            startupinfo = subprocess.STARTUPINFO()  # type: ignore[attr-defined]
-            handle = msvcrt.get_osfhandle(w)  # type: ignore[attr-defined]
-            startupinfo.lpAttributeList["handle_list"].append(handle)
-            kwargs: dict[str, Any] = {"startupinfo": startupinfo}
-        else:
-            handle = w
-            kwargs = {"pass_fds": [w]}
         envs = dict(envs or os.environ)
-        if feature_code:
-            envs["DATACHAIN_FEATURE_CLASS_SOURCE"] = json.dumps(
-                {feature_module: feature_code}
-            )
         envs.update(
             {
                 "DATACHAIN_QUERY_PARAMS": json.dumps(params or {}),
                 "PYTHONPATH": os.getcwd(),  # For local imports
-                "DATACHAIN_QUERY_PREVIEW_ARGS": json.dumps(
-                    {
-                        "limit": preview_limit,
-                        "offset": preview_offset,
-                        "columns": preview_columns,
-                    }
-                ),
                 "DATACHAIN_QUERY_SAVE": "1" if save else "",
-                "DATACHAIN_QUERY_SAVE_AS": save_as or "",
                 "PYTHONUNBUFFERED": "1",
-                "DATACHAIN_OUTPUT_FD": str(handle),
                 "DATACHAIN_JOB_ID": job_id or "",
             },
         )
@@ -2051,52 +1936,12 @@ class Catalog:
             stderr=subprocess.STDOUT if capture_output else None,
             bufsize=1,
             text=False,
-            **kwargs,
         ) as proc:
-            os.close(w)
-
             out = proc.stdout
             _lines: list[str] = []
             ctx = print_and_capture(out, output_hook) if out else nullcontext(_lines)
-
-            with ctx as lines, open(r) as f:
-                response_text = ""
-                while proc.poll() is None:
-                    response_text += f.readline()
-                    time.sleep(0.1)
-                response_text += f.readline()
-        return lines, proc, response_text
-
-    def save_result(self, query_script, exec_result, output, version, job_id):
-        if not exec_result.dataset:
-            raise QueryScriptDatasetNotFound(
-                "No dataset found after running Query script",
-                output=output,
-            )
-        name, version = exec_result.dataset
-        # finding returning dataset
-        try:
-            dataset = self.get_dataset(name)
-            dataset.get_version(version)
-        except (DatasetNotFoundError, ValueError) as e:
-            raise QueryScriptDatasetNotFound(
-                "No dataset found after running Query script",
-                output=output,
-            ) from e
-        dataset = self.update_dataset(
-            dataset,
-            script_output=output,
-            query_script=query_script,
-        )
-        self.update_dataset_version_with_warehouse_info(
-            dataset,
-            version,
-            script_output=output,
-            query_script=query_script,
-            job_id=job_id,
-            is_job_result=True,
-        )
-        return dataset, version
+            with ctx as lines:
+                return lines, proc
 
     def cp(
         self,

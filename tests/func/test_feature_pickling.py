@@ -74,8 +74,9 @@ def sort_df_for_tests(df):
     indirect=True,
 )
 def test_feature_udf_parallel(cloud_test_catalog_tmpfile):
-    catalog = cloud_test_catalog_tmpfile.catalog
-    source = cloud_test_catalog_tmpfile.src_uri
+    ctc = cloud_test_catalog_tmpfile
+    catalog = ctc.catalog
+    source = ctc.src_uri
     catalog.index([source])
 
     import tests.func.test_feature_pickling as tfp  # noqa: PLW0406
@@ -84,8 +85,8 @@ def test_feature_udf_parallel(cloud_test_catalog_tmpfile):
     cloudpickle.register_pickle_by_value(tfp)
 
     chain = (
-        DataChain.from_storage(source, type="text", catalog=catalog)
-        .filter(C.path.glob("*cat*"))
+        DataChain.from_storage(source, type="text", session=ctc.session)
+        .filter(C("file.path").glob("*cat*"))
         .settings(parallel=2)
         .map(
             message=file_to_message,
@@ -107,8 +108,9 @@ def test_feature_udf_parallel(cloud_test_catalog_tmpfile):
     indirect=True,
 )
 def test_feature_udf_parallel_local(cloud_test_catalog_tmpfile):
-    catalog = cloud_test_catalog_tmpfile.catalog
-    source = cloud_test_catalog_tmpfile.src_uri
+    ctc = cloud_test_catalog_tmpfile
+    catalog = ctc.catalog
+    source = ctc.src_uri
     catalog.index([source])
 
     class FileInfoLocal(DataModel):
@@ -132,8 +134,8 @@ def test_feature_udf_parallel_local(cloud_test_catalog_tmpfile):
     cloudpickle.register_pickle_by_value(tfp)
 
     chain = (
-        DataChain.from_storage(source, type="text", catalog=catalog)
-        .filter(C.path.glob("*cat*"))
+        DataChain.from_storage(source, type="text", session=ctc.session)
+        .filter(C("file.path").glob("*cat*"))
         .settings(parallel=2)
         .map(
             message=lambda file: AIMessageLocal(
@@ -164,8 +166,9 @@ def test_feature_udf_parallel_local(cloud_test_catalog_tmpfile):
     indirect=True,
 )
 def test_feature_udf_parallel_local_pydantic(cloud_test_catalog_tmpfile):
-    catalog = cloud_test_catalog_tmpfile.catalog
-    source = cloud_test_catalog_tmpfile.src_uri
+    ctc = cloud_test_catalog_tmpfile
+    catalog = ctc.catalog
+    source = ctc.src_uri
     catalog.index([source])
 
     class FileInfoLocalPydantic(BaseModel):
@@ -189,8 +192,8 @@ def test_feature_udf_parallel_local_pydantic(cloud_test_catalog_tmpfile):
     cloudpickle.register_pickle_by_value(tfp)
 
     chain = (
-        DataChain.from_storage(source, type="text", catalog=catalog)
-        .filter(C.path.glob("*cat*"))
+        DataChain.from_storage(source, type="text", session=ctc.session)
+        .filter(C("file.path").glob("*cat*"))
         .settings(parallel=2)
         .map(
             message=lambda file: AIMessageLocalPydantic(
@@ -223,8 +226,10 @@ def test_feature_udf_parallel_local_pydantic(cloud_test_catalog_tmpfile):
     indirect=True,
 )
 def test_feature_udf_parallel_dynamic(cloud_test_catalog_tmpfile):
-    catalog = cloud_test_catalog_tmpfile.catalog
-    source = cloud_test_catalog_tmpfile.src_uri
+    ctc = cloud_test_catalog_tmpfile
+    catalog = ctc.catalog
+    source = ctc.src_uri
+    session = ctc.session
     catalog.index([source])
 
     file_info_dynamic = create_feature_model(
@@ -260,8 +265,8 @@ def test_feature_udf_parallel_dynamic(cloud_test_catalog_tmpfile):
     cloudpickle.register_pickle_by_value(tfp)
 
     chain = (
-        DataChain.from_storage(source, type="text", catalog=catalog)
-        .filter(C.path.glob("*cat*"))
+        DataChain.from_storage(source, type="text", session=session)
+        .filter(C("file__path").glob("*cat*"))
         .settings(parallel=2)
         .map(
             message=lambda file: ai_message_dynamic(

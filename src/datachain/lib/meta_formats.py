@@ -1,15 +1,12 @@
-# pip install datamodel-code-generator
-# pip install jmespath
-#
 import csv
-import io
 import json
-import subprocess
-import sys
+import tempfile
 import uuid
 from collections.abc import Iterator
-from typing import Any, Callable
+from pathlib import Path
+from typing import Callable
 
+import datamodel_code_generator
 import jmespath as jsp
 from pydantic import BaseModel, ConfigDict, Field, ValidationError  # noqa: F401
 
@@ -47,17 +44,16 @@ def read_schema(source_file, data_type="csv", expr=None, model_name=None):
     data_string = ""
     # using uiid to get around issue #1617
     if not model_name:
-        uid_str = str(generate_uuid()).replace(
-            "-", ""
-        )  # comply with Python class names
+        # comply with Python class names
+        uid_str = str(generate_uuid()).replace("-", "")
         model_name = f"Model{data_type}{uid_str}"
     try:
         with source_file.open() as fd:  # CSV can be larger than memory
             if data_type == "csv":
-                data_string += fd.readline().decode("utf-8", "ignore").replace("\r", "")
-                data_string += fd.readline().decode("utf-8", "ignore").replace("\r", "")
+                data_string += fd.readline().replace("\r", "")
+                data_string += fd.readline().replace("\r", "")
             elif data_type == "jsonl":
-                data_string = fd.readline().decode("utf-8", "ignore").replace("\r", "")
+                data_string = fd.readline().replace("\r", "")
             else:
                 data_string = fd.read()  # other meta must fit into RAM
     except OSError as e:
@@ -70,33 +66,26 @@ def read_schema(source_file, data_type="csv", expr=None, model_name=None):
         if data_type == "jsonl":
             data_type = "json"  # treat json line as plain JSON in auto-schema
         data_string = json.dumps(json_object)
-    command = [
-        "datamodel-codegen",
-        "--input-file-type",
-        data_type,
-        "--class-name",
-        model_name,
-        "--base-class",
-        "datachain.lib.meta_formats.UserModel",
-    ]
-    try:
-        result = subprocess.run(  # noqa: S603
-            command,
-            input=data_string,
-            text=True,
-            capture_output=True,
-            check=True,
+
+    input_file_types = {i.value: i for i in datamodel_code_generator.InputFileType}
+    input_file_type = input_file_types[data_type]
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output = Path(tmpdir) / "model.py"
+        datamodel_code_generator.generate(
+            data_string,
+            input_file_type=input_file_type,
+            output=output,
+            target_python_version=datamodel_code_generator.PythonVersion.PY_39,
+            base_class="datachain.lib.meta_formats.UserModel",
+            class_name=model_name,
+            additional_imports=["datachain.lib.data_model.DataModel"],
+            use_standard_collections=True,
         )
-        model_output = (
-            result.stdout
-        )  # This will contain the output from datamodel-codegen
-    except subprocess.CalledProcessError as e:
-        model_output = f"An error occurred in datamodel-codegen: {e.stderr}"
-    print(f"{model_output}")
-    print("from datachain.lib.data_model import DataModel")
-    print("\n" + f"DataModel.register({model_name})" + "\n")
-    print("\n" + f"spec={model_name}" + "\n")
-    return model_output
+        epilogue = f"""
+DataModel.register({model_name})
+spec = {model_name}
+"""
+        return output.read_text() + epilogue
 
 
 #
@@ -113,35 +102,25 @@ def read_meta(  # noqa: C901
 ) -> Callable:
     from datachain.lib.dc import DataChain
 
-    # ugly hack: datachain is run redirecting printed outputs to a variable
     if schema_from:
-        captured_output = io.StringIO()
-        current_stdout = sys.stdout
-        sys.stdout = captured_output
-        try:
-            chain = (
-                DataChain.from_storage(schema_from)
-                .limit(1)
-                .map(  # dummy column created (#1615)
-                    meta_schema=lambda file: read_schema(
-                        file, data_type=meta_type, expr=jmespath, model_name=model_name
-                    ),
-                    output=str,
-                )
+        chain = (
+            DataChain.from_storage(schema_from, type="text")
+            .limit(1)
+            .map(  # dummy column created (#1615)
+                meta_schema=lambda file: read_schema(
+                    file, data_type=meta_type, expr=jmespath, model_name=model_name
+                ),
+                output=str,
             )
-            chain.exec()
-        finally:
-            sys.stdout = current_stdout
-        model_output = captured_output.getvalue()
-        captured_output.close()
-
+        )
+        (model_output,) = chain.collect("meta_schema")
         if print_schema:
             print(f"{model_output}")
         # Below 'spec' should be a dynamically converted DataModel from Pydantic
         if not spec:
-            local_vars: dict[str, Any] = {}
-            exec(model_output, globals(), local_vars)  # noqa: S102
-            spec = local_vars["spec"]
+            gl = globals()
+            exec(model_output, gl)  # type: ignore[arg-type] # noqa: S102
+            spec = gl["spec"]
 
     if not (spec) and not (schema_from):
         raise ValueError(

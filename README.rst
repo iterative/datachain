@@ -1,3 +1,8 @@
+.. image:: docs/assets/datachain-sys-theme.svg
+   :height: 48
+   :alt: DataChain logo
+
+
 |PyPI| |Python Version| |Codecov| |Tests|
 
 .. |PyPI| image:: https://img.shields.io/pypi/v/datachain.svg
@@ -13,7 +18,6 @@
    :target: https://github.com/iterative/datachain/actions/workflows/tests.yml
    :alt: Tests
 
-AI 🔗 DataChain
 ----------------
 
 DataChain is a modern Pythonic data-frame library designed for artificial intelligence.

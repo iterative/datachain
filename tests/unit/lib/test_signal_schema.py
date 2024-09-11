@@ -3,11 +3,10 @@ from datetime import datetime
 from typing import Optional, Union
 
 import pytest
-from sqlalchemy import Column
 
-from datachain import DataModel
+from datachain import Column, DataModel
 from datachain.lib.convert.flatten import flatten
-from datachain.lib.file import File
+from datachain.lib.file import File, TextFile
 from datachain.lib.signal_schema import (
     SetupError,
     SignalResolvingError,
@@ -443,6 +442,24 @@ def test_slice_nested():
     keys = ["feature.aa"]
     sliced = SignalSchema(schema).slice(keys)
     assert list(sliced.values.items()) == [("feature.aa", int)]
+
+
+def test_mutate_rename():
+    schema = SignalSchema({"name": str})
+    schema = schema.mutate({"new_name": Column("name")})
+    assert schema.values == {"new_name": str}
+
+
+def test_mutate_new_signal():
+    schema = SignalSchema({"name": str})
+    schema = schema.mutate({"age": Column("age", Float)})
+    assert schema.values == {"name": str, "age": float}
+
+
+def test_mutate_change_type():
+    schema = SignalSchema({"name": str, "age": float, "f": File})
+    schema = schema.mutate({"age": int, "f": TextFile})
+    assert schema.values == {"name": str, "age": int, "f": TextFile}
 
 
 @pytest.mark.parametrize(

@@ -87,6 +87,7 @@ class Client(ABC):
     def get_implementation(url: str) -> type["Client"]:
         from .azure import AzureClient
         from .gcs import GCSClient
+        from .hf import HfClient
         from .local import FileClient
         from .s3 import ClientS3
 
@@ -104,6 +105,8 @@ class Client(ABC):
             return AzureClient
         if protocol == FileClient.protocol:
             return FileClient
+        if protocol == HfClient.protocol:
+            return HfClient
 
         raise NotImplementedError(f"Unsupported protocol: {protocol}")
 

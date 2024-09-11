@@ -1,7 +1,5 @@
 import io
-import json
 import os
-from contextlib import suppress
 from pathlib import Path
 from textwrap import dedent
 from urllib.parse import urlparse
@@ -18,6 +16,7 @@ from datachain.error import (
     QueryScriptRunError,
     StorageNotFoundError,
 )
+from datachain.storage import Storage
 from tests.data import ENTRIES
 from tests.utils import (
     DEFAULT_TREE,
@@ -30,23 +29,18 @@ from tests.utils import (
 )
 
 
+def storage_stats(uri, catalog):
+    partial_path = catalog.metastore.get_last_partial_path(uri)
+    if partial_path is None:
+        return None
+    dataset = catalog.get_dataset(Storage.dataset_name(uri, partial_path))
+
+    return catalog.dataset_stats(dataset.name, dataset.latest_version)
+
+
 @pytest.fixture
 def pre_created_ds_name():
     return "pre_created_dataset"
-
-
-@pytest.fixture
-def mock_os_pipe(mocker):
-    r, w = os.pipe()
-    mocker.patch("os.pipe", return_value=(r, w))
-
-    try:
-        yield (r, w)
-    finally:
-        with suppress(OSError):
-            os.close(r)
-        with suppress(OSError):
-            os.close(w)
 
 
 @pytest.fixture
@@ -62,21 +56,20 @@ def mock_popen(mocker):
 
 @pytest.fixture
 def mock_popen_dataset_created(
-    mock_popen, cloud_test_catalog, mock_os_pipe, listed_bucket
+    mocker, monkeypatch, mock_popen, cloud_test_catalog, listed_bucket
 ):
     # create dataset which would be created in subprocess
     ds_name = cloud_test_catalog.catalog.generate_query_dataset_name()
-    ds_version = 1
+    job_id = cloud_test_catalog.catalog.metastore.create_job(name="", query="")
+    mocker.patch.object(
+        cloud_test_catalog.catalog.metastore, "create_job", return_value=job_id
+    )
+    monkeypatch.setenv("DATACHAIN_JOB_ID", str(job_id))
     cloud_test_catalog.catalog.create_dataset_from_sources(
         ds_name,
         [f"{cloud_test_catalog.src_uri}/dogs/*"],
         recursive=True,
     )
-
-    _, w = mock_os_pipe
-    with open(w, mode="w", closefd=False) as f:
-        f.write(json.dumps({"dataset": (ds_name, ds_version)}))
-
     mock_popen.configure_mock(stdout=io.StringIO("user log 1\nuser log 2"))
     yield mock_popen
 
@@ -963,21 +956,6 @@ def test_query_fail_to_compile(cloud_test_catalog):
         catalog.query(query_script)
 
 
-def test_query_fail_wrong_dataset_name(cloud_test_catalog):
-    catalog = cloud_test_catalog.catalog
-
-    query_script = """\
-    from datachain.query import DatasetQuery
-    DatasetQuery("s3://bucket-name")
-    """
-    query_script = dedent(query_script)
-
-    with pytest.raises(
-        ValueError, match="Cannot use ds_query_ prefix for dataset name"
-    ):
-        catalog.query(query_script, save_as="ds_query_dataset")
-
-
 def test_query_subprocess_wrong_return_code(mock_popen, cloud_test_catalog):
     mock_popen.configure_mock(returncode=1)
     catalog = cloud_test_catalog.catalog
@@ -991,42 +969,6 @@ DatasetQuery('{src_uri}')
     with pytest.raises(QueryScriptRunError) as exc_info:
         catalog.query(query_script)
         assert str(exc_info.value).startswith("Query script exited with error code 1")
-
-
-def test_query_last_statement_not_expression(mock_popen, cloud_test_catalog):
-    mock_popen.configure_mock(returncode=10)
-    catalog = cloud_test_catalog.catalog
-    src_uri = cloud_test_catalog.src_uri
-
-    query_script = f"""
-from datachain.query import DatasetQuery, C
-ds = DatasetQuery('{src_uri}')
-    """
-
-    with pytest.raises(QueryScriptCompileError) as exc_info:
-        catalog.query(query_script)
-        assert str(exc_info.value).startswith(
-            "Query script failed to compile, "
-            "reason: Last line in a script was not an expression"
-        )
-
-
-def test_query_last_statement_not_ds_query_instance(mock_popen, cloud_test_catalog):
-    mock_popen.configure_mock(returncode=10)
-    catalog = cloud_test_catalog.catalog
-    src_uri = cloud_test_catalog.src_uri
-
-    query_script = f"""
-from datachain.query import DatasetQuery, C
-ds = DatasetQuery('{src_uri}')
-5
-    """
-
-    with pytest.raises(QueryScriptRunError) as exc_info:
-        catalog.query(query_script)
-        assert str(exc_info.value).startswith(
-            "Last line in a script was not an instance of DataChain"
-        )
 
 
 def test_query_dataset_not_returned(mock_popen, cloud_test_catalog):
@@ -1050,20 +992,20 @@ def test_storage_stats(cloud_test_catalog):
     src_uri = cloud_test_catalog.src_uri
 
     with pytest.raises(StorageNotFoundError):
-        catalog.storage_stats(src_uri)
+        storage_stats(src_uri, catalog)
 
     catalog.enlist_source(src_uri, ttl=1234)
-    stats = catalog.storage_stats(src_uri)
+    stats = storage_stats(src_uri, catalog)
     assert stats.num_objects == 7
     assert stats.size == 36
 
     catalog.enlist_source(f"{src_uri}/dogs/", ttl=1234, force_update=True)
-    stats = catalog.storage_stats(src_uri)
+    stats = storage_stats(src_uri, catalog)
     assert stats.num_objects == 4
     assert stats.size == 15
 
     catalog.enlist_source(f"{src_uri}/dogs/", ttl=1234)
-    stats = catalog.storage_stats(src_uri)
+    stats = storage_stats(src_uri, catalog)
     assert stats.num_objects == 4
     assert stats.size == 15
 
@@ -1074,12 +1016,12 @@ def test_enlist_source_handles_slash(cloud_test_catalog):
     src_uri = cloud_test_catalog.src_uri
 
     catalog.enlist_source(f"{src_uri}/dogs", ttl=1234)
-    stats = catalog.storage_stats(src_uri)
+    stats = storage_stats(src_uri, catalog)
     assert stats.num_objects == len(DEFAULT_TREE["dogs"])
     assert stats.size == 15
 
     catalog.enlist_source(f"{src_uri}/dogs/", ttl=1234, force_update=True)
-    stats = catalog.storage_stats(src_uri)
+    stats = storage_stats(src_uri, catalog)
     assert stats.num_objects == len(DEFAULT_TREE["dogs"])
     assert stats.size == 15
 
@@ -1090,7 +1032,7 @@ def test_enlist_source_handles_glob(cloud_test_catalog):
     src_uri = cloud_test_catalog.src_uri
 
     catalog.enlist_source(f"{src_uri}/dogs/*.jpg", ttl=1234)
-    stats = catalog.storage_stats(src_uri)
+    stats = storage_stats(src_uri, catalog)
 
     assert stats.num_objects == len(DEFAULT_TREE["dogs"])
     assert stats.size == 15
@@ -1102,7 +1044,7 @@ def test_enlist_source_handles_file(cloud_test_catalog):
     src_uri = cloud_test_catalog.src_uri
 
     catalog.enlist_source(f"{src_uri}/dogs/dog1", ttl=1234)
-    stats = catalog.storage_stats(src_uri)
+    stats = storage_stats(src_uri, catalog)
     assert stats.num_objects == len(DEFAULT_TREE["dogs"])
     assert stats.size == 15
 

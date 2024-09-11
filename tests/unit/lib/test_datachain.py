@@ -9,13 +9,15 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 from datasets import Dataset
-from datasets.exceptions import DatasetNotFoundError
 from pydantic import BaseModel
 
 from datachain import Column
+from datachain.client import Client
 from datachain.lib.data_model import DataModel
 from datachain.lib.dc import C, DataChain, DataChainColumnError, Sys
 from datachain.lib.file import File
+from datachain.lib.listing import LISTING_PREFIX
+from datachain.lib.listing_info import ListingInfo
 from datachain.lib.signal_schema import (
     SignalResolvingError,
     SignalResolvingTypeError,
@@ -253,6 +255,60 @@ def test_datasets_in_memory():
     datasets = [d for d in ds.collect("foo") if d.name == "fibonacci"]
     assert len(datasets) == 1
     assert datasets[0].num_objects == 6
+
+
+def test_listings(test_session, tmp_dir):
+    df = pd.DataFrame(DF_DATA)
+    df.to_parquet(tmp_dir / "df.parquet")
+
+    uri = tmp_dir.as_uri()
+    client, _ = Client.parse_url(uri, test_session.catalog.cache)
+
+    DataChain.from_storage(uri, session=test_session)
+
+    # check that listing is not returned as normal dataset
+    assert not any(
+        n.startswith(LISTING_PREFIX)
+        for n in [
+            ds.name
+            for ds in DataChain.datasets(session=test_session).collect("dataset")
+        ]
+    )
+
+    listings = list(DataChain.listings(session=test_session).collect("listing"))
+    assert len(listings) == 1
+    listing = listings[0]
+    assert isinstance(listing, ListingInfo)
+    assert listing.storage_uri == client.uri
+    assert listing.is_expired is False
+    assert listing.expires
+    assert listing.version == 1
+    assert listing.num_objects == 1
+    assert listing.size == 2912
+    assert listing.status == 4
+
+
+def test_listings_reindex(test_session, tmp_dir):
+    df = pd.DataFrame(DF_DATA)
+    df.to_parquet(tmp_dir / "df.parquet")
+
+    uri = tmp_dir.as_uri()
+    client, _ = Client.parse_url(uri, test_session.catalog.cache)
+
+    DataChain.from_storage(uri, session=test_session)
+    assert len(list(DataChain.listings(session=test_session).collect("listing"))) == 1
+
+    DataChain.from_storage(uri, session=test_session)
+    assert len(list(DataChain.listings(session=test_session).collect("listing"))) == 1
+
+    DataChain.from_storage(uri, session=test_session, update=True)
+    listings = list(DataChain.listings(session=test_session).collect("listing"))
+    assert len(listings) == 2
+    listings.sort(key=lambda lst: lst.version)
+    assert listings[0].storage_uri == client.uri
+    assert listings[0].version == 1
+    assert listings[1].storage_uri == client.uri
+    assert listings[1].version == 2
 
 
 def test_preserve_feature_schema(test_session):
@@ -938,7 +994,7 @@ def test_parse_tabular_partitions(tmp_dir, test_session):
     df.to_parquet(path, partition_cols=["first_name"])
     dc = (
         DataChain.from_storage(path.as_uri(), session=test_session)
-        .filter(C("path").glob("*first_name=Alice*"))
+        .filter(C("file.path").glob("*first_name=Alice*"))
         .parse_tabular(partitioning="hive")
     )
     df1 = dc.select("first_name", "age", "city").to_pandas()
@@ -968,7 +1024,7 @@ def test_parse_tabular_unify_schema(tmp_dir, test_session):
     )
     dc = (
         DataChain.from_storage(tmp_dir.as_uri(), session=test_session)
-        .filter(C("path").glob("*.parquet"))
+        .filter(C("file.path").glob("*.parquet"))
         .parse_tabular()
     )
     df = dc.select("first_name", "age", "city", "last_name", "country").to_pandas()
@@ -1863,5 +1919,5 @@ def test_from_hf_object_name(test_session):
 
 
 def test_from_hf_invalid(test_session):
-    with pytest.raises(DatasetNotFoundError):
+    with pytest.raises(FileNotFoundError):
         DataChain.from_hf("invalid_dataset", session=test_session)

@@ -448,3 +448,8 @@ def get_datachain_executable() -> list[str]:
     if datachain_exec_path := os.getenv("DATACHAIN_EXEC_PATH"):
         return [datachain_exec_path]
     return [sys.executable, "-m", "datachain"]
+
+
+def uses_glob(path: str) -> bool:
+    """Checks if some URI path has glob syntax in it"""
+    return glob.has_magic(os.path.basename(os.path.normpath(path)))

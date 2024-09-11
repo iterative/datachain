@@ -195,14 +195,15 @@ class File(DataModel):
             with VFileRegistry.resolve(self, self.location) as f:  # type: ignore[arg-type]
                 yield f
 
-        uid = self.get_uid()
-        client = self._catalog.get_client(self.source)
-        if self._caching_enabled:
-            client.download(uid, callback=self._download_cb)
-        with client.open_object(
-            uid, use_cache=self._caching_enabled, cb=self._download_cb
-        ) as f:
-            yield io.TextIOWrapper(f) if mode == "r" else f
+        else:
+            uid = self.get_uid()
+            client = self._catalog.get_client(self.source)
+            if self._caching_enabled:
+                client.download(uid, callback=self._download_cb)
+            with client.open_object(
+                uid, use_cache=self._caching_enabled, cb=self._download_cb
+            ) as f:
+                yield io.TextIOWrapper(f) if mode == "r" else f
 
     def read(self, length: int = -1):
         """Returns file contents."""
@@ -349,39 +350,6 @@ class ImageFile(File):
         self.read().save(destination)
 
 
-def get_file(type_: Literal["binary", "text", "image"] = "binary"):
-    file: type[File] = File
-    if type_ == "text":
-        file = TextFile
-    elif type_ == "image":
-        file = ImageFile  # type: ignore[assignment]
-
-    def get_file_type(
-        source: str,
-        path: str,
-        size: int,
-        version: str,
-        etag: str,
-        is_latest: bool,
-        last_modified: datetime,
-        location: Optional[Union[dict, list[dict]]],
-        vtype: str,
-    ) -> file:  # type: ignore[valid-type]
-        return file(
-            source=source,
-            path=path,
-            size=size,
-            version=version,
-            etag=etag,
-            is_latest=is_latest,
-            last_modified=last_modified,
-            location=location,
-            vtype=vtype,
-        )
-
-    return get_file_type
-
-
 class IndexedFile(DataModel):
     """Metadata indexed from tabular files.
 
@@ -390,3 +358,13 @@ class IndexedFile(DataModel):
 
     file: File
     index: int
+
+
+def get_file_type(type_: Literal["binary", "text", "image"] = "binary") -> type[File]:
+    file: type[File] = File
+    if type_ == "text":
+        file = TextFile
+    elif type_ == "image":
+        file = ImageFile  # type: ignore[assignment]
+
+    return file

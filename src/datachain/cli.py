@@ -14,6 +14,7 @@ import shtab
 
 from datachain import utils
 from datachain.cli_utils import BooleanOptionalAction, CommaSeparatedArgs, KeyValueArgs
+from datachain.lib.dc import DataChain
 from datachain.utils import DataChainDir
 
 if TYPE_CHECKING:
@@ -473,9 +474,6 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         "script", metavar="<script.py>", type=str, help="Filepath for script"
     )
     query_parser.add_argument(
-        "dataset_name", nargs="?", type=str, help="Save result dataset as"
-    )
-    query_parser.add_argument(
         "--parallel",
         nargs="?",
         type=int,
@@ -487,7 +485,6 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
             "N defaults to the CPU count."
         ),
     )
-    add_show_args(query_parser)
     query_parser.add_argument(
         "-p",
         "--param",
@@ -619,18 +616,6 @@ def _ls_urls_flat(
                 raise FileNotFoundError(f"No such file or directory: {source}")
 
 
-def ls_indexed_storages(catalog: "Catalog", long: bool = False) -> Iterator[str]:
-    from datachain.node import long_line_str
-
-    storage_uris = catalog.ls_storage_uris()
-    if long:
-        for uri in storage_uris:
-            # TODO: add Storage.created so it can be used here
-            yield long_line_str(uri, None, "")
-    else:
-        yield from storage_uris
-
-
 def ls_local(
     sources,
     long: bool = False,
@@ -661,8 +646,9 @@ def ls_local(
                 for entry in entries:
                     print(format_ls_entry(entry))
     else:
-        for entry in ls_indexed_storages(catalog, long=long):
-            print(format_ls_entry(entry))
+        chain = DataChain.listings()
+        for ls in chain.collect("listing"):
+            print(format_ls_entry(f"{ls.uri}@v{ls.version}"))  # type: ignore[union-attr]
 
 
 def format_ls_entry(entry: str) -> str:
@@ -813,16 +799,10 @@ def show(
 def query(
     catalog: "Catalog",
     script: str,
-    dataset_name: Optional[str] = None,
     parallel: Optional[int] = None,
-    limit: int = 10,
-    offset: int = 0,
-    columns: Optional[list[str]] = None,
-    no_collapse: bool = False,
     params: Optional[dict[str, str]] = None,
 ) -> None:
     from datachain.data_storage import JobQueryType, JobStatus
-    from datachain.utils import show_records
 
     with open(script, encoding="utf-8") as f:
         script_content = f.read()
@@ -843,13 +823,9 @@ def query(
     )
 
     try:
-        result = catalog.query(
+        catalog.query(
             script_content,
             python_executable=python_executable,
-            save_as=dataset_name,
-            preview_limit=limit,
-            preview_offset=offset,
-            preview_columns=columns,
             capture_output=False,
             params=params,
             job_id=job_id,
@@ -864,10 +840,7 @@ def query(
             error_stack=error_stack,
         )
         raise
-
-    catalog.metastore.set_job_status(job_id, JobStatus.COMPLETE, metrics=result.metrics)
-
-    show_records(result.preview, collapse_columns=not no_collapse)
+    catalog.metastore.set_job_status(job_id, JobStatus.COMPLETE)
 
 
 def clear_cache(catalog: "Catalog"):
@@ -1042,12 +1015,7 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
             query(
                 catalog,
                 args.script,
-                dataset_name=args.dataset_name,
                 parallel=args.parallel,
-                limit=args.limit,
-                offset=args.offset,
-                columns=args.columns,
-                no_collapse=args.no_collapse,
                 params=args.param,
             )
         elif args.command == "apply-udf":

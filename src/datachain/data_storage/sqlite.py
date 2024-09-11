@@ -143,7 +143,9 @@ class SQLiteDatabaseEngine(DatabaseEngine):
             db.execute("PRAGMA synchronous = NORMAL")
             db.execute("PRAGMA case_sensitive_like = ON")
             if os.environ.get("DEBUG_SHOW_SQL_QUERIES"):
-                db.set_trace_callback(print)
+                import sys
+
+                db.set_trace_callback(sys.stderr.write)
 
             load_usearch_extension(db)
 
@@ -514,17 +516,6 @@ class SQLiteMetastore(AbstractDBMetastore):
 
     def _datasets_dependencies_insert(self) -> "Insert":
         return sqlite.insert(self._datasets_dependencies)
-
-    #
-    # Storages
-    #
-
-    def mark_storage_not_indexed(self, uri: StorageURI) -> None:
-        """
-        Mark storage as not indexed.
-        This method should be called when storage index is deleted.
-        """
-        self.db.execute(self._storages_delete().where(self._storages.c.uri == uri))
 
     #
     # Dataset dependencies
