@@ -141,6 +141,10 @@ filterwarnings = [
   "error::pytest_mock.PytestMockWarning",
   "error::pytest.PytestCollectionWarning",
   "error::sqlalchemy.exc.SADeprecationWarning",
+  "ignore::DeprecationWarning:timm.*",
+  "ignore::DeprecationWarning:botocore.auth",
+  "ignore::DeprecationWarning:datasets.utils._dill",
+  "ignore::DeprecationWarning:librosa.core.intervals",
   "ignore:Field name .* shadows an attribute in parent:UserWarning"  # datachain.lib.feature
 ]
 

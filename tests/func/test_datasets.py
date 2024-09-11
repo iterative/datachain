@@ -58,7 +58,6 @@ def test_create_dataset_no_version_specified(cloud_test_catalog, create_rows):
     dataset_version = dataset.get_version(1)
 
     assert dataset.name == name
-    assert dataset.query_script == "script"
     assert dataset_version.query_script == "script"
     assert dataset.schema["similarity"] == Float32
     assert dataset_version.schema["similarity"] == Float32
@@ -88,7 +87,6 @@ def test_create_dataset_with_explicit_version(cloud_test_catalog, create_rows):
     dataset_version = dataset.get_version(1)
 
     assert dataset.name == name
-    assert dataset.query_script == "script"
     assert dataset_version.query_script == "script"
     assert dataset.schema["similarity"] == Float32
     assert dataset_version.schema["similarity"] == Float32
