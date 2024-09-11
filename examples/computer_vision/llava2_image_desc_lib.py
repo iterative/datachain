@@ -1,4 +1,10 @@
-# pip install accelerate torch
+"""
+To install the required dependencies:
+
+  pip install datachain[examples]
+
+"""
+
 import torch
 from transformers import (
     AutoProcessor,

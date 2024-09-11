@@ -13,8 +13,6 @@ ENTRIES = [
         is_latest=True,
         last_modified=datetime(2023, 2, 27, 18, 28, 54, tzinfo=utc),
         size=13,
-        owner_name="webfile",
-        owner_id="75aa57f09aa0c8caeab4f8c24e99d10f8e7faeebf76c078efc7c6caea54ba06a",
     ),
     Entry.from_file(
         path="cats/cat1",
@@ -23,8 +21,6 @@ ENTRIES = [
         is_latest=True,
         last_modified=datetime(2023, 2, 27, 18, 28, 54, tzinfo=utc),
         size=4,
-        owner_name="webfile",
-        owner_id="75aa57f09aa0c8caeab4f8c24e99d10f8e7faeebf76c078efc7c6caea54ba06a",
     ),
     Entry.from_file(
         path="cats/cat2",
@@ -33,8 +29,6 @@ ENTRIES = [
         is_latest=True,
         last_modified=datetime(2023, 2, 27, 18, 28, 54, tzinfo=utc),
         size=4,
-        owner_name="webfile",
-        owner_id="75aa57f09aa0c8caeab4f8c24e99d10f8e7faeebf76c078efc7c6caea54ba06a",
     ),
     Entry.from_file(
         path="dogs/dog1",
@@ -43,8 +37,6 @@ ENTRIES = [
         is_latest=True,
         last_modified=datetime(2023, 2, 27, 18, 28, 54, tzinfo=utc),
         size=4,
-        owner_name="webfile",
-        owner_id="75aa57f09aa0c8caeab4f8c24e99d10f8e7faeebf76c078efc7c6caea54ba06a",
     ),
     Entry.from_file(
         path="dogs/dog2",
@@ -53,8 +45,6 @@ ENTRIES = [
         is_latest=True,
         last_modified=datetime(2023, 2, 27, 18, 28, 54, tzinfo=utc),
         size=3,
-        owner_name="webfile",
-        owner_id="75aa57f09aa0c8caeab4f8c24e99d10f8e7faeebf76c078efc7c6caea54ba06a",
     ),
     Entry.from_file(
         path="dogs/dog3",
@@ -63,8 +53,6 @@ ENTRIES = [
         is_latest=True,
         last_modified=datetime(2023, 2, 27, 18, 28, 54, tzinfo=utc),
         size=4,
-        owner_name="webfile",
-        owner_id="75aa57f09aa0c8caeab4f8c24e99d10f8e7faeebf76c078efc7c6caea54ba06a",
     ),
     Entry.from_file(
         path="dogs/others/dog4",
@@ -73,8 +61,6 @@ ENTRIES = [
         is_latest=True,
         last_modified=datetime(2023, 2, 27, 18, 28, 54, tzinfo=utc),
         size=4,
-        owner_name="webfile",
-        owner_id="75aa57f09aa0c8caeab4f8c24e99d10f8e7faeebf76c078efc7c6caea54ba06a",
     ),
 ]
 
@@ -90,8 +76,6 @@ INVALID_ENTRIES = [
         is_latest=True,
         last_modified=datetime(2023, 2, 27, 18, 28, 54, tzinfo=utc),
         size=4,
-        owner_name="webfile",
-        owner_id="75aa57f09aa0c8caeab4f8c24e99d10f8e7faeebf76c078efc7c6caea54ba06a",
     ),
     Entry.from_file(
         path="dogs/others",
@@ -100,8 +84,6 @@ INVALID_ENTRIES = [
         is_latest=True,
         last_modified=datetime(2023, 2, 27, 18, 28, 54, tzinfo=utc),
         size=4,
-        owner_name="webfile",
-        owner_id="75aa57f09aa0c8caeab4f8c24e99d10f8e7faeebf76c078efc7c6caea54ba06a",
     ),
     Entry.from_file(
         path="dogs/",
@@ -110,7 +92,5 @@ INVALID_ENTRIES = [
         is_latest=True,
         last_modified=datetime(2023, 2, 27, 18, 28, 54, tzinfo=utc),
         size=4,
-        owner_name="webfile",
-        owner_id="75aa57f09aa0c8caeab4f8c24e99d10f8e7faeebf76c078efc7c6caea54ba06a",
     ),
 ]

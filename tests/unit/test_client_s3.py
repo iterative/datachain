@@ -22,7 +22,6 @@ def nodes():
 def make_size_node(node_id, dir_type, path, size):
     return Node(
         node_id,
-        vtype="",
         dir_type=dir_type,
         path=path,
         size=size,
