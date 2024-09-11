@@ -32,7 +32,6 @@ if TYPE_CHECKING:
         _FromClauseArgument,
         _OnClauseArgument,
     )
-    from sqlalchemy.sql.elements import ColumnElement
     from sqlalchemy.sql.selectable import Join, Select
     from sqlalchemy.types import TypeEngine
 
