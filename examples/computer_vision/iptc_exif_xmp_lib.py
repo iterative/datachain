@@ -1,4 +1,10 @@
-# pip install defusedxml
+"""
+To install the required dependencies:
+
+  pip install datachain[examples]
+
+"""
+
 import json
 
 from PIL import (

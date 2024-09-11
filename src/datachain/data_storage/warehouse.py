@@ -28,7 +28,6 @@ from datachain.utils import sql_escape_like
 
 if TYPE_CHECKING:
     from sqlalchemy.sql._typing import _ColumnsClauseArgument
-    from sqlalchemy.sql.elements import ColumnElement
     from sqlalchemy.sql.selectable import Select
     from sqlalchemy.types import TypeEngine
 
@@ -341,9 +340,7 @@ class AbstractWarehouse(ABC, Serializable):
 
         column_objects = [dr.c[c] for c in column_names]
         # include all object types - file, tar archive, tar file (subobject)
-        select_query = dr.select(*column_objects).where(
-            dr.c.dir_type.in_(DirTypeGroup.FILE) & (dr.c.is_latest == true())
-        )
+        select_query = dr.select(*column_objects).where(dr.c.is_latest == true())
         if path is None:
             return select_query
         if recursive:
@@ -404,13 +401,14 @@ class AbstractWarehouse(ABC, Serializable):
         expressions: tuple[_ColumnsClauseArgument[Any], ...] = (
             sa.func.count(table.c.sys__id),
         )
-        if "file__size" in table.columns:
-            expressions = (*expressions, sa.func.sum(table.c.file__size))
-        elif "size" in table.columns:
-            expressions = (*expressions, sa.func.sum(table.c.size))
+        size_columns = [
+            c for c in table.columns if c.name == "size" or c.name.endswith("__size")
+        ]
+        if size_columns:
+            expressions = (*expressions, sa.func.sum(sum(size_columns)))
         query = select(*expressions)
         ((nrows, *rest),) = self.db.execute(query)
-        return nrows, rest[0] if rest else None
+        return nrows, rest[0] if rest else 0
 
     def prepare_entries(
         self, uri: str, entries: Iterable[Entry]
@@ -420,7 +418,6 @@ class AbstractWarehouse(ABC, Serializable):
         """
 
         def _prepare_entry(entry: Entry):
-            assert entry.dir_type is not None
             return attrs.asdict(entry) | {"source": uri}
 
         return [_prepare_entry(e) for e in entries]
@@ -440,7 +437,7 @@ class AbstractWarehouse(ABC, Serializable):
         """Inserts dataset rows directly into dataset table"""
 
     @abstractmethod
-    def instr(self, source, target) -> "ColumnElement":
+    def instr(self, source, target) -> sa.ColumnElement:
         """
         Return SQLAlchemy Boolean determining if a target substring is present in
         source string column
@@ -500,7 +497,7 @@ class AbstractWarehouse(ABC, Serializable):
         c = query.selected_columns
         q = query.where(c.dir_type.in_(file_group))
         if not include_subobjects:
-            q = q.where(c.vtype == "")
+            q = q.where((c.location == "") | (c.location.is_(None)))
         return q
 
     def get_nodes(self, query) -> Iterator[Node]:
@@ -624,8 +621,7 @@ class AbstractWarehouse(ABC, Serializable):
 
         return sa.select(
             de.c.sys__id,
-            with_default(dr.c.vtype),
-            case((de.c.is_dir == true(), DirType.DIR), else_=dr.c.dir_type).label(
+            case((de.c.is_dir == true(), DirType.DIR), else_=DirType.FILE).label(
                 "dir_type"
             ),
             de.c.path,
@@ -634,8 +630,6 @@ class AbstractWarehouse(ABC, Serializable):
             with_default(dr.c.is_latest),
             dr.c.last_modified,
             with_default(dr.c.size),
-            with_default(dr.c.owner_name),
-            with_default(dr.c.owner_id),
             with_default(dr.c.sys__rand),
             dr.c.location,
             de.c.source,
@@ -650,7 +644,6 @@ class AbstractWarehouse(ABC, Serializable):
             query = dr.select().where(
                 self.path_expr(dr) == path,
                 dr.c.is_latest == true(),
-                dr.c.dir_type != DirType.DIR,
             )
             row = next(self.db.execute(query), None)
             if row is not None:
@@ -660,7 +653,6 @@ class AbstractWarehouse(ABC, Serializable):
             dr.select()
             .where(
                 dr.c.is_latest == true(),
-                dr.c.dir_type != DirType.DIR,
                 dr.c.path.startswith(path),
             )
             .exists()
@@ -761,13 +753,11 @@ class AbstractWarehouse(ABC, Serializable):
 
         sub_glob = posixpath.join(path, "*")
         dr = dataset_rows
-        selections = [
+        selections: list[sa.ColumnElement] = [
             func.sum(dr.c.size),
         ]
         if count_files:
-            selections.append(
-                func.sum(dr.c.dir_type.in_(DirTypeGroup.FILE)),
-            )
+            selections.append(func.count())
         results = next(
             self.db.execute(
                 dr.select(*selections).where(

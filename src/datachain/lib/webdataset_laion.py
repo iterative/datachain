@@ -1,3 +1,4 @@
+import warnings
 from collections.abc import Iterator
 from typing import Optional
 
@@ -6,6 +7,18 @@ from pydantic import BaseModel, Field
 
 from datachain.lib.file import File
 from datachain.lib.webdataset import WDSBasic, WDSReadableSubclass
+
+# The `json` method of the Pydantic `BaseModel` class has been deprecated
+# and will be removed in Pydantic v3. For more details, see:
+# https://github.com/pydantic/pydantic/issues/10033
+# Until then, we can ignore the warning.
+warnings.filterwarnings(
+    "ignore",
+    category=UserWarning,
+    message=(
+        'Field name "json" in "WDSLaion" shadows an attribute in parent "WDSBasic"'
+    ),
+)
 
 
 class Laion(WDSReadableSubclass):

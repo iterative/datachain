@@ -243,7 +243,7 @@ def run_step(step):  # noqa: PLR0912
 
 
 @pytest.mark.e2e
-def test_query_e2e(tmp_dir, catalog):
+def test_query_e2e(tmp_dir, catalog_tmpfile):
     """End-to-end CLI Query Test"""
     for step in E2E_STEPS:
         run_step(step)
