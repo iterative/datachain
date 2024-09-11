@@ -7,6 +7,7 @@ from torch import float32
 from torch.distributed import get_rank, get_world_size
 from torch.utils.data import IterableDataset, get_worker_info
 from torchvision.transforms import v2
+from tqdm import tqdm
 
 from datachain.catalog import Catalog, get_catalog
 from datachain.lib.dc import DataChain
@@ -93,33 +94,38 @@ class PytorchDataset(IterableDataset):
         if self.num_samples > 0:
             ds = ds.sample(self.num_samples)
         ds = ds.chunk(total_rank, total_workers)
-        for row_features in ds.collect():
-            row = []
-            for fr in row_features:
-                if hasattr(fr, "read"):
-                    row.append(fr.read())  # type: ignore[unreachable]
-                else:
-                    row.append(fr)
-            # Apply transforms
-            if self.transform:
-                try:
-                    if isinstance(self.transform, v2.Transform):
-                        row = self.transform(row)
+        desc = f"Parsed PyTorch dataset for rank={total_rank} worker"
+        with tqdm(desc=desc, unit=" rows") as pbar:
+            for row_features in ds.collect():
+                row = []
+                for fr in row_features:
+                    if hasattr(fr, "read"):
+                        row.append(fr.read())  # type: ignore[unreachable]
+                    else:
+                        row.append(fr)
+                # Apply transforms
+                if self.transform:
+                    try:
+                        if isinstance(self.transform, v2.Transform):
+                            row = self.transform(row)
+                        for i, val in enumerate(row):
+                            if isinstance(val, Image.Image):
+                                row[i] = self.transform(val)
+                    except ValueError:
+                        logger.warning(
+                            "Skipping transform due to unsupported data types."
+                        )
+                        self.transform = None
+                if self.tokenizer:
                     for i, val in enumerate(row):
-                        if isinstance(val, Image.Image):
-                            row[i] = self.transform(val)
-                except ValueError:
-                    logger.warning("Skipping transform due to unsupported data types.")
-                    self.transform = None
-            if self.tokenizer:
-                for i, val in enumerate(row):
-                    if isinstance(val, str) or (
-                        isinstance(val, list) and isinstance(val[0], str)
-                    ):
-                        row[i] = convert_text(
-                            val, self.tokenizer, self.tokenizer_kwargs
-                        ).squeeze(0)  # type: ignore[union-attr]
-            yield row
+                        if isinstance(val, str) or (
+                            isinstance(val, list) and isinstance(val[0], str)
+                        ):
+                            row[i] = convert_text(
+                                val, self.tokenizer, self.tokenizer_kwargs
+                            ).squeeze(0)  # type: ignore[union-attr]
+                yield row
+                pbar.update(1)
 
     @staticmethod
     def get_rank_and_workers() -> tuple[int, int]:
