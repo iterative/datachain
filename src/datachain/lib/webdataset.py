@@ -1,6 +1,7 @@
 import hashlib
 import json
 import tarfile
+import warnings
 from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import (
@@ -18,6 +19,18 @@ from pydantic import Field
 from datachain.lib.data_model import DataModel
 from datachain.lib.file import File, TarVFile
 from datachain.lib.utils import DataChainError
+
+# The `json` method of the Pydantic `BaseModel` class has been deprecated
+# and will be removed in Pydantic v3. For more details, see:
+# https://github.com/pydantic/pydantic/issues/10033
+# Until then, we can ignore the warning.
+warnings.filterwarnings(
+    "ignore",
+    category=UserWarning,
+    message=(
+        'Field name "json" in "WDSAllFile" shadows an attribute in parent "WDSBasic"'
+    ),
+)
 
 
 class WDSError(DataChainError):

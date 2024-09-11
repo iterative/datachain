@@ -119,7 +119,6 @@ class File(DataModel):
     is_latest: bool = Field(default=True)
     last_modified: datetime = Field(default=TIME_ZERO)
     location: Optional[Union[dict, list[dict]]] = Field(default=None)
-    vtype: str = Field(default="")
 
     _datachain_column_types: ClassVar[dict[str, Any]] = {
         "source": String,
@@ -130,7 +129,6 @@ class File(DataModel):
         "is_latest": Boolean,
         "last_modified": DateTime,
         "location": JSON,
-        "vtype": String,
     }
 
     _unique_id_keys: ClassVar[list[str]] = [
@@ -140,7 +138,6 @@ class File(DataModel):
         "etag",
         "version",
         "is_latest",
-        "vtype",
         "location",
         "last_modified",
     ]
