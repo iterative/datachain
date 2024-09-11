@@ -847,6 +847,7 @@ def clear_cache(catalog: "Catalog"):
 
 def garbage_collect(catalog: "Catalog"):
     temp_tables = catalog.get_temp_table_names()
+    print(f"Temp tables are {temp_tables}")
     if not temp_tables:
         print("Nothing to clean up.")
     else:
