@@ -401,13 +401,14 @@ class AbstractWarehouse(ABC, Serializable):
         expressions: tuple[_ColumnsClauseArgument[Any], ...] = (
             sa.func.count(table.c.sys__id),
         )
-        if "file__size" in table.columns:
-            expressions = (*expressions, sa.func.sum(table.c.file__size))
-        elif "size" in table.columns:
-            expressions = (*expressions, sa.func.sum(table.c.size))
+        size_columns = [
+            c for c in table.columns if c.name == "size" or c.name.endswith("__size")
+        ]
+        if size_columns:
+            expressions = (*expressions, sa.func.sum(sum(size_columns)))
         query = select(*expressions)
         ((nrows, *rest),) = self.db.execute(query)
-        return nrows, rest[0] if rest else None
+        return nrows, rest[0] if rest else 0
 
     def prepare_entries(
         self, uri: str, entries: Iterable[Entry]
