@@ -4,7 +4,7 @@ from tempfile import NamedTemporaryFile
 from typing import TYPE_CHECKING, Optional
 
 import pyarrow as pa
-from pyarrow.dataset import dataset
+from pyarrow.dataset import CsvFileFormat, dataset
 from tqdm import tqdm
 
 from datachain.lib.data_model import dict_to_data_model
@@ -73,6 +73,9 @@ class ArrowGenerator(Generator):
                         vals = [self.output_schema(**vals_dict)]
                     if self.source:
                         file_model = file.model_dump()
+                        # Can't serialize CsvFileFormat; may lose formatting options.
+                        if isinstance(self.kwargs.get("format"), CsvFileFormat):
+                            self.kwargs["format"] = "csv"
                         file_model["location"] = [
                             {"index": index, "kwargs": self.kwargs}
                         ]
