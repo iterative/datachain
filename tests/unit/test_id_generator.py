@@ -22,20 +22,14 @@ def test_init(sqlite_db):
     assert sqlite_db.has_table("id_generator")
     assert get_rows(id_generator) == set()
 
-    id_generator.cleanup_for_tests()
-    assert not sqlite_db.has_table("id_generator")
-
 
 @skip_if_not_sqlite
 def test_init_empty(tmp_dir):
-    id_generator = SQLiteIDGenerator()
+    id_generator = SQLiteIDGenerator(db_file=tmp_dir / "test.db")
     assert id_generator._table_prefix is None
     assert id_generator.db
     assert id_generator.db.has_table("id_generator")
     assert get_rows(id_generator) == set()
-
-    id_generator.cleanup_for_tests()
-    assert not id_generator.db.has_table("id_generator")
 
 
 def test_init_with_prefix(sqlite_db):
@@ -44,9 +38,6 @@ def test_init_with_prefix(sqlite_db):
     assert id_generator._table_prefix == "foo"
     assert sqlite_db.has_table("foo_id_generator")
     assert get_rows(id_generator) == set()
-
-    id_generator.cleanup_for_tests()
-    assert not sqlite_db.has_table("foo_id_generator")
 
 
 def test_clone(id_generator):
@@ -59,10 +50,6 @@ def test_clone(id_generator):
     assert get_rows(id_generator) == {("foo", 0), ("bar", 1)}
     assert get_rows(clone) == get_rows(id_generator)
 
-    id_generator.cleanup_for_tests()
-    assert not id_generator.db.has_table("id_generator")
-    assert not clone.db.has_table("id_generator")
-
 
 def test_clone_params(id_generator):
     func, args, kwargs = id_generator.clone_params()
@@ -74,10 +61,6 @@ def test_clone_params(id_generator):
     clone.get_next_id("bar")
     assert get_rows(id_generator) == {("foo", 0), ("bar", 1)}
     assert get_rows(clone) == get_rows(id_generator)
-
-    clone.cleanup_for_tests()
-    assert not id_generator.db.has_table("id_generator")
-    assert not clone.db.has_table("id_generator")
 
 
 def test_serialize(sqlite_db):
