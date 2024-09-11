@@ -8,6 +8,7 @@ import pytest
 import yaml
 from fsspec.implementations.local import LocalFileSystem
 
+from datachain import DataChain, File
 from datachain.catalog import parse_edatachain_file
 from datachain.cli import garbage_collect
 from datachain.error import (
@@ -138,8 +139,6 @@ def test_find_names_columns(cloud_test_catalog, cloud_type):
     src_uri = cloud_test_catalog.src_uri
     catalog = cloud_test_catalog.catalog
 
-    owner = "webfile" if cloud_type == "s3" else ""
-
     src_uri_path = src_uri
     if cloud_type == "file":
         src_uri_path = LocalFileSystem._strip_protocol(src_uri)
@@ -148,14 +147,14 @@ def test_find_names_columns(cloud_test_catalog, cloud_type):
         catalog.find(
             [src_uri],
             names=["*cat*"],
-            columns=["du", "name", "owner", "path", "size", "type"],
+            columns=["du", "name", "path", "size", "type"],
         )
     ) == {
         "\t".join(columns)
         for columns in [
-            ["8", "cats", "", f"{src_uri_path}/cats/", "0", "d"],
-            ["4", "cat1", owner, f"{src_uri_path}/cats/cat1", "4", "f"],
-            ["4", "cat2", owner, f"{src_uri_path}/cats/cat2", "4", "f"],
+            ["8", "cats", f"{src_uri_path}/cats/", "0", "d"],
+            ["4", "cat1", f"{src_uri_path}/cats/cat1", "4", "f"],
+            ["4", "cat2", f"{src_uri_path}/cats/cat2", "4", "f"],
         ]
     }
 
@@ -940,6 +939,30 @@ def test_query_save_size(cloud_test_catalog, mock_popen_dataset_created):
     dataset_version = dataset.get_version(1)
     assert dataset_version.num_objects == 4
     assert dataset_version.size == 15
+
+
+def test_dataset_stats(test_session):
+    ids = [1, 2, 3]
+    values = tuple(zip(["a", "b", "c"], [1, 2, 3]))
+
+    ds1 = DataChain.from_values(
+        ids=ids,
+        file=[File(path=name, size=size) for name, size in values],
+        session=test_session,
+    ).save()
+    dataset_version1 = test_session.catalog.get_dataset(ds1.name).get_version(1)
+    assert dataset_version1.num_objects == 3
+    assert dataset_version1.size == 6
+
+    ds2 = DataChain.from_values(
+        ids=ids,
+        file1=[File(path=name, size=size) for name, size in values],
+        file2=[File(path=name, size=size * 2) for name, size in values],
+        session=test_session,
+    ).save()
+    dataset_version2 = test_session.catalog.get_dataset(ds2.name).get_version(1)
+    assert dataset_version2.num_objects == 3
+    assert dataset_version2.size == 18
 
 
 def test_query_fail_to_compile(cloud_test_catalog):

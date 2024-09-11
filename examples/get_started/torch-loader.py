@@ -1,4 +1,9 @@
-# pip install Pillow torchvision
+"""
+To install the required dependencies:
+
+  pip install datachain[torch]
+
+"""
 
 import os
 from posixpath import basename
