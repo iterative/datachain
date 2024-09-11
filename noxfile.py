@@ -39,7 +39,8 @@ def tests(session: nox.Session) -> None:
         "--cov-config=pyproject.toml",
         "--cov-report=xml",
         "--durations=10",
-        # "--numprocesses=logical",
+        "--numprocesses=logical",
+        "--dist=loadgroup",
         *session.posargs,
         env={"COVERAGE_FILE": f".coverage.{session.python}"},
     )

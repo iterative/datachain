@@ -948,6 +948,7 @@ def test_class_udf(cloud_test_catalog, batch):
     [("s3", True)],
     indirect=True,
 )
+@pytest.mark.xdist_group(name="tmpfile")
 def test_udf_reuse_on_error(cloud_test_catalog_tmpfile):
     catalog = cloud_test_catalog_tmpfile.catalog
     sources = [cloud_test_catalog_tmpfile.src_uri]
@@ -992,6 +993,7 @@ def test_udf_reuse_on_error(cloud_test_catalog_tmpfile):
     indirect=True,
 )
 @pytest.mark.parametrize("batch", [False, True])
+@pytest.mark.xdist_group(name="tmpfile")
 def test_udf_parallel(cloud_test_catalog_tmpfile, batch):
     catalog = cloud_test_catalog_tmpfile.catalog
     sources = [cloud_test_catalog_tmpfile.src_uri]
@@ -1037,6 +1039,7 @@ def test_udf_parallel(cloud_test_catalog_tmpfile, batch):
     indirect=True,
 )
 @pytest.mark.parametrize("batch", [1, 4])
+@pytest.mark.xdist_group(name="tmpfile")
 def test_class_udf_parallel(cloud_test_catalog_tmpfile, batch):
     catalog = cloud_test_catalog_tmpfile.catalog
     sources = [cloud_test_catalog_tmpfile.src_uri]
@@ -1077,6 +1080,7 @@ def test_class_udf_parallel(cloud_test_catalog_tmpfile, batch):
     [("s3", True)],
     indirect=True,
 )
+@pytest.mark.xdist_group(name="tmpfile")
 def test_udf_parallel_exec_error(cloud_test_catalog_tmpfile):
     catalog = cloud_test_catalog_tmpfile.catalog
     sources = [cloud_test_catalog_tmpfile.src_uri]
@@ -1104,6 +1108,7 @@ def test_udf_parallel_exec_error(cloud_test_catalog_tmpfile):
     [("s3", True)],
     indirect=True,
 )
+@pytest.mark.xdist_group(name="tmpfile")
 def test_udf_parallel_interrupt(cloud_test_catalog_tmpfile, capfd):
     catalog = cloud_test_catalog_tmpfile.catalog
     sources = [cloud_test_catalog_tmpfile.src_uri]
@@ -1141,6 +1146,7 @@ def test_udf_parallel_interrupt(cloud_test_catalog_tmpfile, capfd):
     reason="Set the DATACHAIN_DISTRIBUTED environment variable "
     "to test distributed UDFs",
 )
+@pytest.mark.xdist_group(name="tmpfile")
 def test_udf_distributed(cloud_test_catalog_tmpfile, batch, workers, datachain_job_id):
     catalog = cloud_test_catalog_tmpfile.catalog
     sources = [cloud_test_catalog_tmpfile.src_uri]
@@ -1192,6 +1198,7 @@ def test_udf_distributed(cloud_test_catalog_tmpfile, batch, workers, datachain_j
     reason="Set the DATACHAIN_DISTRIBUTED environment variable "
     "to test distributed UDFs",
 )
+@pytest.mark.xdist_group(name="tmpfile")
 def test_udf_distributed_exec_error(
     cloud_test_catalog_tmpfile, workers, datachain_job_id
 ):
@@ -1226,6 +1233,7 @@ def test_udf_distributed_exec_error(
     reason="Set the DATACHAIN_DISTRIBUTED environment variable "
     "to test distributed UDFs",
 )
+@pytest.mark.xdist_group(name="tmpfile")
 def test_udf_distributed_interrupt(cloud_test_catalog_tmpfile, capfd, datachain_job_id):
     catalog = cloud_test_catalog_tmpfile.catalog
     sources = [cloud_test_catalog_tmpfile.src_uri]
@@ -1261,6 +1269,7 @@ def test_udf_distributed_interrupt(cloud_test_catalog_tmpfile, capfd, datachain_
     reason="Set the DATACHAIN_DISTRIBUTED environment variable "
     "to test distributed UDFs",
 )
+@pytest.mark.xdist_group(name="tmpfile")
 def test_udf_distributed_cancel(cloud_test_catalog_tmpfile, capfd, datachain_job_id):
     catalog = cloud_test_catalog_tmpfile.catalog
     metastore = catalog.metastore
@@ -2112,6 +2121,7 @@ def test_row_generator_with_limit(cloud_test_catalog, dogs_dataset):
     [("s3", True)],
     indirect=True,
 )
+@pytest.mark.xdist_group(name="tmpfile")
 def test_row_generator_parallel(cloud_test_catalog_tmpfile):
     # Setup catalog.
     dogs_dataset_name = uuid.uuid4().hex
@@ -2292,6 +2302,7 @@ def test_row_generator_partition_by(cloud_test_catalog, dogs_dataset):
     [("s3", True)],
     indirect=True,
 )
+@pytest.mark.xdist_group(name="tmpfile")
 def test_row_generator_partition_by_parallel(cloud_test_catalog_tmpfile):
     # Setup catalog.
     dogs_dataset_name = uuid.uuid4().hex
