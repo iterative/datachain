@@ -39,6 +39,8 @@ from datachain.lib.udf import Generator
 if TYPE_CHECKING:
     from pydantic import BaseModel
 
+    from datachain.catalog import Catalog
+
 
 HFDatasetType = Union[DatasetDict, Dataset, IterableDatasetDict, IterableDataset]
 
@@ -92,12 +94,9 @@ class HFGenerator(Generator):
                     output_dict["split"] = split
                 for name, feat in ds.features.items():
                     anno = self.output_schema.model_fields[name].annotation
-                    output_dict[name] = _convert_feature(row[name], feat, anno)
-                    if isinstance(feat, Image):
-                        file: ImageFile = output_dict[name]  # type: ignore[assignment]
-                        file._set_stream(self.catalog)
-                        client = self.catalog.get_client(file.source)
-                        client.download(file.get_uid(), callback=file._download_cb)
+                    output_dict[name] = _convert_feature(
+                        row[name], feat, anno, self.catalog
+                    )
                 yield self.output_schema(**output_dict)
                 pbar.update(1)
 
@@ -111,7 +110,7 @@ def stream_splits(ds: Union[str, HFDatasetType], *args, **kwargs):
     return {"": ds}
 
 
-def _convert_feature(val: Any, feat: Any, anno: Any) -> Any:
+def _convert_feature(val: Any, feat: Any, anno: Any, catalog: "Catalog") -> Any:
     if isinstance(feat, (Value, Array2D, Array3D, Array4D, Array5D)):
         return val
     if isinstance(feat, ClassLabel):
@@ -122,7 +121,9 @@ def _convert_feature(val: Any, feat: Any, anno: Any) -> Any:
             for sname in val:
                 sfeat = feat.feature[sname]
                 sanno = anno.model_fields[sname].annotation
-                sdict[sname] = [_convert_feature(v, sfeat, sanno) for v in val[sname]]
+                sdict[sname] = [
+                    _convert_feature(v, sfeat, sanno, catalog) for v in val[sname]
+                ]
             return anno(**sdict)
         return val
     if isinstance(feat, Image):
@@ -130,7 +131,11 @@ def _convert_feature(val: Any, feat: Any, anno: Any) -> Any:
         etag = hashlib.md5(img, usedforsecurity=False).hexdigest()
         fs = MemoryFileSystem()
         fs.write_bytes(etag, img)
-        return HFImageFile(source="memory://", path=etag)
+        file = HFImageFile(source="memory://", path=etag)
+        file._set_stream(catalog)
+        client = catalog.get_client(file.source)  # type: ignore[arg-type]
+        client.download(file.get_uid(), callback=file._download_cb)
+        return file
     if isinstance(feat, Audio):
         return HFAudio(**val)
 
