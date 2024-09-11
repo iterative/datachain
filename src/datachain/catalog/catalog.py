@@ -1052,6 +1052,7 @@ class Catalog:
         if create_rows_table:
             table_name = self.warehouse.dataset_table_name(dataset.name, version)
             self.warehouse.create_dataset_rows_table(table_name, columns=columns)
+            self.update_dataset_version_with_warehouse_info(dataset, version)
 
         return dataset
 
