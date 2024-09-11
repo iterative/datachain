@@ -96,7 +96,7 @@ class HFGenerator(Generator):
                     if isinstance(feat, Image):
                         file: ImageFile = output_dict[name]  # type: ignore[assignment]
                         file._set_stream(self.catalog)
-                        client = self._catalog.get_client(file.source)
+                        client = self.catalog.get_client(file.source)
                         client.download(file.get_uid(), callback=file._download_cb)
                 yield self.output_schema(**output_dict)
                 pbar.update(1)
