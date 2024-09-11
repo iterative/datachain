@@ -27,7 +27,6 @@ def load_tar(raw):
         C("file.etag"),
         C("file.is_latest"),
         C("file.last_modified"),
-        C("file.vtype"),
         Object(load_tar),
     ),
     {
@@ -39,7 +38,6 @@ def load_tar(raw):
         "file__is_latest": Boolean,
         "file__last_modified": DateTime,
         "file__location": JSON,
-        "file__vtype": String,
     },
 )
 def index_tar(
@@ -50,7 +48,6 @@ def index_tar(
     etag,
     is_latest,
     last_modified,
-    vtype,
     tar_entries,
 ):
     # generate original tar files as well, along with subobjects
@@ -62,7 +59,6 @@ def index_tar(
         etag=etag,
         is_latest=is_latest,
         last_modified=last_modified,
-        vtype=vtype,
     )
     yield tuple(f[1] for f in list(file))
 
@@ -73,7 +69,6 @@ def index_tar(
                 source=source,
                 path=full_path,
                 size=info.size,
-                vtype="tar",
                 location=[
                     {
                         "vtype": "tar",
@@ -85,7 +80,6 @@ def index_tar(
                             "version": version,
                             "size": size,
                             "etag": etag,
-                            "vtype": "",
                             "location": None,
                         },
                     }

@@ -449,7 +449,6 @@ def test_from_storage_check_rows(tmp_dir, test_session):
             is_latest=True,
             last_modified=datetime.fromtimestamp(mtime, tz=tz),
             location=None,
-            vtype="",
         )
 
 

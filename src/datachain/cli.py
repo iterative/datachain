@@ -24,7 +24,7 @@ logger = logging.getLogger("datachain")
 
 TTL_HUMAN = "4h"
 TTL_INT = 4 * 60 * 60
-FIND_COLUMNS = ["du", "name", "owner", "path", "size", "type"]
+FIND_COLUMNS = ["du", "name", "path", "size", "type"]
 
 
 def human_time_type(value_str: str, can_be_none: bool = False) -> Optional[int]:
@@ -577,9 +577,8 @@ def _node_data_to_ls_values(row, long_format=False):
     value = name + ending
     if long_format:
         last_modified = row[2]
-        owner_name = row[3]
         timestamp = last_modified if not is_dir else None
-        return long_line_str(value, timestamp, owner_name)
+        return long_line_str(value, timestamp)
     return value
 
 
@@ -597,7 +596,7 @@ def _ls_urls_flat(
         if client_cls.is_root_url(source):
             buckets = client_cls.ls_buckets(**catalog.client_config)
             if long:
-                values = (long_line_str(b.name, b.created, "") for b in buckets)
+                values = (long_line_str(b.name, b.created) for b in buckets)
             else:
                 values = (b.name for b in buckets)
             yield source, values
@@ -605,7 +604,7 @@ def _ls_urls_flat(
             found = False
             fields = ["name", "dir_type"]
             if long:
-                fields.extend(["last_modified", "owner_name"])
+                fields.append("last_modified")
             for data_source, results in catalog.ls([source], fields=fields, **kwargs):
                 values = (_node_data_to_ls_values(r, long) for r in results)
                 found = True
@@ -681,7 +680,6 @@ def ls_remote(
                 entry = long_line_str(
                     row["name"] + ("/" if row["dir_type"] else ""),
                     row["last_modified"],
-                    row["owner_name"],
                 )
                 print(format_ls_entry(entry))
         else:

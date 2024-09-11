@@ -50,12 +50,10 @@ from datachain.sql.types import (
     String,
 )
 from tests.utils import (
-    DEFAULT_TREE,
     NUM_TREE,
     TARRED_TREE,
     WEBFORMAT_TREE,
     assert_row_names,
-    create_tar_dataset,
     dataset_dependency_asdict,
     text_embedding,
 )
@@ -520,7 +518,7 @@ def test_mutate(cloud_test_catalog, save, animal_dataset):
     else:
         result = q.db_results(row_factory=lambda c, v: dict(zip(c, v)))
     assert len(result) == 4
-    assert len(result[0]) == 16
+    assert len(result[0]) == 15
     cols = {"size10x", "size1000x", "s2", "s3", "s4"}
     new_data = [[v for k, v in r.items() if k in cols] for r in result]
     assert new_data == [
@@ -2789,7 +2787,7 @@ def test_index_tar(cloud_test_catalog, animal_dataset):
     assert len(set(offsets)) == len(offsets)
 
     assert all(
-        row["file__vtype"] == "tar"
+        json.loads(row["file__location"])[0]["vtype"] == "tar"
         for row in rows
         if not row["file__path"].endswith("animals.tar")
     )
@@ -2833,13 +2831,12 @@ def test_tar_loader(cloud_test_catalog, animal_dataset):
 
 
 @pytest.mark.parametrize("cloud_type", ["s3", "azure", "gs"], indirect=True)
-@pytest.mark.parametrize("tree", [DEFAULT_TREE | TARRED_TREE], indirect=True)
 def test_simple_dataset_query(cloud_test_catalog):
     ctc = cloud_test_catalog
     catalog = ctc.catalog
     metastore = catalog.metastore
     warehouse = catalog.warehouse
-    create_tar_dataset(catalog, ctc.src_uri, "ds1")
+    catalog.create_dataset_from_sources("ds1", [ctc.src_uri], recursive=True)
     DatasetQuery(name="ds1", version=1, catalog=catalog).save("ds2")
 
     ds_queries = []
@@ -2860,14 +2857,6 @@ def test_simple_dataset_query(cloud_test_catalog):
     # everything except the id field should match
     assert ds1 == ds2
     assert [r["file__path"] for r in ds1] == [
-        ("animals.tar"),
-        ("animals.tar/cats/cat1"),
-        ("animals.tar/cats/cat2"),
-        ("animals.tar/description"),
-        ("animals.tar/dogs/dog1"),
-        ("animals.tar/dogs/dog2"),
-        ("animals.tar/dogs/dog3"),
-        ("animals.tar/dogs/others/dog4"),
         ("cats/cat1"),
         ("cats/cat2"),
         ("description"),
@@ -2878,39 +2867,30 @@ def test_simple_dataset_query(cloud_test_catalog):
     ]
 
 
-@pytest.mark.parametrize("tree", [DEFAULT_TREE | TARRED_TREE], indirect=True)
 def test_similarity_search(cloud_test_catalog):
     ctc = cloud_test_catalog
     catalog = ctc.catalog
-    create_tar_dataset(catalog, ctc.src_uri, "ds1")
+    catalog.create_dataset_from_sources("ds1", [ctc.src_uri], recursive=True)
 
     @udf(
-        params=(Object(to_str), "file__path"),
+        params=(Object(to_str),),
         output={"embedding": Array(Float32)},
-        method="embedding",
     )
-    class TextEmbeddingGenerator:
-        def embedding(self, text, path):
-            print(text)
-            print(path)
-            return (text_embedding(text),)
+    def embedding(text):
+        return (text_embedding(text),)
 
-    target_embedding, path = (
+    (target_embedding,) = (
         DatasetQuery(name="ds1", catalog=catalog)
         .filter(C("file.path").glob("*description"))
         .order_by(sqlalchemy.func.length(C("file.path")))
         .limit(1)
-        .add_signals(TextEmbeddingGenerator())
-        .select(C.embedding, C("file.path"))
+        .add_signals(embedding)
+        .select(C.embedding)
         .db_results()[0]
     )
     q = (
         DatasetQuery(name="ds1", catalog=catalog)
-        .filter(
-            ~C("file.path").glob("*.tar"),
-            C("file.path") != path,
-        )
-        .add_signals(TextEmbeddingGenerator())
+        .add_signals(embedding)
         .mutate(
             cos_dist=cosine_distance(C.embedding, target_embedding),
             eucl_dist=euclidean_distance(C.embedding, target_embedding),
@@ -2919,19 +2899,13 @@ def test_similarity_search(cloud_test_catalog):
         .order_by(C("file.path"))
     )
     count = q.count()
-    assert count == 13
+    assert count == 7
 
     result = q.db_results()
     expected = [
-        ("animals.tar/cats/cat1", 0.8508677010357059, 1.9078358385397216),
-        ("animals.tar/cats/cat2", 0.8508677010357059, 1.9078358385397216),
-        ("animals.tar/description", 0.0, 0.0),
-        ("animals.tar/dogs/dog1", 0.7875133863812602, 1.8750659656122843),
-        ("animals.tar/dogs/dog2", 0.7356502722055684, 1.775619888314893),
-        ("animals.tar/dogs/dog3", 0.7695916496857775, 1.8344983482620636),
-        ("animals.tar/dogs/others/dog4", 0.9789704524691446, 2.0531542018152322),
         ("cats/cat1", 0.8508677010357059, 1.9078358385397216),
         ("cats/cat2", 0.8508677010357059, 1.9078358385397216),
+        ("description", 0.0, 0.0),
         ("dogs/dog1", 0.7875133863812602, 1.8750659656122843),
         ("dogs/dog2", 0.7356502722055684, 1.775619888314893),
         ("dogs/dog3", 0.7695916496857775, 1.8344983482620636),

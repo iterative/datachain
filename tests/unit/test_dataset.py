@@ -25,7 +25,6 @@ def test_dataset_table_compilation():
     table = DataTable.new_table(
         "ds-1",
         columns=[
-            Column("vtype", String, nullable=False, index=True),
             Column("dir_type", Int, index=True),
             Column("path", String, nullable=False, index=True),
             Column("etag", String),
@@ -33,8 +32,6 @@ def test_dataset_table_compilation():
             Column("is_latest", Boolean),
             Column("last_modified", DateTime(timezone=True)),
             Column("size", Int64, nullable=False, index=True),
-            Column("owner_name", String),
-            Column("owner_id", String),
             Column("location", JSON),
             Column("source", String, nullable=False),
             Column("score", Float, nullable=False),
@@ -48,7 +45,6 @@ def test_dataset_table_compilation():
         'CREATE TABLE IF NOT EXISTS "ds-1" (\n'
         "\tsys__id INTEGER NOT NULL, \n"
         "\tsys__rand INTEGER DEFAULT (abs(random())) NOT NULL, \n"
-        "\tvtype VARCHAR NOT NULL, \n"
         "\tdir_type INTEGER, \n"
         "\tpath VARCHAR NOT NULL, \n"
         "\tetag VARCHAR, \n"
@@ -56,8 +52,6 @@ def test_dataset_table_compilation():
         "\tis_latest BOOLEAN, \n"
         "\tlast_modified DATETIME, \n"
         "\tsize INTEGER NOT NULL, \n"
-        "\towner_name VARCHAR, \n"
-        "\towner_id VARCHAR, \n"
         "\tlocation JSON, \n"
         "\tsource VARCHAR NOT NULL, \n"
         "\tscore FLOAT NOT NULL, \n"

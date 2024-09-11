@@ -26,7 +26,7 @@ def dog_entries():
             "file__size": e.size,
         }
         for e in ENTRIES
-        if e.name.startswith("dog") and not e.is_dir
+        if e.name.startswith("dog")
     ]
 
 
@@ -53,7 +53,6 @@ def dog_entries_parquet_lz4(dog_entries) -> bytes:
 
         adapted["sys__id"] = 1
         adapted["sys__rand"] = 1
-        adapted["file__vtype"] = b""
         adapted["file__location"] = b""
         adapted["file__source"] = b"s3://dogs"
         return adapted
@@ -69,9 +68,8 @@ def dog_entries_parquet_lz4(dog_entries) -> bytes:
 @pytest.fixture
 def schema():
     return {
-        "sys__id": {"type": "UInt64"},
+        "id": {"type": "UInt64"},
         "sys__rand": {"type": "Int64"},
-        "file__vtype": {"type": "String"},
         "file__path": {"type": "String"},
         "file__etag": {"type": "String"},
         "file__version": {"type": "String"},

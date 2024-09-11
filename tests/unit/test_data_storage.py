@@ -47,7 +47,6 @@ def test_dir_expansion(cloud_test_catalog, version_aware, cloud_type):
         q = warehouse.dataset_rows(dataset).dir_expansion()
         columns = (
             "id",
-            "vtype",
             "is_dir",
             "source",
             "path",
@@ -55,9 +54,7 @@ def test_dir_expansion(cloud_test_catalog, version_aware, cloud_type):
             "location",
         )
         result = [dict(zip(columns, r)) for r in warehouse.db.execute(q)]
-        to_compare = [
-            (r["path"], r["vtype"], r["is_dir"], r["version"] != "") for r in result
-        ]
+        to_compare = [(r["path"], r["is_dir"], r["version"] != "") for r in result]
 
     assert all(r["source"] == ctc.storage_uri for r in result)
     if cloud_type == "file":
@@ -67,32 +64,32 @@ def test_dir_expansion(cloud_test_catalog, version_aware, cloud_type):
 
     # Note, we have both a file and a directory entry for expanded tar files
     expected = [
-        (f"{prefix}animals.tar", "", 0, has_version),
-        (f"{prefix}animals.tar", "", 1, False),
-        (f"{prefix}animals.tar/cats", "", 1, False),
-        (f"{prefix}animals.tar/cats/cat1", "tar", 0, False),
-        (f"{prefix}animals.tar/cats/cat2", "tar", 0, False),
-        (f"{prefix}animals.tar/description", "tar", 0, False),
-        (f"{prefix}animals.tar/dogs", "", 1, False),
-        (f"{prefix}animals.tar/dogs/dog1", "tar", 0, False),
-        (f"{prefix}animals.tar/dogs/dog2", "tar", 0, False),
-        (f"{prefix}animals.tar/dogs/dog3", "tar", 0, False),
-        (f"{prefix}animals.tar/dogs/others", "", 1, False),
-        (f"{prefix}animals.tar/dogs/others/dog4", "tar", 0, False),
-        (f"{prefix}cats", "", 1, False),
-        (f"{prefix}cats/cat1", "", 0, has_version),
-        (f"{prefix}cats/cat2", "", 0, has_version),
-        (f"{prefix}description", "", 0, has_version),
-        (f"{prefix}dogs", "", 1, False),
-        (f"{prefix}dogs/dog1", "", 0, has_version),
-        (f"{prefix}dogs/dog2", "", 0, has_version),
-        (f"{prefix}dogs/dog3", "", 0, has_version),
-        (f"{prefix}dogs/others", "", 1, False),
-        (f"{prefix}dogs/others/dog4", "", 0, has_version),
-        (f"{prefix}nested", "", 1, False),
-        (f"{prefix}nested/dir", "", 1, False),
-        (f"{prefix}nested/dir/path", "", 1, False),
-        (f"{prefix}nested/dir/path/abc.txt", "", 0, has_version),
+        (f"{prefix}animals.tar", 0, has_version),
+        (f"{prefix}animals.tar", 1, False),
+        (f"{prefix}animals.tar/cats", 1, False),
+        (f"{prefix}animals.tar/cats/cat1", 0, False),
+        (f"{prefix}animals.tar/cats/cat2", 0, False),
+        (f"{prefix}animals.tar/description", 0, False),
+        (f"{prefix}animals.tar/dogs", 1, False),
+        (f"{prefix}animals.tar/dogs/dog1", 0, False),
+        (f"{prefix}animals.tar/dogs/dog2", 0, False),
+        (f"{prefix}animals.tar/dogs/dog3", 0, False),
+        (f"{prefix}animals.tar/dogs/others", 1, False),
+        (f"{prefix}animals.tar/dogs/others/dog4", 0, False),
+        (f"{prefix}cats", 1, False),
+        (f"{prefix}cats/cat1", 0, has_version),
+        (f"{prefix}cats/cat2", 0, has_version),
+        (f"{prefix}description", 0, has_version),
+        (f"{prefix}dogs", 1, False),
+        (f"{prefix}dogs/dog1", 0, has_version),
+        (f"{prefix}dogs/dog2", 0, has_version),
+        (f"{prefix}dogs/dog3", 0, has_version),
+        (f"{prefix}dogs/others", 1, False),
+        (f"{prefix}dogs/others/dog4", 0, has_version),
+        (f"{prefix}nested", 1, False),
+        (f"{prefix}nested/dir", 1, False),
+        (f"{prefix}nested/dir/path", 1, False),
+        (f"{prefix}nested/dir/path/abc.txt", 0, has_version),
     ]
 
     if cloud_type == "file":
@@ -100,8 +97,7 @@ def test_dir_expansion(cloud_test_catalog, version_aware, cloud_type):
         # storage uri is the root of FS, we need to add dirs to the root
         prefix_split = prefix.split("/")
         expected = [
-            ("/".join(prefix_split[:i]), "", 1, False)
-            for i in range(1, len(prefix_split))
+            ("/".join(prefix_split[:i]), 1, False) for i in range(1, len(prefix_split))
         ] + expected
 
     assert to_compare == expected
