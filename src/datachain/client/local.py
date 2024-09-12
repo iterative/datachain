@@ -7,8 +7,8 @@ from urllib.parse import urlparse
 
 from fsspec.implementations.local import LocalFileSystem
 
+from datachain.cache import UniqueId
 from datachain.lib.file import File
-from datachain.node import Entry
 from datachain.storage import StorageURI
 
 from .fsspec import Client
@@ -114,9 +114,9 @@ class FileClient(Client):
             use_symlinks=use_symlinks,
         )
 
-    async def get_current_etag(self, uid) -> str:
+    async def get_current_etag(self, uid: UniqueId) -> str:
         info = self.fs.info(self.get_full_path(uid.path))
-        return self.convert_info(info, "").etag
+        return self.info_to_file(info, "").etag
 
     async def get_size(self, path: str) -> int:
         return self.fs.size(path)
@@ -135,15 +135,6 @@ class FileClient(Client):
         if rel_path.endswith("/") or not rel_path:
             full_path += "/"
         return full_path
-
-    def convert_info(self, v: dict[str, Any], path: str) -> Entry:
-        return Entry.from_file(
-            path=path,
-            etag=v["mtime"].hex(),
-            is_latest=True,
-            last_modified=datetime.fromtimestamp(v["mtime"], timezone.utc),
-            size=v.get("size", ""),
-        )
 
     def info_to_file(self, v: dict[str, Any], path: str) -> File:
         return File(
