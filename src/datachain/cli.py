@@ -494,25 +494,6 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         help="Query parameters",
     )
 
-    apply_udf_parser = subp.add_parser(
-        "apply-udf", parents=[parent_parser], description="Apply UDF"
-    )
-    apply_udf_parser.add_argument("udf", type=str, help="UDF location")
-    apply_udf_parser.add_argument("source", type=str, help="Source storage or dataset")
-    apply_udf_parser.add_argument("target", type=str, help="Target dataset name")
-    apply_udf_parser.add_argument("signal_name", type=str, help="New signal name")
-    apply_udf_parser.add_argument(
-        "--parallel",
-        nargs="?",
-        type=int,
-        const=-1,
-        default=None,
-        metavar="N",
-        help=(
-            "Use multiprocessing to run the UDF with N worker processes. "
-            "N defaults to the CPU count."
-        ),
-    )
     subp.add_parser(
         "clear-cache", parents=[parent_parser], description="Clear the local file cache"
     )
@@ -1015,10 +996,6 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
                 args.script,
                 parallel=args.parallel,
                 params=args.param,
-            )
-        elif args.command == "apply-udf":
-            catalog.apply_udf(
-                args.udf, args.source, args.target, args.signal_name, args.parallel
             )
         elif args.command == "clear-cache":
             clear_cache(catalog)

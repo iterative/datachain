@@ -68,7 +68,6 @@ from datachain.utils import (
     DataChainDir,
     batched,
     datachain_paths_join,
-    import_object,
 )
 
 from .datasource import DataSource
@@ -1738,31 +1737,6 @@ class Catalog:
         self.create_dataset_from_sources(
             output, sources, client_config=client_config, recursive=recursive
         )
-
-    def apply_udf(
-        self,
-        udf_location: str,
-        source: str,
-        target_name: str,
-        signal_name: str,
-        parallel: Optional[int] = None,
-    ):
-        from datachain.lib.dc import DataChain
-        from datachain.query.session import Session
-
-        session = Session.get(catalog=self)
-
-        if source.startswith(DATASET_PREFIX):
-            dc = DataChain.from_dataset(source[len(DATASET_PREFIX) :], session=session)
-        else:
-            dc = DataChain.from_storage(source, session=session)
-
-        if parallel:
-            dc = dc.settings(parallel=parallel)
-
-        udf = import_object(udf_location)
-
-        dc.map(**{signal_name: udf}).save(target_name)
 
     def query(
         self,
