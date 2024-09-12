@@ -37,6 +37,7 @@ from tqdm import tqdm
 
 from datachain.asyn import ASYNC_WORKERS, AsyncMapper, OrderedMapper
 from datachain.catalog import QUERY_SCRIPT_CANCELED_EXIT_CODE, get_catalog
+from datachain.client import Client
 from datachain.data_storage.schema import (
     PARTITION_COLUMN_ID,
     partition_col_names,
@@ -194,7 +195,7 @@ class IndexingStep(StartingStep):
 
     def apply(self):
         self.catalog.index([self.path], **self.kwargs)
-        uri, path = self.parse_path()
+        uri, path = Client.parse_url(self.path)
         _partial_id, partial_path = self.catalog.metastore.get_valid_partial_id(
             uri, path
         )
@@ -215,11 +216,6 @@ class IndexingStep(StartingStep):
         storage = self.catalog.metastore.get_storage(uri)
 
         return step_result(q, dataset_rows.c, dependencies=[storage.uri])
-
-    def parse_path(self):
-        client_config = self.kwargs.get("client_config") or {}
-        client, path = self.catalog.parse_url(self.path, **client_config)
-        return client.uri, path
 
 
 def generator_then_call(generator, func: Callable):
