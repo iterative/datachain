@@ -5,6 +5,7 @@ import os
 import posixpath
 import tarfile
 import uuid
+from datetime import datetime
 from string import printable
 from tarfile import DIRTYPE, TarInfo
 from time import sleep, time
@@ -15,6 +16,7 @@ from PIL import Image
 
 from datachain.catalog.catalog import Catalog
 from datachain.dataset import DatasetDependency, DatasetRecord
+from datachain.lib.dc import DataChain
 from datachain.query import C, DatasetQuery
 from datachain.query.builtins import index_tar
 from datachain.storage import StorageStatus
@@ -123,6 +125,41 @@ def create_tar_dataset(catalog, uri: str, ds_name: str) -> DatasetQuery:
     ds1 = DatasetQuery(ds_index_name, catalog=catalog)
     tar_entries = ds1.filter(C("file.path").glob("*.tar")).generate(index_tar)
     return ds1.filter(~C("file.path").glob("*.tar")).union(tar_entries).save(ds_name)
+
+
+def to_old_schema(dataset_name: str, new_dataset_name: str):
+    """
+    Temp util to convert chain to old file schema where signals weren't nested
+    under file.
+    """
+    return (
+        DataChain.from_dataset(dataset_name)
+        .map(source=lambda file__source: file__source)
+        .map(path=lambda file__path: file__path)
+        .map(size=lambda file__size: file__size, output={"size": int})
+        .map(version=lambda file__version: file__version)
+        .map(etag=lambda file__etag: file__etag)
+        .map(
+            is_latest=lambda file__is_latest: bool(file__is_latest),
+            output={"is_latest": bool},
+        )
+        .map(
+            last_modified=lambda file__last_modified: file__last_modified,
+            output={"last_modified": datetime},
+        )
+        .map(location=lambda file__location: file__location)
+        .select(
+            "source",
+            "path",
+            "size",
+            "version",
+            "etag",
+            "is_latest",
+            "last_modified",
+            "location",
+        )
+        .save(new_dataset_name)
+    )
 
 
 skip_if_not_sqlite = pytest.mark.skipif(
