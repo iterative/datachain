@@ -1270,6 +1270,7 @@ def test_to_parquet_partitioned(tmp_dir, test_session):
 
 
 @pytest.mark.parametrize("processes", [False, 2, True])
+@pytest.mark.xdist_group(name="tmpfile")
 def test_parallel(processes, test_session_tmpfile):
     prefix = "t & "
     vals = ["a", "b", "c", "d", "e", "f", "g", "h", "i"]
