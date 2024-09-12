@@ -76,6 +76,7 @@ def get_latest_job(
 
 
 @pytest.mark.parametrize("cloud_type,version_aware", [("file", False)], indirect=True)
+@pytest.mark.xdist_group(name="tmpfile")
 def test_query_cli(cloud_test_catalog_tmpfile, tmp_path, catalog_info_filepath, capsys):
     catalog = cloud_test_catalog_tmpfile.catalog
     src_uri = cloud_test_catalog_tmpfile.src_uri
@@ -113,6 +114,7 @@ def test_query_cli(cloud_test_catalog_tmpfile, tmp_path, catalog_info_filepath, 
     assert latest_job.error_stack == ""
 
 
+@pytest.mark.xdist_group(name="tmpfile")
 def test_query(cloud_test_catalog_tmpfile, tmp_path, catalog_info_filepath):
     catalog = cloud_test_catalog_tmpfile.catalog
     src_uri = cloud_test_catalog_tmpfile.src_uri
@@ -143,6 +145,7 @@ def test_query(cloud_test_catalog_tmpfile, tmp_path, catalog_info_filepath):
 
 
 @pytest.mark.parametrize("cloud_type,version_aware", [("file", False)], indirect=True)
+@pytest.mark.xdist_group(name="tmpfile")
 def test_cli_query_params_metrics(
     cloud_test_catalog_tmpfile, tmp_path, catalog_info_filepath, capsys
 ):
