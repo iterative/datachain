@@ -829,9 +829,7 @@ def garbage_collect(catalog: "Catalog"):
     if not temp_tables:
         print("Nothing to clean up.")
     else:
-        print(
-            f"Garbage collecting {len(temp_tables)} tables., tables are  {temp_tables}"
-        )
+        print(f"Garbage collecting {len(temp_tables)} tables.")
         catalog.cleanup_tables(temp_tables)
 
 

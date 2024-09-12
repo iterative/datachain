@@ -80,12 +80,13 @@ def get_latest_job(
 def test_query_cli(cloud_test_catalog_tmpfile, tmp_path, catalog_info_filepath, capsys):
     catalog = cloud_test_catalog_tmpfile.catalog
     src_uri = cloud_test_catalog_tmpfile.src_uri
-    catalog.create_dataset_from_sources("animals", [src_uri], recursive=True)
 
-    query_script = """\
+    query_script = f"""\
     from datachain.query import DatasetQuery
     from datachain import C
     from datachain.sql.functions.path import name
+
+    catalog.create_dataset_from_sources("animals", ["{src_uri}"], recursive=True)
 
     DatasetQuery("animals", catalog=catalog).mutate(
         name=name(C("file__path"))
@@ -97,6 +98,10 @@ def test_query_cli(cloud_test_catalog_tmpfile, tmp_path, catalog_info_filepath, 
     filepath.write_text(query_script)
 
     query(catalog, str(filepath))
+
+    out, err = capsys.readouterr()
+    assert not out
+    assert not err
 
     dataset = catalog.get_dataset("my-ds")
     assert dataset
