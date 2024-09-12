@@ -41,7 +41,6 @@ def tests(session: nox.Session) -> None:
         "--durations=10",
         "--numprocesses=logical",
         "--dist=loadgroup",
-        "--timeout=300",
         *session.posargs,
         env={"COVERAGE_FILE": f".coverage.{session.python}"},
     )
