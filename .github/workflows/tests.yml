@@ -50,7 +50,7 @@ jobs:
         run: nox -s lint
 
   datachain:
-    timeout-minutes: 60
+    timeout-minutes: 40
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
