@@ -112,19 +112,36 @@ def noop(_: str):
     pass
 
 
-def _process_stream(stream: "IO[bytes]", callback: Callable[[str], None]) -> None:
-    buffer = b""
-    while byt := stream.read(1):  # Read one byte at a time
-        buffer += byt
+def _process_stream(
+    stream: Union[IO[bytes], IO[str]],
+    callback: Callable[[str], None],
+    chunk_size: int = 1024,
+) -> None:
+    buffer = bytearray()
+    while True:
+        chunk = stream.read(chunk_size)
+        if not chunk:
+            break
+        if isinstance(chunk, str):
+            chunk = chunk.encode("utf-8")
+        buffer.extend(chunk)
+        while b"\n" in buffer or b"\r" in buffer:
+            line, _, buffer = buffer.partition(b"\n" if b"\n" in buffer else b"\r")
+            if line:
+                try:
+                    decoded_line = line.decode("utf-8").strip()
+                    if decoded_line:
+                        callback(decoded_line)
+                except UnicodeDecodeError:
+                    pass
 
-        if byt in (b"\n", b"\r"):  # Check for newline or carriage return
-            line = buffer.decode("utf-8")
-            callback(line)
-            buffer = b""  # Clear buffer for next line
-
-    if buffer:  # Handle any remaining data in the buffer
-        line = buffer.decode("utf-8")
-        callback(line)
+    if buffer:
+        try:
+            decoded_line = buffer.decode("utf-8").strip()
+            if decoded_line:
+                callback(decoded_line)
+        except UnicodeDecodeError:
+            pass
 
 
 class DatasetRowsFetcher(NodesThreadPool):
