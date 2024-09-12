@@ -45,7 +45,7 @@ def pre_created_ds_name():
 @pytest.fixture
 def mock_popen(mocker):
     m = mocker.patch(
-        "subprocess.Popen", returncode=0, stdout=io.StringIO(), stderr=io.StringIO()
+        "subprocess.Popen", returncode=0, stdout=io.BytesIO(), stderr=io.BytesIO()
     )
     m.return_value.__enter__.return_value = m
     # keep in sync with the returncode
@@ -69,7 +69,7 @@ def mock_popen_dataset_created(
         [f"{cloud_test_catalog.src_uri}/dogs/*"],
         recursive=True,
     )
-    mock_popen.configure_mock(stdout=io.StringIO("user log 1\nuser log 2"))
+    mock_popen.configure_mock(stdout=io.BytesIO(b"user log 1\nuser log 2"))
     yield mock_popen
 
 
