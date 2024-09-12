@@ -5,7 +5,7 @@ from datachain.lib.file import (
     File,
     FileError,
     ImageFile,
-    TarVFile,
+    TarFile,
     TextFile,
 )
 from datachain.lib.model_store import ModelStore
@@ -31,7 +31,7 @@ __all__ = [
     "ModelStore",
     "Session",
     "Sys",
-    "TarVFile",
+    "TarFile",
     "TextFile",
     "is_chain_type",
 ]

@@ -32,7 +32,6 @@ def test_arrow_generator(tmp_path, catalog):
     assert len(objs) == len(ids)
     for o, id, text in zip(objs, ids, texts):
         assert isinstance(o[0], ArrowFile)
-        o[0]._set_stream(catalog)
         file_vals = o[0].read()
         assert file_vals["id"] == id
         assert file_vals["text"] == text

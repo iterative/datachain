@@ -16,7 +16,7 @@ NPZ_METADATA = os.getenv(
 )
 
 wds_images = (
-    DataChain.from_storage(IMAGE_TARS, type="image")
+    DataChain.from_storage(IMAGE_TARS)
     .settings(cache=True)
     .gen(laion=process_webdataset(spec=WDSLaion), params="file")
 )

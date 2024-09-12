@@ -72,14 +72,12 @@ class ArrowGenerator(Generator):
                                 vals_dict[field] = val
                         vals = [self.output_schema(**vals_dict)]
                     if self.source:
-                        file_model = file.model_dump()
+                        kwargs: dict = self.kwargs
                         # Can't serialize CsvFileFormat; may lose formatting options.
-                        if isinstance(self.kwargs.get("format"), CsvFileFormat):
-                            self.kwargs["format"] = "csv"
-                        file_model["location"] = [
-                            {"index": index, "kwargs": self.kwargs}
-                        ]
-                        yield [ArrowFile(**file_model), *vals]
+                        if isinstance(kwargs.get("format"), CsvFileFormat):
+                            kwargs["format"] = "csv"
+                        arrow_file = ArrowFile(file=file, index=index, kwargs=kwargs)
+                        yield [arrow_file, *vals]
                     else:
                         yield vals
                     index += 1

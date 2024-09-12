@@ -2,7 +2,6 @@ import io
 import json
 import os
 import posixpath
-from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from datetime import datetime
 from io import BytesIO
@@ -30,82 +29,9 @@ if TYPE_CHECKING:
 ExportPlacement = Literal["filename", "etag", "fullpath", "checksum"]
 
 
-class VFileError(DataChainError):
-    def __init__(self, file: "File", message: str, vtype: str = ""):
-        type_ = f" of vtype '{vtype}'" if vtype else ""
-        super().__init__(f"Error in v-file '{file.get_uid().path}'{type_}: {message}")
-
-
 class FileError(DataChainError):
     def __init__(self, file: "File", message: str):
         super().__init__(f"Error in file {file.get_uri()}: {message}")
-
-
-class VFile(ABC):
-    @classmethod
-    @abstractmethod
-    def get_vtype(cls) -> str:
-        pass
-
-    @classmethod
-    @abstractmethod
-    def open(cls, file: "File", location: list[dict]):
-        pass
-
-
-class TarVFile(VFile):
-    """Virtual file model for files extracted from tar archives."""
-
-    @classmethod
-    def get_vtype(cls) -> str:
-        return "tar"
-
-    @classmethod
-    def open(cls, file: "File", location: list[dict]):
-        """Stream file from tar archive based on location in archive."""
-        if len(location) > 1:
-            VFileError(file, "multiple 'location's are not supported yet")
-
-        loc = location[0]
-
-        if (offset := loc.get("offset", None)) is None:
-            VFileError(file, "'offset' is not specified")
-
-        if (size := loc.get("size", None)) is None:
-            VFileError(file, "'size' is not specified")
-
-        if (parent := loc.get("parent", None)) is None:
-            VFileError(file, "'parent' is not specified")
-
-        tar_file = File(**parent)
-        tar_file._set_stream(file._catalog)
-
-        tar_file_uid = tar_file.get_uid()
-        client = file._catalog.get_client(tar_file_uid.storage)
-        fd = client.open_object(tar_file_uid, use_cache=file._caching_enabled)
-        return FileSlice(fd, offset, size, file.name)
-
-
-class VFileRegistry:
-    _vtype_readers: ClassVar[dict[str, type["VFile"]]] = {"tar": TarVFile}
-
-    @classmethod
-    def register(cls, reader: type["VFile"]):
-        cls._vtype_readers[reader.get_vtype()] = reader
-
-    @classmethod
-    def resolve(cls, file: "File", location: list[dict]):
-        if len(location) == 0:
-            raise VFileError(file, "'location' must not be list of JSONs")
-
-        if not (vtype := location[0].get("vtype", "")):
-            raise VFileError(file, "vtype is not specified")
-
-        reader = cls._vtype_readers.get(vtype, None)
-        if not reader:
-            raise VFileError(file, "reader not registered", vtype)
-
-        return reader.open(file, location)
 
 
 class File(DataModel):
@@ -189,19 +115,14 @@ class File(DataModel):
     @contextmanager
     def open(self, mode: Literal["rb", "r"] = "rb"):
         """Open the file and return a file object."""
-        if self.location:
-            with VFileRegistry.resolve(self, self.location) as f:  # type: ignore[arg-type]
-                yield f
-
-        else:
-            uid = self.get_uid()
-            client = self._catalog.get_client(self.source)
-            if self._caching_enabled:
-                client.download(uid, callback=self._download_cb)
-            with client.open_object(
-                uid, use_cache=self._caching_enabled, cb=self._download_cb
-            ) as f:
-                yield io.TextIOWrapper(f) if mode == "r" else f
+        uid = self.get_uid()
+        client = self._catalog.get_client(self.source)
+        if self._caching_enabled:
+            client.download(uid, callback=self._download_cb)
+        with client.open_object(
+            uid, use_cache=self._caching_enabled, cb=self._download_cb
+        ) as f:
+            yield io.TextIOWrapper(f) if mode == "r" else f
 
     def read(self, length: int = -1):
         """Returns file contents."""
@@ -344,46 +265,47 @@ class ImageFile(File):
 
     def read(self):
         """Returns `PIL.Image.Image` object."""
-        fobj = super().read()
-        return Image.open(BytesIO(fobj))
+        with self.open() as stream:
+            return Image.open(BytesIO(stream.read()))
 
     def save(self, destination: str):
         """Writes it's content to destination"""
         self.read().save(destination)
 
 
-class ArrowFile(File):
-    """`DataModel` for reading arrow files."""
+class TarFile(File):
+    """`DataModel` for files extracted from tar archives."""
 
-    def get_uid(self) -> UniqueId:
-        """Returns unique ID for file."""
-        dump = self.model_dump()
-        # Skip location to avoid duplicating arrow files.
-        dump["location"] = None
-        return UniqueId(*(dump[k] for k in self._unique_id_keys))
+    file: File
+    offset: int
 
     @contextmanager
     def open(self):
-        """Stream row contents based on location in file."""
-        if len(self.location) > 1:
-            FileError(self, "multiple 'location's are not supported yet")
+        """Stream file from tar archive based on location in archive."""
+        with self.file.open() as fd:
+            with FileSlice(fd, self.offset, self.size, self.name) as inner_fd:
+                yield inner_fd
 
-        loc = self.location[0]
 
-        if (index := loc.get("index", None)) is None:
-            FileError(self, "'index' is not specified")
+class ArrowFile(DataModel):
+    """`DataModel` for reading arrow files."""
 
-        kwargs = loc.get("kwargs", {})
+    file: File
+    index: int
+    kwargs: dict
 
-        if self._caching_enabled:
-            path = self.get_local_path(download=True)
-            ds = dataset(path, **kwargs)
+    @contextmanager
+    def open(self):
+        """Stream row contents from indexed file."""
+        if self.file._caching_enabled:
+            path = self.file.get_local_path(download=True)
+            ds = dataset(path, **self.kwargs)
 
         else:
-            path = self.get_path()
-            ds = dataset(path, filesystem=self.get_fs(), **kwargs)
+            path = self.file.get_path()
+            ds = dataset(path, filesystem=self.file.get_fs(), **self.kwargs)
 
-        return ds.take([index]).to_reader()
+        return ds.take([self.index]).to_reader()
 
     def read(self):
         """Returns row contents."""

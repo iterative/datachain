@@ -48,8 +48,6 @@ class UniqueId:
 
     def get_hash(self) -> str:
         fingerprint = f"{self.storage}/{self.path}/{self.version}/{self.etag}"
-        if self.location:
-            fingerprint += f"/{self.location}"
         return sha256(fingerprint.encode()).hexdigest()
 
 

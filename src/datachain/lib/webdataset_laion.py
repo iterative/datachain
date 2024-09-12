@@ -5,8 +5,9 @@ from typing import Optional
 import numpy as np
 from pydantic import BaseModel, Field
 
-from datachain.lib.file import File
-from datachain.lib.webdataset import WDSBasic, WDSReadableSubclass
+from datachain.lib.data_model import DataModel
+from datachain.lib.file import File, ImageFile, TarFile
+from datachain.lib.webdataset import WDSReadableSubclass
 
 # The `json` method of the Pydantic `BaseModel` class has been deprecated
 # and will be removed in Pydantic v3. For more details, see:
@@ -41,7 +42,12 @@ class Laion(WDSReadableSubclass):
         return Laion.model_validate_json(builder.read_text(item))
 
 
-class WDSLaion(WDSBasic):
+class LaionImageFile(ImageFile, TarFile):
+    pass
+
+
+class WDSLaion(DataModel):
+    file: LaionImageFile
     txt: Optional[str] = Field(default=None)
     json: Laion  # type: ignore[assignment]
 
