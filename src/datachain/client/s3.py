@@ -160,7 +160,7 @@ class ClientS3(Client):
             source=self.uri,
             path=path,
             size=v["size"],
-            version=ClientS3.clean_s3_version(v.get("VersionId", "")),
+            version=ClientS3.clean_s3_version(v.get("VersionId", "")) or "",
             etag=v.get("ETag", "").strip('"'),
             is_latest=v.get("IsLatest", True),
             last_modified=v.get("LastModified", ""),

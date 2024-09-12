@@ -5,10 +5,10 @@ import os
 import posixpath
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path, PurePosixPath
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Optional, Self, Union
 from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
 
@@ -316,7 +316,7 @@ class File(DataModel):
         """Returns `fsspec` filesystem for the file."""
         return self._catalog.get_client(self.source).fs
 
-    def resolve(self) -> "File":
+    def resolve(self) -> "Self":
         """
         Resolve a File object by checking its existence and updating its metadata.
 
@@ -335,17 +335,15 @@ class File(DataModel):
 
         try:
             info = client.fs.info(client.get_full_path(self.path))
-            converted_info = client.convert_info(info, self.source)
+            converted_info = client.info_to_file(info, self.source)
             return type(self)(
                 path=self.path,
                 source=self.source,
-                size=getattr(converted_info, "size", 0),
-                etag=getattr(converted_info, "etag", ""),
-                version=getattr(converted_info, "version", None) or "",
-                is_latest=getattr(converted_info, "is_latest", True),
-                last_modified=getattr(
-                    converted_info, "last_modified", datetime.now(timezone.utc)
-                ),
+                size=converted_info.size,
+                etag=converted_info.etag,
+                version=converted_info.version or "",
+                is_latest=converted_info.is_latest,
+                last_modified=converted_info.last_modified,
                 location=self.location,
             )
         except (FileNotFoundError, PermissionError, OSError) as e:
