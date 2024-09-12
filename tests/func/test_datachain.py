@@ -472,20 +472,15 @@ def test_mutate_existing_column(test_session):
     [("s3", True)],
     indirect=True,
 )
-@pytest.mark.parametrize("batch", [False, True])
 @pytest.mark.xdist_group(name="tmpfile")
-def test_udf_parallel(cloud_test_catalog_tmpfile, batch):
+def test_udf_parallel(cloud_test_catalog_tmpfile):
     session = cloud_test_catalog_tmpfile.session
-    storage = cloud_test_catalog_tmpfile.src_uri.rstrip("/") + "/*"
 
     def name_len(name):
-        # A very simple udf.
         return (len(name),)
 
     dc = (
-        DataChain.from_storage(storage, session=session)
-        .filter(C("file.size") < 13)
-        .filter(C("file.path").glob("cats*") | (C("file.size") < 4))
+        DataChain.from_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
         .settings(parallel=-1)
         .map(name_len, params=["file.path"], output={"name_len": int})
         .select("file.path", "name_len")
@@ -497,7 +492,7 @@ def test_udf_parallel(cloud_test_catalog_tmpfile, batch):
         print(r)
         count += 1
         assert len(r[0]) == r[1]
-    assert count == 3
+    assert count == 7
 
 
 @pytest.mark.parametrize(
@@ -505,23 +500,20 @@ def test_udf_parallel(cloud_test_catalog_tmpfile, batch):
     [("s3", True)],
     indirect=True,
 )
-@pytest.mark.parametrize("batch", [1, 4])
 @pytest.mark.xdist_group(name="tmpfile")
-def test_class_udf_parallel(cloud_test_catalog_tmpfile, batch):
+def test_class_udf_parallel(cloud_test_catalog_tmpfile):
     session = cloud_test_catalog_tmpfile.session
-    storage = cloud_test_catalog_tmpfile.src_uri.rstrip("/") + "/*"
 
     class MyUDF(Mapper):
         def __init__(self, constant, multiplier=1):
             self.constant = constant
             self.multiplier = multiplier
-            self.batch = batch
 
         def process(self, size):
             return (self.constant + size * self.multiplier,)
 
     dc = (
-        DataChain.from_storage(storage, session=session)
+        DataChain.from_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
         .filter(C("file.size") < 13)
         .settings(parallel=2)
         .map(
@@ -551,14 +543,13 @@ def test_class_udf_parallel(cloud_test_catalog_tmpfile, batch):
 @pytest.mark.xdist_group(name="tmpfile")
 def test_udf_parallel_exec_error(cloud_test_catalog_tmpfile):
     session = cloud_test_catalog_tmpfile.session
-    storage = cloud_test_catalog_tmpfile.src_uri.rstrip("/") + "/*"
 
     def name_len_error(_name):
         # A udf that raises an exception
         raise RuntimeError("Test Error!")
 
     dc = (
-        DataChain.from_storage(storage, session=session)
+        DataChain.from_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
         .filter(C("file.size") < 13)
         .filter(C("file.path").glob("cats*") | (C("file.size") < 4))
         .settings(parallel=-1)
@@ -576,7 +567,6 @@ def test_udf_parallel_exec_error(cloud_test_catalog_tmpfile):
 @pytest.mark.xdist_group(name="tmpfile")
 def test_udf_reuse_on_error(cloud_test_catalog_tmpfile):
     session = cloud_test_catalog_tmpfile.session
-    storage = cloud_test_catalog_tmpfile.src_uri.rstrip("/") + "/*"
 
     error_state = {"error": True}
 
@@ -587,7 +577,7 @@ def test_udf_reuse_on_error(cloud_test_catalog_tmpfile):
         return (len(path),)
 
     dc = (
-        DataChain.from_storage(storage, session=session)
+        DataChain.from_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
         .filter(C("file.size") < 13)
         .filter(C("file.path").glob("cats*") | (C("file.size") < 4))
         .map(name_len_maybe_error, params=["file.path"], output={"path_len": int})
@@ -617,14 +607,13 @@ def test_udf_reuse_on_error(cloud_test_catalog_tmpfile):
 @pytest.mark.xdist_group(name="tmpfile")
 def test_udf_parallel_interrupt(cloud_test_catalog_tmpfile, capfd):
     session = cloud_test_catalog_tmpfile.session
-    storage = cloud_test_catalog_tmpfile.src_uri.rstrip("/") + "/*"
 
     def name_len_interrupt(_name):
         # A UDF that emulates cancellation due to a KeyboardInterrupt.
         raise KeyboardInterrupt
 
     dc = (
-        DataChain.from_storage(storage, session=session)
+        DataChain.from_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
         .filter(C("file.size") < 13)
         .filter(C("file.path").glob("cats*") | (C("file.size") < 4))
         .settings(parallel=-1)
