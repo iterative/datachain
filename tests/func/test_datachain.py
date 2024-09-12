@@ -452,8 +452,8 @@ def test_from_storage_check_rows(tmp_dir, test_session):
         )
 
 
-def test_mutate_existing_column(catalog):
-    ds = DataChain.from_values(ids=[1, 2, 3])
+def test_mutate_existing_column(test_session):
+    ds = DataChain.from_values(ids=[1, 2, 3], session=test_session)
 
     with pytest.raises(DataChainColumnError) as excinfo:
         ds.mutate(ids=Column("ids") + 1)

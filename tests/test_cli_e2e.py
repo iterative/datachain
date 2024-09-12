@@ -214,7 +214,7 @@ def run_step(step):
 
 
 @pytest.mark.e2e
-def test_cli_e2e(tmp_dir, catalog):
+def test_cli_e2e(tmp_dir, catalog_tmpfile):
     """End-to-end CLI Test"""
     for step in E2E_STEPS:
         run_step(step)

@@ -1387,12 +1387,12 @@ class Catalog:
         dataset = self.get_dataset(name)
         return self.warehouse.dataset_table_export_file_names(dataset, version)
 
-    def dataset_stats(self, name: str, version: int) -> DatasetStats:
+    def dataset_stats(self, name: str, version: Optional[int]) -> DatasetStats:
         """
         Returns tuple with dataset stats: total number of rows and total dataset size.
         """
         dataset = self.get_dataset(name)
-        dataset_version = dataset.get_version(version)
+        dataset_version = dataset.get_version(version or dataset.latest_version)
         return DatasetStats(
             num_objects=dataset_version.num_objects,
             size=dataset_version.size,
