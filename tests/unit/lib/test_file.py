@@ -2,12 +2,14 @@ import json
 from unittest.mock import Mock
 
 import pytest
+import pytz
 from fsspec.implementations.local import LocalFileSystem
 from PIL import Image
 
 from datachain import DataChain
 from datachain.cache import UniqueId
 from datachain.catalog import Catalog
+from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.lib.file import File, ImageFile, TextFile, resolve
 from datachain.utils import TIME_ZERO
 
@@ -327,11 +329,21 @@ def test_read_text(tmp_path, catalog):
 def test_resolve_file(cloud_test_catalog):
     ctc = cloud_test_catalog
 
+    is_sqlite = isinstance(cloud_test_catalog.catalog.warehouse, SQLiteWarehouse)
+
     dc = DataChain.from_storage(ctc.src_uri, session=ctc.session)
     for orig_file in dc.collect("file"):
-        resolved_file = File(source=orig_file.source, path=orig_file.path)
-        resolved_file._catalog = ctc.catalog
-        assert orig_file == resolved_file.resolve()
+        file = File(
+            source=orig_file.source,
+            path=orig_file.path,
+        )
+        file._catalog = ctc.catalog
+        resolved_file = file.resolve()
+        if not is_sqlite:
+            resolved_file.last_modified = resolved_file.last_modified.replace(
+                microsecond=0, tzinfo=pytz.UTC
+            )
+        assert orig_file == resolved_file
 
 
 def test_resolve_file_no_exist(cloud_test_catalog):
