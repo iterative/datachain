@@ -166,7 +166,7 @@ def communicate_and_interrupt_process(
     return "\n".join(stdout_lines), "\n".join(stderr_lines)
 
 
-def run_step(step):  # noqa: PLR0912
+def run_step(step, catalog):  # noqa: PLR0912
     """Run an end-to-end query test step with a command and expected output."""
     command = step["command"]
     # Note that a process.returncode of -2 is the same as the shell returncode of 130
@@ -192,6 +192,12 @@ def run_step(step):  # noqa: PLR0912
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             encoding="utf-8",
+            env={
+                **os.environ,
+                "DATACHAIN__ID_GENERATOR": catalog.id_generator.serialize(),
+                "DATACHAIN__METASTORE": catalog.metastore.serialize(),
+                "DATACHAIN__WAREHOUSE": catalog.warehouse.serialize(),
+            },
             **popen_args,
         )
         interrupt_after = step.get("interrupt_after")
@@ -247,7 +253,7 @@ def run_step(step):  # noqa: PLR0912
 def test_query_e2e(tmp_dir, catalog_tmpfile):
     """End-to-end CLI Query Test"""
     for step in E2E_STEPS:
-        run_step(step)
+        run_step(step, catalog_tmpfile)
 
 
 def _comparable_row(output: str) -> str:
