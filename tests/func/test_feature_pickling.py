@@ -1,5 +1,5 @@
 import json
-from typing import Literal
+from typing import List, Literal  # noqa: UP035
 
 import cloudpickle
 import pytest
@@ -220,6 +220,67 @@ def test_feature_udf_parallel_local_pydantic(cloud_test_catalog_tmpfile):
     assert df["message"]["model"].tolist() == [
         "Test AI Model Local Pydantic",
         "Test AI Model Local Pydantic",
+    ]
+
+
+@pytest.mark.parametrize(
+    "cloud_type,version_aware",
+    [("s3", True)],
+    indirect=True,
+)
+@pytest.mark.xdist_group(name="tmpfile")
+def test_feature_udf_parallel_local_pydantic_old(cloud_test_catalog_tmpfile):
+    ctc = cloud_test_catalog_tmpfile
+    catalog = ctc.catalog
+    source = ctc.src_uri
+    catalog.index([source])
+
+    class FileInfoLocalPydantic(BaseModel):
+        file_name: str = ""
+        byte_size: int = 0
+
+    class TextBlockLocalPydantic(BaseModel):
+        text: str = ""
+        type: str = "text"
+
+    class AIMessageLocalPydantic(BaseModel):
+        id: str = ""
+        content: List[TextBlockLocalPydantic]  # noqa: UP006
+        model: str = "Test AI Model Local Pydantic Old"
+        type: Literal["message"] = "message"
+        input_file_info: FileInfoLocalPydantic = FileInfoLocalPydantic()
+
+    import tests.func.test_feature_pickling as tfp  # noqa: PLW0406
+
+    # This emulates having the functions and classes declared in the __main__ script.
+    cloudpickle.register_pickle_by_value(tfp)
+
+    chain = (
+        DataChain.from_storage(source, type="text", session=ctc.session)
+        .filter(C("file.path").glob("*cat*"))
+        .settings(parallel=2)
+        .map(
+            message=lambda file: AIMessageLocalPydantic(
+                id=(name := file.name),
+                content=[TextBlockLocalPydantic(text=json.dumps({"file_name": name}))],
+                input_file_info=FileInfoLocalPydantic(
+                    file_name=name, byte_size=file.size
+                ),
+            )
+            if isinstance(file, File)
+            else AIMessageLocalPydantic(),
+            output=AIMessageLocalPydantic,
+        )
+    )
+
+    df = chain.to_pandas()
+
+    df = sort_df_for_tests(df)
+
+    common_df_asserts(df)
+    assert df["message"]["model"].tolist() == [
+        "Test AI Model Local Pydantic Old",
+        "Test AI Model Local Pydantic Old",
     ]
 
 
