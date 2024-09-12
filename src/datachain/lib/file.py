@@ -344,7 +344,7 @@ class File(DataModel):
                 source=self.source,
                 size=converted_info.size,
                 etag=converted_info.etag,
-                version=converted_info.version or "",
+                version=converted_info.version,
                 is_latest=converted_info.is_latest,
                 last_modified=converted_info.last_modified,
                 location=self.location,
