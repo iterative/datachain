@@ -36,7 +36,6 @@ def name_len(file):
 (
     DataChain.from_storage("gs://dvcx-datalakes/dogs-and-cats/", anon=True)
     .filter(C("file__path").glob("*cat*"))
-    .settings(parallel=False)
     .map(name_len=name_len, output={"name_len": int})
     .save("name_len")
 )
