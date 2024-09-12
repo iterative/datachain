@@ -8,13 +8,16 @@ from contextlib import contextmanager
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path, PurePosixPath
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, Optional, Self, Union
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Optional, Union
 from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
 
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 from PIL import Image
 from pydantic import Field, field_validator
+
+if TYPE_CHECKING:
+    from typing_extensions import Self
 
 from datachain.cache import UniqueId
 from datachain.client.fileslice import FileSlice
