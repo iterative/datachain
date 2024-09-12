@@ -331,7 +331,7 @@ class Client(ABC):
         self.do_instantiate_object(uid, dst)
 
     def do_instantiate_object(self, uid: "UniqueId", dst: str) -> None:
-        src = self.cache.get_path(uid)
+        src = self.cache.get_path(uid.to_file())
         assert src is not None
 
         try:
@@ -345,7 +345,7 @@ class Client(ABC):
     ) -> BinaryIO:
         """Open a file, including files in tar archives."""
         location = uid.get_parsed_location()
-        if use_cache and (cache_path := self.cache.get_path(uid)):
+        if use_cache and (cache_path := self.cache.get_path(uid.to_file())):
             return open(cache_path, mode="rb")  # noqa: SIM115
         if location and location["vtype"] == "tar":
             return self._open_tar(uid, use_cache=True)
@@ -373,7 +373,7 @@ class Client(ABC):
         sync(get_loop(), functools.partial(self._download, uid, callback=callback))
 
     async def _download(self, uid: UniqueId, *, callback: "Callback" = None) -> None:
-        if self.cache.contains(uid):
+        if self.cache.contains(uid.to_file()):
             # Already in cache, so there's nothing to do.
             return
         await self._put_in_cache(uid, callback=callback)
@@ -398,7 +398,7 @@ class Client(ABC):
                     f"Invalid etag for {uid.storage}/{uid.path}: "
                     f"expected {uid.etag}, got {etag}"
                 )
-        await self.cache.download(uid, self, callback=callback)
+        await self.cache.download(uid.to_file(), self, callback=callback)
 
     def _download_from_tar(self, uid, *, callback: "Callback" = None):
         with self._open_tar(uid, use_cache=False) as f:

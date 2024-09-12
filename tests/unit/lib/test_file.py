@@ -69,9 +69,8 @@ def test_cache_get_path(catalog: Catalog):
     stream = File(path="test.txt1", source="s3://mybkt")
     stream._set_stream(catalog)
 
-    uid = stream.get_uid()
     data = b"some data is heRe"
-    catalog.cache.store_data(uid, data)
+    catalog.cache.store_data(stream, data)
 
     path = stream.get_local_path()
     assert path is not None
