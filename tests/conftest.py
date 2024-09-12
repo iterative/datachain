@@ -3,6 +3,7 @@ import os.path
 import uuid
 from collections.abc import Generator
 from pathlib import PosixPath
+from typing import NamedTuple
 
 import attrs
 import pytest
@@ -30,6 +31,29 @@ DEFAULT_DATACHAIN_BIN = "datachain"
 DEFAULT_DATACHAIN_GIT_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 collect_ignore = ["setup.py"]
+
+
+@pytest.fixture(autouse=True)
+def virtual_memory(mocker):
+    class VirtualMemory(NamedTuple):
+        total: int
+        available: int
+        percent: int
+        used: int
+        free: int
+
+    return mocker.patch(
+        "psutil.virtual_memory",
+        return_value=VirtualMemory(
+            total=1073741824,
+            available=5368709120,
+            # prevent dumping of smaller batches to db in process_udf_outputs
+            # we want to avoid this due to tests running concurrently (xdist)
+            percent=50,
+            used=5368709120,
+            free=5368709120,
+        ),
+    )
 
 
 @pytest.fixture(autouse=True)
