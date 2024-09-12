@@ -58,6 +58,10 @@ quote_schema = sqlite_dialect.identifier_preparer.quote_schema
 quote = sqlite_dialect.identifier_preparer.quote
 
 
+def _get_in_memory_uri():
+    return "file::memory:?cache=shared"
+
+
 def get_retry_sleep_sec(retry_count: int) -> int:
     return RETRY_START_SEC * (RETRY_FACTOR**retry_count)
 
@@ -119,7 +123,7 @@ class SQLiteDatabaseEngine(DatabaseEngine):
             if db_file == ":memory:":
                 # Enable multithreaded usage of the same in-memory db
                 db = sqlite3.connect(
-                    "file::memory:?cache=shared", uri=True, detect_types=DETECT_TYPES
+                    _get_in_memory_uri(), uri=True, detect_types=DETECT_TYPES
                 )
             else:
                 db = sqlite3.connect(

@@ -56,6 +56,16 @@ def virtual_memory(mocker):
     )
 
 
+@pytest.fixture(autouse=True)
+def per_thread_im_mem_db(mocker, worker_id):
+    if worker_id == "master":
+        return
+    mocker.patch(
+        "datachain.data_storage.sqlite._get_in_memory_uri",
+        return_value=f"file:in-mem-db-{worker_id}?mode=memory&cache=shared",
+    )
+
+
 @pytest.fixture(scope="session")
 def monkeypatch_session() -> Generator[MonkeyPatch, None, None]:
     """
