@@ -103,6 +103,7 @@ def sqlite_db():
         pytest.skip("This test only runs on SQLite")
     with SQLiteDatabaseEngine.from_db_file(":memory:") as db:
         yield db
+        cleanup_sqlite_db(db, [])
 
 
 def cleanup_sqlite_db(
