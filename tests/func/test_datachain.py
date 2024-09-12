@@ -20,6 +20,7 @@ from datachain.lib.listing import (
     parse_listing_uri,
 )
 from datachain.lib.udf import Mapper
+from datachain.lib.utils import DataChainError
 from tests.utils import images_equal
 
 
@@ -565,3 +566,72 @@ def test_udf_parallel_exec_error(cloud_test_catalog_tmpfile):
     )
     with pytest.raises(RuntimeError, match="UDF Execution Failed!"):
         dc.show()
+
+
+@pytest.mark.parametrize(
+    "cloud_type,version_aware",
+    [("s3", True)],
+    indirect=True,
+)
+@pytest.mark.xdist_group(name="tmpfile")
+def test_udf_reuse_on_error(cloud_test_catalog_tmpfile):
+    session = cloud_test_catalog_tmpfile.session
+    storage = cloud_test_catalog_tmpfile.src_uri.rstrip("/") + "/*"
+
+    error_state = {"error": True}
+
+    def name_len_maybe_error(path):
+        if error_state["error"]:
+            # A udf that raises an exception
+            raise RuntimeError("Test Error!")
+        return (len(path),)
+
+    dc = (
+        DataChain.from_storage(storage, session=session)
+        .filter(C("file.size") < 13)
+        .filter(C("file.path").glob("cats*") | (C("file.size") < 4))
+        .map(name_len_maybe_error, params=["file.path"], output={"path_len": int})
+        .select("file.path", "path_len")
+    )
+
+    with pytest.raises(DataChainError, match="Test Error!"):
+        dc.show()
+
+    # Simulate fixing the error
+    error_state["error"] = False
+
+    # Retry Query
+    count = 0
+    for r in dc.collect():
+        # Check that the UDF ran successfully
+        count += 1
+        assert len(r[0]) == r[1]
+    assert count == 3
+
+
+@pytest.mark.parametrize(
+    "cloud_type,version_aware",
+    [("s3", True)],
+    indirect=True,
+)
+@pytest.mark.xdist_group(name="tmpfile")
+def test_udf_parallel_interrupt(cloud_test_catalog_tmpfile, capfd):
+    session = cloud_test_catalog_tmpfile.session
+    storage = cloud_test_catalog_tmpfile.src_uri.rstrip("/") + "/*"
+
+    def name_len_interrupt(_name):
+        # A UDF that emulates cancellation due to a KeyboardInterrupt.
+        raise KeyboardInterrupt
+
+    dc = (
+        DataChain.from_storage(storage, session=session)
+        .filter(C("file.size") < 13)
+        .filter(C("file.path").glob("cats*") | (C("file.size") < 4))
+        .settings(parallel=-1)
+        .map(name_len_interrupt, params=["file.path"], output={"name_len": int})
+    )
+    with pytest.raises(RuntimeError, match="UDF Execution Failed!"):
+        dc.show()
+    captured = capfd.readouterr()
+    assert "KeyboardInterrupt" in captured.err
+    assert "semaphore" not in captured.err
