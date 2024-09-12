@@ -73,6 +73,7 @@ def sort_df_for_tests(df):
     [("s3", True)],
     indirect=True,
 )
+@pytest.mark.xdist_group(name="tmpfile")
 def test_feature_udf_parallel(cloud_test_catalog_tmpfile):
     ctc = cloud_test_catalog_tmpfile
     source = ctc.src_uri
@@ -105,6 +106,7 @@ def test_feature_udf_parallel(cloud_test_catalog_tmpfile):
     [("s3", True)],
     indirect=True,
 )
+@pytest.mark.xdist_group(name="tmpfile")
 def test_feature_udf_parallel_local(cloud_test_catalog_tmpfile):
     ctc = cloud_test_catalog_tmpfile
     source = ctc.src_uri
@@ -161,6 +163,7 @@ def test_feature_udf_parallel_local(cloud_test_catalog_tmpfile):
     [("s3", True)],
     indirect=True,
 )
+@pytest.mark.xdist_group(name="tmpfile")
 def test_feature_udf_parallel_local_pydantic(cloud_test_catalog_tmpfile):
     ctc = cloud_test_catalog_tmpfile
     source = ctc.src_uri
@@ -219,6 +222,7 @@ def test_feature_udf_parallel_local_pydantic(cloud_test_catalog_tmpfile):
     [("s3", True)],
     indirect=True,
 )
+@pytest.mark.xdist_group(name="tmpfile")
 def test_feature_udf_parallel_local_pydantic_old(cloud_test_catalog_tmpfile):
     ctc = cloud_test_catalog_tmpfile
     catalog = ctc.catalog
@@ -279,6 +283,7 @@ def test_feature_udf_parallel_local_pydantic_old(cloud_test_catalog_tmpfile):
     [("s3", True)],
     indirect=True,
 )
+@pytest.mark.xdist_group(name="tmpfile")
 def test_feature_udf_parallel_dynamic(cloud_test_catalog_tmpfile):
     ctc = cloud_test_catalog_tmpfile
     source = ctc.src_uri

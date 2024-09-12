@@ -181,7 +181,7 @@ def verify_files(files, base=""):
             assert os.path.getsize(full_name) == value
 
 
-def run_step(step):
+def run_step(step, catalog):
     """Run an end-to-end test step with a command and expected output."""
     result = subprocess.run(  # noqa: S603
         step["command"],
@@ -189,6 +189,12 @@ def run_step(step):
         capture_output=True,
         check=True,
         encoding="utf-8",
+        env={
+            **os.environ,
+            "DATACHAIN__ID_GENERATOR": catalog.id_generator.serialize(),
+            "DATACHAIN__METASTORE": catalog.metastore.serialize(),
+            "DATACHAIN__WAREHOUSE": catalog.warehouse.serialize(),
+        },
     )
     if step.get("sort_expected_lines"):
         assert sorted(result.stdout.split("\n")) == sorted(
@@ -214,7 +220,8 @@ def run_step(step):
 
 
 @pytest.mark.e2e
+@pytest.mark.xdist_group(name="tmpfile")
 def test_cli_e2e(tmp_dir, catalog_tmpfile):
     """End-to-end CLI Test"""
     for step in E2E_STEPS:
-        run_step(step)
+        run_step(step, catalog_tmpfile)
