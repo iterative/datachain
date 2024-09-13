@@ -2,7 +2,6 @@ import io
 import json
 from datetime import datetime
 
-import attrs
 import lz4.frame
 import pandas as pd
 import pytest
@@ -16,7 +15,7 @@ from tests.utils import assert_row_names, skip_if_not_sqlite
 
 @pytest.fixture
 def dog_entries():
-    return [attrs.asdict(e) for e in ENTRIES if e.name.startswith("dog")]
+    return [e.model_dump() for e in ENTRIES if e.name.startswith("dog")]
 
 
 @pytest.fixture

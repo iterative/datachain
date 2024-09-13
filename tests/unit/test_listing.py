@@ -5,6 +5,7 @@ import pytest
 
 from datachain.catalog import Catalog
 from datachain.catalog.catalog import DataSource
+from datachain.lib.file import File
 from datachain.lib.listing import (
     LISTING_TTL,
     is_listing_dataset,
@@ -13,7 +14,7 @@ from datachain.lib.listing import (
     listing_uri_from_name,
     parse_listing_uri,
 )
-from datachain.node import DirType, Entry, get_path
+from datachain.node import DirType
 from tests.utils import skip_if_not_sqlite
 
 TREE = {
@@ -33,7 +34,7 @@ def _tree_to_entries(tree: dict, path=""):
             yield from _tree_to_entries(v, dir_path)
         else:
             for fname in v:
-                yield Entry.from_file(get_path(path, fname))
+                yield File(path=posixpath.join(path, fname))
 
 
 @pytest.fixture

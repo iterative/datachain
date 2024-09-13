@@ -43,6 +43,8 @@ if TYPE_CHECKING:
     from sqlalchemy.sql.elements import ColumnElement
     from sqlalchemy.types import TypeEngine
 
+    from datachain.lib.file import File
+
 
 logger = logging.getLogger("datachain")
 
@@ -56,6 +58,10 @@ datachain.sql.sqlite.setup()
 
 quote_schema = sqlite_dialect.identifier_preparer.quote_schema
 quote = sqlite_dialect.identifier_preparer.quote
+
+
+def _get_in_memory_uri():
+    return "file::memory:?cache=shared"
 
 
 def get_retry_sleep_sec(retry_count: int) -> int:
@@ -119,7 +125,7 @@ class SQLiteDatabaseEngine(DatabaseEngine):
             if db_file == ":memory:":
                 # Enable multithreaded usage of the same in-memory db
                 db = sqlite3.connect(
-                    "file::memory:?cache=shared", uri=True, detect_types=DETECT_TYPES
+                    _get_in_memory_uri(), uri=True, detect_types=DETECT_TYPES
                 )
             else:
                 db = sqlite3.connect(
@@ -703,6 +709,9 @@ class SQLiteWarehouse(AbstractWarehouse):
             )
 
         self.db.execute(insert_query)
+
+    def prepare_entries(self, entries: "Iterable[File]") -> Iterable[dict[str, Any]]:
+        return (e.model_dump() for e in entries)
 
     def insert_rows(self, table: Table, rows: Iterable[dict[str, Any]]) -> None:
         rows = list(rows)

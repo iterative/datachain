@@ -28,7 +28,7 @@ from tqdm import tqdm
 from datachain.cache import DataChainCache, UniqueId
 from datachain.client.fileslice import FileWrapper
 from datachain.error import ClientError as DataChainClientError
-from datachain.node import Entry
+from datachain.lib.file import File
 from datachain.nodes_fetcher import NodesFetcher
 from datachain.nodes_thread_pool import NodeChunk
 from datachain.storage import StorageURI
@@ -44,7 +44,7 @@ DELIMITER = "/"  # Path delimiter.
 
 DATA_SOURCE_URI_PATTERN = re.compile(r"^[\w]+:\/\/.*$")
 
-ResultQueue = asyncio.Queue[Optional[Sequence[Entry]]]
+ResultQueue = asyncio.Queue[Optional[Sequence[File]]]
 
 
 def _is_win_local_path(uri: str) -> bool:
@@ -115,15 +115,16 @@ class Client(ABC):
         return DATA_SOURCE_URI_PATTERN.match(name) is not None
 
     @staticmethod
-    def parse_url(
-        source: str,
-        cache: DataChainCache,
-        **kwargs,
-    ) -> tuple["Client", str]:
+    def parse_url(source: str) -> tuple[StorageURI, str]:
         cls = Client.get_implementation(source)
-        storage_url, rel_path = cls.split_url(source)
-        client = cls.from_name(storage_url, cache, kwargs)
-        return client, rel_path
+        storage_name, rel_path = cls.split_url(source)
+        return cls.get_uri(storage_name), rel_path
+
+    @staticmethod
+    def get_client(source: str, cache: DataChainCache, **kwargs) -> "Client":
+        cls = Client.get_implementation(source)
+        storage_url, _ = cls.split_url(source)
+        return cls.from_name(storage_url, cache, kwargs)
 
     @classmethod
     def create_fs(cls, **kwargs) -> "AbstractFileSystem":
@@ -187,7 +188,7 @@ class Client(ABC):
 
     async def get_current_etag(self, uid: UniqueId) -> str:
         info = await self.fs._info(self.get_full_path(uid.path))
-        return self.convert_info(info, "").etag
+        return self.info_to_file(info, "").etag
 
     async def get_size(self, path: str) -> int:
         return await self.fs._size(path)
@@ -197,7 +198,7 @@ class Client(ABC):
 
     async def scandir(
         self, start_prefix: str, method: str = "default"
-    ) -> AsyncIterator[Sequence[Entry]]:
+    ) -> AsyncIterator[Sequence[File]]:
         try:
             impl = getattr(self, f"_fetch_{method}")
         except AttributeError:
@@ -263,7 +264,7 @@ class Client(ABC):
     ) -> None:
         await self._fetch_nested(start_prefix, result_queue)
 
-    async def _fetch_dir(self, prefix, pbar, result_queue) -> set[str]:
+    async def _fetch_dir(self, prefix, pbar, result_queue: ResultQueue) -> set[str]:
         path = f"{self.name}/{prefix}"
         infos = await self.ls_dir(path)
         files = []
@@ -276,7 +277,7 @@ class Client(ABC):
             if info["type"] == "directory":
                 subdirs.add(subprefix)
             else:
-                files.append(self.convert_info(info, subprefix))
+                files.append(self.info_to_file(info, subprefix))
         if files:
             await result_queue.put(files)
         found_count = len(subdirs) + len(files)
@@ -302,7 +303,7 @@ class Client(ABC):
         return f"{self.PREFIX}{self.name}/{rel_path}"
 
     @abstractmethod
-    def convert_info(self, v: dict[str, Any], parent: str) -> Entry: ...
+    def info_to_file(self, v: dict[str, Any], parent: str) -> File: ...
 
     def fetch_nodes(
         self,

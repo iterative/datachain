@@ -1,6 +1,7 @@
 import base64
 import pickle
 
+import pytest
 from sqlalchemy import select
 
 from datachain.data_storage.serializer import deserialize
@@ -27,8 +28,9 @@ def test_init(sqlite_db):
 
 
 @skip_if_not_sqlite
+@pytest.mark.xdist_group(name="tmpfile")
 def test_init_empty(tmp_dir):
-    id_generator = SQLiteIDGenerator()
+    id_generator = SQLiteIDGenerator(db_file=tmp_dir / "test.db")
     assert id_generator._table_prefix is None
     assert id_generator.db
     assert id_generator.db.has_table("id_generator")

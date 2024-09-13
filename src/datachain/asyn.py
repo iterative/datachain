@@ -1,14 +1,8 @@
 import asyncio
-from collections.abc import Awaitable, Coroutine, Iterable
+from collections.abc import AsyncIterable, Awaitable, Coroutine, Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from heapq import heappop, heappush
-from typing import (
-    Any,
-    Callable,
-    Generic,
-    Optional,
-    TypeVar,
-)
+from typing import Any, Callable, Generic, Optional, TypeVar
 
 from fsspec.asyn import get_loop
 
@@ -16,6 +10,7 @@ ASYNC_WORKERS = 20
 
 InputT = TypeVar("InputT", contravariant=True)  # noqa: PLC0105
 ResultT = TypeVar("ResultT", covariant=True)  # noqa: PLC0105
+T = TypeVar("T")
 
 
 class AsyncMapper(Generic[InputT, ResultT]):
@@ -226,7 +221,7 @@ class OrderedMapper(AsyncMapper[InputT, ResultT]):
         self._push_result(self._next_yield, None)
 
 
-def iter_over_async(ait, loop):
+def iter_over_async(ait: AsyncIterable[T], loop) -> Iterator[T]:
     """Wrap an asynchronous iterator into a synchronous one"""
     ait = ait.__aiter__()
 

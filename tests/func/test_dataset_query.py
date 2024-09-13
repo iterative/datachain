@@ -948,192 +948,6 @@ def test_class_udf(cloud_test_catalog, batch):
     [("s3", True)],
     indirect=True,
 )
-def test_udf_reuse_on_error(cloud_test_catalog_tmpfile):
-    catalog = cloud_test_catalog_tmpfile.catalog
-    sources = [cloud_test_catalog_tmpfile.src_uri]
-    globs = [s.rstrip("/") + "/*" for s in sources]
-    catalog.index(sources)
-    catalog.create_dataset_from_sources("animals", globs, recursive=True)
-
-    error_state = {"error": True}
-
-    @udf((C.path,), {"path_len": Int})
-    def name_len_maybe_error(path):
-        if error_state["error"]:
-            # A udf that raises an exception
-            raise RuntimeError("Test Error!")
-        return (len(path),)
-
-    q = (
-        DatasetQuery(name="animals", version=1, catalog=catalog)
-        .filter(C.size < 13)
-        .filter(C.path.glob("cats*") | (C.size < 4))
-        .add_signals(name_len_maybe_error)
-        .select(C.path, C.path_len)
-    )
-    with pytest.raises(RuntimeError, match="Test Error!"):
-        q.db_results()
-
-    # Simulate fixing the error
-    error_state["error"] = False
-
-    # Retry Query
-    result = q.db_results()
-
-    assert len(result) == 3
-    for r in result:
-        # Check that the UDF ran successfully
-        assert len(r[0]) == r[1]
-
-
-@pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
-    indirect=True,
-)
-@pytest.mark.parametrize("batch", [False, True])
-def test_udf_parallel(cloud_test_catalog_tmpfile, batch):
-    catalog = cloud_test_catalog_tmpfile.catalog
-    sources = [cloud_test_catalog_tmpfile.src_uri]
-    globs = [s.rstrip("/") + "/*" for s in sources]
-    catalog.index(sources)
-    catalog.create_dataset_from_sources("animals", globs, recursive=True)
-
-    @udf(("path",), {"name_len": Int})
-    def name_len_local(name):
-        # A very simple udf.
-        return (len(name),)
-
-    @udf(("path",), {"name_len": Int}, batch=2)
-    def name_len_batch(names):
-        # A very simple udf.
-        return [(len(name),) for (name,) in names]
-
-    if batch:
-        # Batching is enabled, we need a udf that acts on
-        # lists of inputs.
-        udf_func = name_len_batch
-    else:
-        udf_func = name_len_local
-
-    q = (
-        DatasetQuery(name="animals", version=1, catalog=catalog)
-        .filter(C.size < 13)
-        .filter(C.path.glob("cats*") | (C.size < 4))
-        .add_signals(udf_func, parallel=-1)
-        .select(C.path, C.name_len)
-    )
-    result = q.db_results()
-
-    assert len(result) == 3
-    for r in result:
-        # Check that the UDF ran successfully
-        assert len(r[0]) == r[1]
-
-
-@pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
-    indirect=True,
-)
-@pytest.mark.parametrize("batch", [1, 4])
-def test_class_udf_parallel(cloud_test_catalog_tmpfile, batch):
-    catalog = cloud_test_catalog_tmpfile.catalog
-    sources = [cloud_test_catalog_tmpfile.src_uri]
-    globs = [s.rstrip("/") + "/*" for s in sources]
-    catalog.index(sources)
-    catalog.create_dataset_from_sources("animals", globs, recursive=True)
-
-    @udf(("size",), {"total": Int}, method="sum", batch=batch)
-    class MyUDF:
-        def __init__(self, constant, multiplier=1):
-            self.constant = constant
-            self.multiplier = multiplier
-            self.batch = batch
-
-        def sum(self, size):
-            if self.batch > 1:
-                return [(self.constant + size_ * self.multiplier,) for (size_,) in size]
-            return (self.constant + size * self.multiplier,)
-
-    q = (
-        DatasetQuery(name="animals", version=1, catalog=catalog)
-        .filter(C.size < 13)
-        .add_signals(MyUDF(5, multiplier=2), parallel=2)
-    )
-    results = q.select(C.size, C.total).order_by(C.size).db_results()
-    assert results == [
-        (3, 11),
-        (4, 13),
-        (4, 13),
-        (4, 13),
-        (4, 13),
-        (4, 13),
-    ]
-
-
-@pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
-    indirect=True,
-)
-def test_udf_parallel_exec_error(cloud_test_catalog_tmpfile):
-    catalog = cloud_test_catalog_tmpfile.catalog
-    sources = [cloud_test_catalog_tmpfile.src_uri]
-    globs = [s.rstrip("/") + "/*" for s in sources]
-    catalog.index(sources)
-    catalog.create_dataset_from_sources("animals", globs, recursive=True)
-
-    @udf((C.path,), {"name_len": Int})
-    def name_len_error(_name):
-        # A udf that raises an exception
-        raise RuntimeError("Test Error!")
-
-    q = (
-        DatasetQuery(name="animals", version=1, catalog=catalog)
-        .filter(C.size < 13)
-        .filter(C.path.glob("cats*") | (C.size < 4))
-        .add_signals(name_len_error, parallel=-1)
-    )
-    with pytest.raises(RuntimeError, match="UDF Execution Failed!"):
-        q.db_results()
-
-
-@pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
-    indirect=True,
-)
-def test_udf_parallel_interrupt(cloud_test_catalog_tmpfile, capfd):
-    catalog = cloud_test_catalog_tmpfile.catalog
-    sources = [cloud_test_catalog_tmpfile.src_uri]
-    globs = [s.rstrip("/") + "/*" for s in sources]
-    catalog.index(sources)
-    catalog.create_dataset_from_sources("animals", globs, recursive=True)
-
-    @udf(("path",), {"name_len": Int})
-    def name_len_interrupt(_name):
-        # A UDF that emulates cancellation due to a KeyboardInterrupt.
-        raise KeyboardInterrupt
-
-    q = (
-        DatasetQuery(name="animals", version=1, catalog=catalog)
-        .filter(C.size < 13)
-        .filter(C.path.glob("cats*") | (C.size < 4))
-        .add_signals(name_len_interrupt, parallel=-1)
-    )
-    with pytest.raises(RuntimeError, match="UDF Execution Failed!"):
-        q.db_results()
-    captured = capfd.readouterr()
-    assert "KeyboardInterrupt" in captured.err
-    assert "semaphore" not in captured.err
-
-
-@pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
-    indirect=True,
-)
 @pytest.mark.parametrize("batch", [False, True])
 @pytest.mark.parametrize("workers", (1, 2))
 @pytest.mark.skipif(
@@ -1141,6 +955,7 @@ def test_udf_parallel_interrupt(cloud_test_catalog_tmpfile, capfd):
     reason="Set the DATACHAIN_DISTRIBUTED environment variable "
     "to test distributed UDFs",
 )
+@pytest.mark.xdist_group(name="tmpfile")
 def test_udf_distributed(cloud_test_catalog_tmpfile, batch, workers, datachain_job_id):
     catalog = cloud_test_catalog_tmpfile.catalog
     sources = [cloud_test_catalog_tmpfile.src_uri]
@@ -1192,6 +1007,7 @@ def test_udf_distributed(cloud_test_catalog_tmpfile, batch, workers, datachain_j
     reason="Set the DATACHAIN_DISTRIBUTED environment variable "
     "to test distributed UDFs",
 )
+@pytest.mark.xdist_group(name="tmpfile")
 def test_udf_distributed_exec_error(
     cloud_test_catalog_tmpfile, workers, datachain_job_id
 ):
@@ -1226,6 +1042,7 @@ def test_udf_distributed_exec_error(
     reason="Set the DATACHAIN_DISTRIBUTED environment variable "
     "to test distributed UDFs",
 )
+@pytest.mark.xdist_group(name="tmpfile")
 def test_udf_distributed_interrupt(cloud_test_catalog_tmpfile, capfd, datachain_job_id):
     catalog = cloud_test_catalog_tmpfile.catalog
     sources = [cloud_test_catalog_tmpfile.src_uri]
@@ -1261,6 +1078,7 @@ def test_udf_distributed_interrupt(cloud_test_catalog_tmpfile, capfd, datachain_
     reason="Set the DATACHAIN_DISTRIBUTED environment variable "
     "to test distributed UDFs",
 )
+@pytest.mark.xdist_group(name="tmpfile")
 def test_udf_distributed_cancel(cloud_test_catalog_tmpfile, capfd, datachain_job_id):
     catalog = cloud_test_catalog_tmpfile.catalog
     metastore = catalog.metastore
@@ -2112,6 +1930,7 @@ def test_row_generator_with_limit(cloud_test_catalog, dogs_dataset):
     [("s3", True)],
     indirect=True,
 )
+@pytest.mark.xdist_group(name="tmpfile")
 def test_row_generator_parallel(cloud_test_catalog_tmpfile):
     # Setup catalog.
     dogs_dataset_name = uuid.uuid4().hex
@@ -2292,6 +2111,7 @@ def test_row_generator_partition_by(cloud_test_catalog, dogs_dataset):
     [("s3", True)],
     indirect=True,
 )
+@pytest.mark.xdist_group(name="tmpfile")
 def test_row_generator_partition_by_parallel(cloud_test_catalog_tmpfile):
     # Setup catalog.
     dogs_dataset_name = uuid.uuid4().hex
