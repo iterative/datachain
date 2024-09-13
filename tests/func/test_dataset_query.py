@@ -2582,25 +2582,6 @@ def test_checksum_udf(cloud_test_catalog, dogs_dataset):
     assert len(result) == 4
 
 
-@pytest.mark.parametrize("tree", [TARRED_TREE], indirect=True)
-def test_tar_loader(cloud_test_catalog):
-    ctc = cloud_test_catalog
-    catalog = ctc.catalog
-    catalog.index([ctc.src_uri])
-    catalog.create_dataset_from_sources("animals", [ctc.src_uri])
-    q = DatasetQuery(name="animals", version=1, catalog=catalog).generate(index_tar)
-    q.save("extracted")
-
-    q = DatasetQuery(name="extracted", catalog=catalog).filter(C.path.glob("*/cats/*"))
-    assert len(q.db_results()) == 2
-
-    ds = q.extract(Object(to_str), "path")
-    assert {(value, posixpath.basename(path)) for value, path in ds} == {
-        ("meow", "cat1"),
-        ("mrow", "cat2"),
-    }
-
-
 @pytest.mark.parametrize("cloud_type", ["s3", "azure", "gs"], indirect=True)
 def test_simple_dataset_query(cloud_test_catalog):
     ctc = cloud_test_catalog

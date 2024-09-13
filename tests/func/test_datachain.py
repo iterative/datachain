@@ -19,9 +19,10 @@ from datachain.lib.listing import (
     is_listing_dataset,
     parse_listing_uri,
 )
+from datachain.lib.tar import process_tar
 from datachain.lib.udf import Mapper
 from datachain.lib.utils import DataChainError
-from tests.utils import images_equal
+from tests.utils import TARRED_TREE, images_equal
 
 
 def _get_listing_datasets(session):
@@ -624,3 +625,18 @@ def test_udf_parallel_interrupt(cloud_test_catalog_tmpfile, capfd):
     captured = capfd.readouterr()
     assert "KeyboardInterrupt" in captured.err
     assert "semaphore" not in captured.err
+
+
+@pytest.mark.parametrize("tree", [TARRED_TREE], indirect=True)
+def test_process_and_open_tar(cloud_test_catalog):
+    ctc = cloud_test_catalog
+    dc = (
+        DataChain.from_storage(ctc.src_uri, session=ctc.session)
+        .gen(file=process_tar)
+        .filter(C("file.path").glob("*/cats/*"))
+    )
+    assert dc.count() == 2
+    assert {(file.read(), file.name) for file in dc.collect("file")} == {
+        (b"meow", "cat1"),
+        (b"mrow", "cat2"),
+    }
