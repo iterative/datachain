@@ -15,7 +15,8 @@ from datachain.lib.data_model import dict_to_data_model
 from datachain.lib.file import File, IndexedFile
 
 
-def test_arrow_generator(tmp_path, catalog):
+@pytest.mark.parametrize("cache", [True, False])
+def test_arrow_generator(tmp_path, catalog, cache):
     ids = [12345, 67890, 34, 0xF0123]
     texts = ["28", "22", "we", "hello world"]
     df = pd.DataFrame({"id": ids, "text": texts})
@@ -24,7 +25,7 @@ def test_arrow_generator(tmp_path, catalog):
     pq_path = tmp_path / name
     df.to_parquet(pq_path)
     stream = File(path=pq_path.as_posix(), source="file:///")
-    stream._set_stream(catalog, caching_enabled=False)
+    stream._set_stream(catalog, caching_enabled=cache)
 
     func = ArrowGenerator()
     objs = list(func.process(stream))
