@@ -690,7 +690,7 @@ def test_ls_dataset_rows_with_custom_columns(cloud_test_catalog, dogs_dataset):
         assert r["array_col_64"] == [0.5]
         assert r["string_col"] == "s"
         assert r["bool_col"]
-        assert r["json_col"] == dumps({"a": 1})
+        assert r["json_col"] == {"a": 1}
         assert r["binary_col"] == int_example.to_bytes(2, "big")
 
 
@@ -754,7 +754,7 @@ def test_dataset_preview_custom_columns(cloud_test_catalog, dogs_dataset):
         assert r["array_col_64"] == [0.5]
         assert r["string_col"] == "s"
         assert r["bool_col"]
-        assert r["json_col"] == '{"a": 1}'
+        assert r["json_col"] == {"a": 1}
         assert r["binary_col"] == [0, 25]
 
 

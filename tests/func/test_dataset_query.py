@@ -861,7 +861,7 @@ def test_udf_different_types(cloud_test_catalog):
             [0.5],
             "s",
             True,
-            dumps({"a": 1}),
+            {"a": 1},
             obj,
         )
     ]
@@ -2281,7 +2281,7 @@ def test_row_generator_with_new_columns(cloud_test_catalog, dogs_dataset):
         0.5,
         0.5,
         0.5,
-        dumps({"a": 1}),
+        {"a": 1},
         now,
         int_example,
         [0.5, 0.5],
@@ -2551,7 +2551,7 @@ def test_index_tar(cloud_test_catalog):
     rows = catalog.ls_dataset_rows("extracted", 1)
 
     offsets = [
-        json.loads(row["location"])[0]["offset"]
+        row["location"][0]["offset"]
         for row in rows
         if not row["path"].endswith("animals.tar")
     ]
@@ -2560,7 +2560,7 @@ def test_index_tar(cloud_test_catalog):
     assert len(set(offsets)) == len(offsets)
 
     assert all(
-        json.loads(row["location"])[0]["vtype"] == "tar"
+        row["location"][0]["vtype"] == "tar"
         for row in rows
         if not row["path"].endswith("animals.tar")
     )
