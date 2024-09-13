@@ -7,6 +7,8 @@ automatically when creating a `DataChain` from files, like in
 classes include various metadata fields about the underlying file as well as methods to
 read from the files and otherwise work with the file contents.
 
+::: datachain.lib.file.ArrowVFile
+
 ::: datachain.lib.file.ExportPlacement
 
 ::: datachain.lib.file.File
@@ -14,8 +16,6 @@ read from the files and otherwise work with the file contents.
 ::: datachain.lib.file.FileError
 
 ::: datachain.lib.file.ImageFile
-
-::: datachain.lib.file.IndexedFile
 
 ::: datachain.lib.file.TarVFile
 

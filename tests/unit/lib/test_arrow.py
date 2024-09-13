@@ -12,7 +12,7 @@ from datachain.lib.arrow import (
     schema_to_output,
 )
 from datachain.lib.data_model import dict_to_data_model
-from datachain.lib.file import File, IndexedFile
+from datachain.lib.file import ArrowVFile, File
 
 
 def test_arrow_generator(tmp_path, catalog):
@@ -30,10 +30,11 @@ def test_arrow_generator(tmp_path, catalog):
     objs = list(func.process(stream))
 
     assert len(objs) == len(ids)
-    for index, (o, id, text) in enumerate(zip(objs, ids, texts)):
-        assert isinstance(o[0], IndexedFile)
-        assert isinstance(o[0].file, File)
-        assert o[0].index == index
+    for o, id, text in zip(objs, ids, texts):
+        assert isinstance(o[0], ArrowVFile)
+        file_vals = o[0].read()
+        assert file_vals["id"] == id
+        assert file_vals["text"] == text
         assert o[1] == id
         assert o[2] == text
 
@@ -75,10 +76,8 @@ def test_arrow_generator_output_schema(tmp_path, catalog):
     objs = list(func.process(stream))
 
     assert len(objs) == len(ids)
-    for index, (o, id, text, dict) in enumerate(zip(objs, ids, texts, dicts)):
-        assert isinstance(o[0], IndexedFile)
-        assert isinstance(o[0].file, File)
-        assert o[0].index == index
+    for o, id, text, dict in zip(objs, ids, texts, dicts):
+        assert isinstance(o[0], ArrowVFile)
         assert o[1].id == id
         assert o[1].text == text
         assert o[1].dict.a == dict["a"]

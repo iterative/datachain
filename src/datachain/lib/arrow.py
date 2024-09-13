@@ -4,11 +4,11 @@ from tempfile import NamedTemporaryFile
 from typing import TYPE_CHECKING, Optional
 
 import pyarrow as pa
-from pyarrow.dataset import dataset
+from pyarrow.dataset import CsvFileFormat, dataset
 from tqdm import tqdm
 
 from datachain.lib.data_model import dict_to_data_model
-from datachain.lib.file import File, IndexedFile
+from datachain.lib.file import ArrowVFile, File
 from datachain.lib.model_store import ModelStore
 from datachain.lib.udf import Generator
 
@@ -69,7 +69,12 @@ class ArrowGenerator(Generator):
                                 vals_dict[field] = val
                         vals = [self.output_schema(**vals_dict)]
                     if self.source:
-                        yield [IndexedFile(file=file, index=index), *vals]
+                        kwargs: dict = self.kwargs
+                        # Can't serialize CsvFileFormat; may lose formatting options.
+                        if isinstance(kwargs.get("format"), CsvFileFormat):
+                            kwargs["format"] = "csv"
+                        arrow_file = ArrowVFile(file=file, index=index, kwargs=kwargs)
+                        yield [arrow_file, *vals]
                     else:
                         yield vals
                     index += 1

@@ -13,6 +13,7 @@ def test_module_exports():
         from datachain import (
             AbstractUDF,
             Aggregator,
+            ArrowVFile,
             C,
             Column,
             DataChain,
@@ -22,7 +23,6 @@ def test_module_exports():
             FileError,
             Generator,
             ImageFile,
-            IndexedFile,
             Mapper,
             Session,
             TarVFile,
@@ -67,6 +67,7 @@ def test_no_torch_deps(monkeypatch, dep):
             from datachain import (
                 AbstractUDF,
                 Aggregator,
+                ArrowVFile,
                 C,
                 Column,
                 DataChain,
@@ -76,7 +77,6 @@ def test_no_torch_deps(monkeypatch, dep):
                 FileError,
                 Generator,
                 ImageFile,
-                IndexedFile,
                 Mapper,
                 Session,
                 TarVFile,
