@@ -400,4 +400,5 @@ def test_get_local_path(tmp_path, catalog):
     file._set_stream(catalog)
 
     assert file.get_local_path() is None
-    assert file.get_local_path(download=True) is not None
+    file.ensure_cached()
+    assert file.get_local_path() is not None

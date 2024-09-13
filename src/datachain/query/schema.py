@@ -101,8 +101,8 @@ class Object(UDFParameter):
         file = File._from_row(file_signals(row))
         client = catalog.get_client(file.source)
         if cache:
-            client.download(file.get_uid(), callback=cb)
-        with client.open_object(file.get_uid(), use_cache=cache, cb=cb) as f:
+            client.download(file, callback=cb)
+        with client.open_object(file, use_cache=cache, cb=cb) as f:
             return self.reader(f)
 
     async def get_value_async(
@@ -118,11 +118,9 @@ class Object(UDFParameter):
         file = File._from_row(file_signals(row))
         client = catalog.get_client(file.source)
         if cache:
-            await client._download(file.get_uid(), callback=cb)
+            await client._download(file, callback=cb)
         obj = await mapper.to_thread(
-            functools.partial(
-                client.open_object, file.get_uid(), use_cache=cache, cb=cb
-            )
+            functools.partial(client.open_object, file, use_cache=cache, cb=cb)
         )
         with obj:
             return await mapper.to_thread(self.reader, obj)
@@ -146,8 +144,8 @@ class Stream(UDFParameter):
         file = File._from_row(file_signals(row))
         client = catalog.get_client(file.source)
         if cache:
-            client.download(file.get_uid(), callback=cb)
-        return client.open_object(file.get_uid(), use_cache=cache, cb=cb)
+            client.download(file, callback=cb)
+        return client.open_object(file, use_cache=cache, cb=cb)
 
     async def get_value_async(
         self,
@@ -162,11 +160,9 @@ class Stream(UDFParameter):
         file = File._from_row(file_signals(row))
         client = catalog.get_client(file.source)
         if cache:
-            await client._download(file.get_uid(), callback=cb)
+            await client._download(file, callback=cb)
         return await mapper.to_thread(
-            functools.partial(
-                client.open_object, file.get_uid(), use_cache=cache, cb=cb
-            )
+            functools.partial(client.open_object, file, use_cache=cache, cb=cb)
         )
 
 
@@ -196,7 +192,7 @@ class LocalFilename(UDFParameter):
             return None
         file = File._from_row(file_signals(row))
         client = catalog.get_client(file.source)
-        client.download(file.get_uid(), callback=cb)
+        client.download(file, callback=cb)
         return client.cache.get_path(file)
 
     async def get_value_async(
@@ -215,7 +211,7 @@ class LocalFilename(UDFParameter):
             return None
         file = File._from_row(file_signals(row))
         client = catalog.get_client(file.source)
-        await client._download(file.get_uid(), callback=cb)
+        await client._download(file, callback=cb)
         return client.cache.get_path(file)
 
 

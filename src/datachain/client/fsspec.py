@@ -187,8 +187,8 @@ class Client(ABC):
     def url(self, path: str, expires: int = 3600, **kwargs) -> str:
         return self.fs.sign(self.get_full_path(path), expiration=expires, **kwargs)
 
-    async def get_current_etag(self, uid: UniqueId) -> str:
-        info = await self.fs._info(self.get_full_path(uid.path))
+    async def get_current_etag(self, file: "File") -> str:
+        info = await self.fs._info(self.get_full_path(file.path))
         return self.info_to_file(info, "").etag
 
     async def get_size(self, path: str) -> int:
@@ -341,17 +341,18 @@ class Client(ABC):
             copy2(src, dst)
 
     def open_object(
-        self, uid: UniqueId, use_cache: bool = True, cb: Callback = DEFAULT_CALLBACK
+        self, file: File, use_cache: bool = True, cb: Callback = DEFAULT_CALLBACK
     ) -> BinaryIO:
         """Open a file, including files in tar archives."""
-        location = uid.get_parsed_location()
-        if use_cache and (cache_path := self.cache.get_path(uid.to_file())):
+        location = file.location
+        if use_cache and (cache_path := self.cache.get_path(file)):
             return open(cache_path, mode="rb")  # noqa: SIM115
-        if location and location["vtype"] == "tar":
-            return self._open_tar(uid, use_cache=True)
-        return FileWrapper(self.fs.open(self.get_full_path(uid.path)), cb)  # type: ignore[return-value]
+        if location and location[0]["vtype"] == "tar":
+            return self._open_tar(file, use_cache=True)
+        return FileWrapper(self.fs.open(self.get_full_path(file.path)), cb)  # type: ignore[return-value]
 
-    def _open_tar(self, uid: UniqueId, use_cache: bool = True):
+    def _open_tar(self, file: "File", use_cache: bool = True):
+        uid = file.get_uid()
         location = uid.get_parsed_location()
         assert location
 
@@ -366,24 +367,23 @@ class Client(ABC):
             parent["etag"],
             location=parent["location"],
         )
-        f = self.open_object(parent_uid, use_cache=use_cache)
+        f = self.open_object(parent_uid.to_file(), use_cache=use_cache)
         return FileSlice(f, offset, size, posixpath.basename(uid.path))
 
-    def download(self, uid: UniqueId, *, callback: Callback = DEFAULT_CALLBACK) -> None:
-        sync(get_loop(), functools.partial(self._download, uid, callback=callback))
+    def download(self, file: File, *, callback: Callback = DEFAULT_CALLBACK) -> None:
+        sync(get_loop(), functools.partial(self._download, file, callback=callback))
 
-    async def _download(self, uid: UniqueId, *, callback: "Callback" = None) -> None:
-        if self.cache.contains(uid.to_file()):
+    async def _download(self, file: File, *, callback: "Callback" = None) -> None:
+        if self.cache.contains(file):
             # Already in cache, so there's nothing to do.
             return
-        await self._put_in_cache(uid, callback=callback)
+        await self._put_in_cache(file, callback=callback)
 
-    def put_in_cache(self, uid: UniqueId, *, callback: "Callback" = None) -> None:
-        sync(get_loop(), functools.partial(self._put_in_cache, uid, callback=callback))
+    def put_in_cache(self, file: File, *, callback: "Callback" = None) -> None:
+        sync(get_loop(), functools.partial(self._put_in_cache, file, callback=callback))
 
-    async def _put_in_cache(
-        self, uid: UniqueId, *, callback: "Callback" = None
-    ) -> None:
+    async def _put_in_cache(self, file: File, *, callback: "Callback" = None) -> None:
+        uid = file.get_uid()
         location = uid.get_parsed_location()
         if location and location["vtype"] == "tar":
             loop = asyncio.get_running_loop()
@@ -391,14 +391,14 @@ class Client(ABC):
                 None, functools.partial(self._download_from_tar, uid, callback=callback)
             )
             return
-        if uid.etag:
-            etag = await self.get_current_etag(uid)
-            if uid.etag != etag:
+        if file.etag:
+            etag = await self.get_current_etag(file)
+            if file.etag != etag:
                 raise FileNotFoundError(
-                    f"Invalid etag for {uid.storage}/{uid.path}: "
-                    f"expected {uid.etag}, got {etag}"
+                    f"Invalid etag for {file.source}/{file.path}: "
+                    f"expected {file.etag}, got {etag}"
                 )
-        await self.cache.download(uid.to_file(), self, callback=callback)
+        await self.cache.download(file, self, callback=callback)
 
     def _download_from_tar(self, uid, *, callback: "Callback" = None):
         with self._open_tar(uid, use_cache=False) as f:

@@ -211,11 +211,11 @@ class File(DataModel):
                 yield f
 
         else:
-            client: Client = self._catalog.get_client(self.source)
             if self._caching_enabled:
-                client.download(self.get_uid(), callback=self._download_cb)
+                self.ensure_cached()
+            client: Client = self._catalog.get_client(self.source)
             with client.open_object(
-                self.get_uid(), use_cache=self._caching_enabled, cb=self._download_cb
+                self, use_cache=self._caching_enabled, cb=self._download_cb
             ) as f:
                 yield io.TextIOWrapper(f) if mode == "r" else f
 
@@ -268,17 +268,24 @@ class File(DataModel):
         dump = self.model_dump()
         return UniqueId(*(dump[k] for k in self._unique_id_keys))
 
-    def get_local_path(self, download: bool = False) -> Optional[str]:
-        """Returns path to a file in a local cache.
-        Return None if file is not cached. Throws an exception if cache is not setup."""
+    def ensure_cached(self) -> None:
+        if self._catalog is None:
+            raise RuntimeError(
+                "cannot download file to cache because catalog is not setup"
+            )
+        client = self._catalog.get_client(self.source)
+        client.download(self, callback=self._download_cb)
+
+    def get_local_path(self) -> Optional[str]:
+        """Return path to a file in a local cache.
+
+        Returns None if file is not cached.
+        Raises an exception if cache is not setup.
+        """
         if self._catalog is None:
             raise RuntimeError(
                 "cannot resolve local file path because catalog is not setup"
             )
-        uid = self.get_uid()
-        if download:
-            client = self._catalog.get_client(self.source)
-            client.download(uid, callback=self._download_cb)
         return self._catalog.cache.get_path(self)
 
     def get_file_suffix(self):

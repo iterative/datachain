@@ -1485,7 +1485,7 @@ class Catalog:
         config = config or self.client_config
         client = self.get_client(file_signals["source"], **config)
         return client.open_object(
-            File._from_row(file_signals).get_uid(),
+            File._from_row(file_signals),
             use_cache=use_cache,
         )
 
