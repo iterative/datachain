@@ -386,10 +386,19 @@ class SignalSchema:
             else:
                 json, pos = unflatten_to_json_pos(fr, row, pos)  # type: ignore[union-attr]
                 obj = fr(**json)
-                if isinstance(obj, File):
-                    obj._set_stream(catalog, caching_enabled=cache)
+                SignalSchema._set_file_stream(obj, catalog, cache)
                 res.append(obj)
         return res
+
+    @staticmethod
+    def _set_file_stream(
+        obj: BaseModel, catalog: "Catalog", cache: bool = False
+    ) -> None:
+        if isinstance(obj, File):
+            obj._set_stream(catalog, caching_enabled=cache)
+        for field, finfo in obj.model_fields.items():
+            if ModelStore.is_pydantic(finfo.annotation):
+                SignalSchema._set_file_stream(getattr(obj, field), catalog, cache)
 
     def db_signals(
         self, name: Optional[str] = None, as_columns=False
