@@ -15,7 +15,6 @@ from PIL import Image
 from datachain.catalog.catalog import Catalog
 from datachain.dataset import DatasetDependency, DatasetRecord
 from datachain.query import C, DatasetQuery
-from datachain.query.builtins import index_tar
 from datachain.storage import StorageStatus
 
 
@@ -109,31 +108,11 @@ def write_tar(tree, archive, curr_dir=""):
 TARRED_TREE: dict[str, Any] = {"animals.tar": make_tar(DEFAULT_TREE)}
 
 
-def create_tar_dataset(catalog, uri: str, ds_name: str) -> DatasetQuery:
-    """
-    Create a dataset from a storage location containing tar archives and other files.
-
-    The resulting dataset contains both the original files (as regular objects)
-    and the tar members (as v-objects).
-    """
-    ds1 = DatasetQuery(path=uri, catalog=catalog)
-    tar_entries = ds1.filter(C.path.glob("*.tar")).generate(index_tar)
-    return ds1.filter(~C.path.glob("*.tar")).union(tar_entries).save(ds_name)
-
-
 skip_if_not_sqlite = pytest.mark.skipif(
     os.environ.get("DATACHAIN_METASTORE") is not None
     or os.environ.get("DATACHAIN_WAREHOUSE") is not None,
     reason="This test is not supported on other data storages",
 )
-
-
-WEBFORMAT_TREE: dict[str, Any] = {
-    "f1.raw": "raw data",
-    "f1.json": '{"similarity": 0.001, "md5": "deadbeef"}',
-    "f2.raw": "raw data",
-    "f2.json": '{"similarity": 0.005, "md5": "foobar"}',
-}
 
 
 def text_embedding(text: str) -> list[float]:

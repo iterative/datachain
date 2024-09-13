@@ -1,8 +1,7 @@
 import typing
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from functools import WRAPPER_ASSIGNMENTS
-from inspect import isclass
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -25,8 +24,6 @@ from .batch import (
 )
 from .schema import (
     UDFParameter,
-    UDFParamSpec,
-    normalize_param,
 )
 
 if TYPE_CHECKING:
@@ -64,41 +61,6 @@ class UDFProperties:
 
     def signal_names(self) -> Iterable[str]:
         return self.output.keys()
-
-
-def udf(
-    params: Sequence[UDFParamSpec],
-    output: UDFOutputSpec,
-    *,
-    method: Optional[str] = None,  # only used for class-based UDFs
-    batch: int = 1,
-):
-    """
-    Decorate a function or a class to be used as a UDF.
-
-    The decorator expects both the outputs and inputs of the UDF to be specified.
-    The outputs are defined as a collection of tuples containing the signal name
-    and type.
-    Parameters are defined as a list of column objects (e.g. C.name).
-    Optionally, UDFs can be run on batches of rows to improve performance, this
-    is determined by the 'batch' parameter. When operating on batches of inputs,
-    the UDF function will be called with a single argument - a list
-    of tuples containing inputs (e.g. ((input1_a, input1_b), (input2_a, input2b))).
-    """
-    if isinstance(params, str):
-        params = (params,)
-    if not isinstance(output, Mapping):
-        raise TypeError(f"'output' must be a mapping, got {type(output).__name__}")
-
-    properties = UDFProperties([normalize_param(p) for p in params], output, batch)
-
-    def decorator(udf_base: Union[Callable, type]):
-        if isclass(udf_base):
-            return UDFClassWrapper(udf_base, properties, method=method)
-        if callable(udf_base):
-            return UDFWrapper(udf_base, properties)
-
-    return decorator
 
 
 class UDFBase:

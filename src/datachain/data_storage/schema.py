@@ -245,9 +245,6 @@ class DataTable:
             ),
         ]
 
-    def dir_expansion(self):
-        return self.dataset_dir_expansion(self)
-
 
 PARTITION_COLUMN_ID = "partition_id"
 

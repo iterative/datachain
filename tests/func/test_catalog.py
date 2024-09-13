@@ -20,9 +20,7 @@ from datachain.storage import Storage
 from tests.data import ENTRIES
 from tests.utils import (
     DEFAULT_TREE,
-    TARRED_TREE,
     assert_row_names,
-    create_tar_dataset,
     make_index,
     skip_if_not_sqlite,
     tree_from_path,
@@ -273,55 +271,6 @@ def test_cp_local_dataset(cloud_test_catalog, dogs_dataset):
     }
 
 
-@pytest.mark.parametrize("tree", [TARRED_TREE], indirect=True)
-@pytest.mark.parametrize("suffix", ["/", "/*"])
-@pytest.mark.parametrize("recursive", [False, True])
-@pytest.mark.parametrize("dir_exists", [False, True])
-@pytest.mark.xfail(reason="Missing support for v-objects in cp")
-def test_cp_tar_root(cloud_test_catalog, suffix, recursive, dir_exists):
-    ctc = cloud_test_catalog
-    catalog = ctc.catalog
-    create_tar_dataset(catalog, ctc.src_uri, "tarred")
-    dest = ctc.working_dir / "data"
-    if dir_exists:
-        dest.mkdir()
-    src = f"ds://tarred/animals.tar{suffix}"
-    dest_path = str(dest) + "/"
-
-    if not dir_exists and suffix == "/*":
-        with pytest.raises(FileNotFoundError):
-            catalog.cp([src], dest_path, recursive=recursive, no_edatachain_file=True)
-        return
-
-    catalog.cp([src], dest_path, recursive=recursive, no_edatachain_file=True)
-
-    expected = DEFAULT_TREE.copy()
-    if not recursive:
-        # Directories are not copied
-        if suffix == "/":
-            expected = {}
-        else:
-            for key in list(expected):
-                if isinstance(expected[key], dict):
-                    del expected[key]
-
-    assert tree_from_path(dest) == expected
-
-
-@pytest.mark.parametrize("tree", [TARRED_TREE], indirect=True)
-@pytest.mark.xfail(reason="Missing support for v-objects in cp")
-def test_cp_full_tar(cloud_test_catalog):
-    ctc = cloud_test_catalog
-    catalog = ctc.catalog
-    create_tar_dataset(catalog, ctc.src_uri, "tarred")
-    dest = ctc.working_dir / "data"
-    dest.mkdir()
-    src = "ds://tarred/"
-    catalog.cp([src], str(dest), recursive=True, no_edatachain_file=True)
-
-    assert tree_from_path(dest, binary=True) == TARRED_TREE
-
-
 @pytest.mark.parametrize(
     "recursive,star,slash,dir_exists",
     (
@@ -401,43 +350,6 @@ def test_cp_subdir(cloud_test_catalog, recursive, star, slash, dir_exists):
     assert files_by_name["dogs/dog2"]["size"] == 3
     assert files_by_name["dogs/dog3"]["size"] == 4
     assert files_by_name["dogs/others/dog4"]["size"] == 4
-
-
-@pytest.mark.parametrize("tree", [TARRED_TREE], indirect=True)
-@pytest.mark.parametrize("path", ["*/dogs", "animals.tar/dogs"])
-@pytest.mark.parametrize("suffix", ["", "/", "/*"])
-@pytest.mark.parametrize("recursive", [False, True])
-@pytest.mark.parametrize("dir_exists", [False, True])
-@pytest.mark.xfail(reason="Missing support for v-objects in cp")
-def test_cp_tar_subdir(cloud_test_catalog, path, suffix, recursive, dir_exists):
-    ctc = cloud_test_catalog
-    catalog = ctc.catalog
-    create_tar_dataset(catalog, ctc.src_uri, "tarred")
-    dest = ctc.working_dir / "data"
-    if dir_exists:
-        dest.mkdir()
-    src = f"ds://tarred/{path}{suffix}"
-
-    if not dir_exists and suffix == "/*":
-        with pytest.raises(FileNotFoundError):
-            catalog.cp([src], str(dest), recursive=recursive)
-        return
-
-    catalog.cp([src], str(dest), recursive=recursive)
-
-    expected = DEFAULT_TREE["dogs"].copy()
-    if suffix in ("",) and dir_exists:
-        expected = {"dogs": expected}
-    if not recursive:
-        # Directories are not copied
-        if not dir_exists or suffix == "/":
-            expected = {}
-        else:
-            for key in list(expected):
-                if isinstance(expected[key], dict):
-                    del expected[key]
-
-    assert tree_from_path(dest) == expected
 
 
 @pytest.mark.parametrize(
@@ -865,34 +777,6 @@ def test_ls_prefix_not_found(cloud_test_catalog):
 def clear_storages(catalog):
     ds = catalog.metastore
     ds.db.execute(ds._storages.delete())
-
-
-@pytest.mark.parametrize("tree", [TARRED_TREE], indirect=True)
-@pytest.mark.xfail(reason="Missing support for datasets in ls")
-def test_ls_subobjects(cloud_test_catalog):
-    ctc = cloud_test_catalog
-    catalog = ctc.catalog
-    create_tar_dataset(catalog, ctc.src_uri, "tarred")
-
-    def do_ls(target):
-        ((_, results),) = list(catalog.ls([target], fields=["name"]))
-        results = list(results)
-        result_set = {x[0] for x in results}
-        assert len(result_set) == len(results)
-        return result_set
-
-    ds = "ds://tarred"
-    assert do_ls(ds) == {"animals.tar"}
-    assert do_ls(f"{ds}/animals.tar") == {"animals.tar"}
-    assert do_ls(f"{ds}/animals.tar/dogs") == {
-        "dog1",
-        "dog2",
-        "dog3",
-        "others",
-    }
-    assert do_ls(f"{ds}/animals.tar/") == {"description", "cats", "dogs"}
-    assert do_ls(f"{ds}/*.tar/") == {"description", "cats", "dogs"}
-    assert do_ls(f"{ds}/*.tar/desc*") == {"description"}
 
 
 def test_index_error(cloud_test_catalog):
