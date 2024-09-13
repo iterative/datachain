@@ -1373,20 +1373,20 @@ def test_union_join(cloud_test_catalog, inner):
     if inner:
         assert len(signals) == 4
         assert signals == [
-            {'path': 'dogs/dog1', 'sig1': 1, 'sig2': 2},
-            {'path': 'dogs/dog2', 'sig1': 1, 'sig2': 2},
-            {'path': 'dogs/dog3', 'sig1': 1, 'sig2': 2},
-            {'path': 'dogs/others/dog4', 'sig1': 1, 'sig2': 2},
+            {"path": "dogs/dog1", "sig1": 1, "sig2": 2},
+            {"path": "dogs/dog2", "sig1": 1, "sig2": 2},
+            {"path": "dogs/dog3", "sig1": 1, "sig2": 2},
+            {"path": "dogs/others/dog4", "sig1": 1, "sig2": 2},
         ]
     else:
         assert len(signals) == 6
         assert signals == [
-            {'path': 'dogs/dog1', 'sig1': 1, 'sig2': 2},
-            {'path': 'dogs/dog2', 'sig1': 1, 'sig2': 2},
-            {'path': 'dogs/dog3', 'sig1': 1, 'sig2': 2},
-            {'path': 'dogs/others/dog4', 'sig1': 1, 'sig2': 2},
-            {'path': 'cats/cat1', 'sig1': 1, 'sig2': None},
-            {'path': 'cats/cat2', 'sig1': 1, 'sig2': None},
+            {"path": "dogs/dog1", "sig1": 1, "sig2": 2},
+            {"path": "dogs/dog2", "sig1": 1, "sig2": 2},
+            {"path": "dogs/dog3", "sig1": 1, "sig2": 2},
+            {"path": "dogs/others/dog4", "sig1": 1, "sig2": 2},
+            {"path": "cats/cat1", "sig1": 1, "sig2": None},
+            {"path": "cats/cat2", "sig1": 1, "sig2": None},
         ]
 
 
@@ -1418,7 +1418,7 @@ def test_multiple_join(cloud_test_catalog, inner1, inner2, inner3):
     def signals2():
         return (2,)
 
-    dogs_and_cats = (dogs | cats)
+    dogs_and_cats = dogs | cats
     dogs1 = dogs.add_signals(signals1)
     cats1 = cats.add_signals(signals2)
     dogs2 = dogs_and_cats.join(dogs1, C.path, inner=inner1)
@@ -1431,19 +1431,19 @@ def test_multiple_join(cloud_test_catalog, inner1, inner2, inner3):
     ]
     if inner1:
         assert dogs2_signals == [
-            {'path': 'dogs/dog1', 'sig1': 1},
-            {'path': 'dogs/dog2', 'sig1': 1},
-            {'path': 'dogs/dog3', 'sig1': 1},
-            {'path': 'dogs/others/dog4', 'sig1': 1},
+            {"path": "dogs/dog1", "sig1": 1},
+            {"path": "dogs/dog2", "sig1": 1},
+            {"path": "dogs/dog3", "sig1": 1},
+            {"path": "dogs/others/dog4", "sig1": 1},
         ]
     else:
         assert dogs2_signals == [
-            {'path': 'dogs/dog1', 'sig1': 1},
-            {'path': 'dogs/dog2', 'sig1': 1},
-            {'path': 'dogs/dog3', 'sig1': 1},
-            {'path': 'dogs/others/dog4', 'sig1': 1},
-            {'path': 'cats/cat1', 'sig1': None},
-            {'path': 'cats/cat2', 'sig1': None},
+            {"path": "dogs/dog1", "sig1": 1},
+            {"path": "dogs/dog2", "sig1": 1},
+            {"path": "dogs/dog3", "sig1": 1},
+            {"path": "dogs/others/dog4", "sig1": 1},
+            {"path": "cats/cat1", "sig1": None},
+            {"path": "cats/cat2", "sig1": None},
         ]
 
     cats2_signals = [
@@ -1452,17 +1452,17 @@ def test_multiple_join(cloud_test_catalog, inner1, inner2, inner3):
     ]
     if inner2:
         assert cats2_signals == [
-            {'path': 'cats/cat1', 'sig2': 2},
-            {'path': 'cats/cat2', 'sig2': 2}
+            {"path": "cats/cat1", "sig2": 2},
+            {"path": "cats/cat2", "sig2": 2},
         ]
     else:
         assert cats2_signals == [
-            {'path': 'dogs/dog1', 'sig2': None},
-            {'path': 'dogs/dog2', 'sig2': None},
-            {'path': 'dogs/dog3', 'sig2': None},
-            {'path': 'dogs/others/dog4', 'sig2': None},
-            {'path': 'cats/cat1', 'sig2': 2},
-            {'path': 'cats/cat2', 'sig2': 2},
+            {"path": "dogs/dog1", "sig2": None},
+            {"path": "dogs/dog2", "sig2": None},
+            {"path": "dogs/dog3", "sig2": None},
+            {"path": "dogs/others/dog4", "sig2": None},
+            {"path": "cats/cat1", "sig2": 2},
+            {"path": "cats/cat2", "sig2": 2},
         ]
 
     joined_signals = [
@@ -1473,24 +1473,24 @@ def test_multiple_join(cloud_test_catalog, inner1, inner2, inner3):
         assert joined_signals == []
     elif inner1:
         assert joined_signals == [
-            {'path': 'dogs/dog1', 'sig1': 1, 'sig2': None},
-            {'path': 'dogs/dog2', 'sig1': 1, 'sig2': None},
-            {'path': 'dogs/dog3', 'sig1': 1, 'sig2': None},
-            {'path': 'dogs/others/dog4', 'sig1': 1, 'sig2': None},
+            {"path": "dogs/dog1", "sig1": 1, "sig2": None},
+            {"path": "dogs/dog2", "sig1": 1, "sig2": None},
+            {"path": "dogs/dog3", "sig1": 1, "sig2": None},
+            {"path": "dogs/others/dog4", "sig1": 1, "sig2": None},
         ]
     elif inner2 and inner3:
         assert joined_signals == [
-            {'path': 'cats/cat1', 'sig1': None, 'sig2': 2},
-            {'path': 'cats/cat2', 'sig1': None, 'sig2': 2},
+            {"path": "cats/cat1", "sig1": None, "sig2": 2},
+            {"path": "cats/cat2", "sig1": None, "sig2": 2},
         ]
     else:
         assert joined_signals == [
-            {'path': 'dogs/dog1', 'sig1': 1, 'sig2': None},
-            {'path': 'dogs/dog2', 'sig1': 1, 'sig2': None},
-            {'path': 'dogs/dog3', 'sig1': 1, 'sig2': None},
-            {'path': 'dogs/others/dog4', 'sig1': 1, 'sig2': None},
-            {'path': 'cats/cat1', 'sig1': None, 'sig2': 2},
-            {'path': 'cats/cat2', 'sig1': None, 'sig2': 2},
+            {"path": "dogs/dog1", "sig1": 1, "sig2": None},
+            {"path": "dogs/dog2", "sig1": 1, "sig2": None},
+            {"path": "dogs/dog3", "sig1": 1, "sig2": None},
+            {"path": "dogs/others/dog4", "sig1": 1, "sig2": None},
+            {"path": "cats/cat1", "sig1": None, "sig2": 2},
+            {"path": "cats/cat2", "sig1": None, "sig2": 2},
         ]
 
 
