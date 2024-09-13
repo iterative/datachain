@@ -905,30 +905,28 @@ class SQLJoin(Step):
     inner: bool
     rname: str
 
-    def get_query(self, query: "DatasetQuery", temp_tables: list[str]) -> sa.Subquery:
-        select_query = query.apply_steps().select()
-        temp_tables.extend(query.temp_table_names)
+    def get_query(self, dq: "DatasetQuery", temp_tables: list[str]) -> sa.Subquery:
+        query = dq.apply_steps().select()
+        temp_tables.extend(dq.temp_table_names)
 
-        if not any(isinstance(step, (SQLJoin, SQLUnion)) for step in query.steps):
-            return select_query.subquery(query.table.name)
+        if not any(isinstance(step, (SQLJoin, SQLUnion)) for step in dq.steps):
+            return query.subquery(dq.table.name)
 
         warehouse = self.catalog.warehouse
 
-        table_name = warehouse.temp_table_name()
         columns = [
             c if isinstance(c, Column) else Column(c.name, c.type)
-            for c in select_query.columns
+            for c in query.subquery().columns
         ]
         temp_table = warehouse.create_dataset_rows_table(
-            table_name,
+            warehouse.temp_table_name(),
             columns=columns,
-            if_not_exists=False,
         )
         temp_tables.append(temp_table.name)
 
-        warehouse.copy_table(temp_table, select_query)
+        warehouse.copy_table(temp_table, query)
 
-        return temp_table.select().subquery(query.table.name)
+        return temp_table.select().subquery(dq.table.name)
 
     def validate_expression(self, exp: "ClauseElement", q1, q2):
         """
@@ -974,7 +972,12 @@ class SQLJoin(Step):
                 continue
 
             if c.name in q1_column_names:
-                c = c.label(self.rname.format(name=c.name))
+                new_name = self.rname.format(name=c.name)
+                new_name_idx = 0
+                while new_name in q1_column_names:
+                    new_name_idx += 1
+                    new_name = self.rname.format(name=f"{c.name}_{new_name_idx}")
+                c = c.label(new_name)
             q2_columns.append(c)
 
         res_columns = q1_columns + q2_columns
@@ -1008,8 +1011,8 @@ class SQLJoin(Step):
                 join_expression,
                 inner=self.inner,
             )
-            subquery = sqlalchemy.select(*columns).select_from(join_query).subquery()
-            return sqlalchemy.select(*subquery.c).select_from(subquery)
+            return sqlalchemy.select(*columns).select_from(join_query)
+            # return sqlalchemy.select(*subquery.c).select_from(subquery)
 
         return step_result(
             q,
