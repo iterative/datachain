@@ -1,5 +1,6 @@
 import io
 import json
+import logging
 import os
 import posixpath
 from abc import ABC, abstractmethod
@@ -15,6 +16,9 @@ from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 from PIL import Image
 from pydantic import Field, field_validator
 
+if TYPE_CHECKING:
+    from typing_extensions import Self
+
 from datachain.cache import UniqueId
 from datachain.client.fileslice import FileSlice
 from datachain.lib.data_model import DataModel
@@ -24,6 +28,8 @@ from datachain.utils import TIME_ZERO
 
 if TYPE_CHECKING:
     from datachain.catalog import Catalog
+
+logger = logging.getLogger("datachain")
 
 # how to create file path when exporting
 ExportPlacement = Literal["filename", "etag", "fullpath", "checksum"]
@@ -312,6 +318,70 @@ class File(DataModel):
     def get_fs(self):
         """Returns `fsspec` filesystem for the file."""
         return self._catalog.get_client(self.source).fs
+
+    def resolve(self) -> "Self":
+        """
+        Resolve a File object by checking its existence and updating its metadata.
+
+        Returns:
+            File: The resolved File object with updated metadata.
+        """
+        if self._catalog is None:
+            raise RuntimeError("Cannot resolve file: catalog is not set")
+
+        try:
+            client = self._catalog.get_client(self.source)
+        except NotImplementedError as e:
+            raise RuntimeError(
+                f"Unsupported protocol for file source: {self.source}"
+            ) from e
+
+        try:
+            info = client.fs.info(client.get_full_path(self.path))
+            converted_info = client.info_to_file(info, self.source)
+            return type(self)(
+                path=self.path,
+                source=self.source,
+                size=converted_info.size,
+                etag=converted_info.etag,
+                version=converted_info.version,
+                is_latest=converted_info.is_latest,
+                last_modified=converted_info.last_modified,
+                location=self.location,
+            )
+        except (FileNotFoundError, PermissionError, OSError) as e:
+            logger.warning("File system error when resolving %s: %s", self.path, str(e))
+
+        return type(self)(
+            path=self.path,
+            source=self.source,
+            size=0,
+            etag="",
+            version="",
+            is_latest=True,
+            last_modified=TIME_ZERO,
+            location=self.location,
+        )
+
+
+def resolve(file: File) -> File:
+    """
+    Resolve a File object by checking its existence and updating its metadata.
+
+    This function is a wrapper around the File.resolve() method, designed to be
+    used as a mapper in DataChain operations.
+
+    Args:
+        file (File): The File object to resolve.
+
+    Returns:
+        File: The resolved File object with updated metadata.
+
+    Raises:
+        RuntimeError: If the file's catalog is not set or if
+        the file source protocol is unsupported.
+    """
+    return file.resolve()
 
 
 class TextFile(File):

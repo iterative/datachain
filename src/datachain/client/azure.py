@@ -4,7 +4,6 @@ from adlfs import AzureBlobFileSystem
 from tqdm import tqdm
 
 from datachain.lib.file import File
-from datachain.node import Entry
 
 from .fsspec import DELIMITER, Client, ResultQueue
 
@@ -13,17 +12,6 @@ class AzureClient(Client):
     FS_CLASS = AzureBlobFileSystem
     PREFIX = "az://"
     protocol = "az"
-
-    def convert_info(self, v: dict[str, Any], path: str) -> Entry:
-        version_id = v.get("version_id")
-        return Entry.from_file(
-            path=path,
-            etag=v.get("etag", "").strip('"'),
-            version=version_id or "",
-            is_latest=version_id is None or bool(v.get("is_current_version")),
-            last_modified=v["last_modified"],
-            size=v.get("size", ""),
-        )
 
     def info_to_file(self, v: dict[str, Any], path: str) -> File:
         version_id = v.get("version_id")
@@ -57,7 +45,7 @@ class AzureClient(Client):
                                 continue
                             info = (await self.fs._details([b]))[0]
                             entries.append(
-                                self.convert_info(info, self.rel_path(info["name"]))
+                                self.info_to_file(info, self.rel_path(info["name"]))
                             )
                         if entries:
                             await result_queue.put(entries)
