@@ -408,7 +408,11 @@ class DataChain(DatasetQuery):
                     in_memory=in_memory,
                 )
                 .gen(
-                    list_bucket(list_uri, client_config=session.catalog.client_config),
+                    list_bucket(
+                        list_uri,
+                        session.catalog.cache,
+                        client_config=session.catalog.client_config,
+                    ),
                     output={f"{object_name}": File},
                 )
                 .save(list_dataset_name, listing=True)

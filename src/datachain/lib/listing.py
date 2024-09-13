@@ -20,7 +20,7 @@ LISTING_TTL = 4 * 60 * 60  # cached listing lasts 4 hours
 LISTING_PREFIX = "lst__"  # listing datasets start with this name
 
 
-def list_bucket(uri: str, client_config=None) -> Callable:
+def list_bucket(uri: str, cache, client_config=None) -> Callable:
     """
     Function that returns another generator function that yields File objects
     from bucket where each File represents one bucket entry.
@@ -28,7 +28,8 @@ def list_bucket(uri: str, client_config=None) -> Callable:
 
     def list_func() -> Iterator[File]:
         config = client_config or {}
-        client, path = Client.parse_url(uri, None, **config)  # type: ignore[arg-type]
+        client = Client.get_client(uri, cache, **config)  # type: ignore[arg-type]
+        _, path = Client.parse_url(uri)
         for entries in iter_over_async(client.scandir(path.rstrip("/")), get_loop()):
             yield from entries
 
@@ -77,16 +78,17 @@ def parse_listing_uri(uri: str, cache, client_config) -> tuple[str, str, str]:
     Parsing uri and returns listing dataset name, listing uri and listing path
     """
     client_config = client_config or {}
-    client, path = Client.parse_url(uri, cache, **client_config)
+    client = Client.get_client(uri, cache, **client_config)
+    storage_uri, path = Client.parse_url(uri)
 
     # clean path without globs
     lst_uri_path = (
         posixpath.dirname(path) if uses_glob(path) or client.fs.isfile(uri) else path
     )
 
-    lst_uri = f"{client.uri}/{lst_uri_path.lstrip('/')}"
+    lst_uri = f"{storage_uri}/{lst_uri_path.lstrip('/')}"
     ds_name = (
-        f"{LISTING_PREFIX}{client.uri}/{posixpath.join(lst_uri_path, '').lstrip('/')}"
+        f"{LISTING_PREFIX}{storage_uri}/{posixpath.join(lst_uri_path, '').lstrip('/')}"
     )
 
     return ds_name, lst_uri, path

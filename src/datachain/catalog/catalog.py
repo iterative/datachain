@@ -619,10 +619,6 @@ class Catalog:
                 code_ast.body[-1:] = new_expressions
         return code_ast
 
-    def parse_url(self, uri: str, **config: Any) -> tuple[Client, str]:
-        config = config or self.client_config
-        return Client.parse_url(uri, self.cache, **config)
-
     def get_client(self, uri: StorageURI, **config: Any) -> Client:
         """
         Return the client corresponding to the given source `uri`.
@@ -649,17 +645,16 @@ class Catalog:
         partial_path: Optional[str]
 
         client_config = client_config or self.client_config
-        client, path = self.parse_url(source, **client_config)
+        uri, path = Client.parse_url(source)
+        client = Client.get_client(source, self.cache, **client_config)
         stem = os.path.basename(os.path.normpath(path))
         prefix = (
             posixpath.dirname(path)
             if glob.has_magic(stem) or client.fs.isfile(source)
             else path
         )
-        storage_dataset_name = Storage.dataset_name(
-            client.uri, posixpath.join(prefix, "")
-        )
-        source_metastore = self.metastore.clone(client.uri)
+        storage_dataset_name = Storage.dataset_name(uri, posixpath.join(prefix, ""))
+        source_metastore = self.metastore.clone(uri)
 
         columns = [
             Column("path", String),
@@ -673,15 +668,13 @@ class Catalog:
         ]
 
         if skip_indexing:
-            source_metastore.create_storage_if_not_registered(client.uri)
-            storage = source_metastore.get_storage(client.uri)
-            source_metastore.init_partial_id(client.uri)
-            partial_id = source_metastore.get_next_partial_id(client.uri)
+            source_metastore.create_storage_if_not_registered(uri)
+            storage = source_metastore.get_storage(uri)
+            source_metastore.init_partial_id(uri)
+            partial_id = source_metastore.get_next_partial_id(uri)
 
-            source_metastore = self.metastore.clone(
-                uri=client.uri, partial_id=partial_id
-            )
-            source_metastore.init(client.uri)
+            source_metastore = self.metastore.clone(uri=uri, partial_id=partial_id)
+            source_metastore.init(uri)
 
             source_warehouse = self.warehouse.clone()
             dataset = self.create_dataset(
@@ -699,20 +692,16 @@ class Catalog:
             in_progress,
             partial_id,
             partial_path,
-        ) = source_metastore.register_storage_for_indexing(
-            client.uri, force_update, prefix
-        )
+        ) = source_metastore.register_storage_for_indexing(uri, force_update, prefix)
         if in_progress:
             raise PendingIndexingError(f"Pending indexing operation: uri={storage.uri}")
 
         if not need_index:
             assert partial_id is not None
             assert partial_path is not None
-            source_metastore = self.metastore.clone(
-                uri=client.uri, partial_id=partial_id
-            )
+            source_metastore = self.metastore.clone(uri=uri, partial_id=partial_id)
             source_warehouse = self.warehouse.clone()
-            dataset = self.get_dataset(Storage.dataset_name(client.uri, partial_path))
+            dataset = self.get_dataset(Storage.dataset_name(uri, partial_path))
             lst = Listing(storage, source_metastore, source_warehouse, client, dataset)
             logger.debug(
                 "Using cached listing %s. Valid till: %s",
@@ -729,11 +718,11 @@ class Catalog:
 
             return lst, path
 
-        source_metastore.init_partial_id(client.uri)
-        partial_id = source_metastore.get_next_partial_id(client.uri)
+        source_metastore.init_partial_id(uri)
+        partial_id = source_metastore.get_next_partial_id(uri)
 
-        source_metastore.init(client.uri)
-        source_metastore = self.metastore.clone(uri=client.uri, partial_id=partial_id)
+        source_metastore.init(uri)
+        source_metastore = self.metastore.clone(uri=uri, partial_id=partial_id)
 
         source_warehouse = self.warehouse.clone()
 
@@ -1366,7 +1355,7 @@ class Catalog:
 
     def signed_url(self, source: str, path: str, client_config=None) -> str:
         client_config = client_config or self.client_config
-        client, _ = self.parse_url(source, **client_config)
+        client = Client.get_client(source, self.cache, **client_config)
         return client.url(path)
 
     def export_dataset_table(
