@@ -57,17 +57,11 @@ def test_webdataset_basic():
 
     assert laion01.file.name == "01.jpg"
     assert laion01.file.parent == tar_file.name
-    assert laion01.file.location is not None
-    assert isinstance(laion01.file.location, list)
-    assert len(laion01.file.location) > 0
+    assert laion01.file.size == 0
 
-    parent = laion01.file.location[0].get("parent", None)
-    assert parent is not None
-    parent_file = File(**parent)
-    assert parent_file == tar_file
+    assert laion01.file.file == tar_file
 
     assert laion64.file.name == "64.jpg"
-    assert laion64.file.parent == tar_file.name
 
     assert laion01.txt is None
     assert laion01.json.uid == "5678"

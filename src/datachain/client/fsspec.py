@@ -3,7 +3,6 @@ import functools
 import logging
 import multiprocessing
 import os
-import posixpath
 import re
 import sys
 from abc import ABC, abstractmethod
@@ -27,7 +26,7 @@ from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 from tqdm import tqdm
 
 from datachain.cache import DataChainCache, UniqueId
-from datachain.client.fileslice import FileSlice, FileWrapper
+from datachain.client.fileslice import FileWrapper
 from datachain.error import ClientError as DataChainClientError
 from datachain.lib.file import File
 from datachain.nodes_fetcher import NodesFetcher
@@ -344,30 +343,9 @@ class Client(ABC):
         self, uid: UniqueId, use_cache: bool = True, cb: Callback = DEFAULT_CALLBACK
     ) -> BinaryIO:
         """Open a file, including files in tar archives."""
-        location = uid.get_parsed_location()
         if use_cache and (cache_path := self.cache.get_path(uid)):
             return open(cache_path, mode="rb")  # noqa: SIM115
-        if location and location["vtype"] == "tar":
-            return self._open_tar(uid, use_cache=True)
         return FileWrapper(self.fs.open(self.get_full_path(uid.path)), cb)  # type: ignore[return-value]
-
-    def _open_tar(self, uid: UniqueId, use_cache: bool = True):
-        location = uid.get_parsed_location()
-        assert location
-
-        offset = location["offset"]
-        size = location["size"]
-        parent = location["parent"]
-
-        parent_uid = UniqueId(
-            parent["source"],
-            parent["path"],
-            parent["size"],
-            parent["etag"],
-            location=parent["location"],
-        )
-        f = self.open_object(parent_uid, use_cache=use_cache)
-        return FileSlice(f, offset, size, posixpath.basename(uid.path))
 
     def download(self, uid: UniqueId, *, callback: Callback = DEFAULT_CALLBACK) -> None:
         sync(get_loop(), functools.partial(self._download, uid, callback=callback))
@@ -384,13 +362,6 @@ class Client(ABC):
     async def _put_in_cache(
         self, uid: UniqueId, *, callback: "Callback" = None
     ) -> None:
-        location = uid.get_parsed_location()
-        if location and location["vtype"] == "tar":
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(
-                None, functools.partial(self._download_from_tar, uid, callback=callback)
-            )
-            return
         if uid.etag:
             etag = await self.get_current_etag(uid)
             if uid.etag != etag:
@@ -399,8 +370,3 @@ class Client(ABC):
                     f"expected {uid.etag}, got {etag}"
                 )
         await self.cache.download(uid, self, callback=callback)
-
-    def _download_from_tar(self, uid, *, callback: "Callback" = None):
-        with self._open_tar(uid, use_cache=False) as f:
-            contents = f.read()
-        self.cache.store_data(uid, contents)
