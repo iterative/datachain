@@ -261,7 +261,7 @@ def test_listings(test_session, tmp_dir):
     df.to_parquet(tmp_dir / "df.parquet")
 
     uri = tmp_dir.as_uri()
-    client, _ = Client.parse_url(uri, test_session.catalog.cache)
+    client = Client.get_client(uri, test_session.catalog.cache)
 
     DataChain.from_storage(uri, session=test_session)
 
@@ -292,7 +292,7 @@ def test_listings_reindex(test_session, tmp_dir):
     df.to_parquet(tmp_dir / "df.parquet")
 
     uri = tmp_dir.as_uri()
-    client, _ = Client.parse_url(uri, test_session.catalog.cache)
+    client = Client.get_client(uri, test_session.catalog.cache)
 
     DataChain.from_storage(uri, session=test_session)
     assert len(list(DataChain.listings(session=test_session).collect("listing"))) == 1

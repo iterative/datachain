@@ -116,15 +116,16 @@ class Client(ABC):
         return DATA_SOURCE_URI_PATTERN.match(name) is not None
 
     @staticmethod
-    def parse_url(
-        source: str,
-        cache: DataChainCache,
-        **kwargs,
-    ) -> tuple["Client", str]:
+    def parse_url(source: str) -> tuple[StorageURI, str]:
         cls = Client.get_implementation(source)
-        storage_url, rel_path = cls.split_url(source)
-        client = cls.from_name(storage_url, cache, kwargs)
-        return client, rel_path
+        storage_name, rel_path = cls.split_url(source)
+        return cls.get_uri(storage_name), rel_path
+
+    @staticmethod
+    def get_client(source: str, cache: DataChainCache, **kwargs) -> "Client":
+        cls = Client.get_implementation(source)
+        storage_url, _ = cls.split_url(source)
+        return cls.from_name(storage_url, cache, kwargs)
 
     @classmethod
     def create_fs(cls, **kwargs) -> "AbstractFileSystem":
