@@ -65,10 +65,6 @@ def from_result_row(col_names, row):
     return dict(zip(col_names, row))
 
 
-def _sort_signals(signals):
-    return sorted(signals, key=lambda x: x["path"])
-
-
 @pytest.fixture
 def dogs_cats_dataset(listed_bucket, cloud_test_catalog, dogs_dataset, cats_dataset):
     dataset_name = uuid.uuid4().hex
@@ -1371,33 +1367,24 @@ def test_union_join(cloud_test_catalog, inner):
     cats1 = cats.add_signals(signals1)
 
     joined = (dogs1 | cats1).join(dogs2, C.path, inner=inner)
-    signals = _sort_signals(
-        [
-            {k: v for k, v in row.items() if k in ("path", "sig1", "sig2")}
-            for row in joined.to_db_records()
-        ]
-    )
+    signals = list(joined.select("path", "sig1", "sig2").order_by("path"))
 
     if inner:
-        assert signals == _sort_signals(
-            [
-                {"path": "dogs/dog1", "sig1": 1, "sig2": 2},
-                {"path": "dogs/dog2", "sig1": 1, "sig2": 2},
-                {"path": "dogs/dog3", "sig1": 1, "sig2": 2},
-                {"path": "dogs/others/dog4", "sig1": 1, "sig2": 2},
-            ]
-        )
+        assert signals == [
+            ("dogs/dog1", 1, 2),
+            ("dogs/dog2", 1, 2),
+            ("dogs/dog3", 1, 2),
+            ("dogs/others/dog4", 1, 2),
+        ]
     else:
-        assert signals == _sort_signals(
-            [
-                {"path": "dogs/dog1", "sig1": 1, "sig2": 2},
-                {"path": "dogs/dog2", "sig1": 1, "sig2": 2},
-                {"path": "dogs/dog3", "sig1": 1, "sig2": 2},
-                {"path": "dogs/others/dog4", "sig1": 1, "sig2": 2},
-                {"path": "cats/cat1", "sig1": 1, "sig2": signal_default_value},
-                {"path": "cats/cat2", "sig1": 1, "sig2": signal_default_value},
-            ]
-        )
+        assert signals == [
+            ("cats/cat1", 1, signal_default_value),
+            ("cats/cat2", 1, signal_default_value),
+            ("dogs/dog1", 1, 2),
+            ("dogs/dog2", 1, 2),
+            ("dogs/dog3", 1, 2),
+            ("dogs/others/dog4", 1, 2),
+        ]
 
 
 @pytest.mark.parametrize(
@@ -1437,93 +1424,31 @@ def test_multiple_join(cloud_test_catalog, inner1, inner2, inner3):
     cats2 = dogs_and_cats.join(cats1, C.path, inner=inner2)
     joined = dogs2.join(cats2, C.path, inner=inner3)
 
-    dogs2_signals = _sort_signals(
-        [
-            {k: v for k, v in row.items() if k in ("path", "sig1")}
-            for row in dogs2.to_db_records()
-        ]
-    )
-    if inner1:
-        assert dogs2_signals == _sort_signals(
-            [
-                {"path": "dogs/dog1", "sig1": 1},
-                {"path": "dogs/dog2", "sig1": 1},
-                {"path": "dogs/dog3", "sig1": 1},
-                {"path": "dogs/others/dog4", "sig1": 1},
-            ]
-        )
-    else:
-        assert dogs2_signals == _sort_signals(
-            [
-                {"path": "dogs/dog1", "sig1": 1},
-                {"path": "dogs/dog2", "sig1": 1},
-                {"path": "dogs/dog3", "sig1": 1},
-                {"path": "dogs/others/dog4", "sig1": 1},
-                {"path": "cats/cat1", "sig1": signal_default_value},
-                {"path": "cats/cat2", "sig1": signal_default_value},
-            ]
-        )
+    joined_signals = list(joined.select("path", "sig1", "sig2").order_by("path"))
 
-    cats2_signals = _sort_signals(
-        [
-            {k: v for k, v in row.items() if k in ("path", "sig2")}
-            for row in cats2.to_db_records()
-        ]
-    )
-    if inner2:
-        assert cats2_signals == _sort_signals(
-            [
-                {"path": "cats/cat1", "sig2": 2},
-                {"path": "cats/cat2", "sig2": 2},
-            ]
-        )
-    else:
-        assert cats2_signals == _sort_signals(
-            [
-                {"path": "dogs/dog1", "sig2": signal_default_value},
-                {"path": "dogs/dog2", "sig2": signal_default_value},
-                {"path": "dogs/dog3", "sig2": signal_default_value},
-                {"path": "dogs/others/dog4", "sig2": signal_default_value},
-                {"path": "cats/cat1", "sig2": 2},
-                {"path": "cats/cat2", "sig2": 2},
-            ]
-        )
-
-    joined_signals = _sort_signals(
-        [
-            {k: v for k, v in row.items() if k in ("path", "sig1", "sig2")}
-            for row in joined.to_db_records()
-        ]
-    )
     if inner1 and inner2 and inner3:
         assert joined_signals == []
     elif inner1:
-        assert joined_signals == _sort_signals(
-            [
-                {"path": "dogs/dog1", "sig1": 1, "sig2": signal_default_value},
-                {"path": "dogs/dog2", "sig1": 1, "sig2": signal_default_value},
-                {"path": "dogs/dog3", "sig1": 1, "sig2": signal_default_value},
-                {"path": "dogs/others/dog4", "sig1": 1, "sig2": signal_default_value},
-            ]
-        )
+        assert joined_signals == [
+            ("dogs/dog1", 1, signal_default_value),
+            ("dogs/dog2", 1, signal_default_value),
+            ("dogs/dog3", 1, signal_default_value),
+            ("dogs/others/dog4", 1, signal_default_value),
+        ]
     elif inner2 and inner3:
-        assert joined_signals == _sort_signals(
-            [
-                {"path": "cats/cat1", "sig1": signal_default_value, "sig2": 2},
-                {"path": "cats/cat2", "sig1": signal_default_value, "sig2": 2},
-            ]
-        )
+        assert joined_signals == [
+            ("cats/cat1", signal_default_value, 2),
+            ("cats/cat2", signal_default_value, 2),
+        ]
     else:
-        assert joined_signals == _sort_signals(
-            [
-                {"path": "dogs/dog1", "sig1": 1, "sig2": signal_default_value},
-                {"path": "dogs/dog2", "sig1": 1, "sig2": signal_default_value},
-                {"path": "dogs/dog3", "sig1": 1, "sig2": signal_default_value},
-                {"path": "dogs/others/dog4", "sig1": 1, "sig2": signal_default_value},
-                {"path": "cats/cat1", "sig1": signal_default_value, "sig2": 2},
-                {"path": "cats/cat2", "sig1": signal_default_value, "sig2": 2},
-            ]
-        )
+        assert joined_signals == [
+            ("cats/cat1", signal_default_value, 2),
+            ("cats/cat2", signal_default_value, 2),
+            ("dogs/dog1", 1, signal_default_value),
+            ("dogs/dog2", 1, signal_default_value),
+            ("dogs/dog3", 1, signal_default_value),
+            ("dogs/others/dog4", 1, signal_default_value),
+        ]
 
 
 @pytest.mark.parametrize(

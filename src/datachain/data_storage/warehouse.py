@@ -938,7 +938,7 @@ class AbstractWarehouse(ABC, Serializable):
         are cleaned up as soon as they are no longer needed.
         """
         with tqdm(desc="Cleanup", unit=" tables") as pbar:
-            for name in names:
+            for name in set(names):
                 self.db.drop_table(Table(name, self.db.metadata), if_exists=True)
                 pbar.update(1)
 
