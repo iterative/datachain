@@ -17,7 +17,7 @@ from typing import (
 from pydantic import Field
 
 from datachain.lib.data_model import DataModel
-from datachain.lib.file import File, TarFile
+from datachain.lib.file import File, TarVFile
 from datachain.lib.utils import DataChainError
 
 # The `json` method of the Pydantic `BaseModel` class has been deprecated
@@ -60,7 +60,7 @@ class UnknownFileExtensionError(WDSError):
 
 
 class WDSBasic(DataModel):
-    file: TarFile
+    file: TarVFile
 
 
 class WDSAllFile(WDSBasic):
@@ -195,7 +195,6 @@ class Builder:
             version=self._tar_stream.version,
             size=core_file.size,
             etag=etag,
-            offset=core_file.offset_data,
             file=self._tar_stream,
         )
 

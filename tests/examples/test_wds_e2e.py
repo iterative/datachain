@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+from PIL import Image
 
 from datachain.client.local import FileClient
 from datachain.lib.dc import DataChain
@@ -33,7 +34,10 @@ def webdataset_tars(tmp_path):
             tar.addfile(info, io.BytesIO(data))
 
             # image file
-            data = b"123"  # some dummy data
+            img = Image.new(mode="RGB", size=(64, 64))
+            buf = io.BytesIO()
+            img.save(buf, format="jpeg")
+            data = buf.getvalue()
             info = tarfile.TarInfo(f"{idx}.jpg")
             info.size = len(data)
             tar.addfile(info, io.BytesIO(data))
@@ -85,12 +89,10 @@ def test_wds(catalog, webdataset_tars):
         )
 
         assert laion_wds.txt == data["caption"]
-        assert laion_wds.file.location
         assert laion_wds.file.source == FileClient.root_path().as_uri()
-        assert laion_wds.file.parent
         assert laion_wds.file.name == f"{idx}.jpg"
-        assert laion_wds.file.location
         assert laion_wds.json.model_dump() == Laion(**data).model_dump()
+        assert isinstance(laion_wds.file.read(), Image.Image)
 
     assert num_rows == len(WDS_TAR_SHARDS)
 

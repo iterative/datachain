@@ -2,6 +2,7 @@ import io
 import json
 import os
 import posixpath
+import tarfile
 from contextlib import contextmanager
 from datetime import datetime
 from io import BytesIO
@@ -16,7 +17,6 @@ from pyarrow.dataset import dataset
 from pydantic import Field, field_validator
 
 from datachain.cache import UniqueId
-from datachain.client.fileslice import FileSlice
 from datachain.lib.data_model import DataModel
 from datachain.lib.utils import DataChainError
 from datachain.sql.types import JSON, Boolean, DateTime, Int, String
@@ -273,21 +273,20 @@ class ImageFile(File):
         self.read().save(destination)
 
 
-class TarFile(File):
+class TarVFile(File):
     """`DataModel` for files extracted from tar archives."""
 
     file: File
-    offset: int
 
     @contextmanager
     def open(self):
         """Stream file from tar archive based on location in archive."""
         with self.file.open() as fd:
-            with FileSlice(fd, self.offset, self.size, self.name) as inner_fd:
-                yield inner_fd
+            with tarfile.open(fileobj=fd) as tar:
+                yield tar.extractfile(self.name)
 
 
-class ArrowFile(DataModel):
+class ArrowVFile(DataModel):
     """`DataModel` for reading arrow files."""
 
     file: File

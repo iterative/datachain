@@ -8,7 +8,7 @@ from pyarrow.dataset import CsvFileFormat, dataset
 from tqdm import tqdm
 
 from datachain.lib.data_model import dict_to_data_model
-from datachain.lib.file import ArrowFile, File
+from datachain.lib.file import ArrowVFile, File
 from datachain.lib.model_store import ModelStore
 from datachain.lib.udf import Generator
 
@@ -76,7 +76,7 @@ class ArrowGenerator(Generator):
                         # Can't serialize CsvFileFormat; may lose formatting options.
                         if isinstance(kwargs.get("format"), CsvFileFormat):
                             kwargs["format"] = "csv"
-                        arrow_file = ArrowFile(file=file, index=index, kwargs=kwargs)
+                        arrow_file = ArrowVFile(file=file, index=index, kwargs=kwargs)
                         yield [arrow_file, *vals]
                     else:
                         yield vals
