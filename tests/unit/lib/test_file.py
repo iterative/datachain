@@ -387,3 +387,18 @@ def test_resolve_function():
 
     assert result == "resolved_file"
     mock_file.resolve.assert_called_once()
+
+
+def test_get_local_path(tmp_path, catalog):
+    file_name = "myfile"
+    data = b"some\x00data\x00is\x48\x65\x6c\x57\x6f\x72\x6c\x64\xff\xffheRe"
+
+    file_path = tmp_path / file_name
+    with open(file_path, "wb") as fd:
+        fd.write(data)
+
+    file = File(path=file_name, source=f"file://{tmp_path}")
+    file._set_stream(catalog)
+
+    assert file.get_local_path() is None
+    assert file.get_local_path(download=True) is not None
