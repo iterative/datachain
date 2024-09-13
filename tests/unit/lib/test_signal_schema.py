@@ -453,6 +453,22 @@ def test_get_signals_nested(nested_file_schema):
     assert files == ["f", "my_f", "my_f.nested_file"]
 
 
+def test_get_features_nested(test_session, nested_file_schema):
+    file = File(path="test")
+    file_dict = file.model_dump()
+    file_vals = list(file_dict.values())
+    nested_file = nested_file_schema.values["my_f"](
+        ref="str", nested_file=file, **file_dict
+    )
+    expected_features = ["str", 0.0, file, nested_file]
+    row = ["str", 0.0, *file_vals, *file_vals, "str", *file_vals]
+    actual_features = nested_file_schema.row_to_features(row, test_session.catalog)
+    assert expected_features == actual_features
+    assert actual_features[2]._catalog == test_session.catalog
+    assert actual_features[3]._catalog == test_session.catalog
+    assert actual_features[3].nested_file._catalog == test_session.catalog
+
+
 def test_get_signals_subclass(nested_file_schema):
     class NewFile(File):
         pass
