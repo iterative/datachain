@@ -5,6 +5,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+from datasets import Dataset
 
 from datachain.lib.arrow import (
     ArrowGenerator,
@@ -13,6 +14,7 @@ from datachain.lib.arrow import (
 )
 from datachain.lib.data_model import dict_to_data_model
 from datachain.lib.file import File, IndexedFile
+from datachain.lib.hf import HFClassLabel
 
 
 @pytest.mark.parametrize("cache", [True, False])
@@ -84,6 +86,22 @@ def test_arrow_generator_output_schema(tmp_path, catalog):
         assert o[1].text == text
         assert o[1].dict.a == dict["a"]
         assert o[1].dict.b == dict["b"]
+
+
+def test_arrow_generator_hf(tmp_path, catalog):
+    ds = Dataset.from_dict({"pokemon": ["bulbasaur", "squirtle"]})
+    ds = ds.class_encode_column("pokemon")
+
+    name = "111.parquet"
+    pq_path = tmp_path / name
+    ds.to_parquet(pq_path)
+    stream = File(path=pq_path.as_posix(), source="file:///")
+    stream._set_stream(catalog, caching_enabled=False)
+
+    output_schema = dict_to_data_model("", schema_to_output(ds._data.schema, ["col"]))
+    func = ArrowGenerator(output_schema=output_schema)
+    for obj in func.process(stream):
+        assert isinstance(obj[1].col, HFClassLabel)
 
 
 @pytest.mark.parametrize(
