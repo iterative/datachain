@@ -7,8 +7,9 @@ import pytest
 import sqlalchemy as sa
 
 from datachain.catalog.catalog import DATASET_INTERNAL_ERROR_MESSAGE
+from datachain.client.local import FileClient
 from datachain.data_storage.sqlite import SQLiteWarehouse
-from datachain.dataset import LISTING_PREFIX, DatasetDependencyType, DatasetStatus
+from datachain.dataset import DatasetDependencyType, DatasetStatus
 from datachain.error import DatasetInvalidVersionError, DatasetNotFoundError
 from datachain.lib.dc import DataChain
 from datachain.lib.listing import parse_listing_uri
@@ -805,7 +806,7 @@ def test_dataset_stats_registered_ds(cloud_test_catalog, dogs_dataset):
 
 
 @pytest.mark.parametrize("indirect", [True, False])
-def test_dataset_storage_dependencies(cloud_test_catalog, indirect):
+def test_dataset_storage_dependencies(cloud_test_catalog, cloud_type, indirect):
     ctc = cloud_test_catalog
     session = ctc.session
     catalog = session.catalog
@@ -824,7 +825,7 @@ def test_dataset_storage_dependencies(cloud_test_catalog, indirect):
         {
             "id": ANY,
             "type": DatasetDependencyType.STORAGE,
-            "name": lst_dataset.name.removeprefix(LISTING_PREFIX),
+            "name": uri if cloud_type != "file" else FileClient.root_path().as_uri(),
             "version": "1",
             "created_at": lst_dataset.get_version(1).created_at,
             "dependencies": [],
