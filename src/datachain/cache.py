@@ -1,49 +1,15 @@
 import os
-from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-import attrs
 from dvc_data.hashfile.db.local import LocalHashFileDB
 from dvc_objects.fs.local import LocalFileSystem
 from fsspec.callbacks import Callback, TqdmCallback
-
-from datachain.utils import TIME_ZERO
 
 from .progress import Tqdm
 
 if TYPE_CHECKING:
     from datachain.client import Client
     from datachain.lib.file import File
-    from datachain.storage import StorageURI
-
-
-@attrs.frozen
-class UniqueId:
-    storage: "StorageURI"
-    path: str
-    size: int
-    etag: str
-    version: str = ""
-    is_latest: bool = True
-    location: Optional[str] = None
-    last_modified: datetime = TIME_ZERO
-
-    def get_hash(self) -> str:
-        return self.to_file().get_hash()
-
-    def to_file(self) -> "File":
-        from datachain.lib.file import File
-
-        return File(
-            source=self.storage,
-            path=self.path,
-            size=self.size,
-            version=self.version,
-            etag=self.etag,
-            is_latest=self.is_latest,
-            last_modified=self.last_modified,
-            location=self.location,
-        )
 
 
 def try_scandir(path):
