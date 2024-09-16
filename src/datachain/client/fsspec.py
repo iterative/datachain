@@ -383,14 +383,7 @@ class Client(ABC):
         sync(get_loop(), functools.partial(self._put_in_cache, file, callback=callback))
 
     async def _put_in_cache(self, file: File, *, callback: "Callback" = None) -> None:
-        uid = file.get_uid()
-        location = uid.get_parsed_location()
-        if location and location["vtype"] == "tar":
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(
-                None, functools.partial(self._download_from_tar, uid, callback=callback)
-            )
-            return
+        assert not file.location
         if file.etag:
             etag = await self.get_current_etag(file)
             if file.etag != etag:
@@ -399,8 +392,3 @@ class Client(ABC):
                     f"expected {file.etag}, got {etag}"
                 )
         await self.cache.download(file, self, callback=callback)
-
-    def _download_from_tar(self, uid, *, callback: "Callback" = None):
-        with self._open_tar(uid, use_cache=False) as f:
-            contents = f.read()
-        self.cache.store_data(uid, contents)
