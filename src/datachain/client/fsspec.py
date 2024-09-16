@@ -25,7 +25,7 @@ from fsspec.asyn import get_loop, sync
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 from tqdm import tqdm
 
-from datachain.cache import DataChainCache, UniqueId
+from datachain.cache import DataChainCache
 from datachain.client.fileslice import FileWrapper
 from datachain.error import ClientError as DataChainClientError
 from datachain.lib.file import File
@@ -316,7 +316,7 @@ class Client(ABC):
 
     def instantiate_object(
         self,
-        uid: UniqueId,
+        file: "File",
         dst: str,
         progress_bar: tqdm,
         force: bool = False,
@@ -327,10 +327,10 @@ class Client(ABC):
             else:
                 progress_bar.close()
                 raise FileExistsError(f"Path {dst} already exists")
-        self.do_instantiate_object(uid, dst)
+        self.do_instantiate_object(file, dst)
 
-    def do_instantiate_object(self, uid: "UniqueId", dst: str) -> None:
-        src = self.cache.get_path(uid.to_file())
+    def do_instantiate_object(self, file: "File", dst: str) -> None:
+        src = self.cache.get_path(file)
         assert src is not None
 
         try:
