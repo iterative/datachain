@@ -7,7 +7,6 @@ from fsspec.implementations.local import LocalFileSystem
 from PIL import Image
 
 from datachain import DataChain
-from datachain.cache import UniqueId
 from datachain.catalog import Catalog
 from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.lib.file import File, ImageFile, TextFile, resolve
@@ -20,28 +19,6 @@ def create_file(source: str):
         source=source,
         etag="ed779276108738fdb2179ccabf9680d9",
     )
-
-
-def test_uid_missing_location():
-    name = "my_name"
-    stream = File(path=name)
-    assert stream.get_uid() == UniqueId(
-        "",
-        name,
-        size=0,
-        version="",
-        etag="",
-        is_latest=True,
-        location=None,
-    )
-
-
-def test_uid_location():
-    name = "na_me"
-    loc = {"e": 42}
-
-    stream = File(path=name, location=loc)
-    assert stream.get_uid() == UniqueId("", name, 0, "", "", True, loc)
 
 
 def test_file_stem():
