@@ -1604,25 +1604,3 @@ class DatasetQuery:
         finally:
             self.cleanup()
         return self.__class__(name=name, version=version, catalog=self.catalog)
-
-
-def query_wrapper(dataset_query: Any) -> Any:
-    """
-    Wrapper function that wraps the last statement of user query script.
-    Last statement MUST be instance of DatasetQuery, otherwise script exits with
-    error code 10
-    """
-    if not isinstance(dataset_query, DatasetQuery):
-        return dataset_query
-
-    catalog = dataset_query.catalog
-    save = bool(os.getenv("DATACHAIN_QUERY_SAVE"))
-
-    is_session_temp_dataset = dataset_query.name and dataset_query.name.startswith(
-        dataset_query.session.get_temp_prefix()
-    )
-
-    if save and (is_session_temp_dataset or not dataset_query.attached):
-        name = catalog.generate_query_dataset_name()
-        dataset_query = dataset_query.save(name)
-    return dataset_query

@@ -492,6 +492,7 @@ def cloud_server(request, tmp_upath_factory, cloud_type, version_aware, tree):
 def datachain_job_id(monkeypatch):
     job_id = uuid.uuid4().hex
     monkeypatch.setenv("DATACHAIN_JOB_ID", job_id)
+    return job_id
 
 
 @pytest.fixture

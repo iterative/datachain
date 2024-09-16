@@ -804,7 +804,6 @@ def query(
         catalog.query(
             script_content,
             python_executable=python_executable,
-            capture_output=False,
             params=params,
             job_id=job_id,
         )
