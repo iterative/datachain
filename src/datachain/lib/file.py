@@ -257,14 +257,18 @@ class File(DataModel):
         dump = self.model_dump()
         return UniqueId(*(dump[k] for k in self._unique_id_keys))
 
-    def get_local_path(self) -> Optional[str]:
+    def get_local_path(self, download: bool = False) -> Optional[str]:
         """Returns path to a file in a local cache.
         Return None if file is not cached. Throws an exception if cache is not setup."""
         if self._catalog is None:
             raise RuntimeError(
                 "cannot resolve local file path because catalog is not setup"
             )
-        return self._catalog.cache.get_path(self.get_uid())
+        uid = self.get_uid()
+        if download:
+            client = self._catalog.get_client(self.source)
+            client.download(uid, callback=self._download_cb)
+        return self._catalog.cache.get_path(uid)
 
     def get_file_suffix(self):
         """Returns last part of file name with `.`."""
