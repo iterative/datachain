@@ -350,10 +350,14 @@ class TarVFile(File):
     @contextmanager
     def open(self):
         """Stream file from tar archive."""
+        vpath = str(PurePosixPath(self.path).relative_to(self.tar.path))
         with self.tar.open() as fd:
-            with tarfile.open(fileobj=fd) as tar:
-                rel_path = str(PurePosixPath(self.path).relative_to(self.tar.path))
-                yield tar.extractfile(rel_path)
+            # See https://stackoverflow.com/a/32476914/3127500
+            with tarfile.open(fileobj=fd, mode="r|*") as tar:
+                for vfile in tar:
+                    if vfile.path == vpath:
+                        yield tar.extractfile(vfile)
+                        break
 
 
 class IndexedFile(DataModel):
