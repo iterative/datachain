@@ -1,4 +1,3 @@
-import hashlib
 import json
 import tarfile
 import warnings
@@ -18,6 +17,7 @@ from pydantic import Field
 
 from datachain.lib.data_model import DataModel
 from datachain.lib.file import File, TarVFile
+from datachain.lib.tar import build_tar_member
 from datachain.lib.utils import DataChainError
 
 # The `json` method of the Pydantic `BaseModel` class has been deprecated
@@ -176,27 +176,11 @@ class Builder:
                 self._tar_stream, self._core_extensions, self.state.stem
             )
 
-        file = self.build_file_record()
+        file_cls = self._wds_class.model_fields["file"].annotation
+        file = build_tar_member(self._tar_stream, self.state.core_file, file_cls)
         wds = self._wds_class(**self.state.data | {"file": file})
         self.state = BuilderState()
         return wds
-
-    def build_file_record(self):
-        new_parent = self._tar_stream.get_full_name()
-        core_file = self.state.core_file
-        etag_string = "-".join(
-            [self._tar_stream.etag, core_file.name, str(core_file.mtime)]
-        )
-        etag = hashlib.md5(etag_string.encode(), usedforsecurity=False).hexdigest()
-        file_cls = self._wds_class.model_fields["file"].annotation
-        return file_cls(
-            source=self._tar_stream.source,
-            path=f"{new_parent}/{core_file.name}",
-            version=self._tar_stream.version,
-            size=core_file.size,
-            etag=etag,
-            file=self._tar_stream,
-        )
 
     def _get_type(self, ext):
         field = self._wds_class.model_fields.get(ext, None)
