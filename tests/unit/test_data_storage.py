@@ -20,7 +20,11 @@ from datachain.sql.types import (
     String,
     UInt64,
 )
-from tests.utils import DEFAULT_TREE, TARRED_TREE, create_tar_dataset
+from tests.utils import (
+    DEFAULT_TREE,
+    TARRED_TREE,
+    create_tar_dataset_with_legacy_columns,
+)
 
 COMPLEX_TREE: dict[str, Any] = {
     **TARRED_TREE,
@@ -34,16 +38,18 @@ def test_dir_expansion(cloud_test_catalog, version_aware, cloud_type):
     has_version = version_aware or cloud_type == "gs"
 
     ctc = cloud_test_catalog
+    session = ctc.session
     catalog = ctc.catalog
     src_uri = ctc.src_uri
     if cloud_type == "file":
         # we don't want to index things in parent directory
         src_uri += "/"
 
-    ds = create_tar_dataset(catalog, ctc.src_uri, "ds2")
-    dataset = catalog.get_dataset(ds.name)
+    dc = create_tar_dataset_with_legacy_columns(session, ctc.src_uri, "dc")
+    dataset = catalog.get_dataset(dc.name)
     with catalog.warehouse.clone() as warehouse:
         q = warehouse.dataset_rows(dataset).dir_expansion()
+
         columns = (
             "id",
             "is_dir",
@@ -52,6 +58,7 @@ def test_dir_expansion(cloud_test_catalog, version_aware, cloud_type):
             "version",
             "location",
         )
+
         result = [dict(zip(columns, r)) for r in warehouse.db.execute(q)]
         to_compare = [(r["path"], r["is_dir"], r["version"] != "") for r in result]
 
@@ -66,15 +73,15 @@ def test_dir_expansion(cloud_test_catalog, version_aware, cloud_type):
         (f"{prefix}animals.tar", 0, has_version),
         (f"{prefix}animals.tar", 1, False),
         (f"{prefix}animals.tar/cats", 1, False),
-        (f"{prefix}animals.tar/cats/cat1", 0, False),
-        (f"{prefix}animals.tar/cats/cat2", 0, False),
-        (f"{prefix}animals.tar/description", 0, False),
+        (f"{prefix}animals.tar/cats/cat1", 0, has_version),
+        (f"{prefix}animals.tar/cats/cat2", 0, has_version),
+        (f"{prefix}animals.tar/description", 0, has_version),
         (f"{prefix}animals.tar/dogs", 1, False),
-        (f"{prefix}animals.tar/dogs/dog1", 0, False),
-        (f"{prefix}animals.tar/dogs/dog2", 0, False),
-        (f"{prefix}animals.tar/dogs/dog3", 0, False),
+        (f"{prefix}animals.tar/dogs/dog1", 0, has_version),
+        (f"{prefix}animals.tar/dogs/dog2", 0, has_version),
+        (f"{prefix}animals.tar/dogs/dog3", 0, has_version),
         (f"{prefix}animals.tar/dogs/others", 1, False),
-        (f"{prefix}animals.tar/dogs/others/dog4", 0, False),
+        (f"{prefix}animals.tar/dogs/others/dog4", 0, has_version),
         (f"{prefix}cats", 1, False),
         (f"{prefix}cats/cat1", 0, has_version),
         (f"{prefix}cats/cat2", 0, has_version),
