@@ -20,7 +20,7 @@ class NodeChunk:
     def next_downloadable(self):
         node = next(self.nodes, None)
         while node and (
-            not node.is_downloadable or self.cache.contains(node.as_uid(self.storage))
+            not node.is_downloadable or self.cache.contains(node.to_file(self.storage))
         ):
             node = next(self.nodes, None)
         return node

@@ -3,7 +3,6 @@ from typing import TYPE_CHECKING, Any, Optional
 
 import attrs
 
-from datachain.cache import UniqueId
 from datachain.lib.file import File
 from datachain.storage import StorageURI
 from datachain.utils import TIME_ZERO, time_to_str
@@ -99,20 +98,6 @@ class Node:
         if self.is_dir and self.path:
             return self.path + "/"
         return self.path
-
-    def as_uid(self, storage: Optional[StorageURI] = None) -> UniqueId:
-        if storage is None:
-            storage = self.source
-        return UniqueId(
-            storage=storage,
-            path=self.path,
-            size=self.size,
-            version=self.version or "",
-            etag=self.etag,
-            is_latest=self.is_latest,
-            location=self.location,
-            last_modified=self.last_modified or TIME_ZERO,
-        )
 
     def to_file(self, source: Optional[StorageURI] = None) -> File:
         if source is None:
