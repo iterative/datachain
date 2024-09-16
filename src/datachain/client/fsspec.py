@@ -3,7 +3,6 @@ import functools
 import logging
 import multiprocessing
 import os
-import posixpath
 import re
 import sys
 from abc import ABC, abstractmethod
@@ -27,7 +26,7 @@ from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 from tqdm import tqdm
 
 from datachain.cache import DataChainCache, UniqueId
-from datachain.client.fileslice import FileSlice, FileWrapper
+from datachain.client.fileslice import FileWrapper
 from datachain.error import ClientError as DataChainClientError
 from datachain.lib.file import File
 from datachain.nodes_fetcher import NodesFetcher
@@ -344,31 +343,10 @@ class Client(ABC):
         self, file: File, use_cache: bool = True, cb: Callback = DEFAULT_CALLBACK
     ) -> BinaryIO:
         """Open a file, including files in tar archives."""
-        location = file.location
         if use_cache and (cache_path := self.cache.get_path(file)):
             return open(cache_path, mode="rb")  # noqa: SIM115
-        if location and location[0]["vtype"] == "tar":
-            return self._open_tar(file, use_cache=True)
+        assert not file.location
         return FileWrapper(self.fs.open(self.get_full_path(file.path)), cb)  # type: ignore[return-value]
-
-    def _open_tar(self, file: "File", use_cache: bool = True):
-        uid = file.get_uid()
-        location = uid.get_parsed_location()
-        assert location
-
-        offset = location["offset"]
-        size = location["size"]
-        parent = location["parent"]
-
-        parent_uid = UniqueId(
-            parent["source"],
-            parent["path"],
-            parent["size"],
-            parent["etag"],
-            location=parent["location"],
-        )
-        f = self.open_object(parent_uid.to_file(), use_cache=use_cache)
-        return FileSlice(f, offset, size, posixpath.basename(uid.path))
 
     def download(self, file: File, *, callback: Callback = DEFAULT_CALLBACK) -> None:
         sync(get_loop(), functools.partial(self._download, file, callback=callback))

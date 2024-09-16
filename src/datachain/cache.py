@@ -1,4 +1,3 @@
-import json
 import os
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
@@ -28,20 +27,6 @@ class UniqueId:
     is_latest: bool = True
     location: Optional[str] = None
     last_modified: datetime = TIME_ZERO
-
-    def get_parsed_location(self) -> Optional[dict]:
-        if not self.location:
-            return None
-
-        loc_stack = (
-            json.loads(self.location)
-            if isinstance(self.location, str)
-            else self.location
-        )
-        if len(loc_stack) > 1:
-            raise NotImplementedError("Nested v-objects are not supported yet.")
-
-        return loc_stack[0]
 
     def get_hash(self) -> str:
         return self.to_file().get_hash()
