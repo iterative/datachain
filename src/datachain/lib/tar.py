@@ -17,7 +17,7 @@ def build_tar_member(
         version=parent.version,
         size=info.size,
         etag=etag,
-        file=parent,
+        tar=parent,
     )
 
 

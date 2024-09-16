@@ -59,7 +59,7 @@ def test_webdataset_basic():
     assert laion01.file.parent == tar_file.name
     assert laion01.file.size == 0
 
-    assert laion01.file.file == tar_file
+    assert laion01.file.tar == tar_file
 
     assert laion64.file.name == "64.jpg"
 
