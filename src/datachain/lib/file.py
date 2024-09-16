@@ -345,14 +345,14 @@ class ImageFile(File):
 class TarVFile(File):
     """`DataModel` for files extracted from tar archives."""
 
-    file: File
+    tar: File
 
     @contextmanager
     def open(self):
-        """Stream file from tar archive based on location in archive."""
-        with self.file.open() as fd:
+        """Stream file from tar archive."""
+        with self.tar.open() as fd:
             with tarfile.open(fileobj=fd) as tar:
-                rel_path = str(Path(self.path).relative_to(self.file.path))
+                rel_path = str(Path(self.path).relative_to(self.tar.path))
                 yield tar.extractfile(rel_path)
 
 
