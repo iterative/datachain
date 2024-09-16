@@ -27,8 +27,12 @@ from datachain.storage import StorageURI
 from datachain.utils import sql_escape_like
 
 if TYPE_CHECKING:
-    from sqlalchemy.sql._typing import _ColumnsClauseArgument
-    from sqlalchemy.sql.selectable import Select
+    from sqlalchemy.sql._typing import (
+        _ColumnsClauseArgument,
+        _FromClauseArgument,
+        _OnClauseArgument,
+    )
+    from sqlalchemy.sql.selectable import Join, Select
     from sqlalchemy.types import TypeEngine
 
     from datachain.data_storage import AbstractIDGenerator, schema
@@ -895,6 +899,18 @@ class AbstractWarehouse(ABC, Serializable):
         """
 
     @abstractmethod
+    def join(
+        self,
+        left: "_FromClauseArgument",
+        right: "_FromClauseArgument",
+        onclause: "_OnClauseArgument",
+        inner: bool = True,
+    ) -> "Join":
+        """
+        Join two tables together.
+        """
+
+    @abstractmethod
     def create_pre_udf_table(self, query: "Select") -> "Table":
         """
         Create a temporary table from a query for use in a UDF.
@@ -922,7 +938,7 @@ class AbstractWarehouse(ABC, Serializable):
         are cleaned up as soon as they are no longer needed.
         """
         with tqdm(desc="Cleanup", unit=" tables") as pbar:
-            for name in names:
+            for name in set(names):
                 self.db.drop_table(Table(name, self.db.metadata), if_exists=True)
                 pbar.update(1)
 
