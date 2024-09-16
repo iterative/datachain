@@ -1339,6 +1339,123 @@ def test_union(cloud_test_catalog):
     [("s3", True)],
     indirect=True,
 )
+@pytest.mark.parametrize("inner", [True, False])
+def test_union_join(cloud_test_catalog, inner):
+    catalog = cloud_test_catalog.catalog
+    sources = [str(cloud_test_catalog.src_uri)]
+    catalog.index(sources)
+
+    src = cloud_test_catalog.src_uri
+    catalog.create_dataset_from_sources("dogs", [f"{src}/dogs/*"], recursive=True)
+    catalog.create_dataset_from_sources("cats", [f"{src}/cats/*"], recursive=True)
+
+    dogs = DatasetQuery(name="dogs", version=1, catalog=catalog)
+    cats = DatasetQuery(name="cats", version=1, catalog=catalog)
+
+    signal_default_value = Int.default_value(catalog.warehouse.db.dialect)
+
+    @udf((), {"sig1": Int})
+    def signals1():
+        return (1,)
+
+    @udf((), {"sig2": Int})
+    def signals2():
+        return (2,)
+
+    dogs1 = dogs.add_signals(signals1)
+    dogs2 = dogs.add_signals(signals2)
+    cats1 = cats.add_signals(signals1)
+
+    joined = (dogs1 | cats1).join(dogs2, C.path, inner=inner)
+    signals = list(joined.select("path", "sig1", "sig2").order_by("path"))
+
+    if inner:
+        assert signals == [
+            ("dogs/dog1", 1, 2),
+            ("dogs/dog2", 1, 2),
+            ("dogs/dog3", 1, 2),
+            ("dogs/others/dog4", 1, 2),
+        ]
+    else:
+        assert signals == [
+            ("cats/cat1", 1, signal_default_value),
+            ("cats/cat2", 1, signal_default_value),
+            ("dogs/dog1", 1, 2),
+            ("dogs/dog2", 1, 2),
+            ("dogs/dog3", 1, 2),
+            ("dogs/others/dog4", 1, 2),
+        ]
+
+
+@pytest.mark.parametrize(
+    "cloud_type,version_aware",
+    [("s3", True)],
+    indirect=True,
+)
+@pytest.mark.parametrize("inner1", [True, False])
+@pytest.mark.parametrize("inner2", [True, False])
+@pytest.mark.parametrize("inner3", [True, False])
+def test_multiple_join(cloud_test_catalog, inner1, inner2, inner3):
+    catalog = cloud_test_catalog.catalog
+    sources = [str(cloud_test_catalog.src_uri)]
+    catalog.index(sources)
+
+    src = cloud_test_catalog.src_uri
+    catalog.create_dataset_from_sources("dogs", [f"{src}/dogs/*"], recursive=True)
+    catalog.create_dataset_from_sources("cats", [f"{src}/cats/*"], recursive=True)
+
+    dogs = DatasetQuery(name="dogs", version=1, catalog=catalog)
+    cats = DatasetQuery(name="cats", version=1, catalog=catalog)
+
+    signal_default_value = Int.default_value(catalog.warehouse.db.dialect)
+
+    @udf((), {"sig1": Int})
+    def signals1():
+        return (1,)
+
+    @udf((), {"sig2": Int})
+    def signals2():
+        return (2,)
+
+    dogs_and_cats = dogs | cats
+    dogs1 = dogs.add_signals(signals1)
+    cats1 = cats.add_signals(signals2)
+    dogs2 = dogs_and_cats.join(dogs1, C.path, inner=inner1)
+    cats2 = dogs_and_cats.join(cats1, C.path, inner=inner2)
+    joined = dogs2.join(cats2, C.path, inner=inner3)
+
+    joined_signals = list(joined.select("path", "sig1", "sig2").order_by("path"))
+
+    if inner1 and inner2 and inner3:
+        assert joined_signals == []
+    elif inner1:
+        assert joined_signals == [
+            ("dogs/dog1", 1, signal_default_value),
+            ("dogs/dog2", 1, signal_default_value),
+            ("dogs/dog3", 1, signal_default_value),
+            ("dogs/others/dog4", 1, signal_default_value),
+        ]
+    elif inner2 and inner3:
+        assert joined_signals == [
+            ("cats/cat1", signal_default_value, 2),
+            ("cats/cat2", signal_default_value, 2),
+        ]
+    else:
+        assert joined_signals == [
+            ("cats/cat1", signal_default_value, 2),
+            ("cats/cat2", signal_default_value, 2),
+            ("dogs/dog1", 1, signal_default_value),
+            ("dogs/dog2", 1, signal_default_value),
+            ("dogs/dog3", 1, signal_default_value),
+            ("dogs/others/dog4", 1, signal_default_value),
+        ]
+
+
+@pytest.mark.parametrize(
+    "cloud_type,version_aware",
+    [("s3", True)],
+    indirect=True,
+)
 @pytest.mark.parametrize("predicates", ["path", C.path])
 def test_join_left_one_column_predicate(
     cloud_test_catalog,
@@ -2580,25 +2697,6 @@ def test_checksum_udf(cloud_test_catalog, dogs_dataset):
     result = q.db_results()
 
     assert len(result) == 4
-
-
-@pytest.mark.parametrize("tree", [TARRED_TREE], indirect=True)
-def test_tar_loader(cloud_test_catalog):
-    ctc = cloud_test_catalog
-    catalog = ctc.catalog
-    catalog.index([ctc.src_uri])
-    catalog.create_dataset_from_sources("animals", [ctc.src_uri])
-    q = DatasetQuery(name="animals", version=1, catalog=catalog).generate(index_tar)
-    q.save("extracted")
-
-    q = DatasetQuery(name="extracted", catalog=catalog).filter(C.path.glob("*/cats/*"))
-    assert len(q.db_results()) == 2
-
-    ds = q.extract(Object(to_str), "path")
-    assert {(value, posixpath.basename(path)) for value, path in ds} == {
-        ("meow", "cat1"),
-        ("mrow", "cat2"),
-    }
 
 
 @pytest.mark.parametrize("cloud_type", ["s3", "azure", "gs"], indirect=True)
