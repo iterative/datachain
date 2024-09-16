@@ -352,7 +352,7 @@ class TarVFile(File):
         """Stream file from tar archive."""
         with self.tar.open() as fd:
             with tarfile.open(fileobj=fd) as tar:
-                rel_path = str(Path(self.path).relative_to(self.tar.path))
+                rel_path = str(PurePosixPath(self.path).relative_to(self.tar.path))
                 yield tar.extractfile(rel_path)
 
 
