@@ -4,8 +4,6 @@ import math
 import os
 import posixpath
 import tarfile
-import uuid
-from datetime import datetime
 from string import printable
 from tarfile import DIRTYPE, TarInfo
 from time import sleep, time
@@ -17,8 +15,8 @@ from PIL import Image
 from datachain.catalog.catalog import Catalog
 from datachain.dataset import DatasetDependency, DatasetRecord
 from datachain.lib.dc import DataChain
-from datachain.query import C, DatasetQuery
-from datachain.query.builtins import index_tar
+from datachain.lib.tar import process_tar
+from datachain.query import C
 from datachain.storage import StorageStatus
 
 
@@ -112,53 +110,26 @@ def write_tar(tree, archive, curr_dir=""):
 TARRED_TREE: dict[str, Any] = {"animals.tar": make_tar(DEFAULT_TREE)}
 
 
-def create_tar_dataset(catalog, uri: str, ds_name: str) -> DatasetQuery:
+def create_tar_dataset_with_legacy_columns(
+    session, uri: str, ds_name: str
+) -> DataChain:
     """
     Create a dataset from a storage location containing tar archives and other files.
 
     The resulting dataset contains both the original files (as regular objects)
     and the tar members (as v-objects).
     """
-    ds_index_name = uuid.uuid4().hex
-    catalog.create_dataset_from_sources(ds_index_name, [uri], recursive=True)
-
-    ds1 = DatasetQuery(ds_index_name, catalog=catalog)
-    tar_entries = ds1.filter(C("file.path").glob("*.tar")).generate(index_tar)
-    return ds1.filter(~C("file.path").glob("*.tar")).union(tar_entries).save(ds_name)
-
-
-def to_old_schema(dataset_name: str, new_dataset_name: str):
-    """
-    Temp util to convert chain to old file schema where signals weren't nested
-    under file.
-    """
+    dc = DataChain.from_storage(uri, session=session)
+    tar_entries = dc.filter(C("file.path").glob("*.tar")).gen(file=process_tar)
     return (
-        DataChain.from_dataset(dataset_name)
-        .map(source=lambda file__source: file__source)
-        .map(path=lambda file__path: file__path)
-        .map(size=lambda file__size: file__size, output={"size": int})
-        .map(version=lambda file__version: file__version)
-        .map(etag=lambda file__etag: file__etag)
-        .map(
-            is_latest=lambda file__is_latest: bool(file__is_latest),
-            output={"is_latest": bool},
+        dc.union(tar_entries)
+        .mutate(
+            path=C("file.path"),
+            source=C("file.source"),
+            location=C("file.location"),
+            version=C("file.version"),
         )
-        .map(
-            last_modified=lambda file__last_modified: file__last_modified,
-            output={"last_modified": datetime},
-        )
-        .map(location=lambda file__location: file__location)
-        .select(
-            "source",
-            "path",
-            "size",
-            "version",
-            "etag",
-            "is_latest",
-            "last_modified",
-            "location",
-        )
-        .save(new_dataset_name)
+        .save(ds_name)
     )
 
 
@@ -167,14 +138,6 @@ skip_if_not_sqlite = pytest.mark.skipif(
     or os.environ.get("DATACHAIN_WAREHOUSE") is not None,
     reason="This test is not supported on other data storages",
 )
-
-
-WEBFORMAT_TREE: dict[str, Any] = {
-    "f1.raw": "raw data",
-    "f1.json": '{"similarity": 0.001, "md5": "deadbeef"}',
-    "f2.raw": "raw data",
-    "f2.json": '{"similarity": 0.005, "md5": "foobar"}',
-}
 
 
 def text_embedding(text: str) -> list[float]:

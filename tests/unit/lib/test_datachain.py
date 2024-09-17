@@ -1720,6 +1720,21 @@ def test_gen_limit(test_session):
     assert ds.limit(3).gen(res=func).limit(10).count() == 9
 
 
+def test_gen_filter(test_session):
+    def func(key, val) -> Iterator[tuple[File, str]]:
+        for i in range(val):
+            yield File(path=""), f"{key}_{i}"
+
+    keys = ["a", "b", "c", "d"]
+    values = [3, 3, 3, 3]
+
+    ds = DataChain.from_values(key=keys, val=values, session=test_session)
+
+    assert ds.count() == 4
+    assert ds.gen(res=func).count() == 12
+    assert ds.gen(res=func).filter(C("res_1").glob("a_*")).count() == 3
+
+
 def test_rename_non_object_column_name_with_mutate(test_session):
     ds = DataChain.from_values(ids=[1, 2, 3], session=test_session)
     ds = ds.mutate(my_ids=Column("ids"))

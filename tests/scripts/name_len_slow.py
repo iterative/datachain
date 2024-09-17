@@ -1,8 +1,7 @@
 import sys
 from time import sleep
 
-from datachain.lib.dc import DataChain
-from datachain.query import C
+from datachain.lib.dc import C, DataChain
 
 if sys.platform == "win32":
     # This is needed for this process to accept a Ctrl-C event in Windows,
@@ -33,9 +32,9 @@ def name_len(file):
 
 
 # Save as a new dataset.
-(
-    DataChain.from_storage("gs://dvcx-datalakes/dogs-and-cats/", anon=True)
-    .filter(C("file__path").glob("*cat*"))
-    .map(name_len=name_len, output={"name_len": int})
-    .save("name_len")
-)
+DataChain.from_storage(
+    "gs://dvcx-datalakes/dogs-and-cats/",
+    anon=True,
+).filter(C("file.path").glob("*cat*")).settings(parallel=1).map(
+    name_len, params=["file.path"], output={"name_len": int}
+).save("name_len")
