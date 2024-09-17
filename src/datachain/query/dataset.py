@@ -56,7 +56,7 @@ from datachain.utils import (
 
 from .schema import C, UDFParamSpec, normalize_param
 from .session import Session
-from .udf import UDFBase, UDFClassWrapper, UDFFactory, UDFType
+from .udf import UDFBase
 
 if TYPE_CHECKING:
     from sqlalchemy.sql.elements import ClauseElement
@@ -423,7 +423,7 @@ def get_generated_callback(is_generator: bool = False) -> Callback:
 
 @frozen
 class UDFStep(Step, ABC):
-    udf: UDFType
+    udf: UDFBase
     catalog: "Catalog"
     partition_by: Optional[PartitionByType] = None
     parallel: Optional[int] = None
@@ -529,12 +529,6 @@ class UDFStep(Step, ABC):
 
             else:
                 # Otherwise process single-threaded (faster for smaller UDFs)
-                # Optionally instantiate the UDF instance if a class is provided.
-                if isinstance(self.udf, UDFFactory):
-                    udf: UDFBase = self.udf()
-                else:
-                    udf = self.udf
-
                 warehouse = self.catalog.warehouse
 
                 with contextlib.closing(
@@ -544,7 +538,7 @@ class UDFStep(Step, ABC):
                     processed_cb = get_processed_callback()
                     generated_cb = get_generated_callback(self.is_generator)
                     try:
-                        udf_results = udf.run(
+                        udf_results = self.udf.run(
                             udf_fields,
                             udf_inputs,
                             self.catalog,
@@ -557,7 +551,7 @@ class UDFStep(Step, ABC):
                             warehouse,
                             udf_table,
                             udf_results,
-                            udf,
+                            self.udf,
                             cb=generated_cb,
                         )
                     finally:
@@ -1556,7 +1550,7 @@ class DatasetQuery:
     @detach
     def add_signals(
         self,
-        udf: UDFType,
+        udf: UDFBase,
         parallel: Optional[int] = None,
         workers: Union[bool, int] = False,
         min_task_size: Optional[int] = None,
@@ -1577,9 +1571,6 @@ class DatasetQuery:
         at least that minimum number of rows to each distributed worker, mostly useful
         if there are a very large number of small tasks to process.
         """
-        if isinstance(udf, UDFClassWrapper):  # type: ignore[unreachable]
-            # This is a bare decorated class, "instantiate" it now.
-            udf = udf()  # type: ignore[unreachable]
         query = self.clone()
         query.steps.append(
             UDFSignal(
@@ -1613,16 +1604,13 @@ class DatasetQuery:
     @detach
     def generate(
         self,
-        udf: UDFType,
+        udf: UDFBase,
         parallel: Optional[int] = None,
         workers: Union[bool, int] = False,
         min_task_size: Optional[int] = None,
         partition_by: Optional[PartitionByType] = None,
         cache: bool = False,
     ) -> "Self":
-        if isinstance(udf, UDFClassWrapper):  # type: ignore[unreachable]
-            # This is a bare decorated class, "instantiate" it now.
-            udf = udf()  # type: ignore[unreachable]
         query = self.clone()
         steps = query.steps
         steps.append(
