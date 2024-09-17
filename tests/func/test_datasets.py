@@ -7,17 +7,21 @@ from unittest.mock import ANY
 import pytest
 import sqlalchemy as sa
 
-from datachain.catalog.catalog import DATASET_INTERNAL_ERROR_MESSAGE
 from datachain.client.local import FileClient
 from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.dataset import DatasetDependencyType, DatasetStatus
 from datachain.error import DatasetInvalidVersionError, DatasetNotFoundError
 from datachain.lib.dc import DataChain
+from datachain.lib.file import File
 from datachain.lib.listing import parse_listing_uri
 from datachain.query import DatasetQuery
-from datachain.query.schema import DatasetRow
-from datachain.sql.types import Float32
+from datachain.sql.types import Float32, Int, Int64
 from tests.utils import assert_row_names, dataset_dependency_asdict
+
+FILE_SCHEMA = {
+    f"file__{name}": _type if _type != Int else Int64
+    for name, _type in File._datachain_column_types.items()
+}
 
 
 def add_column(engine, table_name, column, catalog):
@@ -176,7 +180,43 @@ def test_create_dataset_from_sources(listed_bucket, cloud_test_catalog):
 
     dr = catalog.warehouse.schema.dataset_row_cls
     sys_schema = {c.name: type(c.type) for c in dr.sys_columns()}
-    default_dataset_schema = DatasetRow.schema | sys_schema
+    default_dataset_schema = FILE_SCHEMA | sys_schema
+    assert dataset.schema == default_dataset_schema
+    assert dataset.query_script == ""
+
+    assert dataset_version.schema == default_dataset_schema
+    assert dataset_version.query_script == ""
+    assert dataset_version.num_objects
+    assert dataset_version.preview
+
+
+def test_create_dataset_from_sources_dataset(cloud_test_catalog, dogs_dataset):
+    dataset_name = uuid.uuid4().hex
+    catalog = cloud_test_catalog.catalog
+
+    dataset = catalog.create_dataset_from_sources(
+        dataset_name, [f"ds://{dogs_dataset.name}"], recursive=True
+    )
+
+    dataset_version = dataset.get_version(dataset.latest_version)
+
+    assert dataset.name == dataset_name
+    assert dataset.description is None
+    assert dataset.versions_values == [1]
+    assert dataset.labels == []
+    assert dataset.status == DatasetStatus.COMPLETE
+
+    assert dataset_version.status == DatasetStatus.COMPLETE
+    assert dataset_version.created_at
+    assert dataset_version.finished_at
+    assert dataset_version.error_message == ""
+    assert dataset_version.error_stack == ""
+    assert dataset_version.script_output == ""
+    assert dataset_version.sources == f"ds://{dogs_dataset.name}"
+
+    dr = catalog.warehouse.schema.dataset_row_cls
+    sys_schema = {c.name: type(c.type) for c in dr.sys_columns()}
+    default_dataset_schema = FILE_SCHEMA | sys_schema
     assert dataset.schema == default_dataset_schema
     assert dataset.query_script == ""
 
@@ -211,27 +251,8 @@ def test_create_dataset_from_sources_failed(listed_bucket, cloud_test_catalog, m
             dataset_name, [f"{src_uri}/dogs/*"], recursive=True
         )
 
-    dataset = catalog.get_dataset(dataset_name)
-    dataset_version = dataset.get_version(dataset.latest_version)
-
-    assert dataset.name == dataset_name
-    assert dataset.status == DatasetStatus.FAILED
-    assert dataset.versions_values == [1]
-    assert dataset.created_at
-    assert dataset.finished_at
-    assert dataset.error_message == DATASET_INTERNAL_ERROR_MESSAGE
-    assert dataset.error_stack
-    assert dataset.query_script == ""
-
-    assert dataset_version.status == DatasetStatus.FAILED
-    assert dataset_version.created_at
-    assert dataset_version.finished_at
-    assert dataset_version.error_message == DATASET_INTERNAL_ERROR_MESSAGE
-    assert dataset_version.error_stack
-    assert dataset_version.sources == f"{src_uri}/dogs/*"
-    assert dataset_version.num_objects is None
-    assert dataset_version.size is None
-    assert dataset_version.preview is None
+    with pytest.raises(DatasetNotFoundError):
+        catalog.get_dataset(dataset_name)
 
 
 def test_create_dataset_whole_bucket(listed_bucket, cloud_test_catalog):
@@ -586,7 +607,7 @@ def test_ls_dataset_rows(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
 
     assert {
-        posixpath.basename(r["path"])
+        posixpath.basename(r["file__path"])
         for r in catalog.ls_dataset_rows(dogs_dataset.name, 1)
     } == {
         "dog1",
@@ -608,7 +629,7 @@ def test_ls_dataset_rows_with_limit_offset(cloud_test_catalog, dogs_dataset):
     )
 
     assert {
-        r["path"]
+        r["file__path"]
         for r in catalog.ls_dataset_rows(
             dogs_dataset.name,
             1,
@@ -616,7 +637,7 @@ def test_ls_dataset_rows_with_limit_offset(cloud_test_catalog, dogs_dataset):
             limit=1,
         )
     } == {
-        all_rows[2]["path"],
+        all_rows[2]["file__path"],
     }
 
 
@@ -758,7 +779,7 @@ def test_dataset_preview_last_modified(cloud_test_catalog, dogs_dataset):
     DatasetQuery(name=dogs_dataset.name, catalog=catalog).save("dogs_custom_columns")
 
     for r in catalog.get_dataset("dogs_custom_columns").get_version(1).preview:
-        assert isinstance(r.get("last_modified"), str)
+        assert isinstance(r.get("file__last_modified"), str)
 
 
 @pytest.mark.parametrize("tree", [{str(i): str(i) for i in range(50)}], indirect=True)
@@ -767,7 +788,6 @@ def test_row_random(cloud_test_catalog):
     # of accidental failure is < 1e-10
     ctc = cloud_test_catalog
     catalog = ctc.catalog
-    catalog.index([ctc.src_uri])
     catalog.create_dataset_from_sources("test", [ctc.src_uri])
     random_values = [row["sys__rand"] for row in catalog.ls_dataset_rows("test", 1)]
 

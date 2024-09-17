@@ -22,10 +22,11 @@ from datachain.data_storage.sqlite import (
     SQLiteWarehouse,
 )
 from datachain.dataset import DatasetRecord
+from datachain.lib.dc import DataChain
 from datachain.query.session import Session
 from datachain.utils import DataChainDir
 
-from .utils import DEFAULT_TREE, get_simple_ds_query, instantiate_tree
+from .utils import DEFAULT_TREE, instantiate_tree
 
 DEFAULT_DATACHAIN_BIN = "datachain"
 DEFAULT_DATACHAIN_GIT_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -553,7 +554,19 @@ def cloud_test_catalog_tmpfile(
 
 @pytest.fixture
 def listed_bucket(cloud_test_catalog):
-    cloud_test_catalog.catalog.index([cloud_test_catalog.src_uri])
+    ctc = cloud_test_catalog
+    DataChain.from_storage(ctc.src_uri, session=ctc.session).exec()
+
+
+@pytest.fixture
+def animal_dataset(listed_bucket, cloud_test_catalog):
+    name = uuid.uuid4().hex
+    catalog = cloud_test_catalog.catalog
+    src_uri = cloud_test_catalog.src_uri
+    dataset = catalog.create_dataset_from_sources(name, [src_uri], recursive=True)
+    return catalog.update_dataset(
+        dataset, {"description": "animal dataset", "labels": ["cats", "dogs"]}
+    )
 
 
 @pytest.fixture
@@ -579,13 +592,6 @@ def cats_dataset(listed_bucket, cloud_test_catalog):
     )
     return catalog.update_dataset(
         dataset, {"description": "cats dataset", "labels": ["cats", "dataset"]}
-    )
-
-
-@pytest.fixture
-def simple_ds_query(cloud_test_catalog):
-    return get_simple_ds_query(
-        path=cloud_test_catalog.src_uri, catalog=cloud_test_catalog.catalog
     )
 
 

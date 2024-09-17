@@ -13,11 +13,7 @@ from datachain.query import C, DatasetQuery, Object, Stream
 from datachain.sql import functions
 from datachain.sql.functions import path as pathfunc
 from datachain.sql.types import String
-from tests.utils import (
-    SIMPLE_DS_QUERY_RECORDS,
-    assert_row_names,
-    dataset_dependency_asdict,
-)
+from tests.utils import assert_row_names, dataset_dependency_asdict
 
 
 def from_result_row(col_names, row):
@@ -41,11 +37,10 @@ def dogs_cats_dataset(listed_bucket, cloud_test_catalog, dogs_dataset, cats_data
     [("s3", True)],
     indirect=True,
 )
-def test_delete_dataset(cloud_test_catalog):
+def test_delete_dataset(cloud_test_catalog, cats_dataset):
     catalog = cloud_test_catalog.catalog
-    path = f"{cloud_test_catalog.src_uri}/cats"
-    DatasetQuery(path=path, catalog=catalog).save("cats", version=1)
-    DatasetQuery(path=path, catalog=catalog).save("cats", version=2)
+    DatasetQuery(cats_dataset.name, catalog=catalog).save("cats", version=1)
+    DatasetQuery(cats_dataset.name, catalog=catalog).save("cats", version=2)
 
     DatasetQuery.delete("cats", version=1, catalog=catalog)
     dataset = catalog.get_dataset("cats")
@@ -57,11 +52,10 @@ def test_delete_dataset(cloud_test_catalog):
     [("s3", True)],
     indirect=True,
 )
-def test_delete_dataset_latest_version(cloud_test_catalog):
+def test_delete_dataset_latest_version(cloud_test_catalog, cats_dataset):
     catalog = cloud_test_catalog.catalog
-    path = f"{cloud_test_catalog.src_uri}/cats"
-    DatasetQuery(path=path, catalog=catalog).save("cats", version=1)
-    DatasetQuery(path=path, catalog=catalog).save("cats", version=2)
+    DatasetQuery(cats_dataset.name, catalog=catalog).save("cats", version=1)
+    DatasetQuery(cats_dataset.name, catalog=catalog).save("cats", version=2)
 
     DatasetQuery.delete("cats", catalog=catalog)
     dataset = catalog.get_dataset("cats")
@@ -73,10 +67,9 @@ def test_delete_dataset_latest_version(cloud_test_catalog):
     [("s3", True)],
     indirect=True,
 )
-def test_delete_dataset_only_version(cloud_test_catalog):
+def test_delete_dataset_only_version(cloud_test_catalog, cats_dataset):
     catalog = cloud_test_catalog.catalog
-    path = f"{cloud_test_catalog.src_uri}/cats"
-    DatasetQuery(path=path, catalog=catalog).save("cats", version=1)
+    DatasetQuery(cats_dataset.name, catalog=catalog).save("cats", version=1)
 
     DatasetQuery.delete("cats", catalog=catalog)
     with pytest.raises(DatasetNotFoundError):
@@ -88,11 +81,10 @@ def test_delete_dataset_only_version(cloud_test_catalog):
     [("s3", True)],
     indirect=True,
 )
-def test_delete_dataset_missing_version(cloud_test_catalog):
+def test_delete_dataset_missing_version(cloud_test_catalog, cats_dataset):
     catalog = cloud_test_catalog.catalog
-    path = f"{cloud_test_catalog.src_uri}/cats"
-    DatasetQuery(path=path, catalog=catalog).save("cats", version=1)
-    DatasetQuery(path=path, catalog=catalog).save("cats", version=2)
+    DatasetQuery(cats_dataset.name, catalog=catalog).save("cats", version=1)
+    DatasetQuery(cats_dataset.name, catalog=catalog).save("cats", version=2)
 
     with pytest.raises(DatasetInvalidVersionError):
         DatasetQuery.delete("cats", version=5, catalog=catalog)
@@ -103,40 +95,29 @@ def test_delete_dataset_missing_version(cloud_test_catalog):
     [("s3", True)],
     indirect=True,
 )
-def test_save_dataset_version_already_exists(cloud_test_catalog):
+def test_save_dataset_version_already_exists(cloud_test_catalog, cats_dataset):
     catalog = cloud_test_catalog.catalog
-    path = f"{cloud_test_catalog.src_uri}/cats"
-    DatasetQuery(path=path, catalog=catalog).save("cats", version=1)
+    DatasetQuery(cats_dataset.name, catalog=catalog).save("cats", version=1)
     with pytest.raises(RuntimeError) as exc_info:
-        DatasetQuery(path=path, catalog=catalog).save("cats", version=1)
+        DatasetQuery(cats_dataset.name, catalog=catalog).save("cats", version=1)
 
     assert str(exc_info.value) == "Dataset cats already has version 1"
 
 
-@pytest.mark.parametrize("from_path", [True])
 @pytest.mark.parametrize(
     "cloud_type,version_aware",
     [("s3", True)],
     indirect=True,
 )
-def test_save_multiple_versions(cloud_test_catalog, from_path):
+def test_save_multiple_versions(cloud_test_catalog, animal_dataset):
     catalog = cloud_test_catalog.catalog
     # ensure we can select a subset of a bucket properly
-    path = cloud_test_catalog.src_uri
-    if from_path:
-        ds = DatasetQuery(path=path, catalog=catalog)
-    else:
-        sources = [path]
-        globs = [s.rstrip("/") + "/*" for s in sources]
-        catalog.index(sources)
-        catalog.create_dataset_from_sources("animals", globs, recursive=True)
-        ds = DatasetQuery(name="animals", version=1, catalog=catalog)
-
+    ds = DatasetQuery(animal_dataset.name, catalog=catalog)
     ds_name = "animals_cats"
     q = ds
     q.save(ds_name)
 
-    q = q.filter(C.path.glob("cats*") | (C.size < 4))
+    q = q.filter(C("file.path").glob("cats*") | (C("file.size") < 4))
     q.save(ds_name)
     q.save(ds_name)
 
@@ -150,29 +131,20 @@ def test_save_multiple_versions(cloud_test_catalog, from_path):
         DatasetQuery(name=ds_name, version=4, catalog=catalog).count()
 
 
-@pytest.mark.parametrize("from_path", [True, False])
 @pytest.mark.parametrize("save", [True, False])
 @pytest.mark.parametrize(
     "cloud_type,version_aware",
     [("s3", True)],
     indirect=True,
 )
-def test_filter(cloud_test_catalog, save, from_path):
+def test_filter(cloud_test_catalog, save, cats_dataset):
     catalog = cloud_test_catalog.catalog
     # ensure we can select a subset of a bucket properly
-    path = f"{cloud_test_catalog.src_uri}/cats"
-    if from_path:
-        ds = DatasetQuery(path=path, catalog=catalog)
-    else:
-        sources = [path]
-        globs = [s.rstrip("/") + "/*" for s in sources]
-        catalog.index(sources)
-        catalog.create_dataset_from_sources("animals", globs, recursive=True)
-        ds = DatasetQuery(name="animals", version=1, catalog=catalog)
+    ds = DatasetQuery(cats_dataset.name, catalog=catalog)
     q = (
-        ds.filter(C.size < 13)
-        .filter(C.path.glob("cats*") | (C.size < 4))
-        .filter(C.path.regexp("^cats/cat[0-9]$"))
+        ds.filter(C("file.size") < 13)
+        .filter(C("file.path").glob("cats*") | (C("file.size") < 4))
+        .filter(C("file.path").regexp("^cats/cat[0-9]$"))
     )
     if save:
         ds_name = "animals_cats"
@@ -224,7 +196,7 @@ def test_query_specific_dataset_set_proper_dataset_name_version(
 def test_save_set_proper_dataset_name_version(cloud_test_catalog, dogs_cats_dataset):
     catalog = cloud_test_catalog.catalog
     ds = DatasetQuery(name=dogs_cats_dataset.name, version=1, catalog=catalog)
-    ds = ds.filter(C.path.glob("*dog*"))
+    ds = ds.filter(C("file.path").glob("*dog*"))
     ds2 = ds.save("dogs_small")
 
     assert ds2.name == "dogs_small"
@@ -248,7 +220,7 @@ def test_reset_dataset_name_version_after_filter(cloud_test_catalog, dogs_cats_d
     assert ds2.name == "dogs_small"
     assert ds2.version == 1
 
-    ds3 = ds2.filter(C.path.glob("*dog1"))
+    ds3 = ds2.filter(C("file.path").glob("*dog1"))
     assert ds3.name is None
     assert ds3.version is None
 
@@ -265,7 +237,9 @@ def test_reset_dataset_name_version_after_filter(cloud_test_catalog, dogs_cats_d
 def test_chain_after_save(cloud_test_catalog, dogs_cats_dataset):
     catalog = cloud_test_catalog.catalog
     ds = DatasetQuery(name=dogs_cats_dataset.name, version=1, catalog=catalog)
-    ds.filter(C.path.glob("*dog*")).save("ds1").filter(C.size < 4).save("ds2")
+    ds.filter(C("file.path").glob("*dog*")).save("ds1").filter(C("file.size") < 4).save(
+        "ds2"
+    )
 
     assert_row_names(
         catalog, catalog.get_dataset("ds1"), 1, {"dog1", "dog2", "dog3", "dog4"}
@@ -278,14 +252,15 @@ def test_chain_after_save(cloud_test_catalog, dogs_cats_dataset):
     [("s3", True)],
     indirect=True,
 )
-def test_select(cloud_test_catalog):
+def test_select(cloud_test_catalog, animal_dataset):
     catalog = cloud_test_catalog.catalog
-    path = cloud_test_catalog.src_uri
-    ds = DatasetQuery(path=path, catalog=catalog)
+    ds = DatasetQuery(animal_dataset.name, catalog=catalog)
     q = (
-        ds.order_by(C.size.desc())
+        ds.order_by(C("file.size").desc())
         .limit(6)
-        .select(C.size, size10x=C.size * 10, size100x=C.size * 100)
+        .select(
+            C("file.size"), size10x=C("file.size") * 10, size100x=C("file.size") * 100
+        )
     )
     result = q.db_results()
     assert result == [
@@ -303,10 +278,9 @@ def test_select(cloud_test_catalog):
     [("s3", True)],
     indirect=True,
 )
-def test_select_missing_column(cloud_test_catalog):
+def test_select_missing_column(cloud_test_catalog, animal_dataset):
     catalog = cloud_test_catalog.catalog
-    path = cloud_test_catalog.src_uri
-    ds = DatasetQuery(path=path, catalog=catalog)
+    ds = DatasetQuery(animal_dataset.name, catalog=catalog)
     ds1 = ds.select(C.missing_column_name)
     ds2 = ds.select("missing_column_name")
     # The exception type varies by database backend
@@ -321,15 +295,19 @@ def test_select_missing_column(cloud_test_catalog):
     [("s3", True)],
     indirect=True,
 )
-def test_select_except(cloud_test_catalog):
+def test_select_except(cloud_test_catalog, animal_dataset):
     catalog = cloud_test_catalog.catalog
-    path = cloud_test_catalog.src_uri
-    ds = DatasetQuery(path=path, catalog=catalog)
+    ds = DatasetQuery(animal_dataset.name, catalog=catalog)
     q = (
-        ds.order_by(C.size.desc())
+        ds.order_by(C("file.size").desc())
         .limit(6)
-        .select("path", C.size, size10x=C.size * 10, size100x=C.size * 100)
-        .select_except(C.path, C.size10x)
+        .select(
+            C("file.path"),
+            C("file.size"),
+            size10x=C("file.size") * 10,
+            size100x=C("file.size") * 100,
+        )
+        .select_except(C("file.path"), C.size10x)
     )
     result = q.db_results()
     assert result == [
@@ -347,15 +325,15 @@ def test_select_except(cloud_test_catalog):
     [("s3", True)],
     indirect=True,
 )
-def test_distinct(cloud_test_catalog):
-    catalog = cloud_test_catalog.catalog
-    path = cloud_test_catalog.src_uri
-    ds = DatasetQuery(path=path, catalog=catalog)
+def test_distinct(cloud_test_catalog, animal_dataset):
+    ctc = cloud_test_catalog
+    catalog = ctc.catalog
+    ds = DatasetQuery(animal_dataset.name, catalog=catalog)
 
     q = (
-        ds.select(pathfunc.name(C.path), C.size)
-        .order_by(pathfunc.name(C.path))
-        .distinct(C.size)
+        ds.select(pathfunc.name(C("file.path")), C("file.size"))
+        .order_by(pathfunc.name(C("file.path")))
+        .distinct(C("file.size"))
     )
     result = q.db_results()
 
@@ -367,13 +345,12 @@ def test_distinct(cloud_test_catalog):
     [("s3", True)],
     indirect=True,
 )
-def test_distinct_count(cloud_test_catalog):
+def test_distinct_count(cloud_test_catalog, animal_dataset):
     catalog = cloud_test_catalog.catalog
-    path = cloud_test_catalog.src_uri
-    ds = DatasetQuery(path=path, catalog=catalog)
+    ds = DatasetQuery(animal_dataset.name, catalog=catalog)
 
-    assert ds.distinct(C.size).count() == 3
-    assert ds.distinct(C.path).count() == 7
+    assert ds.distinct(C("file.size")).count() == 3
+    assert ds.distinct(C("file.path")).count() == 7
     assert ds.distinct().count() == 7
 
 
@@ -383,26 +360,25 @@ def test_distinct_count(cloud_test_catalog):
     [("s3", True)],
     indirect=True,
 )
-def test_mutate(cloud_test_catalog, save):
+def test_mutate(cloud_test_catalog, save, animal_dataset):
     catalog = cloud_test_catalog.catalog
-    path = cloud_test_catalog.src_uri
-    ds = DatasetQuery(path=path, catalog=catalog)
+    ds = DatasetQuery(animal_dataset.name, catalog=catalog)
     q = (
-        ds.mutate(size10x=C.size * 10)
+        ds.mutate(size10x=C("file.size") * 10)
         .mutate(size1000x=C.size10x * 100)
         .mutate(
-            ("s2", C.size * 2),
-            ("s3", C.size * 3),
-            s4=C.size * 4,
+            ("s2", C("file.size") * 2),
+            ("s3", C("file.size") * 3),
+            s4=C("file.size") * 4,
         )
-        .filter((C.size10x < 40) | (C.size10x > 100) | C.path.glob("cat*"))
-        .order_by(C.size10x.desc(), C.path)
+        .filter((C.size10x < 40) | (C.size10x > 100) | C("file.path").glob("cat*"))
+        .order_by(C.size10x.desc(), C("file.path"))
     )
     if save:
         ds_name = "animals_cats"
         q.save(ds_name)
         new_query = DatasetQuery(name=ds_name, catalog=catalog).order_by(
-            C.size10x.desc(), C.path
+            C.size10x.desc(), C("file.path")
         )
         result = new_query.db_results(row_factory=lambda c, v: dict(zip(c, v)))
         dataset_record = catalog.get_dataset(ds_name)
@@ -427,12 +403,12 @@ def test_mutate(cloud_test_catalog, save):
     [("s3", True)],
     indirect=True,
 )
-def test_order_by_after_mutate(cloud_test_catalog, save):
+def test_order_by_after_mutate(cloud_test_catalog, save, animal_dataset):
     catalog = cloud_test_catalog.catalog
-    ds = DatasetQuery(path=cloud_test_catalog.src_uri, catalog=catalog)
+    ds = DatasetQuery(animal_dataset.name, catalog=catalog)
     q = (
-        ds.mutate(size10x=C.size * 10)
-        .filter((C.size10x < 40) | (C.size10x > 100) | C.path.glob("cat*"))
+        ds.mutate(size10x=C("file.size") * 10)
+        .filter((C.size10x < 40) | (C.size10x > 100) | C("file.path").glob("cat*"))
         .order_by(C.size10x.desc())
     )
 
@@ -441,7 +417,7 @@ def test_order_by_after_mutate(cloud_test_catalog, save):
         q.save(ds_name)
         result = (
             DatasetQuery(name=ds_name, catalog=catalog)
-            .order_by(C.size10x.desc(), pathfunc.name(C.path))
+            .order_by(C.size10x.desc(), pathfunc.name(C("file.path")))
             .db_results(row_factory=lambda c, v: dict(zip(c, v)))
         )
     else:
@@ -456,23 +432,23 @@ def test_order_by_after_mutate(cloud_test_catalog, save):
     [("s3", True)],
     indirect=True,
 )
-def test_order_by_limit(cloud_test_catalog, save):
+def test_order_by_limit(cloud_test_catalog, save, animal_dataset):
     catalog = cloud_test_catalog.catalog
-    path = cloud_test_catalog.src_uri
-    ds = DatasetQuery(path=path, catalog=catalog)
-    q = ds.order_by(pathfunc.name(C.path).desc()).limit(5)
+    ds = DatasetQuery(animal_dataset.name, catalog=catalog)
+    q = ds.order_by(pathfunc.name(C("file.path")).desc()).limit(5)
     if save:
         ds_name = "animals_cats"
         q.save(ds_name)
         new_query = DatasetQuery(name=ds_name, catalog=catalog).order_by(
-            pathfunc.name(C.path).desc()
+            pathfunc.name(C("file.path")).desc()
         )
         result = new_query.db_results()
         dataset_record = catalog.get_dataset(ds_name)
         assert dataset_record.status == DatasetStatus.COMPLETE
     else:
         result = q.db_results()
-    assert [posixpath.basename(r[2]) for r in result] == [
+
+    assert [posixpath.basename(r[3]) for r in result] == [
         "dog4",
         "dog3",
         "dog2",
@@ -486,15 +462,13 @@ def test_order_by_limit(cloud_test_catalog, save):
     [("s3", True)],
     indirect=True,
 )
-def test_row_number_without_explicit_order_by(cloud_test_catalog):
+def test_row_number_without_explicit_order_by(cloud_test_catalog, animal_dataset):
     catalog = cloud_test_catalog.catalog
-    conf = cloud_test_catalog.client_config
-    path = cloud_test_catalog.src_uri
     ds_name = uuid.uuid4().hex
 
-    DatasetQuery(path=path, catalog=catalog, client_config=conf).filter(
-        C.size > 0
-    ).save(ds_name)
+    DatasetQuery(animal_dataset.name, catalog=catalog).filter(C("file.size") > 0).save(
+        ds_name
+    )
 
     results = DatasetQuery(name=ds_name, catalog=catalog).to_db_records()
     assert len(results) == 7  # unordered, just checking num of results
@@ -505,28 +479,26 @@ def test_row_number_without_explicit_order_by(cloud_test_catalog):
     [("s3", True)],
     indirect=True,
 )
-def test_row_number_with_order_by_name_descending(cloud_test_catalog):
+def test_row_number_with_order_by_name_descending(cloud_test_catalog, animal_dataset):
     catalog = cloud_test_catalog.catalog
-    conf = cloud_test_catalog.client_config
-    path = cloud_test_catalog.src_uri
     ds_name = uuid.uuid4().hex
 
-    DatasetQuery(path=path, catalog=catalog, client_config=conf).order_by(
-        pathfunc.name(C.path).desc()
+    DatasetQuery(animal_dataset.name, catalog=catalog).order_by(
+        pathfunc.name(C("file.path")).desc()
     ).save(ds_name)
 
     results = DatasetQuery(name=ds_name, catalog=catalog).to_db_records()
     results_name_id = [
-        {k: v for k, v in r.items() if k in ["sys__id", "path"]} for r in results
+        {k: v for k, v in r.items() if k in ["sys__id", "file__path"]} for r in results
     ]
     assert sorted(results_name_id, key=lambda k: k["sys__id"]) == [
-        {"sys__id": 1, "path": "dogs/others/dog4"},
-        {"sys__id": 2, "path": "dogs/dog3"},
-        {"sys__id": 3, "path": "dogs/dog2"},
-        {"sys__id": 4, "path": "dogs/dog1"},
-        {"sys__id": 5, "path": "description"},
-        {"sys__id": 6, "path": "cats/cat2"},
-        {"sys__id": 7, "path": "cats/cat1"},
+        {"sys__id": 1, "file__path": "dogs/others/dog4"},
+        {"sys__id": 2, "file__path": "dogs/dog3"},
+        {"sys__id": 3, "file__path": "dogs/dog2"},
+        {"sys__id": 4, "file__path": "dogs/dog1"},
+        {"sys__id": 5, "file__path": "description"},
+        {"sys__id": 6, "file__path": "cats/cat2"},
+        {"sys__id": 7, "file__path": "cats/cat1"},
     ]
 
 
@@ -535,28 +507,26 @@ def test_row_number_with_order_by_name_descending(cloud_test_catalog):
     [("s3", True)],
     indirect=True,
 )
-def test_row_number_with_order_by_name_ascending(cloud_test_catalog):
+def test_row_number_with_order_by_name_ascending(cloud_test_catalog, animal_dataset):
     catalog = cloud_test_catalog.catalog
-    conf = cloud_test_catalog.client_config
-    path = cloud_test_catalog.src_uri
     ds_name = uuid.uuid4().hex
 
-    DatasetQuery(path=path, catalog=catalog, client_config=conf).order_by(
-        pathfunc.name(C.path).asc()
+    DatasetQuery(animal_dataset.name, catalog=catalog).order_by(
+        pathfunc.name(C("file.path")).asc()
     ).save(ds_name)
 
     results = DatasetQuery(name=ds_name, catalog=catalog).to_db_records()
     results_name_id = [
-        {k: v for k, v in r.items() if k in ["sys__id", "path"]} for r in results
+        {k: v for k, v in r.items() if k in ["sys__id", "file__path"]} for r in results
     ]
     assert sorted(results_name_id, key=lambda k: k["sys__id"]) == [
-        {"sys__id": 1, "path": "cats/cat1"},
-        {"sys__id": 2, "path": "cats/cat2"},
-        {"sys__id": 3, "path": "description"},
-        {"sys__id": 4, "path": "dogs/dog1"},
-        {"sys__id": 5, "path": "dogs/dog2"},
-        {"sys__id": 6, "path": "dogs/dog3"},
-        {"sys__id": 7, "path": "dogs/others/dog4"},
+        {"sys__id": 1, "file__path": "cats/cat1"},
+        {"sys__id": 2, "file__path": "cats/cat2"},
+        {"sys__id": 3, "file__path": "description"},
+        {"sys__id": 4, "file__path": "dogs/dog1"},
+        {"sys__id": 5, "file__path": "dogs/dog2"},
+        {"sys__id": 6, "file__path": "dogs/dog3"},
+        {"sys__id": 7, "file__path": "dogs/others/dog4"},
     ]
 
 
@@ -569,7 +539,7 @@ def test_extract(cloud_test_catalog, dogs_dataset, use_cache):
     catalog = cloud_test_catalog.catalog
     q = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
     results = set()
-    for path, stream in q.extract("path", Stream(), cache=use_cache):
+    for path, stream in q.extract("file__path", Stream(), cache=use_cache):
         with stream:
             value = stream.read().decode("utf-8")
         results.add((posixpath.basename(path), value))
@@ -584,7 +554,7 @@ def test_extract(cloud_test_catalog, dogs_dataset, use_cache):
 def test_extract_object(cloud_test_catalog, dogs_dataset):
     ctc = cloud_test_catalog
     ds = DatasetQuery(name=dogs_dataset.name, version=1, catalog=ctc.catalog)
-    data = ds.extract(Object(to_str), "path")
+    data = ds.extract(Object(to_str), "file__path")
     assert {(value, posixpath.basename(path)) for value, path in data} == {
         ("woof", "dog1"),
         ("arf", "dog2"),
@@ -599,7 +569,7 @@ def test_extract_chunked(cloud_test_catalog, dogs_dataset):
     all_data = []
     ds = DatasetQuery(name=dogs_dataset.name, version=1, catalog=ctc.catalog)
     for i in range(n):
-        data = ds.chunk(i, n).extract(Object(to_str), "path")
+        data = ds.chunk(i, n).extract(Object(to_str), "file__path")
         all_data.extend(data)
 
     assert {(value, posixpath.basename(path)) for value, path in all_data} == {
@@ -620,7 +590,7 @@ def test_extract_chunked_limit(cloud_test_catalog, dogs_dataset):
     for _ in range(5):
         q = q.union(q)
     for i in range(chunks):
-        data = q.limit(limit).chunk(i, chunks).extract(Object(to_str), "path")
+        data = q.limit(limit).chunk(i, chunks).extract(Object(to_str), "file__path")
         all_data.extend(data)
 
     assert len(all_data) == limit
@@ -634,7 +604,7 @@ def test_extract_chunked_limit(cloud_test_catalog, dogs_dataset):
 def test_extract_limit(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
     q = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
-    results = list(q.limit(2).extract("path"))
+    results = list(q.limit(2).extract("file__path"))
     assert len(results) == 2
 
 
@@ -646,8 +616,8 @@ def test_extract_limit(cloud_test_catalog, dogs_dataset):
 def test_extract_order_by(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
     q = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
-    results = list(q.order_by("sys__rand").extract("path"))
-    pairs = list(q.extract("sys__rand", "path"))
+    results = list(q.order_by("sys__rand").extract("file__path"))
+    pairs = list(q.extract("sys__rand", "file__path"))
     assert results == [(p[1],) for p in sorted(pairs)]
 
 
@@ -656,17 +626,10 @@ def test_extract_order_by(cloud_test_catalog, dogs_dataset):
     [("s3", True)],
     indirect=True,
 )
-def test_union(cloud_test_catalog):
+def test_union(cloud_test_catalog, cats_dataset, dogs_dataset):
     catalog = cloud_test_catalog.catalog
-    sources = [str(cloud_test_catalog.src_uri)]
-    catalog.index(sources)
-
-    src = cloud_test_catalog.src_uri
-    catalog.create_dataset_from_sources("dogs", [f"{src}/dogs/*"], recursive=True)
-    catalog.create_dataset_from_sources("cats", [f"{src}/cats/*"], recursive=True)
-
-    dogs = DatasetQuery(name="dogs", version=1, catalog=catalog)
-    cats = DatasetQuery(name="cats", version=1, catalog=catalog)
+    dogs = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
+    cats = DatasetQuery(name=cats_dataset.name, version=1, catalog=catalog)
 
     (dogs | cats).save("dogs_cats")
 
@@ -692,10 +655,10 @@ def test_join_with_binary_expression(
     dogs_cats = DatasetQuery(name=dogs_cats_dataset.name, version=1, catalog=catalog)
 
     if n_columns == 1:
-        predicate = dogs_cats.c("path") == dogs.c("path")
+        predicate = dogs_cats.c("file__path") == dogs.c("file__path")
     else:
-        predicate = (dogs_cats.c("path") == dogs.c("path")) & (
-            dogs_cats.c("size") == dogs.c("size")
+        predicate = (dogs_cats.c("file__path") == dogs.c("file__path")) & (
+            dogs_cats.c("file__size") == dogs.c("file__size")
         )
 
     res = dogs_cats.join(
@@ -723,7 +686,9 @@ def test_join_with_binary_expression(
         ]
 
     assert (
-        sorted(((r["path"], r["path_right"]) for r in res), key=lambda x: x[0])
+        sorted(
+            ((r["file__path"], r["file__path_right"]) for r in res), key=lambda x: x[0]
+        )
         == expected
     )
 
@@ -734,7 +699,7 @@ def test_join_with_binary_expression(
     indirect=True,
 )
 @pytest.mark.parametrize("inner", [True, False])
-@pytest.mark.parametrize("column_predicate", ["path", C.path])
+@pytest.mark.parametrize("column_predicate", ["file__path", C("file.path")])
 def test_join_with_combination_binary_expression_and_column_predicates(
     cloud_test_catalog,
     dogs_dataset,
@@ -748,7 +713,7 @@ def test_join_with_combination_binary_expression_and_column_predicates(
 
     res = dogs_cats.join(
         dogs,
-        [column_predicate, dogs_cats.c("size") == dogs.c("size")],
+        [column_predicate, dogs_cats.c("file__size") == dogs.c("file__size")],
         inner=inner,
     ).to_db_records()
 
@@ -771,7 +736,9 @@ def test_join_with_combination_binary_expression_and_column_predicates(
         ]
 
     assert (
-        sorted(((r["path"], r["path_right"]) for r in res), key=lambda x: x[0])
+        sorted(
+            ((r["file__path"], r["file__path_right"]) for r in res), key=lambda x: x[0]
+        )
         == expected
     )
 
@@ -793,10 +760,12 @@ def test_join_with_binary_expression_with_arithmetics(
     cats = DatasetQuery(name=cats_dataset.name, version=1, catalog=catalog)
 
     res = cats.join(
-        dogs, cats.c("size") == dogs.c("size") + 1, inner=inner
+        dogs, cats.c("file__size") == dogs.c("file__size") + 1, inner=inner
     ).to_db_records()
 
-    assert sorted(((r["path"], r["path_right"]) for r in res), key=lambda x: x[0]) == [
+    assert sorted(
+        ((r["file__path"], r["file__path_right"]) for r in res), key=lambda x: x[0]
+    ) == [
         ("cats/cat1", "dogs/dog2"),
         ("cats/cat2", "dogs/dog2"),
     ]
@@ -837,17 +806,17 @@ def test_join_with_missing_columns_in_expression(
     cats = DatasetQuery(name=cats_dataset.name, version=1, catalog=catalog)
 
     with pytest.raises(ValueError) as excinfo:
-        dogs1.join(dogs2, dogs1.c("wrong") == dogs2.c("path")).to_db_records()
+        dogs1.join(dogs2, dogs1.c("wrong") == dogs2.c("file__path")).to_db_records()
     assert str(excinfo.value) == "Column wrong was not found in left part of the join"
 
     with pytest.raises(ValueError) as excinfo:
-        dogs1.join(dogs2, dogs1.c("path") == dogs2.c("wrong")).to_db_records()
+        dogs1.join(dogs2, dogs1.c("file__path") == dogs2.c("wrong")).to_db_records()
     assert str(excinfo.value) == "Column wrong was not found in right part of the join"
 
     with pytest.raises(ValueError) as excinfo:
-        dogs1.join(dogs2, dogs1.c("path") == cats.c("path")).to_db_records()
+        dogs1.join(dogs2, dogs1.c("file__path") == cats.c("file__path")).to_db_records()
     assert str(excinfo.value) == (
-        "Column path was not found in left or right part of the join"
+        "Column file__path was not found in left or right part of the join"
     )
 
 
@@ -867,8 +836,8 @@ def test_join_with_using_functions_in_expression(
     res = dogs_cats.join(
         dogs,
         (
-            sqlalchemy.func.upper(dogs_cats.c("path"))
-            == sqlalchemy.func.upper(dogs.c("path"))
+            sqlalchemy.func.upper(dogs_cats.c("file__path"))
+            == sqlalchemy.func.upper(dogs.c("file__path"))
         ),
         inner=inner,
     ).to_db_records()
@@ -892,7 +861,9 @@ def test_join_with_using_functions_in_expression(
         ]
 
     assert (
-        sorted(((r["path"], r["path_right"]) for r in res), key=lambda x: x[0])
+        sorted(
+            ((r["file__path"], r["file__path_right"]) for r in res), key=lambda x: x[0]
+        )
         == expected
     )
 
@@ -903,14 +874,14 @@ def test_simple_dataset_query(cloud_test_catalog):
     catalog = ctc.catalog
     metastore = catalog.metastore
     warehouse = catalog.warehouse
-    DatasetQuery(ctc.src_uri, catalog=catalog).save("ds1")
+    catalog.create_dataset_from_sources("ds1", [ctc.src_uri], recursive=True)
     DatasetQuery(name="ds1", version=1, catalog=catalog).save("ds2")
 
     ds_queries = []
     for ds_name in ("ds1", "ds2"):
         ds = metastore.get_dataset(ds_name)
         dr = warehouse.dataset_rows(ds)
-        dq = dr.select().order_by(dr.c.path)
+        dq = dr.select().order_by(dr.c.file__path)
         ds_queries.append(dq)
 
     ds1, ds2 = (
@@ -923,7 +894,7 @@ def test_simple_dataset_query(cloud_test_catalog):
 
     # everything except the id field should match
     assert ds1 == ds2
-    assert [r["path"] for r in ds1] == [
+    assert [r["file__path"] for r in ds1] == [
         ("cats/cat1"),
         ("cats/cat2"),
         ("description"),
@@ -939,10 +910,10 @@ def test_aggregate(cloud_test_catalog, dogs_dataset):
 
     q = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
     assert q.count() == 4
-    assert q.sum(C.size) == 15
-    assert q.avg(C.size) == 15 / 4
-    assert q.min(C.size) == 3
-    assert q.max(C.size) == 4
+    assert q.sum(C("file.size")) == 15
+    assert q.avg(C("file.size")) == 15 / 4
+    assert q.min(C("file.size")) == 3
+    assert q.max(C("file.size")) == 4
 
 
 def test_group_by(cloud_test_catalog, cloud_type, dogs_dataset):
@@ -950,15 +921,15 @@ def test_group_by(cloud_test_catalog, cloud_type, dogs_dataset):
 
     q = (
         DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
-        .mutate(parent=pathfunc.parent(C.path))
+        .mutate(parent=pathfunc.parent(C("file.path")))
         .group_by(C.parent)
         .select(
             C.parent,
             functions.count(),
-            functions.sum(C.size),
-            functions.avg(C.size),
-            functions.min(C.size),
-            functions.max(C.size),
+            functions.sum(C("file.size")),
+            functions.avg(C("file.size")),
+            functions.min(C("file.size")),
+            functions.max(C("file.size")),
         )
     )
     result = q.db_results()
@@ -983,8 +954,19 @@ def test_group_by(cloud_test_catalog, cloud_type, dogs_dataset):
     [("s3", True)],
     indirect=True,
 )
-def test_to_db_records(simple_ds_query):
-    assert simple_ds_query.to_db_records() == SIMPLE_DS_QUERY_RECORDS
+def test_to_db_records(cloud_test_catalog, cats_dataset):
+    ctc = cloud_test_catalog
+    catalog = ctc.catalog
+    ds = (
+        DatasetQuery(cats_dataset.name, catalog=catalog)
+        .select(C("file__path"), C("file__size"))
+        .order_by(C("file__path"))
+    )
+
+    assert ds.to_db_records() == [
+        {"file__path": "cats/cat1", "file__size": 4},
+        {"file__path": "cats/cat2", "file__size": 4},
+    ]
 
 
 @pytest.mark.parametrize(
@@ -994,7 +976,7 @@ def test_to_db_records(simple_ds_query):
 )
 @pytest.mark.parametrize("indirect", [True, False])
 def test_dataset_dependencies_one_storage_as_dependency(
-    cloud_test_catalog, listed_bucket, indirect
+    cloud_test_catalog, listed_bucket, indirect, cats_dataset
 ):
     pytest.skip(
         "Skipping as new dependencies are not working with old indexing "
@@ -1004,9 +986,7 @@ def test_dataset_dependencies_one_storage_as_dependency(
     catalog = cloud_test_catalog.catalog
     storage = catalog.metastore.get_storage(cloud_test_catalog.storage_uri)
 
-    path = f"{cloud_test_catalog.src_uri}/cats"
-
-    DatasetQuery(path=path, catalog=catalog).save(ds_name)
+    DatasetQuery(cats_dataset.name, catalog=catalog).save(ds_name)
 
     assert [
         dataset_dependency_asdict(d)
@@ -1090,7 +1070,7 @@ def test_dataset_dependencies_multiple_direct_dataset_dependencies(
     if method == "union":
         dogs.union(cats).save(ds_name)
     else:
-        dogs.join(cats, "path").save(ds_name)
+        dogs.join(cats, "file__path").save(ds_name)
 
     storage_depenedncy = {
         "id": ANY,
@@ -1205,28 +1185,11 @@ def test_dataset_dependencies_multiple_union(
     [("s3", True)],
     indirect=True,
 )
-def test_save_subset_of_columns(cloud_test_catalog):
+def test_save_subset_of_columns(cloud_test_catalog, cats_dataset):
     catalog = cloud_test_catalog.catalog
-    path = f"{cloud_test_catalog.src_uri}/cats"
-    DatasetQuery(path=path, catalog=catalog).select(C.path).save("cats", version=1)
+    DatasetQuery(cats_dataset.name, catalog=catalog).select(C("file.path")).save(
+        "cats", version=1
+    )
 
     dataset = catalog.get_dataset("cats")
-    assert dataset.schema == {"path": String}
-
-
-@pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
-    indirect=True,
-)
-def test_single_file(cloud_test_catalog):
-    catalog = cloud_test_catalog.catalog
-    path = f"{cloud_test_catalog.src_uri}/cats/cat1"
-    ds = DatasetQuery(path=path, catalog=catalog)
-    assert ds.count() == 1
-
-
-def test_recursive(cloud_test_catalog):
-    catalog = cloud_test_catalog.catalog
-    ds = DatasetQuery(path=cloud_test_catalog.src_uri, catalog=catalog, recursive=False)
-    assert ds.count() == 1
+    assert dataset.schema == {"file__path": String}

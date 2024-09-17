@@ -16,7 +16,7 @@ from datachain.catalog.catalog import Catalog
 from datachain.dataset import DatasetDependency, DatasetRecord
 from datachain.lib.dc import DataChain
 from datachain.lib.tar import process_tar
-from datachain.query import C, DatasetQuery
+from datachain.query import C
 from datachain.storage import StorageStatus
 
 
@@ -159,53 +159,6 @@ def text_embedding(text: str) -> list[float]:
     return [2.0 / (1.0 + math.e ** (-x)) - 1.0 for x in emb.values()]
 
 
-SIMPLE_DS_QUERY_RECORDS = [
-    {
-        "path": "cats/cat1",
-        "is_latest": 1,
-        "size": 4,
-    },
-    {
-        "path": "cats/cat2",
-        "is_latest": 1,
-        "size": 4,
-    },
-    {
-        "path": "description",
-        "is_latest": 1,
-        "size": 13,
-    },
-    {
-        "path": "dogs/dog1",
-        "is_latest": 1,
-        "size": 4,
-    },
-    {
-        "path": "dogs/dog2",
-        "is_latest": 1,
-        "size": 3,
-    },
-    {
-        "path": "dogs/dog3",
-        "is_latest": 1,
-        "size": 4,
-    },
-    {
-        "path": "dogs/others/dog4",
-        "is_latest": 1,
-        "size": 4,
-    },
-]
-
-
-def get_simple_ds_query(path, catalog):
-    return (
-        DatasetQuery(path=path, catalog=catalog)
-        .select(C.path, C.is_latest, C.size)
-        .order_by(C.source, C.path)
-    )
-
-
 def dataset_dependency_asdict(
     dep: Optional[DatasetDependency],
 ) -> Optional[dict[str, Any]]:
@@ -250,8 +203,10 @@ def assert_row_names(
     preview = dataset.get_version(version).preview
     assert preview
 
-    assert {r["path"] for r in dataset_rows} == {r.get("path") for r in preview}
-    assert {posixpath.basename(r["path"]) for r in dataset_rows} == expected_names
+    assert {r["file__path"] for r in dataset_rows} == {
+        r.get("file__path") for r in preview
+    }
+    assert {posixpath.basename(r["file__path"]) for r in dataset_rows} == expected_names
 
 
 def images_equal(img1: Image.Image, img2: Image.Image):
