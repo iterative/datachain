@@ -651,11 +651,14 @@ class SQLiteWarehouse(AbstractWarehouse):
         self, dataset: DatasetRecord, version: int
     ) -> list[StorageURI]:
         dr = self.dataset_rows(dataset, version)
-        query = dr.select(dr.c.source).distinct()
+        query = dr.select(dr.c.file__source).distinct()
         cur = self.db.cursor()
         cur.row_factory = sqlite3.Row  # type: ignore[assignment]
 
-        return [StorageURI(row["source"]) for row in self.db.execute(query, cursor=cur)]
+        return [
+            StorageURI(row["file__source"])
+            for row in self.db.execute(query, cursor=cur)
+        ]
 
     def merge_dataset_rows(
         self,

@@ -1,5 +1,4 @@
 import glob
-import importlib.util
 import io
 import json
 import os
@@ -196,45 +195,6 @@ def get_envs_by_prefix(prefix: str) -> dict[str, str]:
             variables[env_name[len(prefix) :]] = env_value
 
     return variables
-
-
-def import_object(object_spec):
-    filename, identifier = object_spec.rsplit(":", 1)
-    filename = filename.strip()
-    identifier = identifier.strip()
-
-    if not identifier.isidentifier() or not filename.endswith(".py"):
-        raise ValueError(f"Invalid object spec: {object_spec}")
-
-    modname = os.path.abspath(filename)
-    if modname in sys.modules:
-        module = sys.modules[modname]
-    else:
-        # Use importlib to find and load the module from the given filename
-        spec = importlib.util.spec_from_file_location(modname, filename)
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[modname] = module
-        spec.loader.exec_module(module)
-
-    return getattr(module, identifier)
-
-
-def parse_params_string(params: str):
-    """
-    Parse a string containing UDF class constructor parameters in the form
-    `a, b, key=val` into *args and **kwargs.
-    """
-    args = []
-    kwargs = {}
-    for part in params.split():
-        if "=" in part:
-            key, val = part.split("=")
-            kwargs[key] = val
-        else:
-            args.append(part)
-    if any((args, kwargs)):
-        return args, kwargs
-    return None, None
 
 
 _T_co = TypeVar("_T_co", covariant=True)

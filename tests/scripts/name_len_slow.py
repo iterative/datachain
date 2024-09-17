@@ -15,7 +15,7 @@ if sys.platform == "win32":
         print("SetConsoleCtrlHandler error: ", ctypes.get_last_error(), file=sys.stderr)
 
 
-def name_len(path):
+def name_len(file):
     # This is to avoid a sleep statement in the tests, so that the end-to-end test
     # knows when UDF processing has started, since we are testing canceling
     # UDF processing.
@@ -26,9 +26,9 @@ def name_len(path):
     sys.stdout.flush()
     # Process very slowly to emulate a stuck script.
     sleep(1)
-    if path.endswith(".json"):
+    if file.path.endswith(".json"):
         return (-1,)
-    return (len(path),)
+    return (len(file.path),)
 
 
 # Save as a new dataset.

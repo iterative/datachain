@@ -77,6 +77,7 @@ def parse_listing_uri(uri: str, cache, client_config) -> tuple[str, str, str]:
     """
     Parsing uri and returns listing dataset name, listing uri and listing path
     """
+    client_config = client_config or {}
     client = Client.get_client(uri, cache, **client_config)
     storage_uri, path = Client.parse_url(uri)
 
