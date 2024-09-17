@@ -27,7 +27,7 @@ from datachain.query.queue import (
     put_into_queue,
     unmarshal,
 )
-from datachain.query.udf import UDFBase, UDFFactory, UDFResult
+from datachain.query.udf import UDFBase, UDFResult
 from datachain.utils import batched_it
 
 DEFAULT_BATCH_SIZE = 10000
@@ -156,8 +156,6 @@ class UDFDispatcher:
 
     @property
     def batch_size(self):
-        if not self.udf:
-            self.udf = self.udf_factory()
         if self._batch_size is None:
             if hasattr(self.udf, "properties") and hasattr(
                 self.udf.properties, "batch"
@@ -181,18 +179,7 @@ class UDFDispatcher:
             self.catalog = Catalog(
                 id_generator, metastore, warehouse, **self.catalog_init_params
             )
-        udf = loads(self.udf_data)
-        # isinstance cannot be used here, as cloudpickle packages the entire class
-        # definition, and so these two types are not considered exactly equal,
-        # even if they have the same import path.
-        if full_module_type_path(type(udf)) != full_module_type_path(UDFFactory):
-            self.udf = udf
-        else:
-            self.udf = None
-            self.udf_factory = udf
-        if not self.udf:
-            self.udf = self.udf_factory()
-
+        self.udf = loads(self.udf_data)
         return UDFWorker(
             self.catalog,
             self.udf,

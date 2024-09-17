@@ -68,8 +68,6 @@ from datachain.utils import (
     DataChainDir,
     batched,
     datachain_paths_join,
-    import_object,
-    parse_params_string,
 )
 
 from .datasource import DataSource
@@ -843,7 +841,7 @@ class Catalog:
         from datachain.query import DatasetQuery
 
         def _row_to_node(d: dict[str, Any]) -> Node:
-            del d["source"]
+            del d["file__source"]
             return Node.from_dict(d)
 
         enlisted_sources: list[tuple[bool, bool, Any]] = []
@@ -1148,30 +1146,28 @@ class Catalog:
         if not sources:
             raise ValueError("Sources needs to be non empty list")
 
-        from datachain.query import DatasetQuery
+        from datachain.lib.dc import DataChain
+        from datachain.query.session import Session
 
-        dataset_queries = []
+        session = Session.get(catalog=self, client_config=client_config)
+
+        chains = []
         for source in sources:
             if source.startswith(DATASET_PREFIX):
-                dq = DatasetQuery(
-                    name=source[len(DATASET_PREFIX) :],
-                    catalog=self,
-                    client_config=client_config,
+                dc = DataChain.from_dataset(
+                    source[len(DATASET_PREFIX) :], session=session
                 )
             else:
-                dq = DatasetQuery(
-                    path=source,
-                    catalog=self,
-                    client_config=client_config,
-                    recursive=recursive,
+                dc = DataChain.from_storage(
+                    source, session=session, recursive=recursive
                 )
 
-            dataset_queries.append(dq)
+            chains.append(dc)
 
         # create union of all dataset queries created from sources
-        dq = reduce(lambda ds1, ds2: ds1.union(ds2), dataset_queries)
+        dc = reduce(lambda dc1, dc2: dc1.union(dc2), chains)
         try:
-            dq.save(name)
+            dc.save(name)
         except Exception as e:  # noqa: BLE001
             try:
                 ds = self.get_dataset(name)
@@ -1730,26 +1726,6 @@ class Catalog:
         self.create_dataset_from_sources(
             output, sources, client_config=client_config, recursive=recursive
         )
-
-    def apply_udf(
-        self,
-        udf_location: str,
-        source: str,
-        target_name: str,
-        parallel: Optional[int] = None,
-        params: Optional[str] = None,
-    ):
-        from datachain.query import DatasetQuery
-
-        if source.startswith(DATASET_PREFIX):
-            ds = DatasetQuery(name=source[len(DATASET_PREFIX) :], catalog=self)
-        else:
-            ds = DatasetQuery(path=source, catalog=self)
-        udf = import_object(udf_location)
-        if params:
-            args, kwargs = parse_params_string(params)
-            udf = udf(*args, **kwargs)
-        ds.add_signals(udf, parallel=parallel).save(target_name)
 
     def query(
         self,

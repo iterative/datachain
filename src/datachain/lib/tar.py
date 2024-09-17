@@ -30,4 +30,5 @@ def process_tar(file: File) -> Iterator[File]:
     with file.open() as fd:
         with tarfile.open(fileobj=fd) as tar:
             for entry in tar.getmembers():
-                yield build_tar_member(file, entry)
+                if entry.isfile():
+                    yield build_tar_member(file, entry)
