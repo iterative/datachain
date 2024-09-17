@@ -190,6 +190,42 @@ def test_create_dataset_from_sources(listed_bucket, cloud_test_catalog):
     assert dataset_version.preview
 
 
+def test_create_dataset_from_sources_dataset(cloud_test_catalog, dogs_dataset):
+    dataset_name = uuid.uuid4().hex
+    catalog = cloud_test_catalog.catalog
+
+    dataset = catalog.create_dataset_from_sources(
+        dataset_name, [f"ds://{dogs_dataset.name}"], recursive=True
+    )
+
+    dataset_version = dataset.get_version(dataset.latest_version)
+
+    assert dataset.name == dataset_name
+    assert dataset.description is None
+    assert dataset.versions_values == [1]
+    assert dataset.labels == []
+    assert dataset.status == DatasetStatus.COMPLETE
+
+    assert dataset_version.status == DatasetStatus.COMPLETE
+    assert dataset_version.created_at
+    assert dataset_version.finished_at
+    assert dataset_version.error_message == ""
+    assert dataset_version.error_stack == ""
+    assert dataset_version.script_output == ""
+    assert dataset_version.sources == f"ds://{dogs_dataset.name}"
+
+    dr = catalog.warehouse.schema.dataset_row_cls
+    sys_schema = {c.name: type(c.type) for c in dr.sys_columns()}
+    default_dataset_schema = FILE_SCHEMA | sys_schema
+    assert dataset.schema == default_dataset_schema
+    assert dataset.query_script == ""
+
+    assert dataset_version.schema == default_dataset_schema
+    assert dataset_version.query_script == ""
+    assert dataset_version.num_objects
+    assert dataset_version.preview
+
+
 def test_create_dataset_from_sources_empty_sources(cloud_test_catalog):
     dataset_name = uuid.uuid4().hex
     catalog = cloud_test_catalog.catalog

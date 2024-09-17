@@ -297,21 +297,6 @@ class AbstractMetastore(ABC, Serializable):
     #
     # Dataset dependencies
     #
-
-    def add_dependency(
-        self,
-        dependency: DatasetDependency,
-        source_dataset_name: str,
-        source_dataset_version: int,
-    ) -> None:
-        """Add dependency to dataset or storage."""
-        self.add_dataset_dependency(
-            source_dataset_name,
-            source_dataset_version,
-            dependency.dataset_name,
-            int(dependency.version),
-        )
-
     @abstractmethod
     def add_dataset_dependency(
         self,
