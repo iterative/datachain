@@ -1,8 +1,7 @@
 import sys
 from time import sleep
 
-from datachain.query import C, DatasetQuery, udf
-from datachain.sql.types import Int
+from datachain.lib.dc import C, DataChain
 
 if sys.platform == "win32":
     # This is needed for this process to accept a Ctrl-C event in Windows,
@@ -16,13 +15,6 @@ if sys.platform == "win32":
         print("SetConsoleCtrlHandler error: ", ctypes.get_last_error(), file=sys.stderr)
 
 
-# Define the UDF:
-@udf(
-    ("path",),  # Columns consumed by the UDF.
-    {
-        "name_len": Int
-    },  # Signals being returned by the UDF, with the signal name and type.
-)
 def name_len(path):
     # This is to avoid a sleep statement in the tests, so that the end-to-end test
     # knows when UDF processing has started, since we are testing canceling
@@ -40,7 +32,9 @@ def name_len(path):
 
 
 # Save as a new dataset.
-DatasetQuery(
-    path="gs://dvcx-datalakes/dogs-and-cats/",
+DataChain.from_storage(
+    "gs://dvcx-datalakes/dogs-and-cats/",
     anon=True,
-).filter(C.path.glob("*cat*")).add_signals(name_len, parallel=1).save("name_len")
+).filter(C("file.path").glob("*cat*")).settings(parallel=1).map(
+    name_len, params=["file.path"], output={"name_len": int}
+).save("name_len")

@@ -13,8 +13,8 @@ class ListingInfo(DatasetInfo):
 
     @property
     def storage_uri(self) -> str:
-        client, _ = Client.parse_url(self.uri, None)  # type: ignore[arg-type]
-        return client.uri
+        uri, _ = Client.parse_url(self.uri)
+        return uri
 
     @property
     def expires(self) -> Optional[datetime]:

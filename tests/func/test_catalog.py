@@ -8,11 +8,11 @@ import pytest
 import yaml
 from fsspec.implementations.local import LocalFileSystem
 
+from datachain import DataChain, File
 from datachain.catalog import parse_edatachain_file
 from datachain.cli import garbage_collect
 from datachain.error import (
     QueryScriptCompileError,
-    QueryScriptDatasetNotFound,
     QueryScriptRunError,
     StorageNotFoundError,
 )
@@ -20,9 +20,7 @@ from datachain.storage import Storage
 from tests.data import ENTRIES
 from tests.utils import (
     DEFAULT_TREE,
-    TARRED_TREE,
     assert_row_names,
-    create_tar_dataset,
     make_index,
     skip_if_not_sqlite,
     tree_from_path,
@@ -46,7 +44,7 @@ def pre_created_ds_name():
 @pytest.fixture
 def mock_popen(mocker):
     m = mocker.patch(
-        "subprocess.Popen", returncode=0, stdout=io.StringIO(), stderr=io.StringIO()
+        "subprocess.Popen", returncode=0, stdout=io.BytesIO(), stderr=io.BytesIO()
     )
     m.return_value.__enter__.return_value = m
     # keep in sync with the returncode
@@ -59,7 +57,7 @@ def mock_popen_dataset_created(
     mocker, monkeypatch, mock_popen, cloud_test_catalog, listed_bucket
 ):
     # create dataset which would be created in subprocess
-    ds_name = cloud_test_catalog.catalog.generate_query_dataset_name()
+    ds_name = "my-ds"
     job_id = cloud_test_catalog.catalog.metastore.create_job(name="", query="")
     mocker.patch.object(
         cloud_test_catalog.catalog.metastore, "create_job", return_value=job_id
@@ -70,7 +68,7 @@ def mock_popen_dataset_created(
         [f"{cloud_test_catalog.src_uri}/dogs/*"],
         recursive=True,
     )
-    mock_popen.configure_mock(stdout=io.StringIO("user log 1\nuser log 2"))
+    mock_popen.configure_mock(stdout=io.BytesIO(b"user log 1\nuser log 2"))
     yield mock_popen
 
 
@@ -84,7 +82,7 @@ def fake_index(catalog):
 def test_find(catalog, fake_index):
     src_uri = fake_index
     dirs = ["cats/", "dogs/", "dogs/others/"]
-    expected_paths = dirs + [entry.full_path for entry in ENTRIES]
+    expected_paths = dirs + [entry.path for entry in ENTRIES]
     assert set(catalog.find([src_uri])) == {
         f"{src_uri}/{path}" for path in expected_paths
     }
@@ -139,8 +137,6 @@ def test_find_names_columns(cloud_test_catalog, cloud_type):
     src_uri = cloud_test_catalog.src_uri
     catalog = cloud_test_catalog.catalog
 
-    owner = "webfile" if cloud_type == "s3" else ""
-
     src_uri_path = src_uri
     if cloud_type == "file":
         src_uri_path = LocalFileSystem._strip_protocol(src_uri)
@@ -149,14 +145,14 @@ def test_find_names_columns(cloud_test_catalog, cloud_type):
         catalog.find(
             [src_uri],
             names=["*cat*"],
-            columns=["du", "name", "owner", "path", "size", "type"],
+            columns=["du", "name", "path", "size", "type"],
         )
     ) == {
         "\t".join(columns)
         for columns in [
-            ["8", "cats", "", f"{src_uri_path}/cats/", "0", "d"],
-            ["4", "cat1", owner, f"{src_uri_path}/cats/cat1", "4", "f"],
-            ["4", "cat2", owner, f"{src_uri_path}/cats/cat2", "4", "f"],
+            ["8", "cats", f"{src_uri_path}/cats/", "0", "d"],
+            ["4", "cat1", f"{src_uri_path}/cats/cat1", "4", "f"],
+            ["4", "cat2", f"{src_uri_path}/cats/cat2", "4", "f"],
         ]
     }
 
@@ -275,55 +271,6 @@ def test_cp_local_dataset(cloud_test_catalog, dogs_dataset):
     }
 
 
-@pytest.mark.parametrize("tree", [TARRED_TREE], indirect=True)
-@pytest.mark.parametrize("suffix", ["/", "/*"])
-@pytest.mark.parametrize("recursive", [False, True])
-@pytest.mark.parametrize("dir_exists", [False, True])
-@pytest.mark.xfail(reason="Missing support for v-objects in cp")
-def test_cp_tar_root(cloud_test_catalog, suffix, recursive, dir_exists):
-    ctc = cloud_test_catalog
-    catalog = ctc.catalog
-    create_tar_dataset(catalog, ctc.src_uri, "tarred")
-    dest = ctc.working_dir / "data"
-    if dir_exists:
-        dest.mkdir()
-    src = f"ds://tarred/animals.tar{suffix}"
-    dest_path = str(dest) + "/"
-
-    if not dir_exists and suffix == "/*":
-        with pytest.raises(FileNotFoundError):
-            catalog.cp([src], dest_path, recursive=recursive, no_edatachain_file=True)
-        return
-
-    catalog.cp([src], dest_path, recursive=recursive, no_edatachain_file=True)
-
-    expected = DEFAULT_TREE.copy()
-    if not recursive:
-        # Directories are not copied
-        if suffix == "/":
-            expected = {}
-        else:
-            for key in list(expected):
-                if isinstance(expected[key], dict):
-                    del expected[key]
-
-    assert tree_from_path(dest) == expected
-
-
-@pytest.mark.parametrize("tree", [TARRED_TREE], indirect=True)
-@pytest.mark.xfail(reason="Missing support for v-objects in cp")
-def test_cp_full_tar(cloud_test_catalog):
-    ctc = cloud_test_catalog
-    catalog = ctc.catalog
-    create_tar_dataset(catalog, ctc.src_uri, "tarred")
-    dest = ctc.working_dir / "data"
-    dest.mkdir()
-    src = "ds://tarred/"
-    catalog.cp([src], str(dest), recursive=True, no_edatachain_file=True)
-
-    assert tree_from_path(dest, binary=True) == TARRED_TREE
-
-
 @pytest.mark.parametrize(
     "recursive,star,slash,dir_exists",
     (
@@ -403,43 +350,6 @@ def test_cp_subdir(cloud_test_catalog, recursive, star, slash, dir_exists):
     assert files_by_name["dogs/dog2"]["size"] == 3
     assert files_by_name["dogs/dog3"]["size"] == 4
     assert files_by_name["dogs/others/dog4"]["size"] == 4
-
-
-@pytest.mark.parametrize("tree", [TARRED_TREE], indirect=True)
-@pytest.mark.parametrize("path", ["*/dogs", "animals.tar/dogs"])
-@pytest.mark.parametrize("suffix", ["", "/", "/*"])
-@pytest.mark.parametrize("recursive", [False, True])
-@pytest.mark.parametrize("dir_exists", [False, True])
-@pytest.mark.xfail(reason="Missing support for v-objects in cp")
-def test_cp_tar_subdir(cloud_test_catalog, path, suffix, recursive, dir_exists):
-    ctc = cloud_test_catalog
-    catalog = ctc.catalog
-    create_tar_dataset(catalog, ctc.src_uri, "tarred")
-    dest = ctc.working_dir / "data"
-    if dir_exists:
-        dest.mkdir()
-    src = f"ds://tarred/{path}{suffix}"
-
-    if not dir_exists and suffix == "/*":
-        with pytest.raises(FileNotFoundError):
-            catalog.cp([src], str(dest), recursive=recursive)
-        return
-
-    catalog.cp([src], str(dest), recursive=recursive)
-
-    expected = DEFAULT_TREE["dogs"].copy()
-    if suffix in ("",) and dir_exists:
-        expected = {"dogs": expected}
-    if not recursive:
-        # Directories are not copied
-        if not dir_exists or suffix == "/":
-            expected = {}
-        else:
-            for key in list(expected):
-                if isinstance(expected[key], dict):
-                    del expected[key]
-
-    assert tree_from_path(dest) == expected
 
 
 @pytest.mark.parametrize(
@@ -869,34 +779,6 @@ def clear_storages(catalog):
     ds.db.execute(ds._storages.delete())
 
 
-@pytest.mark.parametrize("tree", [TARRED_TREE], indirect=True)
-@pytest.mark.xfail(reason="Missing support for datasets in ls")
-def test_ls_subobjects(cloud_test_catalog):
-    ctc = cloud_test_catalog
-    catalog = ctc.catalog
-    create_tar_dataset(catalog, ctc.src_uri, "tarred")
-
-    def do_ls(target):
-        ((_, results),) = list(catalog.ls([target], fields=["name"]))
-        results = list(results)
-        result_set = {x[0] for x in results}
-        assert len(result_set) == len(results)
-        return result_set
-
-    ds = "ds://tarred"
-    assert do_ls(ds) == {"animals.tar"}
-    assert do_ls(f"{ds}/animals.tar") == {"animals.tar"}
-    assert do_ls(f"{ds}/animals.tar/dogs") == {
-        "dog1",
-        "dog2",
-        "dog3",
-        "others",
-    }
-    assert do_ls(f"{ds}/animals.tar/") == {"description", "cats", "dogs"}
-    assert do_ls(f"{ds}/*.tar/") == {"description", "cats", "dogs"}
-    assert do_ls(f"{ds}/*.tar/desc*") == {"description"}
-
-
 def test_index_error(cloud_test_catalog):
     protocol = cloud_test_catalog.src_uri.split("://", 1)[0]
     # XXX: different clients raise inconsistent exceptions
@@ -910,25 +792,16 @@ def test_query(cloud_test_catalog, mock_popen_dataset_created):
 
     query_script = f"""\
     from datachain.query import C, DatasetQuery
-    DatasetQuery({src_uri!r})
+    DatasetQuery({src_uri!r}).save("my-ds")
     """
     query_script = dedent(query_script)
 
-    result = catalog.query(query_script, save=True)
-    assert result.dataset
-    assert_row_names(
-        catalog,
-        result.dataset,
-        result.version,
-        {
-            "dog1",
-            "dog2",
-            "dog3",
-            "dog4",
-        },
-    )
-    assert result.dataset.query_script == query_script
-    assert result.dataset.sources == ""
+    catalog.query(query_script)
+
+    dataset = catalog.get_dataset("my-ds")
+    assert dataset
+    assert dataset.versions_values == [1]
+    assert_row_names(catalog, dataset, 1, {"dog1", "dog2", "dog3", "dog4"})
 
 
 def test_query_save_size(cloud_test_catalog, mock_popen_dataset_created):
@@ -937,14 +810,43 @@ def test_query_save_size(cloud_test_catalog, mock_popen_dataset_created):
 
     query_script = f"""\
     from datachain.query import C, DatasetQuery
-    DatasetQuery({src_uri!r})
+    DatasetQuery({src_uri!r}).save("my-ds")
     """
     query_script = dedent(query_script)
 
-    result = catalog.query(query_script, save=True)
-    dataset_version = result.dataset.get_version(result.version)
+    catalog.query(query_script)
+
+    dataset = catalog.get_dataset("my-ds")
+    assert dataset
+    assert dataset.versions_values == [1]
+
+    dataset_version = dataset.get_version(1)
     assert dataset_version.num_objects == 4
     assert dataset_version.size == 15
+
+
+def test_dataset_stats(test_session):
+    ids = [1, 2, 3]
+    values = tuple(zip(["a", "b", "c"], [1, 2, 3]))
+
+    ds1 = DataChain.from_values(
+        ids=ids,
+        file=[File(path=name, size=size) for name, size in values],
+        session=test_session,
+    ).save()
+    dataset_version1 = test_session.catalog.get_dataset(ds1.name).get_version(1)
+    assert dataset_version1.num_objects == 3
+    assert dataset_version1.size == 6
+
+    ds2 = DataChain.from_values(
+        ids=ids,
+        file1=[File(path=name, size=size) for name, size in values],
+        file2=[File(path=name, size=size * 2) for name, size in values],
+        session=test_session,
+    ).save()
+    dataset_version2 = test_session.catalog.get_dataset(ds2.name).get_version(1)
+    assert dataset_version2.num_objects == 3
+    assert dataset_version2.size == 18
 
 
 def test_query_fail_to_compile(cloud_test_catalog):
@@ -953,7 +855,7 @@ def test_query_fail_to_compile(cloud_test_catalog):
     query_script = "syntax error"
 
     with pytest.raises(QueryScriptCompileError):
-        catalog.query(query_script)
+        catalog.query(query_script, _execute_last_expression=True)
 
 
 def test_query_subprocess_wrong_return_code(mock_popen, cloud_test_catalog):
@@ -969,21 +871,6 @@ DatasetQuery('{src_uri}')
     with pytest.raises(QueryScriptRunError) as exc_info:
         catalog.query(query_script)
         assert str(exc_info.value).startswith("Query script exited with error code 1")
-
-
-def test_query_dataset_not_returned(mock_popen, cloud_test_catalog):
-    mock_popen.configure_mock(stdout=io.StringIO("random str"))
-    catalog = cloud_test_catalog.catalog
-    src_uri = cloud_test_catalog.src_uri
-
-    query_script = f"""
-from datachain.query import DatasetQuery, C
-DatasetQuery('{src_uri}')
-    """
-
-    with pytest.raises(QueryScriptDatasetNotFound) as e:
-        catalog.query(query_script, save=True)
-    assert e.value.output == "random str"
 
 
 @pytest.mark.parametrize("cloud_type", ["s3", "azure", "gs"], indirect=True)

@@ -40,8 +40,12 @@ if TYPE_CHECKING:
     from sqlalchemy.dialects.sqlite import Insert
     from sqlalchemy.engine.base import Engine
     from sqlalchemy.schema import SchemaItem
+    from sqlalchemy.sql._typing import _FromClauseArgument, _OnClauseArgument
     from sqlalchemy.sql.elements import ColumnElement
+    from sqlalchemy.sql.selectable import Join
     from sqlalchemy.types import TypeEngine
+
+    from datachain.lib.file import File
 
 
 logger = logging.getLogger("datachain")
@@ -56,6 +60,10 @@ datachain.sql.sqlite.setup()
 
 quote_schema = sqlite_dialect.identifier_preparer.quote_schema
 quote = sqlite_dialect.identifier_preparer.quote
+
+
+def _get_in_memory_uri():
+    return "file::memory:?cache=shared"
 
 
 def get_retry_sleep_sec(retry_count: int) -> int:
@@ -119,7 +127,7 @@ class SQLiteDatabaseEngine(DatabaseEngine):
             if db_file == ":memory:":
                 # Enable multithreaded usage of the same in-memory db
                 db = sqlite3.connect(
-                    "file::memory:?cache=shared", uri=True, detect_types=DETECT_TYPES
+                    _get_in_memory_uri(), uri=True, detect_types=DETECT_TYPES
                 )
             else:
                 db = sqlite3.connect(
@@ -704,6 +712,9 @@ class SQLiteWarehouse(AbstractWarehouse):
 
         self.db.execute(insert_query)
 
+    def prepare_entries(self, entries: "Iterable[File]") -> Iterable[dict[str, Any]]:
+        return (e.model_dump() for e in entries)
+
     def insert_rows(self, table: Table, rows: Iterable[dict[str, Any]]) -> None:
         rows = list(rows)
         if not rows:
@@ -778,6 +789,23 @@ class SQLiteWarehouse(AbstractWarehouse):
 
             if progress_cb:
                 progress_cb(len(batch_ids))
+
+    def join(
+        self,
+        left: "_FromClauseArgument",
+        right: "_FromClauseArgument",
+        onclause: "_OnClauseArgument",
+        inner: bool = True,
+    ) -> "Join":
+        """
+        Join two tables together.
+        """
+        return sqlalchemy.join(
+            left,
+            right,
+            onclause,
+            isouter=not inner,
+        )
 
     def create_pre_udf_table(self, query: "Select") -> "Table":
         """

@@ -3,6 +3,7 @@ import os.path
 import uuid
 from collections.abc import Generator
 from pathlib import PosixPath
+from typing import NamedTuple
 
 import attrs
 import pytest
@@ -30,6 +31,39 @@ DEFAULT_DATACHAIN_BIN = "datachain"
 DEFAULT_DATACHAIN_GIT_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 collect_ignore = ["setup.py"]
+
+
+@pytest.fixture(autouse=True)
+def virtual_memory(mocker):
+    class VirtualMemory(NamedTuple):
+        total: int
+        available: int
+        percent: int
+        used: int
+        free: int
+
+    return mocker.patch(
+        "psutil.virtual_memory",
+        return_value=VirtualMemory(
+            total=1073741824,
+            available=5368709120,
+            # prevent dumping of smaller batches to db in process_udf_outputs
+            # we want to avoid this due to tests running concurrently (xdist)
+            percent=50,
+            used=5368709120,
+            free=5368709120,
+        ),
+    )
+
+
+@pytest.fixture(autouse=True)
+def per_thread_im_mem_db(mocker, worker_id):
+    if worker_id == "master":
+        return
+    mocker.patch(
+        "datachain.data_storage.sqlite._get_in_memory_uri",
+        return_value=f"file:in-mem-db-{worker_id}?mode=memory&cache=shared",
+    )
 
 
 @pytest.fixture(scope="session")
@@ -69,6 +103,7 @@ def sqlite_db():
         pytest.skip("This test only runs on SQLite")
     with SQLiteDatabaseEngine.from_db_file(":memory:") as db:
         yield db
+        cleanup_sqlite_db(db, [])
 
 
 def cleanup_sqlite_db(
@@ -578,14 +613,11 @@ def dataset_rows():
             "location": "",
             "source": "s3://my-bucket",
             "dir_type": 0,
-            "vtype": "",
             "parent": "input/text_emd_1m",
             "version": "7e589b7d-382c-49a5-931f-2b999c930c5e",
             "is_latest": True,
             "name": f"dql_1m_meta_text_emd.parquet_3_{i}_0.snappy.parquet",
             "etag": f"72b35c8e9b8eed1636c91eb94241c2f8-{i}",
-            "owner_id": "owner",
-            "owner_name": "aws-iterative-sandbox",
             "last_modified": "2024-02-23T10:42:31.842944+00:00",
             "size": 49807360,
             "sys__rand": 12123123123,

@@ -6,11 +6,12 @@ from tests.data import ENTRIES
 
 def test_listing_generator(cloud_test_catalog, cloud_type):
     ctc = cloud_test_catalog
+    catalog = ctc.catalog
 
     uri = f"{ctc.src_uri}/cats"
 
     dc = DataChain.from_records(DataChain.DEFAULT_FILE_RECORD).gen(
-        file=list_bucket(uri, client_config=ctc.catalog.client_config)
+        file=list_bucket(uri, catalog.cache, client_config=catalog.client_config)
     )
     assert dc.count() == 2
 

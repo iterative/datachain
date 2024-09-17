@@ -9,7 +9,8 @@ from sqlalchemy import Column
 from sqlalchemy.sql import func
 from tqdm import tqdm
 
-from datachain.node import DirType, Entry, Node, NodeWithPath
+from datachain.lib.file import File
+from datachain.node import DirType, Node, NodeWithPath
 from datachain.sql.functions import path as pathfunc
 from datachain.utils import suffix_to_number
 
@@ -80,16 +81,13 @@ class Listing:
             finally:
                 fetch_listing.insert_entries_done()
 
-    def insert_entry(self, entry: Entry) -> None:
-        self.warehouse.insert_rows(
-            self.dataset_rows.get_table(),
-            self.warehouse.prepare_entries(self.client.uri, [entry]),
-        )
+    def insert_entry(self, entry: File) -> None:
+        self.insert_entries([entry])
 
-    def insert_entries(self, entries: Iterable[Entry]) -> None:
+    def insert_entries(self, entries: Iterable[File]) -> None:
         self.warehouse.insert_rows(
             self.dataset_rows.get_table(),
-            self.warehouse.prepare_entries(self.client.uri, entries),
+            self.warehouse.prepare_entries(entries),
         )
 
     def insert_entries_done(self) -> None:
@@ -104,7 +102,7 @@ class Listing:
         return self.warehouse.get_node_by_path(self.dataset_rows, path)
 
     def ls_path(self, node, fields):
-        if node.vtype == "tar" or node.dir_type == DirType.TAR_ARCHIVE:
+        if node.location or node.dir_type == DirType.TAR_ARCHIVE:
             return self.warehouse.select_node_fields_by_parent_path_tar(
                 self.dataset_rows, node.path, fields
             )
@@ -235,7 +233,7 @@ class Listing:
         return self.warehouse.size(self.dataset_rows, node, count_files)
 
     def subtree_files(self, node: Node, sort=None):
-        if node.dir_type == DirType.TAR_ARCHIVE or node.vtype != "":
+        if node.dir_type == DirType.TAR_ARCHIVE or node.location:
             include_subobjects = True
         else:
             include_subobjects = False

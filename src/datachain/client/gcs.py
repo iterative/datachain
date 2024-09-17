@@ -10,7 +10,6 @@ from gcsfs import GCSFileSystem
 from tqdm import tqdm
 
 from datachain.lib.file import File
-from datachain.node import Entry
 
 from .fsspec import DELIMITER, Client, ResultQueue
 
@@ -108,19 +107,9 @@ class GCSClient(Client):
         finally:
             await page_queue.put(None)
 
-    def _entry_from_dict(self, d: dict[str, Any]) -> Entry:
+    def _entry_from_dict(self, d: dict[str, Any]) -> File:
         info = self.fs._process_object(self.name, d)
-        return self.convert_info(info, self.rel_path(info["name"]))
-
-    def convert_info(self, v: dict[str, Any], path: str) -> Entry:
-        return Entry.from_file(
-            path=path,
-            etag=v.get("etag", ""),
-            version=v.get("generation", ""),
-            is_latest=not v.get("timeDeleted"),
-            last_modified=self.parse_timestamp(v["updated"]),
-            size=v.get("size", ""),
-        )
+        return self.info_to_file(info, self.rel_path(info["name"]))
 
     def info_to_file(self, v: dict[str, Any], path: str) -> File:
         return File(

@@ -234,7 +234,6 @@ class DataChain(DatasetQuery):
     DEFAULT_FILE_RECORD: ClassVar[dict] = {
         "source": "",
         "path": "",
-        "vtype": "",
         "size": 0,
     }
 
@@ -409,7 +408,11 @@ class DataChain(DatasetQuery):
                     in_memory=in_memory,
                 )
                 .gen(
-                    list_bucket(list_uri, client_config=session.catalog.client_config),
+                    list_bucket(
+                        list_uri,
+                        session.catalog.cache,
+                        client_config=session.catalog.client_config,
+                    ),
                     output={f"{object_name}": File},
                 )
                 .save(list_dataset_name, listing=True)
@@ -1524,7 +1527,8 @@ class DataChain(DatasetQuery):
             output = {"split": str}
 
         model_name = model_name or object_name or ""
-        output = output | get_output_schema(next(iter(ds_dict.values())), model_name)
+        hf_features = next(iter(ds_dict.values())).features
+        output = output | get_output_schema(hf_features, model_name)
         model = dict_to_data_model(model_name, output)
         if object_name:
             output = {object_name: model}

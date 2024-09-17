@@ -20,21 +20,25 @@ from datachain.client import Client
 from datachain.data_storage.schema import convert_rows_custom_column_types
 from datachain.data_storage.serializer import Serializable
 from datachain.dataset import DatasetRecord
-from datachain.node import DirType, DirTypeGroup, Entry, Node, NodeWithPath, get_path
+from datachain.node import DirType, DirTypeGroup, Node, NodeWithPath, get_path
 from datachain.sql.functions import path as pathfunc
 from datachain.sql.types import Int, SQLType
 from datachain.storage import StorageURI
 from datachain.utils import sql_escape_like
 
 if TYPE_CHECKING:
-    from sqlalchemy.sql._typing import _ColumnsClauseArgument
-    from sqlalchemy.sql.elements import ColumnElement
-    from sqlalchemy.sql.selectable import Select
+    from sqlalchemy.sql._typing import (
+        _ColumnsClauseArgument,
+        _FromClauseArgument,
+        _OnClauseArgument,
+    )
+    from sqlalchemy.sql.selectable import Join, Select
     from sqlalchemy.types import TypeEngine
 
     from datachain.data_storage import AbstractIDGenerator, schema
     from datachain.data_storage.db_engine import DatabaseEngine
     from datachain.data_storage.schema import DataTable
+    from datachain.lib.file import File
 
 try:
     import numpy as np
@@ -341,9 +345,7 @@ class AbstractWarehouse(ABC, Serializable):
 
         column_objects = [dr.c[c] for c in column_names]
         # include all object types - file, tar archive, tar file (subobject)
-        select_query = dr.select(*column_objects).where(
-            dr.c.dir_type.in_(DirTypeGroup.FILE) & (dr.c.is_latest == true())
-        )
+        select_query = dr.select(*column_objects).where(dr.c.is_latest == true())
         if path is None:
             return select_query
         if recursive:
@@ -404,26 +406,18 @@ class AbstractWarehouse(ABC, Serializable):
         expressions: tuple[_ColumnsClauseArgument[Any], ...] = (
             sa.func.count(table.c.sys__id),
         )
-        if "file__size" in table.columns:
-            expressions = (*expressions, sa.func.sum(table.c.file__size))
-        elif "size" in table.columns:
-            expressions = (*expressions, sa.func.sum(table.c.size))
+        size_columns = [
+            c for c in table.columns if c.name == "size" or c.name.endswith("__size")
+        ]
+        if size_columns:
+            expressions = (*expressions, sa.func.sum(sum(size_columns)))
         query = select(*expressions)
         ((nrows, *rest),) = self.db.execute(query)
-        return nrows, rest[0] if rest else None
+        return nrows, rest[0] if rest else 0
 
-    def prepare_entries(
-        self, uri: str, entries: Iterable[Entry]
-    ) -> list[dict[str, Any]]:
-        """
-        Prepares bucket listing entry (row) for inserting into database
-        """
-
-        def _prepare_entry(entry: Entry):
-            assert entry.dir_type is not None
-            return attrs.asdict(entry) | {"source": uri}
-
-        return [_prepare_entry(e) for e in entries]
+    @abstractmethod
+    def prepare_entries(self, entries: "Iterable[File]") -> Iterable[dict[str, Any]]:
+        """Convert File entries so they can be passed on to `insert_rows()`"""
 
     @abstractmethod
     def insert_rows(self, table: Table, rows: Iterable[dict[str, Any]]) -> None:
@@ -440,7 +434,7 @@ class AbstractWarehouse(ABC, Serializable):
         """Inserts dataset rows directly into dataset table"""
 
     @abstractmethod
-    def instr(self, source, target) -> "ColumnElement":
+    def instr(self, source, target) -> sa.ColumnElement:
         """
         Return SQLAlchemy Boolean determining if a target substring is present in
         source string column
@@ -500,7 +494,7 @@ class AbstractWarehouse(ABC, Serializable):
         c = query.selected_columns
         q = query.where(c.dir_type.in_(file_group))
         if not include_subobjects:
-            q = q.where(c.vtype == "")
+            q = q.where((c.location == "") | (c.location.is_(None)))
         return q
 
     def get_nodes(self, query) -> Iterator[Node]:
@@ -624,8 +618,7 @@ class AbstractWarehouse(ABC, Serializable):
 
         return sa.select(
             de.c.sys__id,
-            with_default(dr.c.vtype),
-            case((de.c.is_dir == true(), DirType.DIR), else_=dr.c.dir_type).label(
+            case((de.c.is_dir == true(), DirType.DIR), else_=DirType.FILE).label(
                 "dir_type"
             ),
             de.c.path,
@@ -634,8 +627,6 @@ class AbstractWarehouse(ABC, Serializable):
             with_default(dr.c.is_latest),
             dr.c.last_modified,
             with_default(dr.c.size),
-            with_default(dr.c.owner_name),
-            with_default(dr.c.owner_id),
             with_default(dr.c.sys__rand),
             dr.c.location,
             de.c.source,
@@ -650,7 +641,6 @@ class AbstractWarehouse(ABC, Serializable):
             query = dr.select().where(
                 self.path_expr(dr) == path,
                 dr.c.is_latest == true(),
-                dr.c.dir_type != DirType.DIR,
             )
             row = next(self.db.execute(query), None)
             if row is not None:
@@ -660,7 +650,6 @@ class AbstractWarehouse(ABC, Serializable):
             dr.select()
             .where(
                 dr.c.is_latest == true(),
-                dr.c.dir_type != DirType.DIR,
                 dr.c.path.startswith(path),
             )
             .exists()
@@ -761,13 +750,11 @@ class AbstractWarehouse(ABC, Serializable):
 
         sub_glob = posixpath.join(path, "*")
         dr = dataset_rows
-        selections = [
+        selections: list[sa.ColumnElement] = [
             func.sum(dr.c.size),
         ]
         if count_files:
-            selections.append(
-                func.sum(dr.c.dir_type.in_(DirTypeGroup.FILE)),
-            )
+            selections.append(func.count())
         results = next(
             self.db.execute(
                 dr.select(*selections).where(
@@ -912,6 +899,18 @@ class AbstractWarehouse(ABC, Serializable):
         """
 
     @abstractmethod
+    def join(
+        self,
+        left: "_FromClauseArgument",
+        right: "_FromClauseArgument",
+        onclause: "_OnClauseArgument",
+        inner: bool = True,
+    ) -> "Join":
+        """
+        Join two tables together.
+        """
+
+    @abstractmethod
     def create_pre_udf_table(self, query: "Select") -> "Table":
         """
         Create a temporary table from a query for use in a UDF.
@@ -939,7 +938,7 @@ class AbstractWarehouse(ABC, Serializable):
         are cleaned up as soon as they are no longer needed.
         """
         with tqdm(desc="Cleanup", unit=" tables") as pbar:
-            for name in names:
+            for name in set(names):
                 self.db.drop_table(Table(name, self.db.metadata), if_exists=True)
                 pbar.update(1)
 

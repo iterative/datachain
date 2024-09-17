@@ -16,7 +16,7 @@ from datachain.lib.hf import (
 
 def test_hf():
     ds = Dataset.from_dict({"pokemon": ["bulbasaur", "squirtle"]})
-    schema = get_output_schema(ds)
+    schema = get_output_schema(ds.features)
     assert schema["pokemon"] is str
 
     gen = HFGenerator(ds, dict_to_data_model("", schema))
@@ -30,7 +30,7 @@ def test_hf_split():
     ds_test = Dataset.from_dict({"pokemon": ["charizard", "pikachu"]})
     ds_dict = DatasetDict({"train": ds_train, "test": ds_test})
     ds_dict = stream_splits(ds_dict)
-    schema = {"split": str} | get_output_schema(ds_dict["train"])
+    schema = {"split": str} | get_output_schema(ds_dict["train"].features)
 
     gen = HFGenerator(ds_dict, dict_to_data_model("", schema))
     gen.setup()
@@ -43,7 +43,7 @@ def test_hf_split():
 def test_hf_class_label():
     ds = Dataset.from_dict({"pokemon": ["bulbasaur", "squirtle"]})
     ds = ds.class_encode_column("pokemon")
-    schema = get_output_schema(ds)
+    schema = get_output_schema(ds.features)
     assert schema["pokemon"] is HFClassLabel
 
     gen = HFGenerator(ds, dict_to_data_model("", schema))
@@ -55,7 +55,7 @@ def test_hf_class_label():
 
 def test_hf_sequence_list():
     ds = Dataset.from_dict({"seq": [[0, 1], [2, 3]]})
-    schema = get_output_schema(ds)
+    schema = get_output_schema(ds.features)
     assert schema["seq"] == list[int]
 
     gen = HFGenerator(ds, dict_to_data_model("", schema))
@@ -71,7 +71,7 @@ def test_hf_sequence_dict():
     new_features = ds.features.copy()
     new_features["pokemon"] = Sequence(feature={"name": Value(dtype="string")})
     ds = ds.cast(new_features)
-    schema = get_output_schema(ds)
+    schema = get_output_schema(ds.features)
     assert schema["pokemon"].model_fields["name"].annotation == list[str]
 
     gen = HFGenerator(ds, dict_to_data_model("", schema))
@@ -85,7 +85,7 @@ def test_hf_array():
     new_features = ds.features.copy()
     new_features["arr"] = Array2D(shape=(2, 2), dtype="int32")
     ds = ds.cast(new_features)
-    schema = get_output_schema(ds)
+    schema = get_output_schema(ds.features)
     assert schema["arr"] == list[list[int]]
 
     gen = HFGenerator(ds, dict_to_data_model("", schema))
@@ -101,7 +101,7 @@ def test_hf_image(tmp_path):
     img.save(train_dir / "img1.png")
 
     ds = load_dataset("imagefolder", data_dir=tmp_path)
-    schema = get_output_schema(ds["train"])
+    schema = get_output_schema(ds["train"].features)
     assert schema["image"] is HFImage
 
     gen = HFGenerator(ds, dict_to_data_model("", schema))
@@ -122,7 +122,7 @@ def test_hf_audio(tmp_path):
     write(train_dir / "example.wav", samplerate, data.astype(np.int16))
 
     ds = load_dataset("audiofolder", data_dir=tmp_path)
-    schema = get_output_schema(ds["train"])
+    schema = get_output_schema(ds["train"].features)
 
     gen = HFGenerator(ds, dict_to_data_model("", schema))
     gen.setup()

@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING, Any, Optional
 import attrs
 
 from datachain.cache import UniqueId
-from datachain.lib.file import File
 from datachain.storage import StorageURI
 from datachain.utils import TIME_ZERO, time_to_str
 
@@ -49,18 +48,15 @@ class DirTypeGroup:
 class Node:
     sys__id: int = 0
     sys__rand: int = 0
-    vtype: str = ""
-    dir_type: Optional[int] = None
     path: str = ""
     etag: str = ""
     version: Optional[str] = None
     is_latest: bool = True
     last_modified: Optional[datetime] = None
     size: int = 0
-    owner_name: str = ""
-    owner_id: str = ""
     location: Optional[str] = None
     source: StorageURI = StorageURI("")
+    dir_type: int = DirType.FILE
 
     @property
     def is_dir(self) -> bool:
@@ -113,7 +109,6 @@ class Node:
             version=self.version or "",
             etag=self.etag,
             is_latest=self.is_latest,
-            vtype=self.vtype,
             location=self.location,
             last_modified=self.last_modified or TIME_ZERO,
         )
@@ -143,66 +138,6 @@ class Node:
         return split[0]
 
 
-@attrs.define
-class Entry:
-    vtype: str = ""
-    dir_type: Optional[int] = None
-    path: str = ""
-    etag: str = ""
-    version: str = ""
-    is_latest: bool = True
-    last_modified: Optional[datetime] = None
-    size: int = 0
-    owner_name: str = ""
-    owner_id: str = ""
-    location: Optional[str] = None
-
-    @property
-    def is_dir(self) -> bool:
-        return self.dir_type == DirType.DIR
-
-    @classmethod
-    def from_dir(cls, path: str, **kwargs) -> "Entry":
-        return cls(dir_type=DirType.DIR, path=path, **kwargs)
-
-    @classmethod
-    def from_file(cls, path: str, **kwargs) -> "Entry":
-        return cls(dir_type=DirType.FILE, path=path, **kwargs)
-
-    @classmethod
-    def root(cls):
-        return cls(dir_type=DirType.DIR)
-
-    @property
-    def full_path(self) -> str:
-        if self.is_dir and self.path:
-            return self.path + "/"
-        return self.path
-
-    @property
-    def name(self):
-        return self.path.rsplit("/", 1)[-1]
-
-    @property
-    def parent(self):
-        split = self.path.rsplit("/", 1)
-        if len(split) <= 1:
-            return ""
-        return split[0]
-
-    def to_file(self, source: str) -> File:
-        return File(
-            source=source,
-            path=self.path,
-            size=self.size,
-            version=self.version,
-            etag=self.etag,
-            is_latest=self.is_latest,
-            last_modified=self.last_modified,
-            location=self.location,
-        )
-
-
 def get_path(parent: str, name: str):
     return f"{parent}/{name}" if parent else name
 
@@ -229,9 +164,9 @@ class NodeWithPath:
 TIME_FMT = "%Y-%m-%d %H:%M"
 
 
-def long_line_str(name: str, timestamp: Optional[datetime], owner: str) -> str:
+def long_line_str(name: str, timestamp: Optional[datetime]) -> str:
     if timestamp is None:
         time = "-"
     else:
         time = timestamp.strftime(TIME_FMT)
-    return f"{owner: <19} {time: <19} {name}"
+    return f"{time: <19} {name}"

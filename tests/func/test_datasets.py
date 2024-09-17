@@ -1,3 +1,4 @@
+import json
 import posixpath
 import uuid
 from json import dumps
@@ -7,26 +8,15 @@ import pytest
 import sqlalchemy as sa
 
 from datachain.catalog.catalog import DATASET_INTERNAL_ERROR_MESSAGE
+from datachain.client.local import FileClient
 from datachain.data_storage.sqlite import SQLiteWarehouse
-from datachain.dataset import LISTING_PREFIX, DatasetDependencyType, DatasetStatus
+from datachain.dataset import DatasetDependencyType, DatasetStatus
 from datachain.error import DatasetInvalidVersionError, DatasetNotFoundError
 from datachain.lib.dc import DataChain
 from datachain.lib.listing import parse_listing_uri
-from datachain.query import DatasetQuery, udf
+from datachain.query import DatasetQuery
 from datachain.query.schema import DatasetRow
-from datachain.sql.types import (
-    JSON,
-    Array,
-    Binary,
-    Boolean,
-    Float,
-    Float32,
-    Float64,
-    Int,
-    Int32,
-    Int64,
-    String,
-)
+from datachain.sql.types import Float32
 from tests.utils import assert_row_names, dataset_dependency_asdict
 
 
@@ -57,7 +47,6 @@ def test_create_dataset_no_version_specified(cloud_test_catalog, create_rows):
     dataset_version = dataset.get_version(1)
 
     assert dataset.name == name
-    assert dataset.query_script == "script"
     assert dataset_version.query_script == "script"
     assert dataset.schema["similarity"] == Float32
     assert dataset_version.schema["similarity"] == Float32
@@ -87,7 +76,6 @@ def test_create_dataset_with_explicit_version(cloud_test_catalog, create_rows):
     dataset_version = dataset.get_version(1)
 
     assert dataset.name == name
-    assert dataset.query_script == "script"
     assert dataset_version.query_script == "script"
     assert dataset.schema["similarity"] == Float32
     assert dataset_version.schema["similarity"] == Float32
@@ -632,29 +620,10 @@ def test_ls_dataset_rows_with_limit_offset(cloud_test_catalog, dogs_dataset):
     }
 
 
-def test_ls_dataset_rows_with_custom_columns(cloud_test_catalog, dogs_dataset):
+def test_ls_dataset_rows_with_custom_columns(cloud_test_catalog):
     catalog = cloud_test_catalog.catalog
     int_example = 25
 
-    @udf(
-        (),
-        {
-            "int_col": Int,
-            "int_col_32": Int32,
-            "int_col_64": Int64,
-            "float_col": Float,
-            "float_col_32": Float32,
-            "float_col_64": Float64,
-            "array_col": Array(Float),
-            "array_col_nested": Array(Array(Float)),
-            "array_col_32": Array(Float32),
-            "array_col_64": Array(Float64),
-            "string_col": String,
-            "bool_col": Boolean,
-            "json_col": JSON,
-            "binary_col": Binary,
-        },
-    )
     def test_types():
         return (
             5,
@@ -669,13 +638,34 @@ def test_ls_dataset_rows_with_custom_columns(cloud_test_catalog, dogs_dataset):
             [0.5],
             "s",
             True,
-            dumps({"a": 1}),
+            json.dumps({"a": 1}),
             int_example.to_bytes(2, "big"),
         )
 
     (
-        DatasetQuery(name=dogs_dataset.name, catalog=catalog)
-        .add_signals(test_types)
+        DataChain.from_storage(
+            cloud_test_catalog.src_uri, session=cloud_test_catalog.session
+        )
+        .map(
+            test_types,
+            params=[],
+            output={
+                "int_col": int,
+                "int_col_32": int,
+                "int_col_64": int,
+                "float_col": float,
+                "float_col_32": float,
+                "float_col_64": float,
+                "array_col": list[float],
+                "array_col_nested": list[list[float]],
+                "array_col_32": list[float],
+                "array_col_64": list[float],
+                "string_col": str,
+                "bool_col": bool,
+                "json_col": str,
+                "binary_col": bytes,
+            },
+        )
         .save("dogs_custom_columns")
     )
 
@@ -700,25 +690,6 @@ def test_dataset_preview_custom_columns(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
     int_example = 25
 
-    @udf(
-        (),
-        {
-            "int_col": Int,
-            "int_col_32": Int32,
-            "int_col_64": Int64,
-            "float_col": Float,
-            "float_col_32": Float32,
-            "float_col_64": Float64,
-            "array_col": Array(Float),
-            "array_col_nested": Array(Array(Float)),
-            "array_col_32": Array(Float32),
-            "array_col_64": Array(Float64),
-            "string_col": String,
-            "bool_col": Boolean,
-            "json_col": JSON,
-            "binary_col": Binary,
-        },
-    )
     def test_types():
         return (
             5,
@@ -733,13 +704,34 @@ def test_dataset_preview_custom_columns(cloud_test_catalog, dogs_dataset):
             [0.5],
             "s",
             True,
-            dumps({"a": 1}),
+            json.dumps({"a": 1}),
             int_example.to_bytes(2, "big"),
         )
 
     (
-        DatasetQuery(name=dogs_dataset.name, catalog=catalog)
-        .add_signals(test_types)
+        DataChain.from_storage(
+            cloud_test_catalog.src_uri, session=cloud_test_catalog.session
+        )
+        .map(
+            test_types,
+            params=[],
+            output={
+                "int_col": int,
+                "int_col_32": int,
+                "int_col_64": int,
+                "float_col": float,
+                "float_col_32": float,
+                "float_col_64": float,
+                "array_col": list[float],
+                "array_col_nested": list[list[float]],
+                "array_col_32": list[float],
+                "array_col_64": list[float],
+                "string_col": str,
+                "bool_col": bool,
+                "json_col": str,
+                "binary_col": bytes,
+            },
+        )
         .save("dogs_custom_columns")
     )
 
@@ -807,7 +799,7 @@ def test_dataset_stats_registered_ds(cloud_test_catalog, dogs_dataset):
 
 
 @pytest.mark.parametrize("indirect", [True, False])
-def test_dataset_storage_dependencies(cloud_test_catalog, indirect):
+def test_dataset_storage_dependencies(cloud_test_catalog, cloud_type, indirect):
     ctc = cloud_test_catalog
     session = ctc.session
     catalog = session.catalog
@@ -826,7 +818,7 @@ def test_dataset_storage_dependencies(cloud_test_catalog, indirect):
         {
             "id": ANY,
             "type": DatasetDependencyType.STORAGE,
-            "name": lst_dataset.name.removeprefix(LISTING_PREFIX),
+            "name": uri if cloud_type != "file" else FileClient.root_path().as_uri(),
             "version": "1",
             "created_at": lst_dataset.get_version(1).created_at,
             "dependencies": [],
