@@ -49,7 +49,8 @@ class ArrowGenerator(Generator):
 
     def process(self, file: File):
         if file._caching_enabled:
-            path = file.get_local_path(download=True)
+            file.ensure_cached()
+            path = file.get_local_path()
             ds = dataset(path, schema=self.input_schema, **self.kwargs)
         elif self.nrows:
             path = _nrows_file(file, self.nrows)

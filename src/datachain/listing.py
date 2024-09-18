@@ -156,12 +156,12 @@ class Listing:
 
     def instantiate_nodes(
         self,
-        all_nodes,
+        all_nodes: Iterable[NodeWithPath],
         output,
         total_files=None,
         force=False,
         shared_progress_bar=None,
-    ):
+    ) -> None:
         progress_bar = shared_progress_bar or tqdm(
             desc=f"Instantiating '{output}'",
             unit=" files",
@@ -175,8 +175,8 @@ class Listing:
             dst = os.path.join(output, *node.path)
             dst_dir = os.path.dirname(dst)
             os.makedirs(dst_dir, exist_ok=True)
-            uid = node.n.as_uid(self.client.uri)
-            self.client.instantiate_object(uid, dst, progress_bar, force)
+            file = node.n.to_file(self.client.uri)
+            self.client.instantiate_object(file, dst, progress_bar, force)
             counter += 1
             if counter > 1000:
                 progress_bar.update(counter)

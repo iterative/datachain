@@ -34,7 +34,7 @@ import yaml
 from sqlalchemy import Column
 from tqdm import tqdm
 
-from datachain.cache import DataChainCache, UniqueId
+from datachain.cache import DataChainCache
 from datachain.client import Client
 from datachain.config import get_remote_config, read_config
 from datachain.dataset import (
@@ -619,13 +619,13 @@ class Catalog:
                 code_ast.body[-1:] = new_expressions
         return code_ast
 
-    def get_client(self, uri: StorageURI, **config: Any) -> Client:
+    def get_client(self, uri: str, **config: Any) -> Client:
         """
         Return the client corresponding to the given source `uri`.
         """
         config = config or self.client_config
         cls = Client.get_implementation(uri)
-        return cls.from_source(uri, self.cache, **config)
+        return cls.from_source(StorageURI(uri), self.cache, **config)
 
     def enlist_source(
         self,
@@ -1431,7 +1431,7 @@ class Catalog:
 
     def get_file_signals(
         self, dataset_name: str, dataset_version: int, row: RowDict
-    ) -> Optional[dict]:
+    ) -> Optional[RowDict]:
         """
         Function that returns file signals from dataset row.
         Note that signal names are without prefix, so if there was 'laion__file__source'
@@ -1448,7 +1448,7 @@ class Catalog:
 
         version = self.get_dataset(dataset_name).get_version(dataset_version)
 
-        file_signals_values = {}
+        file_signals_values = RowDict()
 
         schema = SignalSchema.deserialize(version.feature_schema)
         for file_signals in schema.get_signals(File):
@@ -1476,6 +1476,8 @@ class Catalog:
         use_cache: bool = True,
         **config: Any,
     ):
+        from datachain.lib.file import File
+
         file_signals = self.get_file_signals(dataset_name, dataset_version, row)
         if not file_signals:
             raise RuntimeError("Cannot open object without file signals")
@@ -1483,20 +1485,8 @@ class Catalog:
         config = config or self.client_config
         client = self.get_client(file_signals["source"], **config)
         return client.open_object(
-            self._get_row_uid(file_signals),  # type: ignore [arg-type]
+            File._from_row(file_signals),
             use_cache=use_cache,
-        )
-
-    def _get_row_uid(self, row: RowDict) -> UniqueId:
-        return UniqueId(
-            row["source"],
-            row["path"],
-            row["size"],
-            row["etag"],
-            row["version"],
-            row["is_latest"],
-            row["location"],
-            row["last_modified"],
         )
 
     def ls(
