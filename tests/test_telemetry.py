@@ -15,6 +15,6 @@ def test_telemetry_api_call(mocker, tmp_dir):
     args = patch_send.call_args_list[0].args[0]
     extra = args.pop("extra")
 
-    assert args == {"interface": "api", "action": "datachain_init", "error": None}
+    assert args == {"interface": "class", "action": "datachain_init", "error": None}
 
     assert "name" in extra
