@@ -7,7 +7,6 @@ from urllib.parse import urlparse
 
 from fsspec.implementations.local import LocalFileSystem
 
-from datachain.cache import UniqueId
 from datachain.lib.file import File
 from datachain.storage import StorageURI
 
@@ -114,8 +113,8 @@ class FileClient(Client):
             use_symlinks=use_symlinks,
         )
 
-    async def get_current_etag(self, uid: UniqueId) -> str:
-        info = self.fs.info(self.get_full_path(uid.path))
+    async def get_current_etag(self, file: "File") -> str:
+        info = self.fs.info(self.get_full_path(file.path))
         return self.info_to_file(info, "").etag
 
     async def get_size(self, path: str) -> int:

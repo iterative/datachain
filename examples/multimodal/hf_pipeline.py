@@ -1,4 +1,10 @@
-# pip install scipy torch transformers huggingface_hub[hf_transfer]
+"""
+To install the required dependencies:
+
+  pip install datachain[examples]
+
+"""
+
 # NOTE: also need to install ffmpeg binary
 import json
 import os

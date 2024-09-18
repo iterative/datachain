@@ -11,6 +11,7 @@ from datachain.client import Client
 from datachain.lib.file import File
 from datachain.query.schema import Column
 from datachain.sql.functions import path as pathfunc
+from datachain.telemetry import telemetry
 from datachain.utils import uses_glob
 
 if TYPE_CHECKING:
@@ -80,6 +81,7 @@ def parse_listing_uri(uri: str, cache, client_config) -> tuple[str, str, str]:
     client_config = client_config or {}
     client = Client.get_client(uri, cache, **client_config)
     storage_uri, path = Client.parse_url(uri)
+    telemetry.log_param("client", client.PREFIX)
 
     # clean path without globs
     lst_uri_path = (
