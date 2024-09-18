@@ -104,9 +104,10 @@ examples = [
   "numpy>=1,<2",
   "defusedxml",
   "accelerate",
-  "unstructured[pdf]",
+  "unstructured[pdf, embed-huggingface]",
   "pdfplumber==0.11.4",
-  "huggingface_hub[hf_transfer]"
+  "huggingface_hub[hf_transfer]",
+  "onnx==1.16.1"
 ]
 
 [project.urls]
