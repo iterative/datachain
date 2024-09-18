@@ -1,7 +1,5 @@
-import json
 import posixpath
 import uuid
-from json import dumps
 from unittest.mock import ANY
 
 import pytest
@@ -659,7 +657,7 @@ def test_ls_dataset_rows_with_custom_columns(cloud_test_catalog):
             [0.5],
             "s",
             True,
-            json.dumps({"a": 1}),
+            {"a": 1},
             int_example.to_bytes(2, "big"),
         )
 
@@ -683,7 +681,7 @@ def test_ls_dataset_rows_with_custom_columns(cloud_test_catalog):
                 "array_col_64": list[float],
                 "string_col": str,
                 "bool_col": bool,
-                "json_col": str,
+                "json_col": dict,
                 "binary_col": bytes,
             },
         )
@@ -725,7 +723,7 @@ def test_dataset_preview_custom_columns(cloud_test_catalog, dogs_dataset):
             [0.5],
             "s",
             True,
-            json.dumps({"a": 1}),
+            {"a": 1},
             int_example.to_bytes(2, "big"),
         )
 
@@ -749,7 +747,7 @@ def test_dataset_preview_custom_columns(cloud_test_catalog, dogs_dataset):
                 "array_col_64": list[float],
                 "string_col": str,
                 "bool_col": bool,
-                "json_col": str,
+                "json_col": dict,
                 "binary_col": bytes,
             },
         )

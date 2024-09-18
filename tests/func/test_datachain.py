@@ -1,4 +1,3 @@
-import json
 import math
 import os
 import pickle
@@ -993,7 +992,7 @@ def test_udf_different_types(cloud_test_catalog):
             [0.5],
             "s",
             True,
-            json.dumps({"a": 1}),
+            {"a": 1},
             pickle.dumps(obj),
         )
 
@@ -1018,7 +1017,7 @@ def test_udf_different_types(cloud_test_catalog):
                 "array_col_64": list[float],
                 "string_col": str,
                 "bool_col": bool,
-                "json_col": str,
+                "json_col": dict,
                 "binary_col": bytes,
             },
         )
@@ -1059,7 +1058,7 @@ def test_udf_different_types(cloud_test_catalog):
             [0.5],
             "s",
             True,
-            json.dumps({"a": 1}),
+            {"a": 1},
             obj,
         )
     ]
