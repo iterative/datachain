@@ -1,5 +1,3 @@
-# pip install Pillow
-
 import base64
 import os
 

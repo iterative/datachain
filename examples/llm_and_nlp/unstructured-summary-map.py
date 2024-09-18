@@ -1,6 +1,10 @@
-#
-# pip install unstructured[pdf] huggingface_hub[hf_transfer]
-#
+"""
+To install the required dependencies:
+
+  pip install datachain[examples]
+
+"""
+
 import os
 
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"

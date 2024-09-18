@@ -1,3 +1,10 @@
+"""
+To install the required dependencies:
+
+  pip install datachain[examples]
+
+"""
+
 from collections.abc import Iterator
 
 from unstructured.cleaners.core import (
