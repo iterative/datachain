@@ -189,7 +189,7 @@ def test_convert_type(cloud_test_catalog):
         [Float32(), lambda val: math.isnan(val)],
         [Float64(), lambda val: math.isnan(val)],
         [Array(Int), []],
-        [JSON(), "{}"],
+        [JSON(), {}],
         [DateTime(), datetime(1970, 1, 1, 0, 0, tzinfo=timezone.utc)],
         [Binary(), b""],
     ],
