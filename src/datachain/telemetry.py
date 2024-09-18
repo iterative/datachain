@@ -1,4 +1,5 @@
 import logging
+import os
 from importlib.metadata import PackageNotFoundError, version
 
 from iterative_telemetry import IterativeTelemetryLogger
