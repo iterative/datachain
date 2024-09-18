@@ -3,8 +3,7 @@ from importlib.metadata import PackageNotFoundError, version
 
 from iterative_telemetry import IterativeTelemetryLogger
 
-from datachain.config import read_config
-from datachain.utils import DataChainDir, env2bool
+from datachain.utils import env2bool
 
 logger = logging.getLogger(__name__)
 
@@ -23,12 +22,6 @@ def is_enabled():
         logger.debug("Telemetry is disabled by environment variable.")
         return False
 
-    # Check if telemetry is disabled by configuration file
-    config = read_config(DataChainDir.find().root)
-    if config and config.get("core", {}).get("no_analytics", False):
-        logger.debug("Telemetry is disabled by configuration.")
-        return False
-
     logger.debug("Telemetry is enabled.")
     return True
 
@@ -41,12 +34,3 @@ except PackageNotFoundError:
 
 # Initialize telemetry logger
 telemetry = IterativeTelemetryLogger("datachain", __version__, is_enabled)
-
-_telemetry_sent = False
-
-
-def send_telemetry_once(action: str, **kwargs):
-    global _telemetry_sent  # noqa: PLW0603
-    if not _telemetry_sent:
-        telemetry.send_event("api", action, **kwargs)
-        _telemetry_sent = True

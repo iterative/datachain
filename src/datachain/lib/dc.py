@@ -58,7 +58,7 @@ from datachain.query.dataset import (
 )
 from datachain.query.schema import DEFAULT_DELIMITER, Column, DatasetRow
 from datachain.sql.functions import path as pathfunc
-from datachain.telemetry import send_telemetry_once
+from datachain.telemetry import telemetry
 from datachain.utils import inside_notebook
 
 if TYPE_CHECKING:
@@ -247,7 +247,8 @@ class DataChain(DatasetQuery):
             **kwargs,
             indexing_column_types=File._datachain_column_types,
         )
-        send_telemetry_once("datachain_init", **kwargs)
+
+        telemetry.send_event_once("class", "datachain_init", **kwargs)
 
         if settings:
             self._settings = Settings(**settings)
