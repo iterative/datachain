@@ -17,7 +17,7 @@ def is_enabled():
         return False
 
     # Check if telemetry is disabled by environment variable
-    disabled = env2bool("DATACHAIN_NO_ANALYTICS")
+    disabled = bool(os.getenv("DATACHAIN_NO_ANALYTICS"))
     if disabled:
         logger.debug("Telemetry is disabled by environment variable.")
         return False
