@@ -54,7 +54,6 @@ from datachain.query import Session
 from datachain.query.dataset import (
     DatasetQuery,
     PartitionByType,
-    detach,
 )
 from datachain.query.schema import DEFAULT_DELIMITER, Column, DatasetRow
 from datachain.sql.functions import path as pathfunc
@@ -159,7 +158,7 @@ class Sys(DataModel):
     rand: int
 
 
-class DataChain(DatasetQuery):
+class DataChain:
     """DataChain - a data structure for batch data processing and evaluation.
 
     It represents a sequence of data manipulation steps such as reading data from
@@ -238,33 +237,40 @@ class DataChain(DatasetQuery):
         "size": 0,
     }
 
-    def __init__(self, *args, settings: Optional[dict] = None, **kwargs) -> None:
-        """This method needs to be redefined as a part of Dataset and DataChain
-        decoupling.
-        """
-        super().__init__(  # type: ignore[misc]
+    @classmethod
+    def _create(cls, *args, settings: Optional[dict] = None, **kwargs) -> "Self":
+        query = DatasetQuery(  # type: ignore[misc]
             *args,
             **kwargs,
             indexing_column_types=File._datachain_column_types,
         )
-
         telemetry.send_event_once("class", "datachain_init", **kwargs)
-
         if settings:
-            self._settings = Settings(**settings)
+            _settings = Settings(**settings)
         else:
-            self._settings = Settings()
-        self._setup: dict = {}
+            _settings = Settings()
 
-        self.signals_schema = SignalSchema({"sys": Sys})
-        if self.feature_schema:
-            self.signals_schema |= SignalSchema.deserialize(self.feature_schema)
+        signals_schema = SignalSchema({"sys": Sys})
+        if query.feature_schema:
+            signals_schema |= SignalSchema.deserialize(query.feature_schema)
         else:
-            self.signals_schema |= SignalSchema.from_column_types(
-                self.column_types or {}
-            )
+            signals_schema |= SignalSchema.from_column_types(query.column_types or {})
+        return cls(query, _settings, signals_schema)
 
-        self._sys = False
+    def __init__(
+        self,
+        query: DatasetQuery,
+        settings: Settings,
+        signal_schema: SignalSchema,
+        setup: Optional[dict] = None,
+        sys: bool = False,
+    ) -> None:
+        """Don't instantiate this directly, use one of the from_XXX constructors."""
+        self._query = query
+        self._settings = settings
+        self.signals_schema = signal_schema
+        self._setup: dict = setup or {}
+        self._sys = sys
 
     @property
     def schema(self) -> dict[str, DataType]:
@@ -290,18 +296,43 @@ class DataChain(DatasetQuery):
     def c(self, column: Union[str, Column]) -> Column:
         """Returns Column instance attached to the current chain."""
         c = self.column(column) if isinstance(column, str) else self.column(column.name)
-        c.table = self.table
+        c.table = self._query.table
         return c
+
+    @property
+    def session(self) -> Session:
+        """Session of the chain."""
+        return self._query.session
+
+    @property
+    def name(self) -> Optional[str]:
+        """Name of the chain."""
+        return self._query.name
+
+    @property
+    def version(self) -> Optional[int]:
+        """Version of the chain."""
+        return self._query.version
+
+    def __or__(self, other: "Self") -> "Self":
+        """Return `self.union(other)`."""
+        return self.union(other)
 
     def print_schema(self) -> None:
         """Print schema of the chain."""
         self._effective_signals_schema.print_tree()
 
-    def clone(self, new_table: bool = True) -> "Self":
+    def clone(self, query=None, new_table: bool = True) -> "Self":
         """Make a copy of the chain in a new table."""
-        obj = super().clone(new_table=new_table)
-        obj.signals_schema = copy.deepcopy(self.signals_schema)
-        return obj
+        if query is None:
+            query = self._query.clone(new_table=new_table)
+        return type(self)(
+            query,
+            self._settings,
+            signal_schema=copy.deepcopy(self.signals_schema),
+            setup=self._setup,
+            sys=self._sys,
+        )
 
     def settings(
         self,
@@ -434,7 +465,7 @@ class DataChain(DatasetQuery):
         version: Optional[int] = None,
         session: Optional[Session] = None,
         settings: Optional[dict] = None,
-    ) -> "DataChain":
+    ) -> "Self":
         """Get data from a saved Dataset. It returns the chain itself.
 
         Parameters:
@@ -446,7 +477,9 @@ class DataChain(DatasetQuery):
             chain = DataChain.from_dataset("my_cats")
             ```
         """
-        return DataChain(name=name, version=version, session=session, settings=settings)
+        return cls._create(
+            name=name, version=version, session=session, settings=settings
+        )
 
     @classmethod
     def from_json(
@@ -699,7 +732,11 @@ class DataChain(DatasetQuery):
             version : version of a dataset. Default - the last version that exist.
         """
         schema = self.signals_schema.clone_without_sys_signals().serialize()
-        return super().save(name=name, version=version, feature_schema=schema, **kwargs)
+        return self.clone(
+            query=self._query.save(
+                name=name, version=version, feature_schema=schema, **kwargs
+            )
+        )
 
     def apply(self, func, *args, **kwargs):
         """Apply any function to the chain.
@@ -765,7 +802,8 @@ class DataChain(DatasetQuery):
         """
         udf_obj = self._udf_to_obj(Mapper, func, params, output, signal_map)
 
-        chain = self.add_signals(
+        chain = self.clone()
+        chain._query = self._query.add_signals(
             udf_obj.to_udf_wrapper(),
             **self._settings.to_dict(),
         )
@@ -800,10 +838,11 @@ class DataChain(DatasetQuery):
             ```
         """
         udf_obj = self._udf_to_obj(Generator, func, params, output, signal_map)
-        chain = DatasetQuery.generate(
-            self,
-            udf_obj.to_udf_wrapper(),
-            **self._settings.to_dict(),
+        chain = self.clone(
+            query=self._query.generate(
+                udf_obj.to_udf_wrapper(),
+                **self._settings.to_dict(),
+            )
         )
 
         return chain.reset_schema(udf_obj.output).reset_settings(self._settings)
@@ -840,11 +879,12 @@ class DataChain(DatasetQuery):
             ```
         """
         udf_obj = self._udf_to_obj(Aggregator, func, params, output, signal_map)
-        chain = DatasetQuery.generate(
-            self,
-            udf_obj.to_udf_wrapper(),
-            partition_by=partition_by,
-            **self._settings.to_dict(),
+        chain = self.clone(
+            query=self._query.generate(
+                udf_obj.to_udf_wrapper(),
+                partition_by=partition_by,
+                **self._settings.to_dict(),
+            )
         )
 
         return chain.reset_schema(udf_obj.output).reset_settings(self._settings)
@@ -876,10 +916,11 @@ class DataChain(DatasetQuery):
             ```
         """
         udf_obj = self._udf_to_obj(BatchMapper, func, params, output, signal_map)
-        chain = DatasetQuery.add_signals(
-            self,
-            udf_obj.to_udf_wrapper(batch),
-            **self._settings.to_dict(),
+        chain = self.clone(
+            query=self._query.add_signals(
+                udf_obj.to_udf_wrapper(batch),
+                **self._settings.to_dict(),
+            )
         )
 
         return chain.add_schema(udf_obj.output).reset_settings(self._settings)
@@ -907,13 +948,12 @@ class DataChain(DatasetQuery):
         return target_class._create(sign, params_schema)
 
     def _extend_to_data_model(self, method_name, *args, **kwargs):
-        super_func = getattr(super(), method_name)
+        query_func = getattr(self._query, method_name)
 
         new_schema = self.signals_schema.resolve(*args)
         columns = [C(col) for col in new_schema.db_signals()]
-        return super_func(*columns, **kwargs)
+        return query_func(*columns, **kwargs)
 
-    @detach
     @resolve_columns
     def order_by(self, *args, descending: bool = False) -> "Self":
         """Orders by specified set of signals.
@@ -924,9 +964,10 @@ class DataChain(DatasetQuery):
         if descending:
             args = tuple(sqlalchemy.desc(a) for a in args)
 
-        return super().order_by(*args)
+        chain = self.clone()
+        chain._query = self._query.order_by(*args)
+        return chain
 
-    @detach
     def distinct(self, arg: str, *args: str) -> "Self":  # type: ignore[override]
         """Removes duplicate rows based on uniqueness of some input column(s)
         i.e if rows are found with the same value of input column(s), only one
@@ -938,29 +979,30 @@ class DataChain(DatasetQuery):
         )
         ```
         """
-        return super().distinct(*self.signals_schema.resolve(arg, *args).db_signals())
+        return self.clone(
+            query=self._query.distinct(
+                *self.signals_schema.resolve(arg, *args).db_signals()
+            )
+        )
 
-    @detach
     def select(self, *args: str, _sys: bool = True) -> "Self":
         """Select only a specified set of signals."""
         new_schema = self.signals_schema.resolve(*args)
         if _sys:
             new_schema = SignalSchema({"sys": Sys}) | new_schema
         columns = new_schema.db_signals()
-        chain = super().select(*columns)
+        chain = self.clone(query=self._query.select(*columns))
         chain.signals_schema = new_schema
         return chain
 
-    @detach
     def select_except(self, *args: str) -> "Self":
         """Select all the signals expect the specified signals."""
         new_schema = self.signals_schema.select_except_signals(*args)
         columns = new_schema.db_signals()
-        chain = super().select(*columns)
+        chain = self.clone(self._query.select(*columns))
         chain.signals_schema = new_schema
         return chain
 
-    @detach
     def mutate(self, **kwargs) -> "Self":
         """Create new signals based on existing signals.
 
@@ -1025,7 +1067,7 @@ class DataChain(DatasetQuery):
                 # adding new signal
                 mutated[name] = value
 
-        chain = super().mutate(**mutated)
+        chain = self.clone(query=self._query.mutate(**mutated))
         chain.signals_schema = schema.mutate(kwargs)
         return chain
 
@@ -1054,7 +1096,7 @@ class DataChain(DatasetQuery):
                           a tuple of row values.
         """
         db_signals = self._effective_signals_schema.db_signals()
-        with super().select(*db_signals).as_iterable() as rows:
+        with self._query.select(*db_signals).as_iterable() as rows:
             if row_factory:
                 rows = (row_factory(db_signals, r) for r in rows)
             yield from rows
@@ -1122,7 +1164,7 @@ class DataChain(DatasetQuery):
         chain = self.select(*cols) if cols else self
         signals_schema = chain._effective_signals_schema
         db_signals = signals_schema.db_signals()
-        with super().select(*db_signals).as_iterable() as rows:
+        with self._query.select(*db_signals).as_iterable() as rows:
             for row in rows:
                 ret = signals_schema.row_to_features(
                     row, catalog=chain.session.catalog, cache=chain._settings.cache
@@ -1152,7 +1194,7 @@ class DataChain(DatasetQuery):
         """
         from datachain.torch import PytorchDataset
 
-        if self.attached:
+        if self._query.attached:
             chain = self
         else:
             chain = self.save()
@@ -1160,7 +1202,7 @@ class DataChain(DatasetQuery):
         return PytorchDataset(
             chain.name,
             chain.version,
-            catalog=self.catalog,
+            catalog=self.session.catalog,
             transform=transform,
             tokenizer=tokenizer,
             tokenizer_kwargs=tokenizer_kwargs,
@@ -1171,7 +1213,6 @@ class DataChain(DatasetQuery):
         schema = self.signals_schema.clone_without_file_signals()
         return self.select(*schema.values.keys())
 
-    @detach
     def merge(
         self,
         right_ds: "DataChain",
@@ -1262,9 +1303,11 @@ class DataChain(DatasetQuery):
                 on, right_on, f"Could not resolve {', '.join(errors)}"
             )
 
-        ds = self.join(right_ds, sqlalchemy.and_(*ops), inner, rname + "{name}")
-
-        ds.feature_schema = None
+        query = self._query.join(
+            right_ds._query, sqlalchemy.and_(*ops), inner, rname + "{name}"
+        )
+        query.feature_schema = None
+        ds = self.clone(query=query)
 
         signals_schema = self.signals_schema.clone_without_sys_signals()
         right_signals_schema = right_ds.signals_schema.clone_without_sys_signals()
@@ -1273,6 +1316,10 @@ class DataChain(DatasetQuery):
         )
 
         return ds
+
+    def union(self, other: "Self") -> "Self":
+        """Return the set union of the two datasets."""
+        return self.clone(query=self._query.union(other._query))
 
     def subtract(  # type: ignore[override]
         self,
@@ -1337,7 +1384,7 @@ class DataChain(DatasetQuery):
                     other.signals_schema.resolve(*right_on).db_signals(),
                 )  # type: ignore[arg-type]
             )
-        return super().subtract(other, signals)  # type: ignore[arg-type]
+        return self.clone(query=self._query.subtract(other._query, signals))  # type: ignore[arg-type]
 
     @classmethod
     def from_values(
@@ -1445,7 +1492,7 @@ class DataChain(DatasetQuery):
             transpose : Whether to transpose rows and columns.
             truncate : Whether or not to truncate the contents of columns.
         """
-        dc = self.limit(limit) if limit > 0 else self
+        dc = self.limit(limit) if limit > 0 else self  # type: ignore[misc]
         df = dc.to_pandas(flatten)
 
         if df.empty:
@@ -1778,7 +1825,7 @@ class DataChain(DatasetQuery):
         settings: Optional[dict] = None,
         in_memory: bool = False,
         schema: Optional[dict[str, DataType]] = None,
-    ) -> "DataChain":
+    ) -> "Self":
         """Create a DataChain from the provided records. This method can be used for
         programmatically generating a chain in contrast of reading data from storages
         or other sources.
@@ -1833,7 +1880,7 @@ class DataChain(DatasetQuery):
         insert_q = dr.get_table().insert()
         for record in to_insert:
             db.execute(insert_q.values(**record))
-        return DataChain(name=dsr.name, settings=settings)
+        return cls.from_dataset(name=dsr.name, session=session, settings=settings)
 
     def sum(self, fr: DataType):  # type: ignore[override]
         """Compute the sum of a column."""
@@ -1894,8 +1941,8 @@ class DataChain(DatasetQuery):
     ) -> None:
         """Method that exports all files from chain to some folder."""
         if placement == "filename" and (
-            super().distinct(pathfunc.name(C(f"{signal}__path"))).count()
-            != self.count()
+            self._query.distinct(pathfunc.name(C(f"{signal}__path"))).count()
+            != self._query.count()
         ):
             raise ValueError("Files with the same name found")
 
@@ -1915,10 +1962,9 @@ class DataChain(DatasetQuery):
         NOTE: Samples are not deterministic, and streamed/paginated queries or
         multiple workers will draw samples with replacement.
         """
-        return super().sample(n)
+        return self.clone(query=self._query.sample(n))
 
-    @detach
-    def filter(self, *args) -> "Self":
+    def filter(self, *args: Any) -> "Self":
         """Filter the chain according to conditions.
 
         Example:
@@ -1951,14 +1997,34 @@ class DataChain(DatasetQuery):
             )
             ```
         """
-        return super().filter(*args)
+        return self.clone(query=self._query.filter(*args))
 
-    @detach
     def limit(self, n: int) -> "Self":
         """Return the first n rows of the chain."""
-        return super().limit(n)
+        return self.clone(query=self._query.limit(n))
 
-    @detach
     def offset(self, offset: int) -> "Self":
         """Return the results starting with the offset row."""
-        return super().offset(offset)
+        return self.clone(query=self._query.offset(offset))
+
+    def count(self) -> int:
+        """Return the number of rows in the chain."""
+        return self._query.count()
+
+    def exec(self) -> "Self":
+        """Execute the chain."""
+        return self.clone(query=self._query.exec())
+
+    def chunk(self, index: int, total: int) -> "Self":
+        """Split a chain into smaller chunks for e.g. parallelization.
+
+        Example:
+            >>> chain = DataChain.from_storage(...)
+            >>> chunk_1 = query._chunk(0, 2)
+            >>> chunk_2 = query._chunk(1, 2)
+
+        Note:
+            Bear in mind that `index` is 0-indexed but `total` isn't.
+            Use 0/3, 1/3 and 2/3, not 1/3, 2/3 and 3/3.
+        """
+        return self.clone(query=self._query.chunk(index, total))

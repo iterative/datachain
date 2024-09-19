@@ -88,7 +88,9 @@ class PytorchDataset(IterableDataset):
         if self.catalog is None:
             self.catalog = self._get_catalog()
         total_rank, total_workers = self.get_rank_and_workers()
-        ds = DataChain(name=self.name, version=self.version, catalog=self.catalog)
+        ds = DataChain._create(
+            name=self.name, version=self.version, catalog=self.catalog
+        )
         ds = ds.remove_file_signals()
 
         if self.num_samples > 0:

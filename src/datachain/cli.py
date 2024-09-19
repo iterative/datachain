@@ -770,7 +770,7 @@ def show(
     show_records(records, collapse_columns=not no_collapse)
     if schema and dataset_version.feature_schema:
         print("\nSchema:")
-        dc = DataChain(name=name, version=version, catalog=catalog)
+        dc = DataChain._create(name=name, version=version, catalog=catalog)
         dc.print_schema()
 
 
