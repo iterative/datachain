@@ -1317,10 +1317,6 @@ def test_extend_features(test_session):
         f1=features, num=range(len(features)), session=test_session
     )
 
-    res = dc._extend_to_data_model("select", "num")
-    assert isinstance(res, DataChain)
-    assert res.signals_schema.values == {"num": int}
-
     res = dc._extend_to_data_model("sum", "num")
     assert res == sum(range(len(features)))
 

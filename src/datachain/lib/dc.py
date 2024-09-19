@@ -238,7 +238,7 @@ class DataChain(DatasetQuery):
         "size": 0,
     }
 
-    def __init__(self, *args, settings: Optional[dict] = None, **kwargs):
+    def __init__(self, *args, settings: Optional[dict] = None, **kwargs) -> None:
         """This method needs to be redefined as a part of Dataset and DataChain
         decoupling.
         """
@@ -911,11 +911,7 @@ class DataChain(DatasetQuery):
 
         new_schema = self.signals_schema.resolve(*args)
         columns = [C(col) for col in new_schema.db_signals()]
-        res = super_func(*columns, **kwargs)
-        if isinstance(res, DataChain):
-            res.signals_schema = new_schema
-
-        return res
+        return super_func(*columns, **kwargs)
 
     @detach
     @resolve_columns
