@@ -34,7 +34,7 @@ import yaml
 from sqlalchemy import Column
 from tqdm import tqdm
 
-from datachain.cache import DataChainCache, UniqueId
+from datachain.cache import DataChainCache
 from datachain.client import Client
 from datachain.config import get_remote_config, read_config
 from datachain.dataset import (
@@ -68,8 +68,6 @@ from datachain.utils import (
     DataChainDir,
     batched,
     datachain_paths_join,
-    import_object,
-    parse_params_string,
 )
 
 from .datasource import DataSource
@@ -621,13 +619,13 @@ class Catalog:
                 code_ast.body[-1:] = new_expressions
         return code_ast
 
-    def get_client(self, uri: StorageURI, **config: Any) -> Client:
+    def get_client(self, uri: str, **config: Any) -> Client:
         """
         Return the client corresponding to the given source `uri`.
         """
         config = config or self.client_config
         cls = Client.get_implementation(uri)
-        return cls.from_source(uri, self.cache, **config)
+        return cls.from_source(StorageURI(uri), self.cache, **config)
 
     def enlist_source(
         self,
@@ -843,7 +841,7 @@ class Catalog:
         from datachain.query import DatasetQuery
 
         def _row_to_node(d: dict[str, Any]) -> Node:
-            del d["source"]
+            del d["file__source"]
             return Node.from_dict(d)
 
         enlisted_sources: list[tuple[bool, bool, Any]] = []
@@ -1148,30 +1146,28 @@ class Catalog:
         if not sources:
             raise ValueError("Sources needs to be non empty list")
 
-        from datachain.query import DatasetQuery
+        from datachain.lib.dc import DataChain
+        from datachain.query.session import Session
 
-        dataset_queries = []
+        session = Session.get(catalog=self, client_config=client_config)
+
+        chains = []
         for source in sources:
             if source.startswith(DATASET_PREFIX):
-                dq = DatasetQuery(
-                    name=source[len(DATASET_PREFIX) :],
-                    catalog=self,
-                    client_config=client_config,
+                dc = DataChain.from_dataset(
+                    source[len(DATASET_PREFIX) :], session=session
                 )
             else:
-                dq = DatasetQuery(
-                    path=source,
-                    catalog=self,
-                    client_config=client_config,
-                    recursive=recursive,
+                dc = DataChain.from_storage(
+                    source, session=session, recursive=recursive
                 )
 
-            dataset_queries.append(dq)
+            chains.append(dc)
 
         # create union of all dataset queries created from sources
-        dq = reduce(lambda ds1, ds2: ds1.union(ds2), dataset_queries)
+        dc = reduce(lambda dc1, dc2: dc1.union(dc2), chains)
         try:
-            dq.save(name)
+            dc.save(name)
         except Exception as e:  # noqa: BLE001
             try:
                 ds = self.get_dataset(name)
@@ -1435,7 +1431,7 @@ class Catalog:
 
     def get_file_signals(
         self, dataset_name: str, dataset_version: int, row: RowDict
-    ) -> Optional[dict]:
+    ) -> Optional[RowDict]:
         """
         Function that returns file signals from dataset row.
         Note that signal names are without prefix, so if there was 'laion__file__source'
@@ -1452,7 +1448,7 @@ class Catalog:
 
         version = self.get_dataset(dataset_name).get_version(dataset_version)
 
-        file_signals_values = {}
+        file_signals_values = RowDict()
 
         schema = SignalSchema.deserialize(version.feature_schema)
         for file_signals in schema.get_signals(File):
@@ -1480,6 +1476,8 @@ class Catalog:
         use_cache: bool = True,
         **config: Any,
     ):
+        from datachain.lib.file import File
+
         file_signals = self.get_file_signals(dataset_name, dataset_version, row)
         if not file_signals:
             raise RuntimeError("Cannot open object without file signals")
@@ -1487,20 +1485,8 @@ class Catalog:
         config = config or self.client_config
         client = self.get_client(file_signals["source"], **config)
         return client.open_object(
-            self._get_row_uid(file_signals),  # type: ignore [arg-type]
+            File._from_row(file_signals),
             use_cache=use_cache,
-        )
-
-    def _get_row_uid(self, row: RowDict) -> UniqueId:
-        return UniqueId(
-            row["source"],
-            row["path"],
-            row["size"],
-            row["etag"],
-            row["version"],
-            row["is_latest"],
-            row["location"],
-            row["last_modified"],
         )
 
     def ls(
@@ -1730,26 +1716,6 @@ class Catalog:
         self.create_dataset_from_sources(
             output, sources, client_config=client_config, recursive=recursive
         )
-
-    def apply_udf(
-        self,
-        udf_location: str,
-        source: str,
-        target_name: str,
-        parallel: Optional[int] = None,
-        params: Optional[str] = None,
-    ):
-        from datachain.query import DatasetQuery
-
-        if source.startswith(DATASET_PREFIX):
-            ds = DatasetQuery(name=source[len(DATASET_PREFIX) :], catalog=self)
-        else:
-            ds = DatasetQuery(path=source, catalog=self)
-        udf = import_object(udf_location)
-        if params:
-            args, kwargs = parse_params_string(params)
-            udf = udf(*args, **kwargs)
-        ds.add_signals(udf, parallel=parallel).save(target_name)
 
     def query(
         self,

@@ -58,6 +58,7 @@ from datachain.query.dataset import (
 )
 from datachain.query.schema import DEFAULT_DELIMITER, Column, DatasetRow
 from datachain.sql.functions import path as pathfunc
+from datachain.telemetry import telemetry
 from datachain.utils import inside_notebook
 
 if TYPE_CHECKING:
@@ -246,6 +247,9 @@ class DataChain(DatasetQuery):
             **kwargs,
             indexing_column_types=File._datachain_column_types,
         )
+
+        telemetry.send_event_once("class", "datachain_init", **kwargs)
+
         if settings:
             self._settings = Settings(**settings)
         else:
@@ -1337,8 +1341,7 @@ class DataChain(DatasetQuery):
                     other.signals_schema.resolve(*right_on).db_signals(),
                 )  # type: ignore[arg-type]
             )
-
-        return super()._subtract(other, signals)  # type: ignore[arg-type]
+        return super().subtract(other, signals)  # type: ignore[arg-type]
 
     @classmethod
     def from_values(
@@ -1527,7 +1530,8 @@ class DataChain(DatasetQuery):
             output = {"split": str}
 
         model_name = model_name or object_name or ""
-        output = output | get_output_schema(next(iter(ds_dict.values())), model_name)
+        hf_features = next(iter(ds_dict.values())).features
+        output = output | get_output_schema(hf_features, model_name)
         model = dict_to_data_model(model_name, output)
         if object_name:
             output = {object_name: model}

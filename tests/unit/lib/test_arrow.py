@@ -5,6 +5,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+from datasets import Dataset
 
 from datachain.lib.arrow import (
     ArrowGenerator,
@@ -13,9 +14,11 @@ from datachain.lib.arrow import (
 )
 from datachain.lib.data_model import dict_to_data_model
 from datachain.lib.file import ArrowVFile, File
+from datachain.lib.hf import HFClassLabel
 
 
-def test_arrow_generator(tmp_path, catalog):
+@pytest.mark.parametrize("cache", [True, False])
+def test_arrow_generator(tmp_path, catalog, cache):
     ids = [12345, 67890, 34, 0xF0123]
     texts = ["28", "22", "we", "hello world"]
     df = pd.DataFrame({"id": ids, "text": texts})
@@ -23,8 +26,8 @@ def test_arrow_generator(tmp_path, catalog):
     name = "111.parquet"
     pq_path = tmp_path / name
     df.to_parquet(pq_path)
-    stream = File(path=pq_path.as_posix(), source="file:///")
-    stream._set_stream(catalog, caching_enabled=False)
+    stream = File(path=pq_path.as_posix(), source="file://")
+    stream._set_stream(catalog, caching_enabled=cache)
 
     func = ArrowGenerator()
     objs = list(func.process(stream))
@@ -47,7 +50,7 @@ def test_arrow_generator_no_source(tmp_path, catalog):
     name = "111.parquet"
     pq_path = tmp_path / name
     df.to_parquet(pq_path)
-    stream = File(path=pq_path.as_posix(), source="file:///")
+    stream = File(path=pq_path.as_posix(), source="file://")
     stream._set_stream(catalog, caching_enabled=False)
 
     func = ArrowGenerator(source=False)
@@ -68,7 +71,7 @@ def test_arrow_generator_output_schema(tmp_path, catalog):
     name = "111.parquet"
     pq_path = tmp_path / name
     pq.write_table(table, pq_path)
-    stream = File(path=pq_path.as_posix(), source="file:///")
+    stream = File(path=pq_path.as_posix(), source="file://")
     stream._set_stream(catalog, caching_enabled=False)
 
     output_schema = dict_to_data_model("", schema_to_output(table.schema))
@@ -82,6 +85,22 @@ def test_arrow_generator_output_schema(tmp_path, catalog):
         assert o[1].text == text
         assert o[1].dict.a == dict["a"]
         assert o[1].dict.b == dict["b"]
+
+
+def test_arrow_generator_hf(tmp_path, catalog):
+    ds = Dataset.from_dict({"pokemon": ["bulbasaur", "squirtle"]})
+    ds = ds.class_encode_column("pokemon")
+
+    name = "111.parquet"
+    pq_path = tmp_path / name
+    ds.to_parquet(pq_path)
+    stream = File(path=pq_path.as_posix(), source="file:///")
+    stream._set_stream(catalog, caching_enabled=False)
+
+    output_schema = dict_to_data_model("", schema_to_output(ds._data.schema, ["col"]))
+    func = ArrowGenerator(output_schema=output_schema)
+    for obj in func.process(stream):
+        assert isinstance(obj[1].col, HFClassLabel)
 
 
 @pytest.mark.parametrize(

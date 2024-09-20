@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 import attrs
 
-from datachain.cache import UniqueId
+from datachain.lib.file import File
 from datachain.storage import StorageURI
 from datachain.utils import TIME_ZERO, time_to_str
 
@@ -99,11 +99,11 @@ class Node:
             return self.path + "/"
         return self.path
 
-    def as_uid(self, storage: Optional[StorageURI] = None) -> UniqueId:
-        if storage is None:
-            storage = self.source
-        return UniqueId(
-            storage=storage,
+    def to_file(self, source: Optional[StorageURI] = None) -> File:
+        if source is None:
+            source = self.source
+        return File(
+            source=source,
             path=self.path,
             size=self.size,
             version=self.version or "",
@@ -114,9 +114,23 @@ class Node:
         )
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "Self":
-        kw = {f.name: d[f.name] for f in attrs.fields(cls) if f.name in d}
-        return cls(**kw)
+    def from_dict(cls, d: dict[str, Any], file_prefix: str = "file") -> "Self":
+        def _dval(field_name: str):
+            return d.get(f"{file_prefix}__{field_name}")
+
+        return cls(
+            sys__id=d["sys__id"],
+            sys__rand=d["sys__rand"],
+            source=_dval("source"),
+            path=_dval("path"),
+            etag=_dval("etag"),
+            is_latest=_dval("is_latest"),
+            size=_dval("size"),
+            last_modified=_dval("last_modified"),
+            version=_dval("version"),
+            location=_dval("location"),
+            dir_type=DirType.FILE,
+        )
 
     @classmethod
     def from_dir(cls, path, **kwargs) -> "Node":

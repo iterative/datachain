@@ -15,7 +15,7 @@ try:
         Value,
         load_dataset,
     )
-    from datasets.features.features import string_to_arrow
+    from datasets.features.features import Features, string_to_arrow
     from datasets.features.image import image_to_bytes
 
 except ImportError as exc:
@@ -36,6 +36,7 @@ from datachain.lib.data_model import DataModel, DataType, dict_to_data_model
 from datachain.lib.udf import Generator
 
 if TYPE_CHECKING:
+    import pyarrow as pa
     from pydantic import BaseModel
 
 
@@ -71,6 +72,15 @@ class HFGenerator(Generator):
         *args,
         **kwargs,
     ):
+        """
+        Generator for chain from huggingface datasets.
+
+        Parameters:
+
+        ds : Path or name of the dataset to read from Hugging Face Hub,
+            or an instance of `datasets.Dataset`-like object.
+        output_schema : Pydantic model for validation.
+        """
         super().__init__()
         self.ds = ds
         self.output_schema = output_schema
@@ -92,7 +102,7 @@ class HFGenerator(Generator):
                     output_dict["split"] = split
                 for name, feat in ds.features.items():
                     anno = self.output_schema.model_fields[name].annotation
-                    output_dict[name] = _convert_feature(row[name], feat, anno)
+                    output_dict[name] = convert_feature(row[name], feat, anno)
                 yield self.output_schema(**output_dict)
                 pbar.update(1)
 
@@ -106,7 +116,7 @@ def stream_splits(ds: Union[str, HFDatasetType], *args, **kwargs):
     return {"": ds}
 
 
-def _convert_feature(val: Any, feat: Any, anno: Any) -> Any:
+def convert_feature(val: Any, feat: Any, anno: Any) -> Any:  # noqa: PLR0911
     if isinstance(feat, (Value, Array2D, Array3D, Array4D, Array5D)):
         return val
     if isinstance(feat, ClassLabel):
@@ -117,20 +127,23 @@ def _convert_feature(val: Any, feat: Any, anno: Any) -> Any:
             for sname in val:
                 sfeat = feat.feature[sname]
                 sanno = anno.model_fields[sname].annotation
-                sdict[sname] = [_convert_feature(v, sfeat, sanno) for v in val[sname]]
+                sdict[sname] = [convert_feature(v, sfeat, sanno) for v in val[sname]]
             return anno(**sdict)
         return val
     if isinstance(feat, Image):
+        if isinstance(val, dict):
+            return HFImage(img=val["bytes"])
         return HFImage(img=image_to_bytes(val))
     if isinstance(feat, Audio):
         return HFAudio(**val)
 
 
 def get_output_schema(
-    ds: Union[Dataset, IterableDataset], model_name: str = ""
+    features: Features, model_name: str = "", stream: bool = True
 ) -> dict[str, DataType]:
+    """Generate UDF output schema from huggingface datasets features."""
     fields_dict = {}
-    for name, val in ds.features.items():
+    for name, val in features.items():
         fields_dict[name] = _feature_to_chain_type(name, val)  # type: ignore[assignment]
     return fields_dict  # type: ignore[return-value]
 
@@ -165,3 +178,7 @@ def _feature_to_chain_type(name: str, val: Any) -> type:  # noqa: PLR0911
     if isinstance(val, Audio):
         return HFAudio
     raise TypeError(f"Unknown huggingface datasets type {type(val)}")
+
+
+def schema_from_arrow(schema: "pa.Schema"):
+    return Features.from_arrow_schema(schema)

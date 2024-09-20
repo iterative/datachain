@@ -13,8 +13,10 @@ from datachain.lib.model_store import ModelStore
 from datachain.lib.udf import Generator
 
 if TYPE_CHECKING:
+    from datasets.features.features import Features
     from pydantic import BaseModel
 
+    from datachain.lib.data_model import DataType
     from datachain.lib.dc import DataChain
 
 
@@ -46,7 +48,11 @@ class ArrowGenerator(Generator):
         self.kwargs = kwargs
 
     def process(self, file: File):
-        if self.nrows:
+        if file._caching_enabled:
+            file.ensure_cached()
+            path = file.get_local_path()
+            ds = dataset(path, schema=self.input_schema, **self.kwargs)
+        elif self.nrows:
             path = _nrows_file(file, self.nrows)
             ds = dataset(path, schema=self.input_schema, **self.kwargs)
         else:
@@ -54,6 +60,7 @@ class ArrowGenerator(Generator):
             ds = dataset(
                 path, filesystem=file.get_fs(), schema=self.input_schema, **self.kwargs
             )
+        hf_schema = _get_hf_schema(ds.schema)
         index = 0
         with tqdm(desc="Parsed by pyarrow", unit=" rows") as pbar:
             for record_batch in ds.to_batches():
@@ -62,9 +69,17 @@ class ArrowGenerator(Generator):
                     if self.output_schema:
                         fields = self.output_schema.model_fields
                         vals_dict = {}
-                        for (field, field_info), val in zip(fields.items(), vals):
-                            if ModelStore.is_pydantic(field_info.annotation):
-                                vals_dict[field] = field_info.annotation(**val)  # type: ignore[misc]
+                        for i, ((field, field_info), val) in enumerate(
+                            zip(fields.items(), vals)
+                        ):
+                            anno = field_info.annotation
+                            if hf_schema:
+                                from datachain.lib.hf import convert_feature
+
+                                feat = list(hf_schema[0].values())[i]
+                                vals_dict[field] = convert_feature(val, feat, anno)
+                            elif ModelStore.is_pydantic(anno):
+                                vals_dict[field] = anno(**val)  # type: ignore[misc]
                             else:
                                 vals_dict[field] = val
                         vals = [self.output_schema(**vals_dict)]
@@ -96,24 +111,34 @@ def schema_to_output(schema: pa.Schema, col_names: Optional[Sequence[str]] = Non
             "Error generating output from Arrow schema - "
             f"Schema has {len(schema)} columns but got {len(col_names)} column names."
         )
-    default_column = 0
+    if not col_names:
+        col_names = schema.names
+    columns = _convert_col_names(col_names)  # type: ignore[arg-type]
+    hf_schema = _get_hf_schema(schema)
+    if hf_schema:
+        return {
+            column: hf_type for hf_type, column in zip(hf_schema[1].values(), columns)
+        }
     output = {}
-    for i, field in enumerate(schema):
-        if col_names:
-            column = col_names[i]
-        else:
-            column = field.name
+    for field, column in zip(schema, columns):
+        dtype = arrow_type_mapper(field.type, column)  # type: ignore[assignment]
+        if field.nullable and not ModelStore.is_pydantic(dtype):
+            dtype = Optional[dtype]  # type: ignore[assignment]
+        output[column] = dtype
+    return output
+
+
+def _convert_col_names(col_names: Sequence[str]) -> list[str]:
+    default_column = 0
+    converted_col_names = []
+    for column in col_names:
         column = column.lower()
         column = re.sub("[^0-9a-z_]+", "", column)
         if not column:
             column = f"c{default_column}"
             default_column += 1
-        dtype = arrow_type_mapper(field.type, column)  # type: ignore[assignment]
-        if field.nullable and not ModelStore.is_pydantic(dtype):
-            dtype = Optional[dtype]  # type: ignore[assignment]
-        output[column] = dtype
-
-    return output
+        converted_col_names.append(column)
+    return converted_col_names
 
 
 def arrow_type_mapper(col_type: pa.DataType, column: str = "") -> type:  # noqa: PLR0911
@@ -161,3 +186,14 @@ def _nrows_file(file: File, nrows: int) -> str:
                 writer.write(line)
                 writer.write("\n")
     return tf.name
+
+
+def _get_hf_schema(
+    schema: "pa.Schema",
+) -> Optional[tuple["Features", dict[str, "DataType"]]]:
+    if schema.metadata and b"huggingface" in schema.metadata:
+        from datachain.lib.hf import get_output_schema, schema_from_arrow
+
+        features = schema_from_arrow(schema)
+        return features, get_output_schema(features)
+    return None

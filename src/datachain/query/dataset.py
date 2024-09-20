@@ -3,7 +3,6 @@ import inspect
 import logging
 import os
 import random
-import re
 import string
 import subprocess
 import sys
@@ -33,11 +32,9 @@ from sqlalchemy.sql.elements import ColumnClause, ColumnElement
 from sqlalchemy.sql.expression import label
 from sqlalchemy.sql.schema import TableClause
 from sqlalchemy.sql.selectable import Select
-from tqdm import tqdm
 
 from datachain.asyn import ASYNC_WORKERS, AsyncMapper, OrderedMapper
 from datachain.catalog import QUERY_SCRIPT_CANCELED_EXIT_CODE, get_catalog
-from datachain.client import Client
 from datachain.data_storage.schema import (
     PARTITION_COLUMN_ID,
     partition_col_names,
@@ -47,7 +44,6 @@ from datachain.dataset import DatasetStatus, RowDict
 from datachain.error import DatasetNotFoundError, QueryScriptCancelError
 from datachain.progress import CombinedDownloadCallback
 from datachain.sql.functions import rand
-from datachain.storage import Storage, StorageURI
 from datachain.utils import (
     batched,
     determine_processes,
@@ -57,7 +53,7 @@ from datachain.utils import (
 
 from .schema import C, UDFParamSpec, normalize_param
 from .session import Session
-from .udf import UDFBase, UDFClassWrapper, UDFFactory, UDFType
+from .udf import UDFBase
 
 if TYPE_CHECKING:
     from sqlalchemy.sql.elements import ClauseElement
@@ -78,9 +74,7 @@ INSERT_BATCH_SIZE = 10000
 
 PartitionByType = Union[ColumnElement, Sequence[ColumnElement]]
 JoinPredicateType = Union[str, ColumnClause, ColumnElement]
-# dependency can be either dataset_name + dataset_version tuple or just storage uri
-# depending what type of dependency we are adding
-DatasetDependencyType = Union[tuple[str, int], StorageURI]
+DatasetDependencyType = tuple[str, int]
 
 logger = logging.getLogger("datachain")
 
@@ -186,38 +180,6 @@ class QueryStep(StartingStep):
         )
 
 
-@frozen
-class IndexingStep(StartingStep):
-    path: str
-    catalog: "Catalog"
-    kwargs: dict[str, Any]
-    recursive: Optional[bool] = True
-
-    def apply(self):
-        self.catalog.index([self.path], **self.kwargs)
-        uri, path = Client.parse_url(self.path)
-        _partial_id, partial_path = self.catalog.metastore.get_valid_partial_id(
-            uri, path
-        )
-        dataset = self.catalog.get_dataset(Storage.dataset_name(uri, partial_path))
-        dataset_rows = self.catalog.warehouse.dataset_rows(
-            dataset, dataset.latest_version
-        )
-
-        def q(*columns):
-            col_names = [c.name for c in columns]
-            return self.catalog.warehouse.nodes_dataset_query(
-                dataset_rows,
-                column_names=col_names,
-                path=path,
-                recursive=self.recursive,
-            )
-
-        storage = self.catalog.metastore.get_storage(uri)
-
-        return step_result(q, dataset_rows.c, dependencies=[storage.uri])
-
-
 def generator_then_call(generator, func: Callable):
     """
     Yield items from generator then execute a function and yield
@@ -231,7 +193,7 @@ def generator_then_call(generator, func: Callable):
 class DatasetDiffOperation(Step):
     """
     Abstract class for operations that are calculation some kind of diff between
-    datasets queries like subtract, changed etc.
+    datasets queries like subtract etc.
     """
 
     dq: "DatasetQuery"
@@ -303,28 +265,6 @@ class Subtract(DatasetDiffOperation):
             ]
         )
         return sq.select().except_(sq.select().where(where_clause))
-
-
-@frozen
-class Changed(DatasetDiffOperation):
-    """
-    Calculates rows that are changed in a source query compared to target query
-    Changed means it has same source + path but different last_modified
-    Example:
-        >>> ds = DatasetQuery(name="dogs_cats") # some older dataset with embeddings
-        >>> ds_updated = (
-                DatasetQuery("gs://dvcx-datalakes/dogs-and-cats")
-                .filter(C.size > 1000) # we can also filter out source query
-                .changed(ds)
-                .add_signals(calc_embeddings) # calculae embeddings only on changed rows
-                .union(ds) # union with old dataset that's missing updated rows
-                .save("dogs_cats_updated")
-            )
-
-    """
-
-    def query(self, source_query: Select, target_query: Select) -> Select:
-        return self.catalog.warehouse.changed_query(source_query, target_query)
 
 
 def adjust_outputs(
@@ -424,7 +364,7 @@ def get_generated_callback(is_generator: bool = False) -> Callback:
 
 @frozen
 class UDFStep(Step, ABC):
-    udf: UDFType
+    udf: UDFBase
     catalog: "Catalog"
     partition_by: Optional[PartitionByType] = None
     parallel: Optional[int] = None
@@ -530,12 +470,6 @@ class UDFStep(Step, ABC):
 
             else:
                 # Otherwise process single-threaded (faster for smaller UDFs)
-                # Optionally instantiate the UDF instance if a class is provided.
-                if isinstance(self.udf, UDFFactory):
-                    udf: UDFBase = self.udf()
-                else:
-                    udf = self.udf
-
                 warehouse = self.catalog.warehouse
 
                 with contextlib.closing(
@@ -545,7 +479,7 @@ class UDFStep(Step, ABC):
                     processed_cb = get_processed_callback()
                     generated_cb = get_generated_callback(self.is_generator)
                     try:
-                        udf_results = udf.run(
+                        udf_results = self.udf.run(
                             udf_fields,
                             udf_inputs,
                             self.catalog,
@@ -558,7 +492,7 @@ class UDFStep(Step, ABC):
                             warehouse,
                             udf_table,
                             udf_results,
-                            udf,
+                            self.udf,
                             cb=generated_cb,
                         )
                     finally:
@@ -899,11 +833,35 @@ class SQLUnion(Step):
 
 @frozen
 class SQLJoin(Step):
+    catalog: "Catalog"
     query1: "DatasetQuery"
     query2: "DatasetQuery"
     predicates: Union[JoinPredicateType, tuple[JoinPredicateType, ...]]
     inner: bool
     rname: str
+
+    def get_query(self, dq: "DatasetQuery", temp_tables: list[str]) -> sa.Subquery:
+        query = dq.apply_steps().select()
+        temp_tables.extend(dq.temp_table_names)
+
+        if not any(isinstance(step, (SQLJoin, SQLUnion)) for step in dq.steps):
+            return query.subquery(dq.table.name)
+
+        warehouse = self.catalog.warehouse
+
+        columns = [
+            c if isinstance(c, Column) else Column(c.name, c.type)
+            for c in query.subquery().columns
+        ]
+        temp_table = warehouse.create_dataset_rows_table(
+            warehouse.temp_table_name(),
+            columns=columns,
+        )
+        temp_tables.append(temp_table.name)
+
+        warehouse.copy_table(temp_table, query)
+
+        return temp_table.select().subquery(dq.table.name)
 
     def validate_expression(self, exp: "ClauseElement", q1, q2):
         """
@@ -937,10 +895,8 @@ class SQLJoin(Step):
     def apply(
         self, query_generator: QueryGenerator, temp_tables: list[str]
     ) -> StepResult:
-        q1 = self.query1.apply_steps().select().subquery(self.query1.table.name)
-        temp_tables.extend(self.query1.temp_table_names)
-        q2 = self.query2.apply_steps().select().subquery(self.query2.table.name)
-        temp_tables.extend(self.query2.temp_table_names)
+        q1 = self.get_query(self.query1, temp_tables)
+        q2 = self.get_query(self.query2, temp_tables)
 
         q1_columns = list(q1.c)
         q1_column_names = {c.name for c in q1_columns}
@@ -951,7 +907,12 @@ class SQLJoin(Step):
                 continue
 
             if c.name in q1_column_names:
-                c = c.label(self.rname.format(name=c.name))
+                new_name = self.rname.format(name=c.name)
+                new_name_idx = 0
+                while new_name in q1_column_names:
+                    new_name_idx += 1
+                    new_name = self.rname.format(name=f"{c.name}_{new_name_idx}")
+                c = c.label(new_name)
             q2_columns.append(c)
 
         res_columns = q1_columns + q2_columns
@@ -979,16 +940,14 @@ class SQLJoin(Step):
         self.validate_expression(join_expression, q1, q2)
 
         def q(*columns):
-            join_query = sqlalchemy.join(
+            join_query = self.catalog.warehouse.join(
                 q1,
                 q2,
                 join_expression,
-                isouter=not self.inner,
+                inner=self.inner,
             )
-
-            res = sqlalchemy.select(*columns).select_from(join_query)
-            subquery = res.subquery()
-            return sqlalchemy.select(*subquery.c).select_from(subquery)
+            return sqlalchemy.select(*columns).select_from(join_query)
+            # return sqlalchemy.select(*subquery.c).select_from(subquery)
 
         return step_result(
             q,
@@ -1072,28 +1031,14 @@ class ResultIter:
 class DatasetQuery:
     def __init__(
         self,
-        path: str = "",
-        name: str = "",
+        name: str,
         version: Optional[int] = None,
         catalog: Optional["Catalog"] = None,
-        client_config=None,
-        recursive: Optional[bool] = True,
         session: Optional[Session] = None,
-        anon: bool = False,
-        indexing_feature_schema: Optional[dict] = None,
         indexing_column_types: Optional[dict[str, Any]] = None,
-        update: Optional[bool] = False,
         in_memory: bool = False,
     ):
-        if client_config is None:
-            client_config = {}
-
-        if anon:
-            client_config["anon"] = True
-
-        self.session = Session.get(
-            session, catalog=catalog, client_config=client_config, in_memory=in_memory
-        )
+        self.session = Session.get(session, catalog=catalog, in_memory=in_memory)
         self.catalog = catalog or self.session.catalog
         self.steps: list[Step] = []
         self._chunk_index: Optional[int] = None
@@ -1107,26 +1052,14 @@ class DatasetQuery:
         self.feature_schema: Optional[dict] = None
         self.column_types: Optional[dict[str, Any]] = None
 
-        if path:
-            kwargs = {"update": True} if update else {}
-            self.starting_step = IndexingStep(path, self.catalog, kwargs, recursive)
-            self.feature_schema = indexing_feature_schema
-            self.column_types = indexing_column_types
-        elif name:
-            self.name = name
-            ds = self.catalog.get_dataset(name)
-            self.version = version or ds.latest_version
-            self.feature_schema = ds.get_version(self.version).feature_schema
-            self.column_types = copy(ds.schema)
-            if "sys__id" in self.column_types:
-                self.column_types.pop("sys__id")
-            self.starting_step = QueryStep(self.catalog, name, self.version)
-        else:
-            raise ValueError("must provide path or name")
-
-    @staticmethod
-    def is_storage_path(path):
-        return bool(re.compile(r"^[a-zA-Z0-9]+://").match(path))
+        self.name = name
+        ds = self.catalog.get_dataset(name)
+        self.version = version or ds.latest_version
+        self.feature_schema = ds.get_version(self.version).feature_schema
+        self.column_types = copy(ds.schema)
+        if "sys__id" in self.column_types:
+            self.column_types.pop("sys__id")
+        self.starting_step = QueryStep(self.catalog, name, self.version)
 
     def __iter__(self):
         return iter(self.db_results())
@@ -1511,7 +1444,7 @@ class DatasetQuery:
             if isinstance(predicates, (str, ColumnClause, ColumnElement))
             else tuple(predicates)
         )
-        new_query.steps = [SQLJoin(left, right, predicates, inner, rname)]
+        new_query.steps = [SQLJoin(self.catalog, left, right, predicates, inner, rname)]
         return new_query
 
     @detach
@@ -1532,7 +1465,7 @@ class DatasetQuery:
     @detach
     def add_signals(
         self,
-        udf: UDFType,
+        udf: UDFBase,
         parallel: Optional[int] = None,
         workers: Union[bool, int] = False,
         min_task_size: Optional[int] = None,
@@ -1553,9 +1486,6 @@ class DatasetQuery:
         at least that minimum number of rows to each distributed worker, mostly useful
         if there are a very large number of small tasks to process.
         """
-        if isinstance(udf, UDFClassWrapper):  # type: ignore[unreachable]
-            # This is a bare decorated class, "instantiate" it now.
-            udf = udf()  # type: ignore[unreachable]
         query = self.clone()
         query.steps.append(
             UDFSignal(
@@ -1571,34 +1501,21 @@ class DatasetQuery:
         return query
 
     @detach
-    def subtract(self, dq: "DatasetQuery") -> "Self":
-        return self._subtract(dq, on=[("source", "source"), ("path", "path")])
-
-    @detach
-    def _subtract(self, dq: "DatasetQuery", on: Sequence[tuple[str, str]]) -> "Self":
+    def subtract(self, dq: "DatasetQuery", on: Sequence[tuple[str, str]]) -> "Self":
         query = self.clone()
         query.steps.append(Subtract(dq, self.catalog, on=on))
         return query
 
     @detach
-    def changed(self, dq: "DatasetQuery") -> "Self":
-        query = self.clone()
-        query.steps.append(Changed(dq, self.catalog))
-        return query
-
-    @detach
     def generate(
         self,
-        udf: UDFType,
+        udf: UDFBase,
         parallel: Optional[int] = None,
         workers: Union[bool, int] = False,
         min_task_size: Optional[int] = None,
         partition_by: Optional[PartitionByType] = None,
         cache: bool = False,
     ) -> "Self":
-        if isinstance(udf, UDFClassWrapper):  # type: ignore[unreachable]
-            # This is a bare decorated class, "instantiate" it now.
-            udf = udf()  # type: ignore[unreachable]
         query = self.clone()
         steps = query.steps
         steps.append(
@@ -1616,24 +1533,13 @@ class DatasetQuery:
 
     def _add_dependencies(self, dataset: "DatasetRecord", version: int):
         for dependency in self.dependencies:
-            if isinstance(dependency, tuple):
-                # dataset dependency
-                ds_dependency_name, ds_dependency_version = dependency
-                self.catalog.metastore.add_dataset_dependency(
-                    dataset.name,
-                    version,
-                    ds_dependency_name,
-                    ds_dependency_version,
-                )
-            else:
-                # storage dependency - its name is a valid StorageURI
-                storage = self.catalog.metastore.get_storage(dependency)
-                self.catalog.metastore.add_storage_dependency(
-                    StorageURI(dataset.name),
-                    version,
-                    storage.uri,
-                    storage.timestamp_str,
-                )
+            ds_dependency_name, ds_dependency_version = dependency
+            self.catalog.metastore.add_dataset_dependency(
+                dataset.name,
+                version,
+                ds_dependency_name,
+                ds_dependency_version,
+            )
 
     def exec(self) -> "Self":
         """Execute the query."""
@@ -1687,12 +1593,7 @@ class DatasetQuery:
 
             dr = self.catalog.warehouse.dataset_rows(dataset)
 
-            with tqdm(desc="Saving", unit=" rows") as pbar:
-                self.catalog.warehouse.copy_table(
-                    dr.get_table(),
-                    query.select(),
-                    progress_cb=pbar.update,
-                )
+            self.catalog.warehouse.copy_table(dr.get_table(), query.select())
 
             self.catalog.metastore.update_dataset_status(
                 dataset, DatasetStatus.COMPLETE, version=version

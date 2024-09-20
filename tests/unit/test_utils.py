@@ -1,12 +1,10 @@
 import os
-from textwrap import dedent
 
 import pytest
 
 from datachain.utils import (
     datachain_paths_join,
     determine_processes,
-    import_object,
     retry_with_backoff,
     sizeof_fmt,
     sql_escape_like,
@@ -113,29 +111,6 @@ def test_suffix_to_number_invalid(text):
 )
 def test_sql_escape_like(text, expected):
     assert sql_escape_like(text) == expected
-
-
-def test_import_object(tmp_path):
-    fname = tmp_path / "foo.py"
-    code = """\
-        def hello():
-            return "Hello!"
-    """
-    fname.write_text(dedent(code))
-    func = import_object(f"{fname}:hello")
-    assert func() == "Hello!"
-
-
-def test_import_object_relative(tmp_path, monkeypatch):
-    fname = tmp_path / "foo.py"
-    code = """\
-        def hello():
-            return "Hello!"
-    """
-    fname.write_text(dedent(code))
-    monkeypatch.chdir(tmp_path)
-    func = import_object("foo.py:hello")
-    assert func() == "Hello!"
 
 
 def test_retry_with_backoff():
