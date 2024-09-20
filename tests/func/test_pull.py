@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from datachain.dataset import DatasetStatus
-from datachain.error import DataChainError, DatasetVersionNotFoundError
+from datachain.error import DataChainError
 from datachain.utils import JSONSerialize
 from tests.data import ENTRIES
 from tests.utils import assert_row_names, skip_if_not_sqlite
@@ -229,7 +229,7 @@ def test_pull_dataset_wrong_version(
     )
     catalog = cloud_test_catalog.catalog
 
-    with pytest.raises(DatasetVersionNotFoundError) as exc_info:
+    with pytest.raises(DataChainError) as exc_info:
         catalog.pull_dataset("ds://dogs@v5", no_cp=True, remote_config=remote_config)
     assert str(exc_info.value) == "Dataset dogs doesn't have version 5 on server"
 

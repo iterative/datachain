@@ -1584,7 +1584,7 @@ class Catalog:
 
         try:
             remote_dataset_version = remote_dataset.get_version(version)
-        except (ValueError, StopIteration) as exc:
+        except (DatasetVersionNotFoundError, StopIteration) as exc:
             raise DataChainError(
                 f"Dataset {remote_dataset_name} doesn't have version {version}"
                 " on server"
