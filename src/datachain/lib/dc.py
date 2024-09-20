@@ -1313,7 +1313,11 @@ class DataChain:
         return ds
 
     def union(self, other: "Self") -> "Self":
-        """Return the set union of the two datasets."""
+        """Return the set union of the two datasets.
+
+        Parameters:
+            other: chain whose rows will be added to `self`.
+        """
         return self.clone(query=self._query.union(other._query))
 
     def subtract(  # type: ignore[override]
@@ -1995,11 +1999,25 @@ class DataChain:
         return self.clone(query=self._query.filter(*args))
 
     def limit(self, n: int) -> "Self":
-        """Return the first n rows of the chain."""
+        """Return the first `n` rows of the chain.
+
+        If the chain is unordered, which rows are returned is undefined.
+        If the chain has less than `n` rows, the whole chain is returned.
+
+        Parameters:
+            n (int): Number of rows to return.
+        """
         return self.clone(query=self._query.limit(n))
 
     def offset(self, offset: int) -> "Self":
-        """Return the results starting with the offset row."""
+        """Return the results starting with the offset row.
+
+        If the chain is unordered, which rows are skipped in undefined.
+        If the chain has less than `offset` rows, the result is an empty chain.
+
+        Parameters:
+            offset (int): Number of rows to skip.
+        """
         return self.clone(query=self._query.offset(offset))
 
     def count(self) -> int:
@@ -2014,9 +2032,11 @@ class DataChain:
         """Split a chain into smaller chunks for e.g. parallelization.
 
         Example:
-            >>> chain = DataChain.from_storage(...)
-            >>> chunk_1 = query._chunk(0, 2)
-            >>> chunk_2 = query._chunk(1, 2)
+            ```py
+            chain = DataChain.from_storage(...)
+            chunk_1 = query._chunk(0, 2)
+            chunk_2 = query._chunk(1, 2)
+            ```
 
         Note:
             Bear in mind that `index` is 0-indexed but `total` isn't.
