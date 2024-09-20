@@ -26,8 +26,8 @@ from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import DataModel, DataType, dict_to_data_model
 from datachain.lib.dataset_info import DatasetInfo
+from datachain.lib.file import ArrowRow, File, get_file_type
 from datachain.lib.file import ExportPlacement as FileExportPlacement
-from datachain.lib.file import File, IndexedFile, get_file_type
 from datachain.lib.listing import (
     is_listing_dataset,
     is_listing_expired,
@@ -1614,7 +1614,7 @@ class DataChain(DatasetQuery):
                 for name, info in output.model_fields.items()
             }
         if source:
-            output = {"source": IndexedFile} | output  # type: ignore[assignment,operator]
+            output = {"source": ArrowRow} | output  # type: ignore[assignment,operator]
         return self.gen(
             ArrowGenerator(schema, model, source, nrows, **kwargs), output=output
         )
