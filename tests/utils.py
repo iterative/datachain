@@ -14,9 +14,6 @@ from PIL import Image
 
 from datachain.catalog.catalog import Catalog
 from datachain.dataset import DatasetDependency, DatasetRecord
-from datachain.lib.dc import DataChain
-from datachain.lib.tar import process_tar
-from datachain.query import C
 from datachain.storage import StorageStatus
 
 
@@ -108,29 +105,6 @@ def write_tar(tree, archive, curr_dir=""):
 
 
 TARRED_TREE: dict[str, Any] = {"animals.tar": make_tar(DEFAULT_TREE)}
-
-
-def create_tar_dataset_with_legacy_columns(
-    session, uri: str, ds_name: str
-) -> DataChain:
-    """
-    Create a dataset from a storage location containing tar archives and other files.
-
-    The resulting dataset contains both the original files (as regular objects)
-    and the tar members (as v-objects).
-    """
-    dc = DataChain.from_storage(uri, session=session)
-    tar_entries = dc.filter(C("file.path").glob("*.tar")).gen(file=process_tar)
-    return (
-        dc.union(tar_entries)
-        .mutate(
-            path=C("file.path"),
-            source=C("file.source"),
-            location=C("file.location"),
-            version=C("file.version"),
-        )
-        .save(ds_name)
-    )
 
 
 skip_if_not_sqlite = pytest.mark.skipif(
