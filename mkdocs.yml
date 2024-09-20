@@ -15,6 +15,7 @@ validation:
 
 theme:
   name: material
+  custom_dir: overrides
   logo: assets/datachain-white.svg
   favicon: assets/datachain.svg
   icon:
