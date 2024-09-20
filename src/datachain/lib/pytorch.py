@@ -9,6 +9,7 @@ from torch.utils.data import IterableDataset, get_worker_info
 from torchvision.transforms import v2
 from tqdm import tqdm
 
+from datachain import Session
 from datachain.catalog import Catalog, get_catalog
 from datachain.lib.dc import DataChain
 from datachain.lib.text import convert_text
@@ -87,9 +88,10 @@ class PytorchDataset(IterableDataset):
     def __iter__(self) -> Iterator[Any]:
         if self.catalog is None:
             self.catalog = self._get_catalog()
+        session = Session.get(catalog=self.catalog)
         total_rank, total_workers = self.get_rank_and_workers()
-        ds = DataChain._create(
-            name=self.name, version=self.version, catalog=self.catalog
+        ds = DataChain.from_dataset(
+            name=self.name, version=self.version, session=session
         )
         ds = ds.remove_file_signals()
 

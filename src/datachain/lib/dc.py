@@ -237,26 +237,6 @@ class DataChain:
         "size": 0,
     }
 
-    @classmethod
-    def _create(cls, *args, settings: Optional[dict] = None, **kwargs) -> "Self":
-        query = DatasetQuery(  # type: ignore[misc]
-            *args,
-            **kwargs,
-            indexing_column_types=File._datachain_column_types,
-        )
-        telemetry.send_event_once("class", "datachain_init", **kwargs)
-        if settings:
-            _settings = Settings(**settings)
-        else:
-            _settings = Settings()
-
-        signals_schema = SignalSchema({"sys": Sys})
-        if query.feature_schema:
-            signals_schema |= SignalSchema.deserialize(query.feature_schema)
-        else:
-            signals_schema |= SignalSchema.from_column_types(query.column_types or {})
-        return cls(query, _settings, signals_schema)
-
     def __init__(
         self,
         query: DatasetQuery,
@@ -477,9 +457,24 @@ class DataChain:
             chain = DataChain.from_dataset("my_cats")
             ```
         """
-        return cls._create(
-            name=name, version=version, session=session, settings=settings
+        query = DatasetQuery(
+            name=name,
+            version=version,
+            session=session,
+            indexing_column_types=File._datachain_column_types,
         )
+        telemetry.send_event_once("class", "datachain_init", name=name, version=version)
+        if settings:
+            _settings = Settings(**settings)
+        else:
+            _settings = Settings()
+
+        signals_schema = SignalSchema({"sys": Sys})
+        if query.feature_schema:
+            signals_schema |= SignalSchema.deserialize(query.feature_schema)
+        else:
+            signals_schema |= SignalSchema.from_column_types(query.column_types or {})
+        return cls(query, _settings, signals_schema)
 
     @classmethod
     def from_json(
