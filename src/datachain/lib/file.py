@@ -440,8 +440,8 @@ class ImageFile(File):
         self.read().save(destination)
 
 
-class ArrowVFile(DataModel):
-    """`DataModel` for reading arrow files."""
+class ArrowRow(DataModel):
+    """`DataModel` for reading row from Arrow-supported file."""
 
     file: File
     index: int
@@ -462,7 +462,7 @@ class ArrowVFile(DataModel):
         return ds.take([self.index]).to_reader()
 
     def read(self):
-        """Returns row contents."""
+        """Returns row contents as dict."""
         with self.open() as record_batch:
             return record_batch.to_pylist()[0]
 

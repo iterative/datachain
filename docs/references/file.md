@@ -7,7 +7,7 @@ automatically when creating a `DataChain` from files, like in
 classes include various metadata fields about the underlying file as well as methods to
 read from the files and otherwise work with the file contents.
 
-::: datachain.lib.file.ArrowVFile
+::: datachain.lib.file.ArrowRow
 
 ::: datachain.lib.file.ExportPlacement
 

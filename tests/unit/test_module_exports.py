@@ -13,7 +13,7 @@ def test_module_exports():
         from datachain import (
             AbstractUDF,
             Aggregator,
-            ArrowVFile,
+            ArrowRow,
             C,
             Column,
             DataChain,
@@ -67,7 +67,7 @@ def test_no_torch_deps(monkeypatch, dep):
             from datachain import (
                 AbstractUDF,
                 Aggregator,
-                ArrowVFile,
+                ArrowRow,
                 C,
                 Column,
                 DataChain,

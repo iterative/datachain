@@ -1,7 +1,7 @@
 from datachain.lib.data_model import DataModel, DataType, is_chain_type
 from datachain.lib.dc import C, Column, DataChain, Sys
 from datachain.lib.file import (
-    ArrowVFile,
+    ArrowRow,
     File,
     FileError,
     ImageFile,
@@ -16,7 +16,7 @@ from datachain.query.session import Session
 __all__ = [
     "AbstractUDF",
     "Aggregator",
-    "ArrowVFile",
+    "ArrowRow",
     "C",
     "Column",
     "DataChain",
