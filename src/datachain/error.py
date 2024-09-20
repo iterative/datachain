@@ -10,6 +10,10 @@ class DatasetNotFoundError(NotFoundError):
     pass
 
 
+class DatasetVersionNotFoundError(NotFoundError):
+    pass
+
+
 class DatasetInvalidVersionError(Exception):
     pass
 

@@ -53,6 +53,7 @@ from datachain.error import (
     DataChainError,
     DatasetInvalidVersionError,
     DatasetNotFoundError,
+    DatasetVersionNotFoundError,
     PendingIndexingError,
     QueryScriptCancelError,
     QueryScriptCompileError,
@@ -1218,7 +1219,9 @@ class Catalog:
 
         dataset_version = dataset.get_version(version)
         if not dataset_version:
-            raise ValueError(f"Dataset {dataset.name} does not have version {version}")
+            raise DatasetVersionNotFoundError(
+                f"Dataset {dataset.name} does not have version {version}"
+            )
 
         if not dataset_version.is_final_status():
             raise ValueError("Cannot register dataset version in non final status")
