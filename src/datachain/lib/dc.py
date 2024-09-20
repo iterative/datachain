@@ -302,7 +302,7 @@ class DataChain:
         """Print schema of the chain."""
         self._effective_signals_schema.print_tree()
 
-    def clone(self, query=None, new_table: bool = True) -> "Self":
+    def clone(self, *, query=None, new_table: bool = True) -> "Self":
         """Make a copy of the chain in a new table."""
         if query is None:
             query = self._query.clone(new_table=new_table)
@@ -797,10 +797,11 @@ class DataChain:
         """
         udf_obj = self._udf_to_obj(Mapper, func, params, output, signal_map)
 
-        chain = self.clone()
-        chain._query = self._query.add_signals(
-            udf_obj.to_udf_wrapper(),
-            **self._settings.to_dict(),
+        chain = self.clone(
+            query=self._query.add_signals(
+                udf_obj.to_udf_wrapper(),
+                **self._settings.to_dict(),
+            )
         )
 
         return chain.add_schema(udf_obj.output).reset_settings(self._settings)
@@ -959,9 +960,7 @@ class DataChain:
         if descending:
             args = tuple(sqlalchemy.desc(a) for a in args)
 
-        chain = self.clone()
-        chain._query = self._query.order_by(*args)
-        return chain
+        return self.clone(query=self._query.order_by(*args))
 
     def distinct(self, arg: str, *args: str) -> "Self":  # type: ignore[override]
         """Removes duplicate rows based on uniqueness of some input column(s)
@@ -994,7 +993,7 @@ class DataChain:
         """Select all the signals expect the specified signals."""
         new_schema = self.signals_schema.select_except_signals(*args)
         columns = new_schema.db_signals()
-        chain = self.clone(self._query.select(*columns))
+        chain = self.clone(query=self._query.select(*columns))
         chain.signals_schema = new_schema
         return chain
 
