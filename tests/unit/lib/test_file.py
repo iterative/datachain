@@ -7,7 +7,6 @@ from fsspec.implementations.local import LocalFileSystem
 from PIL import Image
 
 from datachain import DataChain
-from datachain.cache import UniqueId
 from datachain.catalog import Catalog
 from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.lib.file import File, ImageFile, TextFile, resolve
@@ -20,28 +19,6 @@ def create_file(source: str):
         source=source,
         etag="ed779276108738fdb2179ccabf9680d9",
     )
-
-
-def test_uid_missing_location():
-    name = "my_name"
-    stream = File(path=name)
-    assert stream.get_uid() == UniqueId(
-        "",
-        name,
-        size=0,
-        version="",
-        etag="",
-        is_latest=True,
-        location=None,
-    )
-
-
-def test_uid_location():
-    name = "na_me"
-    loc = {"e": 42}
-
-    stream = File(path=name, location=loc)
-    assert stream.get_uid() == UniqueId("", name, 0, "", "", True, loc)
 
 
 def test_file_stem():
@@ -69,9 +46,8 @@ def test_cache_get_path(catalog: Catalog):
     stream = File(path="test.txt1", source="s3://mybkt")
     stream._set_stream(catalog)
 
-    uid = stream.get_uid()
     data = b"some data is heRe"
-    catalog.cache.store_data(uid, data)
+    catalog.cache.store_data(stream, data)
 
     path = stream.get_local_path()
     assert path is not None
@@ -401,4 +377,5 @@ def test_get_local_path(tmp_path, catalog):
     file._set_stream(catalog)
 
     assert file.get_local_path() is None
-    assert file.get_local_path(download=True) is not None
+    file.ensure_cached()
+    assert file.get_local_path() is not None

@@ -1,11 +1,14 @@
+import hashlib
 import io
 import json
 import logging
 import os
 import posixpath
 import tarfile
+from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import datetime
+from functools import partial
 from io import BytesIO
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, Optional, Union
@@ -14,19 +17,25 @@ from urllib.request import url2pathname
 
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 from PIL import Image
+from pyarrow.dataset import dataset
 from pydantic import Field, field_validator
 
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-from datachain.cache import UniqueId
 from datachain.lib.data_model import DataModel
 from datachain.lib.utils import DataChainError
 from datachain.sql.types import JSON, Boolean, DateTime, Int, String
 from datachain.utils import TIME_ZERO
 
 if TYPE_CHECKING:
+    from typing_extensions import Self
+
     from datachain.catalog import Catalog
+    from datachain.client.fsspec import Client
+    from datachain.dataset import RowDict
+
+sha256 = partial(hashlib.sha256, usedforsecurity=False)
 
 logger = logging.getLogger("datachain")
 
@@ -107,7 +116,11 @@ class File(DataModel):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._catalog = None
-        self._caching_enabled = False
+        self._caching_enabled: bool = False
+
+    @classmethod
+    def _from_row(cls, row: "RowDict") -> "Self":
+        return cls(**{key: row[key] for key in cls._datachain_column_types})
 
     @property
     def name(self):
@@ -118,14 +131,13 @@ class File(DataModel):
         return str(PurePosixPath(self.path).parent)
 
     @contextmanager
-    def open(self, mode: Literal["rb", "r"] = "rb"):
+    def open(self, mode: Literal["rb", "r"] = "rb") -> Iterator[Any]:
         """Open the file and return a file object."""
-        uid = self.get_uid()
-        client = self._catalog.get_client(self.source)
         if self._caching_enabled:
-            client.download(uid, callback=self._download_cb)
+            self.ensure_cached()
+        client: Client = self._catalog.get_client(self.source)
         with client.open_object(
-            uid, use_cache=self._caching_enabled, cb=self._download_cb
+            self, use_cache=self._caching_enabled, cb=self._download_cb
         ) as f:
             yield io.TextIOWrapper(f) if mode == "r" else f
 
@@ -173,23 +185,25 @@ class File(DataModel):
         self._caching_enabled = caching_enabled
         self._download_cb = download_cb
 
-    def get_uid(self) -> UniqueId:
-        """Returns unique ID for file."""
-        dump = self.model_dump()
-        return UniqueId(*(dump[k] for k in self._unique_id_keys))
+    def ensure_cached(self) -> None:
+        if self._catalog is None:
+            raise RuntimeError(
+                "cannot download file to cache because catalog is not setup"
+            )
+        client = self._catalog.get_client(self.source)
+        client.download(self, callback=self._download_cb)
 
-    def get_local_path(self, download: bool = False) -> Optional[str]:
-        """Returns path to a file in a local cache.
-        Return None if file is not cached. Throws an exception if cache is not setup."""
+    def get_local_path(self) -> Optional[str]:
+        """Return path to a file in a local cache.
+
+        Returns None if file is not cached.
+        Raises an exception if cache is not setup.
+        """
         if self._catalog is None:
             raise RuntimeError(
                 "cannot resolve local file path because catalog is not setup"
             )
-        uid = self.get_uid()
-        if download:
-            client = self._catalog.get_client(self.source)
-            client.download(uid, callback=self._download_cb)
-        return self._catalog.cache.get_path(uid)
+        return self._catalog.cache.get_path(self)
 
     def get_file_suffix(self):
         """Returns last part of file name with `.`."""
@@ -243,6 +257,12 @@ class File(DataModel):
     def get_fs(self):
         """Returns `fsspec` filesystem for the file."""
         return self._catalog.get_client(self.source).fs
+
+    def get_hash(self) -> str:
+        fingerprint = f"{self.source}/{self.path}/{self.version}/{self.etag}"
+        if self.location:
+            fingerprint += f"/{self.location}"
+        return sha256(fingerprint.encode()).hexdigest()
 
     def resolve(self) -> "Self":
         """
@@ -360,14 +380,31 @@ class TarVFile(File):
                         break
 
 
-class IndexedFile(DataModel):
-    """Metadata indexed from tabular files.
-
-    Includes `file` and `index` signals.
-    """
+class ArrowRow(DataModel):
+    """`DataModel` for reading row from Arrow-supported file."""
 
     file: File
     index: int
+    kwargs: dict
+
+    @contextmanager
+    def open(self):
+        """Stream row contents from indexed file."""
+        if self.file._caching_enabled:
+            self.file.ensure_cached()
+            path = self.file.get_local_path()
+            ds = dataset(path, **self.kwargs)
+
+        else:
+            path = self.file.get_path()
+            ds = dataset(path, filesystem=self.file.get_fs(), **self.kwargs)
+
+        return ds.take([self.index]).to_reader()
+
+    def read(self):
+        """Returns row contents as dict."""
+        with self.open() as record_batch:
+            return record_batch.to_pylist()[0]
 
 
 def get_file_type(type_: Literal["binary", "text", "image"] = "binary") -> type[File]:

@@ -26,8 +26,8 @@ from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import DataModel, DataType, dict_to_data_model
 from datachain.lib.dataset_info import DatasetInfo
+from datachain.lib.file import ArrowRow, File, get_file_type
 from datachain.lib.file import ExportPlacement as FileExportPlacement
-from datachain.lib.file import File, IndexedFile, get_file_type
 from datachain.lib.listing import (
     is_listing_dataset,
     is_listing_expired,
@@ -58,6 +58,7 @@ from datachain.query.dataset import (
 )
 from datachain.query.schema import DEFAULT_DELIMITER, Column, DatasetRow
 from datachain.sql.functions import path as pathfunc
+from datachain.telemetry import telemetry
 from datachain.utils import inside_notebook
 
 if TYPE_CHECKING:
@@ -246,6 +247,9 @@ class DataChain(DatasetQuery):
             **kwargs,
             indexing_column_types=File._datachain_column_types,
         )
+
+        telemetry.send_event_once("class", "datachain_init", **kwargs)
+
         if settings:
             self._settings = Settings(**settings)
         else:
@@ -1337,8 +1341,7 @@ class DataChain(DatasetQuery):
                     other.signals_schema.resolve(*right_on).db_signals(),
                 )  # type: ignore[arg-type]
             )
-
-        return super()._subtract(other, signals)  # type: ignore[arg-type]
+        return super().subtract(other, signals)  # type: ignore[arg-type]
 
     @classmethod
     def from_values(
@@ -1611,7 +1614,7 @@ class DataChain(DatasetQuery):
                 for name, info in output.model_fields.items()
             }
         if source:
-            output = {"source": IndexedFile} | output  # type: ignore[assignment,operator]
+            output = {"source": ArrowRow} | output  # type: ignore[assignment,operator]
         return self.gen(
             ArrowGenerator(schema, model, source, nrows, **kwargs), output=output
         )

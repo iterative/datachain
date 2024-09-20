@@ -40,7 +40,9 @@ if TYPE_CHECKING:
     from sqlalchemy.dialects.sqlite import Insert
     from sqlalchemy.engine.base import Engine
     from sqlalchemy.schema import SchemaItem
+    from sqlalchemy.sql._typing import _FromClauseArgument, _OnClauseArgument
     from sqlalchemy.sql.elements import ColumnElement
+    from sqlalchemy.sql.selectable import Join
     from sqlalchemy.types import TypeEngine
 
     from datachain.lib.file import File
@@ -649,11 +651,14 @@ class SQLiteWarehouse(AbstractWarehouse):
         self, dataset: DatasetRecord, version: int
     ) -> list[StorageURI]:
         dr = self.dataset_rows(dataset, version)
-        query = dr.select(dr.c.source).distinct()
+        query = dr.select(dr.c.file__source).distinct()
         cur = self.db.cursor()
         cur.row_factory = sqlite3.Row  # type: ignore[assignment]
 
-        return [StorageURI(row["source"]) for row in self.db.execute(query, cursor=cur)]
+        return [
+            StorageURI(row["file__source"])
+            for row in self.db.execute(query, cursor=cur)
+        ]
 
     def merge_dataset_rows(
         self,
@@ -787,6 +792,23 @@ class SQLiteWarehouse(AbstractWarehouse):
 
             if progress_cb:
                 progress_cb(len(batch_ids))
+
+    def join(
+        self,
+        left: "_FromClauseArgument",
+        right: "_FromClauseArgument",
+        onclause: "_OnClauseArgument",
+        inner: bool = True,
+    ) -> "Join":
+        """
+        Join two tables together.
+        """
+        return sqlalchemy.join(
+            left,
+            right,
+            onclause,
+            isouter=not inner,
+        )
 
     def create_pre_udf_table(self, query: "Select") -> "Table":
         """

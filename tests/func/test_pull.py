@@ -15,7 +15,19 @@ from tests.utils import assert_row_names, skip_if_not_sqlite
 
 @pytest.fixture
 def dog_entries():
-    return [e.model_dump() for e in ENTRIES if e.name.startswith("dog")]
+    # TODO remove when we replace ENTRIES with FILES
+    return [
+        {
+            "file__path": e.path,
+            "file__etag": e.etag,
+            "file__version": e.version,
+            "file__is_latest": e.is_latest,
+            "file__last_modified": e.last_modified,
+            "file__size": e.size,
+        }
+        for e in ENTRIES
+        if e.name.startswith("dog")
+    ]
 
 
 @pytest.fixture
@@ -41,8 +53,8 @@ def dog_entries_parquet_lz4(dog_entries) -> bytes:
 
         adapted["sys__id"] = 1
         adapted["sys__rand"] = 1
-        adapted["location"] = b""
-        adapted["source"] = b"s3://dogs"
+        adapted["file__location"] = b""
+        adapted["file__source"] = b"s3://dogs"
         return adapted
 
     dog_entries = [_adapt_row(e) for e in dog_entries]
@@ -57,15 +69,15 @@ def dog_entries_parquet_lz4(dog_entries) -> bytes:
 def schema():
     return {
         "id": {"type": "UInt64"},
-        "path": {"type": "String"},
-        "etag": {"type": "String"},
-        "version": {"type": "String"},
-        "is_latest": {"type": "Boolean"},
-        "last_modified": {"type": "DateTime"},
-        "size": {"type": "Int64"},
         "sys__rand": {"type": "Int64"},
-        "location": {"type": "String"},
-        "source": {"type": "String"},
+        "file__path": {"type": "String"},
+        "file__etag": {"type": "String"},
+        "file__version": {"type": "String"},
+        "file__is_latest": {"type": "Boolean"},
+        "file__last_modified": {"type": "DateTime"},
+        "file__size": {"type": "Int64"},
+        "file__location": {"type": "String"},
+        "file__source": {"type": "String"},
     }
 
 

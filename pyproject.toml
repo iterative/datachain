@@ -46,7 +46,8 @@ dependencies = [
   "Pillow>=10.0.0,<11",
   "msgpack>=1.0.4,<2",
   "psutil",
-  "huggingface_hub"
+  "huggingface_hub",
+  "iterative-telemetry>=0.0.9"
 ]
 
 [project.optional-dependencies]
@@ -80,7 +81,7 @@ tests = [
   "pytest-sugar>=0.9.6",
   "pytest-cov>=4.1.0",
   "pytest-mock>=3.12.0",
-  "pytest-servers[all]>=0.5.5",
+  "pytest-servers[all]>=0.5.7",
   "pytest-benchmark[histogram]",
   "pytest-xdist>=3.3.1",
   "virtualenv",
@@ -104,9 +105,10 @@ examples = [
   "numpy>=1,<2",
   "defusedxml",
   "accelerate",
-  "unstructured[pdf]",
+  "unstructured[pdf, embed-huggingface]",
   "pdfplumber==0.11.4",
-  "huggingface_hub[hf_transfer]"
+  "huggingface_hub[hf_transfer]",
+  "onnx==1.16.1"
 ]
 
 [project.urls]

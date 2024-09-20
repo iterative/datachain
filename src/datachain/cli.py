@@ -15,6 +15,7 @@ import shtab
 from datachain import utils
 from datachain.cli_utils import BooleanOptionalAction, CommaSeparatedArgs, KeyValueArgs
 from datachain.lib.dc import DataChain
+from datachain.telemetry import telemetry
 from datachain.utils import DataChainDir
 
 if TYPE_CHECKING:
@@ -494,27 +495,6 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         help="Query parameters",
     )
 
-    apply_udf_parser = subp.add_parser(
-        "apply-udf", parents=[parent_parser], description="Apply UDF"
-    )
-    apply_udf_parser.add_argument("udf", type=str, help="UDF location")
-    apply_udf_parser.add_argument("source", type=str, help="Source storage or dataset")
-    apply_udf_parser.add_argument("target", type=str, help="Target dataset name")
-    apply_udf_parser.add_argument(
-        "--parallel",
-        nargs="?",
-        type=int,
-        const=-1,
-        default=None,
-        metavar="N",
-        help=(
-            "Use multiprocessing to run the UDF with N worker processes. "
-            "N defaults to the CPU count."
-        ),
-    )
-    apply_udf_parser.add_argument(
-        "--udf-params", type=str, default=None, help="UDF class parameters"
-    )
     subp.add_parser(
         "clear-cache", parents=[parent_parser], description="Clear the local file cache"
     )
@@ -893,6 +873,7 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
         # This also sets this environment variable for any subprocesses
         os.environ["DEBUG_SHOW_SQL_QUERIES"] = "True"
 
+    error = None
     try:
         catalog = get_catalog(client_config=client_config)
         if args.command == "cp":
@@ -1016,10 +997,6 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
                 parallel=args.parallel,
                 params=args.param,
             )
-        elif args.command == "apply-udf":
-            catalog.apply_udf(
-                args.udf, args.source, args.target, args.parallel, args.udf_params
-            )
         elif args.command == "clear-cache":
             clear_cache(catalog)
         elif args.command == "gc":
@@ -1028,14 +1005,16 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
             print(f"invalid command: {args.command}", file=sys.stderr)
             return 1
         return 0
-    except BrokenPipeError:
+    except BrokenPipeError as exc:
         # Python flushes standard streams on exit; redirect remaining output
         # to devnull to avoid another BrokenPipeError at shutdown
         # See: https://docs.python.org/3/library/signal.html#note-on-sigpipe
+        error = str(exc)
         devnull = os.open(os.devnull, os.O_WRONLY)
         os.dup2(devnull, sys.stdout.fileno())
         return 141  # 128 + 13 (SIGPIPE)
     except (KeyboardInterrupt, Exception) as exc:
+        error = str(exc)
         if isinstance(exc, KeyboardInterrupt):
             msg = "Operation cancelled by the user"
         else:
@@ -1053,3 +1032,5 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
 
             pdb.post_mortem()
         return 1
+    finally:
+        telemetry.send_cli_call(args.command, error=error)

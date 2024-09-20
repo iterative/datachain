@@ -25,7 +25,7 @@ from fsspec.asyn import get_loop, sync
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 from tqdm import tqdm
 
-from datachain.cache import DataChainCache, UniqueId
+from datachain.cache import DataChainCache
 from datachain.client.fileslice import FileWrapper
 from datachain.error import ClientError as DataChainClientError
 from datachain.lib.file import File
@@ -186,8 +186,8 @@ class Client(ABC):
     def url(self, path: str, expires: int = 3600, **kwargs) -> str:
         return self.fs.sign(self.get_full_path(path), expiration=expires, **kwargs)
 
-    async def get_current_etag(self, uid: UniqueId) -> str:
-        info = await self.fs._info(self.get_full_path(uid.path))
+    async def get_current_etag(self, file: "File") -> str:
+        info = await self.fs._info(self.get_full_path(file.path))
         return self.info_to_file(info, "").etag
 
     async def get_size(self, path: str) -> int:
@@ -316,7 +316,7 @@ class Client(ABC):
 
     def instantiate_object(
         self,
-        uid: UniqueId,
+        file: "File",
         dst: str,
         progress_bar: tqdm,
         force: bool = False,
@@ -327,10 +327,10 @@ class Client(ABC):
             else:
                 progress_bar.close()
                 raise FileExistsError(f"Path {dst} already exists")
-        self.do_instantiate_object(uid, dst)
+        self.do_instantiate_object(file, dst)
 
-    def do_instantiate_object(self, uid: "UniqueId", dst: str) -> None:
-        src = self.cache.get_path(uid)
+    def do_instantiate_object(self, file: "File", dst: str) -> None:
+        src = self.cache.get_path(file)
         assert src is not None
 
         try:
@@ -340,33 +340,33 @@ class Client(ABC):
             copy2(src, dst)
 
     def open_object(
-        self, uid: UniqueId, use_cache: bool = True, cb: Callback = DEFAULT_CALLBACK
+        self, file: File, use_cache: bool = True, cb: Callback = DEFAULT_CALLBACK
     ) -> BinaryIO:
         """Open a file, including files in tar archives."""
-        if use_cache and (cache_path := self.cache.get_path(uid)):
+        if use_cache and (cache_path := self.cache.get_path(file)):
             return open(cache_path, mode="rb")  # noqa: SIM115
-        return FileWrapper(self.fs.open(self.get_full_path(uid.path)), cb)  # type: ignore[return-value]
+        assert not file.location
+        return FileWrapper(self.fs.open(self.get_full_path(file.path)), cb)  # type: ignore[return-value]
 
-    def download(self, uid: UniqueId, *, callback: Callback = DEFAULT_CALLBACK) -> None:
-        sync(get_loop(), functools.partial(self._download, uid, callback=callback))
+    def download(self, file: File, *, callback: Callback = DEFAULT_CALLBACK) -> None:
+        sync(get_loop(), functools.partial(self._download, file, callback=callback))
 
-    async def _download(self, uid: UniqueId, *, callback: "Callback" = None) -> None:
-        if self.cache.contains(uid):
+    async def _download(self, file: File, *, callback: "Callback" = None) -> None:
+        if self.cache.contains(file):
             # Already in cache, so there's nothing to do.
             return
-        await self._put_in_cache(uid, callback=callback)
+        await self._put_in_cache(file, callback=callback)
 
-    def put_in_cache(self, uid: UniqueId, *, callback: "Callback" = None) -> None:
-        sync(get_loop(), functools.partial(self._put_in_cache, uid, callback=callback))
+    def put_in_cache(self, file: File, *, callback: "Callback" = None) -> None:
+        sync(get_loop(), functools.partial(self._put_in_cache, file, callback=callback))
 
-    async def _put_in_cache(
-        self, uid: UniqueId, *, callback: "Callback" = None
-    ) -> None:
-        if uid.etag:
-            etag = await self.get_current_etag(uid)
-            if uid.etag != etag:
+    async def _put_in_cache(self, file: File, *, callback: "Callback" = None) -> None:
+        assert not file.location
+        if file.etag:
+            etag = await self.get_current_etag(file)
+            if file.etag != etag:
                 raise FileNotFoundError(
-                    f"Invalid etag for {uid.storage}/{uid.path}: "
-                    f"expected {uid.etag}, got {etag}"
+                    f"Invalid etag for {file.source}/{file.path}: "
+                    f"expected {file.etag}, got {etag}"
                 )
-        await self.cache.download(uid, self, callback=callback)
+        await self.cache.download(file, self, callback=callback)
