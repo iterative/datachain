@@ -5,7 +5,7 @@ from datachain.lib.webdataset_laion import WDSLaion
 from datachain.sql import literal
 from datachain.sql.functions import array, greatest, least, string
 
-name = "wds"
+name = "wds_filtered"
 try:
     wds = DataChain.from_dataset(name=name)
 except datachain.error.DatasetNotFoundError:
