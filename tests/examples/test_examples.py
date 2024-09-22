@@ -6,34 +6,42 @@ from typing import Optional
 
 import pytest
 
-get_started_examples = [
-    filename
-    for filename in glob.glob("examples/get_started/**/*.py", recursive=True)
-    # torch-loader will not finish within an hour on Linux runner
-    if "torch" not in filename or os.environ.get("RUNNER_OS") != "Linux"
-]
+get_started_examples = sorted(
+    [
+        filename
+        for filename in glob.glob("examples/get_started/**/*.py", recursive=True)
+        # torch-loader will not finish within an hour on Linux runner
+        if "torch" not in filename or os.environ.get("RUNNER_OS") != "Linux"
+    ]
+)
 
-llm_and_nlp_examples = [
-    filename
-    for filename in glob.glob("examples/llm_and_nlp/**/*.py", recursive=True)
-    # no anthropic token
-    if "claude" not in filename
-]
+llm_and_nlp_examples = sorted(
+    [
+        filename
+        for filename in glob.glob("examples/llm_and_nlp/**/*.py", recursive=True)
+        # no anthropic token
+        if "claude" not in filename
+    ]
+)
 
-multimodal_examples = [
-    filename
-    for filename in glob.glob("examples/multimodal/**/*.py", recursive=True)
-    # no OpenAI token
-    if "openai" not in filename
-]
+multimodal_examples = sorted(
+    [
+        filename
+        for filename in glob.glob("examples/multimodal/**/*.py", recursive=True)
+        # no OpenAI token
+        if "openai" not in filename
+    ]
+)
 
-computer_vision_examples = [
-    filename
-    for filename in glob.glob("examples/computer_vision/**/*.py", recursive=True)
-    # fashion product images tutorial out of scope
-    # and hf download painfully slow
-    if "image_desc" not in filename and "fashion_product_images" not in filename
-]
+computer_vision_examples = sorted(
+    [
+        filename
+        for filename in glob.glob("examples/computer_vision/**/*.py", recursive=True)
+        # fashion product images tutorial out of scope
+        # and hf download painfully slow
+        if "image_desc" not in filename and "fashion_product_images" not in filename
+    ]
+)
 
 
 def smoke_test(example: str, env: Optional[dict] = None):
