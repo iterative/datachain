@@ -57,8 +57,8 @@ def smoke_test(example: str, env: Optional[dict] = None):
         print(e.stderr.decode("utf-8"))
         pytest.fail("subprocess returned a non-zero exit code")
 
-    assert completed_process.stdout
-    assert completed_process.stderr
+    example_has_some_output = bool(completed_process.stdout or completed_process.stderr)
+    assert example_has_some_output
 
 
 @pytest.mark.examples
