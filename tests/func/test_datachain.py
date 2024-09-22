@@ -30,8 +30,9 @@ from datachain.lib.tar import process_tar
 from datachain.lib.udf import Mapper
 from datachain.lib.utils import DataChainError
 from datachain.query.dataset import QueryStep
+from datachain.sql.functions import path as pathfunc
 from datachain.sql.functions.array import cosine_distance, euclidean_distance
-from tests.utils import TARRED_TREE, images_equal, text_embedding
+from tests.utils import NUM_TREE, TARRED_TREE, images_equal, text_embedding
 
 
 def _get_listing_datasets(session):
@@ -900,6 +901,39 @@ def test_avoid_recalculation_after_save(cloud_test_catalog):
     assert isinstance(ds2.starting_step, QueryStep)
     ds2.save("ds2")
     assert calls == 1  # UDF should be called only once
+
+
+@pytest.mark.parametrize(
+    "cloud_type,version_aware,tree",
+    [("s3", True, NUM_TREE), ("file", False, NUM_TREE)],
+    indirect=True,
+)
+def test_udf_after_limit(cloud_test_catalog):
+    ctc = cloud_test_catalog
+
+    def name_int(name: str) -> int:
+        try:
+            return int(name)
+        except ValueError:
+            return 0
+
+    def get_result(chain):
+        res = chain.limit(100).map(name_int=name_int).order_by("name")
+        return list(res.collect("name", "name_int"))
+
+    expected = [(f"{i:06d}", i) for i in range(100)]
+    dc = (
+        DataChain.from_storage(ctc.src_uri, session=ctc.session)
+        .mutate(name=pathfunc.name(C("file.path")))
+        .save()
+    )
+    # We test a few different orderings here, because we've had strange
+    # bugs in the past where calling add_signals() after limit() gave us
+    # incorrect results on clickhouse cloud.
+    # See https://github.com/iterative/dvcx/issues/940
+    assert get_result(dc.order_by("name")) == expected
+    assert len(get_result(dc.order_by("sys.rand"))) == 100
+    assert len(get_result(dc)) == 100
 
 
 @pytest.mark.parametrize(
