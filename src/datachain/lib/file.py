@@ -17,6 +17,7 @@ from urllib.request import url2pathname
 
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 from PIL import Image
+from pyarrow.dataset import dataset
 from pydantic import Field, field_validator
 
 if TYPE_CHECKING:
@@ -439,14 +440,31 @@ class ImageFile(File):
         self.read().save(destination)
 
 
-class IndexedFile(DataModel):
-    """Metadata indexed from tabular files.
-
-    Includes `file` and `index` signals.
-    """
+class ArrowRow(DataModel):
+    """`DataModel` for reading row from Arrow-supported file."""
 
     file: File
     index: int
+    kwargs: dict
+
+    @contextmanager
+    def open(self):
+        """Stream row contents from indexed file."""
+        if self.file._caching_enabled:
+            self.file.ensure_cached()
+            path = self.file.get_local_path()
+            ds = dataset(path, **self.kwargs)
+
+        else:
+            path = self.file.get_path()
+            ds = dataset(path, filesystem=self.file.get_fs(), **self.kwargs)
+
+        return ds.take([self.index]).to_reader()
+
+    def read(self):
+        """Returns row contents as dict."""
+        with self.open() as record_batch:
+            return record_batch.to_pylist()[0]
 
 
 def get_file_type(type_: Literal["binary", "text", "image"] = "binary") -> type[File]:
