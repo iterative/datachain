@@ -1,7 +1,5 @@
-import io
 import os
 from pathlib import Path
-from textwrap import dedent
 from urllib.parse import urlparse
 
 import pytest
@@ -11,20 +9,10 @@ from fsspec.implementations.local import LocalFileSystem
 from datachain import DataChain, File
 from datachain.catalog import parse_edatachain_file
 from datachain.cli import garbage_collect
-from datachain.error import (
-    QueryScriptCompileError,
-    QueryScriptRunError,
-    StorageNotFoundError,
-)
+from datachain.error import StorageNotFoundError
 from datachain.storage import Storage
 from tests.data import ENTRIES
-from tests.utils import (
-    DEFAULT_TREE,
-    assert_row_names,
-    make_index,
-    skip_if_not_sqlite,
-    tree_from_path,
-)
+from tests.utils import DEFAULT_TREE, make_index, skip_if_not_sqlite, tree_from_path
 
 
 def storage_stats(uri, catalog):
@@ -39,37 +27,6 @@ def storage_stats(uri, catalog):
 @pytest.fixture
 def pre_created_ds_name():
     return "pre_created_dataset"
-
-
-@pytest.fixture
-def mock_popen(mocker):
-    m = mocker.patch(
-        "subprocess.Popen", returncode=0, stdout=io.BytesIO(), stderr=io.BytesIO()
-    )
-    m.return_value.__enter__.return_value = m
-    # keep in sync with the returncode
-    m.poll.side_effect = lambda: m.returncode if m.poll.call_count > 1 else None
-    return m
-
-
-@pytest.fixture
-def mock_popen_dataset_created(
-    mocker, monkeypatch, mock_popen, cloud_test_catalog, listed_bucket
-):
-    # create dataset which would be created in subprocess
-    ds_name = "my-ds"
-    job_id = cloud_test_catalog.catalog.metastore.create_job(name="", query="")
-    mocker.patch.object(
-        cloud_test_catalog.catalog.metastore, "create_job", return_value=job_id
-    )
-    monkeypatch.setenv("DATACHAIN_JOB_ID", str(job_id))
-    cloud_test_catalog.catalog.create_dataset_from_sources(
-        ds_name,
-        [f"{cloud_test_catalog.src_uri}/dogs/*"],
-        recursive=True,
-    )
-    mock_popen.configure_mock(stdout=io.BytesIO(b"user log 1\nuser log 2"))
-    yield mock_popen
 
 
 @pytest.fixture
@@ -786,45 +743,6 @@ def test_index_error(cloud_test_catalog):
         cloud_test_catalog.catalog.index([f"{protocol}://does_not_exist"])
 
 
-def test_query(cloud_test_catalog, mock_popen_dataset_created):
-    catalog = cloud_test_catalog.catalog
-    src_uri = cloud_test_catalog.src_uri
-
-    query_script = f"""\
-    from datachain.query import C, DatasetQuery
-    DatasetQuery({src_uri!r}).save("my-ds")
-    """
-    query_script = dedent(query_script)
-
-    catalog.query(query_script)
-
-    dataset = catalog.get_dataset("my-ds")
-    assert dataset
-    assert dataset.versions_values == [1]
-    assert_row_names(catalog, dataset, 1, {"dog1", "dog2", "dog3", "dog4"})
-
-
-def test_query_save_size(cloud_test_catalog, mock_popen_dataset_created):
-    catalog = cloud_test_catalog.catalog
-    src_uri = cloud_test_catalog.src_uri
-
-    query_script = f"""\
-    from datachain.query import C, DatasetQuery
-    DatasetQuery({src_uri!r}).save("my-ds")
-    """
-    query_script = dedent(query_script)
-
-    catalog.query(query_script)
-
-    dataset = catalog.get_dataset("my-ds")
-    assert dataset
-    assert dataset.versions_values == [1]
-
-    dataset_version = dataset.get_version(1)
-    assert dataset_version.num_objects == 4
-    assert dataset_version.size == 15
-
-
 def test_dataset_stats(test_session):
     ids = [1, 2, 3]
     values = tuple(zip(["a", "b", "c"], [1, 2, 3]))
@@ -847,30 +765,6 @@ def test_dataset_stats(test_session):
     dataset_version2 = test_session.catalog.get_dataset(ds2.name).get_version(1)
     assert dataset_version2.num_objects == 3
     assert dataset_version2.size == 18
-
-
-def test_query_fail_to_compile(cloud_test_catalog):
-    catalog = cloud_test_catalog.catalog
-
-    query_script = "syntax error"
-
-    with pytest.raises(QueryScriptCompileError):
-        catalog.query(query_script, _execute_last_expression=True)
-
-
-def test_query_subprocess_wrong_return_code(mock_popen, cloud_test_catalog):
-    mock_popen.configure_mock(returncode=1)
-    catalog = cloud_test_catalog.catalog
-    src_uri = cloud_test_catalog.src_uri
-
-    query_script = f"""
-from datachain.query import DatasetQuery, C
-DatasetQuery('{src_uri}')
-    """
-
-    with pytest.raises(QueryScriptRunError) as exc_info:
-        catalog.query(query_script)
-        assert str(exc_info.value).startswith("Query script exited with error code 1")
 
 
 @pytest.mark.parametrize("cloud_type", ["s3", "azure", "gs"], indirect=True)

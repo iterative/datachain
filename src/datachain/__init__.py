@@ -11,6 +11,7 @@ from datachain.lib.file import (
 from datachain.lib.model_store import ModelStore
 from datachain.lib.udf import Aggregator, Generator, Mapper
 from datachain.lib.utils import AbstractUDF, DataChainError
+from datachain.query import metrics, param
 from datachain.query.session import Session
 
 __all__ = [
@@ -34,4 +35,6 @@ __all__ = [
     "TarVFile",
     "TextFile",
     "is_chain_type",
+    "metrics",
+    "param",
 ]

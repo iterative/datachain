@@ -12,6 +12,7 @@ from typing import (
 from urllib.parse import urlparse
 
 from datachain.client import Client
+from datachain.error import DatasetVersionNotFoundError
 from datachain.sql.types import NAME_TYPES_MAPPING, SQLType
 
 if TYPE_CHECKING:
@@ -417,7 +418,9 @@ class DatasetRecord:
 
     def get_version(self, version: int) -> DatasetVersion:
         if not self.has_version(version):
-            raise ValueError(f"Dataset {self.name} does not have version {version}")
+            raise DatasetVersionNotFoundError(
+                f"Dataset {self.name} does not have version {version}"
+            )
         return next(
             v
             for v in self.versions  # type: ignore [union-attr]
@@ -435,7 +438,9 @@ class DatasetRecord:
         Get identifier in the form my-dataset@v3
         """
         if not self.has_version(version):
-            raise ValueError(f"Dataset {self.name} doesn't have a version {version}")
+            raise DatasetVersionNotFoundError(
+                f"Dataset {self.name} doesn't have a version {version}"
+            )
         return f"{self.name}@v{version}"
 
     def uri(self, version: int) -> str:

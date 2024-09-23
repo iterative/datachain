@@ -1,4 +1,3 @@
-import ast
 import glob
 import io
 import json
@@ -53,9 +52,9 @@ from datachain.error import (
     DataChainError,
     DatasetInvalidVersionError,
     DatasetNotFoundError,
+    DatasetVersionNotFoundError,
     PendingIndexingError,
     QueryScriptCancelError,
-    QueryScriptCompileError,
     QueryScriptRunError,
 )
 from datachain.listing import Listing
@@ -588,37 +587,6 @@ class Catalog:
     @classmethod
     def generate_query_dataset_name(cls) -> str:
         return f"{QUERY_DATASET_PREFIX}_{uuid4().hex}"
-
-    def attach_query_wrapper(self, code_ast):
-        if code_ast.body:
-            last_expr = code_ast.body[-1]
-            if isinstance(last_expr, ast.Expr):
-                new_expressions = [
-                    ast.Import(
-                        names=[ast.alias(name="datachain.query.dataset", asname=None)]
-                    ),
-                    ast.Expr(
-                        value=ast.Call(
-                            func=ast.Attribute(
-                                value=ast.Attribute(
-                                    value=ast.Attribute(
-                                        value=ast.Name(id="datachain", ctx=ast.Load()),
-                                        attr="query",
-                                        ctx=ast.Load(),
-                                    ),
-                                    attr="dataset",
-                                    ctx=ast.Load(),
-                                ),
-                                attr="query_wrapper",
-                                ctx=ast.Load(),
-                            ),
-                            args=[last_expr],
-                            keywords=[],
-                        )
-                    ),
-                ]
-                code_ast.body[-1:] = new_expressions
-        return code_ast
 
     def get_client(self, uri: str, **config: Any) -> Client:
         """
@@ -1219,7 +1187,9 @@ class Catalog:
 
         dataset_version = dataset.get_version(version)
         if not dataset_version:
-            raise ValueError(f"Dataset {dataset.name} does not have version {version}")
+            raise DatasetVersionNotFoundError(
+                f"Dataset {dataset.name} does not have version {version}"
+            )
 
         if not dataset_version.is_final_status():
             raise ValueError("Cannot register dataset version in non final status")
@@ -1590,7 +1560,7 @@ class Catalog:
 
         try:
             remote_dataset_version = remote_dataset.get_version(version)
-        except (ValueError, StopIteration) as exc:
+        except (DatasetVersionNotFoundError, StopIteration) as exc:
             raise DataChainError(
                 f"Dataset {remote_dataset_name} doesn't have version {version}"
                 " on server"
@@ -1731,64 +1701,24 @@ class Catalog:
         query_script: str,
         env: Optional[Mapping[str, str]] = None,
         python_executable: str = sys.executable,
-        save: bool = False,
-        capture_output: bool = True,
+        capture_output: bool = False,
         output_hook: Callable[[str], None] = noop,
         params: Optional[dict[str, str]] = None,
         job_id: Optional[str] = None,
-        _execute_last_expression: bool = False,
     ) -> None:
-        """
-        Method to run custom user Python script to run a query and, as result,
-        creates new dataset from the results of a query.
-        Returns tuple of result dataset and script output.
-
-        Constraints on query script:
-            1. datachain.query.DatasetQuery should be used in order to create query
-            for a dataset
-            2. There should not be any .save() call on DatasetQuery since the idea
-            is to create only one dataset as the outcome of the script
-            3. Last statement must be an instance of DatasetQuery
-
-        If save is set to True, we are creating new dataset with results
-        from dataset query. If it's set to False, we will just print results
-        without saving anything
-
-        Example of query script:
-            from datachain.query import DatasetQuery, C
-            DatasetQuery('s3://ldb-public/remote/datasets/mnist-tiny/').filter(
-                C.size > 1000
-            )
-        """
-        if _execute_last_expression:
-            try:
-                code_ast = ast.parse(query_script)
-                code_ast = self.attach_query_wrapper(code_ast)
-                query_script_compiled = ast.unparse(code_ast)
-            except Exception as exc:
-                raise QueryScriptCompileError(
-                    f"Query script failed to compile, reason: {exc}"
-                ) from exc
-        else:
-            query_script_compiled = query_script
-            assert not save
-
+        cmd = [python_executable, "-c", query_script]
         env = dict(env or os.environ)
         env.update(
             {
                 "DATACHAIN_QUERY_PARAMS": json.dumps(params or {}),
-                "PYTHONPATH": os.getcwd(),  # For local imports
-                "DATACHAIN_QUERY_SAVE": "1" if save else "",
-                "PYTHONUNBUFFERED": "1",
                 "DATACHAIN_JOB_ID": job_id or "",
             },
         )
-        popen_kwargs = {}
+        popen_kwargs: dict[str, Any] = {}
         if capture_output:
             popen_kwargs = {"stdout": subprocess.PIPE, "stderr": subprocess.STDOUT}
 
-        cmd = [python_executable, "-c", query_script_compiled]
-        with subprocess.Popen(cmd, env=env, **popen_kwargs) as proc:  # type: ignore[call-overload]  # noqa: S603
+        with subprocess.Popen(cmd, env=env, **popen_kwargs) as proc:  # noqa: S603
             if capture_output:
                 args = (proc.stdout, output_hook)
                 thread = Thread(target=_process_stream, args=args, daemon=True)

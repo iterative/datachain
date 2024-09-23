@@ -1305,3 +1305,11 @@ def test_process_and_open_tar(cloud_test_catalog, cloud_type):
         (b"bark", f"{prefix}animals.tar/dogs/dog3"),
         (b"ruff", f"{prefix}animals.tar/dogs/others/dog4"),
     }
+
+
+def test_datachain_save_with_job(test_session, catalog, datachain_job_id):
+    DataChain.from_values(value=["val1", "val2"], session=test_session).save("my-ds")
+
+    dataset = catalog.get_dataset("my-ds")
+    result_job_id = dataset.get_version(dataset.latest_version).job_id
+    assert result_job_id == datachain_job_id
