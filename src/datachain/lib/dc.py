@@ -286,12 +286,12 @@ class DataChain:
 
     @property
     def name(self) -> Optional[str]:
-        """Name of the chain."""
+        """Name of the underlying dataset, if there is one."""
         return self._query.name
 
     @property
     def version(self) -> Optional[int]:
-        """Version of the chain."""
+        """Version of the underlying dataset, if there is one."""
         return self._query.version
 
     def __or__(self, other: "Self") -> "Self":
