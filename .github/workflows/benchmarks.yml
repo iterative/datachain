@@ -23,15 +23,18 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-          cache: 'pip'
 
-      - name: Upgrade nox and uv
-        run: |
-          python -m pip install --upgrade 'nox[uv]'
-          nox --version
-          uv --version
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-suffix: benchmarks
+          cache-dependency-glob: pyproject.toml
 
-      - run: uv pip install dvc[gs] --system
-      - run: dvc --cd tests/benchmarks/datasets pull
+      - name: Install nox and dvc
+        run: uv pip install dvc[gs] nox --system
+
+      - name: Pull dataset
+        run: dvc --cd tests/benchmarks/datasets pull
       - name: Run benchmarks
         run: nox -s bench
