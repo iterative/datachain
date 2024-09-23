@@ -39,7 +39,7 @@ def test_args(catalog, mock_popen):
     mock_popen.assert_called_once_with(["mypython", "-c", "pass"], env=expected_env)
 
 
-def test_capture_output(mocker, catalog, mock_popen):
+def test_capture_output(catalog, mock_popen):
     mock_popen.stdout = io.BytesIO(b"Hello, World!\rLorem Ipsum\nDolor Sit Amet\nconse")
     lines = []
 
