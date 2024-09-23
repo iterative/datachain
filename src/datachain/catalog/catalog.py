@@ -52,6 +52,7 @@ from datachain.error import (
     DataChainError,
     DatasetInvalidVersionError,
     DatasetNotFoundError,
+    DatasetVersionNotFoundError,
     PendingIndexingError,
     QueryScriptCancelError,
     QueryScriptRunError,
@@ -1185,7 +1186,9 @@ class Catalog:
 
         dataset_version = dataset.get_version(version)
         if not dataset_version:
-            raise ValueError(f"Dataset {dataset.name} does not have version {version}")
+            raise DatasetVersionNotFoundError(
+                f"Dataset {dataset.name} does not have version {version}"
+            )
 
         if not dataset_version.is_final_status():
             raise ValueError("Cannot register dataset version in non final status")
@@ -1548,7 +1551,7 @@ class Catalog:
 
         try:
             remote_dataset_version = remote_dataset.get_version(version)
-        except (ValueError, StopIteration) as exc:
+        except (DatasetVersionNotFoundError, StopIteration) as exc:
             raise DataChainError(
                 f"Dataset {remote_dataset_name} doesn't have version {version}"
                 " on server"

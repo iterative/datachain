@@ -8,7 +8,11 @@ import sqlalchemy
 from dateutil.parser import isoparse
 
 from datachain.dataset import DatasetDependencyType, DatasetStatus
-from datachain.error import DatasetInvalidVersionError, DatasetNotFoundError
+from datachain.error import (
+    DatasetInvalidVersionError,
+    DatasetNotFoundError,
+    DatasetVersionNotFoundError,
+)
 from datachain.query import C, DatasetQuery, Object, Stream
 from datachain.sql import functions
 from datachain.sql.functions import path as pathfunc
@@ -127,7 +131,7 @@ def test_save_multiple_versions(cloud_test_catalog, animal_dataset):
     assert DatasetQuery(name=ds_name, version=2, catalog=catalog).count() == 3
     assert DatasetQuery(name=ds_name, version=3, catalog=catalog).count() == 3
 
-    with pytest.raises(ValueError):
+    with pytest.raises(DatasetVersionNotFoundError):
         DatasetQuery(name=ds_name, version=4, catalog=catalog).count()
 
 

@@ -8,7 +8,11 @@ import sqlalchemy as sa
 from datachain.client.local import FileClient
 from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.dataset import DatasetDependencyType, DatasetStatus
-from datachain.error import DatasetInvalidVersionError, DatasetNotFoundError
+from datachain.error import (
+    DatasetInvalidVersionError,
+    DatasetNotFoundError,
+    DatasetVersionNotFoundError,
+)
 from datachain.lib.dc import DataChain
 from datachain.lib.file import File
 from datachain.lib.listing import parse_listing_uri
@@ -452,7 +456,7 @@ def test_registering_dataset_invalid_source_version(
 ):
     catalog = cloud_test_catalog.catalog
 
-    with pytest.raises(ValueError) as exc_info:
+    with pytest.raises(DatasetVersionNotFoundError) as exc_info:
         catalog.register_dataset(
             dogs_dataset,
             5,
