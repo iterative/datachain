@@ -1400,45 +1400,6 @@ class Catalog:
         dataset = self.get_dataset(name)
         return self.update_dataset(dataset, **update_data)
 
-    def get_file_signals(
-        self, dataset_name: str, dataset_version: int, row: RowDict
-    ) -> Optional[RowDict]:
-        """
-        Function that returns file signals from dataset row.
-        Note that signal names are without prefix, so if there was 'laion__file__source'
-        in original row, result will have just 'source'
-        Example output:
-            {
-                "source": "s3://ldb-public",
-                "path": "animals/dogs/dog.jpg",
-                ...
-            }
-        """
-        from datachain.lib.file import File
-        from datachain.lib.signal_schema import DEFAULT_DELIMITER, SignalSchema
-
-        version = self.get_dataset(dataset_name).get_version(dataset_version)
-
-        file_signals_values = RowDict()
-
-        schema = SignalSchema.deserialize(version.feature_schema)
-        for file_signals in schema.get_signals(File):
-            prefix = file_signals.replace(".", DEFAULT_DELIMITER) + DEFAULT_DELIMITER
-            file_signals_values[file_signals] = {
-                c_name.removeprefix(prefix): c_value
-                for c_name, c_value in row.items()
-                if c_name.startswith(prefix)
-                and DEFAULT_DELIMITER not in c_name.removeprefix(prefix)
-            }
-
-        if not file_signals_values:
-            return None
-
-        # there can be multiple file signals in a schema, but taking the first
-        # one for now. In future we might add ability to choose from which one
-        # to open object
-        return next(iter(file_signals_values.values()))
-
     def get_file_from_row(
         self, dataset_name: str, dataset_version: int, row: RowDict, signal_name: str
     ) -> "File":

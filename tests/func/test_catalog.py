@@ -847,7 +847,7 @@ def test_garbage_collect(cloud_test_catalog, from_cli, capsys):
     assert catalog.get_temp_table_names() == []
 
 
-def test_get_file_signals(cloud_test_catalog, dogs_dataset):
+def test_get_file_from_row(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
     catalog.metastore.update_dataset_version(
         dogs_dataset,
@@ -878,7 +878,7 @@ def test_get_file_signals(cloud_test_catalog, dogs_dataset):
     )
 
 
-def test_get_file_signals_with_custom_types(cloud_test_catalog, dogs_dataset):
+def test_get_file_from_row_with_custom_types(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
     catalog.metastore.update_dataset_version(
         dogs_dataset,
@@ -908,7 +908,7 @@ def test_get_file_signals_with_custom_types(cloud_test_catalog, dogs_dataset):
     )
 
 
-def test_get_file_signals_no_signals(cloud_test_catalog, dogs_dataset):
+def test_get_file_from_row_no_signals(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
     catalog.metastore.update_dataset_version(
         dogs_dataset,
