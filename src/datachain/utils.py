@@ -1,5 +1,4 @@
 import glob
-import io
 import json
 import os
 import os.path as osp
@@ -17,7 +16,6 @@ from uuid import UUID
 import cloudpickle
 from dateutil import tz
 from dateutil.parser import isoparse
-from pydantic import BaseModel
 
 if TYPE_CHECKING:
     import pandas as pd
