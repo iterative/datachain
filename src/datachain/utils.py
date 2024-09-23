@@ -375,31 +375,7 @@ def get_all_subclasses(cls):
 
 
 def filtered_cloudpickle_dumps(obj: Any) -> bytes:
-    """Equivalent to cloudpickle.dumps, but this supports Pydantic models."""
-    model_namespaces = {}
-
-    with io.BytesIO() as f:
-        pickler = cloudpickle.CloudPickler(f)
-
-        for model_class in get_all_subclasses(BaseModel):
-            # This "is not None" check is needed, because due to multiple inheritance,
-            # it is theoretically possible to get the same class twice from
-            # get_all_subclasses.
-            if model_class.__pydantic_parent_namespace__ is not None:
-                # __pydantic_parent_namespace__ can contain many unnecessary and
-                # unpickleable entities, so should be removed for serialization.
-                model_namespaces[model_class] = (
-                    model_class.__pydantic_parent_namespace__
-                )
-                model_class.__pydantic_parent_namespace__ = None
-
-        try:
-            pickler.dump(obj)
-            return f.getvalue()
-        finally:
-            for model_class, namespace in model_namespaces.items():
-                # Restore original __pydantic_parent_namespace__ locally.
-                model_class.__pydantic_parent_namespace__ = namespace
+    return cloudpickle.dumps(obj)
 
 
 def get_datachain_executable() -> list[str]:
