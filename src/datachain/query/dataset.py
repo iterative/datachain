@@ -1037,7 +1037,7 @@ class DatasetQuery:
         session: Optional[Session] = None,
         indexing_column_types: Optional[dict[str, Any]] = None,
         in_memory: bool = False,
-    ):
+    ) -> None:
         self.session = Session.get(session, catalog=catalog, in_memory=in_memory)
         self.catalog = catalog or self.session.catalog
         self.steps: list[Step] = []
