@@ -15,6 +15,7 @@ validation:
 
 theme:
   name: material
+  custom_dir: overrides
   logo: assets/datachain-white.svg
   favicon: assets/datachain.svg
   icon:
@@ -71,6 +72,7 @@ nav:
       - references/udf.md
       - references/torch.md
       - references/sql.md
+  - DataChain Website: https://datachain.ai" target="_blank"
 
 markdown_extensions:
   - abbr
