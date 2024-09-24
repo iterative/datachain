@@ -243,7 +243,6 @@ class AbstractMetastore(ABC, Serializable):
         size: Optional[int] = None,
         preview: Optional[list[dict]] = None,
         job_id: Optional[str] = None,
-        is_job_result: bool = False,
     ) -> DatasetRecord:
         """Creates new dataset version."""
 
@@ -497,7 +496,6 @@ class AbstractDBMetastore(AbstractMetastore):
             Column("query_script", Text, nullable=False, default=""),
             Column("schema", JSON, nullable=True),
             Column("job_id", Text, nullable=True),
-            Column("is_job_result", Boolean, nullable=False, default=False),
             UniqueConstraint("dataset_id", "version"),
         ]
 
@@ -1009,7 +1007,6 @@ class AbstractDBMetastore(AbstractMetastore):
         size: Optional[int] = None,
         preview: Optional[list[dict]] = None,
         job_id: Optional[str] = None,
-        is_job_result: bool = False,
         conn=None,
     ) -> DatasetRecord:
         """Creates new dataset version."""
@@ -1035,7 +1032,6 @@ class AbstractDBMetastore(AbstractMetastore):
             size=size,
             preview=json.dumps(preview or []),
             job_id=job_id or os.getenv("DATACHAIN_JOB_ID"),
-            is_job_result=is_job_result,
         )
         if ignore_if_exists and hasattr(query, "on_conflict_do_nothing"):
             # SQLite and PostgreSQL both support 'on_conflict_do_nothing',
