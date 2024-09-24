@@ -179,7 +179,6 @@ class DatasetVersion:
     sources: str = ""
     query_script: str = ""
     job_id: Optional[str] = None
-    is_job_result: bool = False
 
     @classmethod
     def parse(  # noqa: PLR0913
@@ -201,7 +200,6 @@ class DatasetVersion:
         sources: str = "",
         query_script: str = "",
         job_id: Optional[str] = None,
-        is_job_result: bool = False,
     ):
         return cls(
             id,
@@ -221,7 +219,6 @@ class DatasetVersion:
             sources,
             query_script,
             job_id,
-            is_job_result,
         )
 
     def __eq__(self, other):
@@ -327,7 +324,6 @@ class DatasetRecord:
         version_query_script: Optional[str],
         version_schema: str,
         version_job_id: Optional[str] = None,
-        version_is_job_result: bool = False,
     ) -> "DatasetRecord":
         labels_lst: list[str] = json.loads(labels) if labels else []
         schema_dct: dict[str, Any] = json.loads(schema) if schema else {}
@@ -353,7 +349,6 @@ class DatasetRecord:
             version_sources,  # type: ignore[arg-type]
             version_query_script,  # type: ignore[arg-type]
             version_job_id,
-            version_is_job_result,
         )
 
         return cls(
