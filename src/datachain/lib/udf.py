@@ -89,7 +89,7 @@ class UDFAdapter:
         download_cb: Callback = DEFAULT_CALLBACK,
         processed_cb: Callback = DEFAULT_CALLBACK,
     ) -> Iterator[Iterable[UDFResult]]:
-        self.inner._catalog = catalog
+        self.inner.catalog = catalog
         if hasattr(self.inner, "setup") and callable(self.inner.setup):
             self.inner.setup()
 
@@ -210,14 +210,14 @@ class UDFBase(AbstractUDF):
     is_output_batched = False
     is_input_grouped = False
     params_spec: Optional[list[str]]
+    catalog: "Optional[Catalog]"
 
     def __init__(self):
         self.params = None
         self.output = None
         self.params_spec = None
         self.output_spec = None
-        self._contains_stream = None
-        self._catalog = None
+        self.catalog = None
         self._func = None
 
     def process(self, *args, **kwargs):
@@ -275,13 +275,6 @@ class UDFBase(AbstractUDF):
     @property
     def name(self):
         return self.__class__.__name__
-
-    def set_catalog(self, catalog):
-        self._catalog = catalog.copy(db=False)
-
-    @property
-    def catalog(self):
-        return self._catalog
 
     def to_udf_wrapper(self, batch: int = 1) -> UDFAdapter:
         assert self.params_spec is not None
@@ -347,7 +340,7 @@ class UDFBase(AbstractUDF):
             for obj in obj_row:
                 if isinstance(obj, File):
                     obj._set_stream(
-                        self._catalog, caching_enabled=cache, download_cb=download_cb
+                        self.catalog, caching_enabled=cache, download_cb=download_cb
                     )
             objs.append(obj_row)
         return objs
@@ -376,7 +369,7 @@ class UDFBase(AbstractUDF):
 
                 if isinstance(obj, File):
                     obj._set_stream(
-                        self._catalog, caching_enabled=cache, download_cb=download_cb
+                        self.catalog, caching_enabled=cache, download_cb=download_cb
                     )
                 output_map[signal].append(obj)
 
