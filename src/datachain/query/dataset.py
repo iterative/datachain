@@ -42,6 +42,7 @@ from datachain.data_storage.schema import (
 )
 from datachain.dataset import DatasetStatus, RowDict
 from datachain.error import DatasetNotFoundError, QueryScriptCancelError
+from datachain.lib.udf import UDFAdapter
 from datachain.progress import CombinedDownloadCallback
 from datachain.sql.functions import rand
 from datachain.utils import (
@@ -53,7 +54,6 @@ from datachain.utils import (
 
 from .schema import C, UDFParamSpec, normalize_param
 from .session import Session
-from .udf import UDFBase
 
 if TYPE_CHECKING:
     from sqlalchemy.sql.elements import ClauseElement
@@ -299,7 +299,7 @@ def adjust_outputs(
     return row
 
 
-def get_udf_col_types(warehouse: "AbstractWarehouse", udf: UDFBase) -> list[tuple]:
+def get_udf_col_types(warehouse: "AbstractWarehouse", udf: UDFAdapter) -> list[tuple]:
     """Optimization: Precompute UDF column types so these don't have to be computed
     in the convert_type function for each row in a loop."""
     dialect = warehouse.db.dialect
@@ -320,7 +320,7 @@ def process_udf_outputs(
     warehouse: "AbstractWarehouse",
     udf_table: "Table",
     udf_results: Iterator[Iterable["UDFResult"]],
-    udf: UDFBase,
+    udf: UDFAdapter,
     batch_size: int = INSERT_BATCH_SIZE,
     cb: Callback = DEFAULT_CALLBACK,
 ) -> None:
@@ -364,7 +364,7 @@ def get_generated_callback(is_generator: bool = False) -> Callback:
 
 @frozen
 class UDFStep(Step, ABC):
-    udf: UDFBase
+    udf: UDFAdapter
     catalog: "Catalog"
     partition_by: Optional[PartitionByType] = None
     parallel: Optional[int] = None
@@ -1465,7 +1465,7 @@ class DatasetQuery:
     @detach
     def add_signals(
         self,
-        udf: UDFBase,
+        udf: UDFAdapter,
         parallel: Optional[int] = None,
         workers: Union[bool, int] = False,
         min_task_size: Optional[int] = None,
@@ -1509,7 +1509,7 @@ class DatasetQuery:
     @detach
     def generate(
         self,
-        udf: UDFBase,
+        udf: UDFAdapter,
         parallel: Optional[int] = None,
         workers: Union[bool, int] = False,
         min_task_size: Optional[int] = None,
