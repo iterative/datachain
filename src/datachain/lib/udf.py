@@ -20,7 +20,6 @@ from datachain.query.batch import (
     RowsOutputBatch,
     UDFInputBatch,
 )
-from datachain.query.schema import ColumnParameter, UDFParameter
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -60,7 +59,6 @@ class UDFProperties:
 @attrs.define(slots=False)
 class UDFAdapter:
     inner: "UDFBase"
-    params: list[UDFParameter]
     output: UDFOutputSpec
     batch: int = 1
 
@@ -137,7 +135,7 @@ class UDFAdapter:
         raise ValueError(f"Unexpected UDF argument: {arg}")
 
     def bind_parameters(self, catalog: "Catalog", row: "RowDict", **kwargs) -> list:
-        return [p.get_value(catalog, row, **kwargs) for p in self.params]
+        return [row[p] for p in self.inner.params.to_udf_spec()]
 
     def _process_results(
         self,
@@ -211,13 +209,11 @@ class UDFBase(AbstractUDF):
     is_input_batched = False
     is_output_batched = False
     is_input_grouped = False
-    params_spec: Optional[list[str]]
     catalog: "Optional[Catalog]"
 
     def __init__(self):
         self.params = None
         self.output = None
-        self.params_spec = None
         self.catalog = None
         self._func = None
 
@@ -245,10 +241,6 @@ class UDFBase(AbstractUDF):
     ):
         self.params = params
         self.output = sign.output_schema
-
-        params_spec = self.params.to_udf_spec()
-        self.params_spec = list(params_spec.keys())
-
         self._func = func
 
     @classmethod
@@ -277,10 +269,8 @@ class UDFBase(AbstractUDF):
         return self.__class__.__name__
 
     def to_udf_wrapper(self, batch: int = 1) -> UDFAdapter:
-        assert self.params_spec is not None
         return UDFAdapter(
             self,
-            [ColumnParameter(p) for p in self.params_spec],
             self.output.to_udf_spec(),
             batch,
         )
