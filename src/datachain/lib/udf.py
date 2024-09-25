@@ -1,9 +1,9 @@
 import sys
 import traceback
 from collections.abc import Iterable, Iterator, Mapping, Sequence
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
+import attrs
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 from pydantic import BaseModel
 
@@ -45,13 +45,28 @@ UDFOutputSpec = Mapping[str, ColumnType]
 UDFResult = dict[str, Any]
 
 
-@dataclass
+@attrs.define
 class UDFProperties:
-    """Container for basic UDF properties."""
+    udf: "UDFAdapter"
 
+    def get_batching(self, use_partitioning: bool = False) -> BatchingStrategy:
+        return self.udf.get_batching(use_partitioning)
+
+    @property
+    def batch(self):
+        return self.udf.batch
+
+
+@attrs.define(slots=False)
+class UDFAdapter:
+    inner: "UDFBase"
     params: list[UDFParameter]
     output: UDFOutputSpec
     batch: int = 1
+
+    @property
+    def signal_names(self) -> Iterable[str]:
+        return self.output.keys()
 
     def get_batching(self, use_partitioning: bool = False) -> BatchingStrategy:
         if use_partitioning:
@@ -62,20 +77,10 @@ class UDFProperties:
             return Batch(self.batch)
         raise ValueError(f"invalid batch size {self.batch}")
 
-    def signal_names(self) -> Iterable[str]:
-        return self.output.keys()
-
-
-class UDFAdapter:
-    def __init__(
-        self,
-        inner: "UDFBase",
-        properties: UDFProperties,
-    ):
-        self.inner = inner
-        self.properties = properties
-        self.signal_names = properties.signal_names()
-        self.output = properties.output
+    @property
+    def properties(self):
+        # For backwards compatibility.
+        return UDFProperties(self)
 
     def run(
         self,
@@ -132,7 +137,7 @@ class UDFAdapter:
         raise ValueError(f"Unexpected UDF argument: {arg}")
 
     def bind_parameters(self, catalog: "Catalog", row: "RowDict", **kwargs) -> list:
-        return [p.get_value(catalog, row, **kwargs) for p in self.properties.params]
+        return [p.get_value(catalog, row, **kwargs) for p in self.params]
 
     def _process_results(
         self,
@@ -213,7 +218,6 @@ class UDFBase(AbstractUDF):
         self.params = None
         self.output = None
         self.params_spec = None
-        self.output_spec = None
         self.catalog = None
         self._func = None
 
@@ -244,7 +248,6 @@ class UDFBase(AbstractUDF):
 
         params_spec = self.params.to_udf_spec()
         self.params_spec = list(params_spec.keys())
-        self.output_spec = self.output.to_udf_spec()
 
         self._func = func
 
@@ -275,13 +278,12 @@ class UDFBase(AbstractUDF):
 
     def to_udf_wrapper(self, batch: int = 1) -> UDFAdapter:
         assert self.params_spec is not None
-        properties = UDFProperties(
-            [ColumnParameter(p) for p in self.params_spec], self.output_spec, batch
+        return UDFAdapter(
+            self,
+            [ColumnParameter(p) for p in self.params_spec],
+            self.output.to_udf_spec(),
+            batch,
         )
-        return UDFAdapter(self, properties)
-
-    def validate_results(self, results, *args, **kwargs):
-        return results
 
     def run_once(self, rows, cache, download_cb):
         if self.is_input_batched:
