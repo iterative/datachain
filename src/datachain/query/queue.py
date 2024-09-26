@@ -1,5 +1,4 @@
 import datetime
-from collections.abc import Iterable, Iterator
 from queue import Empty, Full, Queue
 from struct import pack, unpack
 from time import sleep
@@ -7,7 +6,7 @@ from typing import Any
 
 import msgpack
 
-from datachain.query.batch import RowsOutput, RowsOutputBatch
+from datachain.query.batch import RowsOutputBatch
 
 DEFAULT_BATCH_SIZE = 10000
 STOP_SIGNAL = "STOP"
@@ -108,13 +107,3 @@ def _msgpack_unpack_extended_types(code: int, data: bytes) -> Any:
 
 def msgpack_unpack(data: bytes) -> Any:
     return msgpack.unpackb(data, ext_hook=_msgpack_unpack_extended_types)
-
-
-def marshal(obj: Iterator[RowsOutput]) -> Iterable[bytes]:
-    for row in obj:
-        yield msgpack_pack(row)
-
-
-def unmarshal(obj: Iterator[bytes]) -> Iterable[RowsOutput]:
-    for row in obj:
-        yield msgpack_unpack(row)
