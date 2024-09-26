@@ -609,7 +609,6 @@ def dataset_record():
         description="",
         labels=[],
         versions=[],
-        shadow=False,
         status=1,
         schema={},
         feature_schema={},
