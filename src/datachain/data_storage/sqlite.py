@@ -153,7 +153,7 @@ class SQLiteDatabaseEngine(DatabaseEngine):
             if os.environ.get("DEBUG_SHOW_SQL_QUERIES"):
                 import sys
 
-                db.set_trace_callback(sys.stderr.write)
+                db.set_trace_callback(lambda stmt: print(stmt, file=sys.stderr))
 
             load_usearch_extension(db)
 
