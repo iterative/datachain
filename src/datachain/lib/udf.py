@@ -13,7 +13,6 @@ from datachain.lib.convert.unflatten import unflatten_to_json
 from datachain.lib.file import File
 from datachain.lib.model_store import ModelStore
 from datachain.lib.signal_schema import SignalSchema
-from datachain.lib.udf_signature import UdfSignature
 from datachain.lib.utils import AbstractUDF, DataChainError, DataChainParamsError
 from datachain.query.batch import (
     Batch,
@@ -29,6 +28,7 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
     from datachain.catalog import Catalog
+    from datachain.lib.udf_signature import UdfSignature
     from datachain.query.batch import RowsOutput, UDFInput
 
 
@@ -122,11 +122,11 @@ class UDFAdapter:
                 self.bind_parameters(catalog, row, cache=cache, cb=cb)
                 for row in arg.rows
             ]
-            udf_outputs = self.inner(udf_inputs, cache=cache, download_cb=cb)
+            udf_outputs = self.inner.run_once(udf_inputs, cache=cache, download_cb=cb)
             return self._process_results(arg.rows, udf_outputs, is_generator)
         if isinstance(arg, RowDict):
             udf_inputs = self.bind_parameters(catalog, arg, cache=cache, cb=cb)
-            udf_outputs = self.inner(*udf_inputs, cache=cache, download_cb=cb)
+            udf_outputs = self.inner.run_once(*udf_inputs, cache=cache, download_cb=cb)
             if not is_generator:
                 # udf_outputs is generator already if is_generator=True
                 udf_outputs = [udf_outputs]
@@ -238,9 +238,9 @@ class UDFBase(AbstractUDF):
 
     def _init(
         self,
-        sign: UdfSignature,
+        sign: "UdfSignature",
         params: SignalSchema,
-        func: Callable,
+        func: Optional[Callable],
     ):
         self.params = params
         self.output = sign.output_schema
@@ -254,13 +254,13 @@ class UDFBase(AbstractUDF):
     @classmethod
     def _create(
         cls,
-        sign: UdfSignature,
+        sign: "UdfSignature",
         params: SignalSchema,
     ) -> "Self":
         if isinstance(sign.func, AbstractUDF):
             if not isinstance(sign.func, cls):  # type: ignore[unreachable]
                 raise UdfError(
-                    f"cannot create UDF: provided UDF '{sign.func.__name__}'"
+                    f"cannot create UDF: provided UDF '{type(sign.func).__name__}'"
                     f" must be a child of target class '{cls.__name__}'",
                 )
             result = sign.func
@@ -286,7 +286,7 @@ class UDFBase(AbstractUDF):
     def validate_results(self, results, *args, **kwargs):
         return results
 
-    def __call__(self, *rows, cache, download_cb):
+    def run_once(self, *rows, cache, download_cb):
         if self.is_input_grouped:
             objs = self._parse_grouped_rows(rows[0], cache, download_cb)
         elif self.is_input_batched:
