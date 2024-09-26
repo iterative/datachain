@@ -16,6 +16,7 @@ from typing import (
     overload,
 )
 
+import orjson
 import pandas as pd
 import sqlalchemy
 from pydantic import BaseModel
@@ -58,7 +59,7 @@ from datachain.query.dataset import (
 from datachain.query.schema import DEFAULT_DELIMITER, Column, DatasetRow
 from datachain.sql.functions import path as pathfunc
 from datachain.telemetry import telemetry
-from datachain.utils import inside_notebook
+from datachain.utils import batched_it, inside_notebook
 
 if TYPE_CHECKING:
     from typing_extensions import Concatenate, ParamSpec, Self
@@ -71,6 +72,9 @@ C = Column
 
 _T = TypeVar("_T")
 D = TypeVar("D", bound="DataChain")
+
+
+DEFAULT_PARQUET_CHUNK_SIZE = 100_000
 
 
 def resolve_columns(
@@ -1103,6 +1107,29 @@ class DataChain:
                 rows = (row_factory(db_signals, r) for r in rows)
             yield from rows
 
+    def to_columnar_data_with_names(
+        self, chunk_size: int = DEFAULT_PARQUET_CHUNK_SIZE
+    ) -> tuple[list[str], Iterator[list[list[Any]]]]:
+        """Returns column names and the results as an iterator that provides chunks,
+        with each chunk containing a list of columns, where each column contains a
+        list of the row values for that column in that chunk. Useful for columnar data
+        formats, such as parquet or other OLAP databases.
+        """
+        headers, _ = self._effective_signals_schema.get_headers_with_length()
+        column_names = [".".join(filter(None, header)) for header in headers]
+
+        results_iter = self.collect_flatten()
+
+        def column_chunks() -> Iterator[list[list[Any]]]:
+            for chunk_iter in batched_it(results_iter, chunk_size):
+                columns: list[list[Any]] = [[] for _ in column_names]
+                for row in chunk_iter:
+                    for i, col in enumerate(columns):
+                        col.append(row[i])
+                yield columns
+
+        return column_names, column_chunks()
+
     @overload
     def results(self) -> list[tuple[Any, ...]]: ...
 
@@ -1808,20 +1835,69 @@ class DataChain:
         self,
         path: Union[str, os.PathLike[str], BinaryIO],
         partition_cols: Optional[Sequence[str]] = None,
+        chunk_size: int = DEFAULT_PARQUET_CHUNK_SIZE,
         **kwargs,
     ) -> None:
-        """Save chain to parquet file.
+        """Save chain to parquet file with SignalSchema metadata.
 
         Parameters:
             path : Path or a file-like binary object to save the file.
             partition_cols : Column names by which to partition the dataset.
+            chunk_size : The chunk size of results to read and convert to columnar
+                data, to avoid running out of memory.
         """
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+
+        from datachain.lib.arrow import DATACHAIN_SIGNAL_SCHEMA_PARQUET_KEY
+
         _partition_cols = list(partition_cols) if partition_cols else None
-        return self.to_pandas().to_parquet(
-            path,
-            partition_cols=_partition_cols,
-            **kwargs,
+        signal_schema_metadata = orjson.dumps(
+            self._effective_signals_schema.serialize()
         )
+
+        column_names, column_chunks = self.to_columnar_data_with_names(chunk_size)
+
+        parquet_schema = None
+        parquet_writer = None
+        first_chunk = True
+
+        for chunk in column_chunks:
+            # pyarrow infers the best parquet schema from the python types of
+            # the input data.
+            table = pa.Table.from_pydict(
+                dict(zip(column_names, chunk)),
+                schema=parquet_schema,
+            )
+
+            # Preserve any existing metadata, and add the DataChain SignalSchema.
+            existing_metadata = table.schema.metadata or {}
+            merged_metadata = {
+                **existing_metadata,
+                DATACHAIN_SIGNAL_SCHEMA_PARQUET_KEY: signal_schema_metadata,
+            }
+            table = table.replace_schema_metadata(merged_metadata)
+            parquet_schema = table.schema
+
+            if _partition_cols:
+                # Write to a partitioned parquet dataset.
+                pq.write_to_dataset(
+                    table,
+                    root_path=path,
+                    partition_cols=_partition_cols,
+                    **kwargs,
+                )
+            else:
+                if first_chunk:
+                    # Write to a single parquet file.
+                    parquet_writer = pq.ParquetWriter(path, parquet_schema, **kwargs)
+                    first_chunk = False
+
+                assert parquet_writer
+                parquet_writer.write_table(table)
+
+        if parquet_writer:
+            parquet_writer.close()
 
     @classmethod
     def from_records(

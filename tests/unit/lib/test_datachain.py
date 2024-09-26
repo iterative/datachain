@@ -1269,6 +1269,94 @@ def test_to_parquet_partitioned(tmp_dir, test_session):
     pd.testing.assert_frame_equal(df1, df)
 
 
+@pytest.mark.parametrize("chunk_size", (1000, 2))
+@pytest.mark.parametrize("kwargs", ({}, {"compression": "gzip"}))
+def test_to_from_parquet(tmp_dir, test_session, chunk_size, kwargs):
+    df = pd.DataFrame(DF_DATA)
+    dc_to = DataChain.from_pandas(df, session=test_session)
+
+    path = tmp_dir / "test.parquet"
+    dc_to.to_parquet(path, chunk_size=chunk_size, **kwargs)
+
+    assert path.is_file()
+    pd.testing.assert_frame_equal(pd.read_parquet(path), df)
+
+    dc_from = DataChain.from_parquet(path.as_uri(), session=test_session)
+    df1 = dc_from.select("first_name", "age", "city").to_pandas()
+
+    assert df1.equals(df)
+
+
+@pytest.mark.parametrize("chunk_size", (1000, 2))
+def test_to_from_parquet_partitioned(tmp_dir, test_session, chunk_size):
+    df = pd.DataFrame(DF_DATA)
+    dc_to = DataChain.from_pandas(df, session=test_session)
+
+    path = tmp_dir / "parquets"
+    dc_to.to_parquet(path, partition_cols=["first_name"], chunk_size=chunk_size)
+
+    assert set(path.iterdir()) == {
+        path / f"first_name={name}" for name in df["first_name"]
+    }
+    df1 = pd.read_parquet(path)
+    df1 = df1.reindex(columns=df.columns)
+    df1["first_name"] = df1["first_name"].astype("str")
+    df1 = df1.sort_values("first_name").reset_index(drop=True)
+    pd.testing.assert_frame_equal(df1, df)
+
+    dc_from = DataChain.from_parquet(path.as_uri(), session=test_session)
+    df1 = dc_from.select("first_name", "age", "city").to_pandas()
+    df1 = df1.sort_values("first_name").reset_index(drop=True)
+    assert df1.equals(df)
+
+
+@pytest.mark.parametrize("chunk_size", (1000, 2))
+def test_to_from_parquet_features(tmp_dir, test_session, chunk_size):
+    dc_to = DataChain.from_values(
+        f1=features, num=range(len(features)), session=test_session
+    )
+
+    path = tmp_dir / "test.parquet"
+    dc_to.to_parquet(path, chunk_size=chunk_size)
+
+    assert path.is_file()
+
+    dc_from = DataChain.from_parquet(path.as_uri(), session=test_session)
+
+    n = 0
+    for sample in dc_from.select("f1", "num").collect():
+        assert len(sample) == 2
+        fr, num = sample
+
+        assert isinstance(fr, MyFr)
+        assert isinstance(num, int)
+        assert num == n
+        assert fr == features[n]
+
+        n += 1
+
+    assert n == len(features)
+
+
+@pytest.mark.parametrize("chunk_size", (1000, 2))
+def test_to_from_parquet_nested_features(tmp_dir, test_session, chunk_size):
+    dc_to = DataChain.from_values(sign1=features_nested, session=test_session)
+
+    path = tmp_dir / "test.parquet"
+    dc_to.to_parquet(path, chunk_size=chunk_size)
+
+    assert path.is_file()
+
+    dc_from = DataChain.from_parquet(path.as_uri(), session=test_session)
+
+    for n, sample in enumerate(dc_from.select("sign1").collect()):
+        assert len(sample) == 1
+        nested = sample[0]
+
+        assert isinstance(nested, MyNested)
+        assert nested == features_nested[n]
+
+
 @pytest.mark.parametrize("processes", [False, 2, True])
 @pytest.mark.xdist_group(name="tmpfile")
 def test_parallel(processes, test_session_tmpfile):
