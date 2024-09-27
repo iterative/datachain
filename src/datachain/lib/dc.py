@@ -29,6 +29,7 @@ from datachain.lib.data_model import DataModel, DataType, dict_to_data_model
 from datachain.lib.dataset_info import DatasetInfo
 from datachain.lib.file import ArrowRow, File, get_file_type
 from datachain.lib.file import ExportPlacement as FileExportPlacement
+from datachain.lib.func import Func
 from datachain.lib.listing import (
     is_listing_dataset,
     is_listing_expired,
@@ -1009,6 +1010,72 @@ class DataChain:
         columns = new_schema.db_signals()
         return self._evolve(
             query=self._query.select(*columns), signal_schema=new_schema
+        )
+
+    def group_by(
+        self,
+        *,
+        partition_by: Union[str, Sequence[str]],
+        **kwargs: Func,
+    ) -> "Self":
+        """Groups by specified set of signals."""
+        if not kwargs:
+            raise ValueError("At least one column should be provided for group_by")
+
+        partition_by = [partition_by] if isinstance(partition_by, str) else partition_by
+        if not partition_by:
+            raise ValueError("At least one column should be provided for partition_by")
+
+        all_columns = {
+            DEFAULT_DELIMITER.join(path): _type
+            for path, _type, has_subtree, _ in self.signals_schema.get_flat_tree()
+            if not has_subtree
+        }
+
+        partition_by_columns = []
+        schema_fields = {}
+        for col_name in partition_by:
+            col_type = all_columns.get(col_name)
+            if col_type is None:
+                raise DataChainColumnError(
+                    col_name, f"Column {col_name} not found in schema"
+                )
+            column = Column(col_name, python_to_sql(col_type))
+            partition_by_columns.append(column)
+            schema_fields[col_name] = col_type
+
+        select_columns = []
+        for field, func in kwargs.items():
+            cols = []
+            result_type = func.result_type
+            for col_name in func.cols:
+                col_type = all_columns.get(col_name)
+                if col_type is None:
+                    raise DataChainColumnError(
+                        col_name, f"Column {col_name} not found in schema"
+                    )
+                cols.append(Column(col_name, python_to_sql(col_type)))
+                if result_type is None:
+                    result_type = col_type
+                elif col_type != result_type:
+                    raise DataChainColumnError(
+                        col_name,
+                        (
+                            f"Column {col_name} has type {col_type}"
+                            f"but expected {result_type}"
+                        ),
+                    )
+            if result_type is None:
+                raise ValueError(
+                    f"Cannot infer type for function {func} with columns {func.cols}"
+                )
+
+            select_columns.append(func.inner(*cols).label(field))
+            schema_fields[field] = result_type
+
+        return self._evolve(
+            query=self._query.group_by(select_columns, partition_by_columns),
+            signal_schema=SignalSchema(schema_fields),
         )
 
     def mutate(self, **kwargs) -> "Self":

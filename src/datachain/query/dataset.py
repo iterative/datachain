@@ -957,6 +957,24 @@ class SQLJoin(Step):
 
 
 @frozen
+class SQLGroupBy(SQLClause):
+    cols: Sequence[Union[str, ColumnElement]]
+    group_by: Sequence[Union[str, ColumnElement]]
+
+    def apply_sql_clause(self, query) -> Select:
+        subquery = query.subquery()
+
+        cols = [
+            subquery.c[str(c)] if isinstance(c, (str, C)) else c
+            for c in [*self.group_by, *self.cols]
+        ]
+        if not cols:
+            cols = subquery.c
+
+        return sqlalchemy.select(*cols).select_from(subquery).group_by(*self.group_by)
+
+
+@frozen
 class GroupBy(Step):
     """Group rows by a specific column."""
 
@@ -1410,9 +1428,13 @@ class DatasetQuery:
         return query.as_scalar()
 
     @detach
-    def group_by(self, *cols: ColumnElement) -> "Self":
+    def group_by(
+        self,
+        cols: Sequence[ColumnElement],
+        group_by: Sequence[ColumnElement],
+    ) -> "Self":
         query = self.clone()
-        query.steps.append(GroupBy(cols))
+        query.steps.append(SQLGroupBy(cols, group_by))
         return query
 
     @detach
