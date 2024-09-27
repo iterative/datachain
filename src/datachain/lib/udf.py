@@ -126,7 +126,7 @@ class UDFAdapter:
             return self._process_results(arg.rows, udf_outputs, is_generator)
         if isinstance(arg, RowDict):
             udf_inputs = self.bind_parameters(catalog, arg, cache=cache, cb=cb)
-            udf_outputs = self.inner.run_once(*udf_inputs, cache=cache, download_cb=cb)
+            udf_outputs = self.inner.run_once(udf_inputs, cache=cache, download_cb=cb)
             if not is_generator:
                 # udf_outputs is generator already if is_generator=True
                 udf_outputs = [udf_outputs]
@@ -286,11 +286,11 @@ class UDFBase(AbstractUDF):
     def validate_results(self, results, *args, **kwargs):
         return results
 
-    def run_once(self, *rows, cache, download_cb):
+    def run_once(self, rows, cache, download_cb):
         if self.is_input_grouped:
-            objs = self._parse_grouped_rows(rows[0], cache, download_cb)
+            objs = self._parse_grouped_rows(rows, cache, download_cb)
         elif self.is_input_batched:
-            objs = zip(*self._parse_rows(rows[0], cache, download_cb))
+            objs = zip(*self._parse_rows(rows, cache, download_cb))
         else:
             objs = self._parse_rows([rows], cache, download_cb)[0]
 
@@ -316,8 +316,8 @@ class UDFBase(AbstractUDF):
         ):
             res = list(res)
             assert len(res) == len(
-                rows[0]
-            ), f"{self.name} returns {len(res)} rows while len(rows[0]) expected"
+                rows
+            ), f"{self.name} returns {len(res)} rows while {len(rows)} expected"
 
         return res
 
