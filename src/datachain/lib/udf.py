@@ -277,36 +277,23 @@ class UDFBase(AbstractUDF):
             batch,
         )
 
+    def _pre_process(self, rows, cache, download_cb):
+        return self._parse_rows([rows], cache, download_cb)[0]
+
     def run_once(self, rows, cache, download_cb):
-        if self.is_input_batched:
-            objs = zip(*self._parse_rows(rows, cache, download_cb))
-        else:
-            objs = self._parse_rows([rows], cache, download_cb)[0]
-
+        objs = self._pre_process(rows, cache, download_cb)
         result_objs = self.process_safe(objs)
+        return self._post_process(result_objs, rows)
 
-        if not self.is_output_batched:
-            result_objs = [result_objs]
-
+    def _post_process(self, result_objs, orig_rows):
         # Generator expression is required, otherwise the value will be materialized
         res = (self._flatten_row(row) for row in result_objs)
 
-        if not self.is_output_batched:
-            res = list(res)
-            assert (
-                len(res) == 1
-            ), f"{self.name} returns {len(res)} rows while it's not batched"
-            if isinstance(res[0], tuple):
-                res = res[0]
-        elif (
-            self.is_input_batched
-            and self.is_output_batched
-            and not self.is_input_grouped
-        ):
+        if self.is_input_batched and not self.is_input_grouped:
             res = list(res)
             assert len(res) == len(
-                rows
-            ), f"{self.name} returns {len(res)} rows while {len(rows)} expected"
+                orig_rows
+            ), f"{self.name} returns {len(res)} rows while {len(orig_rows)} expected"
 
         return res
 
@@ -356,12 +343,18 @@ class UDFBase(AbstractUDF):
 class Mapper(UDFBase):
     """Inherit from this class to pass to `DataChain.map()`."""
 
+    def _post_process(self, result_objs, orig_rows):
+        return self._flatten_row(result_objs)
+
 
 class BatchMapper(UDFBase):
     """Inherit from this class to pass to `DataChain.batch_map()`."""
 
     is_input_batched = True
     is_output_batched = True
+
+    def _pre_process(self, rows, cache, download_cb):
+        return zip(*self._parse_rows(rows, cache, download_cb))
 
 
 class Generator(UDFBase):
@@ -376,3 +369,6 @@ class Aggregator(UDFBase):
     is_input_batched = True
     is_output_batched = True
     is_input_grouped = True
+
+    def _pre_process(self, rows, cache, download_cb):
+        return zip(*self._parse_rows(rows, cache, download_cb))
