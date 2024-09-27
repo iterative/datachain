@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from datachain.dataset import RowDict
 from datachain.lib.convert.flatten import flatten
+from datachain.lib.data_model import DataValue
 from datachain.lib.file import File
 from datachain.lib.signal_schema import SignalSchema
 from datachain.lib.utils import AbstractUDF, DataChainError, DataChainParamsError
@@ -135,6 +136,7 @@ class UDFAdapter:
         raise ValueError(f"Unexpected UDF argument: {arg}")
 
     def bind_parameters(self, catalog: "Catalog", row: "RowDict", **kwargs) -> list:
+        assert self.inner.params
         return [row[p] for p in self.inner.params.to_udf_spec()]
 
     def _process_results(
@@ -212,7 +214,7 @@ class UDFBase(AbstractUDF):
     catalog: "Optional[Catalog]"
 
     def __init__(self):
-        self.params = None
+        self.params: Optional[SignalSchema] = None
         self.output = None
         self.catalog = None
         self._func = None
@@ -320,12 +322,16 @@ class UDFBase(AbstractUDF):
     def _obj_to_list(obj):
         return flatten(obj) if isinstance(obj, BaseModel) else [obj]
 
-    def _parse_rows(self, rows, cache, download_cb):
+    def _parse_rows(
+        self, rows, cache: bool, download_cb: Callback
+    ) -> list[list[DataValue]]:
+        assert self.params
         objs = []
         for row in rows:
             obj_row = self.params.row_to_objs(row)
             for obj in obj_row:
                 if isinstance(obj, File):
+                    assert self.catalog is not None
                     obj._set_stream(
                         self.catalog, caching_enabled=cache, download_cb=download_cb
                     )
