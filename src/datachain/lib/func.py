@@ -1,6 +1,9 @@
 from typing import TYPE_CHECKING, Callable, Optional
 
-from sqlalchemy import func
+from sqlalchemy import func as sa_func
+
+from datachain.query.schema import DEFAULT_DELIMITER
+from datachain.sql import functions as dc_func
 
 if TYPE_CHECKING:
     from datachain import DataType
@@ -12,17 +15,36 @@ class Func:
     def __init__(
         self,
         inner: Callable,
-        cols: tuple[str, ...],
+        col: Optional[str] = None,
         result_type: Optional["DataType"] = None,
     ) -> None:
         self.inner = inner
-        self.cols = [col.replace(".", "__") for col in cols]
+        self.col = col.replace(".", DEFAULT_DELIMITER) if col else None
         self.result_type = result_type
 
 
-def sum(*cols: str) -> Func:
-    return Func(inner=func.sum, cols=cols)
+def count(col: Optional[str] = None) -> Func:
+    return Func(inner=sa_func.count, col=col, result_type=int)
 
 
-def count(*cols: str) -> Func:
-    return Func(inner=func.count, cols=cols, result_type=int)
+def sum(col: str) -> Func:
+    return Func(inner=sa_func.sum, col=col)
+
+
+def avg(col: str) -> Func:
+    return Func(inner=dc_func.avg, col=col)
+
+
+def min(col: str) -> Func:
+    return Func(inner=sa_func.min, col=col)
+
+
+def max(col: str) -> Func:
+    return Func(inner=sa_func.max, col=col)
+
+
+def concat(col: str, separator="") -> Func:
+    def inner(arg):
+        return sa_func.aggregate_strings(arg, separator)
+
+    return Func(inner=inner, col=col, result_type=str)

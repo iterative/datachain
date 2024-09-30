@@ -400,6 +400,13 @@ class SignalSchema:
             if ModelStore.is_pydantic(finfo.annotation):
                 SignalSchema._set_file_stream(getattr(obj, field), catalog, cache)
 
+    def db_columns_types(self) -> dict[str, type]:
+        return {
+            DEFAULT_DELIMITER.join(path): _type
+            for path, _type, has_subtree, _ in self.get_flat_tree()
+            if not has_subtree
+        }
+
     def db_signals(
         self, name: Optional[str] = None, as_columns=False
     ) -> Union[list[str], list[Column]]:
