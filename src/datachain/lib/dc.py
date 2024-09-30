@@ -1019,62 +1019,60 @@ class DataChain:
         **kwargs: Func,
     ) -> "Self":
         """Groups by specified set of signals."""
-        if not kwargs:
-            raise ValueError("At least one column should be provided for group_by")
-
         partition_by = [partition_by] if isinstance(partition_by, str) else partition_by
         if not partition_by:
             raise ValueError("At least one column should be provided for partition_by")
 
-        all_columns = {
-            DEFAULT_DELIMITER.join(path): _type
-            for path, _type, has_subtree, _ in self.signals_schema.get_flat_tree()
-            if not has_subtree
-        }
+        if not kwargs:
+            raise ValueError("At least one column should be provided for group_by")
+        for col_name, func in kwargs.items():
+            if not isinstance(func, Func):
+                raise DataChainColumnError(
+                    col_name,
+                    f"Column {col_name} has type {type(func)} but expected Func object",
+                )
 
-        partition_by_columns = []
+        schema_columns = self.signals_schema.db_columns_types()
         schema_fields = {}
+
+        # validate partition_by columns and add them to the schema
+        partition_by_columns: list[Column] = []
         for col_name in partition_by:
-            col_type = all_columns.get(col_name)
+            db_col_name = col_name.replace(".", DEFAULT_DELIMITER)
+            col_type = schema_columns.get(db_col_name)
             if col_type is None:
                 raise DataChainColumnError(
                     col_name, f"Column {col_name} not found in schema"
                 )
-            column = Column(col_name, python_to_sql(col_type))
-            partition_by_columns.append(column)
-            schema_fields[col_name] = col_type
+            partition_by_columns.append(Column(db_col_name, python_to_sql(col_type)))
+            schema_fields[db_col_name] = col_type
 
-        select_columns = []
-        for field, func in kwargs.items():
-            cols = []
+        # validate signal columns and add them to the schema
+        signal_columns: list[Column] = []
+        for col_name, func in kwargs.items():
             result_type = func.result_type
-            for col_name in func.cols:
-                col_type = all_columns.get(col_name)
+            if func.col is None:
+                signal_columns.append(func.inner().label(col_name))
+            else:
+                col_type = schema_columns.get(func.col)
                 if col_type is None:
                     raise DataChainColumnError(
-                        col_name, f"Column {col_name} not found in schema"
+                        func.col, f"Column {func.col} not found in schema"
                     )
-                cols.append(Column(col_name, python_to_sql(col_type)))
                 if result_type is None:
                     result_type = col_type
-                elif col_type != result_type:
-                    raise DataChainColumnError(
-                        col_name,
-                        (
-                            f"Column {col_name} has type {col_type}"
-                            f"but expected {result_type}"
-                        ),
-                    )
+                col = Column(func.col, python_to_sql(col_type))
+                signal_columns.append(func.inner(col).label(col_name))
+
             if result_type is None:
-                raise ValueError(
-                    f"Cannot infer type for function {func} with columns {func.cols}"
+                raise DataChainColumnError(
+                    col_name, f"Cannot infer type for function {func}"
                 )
 
-            select_columns.append(func.inner(*cols).label(field))
-            schema_fields[field] = result_type
+            schema_fields[col_name] = result_type
 
         return self._evolve(
-            query=self._query.group_by(select_columns, partition_by_columns),
+            query=self._query.group_by(signal_columns, partition_by_columns),
             signal_schema=SignalSchema(schema_fields),
         )
 
