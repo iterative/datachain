@@ -345,7 +345,6 @@ class Client(ABC):
         """Open a file, including files in tar archives."""
         if use_cache and (cache_path := self.cache.get_path(file)):
             return open(cache_path, mode="rb")  # noqa: SIM115
-        assert not file.location
         return FileWrapper(self.fs.open(self.get_full_path(file.path)), cb)  # type: ignore[return-value]
 
     def download(self, file: File, *, callback: Callback = DEFAULT_CALLBACK) -> None:
@@ -361,7 +360,6 @@ class Client(ABC):
         sync(get_loop(), functools.partial(self._put_in_cache, file, callback=callback))
 
     async def _put_in_cache(self, file: File, *, callback: "Callback" = None) -> None:
-        assert not file.location
         if file.etag:
             etag = await self.get_current_etag(file)
             if file.etag != etag:

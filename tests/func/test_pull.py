@@ -53,7 +53,6 @@ def dog_entries_parquet_lz4(dog_entries) -> bytes:
 
         adapted["sys__id"] = 1
         adapted["sys__rand"] = 1
-        adapted["file__location"] = b""
         adapted["file__source"] = b"s3://dogs"
         return adapted
 
@@ -76,7 +75,6 @@ def schema():
         "file__is_latest": {"type": "Boolean"},
         "file__last_modified": {"type": "DateTime"},
         "file__size": {"type": "Int64"},
-        "file__location": {"type": "String"},
         "file__source": {"type": "String"},
     }
 

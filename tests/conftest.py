@@ -621,7 +621,6 @@ def dataset_rows():
     return [
         {
             "id": i,
-            "location": "",
             "source": "s3://my-bucket",
             "dir_type": 0,
             "parent": "input/text_emd_1m",

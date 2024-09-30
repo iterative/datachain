@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 from datachain.lib.data_model import DataModel
 from datachain.lib.utils import DataChainError
-from datachain.sql.types import JSON, Boolean, DateTime, Int, String
+from datachain.sql.types import Boolean, DateTime, Int, String
 from datachain.utils import TIME_ZERO
 
 if TYPE_CHECKING:
@@ -58,7 +58,6 @@ class File(DataModel):
     etag: str = Field(default="")
     is_latest: bool = Field(default=True)
     last_modified: datetime = Field(default=TIME_ZERO)
-    location: Optional[Union[dict, list[dict]]] = Field(default=None)
 
     _datachain_column_types: ClassVar[dict[str, Any]] = {
         "source": String,
@@ -68,7 +67,6 @@ class File(DataModel):
         "etag": String,
         "is_latest": Boolean,
         "last_modified": DateTime,
-        "location": JSON,
     }
 
     _unique_id_keys: ClassVar[list[str]] = [
@@ -78,7 +76,6 @@ class File(DataModel):
         "etag",
         "version",
         "is_latest",
-        "location",
         "last_modified",
     ]
 
@@ -96,12 +93,6 @@ class File(DataModel):
                     f"Unable to convert string '{v}' to dict for File feature: {e}"
                 ) from None
         return v
-
-    # Workaround for empty JSONs converted to empty strings in some DBs.
-    @field_validator("location", mode="before")
-    @classmethod
-    def validate_location(cls, v):
-        return File._validate_dict(v)
 
     @field_validator("path", mode="before")
     @classmethod
@@ -260,8 +251,6 @@ class File(DataModel):
 
     def get_hash(self) -> str:
         fingerprint = f"{self.source}/{self.path}/{self.version}/{self.etag}"
-        if self.location:
-            fingerprint += f"/{self.location}"
         return sha256(fingerprint.encode()).hexdigest()
 
     def resolve(self) -> "Self":
@@ -292,7 +281,6 @@ class File(DataModel):
                 version=converted_info.version,
                 is_latest=converted_info.is_latest,
                 last_modified=converted_info.last_modified,
-                location=self.location,
             )
         except (FileNotFoundError, PermissionError, OSError) as e:
             logger.warning("File system error when resolving %s: %s", self.path, str(e))
@@ -305,7 +293,6 @@ class File(DataModel):
             version="",
             is_latest=True,
             last_modified=TIME_ZERO,
-            location=self.location,
         )
 
 

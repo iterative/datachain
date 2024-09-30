@@ -32,4 +32,3 @@ def test_listing_generator(cloud_test_catalog, cloud_type):
             assert cat_file.path == cat_entry.path
         assert cat_file.size == cat_entry.size
         assert cat_file.is_latest == cat_entry.is_latest
-        assert cat_file.location is None

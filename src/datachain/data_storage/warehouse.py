@@ -475,27 +475,17 @@ class AbstractWarehouse(ABC, Serializable):
         self,
         query: sa.Select,
         type: str,
-        include_subobjects: bool = True,
     ) -> sa.Select:
         file_group: Sequence[int]
         if type in {"f", "file", "files"}:
-            if include_subobjects:
-                file_group = DirTypeGroup.SUBOBJ_FILE
-            else:
-                file_group = DirTypeGroup.FILE
+            file_group = DirTypeGroup.FILE
         elif type in {"d", "dir", "directory", "directories"}:
-            if include_subobjects:
-                file_group = DirTypeGroup.SUBOBJ_DIR
-            else:
-                file_group = DirTypeGroup.DIR
+            file_group = DirTypeGroup.DIR
         else:
             raise ValueError(f"invalid file type: {type!r}")
 
         c = query.selected_columns
-        q = query.where(c.dir_type.in_(file_group))
-        if not include_subobjects:
-            q = q.where((c.location == "") | (c.location.is_(None)))
-        return q
+        return query.where(c.dir_type.in_(file_group))
 
     def get_nodes(self, query) -> Iterator[Node]:
         """
@@ -628,7 +618,6 @@ class AbstractWarehouse(ABC, Serializable):
             dr.c.last_modified,
             with_default(dr.c.size),
             with_default(dr.c.sys__rand),
-            dr.c.location,
             de.c.source,
         ).select_from(de.outerjoin(dr.table, de.c.sys__id == dr.c.sys__id))
 
@@ -779,7 +768,6 @@ class AbstractWarehouse(ABC, Serializable):
         type: Optional[str] = None,
         conds=None,
         order_by: Optional[Union[str, list[str]]] = None,
-        include_subobjects: bool = True,
     ) -> sa.Select:
         if not conds:
             conds = []
@@ -804,7 +792,7 @@ class AbstractWarehouse(ABC, Serializable):
         query = sa.select(*columns)
         query = query.where(*conds)
         if type is not None:
-            query = self.add_node_type_where(query, type, include_subobjects)
+            query = self.add_node_type_where(query, type)
         if order_by is not None:
             if isinstance(order_by, str):
                 order_by = [order_by]
@@ -816,7 +804,6 @@ class AbstractWarehouse(ABC, Serializable):
         dataset_rows: "DataTable",
         node: Node,
         sort: Union[list[str], str, None] = None,
-        include_subobjects: bool = True,
     ) -> Iterator[NodeWithPath]:
         """
         Returns all file nodes that are "below" some node.
@@ -827,7 +814,6 @@ class AbstractWarehouse(ABC, Serializable):
             dr,
             node.path,
             type="f",
-            include_subobjects=include_subobjects,
         )
         if sort is not None:
             if not isinstance(sort, list):

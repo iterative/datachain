@@ -199,7 +199,6 @@ def test_from_records_empty_chain_without_schema(test_session):
         "etag",
         "is_latest",
         "last_modified",
-        "location",
     }
     assert ds.count() == 0
 
