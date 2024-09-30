@@ -1357,6 +1357,29 @@ def test_to_from_parquet_nested_features(tmp_dir, test_session, chunk_size):
         assert nested == features_nested[n]
 
 
+@pytest.mark.parametrize("chunk_size", (1000, 2))
+def test_to_from_parquet_two_top_level_features(tmp_dir, test_session, chunk_size):
+    dc_to = DataChain.from_values(
+        f1=features, nest1=features_nested, session=test_session
+    )
+
+    path = tmp_dir / "test.parquet"
+    dc_to.to_parquet(path, chunk_size=chunk_size)
+
+    assert path.is_file()
+
+    dc_from = DataChain.from_parquet(path.as_uri(), session=test_session)
+
+    for n, sample in enumerate(dc_from.select("f1", "nest1").collect()):
+        assert len(sample) == 2
+        fr, nested = sample
+
+        assert isinstance(fr, MyFr)
+        assert fr == features[n]
+        assert isinstance(nested, MyNested)
+        assert nested == features_nested[n]
+
+
 @pytest.mark.parametrize("processes", [False, 2, True])
 @pytest.mark.xdist_group(name="tmpfile")
 def test_parallel(processes, test_session_tmpfile):
