@@ -98,23 +98,14 @@ class UDFAdapter:
             if isinstance(batch, RowsOutputBatch):
                 n_rows = len(batch.rows)
                 rows = [RowDict(zip(udf_fields, row)) for row in batch.rows]
-                udf_inputs = [
-                    self.bind_parameters(catalog, row, cache=cache, cb=download_cb)
-                    for row in rows
-                ]
-                udf_outputs = self.inner.run_once(
-                    udf_inputs, cache=cache, download_cb=download_cb
-                )
+                udf_inputs = self.inner._pre_process(rows, cache, download_cb)
+                udf_outputs = self.inner.run_once(udf_inputs, n_rows=n_rows)
                 output = self._process_results(rows, udf_outputs, is_generator)
             else:
                 n_rows = 1
                 row = RowDict(zip(udf_fields, batch))
-                udf_input = self.bind_parameters(
-                    catalog, row, cache=cache, cb=download_cb
-                )
-                udf_outputs = self.inner.run_once(
-                    udf_input, cache=cache, download_cb=download_cb
-                )
+                udf_input = self.inner._pre_process(row, cache, download_cb)
+                udf_outputs = self.inner.run_once(udf_input)
                 if not is_generator:
                     # udf_outputs is generator already if is_generator=True
                     udf_outputs = [udf_outputs]
@@ -124,10 +115,6 @@ class UDFAdapter:
 
         if hasattr(self.inner, "teardown") and callable(self.inner.teardown):
             self.inner.teardown()
-
-    def bind_parameters(self, catalog: "Catalog", row: "RowDict", **kwargs) -> list:
-        assert self.inner.params
-        return [row[p] for p in self.inner.params.to_udf_spec()]
 
     def _process_results(
         self,
@@ -268,22 +255,21 @@ class UDFBase(AbstractUDF):
         )
 
     def _pre_process(self, rows, cache, download_cb):
-        return self._parse_rows([rows], cache, download_cb)[0]
+        return self._parse_row(rows, cache, download_cb)
 
-    def run_once(self, rows, cache, download_cb):
-        objs = self._pre_process(rows, cache, download_cb)
-        result_objs = self.process_safe(objs)
-        return self._post_process(result_objs, rows)
+    def run_once(self, rows, n_rows=1):
+        result_objs = self.process_safe(rows)
+        return self._post_process(result_objs, n_rows)
 
-    def _post_process(self, result_objs, orig_rows):
+    def _post_process(self, result_objs, n_rows):
         # Generator expression is required, otherwise the value will be materialized
         res = (self._flatten_row(row) for row in result_objs)
 
         if self.is_input_batched and not self.is_input_grouped:
             res = list(res)
-            assert len(res) == len(
-                orig_rows
-            ), f"{self.name} returns {len(res)} rows while {len(orig_rows)} expected"
+            assert (
+                len(res) == n_rows
+            ), f"{self.name} returns {len(res)} rows, but {n_rows} were expected"
 
         return res
 
@@ -302,18 +288,19 @@ class UDFBase(AbstractUDF):
     def _parse_rows(
         self, rows, cache: bool, download_cb: Callback
     ) -> list[list[DataValue]]:
+        return [self._parse_row(row, cache, download_cb) for row in rows]
+
+    def _parse_row(self, row, cache: bool, download_cb: Callback) -> list[DataValue]:
         assert self.params
-        objs = []
-        for row in rows:
-            obj_row = self.params.row_to_objs(row)
-            for obj in obj_row:
-                if isinstance(obj, File):
-                    assert self.catalog is not None
-                    obj._set_stream(
-                        self.catalog, caching_enabled=cache, download_cb=download_cb
-                    )
-            objs.append(obj_row)
-        return objs
+        row = [row[p] for p in self.params.to_udf_spec()]
+        obj_row = self.params.row_to_objs(row)
+        for obj in obj_row:
+            if isinstance(obj, File):
+                assert self.catalog is not None
+                obj._set_stream(
+                    self.catalog, caching_enabled=cache, download_cb=download_cb
+                )
+        return obj_row
 
     def process_safe(self, obj_rows):
         try:
@@ -333,7 +320,7 @@ class UDFBase(AbstractUDF):
 class Mapper(UDFBase):
     """Inherit from this class to pass to `DataChain.map()`."""
 
-    def _post_process(self, result_objs, orig_rows):
+    def _post_process(self, result_objs, n_rows):
         return self._flatten_row(result_objs)
 
 
