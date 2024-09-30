@@ -19,7 +19,6 @@ from datachain.query.batch import (
     NoBatching,
     Partition,
     RowsOutputBatch,
-    UDFInputBatch,
 )
 
 if TYPE_CHECKING:
@@ -27,7 +26,7 @@ if TYPE_CHECKING:
 
     from datachain.catalog import Catalog
     from datachain.lib.udf_signature import UdfSignature
-    from datachain.query.batch import RowsOutput, UDFInput
+    from datachain.query.batch import RowsOutput
 
 
 class UdfError(DataChainParamsError):
@@ -98,42 +97,33 @@ class UDFAdapter:
         for batch in udf_inputs:
             if isinstance(batch, RowsOutputBatch):
                 n_rows = len(batch.rows)
-                inputs: UDFInput = UDFInputBatch(
-                    [RowDict(zip(udf_fields, row)) for row in batch.rows]
+                rows = [RowDict(zip(udf_fields, row)) for row in batch.rows]
+                udf_inputs = [
+                    self.bind_parameters(catalog, row, cache=cache, cb=download_cb)
+                    for row in rows
+                ]
+                udf_outputs = self.inner.run_once(
+                    udf_inputs, cache=cache, download_cb=download_cb
                 )
+                output = self._process_results(rows, udf_outputs, is_generator)
             else:
                 n_rows = 1
-                inputs = RowDict(zip(udf_fields, batch))
-            output = self.run_once(catalog, inputs, is_generator, cache, cb=download_cb)
+                row = RowDict(zip(udf_fields, batch))
+                udf_input = self.bind_parameters(
+                    catalog, row, cache=cache, cb=download_cb
+                )
+                udf_outputs = self.inner.run_once(
+                    udf_input, cache=cache, download_cb=download_cb
+                )
+                if not is_generator:
+                    # udf_outputs is generator already if is_generator=True
+                    udf_outputs = [udf_outputs]
+                output = self._process_results([row], udf_outputs, is_generator)
             processed_cb.relative_update(n_rows)
             yield output
 
         if hasattr(self.inner, "teardown") and callable(self.inner.teardown):
             self.inner.teardown()
-
-    def run_once(
-        self,
-        catalog: "Catalog",
-        arg: "UDFInput",
-        is_generator: bool = False,
-        cache: bool = False,
-        cb: Callback = DEFAULT_CALLBACK,
-    ) -> Iterable[UDFResult]:
-        if isinstance(arg, UDFInputBatch):
-            udf_inputs = [
-                self.bind_parameters(catalog, row, cache=cache, cb=cb)
-                for row in arg.rows
-            ]
-            udf_outputs = self.inner.run_once(udf_inputs, cache=cache, download_cb=cb)
-            return self._process_results(arg.rows, udf_outputs, is_generator)
-        if isinstance(arg, RowDict):
-            udf_inputs = self.bind_parameters(catalog, arg, cache=cache, cb=cb)
-            udf_outputs = self.inner.run_once(udf_inputs, cache=cache, download_cb=cb)
-            if not is_generator:
-                # udf_outputs is generator already if is_generator=True
-                udf_outputs = [udf_outputs]
-            return self._process_results([arg], udf_outputs, is_generator)
-        raise ValueError(f"Unexpected UDF argument: {arg}")
 
     def bind_parameters(self, catalog: "Catalog", row: "RowDict", **kwargs) -> list:
         assert self.inner.params
