@@ -13,6 +13,7 @@ from multiprocess import get_context
 
 from datachain.catalog import Catalog
 from datachain.catalog.loader import get_distributed_class
+from datachain.lib.udf import UDFAdapter, UDFResult
 from datachain.query.dataset import (
     get_download_callback,
     get_generated_callback,
@@ -27,7 +28,6 @@ from datachain.query.queue import (
     put_into_queue,
     unmarshal,
 )
-from datachain.query.udf import UDFBase, UDFResult
 from datachain.utils import batched_it
 
 DEFAULT_BATCH_SIZE = 10000
@@ -336,7 +336,7 @@ class ProcessedCallback(Callback):
 @attrs.define
 class UDFWorker:
     catalog: Catalog
-    udf: UDFBase
+    udf: UDFAdapter
     task_queue: "multiprocess.Queue"
     done_queue: "multiprocess.Queue"
     is_generator: bool

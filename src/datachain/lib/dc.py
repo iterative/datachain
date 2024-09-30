@@ -72,6 +72,7 @@ C = Column
 
 _T = TypeVar("_T")
 D = TypeVar("D", bound="DataChain")
+UDFObjT = TypeVar("UDFObjT", bound=UDFBase)
 
 
 DEFAULT_PARQUET_CHUNK_SIZE = 100_000
@@ -823,7 +824,7 @@ class DataChain:
 
     def gen(
         self,
-        func: Optional[Callable] = None,
+        func: Optional[Union[Callable, Generator]] = None,
         params: Union[None, str, Sequence[str]] = None,
         output: OutputType = None,
         **signal_map,
@@ -935,12 +936,12 @@ class DataChain:
 
     def _udf_to_obj(
         self,
-        target_class: type[UDFBase],
-        func: Optional[Callable],
+        target_class: type[UDFObjT],
+        func: Optional[Union[Callable, UDFObjT]],
         params: Union[None, str, Sequence[str]],
         output: OutputType,
         signal_map,
-    ) -> UDFBase:
+    ) -> UDFObjT:
         is_generator = target_class.is_output_batched
         name = self.name or ""
 
