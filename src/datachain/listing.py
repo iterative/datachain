@@ -10,7 +10,7 @@ from sqlalchemy.sql import func
 from tqdm import tqdm
 
 from datachain.lib.file import File
-from datachain.node import DirType, Node, NodeWithPath
+from datachain.node import Node, NodeWithPath
 from datachain.sql.functions import path as pathfunc
 from datachain.utils import suffix_to_number
 
@@ -102,10 +102,6 @@ class Listing:
         return self.warehouse.get_node_by_path(self.dataset_rows, path)
 
     def ls_path(self, node, fields):
-        if node.location or node.dir_type == DirType.TAR_ARCHIVE:
-            return self.warehouse.select_node_fields_by_parent_path_tar(
-                self.dataset_rows, node.path, fields
-            )
         return self.warehouse.select_node_fields_by_parent_path(
             self.dataset_rows, node.path, fields
         )
@@ -233,16 +229,10 @@ class Listing:
         return self.warehouse.size(self.dataset_rows, node, count_files)
 
     def subtree_files(self, node: Node, sort=None):
-        if node.dir_type == DirType.TAR_ARCHIVE or node.location:
-            include_subobjects = True
-        else:
-            include_subobjects = False
-
         return self.warehouse.get_subtree_files(
             self.dataset_rows,
             node,
             sort=sort,
-            include_subobjects=include_subobjects,
         )
 
     def get_dirs_by_parent_path(

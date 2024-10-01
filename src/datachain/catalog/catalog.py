@@ -62,7 +62,7 @@ from datachain.listing import Listing
 from datachain.node import DirType, Node, NodeWithPath
 from datachain.nodes_thread_pool import NodesThreadPool
 from datachain.remote.studio import StudioClient
-from datachain.sql.types import JSON, Boolean, DateTime, Int64, SQLType, String
+from datachain.sql.types import Boolean, DateTime, Int64, SQLType, String
 from datachain.storage import Storage, StorageStatus, StorageURI
 from datachain.utils import (
     DataChainDir,
@@ -663,7 +663,6 @@ class Catalog:
             Column("is_latest", Boolean),
             Column("last_modified", DateTime(timezone=True)),
             Column("size", Int64),
-            Column("location", JSON),
             Column("source", String),
         ]
 

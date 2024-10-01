@@ -476,7 +476,6 @@ def test_from_storage_check_rows(tmp_dir, test_session):
             etag=stat.st_mtime.hex(),
             is_latest=True,
             last_modified=datetime.fromtimestamp(mtime, tz=tz),
-            location=None,
         )
 
 

@@ -1,5 +1,4 @@
 import functools
-import json
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from fnmatch import fnmatch
@@ -10,7 +9,7 @@ import sqlalchemy as sa
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 
 from datachain.lib.file import File
-from datachain.sql.types import JSON, Boolean, DateTime, Int64, SQLType, String
+from datachain.sql.types import Boolean, DateTime, Int64, SQLType, String
 
 if TYPE_CHECKING:
     from datachain.catalog import Catalog
@@ -233,7 +232,6 @@ class DatasetRow:
         "source": String,
         "path": String,
         "size": Int64,
-        "location": JSON,
         "is_latest": Boolean,
         "last_modified": DateTime,
         "version": String,
@@ -245,7 +243,6 @@ class DatasetRow:
         path: str,
         source: str = "",
         size: int = 0,
-        location: Optional[dict[str, Any]] = None,
         is_latest: bool = True,
         last_modified: Optional[datetime] = None,
         version: str = "",
@@ -262,16 +259,12 @@ class DatasetRow:
         str,
         int,
     ]:
-        if location:
-            location = json.dumps([location])  # type: ignore [assignment]
-
         last_modified = last_modified or datetime.now(timezone.utc)
 
         return (  # type: ignore [return-value]
             source,
             path,
             size,
-            location,
             is_latest,
             last_modified,
             version,

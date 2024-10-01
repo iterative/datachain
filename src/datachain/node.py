@@ -54,7 +54,6 @@ class Node:
     is_latest: bool = True
     last_modified: Optional[datetime] = None
     size: int = 0
-    location: Optional[str] = None
     source: StorageURI = StorageURI("")
     dir_type: int = DirType.FILE
 
@@ -109,7 +108,6 @@ class Node:
             version=self.version or "",
             etag=self.etag,
             is_latest=self.is_latest,
-            location=self.location,
             last_modified=self.last_modified or TIME_ZERO,
         )
 
@@ -128,7 +126,6 @@ class Node:
             size=_dval("size"),
             last_modified=_dval("last_modified"),
             version=_dval("version"),
-            location=_dval("location"),
             dir_type=DirType.FILE,
         )
 

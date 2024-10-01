@@ -32,7 +32,6 @@ def test_dataset_table_compilation():
             Column("is_latest", Boolean),
             Column("last_modified", DateTime(timezone=True)),
             Column("size", Int64, nullable=False, index=True),
-            Column("location", JSON),
             Column("source", String, nullable=False),
             Column("score", Float, nullable=False),
             Column("meta_info", JSON),
@@ -52,7 +51,6 @@ def test_dataset_table_compilation():
         "\tis_latest BOOLEAN, \n"
         "\tlast_modified DATETIME, \n"
         "\tsize INTEGER NOT NULL, \n"
-        "\tlocation JSON, \n"
         "\tsource VARCHAR NOT NULL, \n"
         "\tscore FLOAT NOT NULL, \n"
         "\tmeta_info JSON, \n"

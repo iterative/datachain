@@ -1,4 +1,3 @@
-import json
 from unittest.mock import Mock
 
 import pytest
@@ -200,34 +199,6 @@ def test_cache_get_path_without_cache():
     stream = File(path="test.txt1", source="s3://mybkt")
     with pytest.raises(RuntimeError):
         stream.get_local_path()
-
-
-def test_json_from_string():
-    d = {"e": 12}
-
-    file = File(path="something", location=d)
-    assert file.location == d
-
-    file = File(path="something", location=None)
-    assert file.location is None
-
-    file = File(path="something", location="")
-    assert file.location is None
-
-    file = File(path="something", location=json.dumps(d))
-    assert file.location == d
-
-    with pytest.raises(ValueError):
-        File(path="something", location="{not a json}")
-
-
-def test_file_info_jsons():
-    file = File(path="something", location="")
-    assert file.location is None
-
-    d = {"e": 12}
-    file = File(path="something", location=json.dumps(d))
-    assert file.location == d
 
 
 def test_get_path_local(catalog):

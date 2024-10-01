@@ -10,7 +10,7 @@ from typing import (
 
 import sqlalchemy as sa
 from sqlalchemy.sql import func as f
-from sqlalchemy.sql.expression import false, null, true
+from sqlalchemy.sql.expression import false, true
 
 from datachain.sql.functions import path
 from datachain.sql.types import Int, SQLType, UInt64
@@ -84,7 +84,6 @@ class DirExpansion:
             q.c.source,
             q.c.path,
             q.c.version,
-            q.c.location,
         )
 
     @staticmethod
@@ -96,7 +95,6 @@ class DirExpansion:
                 q.c.source,
                 q.c.path,
                 q.c.version,
-                f.max(q.c.location).label("location"),
             )
             .select_from(q)
             .group_by(q.c.source, q.c.path, q.c.is_dir, q.c.version)
@@ -114,7 +112,6 @@ class DirExpansion:
                 q.c.source,
                 parent.label("path"),
                 sa.literal("").label("version"),
-                null().label("location"),
             ).where(parent != "")
         )
         return cls.apply_group_by(q)
