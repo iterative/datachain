@@ -45,6 +45,6 @@ def max(col: str) -> Func:
 
 def concat(col: str, separator="") -> Func:
     def inner(arg):
-        return sa_func.aggregate_strings(arg, separator)
+        return dc_func.array.group_concat(arg, separator)
 
     return Func(inner=inner, col=col, result_type=str)
