@@ -1109,6 +1109,16 @@ def test_from_csv(tmp_dir, test_session):
     assert df1.equals(df)
 
 
+def test_to_from_csv(tmp_dir, test_session):
+    df = pd.DataFrame(DF_DATA)
+    dc_to = DataChain.from_pandas(df, session=test_session)
+    path = tmp_dir / "test.csv"
+    dc_to.to_csv(path)
+    dc_from = DataChain.from_csv(path.as_uri(), session=test_session)
+    df1 = dc_from.select("first_name", "age", "city").to_pandas()
+    assert df1.equals(df)
+
+
 @skip_if_not_sqlite
 def test_from_csv_in_memory(tmp_dir):
     df = pd.DataFrame(DF_DATA)
@@ -1116,6 +1126,17 @@ def test_from_csv_in_memory(tmp_dir):
     df.to_csv(path, index=False)
     dc = DataChain.from_csv(path.as_uri(), in_memory=True)
     df1 = dc.select("first_name", "age", "city").to_pandas()
+    assert df1.equals(df)
+
+
+@skip_if_not_sqlite
+def test_to_from_csv_in_memory(tmp_dir):
+    df = pd.DataFrame(DF_DATA)
+    dc_to = DataChain.from_pandas(df, in_memory=True)
+    path = tmp_dir / "test.csv"
+    dc_to.to_csv(path)
+    dc_from = DataChain.from_csv(path.as_uri(), in_memory=True)
+    df1 = dc_from.select("first_name", "age", "city").to_pandas()
     assert df1.equals(df)
 
 
@@ -1208,6 +1229,43 @@ def test_from_csv_nrows(tmp_dir, test_session):
     dc = DataChain.from_csv(path.as_uri(), nrows=2, session=test_session)
     df1 = dc.select("first_name", "age", "city").to_pandas()
     assert df1.equals(df[:2])
+
+
+def test_to_csv_features(tmp_dir, test_session):
+    dc_to = DataChain.from_values(
+        f1=features, num=range(len(features)), session=test_session
+    )
+    path = tmp_dir / "test.csv"
+    dc_to.to_csv(path)
+    with open(path) as f:
+        lines = f.read().split("\n")
+    assert lines == ["f1.nnn,f1.count,num", "n1,3,0", "n2,5,1", "n1,1,2", ""]
+
+
+def test_to_tsv_features(tmp_dir, test_session):
+    dc_to = DataChain.from_values(
+        f1=features, num=range(len(features)), session=test_session
+    )
+    path = tmp_dir / "test.csv"
+    dc_to.to_csv(path, delimiter="\t")
+    with open(path) as f:
+        lines = f.read().split("\n")
+    assert lines == ["f1.nnn\tf1.count\tnum", "n1\t3\t0", "n2\t5\t1", "n1\t1\t2", ""]
+
+
+def test_to_csv_features_nested(tmp_dir, test_session):
+    dc_to = DataChain.from_values(sign1=features_nested, session=test_session)
+    path = tmp_dir / "test.csv"
+    dc_to.to_csv(path)
+    with open(path) as f:
+        lines = f.read().split("\n")
+    assert lines == [
+        "sign1.label,sign1.fr.nnn,sign1.fr.count",
+        "label_0,n1,3",
+        "label_1,n2,5",
+        "label_2,n1,1",
+        "",
+    ]
 
 
 def test_from_parquet(tmp_dir, test_session):
