@@ -983,10 +983,9 @@ class DataChain:
         row is left in the result set.
 
         Example:
-        ```py
-         dc.distinct("file.parent", "file.name")
-        )
-        ```
+            ```py
+            dc.distinct("file.parent", "file.name")
+            ```
         """
         return self._evolve(
             query=self._query.distinct(
@@ -1015,11 +1014,33 @@ class DataChain:
     def group_by(
         self,
         *,
-        partition_by: Union[str, Sequence[str]],
+        partition_by: Union[
+            Union[str, GenericFunction], Sequence[Union[str, GenericFunction]]
+        ],
         **kwargs: Func,
     ) -> "Self":
-        """Groups by specified set of signals."""
-        partition_by = [partition_by] if isinstance(partition_by, str) else partition_by
+        """Group rows by specified set of signals and return new signals
+        with aggregated values.
+
+        Example:
+            Using column name(s) in partition_by:
+            ```py
+            chain = chain.group_by(
+                cnt=func.count(),
+                partition_by=("file_source", "file_ext"),
+            )
+
+            Using GenericFunction in partition_by:
+            ```py
+            chain = chain.group_by(
+                total_size=func.sum("file.size"),
+                partition_by=func.file_ext(C("file.path")),
+            )
+            ```
+        """
+        partition_by = (
+            partition_by if isinstance(partition_by, (list, tuple)) else [partition_by]
+        )
         if not partition_by:
             raise ValueError("At least one column should be provided for partition_by")
 
@@ -1036,16 +1057,18 @@ class DataChain:
         schema_fields = {}
 
         # validate partition_by columns and add them to the schema
-        partition_by_columns: list[Column] = []
-        for col_name in partition_by:
-            db_col_name = col_name.replace(".", DEFAULT_DELIMITER)
-            col_type = schema_columns.get(db_col_name)
-            if col_type is None:
-                raise DataChainColumnError(
-                    col_name, f"Column {col_name} not found in schema"
-                )
-            partition_by_columns.append(Column(db_col_name, python_to_sql(col_type)))
-            schema_fields[db_col_name] = col_type
+        partition_by_columns: list[Union[Column, GenericFunction]] = []
+        for col in partition_by:
+            if isinstance(col, GenericFunction):
+                partition_by_columns.append(col)
+                schema_fields[col.name] = col.type
+            else:
+                col_name = col.replace(".", DEFAULT_DELIMITER)
+                col_type = schema_columns.get(col_name)
+                if col_type is None:
+                    raise DataChainColumnError(col, f"Column {col} not found in schema")
+                partition_by_columns.append(Column(col_name, python_to_sql(col_type)))
+                schema_fields[col_name] = col_type
 
         # validate signal columns and add them to the schema
         signal_columns: list[Column] = []

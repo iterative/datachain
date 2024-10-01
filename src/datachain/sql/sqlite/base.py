@@ -85,6 +85,7 @@ def setup():
     compiles(Values, "sqlite")(compile_values)
     compiles(random.rand, "sqlite")(compile_rand)
     compiles(array.avg, "sqlite")(compile_avg)
+    compiles(array.group_concat, "sqlite")(compile_group_concat)
 
     if load_usearch_extension(sqlite3.connect(":memory:")):
         compiles(array.cosine_distance, "sqlite")(compile_cosine_distance_ext)
@@ -398,6 +399,10 @@ def compile_rand(element, compiler, **kwargs):
 
 def compile_avg(element, compiler, **kwargs):
     return compiler.process(func.avg(*element.clauses.clauses), **kwargs)
+
+
+def compile_group_concat(element, compiler, **kwargs):
+    return compiler.process(func.aggregate_strings(*element.clauses.clauses), **kwargs)
 
 
 def load_usearch_extension(conn) -> bool:
