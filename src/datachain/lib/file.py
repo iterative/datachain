@@ -354,8 +354,8 @@ class ImageFile(File):
 
     def read(self):
         """Returns `PIL.Image.Image` object."""
-        with self.open() as stream:
-            return Image.open(BytesIO(stream.read()))
+        fobj = super().read()
+        return Image.open(BytesIO(fobj))
 
     def save(self, destination: str):
         """Writes it's content to destination"""
