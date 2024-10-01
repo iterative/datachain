@@ -1,8 +1,9 @@
 import re
 from collections.abc import Sequence
 from tempfile import NamedTemporaryFile
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
+import orjson
 import pyarrow as pa
 from pyarrow.dataset import CsvFileFormat, dataset
 from tqdm import tqdm
@@ -10,6 +11,7 @@ from tqdm import tqdm
 from datachain.lib.data_model import dict_to_data_model
 from datachain.lib.file import ArrowRow, File
 from datachain.lib.model_store import ModelStore
+from datachain.lib.signal_schema import SignalSchema
 from datachain.lib.udf import Generator
 
 if TYPE_CHECKING:
@@ -18,6 +20,9 @@ if TYPE_CHECKING:
 
     from datachain.lib.data_model import DataType
     from datachain.lib.dc import DataChain
+
+
+DATACHAIN_SIGNAL_SCHEMA_PARQUET_KEY = b"DataChain SignalSchema"
 
 
 class ArrowGenerator(Generator):
@@ -61,28 +66,35 @@ class ArrowGenerator(Generator):
                 path, filesystem=file.get_fs(), schema=self.input_schema, **self.kwargs
             )
         hf_schema = _get_hf_schema(ds.schema)
+        use_datachain_schema = (
+            bool(ds.schema.metadata)
+            and DATACHAIN_SIGNAL_SCHEMA_PARQUET_KEY in ds.schema.metadata
+        )
         index = 0
         with tqdm(desc="Parsed by pyarrow", unit=" rows") as pbar:
             for record_batch in ds.to_batches():
                 for record in record_batch.to_pylist():
-                    vals = list(record.values())
-                    if self.output_schema:
-                        fields = self.output_schema.model_fields
-                        vals_dict = {}
-                        for i, ((field, field_info), val) in enumerate(
-                            zip(fields.items(), vals)
-                        ):
-                            anno = field_info.annotation
-                            if hf_schema:
-                                from datachain.lib.hf import convert_feature
+                    if use_datachain_schema and self.output_schema:
+                        vals = [_nested_model_instantiate(record, self.output_schema)]
+                    else:
+                        vals = list(record.values())
+                        if self.output_schema:
+                            fields = self.output_schema.model_fields
+                            vals_dict = {}
+                            for i, ((field, field_info), val) in enumerate(
+                                zip(fields.items(), vals)
+                            ):
+                                anno = field_info.annotation
+                                if hf_schema:
+                                    from datachain.lib.hf import convert_feature
 
-                                feat = list(hf_schema[0].values())[i]
-                                vals_dict[field] = convert_feature(val, feat, anno)
-                            elif ModelStore.is_pydantic(anno):
-                                vals_dict[field] = anno(**val)  # type: ignore[misc]
-                            else:
-                                vals_dict[field] = val
-                        vals = [self.output_schema(**vals_dict)]
+                                    feat = list(hf_schema[0].values())[i]
+                                    vals_dict[field] = convert_feature(val, feat, anno)
+                                elif ModelStore.is_pydantic(anno):
+                                    vals_dict[field] = anno(**val)  # type: ignore[misc]
+                                else:
+                                    vals_dict[field] = val
+                            vals = [self.output_schema(**vals_dict)]
                     if self.source:
                         kwargs: dict = self.kwargs
                         # Can't serialize CsvFileFormat; may lose formatting options.
@@ -113,6 +125,9 @@ def schema_to_output(schema: pa.Schema, col_names: Optional[Sequence[str]] = Non
         )
     if not col_names:
         col_names = schema.names
+    signal_schema = _get_datachain_schema(schema)
+    if signal_schema:
+        return signal_schema.values
     columns = _convert_col_names(col_names)  # type: ignore[arg-type]
     hf_schema = _get_hf_schema(schema)
     if hf_schema:
@@ -197,3 +212,33 @@ def _get_hf_schema(
         features = schema_from_arrow(schema)
         return features, get_output_schema(features)
     return None
+
+
+def _get_datachain_schema(schema: "pa.Schema") -> Optional[SignalSchema]:
+    """Return a restored SignalSchema from parquet metadata, if any is found."""
+    if schema.metadata and DATACHAIN_SIGNAL_SCHEMA_PARQUET_KEY in schema.metadata:
+        serialized_signal_schema = orjson.loads(
+            schema.metadata[DATACHAIN_SIGNAL_SCHEMA_PARQUET_KEY]
+        )
+        return SignalSchema.deserialize(serialized_signal_schema)
+    return None
+
+
+def _nested_model_instantiate(
+    column_values: dict[str, Any], model: type["BaseModel"], prefix: str = ""
+) -> "BaseModel":
+    """Instantiate the given model and all sub-models/fields based on the provided
+    column values."""
+    vals_dict = {}
+    for field, field_info in model.model_fields.items():
+        anno = field_info.annotation
+        cur_path = f"{prefix}.{field}" if prefix else field
+        if ModelStore.is_pydantic(anno):
+            vals_dict[field] = _nested_model_instantiate(
+                column_values,
+                anno,  # type: ignore[arg-type]
+                prefix=cur_path,
+            )
+        elif cur_path in column_values:
+            vals_dict[field] = column_values[cur_path]
+    return model(**vals_dict)
