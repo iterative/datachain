@@ -158,6 +158,24 @@ def test_get_next_ids(id_generator):
     assert get_rows(id_generator) == {("foo", 23), ("bar", 1000)}
 
 
+@skip_if_not_sqlite
+def test_get_legacy_next_ids(mocker, id_generator):
+    from datachain.data_storage.sqlite import sqlite3
+
+    mocker.patch.object(sqlite3, "sqlite_version", "1.0.0")
+
+    assert get_rows(id_generator) == set()
+
+    assert id_generator.get_next_ids("foo", 3) == range(1, 4)
+    assert get_rows(id_generator) == {("foo", 3)}
+
+    assert id_generator.get_next_ids("foo", 20) == range(4, 24)
+    assert get_rows(id_generator) == {("foo", 23)}
+
+    assert id_generator.get_next_ids("bar", 1000) == range(1, 1001)
+    assert get_rows(id_generator) == {("foo", 23), ("bar", 1000)}
+
+
 def test_delete_uri(id_generator):
     assert get_rows(id_generator) == set()
 
