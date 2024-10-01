@@ -24,6 +24,7 @@ from sqlalchemy.sql.functions import GenericFunction
 from sqlalchemy.sql.sqltypes import NullType
 
 from datachain.lib.convert.python_to_sql import python_to_sql
+from datachain.lib.convert.sql_to_python import sql_to_python
 from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import DataModel, DataType, dict_to_data_model
 from datachain.lib.dataset_info import DatasetInfo
@@ -1039,7 +1040,9 @@ class DataChain:
             ```
         """
         partition_by = (
-            partition_by if isinstance(partition_by, (list, tuple)) else [partition_by]
+            [partition_by]
+            if isinstance(partition_by, (str, GenericFunction))
+            else partition_by
         )
         if not partition_by:
             raise ValueError("At least one column should be provided for partition_by")
@@ -1054,14 +1057,14 @@ class DataChain:
                 )
 
         schema_columns = self.signals_schema.db_columns_types()
-        schema_fields = {}
+        schema_fields: dict[str, DataType] = {}
 
         # validate partition_by columns and add them to the schema
         partition_by_columns: list[Union[Column, GenericFunction]] = []
         for col in partition_by:
             if isinstance(col, GenericFunction):
                 partition_by_columns.append(col)
-                schema_fields[col.name] = col.type
+                schema_fields[col.name] = sql_to_python(col)
             else:
                 col_name = col.replace(".", DEFAULT_DELIMITER)
                 col_type = schema_columns.get(col_name)
@@ -1084,8 +1087,8 @@ class DataChain:
                     )
                 if result_type is None:
                     result_type = col_type
-                col = Column(func.col, python_to_sql(col_type))
-                signal_columns.append(func.inner(col).label(col_name))
+                func_col = Column(func.col, python_to_sql(col_type))
+                signal_columns.append(func.inner(func_col).label(col_name))
 
             if result_type is None:
                 raise DataChainColumnError(
