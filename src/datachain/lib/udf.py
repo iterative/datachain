@@ -9,9 +9,7 @@ from pydantic import BaseModel
 
 from datachain.dataset import RowDict
 from datachain.lib.convert.flatten import flatten
-from datachain.lib.convert.unflatten import unflatten_to_json
 from datachain.lib.file import File
-from datachain.lib.model_store import ModelStore
 from datachain.lib.signal_schema import SignalSchema
 from datachain.lib.utils import AbstractUDF, DataChainError, DataChainParamsError
 from datachain.query.batch import (
@@ -287,9 +285,7 @@ class UDFBase(AbstractUDF):
         return results
 
     def run_once(self, rows, cache, download_cb):
-        if self.is_input_grouped:
-            objs = self._parse_grouped_rows(rows, cache, download_cb)
-        elif self.is_input_batched:
+        if self.is_input_batched:
             objs = zip(*self._parse_rows(rows, cache, download_cb))
         else:
             objs = self._parse_rows([rows], cache, download_cb)[0]
@@ -344,36 +340,6 @@ class UDFBase(AbstractUDF):
                     )
             objs.append(obj_row)
         return objs
-
-    def _parse_grouped_rows(self, group, cache, download_cb):
-        spec_map = {}
-        output_map = {}
-        for name, (anno, subtree) in self.params.tree.items():
-            if ModelStore.is_pydantic(anno):
-                length = sum(1 for _ in self.params._get_flat_tree(subtree, [], 0))
-            else:
-                length = 1
-            spec_map[name] = anno, length
-            output_map[name] = []
-
-        for flat_obj in group:
-            position = 0
-            for signal, (cls, length) in spec_map.items():
-                slice = flat_obj[position : position + length]
-                position += length
-
-                if ModelStore.is_pydantic(cls):
-                    obj = cls(**unflatten_to_json(cls, slice))
-                else:
-                    obj = slice[0]
-
-                if isinstance(obj, File):
-                    obj._set_stream(
-                        self.catalog, caching_enabled=cache, download_cb=download_cb
-                    )
-                output_map[signal].append(obj)
-
-        return list(output_map.values())
 
     def process_safe(self, obj_rows):
         try:
