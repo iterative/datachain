@@ -1900,6 +1900,32 @@ class DataChain:
         if parquet_writer:
             parquet_writer.close()
 
+    def to_csv(
+        self,
+        path: Union[str, os.PathLike[str]],
+        delimiter: str = ",",
+        **kwargs,
+    ) -> None:
+        """Save chain to a csv (comma-separated values) file.
+
+        Parameters:
+            path : Path to save the file.
+            delimiter : Delimiter to use for the resulting file.
+        """
+        import csv
+
+        headers, _ = self._effective_signals_schema.get_headers_with_length()
+        column_names = [".".join(filter(None, header)) for header in headers]
+
+        results_iter = self.collect_flatten()
+
+        with open(path, "w", newline="") as f:
+            writer = csv.writer(f, delimiter=delimiter, **kwargs)
+            writer.writerow(column_names)
+
+            for row in results_iter:
+                writer.writerow(row)
+
     @classmethod
     def from_records(
         cls,
