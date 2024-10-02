@@ -154,7 +154,6 @@ class UDFAdapter:
         return [
             {"sys__id": row_id} | dict(zip(self.signal_names, signals))
             for row_id, signals in zip(row_ids, results)
-            if signals is not None  # skip rows with no output
         ]
 
 
