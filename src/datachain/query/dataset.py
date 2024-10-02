@@ -591,10 +591,6 @@ class UDFSignal(UDFStep):
             return query, []
         table = self.catalog.warehouse.create_pre_udf_table(query)
         q: Select = sqlalchemy.select(*table.c)
-        if query._order_by_clauses:
-            # we are adding ordering only if it's explicitly added by user in
-            # query part before adding signals
-            q = q.order_by(table.c.sys__id)
         return q, [table]
 
     def create_result_query(
@@ -630,11 +626,6 @@ class UDFSignal(UDFStep):
             else:
                 res = sqlalchemy.select(*cols1).select_from(subq)
 
-            if query._order_by_clauses:
-                # if ordering is used in query part before adding signals, we
-                # will have it as order by id from select from pre-created udf table
-                res = res.order_by(subq.c.sys__id)
-
             if self.partition_by is not None:
                 subquery = res.subquery()
                 res = sqlalchemy.select(*subquery.c).select_from(subquery)
@@ -666,13 +657,6 @@ class RowGenerator(UDFStep):
     def create_result_query(
         self, udf_table, query: Select
     ) -> tuple[QueryGeneratorFunc, list["sqlalchemy.Column"]]:
-        if not query._order_by_clauses:
-            # if we are not selecting all rows in UDF, we need to ensure that
-            # we get the same rows as we got as inputs of UDF since selecting
-            # without ordering can be non deterministic in some databases
-            c = query.selected_columns
-            query = query.order_by(c.sys__id)
-
         udf_table_query = udf_table.select().subquery()
         udf_table_cols: list[sqlalchemy.Label[Any]] = [
             label(c.name, c) for c in udf_table_query.columns

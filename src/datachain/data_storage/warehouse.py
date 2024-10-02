@@ -215,10 +215,6 @@ class AbstractWarehouse(ABC, Serializable):
         limit = query._limit
         paginated_query = query.limit(page_size)
 
-        if not paginated_query._order_by_clauses:
-            # default order by is order by `sys__id`
-            paginated_query = paginated_query.order_by(query.selected_columns.sys__id)
-
         results = None
         offset = 0
         num_yielded = 0
