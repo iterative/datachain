@@ -62,10 +62,6 @@ class UDFAdapter:
     output: UDFOutputSpec
     batch: int = 1
 
-    @property
-    def signal_names(self) -> Iterable[str]:
-        return self.output.keys()
-
     def get_batching(self, use_partitioning: bool = False) -> BatchingStrategy:
         if use_partitioning:
             return Partition()
@@ -90,51 +86,14 @@ class UDFAdapter:
         download_cb: Callback = DEFAULT_CALLBACK,
         processed_cb: Callback = DEFAULT_CALLBACK,
     ) -> Iterator[Iterable[UDFResult]]:
-        self.inner.catalog = catalog
-        if hasattr(self.inner, "setup") and callable(self.inner.setup):
-            self.inner.setup()
-
-        for batch in udf_inputs:
-            if isinstance(batch, RowsOutputBatch):
-                n_rows = len(batch.rows)
-                rows = [RowDict(zip(udf_fields, row)) for row in batch.rows]
-                udf_inputs = self.inner._pre_process(rows, cache, download_cb)
-                udf_outputs = self.inner.run_once(udf_inputs, n_rows=n_rows)
-                output = self._process_results(rows, udf_outputs, is_generator)
-            else:
-                n_rows = 1
-                row = RowDict(zip(udf_fields, batch))
-                udf_input = self.inner._pre_process(row, cache, download_cb)
-                udf_outputs = self.inner.run_once(udf_input)
-                if not is_generator:
-                    # udf_outputs is generator already if is_generator=True
-                    udf_outputs = [udf_outputs]
-                output = self._process_results([row], udf_outputs, is_generator)
-            processed_cb.relative_update(n_rows)
-            yield output
-
-        if hasattr(self.inner, "teardown") and callable(self.inner.teardown):
-            self.inner.teardown()
-
-    def _process_results(
-        self,
-        rows: Sequence["RowDict"],
-        results: Sequence[Sequence[Any]],
-        is_generator=False,
-    ) -> Iterable[UDFResult]:
-        """Create a list of dictionaries representing UDF results."""
-
-        # outputting rows
-        if is_generator:
-            # each row in results is a tuple of column values
-            return (dict(zip(self.signal_names, row)) for row in results)
-
-        # outputting signals
-        row_ids = [row["sys__id"] for row in rows]
-        return [
-            {"sys__id": row_id} | dict(zip(self.signal_names, signals))
-            for row_id, signals in zip(row_ids, results)
-        ]
+        yield from self.inner.run(
+            udf_fields,
+            udf_inputs,
+            catalog,
+            cache,
+            download_cb,
+            processed_cb,
+        )
 
 
 class UDFBase(AbstractUDF):
@@ -185,9 +144,7 @@ class UDFBase(AbstractUDF):
         ```
     """
 
-    is_input_batched = False
     is_output_batched = False
-    is_input_grouped = False
     catalog: "Optional[Catalog]"
 
     def __init__(self):
@@ -247,6 +204,10 @@ class UDFBase(AbstractUDF):
     def name(self):
         return self.__class__.__name__
 
+    @property
+    def signal_names(self) -> Iterable[str]:
+        return self.output.to_udf_spec().keys()
+
     def to_udf_wrapper(self, batch: int = 1) -> UDFAdapter:
         return UDFAdapter(
             self,
@@ -254,24 +215,16 @@ class UDFBase(AbstractUDF):
             batch,
         )
 
-    def _pre_process(self, rows, cache, download_cb):
-        return self._parse_row(rows, cache, download_cb)
-
-    def run_once(self, rows, n_rows=1):
-        result_objs = self.process_safe(rows)
-        return self._post_process(result_objs, n_rows)
-
-    def _post_process(self, result_objs, n_rows):
-        # Generator expression is required, otherwise the value will be materialized
-        res = (self._flatten_row(row) for row in result_objs)
-
-        if self.is_input_batched and not self.is_input_grouped:
-            res = list(res)
-            assert (
-                len(res) == n_rows
-            ), f"{self.name} returns {len(res)} rows, but {n_rows} were expected"
-
-        return res
+    def run(
+        self,
+        udf_fields: "Sequence[str]",
+        udf_inputs: "Iterable[Any]",
+        catalog: "Catalog",
+        cache: bool,
+        download_cb: Callback = DEFAULT_CALLBACK,
+        processed_cb: Callback = DEFAULT_CALLBACK,
+    ) -> Iterator[Iterable[UDFResult]]:
+        raise NotImplementedError
 
     def _flatten_row(self, row):
         if len(self.output.values) > 1 and not isinstance(row, BaseModel):
@@ -285,14 +238,11 @@ class UDFBase(AbstractUDF):
     def _obj_to_list(obj):
         return flatten(obj) if isinstance(obj, BaseModel) else [obj]
 
-    def _parse_rows(
-        self, rows, cache: bool, download_cb: Callback
-    ) -> list[list[DataValue]]:
-        return [self._parse_row(row, cache, download_cb) for row in rows]
-
-    def _parse_row(self, row, cache: bool, download_cb: Callback) -> list[DataValue]:
+    def _parse_row(
+        self, row_dict: RowDict, cache: bool, download_cb: Callback
+    ) -> list[DataValue]:
         assert self.params
-        row = [row[p] for p in self.params.to_udf_spec()]
+        row = [row_dict[p] for p in self.params.to_udf_spec()]
         obj_row = self.params.row_to_objs(row)
         for obj in obj_row:
             if isinstance(obj, File):
@@ -301,6 +251,15 @@ class UDFBase(AbstractUDF):
                     self.catalog, caching_enabled=cache, download_cb=download_cb
                 )
         return obj_row
+
+    def _prepare_row(self, row, udf_fields, cache, download_cb):
+        row_dict = RowDict(zip(udf_fields, row))
+        return self._parse_row(row_dict, cache, download_cb)
+
+    def _prepare_row_and_id(self, row, udf_fields, cache, download_cb):
+        row_dict = RowDict(zip(udf_fields, row))
+        udf_input = self._parse_row(row_dict, cache, download_cb)
+        return row_dict["sys__id"], *udf_input
 
     def process_safe(self, obj_rows):
         try:
@@ -320,18 +279,70 @@ class UDFBase(AbstractUDF):
 class Mapper(UDFBase):
     """Inherit from this class to pass to `DataChain.map()`."""
 
-    def _post_process(self, result_objs, n_rows):
-        return self._flatten_row(result_objs)
+    def run(
+        self,
+        udf_fields: "Sequence[str]",
+        udf_inputs: "Iterable[Sequence[Any]]",
+        catalog: "Catalog",
+        cache: bool,
+        download_cb: Callback = DEFAULT_CALLBACK,
+        processed_cb: Callback = DEFAULT_CALLBACK,
+    ) -> Iterator[Iterable[UDFResult]]:
+        self.catalog = catalog
+        self.setup()
+
+        for row in udf_inputs:
+            id_, *udf_args = self._prepare_row_and_id(
+                row, udf_fields, cache, download_cb
+            )
+            result_objs = self.process_safe(udf_args)
+            udf_output = self._flatten_row(result_objs)
+            output = [{"sys__id": id_} | dict(zip(self.signal_names, udf_output))]
+            processed_cb.relative_update(1)
+            yield output
+
+        self.teardown()
 
 
 class BatchMapper(UDFBase):
     """Inherit from this class to pass to `DataChain.batch_map()`."""
 
-    is_input_batched = True
     is_output_batched = True
 
-    def _pre_process(self, rows, cache, download_cb):
-        return zip(*self._parse_rows(rows, cache, download_cb))
+    def run(
+        self,
+        udf_fields: Sequence[str],
+        udf_inputs: Iterable[RowsOutputBatch],
+        catalog: "Catalog",
+        cache: bool,
+        download_cb: Callback = DEFAULT_CALLBACK,
+        processed_cb: Callback = DEFAULT_CALLBACK,
+    ) -> Iterator[Iterable[UDFResult]]:
+        self.catalog = catalog
+        self.setup()
+
+        for batch in udf_inputs:
+            n_rows = len(batch.rows)
+            row_ids, *udf_args = zip(
+                *[
+                    self._prepare_row_and_id(row, udf_fields, cache, download_cb)
+                    for row in batch.rows
+                ]
+            )
+            result_objs = list(self.process_safe(udf_args))
+            n_objs = len(result_objs)
+            assert (
+                n_objs == n_rows
+            ), f"{self.name} returns {n_objs} rows, but {n_rows} were expected"
+            udf_outputs = (self._flatten_row(row) for row in result_objs)
+            output = [
+                {"sys__id": row_id} | dict(zip(self.signal_names, signals))
+                for row_id, signals in zip(row_ids, udf_outputs)
+            ]
+            processed_cb.relative_update(n_rows)
+            yield output
+
+        self.teardown()
 
 
 class Generator(UDFBase):
@@ -339,13 +350,57 @@ class Generator(UDFBase):
 
     is_output_batched = True
 
+    def run(
+        self,
+        udf_fields: "Sequence[str]",
+        udf_inputs: "Iterable[Sequence[Any]]",
+        catalog: "Catalog",
+        cache: bool,
+        download_cb: Callback = DEFAULT_CALLBACK,
+        processed_cb: Callback = DEFAULT_CALLBACK,
+    ) -> Iterator[Iterable[UDFResult]]:
+        self.catalog = catalog
+        self.setup()
+
+        for row in udf_inputs:
+            udf_args = self._prepare_row(row, udf_fields, cache, download_cb)
+            result_objs = self.process_safe(udf_args)
+            udf_outputs = (self._flatten_row(row) for row in result_objs)
+            output = (dict(zip(self.signal_names, row)) for row in udf_outputs)
+            processed_cb.relative_update(1)
+            yield output
+
+        self.teardown()
+
 
 class Aggregator(UDFBase):
     """Inherit from this class to pass to `DataChain.agg()`."""
 
-    is_input_batched = True
     is_output_batched = True
-    is_input_grouped = True
 
-    def _pre_process(self, rows, cache, download_cb):
-        return zip(*self._parse_rows(rows, cache, download_cb))
+    def run(
+        self,
+        udf_fields: "Sequence[str]",
+        udf_inputs: Iterable[RowsOutputBatch],
+        catalog: "Catalog",
+        cache: bool,
+        download_cb: Callback = DEFAULT_CALLBACK,
+        processed_cb: Callback = DEFAULT_CALLBACK,
+    ) -> Iterator[Iterable[UDFResult]]:
+        self.catalog = catalog
+        self.setup()
+
+        for batch in udf_inputs:
+            udf_args = zip(
+                *[
+                    self._prepare_row(row, udf_fields, cache, download_cb)
+                    for row in batch.rows
+                ]
+            )
+            result_objs = self.process_safe(udf_args)
+            udf_outputs = (self._flatten_row(row) for row in result_objs)
+            output = (dict(zip(self.signal_names, row)) for row in udf_outputs)
+            processed_cb.relative_update(len(batch.rows))
+            yield output
+
+        self.teardown()
