@@ -274,7 +274,7 @@ def test_merge_on_expression(test_session):
         return func.substr(c, func.length(c) - 3)
 
     dc = DataChain.from_values(team=team, session=test_session)
-    right_dc = dc.clone(new_table=True)
+    right_dc = dc.clone()
 
     # cross join on "ball" from sport
     merged = dc.merge(right_dc, on=_get_expr(dc), right_on=_get_expr(right_dc))

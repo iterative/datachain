@@ -979,7 +979,6 @@ class Catalog:
         script_output="",
         create_rows_table=True,
         job_id: Optional[str] = None,
-        is_job_result: bool = False,
     ) -> DatasetRecord:
         """
         Creates dataset version if it doesn't exist.
@@ -1001,7 +1000,6 @@ class Catalog:
             script_output=script_output,
             schema=schema,
             job_id=job_id,
-            is_job_result=is_job_result,
             ignore_if_exists=True,
         )
 
@@ -1211,7 +1209,6 @@ class Catalog:
             size=dataset_version.size,
             preview=dataset_version.preview,
             job_id=dataset_version.job_id,
-            is_job_result=dataset_version.is_job_result,
         )
         # to avoid re-creating rows table, we are just renaming it for a new version
         # of target dataset

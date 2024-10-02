@@ -26,13 +26,16 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
-          cache: 'pip'
 
-      - name: Upgrade nox and uv
-        run: |
-          python -m pip install --upgrade 'nox[uv]'
-          nox --version
-          uv --version
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-suffix: lint
+          cache-dependency-glob: pyproject.toml
+
+      - name: Install nox
+        run: uv pip install nox --system
 
       - name: Cache mypy
         uses: actions/cache@v4
@@ -77,13 +80,16 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.pyv }}
-          cache: 'pip'
 
-      - name: Upgrade nox and uv
-        run: |
-          python -m pip install --upgrade 'nox[uv]'
-          nox --version
-          uv --version
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-suffix: tests-${{ matrix.pyv }}
+          cache-dependency-glob: pyproject.toml
+
+      - name: Install nox
+        run: uv pip install nox --system
 
       - name: Skip flaky azure, gs remotes on macOS
         if: runner.os == 'macOS'
@@ -134,13 +140,16 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.pyv }}
-          cache: 'pip'
 
-      - name: Upgrade nox and uv
-        run: |
-          python -m pip install --upgrade 'nox[uv]'
-          nox --version
-          uv --version
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-suffix: examples-${{ matrix.pyv }}
+          cache-dependency-glob: pyproject.toml
+
+      - name: Install nox
+        run: uv pip install nox --system
 
       - name: Run examples
         run: nox -s examples -p ${{ matrix.pyv }} -- -m "${{ matrix.group }}"

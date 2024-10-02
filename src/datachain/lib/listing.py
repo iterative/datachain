@@ -1,7 +1,7 @@
 import posixpath
 from collections.abc import Iterator
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING, Callable, Optional
+from typing import TYPE_CHECKING, Callable, Optional, TypeVar
 
 from fsspec.asyn import get_loop
 from sqlalchemy.sql.expression import true
@@ -19,6 +19,8 @@ if TYPE_CHECKING:
 
 LISTING_TTL = 4 * 60 * 60  # cached listing lasts 4 hours
 LISTING_PREFIX = "lst__"  # listing datasets start with this name
+
+D = TypeVar("D", bound="DataChain")
 
 
 def list_bucket(uri: str, cache, client_config=None) -> Callable:
@@ -38,11 +40,11 @@ def list_bucket(uri: str, cache, client_config=None) -> Callable:
 
 
 def ls(
-    dc: "DataChain",
+    dc: D,
     path: str,
     recursive: Optional[bool] = True,
     object_name="file",
-):
+) -> D:
     """
     Return files by some path from DataChain instance which contains bucket listing.
     Path can have globs.

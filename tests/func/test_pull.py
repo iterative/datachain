@@ -113,7 +113,6 @@ def remote_dataset(remote_dataset_version, schema):
         "name": "remote",
         "description": "",
         "labels": [],
-        "shadow": False,
         "schema": schema,
         "status": 4,
         "feature_schema": {},

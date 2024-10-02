@@ -50,7 +50,7 @@ def _get_listing_datasets(session):
 @pytest.mark.parametrize("anon", [True, False])
 def test_catalog_anon(tmp_dir, catalog, anon):
     chain = DataChain.from_storage(tmp_dir.as_uri(), anon=anon)
-    assert chain.catalog.client_config.get("anon", False) is anon
+    assert chain.session.catalog.client_config.get("anon", False) is anon
 
 
 def test_from_storage(cloud_test_catalog):
@@ -896,9 +896,9 @@ def test_avoid_recalculation_after_save(cloud_test_catalog):
     )
     ds2 = ds.save("ds1")
 
-    assert ds2.steps == []
-    assert ds2.dependencies == set()
-    assert isinstance(ds2.starting_step, QueryStep)
+    assert ds2._query.steps == []
+    assert ds2._query.dependencies == set()
+    assert isinstance(ds2._query.starting_step, QueryStep)
     ds2.save("ds2")
     assert calls == 1  # UDF should be called only once
 

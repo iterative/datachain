@@ -126,9 +126,9 @@ def test_from_features_basic(test_session):
 
     ds_name = "my_ds"
     ds.save(ds_name)
-    ds = DataChain(name=ds_name)
+    ds = DataChain.from_dataset(name=ds_name)
 
-    assert isinstance(ds.feature_schema, dict)
+    assert isinstance(ds._query.feature_schema, dict)
     assert isinstance(ds.signals_schema, SignalSchema)
     assert ds.schema.keys() == {"file"}
     assert set(ds.schema.values()) == {File}
@@ -144,9 +144,9 @@ def test_from_features_basic_in_memory():
 
     ds_name = "my_ds"
     ds.save(ds_name)
-    ds = DataChain(name=ds_name)
+    ds = DataChain.from_dataset(name=ds_name)
 
-    assert isinstance(ds.feature_schema, dict)
+    assert isinstance(ds._query.feature_schema, dict)
     assert isinstance(ds.signals_schema, SignalSchema)
     assert ds.schema.keys() == {"file"}
     assert set(ds.schema.values()) == {File}
@@ -166,30 +166,29 @@ def test_from_features(test_session):
 def test_from_records_empty_chain_with_schema(test_session):
     schema = {"my_file": File, "my_col": int}
     ds = DataChain.from_records([], schema=schema, session=test_session)
-    ds_sys = ds.settings(sys=True)
 
     ds_name = "my_ds"
     ds.save(ds_name)
-    ds = DataChain(name=ds_name)
+    ds = DataChain.from_dataset(name=ds_name)
 
-    assert isinstance(ds.feature_schema, dict)
+    assert isinstance(ds._query.feature_schema, dict)
     assert isinstance(ds.signals_schema, SignalSchema)
     assert ds.schema.keys() == {"my_file", "my_col"}
     assert set(ds.schema.values()) == {File, int}
     assert ds.count() == 0
 
     # check that columns have actually been created from schema
-    dr = ds_sys.catalog.warehouse.dataset_rows(ds_sys.catalog.get_dataset(ds_name))
+    catalog = test_session.catalog
+    dr = catalog.warehouse.dataset_rows(catalog.get_dataset(ds_name))
     assert sorted([c.name for c in dr.c]) == sorted(ds.signals_schema.db_signals())
 
 
 def test_from_records_empty_chain_without_schema(test_session):
     ds = DataChain.from_records([], schema=None, session=test_session)
-    ds_sys = ds.settings(sys=True)
 
     ds_name = "my_ds"
     ds.save(ds_name)
-    ds = DataChain(name=ds_name)
+    ds = DataChain.from_dataset(name=ds_name)
 
     assert ds.schema.keys() == {
         "source",
@@ -204,7 +203,8 @@ def test_from_records_empty_chain_without_schema(test_session):
     assert ds.count() == 0
 
     # check that columns have actually been created from schema
-    dr = ds_sys.catalog.warehouse.dataset_rows(ds_sys.catalog.get_dataset(ds_name))
+    catalog = test_session.catalog
+    dr = catalog.warehouse.dataset_rows(catalog.get_dataset(ds_name))
     assert sorted([c.name for c in dr.c]) == sorted(ds.signals_schema.db_signals())
 
 
@@ -320,9 +320,9 @@ def test_preserve_feature_schema(test_session):
 
     ds_name = "my_ds1"
     ds.save(ds_name)
-    ds = DataChain(name=ds_name)
+    ds = DataChain.from_dataset(name=ds_name)
 
-    assert isinstance(ds.feature_schema, dict)
+    assert isinstance(ds._query.feature_schema, dict)
     assert isinstance(ds.signals_schema, SignalSchema)
     assert ds.schema.keys() == {"t1", "t2", "file"}
     assert set(ds.schema.values()) == {MyFr, File}
@@ -372,7 +372,7 @@ def test_from_features_more_simple_types(test_session):
         session=test_session,
     ).save(ds_name)
 
-    ds = DataChain(name=ds_name)
+    ds = DataChain.from_dataset(name=ds_name)
     assert ds.schema.keys() == {
         "t1",
         "num",
@@ -1269,6 +1269,117 @@ def test_to_parquet_partitioned(tmp_dir, test_session):
     pd.testing.assert_frame_equal(df1, df)
 
 
+@pytest.mark.parametrize("chunk_size", (1000, 2))
+@pytest.mark.parametrize("kwargs", ({}, {"compression": "gzip"}))
+def test_to_from_parquet(tmp_dir, test_session, chunk_size, kwargs):
+    df = pd.DataFrame(DF_DATA)
+    dc_to = DataChain.from_pandas(df, session=test_session)
+
+    path = tmp_dir / "test.parquet"
+    dc_to.to_parquet(path, chunk_size=chunk_size, **kwargs)
+
+    assert path.is_file()
+    pd.testing.assert_frame_equal(pd.read_parquet(path), df)
+
+    dc_from = DataChain.from_parquet(path.as_uri(), session=test_session)
+    df1 = dc_from.select("first_name", "age", "city").to_pandas()
+
+    assert df1.equals(df)
+
+
+@pytest.mark.parametrize("chunk_size", (1000, 2))
+def test_to_from_parquet_partitioned(tmp_dir, test_session, chunk_size):
+    df = pd.DataFrame(DF_DATA)
+    dc_to = DataChain.from_pandas(df, session=test_session)
+
+    path = tmp_dir / "parquets"
+    dc_to.to_parquet(path, partition_cols=["first_name"], chunk_size=chunk_size)
+
+    assert set(path.iterdir()) == {
+        path / f"first_name={name}" for name in df["first_name"]
+    }
+    df1 = pd.read_parquet(path)
+    df1 = df1.reindex(columns=df.columns)
+    df1["first_name"] = df1["first_name"].astype("str")
+    df1 = df1.sort_values("first_name").reset_index(drop=True)
+    pd.testing.assert_frame_equal(df1, df)
+
+    dc_from = DataChain.from_parquet(path.as_uri(), session=test_session)
+    df1 = dc_from.select("first_name", "age", "city").to_pandas()
+    df1 = df1.sort_values("first_name").reset_index(drop=True)
+    assert df1.equals(df)
+
+
+@pytest.mark.parametrize("chunk_size", (1000, 2))
+def test_to_from_parquet_features(tmp_dir, test_session, chunk_size):
+    dc_to = DataChain.from_values(
+        f1=features, num=range(len(features)), session=test_session
+    )
+
+    path = tmp_dir / "test.parquet"
+    dc_to.to_parquet(path, chunk_size=chunk_size)
+
+    assert path.is_file()
+
+    dc_from = DataChain.from_parquet(path.as_uri(), session=test_session)
+
+    n = 0
+    for sample in dc_from.select("f1", "num").collect():
+        assert len(sample) == 2
+        fr, num = sample
+
+        assert isinstance(fr, MyFr)
+        assert isinstance(num, int)
+        assert num == n
+        assert fr == features[n]
+
+        n += 1
+
+    assert n == len(features)
+
+
+@pytest.mark.parametrize("chunk_size", (1000, 2))
+def test_to_from_parquet_nested_features(tmp_dir, test_session, chunk_size):
+    dc_to = DataChain.from_values(sign1=features_nested, session=test_session)
+
+    path = tmp_dir / "test.parquet"
+    dc_to.to_parquet(path, chunk_size=chunk_size)
+
+    assert path.is_file()
+
+    dc_from = DataChain.from_parquet(path.as_uri(), session=test_session)
+
+    for n, sample in enumerate(dc_from.select("sign1").collect()):
+        assert len(sample) == 1
+        nested = sample[0]
+
+        assert isinstance(nested, MyNested)
+        assert nested == features_nested[n]
+
+
+@pytest.mark.parametrize("chunk_size", (1000, 2))
+def test_to_from_parquet_two_top_level_features(tmp_dir, test_session, chunk_size):
+    dc_to = DataChain.from_values(
+        f1=features, nest1=features_nested, session=test_session
+    )
+
+    path = tmp_dir / "test.parquet"
+    dc_to.to_parquet(path, chunk_size=chunk_size)
+
+    assert path.is_file()
+
+    dc_from = DataChain.from_parquet(path.as_uri(), session=test_session)
+
+    for n, sample in enumerate(dc_from.select("f1", "nest1").collect()):
+        assert len(sample) == 2
+        fr, nested = sample
+
+        assert isinstance(fr, MyFr)
+        assert fr == features[n]
+        assert isinstance(nested, MyNested)
+        assert nested == features_nested[n]
+
+
 @pytest.mark.parametrize("processes", [False, 2, True])
 @pytest.mark.xdist_group(name="tmpfile")
 def test_parallel(processes, test_session_tmpfile):
@@ -1316,10 +1427,6 @@ def test_extend_features(test_session):
     dc = DataChain.from_values(
         f1=features, num=range(len(features)), session=test_session
     )
-
-    res = dc._extend_to_data_model("select", "num")
-    assert isinstance(res, DataChain)
-    assert res.signals_schema.values == {"num": int}
 
     res = dc._extend_to_data_model("sum", "num")
     assert res == sum(range(len(features)))
@@ -1370,7 +1477,7 @@ def test_sys_feature(test_session):
         (sys_cls(id=2, rand=ANY), MyFr(nnn="n2", count=5)),
         (sys_cls(id=3, rand=ANY), MyFr(nnn="n1", count=1)),
     ]
-    assert "sys" not in ds_sys.catalog.get_dataset("ds_sys").feature_schema
+    assert "sys" not in test_session.catalog.get_dataset("ds_sys").feature_schema
 
     ds_no_sys = ds_sys.settings(sys=False)
     assert not ds_no_sys._sys
@@ -1382,7 +1489,7 @@ def test_sys_feature(test_session):
         MyFr(nnn="n2", count=5),
         MyFr(nnn="n1", count=1),
     ]
-    assert "sys" not in ds_no_sys.catalog.get_dataset("ds_no_sys").feature_schema
+    assert "sys" not in test_session.catalog.get_dataset("ds_no_sys").feature_schema
 
 
 def test_to_pandas_multi_level(test_session):
@@ -1662,7 +1769,7 @@ def test_custom_model_with_nested_lists(test_session):
         session=test_session,
     ).save(ds_name)
 
-    assert list(DataChain(name=ds_name).collect("nested")) == [
+    assert list(DataChain.from_dataset(name=ds_name).collect("nested")) == [
         Nested(
             values=[[0.5, 0.5], [0.5, 0.5]],
             traces_single=[{"x": 0.5, "y": 0.5}, {"x": 0.5, "y": 0.5}],
@@ -1744,7 +1851,7 @@ def test_rename_non_object_column_name_with_mutate(test_session):
 
     ds.save("mutated")
 
-    ds = DataChain(name="mutated", session=test_session)
+    ds = DataChain.from_dataset(name="mutated", session=test_session)
     assert ds.signals_schema.values.get("my_ids") is int
     assert "ids" not in ds.signals_schema.values
     assert list(ds.order_by("my_ids").collect("my_ids")) == [1, 2, 3]
@@ -1764,7 +1871,7 @@ def test_rename_object_column_name_with_mutate(test_session):
     # check that persist after saving
     ds.save("mutated")
 
-    ds = DataChain(name="mutated", session=test_session)
+    ds = DataChain.from_dataset(name="mutated", session=test_session)
     assert ds.signals_schema.values.get("file") is File
     assert ds.signals_schema.values.get("ids") is int
     assert ds.signals_schema.values.get("fname") is str
@@ -1784,7 +1891,7 @@ def test_rename_object_name_with_mutate(test_session):
 
     ds.save("mutated")
 
-    ds = DataChain(name="mutated", session=test_session)
+    ds = DataChain.from_dataset(name="mutated", session=test_session)
     assert ds.signals_schema.values.get("my_file") is File
     assert ds.signals_schema.values.get("ids") is int
     assert "file" not in ds.signals_schema.values
@@ -1860,7 +1967,7 @@ def test_mutate_with_saving(test_session):
     ds = DataChain.from_values(id=[1, 2], session=test_session)
     ds = ds.mutate(new=ds.column("id") / 2).save("mutated")
 
-    ds = DataChain(name="mutated", session=test_session)
+    ds = DataChain.from_dataset(name="mutated", session=test_session)
     assert ds.signals_schema.values["new"] is float
     assert list(ds.collect("new")) == [0.5, 1.0]
 

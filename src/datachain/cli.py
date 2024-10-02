@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Optional, Union
 
 import shtab
 
-from datachain import utils
+from datachain import Session, utils
 from datachain.cli_utils import BooleanOptionalAction, CommaSeparatedArgs, KeyValueArgs
 from datachain.lib.dc import DataChain
 from datachain.telemetry import telemetry
@@ -770,7 +770,8 @@ def show(
     show_records(records, collapse_columns=not no_collapse)
     if schema and dataset_version.feature_schema:
         print("\nSchema:")
-        dc = DataChain(name=name, version=version, catalog=catalog)
+        session = Session.get(catalog=catalog)
+        dc = DataChain.from_dataset(name=name, version=version, session=session)
         dc.print_schema()
 
 

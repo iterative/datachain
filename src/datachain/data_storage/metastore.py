@@ -15,7 +15,6 @@ from uuid import uuid4
 from sqlalchemy import (
     JSON,
     BigInteger,
-    Boolean,
     Column,
     DateTime,
     ForeignKey,
@@ -228,7 +227,7 @@ class AbstractMetastore(ABC, Serializable):
         self,
         dataset: DatasetRecord,
         version: int,
-        status: int = DatasetStatus.CREATED,
+        status: int,
         sources: str = "",
         feature_schema: Optional[dict] = None,
         query_script: str = "",
@@ -243,7 +242,6 @@ class AbstractMetastore(ABC, Serializable):
         size: Optional[int] = None,
         preview: Optional[list[dict]] = None,
         job_id: Optional[str] = None,
-        is_job_result: bool = False,
     ) -> DatasetRecord:
         """Creates new dataset version."""
 
@@ -449,7 +447,6 @@ class AbstractDBMetastore(AbstractMetastore):
             Column("name", Text, nullable=False),
             Column("description", Text),
             Column("labels", JSON, nullable=True),
-            Column("shadow", Boolean, nullable=False),
             Column("status", Integer, nullable=False),
             Column("feature_schema", JSON, nullable=True),
             Column("created_at", DateTime(timezone=True)),
@@ -482,8 +479,11 @@ class AbstractDBMetastore(AbstractMetastore):
                 nullable=False,
             ),
             Column("version", Integer, nullable=False),
-            # adding default for now until we fully remove shadow datasets
-            Column("status", Integer, nullable=False, default=DatasetStatus.COMPLETE),
+            Column(
+                "status",
+                Integer,
+                nullable=False,
+            ),
             Column("feature_schema", JSON, nullable=True),
             Column("created_at", DateTime(timezone=True)),
             Column("finished_at", DateTime(timezone=True)),
@@ -497,7 +497,6 @@ class AbstractDBMetastore(AbstractMetastore):
             Column("query_script", Text, nullable=False, default=""),
             Column("schema", JSON, nullable=True),
             Column("job_id", Text, nullable=True),
-            Column("is_job_result", Boolean, nullable=False, default=False),
             UniqueConstraint("dataset_id", "version"),
         ]
 
@@ -971,7 +970,6 @@ class AbstractDBMetastore(AbstractMetastore):
         # TODO abstract this method and add registered = True based on kwargs
         query = self._datasets_insert().values(
             name=name,
-            shadow=False,
             status=status,
             feature_schema=json.dumps(feature_schema or {}),
             created_at=datetime.now(timezone.utc),
@@ -994,7 +992,7 @@ class AbstractDBMetastore(AbstractMetastore):
         self,
         dataset: DatasetRecord,
         version: int,
-        status: int = DatasetStatus.CREATED,
+        status: int,
         sources: str = "",
         feature_schema: Optional[dict] = None,
         query_script: str = "",
@@ -1009,7 +1007,6 @@ class AbstractDBMetastore(AbstractMetastore):
         size: Optional[int] = None,
         preview: Optional[list[dict]] = None,
         job_id: Optional[str] = None,
-        is_job_result: bool = False,
         conn=None,
     ) -> DatasetRecord:
         """Creates new dataset version."""
@@ -1021,7 +1018,7 @@ class AbstractDBMetastore(AbstractMetastore):
         query = self._datasets_versions_insert().values(
             dataset_id=dataset.id,
             version=version,
-            status=status,  # for now until we remove shadow datasets
+            status=status,
             feature_schema=json.dumps(feature_schema or {}),
             created_at=created_at or datetime.now(timezone.utc),
             finished_at=finished_at,
@@ -1035,7 +1032,6 @@ class AbstractDBMetastore(AbstractMetastore):
             size=size,
             preview=json.dumps(preview or []),
             job_id=job_id or os.getenv("DATACHAIN_JOB_ID"),
-            is_job_result=is_job_result,
         )
         if ignore_if_exists and hasattr(query, "on_conflict_do_nothing"):
             # SQLite and PostgreSQL both support 'on_conflict_do_nothing',

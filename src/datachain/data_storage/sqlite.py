@@ -15,6 +15,7 @@ from typing import (
 )
 
 import sqlalchemy
+from packaging import version
 from sqlalchemy import MetaData, Table, UniqueConstraint, exists, select
 from sqlalchemy.dialects import sqlite
 from sqlalchemy.schema import CreateIndex, CreateTable, DropTable
@@ -153,7 +154,7 @@ class SQLiteDatabaseEngine(DatabaseEngine):
             if os.environ.get("DEBUG_SHOW_SQL_QUERIES"):
                 import sys
 
-                db.set_trace_callback(sys.stderr.write)
+                db.set_trace_callback(lambda stmt: print(stmt, file=sys.stderr))
 
             load_usearch_extension(db)
 
@@ -345,45 +346,36 @@ class SQLiteIDGenerator(AbstractDBIDGenerator):
     def get_next_ids(self, uri: str, count: int) -> range:
         """Returns a range of IDs for the given URI."""
 
-        # NOTE: we can't use RETURNING clause here because it is only available
-        # in sqlalchemy v2, see
-        # https://github.com/sqlalchemy/sqlalchemy/issues/6195#issuecomment-1248700677
-        # After we upgrade to sqlalchemy v2, we can use the following code,
-        # leaving fallback to the current implementation for older versions of SQLite,
-        # which is still supported, for example, in Ubuntu 20.04 LTS (Focal Fossa),
-        # where SQLite version 3.31.1 is used.
-
-        # sqlite_version = version.parse(sqlite3.sqlite_version)
-        # if sqlite_version >= version.parse("3.35.0"):
-        #     # RETURNING is supported on SQLite 3.35.0 (2021-03-12) or newer
-        #     stmt = (
-        #         sqlite.insert(self._table)
-        #         .values(uri=uri, last_id=count)
-        #         .on_conflict_do_update(
-        #             index_elements=["uri"],
-        #             set_={"last_id": self._table.c.last_id + count},
-        #         )
-        #         .returning(self._table.c.last_id)
-        #     )
-        #     last_id = self._db.execute(stmt).fetchone()[0]
-        # else:
-        #     (fallback to the current implementation with a transaction)
-
-        # Transactions ensure no concurrency conflicts
-        with self._db.transaction() as conn:
-            # UPSERT syntax was added to SQLite with version 3.24.0 (2018-06-04).
-            stmt_ins = (
+        sqlite_version = version.parse(sqlite3.sqlite_version)
+        is_returning_supported = sqlite_version >= version.parse("3.35.0")
+        if is_returning_supported:
+            stmt = (
                 sqlite.insert(self._table)
                 .values(uri=uri, last_id=count)
                 .on_conflict_do_update(
                     index_elements=["uri"],
                     set_={"last_id": self._table.c.last_id + count},
                 )
+                .returning(self._table.c.last_id)
             )
-            self._db.execute(stmt_ins, conn=conn)
+            last_id = self._db.execute(stmt).fetchone()[0]
+        else:
+            # Older versions of SQLite are still the default under Ubuntu LTS,
+            # e.g. Ubuntu 20.04 LTS (Focal Fossa) uses 3.31.1
+            # Transactions ensure no concurrency conflicts
+            with self._db.transaction() as conn:
+                stmt_ins = (
+                    sqlite.insert(self._table)
+                    .values(uri=uri, last_id=count)
+                    .on_conflict_do_update(
+                        index_elements=["uri"],
+                        set_={"last_id": self._table.c.last_id + count},
+                    )
+                )
+                self._db.execute(stmt_ins, conn=conn)
 
-            stmt_sel = select(self._table.c.last_id).where(self._table.c.uri == uri)
-            last_id = self._db.execute(stmt_sel, conn=conn).fetchone()[0]
+                stmt_sel = select(self._table.c.last_id).where(self._table.c.uri == uri)
+                last_id = self._db.execute(stmt_sel, conn=conn).fetchone()[0]
 
         return range(last_id - count + 1, last_id + 1)
 
