@@ -75,6 +75,17 @@ class FileClient(Client):
 
     @classmethod
     def split_url(cls, url: str) -> tuple[str, str]:
+        # lowercasing scheme just in case it's uppercase
+        scheme, rest = url.split(":", 1)
+        url = f"{scheme.lower()}:{rest}"
+
+        for pos in range(len(url) - 1, len(cls.PREFIX), -1):
+            if url[pos] == "/":
+                return LocalFileSystem._strip_protocol(url[:pos]), url[pos + 1 :]
+        raise RuntimeError(f"Invalid file path '{url}'")
+
+    @classmethod
+    def split_url_old(cls, url: str) -> tuple[str, str]:
         """
         Splits url into two components:
             1. root of the FS which will later on become the name of the storage

@@ -16,7 +16,6 @@ from PIL import Image
 from sqlalchemy import Column
 
 from datachain.catalog.catalog import QUERY_SCRIPT_CANCELED_EXIT_CODE
-from datachain.client.local import FileClient
 from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.dataset import DatasetDependencyType, DatasetStats
 from datachain.lib.dc import C, DataChain, DataChainColumnError
@@ -198,7 +197,7 @@ def test_from_storage_dependencies(cloud_test_catalog, cloud_type):
     assert len(dependencies) == 1
     assert dependencies[0].type == DatasetDependencyType.STORAGE
     if cloud_type == "file":
-        assert dependencies[0].name == FileClient.root_path().as_uri()
+        assert dependencies[0].name == uri
     else:
         assert dependencies[0].name == src_uri
 
@@ -469,7 +468,7 @@ def test_from_storage_check_rows(tmp_dir, test_session):
         stat = stats[file.name]
         mtime = stat.st_mtime if is_sqlite else float(math.floor(stat.st_mtime))
         assert file == File(
-            source=Path(tmp_dir.anchor).as_uri(),
+            source=Path(tmp_dir).as_uri(),
             path=file.path,
             size=stat.st_size,
             version="",
@@ -1291,19 +1290,14 @@ def test_process_and_open_tar(cloud_test_catalog, cloud_type):
     dc = DataChain.from_storage(ctc.src_uri, session=ctc.session).gen(file=process_tar)
     assert dc.count() == 7
 
-    if cloud_type == "file":
-        prefix = cloud_test_catalog.partial_path + "/"
-    else:
-        prefix = ""
-
     assert {(file.read(), file.path) for file in dc.collect("file")} == {
-        (b"meow", f"{prefix}animals.tar/cats/cat1"),
-        (b"mrow", f"{prefix}animals.tar/cats/cat2"),
-        (b"Cats and Dogs", f"{prefix}animals.tar/description"),
-        (b"woof", f"{prefix}animals.tar/dogs/dog1"),
-        (b"arf", f"{prefix}animals.tar/dogs/dog2"),
-        (b"bark", f"{prefix}animals.tar/dogs/dog3"),
-        (b"ruff", f"{prefix}animals.tar/dogs/others/dog4"),
+        (b"meow", "animals.tar/cats/cat1"),
+        (b"mrow", "animals.tar/cats/cat2"),
+        (b"Cats and Dogs", "animals.tar/description"),
+        (b"woof", "animals.tar/dogs/dog1"),
+        (b"arf", "animals.tar/dogs/dog2"),
+        (b"bark", "animals.tar/dogs/dog3"),
+        (b"ruff", "animals.tar/dogs/others/dog4"),
     }
 
 

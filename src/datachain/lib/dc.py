@@ -23,6 +23,8 @@ from pydantic import BaseModel
 from sqlalchemy.sql.functions import GenericFunction
 from sqlalchemy.sql.sqltypes import NullType
 
+from datachain.client import Client
+from datachain.client.local import FileClient
 from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import DataModel, DataType, dict_to_data_model
@@ -413,12 +415,14 @@ class DataChain:
         file_type = get_file_type(type)
 
         client_config = {"anon": True} if anon else None
-
         session = Session.get(session, client_config=client_config, in_memory=in_memory)
+        cache = session.catalog.cache
+        client_config = session.catalog.client_config
 
         list_dataset_name, list_uri, list_path = parse_listing_uri(
-            uri, session.catalog.cache, session.catalog.client_config
+            uri, cache, client_config
         )
+        old_list_dataset_name = list_dataset_name
         need_listing = True
 
         for ds in cls.listings(session=session, in_memory=in_memory).collect("listing"):
@@ -440,15 +444,19 @@ class DataChain:
                     in_memory=in_memory,
                 )
                 .gen(
-                    list_bucket(
-                        list_uri,
-                        session.catalog.cache,
-                        client_config=session.catalog.client_config,
-                    ),
+                    list_bucket(list_uri, cache, client_config=client_config),
                     output={f"{object_name}": File},
                 )
                 .save(list_dataset_name, listing=True)
             )
+
+        if (
+            isinstance(Client.get_client(uri, cache, **client_config), FileClient)
+            and old_list_dataset_name != list_dataset_name
+        ):
+            # For local file system we need to make some adjustments
+            diff = old_list_dataset_name.strip("/").removeprefix(list_dataset_name)
+            list_path = f"{diff}/{list_path}"
 
         dc = cls.from_dataset(list_dataset_name, session=session, settings=settings)
         dc.signals_schema = dc.signals_schema.mutate({f"{object_name}": file_type})

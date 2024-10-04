@@ -171,9 +171,7 @@ def test_cp_root(cloud_test_catalog, recursive, star, dir_exists, cloud_type):
     assert "dogs/others" not in files_by_name
 
     # Description is always copied (if anything is copied)
-    prefix = (
-        "" if star or (recursive and not dir_exists) or cloud_type == "file" else "/"
-    )
+    prefix = "" if star or (recursive and not dir_exists) else "/"
     assert files_by_name[f"{prefix}description"]["size"] == 13
 
     if recursive:
@@ -477,7 +475,7 @@ def test_storage_mutation(cloud_test_catalog):
     assert tree_from_path(dest) == {}
 
     # Storage modified with reindexing, we get the new version.
-    catalog.index([cloud_test_catalog.src_uri], update=True)
+    catalog.index([src_path], update=True)
     dest = working_dir / "data4"
     dest.mkdir()
     catalog.cp([src_path], str(dest / "local"), no_edatachain_file=True)
