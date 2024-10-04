@@ -30,7 +30,7 @@ def list_bucket(uri: str, cache, client_config=None) -> Callable:
     """
 
     def list_func() -> Iterator[File]:
-        config = client_config or {}
+        config = client_config if client_config is not None else {"anon": True}
         client = Client.get_client(uri, cache, **config)  # type: ignore[arg-type]
         _, path = Client.parse_url(uri)
         for entries in iter_over_async(client.scandir(path.rstrip("/")), get_loop()):
@@ -80,7 +80,7 @@ def parse_listing_uri(uri: str, cache, client_config) -> tuple[str, str, str]:
     """
     Parsing uri and returns listing dataset name, listing uri and listing path
     """
-    client_config = client_config or {}
+    client_config = client_config if client_config is not None else {"anon": True}
     client = Client.get_client(uri, cache, **client_config)
     storage_uri, path = Client.parse_url(uri)
     telemetry.log_param("client", client.PREFIX)

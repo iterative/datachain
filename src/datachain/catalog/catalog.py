@@ -554,7 +554,9 @@ class Catalog:
         self.metastore = metastore
         self._warehouse = warehouse
         self.cache = DataChainCache(datachain_dir.cache, datachain_dir.tmp)
-        self.client_config = client_config if client_config is not None else {}
+        self.client_config = (
+            client_config if client_config is not None else {"anon": True}
+        )
         self._init_params = {
             "cache_dir": cache_dir,
             "tmp_dir": tmp_dir,

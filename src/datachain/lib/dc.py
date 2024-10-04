@@ -392,6 +392,7 @@ class DataChain:
         object_name: str = "file",
         update: bool = False,
         anon: bool = False,
+        client_config: Optional[dict[str, Any]] = None,
     ) -> "Self":
         """Get data from a storage as a list of file with all file attributes.
         It returns the chain itself as usual.
@@ -412,7 +413,10 @@ class DataChain:
         """
         file_type = get_file_type(type)
 
-        client_config = {"anon": True} if anon else None
+        if anon:
+            if client_config is None:
+                client_config = {}
+            client_config["anon"] = True
 
         session = Session.get(session, client_config=client_config, in_memory=in_memory)
 

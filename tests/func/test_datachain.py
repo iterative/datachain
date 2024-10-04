@@ -47,10 +47,21 @@ def _get_listing_datasets(session):
     )
 
 
-@pytest.mark.parametrize("anon", [True, False])
-def test_catalog_anon(tmp_dir, catalog, anon):
-    chain = DataChain.from_storage(tmp_dir.as_uri(), anon=anon)
-    assert chain.session.catalog.client_config.get("anon", False) is anon
+@pytest.mark.parametrize(
+    "client_config,anon,expected",
+    (
+        ({"anon": True}, False, True),
+        ({}, False, False),
+        ({}, True, True),
+        (None, False, True),
+        (None, True, True),
+    ),
+)
+def test_catalog_anon(tmp_dir, catalog, client_config, anon, expected):
+    chain = DataChain.from_storage(
+        tmp_dir.as_uri(), anon=anon, client_config=client_config
+    )
+    assert chain.session.catalog.client_config.get("anon", False) is expected
 
 
 def test_from_storage(cloud_test_catalog):
