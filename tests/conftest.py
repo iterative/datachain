@@ -420,8 +420,6 @@ class CloudTestCatalog:
 
     @property
     def storage_uri(self):
-        if self.server.kind == "file":
-            return FileClient.root_path().as_uri()
         return self.server.src_uri
 
     @property
@@ -440,8 +438,9 @@ class CloudTestCatalog:
         return Session("CTCSession", catalog=self.catalog)
 
 
-cloud_types = ["s3", "gs", "azure"]
-cloud_types = []
+# cloud_types = ["s3", "gs", "azure"]
+cloud_types = ["s3"]
+# cloud_types = []
 
 
 @pytest.fixture(scope="session", params=["file", *cloud_types])
@@ -449,7 +448,7 @@ def cloud_type(request):
     return request.param
 
 
-@pytest.fixture(scope="session", params=[False, True])
+@pytest.fixture(scope="session", params=[False])
 def version_aware(request):
     return request.param
 

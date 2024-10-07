@@ -6,7 +6,6 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from datachain.client.local import FileClient
 from datachain.lib.dc import DataChain
 from datachain.lib.file import File
 from datachain.lib.webdataset import process_webdataset
@@ -86,7 +85,7 @@ def test_wds(test_session, webdataset_tars):
 
         assert laion_wds.txt == data["caption"]
         assert laion_wds.file.location
-        assert laion_wds.file.source == FileClient.root_path().as_uri()
+        assert laion_wds.file.source == Path(webdataset_tars).as_uri()
         assert laion_wds.file.parent
         assert laion_wds.file.name == f"{idx}.jpg"
         assert laion_wds.file.location

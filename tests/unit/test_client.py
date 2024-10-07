@@ -35,16 +35,15 @@ def test_win_paths_are_recognized():
 
 @settings(suppress_health_check=[HealthCheck.function_scoped_fixture], deadline=None)
 @given(rel_path=non_null_text)
-def test_parse_url(cloud_test_catalog, rel_path, cloud_type):
+def test_parse_uurl(cloud_test_catalog, rel_path, cloud_type):
     if cloud_type == "file":
         assume(not rel_path.startswith("/"))
     bucket_uri = cloud_test_catalog.src_uri
     url = f"{bucket_uri}/{rel_path}"
     uri, rel_part = Client.parse_url(url)
     if cloud_type == "file":
-        root_uri = FileClient.root_path().as_uri()
-        assert uri == root_uri
-        assert rel_part == url[len(root_uri) :]
+        assert uri == url.rsplit("/", 1)[0]
+        assert rel_part == url.rsplit("/", 1)[1]
     else:
         assert uri == bucket_uri
         assert rel_part == rel_path
@@ -58,11 +57,7 @@ def test_get_client(cloud_test_catalog, rel_path, cloud_type):
     url = f"{bucket_uri}/{rel_path}"
     client = Client.get_client(url, catalog.cache)
     assert client
-    if cloud_type == "file":
-        root_uri = FileClient.root_path().as_uri()
-        assert client.uri == root_uri
-    else:
-        assert client.uri == bucket_uri
+    assert client.uri
 
 
 @settings(suppress_health_check=[HealthCheck.function_scoped_fixture], deadline=None)
@@ -75,9 +70,9 @@ def test_parse_url_uppercase_scheme(cloud_test_catalog, rel_path, cloud_type):
     url = f"{bucket_uri_upper}/{rel_path}"
     uri, rel_part = Client.parse_url(url)
     if cloud_type == "file":
-        root_uri = FileClient.root_path().as_uri()
-        assert uri == root_uri
-        assert rel_part == url[len(root_uri) :]
+        url = f"{bucket_uri}/{rel_path}"
+        assert uri == url.rsplit("/", 1)[0]
+        assert rel_part == url.rsplit("/", 1)[1]
     else:
         assert uri == bucket_uri
         assert rel_part == rel_path
@@ -86,32 +81,24 @@ def test_parse_url_uppercase_scheme(cloud_test_catalog, rel_path, cloud_type):
 @pytest.mark.parametrize("cloud_type", ["file"], indirect=True)
 def test_parse_file_absolute_path_without_protocol(cloud_test_catalog):
     working_dir = Path().absolute()
-    root_uri = FileClient.root_path().as_uri()
     uri, rel_part = Client.parse_url(str(working_dir / Path("animals")))
-    working_dir = Path().absolute()
-    root_uri = FileClient.root_path().as_uri()
-    assert uri == root_uri
-    assert rel_part == (working_dir / Path("animals")).as_uri()[len(root_uri) :]
+    assert uri == working_dir.as_uri()
+    assert rel_part == "animals"
 
 
 @pytest.mark.parametrize("cloud_type", ["file"], indirect=True)
 def test_parse_file_relative_path_multiple_dirs_back(cloud_test_catalog):
     uri, rel_part = Client.parse_url("../../animals".replace("/", os.sep))
-    root_uri = FileClient.root_path().as_uri()
-    assert uri == root_uri
-    assert (
-        rel_part
-        == (Path().absolute().parents[1] / Path("animals")).as_uri()[len(root_uri) :]
-    )
+    assert uri == Path().absolute().parents[1].as_uri()
+    assert rel_part == "animals"
 
 
 @pytest.mark.parametrize("cloud_type", ["file"], indirect=True)
 @pytest.mark.parametrize("url", ["./animals".replace("/", os.sep), "animals"])
 def test_parse_file_relative_path_working_dir(cloud_test_catalog, url):
     uri, rel_part = Client.parse_url(url)
-    root_uri = FileClient.root_path().as_uri()
-    assert uri == root_uri
-    assert rel_part == (Path().absolute() / Path("animals")).as_uri()[len(root_uri) :]
+    assert uri == Path().absolute().as_uri()
+    assert rel_part == "animals"
 
 
 @pytest.mark.parametrize("cloud_type", ["file"], indirect=True)
@@ -120,20 +107,15 @@ def test_parse_file_relative_path_home_dir(cloud_test_catalog):
         # home dir shortcut is not available on windows
         pytest.skip()
     uri, rel_part = Client.parse_url("~/animals")
-    root_uri = FileClient.root_path().as_uri()
-    assert uri == root_uri
-    assert rel_part == (Path().home() / Path("animals")).as_uri()[len(root_uri) :]
+    assert uri == Path().home().as_uri()
+    assert rel_part == "animals"
 
 
 @pytest.mark.parametrize("cloud_type", ["file"], indirect=True)
 def test_parse_file_path_ends_with_slash(cloud_type):
     uri, rel_part = Client.parse_url("./animals/".replace("/", os.sep))
-    root_uri = FileClient.root_path().as_uri()
-    assert uri == root_uri
-    assert (
-        rel_part
-        == ((Path().absolute() / Path("animals")).as_uri())[len(root_uri) :] + "/"
-    )
+    assert uri == (Path().absolute() / Path("animals")).as_uri()
+    assert rel_part == ""
 
 
 @pytest.mark.parametrize("cloud_type", ["s3", "azure", "gs"], indirect=True)

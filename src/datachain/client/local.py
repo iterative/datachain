@@ -8,7 +8,6 @@ from urllib.parse import urlparse
 from fsspec.implementations.local import LocalFileSystem
 
 from datachain.lib.file import File
-from datachain.storage import StorageURI
 
 from .fsspec import Client
 
@@ -27,6 +26,7 @@ class FileClient(Client):
     def url(self, path: str, expires: int = 3600, **kwargs) -> str:
         raise TypeError("Signed urls are not implemented for local file system")
 
+    '''
     @classmethod
     def get_uri(cls, name) -> StorageURI:
         """
@@ -35,6 +35,7 @@ class FileClient(Client):
             Windows: file:///C:/
         """
         return StorageURI(Path(name).as_uri())
+    '''
 
     @staticmethod
     def root_dir() -> str:
@@ -75,14 +76,18 @@ class FileClient(Client):
 
     @classmethod
     def split_url(cls, url: str) -> tuple[str, str]:
-        # lowercasing scheme just in case it's uppercase
-        scheme, rest = url.split(":", 1)
-        url = f"{scheme.lower()}:{rest}"
+        parsed = urlparse(url)
+        if parsed.scheme == "file":
+            scheme, rest = url.split(":", 1)
+            url = f"{scheme.lower()}:{rest}"
+        else:
+            url = cls.path_to_uri(url)
 
-        for pos in range(len(url) - 1, len(cls.PREFIX), -1):
-            if url[pos] == "/":
-                return LocalFileSystem._strip_protocol(url[:pos]), url[pos + 1 :]
-        raise RuntimeError(f"Invalid file path '{url}'")
+        fill_path = url[len(cls.PREFIX) :]
+        path_split = fill_path.rsplit("/", 1)
+        bucket = path_split[0]
+        path = path_split[1] if len(path_split) > 1 else ""
+        return bucket, path
 
     @classmethod
     def split_url_old(cls, url: str) -> tuple[str, str]:
