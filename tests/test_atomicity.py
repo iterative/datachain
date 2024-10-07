@@ -3,6 +3,9 @@ import subprocess
 import sys
 
 import pytest
+import sqlalchemy as sa
+
+from datachain.sql.types import Float32
 
 tests_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -25,6 +28,13 @@ def test_atomicity_feature_file(tmp_dir, catalog_tmpfile):
     else:
         popen_args = {"start_new_session": True}
 
+    existing_dataset = catalog_tmpfile.create_dataset(
+        "existing_dataset",
+        query_script="script",
+        columns=[sa.Column("similarity", Float32)],
+        create_rows=True,
+    )
+
     process = subprocess.Popen(  # noqa: S603
         command,
         shell=False,
@@ -42,5 +52,7 @@ def test_atomicity_feature_file(tmp_dir, catalog_tmpfile):
 
     assert process.returncode == 1
 
-    # No datasets should be left in the catalog
-    assert list(catalog_tmpfile.list_datasets_versions()) == []
+    # No datasets should be created in the catalog, but old should not be removed.
+    dataset_versions = list(catalog_tmpfile.list_datasets_versions())
+    assert len(dataset_versions) == 1
+    assert dataset_versions[0][0].name == existing_dataset.name
