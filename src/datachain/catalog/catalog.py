@@ -994,7 +994,7 @@ class Catalog:
             from datachain.query.session import Session
 
             session = Session.get(catalog=self)
-            job_id = session.name
+            job_id = session.job_id
 
         dataset = self.metastore.create_dataset_version(
             dataset,

@@ -64,6 +64,7 @@ class Session:
 
         session_uuid = uuid4().hex[: self.SESSION_UUID_LEN]
         self.name = f"{name}_{session_uuid}"
+        self.job_id = os.getenv("DATACHAIN_JOB_ID") or str(uuid4())
         self.is_new_catalog = not catalog
         self.catalog = catalog or get_catalog(
             client_config=client_config, in_memory=in_memory
@@ -149,7 +150,7 @@ class Session:
     def except_hook(exc_type, exc_value, exc_traceback):
         Session._global_cleanup()
         if Session.GLOBAL_SESSION_CTX is not None:
-            job_id = os.getenv("DATACHAIN_JOB_ID") or Session.GLOBAL_SESSION_CTX.name
+            job_id = Session.GLOBAL_SESSION_CTX.job_id
             Session.GLOBAL_SESSION_CTX._cleanup_created_versions(job_id)
 
         if Session.ORIGINAL_EXCEPT_HOOK:
