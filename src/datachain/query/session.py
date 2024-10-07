@@ -1,5 +1,8 @@
 import atexit
+import logging
+import os
 import re
+import sys
 from typing import TYPE_CHECKING, Optional
 from uuid import uuid4
 
@@ -8,6 +11,8 @@ from datachain.error import TableMissingError
 
 if TYPE_CHECKING:
     from datachain.catalog import Catalog
+
+logger = logging.getLogger("datachain")
 
 
 class Session:
@@ -35,6 +40,7 @@ class Session:
 
     GLOBAL_SESSION_CTX: Optional["Session"] = None
     GLOBAL_SESSION: Optional["Session"] = None
+    ORIGINAL_EXCEPT_HOOK = None
 
     DATASET_PREFIX = "session_"
     GLOBAL_SESSION_NAME = "global"
@@ -67,6 +73,9 @@ class Session:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type:
+            self._cleanup_created_versions(self.name)
+
         self._cleanup_temp_datasets()
         if self.is_new_catalog:
             self.catalog.metastore.close_on_exit()
@@ -87,6 +96,21 @@ class Session:
         # suppress error when metastore has been reset during testing
         except TableMissingError:
             pass
+
+    def _cleanup_created_versions(self, job_id: str) -> None:
+        versions = self.catalog.metastore.get_job_dataset_versions(job_id)
+        if not versions:
+            return
+
+        datasets = {}
+        for dataset_name, version in versions:
+            if dataset_name not in datasets:
+                datasets[dataset_name] = self.catalog.get_dataset(dataset_name)
+            dataset = datasets[dataset_name]
+            logger.info(
+                "Removing dataset version %s@%s due to exception", dataset_name, version
+            )
+            self.catalog.remove_dataset_version(dataset, version)
 
     @classmethod
     def get(
@@ -114,8 +138,22 @@ class Session:
                 in_memory=in_memory,
             )
             cls.GLOBAL_SESSION = cls.GLOBAL_SESSION_CTX.__enter__()
+
             atexit.register(cls._global_cleanup)
+            cls.ORIGINAL_EXCEPT_HOOK = sys.excepthook
+            sys.excepthook = cls.except_hook
+
         return cls.GLOBAL_SESSION
+
+    @staticmethod
+    def except_hook(exc_type, exc_value, exc_traceback):
+        Session._global_cleanup()
+        if Session.GLOBAL_SESSION_CTX is not None:
+            job_id = os.getenv("DATACHAIN_JOB_ID") or Session.GLOBAL_SESSION_CTX.name
+            Session.GLOBAL_SESSION_CTX._cleanup_created_versions(job_id)
+
+        if Session.ORIGINAL_EXCEPT_HOOK:
+            Session.ORIGINAL_EXCEPT_HOOK(exc_type, exc_value, exc_traceback)
 
     @classmethod
     def cleanup_for_tests(cls):
@@ -124,6 +162,9 @@ class Session:
             cls.GLOBAL_SESSION = None
             cls.GLOBAL_SESSION_CTX = None
             atexit.unregister(cls._global_cleanup)
+
+        if cls.ORIGINAL_EXCEPT_HOOK:
+            sys.excepthook = cls.ORIGINAL_EXCEPT_HOOK
 
     @staticmethod
     def _global_cleanup():
