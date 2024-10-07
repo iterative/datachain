@@ -1,31 +1,33 @@
 import sys
 import traceback
-from typing import TYPE_CHECKING, Callable, Optional
+from collections.abc import Iterable, Iterator, Mapping, Sequence
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 from pydantic import BaseModel
 
 from datachain.dataset import RowDict
 from datachain.lib.convert.flatten import flatten
-from datachain.lib.convert.unflatten import unflatten_to_json
 from datachain.lib.file import File
-from datachain.lib.model_store import ModelStore
 from datachain.lib.signal_schema import SignalSchema
-from datachain.lib.udf_signature import UdfSignature
 from datachain.lib.utils import AbstractUDF, DataChainError, DataChainParamsError
-from datachain.query.batch import UDFInputBatch
-from datachain.query.schema import ColumnParameter
-from datachain.query.udf import UDFBase as _UDFBase
-from datachain.query.udf import UDFProperties
+from datachain.query.batch import (
+    Batch,
+    BatchingStrategy,
+    NoBatching,
+    Partition,
+    RowsOutputBatch,
+    UDFInputBatch,
+)
+from datachain.query.schema import ColumnParameter, UDFParameter
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator, Sequence
-
     from typing_extensions import Self
 
     from datachain.catalog import Catalog
+    from datachain.lib.udf_signature import UdfSignature
     from datachain.query.batch import RowsOutput, UDFInput
-    from datachain.query.udf import UDFResult
 
 
 class UdfError(DataChainParamsError):
@@ -33,14 +35,47 @@ class UdfError(DataChainParamsError):
         super().__init__(f"UDF error: {msg}")
 
 
-class UDFAdapter(_UDFBase):
+ColumnType = Any
+
+# Specification for the output of a UDF
+UDFOutputSpec = Mapping[str, ColumnType]
+
+# Result type when calling the UDF wrapper around the actual
+# Python function / class implementing it.
+UDFResult = dict[str, Any]
+
+
+@dataclass
+class UDFProperties:
+    """Container for basic UDF properties."""
+
+    params: list[UDFParameter]
+    output: UDFOutputSpec
+    batch: int = 1
+
+    def get_batching(self, use_partitioning: bool = False) -> BatchingStrategy:
+        if use_partitioning:
+            return Partition()
+        if self.batch == 1:
+            return NoBatching()
+        if self.batch > 1:
+            return Batch(self.batch)
+        raise ValueError(f"invalid batch size {self.batch}")
+
+    def signal_names(self) -> Iterable[str]:
+        return self.output.keys()
+
+
+class UDFAdapter:
     def __init__(
         self,
         inner: "UDFBase",
         properties: UDFProperties,
     ):
         self.inner = inner
-        super().__init__(properties)
+        self.properties = properties
+        self.signal_names = properties.signal_names()
+        self.output = properties.output
 
     def run(
         self,
@@ -51,20 +86,23 @@ class UDFAdapter(_UDFBase):
         cache: bool,
         download_cb: Callback = DEFAULT_CALLBACK,
         processed_cb: Callback = DEFAULT_CALLBACK,
-    ) -> "Iterator[Iterable[UDFResult]]":
-        self.inner._catalog = catalog
+    ) -> Iterator[Iterable[UDFResult]]:
+        self.inner.catalog = catalog
         if hasattr(self.inner, "setup") and callable(self.inner.setup):
             self.inner.setup()
 
-        yield from super().run(
-            udf_fields,
-            udf_inputs,
-            catalog,
-            is_generator,
-            cache,
-            download_cb,
-            processed_cb,
-        )
+        for batch in udf_inputs:
+            if isinstance(batch, RowsOutputBatch):
+                n_rows = len(batch.rows)
+                inputs: UDFInput = UDFInputBatch(
+                    [RowDict(zip(udf_fields, row)) for row in batch.rows]
+                )
+            else:
+                n_rows = 1
+                inputs = RowDict(zip(udf_fields, batch))
+            output = self.run_once(catalog, inputs, is_generator, cache, cb=download_cb)
+            processed_cb.relative_update(n_rows)
+            yield output
 
         if hasattr(self.inner, "teardown") and callable(self.inner.teardown):
             self.inner.teardown()
@@ -76,22 +114,45 @@ class UDFAdapter(_UDFBase):
         is_generator: bool = False,
         cache: bool = False,
         cb: Callback = DEFAULT_CALLBACK,
-    ) -> "Iterable[UDFResult]":
+    ) -> Iterable[UDFResult]:
         if isinstance(arg, UDFInputBatch):
             udf_inputs = [
                 self.bind_parameters(catalog, row, cache=cache, cb=cb)
                 for row in arg.rows
             ]
-            udf_outputs = self.inner(udf_inputs, cache=cache, download_cb=cb)
+            udf_outputs = self.inner.run_once(udf_inputs, cache=cache, download_cb=cb)
             return self._process_results(arg.rows, udf_outputs, is_generator)
         if isinstance(arg, RowDict):
             udf_inputs = self.bind_parameters(catalog, arg, cache=cache, cb=cb)
-            udf_outputs = self.inner(*udf_inputs, cache=cache, download_cb=cb)
+            udf_outputs = self.inner.run_once(udf_inputs, cache=cache, download_cb=cb)
             if not is_generator:
                 # udf_outputs is generator already if is_generator=True
                 udf_outputs = [udf_outputs]
             return self._process_results([arg], udf_outputs, is_generator)
         raise ValueError(f"Unexpected UDF argument: {arg}")
+
+    def bind_parameters(self, catalog: "Catalog", row: "RowDict", **kwargs) -> list:
+        return [p.get_value(catalog, row, **kwargs) for p in self.properties.params]
+
+    def _process_results(
+        self,
+        rows: Sequence["RowDict"],
+        results: Sequence[Sequence[Any]],
+        is_generator=False,
+    ) -> Iterable[UDFResult]:
+        """Create a list of dictionaries representing UDF results."""
+
+        # outputting rows
+        if is_generator:
+            # each row in results is a tuple of column values
+            return (dict(zip(self.signal_names, row)) for row in results)
+
+        # outputting signals
+        row_ids = [row["sys__id"] for row in rows]
+        return [
+            {"sys__id": row_id} | dict(zip(self.signal_names, signals))
+            for row_id, signals in zip(row_ids, results)
+        ]
 
 
 class UDFBase(AbstractUDF):
@@ -146,14 +207,14 @@ class UDFBase(AbstractUDF):
     is_output_batched = False
     is_input_grouped = False
     params_spec: Optional[list[str]]
+    catalog: "Optional[Catalog]"
 
     def __init__(self):
         self.params = None
         self.output = None
         self.params_spec = None
         self.output_spec = None
-        self._contains_stream = None
-        self._catalog = None
+        self.catalog = None
         self._func = None
 
     def process(self, *args, **kwargs):
@@ -174,9 +235,9 @@ class UDFBase(AbstractUDF):
 
     def _init(
         self,
-        sign: UdfSignature,
+        sign: "UdfSignature",
         params: SignalSchema,
-        func: Callable,
+        func: Optional[Callable],
     ):
         self.params = params
         self.output = sign.output_schema
@@ -190,13 +251,13 @@ class UDFBase(AbstractUDF):
     @classmethod
     def _create(
         cls,
-        sign: UdfSignature,
+        sign: "UdfSignature",
         params: SignalSchema,
     ) -> "Self":
         if isinstance(sign.func, AbstractUDF):
             if not isinstance(sign.func, cls):  # type: ignore[unreachable]
                 raise UdfError(
-                    f"cannot create UDF: provided UDF '{sign.func.__name__}'"
+                    f"cannot create UDF: provided UDF '{type(sign.func).__name__}'"
                     f" must be a child of target class '{cls.__name__}'",
                 )
             result = sign.func
@@ -212,13 +273,6 @@ class UDFBase(AbstractUDF):
     def name(self):
         return self.__class__.__name__
 
-    def set_catalog(self, catalog):
-        self._catalog = catalog.copy(db=False)
-
-    @property
-    def catalog(self):
-        return self._catalog
-
     def to_udf_wrapper(self, batch: int = 1) -> UDFAdapter:
         assert self.params_spec is not None
         properties = UDFProperties(
@@ -229,11 +283,9 @@ class UDFBase(AbstractUDF):
     def validate_results(self, results, *args, **kwargs):
         return results
 
-    def __call__(self, *rows, cache, download_cb):
-        if self.is_input_grouped:
-            objs = self._parse_grouped_rows(rows[0], cache, download_cb)
-        elif self.is_input_batched:
-            objs = zip(*self._parse_rows(rows[0], cache, download_cb))
+    def run_once(self, rows, cache, download_cb):
+        if self.is_input_batched:
+            objs = zip(*self._parse_rows(rows, cache, download_cb))
         else:
             objs = self._parse_rows([rows], cache, download_cb)[0]
 
@@ -259,8 +311,8 @@ class UDFBase(AbstractUDF):
         ):
             res = list(res)
             assert len(res) == len(
-                rows[0]
-            ), f"{self.name} returns {len(res)} rows while len(rows[0]) expected"
+                rows
+            ), f"{self.name} returns {len(res)} rows while {len(rows)} expected"
 
         return res
 
@@ -283,40 +335,10 @@ class UDFBase(AbstractUDF):
             for obj in obj_row:
                 if isinstance(obj, File):
                     obj._set_stream(
-                        self._catalog, caching_enabled=cache, download_cb=download_cb
+                        self.catalog, caching_enabled=cache, download_cb=download_cb
                     )
             objs.append(obj_row)
         return objs
-
-    def _parse_grouped_rows(self, group, cache, download_cb):
-        spec_map = {}
-        output_map = {}
-        for name, (anno, subtree) in self.params.tree.items():
-            if ModelStore.is_pydantic(anno):
-                length = sum(1 for _ in self.params._get_flat_tree(subtree, [], 0))
-            else:
-                length = 1
-            spec_map[name] = anno, length
-            output_map[name] = []
-
-        for flat_obj in group:
-            position = 0
-            for signal, (cls, length) in spec_map.items():
-                slice = flat_obj[position : position + length]
-                position += length
-
-                if ModelStore.is_pydantic(cls):
-                    obj = cls(**unflatten_to_json(cls, slice))
-                else:
-                    obj = slice[0]
-
-                if isinstance(obj, File):
-                    obj._set_stream(
-                        self._catalog, caching_enabled=cache, download_cb=download_cb
-                    )
-                output_map[signal].append(obj)
-
-        return list(output_map.values())
 
     def process_safe(self, obj_rows):
         try:

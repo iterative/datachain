@@ -919,9 +919,7 @@ class AbstractWarehouse(ABC, Serializable):
     def is_temp_table_name(self, name: str) -> bool:
         """Returns if the given table name refers to a temporary
         or no longer needed table."""
-        return name.startswith(
-            (self.TMP_TABLE_NAME_PREFIX, self.UDF_TABLE_NAME_PREFIX, "ds_shadow_")
-        ) or name.endswith("_shadow")
+        return name.startswith((self.TMP_TABLE_NAME_PREFIX, self.UDF_TABLE_NAME_PREFIX))
 
     def get_temp_table_names(self) -> list[str]:
         return [

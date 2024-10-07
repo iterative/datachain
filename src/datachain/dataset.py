@@ -267,7 +267,6 @@ class DatasetRecord:
     name: str
     description: Optional[str]
     labels: list[str]
-    shadow: bool
     schema: dict[str, Union[SQLType, type[SQLType]]]
     feature_schema: dict
     versions: list[DatasetVersion]
@@ -296,7 +295,6 @@ class DatasetRecord:
         name: str,
         description: Optional[str],
         labels: str,
-        shadow: int,
         status: int,
         feature_schema: Optional[str],
         created_at: datetime,
@@ -356,7 +354,6 @@ class DatasetRecord:
             name,
             description,
             labels_lst,
-            bool(shadow),
             cls.parse_schema(schema_dct),  # type: ignore[arg-type]
             json.loads(feature_schema) if feature_schema else {},
             [dataset_version],

@@ -15,7 +15,6 @@ from uuid import uuid4
 from sqlalchemy import (
     JSON,
     BigInteger,
-    Boolean,
     Column,
     DateTime,
     ForeignKey,
@@ -227,7 +226,7 @@ class AbstractMetastore(ABC, Serializable):
         self,
         dataset: DatasetRecord,
         version: int,
-        status: int = DatasetStatus.CREATED,
+        status: int,
         sources: str = "",
         feature_schema: Optional[dict] = None,
         query_script: str = "",
@@ -452,7 +451,6 @@ class AbstractDBMetastore(AbstractMetastore):
             Column("name", Text, nullable=False),
             Column("description", Text),
             Column("labels", JSON, nullable=True),
-            Column("shadow", Boolean, nullable=False),
             Column("status", Integer, nullable=False),
             Column("feature_schema", JSON, nullable=True),
             Column("created_at", DateTime(timezone=True)),
@@ -485,8 +483,11 @@ class AbstractDBMetastore(AbstractMetastore):
                 nullable=False,
             ),
             Column("version", Integer, nullable=False),
-            # adding default for now until we fully remove shadow datasets
-            Column("status", Integer, nullable=False, default=DatasetStatus.COMPLETE),
+            Column(
+                "status",
+                Integer,
+                nullable=False,
+            ),
             Column("feature_schema", JSON, nullable=True),
             Column("created_at", DateTime(timezone=True)),
             Column("finished_at", DateTime(timezone=True)),
@@ -973,7 +974,6 @@ class AbstractDBMetastore(AbstractMetastore):
         # TODO abstract this method and add registered = True based on kwargs
         query = self._datasets_insert().values(
             name=name,
-            shadow=False,
             status=status,
             feature_schema=json.dumps(feature_schema or {}),
             created_at=datetime.now(timezone.utc),
@@ -996,7 +996,7 @@ class AbstractDBMetastore(AbstractMetastore):
         self,
         dataset: DatasetRecord,
         version: int,
-        status: int = DatasetStatus.CREATED,
+        status: int,
         sources: str = "",
         feature_schema: Optional[dict] = None,
         query_script: str = "",
@@ -1022,7 +1022,7 @@ class AbstractDBMetastore(AbstractMetastore):
         query = self._datasets_versions_insert().values(
             dataset_id=dataset.id,
             version=version,
-            status=status,  # for now until we remove shadow datasets
+            status=status,
             feature_schema=json.dumps(feature_schema or {}),
             created_at=created_at or datetime.now(timezone.utc),
             finished_at=finished_at,
