@@ -26,30 +26,6 @@ class FileClient(Client):
     def url(self, path: str, expires: int = 3600, **kwargs) -> str:
         raise TypeError("Signed urls are not implemented for local file system")
 
-    '''
-    @classmethod
-    def get_uri(cls, name) -> StorageURI:
-        """
-        This returns root of FS as uri, e.g
-            Linux & Mac : file:///
-            Windows: file:///C:/
-        """
-        return StorageURI(Path(name).as_uri())
-    '''
-
-    @staticmethod
-    def root_dir() -> str:
-        """
-        Returns file system root path.
-        Linux &  MacOS: /
-        Windows: C:/
-        """
-        return Path.cwd().anchor.replace(os.sep, posixpath.sep)
-
-    @staticmethod
-    def root_path() -> Path:
-        return Path(FileClient.root_dir())
-
     @classmethod
     def ls_buckets(cls, **kwargs):
         return []
@@ -88,26 +64,6 @@ class FileClient(Client):
         bucket = path_split[0]
         path = path_split[1] if len(path_split) > 1 else ""
         return bucket, path
-
-    @classmethod
-    def split_url_old(cls, url: str) -> tuple[str, str]:
-        """
-        Splits url into two components:
-            1. root of the FS which will later on become the name of the storage
-            2. path which will later on become partial path
-        Note that URL needs to be have file:/// protocol.
-        Examples:
-            file:///tmp/dir -> / + tmp/dir
-            file:///c:/windows/files -> c:/ + windows/files
-        """
-        parsed = urlparse(url)
-        if parsed.scheme == "file":
-            scheme, rest = url.split(":", 1)
-            uri = f"{scheme.lower()}:{rest}"
-        else:
-            uri = cls.path_to_uri(url)
-
-        return cls.root_dir(), uri.removeprefix(cls.root_path().as_uri())
 
     @classmethod
     def from_name(cls, name: str, cache, kwargs) -> "FileClient":

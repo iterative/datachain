@@ -62,7 +62,7 @@ def test_dir_expansion(cloud_test_catalog, version_aware, cloud_type):
         result = [dict(zip(columns, r)) for r in warehouse.db.execute(q)]
         to_compare = [(r["path"], r["is_dir"], r["version"] != "") for r in result]
 
-    assert all(r["source"] == ctc.storage_uri for r in result)
+    assert all(r["source"] == ctc.src_uri for r in result)
 
     # Note, we have both a file and a directory entry for expanded tar files
     expected = [
