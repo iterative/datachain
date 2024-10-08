@@ -534,7 +534,7 @@ def test_remove_dataset_wrong_version(cloud_test_catalog, dogs_dataset):
         catalog.remove_dataset(dogs_dataset.name, version=100)
 
 
-def test_edit_dataset(cloud_test_catalog, dogs_dataset):
+def test_eedit_dataset(cloud_test_catalog, dogs_dataset):
     dataset_old_name = dogs_dataset.name
     dataset_new_name = uuid.uuid4().hex
     catalog = cloud_test_catalog.catalog

@@ -36,7 +36,7 @@ def tests(session: nox.Session) -> None:
     session.run(
         "pytest",
         "tests/func/test_datasets.py",
-        "-k test_edit_dataset",
+        "-k test_eedit_dataset",
         "-vvv",
         "--capture=sys",
         "--cov",
