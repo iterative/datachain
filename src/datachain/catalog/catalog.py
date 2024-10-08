@@ -988,6 +988,14 @@ class Catalog:
         schema = {
             c.name: c.type.to_dict() for c in columns if isinstance(c.type, SQLType)
         }
+
+        job_id = job_id or os.getenv("DATACHAIN_JOB_ID")
+        if not job_id:
+            from datachain.query.session import Session
+
+            session = Session.get(catalog=self)
+            job_id = session.job_id
+
         dataset = self.metastore.create_dataset_version(
             dataset,
             version,
