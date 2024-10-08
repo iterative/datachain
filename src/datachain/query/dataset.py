@@ -666,13 +666,6 @@ class RowGenerator(UDFStep):
     def create_result_query(
         self, udf_table, query: Select
     ) -> tuple[QueryGeneratorFunc, list["sqlalchemy.Column"]]:
-        if not query._order_by_clauses:
-            # if we are not selecting all rows in UDF, we need to ensure that
-            # we get the same rows as we got as inputs of UDF since selecting
-            # without ordering can be non deterministic in some databases
-            c = query.selected_columns
-            query = query.order_by(c.sys__id)
-
         udf_table_query = udf_table.select().subquery()
         udf_table_cols: list[sqlalchemy.Label[Any]] = [
             label(c.name, c) for c in udf_table_query.columns
@@ -682,7 +675,15 @@ class RowGenerator(UDFStep):
             names = {c.name for c in columns}
             # Columns for the generated table.
             cols = [c for c in udf_table_cols if c.name in names]
-            return sqlalchemy.select(*cols).select_from(udf_table_query)
+            res = sqlalchemy.select(*cols).select_from(udf_table_query)
+
+            if query._order_by_clauses:
+                # if we are not selecting all rows in UDF, we need to ensure that
+                # we get the same rows as we got as inputs of UDF since selecting
+                # without ordering can be non deterministic in some databases
+                res = res.order_by(udf_table_query.c.sys__id)
+
+            return res
 
         return q, udf_table_query.columns
 
