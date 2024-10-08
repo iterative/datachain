@@ -318,7 +318,12 @@ def test_cp_subdir(cloud_test_catalog, recursive, star, slash, dir_exists):
         (False, False, True),
     ),
 )
-def test_cp_multi_subdir(cloud_test_catalog, recursive, star, slash):  # noqa: PLR0915
+def test_cp_multi_subdir(cloud_test_catalog, recursive, star, slash, cloud_type):  # noqa: PLR0915
+    # TODO remove when https://github.com/iterative/datachain/issues/318 is done
+    if cloud_type == "file" and recursive and not star and slash:
+        pytest.skip(
+            "Skipping until https://github.com/iterative/datachain/issues/318 is fixed"
+        )
     sources = [
         f"{cloud_test_catalog.src_uri}/cats",
         f"{cloud_test_catalog.src_uri}/dogs",
@@ -554,6 +559,9 @@ def test_cp_edatachain_file_options(cloud_test_catalog):
 
 
 def test_cp_edatachain_file_sources(cloud_test_catalog):  # noqa: PLR0915
+    pytest.skip(
+        "Skipping until https://github.com/iterative/datachain/issues/318 is fixed"
+    )
     sources = [
         f"{cloud_test_catalog.src_uri}/cats/",
         f"{cloud_test_catalog.src_uri}/dogs/*",

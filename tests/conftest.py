@@ -438,9 +438,7 @@ class CloudTestCatalog:
         return Session("CTCSession", catalog=self.catalog)
 
 
-# cloud_types = ["s3", "gs", "azure"]
-cloud_types = ["s3"]
-# cloud_types = []
+cloud_types = ["s3", "gs", "azure"]
 
 
 @pytest.fixture(scope="session", params=["file", *cloud_types])
