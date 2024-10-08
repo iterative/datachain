@@ -88,10 +88,10 @@ def parse_listing_uri(uri: str, cache, client_config) -> tuple[str, str, str]:
     if uses_glob(path) or client.fs.isfile(uri):
         lst_uri_path = posixpath.dirname(path)
     else:
-        storage_uri, path = Client.parse_url(f"{uri.rstrip("/")}/")
+        storage_uri, path = Client.parse_url(f'{uri.rstrip("/")}/')
         lst_uri_path = path
 
-    lst_uri = f"{storage_uri}/{lst_uri_path.lstrip('/')}"
+    lst_uri = f'{storage_uri}/{lst_uri_path.lstrip("/")}'
     ds_name = (
         f"{LISTING_PREFIX}{storage_uri}/{posixpath.join(lst_uri_path, '').lstrip('/')}"
     )

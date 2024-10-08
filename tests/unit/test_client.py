@@ -35,7 +35,7 @@ def test_win_paths_are_recognized():
 
 @settings(suppress_health_check=[HealthCheck.function_scoped_fixture], deadline=None)
 @given(rel_path=non_null_text)
-def test_parse_uurl(cloud_test_catalog, rel_path, cloud_type):
+def test_parse_url(cloud_test_catalog, rel_path, cloud_type):
     if cloud_type == "file":
         assume(not rel_path.startswith("/"))
     bucket_uri = cloud_test_catalog.src_uri
