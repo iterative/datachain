@@ -33,6 +33,7 @@ def list_bucket(uri: str, cache, client_config=None) -> Callable:
         config = client_config or {}
         client = Client.get_client(uri, cache, **config)  # type: ignore[arg-type]
         _, path = Client.parse_url(uri)
+        print(f'LIST BUCKET: uri: {uri}, path: {path}, scandir arg {path.rstrip("/")}')
         for entries in iter_over_async(client.scandir(path.rstrip("/")), get_loop()):
             yield from entries
 

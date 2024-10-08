@@ -262,10 +262,12 @@ class Client(ABC):
     async def _fetch_default(
         self, start_prefix: str, result_queue: ResultQueue
     ) -> None:
+        print(f"Fetch default, start_prefix: {start_prefix}")
         await self._fetch_nested(start_prefix, result_queue)
 
     async def _fetch_dir(self, prefix, pbar, result_queue: ResultQueue) -> set[str]:
         path = f"{self.name}/{prefix}"
+        print(f"Inside fetch dir, prefix: {prefix}, path: {path}")
         infos = await self.ls_dir(path)
         files = []
         subdirs = set()
