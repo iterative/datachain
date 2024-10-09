@@ -52,7 +52,9 @@ def test_atomicity_feature_file(tmp_dir, catalog_tmpfile):
 
     assert process.returncode == 1
 
-    # No datasets should be created in the catalog, but old should not be removed.
+    # Local context datasets should be created in the catalog, but old should not be removed.
     dataset_versions = list(catalog_tmpfile.list_datasets_versions())
-    assert len(dataset_versions) == 1
-    assert dataset_versions[0][0].name == existing_dataset.name
+    assert len(dataset_versions) == 2
+
+    assert sorted([d[0].name for d in dataset_versions]) == ["existing_dataset", "local_test_datachain"]
+
