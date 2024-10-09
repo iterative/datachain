@@ -68,6 +68,8 @@ class FileClient(Client):
         fill_path = url[len(cls.PREFIX) :]
         path_split = fill_path.rsplit("/", 1)
         bucket = path_split[0]
+        if os.name == "nt":
+            bucket = bucket.removeprefix("/")
         path = path_split[1] if len(path_split) > 1 else ""
         return bucket, path
 
