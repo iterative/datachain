@@ -30,6 +30,7 @@ def list_bucket(uri: str, cache, client_config=None) -> Callable:
     """
 
     def list_func() -> Iterator[File]:
+        print(f"Inside list bucket, uri is {uri}")
         config = client_config or {}
         client = Client.get_client(uri, cache, **config)  # type: ignore[arg-type]
         _, path = Client.parse_url(uri)
