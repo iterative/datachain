@@ -8,6 +8,7 @@ def test_listing_generator(cloud_test_catalog, cloud_type):
     catalog = ctc.catalog
 
     uri = f"{ctc.src_uri}/cats"
+    print(f"src uri is {ctc.src_uri}")
 
     dc = DataChain.from_records(DataChain.DEFAULT_FILE_RECORD).gen(
         file=list_bucket(uri, catalog.cache, client_config=catalog.client_config)
@@ -20,7 +21,7 @@ def test_listing_generator(cloud_test_catalog, cloud_type):
     files = sorted(dc.collect("file"), key=lambda f: f.path)
 
     for cat_file, cat_entry in zip(files, entries):
-        assert cat_file.source == cloud_test_catalog.src_uri
+        assert cat_file.source == ctc.src_uri
         assert cat_file.path == cat_entry.path
         assert cat_file.size == cat_entry.size
         assert cat_file.is_latest == cat_entry.is_latest

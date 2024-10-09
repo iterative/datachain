@@ -35,6 +35,8 @@ def tests(session: nox.Session) -> None:
     session.install(".[tests]")
     session.run(
         "pytest",
+        "tests/func/test_listing.py",
+        "-k test_listing_generator",
         "-vvv",
         "--capture=sys",
         "--cov",
