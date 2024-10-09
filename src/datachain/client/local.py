@@ -99,6 +99,10 @@ class FileClient(Client):
         return self.fs.ls(path, detail=True)
 
     def rel_path(self, path):
+        print(
+            f"Calculating rel path, self.name is {self.name}, path is {path},",
+            f" rel path is {posixpath.relpath(path, self.name)}",
+        )
         return posixpath.relpath(path, self.name)
 
     def get_full_path(self, rel_path):
