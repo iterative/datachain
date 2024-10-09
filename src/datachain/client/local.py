@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 from fsspec.implementations.local import LocalFileSystem
 
 from datachain.lib.file import File
+from datachain.storage import StorageURI
 
 from .fsspec import Client
 
@@ -25,6 +26,10 @@ class FileClient(Client):
 
     def url(self, path: str, expires: int = 3600, **kwargs) -> str:
         raise TypeError("Signed urls are not implemented for local file system")
+
+    @classmethod
+    def get_uri(cls, name) -> StorageURI:
+        return StorageURI(Path(name).as_uri())
 
     @classmethod
     def ls_buckets(cls, **kwargs):
@@ -108,6 +113,7 @@ class FileClient(Client):
         return full_path
 
     def info_to_file(self, v: dict[str, Any], path: str) -> File:
+        print("info to file, self uri is {self.uri}")
         return File(
             source=self.uri,
             path=path,

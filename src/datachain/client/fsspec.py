@@ -272,6 +272,8 @@ class Client(ABC):
         files = []
         subdirs = set()
         for info in infos:
+            print("info is")
+            print(info)
             full_path = info["name"]
             subprefix = self.rel_path(full_path)
             if prefix.strip(DELIMITER) == subprefix.strip(DELIMITER):
