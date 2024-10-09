@@ -255,7 +255,7 @@ def test_datasets_in_memory():
     assert datasets[0].num_objects == 6
 
 
-def test_llistings(test_session, tmp_dir):
+def test_listings(test_session, tmp_dir):
     df = pd.DataFrame(DF_DATA)
     df.to_parquet(tmp_dir / "df.parquet")
 
