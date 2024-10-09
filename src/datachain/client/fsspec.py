@@ -124,6 +124,8 @@ class Client(ABC):
     def get_client(source: str, cache: DataChainCache, **kwargs) -> "Client":
         cls = Client.get_implementation(source)
         storage_url, _ = cls.split_url(source)
+        if os.name == "nt":
+            storage_url = storage_url.removeprefix("/")
         return cls.from_name(storage_url, cache, kwargs)
 
     @classmethod
