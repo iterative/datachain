@@ -450,6 +450,10 @@ class DataChain:
                 .save(list_dataset_name, listing=True)
             )
 
+        print(
+            f"In from storage, uri: {uri}, old dataset name {old_list_dataset_name}",
+            f" list dataset name {list_dataset_name} ",
+        )
         if (
             isinstance(Client.get_client(uri, cache, **client_config), FileClient)
             and old_list_dataset_name != list_dataset_name
