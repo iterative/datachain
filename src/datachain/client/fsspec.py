@@ -118,6 +118,7 @@ class Client(ABC):
     def parse_url(source: str) -> tuple[StorageURI, str]:
         cls = Client.get_implementation(source)
         storage_name, rel_path = cls.split_url(source)
+        print(f"Splitting {source} to storage {storage_name} and path {rel_path}")
         return cls.get_uri(storage_name), rel_path
 
     @staticmethod
