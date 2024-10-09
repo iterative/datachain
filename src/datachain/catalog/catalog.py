@@ -980,6 +980,8 @@ class Catalog:
         create_rows_table=True,
         job_id: Optional[str] = None,
     ) -> DatasetRecord:
+        from datachain.query.session import Session
+
         """
         Creates dataset version if it doesn't exist.
         If create_rows is False, dataset rows table will not be created
@@ -988,13 +990,6 @@ class Catalog:
         schema = {
             c.name: c.type.to_dict() for c in columns if isinstance(c.type, SQLType)
         }
-
-        job_id = job_id or os.getenv("DATACHAIN_JOB_ID")
-        if not job_id:
-            from datachain.query.session import Session
-
-            session = Session.get(catalog=self)
-            job_id = session.job_id
 
         dataset = self.metastore.create_dataset_version(
             dataset,
@@ -1015,6 +1010,9 @@ class Catalog:
             table_name = self.warehouse.dataset_table_name(dataset.name, version)
             self.warehouse.create_dataset_rows_table(table_name, columns=columns)
             self.update_dataset_version_with_warehouse_info(dataset, version)
+
+        session = Session.get_current_context()
+        session.add_created_versions(dataset, version)
 
         return dataset
 
@@ -1184,6 +1182,8 @@ class Catalog:
         one (it can be new version of existing one).
         It also removes original dataset version
         """
+        from datachain.query.session import Session
+
         target_version = target_version or target_dataset.next_version
 
         if not target_dataset.is_valid_next_version(target_version):
@@ -1218,6 +1218,10 @@ class Catalog:
             preview=dataset_version.preview,
             job_id=dataset_version.job_id,
         )
+
+        session = Session.get_current_context()
+        session.add_created_versions(target_dataset, target_version)
+
         # to avoid re-creating rows table, we are just renaming it for a new version
         # of target dataset
         self.warehouse.rename_dataset_table(
