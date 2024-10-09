@@ -74,7 +74,7 @@ class Session:
 
     def __enter__(self):
         # Initialize the stack if not present
-        if not hasattr(_local, 'context_stack'):
+        if not hasattr(_local, "context_stack"):
             _local.context_stack = []
 
         # Push the current context onto the stack
@@ -92,13 +92,13 @@ class Session:
             self.catalog.warehouse.close_on_exit()
             self.catalog.id_generator.close_on_exit()
 
-        if hasattr(_local, 'context_stack') and _local.context_stack:
+        if hasattr(_local, "context_stack") and _local.context_stack:
             _local.context_stack.pop()
 
     @classmethod
     def get_current_context(cls):
         # Access the top (most recent) context from the stack
-        if hasattr(_local, 'context_stack') and _local.context_stack:
+        if hasattr(_local, "context_stack") and _local.context_stack:
             return _local.context_stack[-1]
 
         # Return global context

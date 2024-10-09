@@ -56,5 +56,7 @@ def test_atomicity_feature_file(tmp_dir, catalog_tmpfile):
     dataset_versions = list(catalog_tmpfile.list_datasets_versions())
     assert len(dataset_versions) == 2
 
-    assert sorted([d[0].name for d in dataset_versions]) == ["existing_dataset", "local_test_datachain"]
-
+    assert sorted([d[0].name for d in dataset_versions]) == [
+        "existing_dataset",
+        "local_test_datachain",
+    ]
