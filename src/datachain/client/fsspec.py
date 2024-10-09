@@ -122,10 +122,13 @@ class Client(ABC):
 
     @staticmethod
     def get_client(source: str, cache: DataChainCache, **kwargs) -> "Client":
+        print(f"Inside get_client, source is {source}")
         cls = Client.get_implementation(source)
         storage_url, _ = cls.split_url(source)
         if os.name == "nt":
             storage_url = storage_url.removeprefix("/")
+
+        print(f"Inside get_client, source is {source}, storage url is {storage_url}")
         return cls.from_name(storage_url, cache, kwargs)
 
     @classmethod
