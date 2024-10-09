@@ -114,7 +114,6 @@ class UDFDispatcher:
     catalog: Optional[Catalog] = None
     task_queue: Optional[multiprocess.Queue] = None
     done_queue: Optional[multiprocess.Queue] = None
-    _batch_size: Optional[int] = None
 
     def __init__(
         self,
@@ -153,17 +152,6 @@ class UDFDispatcher:
         self.task_queue = None
         self.done_queue = None
         self.ctx = get_context("spawn")
-
-    @property
-    def batch_size(self):
-        if self._batch_size is None:
-            if hasattr(self.udf, "properties") and hasattr(
-                self.udf.properties, "batch"
-            ):
-                self._batch_size = self.udf.properties.batch
-            else:
-                self._batch_size = 1
-        return self._batch_size
 
     def _create_worker(self) -> "UDFWorker":
         if not self.catalog:

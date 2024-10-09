@@ -11,8 +11,6 @@ from datachain.data_storage.warehouse import SELECT_BATCH_SIZE
 if TYPE_CHECKING:
     from sqlalchemy import Select
 
-    from datachain.dataset import RowDict
-
 
 @dataclass
 class RowsOutputBatch:
@@ -20,14 +18,6 @@ class RowsOutputBatch:
 
 
 RowsOutput = Union[Sequence, RowsOutputBatch]
-
-
-@dataclass
-class UDFInputBatch:
-    rows: Sequence["RowDict"]
-
-
-UDFInput = Union["RowDict", UDFInputBatch]
 
 
 class BatchingStrategy(ABC):

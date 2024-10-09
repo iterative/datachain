@@ -25,7 +25,7 @@ from typing_extensions import Literal as LiteralEx
 from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.convert.sql_to_python import sql_to_python
 from datachain.lib.convert.unflatten import unflatten_to_json_pos
-from datachain.lib.data_model import DataModel, DataType
+from datachain.lib.data_model import DataModel, DataType, DataValue
 from datachain.lib.file import File
 from datachain.lib.model_store import ModelStore
 from datachain.lib.utils import DataChainParamsError
@@ -110,7 +110,7 @@ class SignalSchema:
     values: dict[str, DataType]
     tree: dict[str, Any]
     setup_func: dict[str, Callable]
-    setup_values: Optional[dict[str, Callable]]
+    setup_values: Optional[dict[str, Any]]
 
     def __init__(
         self,
@@ -333,21 +333,21 @@ class SignalSchema:
                 res[db_name] = python_to_sql(type_)
         return res
 
-    def row_to_objs(self, row: Sequence[Any]) -> list[DataType]:
+    def row_to_objs(self, row: Sequence[Any]) -> list[DataValue]:
         self._init_setup_values()
 
-        objs = []
+        objs: list[DataValue] = []
         pos = 0
         for name, fr_type in self.values.items():
             if self.setup_values and (val := self.setup_values.get(name, None)):
                 objs.append(val)
             elif (fr := ModelStore.to_pydantic(fr_type)) is not None:
                 j, pos = unflatten_to_json_pos(fr, row, pos)
-                objs.append(fr(**j))  # type: ignore[arg-type]
+                objs.append(fr(**j))
             else:
                 objs.append(row[pos])
                 pos += 1
-        return objs  # type: ignore[return-value]
+        return objs
 
     def contains_file(self) -> bool:
         for type_ in self.values.values():
