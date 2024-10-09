@@ -222,6 +222,7 @@ class Client(ABC):
                 prefix = await queue.get()
                 try:
                     subdirs = await self._fetch_dir(prefix, progress_bar, result_queue)
+                    print(f"subdirs are {subdirs}")
                     for subdir in subdirs:
                         queue.put_nowait(subdir)
                 except Exception:
@@ -271,9 +272,12 @@ class Client(ABC):
         infos = await self.ls_dir(path)
         files = []
         subdirs = set()
+        print("infos")
         for info in infos:
+            print(info)
             full_path = info["name"]
             subprefix = self.rel_path(full_path)
+            print(f"full_path: {full_path}, subprefix: {subprefix}")
             if prefix.strip(DELIMITER) == subprefix.strip(DELIMITER):
                 continue
             if info["type"] == "directory":
