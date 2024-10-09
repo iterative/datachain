@@ -33,9 +33,11 @@ def list_bucket(uri: str, cache, client_config=None) -> Callable:
         print(f"Inside list bucket, uri is {uri}")
         config = client_config or {}
         client = Client.get_client(uri, cache, **config)  # type: ignore[arg-type]
+        print(f"Before parsing url {uri}")
         _, path = Client.parse_url(uri)
+        print(f"After parsing url {uri}")
         print(
-            f"Inside list bucket, uri is {uri} client name is {client.name}",
+            f"Inside list bucket 2, uri is {uri} client name is {client.name}",
             f" path is {path}",
         )
         for entries in iter_over_async(client.scandir(path.rstrip("/")), get_loop()):

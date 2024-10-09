@@ -128,7 +128,7 @@ class Client(ABC):
         if os.name == "nt":
             storage_url = storage_url.removeprefix("/")
 
-        print(f"Inside get_client, source is {source}, storage url is {storage_url}")
+        print(f"Get client, source is {source}, storage url is {storage_url}")
         return cls.from_name(storage_url, cache, kwargs)
 
     @classmethod
