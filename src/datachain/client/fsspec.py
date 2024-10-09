@@ -211,10 +211,6 @@ class Client(ABC):
         await main_task
 
     async def _fetch_nested(self, start_prefix: str, result_queue: ResultQueue) -> None:
-        print(
-            f"Fetch dir, start_prefix: {start_prefix},",
-            f" queue size {result_queue.qsize()}",
-        )
         progress_bar = tqdm(desc=f"Listing {self.uri}", unit=" objects")
         loop = get_loop()
 
@@ -226,7 +222,6 @@ class Client(ABC):
                 prefix = await queue.get()
                 try:
                     subdirs = await self._fetch_dir(prefix, progress_bar, result_queue)
-                    print(f"subdirs are {subdirs}")
                     for subdir in subdirs:
                         queue.put_nowait(subdir)
                 except Exception:
@@ -267,27 +262,16 @@ class Client(ABC):
     async def _fetch_default(
         self, start_prefix: str, result_queue: ResultQueue
     ) -> None:
-        print(
-            f"Fetch default, start_prefix: {start_prefix},",
-            f" queue size {result_queue.qsize()}",
-        )
         await self._fetch_nested(start_prefix, result_queue)
 
     async def _fetch_dir(self, prefix, pbar, result_queue: ResultQueue) -> set[str]:
         path = f"{self.name}/{prefix}"
-        print(
-            f"Fetch dir, prefix: {prefix}, path: {path},",
-            f" queue size {result_queue.qsize()}",
-        )
         infos = await self.ls_dir(path)
         files = []
         subdirs = set()
-        print("infos")
         for info in infos:
-            print(info)
             full_path = info["name"]
             subprefix = self.rel_path(full_path)
-            print(f"full_path: {full_path}, subprefix: {subprefix}")
             if prefix.strip(DELIMITER) == subprefix.strip(DELIMITER):
                 continue
             if info["type"] == "directory":

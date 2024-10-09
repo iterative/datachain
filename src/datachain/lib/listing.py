@@ -33,7 +33,6 @@ def list_bucket(uri: str, cache, client_config=None) -> Callable:
         config = client_config or {}
         client = Client.get_client(uri, cache, **config)  # type: ignore[arg-type]
         _, path = Client.parse_url(uri)
-        print(f'LIST BUCKET: uri: {uri}, path: {path}, scandir arg {path.rstrip("/")}')
         for entries in iter_over_async(client.scandir(path.rstrip("/")), get_loop()):
             yield from entries
 
@@ -86,22 +85,17 @@ def parse_listing_uri(uri: str, cache, client_config) -> tuple[str, str, str]:
     storage_uri, path = Client.parse_url(uri)
     telemetry.log_param("client", client.PREFIX)
 
-    print(f"uri: {uri}, storage_uri: {storage_uri}, path: {path}")
-
     if uses_glob(path) or client.fs.isfile(uri):
         lst_uri_path = posixpath.dirname(path)
     else:
         # storage_uri, path = Client.parse_url(f'{uri.rstrip("/")}/')
         storage_uri, path = Client.parse_url(f'{uri.rstrip("/")}/')
-        print(f"NEW uri: {uri.rstrip("/")}, storage_uri: {storage_uri}, path: {path}")
         lst_uri_path = path
 
     lst_uri = f'{storage_uri}/{lst_uri_path.lstrip("/")}'
-    print(f"lst_uri: {lst_uri}")
     ds_name = (
         f"{LISTING_PREFIX}{storage_uri}/{posixpath.join(lst_uri_path, '').lstrip('/')}"
     )
-    print(f"ds_name: {ds_name}")
 
     return ds_name, lst_uri, path
 
