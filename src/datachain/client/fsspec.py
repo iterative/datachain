@@ -118,18 +118,18 @@ class Client(ABC):
     def parse_url(source: str) -> tuple[StorageURI, str]:
         cls = Client.get_implementation(source)
         storage_name, rel_path = cls.split_url(source)
-        print(f"Splitting {source} to storage {storage_name} and path {rel_path}")
+        # print(f"Splitting {source} to storage {storage_name} and path {rel_path}")
         return cls.get_uri(storage_name), rel_path
 
     @staticmethod
     def get_client(source: str, cache: DataChainCache, **kwargs) -> "Client":
-        print(f"Inside get_client, source is {source}")
+        # print(f"Inside get_client, source is {source}")
         cls = Client.get_implementation(source)
         storage_url, _ = cls.split_url(source)
         if os.name == "nt":
             storage_url = storage_url.removeprefix("/")
 
-        print(f"Get client, source is {source}, storage url is {storage_url}")
+        # print(f"Get client, source is {source}, storage url is {storage_url}")
         return cls.from_name(storage_url, cache, kwargs)
 
     @classmethod
@@ -276,8 +276,6 @@ class Client(ABC):
         files = []
         subdirs = set()
         for info in infos:
-            print("info is")
-            print(info)
             full_path = info["name"]
             subprefix = self.rel_path(full_path)
             if prefix.strip(DELIMITER) == subprefix.strip(DELIMITER):

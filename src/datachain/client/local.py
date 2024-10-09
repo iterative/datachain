@@ -29,7 +29,7 @@ class FileClient(Client):
 
     @classmethod
     def get_uri(cls, name) -> StorageURI:
-        print(f"Converting {name} to uri")
+        # print(f"Converting {name} to uri")
         return StorageURI(Path(name).as_uri())
 
     @classmethod
@@ -116,7 +116,6 @@ class FileClient(Client):
         return full_path
 
     def info_to_file(self, v: dict[str, Any], path: str) -> File:
-        print("info to file, self uri is {self.uri}")
         return File(
             source=self.uri,
             path=path,
