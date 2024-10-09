@@ -763,6 +763,14 @@ class SQLiteWarehouse(AbstractWarehouse):
         query: Select,
         progress_cb: Optional[Callable[[int], None]] = None,
     ) -> None:
+        if len(query._group_by_clause) > 0:
+            select_q = query.with_only_columns(
+                *[c for c in query.selected_columns if c.name != "sys__id"]
+            )
+            q = table.insert().from_select(list(select_q.selected_columns), select_q)
+            self.db.execute(q)
+            return
+
         if "sys__id" in query.selected_columns:
             col_id = query.selected_columns.sys__id
         else:

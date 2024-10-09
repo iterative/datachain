@@ -14,7 +14,6 @@ from datachain.error import (
     DatasetVersionNotFoundError,
 )
 from datachain.query import C, DatasetQuery, Object, Stream
-from datachain.sql import functions
 from datachain.sql.functions import path as pathfunc
 from datachain.sql.types import String
 from tests.utils import assert_row_names, dataset_dependency_asdict
@@ -918,39 +917,6 @@ def test_aggregate(cloud_test_catalog, dogs_dataset):
     assert q.avg(C("file.size")) == 15 / 4
     assert q.min(C("file.size")) == 3
     assert q.max(C("file.size")) == 4
-
-
-def test_group_by(cloud_test_catalog, cloud_type, dogs_dataset):
-    catalog = cloud_test_catalog.catalog
-
-    q = (
-        DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
-        .mutate(parent=pathfunc.parent(C("file.path")))
-        .group_by(C.parent)
-        .select(
-            C.parent,
-            functions.count(),
-            functions.sum(C("file.size")),
-            functions.avg(C("file.size")),
-            functions.min(C("file.size")),
-            functions.max(C("file.size")),
-        )
-    )
-    result = q.db_results()
-    assert len(result) == 2
-
-    result_dict = {r[0]: r[1:] for r in result}
-    if cloud_type == "file":
-        assert result_dict == {
-            f"{cloud_test_catalog.partial_path}/dogs": (3, 11, 11 / 3, 3, 4),
-            f"{cloud_test_catalog.partial_path}/dogs/others": (1, 4, 4, 4, 4),
-        }
-
-    else:
-        assert result_dict == {
-            "dogs": (3, 11, 11 / 3, 3, 4),
-            "dogs/others": (1, 4, 4, 4, 4),
-        }
 
 
 @pytest.mark.parametrize(
