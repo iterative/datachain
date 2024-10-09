@@ -30,7 +30,8 @@ class FileClient(Client):
     @classmethod
     def get_uri(cls, name) -> StorageURI:
         # print(f"Converting {name} to uri")
-        return StorageURI(Path(name).as_uri())
+        # return StorageURI(Path(name).as_uri())
+        return StorageURI(f"{cls.PREFIX}/{name.removeprefix("/")}")
 
     @classmethod
     def ls_buckets(cls, **kwargs):
