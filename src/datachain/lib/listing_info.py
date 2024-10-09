@@ -9,11 +9,16 @@ from datachain.lib.listing import LISTING_PREFIX, LISTING_TTL
 class ListingInfo(DatasetInfo):
     @property
     def uri(self) -> str:
+        print(
+            f"Inside uri property, name is {self.name}, listing prefix is",
+            f" {LISTING_PREFIX}, uri is {self.name.removeprefix(LISTING_PREFIX)}",
+        )
         return self.name.removeprefix(LISTING_PREFIX)
 
     @property
     def storage_uri(self) -> str:
         uri, _ = Client.parse_url(self.uri)
+        print(f"Inside storage uri, parsing uri {self.uri}, result is {uri}")
         return uri
 
     @property

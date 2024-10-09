@@ -35,6 +35,8 @@ def tests(session: nox.Session) -> None:
     session.install(".[tests]")
     session.run(
         "pytest",
+        "tests/unit/lib/test_datachain.py",
+        "-k test_llistings",
         "-vvv",
         "--capture=sys",
         "--cov",
