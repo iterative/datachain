@@ -16,7 +16,7 @@ from typing import (
 from pydantic import Field
 
 from datachain.lib.data_model import DataModel
-from datachain.lib.file import File
+from datachain.lib.file import File, TarVFile
 from datachain.lib.tar import build_tar_member
 from datachain.lib.utils import DataChainError
 
@@ -60,7 +60,7 @@ class UnknownFileExtensionError(WDSError):
 
 
 class WDSBasic(DataModel):
-    file: File
+    file: TarVFile
 
 
 class WDSAllFile(WDSBasic):
@@ -176,7 +176,8 @@ class Builder:
                 self._tar_stream, self._core_extensions, self.state.stem
             )
 
-        file = build_tar_member(self._tar_stream, self.state.core_file)
+        file_cls = self._wds_class.model_fields["file"].annotation
+        file = build_tar_member(self._tar_stream, self.state.core_file, file_cls)
         wds = self._wds_class(**self.state.data | {"file": file})
         self.state = BuilderState()
         return wds

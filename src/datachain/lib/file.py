@@ -4,7 +4,7 @@ import json
 import logging
 import os
 import posixpath
-from abc import ABC, abstractmethod
+import tarfile
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import datetime
@@ -23,7 +23,6 @@ from pydantic import Field, field_validator
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-from datachain.client.fileslice import FileSlice
 from datachain.lib.data_model import DataModel
 from datachain.lib.utils import DataChainError
 from datachain.sql.types import JSON, Boolean, DateTime, Int, String
@@ -44,81 +43,9 @@ logger = logging.getLogger("datachain")
 ExportPlacement = Literal["filename", "etag", "fullpath", "checksum"]
 
 
-class VFileError(DataChainError):
-    def __init__(self, file: "File", message: str, vtype: str = ""):
-        type_ = f" of vtype '{vtype}'" if vtype else ""
-        super().__init__(f"Error in v-file '{file.path}'{type_}: {message}")
-
-
 class FileError(DataChainError):
     def __init__(self, file: "File", message: str):
         super().__init__(f"Error in file {file.get_uri()}: {message}")
-
-
-class VFile(ABC):
-    @classmethod
-    @abstractmethod
-    def get_vtype(cls) -> str:
-        pass
-
-    @classmethod
-    @abstractmethod
-    def open(cls, file: "File", location: list[dict]):
-        pass
-
-
-class TarVFile(VFile):
-    """Virtual file model for files extracted from tar archives."""
-
-    @classmethod
-    def get_vtype(cls) -> str:
-        return "tar"
-
-    @classmethod
-    def open(cls, file: "File", location: list[dict]):
-        """Stream file from tar archive based on location in archive."""
-        if len(location) > 1:
-            VFileError(file, "multiple 'location's are not supported yet")
-
-        loc = location[0]
-
-        if (offset := loc.get("offset", None)) is None:
-            VFileError(file, "'offset' is not specified")
-
-        if (size := loc.get("size", None)) is None:
-            VFileError(file, "'size' is not specified")
-
-        if (parent := loc.get("parent", None)) is None:
-            VFileError(file, "'parent' is not specified")
-
-        tar_file = File(**parent)
-        tar_file._set_stream(file._catalog)
-
-        client = file._catalog.get_client(tar_file.source)
-        fd = client.open_object(tar_file, use_cache=file._caching_enabled)
-        return FileSlice(fd, offset, size, file.name)
-
-
-class VFileRegistry:
-    _vtype_readers: ClassVar[dict[str, type["VFile"]]] = {"tar": TarVFile}
-
-    @classmethod
-    def register(cls, reader: type["VFile"]):
-        cls._vtype_readers[reader.get_vtype()] = reader
-
-    @classmethod
-    def resolve(cls, file: "File", location: list[dict]):
-        if len(location) == 0:
-            raise VFileError(file, "'location' must not be list of JSONs")
-
-        if not (vtype := location[0].get("vtype", "")):
-            raise VFileError(file, "vtype is not specified")
-
-        reader = cls._vtype_readers.get(vtype, None)
-        if not reader:
-            raise VFileError(file, "reader not registered", vtype)
-
-        return reader.open(file, location)
 
 
 class File(DataModel):
@@ -206,18 +133,13 @@ class File(DataModel):
     @contextmanager
     def open(self, mode: Literal["rb", "r"] = "rb") -> Iterator[Any]:
         """Open the file and return a file object."""
-        if self.location:
-            with VFileRegistry.resolve(self, self.location) as f:  # type: ignore[arg-type]
-                yield f
-
-        else:
-            if self._caching_enabled:
-                self.ensure_cached()
-            client: Client = self._catalog.get_client(self.source)
-            with client.open_object(
-                self, use_cache=self._caching_enabled, cb=self._download_cb
-            ) as f:
-                yield io.TextIOWrapper(f) if mode == "r" else f
+        if self._caching_enabled:
+            self.ensure_cached()
+        client: Client = self._catalog.get_client(self.source)
+        with client.open_object(
+            self, use_cache=self._caching_enabled, cb=self._download_cb
+        ) as f:
+            yield io.TextIOWrapper(f) if mode == "r" else f
 
     def read(self, length: int = -1):
         """Returns file contents."""
@@ -438,6 +360,24 @@ class ImageFile(File):
     def save(self, destination: str):
         """Writes it's content to destination"""
         self.read().save(destination)
+
+
+class TarVFile(File):
+    """`DataModel` for files extracted from tar archives."""
+
+    tar: File
+
+    @contextmanager
+    def open(self):
+        """Stream file from tar archive."""
+        vpath = str(PurePosixPath(self.path).relative_to(self.tar.path))
+        with self.tar.open() as fd:
+            # See https://stackoverflow.com/a/32476914/3127500
+            with tarfile.open(fileobj=fd, mode="r|*") as tar:
+                for vfile in tar:
+                    if vfile.path == vpath:
+                        yield tar.extractfile(vfile)
+                        break
 
 
 class ArrowRow(DataModel):

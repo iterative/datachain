@@ -23,7 +23,6 @@ from datachain.sql.types import (
 from tests.utils import (
     DEFAULT_TREE,
     TARRED_TREE,
-    create_tar_dataset_with_legacy_columns,
 )
 
 COMPLEX_TREE: dict[str, Any] = {
@@ -31,82 +30,6 @@ COMPLEX_TREE: dict[str, Any] = {
     **DEFAULT_TREE,
     "nested": {"dir": {"path": {"abc.txt": "abc"}}},
 }
-
-
-@pytest.mark.parametrize("tree", [COMPLEX_TREE], indirect=True)
-def test_dir_expansion(cloud_test_catalog, version_aware, cloud_type):
-    has_version = version_aware or cloud_type == "gs"
-
-    ctc = cloud_test_catalog
-    session = ctc.session
-    catalog = ctc.catalog
-    src_uri = ctc.src_uri
-    if cloud_type == "file":
-        # we don't want to index things in parent directory
-        src_uri += "/"
-
-    dc = create_tar_dataset_with_legacy_columns(session, ctc.src_uri, "dc")
-    dataset = catalog.get_dataset(dc.name)
-    with catalog.warehouse.clone() as warehouse:
-        q = warehouse.dataset_rows(dataset).dir_expansion()
-
-        columns = (
-            "id",
-            "is_dir",
-            "source",
-            "path",
-            "version",
-            "location",
-        )
-
-        result = [dict(zip(columns, r)) for r in warehouse.db.execute(q)]
-        to_compare = [(r["path"], r["is_dir"], r["version"] != "") for r in result]
-
-    assert all(r["source"] == ctc.storage_uri for r in result)
-    if cloud_type == "file":
-        prefix = ctc.partial_path + "/"
-    else:
-        prefix = ""
-
-    # Note, we have both a file and a directory entry for expanded tar files
-    expected = [
-        (f"{prefix}animals.tar", 0, has_version),
-        (f"{prefix}animals.tar", 1, False),
-        (f"{prefix}animals.tar/cats", 1, False),
-        (f"{prefix}animals.tar/cats/cat1", 0, has_version),
-        (f"{prefix}animals.tar/cats/cat2", 0, has_version),
-        (f"{prefix}animals.tar/description", 0, has_version),
-        (f"{prefix}animals.tar/dogs", 1, False),
-        (f"{prefix}animals.tar/dogs/dog1", 0, has_version),
-        (f"{prefix}animals.tar/dogs/dog2", 0, has_version),
-        (f"{prefix}animals.tar/dogs/dog3", 0, has_version),
-        (f"{prefix}animals.tar/dogs/others", 1, False),
-        (f"{prefix}animals.tar/dogs/others/dog4", 0, has_version),
-        (f"{prefix}cats", 1, False),
-        (f"{prefix}cats/cat1", 0, has_version),
-        (f"{prefix}cats/cat2", 0, has_version),
-        (f"{prefix}description", 0, has_version),
-        (f"{prefix}dogs", 1, False),
-        (f"{prefix}dogs/dog1", 0, has_version),
-        (f"{prefix}dogs/dog2", 0, has_version),
-        (f"{prefix}dogs/dog3", 0, has_version),
-        (f"{prefix}dogs/others", 1, False),
-        (f"{prefix}dogs/others/dog4", 0, has_version),
-        (f"{prefix}nested", 1, False),
-        (f"{prefix}nested/dir", 1, False),
-        (f"{prefix}nested/dir/path", 1, False),
-        (f"{prefix}nested/dir/path/abc.txt", 0, has_version),
-    ]
-
-    if cloud_type == "file":
-        # since with file listing, parent is relative path to the root of FS as
-        # storage uri is the root of FS, we need to add dirs to the root
-        prefix_split = prefix.split("/")
-        expected = [
-            ("/".join(prefix_split[:i]), 1, False) for i in range(1, len(prefix_split))
-        ] + expected
-
-    assert to_compare == expected
 
 
 @pytest.mark.parametrize(
