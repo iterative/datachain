@@ -268,6 +268,11 @@ class File(DataModel):
         client = self._catalog.get_client(self.source)
         client.download(self, callback=self._download_cb)
 
+    async def _prefetch(self) -> None:
+        if self._caching_enabled:
+            client = self._catalog.get_client(self.source)
+            await client._download(self, callback=self._download_cb)
+
     def get_local_path(self) -> Optional[str]:
         """Return path to a file in a local cache.
 
