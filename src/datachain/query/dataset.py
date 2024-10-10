@@ -1587,6 +1587,7 @@ class DatasetQuery:
                 version=version,
                 feature_schema=feature_schema,
                 columns=columns,
+                session=self.session,
                 **kwargs,
             )
             version = version or dataset.latest_version
