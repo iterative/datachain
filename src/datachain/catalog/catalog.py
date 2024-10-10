@@ -72,6 +72,7 @@ from datachain.utils import (
 from .datasource import DataSource
 
 if TYPE_CHECKING:
+    from datachain import Session
     from datachain.data_storage import (
         AbstractIDGenerator,
         AbstractMetastore,
@@ -916,6 +917,7 @@ class Catalog:
         create_rows: Optional[bool] = True,
         validate_version: Optional[bool] = True,
         listing: Optional[bool] = False,
+        session: Optional["Session"] = None,
     ) -> "DatasetRecord":
         """
         Creates new dataset of a specific version.
@@ -963,6 +965,7 @@ class Catalog:
             query_script=query_script,
             create_rows_table=create_rows,
             columns=columns,
+            session=session,
         )
 
     def create_new_dataset_version(
@@ -979,6 +982,7 @@ class Catalog:
         script_output="",
         create_rows_table=True,
         job_id: Optional[str] = None,
+        session: Optional["Session"] = None,
     ) -> DatasetRecord:
         from datachain.query.session import Session
 
@@ -1011,7 +1015,7 @@ class Catalog:
             self.warehouse.create_dataset_rows_table(table_name, columns=columns)
             self.update_dataset_version_with_warehouse_info(dataset, version)
 
-        session = Session.get_current_context()
+        session = Session.get(session=session, catalog=self)
         session.add_created_versions(dataset, version)
 
         return dataset
@@ -1176,6 +1180,7 @@ class Catalog:
         version: int,
         target_dataset: DatasetRecord,
         target_version: Optional[int] = None,
+        session: Optional["Session"] = None,
     ) -> DatasetRecord:
         """
         Registers dataset version of one dataset as dataset version of another
@@ -1219,7 +1224,7 @@ class Catalog:
             job_id=dataset_version.job_id,
         )
 
-        session = Session.get_current_context()
+        session = Session.get(session=session, catalog=self)
         session.add_created_versions(target_dataset, target_version)
 
         # to avoid re-creating rows table, we are just renaming it for a new version

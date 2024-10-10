@@ -11,6 +11,7 @@ from datachain.error import TableMissingError
 
 if TYPE_CHECKING:
     from datachain.catalog import Catalog
+    from datachain.dataset import DatasetRecord
 
 logger = logging.getLogger("datachain")
 
@@ -70,7 +71,7 @@ class Session:
         self.catalog = catalog or get_catalog(
             client_config=client_config, in_memory=in_memory
         )
-        self.versions = []
+        self.versions: list[tuple[DatasetRecord, int]] = []
 
     def __enter__(self):
         # Initialize the stack if not present
@@ -95,16 +96,7 @@ class Session:
         if hasattr(_local, "context_stack") and _local.context_stack:
             _local.context_stack.pop()
 
-    @classmethod
-    def get_current_context(cls):
-        # Access the top (most recent) context from the stack
-        if hasattr(_local, "context_stack") and _local.context_stack:
-            return _local.context_stack[-1]
-
-        # Return global context
-        return Session.get()
-
-    def add_created_versions(self, dataset, version):
+    def add_created_versions(self, dataset: "DatasetRecord", version: int) -> None:
         self.versions.append((dataset, version))
 
     def generate_temp_dataset_name(self) -> str:
@@ -147,6 +139,10 @@ class Session:
         if session:
             return session
 
+        # Access the active (most recent) context from the stack
+        if hasattr(_local, "context_stack") and _local.context_stack:
+            return _local.context_stack[-1]
+
         if cls.GLOBAL_SESSION_CTX is None:
             cls.GLOBAL_SESSION_CTX = Session(
                 cls.GLOBAL_SESSION_NAME,
@@ -164,6 +160,7 @@ class Session:
     @staticmethod
     def except_hook(exc_type, exc_value, exc_traceback):
         Session.GLOBAL_SESSION_CTX.__exit__(exc_type, exc_value, exc_traceback)
+        Session._global_cleanup()
 
         if Session.ORIGINAL_EXCEPT_HOOK:
             Session.ORIGINAL_EXCEPT_HOOK(exc_type, exc_value, exc_traceback)
@@ -182,3 +179,9 @@ class Session:
     def _global_cleanup():
         if Session.GLOBAL_SESSION_CTX is not None:
             Session.GLOBAL_SESSION_CTX.__exit__(None, None, None)
+
+    def __del__(self):
+        if hasattr(
+            self, "name"
+        ):  # If the session object is not initialized, it won't have name attribute
+            self.__exit__(None, None, None)

@@ -28,7 +28,7 @@ def test_atomicity_feature_file(tmp_dir, catalog_tmpfile):
     else:
         popen_args = {"start_new_session": True}
 
-    existing_dataset = catalog_tmpfile.create_dataset(
+    catalog_tmpfile.create_dataset(
         "existing_dataset",
         query_script="script",
         columns=[sa.Column("similarity", Float32)],
@@ -52,11 +52,13 @@ def test_atomicity_feature_file(tmp_dir, catalog_tmpfile):
 
     assert process.returncode == 1
 
-    # Local context datasets should be created in the catalog, but old should not be removed.
+    # Local context datasets should be created in the catalog,
+    # but old should not be removed.
     dataset_versions = list(catalog_tmpfile.list_datasets_versions())
-    assert len(dataset_versions) == 2
+    assert len(dataset_versions) == 3
 
     assert sorted([d[0].name for d in dataset_versions]) == [
         "existing_dataset",
         "local_test_datachain",
+        "passed_as_argument",
     ]

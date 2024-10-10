@@ -1976,6 +1976,7 @@ class DataChain:
                 if signal_schema
                 else None
             ),
+            session=session,
         )
 
         if isinstance(to_insert, dict):
