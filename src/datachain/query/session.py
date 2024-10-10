@@ -114,6 +114,8 @@ class Session:
         for dataset, version in self.versions:
             self.catalog.remove_dataset_version(dataset, version)
 
+        self.versions.clear()
+
     @classmethod
     def get(
         cls,
@@ -172,9 +174,3 @@ class Session:
     def _global_cleanup():
         if Session.GLOBAL_SESSION_CTX is not None:
             Session.GLOBAL_SESSION_CTX.__exit__(None, None, None)
-
-    def __del__(self):
-        if hasattr(
-            self, "name"
-        ):  # If the session object is not initialized, it won't have name attribute
-            self.__exit__(None, None, None)
