@@ -31,6 +31,4 @@ except ValueError:
 # We return to global context. So, this will also be reverted.
 DataChain.from_values(key=["a", "b", "c"]).save("global_error_class_v2")
 
-session._cleanup_temp_datasets()
-
 raise Exception("This is a test exception")

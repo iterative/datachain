@@ -1,4 +1,5 @@
 import atexit
+import gc
 import logging
 import re
 import sys
@@ -174,3 +175,7 @@ class Session:
     def _global_cleanup():
         if Session.GLOBAL_SESSION_CTX is not None:
             Session.GLOBAL_SESSION_CTX.__exit__(None, None, None)
+
+        for obj in gc.get_objects():  # Get all tracked objects
+            if isinstance(obj, Session):  # Cleanup temp dataset for session variables.
+                obj.__exit__(None, None, None)
