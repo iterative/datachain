@@ -30,12 +30,9 @@ def list_bucket(uri: str, cache, client_config=None) -> Callable:
     """
 
     def list_func() -> Iterator[File]:
-        # print(f"Inside list bucket, uri is {uri}")
         config = client_config or {}
         client = Client.get_client(uri, cache, **config)  # type: ignore[arg-type]
-        # print(f"Before parsing url {uri}")
         _, path = Client.parse_url(uri)
-        # print(f"After parsing url {uri}")
         for entries in iter_over_async(client.scandir(path.rstrip("/")), get_loop()):
             yield from entries
 
@@ -91,7 +88,6 @@ def parse_listing_uri(uri: str, cache, client_config) -> tuple[str, str, str]:
     if uses_glob(path) or client.fs.isfile(uri):
         lst_uri_path = posixpath.dirname(path)
     else:
-        # storage_uri, path = Client.parse_url(f'{uri.rstrip("/")}/')
         storage_uri, path = Client.parse_url(f'{uri.rstrip("/")}/')
         lst_uri_path = path
 

@@ -8,7 +8,6 @@ def test_listing_generator(cloud_test_catalog, cloud_type):
     catalog = ctc.catalog
 
     uri = f"{ctc.src_uri}/cats"
-    print(f"src uri is {ctc.src_uri}")
 
     dc = DataChain.from_records(DataChain.DEFAULT_FILE_RECORD).gen(
         file=list_bucket(uri, catalog.cache, client_config=catalog.client_config)

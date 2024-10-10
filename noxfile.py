@@ -35,8 +35,6 @@ def tests(session: nox.Session) -> None:
     session.install(".[tests]")
     session.run(
         "pytest",
-        "-vvv",
-        "--capture=sys",
         "--cov",
         "--cov-config=pyproject.toml",
         "--cov-report=xml",

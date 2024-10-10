@@ -141,7 +141,7 @@ def get_partial_indexed_paths(metastore):
     ]
 
 
-def test_ls_partial_iindexing(cloud_test_catalog, cloud_type, capsys):
+def test_ls_partial_indexing(cloud_test_catalog, cloud_type, capsys):
     metastore = cloud_test_catalog.catalog.metastore
     src = cloud_test_catalog.src_uri
     if cloud_type == "file":
