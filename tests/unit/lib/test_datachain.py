@@ -1,5 +1,6 @@
 import datetime
 import math
+import os
 from collections.abc import Generator, Iterator
 from unittest.mock import ANY
 
@@ -304,6 +305,19 @@ def test_listings_reindex(test_session, tmp_dir):
     assert listings[0].version == 1
     assert listings[1].storage_uri == uri
     assert listings[1].version == 2
+
+
+def test_listings_reindex_subpath_local_file_system(test_session, tmp_dir):
+    subdir = tmp_dir / "subdir"
+    os.mkdir(subdir)
+
+    df = pd.DataFrame(DF_DATA)
+    df.to_parquet(tmp_dir / "df.parquet")
+    df.to_parquet(tmp_dir / "df2.parquet")
+    df.to_parquet(subdir / "df3.parquet")
+
+    assert DataChain.from_storage(tmp_dir.as_uri(), session=test_session).count() == 3
+    assert DataChain.from_storage(subdir.as_uri(), session=test_session).count() == 1
 
 
 def test_preserve_feature_schema(test_session):

@@ -419,20 +419,19 @@ class DataChain:
         cache = session.catalog.cache
         client_config = session.catalog.client_config
 
-        list_dataset_name, list_uri, list_path = parse_listing_uri(
-            uri, cache, client_config
-        )
-        old_list_dataset_name = list_dataset_name
+        list_ds_name, list_uri, list_path = parse_listing_uri(uri, cache, client_config)
+        original_list_ds_name = list_ds_name
         need_listing = True
 
         for ds in cls.listings(session=session, in_memory=in_memory).collect("listing"):
             if (
                 not is_listing_expired(ds.created_at)  # type: ignore[union-attr]
-                and is_listing_subset(ds.name, list_dataset_name)  # type: ignore[union-attr]
+                and is_listing_subset(ds.name, original_list_ds_name)  # type: ignore[union-attr]
                 and not update
             ):
                 need_listing = False
-                list_dataset_name = ds.name  # type: ignore[union-attr]
+                list_ds_name = ds.name  # type: ignore[union-attr]
+                break
 
         if need_listing:
             # caching new listing to special listing dataset
@@ -447,18 +446,18 @@ class DataChain:
                     list_bucket(list_uri, cache, client_config=client_config),
                     output={f"{object_name}": File},
                 )
-                .save(list_dataset_name, listing=True)
+                .save(list_ds_name, listing=True)
             )
 
         if (
             isinstance(Client.get_client(uri, cache, **client_config), FileClient)
-            and old_list_dataset_name != list_dataset_name
+            and original_list_ds_name != list_ds_name
         ):
-            # For local file system we need to make some adjustments
-            diff = old_list_dataset_name.strip("/").removeprefix(list_dataset_name)
+            # For local file system we need to fix listing path / prefix
+            diff = original_list_ds_name.strip("/").removeprefix(list_ds_name)
             list_path = f"{diff}/{list_path}"
 
-        dc = cls.from_dataset(list_dataset_name, session=session, settings=settings)
+        dc = cls.from_dataset(list_ds_name, session=session, settings=settings)
         dc.signals_schema = dc.signals_schema.mutate({f"{object_name}": file_type})
 
         return ls(dc, list_path, recursive=recursive, object_name=object_name)
