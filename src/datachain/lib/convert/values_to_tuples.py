@@ -4,7 +4,7 @@ from typing import Any, Union
 from datachain.lib.data_model import (
     DataType,
     DataTypeNames,
-    DataValuesType,
+    DataValue,
     is_chain_type,
 )
 from datachain.lib.utils import DataChainParamsError
@@ -20,7 +20,7 @@ class ValuesToTupleError(DataChainParamsError):
 def values_to_tuples(  # noqa: C901, PLR0912
     ds_name: str = "",
     output: Union[None, DataType, Sequence[str], dict[str, DataType]] = None,
-    **fr_map: Sequence[DataValuesType],
+    **fr_map: Sequence[DataValue],
 ) -> tuple[Any, Any, Any]:
     if output:
         if not isinstance(output, (Sequence, str, dict)):

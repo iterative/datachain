@@ -392,7 +392,7 @@ class UDFStep(Step, ABC):
 
     def populate_udf_table(self, udf_table: "Table", query: Select) -> None:
         use_partitioning = self.partition_by is not None
-        batching = self.udf.properties.get_batching(use_partitioning)
+        batching = self.udf.get_batching(use_partitioning)
         workers = self.workers
         if (
             not workers
