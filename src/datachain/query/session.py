@@ -2,8 +2,7 @@ import atexit
 import logging
 import re
 import sys
-import threading
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, ClassVar, Optional
 from uuid import uuid4
 
 from datachain.catalog import get_catalog
@@ -14,9 +13,6 @@ if TYPE_CHECKING:
     from datachain.dataset import DatasetRecord
 
 logger = logging.getLogger("datachain")
-
-# Thread-local storage for the context manager stack
-_local = threading.local()
 
 
 class Session:
@@ -43,6 +39,7 @@ class Session:
     """
 
     GLOBAL_SESSION_CTX: Optional["Session"] = None
+    SESSION_CONTEXTS: ClassVar[list["Session"]] = []
     ORIGINAL_EXCEPT_HOOK = None
 
     DATASET_PREFIX = "session_"
@@ -74,12 +71,8 @@ class Session:
         self.versions: list[tuple[DatasetRecord, int]] = []
 
     def __enter__(self):
-        # Initialize the stack if not present
-        if not hasattr(_local, "context_stack"):
-            _local.context_stack = []
-
         # Push the current context onto the stack
-        _local.context_stack.append(self)
+        Session.SESSION_CONTEXTS.append(self)
 
         return self
 
@@ -93,8 +86,8 @@ class Session:
             self.catalog.warehouse.close_on_exit()
             self.catalog.id_generator.close_on_exit()
 
-        if hasattr(_local, "context_stack") and _local.context_stack:
-            _local.context_stack.pop()
+        if Session.SESSION_CONTEXTS:
+            Session.SESSION_CONTEXTS.pop()
 
     def add_created_versions(self, dataset: "DatasetRecord", version: int) -> None:
         self.versions.append((dataset, version))
@@ -140,8 +133,8 @@ class Session:
             return session
 
         # Access the active (most recent) context from the stack
-        if hasattr(_local, "context_stack") and _local.context_stack:
-            return _local.context_stack[-1]
+        if cls.SESSION_CONTEXTS:
+            return cls.SESSION_CONTEXTS[-1]
 
         if cls.GLOBAL_SESSION_CTX is None:
             cls.GLOBAL_SESSION_CTX = Session(
