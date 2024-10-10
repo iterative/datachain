@@ -756,6 +756,10 @@ class Catalog:
 
         return lst, path
 
+    def list(self, uri: str, update=False) -> DataChain:
+        session = Session.get(catalog=self)
+        return DataChain.from_storage(uri, session=session, update=update)
+
     def _remove_dataset_rows_and_warehouse_info(
         self, dataset: DatasetRecord, version: int, **kwargs
     ):
@@ -1434,6 +1438,27 @@ class Catalog:
 
         return File(**file_signals)
 
+    def ls_old(
+        self,
+        sources: list[str],
+        fields: Iterable[str],
+        ttl=TTL_INT,
+        update=False,
+        skip_indexing=False,
+        *,
+        client_config=None,
+    ) -> Iterator[tuple[DataSource, Iterable[tuple]]]:
+        data_sources = self.enlist_sources(
+            sources,
+            ttl,
+            update,
+            skip_indexing=skip_indexing,
+            client_config=client_config or self.client_config,
+        )
+
+        for source in data_sources:  # type: ignore [union-attr]
+            yield source, source.ls(fields)
+
     def ls(
         self,
         sources: list[str],
@@ -1444,6 +1469,8 @@ class Catalog:
         *,
         client_config=None,
     ) -> Iterator[tuple[DataSource, Iterable[tuple]]]:
+        chains = [self.list(s, update=update) for s in sources]
+
         data_sources = self.enlist_sources(
             sources,
             ttl,
