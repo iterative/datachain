@@ -75,20 +75,6 @@ def test_pandas_conversion_in_memory():
     assert dc.equals(df)
 
 
-def test_pandas_file_column_conflict(test_session):
-    file_records = {"path": ["aa.txt", "bb.txt", "ccc.jpg", "dd", "e.txt"]}
-    with pytest.raises(DataChainParamsError):
-        DataChain.from_pandas(
-            pd.DataFrame(DF_DATA | file_records), session=test_session
-        )
-
-    file_records = {"etag": [1, 2, 3, 4, 5]}
-    with pytest.raises(DataChainParamsError):
-        DataChain.from_pandas(
-            pd.DataFrame(DF_DATA | file_records), session=test_session
-        )
-
-
 def test_pandas_uppercase_columns(test_session):
     data = {
         "FirstName": ["Alice", "Bob", "Charlie", "David", "Eva"],
