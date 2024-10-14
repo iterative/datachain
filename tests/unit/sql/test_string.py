@@ -46,3 +46,18 @@ def test_regexp_replace(warehouse, input_string, pattern, replacement, expected)
     )
     result = tuple(warehouse.db.execute(query))
     assert result == ((expected,),)
+
+
+@pytest.mark.parametrize(
+    "input_string,pattern,replacement,expected",
+    [
+        ("hello world", "world", "universe", "hello universe"),
+        ("hello world world", "world", "universe", "hello universe universe"),
+    ],
+)
+def test_replace(warehouse, input_string, pattern, replacement, expected):
+    query = select(
+        string.replace(literal(input_string), literal(pattern), literal(replacement))
+    )
+    result = tuple(warehouse.db.execute(query))
+    assert result == ((expected,),)
