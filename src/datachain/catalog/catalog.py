@@ -1016,7 +1016,7 @@ class Catalog:
             self.update_dataset_version_with_warehouse_info(dataset, version)
 
         session = Session.get(session=session, catalog=self)
-        session.add_created_versions(dataset, version)
+        session.add_dataset_version(dataset, version)
 
         return dataset
 
@@ -1225,7 +1225,7 @@ class Catalog:
         )
 
         session = Session.get(session=session, catalog=self)
-        session.add_created_versions(target_dataset, target_version)
+        session.add_dataset_version(target_dataset, target_version)
 
         # to avoid re-creating rows table, we are just renaming it for a new version
         # of target dataset
