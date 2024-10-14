@@ -1024,7 +1024,7 @@ class DataChain:
         The supported functions:
            Numerical:   +, -, *, /, rand(), avg(), count(), func(),
                         greatest(), least(), max(), min(), sum()
-           String:      length(), split()
+           String:      length(), split(), replace(), regexp_replace()
            Filename:    name(), parent(), file_stem(), file_ext()
            Array:       length(), sip_hash_64(), euclidean_distance(),
                         cosine_distance()
