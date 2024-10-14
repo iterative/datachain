@@ -62,6 +62,7 @@ from datachain.telemetry import telemetry
 from datachain.utils import batched_it, inside_notebook
 
 if TYPE_CHECKING:
+    from pyarrow import DataType as ArrowDataType
     from typing_extensions import Concatenate, ParamSpec, Self
 
     from datachain.lib.hf import HFDatasetType
@@ -1709,6 +1710,7 @@ class DataChain:
         nrows=None,
         session: Optional[Session] = None,
         settings: Optional[dict] = None,
+        column_types: Optional[dict[str, "Union[str, ArrowDataType]"]] = None,
         **kwargs,
     ) -> "DataChain":
         """Generate chain from csv files.
@@ -1727,6 +1729,9 @@ class DataChain:
             nrows : Optional row limit.
             session : Session to use for the chain.
             settings : Settings to use for the chain.
+            column_types : Dictionary of column names and their corresponding types.
+                It is passed to CSV reader and for each column specified type auto
+                inference is disabled.
 
         Example:
             Reading a csv file:
@@ -1742,6 +1747,15 @@ class DataChain:
         from pandas.io.parsers.readers import STR_NA_VALUES
         from pyarrow.csv import ConvertOptions, ParseOptions, ReadOptions
         from pyarrow.dataset import CsvFileFormat
+        from pyarrow.lib import type_for_alias
+
+        if column_types:
+            column_types = {
+                name: type_for_alias(typ) if isinstance(typ, str) else typ
+                for name, typ in column_types.items()
+            }
+        else:
+            column_types = {}
 
         chain = DataChain.from_storage(
             path, session=session, settings=settings, **kwargs
@@ -1767,7 +1781,9 @@ class DataChain:
         parse_options = ParseOptions(delimiter=delimiter)
         read_options = ReadOptions(column_names=column_names)
         convert_options = ConvertOptions(
-            strings_can_be_null=True, null_values=STR_NA_VALUES
+            strings_can_be_null=True,
+            null_values=STR_NA_VALUES,
+            column_types=column_types,
         )
         format = CsvFileFormat(
             parse_options=parse_options,
