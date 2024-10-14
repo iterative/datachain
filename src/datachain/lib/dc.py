@@ -56,7 +56,7 @@ from datachain.query.dataset import (
     DatasetQuery,
     PartitionByType,
 )
-from datachain.query.schema import DEFAULT_DELIMITER, Column, DatasetRow
+from datachain.query.schema import DEFAULT_DELIMITER, Column
 from datachain.sql.functions import path as pathfunc
 from datachain.telemetry import telemetry
 from datachain.utils import batched_it, inside_notebook
@@ -1477,12 +1477,6 @@ class DataChain:
         fr_map = {col.lower(): df[col].tolist() for col in df.columns}
 
         for column in fr_map:
-            if column in DatasetRow.schema:
-                raise DatasetPrepareError(
-                    name,
-                    f"import from pandas error - column '{column}' conflicts with"
-                    " default schema",
-                )
             if not column.isidentifier():
                 raise DatasetPrepareError(
                     name,
