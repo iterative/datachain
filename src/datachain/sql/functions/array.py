@@ -1,6 +1,6 @@
 from sqlalchemy.sql.functions import GenericFunction
 
-from datachain.sql.types import Float, Int64, String
+from datachain.sql.types import Float, Int64
 from datachain.sql.utils import compiler_not_implemented
 
 
@@ -44,23 +44,7 @@ class sip_hash_64(GenericFunction):  # noqa: N801
     inherit_cache = True
 
 
-class avg(GenericFunction):  # noqa: N801
-    type = Float()
-    package = "array"
-    name = "avg"
-    inherit_cache = True
-
-
-class group_concat(GenericFunction):  # noqa: N801
-    type = String()
-    package = "array"
-    name = "group_concat"
-    inherit_cache = True
-
-
 compiler_not_implemented(cosine_distance)
 compiler_not_implemented(euclidean_distance)
 compiler_not_implemented(length)
 compiler_not_implemented(sip_hash_64)
-compiler_not_implemented(avg)
-compiler_not_implemented(group_concat)

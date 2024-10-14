@@ -24,7 +24,6 @@ from sqlalchemy.sql.functions import GenericFunction
 from sqlalchemy.sql.sqltypes import NullType
 
 from datachain.lib.convert.python_to_sql import python_to_sql
-from datachain.lib.convert.sql_to_python import sql_to_python
 from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import DataModel, DataType, dict_to_data_model
 from datachain.lib.dataset_info import DatasetInfo
@@ -44,21 +43,12 @@ from datachain.lib.meta_formats import read_meta, read_schema
 from datachain.lib.model_store import ModelStore
 from datachain.lib.settings import Settings
 from datachain.lib.signal_schema import SignalSchema
-from datachain.lib.udf import (
-    Aggregator,
-    BatchMapper,
-    Generator,
-    Mapper,
-    UDFBase,
-)
+from datachain.lib.udf import Aggregator, BatchMapper, Generator, Mapper, UDFBase
 from datachain.lib.udf_signature import UdfSignature
-from datachain.lib.utils import DataChainParamsError
+from datachain.lib.utils import DataChainColumnError, DataChainParamsError
 from datachain.query import Session
-from datachain.query.dataset import (
-    DatasetQuery,
-    PartitionByType,
-)
-from datachain.query.schema import DEFAULT_DELIMITER, Column
+from datachain.query.dataset import DatasetQuery, PartitionByType
+from datachain.query.schema import DEFAULT_DELIMITER, Column, ColumnMeta
 from datachain.sql.functions import path as pathfunc
 from datachain.telemetry import telemetry
 from datachain.utils import batched_it, inside_notebook
@@ -149,11 +139,6 @@ class DatasetMergeError(DataChainParamsError):  # noqa: D101
             else ""
         )
         super().__init__(f"Merge error on='{on_str}'{right_on_str}: {msg}")
-
-
-class DataChainColumnError(DataChainParamsError):  # noqa: D101
-    def __init__(self, col_name, msg):  # noqa: D107
-        super().__init__(f"Error for column {col_name}: {msg}")
 
 
 OutputType = Union[None, DataType, Sequence[str], dict[str, DataType]]
@@ -1015,35 +1000,22 @@ class DataChain:
     def group_by(
         self,
         *,
-        partition_by: Union[
-            Union[str, GenericFunction], Sequence[Union[str, GenericFunction]]
-        ],
+        partition_by: Union[str, Sequence[str]],
         **kwargs: Func,
     ) -> "Self":
         """Group rows by specified set of signals and return new signals
         with aggregated values.
 
         Example:
-            Using column name(s) in partition_by:
             ```py
             chain = chain.group_by(
                 cnt=func.count(),
                 partition_by=("file_source", "file_ext"),
             )
-
-            Using GenericFunction in partition_by:
-            ```py
-            chain = chain.group_by(
-                total_size=func.sum("file.size"),
-                partition_by=func.file_ext(C("file.path")),
-            )
             ```
         """
-        partition_by = (
-            [partition_by]
-            if isinstance(partition_by, (str, GenericFunction))
-            else partition_by
-        )
+        if isinstance(partition_by, str):
+            partition_by = [partition_by]
         if not partition_by:
             raise ValueError("At least one column should be provided for partition_by")
 
@@ -1056,46 +1028,23 @@ class DataChain:
                     f"Column {col_name} has type {type(func)} but expected Func object",
                 )
 
-        schema_columns = self.signals_schema.db_columns_types()
+        partition_by_columns: list[Column] = []
+        signal_columns: list[Column] = []
         schema_fields: dict[str, DataType] = {}
 
         # validate partition_by columns and add them to the schema
-        partition_by_columns: list[Union[Column, GenericFunction]] = []
-        for col in partition_by:
-            if isinstance(col, GenericFunction):
-                partition_by_columns.append(col)
-                schema_fields[col.name] = sql_to_python(col)
-            else:
-                col_name = col.replace(".", DEFAULT_DELIMITER)
-                col_type = schema_columns.get(col_name)
-                if col_type is None:
-                    raise DataChainColumnError(col, f"Column {col} not found in schema")
-                partition_by_columns.append(Column(col_name, python_to_sql(col_type)))
-                schema_fields[col_name] = col_type
+        for col_name in partition_by:
+            col_db_name = ColumnMeta.to_db_name(col_name)
+            col_type = self.signals_schema.get_column_type(col_db_name)
+            col = Column(col_db_name, python_to_sql(col_type))
+            partition_by_columns.append(col)
+            schema_fields[col_db_name] = col_type
 
         # validate signal columns and add them to the schema
-        signal_columns: list[Column] = []
         for col_name, func in kwargs.items():
-            result_type = func.result_type
-            if func.col is None:
-                signal_columns.append(func.inner().label(col_name))
-            else:
-                col_type = schema_columns.get(func.col)
-                if col_type is None:
-                    raise DataChainColumnError(
-                        func.col, f"Column {func.col} not found in schema"
-                    )
-                if result_type is None:
-                    result_type = col_type
-                func_col = Column(func.col, python_to_sql(col_type))
-                signal_columns.append(func.inner(func_col).label(col_name))
-
-            if result_type is None:
-                raise DataChainColumnError(
-                    col_name, f"Cannot infer type for function {func}"
-                )
-
-            schema_fields[col_name] = result_type
+            col = func.get_column(self.signals_schema, label=col_name)
+            signal_columns.append(col)
+            schema_fields[col_name] = func.get_result_type(self.signals_schema)
 
         return self._evolve(
             query=self._query.group_by(signal_columns, partition_by_columns),
