@@ -78,7 +78,8 @@ def setup():
     compiles(array.length, "sqlite")(compile_array_length)
     compiles(string.length, "sqlite")(compile_string_length)
     compiles(string.split, "sqlite")(compile_string_split)
-    compiles(string.regexp_replace, "sqlite")(compile_regexp_replace)
+    compiles(string.regexp_replace, "sqlite")(compile_string_regexp_replace)
+    compiles(string.replace, "sqlite")(compile_string_replace)
     compiles(conditional.greatest, "sqlite")(compile_greatest)
     compiles(conditional.least, "sqlite")(compile_least)
     compiles(Values, "sqlite")(compile_values)
@@ -273,10 +274,6 @@ def path_file_ext(path):
     return func.substr(path, func.length(path) - path_file_ext_length(path) + 1)
 
 
-def compile_regexp_replace(element, compiler, **kwargs):
-    return f"regexp_replace({compiler.process(element.clauses, **kwargs)})"
-
-
 def compile_path_parent(element, compiler, **kwargs):
     return compiler.process(path_parent(*element.clauses.clauses), **kwargs)
 
@@ -329,6 +326,14 @@ def compile_string_length(element, compiler, **kwargs):
 
 def compile_string_split(element, compiler, **kwargs):
     return compiler.process(func.split(*element.clauses.clauses), **kwargs)
+
+
+def compile_string_regexp_replace(element, compiler, **kwargs):
+    return f"regexp_replace({compiler.process(element.clauses, **kwargs)})"
+
+
+def compile_string_replace(element, compiler, **kwargs):
+    return compiler.process(func.replace(*element.clauses.clauses), **kwargs)
 
 
 def compile_greatest(element, compiler, **kwargs):

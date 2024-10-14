@@ -1231,6 +1231,17 @@ def test_from_csv_nrows(tmp_dir, test_session):
     assert df1.equals(df[:2])
 
 
+def test_from_csv_column_types(tmp_dir, test_session):
+    df = pd.DataFrame(DF_DATA)
+    path = tmp_dir / "test.csv"
+    df.to_csv(path, index=False)
+    dc = DataChain.from_csv(
+        path.as_uri(), column_types={"age": "str"}, session=test_session
+    )
+    df1 = dc.select("first_name", "age", "city").to_pandas()
+    assert df1["age"].dtype == pd.StringDtype
+
+
 def test_to_csv_features(tmp_dir, test_session):
     dc_to = DataChain.from_values(
         f1=features, num=range(len(features)), session=test_session
