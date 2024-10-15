@@ -1319,8 +1319,6 @@ class Catalog:
         if offset:
             q = q.offset(offset)
 
-        q = q.order_by("sys__id")
-
         return q.to_db_records()
 
     def signed_url(self, source: str, path: str, client_config=None) -> str:
