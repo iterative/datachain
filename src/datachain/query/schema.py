@@ -1,16 +1,13 @@
 import functools
-import json
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
 from fnmatch import fnmatch
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 import attrs
 import sqlalchemy as sa
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 
 from datachain.lib.file import File
-from datachain.sql.types import JSON, Boolean, DateTime, Int64, SQLType, String
 
 if TYPE_CHECKING:
     from datachain.catalog import Catalog
@@ -226,63 +223,6 @@ def normalize_param(param: UDFParamSpec) -> UDFParameter:
     if isinstance(param, UDFParameter):
         return param
     raise TypeError(f"Invalid UDF parameter: {param}")
-
-
-class DatasetRow:
-    schema: ClassVar[dict[str, type[SQLType]]] = {
-        "source": String,
-        "path": String,
-        "size": Int64,
-        "location": JSON,
-        "is_latest": Boolean,
-        "last_modified": DateTime,
-        "version": String,
-        "etag": String,
-    }
-
-    @staticmethod
-    def create(
-        path: str,
-        source: str = "",
-        size: int = 0,
-        location: Optional[dict[str, Any]] = None,
-        is_latest: bool = True,
-        last_modified: Optional[datetime] = None,
-        version: str = "",
-        etag: str = "",
-    ) -> tuple[
-        str,
-        str,
-        int,
-        Optional[str],
-        int,
-        bool,
-        datetime,
-        str,
-        str,
-        int,
-    ]:
-        if location:
-            location = json.dumps([location])  # type: ignore [assignment]
-
-        last_modified = last_modified or datetime.now(timezone.utc)
-
-        return (  # type: ignore [return-value]
-            source,
-            path,
-            size,
-            location,
-            is_latest,
-            last_modified,
-            version,
-            etag,
-        )
-
-    @staticmethod
-    def extend(**columns):
-        cols = {**DatasetRow.schema}
-        cols.update(columns)
-        return cols
 
 
 C = Column
