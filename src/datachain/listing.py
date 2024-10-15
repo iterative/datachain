@@ -19,31 +19,30 @@ if TYPE_CHECKING:
     from datachain.client import Client
     from datachain.data_storage import AbstractMetastore, AbstractWarehouse
     from datachain.dataset import DatasetRecord
-    from datachain.storage import Storage
 
 
 class Listing:
     def __init__(
         self,
-        storage: Optional["Storage"],
         metastore: "AbstractMetastore",
         warehouse: "AbstractWarehouse",
         client: "Client",
         dataset: Optional["DatasetRecord"],
+        obj_name: str = "file",
     ):
-        self.storage = storage
         self.metastore = metastore
         self.warehouse = warehouse
         self.client = client
         self.dataset = dataset  # dataset representing bucket listing
+        self.obj_name = obj_name
 
     def clone(self) -> "Listing":
         return self.__class__(
-            self.storage,
             self.metastore.clone(),
             self.warehouse.clone(),
             self.client,
             self.dataset,
+            self.obj_name,
         )
 
     def __enter__(self) -> "Listing":
@@ -56,13 +55,17 @@ class Listing:
         self.metastore.close()
         self.warehouse.close()
 
+    """
     @property
     def id(self):
         return self.storage.id
+    """
 
     @property
     def dataset_rows(self):
-        return self.warehouse.dataset_rows(self.dataset, self.dataset.latest_version)
+        return self.warehouse.dataset_rows(
+            self.dataset, self.dataset.latest_version, obj_name=self.obj_name
+        )
 
     def fetch(self, start_prefix="", method: str = "default") -> None:
         sync(get_loop(), self._fetch, start_prefix, method)
@@ -93,7 +96,7 @@ class Listing:
     def insert_entries_done(self) -> None:
         self.warehouse.insert_rows_done(self.dataset_rows.get_table())
 
-    def expand_path(self, path, use_glob=True) -> list[Node]:
+    def expand_path(self, path, use_glob=True) -> list[File]:
         if use_glob and glob.has_magic(path):
             return self.warehouse.expand_path(self.dataset_rows, path)
         return [self.resolve_path(path)]

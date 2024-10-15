@@ -599,6 +599,43 @@ class Catalog:
     def enlist_source(
         self,
         source: str,
+        update=False,
+        client_config=None,
+        object_name="file",
+        skip_indexing=False,
+    ) -> tuple[Listing, str]:
+        from datachain.lib.dc import DataChain
+        from datachain.query.session import Session
+
+        # from datachain.client import Client
+        session = Session.get(catalog=self)  # TODO move as property of Catalog
+
+        _, path = Client.parse_url(source)
+        client = Client.get_client(source, self.cache, **self.client_config)
+
+        chain, dataset_name = DataChain.from_storage(
+            source, session=session, update=update, object_name=object_name
+        )
+        """
+        print("Chain is")
+        print(chain)
+        # dataset_name, _ = DataChain.get_list_dataset_name(source, session)
+        print(f"list dataset name is {dataset_name}")
+        """
+
+        lst = Listing(
+            self.metastore,
+            self.warehouse,
+            client,
+            self.get_dataset(dataset_name),
+            obj_name=object_name,
+        )
+
+        return lst, path
+
+    def enlist_source_old(
+        self,
+        source: str,
         ttl: int,
         force_update=False,
         skip_indexing=False,
@@ -756,10 +793,6 @@ class Catalog:
 
         return lst, path
 
-    def list(self, uri: str, update=False) -> DataChain:
-        session = Session.get(catalog=self)
-        return DataChain.from_storage(uri, session=session, update=update)
-
     def _remove_dataset_rows_and_warehouse_info(
         self, dataset: DatasetRecord, version: int, **kwargs
     ):
@@ -784,10 +817,9 @@ class Catalog:
         for src in sources:  # Opt: parallel
             listing, file_path = self.enlist_source(
                 src,
-                ttl,
                 update,
-                skip_indexing=skip_indexing,
                 client_config=client_config or self.client_config,
+                skip_indexing=skip_indexing,
             )
             enlisted_sources.append((listing, file_path))
 
@@ -1469,8 +1501,6 @@ class Catalog:
         *,
         client_config=None,
     ) -> Iterator[tuple[DataSource, Iterable[tuple]]]:
-        chains = [self.list(s, update=update) for s in sources]
-
         data_sources = self.enlist_sources(
             sources,
             ttl,

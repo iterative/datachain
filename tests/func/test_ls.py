@@ -82,7 +82,7 @@ dog3
     """
 
 
-def test_ls_sources(cloud_test_catalog, cloud_type, capsys):
+def test_ls_ssources(cloud_test_catalog, cloud_type, capsys):
     src = cloud_test_catalog.src_uri
     ls([src, f"{src}/dogs/*"], catalog=cloud_test_catalog.catalog)
     captured = capsys.readouterr()

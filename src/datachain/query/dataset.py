@@ -1205,6 +1205,7 @@ class DatasetQuery:
                 selected_columns,
             )
         finally:
+            # pass
             self.cleanup()
 
     def extract(

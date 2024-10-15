@@ -23,6 +23,7 @@ from pydantic import BaseModel
 from sqlalchemy.sql.functions import GenericFunction
 from sqlalchemy.sql.sqltypes import NullType
 
+from datachain.dataset import DatasetRecord
 from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import DataModel, DataType, dict_to_data_model
@@ -299,6 +300,13 @@ class DataChain:
         """Version of the underlying dataset, if there is one."""
         return self._query.version
 
+    @property
+    def dataset(self) -> Optional[DatasetRecord]:
+        """Underlying dataset, if there is one"""
+        if not self.name:
+            return None
+        return self.session.catalog.get_dataset(self.name)
+
     def __or__(self, other: "Self") -> "Self":
         """Return `self.union(other)`."""
         return self.union(other)
@@ -380,6 +388,45 @@ class DataChain:
         return self
 
     @classmethod
+    def get_list_dataset_name(
+        cls, uri: str, session: Session, update: bool = False, in_memory=False
+    ) -> tuple[str, bool]:
+        # TODO maybe move to lib/listing.py
+        list_dataset_name, _, _ = parse_listing_uri(
+            uri, session.catalog.cache, session.catalog.client_config
+        )
+
+        # list of all possible datasets that have input uri listed in them
+        datasets = []
+        for ds in cls.listings(session=session, in_memory=in_memory).collect("listing"):
+            if not is_listing_expired(ds.created_at) and is_listing_subset(
+                ds.name, list_dataset_name
+            ):
+                datasets.append(ds)
+
+        """
+        datasets = [
+            ds
+            for ds in cls.listings(session=session, in_memory=in_memory).collect("listing")
+            if not is_listing_expired(ds.created_at)  # type: ignore[union-attr]
+            and is_listing_subset(ds.name, list_dataset_name)  # type: ignore[union-attr]
+        ]
+        print("listing datasets are")
+        print(datasets)
+        """
+
+        if not datasets:
+            # no existing datasets found that have input uri listed
+            return list_dataset_name, False
+
+        if not update:
+            # not need to update, choosing the most recent one
+            return sorted(datasets, key=lambda d: d.created_at)[-1].name, True
+
+        # choosing the smallest possible one to minimize update time
+        return sorted(datasets, key=lambda d: len(d.name))[0].name, True
+
+    @classmethod
     def from_storage(
         cls,
         uri,
@@ -393,6 +440,7 @@ class DataChain:
         update: bool = False,
         anon: bool = False,
     ) -> "Self":
+        # print(f"Inside from_storage, uri is {uri}")
         """Get data from a storage as a list of file with all file attributes.
         It returns the chain itself as usual.
 
@@ -416,22 +464,22 @@ class DataChain:
 
         session = Session.get(session, client_config=client_config, in_memory=in_memory)
 
-        list_dataset_name, list_uri, list_path = parse_listing_uri(
+        _, list_uri, list_path = parse_listing_uri(
             uri, session.catalog.cache, session.catalog.client_config
         )
-        need_listing = True
 
+        """
+        print("before get list datasets in from_storage")
         for ds in cls.listings(session=session, in_memory=in_memory).collect("listing"):
-            if (
-                not is_listing_expired(ds.created_at)  # type: ignore[union-attr]
-                and is_listing_subset(ds.name, list_dataset_name)  # type: ignore[union-attr]
-                and not update
-            ):
-                need_listing = False
-                list_dataset_name = ds.name  # type: ignore[union-attr]
+            print(ds)
 
-        if need_listing:
-            # caching new listing to special listing dataset
+        print("before get list dataset name")
+        """
+        list_dataset_name, list_dataset_exists = cls.get_list_dataset_name(
+            uri, session, in_memory=in_memory
+        )
+
+        if update or not list_dataset_exists:
             (
                 cls.from_records(
                     DataChain.DEFAULT_FILE_RECORD,
@@ -453,7 +501,9 @@ class DataChain:
         dc = cls.from_dataset(list_dataset_name, session=session, settings=settings)
         dc.signals_schema = dc.signals_schema.mutate({f"{object_name}": file_type})
 
-        return ls(dc, list_path, recursive=recursive, object_name=object_name)
+        return ls(
+            dc, list_path, recursive=recursive, object_name=object_name
+        ), list_dataset_name
 
     @classmethod
     def from_dataset(
