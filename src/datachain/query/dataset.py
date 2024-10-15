@@ -1587,10 +1587,11 @@ class DatasetQuery:
                 version=version,
                 feature_schema=feature_schema,
                 columns=columns,
-                session=self.session,
                 **kwargs,
             )
             version = version or dataset.latest_version
+
+            self.session.add_dataset_version(dataset=dataset, version=version)
 
             dr = self.catalog.warehouse.dataset_rows(dataset)
 
