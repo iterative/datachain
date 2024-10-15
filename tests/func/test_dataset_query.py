@@ -940,17 +940,10 @@ def test_group_by(cloud_test_catalog, cloud_type, dogs_dataset):
     assert len(result) == 2
 
     result_dict = {r[0]: r[1:] for r in result}
-    if cloud_type == "file":
-        assert result_dict == {
-            f"{cloud_test_catalog.partial_path}/dogs": (3, 11, 11 / 3, 3, 4),
-            f"{cloud_test_catalog.partial_path}/dogs/others": (1, 4, 4, 4, 4),
-        }
-
-    else:
-        assert result_dict == {
-            "dogs": (3, 11, 11 / 3, 3, 4),
-            "dogs/others": (1, 4, 4, 4, 4),
-        }
+    assert result_dict == {
+        "dogs": (3, 11, 11 / 3, 3, 4),
+        "dogs/others": (1, 4, 4, 4, 4),
+    }
 
 
 @pytest.mark.parametrize(
@@ -988,7 +981,7 @@ def test_dataset_dependencies_one_storage_as_dependency(
     )
     ds_name = uuid.uuid4().hex
     catalog = cloud_test_catalog.catalog
-    storage = catalog.metastore.get_storage(cloud_test_catalog.storage_uri)
+    storage = catalog.metastore.get_storage(cloud_test_catalog.src_uri)
 
     DatasetQuery(cats_dataset.name, catalog=catalog).save(ds_name)
 
@@ -1017,7 +1010,7 @@ def test_dataset_dependencies_one_registered_dataset_as_dependency(
     )
     ds_name = uuid.uuid4().hex
     catalog = cloud_test_catalog.catalog
-    storage = catalog.metastore.get_storage(cloud_test_catalog.storage_uri)
+    storage = catalog.metastore.get_storage(cloud_test_catalog.src_uri)
 
     DatasetQuery(name=dogs_dataset.name, catalog=catalog).save(ds_name)
 
@@ -1066,7 +1059,7 @@ def test_dataset_dependencies_multiple_direct_dataset_dependencies(
     # combining multiple DatasetQuery instances into new one like union or join
     ds_name = uuid.uuid4().hex
     catalog = cloud_test_catalog.catalog
-    storage = catalog.metastore.get_storage(cloud_test_catalog.storage_uri)
+    storage = catalog.metastore.get_storage(cloud_test_catalog.src_uri)
 
     dogs = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
     cats = DatasetQuery(name=cats_dataset.name, version=1, catalog=catalog)
@@ -1139,7 +1132,7 @@ def test_dataset_dependencies_multiple_union(
     )
     ds_name = uuid.uuid4().hex
     catalog = cloud_test_catalog.catalog
-    storage = catalog.metastore.get_storage(cloud_test_catalog.storage_uri)
+    storage = catalog.metastore.get_storage(cloud_test_catalog.src_uri)
 
     dogs = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
     cats = DatasetQuery(name=cats_dataset.name, version=1, catalog=catalog)

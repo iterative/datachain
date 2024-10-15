@@ -29,25 +29,7 @@ class FileClient(Client):
 
     @classmethod
     def get_uri(cls, name) -> StorageURI:
-        """
-        This returns root of FS as uri, e.g
-            Linux & Mac : file:///
-            Windows: file:///C:/
-        """
-        return StorageURI(Path(name).as_uri())
-
-    @staticmethod
-    def root_dir() -> str:
-        """
-        Returns file system root path.
-        Linux &  MacOS: /
-        Windows: C:/
-        """
-        return Path.cwd().anchor.replace(os.sep, posixpath.sep)
-
-    @staticmethod
-    def root_path() -> Path:
-        return Path(FileClient.root_dir())
+        return StorageURI(f'{cls.PREFIX}/{name.removeprefix("/")}')
 
     @classmethod
     def ls_buckets(cls, **kwargs):
@@ -75,23 +57,20 @@ class FileClient(Client):
 
     @classmethod
     def split_url(cls, url: str) -> tuple[str, str]:
-        """
-        Splits url into two components:
-            1. root of the FS which will later on become the name of the storage
-            2. path which will later on become partial path
-        Note that URL needs to be have file:/// protocol.
-        Examples:
-            file:///tmp/dir -> / + tmp/dir
-            file:///c:/windows/files -> c:/ + windows/files
-        """
         parsed = urlparse(url)
         if parsed.scheme == "file":
             scheme, rest = url.split(":", 1)
-            uri = f"{scheme.lower()}:{rest}"
+            url = f"{scheme.lower()}:{rest}"
         else:
-            uri = cls.path_to_uri(url)
+            url = cls.path_to_uri(url)
 
-        return cls.root_dir(), uri.removeprefix(cls.root_path().as_uri())
+        fill_path = url[len(cls.PREFIX) :]
+        path_split = fill_path.rsplit("/", 1)
+        bucket = path_split[0]
+        if os.name == "nt":
+            bucket = bucket.removeprefix("/")
+        path = path_split[1] if len(path_split) > 1 else ""
+        return bucket, path
 
     @classmethod
     def from_name(cls, name: str, cache, kwargs) -> "FileClient":

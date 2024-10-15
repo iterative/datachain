@@ -124,6 +124,9 @@ class Client(ABC):
     def get_client(source: str, cache: DataChainCache, **kwargs) -> "Client":
         cls = Client.get_implementation(source)
         storage_url, _ = cls.split_url(source)
+        if os.name == "nt":
+            storage_url = storage_url.removeprefix("/")
+
         return cls.from_name(storage_url, cache, kwargs)
 
     @classmethod
@@ -171,6 +174,12 @@ class Client(ABC):
 
     @classmethod
     def split_url(cls, url: str) -> tuple[str, str]:
+        """
+        Splits the URL into two pieces:
+        1. bucket name without protocol (everything up until the first /)
+        2. path which is the rest of URL starting from bucket name
+        e.g s3://my-bucket/animals/dogs -> (my-bucket, animals/dogs)
+        """
         fill_path = url[len(cls.PREFIX) :]
         path_split = fill_path.split("/", 1)
         bucket = path_split[0]
