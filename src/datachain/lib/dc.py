@@ -1988,6 +1988,8 @@ class DataChain:
             ),
         )
 
+        session.add_dataset_version(dsr, dsr.latest_version)
+
         if isinstance(to_insert, dict):
             to_insert = [to_insert]
         elif not to_insert:
