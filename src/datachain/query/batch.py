@@ -97,7 +97,6 @@ class Partition(BatchingStrategy):
 
         ordered_query = query.order_by(None).order_by(
             PARTITION_COLUMN_ID,
-            "sys__id",
             *query._order_by_clauses,
         )
 
