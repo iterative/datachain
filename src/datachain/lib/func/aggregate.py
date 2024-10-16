@@ -16,7 +16,7 @@ def sum(col: str) -> Func:
 
 
 def avg(col: str) -> Func:
-    return Func(inner=dc_func.aggregate.avg, col=col)
+    return Func(inner=dc_func.aggregate.avg, col=col, result_type=float)
 
 
 def min(col: str) -> Func:

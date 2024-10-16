@@ -11,7 +11,6 @@ from datachain.dataset import RowDict
 from datachain.lib.convert.flatten import flatten
 from datachain.lib.data_model import DataValue
 from datachain.lib.file import File
-from datachain.lib.signal_schema import SignalSchema
 from datachain.lib.utils import AbstractUDF, DataChainError, DataChainParamsError
 from datachain.query.batch import (
     Batch,
@@ -25,6 +24,7 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
     from datachain.catalog import Catalog
+    from datachain.lib.signal_schema import SignalSchema
     from datachain.lib.udf_signature import UdfSignature
     from datachain.query.batch import RowsOutput
 
@@ -172,7 +172,7 @@ class UDFBase(AbstractUDF):
     def _init(
         self,
         sign: "UdfSignature",
-        params: SignalSchema,
+        params: "SignalSchema",
         func: Optional[Callable],
     ):
         self.params = params
@@ -183,7 +183,7 @@ class UDFBase(AbstractUDF):
     def _create(
         cls,
         sign: "UdfSignature",
-        params: SignalSchema,
+        params: "SignalSchema",
     ) -> "Self":
         if isinstance(sign.func, AbstractUDF):
             if not isinstance(sign.func, cls):  # type: ignore[unreachable]

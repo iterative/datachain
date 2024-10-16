@@ -1,5 +1,7 @@
 from typing import TYPE_CHECKING, Callable, Optional
 
+from sqlalchemy import desc
+
 from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.utils import DataChainColumnError
 from datachain.query.schema import Column, ColumnMeta
@@ -9,6 +11,13 @@ if TYPE_CHECKING:
     from datachain.lib.signal_schema import SignalSchema
 
 
+class Window:
+    def __init__(self, *, partition_by: str, order_by: str, desc: bool = False) -> None:
+        self.partition_by = partition_by
+        self.order_by = order_by
+        self.desc = desc
+
+
 class Func:
     def __init__(
         self,
@@ -16,11 +25,30 @@ class Func:
         col: Optional[str] = None,
         result_type: Optional["DataType"] = None,
         is_array: bool = False,
+        is_window: bool = False,
+        window: Optional[Window] = None,
     ) -> None:
         self.inner = inner
         self.col = col
         self.result_type = result_type
         self.is_array = is_array
+        self.is_window = is_window
+        self.window = window
+
+    def over(self, window: Window) -> "Func":
+        if not self.is_window:
+            raise DataChainColumnError(
+                str(self.inner), "Window function is not supported"
+            )
+
+        return Func(
+            self.inner,
+            self.col,
+            self.result_type,
+            self.is_array,
+            self.is_window,
+            window,
+        )
 
     @property
     def db_col(self) -> Optional[str]:
@@ -55,6 +83,22 @@ class Func:
             func_col = self.inner(col)
         else:
             func_col = self.inner()
+
+        if self.is_window:
+            if not self.window:
+                raise DataChainColumnError(
+                    str(self.inner), "Window function requires window"
+                )
+            func_col = func_col.over(
+                partition_by=self.window.partition_by,
+                order_by=(
+                    desc(self.window.order_by)
+                    if self.window.desc
+                    else self.window.order_by
+                ),
+            )
+
+        func_col.type = sql_type
 
         if label:
             func_col = func_col.label(label)
