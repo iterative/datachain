@@ -80,73 +80,73 @@ def convert_rows_custom_column_types(
 
 class DirExpansion:
     @staticmethod
-    def db_name(name: str, obj_name: str = "file") -> str:
-        # TODO use obj_name in callers of this function
-        return f"{obj_name}{DEFAULT_DELIMITER}{name}"
+    def db_name(name: str, object_name: str = "file") -> str:
+        # TODO use object_name in callers of this function
+        return f"{object_name}{DEFAULT_DELIMITER}{name}"
 
     @classmethod
-    def col(cls, query, name: str, obj_name: str = "file") -> str:
-        # TODO use obj_name in callers of this function
-        return getattr(query.c, cls.db_name(name, obj_name))
+    def col(cls, query, name: str, object_name: str = "file") -> str:
+        # TODO use object_name in callers of this function
+        return getattr(query.c, cls.db_name(name, object_name))
 
     @classmethod
-    def base_select(cls, q, obj_name="file"):
+    def base_select(cls, q, object_name="file"):
         return sa.select(
             q.c.sys__id,
-            false().label(cls.db_name("is_dir", obj_name)),
-            cls.col(q, "source", obj_name),
-            cls.col(q, "path", obj_name),
-            cls.col(q, "version", obj_name),
-            cls.col(q, "location", obj_name),
-            # q.c(cls.db_name("source", obj_name)),
-            # q.c(cls.db_name("path", obj_name)),
-            # q.c(cls.db_name("version", obj_name)),
-            # q.c(cls.db_name("location", obj_name)),
+            false().label(cls.db_name("is_dir", object_name)),
+            cls.col(q, "source", object_name),
+            cls.col(q, "path", object_name),
+            cls.col(q, "version", object_name),
+            cls.col(q, "location", object_name),
+            # q.c(cls.db_name("source", object_name)),
+            # q.c(cls.db_name("path", object_name)),
+            # q.c(cls.db_name("version", object_name)),
+            # q.c(cls.db_name("location", object_name)),
         )
 
     @classmethod
-    def apply_group_by(cls, q, obj_name="file"):
+    def apply_group_by(cls, q, object_name="file"):
         return (
             sa.select(
                 f.min(q.c.sys__id).label("sys__id"),
-                cls.col(q, "is_dir", obj_name),
-                cls.col(q, "source", obj_name),
-                cls.col(q, "path", obj_name),
-                cls.col(q, "version", obj_name),
-                f.max(cls.col(q, "location", obj_name)).label(
-                    cls.db_name("location", obj_name)
+                cls.col(q, "is_dir", object_name),
+                cls.col(q, "source", object_name),
+                cls.col(q, "path", object_name),
+                cls.col(q, "version", object_name),
+                f.max(cls.col(q, "location", object_name)).label(
+                    cls.db_name("location", object_name)
                 ),
             )
             .select_from(q)
             .group_by(
-                cls.col(q, "source", obj_name),
-                cls.col(q, "path", obj_name),
-                cls.col(q, "is_dir", obj_name),
-                cls.col(q, "version", obj_name),
+                cls.col(q, "source", object_name),
+                cls.col(q, "path", object_name),
+                cls.col(q, "is_dir", object_name),
+                cls.col(q, "version", object_name),
             )
             .order_by(
-                cls.col(q, "source", obj_name),
-                cls.col(q, "path", obj_name),
-                cls.col(q, "is_dir", obj_name),
-                cls.col(q, "version", obj_name),
+                cls.col(q, "source", object_name),
+                cls.col(q, "path", object_name),
+                cls.col(q, "is_dir", object_name),
+                cls.col(q, "version", object_name),
             )
         )
 
     @classmethod
-    def query(cls, q, obj_name="file"):
-        q = cls.base_select(q, obj_name).cte(recursive=True)
-        parent = path.parent(cls.col(q, "path", obj_name))
+    def query(cls, q, object_name="file"):
+        q = cls.base_select(q, object_name).cte(recursive=True)
+        parent = path.parent(cls.col(q, "path", object_name))
         q = q.union_all(
             sa.select(
                 sa.literal(-1).label("sys__id"),
-                true().label(cls.db_name("is_dir", obj_name)),
-                cls.col(q, "source", obj_name),
-                parent.label(cls.db_name("path", obj_name)),
-                sa.literal("").label(cls.db_name("version", obj_name)),
-                null().label(cls.db_name("location", obj_name)),
+                true().label(cls.db_name("is_dir", object_name)),
+                cls.col(q, "source", object_name),
+                parent.label(cls.db_name("path", object_name)),
+                sa.literal("").label(cls.db_name("version", object_name)),
+                null().label(cls.db_name("location", object_name)),
             ).where(parent != "")
         )
-        return cls.apply_group_by(q, obj_name)
+        return cls.apply_group_by(q, object_name)
 
 
 class DataTable:
@@ -158,13 +158,13 @@ class DataTable:
         engine: "Engine",
         metadata: Optional["sa.MetaData"] = None,
         column_types: Optional[dict[str, SQLType]] = None,
-        obj_name: str = "file",
+        object_name: str = "file",
     ):
         self.name: str = name
         self.engine = engine
         self.metadata: sa.MetaData = metadata if metadata is not None else sa.MetaData()
         self.column_types: dict[str, SQLType] = column_types or {}
-        self.obj_name = obj_name
+        self.object_name = object_name
 
     @staticmethod
     def copy_column(
@@ -240,8 +240,7 @@ class DataTable:
         return self.columns
 
     def col(self, name: str):
-        return getattr(self.c, f"{self.obj_name}{DEFAULT_DELIMITER}{name}")
-        # return self.c(f"{self.obj_name}{DEFAULT_DELIMITER}{name}")
+        return getattr(self.c, f"{self.object_name}{DEFAULT_DELIMITER}{name}")
 
     @property
     def table(self) -> "sa.Table":

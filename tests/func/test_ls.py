@@ -11,7 +11,9 @@ from sqlalchemy import select
 from datachain.cli import ls
 from datachain.client.local import FileClient
 from datachain.lib.dc import DataChain
+from datachain.lib.listing import LISTING_PREFIX
 from tests.utils import uppercase_scheme
+import posixpath
 
 
 def same_lines(lines1, lines2):
@@ -140,15 +142,13 @@ def test_ls_glob_sub(cloud_test_catalog, cloud_type, capsys):
     assert same_lines(captured.out, ls_glob_output(src, cloud_type))
 
 
-def get_partial_indexed_paths(metastore):
-    p = metastore._partials
-    return [
-        r[0] for r in metastore.db.execute(select(p.c.path_str).order_by(p.c.path_str))
-    ]
+def list_dataset_name(uri, path):
+    return f"{LISTING_PREFIX}{uri}/{posixpath.join(path, '').lstrip('/')}"
 
 
 def test_ls_partial_indexing(cloud_test_catalog, cloud_type, capsys):
-    metastore = cloud_test_catalog.catalog.metastore
+    catalog = cloud_test_catalog.catalog
+    metastore = catalog.metastore
     src = cloud_test_catalog.src_uri
     if cloud_type == "file":
         src_metastore = metastore.clone(FileClient.root_path().as_uri())
@@ -163,16 +163,15 @@ def test_ls_partial_indexing(cloud_test_catalog, cloud_type, capsys):
     # and to avoid any flaky tests due to multithreading generating output out of order
     sleep(0.05)
     captured = capsys.readouterr()
-    assert get_partial_indexed_paths(src_metastore) == [f"{prefix}dogs/others/"]
     assert "Listing" in captured.err
     assert captured.out == "dog4\n"
 
     ls([f"{src}/cats/"], catalog=cloud_test_catalog.catalog)
     sleep(0.05)
     captured = capsys.readouterr()
-    assert get_partial_indexed_paths(src_metastore) == [
-        f"{prefix}cats/",
-        f"{prefix}dogs/others/",
+    assert sorted(l.name for l in catalog.listings()) == [
+        list_dataset_name(src, "cats/"),
+        list_dataset_name(src, "dogs/others/"),
     ]
     assert "Listing" in captured.err
     assert same_lines("cat1\ncat2\n", captured.out)
@@ -180,10 +179,10 @@ def test_ls_partial_indexing(cloud_test_catalog, cloud_type, capsys):
     ls([f"{src}/dogs/"], catalog=cloud_test_catalog.catalog)
     sleep(0.05)
     captured = capsys.readouterr()
-    assert get_partial_indexed_paths(src_metastore) == [
-        f"{prefix}cats/",
-        f"{prefix}dogs/",
-        f"{prefix}dogs/others/",
+    assert sorted(l.name for l in catalog.listings()) == [
+        list_dataset_name(src, "cats/"),
+        list_dataset_name(src, "dogs/"),
+        list_dataset_name(src, "dogs/others/"),
     ]
     assert "Listing" in captured.err
     assert same_lines("others/\ndog1\ndog2\ndog3\n", captured.out)
@@ -191,10 +190,10 @@ def test_ls_partial_indexing(cloud_test_catalog, cloud_type, capsys):
     ls([f"{src}/cats/"], catalog=cloud_test_catalog.catalog)
     sleep(0.05)
     captured = capsys.readouterr()
-    assert get_partial_indexed_paths(src_metastore) == [
-        f"{prefix}cats/",
-        f"{prefix}dogs/",
-        f"{prefix}dogs/others/",
+    assert sorted(l.name for l in catalog.listings()) == [
+        list_dataset_name(src, "cats/"),
+        list_dataset_name(src, "dogs/"),
+        list_dataset_name(src, "dogs/others/"),
     ]
     assert "Listing" not in captured.err
     assert same_lines("cat1\ncat2\n", captured.out)
@@ -202,11 +201,11 @@ def test_ls_partial_indexing(cloud_test_catalog, cloud_type, capsys):
     ls([f"{src}/"], catalog=cloud_test_catalog.catalog)
     sleep(0.05)
     captured = capsys.readouterr()
-    assert get_partial_indexed_paths(src_metastore) == [
-        f"{prefix}",
-        f"{prefix}cats/",
-        f"{prefix}dogs/",
-        f"{prefix}dogs/others/",
+    assert sorted(l.name for l in catalog.listings()) == [
+        list_dataset_name(src, ""),
+        list_dataset_name(src, "cats/"),
+        list_dataset_name(src, "dogs/"),
+        list_dataset_name(src, "dogs/others/"),
     ]
     assert "Listing" in captured.err
     assert same_lines("cats/\ndogs/\ndescription\n", captured.out)

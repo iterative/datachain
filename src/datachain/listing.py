@@ -28,13 +28,13 @@ class Listing:
         warehouse: "AbstractWarehouse",
         client: "Client",
         dataset: Optional["DatasetRecord"],
-        obj_name: str = "file",
+        object_name: str = "file",
     ):
         self.metastore = metastore
         self.warehouse = warehouse
         self.client = client
         self.dataset = dataset  # dataset representing bucket listing
-        self.obj_name = obj_name
+        self.object_name = object_name
 
     def clone(self) -> "Listing":
         return self.__class__(
@@ -42,7 +42,7 @@ class Listing:
             self.warehouse.clone(),
             self.client,
             self.dataset,
-            self.obj_name,
+            self.object_name,
         )
 
     def __enter__(self) -> "Listing":
@@ -64,7 +64,7 @@ class Listing:
     @property
     def dataset_rows(self):
         return self.warehouse.dataset_rows(
-            self.dataset, self.dataset.latest_version, obj_name=self.obj_name
+            self.dataset, self.dataset.latest_version, object_name=self.object_name
         )
 
     def fetch(self, start_prefix="", method: str = "default") -> None:

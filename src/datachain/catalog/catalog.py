@@ -610,26 +610,20 @@ class Catalog:
         # from datachain.client import Client
         session = Session.get(catalog=self)  # TODO move as property of Catalog
 
-        _, path = Client.parse_url(source)
-        client = Client.get_client(source, self.cache, **self.client_config)
-
-        chain, dataset_name = DataChain.from_storage(
+        chain = DataChain.from_storage(
             source, session=session, update=update, object_name=object_name
         )
-        """
-        print("Chain is")
-        print(chain)
-        # dataset_name, _ = DataChain.get_list_dataset_name(source, session)
-        print(f"list dataset name is {dataset_name}")
-        """
+        dataset_name, _ = DataChain.get_list_dataset_name(source, session)
 
         lst = Listing(
-            self.metastore,
-            self.warehouse,
-            client,
+            self.metastore.clone(),
+            self.warehouse.clone(),
+            Client.get_client(source, self.cache, **self.client_config),
             self.get_dataset(dataset_name),
-            obj_name=object_name,
+            object_name=object_name,
         )
+
+        _, path = Client.parse_url(source)
 
         return lst, path
 
@@ -807,7 +801,6 @@ class Catalog:
     def enlist_sources(
         self,
         sources: list[str],
-        ttl: int,
         update: bool,
         skip_indexing=False,
         client_config=None,
@@ -838,7 +831,6 @@ class Catalog:
     def enlist_sources_grouped(
         self,
         sources: list[str],
-        ttl: int,
         update: bool,
         no_glob: bool = False,
         client_config=None,
@@ -859,7 +851,6 @@ class Catalog:
                 for ds in edatachain_data:
                     listing, source_path = self.enlist_source(
                         ds["data-source"]["uri"],
-                        ttl,
                         update,
                         client_config=client_config,
                     )
@@ -900,7 +891,7 @@ class Catalog:
                 enlisted_sources.append((False, True, indexed_sources))
             else:
                 listing, source_path = self.enlist_source(
-                    src, ttl, update, client_config=client_config
+                    src, update, client_config=client_config
                 )
                 enlisted_sources.append((False, False, (listing, source_path)))
 
@@ -1348,6 +1339,21 @@ class Catalog:
                 for v in d.versions
             )
 
+    def listings(self):
+        """
+        Returns list of ListingInfo objects which are representing specific
+        storage listing datasets
+        """
+        from datachain.lib.listing_info import ListingInfo
+        from datachain.lib.listing import is_listing_dataset
+
+        return [
+            ListingInfo.from_models(d, v, j)
+            for d, v, j in self.list_datasets_versions(include_listing=True)
+            if is_listing_dataset(d.name)
+        ]
+
+
     def ls_dataset_rows(
         self, name: str, version: int, offset=None, limit=None
     ) -> list[dict]:
@@ -1470,32 +1476,10 @@ class Catalog:
 
         return File(**file_signals)
 
-    def ls_old(
-        self,
-        sources: list[str],
-        fields: Iterable[str],
-        ttl=TTL_INT,
-        update=False,
-        skip_indexing=False,
-        *,
-        client_config=None,
-    ) -> Iterator[tuple[DataSource, Iterable[tuple]]]:
-        data_sources = self.enlist_sources(
-            sources,
-            ttl,
-            update,
-            skip_indexing=skip_indexing,
-            client_config=client_config or self.client_config,
-        )
-
-        for source in data_sources:  # type: ignore [union-attr]
-            yield source, source.ls(fields)
-
     def ls(
         self,
         sources: list[str],
         fields: Iterable[str],
-        ttl=TTL_INT,
         update=False,
         skip_indexing=False,
         *,
@@ -1503,7 +1487,6 @@ class Catalog:
     ) -> Iterator[tuple[DataSource, Iterable[tuple]]]:
         data_sources = self.enlist_sources(
             sources,
-            ttl,
             update,
             skip_indexing=skip_indexing,
             client_config=client_config or self.client_config,
@@ -1680,7 +1663,6 @@ class Catalog:
         no_cp: bool = False,
         edatachain: bool = False,
         edatachain_file: Optional[str] = None,
-        ttl: int = TTL_INT,
         *,
         client_config=None,
     ) -> None:
@@ -1702,7 +1684,6 @@ class Catalog:
                 edatachain_only=no_cp,
                 no_edatachain_file=not edatachain,
                 edatachain_file=edatachain_file,
-                ttl=ttl,
                 client_config=client_config,
             )
         else:
@@ -1710,7 +1691,6 @@ class Catalog:
             # it needs to be done here
             self.enlist_sources(
                 sources,
-                ttl,
                 update,
                 client_config=client_config or self.client_config,
             )
@@ -1770,7 +1750,6 @@ class Catalog:
         edatachain_only: bool = False,
         no_edatachain_file: bool = False,
         no_glob: bool = False,
-        ttl: int = TTL_INT,
         *,
         client_config=None,
     ) -> list[dict[str, Any]]:
@@ -1782,7 +1761,6 @@ class Catalog:
         client_config = client_config or self.client_config
         node_groups = self.enlist_sources_grouped(
             sources,
-            ttl,
             update,
             no_glob,
             client_config=client_config,
@@ -1841,14 +1819,12 @@ class Catalog:
         self,
         sources,
         depth=0,
-        ttl=TTL_INT,
         update=False,
         *,
         client_config=None,
     ) -> Iterable[tuple[str, float]]:
         sources = self.enlist_sources(
             sources,
-            ttl,
             update,
             client_config=client_config or self.client_config,
         )
@@ -1869,7 +1845,6 @@ class Catalog:
     def find(
         self,
         sources,
-        ttl=TTL_INT,
         update=False,
         names=None,
         inames=None,
@@ -1883,7 +1858,6 @@ class Catalog:
     ) -> Iterator[str]:
         sources = self.enlist_sources(
             sources,
-            ttl,
             update,
             client_config=client_config or self.client_config,
         )
@@ -1919,7 +1893,6 @@ class Catalog:
     def index(
         self,
         sources,
-        ttl=TTL_INT,
         update=False,
         *,
         client_config=None,
@@ -1945,7 +1918,6 @@ class Catalog:
 
         self.enlist_sources(
             non_root_sources,
-            ttl,
             update,
             client_config=client_config,
             only_index=True,

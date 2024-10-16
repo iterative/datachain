@@ -54,14 +54,14 @@ SELECT_BATCH_SIZE = 100_000  # number of rows to fetch at a time
 DEFAULT_DELIMITER = "__"  # TODO import from original source to not duplicate
 
 
-def db_name(name: str, obj_name: str = "file") -> str:
-    # TODO use correct obj_name in callers of this function instead default "file"
-    return f"{obj_name}{DEFAULT_DELIMITER}{name}"
+def db_name(name: str, object_name: str = "file") -> str:
+    # TODO use correct object_name in callers of this function instead default "file"
+    return f"{object_name}{DEFAULT_DELIMITER}{name}"
 
 
-def col(query, name: str, obj_name: str = "file") -> str:
-    # TODO use obj_name in callers of this function
-    return getattr(query.c, db_name(name, obj_name))
+def col(query, name: str, object_name: str = "file") -> str:
+    # TODO use object_name in callers of this function
+    return getattr(query.c, db_name(name, object_name))
 
 
 class AbstractWarehouse(ABC, Serializable):
@@ -200,7 +200,7 @@ class AbstractWarehouse(ABC, Serializable):
         self,
         dataset: DatasetRecord,
         version: Optional[int] = None,
-        obj_name: str = "file",
+        object_name: str = "file",
     ):
         version = version or dataset.latest_version
 
@@ -210,7 +210,7 @@ class AbstractWarehouse(ABC, Serializable):
             self.db.engine,
             self.db.metadata,
             dataset.get_schema(version),
-            obj_name=obj_name,
+            object_name=object_name,
         )
 
     @property
@@ -514,7 +514,7 @@ class AbstractWarehouse(ABC, Serializable):
             q = q.where((c.location == "") | (c.location.is_(None)))
         return q
 
-    def get_nodes(self, query, obj_name: str = "file") -> Iterator[Node]:
+    def get_nodes(self, query, object_name: str = "file") -> Iterator[Node]:
         """
         This gets nodes based on the provided query, and should be used sparingly,
         as it will be slow on any OLAP database systems.
@@ -523,10 +523,9 @@ class AbstractWarehouse(ABC, Serializable):
         for row in self.db.execute(query):
             d = dict(zip(columns, row))
             d = {
-                k.removeprefix(f"{obj_name}{DEFAULT_DELIMITER}"): v
+                k.removeprefix(f"{object_name}{DEFAULT_DELIMITER}"): v
                 for k, v in d.items()
             }
-            # print(d)
             yield Node(**d)
 
     def get_dirs_by_parent_path(
@@ -543,14 +542,14 @@ class AbstractWarehouse(ABC, Serializable):
             conds=[pathfunc.parent(sa.Column("path")) == parent_path],
             order_by=["source", "path"],
         )
-        return self.get_nodes(query, dr.obj_name)
+        return self.get_nodes(query, dr.object_name)
 
     def _get_nodes_by_glob_path_pattern(
         self,
         dataset_rows: "DataTable",
         path_list: list[str],
         glob_name: str,
-        obj_name="file",
+        object_name="file",
     ) -> Iterator[Node]:
         """Finds all Nodes that correspond to GLOB like path pattern."""
         dr = dataset_rows
@@ -569,7 +568,7 @@ class AbstractWarehouse(ABC, Serializable):
                 & (self.path_expr_file(de) != dirpath)
             )
             .order_by(col(de, "source"), col(de, "path"), col(de, "version")),
-            dr.obj_name,
+            dr.object_name,
         )
 
     def _get_node_by_path_list(
@@ -582,7 +581,7 @@ class AbstractWarehouse(ABC, Serializable):
         dr = dataset_rows
         de = dr.dataset_dir_expansion(
             dr.select().where(dr.col("is_latest") == true()).subquery(),
-            obj_name=dr.obj_name,
+            object_name=dr.object_name,
         ).subquery()
         query = self.expand_query(de, dr)
 
@@ -593,8 +592,6 @@ class AbstractWarehouse(ABC, Serializable):
         if not row:
             path = f"{parent}/{name}"
             raise FileNotFoundError(f"Unable to resolve path {path!r}")
-        # print("Row in _get_node_by_path_list is:")
-        # print(row)
         return Node(*row)
 
     def _populate_nodes_by_path(
@@ -643,7 +640,7 @@ class AbstractWarehouse(ABC, Serializable):
         de = dir_expanded_query
 
         def with_default(column):
-            column_name = column.name.removeprefix(f"{dr.obj_name}{DEFAULT_DELIMITER}")
+            column_name = column.name.removeprefix(f"{dr.object_name}{DEFAULT_DELIMITER}")
             default = getattr(attrs.fields(Node), column_name).default
             return func.coalesce(column, default).label(column.name)
 
@@ -671,7 +668,7 @@ class AbstractWarehouse(ABC, Serializable):
         if not path.endswith("/"):
             query = dr.select().where(
                 self.path_expr(dr) == path,
-                dr.c.is_latest == true(),
+                dr.col("is_latest") == true(),
             )
             row = next(self.db.execute(query), None)
             if row is not None:
@@ -680,8 +677,8 @@ class AbstractWarehouse(ABC, Serializable):
         query = sa.select(1).where(
             dr.select()
             .where(
-                dr.c.is_latest == true(),
-                dr.c.path.startswith(path),
+                dr.col("is_latest") == true(),
+                dr.col("path").startswith(path),
             )
             .exists()
         )
@@ -738,7 +735,7 @@ class AbstractWarehouse(ABC, Serializable):
         dataset_rows: "DataTable",
         parent_path: str,
         fields: Iterable[str],
-        obj_name,
+        object_name,
     ) -> Iterator[tuple[Any, ...]]:
         """
         Gets latest-version file nodes from the provided parent path

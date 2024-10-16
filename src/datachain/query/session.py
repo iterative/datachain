@@ -93,6 +93,7 @@ class Session:
         prefix = self.get_temp_prefix()
         try:
             for dataset in list(self.catalog.metastore.list_datasets_by_prefix(prefix)):
+                # print(f"Removing dataset {dataset.name}")
                 self.catalog.remove_dataset(dataset.name, force=True)
         # suppress error when metastore has been reset during testing
         except TableMissingError:
@@ -144,6 +145,7 @@ class Session:
             cls.ORIGINAL_EXCEPT_HOOK = sys.excepthook
             sys.excepthook = cls.except_hook
 
+        # print(f"returning global session {cls.GLOBAL_SESSION}")
         return cls.GLOBAL_SESSION
 
     @staticmethod

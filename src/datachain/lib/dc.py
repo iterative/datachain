@@ -32,8 +32,6 @@ from datachain.lib.file import ArrowRow, File, get_file_type
 from datachain.lib.file import ExportPlacement as FileExportPlacement
 from datachain.lib.listing import (
     is_listing_dataset,
-    is_listing_expired,
-    is_listing_subset,
     list_bucket,
     ls,
     parse_listing_uri,
@@ -396,35 +394,23 @@ class DataChain:
             uri, session.catalog.cache, session.catalog.client_config
         )
 
-        # list of all possible datasets that have input uri listed in them
-        datasets = []
-        for ds in cls.listings(session=session, in_memory=in_memory).collect("listing"):
-            if not is_listing_expired(ds.created_at) and is_listing_subset(
-                ds.name, list_dataset_name
-            ):
-                datasets.append(ds)
+        catalog = session.catalog
 
-        """
-        datasets = [
-            ds
-            for ds in cls.listings(session=session, in_memory=in_memory).collect("listing")
-            if not is_listing_expired(ds.created_at)  # type: ignore[union-attr]
-            and is_listing_subset(ds.name, list_dataset_name)  # type: ignore[union-attr]
+        listings = [
+            ls for ls in catalog.listings()
+            if not ls.is_expired and ls.contains(list_dataset_name)
         ]
-        print("listing datasets are")
-        print(datasets)
-        """
 
-        if not datasets:
+        if not listings:
             # no existing datasets found that have input uri listed
             return list_dataset_name, False
 
         if not update:
             # not need to update, choosing the most recent one
-            return sorted(datasets, key=lambda d: d.created_at)[-1].name, True
+            return sorted(listings, key=lambda l: l.created_at)[-1].name, True
 
         # choosing the smallest possible one to minimize update time
-        return sorted(datasets, key=lambda d: len(d.name))[0].name, True
+        return sorted(listings, key=lambda l: len(l.name))[0].name, True
 
     @classmethod
     def from_storage(
@@ -468,13 +454,6 @@ class DataChain:
             uri, session.catalog.cache, session.catalog.client_config
         )
 
-        """
-        print("before get list datasets in from_storage")
-        for ds in cls.listings(session=session, in_memory=in_memory).collect("listing"):
-            print(ds)
-
-        print("before get list dataset name")
-        """
         list_dataset_name, list_dataset_exists = cls.get_list_dataset_name(
             uri, session, in_memory=in_memory
         )
@@ -501,9 +480,7 @@ class DataChain:
         dc = cls.from_dataset(list_dataset_name, session=session, settings=settings)
         dc.signals_schema = dc.signals_schema.mutate({f"{object_name}": file_type})
 
-        return ls(
-            dc, list_path, recursive=recursive, object_name=object_name
-        ), list_dataset_name
+        return ls(dc, list_path, recursive=recursive, object_name=object_name)
 
     @classmethod
     def from_dataset(
@@ -727,19 +704,11 @@ class DataChain:
         session = Session.get(session, in_memory=in_memory)
         catalog = kwargs.get("catalog") or session.catalog
 
-        listings = [
-            ListingInfo.from_models(d, v, j)
-            for d, v, j in catalog.list_datasets_versions(
-                include_listing=True, **kwargs
-            )
-            if is_listing_dataset(d.name)
-        ]
-
         return cls.from_values(
             session=session,
             in_memory=in_memory,
             output={object_name: ListingInfo},
-            **{object_name: listings},  # type: ignore[arg-type]
+            **{object_name: catalog.listings()},  # type: ignore[arg-type]
         )
 
     def print_json_schema(  # type: ignore[override]
