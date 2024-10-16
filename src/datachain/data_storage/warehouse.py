@@ -493,7 +493,11 @@ class AbstractWarehouse(ABC, Serializable):
         query: sa.Select,
         type: str,
         include_subobjects: bool = True,
+        object_name: str = "file",
     ) -> sa.Select:
+        def col(name: str):
+            return getattr(query.selected_columns, db_name(name, object_name))
+
         file_group: Sequence[int]
         if type in {"f", "file", "files"}:
             if include_subobjects:
@@ -509,9 +513,9 @@ class AbstractWarehouse(ABC, Serializable):
             raise ValueError(f"invalid file type: {type!r}")
 
         c = query.selected_columns
-        q = query.where(c.dir_type.in_(file_group))
+        q = query.where(col("dir_type").in_(file_group))
         if not include_subobjects:
-            q = q.where((c.location == "") | (c.location.is_(None)))
+            q = q.where((col("location") == "") | (col("location").is_(None)))
         return q
 
     def get_nodes(self, query, object_name: str = "file") -> Iterator[Node]:
@@ -539,8 +543,11 @@ class AbstractWarehouse(ABC, Serializable):
             dr,
             parent_path,
             type="dir",
-            conds=[pathfunc.parent(sa.Column("path")) == parent_path],
-            order_by=["source", "path"],
+            conds=[
+                pathfunc.parent(sa.Column(db_name("path", dr.object_name)))
+                == parent_path
+            ],
+            order_by=[db_name("source"), db_name("path")],
         )
         return self.get_nodes(query, dr.object_name)
 
@@ -640,7 +647,9 @@ class AbstractWarehouse(ABC, Serializable):
         de = dir_expanded_query
 
         def with_default(column):
-            column_name = column.name.removeprefix(f"{dr.object_name}{DEFAULT_DELIMITER}")
+            column_name = column.name.removeprefix(
+                f"{dr.object_name}{DEFAULT_DELIMITER}"
+            )
             default = getattr(attrs.fields(Node), column_name).default
             return func.coalesce(column, default).label(column.name)
 
@@ -826,7 +835,7 @@ class AbstractWarehouse(ABC, Serializable):
 
         dr = dataset_rows
         de = dr.dataset_dir_expansion(
-            dr.select().where(dr.c.is_latest == true()).subquery()
+            dr.select().where(dr.col("is_latest") == true()).subquery()
         ).subquery()
         q = self.expand_query(de, dr).subquery()
         path = self.path_expr(q)
@@ -844,7 +853,9 @@ class AbstractWarehouse(ABC, Serializable):
         query = sa.select(*columns)
         query = query.where(*conds)
         if type is not None:
-            query = self.add_node_type_where(query, type, include_subobjects)
+            query = self.add_node_type_where(
+                query, type, include_subobjects, dr.object_name
+            )
         if order_by is not None:
             if isinstance(order_by, str):
                 order_by = [order_by]
