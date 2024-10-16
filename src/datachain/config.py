@@ -1,6 +1,6 @@
 from collections.abc import Mapping
 from contextlib import contextmanager
-from typing import Optional, Union
+from typing import Optional
 
 from tomlkit import TOMLDocument, dump, load
 
@@ -22,8 +22,6 @@ class Config:
     ):
         self.level = level
 
-        self.init()
-
     @classmethod
     def get_dir(cls, level: Optional[str]) -> str:
         if level == "system":
@@ -33,18 +31,22 @@ class Config:
 
         return DataChainDir.find().root
 
-    def init(self):
-        d = DataChainDir(self.get_dir(self.level))
+    @staticmethod
+    def init(datachain_dir: Optional[str] = None):
+        d = DataChainDir(datachain_dir)
         d.init()
 
-    def load_one(self, level: Optional[str] = None) -> TOMLDocument:
+        with open(d.config, "w"):
+            return Config(d.root)
+
+    def load_one(self, level: Optional[str] = None) -> Optional[TOMLDocument]:
         config_path = DataChainDir(self.get_dir(level)).config
 
         try:
             with open(config_path, encoding="utf-8") as f:
                 return load(f)
         except FileNotFoundError:
-            return TOMLDocument()
+            return None
 
     def load_config_to_level(self) -> TOMLDocument:
         merged_conf = TOMLDocument()
@@ -58,7 +60,7 @@ class Config:
 
         return merged_conf
 
-    def read(self) -> TOMLDocument:
+    def read(self) -> Optional[TOMLDocument]:
         if self.level is None:
             return self.load_config_to_level()
         return self.load_one(self.level)
@@ -70,17 +72,16 @@ class Config:
 
         self.write(config)
 
-    def config_file(self):
-        return DataChainDir(self.get_dir(self.level)).config
-
     def write(self, config: TOMLDocument):
-        with open(self.config_file(), "w") as f:
+        config_file = DataChainDir(self.get_dir(self.level)).config
+
+        with open(config_file, "w") as f:
             dump(config, f)
 
     def get_remote_config(self, remote: str = "") -> Mapping[str, str]:
         config = self.read()
 
-        if not config:
+        if config is None:
             return {"type": "local"}
         if not remote:
             try:
@@ -122,10 +123,10 @@ class Config:
         return remote_conf
 
 
-def merge(into: Union[TOMLDocument, dict], update: Union[TOMLDocument, dict]):
+def merge(into, update):
     """Merges second dict into first recursively"""
     for key, val in update.items():
         if isinstance(into.get(key), dict) and isinstance(val, dict):
-            merge(into[key], val)  # type: ignore[arg-type]
+            merge(into[key], val)
         else:
             into[key] = val
