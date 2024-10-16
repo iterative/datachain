@@ -22,6 +22,8 @@ class Config:
     ):
         self.level = level
 
+        self.init()
+
     @classmethod
     def get_dir(cls, level: Optional[str]) -> str:
         if level == "system":
@@ -31,13 +33,12 @@ class Config:
 
         return DataChainDir.find().root
 
-    @staticmethod
-    def init(datachain_dir: Optional[str] = None):
-        d = DataChainDir(datachain_dir)
+    def init(self):
+        d = DataChainDir(self.get_dir(self.level))
         d.init()
 
         with open(d.config, "w"):
-            return Config(d.root)
+            return self
 
     def load_one(self, level: Optional[str] = None) -> TOMLDocument:
         config_path = DataChainDir(self.get_dir(level)).config
@@ -60,7 +61,7 @@ class Config:
 
         return merged_conf
 
-    def read(self) -> Optional[TOMLDocument]:
+    def read(self) -> TOMLDocument:
         if self.level is None:
             return self.load_config_to_level()
         return self.load_one(self.level)
@@ -72,10 +73,11 @@ class Config:
 
         self.write(config)
 
-    def write(self, config: TOMLDocument):
-        config_file = DataChainDir(self.get_dir(self.level)).config
+    def config_file(self):
+        return DataChainDir(self.get_dir(self.level)).config
 
-        with open(config_file, "w") as f:
+    def write(self, config: TOMLDocument):
+        with open(self.config_file(), "w") as f:
             dump(config, f)
 
     def get_remote_config(self, remote: str = "") -> Mapping[str, str]:
