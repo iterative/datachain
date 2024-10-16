@@ -33,12 +33,10 @@ class Func:
         return list[col_type] if self.is_array else col_type  # type: ignore[valid-type]
 
     def get_result_type(self, signals_schema: "SignalSchema") -> "DataType":
-        col_type = self.db_col_type(signals_schema)
-
         if self.result_type:
             return self.result_type
 
-        if col_type:
+        if col_type := self.db_col_type(signals_schema):
             return col_type
 
         raise DataChainColumnError(
@@ -49,11 +47,11 @@ class Func:
     def get_column(
         self, signals_schema: "SignalSchema", label: Optional[str] = None
     ) -> Column:
+        col_type = self.get_result_type(signals_schema)
+        sql_type = python_to_sql(col_type)
+
         if self.col:
-            if label == "collect":
-                print(label)
-            col_type = self.get_result_type(signals_schema)
-            col = Column(self.db_col, python_to_sql(col_type))
+            col = Column(self.db_col, sql_type)
             func_col = self.inner(col)
         else:
             func_col = self.inner()
