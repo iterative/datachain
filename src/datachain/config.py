@@ -1,6 +1,6 @@
 from collections.abc import Mapping
 from contextlib import contextmanager
-from typing import Optional
+from typing import Optional, Union
 
 from tomlkit import TOMLDocument, dump, load
 
@@ -36,9 +36,6 @@ class Config:
     def init(self):
         d = DataChainDir(self.get_dir(self.level))
         d.init()
-
-        with open(d.config, "w"):
-            return self
 
     def load_one(self, level: Optional[str] = None) -> TOMLDocument:
         config_path = DataChainDir(self.get_dir(level)).config
@@ -125,10 +122,10 @@ class Config:
         return remote_conf
 
 
-def merge(into, update):
+def merge(into: Union[TOMLDocument, dict], update: Union[TOMLDocument, dict]):
     """Merges second dict into first recursively"""
     for key, val in update.items():
         if isinstance(into.get(key), dict) and isinstance(val, dict):
-            merge(into[key], val)
+            merge(into[key], val)  # type: ignore[arg-type]
         else:
             into[key] = val
