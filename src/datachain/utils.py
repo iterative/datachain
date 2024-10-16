@@ -30,6 +30,8 @@ APPNAME = "datachain"
 APPAUTHOR = "iterative"
 ENV_DATACHAIN_SYSTEM_CONFIG_DIR = "DATACHAIN_SYSTEM_CONFIG_DIR"
 ENV_DATACHAIN_GLOBAL_CONFIG_DIR = "DATACHAIN_GLOBAL_CONFIG_DIR"
+STUDIO_URL = "https://studio.dvc.ai"
+
 
 T = TypeVar("T", bound="DataChainDir")
 
@@ -97,15 +99,15 @@ class DataChainDir:
 
 
 def system_config_dir():
-    return os.getenv(
-        DataChainDir.ENV_DATACHAIN_SYSTEM_CONFIG_DIR
-    ) or platformdirs.site_config_dir(APPNAME, APPAUTHOR)
+    return os.getenv(ENV_DATACHAIN_SYSTEM_CONFIG_DIR) or platformdirs.site_config_dir(
+        APPNAME, APPAUTHOR
+    )
 
 
 def global_config_dir():
-    return os.getenv(
-        DataChainDir.ENV_DATACHAIN_GLOBAL_CONFIG_DIR
-    ) or platformdirs.user_config_dir(APPNAME, APPAUTHOR)
+    return os.getenv(ENV_DATACHAIN_GLOBAL_CONFIG_DIR) or platformdirs.user_config_dir(
+        APPNAME, APPAUTHOR
+    )
 
 
 def human_time_to_int(time: str) -> Optional[int]:
