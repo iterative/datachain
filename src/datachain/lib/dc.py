@@ -29,6 +29,7 @@ from datachain.lib.data_model import DataModel, DataType, dict_to_data_model
 from datachain.lib.dataset_info import DatasetInfo
 from datachain.lib.file import ArrowRow, File, get_file_type
 from datachain.lib.file import ExportPlacement as FileExportPlacement
+from datachain.lib.func import Func
 from datachain.lib.listing import (
     is_listing_dataset,
     is_listing_expired,
@@ -42,21 +43,12 @@ from datachain.lib.meta_formats import read_meta, read_schema
 from datachain.lib.model_store import ModelStore
 from datachain.lib.settings import Settings
 from datachain.lib.signal_schema import SignalSchema
-from datachain.lib.udf import (
-    Aggregator,
-    BatchMapper,
-    Generator,
-    Mapper,
-    UDFBase,
-)
+from datachain.lib.udf import Aggregator, BatchMapper, Generator, Mapper, UDFBase
 from datachain.lib.udf_signature import UdfSignature
-from datachain.lib.utils import DataChainParamsError
+from datachain.lib.utils import DataChainColumnError, DataChainParamsError
 from datachain.query import Session
-from datachain.query.dataset import (
-    DatasetQuery,
-    PartitionByType,
-)
-from datachain.query.schema import DEFAULT_DELIMITER, Column
+from datachain.query.dataset import DatasetQuery, PartitionByType
+from datachain.query.schema import DEFAULT_DELIMITER, Column, ColumnMeta
 from datachain.sql.functions import path as pathfunc
 from datachain.telemetry import telemetry
 from datachain.utils import batched_it, inside_notebook
@@ -147,11 +139,6 @@ class DatasetMergeError(DataChainParamsError):  # noqa: D101
             else ""
         )
         super().__init__(f"Merge error on='{on_str}'{right_on_str}: {msg}")
-
-
-class DataChainColumnError(DataChainParamsError):  # noqa: D101
-    def __init__(self, col_name, msg):  # noqa: D107
-        super().__init__(f"Error for column {col_name}: {msg}")
 
 
 OutputType = Union[None, DataType, Sequence[str], dict[str, DataType]]
@@ -982,10 +969,9 @@ class DataChain:
         row is left in the result set.
 
         Example:
-        ```py
-         dc.distinct("file.parent", "file.name")
-        )
-        ```
+            ```py
+            dc.distinct("file.parent", "file.name")
+            ```
         """
         return self._evolve(
             query=self._query.distinct(
@@ -1009,6 +995,60 @@ class DataChain:
         columns = new_schema.db_signals()
         return self._evolve(
             query=self._query.select(*columns), signal_schema=new_schema
+        )
+
+    def group_by(
+        self,
+        *,
+        partition_by: Union[str, Sequence[str]],
+        **kwargs: Func,
+    ) -> "Self":
+        """Group rows by specified set of signals and return new signals
+        with aggregated values.
+
+        Example:
+            ```py
+            chain = chain.group_by(
+                cnt=func.count(),
+                partition_by=("file_source", "file_ext"),
+            )
+            ```
+        """
+        if isinstance(partition_by, str):
+            partition_by = [partition_by]
+        if not partition_by:
+            raise ValueError("At least one column should be provided for partition_by")
+
+        if not kwargs:
+            raise ValueError("At least one column should be provided for group_by")
+        for col_name, func in kwargs.items():
+            if not isinstance(func, Func):
+                raise DataChainColumnError(
+                    col_name,
+                    f"Column {col_name} has type {type(func)} but expected Func object",
+                )
+
+        partition_by_columns: list[Column] = []
+        signal_columns: list[Column] = []
+        schema_fields: dict[str, DataType] = {}
+
+        # validate partition_by columns and add them to the schema
+        for col_name in partition_by:
+            col_db_name = ColumnMeta.to_db_name(col_name)
+            col_type = self.signals_schema.get_column_type(col_db_name)
+            col = Column(col_db_name, python_to_sql(col_type))
+            partition_by_columns.append(col)
+            schema_fields[col_db_name] = col_type
+
+        # validate signal columns and add them to the schema
+        for col_name, func in kwargs.items():
+            col = func.get_column(self.signals_schema, label=col_name)
+            signal_columns.append(col)
+            schema_fields[col_name] = func.get_result_type(self.signals_schema)
+
+        return self._evolve(
+            query=self._query.group_by(signal_columns, partition_by_columns),
+            signal_schema=SignalSchema(schema_fields),
         )
 
     def mutate(self, **kwargs) -> "Self":

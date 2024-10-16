@@ -400,6 +400,12 @@ class SignalSchema:
             if ModelStore.is_pydantic(finfo.annotation):
                 SignalSchema._set_file_stream(getattr(obj, field), catalog, cache)
 
+    def get_column_type(self, col_name: str) -> DataType:
+        for path, _type, has_subtree, _ in self.get_flat_tree():
+            if not has_subtree and DEFAULT_DELIMITER.join(path) == col_name:
+                return _type
+        raise SignalResolvingError([col_name], "is not found")
+
     def db_signals(
         self, name: Optional[str] = None, as_columns=False
     ) -> Union[list[str], list[Column]]:
@@ -490,7 +496,7 @@ class SignalSchema:
                 new_values[name] = args_map[name]
             else:
                 # adding new signal
-                new_values.update(sql_to_python({name: value}))
+                new_values[name] = sql_to_python(value)
 
         return SignalSchema(new_values)
 
@@ -534,12 +540,12 @@ class SignalSchema:
             for name, val in values.items()
         }
 
-    def get_flat_tree(self) -> Iterator[tuple[list[str], type, bool, int]]:
+    def get_flat_tree(self) -> Iterator[tuple[list[str], DataType, bool, int]]:
         yield from self._get_flat_tree(self.tree, [], 0)
 
     def _get_flat_tree(
         self, tree: dict, prefix: list[str], depth: int
-    ) -> Iterator[tuple[list[str], type, bool, int]]:
+    ) -> Iterator[tuple[list[str], DataType, bool, int]]:
         for name, (type_, substree) in tree.items():
             suffix = name.split(".")
             new_prefix = prefix + suffix

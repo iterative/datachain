@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from datachain import Column
 from datachain.client import Client
 from datachain.lib.data_model import DataModel
-from datachain.lib.dc import C, DataChain, DataChainColumnError, Sys
+from datachain.lib.dc import C, DataChain, Sys
 from datachain.lib.file import File
 from datachain.lib.listing import LISTING_PREFIX
 from datachain.lib.listing_info import ListingInfo
@@ -24,10 +24,9 @@ from datachain.lib.signal_schema import (
     SignalSchema,
 )
 from datachain.lib.udf_signature import UdfSignatureError
-from datachain.lib.utils import DataChainParamsError
-from datachain.sql import functions as func
+from datachain.lib.utils import DataChainColumnError, DataChainParamsError
 from datachain.sql.types import Float, Int64, String
-from tests.utils import skip_if_not_sqlite
+from tests.utils import ANY_VALUE, skip_if_not_sqlite, sorted_dicts
 
 DF_DATA = {
     "first_name": ["Alice", "Bob", "Charlie", "David", "Eva"],
@@ -2000,7 +1999,9 @@ def test_mutate_with_multiplication(test_session):
     assert ds.mutate(new=ds.column("id") * 10).signals_schema.values["new"] is int
 
 
-def test_mutate_with_func(test_session):
+def test_mutate_with_sql_func(test_session):
+    from datachain.sql import functions as func
+
     ds = DataChain.from_values(id=[1, 2], session=test_session)
     assert (
         ds.mutate(new=func.avg(ds.column("id"))).signals_schema.values["new"] is float
@@ -2008,6 +2009,8 @@ def test_mutate_with_func(test_session):
 
 
 def test_mutate_with_complex_expression(test_session):
+    from datachain.sql import functions as func
+
     ds = DataChain.from_values(id=[1, 2], name=["Jim", "Jon"], session=test_session)
     assert (
         ds.mutate(
@@ -2098,3 +2101,345 @@ def test_from_hf_object_name(test_session):
 def test_from_hf_invalid(test_session):
     with pytest.raises(FileNotFoundError):
         DataChain.from_hf("invalid_dataset", session=test_session)
+
+
+def test_group_by_int(test_session):
+    from datachain import func
+
+    ds = (
+        DataChain.from_values(
+            col1=["a", "a", "b", "b", "b", "c"],
+            col2=[1, 2, 3, 4, 5, 6],
+            session=test_session,
+        )
+        .group_by(
+            cnt=func.count(),
+            cnt_col=func.count("col2"),
+            sum=func.sum("col2"),
+            avg=func.avg("col2"),
+            min=func.min("col2"),
+            max=func.max("col2"),
+            value=func.any_value("col2"),
+            collect=func.collect("col2"),
+            partition_by="col1",
+        )
+        .save("my-ds")
+    )
+
+    assert ds.signals_schema.serialize() == {
+        "col1": "str",
+        "cnt": "int",
+        "cnt_col": "int",
+        "sum": "int",
+        "avg": "int",
+        "min": "int",
+        "max": "int",
+        "value": "int",
+        "collect": "list[int]",
+    }
+    assert sorted_dicts(ds.to_records(), "col1") == sorted_dicts(
+        [
+            {
+                "col1": "a",
+                "cnt": 2,
+                "cnt_col": 2,
+                "sum": 3,
+                "avg": 1.5,
+                "min": 1,
+                "max": 2,
+                "value": ANY_VALUE(1, 2),
+                "collect": [1, 2],
+            },
+            {
+                "col1": "b",
+                "cnt": 3,
+                "cnt_col": 3,
+                "sum": 12,
+                "avg": 4.0,
+                "min": 3,
+                "max": 5,
+                "value": ANY_VALUE(3, 4, 5),
+                "collect": [3, 4, 5],
+            },
+            {
+                "col1": "c",
+                "cnt": 1,
+                "cnt_col": 1,
+                "sum": 6,
+                "avg": 6.0,
+                "min": 6,
+                "max": 6,
+                "value": ANY_VALUE(6),
+                "collect": [6],
+            },
+        ],
+        "col1",
+    )
+
+
+def test_group_by_float(test_session):
+    from datachain import func
+
+    ds = (
+        DataChain.from_values(
+            col1=["a", "a", "b", "b", "b", "c"],
+            col2=[1.5, 2.5, 3.5, 4.5, 5.5, 6.5],
+            session=test_session,
+        )
+        .group_by(
+            cnt=func.count(),
+            cnt_col=func.count("col2"),
+            sum=func.sum("col2"),
+            avg=func.avg("col2"),
+            min=func.min("col2"),
+            max=func.max("col2"),
+            value=func.any_value("col2"),
+            collect=func.collect("col2"),
+            partition_by="col1",
+        )
+        .save("my-ds")
+    )
+
+    assert ds.signals_schema.serialize() == {
+        "col1": "str",
+        "cnt": "int",
+        "cnt_col": "int",
+        "sum": "float",
+        "avg": "float",
+        "min": "float",
+        "max": "float",
+        "value": "float",
+        "collect": "list[float]",
+    }
+    assert sorted_dicts(ds.to_records(), "col1") == sorted_dicts(
+        [
+            {
+                "col1": "a",
+                "cnt": 2,
+                "cnt_col": 2,
+                "sum": 4.0,
+                "avg": 2.0,
+                "min": 1.5,
+                "max": 2.5,
+                "value": ANY_VALUE(1.5, 2.5),
+                "collect": [1.5, 2.5],
+            },
+            {
+                "col1": "b",
+                "cnt": 3,
+                "cnt_col": 3,
+                "sum": 13.5,
+                "avg": 4.5,
+                "min": 3.5,
+                "max": 5.5,
+                "value": ANY_VALUE(3.5, 4.5, 5.5),
+                "collect": [3.5, 4.5, 5.5],
+            },
+            {
+                "col1": "c",
+                "cnt": 1,
+                "cnt_col": 1,
+                "sum": 6.5,
+                "avg": 6.5,
+                "min": 6.5,
+                "max": 6.5,
+                "value": ANY_VALUE(6.5),
+                "collect": [6.5],
+            },
+        ],
+        "col1",
+    )
+
+
+def test_group_by_str(test_session):
+    from datachain import func
+
+    ds = (
+        DataChain.from_values(
+            col1=["a", "a", "b", "b", "b", "c"],
+            col2=["1", "2", "3", "4", "5", "6"],
+            session=test_session,
+        )
+        .group_by(
+            cnt=func.count(),
+            cnt_col=func.count("col2"),
+            concat=func.concat("col2"),
+            concat_sep=func.concat("col2", separator=","),
+            value=func.any_value("col2"),
+            collect=func.collect("col2"),
+            partition_by="col1",
+        )
+        .save("my-ds")
+    )
+
+    assert ds.signals_schema.serialize() == {
+        "col1": "str",
+        "cnt": "int",
+        "cnt_col": "int",
+        "concat": "str",
+        "concat_sep": "str",
+        "value": "str",
+        "collect": "list[str]",
+    }
+    assert sorted_dicts(ds.to_records(), "col1") == sorted_dicts(
+        [
+            {
+                "col1": "a",
+                "cnt": 2,
+                "cnt_col": 2,
+                "concat": "12",
+                "concat_sep": "1,2",
+                "value": ANY_VALUE("1", "2"),
+                "collect": ["1", "2"],
+            },
+            {
+                "col1": "b",
+                "cnt": 3,
+                "cnt_col": 3,
+                "concat": "345",
+                "concat_sep": "3,4,5",
+                "value": ANY_VALUE("3", "4", "5"),
+                "collect": ["3", "4", "5"],
+            },
+            {
+                "col1": "c",
+                "cnt": 1,
+                "cnt_col": 1,
+                "concat": "6",
+                "concat_sep": "6",
+                "value": ANY_VALUE("6"),
+                "collect": ["6"],
+            },
+        ],
+        "col1",
+    )
+
+
+def test_group_by_multiple_partition_by(test_session):
+    from datachain import func
+
+    ds = (
+        DataChain.from_values(
+            col1=["a", "a", "b", "b", "b", "c"],
+            col2=[1, 2, 1, 2, 1, 2],
+            col3=[1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            col4=["1", "2", "3", "4", "5", "6"],
+            session=test_session,
+        )
+        .group_by(
+            cnt=func.count(),
+            cnt_col=func.count("col2"),
+            sum=func.sum("col3"),
+            concat=func.concat("col4"),
+            value=func.any_value("col3"),
+            collect=func.collect("col3"),
+            partition_by=("col1", "col2"),
+        )
+        .save("my-ds")
+    )
+
+    assert ds.signals_schema.serialize() == {
+        "col1": "str",
+        "col2": "int",
+        "cnt": "int",
+        "cnt_col": "int",
+        "sum": "float",
+        "concat": "str",
+        "value": "float",
+        "collect": "list[float]",
+    }
+    assert sorted_dicts(ds.to_records(), "col1", "col2") == sorted_dicts(
+        [
+            {
+                "col1": "a",
+                "col2": 1,
+                "cnt": 1,
+                "cnt_col": 1,
+                "sum": 1.0,
+                "concat": "1",
+                "value": ANY_VALUE(1.0),
+                "collect": [1.0],
+            },
+            {
+                "col1": "a",
+                "col2": 2,
+                "cnt": 1,
+                "cnt_col": 1,
+                "sum": 2.0,
+                "concat": "2",
+                "value": ANY_VALUE(2.0),
+                "collect": [2.0],
+            },
+            {
+                "col1": "b",
+                "col2": 1,
+                "cnt": 2,
+                "cnt_col": 2,
+                "sum": 8.0,
+                "concat": "35",
+                "value": ANY_VALUE(3.0, 5.0),
+                "collect": [3.0, 5.0],
+            },
+            {
+                "col1": "b",
+                "col2": 2,
+                "cnt": 1,
+                "cnt_col": 1,
+                "sum": 4.0,
+                "concat": "4",
+                "value": ANY_VALUE(4.0),
+                "collect": [4.0],
+            },
+            {
+                "col1": "c",
+                "col2": 2,
+                "cnt": 1,
+                "cnt_col": 1,
+                "sum": 6.0,
+                "concat": "6",
+                "value": ANY_VALUE(6.0),
+                "collect": [6.0],
+            },
+        ],
+        "col1",
+        "col2",
+    )
+
+
+def test_group_by_error(test_session):
+    from datachain import func
+
+    dc = DataChain.from_values(
+        col1=["a", "a", "b", "b", "b", "c"],
+        col2=[1, 2, 3, 4, 5, 6],
+        session=test_session,
+    )
+
+    with pytest.raises(TypeError):
+        dc.group_by(cnt=func.count())
+
+    with pytest.raises(
+        ValueError, match="At least one column should be provided for partition_by"
+    ):
+        dc.group_by(cnt=func.count(), partition_by=())
+
+    with pytest.raises(
+        ValueError, match="At least one column should be provided for group_by"
+    ):
+        dc.group_by(partition_by="col1")
+
+    with pytest.raises(
+        DataChainColumnError,
+        match="Column foo has type <class 'str'> but expected Func object",
+    ):
+        dc.group_by(foo="col2", partition_by="col1")
+
+    with pytest.raises(
+        SignalResolvingError, match="cannot resolve signal name 'col3': is not found"
+    ):
+        dc.group_by(foo=func.sum("col3"), partition_by="col1")
+
+    with pytest.raises(
+        SignalResolvingError, match="cannot resolve signal name 'col3': is not found"
+    ):
+        dc.group_by(foo=func.sum("col2"), partition_by="col3")

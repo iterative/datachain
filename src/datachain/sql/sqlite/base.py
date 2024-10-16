@@ -14,7 +14,7 @@ from sqlalchemy.sql.elements import literal
 from sqlalchemy.sql.expression import case
 from sqlalchemy.sql.functions import func
 
-from datachain.sql.functions import array, conditional, random, string
+from datachain.sql.functions import aggregate, array, conditional, random, string
 from datachain.sql.functions import path as sql_path
 from datachain.sql.selectable import Values, base_values_compiler
 from datachain.sql.sqlite.types import (
@@ -84,7 +84,10 @@ def setup():
     compiles(conditional.least, "sqlite")(compile_least)
     compiles(Values, "sqlite")(compile_values)
     compiles(random.rand, "sqlite")(compile_rand)
-    compiles(array.avg, "sqlite")(compile_avg)
+    compiles(aggregate.avg, "sqlite")(compile_avg)
+    compiles(aggregate.group_concat, "sqlite")(compile_group_concat)
+    compiles(aggregate.any_value, "sqlite")(compile_any_value)
+    compiles(aggregate.collect, "sqlite")(compile_collect)
 
     if load_usearch_extension(sqlite3.connect(":memory:")):
         compiles(array.cosine_distance, "sqlite")(compile_cosine_distance_ext)
@@ -398,6 +401,21 @@ def compile_rand(element, compiler, **kwargs):
 
 def compile_avg(element, compiler, **kwargs):
     return compiler.process(func.avg(*element.clauses.clauses), **kwargs)
+
+
+def compile_group_concat(element, compiler, **kwargs):
+    return compiler.process(func.aggregate_strings(*element.clauses.clauses), **kwargs)
+
+
+def compile_any_value(element, compiler, **kwargs):
+    # use bare column to return any value from the group,
+    # this is documented behavior for sqlite,
+    # see https://www.sqlite.org/lang_select.html#bare_columns_in_an_aggregate_query
+    return compiler.process(*element.clauses.clauses, **kwargs)
+
+
+def compile_collect(element, compiler, **kwargs):
+    return compiler.process(func.json_group_array(*element.clauses.clauses), **kwargs)
 
 
 def load_usearch_extension(conn) -> bool:

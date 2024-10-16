@@ -15,24 +15,28 @@ import pytz
 from PIL import Image
 from sqlalchemy import Column
 
+from datachain import DataModel
 from datachain.catalog.catalog import QUERY_SCRIPT_CANCELED_EXIT_CODE
 from datachain.client.local import FileClient
 from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.dataset import DatasetDependencyType, DatasetStats
-from datachain.lib.dc import C, DataChain, DataChainColumnError
+from datachain.lib.dc import C, DataChain
 from datachain.lib.file import File, ImageFile
-from datachain.lib.listing import (
-    LISTING_TTL,
-    is_listing_dataset,
-    parse_listing_uri,
-)
+from datachain.lib.listing import LISTING_TTL, is_listing_dataset, parse_listing_uri
 from datachain.lib.tar import process_tar
 from datachain.lib.udf import Mapper
-from datachain.lib.utils import DataChainError
+from datachain.lib.utils import DataChainColumnError, DataChainError
 from datachain.query.dataset import QueryStep
 from datachain.sql.functions import path as pathfunc
 from datachain.sql.functions.array import cosine_distance, euclidean_distance
-from tests.utils import NUM_TREE, TARRED_TREE, images_equal, text_embedding
+from tests.utils import (
+    ANY_VALUE,
+    NUM_TREE,
+    TARRED_TREE,
+    images_equal,
+    sorted_dicts,
+    text_embedding,
+)
 
 
 def _get_listing_datasets(session):
@@ -1313,3 +1317,52 @@ def test_datachain_save_with_job(test_session, catalog, datachain_job_id):
     dataset = catalog.get_dataset("my-ds")
     result_job_id = dataset.get_version(dataset.latest_version).job_id
     assert result_job_id == datachain_job_id
+
+
+@pytest.mark.parametrize("partition_by", ["file_info.path", "file_info__path"])
+@pytest.mark.parametrize("signal_name", ["file.size", "file__size"])
+def test_group_by_signals(cloud_test_catalog, partition_by, signal_name):
+    from datachain import func
+
+    session = cloud_test_catalog.session
+    src_uri = cloud_test_catalog.src_uri
+
+    class FileInfo(DataModel):
+        path: str = ""
+        name: str = ""
+
+    def file_info(file: File) -> DataModel:
+        full_path = file.source.rstrip("/") + "/" + file.path
+        rel_path = posixpath.relpath(full_path, src_uri)
+        path_parts = rel_path.split("/", 1)
+        return FileInfo(
+            path=path_parts[0] if len(path_parts) > 1 else "",
+            name=path_parts[1] if len(path_parts) > 1 else path_parts[0],
+        )
+
+    ds = (
+        DataChain.from_storage(src_uri, session=session)
+        .map(file_info, params=["file"], output={"file_info": FileInfo})
+        .group_by(
+            cnt=func.count(),
+            sum=func.sum(signal_name),
+            value=func.any_value(signal_name),
+            partition_by=partition_by,
+        )
+        .save("my-ds")
+    )
+
+    assert ds.signals_schema.serialize() == {
+        "file_info__path": "str",
+        "cnt": "int",
+        "sum": "int",
+        "value": "int",
+    }
+    assert sorted_dicts(ds.to_records(), "file_info__path") == sorted_dicts(
+        [
+            {"file_info__path": "", "cnt": 1, "sum": 13, "value": ANY_VALUE(13)},
+            {"file_info__path": "cats", "cnt": 2, "sum": 8, "value": ANY_VALUE(4)},
+            {"file_info__path": "dogs", "cnt": 4, "sum": 15, "value": ANY_VALUE(3, 4)},
+        ],
+        "file_info__path",
+    )

@@ -941,24 +941,24 @@ class SQLJoin(Step):
 
 
 @frozen
-class GroupBy(Step):
-    """Group rows by a specific column."""
+class SQLGroupBy(SQLClause):
+    cols: Sequence[Union[str, ColumnElement]]
+    group_by: Sequence[Union[str, ColumnElement]]
 
-    cols: PartitionByType
+    def apply_sql_clause(self, query) -> Select:
+        if not self.cols:
+            raise ValueError("No columns to select")
+        if not self.group_by:
+            raise ValueError("No columns to group by")
 
-    def clone(self) -> "Self":
-        return self.__class__(self.cols)
+        subquery = query.subquery()
 
-    def apply(
-        self, query_generator: QueryGenerator, temp_tables: list[str]
-    ) -> StepResult:
-        query = query_generator.select()
-        grouped_query = query.group_by(*self.cols)
+        cols = [
+            subquery.c[str(c)] if isinstance(c, (str, C)) else c
+            for c in [*self.group_by, *self.cols]
+        ]
 
-        def q(*columns):
-            return grouped_query.with_only_columns(*columns)
-
-        return step_result(q, grouped_query.selected_columns)
+        return sqlalchemy.select(*cols).select_from(subquery).group_by(*self.group_by)
 
 
 def _validate_columns(
@@ -1114,23 +1114,12 @@ class DatasetQuery:
             query.steps = query.steps[-1:] + query.steps[:-1]
 
         result = query.starting_step.apply()
-        group_by = None
         self.dependencies.update(result.dependencies)
 
         for step in query.steps:
-            if isinstance(step, GroupBy):
-                if group_by is not None:
-                    raise TypeError("only one group_by allowed")
-                group_by = step
-                continue
-
             result = step.apply(
                 result.query_generator, self.temp_table_names
             )  # a chain of steps linked by results
-            self.dependencies.update(result.dependencies)
-
-        if group_by:
-            result = group_by.apply(result.query_generator, self.temp_table_names)
             self.dependencies.update(result.dependencies)
 
         return result.query_generator
@@ -1394,9 +1383,13 @@ class DatasetQuery:
         return query.as_scalar()
 
     @detach
-    def group_by(self, *cols: ColumnElement) -> "Self":
+    def group_by(
+        self,
+        cols: Sequence[ColumnElement],
+        group_by: Sequence[ColumnElement],
+    ) -> "Self":
         query = self.clone()
-        query.steps.append(GroupBy(cols))
+        query.steps.append(SQLGroupBy(cols, group_by))
         return query
 
     @detach
