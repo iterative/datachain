@@ -39,14 +39,14 @@ class Config:
         with open(d.config, "w"):
             return Config(d.root)
 
-    def load_one(self, level: Optional[str] = None) -> Optional[TOMLDocument]:
+    def load_one(self, level: Optional[str] = None) -> TOMLDocument:
         config_path = DataChainDir(self.get_dir(level)).config
 
         try:
             with open(config_path, encoding="utf-8") as f:
                 return load(f)
         except FileNotFoundError:
-            return None
+            return TOMLDocument()
 
     def load_config_to_level(self) -> TOMLDocument:
         merged_conf = TOMLDocument()
@@ -81,7 +81,7 @@ class Config:
     def get_remote_config(self, remote: str = "") -> Mapping[str, str]:
         config = self.read()
 
-        if config is None:
+        if not config:
             return {"type": "local"}
         if not remote:
             try:
