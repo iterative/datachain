@@ -1386,6 +1386,13 @@ def test_to_from_csv_remote(cloud_test_catalog):
     df1 = dc_from.select("first_name", "age", "city").to_pandas()
     assert df1.equals(df)
 
+    # Cleanup any written files
+    from datachain.client.fsspec import Client
+
+    client = Client.get_implementation(path)
+    fsspec_fs = client.create_fs(**ctc.client_config)
+    fsspec_fs.rm(path, recursive=True)
+
 
 @pytest.mark.parametrize("chunk_size", (1000, 2))
 @pytest.mark.parametrize("kwargs", ({}, {"compression": "gzip"}))
@@ -1401,6 +1408,13 @@ def test_to_from_parquet_remote(cloud_test_catalog, chunk_size, kwargs):
     df1 = dc_from.select("first_name", "age", "city").to_pandas()
 
     assert df1.equals(df)
+
+    # Cleanup any written files
+    from datachain.client.fsspec import Client
+
+    client = Client.get_implementation(path)
+    fsspec_fs = client.create_fs(**ctc.client_config)
+    fsspec_fs.rm(path, recursive=True)
 
 
 @pytest.mark.parametrize("chunk_size", (1000, 2))
