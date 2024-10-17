@@ -31,7 +31,7 @@ def login(args: "Namespace"):
     name = args.name
     hostname = (
         args.hostname
-        or os.environ.get("DATACHAIN_STUDIO_HOSTNAME")
+        or os.environ.get("DVC_STUDIO_HOSTNAME")
         or config.get("url")
         or STUDIO_URL
     )

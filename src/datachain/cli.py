@@ -101,10 +101,10 @@ def add_show_args(parser: ArgumentParser) -> None:
 def add_studio_parser(subparsers, parent_parser) -> None:
     studio_help = "Commands to authenticate Datachain with Iterative Studio"
     studio_description = (
-        "Authenticate Datachain with Studio and set the token."
-        " Once this token has been properly configured,\n"
-        " Datachain will utilize it for seamlessly sharing datasets\n"
-        " and using Studio features from CLI"
+        "Authenticate Datachain with Studio and set the token. "
+        "Once this token has been properly configured,\n"
+        "Datachain will utilize it for seamlessly sharing datasets\n"
+        "and using Studio features from CLI"
     )
 
     studio_parser = subparsers.add_parser(
@@ -122,7 +122,7 @@ def add_studio_parser(subparsers, parent_parser) -> None:
     studio_login_help = "Authenticate Datachain with Studio host"
     studio_login_description = (
         "By default, this command authenticates the Datachain with Studio\n"
-        " using default scopes and assigns a random name as the token name."
+        "using default scopes and assigns a random name as the token name."
     )
     login_parser = studio_subparser.add_parser(
         "login",
@@ -165,9 +165,7 @@ def add_studio_parser(subparsers, parent_parser) -> None:
     )
 
     studio_logout_help = "Logout user from Studio"
-    studio_logout_description = (
-        "This removes the studio token from your global config.\n"
-    )
+    studio_logout_description = "This removes the studio token from your global config."
 
     studio_subparser.add_parser(
         "logout",
