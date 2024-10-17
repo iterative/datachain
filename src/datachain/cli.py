@@ -15,6 +15,7 @@ import shtab
 from datachain import Session, utils
 from datachain.cli_utils import BooleanOptionalAction, CommaSeparatedArgs, KeyValueArgs
 from datachain.lib.dc import DataChain
+from datachain.studio import process_studio_cli_args
 from datachain.telemetry import telemetry
 
 if TYPE_CHECKING:
@@ -94,6 +95,92 @@ def add_show_args(parser: ArgumentParser) -> None:
         action="store_true",
         default=False,
         help="Do not collapse the columns",
+    )
+
+
+def add_studio_parser(subparsers, parent_parser) -> None:
+    studio_help = "Commands to authenticate Datachain with Iterative Studio"
+    studio_description = (
+        "Authenticate Datachain with Studio and set the token. "
+        "Once this token has been properly configured,\n"
+        "Datachain will utilize it for seamlessly sharing datasets\n"
+        "and using Studio features from CLI"
+    )
+
+    studio_parser = subparsers.add_parser(
+        "studio",
+        parents=[parent_parser],
+        description=studio_description,
+        help=studio_help,
+    )
+    studio_subparser = studio_parser.add_subparsers(
+        dest="cmd",
+        help="Use `Datachain studio CMD --help` to display command-specific help.",
+        required=True,
+    )
+
+    studio_login_help = "Authenticate Datachain with Studio host"
+    studio_login_description = (
+        "By default, this command authenticates the Datachain with Studio\n"
+        "using default scopes and assigns a random name as the token name."
+    )
+    login_parser = studio_subparser.add_parser(
+        "login",
+        parents=[parent_parser],
+        description=studio_login_description,
+        help=studio_login_help,
+    )
+
+    login_parser.add_argument(
+        "-H",
+        "--hostname",
+        action="store",
+        default=None,
+        help="The hostname of the Studio instance to authenticate with.",
+    )
+    login_parser.add_argument(
+        "-s",
+        "--scopes",
+        action="store",
+        default=None,
+        help="The scopes for the authentication token. ",
+    )
+
+    login_parser.add_argument(
+        "-n",
+        "--name",
+        action="store",
+        default=None,
+        help="The name of the authentication token. It will be used to\n"
+        "identify token shown in Studio profile.",
+    )
+
+    login_parser.add_argument(
+        "--no-open",
+        action="store_true",
+        default=False,
+        help="Use authentication flow based on user code.\n"
+        "You will be presented with user code to enter in browser.\n"
+        "Datachain will also use this if it cannot launch browser on your behalf.",
+    )
+
+    studio_logout_help = "Logout user from Studio"
+    studio_logout_description = "This removes the studio token from your global config."
+
+    studio_subparser.add_parser(
+        "logout",
+        parents=[parent_parser],
+        description=studio_logout_description,
+        help=studio_logout_help,
+    )
+
+    studio_token_help = "View the token datachain uses to contact Studio"  # noqa: S105 # nosec B105
+
+    studio_subparser.add_parser(
+        "token",
+        parents=[parent_parser],
+        description=studio_token_help,
+        help=studio_token_help,
     )
 
 
@@ -224,6 +311,8 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         "--edatachain-file",
         help="Use a different filename for the resulting .edatachain file",
     )
+
+    add_studio_parser(subp, parent_parser)
 
     parse_pull = subp.add_parser(
         "pull",
@@ -1000,6 +1089,8 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
             clear_cache(catalog)
         elif args.command == "gc":
             garbage_collect(catalog)
+        elif args.command == "studio":
+            process_studio_cli_args(args)
         else:
             print(f"invalid command: {args.command}", file=sys.stderr)
             return 1

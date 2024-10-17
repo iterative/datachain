@@ -47,7 +47,8 @@ dependencies = [
   "psutil",
   "huggingface_hub",
   "iterative-telemetry>=0.0.9",
-  "platformdirs"
+  "platformdirs",
+  "dvc-studio-client>=0.21,<1"
 ]
 
 [project.optional-dependencies]
