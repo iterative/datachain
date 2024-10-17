@@ -42,7 +42,6 @@ class DataChainDir:
     TMP = "tmp"
     DB = "db"
     CONFIG = "config"
-    CONFIG = "config"
     ENV_VAR = "DATACHAIN_DIR"
     ENV_VAR_DATACHAIN_ROOT = "DATACHAIN_ROOT_DIR"
 
@@ -52,7 +51,6 @@ class DataChainDir:
         cache: Optional[str] = None,
         tmp: Optional[str] = None,
         db: Optional[str] = None,
-        config: Optional[str] = None,
         config: Optional[str] = None,
     ) -> None:
         self.root = osp.abspath(root) if root is not None else self.default_root()

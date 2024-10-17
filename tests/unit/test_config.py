@@ -1,3 +1,5 @@
+import os
+
 import pytest
 from tomlkit import TOMLDocument, dump
 
@@ -49,14 +51,15 @@ def create_local_config(current_dir):
         "local-conf": "exists",
     }
 
-    with open(DataChainDir(current_dir + "/.datachain").config, "w") as f:
+    with open(DataChainDir(os.path.join(current_dir, ".datachain")).config, "w") as f:
         dump(conf, f)
 
 
 def test_get_dir(global_config_dir, system_config_dir, current_dir):
     assert Config.get_dir(ConfigLevel.GLOBAL) == global_config_dir
     assert Config.get_dir(ConfigLevel.SYSTEM) == system_config_dir
-    assert Config.get_dir(ConfigLevel.LOCAL) == current_dir + "/.datachain"
+
+    assert Config.get_dir(ConfigLevel.LOCAL) == os.path.join(current_dir, ".datachain")
 
 
 def test_read_config(global_config_dir, system_config_dir, current_dir):
