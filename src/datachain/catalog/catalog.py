@@ -35,7 +35,7 @@ from tqdm import tqdm
 
 from datachain.cache import DataChainCache
 from datachain.client import Client
-from datachain.config import get_remote_config, read_config
+from datachain.config import Config
 from datachain.dataset import (
     DATASET_PREFIX,
     QUERY_DATASET_PREFIX,
@@ -1240,9 +1240,7 @@ class Catalog:
         return self.metastore.get_dataset(name)
 
     def get_remote_dataset(self, name: str, *, remote_config=None) -> DatasetRecord:
-        remote_config = remote_config or get_remote_config(
-            read_config(DataChainDir.find().root), remote=""
-        )
+        remote_config = remote_config or Config().get_remote_config(remote="")
         studio_client = StudioClient(
             remote_config["url"], remote_config["username"], remote_config["token"]
         )
@@ -1479,9 +1477,7 @@ class Catalog:
             raise ValueError("Please provide output directory for instantiation")
 
         client_config = client_config or self.client_config
-        remote_config = remote_config or get_remote_config(
-            read_config(DataChainDir.find().root), remote=""
-        )
+        remote_config = remote_config or Config().get_remote_config(remote="")
 
         studio_client = StudioClient(
             remote_config["url"], remote_config["username"], remote_config["token"]
