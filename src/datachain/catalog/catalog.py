@@ -481,7 +481,6 @@ def compute_metafile_data(node_groups) -> list[dict[str, Any]]:
             continue
         listing: Listing = node_group.listing
         source_path: str = node_group.source_path
-        print(f"Setting data-source uri: {listing.uri}")
         metafile_group = {"data-source": {"uri": listing.uri}, "files": []}
         for node in node_group.instantiated_nodes:
             if not node.n.is_dir:
@@ -510,9 +509,6 @@ def find_column_to_str(  # noqa: PLR0911
             full_path = path + "/"
         else:
             full_path = path
-        print(
-            f"Node full path from path {full_path} is {src.get_node_full_path_from_path(full_path)}"
-        )
         return src.get_node_full_path_from_path(full_path)
     if column == "size":
         return str(row[field_lookup["size"]])
@@ -1887,7 +1883,6 @@ class Catalog:
                 src.node, fields, names, inames, paths, ipaths, size, typ
             )
             for row in results:
-                print(row)
                 yield "\t".join(
                     find_column_to_str(row, field_lookup, src, column)
                     for column in columns

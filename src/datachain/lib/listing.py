@@ -94,7 +94,6 @@ def parse_listing_uri(uri: str, cache, client_config) -> tuple[str, str, str]:
         f"{LISTING_PREFIX}{storage_uri}/{posixpath.join(lst_uri_path, '').lstrip('/')}"
     )
 
-    print(f"PARSE LISTING URI {uri}: ds name is {ds_name}")
     return ds_name, lst_uri, path
 
 
@@ -107,5 +106,4 @@ def listing_uri_from_name(dataset_name: str) -> str:
     """Returns clean storage URI from listing dataset name"""
     if not is_listing_dataset(dataset_name):
         raise ValueError(f"Dataset {dataset_name} is not a listing")
-    print(f"Calculating uri from name {dataset_name}")
     return dataset_name.removeprefix(LISTING_PREFIX)

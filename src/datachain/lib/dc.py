@@ -31,7 +31,6 @@ from datachain.lib.dataset_info import DatasetInfo
 from datachain.lib.file import ArrowRow, File, get_file_type
 from datachain.lib.file import ExportPlacement as FileExportPlacement
 from datachain.lib.listing import (
-    is_listing_dataset,
     list_bucket,
     ls,
     parse_listing_uri,
@@ -397,7 +396,8 @@ class DataChain:
         catalog = session.catalog
 
         listings = [
-            ls for ls in catalog.listings()
+            ls
+            for ls in catalog.listings()
             if not ls.is_expired and ls.contains(list_dataset_name)
         ]
 
@@ -406,7 +406,7 @@ class DataChain:
             return list_dataset_name, False
 
         if not update:
-            # not need to update, choosing the most recent one
+            # no need to update, choosing the most recent one
             return sorted(listings, key=lambda l: l.created_at)[-1].name, True
 
         # choosing the smallest possible one to minimize update time
@@ -426,7 +426,6 @@ class DataChain:
         update: bool = False,
         anon: bool = False,
     ) -> "Self":
-        # print(f"Inside from_storage, uri is {uri}")
         """Get data from a storage as a list of file with all file attributes.
         It returns the chain itself as usual.
 
@@ -455,7 +454,7 @@ class DataChain:
         )
 
         list_dataset_name, list_dataset_exists = cls.get_list_dataset_name(
-            uri, session, in_memory=in_memory
+            uri, session, in_memory=in_memory, update=update
         )
 
         if update or not list_dataset_exists:

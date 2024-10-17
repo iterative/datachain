@@ -163,8 +163,6 @@ def test_cp_root(cloud_test_catalog, recursive, star, dir_exists, cloud_type):
     edatachain_contents = yaml.safe_load(dest.with_suffix(".edatachain").read_text())
     assert len(edatachain_contents) == 1
     data = edatachain_contents[0]
-    print("URI IS")
-    print(data["data-source"]["uri"])
     assert data["data-source"]["uri"] == src_uri.rstrip("/") + "/"
     expected_file_count = 7 if recursive else 1
     assert len(data["files"]) == expected_file_count

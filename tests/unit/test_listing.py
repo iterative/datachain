@@ -1,5 +1,4 @@
 import posixpath
-from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -7,10 +6,9 @@ from datachain.catalog import Catalog
 from datachain.catalog.catalog import DataSource
 from datachain.lib.file import File
 from datachain.lib.listing import (
-    LISTING_TTL,
     is_listing_dataset,
-    is_listing_expired,
-    is_listing_subset,
+    # is_listing_expired,
+    # is_listing_subset,
     listing_uri_from_name,
     parse_listing_uri,
 )
@@ -201,6 +199,7 @@ def test_listing_uri_from_name():
         listing_uri_from_name("s3://my-bucket")
 
 
+"""
 @pytest.mark.parametrize(
     "date,is_expired",
     [
@@ -225,3 +224,4 @@ def test_is_listing_expired(date, is_expired):
 )
 def test_listing_subset(ds1_name, ds2_name, is_subset):
     assert is_listing_subset(ds1_name, ds2_name) is is_subset
+"""

@@ -95,7 +95,6 @@ class Listing:
         self.insert_entries([entry])
 
     def insert_entries(self, entries: Iterable[File]) -> None:
-        print(f"Table dataset rows is {self.dataset_rows.get_table()}")
         self.warehouse.insert_rows(
             self.dataset_rows.get_table(),
             self.warehouse.prepare_entries(entries),

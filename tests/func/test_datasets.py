@@ -244,8 +244,8 @@ def test_create_dataset_from_sources_failed(listed_bucket, cloud_test_catalog, m
     catalog = cloud_test_catalog.catalog
     # Mocks are automatically undone at the end of a test.
     mocker.patch.object(
-        catalog.warehouse.__class__,
-        "create_dataset_rows_table",
+        catalog.__class__,
+        "listings",
         side_effect=RuntimeError("Error"),
     )
     with pytest.raises(RuntimeError):
