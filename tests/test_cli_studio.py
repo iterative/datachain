@@ -1,17 +1,9 @@
-import pytest
 from dvc_studio_client.auth import AuthorizationExpiredError
 
 from datachain.cli import main
-from datachain.config import Config
+from datachain.config import Config, ConfigLevel
 from datachain.studio import POST_LOGIN_MESSAGE
-from datachain.utils import ENV_DATACHAIN_GLOBAL_CONFIG_DIR, STUDIO_URL
-
-
-@pytest.fixture(autouse=True)
-def global_config_dir(monkeypatch, tmp_path_factory):
-    monkeypatch.setenv(
-        ENV_DATACHAIN_GLOBAL_CONFIG_DIR, str(tmp_path_factory.mktemp("studio-login"))
-    )
+from datachain.utils import STUDIO_URL
 
 
 def test_studio_login_token_check_failed(mocker):
@@ -69,24 +61,24 @@ def test_studio_login_arguments(mocker):
 
 
 def test_studio_logout():
-    with Config("global").edit() as conf:
+    with Config(ConfigLevel.GLOBAL).edit() as conf:
         conf["studio"] = {"token": "isat_access_token"}
 
     assert main(["studio", "logout"]) == 0
-    config = Config("global").read()
+    config = Config(ConfigLevel.GLOBAL).read()
     assert "token" not in config["studio"]
 
     assert main(["studio", "logout"]) == 1
 
 
 def test_studio_token(capsys):
-    with Config("global").edit() as conf:
+    with Config(ConfigLevel.GLOBAL).edit() as conf:
         conf["studio"] = {"token": "isat_access_token"}
 
     assert main(["studio", "token"]) == 0
     assert capsys.readouterr().out == "isat_access_token\n"
 
-    with Config("global").edit() as conf:
+    with Config(ConfigLevel.GLOBAL).edit() as conf:
         del conf["studio"]["token"]
 
     assert main(["studio", "token"]) == 1

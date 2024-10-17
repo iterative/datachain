@@ -1,7 +1,7 @@
 import os
 from typing import TYPE_CHECKING
 
-from datachain.config import Config
+from datachain.config import Config, ConfigLevel
 from datachain.error import DataChainError
 from datachain.utils import STUDIO_URL
 
@@ -63,7 +63,7 @@ def login(args: "Namespace"):
 
 
 def logout():
-    with Config("global").edit() as conf:
+    with Config(ConfigLevel.GLOBAL).edit() as conf:
         token = conf.get("studio", {}).get("token")
         if not token:
             raise DataChainError(
@@ -87,7 +87,7 @@ def token():
 
 
 def save_config(hostname, token):
-    config = Config("global")
+    config = Config(ConfigLevel.GLOBAL)
     with config.edit() as conf:
         studio_conf = conf.get("studio", {})
         studio_conf["url"] = hostname
