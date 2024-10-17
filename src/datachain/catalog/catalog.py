@@ -1,4 +1,3 @@
-import glob
 import io
 import json
 import logging
@@ -48,12 +47,10 @@ from datachain.dataset import (
     parse_dataset_uri,
 )
 from datachain.error import (
-    ClientError,
     DataChainError,
     DatasetInvalidVersionError,
     DatasetNotFoundError,
     DatasetVersionNotFoundError,
-    PendingIndexingError,
     QueryScriptCancelError,
     QueryScriptRunError,
 )
@@ -61,8 +58,8 @@ from datachain.listing import Listing
 from datachain.node import DirType, Node, NodeWithPath
 from datachain.nodes_thread_pool import NodesThreadPool
 from datachain.remote.studio import StudioClient
-from datachain.sql.types import JSON, Boolean, DateTime, Int64, SQLType, String
-from datachain.storage import Storage, StorageStatus, StorageURI
+from datachain.sql.types import DateTime, SQLType, String
+from datachain.storage import StorageURI
 from datachain.utils import (
     DataChainDir,
     batched,
@@ -484,13 +481,8 @@ def compute_metafile_data(node_groups) -> list[dict[str, Any]]:
             continue
         listing: Listing = node_group.listing
         source_path: str = node_group.source_path
-        if not node_group.is_dataset:
-            assert listing.storage
-            data_source = listing.storage.to_dict(source_path)
-        else:
-            data_source = {"uri": listing.metastore.uri}
-
-        metafile_group = {"data-source": data_source, "files": []}
+        print(f"Setting data-source uri: {listing.uri}")
+        metafile_group = {"data-source": {"uri": listing.uri}, "files": []}
         for node in node_group.instantiated_nodes:
             if not node.n.is_dir:
                 metafile_group["files"].append(node.get_metafile_data())
@@ -518,6 +510,9 @@ def find_column_to_str(  # noqa: PLR0911
             full_path = path + "/"
         else:
             full_path = path
+        print(
+            f"Node full path from path {full_path} is {src.get_node_full_path_from_path(full_path)}"
+        )
         return src.get_node_full_path_from_path(full_path)
     if column == "size":
         return str(row[field_lookup["size"]])
@@ -568,6 +563,12 @@ class Catalog:
             self._warehouse_ready_callback(self._warehouse)
 
         return self._warehouse
+
+    @cached_property
+    def session(self):
+        from datachain.query.session import Session
+
+        return Session.get(catalog=self)
 
     def get_init_params(self) -> dict[str, Any]:
         return {
@@ -627,6 +628,7 @@ class Catalog:
 
         return lst, path
 
+    """
     def enlist_source_old(
         self,
         source: str,
@@ -786,6 +788,7 @@ class Catalog:
         lst.storage = storage
 
         return lst, path
+    """
 
     def _remove_dataset_rows_and_warehouse_info(
         self, dataset: DatasetRecord, version: int, **kwargs
@@ -870,11 +873,14 @@ class Catalog:
                 )
                 indexed_sources = []
                 for source in dataset_sources:
+                    from datachain.lib.dc import DataChain
+
                     client = self.get_client(source, **client_config)
                     uri = client.uri
                     ms = self.metastore.clone(uri, None)
                     st = self.warehouse.clone()
-                    listing = Listing(None, ms, st, client, None)
+                    dataset_name, _ = DataChain.get_list_dataset_name(uri, self.session)
+                    listing = Listing(ms, st, client, self.get_dataset(dataset_name))
                     rows = DatasetQuery(
                         name=dataset.name, version=ds_version, catalog=self
                     ).to_db_records()
@@ -1018,10 +1024,7 @@ class Catalog:
 
         job_id = job_id or os.getenv("DATACHAIN_JOB_ID")
         if not job_id:
-            from datachain.query.session import Session
-
-            session = Session.get(catalog=self)
-            job_id = session.job_id
+            job_id = self.session.job_id
 
         dataset = self.metastore.create_dataset_version(
             dataset,
@@ -1344,15 +1347,14 @@ class Catalog:
         Returns list of ListingInfo objects which are representing specific
         storage listing datasets
         """
-        from datachain.lib.listing_info import ListingInfo
         from datachain.lib.listing import is_listing_dataset
+        from datachain.lib.listing_info import ListingInfo
 
         return [
             ListingInfo.from_models(d, v, j)
             for d, v, j in self.list_datasets_versions(include_listing=True)
             if is_listing_dataset(d.name)
         ]
-
 
     def ls_dataset_rows(
         self, name: str, version: int, offset=None, limit=None
@@ -1885,6 +1887,7 @@ class Catalog:
                 src.node, fields, names, inames, paths, ipaths, size, typ
             )
             for row in results:
+                print(row)
                 yield "\t".join(
                     find_column_to_str(row, field_lookup, src, column)
                     for column in columns

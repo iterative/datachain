@@ -9,6 +9,7 @@ from sqlalchemy import Column
 from sqlalchemy.sql import func
 from tqdm import tqdm
 
+from datachain.data_storage.warehouse import db_name
 from datachain.lib.file import File
 from datachain.node import DirType, Node, NodeWithPath
 from datachain.sql.functions import path as pathfunc
@@ -62,6 +63,12 @@ class Listing:
     """
 
     @property
+    def uri(self):
+        from datachain.lib.listing import listing_uri_from_name
+
+        return listing_uri_from_name(self.dataset.name)
+
+    @property
     def dataset_rows(self):
         return self.warehouse.dataset_rows(
             self.dataset, self.dataset.latest_version, object_name=self.object_name
@@ -88,6 +95,7 @@ class Listing:
         self.insert_entries([entry])
 
     def insert_entries(self, entries: Iterable[File]) -> None:
+        print(f"Table dataset rows is {self.dataset_rows.get_table()}")
         self.warehouse.insert_rows(
             self.dataset_rows.get_table(),
             self.warehouse.prepare_entries(entries),
@@ -203,25 +211,29 @@ class Listing:
         conds = []
         if names:
             for name in names:
-                conds.append(pathfunc.name(Column("path")).op("GLOB")(name))
+                conds.append(pathfunc.name(Column(db_name("path"))).op("GLOB")(name))
         if inames:
             for iname in inames:
                 conds.append(
-                    func.lower(pathfunc.name(Column("path"))).op("GLOB")(iname.lower())
+                    func.lower(pathfunc.name(Column(db_name("path")))).op("GLOB")(
+                        iname.lower()
+                    )
                 )
         if paths:
             for path in paths:
-                conds.append(Column("path").op("GLOB")(path))
+                conds.append(Column(db_name("path")).op("GLOB")(path))
         if ipaths:
             for ipath in ipaths:
-                conds.append(func.lower(Column("path")).op("GLOB")(ipath.lower()))
+                conds.append(
+                    func.lower(Column(db_name("path"))).op("GLOB")(ipath.lower())
+                )
 
         if size is not None:
             size_limit = suffix_to_number(size)
             if size_limit >= 0:
-                conds.append(Column("size") >= size_limit)
+                conds.append(Column(db_name("size")) >= size_limit)
             else:
-                conds.append(Column("size") <= -size_limit)
+                conds.append(Column(db_name("size")) <= -size_limit)
 
         return self.warehouse.find(
             dr,

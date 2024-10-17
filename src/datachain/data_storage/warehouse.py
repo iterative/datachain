@@ -679,9 +679,9 @@ class AbstractWarehouse(ABC, Serializable):
                 self.path_expr(dr) == path,
                 dr.col("is_latest") == true(),
             )
-            row = next(self.db.execute(query), None)
-            if row is not None:
-                return Node(*row)
+            node = next(self.get_nodes(query), None)
+            if node:
+                return node
             path += "/"
         query = sa.select(1).where(
             dr.select()
@@ -796,7 +796,7 @@ class AbstractWarehouse(ABC, Serializable):
         sub_glob = posixpath.join(path, "*")
         dr = dataset_rows
         selections: list[sa.ColumnElement] = [
-            func.sum(dr.c.size),
+            func.sum(dr.col("size")),
         ]
         if count_files:
             selections.append(func.count())
@@ -804,7 +804,7 @@ class AbstractWarehouse(ABC, Serializable):
             self.db.execute(
                 dr.select(*selections).where(
                     (self.path_expr(dr).op("GLOB")(sub_glob))
-                    & (dr.c.is_latest == true())
+                    & (dr.col("is_latest") == true())
                 )
             ),
             (0, 0),
@@ -883,7 +883,7 @@ class AbstractWarehouse(ABC, Serializable):
         if sort is not None:
             if not isinstance(sort, list):
                 sort = [sort]
-            query = query.order_by(*(sa.text(s) for s in sort))  # type: ignore [attr-defined]
+            query = query.order_by(*(sa.text(db_name(s)) for s in sort))  # type: ignore [attr-defined]
 
         prefix_len = len(node.path)
 
@@ -905,6 +905,7 @@ class AbstractWarehouse(ABC, Serializable):
         Finds nodes that match certain criteria and only looks for latest nodes
         under the passed node.
         """
+        fields = [db_name(f, dataset_rows.object_name) for f in fields]
         query = self._find_query(
             dataset_rows,
             node.path,
