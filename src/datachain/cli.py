@@ -16,7 +16,6 @@ from datachain import Session, utils
 from datachain.cli_utils import BooleanOptionalAction, CommaSeparatedArgs, KeyValueArgs
 from datachain.lib.dc import DataChain
 from datachain.telemetry import telemetry
-from datachain.utils import DataChainDir
 
 if TYPE_CHECKING:
     from datachain.catalog import Catalog
@@ -679,9 +678,9 @@ def ls(
     **kwargs,
 ):
     if config is None:
-        from .config import get_remote_config, read_config
+        from .config import Config
 
-        config = get_remote_config(read_config(DataChainDir.find().root), remote=remote)
+        config = Config().get_remote_config(remote=remote)
     remote_type = config["type"]
     if remote_type == "local":
         ls_local(sources, long=long, **kwargs)
