@@ -1,5 +1,6 @@
 from collections.abc import Mapping
 from contextlib import contextmanager
+from enum import Enum
 from typing import Optional, Union
 
 from tomlkit import TOMLDocument, dump, load
@@ -7,37 +8,42 @@ from tomlkit import TOMLDocument, dump, load
 from datachain.utils import DataChainDir, global_config_dir, system_config_dir
 
 
+# Define an enum with value system, global and local
+class ConfigLevel(Enum):
+    SYSTEM = "system"
+    GLOBAL = "global"
+    LOCAL = "local"
+
+
 class Config:
-    SYSTEM_LEVELS = ("system", "global")
-    LOCAL_LEVELS = ("local",)
+    SYSTEM_LEVELS = (ConfigLevel.SYSTEM, ConfigLevel.GLOBAL)
+    LOCAL_LEVELS = (ConfigLevel.LOCAL,)
 
     # In the order of precedence
     LEVELS = SYSTEM_LEVELS + LOCAL_LEVELS
 
-    CONFIG = "config"
-
     def __init__(
         self,
-        level: Optional[str] = None,
+        level: Optional[ConfigLevel] = None,
     ):
         self.level = level
 
         self.init()
 
     @classmethod
-    def get_dir(cls, level: Optional[str]) -> str:
-        if level == "system":
+    def get_dir(cls, level: Optional[ConfigLevel]) -> str:
+        if level == ConfigLevel.SYSTEM:
             return system_config_dir()
-        if level == "global":
+        if level == ConfigLevel.GLOBAL:
             return global_config_dir()
 
-        return DataChainDir.find().root
+        return str(DataChainDir.find().root)
 
     def init(self):
         d = DataChainDir(self.get_dir(self.level))
         d.init()
 
-    def load_one(self, level: Optional[str] = None) -> TOMLDocument:
+    def load_one(self, level: Optional[ConfigLevel] = None) -> TOMLDocument:
         config_path = DataChainDir(self.get_dir(level)).config
 
         try:
