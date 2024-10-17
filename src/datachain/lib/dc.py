@@ -1,6 +1,8 @@
 import copy
 import os
+import os.path
 import re
+import sys
 from collections.abc import Iterator, Sequence
 from functools import wraps
 from typing import (
@@ -1920,6 +1922,8 @@ class DataChain:
                 from urllib.parse import urlparse
 
                 path = urlparse(path).path
+                if sys.platform == "win32":
+                    path = os.path.normpath(path.lstrip("/"))
 
             fsspec_fs = client.create_fs(**fs_kwargs)
 
