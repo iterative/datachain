@@ -1073,9 +1073,9 @@ class DataChain:
         Example:
         ```py
          dc.mutate(
-                area=Column("image.height") * Column("image.width"),
-                extension=file_ext(Column("file.name")),
-                dist=cosine_distance(embedding_text, embedding_image)
+            area=Column("image.height") * Column("image.width"),
+            extension=file_ext(Column("file.name")),
+            dist=cosine_distance(embedding_text, embedding_image)
         )
         ```
 
@@ -1086,7 +1086,7 @@ class DataChain:
         Example:
         ```py
          dc.mutate(
-                newkey=Column("oldkey")
+            newkey=Column("oldkey")
         )
         ```
         """
@@ -1099,7 +1099,7 @@ class DataChain:
                     "Use a different name for the new column.",
                 )
         for col_name, expr in kwargs.items():
-            if not isinstance(expr, Column) and isinstance(expr.type, NullType):
+            if not isinstance(expr, (Column, Func)) and isinstance(expr.type, NullType):
                 raise DataChainColumnError(
                     col_name, f"Cannot infer type with expression {expr}"
                 )
@@ -1111,6 +1111,9 @@ class DataChain:
                 # renaming existing column
                 for signal in schema.db_signals(name=value.name, as_columns=True):
                     mutated[signal.name.replace(value.name, name, 1)] = signal  # type: ignore[union-attr]
+            elif isinstance(value, Func):
+                # adding new signal
+                mutated[name] = value.get_column(schema)
             else:
                 # adding new signal
                 mutated[name] = value
