@@ -1895,10 +1895,14 @@ class DataChain:
         """Save chain to parquet file with SignalSchema metadata.
 
         Parameters:
-            path : Path or a file-like binary object to save the file.
+            path : Path or a file-like binary object to save the file. This supports
+                local paths as well as remote paths, such as s3:// or hf:// with fsspec.
             partition_cols : Column names by which to partition the dataset.
             chunk_size : The chunk size of results to read and convert to columnar
                 data, to avoid running out of memory.
+            fs_kwargs : Optional kwargs to pass to the fsspec filesystem, used only for
+                write, for fsspec-type URLs, such as s3:// or hf:// when
+                provided as the destination path.
         """
         import pyarrow as pa
         import pyarrow.parquet as pq
@@ -1988,8 +1992,12 @@ class DataChain:
         """Save chain to a csv (comma-separated values) file.
 
         Parameters:
-            path : Path to save the file.
+            path : Path to save the file. This supports local paths as well as
+                remote paths, such as s3:// or hf:// with fsspec.
             delimiter : Delimiter to use for the resulting file.
+            fs_kwargs : Optional kwargs to pass to the fsspec filesystem, used only for
+                write, for fsspec-type URLs, such as s3:// or hf:// when
+                provided as the destination path.
         """
         import csv
 
