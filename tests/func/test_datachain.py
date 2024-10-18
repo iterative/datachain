@@ -38,6 +38,12 @@ from tests.utils import (
     text_embedding,
 )
 
+DF_DATA = {
+    "first_name": ["Alice", "Bob", "Charlie", "David", "Eva"],
+    "age": [25, 30, 35, 40, 45],
+    "city": ["New York", "Los Angeles", "Chicago", "Houston", "Phoenix"],
+}
+
 
 def _get_listing_datasets(session):
     return sorted(
@@ -1366,3 +1372,47 @@ def test_group_by_signals(cloud_test_catalog, partition_by, signal_name):
         ],
         "file_info__path",
     )
+
+
+def test_to_from_csv_remote(cloud_test_catalog_upload):
+    ctc = cloud_test_catalog_upload
+    path = f"{ctc.src_uri}/test.csv"
+
+    df = pd.DataFrame(DF_DATA)
+    dc_to = DataChain.from_pandas(df, session=ctc.session)
+    dc_to.to_csv(path)
+
+    dc_from = DataChain.from_csv(path, session=ctc.session)
+    df1 = dc_from.select("first_name", "age", "city").to_pandas()
+    assert df1.equals(df)
+
+
+@pytest.mark.parametrize("chunk_size", (1000, 2))
+@pytest.mark.parametrize("kwargs", ({}, {"compression": "gzip"}))
+def test_to_from_parquet_remote(cloud_test_catalog_upload, chunk_size, kwargs):
+    ctc = cloud_test_catalog_upload
+    path = f"{ctc.src_uri}/test.parquet"
+
+    df = pd.DataFrame(DF_DATA)
+    dc_to = DataChain.from_pandas(df, session=ctc.session)
+    dc_to.to_parquet(path, chunk_size=chunk_size, **kwargs)
+
+    dc_from = DataChain.from_parquet(path, session=ctc.session)
+    df1 = dc_from.select("first_name", "age", "city").to_pandas()
+
+    assert df1.equals(df)
+
+
+@pytest.mark.parametrize("chunk_size", (1000, 2))
+def test_to_from_parquet_partitioned_remote(cloud_test_catalog_upload, chunk_size):
+    ctc = cloud_test_catalog_upload
+    path = f"{ctc.src_uri}/parquets"
+
+    df = pd.DataFrame(DF_DATA)
+    dc_to = DataChain.from_pandas(df, session=ctc.session)
+    dc_to.to_parquet(path, partition_cols=["first_name"], chunk_size=chunk_size)
+
+    dc_from = DataChain.from_parquet(path, session=ctc.session)
+    df1 = dc_from.select("first_name", "age", "city").to_pandas()
+    df1 = df1.sort_values("first_name").reset_index(drop=True)
+    assert df1.equals(df)

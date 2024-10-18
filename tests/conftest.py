@@ -559,6 +559,26 @@ def cloud_test_catalog(
 
 
 @pytest.fixture
+def cloud_test_catalog_upload(cloud_test_catalog):
+    """This returns a version of the cloud_test_catalog that is suitable for uploading
+    files, and will perform the necessary cleanup of any uploaded files."""
+    from datachain.client.fsspec import Client
+
+    src = cloud_test_catalog.src_uri
+    client = Client.get_implementation(src)
+    fsspec_fs = client.create_fs(**cloud_test_catalog.client_config)
+    original_paths = set(fsspec_fs.ls(src))
+
+    yield cloud_test_catalog
+
+    # Cleanup any written files
+    new_paths = set(fsspec_fs.ls(src))
+    cleanup_paths = new_paths - original_paths
+    for p in cleanup_paths:
+        fsspec_fs.rm(p, recursive=True)
+
+
+@pytest.fixture
 def cloud_test_catalog_tmpfile(
     cloud_server,
     cloud_server_credentials,
