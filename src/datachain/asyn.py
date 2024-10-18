@@ -1,5 +1,12 @@
 import asyncio
-from collections.abc import AsyncIterable, Awaitable, Coroutine, Iterable, Iterator
+from collections.abc import (
+    AsyncIterable,
+    Awaitable,
+    Coroutine,
+    Generator,
+    Iterable,
+    Iterator,
+)
 from concurrent.futures import ThreadPoolExecutor
 from heapq import heappop, heappush
 from typing import Any, Callable, Generic, Optional, TypeVar
@@ -54,9 +61,13 @@ class AsyncMapper(Generic[InputT, ResultT]):
         task.add_done_callback(self._tasks.discard)
         return task
 
-    async def produce(self) -> None:
+    def _produce(self) -> None:
         for item in self.iterable:
-            await self.work_queue.put(item)
+            fut = asyncio.run_coroutine_threadsafe(self.work_queue.put(item), self.loop)
+            fut.result()  # wait until the item is in the queue
+
+    async def produce(self) -> None:
+        await self.to_thread(self._produce)
 
     async def worker(self) -> None:
         while (item := await self.work_queue.get()) is not None:
@@ -132,7 +143,7 @@ class AsyncMapper(Generic[InputT, ResultT]):
             self.result_queue.get_nowait()
         await self.result_queue.put(None)
 
-    def iterate(self, timeout=None) -> Iterable[ResultT]:
+    def iterate(self, timeout=None) -> Generator[ResultT, None, None]:
         init = asyncio.run_coroutine_threadsafe(self.init(), self.loop)
         init.result(timeout=1)
         async_run = asyncio.run_coroutine_threadsafe(self.run(), self.loop)
