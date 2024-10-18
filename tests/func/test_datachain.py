@@ -1366,3 +1366,98 @@ def test_group_by_signals(cloud_test_catalog, partition_by, signal_name):
         ],
         "file_info__path",
     )
+
+
+@pytest.mark.parametrize("partition_by", ["file_info.path", "file_info__path"])
+@pytest.mark.parametrize("order_by", ["file_info.name", "file_info__name"])
+def test_window_signals(cloud_test_catalog, partition_by, order_by):
+    from datachain import func
+
+    session = cloud_test_catalog.session
+    src_uri = cloud_test_catalog.src_uri
+
+    class FileInfo(DataModel):
+        path: str = ""
+        name: str = ""
+
+    def file_info(file: File) -> DataModel:
+        full_path = file.source.rstrip("/") + "/" + file.path
+        rel_path = posixpath.relpath(full_path, src_uri)
+        path_parts = rel_path.split("/", 1)
+        return FileInfo(
+            path=path_parts[0] if len(path_parts) > 1 else "",
+            name=path_parts[1] if len(path_parts) > 1 else path_parts[0],
+        )
+
+    window = func.window(partition_by=partition_by, order_by=order_by, desc=True)
+
+    ds = (
+        DataChain.from_storage(src_uri, session=session)
+        .map(file_info, params=["file"], output={"file_info": FileInfo})
+        .mutate(row_number=func.row_number().over(window))
+        .save("my-ds")
+    )
+
+    results = {}
+    for r in ds.to_records():
+        filename = (
+            r["file_info__path"] + "/" + r["file_info__name"]
+            if r["file_info__path"]
+            else r["file_info__name"]
+        )
+        results[filename] = r["row_number"]
+
+    assert results == {
+        "cats/cat2": 1,
+        "cats/cat1": 2,
+        "description": 1,
+        "dogs/others/dog4": 1,
+        "dogs/dog3": 2,
+        "dogs/dog2": 3,
+        "dogs/dog1": 4,
+    }
+
+
+def test_window_signals_random(cloud_test_catalog):
+    from datachain import func
+
+    session = cloud_test_catalog.session
+    src_uri = cloud_test_catalog.src_uri
+
+    class FileInfo(DataModel):
+        path: str = ""
+        name: str = ""
+
+    def file_info(file: File) -> DataModel:
+        full_path = file.source.rstrip("/") + "/" + file.path
+        rel_path = posixpath.relpath(full_path, src_uri)
+        path_parts = rel_path.split("/", 1)
+        return FileInfo(
+            path=path_parts[0] if len(path_parts) > 1 else "",
+            name=path_parts[1] if len(path_parts) > 1 else path_parts[0],
+        )
+
+    window = func.window(partition_by="file_info.path", order_by="sys.rand")
+
+    ds = (
+        DataChain.from_storage(src_uri, session=session)
+        .map(file_info, params=["file"], output={"file_info": FileInfo})
+        .mutate(row_number=func.row_number().over(window))
+        .filter(C("row_number") < 3)
+        .select_except("row_number")
+        .save("my-ds")
+    )
+
+    results = {}
+    for r in ds.to_records():
+        results.setdefault(r["file_info__path"], []).append(r["file_info__name"])
+
+    assert results[""] == ["description"]
+    assert sorted(results["cats"]) == sorted(["cat1", "cat2"])
+
+    assert len(results["dogs"]) == 2
+    all_dogs = ["dog1", "dog2", "dog3", "others/dog4"]
+    for dog in results["dogs"]:
+        assert dog in all_dogs
+        all_dogs.remove(dog)
+    assert len(all_dogs) == 2

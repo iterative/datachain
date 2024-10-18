@@ -1,9 +1,10 @@
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Optional
 
 from sqlalchemy import desc
 
 from datachain.lib.convert.python_to_sql import python_to_sql
-from datachain.lib.utils import DataChainColumnError
+from datachain.lib.utils import DataChainColumnError, DataChainParamsError
 from datachain.query.schema import Column, ColumnMeta
 
 if TYPE_CHECKING:
@@ -11,11 +12,19 @@ if TYPE_CHECKING:
     from datachain.lib.signal_schema import SignalSchema
 
 
+@dataclass
 class Window:
-    def __init__(self, *, partition_by: str, order_by: str, desc: bool = False) -> None:
-        self.partition_by = partition_by
-        self.order_by = order_by
-        self.desc = desc
+    partition_by: str
+    order_by: str
+    desc: bool = False
+
+
+def window(partition_by: str, order_by: str, desc: bool = False) -> Window:
+    return Window(
+        ColumnMeta.to_db_name(partition_by),
+        ColumnMeta.to_db_name(order_by),
+        desc,
+    )
 
 
 class Func:
@@ -37,9 +46,7 @@ class Func:
 
     def over(self, window: Window) -> "Func":
         if not self.is_window:
-            raise DataChainColumnError(
-                str(self.inner), "Window function is not supported"
-            )
+            raise DataChainParamsError("Over requires a window function")
 
         return Func(
             self.inner,

@@ -2449,7 +2449,7 @@ def test_group_by_error(test_session):
 def test_window_functions(test_session, desc):
     from datachain import func
 
-    window = func.Window(partition_by="col1", order_by="col2", desc=desc)
+    window = func.window(partition_by="col1", order_by="col2", desc=desc)
 
     ds = (
         DataChain.from_values(
@@ -2533,7 +2533,7 @@ def test_window_functions(test_session, desc):
 def test_window_error(test_session):
     from datachain import func
 
-    window = func.Window(partition_by="col1", order_by="col2")
+    window = func.window(partition_by="col1", order_by="col2")
 
     dc = DataChain.from_values(
         col1=["a", "a", "b", "b", "b", "c"],
@@ -2544,5 +2544,5 @@ def test_window_error(test_session):
     with pytest.raises(DataChainColumnError, match="Window function requires window"):
         dc.mutate(first=func.first("col2"))
 
-    with pytest.raises(DataChainColumnError, match="Window function is not supported"):
+    with pytest.raises(DataChainParamsError, match="Over requires a window function"):
         dc.mutate(first=func.sum("col2").over(window))
