@@ -12,11 +12,11 @@ from unstructured.cleaners.core import (
     group_broken_paragraphs,
     replace_unicode_quotes,
 )
-from unstructured.partition.pdf import partition_pdf
-from unstructured_ingest.embed.huggingface import (
+from unstructured.embed.huggingface import (
     HuggingFaceEmbeddingConfig,
     HuggingFaceEmbeddingEncoder,
 )
+from unstructured.partition.pdf import partition_pdf
 
 from datachain import C, DataChain, DataModel, File
 
@@ -43,7 +43,6 @@ def process_pdf(file: File) -> Iterator[Chunk]:
         chunks = partition_pdf(file=f, chunking_strategy="by_title", strategy="fast")
 
     # Clean the chunks and add new columns
-    chunks_cleaned = []
     for chunk in chunks:
         chunk.apply(
             lambda text: clean(
@@ -52,17 +51,16 @@ def process_pdf(file: File) -> Iterator[Chunk]:
         )
         chunk.apply(replace_unicode_quotes)
         chunk.apply(group_broken_paragraphs)
-        chunks_cleaned.append({"text": chunk.text})
 
     # create embeddings
-    chunks_embedded = embedding_encoder.embed_documents(chunks_cleaned)
+    chunks_embedded = embedding_encoder.embed_documents(chunks)
 
     # Add new rows to DataChain
     for chunk in chunks_embedded:
         yield Chunk(
             key=file.path,
-            text=chunk.get("text"),
-            embeddings=chunk.get("embeddings"),
+            text=chunk.text,
+            embeddings=chunk.embeddings,
         )
 
 
