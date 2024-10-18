@@ -1374,8 +1374,8 @@ def test_group_by_signals(cloud_test_catalog, partition_by, signal_name):
     )
 
 
-def test_to_from_csv_remote(cloud_test_catalog):
-    ctc = cloud_test_catalog
+def test_to_from_csv_remote(cloud_test_catalog_upload):
+    ctc = cloud_test_catalog_upload
     path = f"{ctc.src_uri}/test.csv"
 
     df = pd.DataFrame(DF_DATA)
@@ -1386,18 +1386,11 @@ def test_to_from_csv_remote(cloud_test_catalog):
     df1 = dc_from.select("first_name", "age", "city").to_pandas()
     assert df1.equals(df)
 
-    # Cleanup any written files
-    from datachain.client.fsspec import Client
-
-    client = Client.get_implementation(path)
-    fsspec_fs = client.create_fs(**ctc.client_config)
-    fsspec_fs.rm(path, recursive=True)
-
 
 @pytest.mark.parametrize("chunk_size", (1000, 2))
 @pytest.mark.parametrize("kwargs", ({}, {"compression": "gzip"}))
-def test_to_from_parquet_remote(cloud_test_catalog, chunk_size, kwargs):
-    ctc = cloud_test_catalog
+def test_to_from_parquet_remote(cloud_test_catalog_upload, chunk_size, kwargs):
+    ctc = cloud_test_catalog_upload
     path = f"{ctc.src_uri}/test.parquet"
 
     df = pd.DataFrame(DF_DATA)
@@ -1409,17 +1402,10 @@ def test_to_from_parquet_remote(cloud_test_catalog, chunk_size, kwargs):
 
     assert df1.equals(df)
 
-    # Cleanup any written files
-    from datachain.client.fsspec import Client
-
-    client = Client.get_implementation(path)
-    fsspec_fs = client.create_fs(**ctc.client_config)
-    fsspec_fs.rm(path, recursive=True)
-
 
 @pytest.mark.parametrize("chunk_size", (1000, 2))
-def test_to_from_parquet_partitioned_remote(cloud_test_catalog, chunk_size):
-    ctc = cloud_test_catalog
+def test_to_from_parquet_partitioned_remote(cloud_test_catalog_upload, chunk_size):
+    ctc = cloud_test_catalog_upload
     path = f"{ctc.src_uri}/parquets"
 
     df = pd.DataFrame(DF_DATA)
@@ -1430,10 +1416,3 @@ def test_to_from_parquet_partitioned_remote(cloud_test_catalog, chunk_size):
     df1 = dc_from.select("first_name", "age", "city").to_pandas()
     df1 = df1.sort_values("first_name").reset_index(drop=True)
     assert df1.equals(df)
-
-    # Cleanup any written files
-    from datachain.client.fsspec import Client
-
-    client = Client.get_implementation(path)
-    fsspec_fs = client.create_fs(**ctc.client_config)
-    fsspec_fs.rm(path, recursive=True)
