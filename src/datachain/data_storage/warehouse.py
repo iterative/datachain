@@ -560,7 +560,7 @@ class AbstractWarehouse(ABC, Serializable):
     ) -> Iterator[Node]:
         """Finds all Nodes that correspond to GLOB like path pattern."""
         dr = dataset_rows
-        de = dr.dataset_dir_expansion(
+        de = dr.dir_expansion(
             dr.select().where(dr.col("is_latest") == true()).subquery()
         ).subquery()
         path_glob = "/".join([*path_list, glob_name])
@@ -586,7 +586,7 @@ class AbstractWarehouse(ABC, Serializable):
         """
         parent = "/".join(path_list)
         dr = dataset_rows
-        de = dr.dataset_dir_expansion(
+        de = dr.dir_expansion(
             dr.select().where(dr.col("is_latest") == true()).subquery(),
             object_name=dr.object_name,
         ).subquery()
@@ -716,7 +716,7 @@ class AbstractWarehouse(ABC, Serializable):
         Gets latest-version file nodes from the provided parent path
         """
         dr = dataset_rows
-        de = dr.dataset_dir_expansion(
+        de = dr.dir_expansion(
             dr.select().where(dr.col("is_latest") == true()).subquery()
         ).subquery()
         where_cond = pathfunc.parent(col(de, "path")) == parent_path
@@ -834,7 +834,7 @@ class AbstractWarehouse(ABC, Serializable):
             conds = []
 
         dr = dataset_rows
-        de = dr.dataset_dir_expansion(
+        de = dr.dir_expansion(
             dr.select().where(dr.col("is_latest") == true()).subquery()
         ).subquery()
         q = self.expand_query(de, dr).subquery()
