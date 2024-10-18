@@ -1069,6 +1069,7 @@ class DataChain:
            Filename:    name(), parent(), file_stem(), file_ext()
            Array:       length(), sip_hash_64(), euclidean_distance(),
                         cosine_distance()
+           Window:      row_number(), rank(), dense_rank()
 
         Example:
         ```py
@@ -1076,6 +1077,14 @@ class DataChain:
             area=Column("image.height") * Column("image.width"),
             extension=file_ext(Column("file.name")),
             dist=cosine_distance(embedding_text, embedding_image)
+        )
+        ```
+
+        Window function example:
+        ```py
+        window = func.window(partition_by="file.parent", order_by="file.size")
+        dc.mutate(
+            row_number=func.row_number().over(window),
         )
         ```
 

@@ -1331,7 +1331,7 @@ def test_group_by_signals(cloud_test_catalog, partition_by, signal_name):
         path: str = ""
         name: str = ""
 
-    def file_info(file: File) -> DataModel:
+    def file_info(file: File) -> FileInfo:
         full_path = file.source.rstrip("/") + "/" + file.path
         rel_path = posixpath.relpath(full_path, src_uri)
         path_parts = rel_path.split("/", 1)
@@ -1380,7 +1380,7 @@ def test_window_signals(cloud_test_catalog, partition_by, order_by):
         path: str = ""
         name: str = ""
 
-    def file_info(file: File) -> DataModel:
+    def file_info(file: File) -> FileInfo:
         full_path = file.source.rstrip("/") + "/" + file.path
         rel_path = posixpath.relpath(full_path, src_uri)
         path_parts = rel_path.split("/", 1)
@@ -1428,7 +1428,7 @@ def test_window_signals_random(cloud_test_catalog):
         path: str = ""
         name: str = ""
 
-    def file_info(file: File) -> DataModel:
+    def file_info(file: File) -> FileInfo:
         full_path = file.source.rstrip("/") + "/" + file.path
         rel_path = posixpath.relpath(full_path, src_uri)
         path_parts = rel_path.split("/", 1)
