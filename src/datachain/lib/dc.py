@@ -1,6 +1,8 @@
 import copy
 import os
+import os.path
 import re
+import sys
 from collections.abc import Iterator, Sequence
 from functools import wraps
 from typing import (
@@ -1887,20 +1889,47 @@ class DataChain:
         path: Union[str, os.PathLike[str], BinaryIO],
         partition_cols: Optional[Sequence[str]] = None,
         chunk_size: int = DEFAULT_PARQUET_CHUNK_SIZE,
+        fs_kwargs: Optional[dict[str, Any]] = None,
         **kwargs,
     ) -> None:
         """Save chain to parquet file with SignalSchema metadata.
 
         Parameters:
-            path : Path or a file-like binary object to save the file.
+            path : Path or a file-like binary object to save the file. This supports
+                local paths as well as remote paths, such as s3:// or hf:// with fsspec.
             partition_cols : Column names by which to partition the dataset.
             chunk_size : The chunk size of results to read and convert to columnar
                 data, to avoid running out of memory.
+            fs_kwargs : Optional kwargs to pass to the fsspec filesystem, used only for
+                write, for fsspec-type URLs, such as s3:// or hf:// when
+                provided as the destination path.
         """
         import pyarrow as pa
         import pyarrow.parquet as pq
 
         from datachain.lib.arrow import DATACHAIN_SIGNAL_SCHEMA_PARQUET_KEY
+
+        fsspec_fs = None
+
+        if isinstance(path, str) and "://" in path:
+            from datachain.client.fsspec import Client
+
+            fs_kwargs = {
+                **self._query.catalog.client_config,
+                **(fs_kwargs or {}),
+            }
+
+            client = Client.get_implementation(path)
+
+            if path.startswith("file://"):
+                # pyarrow does not handle file:// uris, and needs a direct path instead.
+                from urllib.parse import urlparse
+
+                path = urlparse(path).path
+                if sys.platform == "win32":
+                    path = os.path.normpath(path.lstrip("/"))
+
+            fsspec_fs = client.create_fs(**fs_kwargs)
 
         _partition_cols = list(partition_cols) if partition_cols else None
         signal_schema_metadata = orjson.dumps(
@@ -1936,12 +1965,15 @@ class DataChain:
                     table,
                     root_path=path,
                     partition_cols=_partition_cols,
+                    filesystem=fsspec_fs,
                     **kwargs,
                 )
             else:
                 if first_chunk:
                     # Write to a single parquet file.
-                    parquet_writer = pq.ParquetWriter(path, parquet_schema, **kwargs)
+                    parquet_writer = pq.ParquetWriter(
+                        path, parquet_schema, filesystem=fsspec_fs, **kwargs
+                    )
                     first_chunk = False
 
                 assert parquet_writer
@@ -1954,22 +1986,43 @@ class DataChain:
         self,
         path: Union[str, os.PathLike[str]],
         delimiter: str = ",",
+        fs_kwargs: Optional[dict[str, Any]] = None,
         **kwargs,
     ) -> None:
         """Save chain to a csv (comma-separated values) file.
 
         Parameters:
-            path : Path to save the file.
+            path : Path to save the file. This supports local paths as well as
+                remote paths, such as s3:// or hf:// with fsspec.
             delimiter : Delimiter to use for the resulting file.
+            fs_kwargs : Optional kwargs to pass to the fsspec filesystem, used only for
+                write, for fsspec-type URLs, such as s3:// or hf:// when
+                provided as the destination path.
         """
         import csv
+
+        opener = open
+
+        if isinstance(path, str) and "://" in path:
+            from datachain.client.fsspec import Client
+
+            fs_kwargs = {
+                **self._query.catalog.client_config,
+                **(fs_kwargs or {}),
+            }
+
+            client = Client.get_implementation(path)
+
+            fsspec_fs = client.create_fs(**fs_kwargs)
+
+            opener = fsspec_fs.open
 
         headers, _ = self._effective_signals_schema.get_headers_with_length()
         column_names = [".".join(filter(None, header)) for header in headers]
 
         results_iter = self.collect_flatten()
 
-        with open(path, "w", newline="") as f:
+        with opener(path, "w", newline="") as f:
             writer = csv.writer(f, delimiter=delimiter, **kwargs)
             writer.writerow(column_names)
 
