@@ -2,6 +2,7 @@ import asyncio
 import functools
 from collections import Counter
 from contextlib import contextmanager
+from queue import Queue
 
 import pytest
 from fsspec.asyn import sync
@@ -109,6 +110,37 @@ def test_mapper_exception_while_processing(create_mapper, loop):
     mapper = create_mapper(process, range(50), workers=10, loop=loop)
     with pytest.raises(RuntimeError):
         list(mapper.iterate(timeout=4))
+
+
+@pytest.mark.parametrize("create_mapper", [AsyncMapper, OrderedMapper])
+def test_mapper_deadlock(create_mapper):
+    queue = Queue()
+    inputs = range(50)
+
+    def as_iter(queue):
+        while (item := queue.get()) is not None:
+            yield item
+
+    async def process(x):
+        return x
+
+    mapper = create_mapper(process, as_iter(queue), workers=10, loop=get_loop())
+    it = mapper.iterate(timeout=4)
+    for i in inputs:
+        queue.put(i)
+
+    # Check that we can get as many objects out as we put in, without deadlock
+    result = []
+    for _ in range(len(inputs)):
+        result.append(next(it))
+    if mapper.order_preserving:
+        assert result == list(inputs)
+    else:
+        assert set(result) == set(inputs)
+
+    # Check that iteration terminates cleanly
+    queue.put(None)
+    assert list(it) == []
 
 
 @pytest.mark.parametrize("create_mapper", [AsyncMapper, OrderedMapper])
