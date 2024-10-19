@@ -1,5 +1,6 @@
 import datetime
 import math
+import re
 from collections.abc import Generator, Iterator
 from unittest.mock import ANY
 
@@ -2551,8 +2552,18 @@ def test_window_error(test_session):
         session=test_session,
     )
 
-    with pytest.raises(DataChainColumnError, match="Window function requires window"):
+    with pytest.raises(
+        DataChainParamsError,
+        match=re.escape(
+            "Window function first() requires over() clause with a window spec",
+        ),
+    ):
         dc.mutate(first=func.first("col2"))
 
-    with pytest.raises(DataChainParamsError, match="Over requires a window function"):
+    with pytest.raises(
+        DataChainParamsError,
+        match=re.escape(
+            "sum() doesn't support window (over())",
+        ),
+    ):
         dc.mutate(first=func.sum("col2").over(window))

@@ -31,7 +31,7 @@ def count(col: Optional[str] = None) -> Func:
     Notes:
         - Result column will always be of type int.
     """
-    return Func(inner=sa_func.count, col=col, result_type=int)
+    return Func("count", inner=sa_func.count, col=col, result_type=int)
 
 
 def sum(col: str) -> Func:
@@ -59,7 +59,7 @@ def sum(col: str) -> Func:
         - The `sum` function should be used on numeric columns.
         - Result column type will be the same as the input column type.
     """
-    return Func(inner=sa_func.sum, col=col)
+    return Func("sum", inner=sa_func.sum, col=col)
 
 
 def avg(col: str) -> Func:
@@ -87,7 +87,7 @@ def avg(col: str) -> Func:
         - The `avg` function should be used on numeric columns.
         - Result column will always be of type float.
     """
-    return Func(inner=dc_func.aggregate.avg, col=col, result_type=float)
+    return Func("avg", inner=dc_func.aggregate.avg, col=col, result_type=float)
 
 
 def min(col: str) -> Func:
@@ -106,7 +106,7 @@ def min(col: str) -> Func:
     Example:
         ```py
         dc.group_by(
-            smallest_file=func.avg("file.size"),
+            smallest_file=func.min("file.size"),
             partition_by="signal.category",
         )
         ```
@@ -115,7 +115,7 @@ def min(col: str) -> Func:
         - The `min` function can be used with numeric, date, and string columns.
         - Result column will have the same type as the input column.
     """
-    return Func(inner=sa_func.min, col=col)
+    return Func("min", inner=sa_func.min, col=col)
 
 
 def max(col: str) -> Func:
@@ -134,7 +134,7 @@ def max(col: str) -> Func:
     Example:
         ```py
         dc.group_by(
-            largest_file=func.avg("file.size"),
+            largest_file=func.max("file.size"),
             partition_by="signal.category",
         )
         ```
@@ -143,7 +143,7 @@ def max(col: str) -> Func:
         - The `max` function can be used with numeric, date, and string columns.
         - Result column will have the same type as the input column.
     """
-    return Func(inner=sa_func.max, col=col)
+    return Func("max", inner=sa_func.max, col=col)
 
 
 def any_value(col: str) -> Func:
@@ -163,7 +163,7 @@ def any_value(col: str) -> Func:
     Example:
         ```py
         dc.group_by(
-            file_example=func.avg("file.name"),
+            file_example=func.any_value("file.name"),
             partition_by="signal.category",
         )
         ```
@@ -174,7 +174,7 @@ def any_value(col: str) -> Func:
         - The result of `any_value` is non-deterministic,
           meaning it may return different values for different executions.
     """
-    return Func(inner=dc_func.aggregate.any_value, col=col)
+    return Func("any_value", inner=dc_func.aggregate.any_value, col=col)
 
 
 def collect(col: str) -> Func:
@@ -203,7 +203,7 @@ def collect(col: str) -> Func:
         - The `collect` function can be used with numeric and string columns.
         - Result column will have an array type.
     """
-    return Func(inner=dc_func.aggregate.collect, col=col, is_array=True)
+    return Func("collect", inner=dc_func.aggregate.collect, col=col, is_array=True)
 
 
 def concat(col: str, separator="") -> Func:
@@ -238,7 +238,7 @@ def concat(col: str, separator="") -> Func:
     def inner(arg):
         return dc_func.aggregate.group_concat(arg, separator)
 
-    return Func(inner=inner, col=col, result_type=str)
+    return Func("concat", inner=inner, col=col, result_type=str)
 
 
 def row_number() -> Func:
@@ -264,7 +264,7 @@ def row_number() -> Func:
     Note:
         - The result column will always be of type int.
     """
-    return Func(inner=sa_func.row_number, result_type=int, is_window=True)
+    return Func("row_number", inner=sa_func.row_number, result_type=int, is_window=True)
 
 
 def rank() -> Func:
@@ -292,7 +292,7 @@ def rank() -> Func:
         - The RANK function differs from ROW_NUMBER in that rows with the same value
           in the ordering column(s) receive the same rank.
     """
-    return Func(inner=sa_func.rank, result_type=int, is_window=True)
+    return Func("rank", inner=sa_func.rank, result_type=int, is_window=True)
 
 
 def dense_rank() -> Func:
@@ -320,7 +320,7 @@ def dense_rank() -> Func:
         - The DENSE_RANK function differs from RANK in that it does not leave gaps
           in the ranking for tied values.
     """
-    return Func(inner=sa_func.dense_rank, result_type=int, is_window=True)
+    return Func("dense_rank", inner=sa_func.dense_rank, result_type=int, is_window=True)
 
 
 def first(col: str) -> Func:
@@ -350,4 +350,4 @@ def first(col: str) -> Func:
           in the specified order.
         - The result column will have the same type as the input column.
     """
-    return Func(inner=sa_func.first_value, col=col, is_window=True)
+    return Func("first", inner=sa_func.first_value, col=col, is_window=True)

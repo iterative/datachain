@@ -63,6 +63,7 @@ class Func:
 
     def __init__(
         self,
+        name: str,
         inner: Callable,
         col: Optional[str] = None,
         result_type: Optional["DataType"] = None,
@@ -70,6 +71,7 @@ class Func:
         is_window: bool = False,
         window: Optional[Window] = None,
     ) -> None:
+        self.name = name
         self.inner = inner
         self.col = col
         self.result_type = result_type
@@ -77,11 +79,15 @@ class Func:
         self.is_window = is_window
         self.window = window
 
+    def __str__(self) -> str:
+        return self.name + "()"
+
     def over(self, window: Window) -> "Func":
         if not self.is_window:
-            raise DataChainParamsError("Over requires a window function")
+            raise DataChainParamsError(f"{self} doesn't support window (over())")
 
         return Func(
+            "over",
             self.inner,
             self.col,
             self.result_type,
@@ -108,7 +114,7 @@ class Func:
             return col_type
 
         raise DataChainColumnError(
-            str(self.inner),
+            str(self),
             "Column name is required to infer result type",
         )
 
@@ -126,8 +132,8 @@ class Func:
 
         if self.is_window:
             if not self.window:
-                raise DataChainColumnError(
-                    str(self.inner), "Window function requires window"
+                raise DataChainParamsError(
+                    f"Window function {self} requires over() clause with a window spec",
                 )
             func_col = func_col.over(
                 partition_by=self.window.partition_by,
