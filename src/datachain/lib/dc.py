@@ -1008,6 +1008,9 @@ class DataChain:
         """Group rows by specified set of signals and return new signals
         with aggregated values.
 
+        The supported functions:
+           count(), sum(), avg(), min(), max(), any_value(), collect(), concat()
+
         Example:
             ```py
             chain = chain.group_by(
@@ -1071,7 +1074,7 @@ class DataChain:
            Filename:    name(), parent(), file_stem(), file_ext()
            Array:       length(), sip_hash_64(), euclidean_distance(),
                         cosine_distance()
-           Window:      row_number(), rank(), dense_rank()
+           Window:      row_number(), rank(), dense_rank(), first()
 
         Example:
         ```py
