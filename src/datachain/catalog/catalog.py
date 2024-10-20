@@ -480,7 +480,6 @@ def compute_metafile_data(node_groups) -> list[dict[str, Any]]:
         if not node_group.sources:
             continue
         listing: Listing = node_group.listing
-        source_path: str = node_group.source_path
         metafile_group = {"data-source": {"uri": listing.uri}, "files": []}
         for node in node_group.instantiated_nodes:
             if not node.n.is_dir:
@@ -607,7 +606,7 @@ class Catalog:
         # from datachain.client import Client
         session = Session.get(catalog=self)  # TODO move as property of Catalog
 
-        chain = DataChain.from_storage(
+        DataChain.from_storage(
             source, session=session, update=update, object_name=object_name
         )
         dataset_name, _ = DataChain.get_list_dataset_name(source, session)
@@ -623,168 +622,6 @@ class Catalog:
         _, path = Client.parse_url(source)
 
         return lst, path
-
-    """
-    def enlist_source_old(
-        self,
-        source: str,
-        ttl: int,
-        force_update=False,
-        skip_indexing=False,
-        client_config=None,
-    ) -> tuple[Listing, str]:
-        if force_update and skip_indexing:
-            raise ValueError(
-                "Both force_update and skip_indexing flags"
-                " cannot be True at the same time"
-            )
-
-        partial_id: Optional[int]
-        partial_path: Optional[str]
-
-        client_config = client_config or self.client_config
-        uri, path = Client.parse_url(source)
-        client = Client.get_client(source, self.cache, **client_config)
-        stem = os.path.basename(os.path.normpath(path))
-        prefix = (
-            posixpath.dirname(path)
-            if glob.has_magic(stem) or client.fs.isfile(source)
-            else path
-        )
-        storage_dataset_name = Storage.dataset_name(uri, posixpath.join(prefix, ""))
-        source_metastore = self.metastore.clone(uri)
-
-        columns = [
-            Column("path", String),
-            Column("etag", String),
-            Column("version", String),
-            Column("is_latest", Boolean),
-            Column("last_modified", DateTime(timezone=True)),
-            Column("size", Int64),
-            Column("location", JSON),
-            Column("source", String),
-        ]
-
-        if skip_indexing:
-            source_metastore.create_storage_if_not_registered(uri)
-            storage = source_metastore.get_storage(uri)
-            source_metastore.init_partial_id(uri)
-            partial_id = source_metastore.get_next_partial_id(uri)
-
-            source_metastore = self.metastore.clone(uri=uri, partial_id=partial_id)
-            source_metastore.init(uri)
-
-            source_warehouse = self.warehouse.clone()
-            dataset = self.create_dataset(
-                storage_dataset_name, columns=columns, listing=True
-            )
-
-            return (
-                Listing(storage, source_metastore, source_warehouse, client, dataset),
-                path,
-            )
-
-        (
-            storage,
-            need_index,
-            in_progress,
-            partial_id,
-            partial_path,
-        ) = source_metastore.register_storage_for_indexing(uri, force_update, prefix)
-        if in_progress:
-            raise PendingIndexingError(f"Pending indexing operation: uri={storage.uri}")
-
-        if not need_index:
-            assert partial_id is not None
-            assert partial_path is not None
-            source_metastore = self.metastore.clone(uri=uri, partial_id=partial_id)
-            source_warehouse = self.warehouse.clone()
-            dataset = self.get_dataset(Storage.dataset_name(uri, partial_path))
-            lst = Listing(storage, source_metastore, source_warehouse, client, dataset)
-            logger.debug(
-                "Using cached listing %s. Valid till: %s",
-                storage.uri,
-                storage.expires_to_local,
-            )
-            # Listing has to have correct version of data storage
-            # initialized with correct Storage
-
-            self.update_dataset_version_with_warehouse_info(
-                dataset,
-                dataset.latest_version,
-            )
-
-            return lst, path
-
-        source_metastore.init_partial_id(uri)
-        partial_id = source_metastore.get_next_partial_id(uri)
-
-        source_metastore.init(uri)
-        source_metastore = self.metastore.clone(uri=uri, partial_id=partial_id)
-
-        source_warehouse = self.warehouse.clone()
-
-        dataset = self.create_dataset(
-            storage_dataset_name, columns=columns, listing=True
-        )
-
-        lst = Listing(storage, source_metastore, source_warehouse, client, dataset)
-
-        try:
-            lst.fetch(prefix)
-
-            source_metastore.mark_storage_indexed(
-                storage.uri,
-                StorageStatus.PARTIAL if prefix else StorageStatus.COMPLETE,
-                ttl,
-                prefix=prefix,
-                partial_id=partial_id,
-                dataset=dataset,
-            )
-
-            self.update_dataset_version_with_warehouse_info(
-                dataset,
-                dataset.latest_version,
-            )
-
-        except ClientError as e:
-            # for handling cloud errors
-            error_message = INDEX_INTERNAL_ERROR_MESSAGE
-            if e.error_code in ["InvalidAccessKeyId", "SignatureDoesNotMatch"]:
-                error_message = "Invalid cloud credentials"
-
-            source_metastore.mark_storage_indexed(
-                storage.uri,
-                StorageStatus.FAILED,
-                ttl,
-                prefix=prefix,
-                error_message=error_message,
-                error_stack=traceback.format_exc(),
-                dataset=dataset,
-            )
-            self._remove_dataset_rows_and_warehouse_info(
-                dataset, dataset.latest_version
-            )
-            raise
-        except:
-            source_metastore.mark_storage_indexed(
-                storage.uri,
-                StorageStatus.FAILED,
-                ttl,
-                prefix=prefix,
-                error_message=INDEX_INTERNAL_ERROR_MESSAGE,
-                error_stack=traceback.format_exc(),
-                dataset=dataset,
-            )
-            self._remove_dataset_rows_and_warehouse_info(
-                dataset, dataset.latest_version
-            )
-            raise
-
-        lst.storage = storage
-
-        return lst, path
-    """
 
     def _remove_dataset_rows_and_warehouse_info(
         self, dataset: DatasetRecord, version: int, **kwargs

@@ -278,8 +278,9 @@ class DataTable:
             ),
         ]
 
-    def dir_expansion(self, query):
-        return DirExpansion(self.object_name).query(query)
+    def dir_expansion(self):
+        return DirExpansion(self.object_name)
+        # return DirExpansion(self.object_name).query(query)
 
 
 PARTITION_COLUMN_ID = "partition_id"
