@@ -1008,6 +1008,9 @@ class DataChain:
         """Group rows by specified set of signals and return new signals
         with aggregated values.
 
+        The supported functions:
+           count(), sum(), avg(), min(), max(), any_value(), collect(), concat()
+
         Example:
             ```py
             chain = chain.group_by(
@@ -1071,13 +1074,22 @@ class DataChain:
            Filename:    name(), parent(), file_stem(), file_ext()
            Array:       length(), sip_hash_64(), euclidean_distance(),
                         cosine_distance()
+           Window:      row_number(), rank(), dense_rank(), first()
 
         Example:
         ```py
          dc.mutate(
-                area=Column("image.height") * Column("image.width"),
-                extension=file_ext(Column("file.name")),
-                dist=cosine_distance(embedding_text, embedding_image)
+            area=Column("image.height") * Column("image.width"),
+            extension=file_ext(Column("file.name")),
+            dist=cosine_distance(embedding_text, embedding_image)
+        )
+        ```
+
+        Window function example:
+        ```py
+        window = func.window(partition_by="file.parent", order_by="file.size")
+        dc.mutate(
+            row_number=func.row_number().over(window),
         )
         ```
 
@@ -1088,7 +1100,7 @@ class DataChain:
         Example:
         ```py
          dc.mutate(
-                newkey=Column("oldkey")
+            newkey=Column("oldkey")
         )
         ```
         """
@@ -1101,7 +1113,7 @@ class DataChain:
                     "Use a different name for the new column.",
                 )
         for col_name, expr in kwargs.items():
-            if not isinstance(expr, Column) and isinstance(expr.type, NullType):
+            if not isinstance(expr, (Column, Func)) and isinstance(expr.type, NullType):
                 raise DataChainColumnError(
                     col_name, f"Cannot infer type with expression {expr}"
                 )
@@ -1113,6 +1125,9 @@ class DataChain:
                 # renaming existing column
                 for signal in schema.db_signals(name=value.name, as_columns=True):
                     mutated[signal.name.replace(value.name, name, 1)] = signal  # type: ignore[union-attr]
+            elif isinstance(value, Func):
+                # adding new signal
+                mutated[name] = value.get_column(schema)
             else:
                 # adding new signal
                 mutated[name] = value

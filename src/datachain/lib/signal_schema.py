@@ -27,6 +27,7 @@ from datachain.lib.convert.sql_to_python import sql_to_python
 from datachain.lib.convert.unflatten import unflatten_to_json_pos
 from datachain.lib.data_model import DataModel, DataType, DataValue
 from datachain.lib.file import File
+from datachain.lib.func import Func
 from datachain.lib.model_store import ModelStore
 from datachain.lib.utils import DataChainParamsError
 from datachain.query.schema import DEFAULT_DELIMITER, Column
@@ -494,6 +495,9 @@ class SignalSchema:
                 # changing the type of existing signal, e.g File -> ImageFile
                 del new_values[name]
                 new_values[name] = args_map[name]
+            elif isinstance(value, Func):
+                # adding new signal with function
+                new_values[name] = value.get_result_type(self)
             else:
                 # adding new signal
                 new_values[name] = sql_to_python(value)

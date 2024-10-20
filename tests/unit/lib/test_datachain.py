@@ -1,5 +1,6 @@
 import datetime
 import math
+import re
 from collections.abc import Generator, Iterator
 from unittest.mock import ANY
 
@@ -2131,7 +2132,7 @@ def test_group_by_int(test_session):
         "cnt": "int",
         "cnt_col": "int",
         "sum": "int",
-        "avg": "int",
+        "avg": "float",
         "min": "int",
         "max": "int",
         "value": "int",
@@ -2263,6 +2264,8 @@ def test_group_by_str(test_session):
         .group_by(
             cnt=func.count(),
             cnt_col=func.count("col2"),
+            min=func.min("col2"),
+            max=func.max("col2"),
             concat=func.concat("col2"),
             concat_sep=func.concat("col2", separator=","),
             value=func.any_value("col2"),
@@ -2276,6 +2279,8 @@ def test_group_by_str(test_session):
         "col1": "str",
         "cnt": "int",
         "cnt_col": "int",
+        "min": "str",
+        "max": "str",
         "concat": "str",
         "concat_sep": "str",
         "value": "str",
@@ -2287,6 +2292,8 @@ def test_group_by_str(test_session):
                 "col1": "a",
                 "cnt": 2,
                 "cnt_col": 2,
+                "min": "1",
+                "max": "2",
                 "concat": "12",
                 "concat_sep": "1,2",
                 "value": ANY_VALUE("1", "2"),
@@ -2296,6 +2303,8 @@ def test_group_by_str(test_session):
                 "col1": "b",
                 "cnt": 3,
                 "cnt_col": 3,
+                "min": "3",
+                "max": "5",
                 "concat": "345",
                 "concat_sep": "3,4,5",
                 "value": ANY_VALUE("3", "4", "5"),
@@ -2305,6 +2314,8 @@ def test_group_by_str(test_session):
                 "col1": "c",
                 "cnt": 1,
                 "cnt_col": 1,
+                "min": "6",
+                "max": "6",
                 "concat": "6",
                 "concat_sep": "6",
                 "value": ANY_VALUE("6"),
@@ -2443,3 +2454,116 @@ def test_group_by_error(test_session):
         SignalResolvingError, match="cannot resolve signal name 'col3': is not found"
     ):
         dc.group_by(foo=func.sum("col2"), partition_by="col3")
+
+
+@pytest.mark.parametrize("desc", [True, False])
+def test_window_functions(test_session, desc):
+    from datachain import func
+
+    window = func.window(partition_by="col1", order_by="col2", desc=desc)
+
+    ds = (
+        DataChain.from_values(
+            col1=["a", "a", "b", "b", "b", "c"],
+            col2=[1, 2, 3, 4, 5, 6],
+            session=test_session,
+        )
+        .mutate(
+            row_number=func.row_number().over(window),
+            rank=func.rank().over(window),
+            dense_rank=func.dense_rank().over(window),
+            first=func.first("col2").over(window),
+        )
+        .save("my-ds")
+    )
+
+    assert ds.signals_schema.serialize() == {
+        "col1": "str",
+        "col2": "int",
+        "row_number": "int",
+        "rank": "int",
+        "dense_rank": "int",
+        "first": "int",
+    }
+    assert sorted_dicts(ds.to_records(), "col1", "col2") == sorted_dicts(
+        [
+            {
+                "col1": "a",
+                "col2": 1,
+                "row_number": 2 if desc else 1,
+                "rank": 2 if desc else 1,
+                "dense_rank": 2 if desc else 1,
+                "first": 2 if desc else 1,
+            },
+            {
+                "col1": "a",
+                "col2": 2,
+                "row_number": 1 if desc else 2,
+                "rank": 1 if desc else 2,
+                "dense_rank": 1 if desc else 2,
+                "first": 2 if desc else 1,
+            },
+            {
+                "col1": "b",
+                "col2": 3,
+                "row_number": 3 if desc else 1,
+                "rank": 3 if desc else 1,
+                "dense_rank": 3 if desc else 1,
+                "first": 5 if desc else 3,
+            },
+            {
+                "col1": "b",
+                "col2": 4,
+                "row_number": 2,
+                "rank": 2,
+                "dense_rank": 2,
+                "first": 5 if desc else 3,
+            },
+            {
+                "col1": "b",
+                "col2": 5,
+                "row_number": 1 if desc else 3,
+                "rank": 1 if desc else 3,
+                "dense_rank": 1 if desc else 3,
+                "first": 5 if desc else 3,
+            },
+            {
+                "col1": "c",
+                "col2": 6,
+                "row_number": 1,
+                "rank": 1,
+                "dense_rank": 1,
+                "first": 6,
+            },
+        ],
+        "col1",
+        "col2",
+    )
+
+
+def test_window_error(test_session):
+    from datachain import func
+
+    window = func.window(partition_by="col1", order_by="col2")
+
+    dc = DataChain.from_values(
+        col1=["a", "a", "b", "b", "b", "c"],
+        col2=[1, 2, 3, 4, 5, 6],
+        session=test_session,
+    )
+
+    with pytest.raises(
+        DataChainParamsError,
+        match=re.escape(
+            "Window function first() requires over() clause with a window spec",
+        ),
+    ):
+        dc.mutate(first=func.first("col2"))
+
+    with pytest.raises(
+        DataChainParamsError,
+        match=re.escape(
+            "sum() doesn't support window (over())",
+        ),
+    ):
+        dc.mutate(first=func.sum("col2").over(window))
