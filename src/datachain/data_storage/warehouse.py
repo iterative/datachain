@@ -17,7 +17,7 @@ from sqlalchemy.sql.expression import true
 from tqdm import tqdm
 
 from datachain.client import Client
-from datachain.data_storage.schema import convert_rows_custom_column_types
+from datachain.data_storage.schema import col_name, convert_rows_custom_column_types
 from datachain.data_storage.serializer import Serializable
 from datachain.dataset import DatasetRecord
 from datachain.node import DirType, DirTypeGroup, Node, NodeWithPath, get_path
@@ -54,14 +54,9 @@ SELECT_BATCH_SIZE = 100_000  # number of rows to fetch at a time
 DEFAULT_DELIMITER = "__"  # TODO import from original source to not duplicate
 
 
-def db_name(name: str, object_name: str = "file") -> str:
-    # TODO use correct object_name in callers of this function instead default "file"
-    return f"{object_name}{DEFAULT_DELIMITER}{name}"
-
-
 def col(query, name: str, object_name: str = "file") -> str:
     # TODO use object_name in callers of this function
-    return getattr(query.c, db_name(name, object_name))
+    return getattr(query.c, col_name(name, object_name))
 
 
 class AbstractWarehouse(ABC, Serializable):
@@ -496,7 +491,7 @@ class AbstractWarehouse(ABC, Serializable):
         object_name: str = "file",
     ) -> sa.Select:
         def col(name: str):
-            return getattr(query.selected_columns, db_name(name, object_name))
+            return getattr(query.selected_columns, col_name(name, object_name))
 
         file_group: Sequence[int]
         if type in {"f", "file", "files"}:
@@ -544,10 +539,10 @@ class AbstractWarehouse(ABC, Serializable):
             parent_path,
             type="dir",
             conds=[
-                pathfunc.parent(sa.Column(db_name("path", dr.object_name)))
+                pathfunc.parent(sa.Column(col_name("path", dr.object_name)))
                 == parent_path
             ],
-            order_by=[db_name("source"), db_name("path")],
+            order_by=[col_name("source"), col_name("path")],
         )
         return self.get_nodes(query, dr.object_name)
 
@@ -656,7 +651,7 @@ class AbstractWarehouse(ABC, Serializable):
         return sa.select(
             de.c.sys__id,
             case((col(de, "is_dir") == true(), DirType.DIR), else_=DirType.FILE).label(
-                db_name("dir_type")
+                col_name("dir_type")
             ),
             col(de, "path"),
             with_default(dr.col("etag")),
@@ -883,7 +878,7 @@ class AbstractWarehouse(ABC, Serializable):
         if sort is not None:
             if not isinstance(sort, list):
                 sort = [sort]
-            query = query.order_by(*(sa.text(db_name(s)) for s in sort))  # type: ignore [attr-defined]
+            query = query.order_by(*(sa.text(col_name(s)) for s in sort))  # type: ignore [attr-defined]
 
         prefix_len = len(node.path)
 
@@ -905,7 +900,7 @@ class AbstractWarehouse(ABC, Serializable):
         Finds nodes that match certain criteria and only looks for latest nodes
         under the passed node.
         """
-        fields = [db_name(f, dataset_rows.object_name) for f in fields]
+        fields = [col_name(f, dataset_rows.object_name) for f in fields]
         query = self._find_query(
             dataset_rows,
             node.path,

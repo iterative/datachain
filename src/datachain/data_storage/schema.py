@@ -29,6 +29,10 @@ if TYPE_CHECKING:
 DEFAULT_DELIMITER = "__"
 
 
+def col_name(name: str, object_name: str = "file") -> str:
+    return f"{object_name}{DEFAULT_DELIMITER}{name}"
+
+
 def dedup_columns(columns: Iterable[sa.Column]) -> list[sa.Column]:
     """
     Removes duplicate columns from a list of columns.
@@ -83,7 +87,7 @@ class DirExpansion:
         self.object_name = object_name
 
     def col_name(self, name: str) -> str:
-        return f"{self.object_name}{DEFAULT_DELIMITER}{name}"
+        return col_name(name, self.object_name)
 
     def col(self, query, name: str) -> str:
         return getattr(query.c, self.col_name(name))
@@ -228,7 +232,7 @@ class DataTable:
         return self.columns
 
     def col_name(self, name: str) -> str:
-        return f"{self.object_name}{DEFAULT_DELIMITER}{name}"
+        return col_name(name, self.object_name)
 
     def col(self, name: str):
         return getattr(self.c, self.col_name(name))
