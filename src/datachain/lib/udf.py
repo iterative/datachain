@@ -1,3 +1,4 @@
+import contextlib
 import sys
 import traceback
 from collections.abc import Iterable, Iterator, Mapping, Sequence
@@ -7,6 +8,7 @@ import attrs
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 from pydantic import BaseModel
 
+from datachain.asyn import AsyncMapper
 from datachain.dataset import RowDict
 from datachain.lib.convert.flatten import flatten
 from datachain.lib.data_model import DataValue
@@ -21,6 +23,8 @@ from datachain.query.batch import (
 )
 
 if TYPE_CHECKING:
+    from collections import abc
+
     from typing_extensions import Self
 
     from datachain.catalog import Catalog
@@ -276,8 +280,17 @@ class UDFBase(AbstractUDF):
         return result_objs
 
 
+async def _prefetch_input(row):
+    for obj in row:
+        if isinstance(obj, File):
+            await obj._prefetch()
+    return row
+
+
 class Mapper(UDFBase):
     """Inherit from this class to pass to `DataChain.map()`."""
+
+    prefetch: int = 2
 
     def run(
         self,
@@ -290,16 +303,22 @@ class Mapper(UDFBase):
     ) -> Iterator[Iterable[UDFResult]]:
         self.catalog = catalog
         self.setup()
+        prepared_inputs: abc.Generator[Sequence[Any], None, None] = (
+            self._prepare_row_and_id(row, udf_fields, cache, download_cb)
+            for row in udf_inputs
+        )
+        if self.prefetch > 0:
+            prepared_inputs = AsyncMapper(
+                _prefetch_input, prepared_inputs, workers=self.prefetch
+            ).iterate()
 
-        for row in udf_inputs:
-            id_, *udf_args = self._prepare_row_and_id(
-                row, udf_fields, cache, download_cb
-            )
-            result_objs = self.process_safe(udf_args)
-            udf_output = self._flatten_row(result_objs)
-            output = [{"sys__id": id_} | dict(zip(self.signal_names, udf_output))]
-            processed_cb.relative_update(1)
-            yield output
+        with contextlib.closing(prepared_inputs):
+            for id_, *udf_args in prepared_inputs:
+                result_objs = self.process_safe(udf_args)
+                udf_output = self._flatten_row(result_objs)
+                output = [{"sys__id": id_} | dict(zip(self.signal_names, udf_output))]
+                processed_cb.relative_update(1)
+                yield output
 
         self.teardown()
 
@@ -349,6 +368,7 @@ class Generator(UDFBase):
     """Inherit from this class to pass to `DataChain.gen()`."""
 
     is_output_batched = True
+    prefetch: int = 2
 
     def run(
         self,
@@ -361,14 +381,21 @@ class Generator(UDFBase):
     ) -> Iterator[Iterable[UDFResult]]:
         self.catalog = catalog
         self.setup()
+        prepared_inputs: abc.Generator[Sequence[Any], None, None] = (
+            self._prepare_row(row, udf_fields, cache, download_cb) for row in udf_inputs
+        )
+        if self.prefetch > 0:
+            prepared_inputs = AsyncMapper(
+                _prefetch_input, prepared_inputs, workers=self.prefetch
+            ).iterate()
 
-        for row in udf_inputs:
-            udf_args = self._prepare_row(row, udf_fields, cache, download_cb)
-            result_objs = self.process_safe(udf_args)
-            udf_outputs = (self._flatten_row(row) for row in result_objs)
-            output = (dict(zip(self.signal_names, row)) for row in udf_outputs)
-            processed_cb.relative_update(1)
-            yield output
+        with contextlib.closing(prepared_inputs):
+            for row in prepared_inputs:
+                result_objs = self.process_safe(row)
+                udf_outputs = (self._flatten_row(row) for row in result_objs)
+                output = (dict(zip(self.signal_names, row)) for row in udf_outputs)
+                processed_cb.relative_update(1)
+                yield output
 
         self.teardown()
 
