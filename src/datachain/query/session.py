@@ -1,9 +1,9 @@
 import atexit
+import gc
 import logging
-import os
 import re
 import sys
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, ClassVar, Optional
 from uuid import uuid4
 
 from datachain.catalog import get_catalog
@@ -11,6 +11,7 @@ from datachain.error import TableMissingError
 
 if TYPE_CHECKING:
     from datachain.catalog import Catalog
+    from datachain.dataset import DatasetRecord
 
 logger = logging.getLogger("datachain")
 
@@ -39,7 +40,7 @@ class Session:
     """
 
     GLOBAL_SESSION_CTX: Optional["Session"] = None
-    GLOBAL_SESSION: Optional["Session"] = None
+    SESSION_CONTEXTS: ClassVar[list["Session"]] = []
     ORIGINAL_EXCEPT_HOOK = None
 
     DATASET_PREFIX = "session_"
@@ -64,24 +65,33 @@ class Session:
 
         session_uuid = uuid4().hex[: self.SESSION_UUID_LEN]
         self.name = f"{name}_{session_uuid}"
-        self.job_id = os.getenv("DATACHAIN_JOB_ID") or str(uuid4())
         self.is_new_catalog = not catalog
         self.catalog = catalog or get_catalog(
             client_config=client_config, in_memory=in_memory
         )
+        self.dataset_versions: list[tuple[DatasetRecord, int]] = []
 
     def __enter__(self):
+        # Push the current context onto the stack
+        Session.SESSION_CONTEXTS.append(self)
+
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_type:
-            self._cleanup_created_versions(self.name)
+            self._cleanup_created_versions()
 
         self._cleanup_temp_datasets()
         if self.is_new_catalog:
             self.catalog.metastore.close_on_exit()
             self.catalog.warehouse.close_on_exit()
             self.catalog.id_generator.close_on_exit()
+
+        if Session.SESSION_CONTEXTS:
+            Session.SESSION_CONTEXTS.pop()
+
+    def add_dataset_version(self, dataset: "DatasetRecord", version: int) -> None:
+        self.dataset_versions.append((dataset, version))
 
     def generate_temp_dataset_name(self) -> str:
         return self.get_temp_prefix() + uuid4().hex[: self.TEMP_TABLE_UUID_LEN]
@@ -93,26 +103,19 @@ class Session:
         prefix = self.get_temp_prefix()
         try:
             for dataset in list(self.catalog.metastore.list_datasets_by_prefix(prefix)):
-                # print(f"Removing dataset {dataset.name}")
                 self.catalog.remove_dataset(dataset.name, force=True)
         # suppress error when metastore has been reset during testing
         except TableMissingError:
             pass
 
-    def _cleanup_created_versions(self, job_id: str) -> None:
-        versions = self.catalog.metastore.get_job_dataset_versions(job_id)
-        if not versions:
+    def _cleanup_created_versions(self) -> None:
+        if not self.dataset_versions:
             return
 
-        datasets = {}
-        for dataset_name, version in versions:
-            if dataset_name not in datasets:
-                datasets[dataset_name] = self.catalog.get_dataset(dataset_name)
-            dataset = datasets[dataset_name]
-            logger.info(
-                "Removing dataset version %s@%s due to exception", dataset_name, version
-            )
+        for dataset, version in self.dataset_versions:
             self.catalog.remove_dataset_version(dataset, version)
+
+        self.dataset_versions.clear()
 
     @classmethod
     def get(
@@ -126,34 +129,34 @@ class Session:
 
         Parameters:
             session (Session): Optional Session(). If not provided a new session will
-                    be created. It's needed mostly for simplie API purposes.
-            catalog (Catalog): Optional catalog. By default a new catalog is created.
+                    be created. It's needed mostly for simple API purposes.
+            catalog (Catalog): Optional catalog. By default, a new catalog is created.
         """
         if session:
             return session
 
-        if cls.GLOBAL_SESSION is None:
+        # Access the active (most recent) context from the stack
+        if cls.SESSION_CONTEXTS:
+            return cls.SESSION_CONTEXTS[-1]
+
+        if cls.GLOBAL_SESSION_CTX is None:
             cls.GLOBAL_SESSION_CTX = Session(
                 cls.GLOBAL_SESSION_NAME,
                 catalog,
                 client_config=client_config,
                 in_memory=in_memory,
             )
-            cls.GLOBAL_SESSION = cls.GLOBAL_SESSION_CTX.__enter__()
 
             atexit.register(cls._global_cleanup)
             cls.ORIGINAL_EXCEPT_HOOK = sys.excepthook
             sys.excepthook = cls.except_hook
 
-        # print(f"returning global session {cls.GLOBAL_SESSION}")
-        return cls.GLOBAL_SESSION
+        return cls.GLOBAL_SESSION_CTX
 
     @staticmethod
     def except_hook(exc_type, exc_value, exc_traceback):
+        Session.GLOBAL_SESSION_CTX.__exit__(exc_type, exc_value, exc_traceback)
         Session._global_cleanup()
-        if Session.GLOBAL_SESSION_CTX is not None:
-            job_id = Session.GLOBAL_SESSION_CTX.job_id
-            Session.GLOBAL_SESSION_CTX._cleanup_created_versions(job_id)
 
         if Session.ORIGINAL_EXCEPT_HOOK:
             Session.ORIGINAL_EXCEPT_HOOK(exc_type, exc_value, exc_traceback)
@@ -162,7 +165,6 @@ class Session:
     def cleanup_for_tests(cls):
         if cls.GLOBAL_SESSION_CTX is not None:
             cls.GLOBAL_SESSION_CTX.__exit__(None, None, None)
-            cls.GLOBAL_SESSION = None
             cls.GLOBAL_SESSION_CTX = None
             atexit.unregister(cls._global_cleanup)
 
@@ -173,3 +175,7 @@ class Session:
     def _global_cleanup():
         if Session.GLOBAL_SESSION_CTX is not None:
             Session.GLOBAL_SESSION_CTX.__exit__(None, None, None)
+
+        for obj in gc.get_objects():  # Get all tracked objects
+            if isinstance(obj, Session):  # Cleanup temp dataset for session variables.
+                obj.__exit__(None, None, None)

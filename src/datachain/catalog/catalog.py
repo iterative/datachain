@@ -34,7 +34,7 @@ from tqdm import tqdm
 
 from datachain.cache import DataChainCache
 from datachain.client import Client
-from datachain.config import get_remote_config, read_config
+from datachain.config import Config
 from datachain.dataset import (
     DATASET_PREFIX,
     QUERY_DATASET_PREFIX,
@@ -483,7 +483,9 @@ def compute_metafile_data(node_groups) -> list[dict[str, Any]]:
         metafile_group = {"data-source": {"uri": listing.uri}, "files": []}
         for node in node_group.instantiated_nodes:
             if not node.n.is_dir:
-                metafile_group["files"].append(node.get_metafile_data())
+                metafile_group["files"].append(  # type: ignore [attr-defined]
+                    node.get_metafile_data()
+                )
         if metafile_group["files"]:
             metafile_data.append(metafile_group)
 
@@ -855,10 +857,6 @@ class Catalog:
             c.name: c.type.to_dict() for c in columns if isinstance(c.type, SQLType)
         }
 
-        job_id = job_id or os.getenv("DATACHAIN_JOB_ID")
-        if not job_id:
-            job_id = self.session.job_id
-
         dataset = self.metastore.create_dataset_version(
             dataset,
             version,
@@ -1081,6 +1079,7 @@ class Catalog:
             preview=dataset_version.preview,
             job_id=dataset_version.job_id,
         )
+
         # to avoid re-creating rows table, we are just renaming it for a new version
         # of target dataset
         self.warehouse.rename_dataset_table(
@@ -1109,9 +1108,7 @@ class Catalog:
         return self.metastore.get_dataset(name)
 
     def get_remote_dataset(self, name: str, *, remote_config=None) -> DatasetRecord:
-        remote_config = remote_config or get_remote_config(
-            read_config(DataChainDir.find().root), remote=""
-        )
+        remote_config = remote_config or Config().get_remote_config(remote="")
         studio_client = StudioClient(
             remote_config["url"], remote_config["username"], remote_config["token"]
         )
@@ -1201,8 +1198,6 @@ class Catalog:
             q = q.limit(limit)
         if offset:
             q = q.offset(offset)
-
-        q = q.order_by("sys__id")
 
         return q.to_db_records()
 
@@ -1362,9 +1357,7 @@ class Catalog:
             raise ValueError("Please provide output directory for instantiation")
 
         client_config = client_config or self.client_config
-        remote_config = remote_config or get_remote_config(
-            read_config(DataChainDir.find().root), remote=""
-        )
+        remote_config = remote_config or Config().get_remote_config(remote="")
 
         studio_client = StudioClient(
             remote_config["url"], remote_config["username"], remote_config["token"]

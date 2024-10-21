@@ -1,3 +1,4 @@
+import posixpath
 import re
 from datetime import datetime
 from struct import pack
@@ -6,14 +7,11 @@ from typing import Any
 
 import msgpack
 import pytest
-from sqlalchemy import select
 
 from datachain.cli import ls
-from datachain.client.local import FileClient
 from datachain.lib.dc import DataChain
 from datachain.lib.listing import LISTING_PREFIX
 from tests.utils import uppercase_scheme
-import posixpath
 
 
 def same_lines(lines1, lines2):
@@ -52,48 +50,44 @@ def test_ls_root(cloud_test_catalog, cloud_type, capsys):
 
 def ls_sources_output(src, cloud_type):
     if cloud_type == "file":
-        root_uri = FileClient.root_path().as_uri()
-        prefix = src[len(root_uri) :]
-        return f"""\
-{prefix}:
+        return """\
 cats/
 description
 dogs/
-
-{prefix}/dogs:
 dog1
 dog2
 dog3
 
-{prefix}/dogs/others:
+others:
 dog4
     """
 
     return """\
 cats/
-dogs/
 description
-
-dogs/others:
-dog4
-
+dogs/
 dogs:
 dog1
 dog2
 dog3
+
+dogs/others:
+dog4
     """
 
 
-def test_ls_ssources(cloud_test_catalog, cloud_type, capsys):
+def test_ls_sources(cloud_test_catalog, cloud_type, capsys):
     src = cloud_test_catalog.src_uri
-    ls([src, f"{src}/dogs/*"], catalog=cloud_test_catalog.catalog)
+    ls([src], catalog=cloud_test_catalog.catalog)
+    ls([f"{src}/dogs/*"], catalog=cloud_test_catalog.catalog)
     captured = capsys.readouterr()
     assert same_lines(captured.out, ls_sources_output(src, cloud_type))
 
 
 def test_ls_sources_scheme_uppercased(cloud_test_catalog, cloud_type, capsys):
     src = uppercase_scheme(cloud_test_catalog.src_uri)
-    ls([src, f"{src}/dogs/*"], catalog=cloud_test_catalog.catalog)
+    ls([src], catalog=cloud_test_catalog.catalog)
+    ls([f"{src}/dogs/*"], catalog=cloud_test_catalog.catalog)
     captured = capsys.readouterr()
     assert same_lines(captured.out, ls_sources_output(src, cloud_type))
 
@@ -101,27 +95,26 @@ def test_ls_sources_scheme_uppercased(cloud_test_catalog, cloud_type, capsys):
 def test_ls_not_found(cloud_test_catalog):
     src = cloud_test_catalog.src_uri
     with pytest.raises(FileNotFoundError):
-        ls([src, f"{src}/cats/bogus*"], catalog=cloud_test_catalog.catalog)
+        ls([f"{src}/cats/bogus*"], catalog=cloud_test_catalog.catalog)
 
 
-def test_ls_not_a_directory(cloud_test_catalog):
+# TODO return file test when https://github.com/iterative/datachain/issues/318 is done
+@pytest.mark.parametrize("cloud_type", ["s3", "gs", "azure"], indirect=True)
+def test_ls_not_a_directory(cloud_test_catalog, capsys):
     src = cloud_test_catalog.src_uri
     with pytest.raises(FileNotFoundError):
-        ls([src, f"{src}/description/"], catalog=cloud_test_catalog.catalog)
+        ls([f"{src}/description/"], catalog=cloud_test_catalog.catalog)
 
 
 def ls_glob_output(src, cloud_type):
     if cloud_type == "file":
-        root_uri = FileClient.root_path().as_uri()
-        prefix = src[len(root_uri) :]
-        return f"""\
-{prefix}/dogs/others:
-dog4
-
-{prefix}/dogs:
+        return """\
 dog1
 dog2
 dog3
+
+others:
+dog4
     """
 
     return """\
@@ -148,15 +141,7 @@ def list_dataset_name(uri, path):
 
 def test_ls_partial_indexing(cloud_test_catalog, cloud_type, capsys):
     catalog = cloud_test_catalog.catalog
-    metastore = catalog.metastore
     src = cloud_test_catalog.src_uri
-    if cloud_type == "file":
-        src_metastore = metastore.clone(FileClient.root_path().as_uri())
-        root_uri = FileClient.root_path().as_uri()
-        prefix = src[len(root_uri) :] + "/"
-    else:
-        src_metastore = metastore.clone(src)
-        prefix = ""
 
     ls([f"{src}/dogs/others/"], catalog=cloud_test_catalog.catalog)
     # These sleep calls are here to ensure that capsys can fully capture the output
@@ -169,7 +154,7 @@ def test_ls_partial_indexing(cloud_test_catalog, cloud_type, capsys):
     ls([f"{src}/cats/"], catalog=cloud_test_catalog.catalog)
     sleep(0.05)
     captured = capsys.readouterr()
-    assert sorted(l.name for l in catalog.listings()) == [
+    assert sorted(ls.name for ls in catalog.listings()) == [
         list_dataset_name(src, "cats/"),
         list_dataset_name(src, "dogs/others/"),
     ]
@@ -179,7 +164,7 @@ def test_ls_partial_indexing(cloud_test_catalog, cloud_type, capsys):
     ls([f"{src}/dogs/"], catalog=cloud_test_catalog.catalog)
     sleep(0.05)
     captured = capsys.readouterr()
-    assert sorted(l.name for l in catalog.listings()) == [
+    assert sorted(ls.name for ls in catalog.listings()) == [
         list_dataset_name(src, "cats/"),
         list_dataset_name(src, "dogs/"),
         list_dataset_name(src, "dogs/others/"),
@@ -190,7 +175,7 @@ def test_ls_partial_indexing(cloud_test_catalog, cloud_type, capsys):
     ls([f"{src}/cats/"], catalog=cloud_test_catalog.catalog)
     sleep(0.05)
     captured = capsys.readouterr()
-    assert sorted(l.name for l in catalog.listings()) == [
+    assert sorted(ls.name for ls in catalog.listings()) == [
         list_dataset_name(src, "cats/"),
         list_dataset_name(src, "dogs/"),
         list_dataset_name(src, "dogs/others/"),
@@ -201,7 +186,7 @@ def test_ls_partial_indexing(cloud_test_catalog, cloud_type, capsys):
     ls([f"{src}/"], catalog=cloud_test_catalog.catalog)
     sleep(0.05)
     captured = capsys.readouterr()
-    assert sorted(l.name for l in catalog.listings()) == [
+    assert sorted(ls.name for ls in catalog.listings()) == [
         list_dataset_name(src, ""),
         list_dataset_name(src, "cats/"),
         list_dataset_name(src, "dogs/"),

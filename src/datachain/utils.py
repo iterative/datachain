@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, Optional, TypeVar, Union
 from uuid import UUID
 
 import cloudpickle
+import platformdirs
 from dateutil import tz
 from dateutil.parser import isoparse
 from pydantic import BaseModel
@@ -25,6 +26,13 @@ if TYPE_CHECKING:
 NUL = b"\0"
 TIME_ZERO = datetime.fromtimestamp(0, tz=timezone.utc)
 
+APPNAME = "datachain"
+APPAUTHOR = "iterative"
+ENV_DATACHAIN_SYSTEM_CONFIG_DIR = "DATACHAIN_SYSTEM_CONFIG_DIR"
+ENV_DATACHAIN_GLOBAL_CONFIG_DIR = "DATACHAIN_GLOBAL_CONFIG_DIR"
+STUDIO_URL = "https://studio.dvc.ai"
+
+
 T = TypeVar("T", bound="DataChainDir")
 
 
@@ -33,6 +41,7 @@ class DataChainDir:
     CACHE = "cache"
     TMP = "tmp"
     DB = "db"
+    CONFIG = "config"
     ENV_VAR = "DATACHAIN_DIR"
     ENV_VAR_DATACHAIN_ROOT = "DATACHAIN_ROOT_DIR"
 
@@ -42,6 +51,7 @@ class DataChainDir:
         cache: Optional[str] = None,
         tmp: Optional[str] = None,
         db: Optional[str] = None,
+        config: Optional[str] = None,
     ) -> None:
         self.root = osp.abspath(root) if root is not None else self.default_root()
         self.cache = (
@@ -51,12 +61,24 @@ class DataChainDir:
             osp.abspath(tmp) if tmp is not None else osp.join(self.root, self.TMP)
         )
         self.db = osp.abspath(db) if db is not None else osp.join(self.root, self.DB)
+        self.config = (
+            osp.abspath(config)
+            if config is not None
+            else osp.join(self.root, self.CONFIG)
+        )
+        self.config = (
+            osp.abspath(config)
+            if config is not None
+            else osp.join(self.root, self.CONFIG)
+        )
 
     def init(self):
         os.makedirs(self.root, exist_ok=True)
         os.makedirs(self.cache, exist_ok=True)
         os.makedirs(self.tmp, exist_ok=True)
         os.makedirs(osp.split(self.db)[0], exist_ok=True)
+        os.makedirs(osp.split(self.config)[0], exist_ok=True)
+        os.makedirs(osp.split(self.config)[0], exist_ok=True)
 
     @classmethod
     def default_root(cls) -> str:
@@ -80,6 +102,18 @@ class DataChainDir:
             else:
                 raise NotADirectoryError(root)
         return instance
+
+
+def system_config_dir():
+    return os.getenv(ENV_DATACHAIN_SYSTEM_CONFIG_DIR) or platformdirs.site_config_dir(
+        APPNAME, APPAUTHOR
+    )
+
+
+def global_config_dir():
+    return os.getenv(ENV_DATACHAIN_GLOBAL_CONFIG_DIR) or platformdirs.user_config_dir(
+        APPNAME, APPAUTHOR
+    )
 
 
 def human_time_to_int(time: str) -> Optional[int]:
