@@ -86,55 +86,56 @@ class DirExpansion:
     def __init__(self, object_name: str):
         self.object_name = object_name
 
-    def col_name(self, name: str) -> str:
-        return col_name(name, self.object_name)
+    def col_name(self, name: str, object_name: Optional[str] = None) -> str:
+        object_name = object_name or self.object_name
+        return col_name(name, object_name)
 
-    def col(self, query, name: str) -> str:
-        return getattr(query.c, self.col_name(name))
+    def c(self, query, name: str, object_name: Optional[str] = None) -> str:
+        return getattr(query.c, self.col_name(name, object_name=object_name))
 
     def base_select(self, q):
         return sa.select(
-            q.c.sys__id,
+            self.c(q, "id", object_name="sys"),
             false().label(self.col_name("is_dir")),
-            self.col(q, "source"),
-            self.col(q, "path"),
-            self.col(q, "version"),
-            self.col(q, "location"),
+            self.c(q, "source"),
+            self.c(q, "path"),
+            self.c(q, "version"),
+            self.c(q, "location"),
         )
 
     def apply_group_by(self, q):
         return (
             sa.select(
                 f.min(q.c.sys__id).label("sys__id"),
-                self.col(q, "is_dir"),
-                self.col(q, "source"),
-                self.col(q, "path"),
-                self.col(q, "version"),
-                f.max(self.col(q, "location")).label(self.col_name("location")),
+                self.c(q, "is_dir"),
+                self.c(q, "source"),
+                self.c(q, "path"),
+                self.c(q, "version"),
+                f.max(self.c(q, "location")).label(self.col_name("location")),
             )
             .select_from(q)
             .group_by(
-                self.col(q, "source"),
-                self.col(q, "path"),
-                self.col(q, "is_dir"),
-                self.col(q, "version"),
+                self.c(q, "source"),
+                self.c(q, "path"),
+                self.c(q, "is_dir"),
+                self.c(q, "version"),
             )
             .order_by(
-                self.col(q, "source"),
-                self.col(q, "path"),
-                self.col(q, "is_dir"),
-                self.col(q, "version"),
+                self.c(q, "source"),
+                self.c(q, "path"),
+                self.c(q, "is_dir"),
+                self.c(q, "version"),
             )
         )
 
     def query(self, q):
         q = self.base_select(q).cte(recursive=True)
-        parent = path.parent(self.col(q, "path"))
+        parent = path.parent(self.c(q, "path"))
         q = q.union_all(
             sa.select(
                 sa.literal(-1).label("sys__id"),
                 true().label(self.col_name("is_dir")),
-                self.col(q, "source"),
+                self.c(q, "source"),
                 parent.label(self.col_name("path")),
                 sa.literal("").label(self.col_name("version")),
                 null().label(self.col_name("location")),
@@ -227,15 +228,12 @@ class DataTable:
     def columns(self) -> "ReadOnlyColumnCollection[str, sa.Column[Any]]":
         return self.table.columns
 
-    @property
-    def c(self):
-        return self.columns
+    def col_name(self, name: str, object_name: Optional[str] = None) -> str:
+        object_name = object_name or self.object_name
+        return col_name(name, object_name)
 
-    def col_name(self, name: str) -> str:
-        return col_name(name, self.object_name)
-
-    def col(self, name: str):
-        return getattr(self.c, self.col_name(name))
+    def c(self, name: str, object_name: Optional[str] = None):
+        return getattr(self.columns, self.col_name(name, object_name=object_name))
 
     @property
     def table(self) -> "sa.Table":

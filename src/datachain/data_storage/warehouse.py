@@ -331,55 +331,6 @@ class AbstractWarehouse(ABC, Serializable):
         self, dataset: DatasetRecord, version: int
     ) -> list[StorageURI]: ...
 
-    def nodes_dataset_query(
-        self,
-        dataset_rows: "DataTable",
-        *,
-        column_names: Iterable[str],
-        path: Optional[str] = None,
-        recursive: Optional[bool] = False,
-    ) -> "sa.Select":
-        """
-        Creates query pointing to certain bucket listing represented by dataset_rows
-        The given `column_names`
-        will be selected in the order they're given. `path` is a glob which
-        will select files in matching directories, or if `recursive=True` is
-        set then the entire tree under matching directories will be selected.
-        """
-        dr = dataset_rows
-
-        def _is_glob(path: str) -> bool:
-            return any(c in path for c in ["*", "?", "[", "]"])
-
-        column_objects = [dr.c[c] for c in column_names]
-        # include all object types - file, tar archive, tar file (subobject)
-        select_query = dr.select(*column_objects).where(dr.c.is_latest == true())
-        if path is None:
-            return select_query
-        if recursive:
-            root = False
-            where = dr.col("path").op("GLOB")(path)
-            if not path or path == "/":
-                # root of the bucket, e.g s3://bucket/ -> getting all the nodes
-                # in the bucket
-                root = True
-
-            if not root and not _is_glob(path):
-                # not a root and not a explicit glob, so it's pointing to some directory
-                # and we are adding a proper glob syntax for it
-                # e.g s3://bucket/dir1 -> s3://bucket/dir1/*
-                dir_path = path.rstrip("/") + "/*"
-                where = where | dr.col("path").op("GLOB")(dir_path)
-
-            if not root:
-                # not a root, so running glob query
-                select_query = select_query.where(where)
-
-        else:
-            parent = self.get_node_by_path(dr, path.lstrip("/").rstrip("/*"))
-            select_query = select_query.where(pathfunc.parent(dr.c.path) == parent.path)
-        return select_query
-
     def rename_dataset_table(
         self,
         old_name: str,
@@ -552,20 +503,20 @@ class AbstractWarehouse(ABC, Serializable):
         dr = dataset_rows
         de = dr.dir_expansion()
         q = de.query(
-            dr.select().where(dr.col("is_latest") == true()).subquery()
+            dr.select().where(dr.c("is_latest") == true()).subquery()
         ).subquery()
         path_glob = "/".join([*path_list, glob_name])
         dirpath = path_glob[: -len(glob_name)]
-        relpath = func.substr(de.col(q, "path"), len(dirpath) + 1)
+        relpath = func.substr(de.c(q, "path"), len(dirpath) + 1)
 
         return self.get_nodes(
             self.expand_query(de, q, dr)
             .where(
-                (de.col(q, "path").op("GLOB")(path_glob))
+                (de.c(q, "path").op("GLOB")(path_glob))
                 & ~self.instr(relpath, "/")
-                & (de.col(q, "path") != dirpath)
+                & (de.c(q, "path") != dirpath)
             )
-            .order_by(de.col(q, "source"), de.col(q, "path"), de.col(q, "version")),
+            .order_by(de.c(q, "source"), de.c(q, "path"), de.c(q, "version")),
             dr.object_name,
         )
 
@@ -579,13 +530,13 @@ class AbstractWarehouse(ABC, Serializable):
         dr = dataset_rows
         de = dr.dir_expansion()
         q = de.query(
-            dr.select().where(dr.col("is_latest") == true()).subquery(),
+            dr.select().where(dr.c("is_latest") == true()).subquery(),
             object_name=dr.object_name,
         ).subquery()
         q = self.expand_query(de, q, dr)
 
-        q = q.where(de.col(q, "path") == get_path(parent, name)).order_by(
-            de.col(q, "source"), de.col(q, "path"), de.col(q, "version")
+        q = q.where(de.c(q, "path") == get_path(parent, name)).order_by(
+            de.c(q, "source"), de.c(q, "path"), de.c(q, "version")
         )
         row = next(self.dataset_rows_select(q), None)
         if not row:
@@ -648,19 +599,22 @@ class AbstractWarehouse(ABC, Serializable):
 
         return sa.select(
             q.c.sys__id,
-            case(
-                (de.col(q, "is_dir") == true(), DirType.DIR), else_=DirType.FILE
-            ).label(dr.col_name("dir_type")),
-            de.col(q, "path"),
-            with_default(dr.col("etag")),
-            de.col(q, "version"),
-            with_default(dr.col("is_latest")),
-            dr.col("last_modified"),
-            with_default(dr.col("size")),
-            with_default(dr.c.sys__rand),
-            dr.col("location"),
-            de.col(q, "source"),
-        ).select_from(q.outerjoin(dr.table, q.c.sys__id == dr.c.sys__id))
+            case((de.c(q, "is_dir") == true(), DirType.DIR), else_=DirType.FILE).label(
+                dr.col_name("dir_type")
+            ),
+            de.c(q, "path"),
+            with_default(dr.c("etag")),
+            de.c(q, "version"),
+            with_default(dr.c("is_latest")),
+            dr.c("last_modified"),
+            with_default(dr.c("size")),
+            # with_default(dr.c.sys__rand),
+            with_default(dr.c("rand", object_name="sys")),
+            dr.c("location"),
+            de.c(q, "source"),
+        ).select_from(
+            q.outerjoin(dr.table, q.c.sys__id == dr.c("id", object_name="sys"))
+        )
 
     def get_node_by_path(self, dataset_rows: "DataTable", path: str) -> Node:
         """Gets node that corresponds to some path"""
@@ -669,8 +623,8 @@ class AbstractWarehouse(ABC, Serializable):
         dr = dataset_rows
         if not path.endswith("/"):
             query = dr.select().where(
-                dr.col("path") == path,
-                dr.col("is_latest") == true(),
+                dr.c("path") == path,
+                dr.c("is_latest") == true(),
             )
             node = next(self.get_nodes(query), None)
             if node:
@@ -679,8 +633,8 @@ class AbstractWarehouse(ABC, Serializable):
         query = sa.select(1).where(
             dr.select()
             .where(
-                dr.col("is_latest") == true(),
-                dr.col("path").startswith(path),
+                dr.c("is_latest") == true(),
+                dr.c("path").startswith(path),
             )
             .exists()
         )
@@ -711,24 +665,24 @@ class AbstractWarehouse(ABC, Serializable):
         dr = dataset_rows
         de = dr.dir_expansion()
         q = de.query(
-            dr.select().where(dr.col("is_latest") == true()).subquery()
+            dr.select().where(dr.c("is_latest") == true()).subquery()
         ).subquery()
-        where_cond = pathfunc.parent(de.col(q, "path")) == parent_path
+        where_cond = pathfunc.parent(de.c(q, "path")) == parent_path
         if parent_path == "":
             # Exclude the root dir
-            where_cond = where_cond & (de.col(q, "path") != "")
+            where_cond = where_cond & (de.c(q, "path") != "")
         inner_query = self.expand_query(de, q, dr).where(where_cond).subquery()
 
         def field_to_expr(f):
             if f == "name":
-                return pathfunc.name(de.col(inner_query, "path"))
-            return de.col(inner_query, f)
+                return pathfunc.name(de.c(inner_query, "path"))
+            return de.c(inner_query, f)
 
         return self.db.execute(
             select(*(field_to_expr(f) for f in fields)).order_by(
-                de.col(inner_query, "source"),
-                de.col(inner_query, "path"),
-                de.col(inner_query, "version"),
+                de.c(inner_query, "source"),
+                de.c(inner_query, "path"),
+                de.c(inner_query, "version"),
             )
         )
 
@@ -747,19 +701,17 @@ class AbstractWarehouse(ABC, Serializable):
 
         def field_to_expr(f):
             if f == "name":
-                return pathfunc.name(dr.col("path"))
-            return dr.col(f)
+                return pathfunc.name(dr.c("path"))
+            return dr.c(f)
 
         q = (
             select(*(field_to_expr(f) for f in fields))
             .where(
-                dr.col("path").like(f"{sql_escape_like(dirpath)}%"),
-                ~self.instr(pathfunc.name(dr.col("path")), "/"),
-                dr.col("is_latest") == true(),
+                dr.c("path").like(f"{sql_escape_like(dirpath)}%"),
+                ~self.instr(pathfunc.name(dr.c("path")), "/"),
+                dr.c("is_latest") == true(),
             )
-            .order_by(
-                dr.col("source"), dr.col("path"), dr.col("version"), dr.col("etag")
-            )
+            .order_by(dr.c("source"), dr.c("path"), dr.c("version"), dr.c("etag"))
         )
         return self.db.execute(q)
 
@@ -788,15 +740,14 @@ class AbstractWarehouse(ABC, Serializable):
         sub_glob = posixpath.join(path, "*")
         dr = dataset_rows
         selections: list[sa.ColumnElement] = [
-            func.sum(dr.col("size")),
+            func.sum(dr.c("size")),
         ]
         if count_files:
             selections.append(func.count())
         results = next(
             self.db.execute(
                 dr.select(*selections).where(
-                    (dr.col("path").op("GLOB")(sub_glob))
-                    & (dr.col("is_latest") == true())
+                    (dr.c("path").op("GLOB")(sub_glob)) & (dr.c("is_latest") == true())
                 )
             ),
             (0, 0),
@@ -821,10 +772,10 @@ class AbstractWarehouse(ABC, Serializable):
         dr = dataset_rows
         de = dr.dir_expansion()
         q = de.query(
-            dr.select().where(dr.col("is_latest") == true()).subquery()
+            dr.select().where(dr.c("is_latest") == true()).subquery()
         ).subquery()
         q = self.expand_query(de, q, dr).subquery()
-        path = de.col(q, "path")
+        path = de.c(q, "path")
 
         if parent_path:
             sub_glob = posixpath.join(parent_path, "*")

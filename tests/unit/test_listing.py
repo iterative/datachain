@@ -2,16 +2,16 @@ import posixpath
 
 import pytest
 
-from datachain.catalog import Catalog
 from datachain.catalog.catalog import DataSource
+from datachain.client import Client
+from datachain.lib.dc import DataChain
 from datachain.lib.file import File
 from datachain.lib.listing import (
     is_listing_dataset,
-    # is_listing_expired,
-    # is_listing_subset,
     listing_uri_from_name,
     parse_listing_uri,
 )
+from datachain.listing import Listing
 from datachain.node import DirType
 from tests.utils import skip_if_not_sqlite
 
@@ -36,14 +36,19 @@ def _tree_to_entries(tree: dict, path=""):
 
 
 @pytest.fixture
-def listing(id_generator, metastore, warehouse):
-    catalog = Catalog(
-        id_generator=id_generator, metastore=metastore, warehouse=warehouse
+def listing(test_session):
+    catalog = test_session.catalog
+    dataset_name, _ = DataChain.get_list_dataset_name("s3://whatever", test_session)
+    DataChain.from_values(file=list(_tree_to_entries(TREE))).save(
+        dataset_name, listing=True
     )
-    lst, _ = catalog.enlist_source("s3://whatever", 1234, skip_indexing=True)
-    lst.insert_entries(_tree_to_entries(TREE))
-    lst.insert_entries_done()
-    return lst
+
+    return Listing(
+        catalog.warehouse.clone(),
+        Client.get_client("s3://whatever", catalog.cache, **catalog.client_config),
+        catalog.get_dataset(dataset_name),
+        object_name="file",
+    )
 
 
 def test_resolve_path_in_root(listing):
@@ -200,31 +205,3 @@ def test_listing_uri_from_name():
     assert listing_uri_from_name("lst__s3://my-bucket") == "s3://my-bucket"
     with pytest.raises(ValueError):
         listing_uri_from_name("s3://my-bucket")
-
-
-"""
-@pytest.mark.parametrize(
-    "date,is_expired",
-    [
-        (datetime.now(timezone.utc), False),
-        (datetime.now(timezone.utc) - timedelta(seconds=LISTING_TTL + 1), True),
-    ],
-)
-def test_is_listing_expired(date, is_expired):
-    assert is_listing_expired(date) is is_expired
-
-
-@pytest.mark.parametrize(
-    "ds1_name,ds2_name,is_subset",
-    [
-        ("lst__s3://my-bucket/animals/", "lst__s3://my-bucket/animals/dogs/", True),
-        ("lst__s3://my-bucket/animals/", "lst__s3://my-bucket/animals/", True),
-        ("lst__s3://my-bucket/", "lst__s3://my-bucket/", True),
-        ("lst__s3://my-bucket/cats/", "lst__s3://my-bucket/animals/dogs/", False),
-        ("lst__s3://my-bucket/dogs/", "lst__s3://my-bucket/animals/", False),
-        ("lst__s3://my-bucket/animals/", "lst__s3://other-bucket/animals/", False),
-    ],
-)
-def test_listing_subset(ds1_name, ds2_name, is_subset):
-    assert is_listing_subset(ds1_name, ds2_name) is is_subset
-"""

@@ -4,13 +4,10 @@ from collections.abc import Iterable, Iterator
 from itertools import zip_longest
 from typing import TYPE_CHECKING, Optional
 
-from fsspec.asyn import get_loop, sync
 from sqlalchemy import Column
 from sqlalchemy.sql import func
 from tqdm import tqdm
 
-from datachain.data_storage.warehouse import col_name
-from datachain.lib.file import File
 from datachain.node import DirType, Node, NodeWithPath
 from datachain.sql.functions import path as pathfunc
 from datachain.utils import suffix_to_number
@@ -18,20 +15,18 @@ from datachain.utils import suffix_to_number
 if TYPE_CHECKING:
     from datachain.catalog.datasource import DataSource
     from datachain.client import Client
-    from datachain.data_storage import AbstractMetastore, AbstractWarehouse
+    from datachain.data_storage import AbstractWarehouse
     from datachain.dataset import DatasetRecord
 
 
 class Listing:
     def __init__(
         self,
-        metastore: "AbstractMetastore",
         warehouse: "AbstractWarehouse",
         client: "Client",
         dataset: Optional["DatasetRecord"],
         object_name: str = "file",
     ):
-        self.metastore = metastore
         self.warehouse = warehouse
         self.client = client
         self.dataset = dataset  # dataset representing bucket listing
@@ -39,7 +34,6 @@ class Listing:
 
     def clone(self) -> "Listing":
         return self.__class__(
-            self.metastore.clone(),
             self.warehouse.clone(),
             self.client,
             self.dataset,
@@ -53,14 +47,7 @@ class Listing:
         self.close()
 
     def close(self) -> None:
-        self.metastore.close()
         self.warehouse.close()
-
-    """
-    @property
-    def id(self):
-        return self.storage.id
-    """
 
     @property
     def uri(self):
@@ -74,36 +61,7 @@ class Listing:
             self.dataset, self.dataset.latest_version, object_name=self.object_name
         )
 
-    def fetch(self, start_prefix="", method: str = "default") -> None:
-        sync(get_loop(), self._fetch, start_prefix, method)
-
-    async def _fetch(self, start_prefix: str, method: str) -> None:
-        with self.clone() as fetch_listing:
-            if start_prefix:
-                start_prefix = start_prefix.rstrip("/")
-            try:
-                async for entries in fetch_listing.client.scandir(
-                    start_prefix, method=method
-                ):
-                    fetch_listing.insert_entries(entries)
-                    if len(entries) > 1:
-                        fetch_listing.metastore.update_last_inserted_at()
-            finally:
-                fetch_listing.insert_entries_done()
-
-    def insert_entry(self, entry: File) -> None:
-        self.insert_entries([entry])
-
-    def insert_entries(self, entries: Iterable[File]) -> None:
-        self.warehouse.insert_rows(
-            self.dataset_rows.get_table(),
-            self.warehouse.prepare_entries(entries),
-        )
-
-    def insert_entries_done(self) -> None:
-        self.warehouse.insert_rows_done(self.dataset_rows.get_table())
-
-    def expand_path(self, path, use_glob=True) -> list[File]:
+    def expand_path(self, path, use_glob=True) -> list[Node]:
         if use_glob and glob.has_magic(path):
             return self.warehouse.expand_path(self.dataset_rows, path)
         return [self.resolve_path(path)]
@@ -210,29 +168,31 @@ class Listing:
         conds = []
         if names:
             for name in names:
-                conds.append(pathfunc.name(Column(col_name("path"))).op("GLOB")(name))
+                conds.append(
+                    pathfunc.name(Column(dr.col_name("path"))).op("GLOB")(name)
+                )
         if inames:
             for iname in inames:
                 conds.append(
-                    func.lower(pathfunc.name(Column(col_name("path")))).op("GLOB")(
+                    func.lower(pathfunc.name(Column(dr.col_name("path")))).op("GLOB")(
                         iname.lower()
                     )
                 )
         if paths:
             for path in paths:
-                conds.append(Column(col_name("path")).op("GLOB")(path))
+                conds.append(Column(dr.col_name("path")).op("GLOB")(path))
         if ipaths:
             for ipath in ipaths:
                 conds.append(
-                    func.lower(Column(col_name("path"))).op("GLOB")(ipath.lower())
+                    func.lower(Column(dr.col_name("path"))).op("GLOB")(ipath.lower())
                 )
 
         if size is not None:
             size_limit = suffix_to_number(size)
             if size_limit >= 0:
-                conds.append(Column(col_name("size")) >= size_limit)
+                conds.append(Column(dr.col_name("size")) >= size_limit)
             else:
-                conds.append(Column(col_name("size")) <= -size_limit)
+                conds.append(Column(dr.col_name("size")) <= -size_limit)
 
         return self.warehouse.find(
             dr,

@@ -643,7 +643,7 @@ class SQLiteWarehouse(AbstractWarehouse):
         self, dataset: DatasetRecord, version: int
     ) -> list[StorageURI]:
         dr = self.dataset_rows(dataset, version)
-        query = dr.select(dr.c.file__source).distinct()
+        query = dr.select(dr.c("source", object_name="file")).distinct()
         cur = self.db.cursor()
         cur.row_factory = sqlite3.Row  # type: ignore[assignment]
 
@@ -671,13 +671,13 @@ class SQLiteWarehouse(AbstractWarehouse):
             # destination table doesn't exist, create it
             self.create_dataset_rows_table(
                 self.dataset_table_name(dst.name, dst_version),
-                columns=src_dr.c,
+                columns=src_dr.columns,
             )
             dst_empty = True
 
         dst_dr = self.dataset_rows(dst, dst_version).table
-        merge_fields = [c.name for c in src_dr.c if c.name != "sys__id"]
-        select_src = select(*(getattr(src_dr.c, f) for f in merge_fields))
+        merge_fields = [c.name for c in src_dr.columns if c.name != "sys__id"]
+        select_src = select(*(getattr(src_dr.columns, f) for f in merge_fields))
 
         if dst_empty:
             # we don't need union, but just select from source to destination

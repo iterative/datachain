@@ -50,7 +50,7 @@ def test_dir_expansion(cloud_test_catalog, version_aware, cloud_type):
     with catalog.warehouse.clone() as warehouse:
         dr = warehouse.dataset_rows(dataset, object_name="file")
         de = dr.dir_expansion()
-        q = de.query(dr)
+        q = de.query(dr.get_table())
 
         columns = (
             "id",

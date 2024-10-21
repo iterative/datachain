@@ -614,7 +614,6 @@ class Catalog:
         dataset_name, _ = DataChain.get_list_dataset_name(source, session)
 
         lst = Listing(
-            self.metastore.clone(),
             self.warehouse.clone(),
             Client.get_client(source, self.cache, **self.client_config),
             self.get_dataset(dataset_name),
@@ -712,10 +711,9 @@ class Catalog:
 
                     client = self.get_client(source, **client_config)
                     uri = client.uri
-                    ms = self.metastore.clone(uri, None)
                     st = self.warehouse.clone()
                     dataset_name, _ = DataChain.get_list_dataset_name(uri, self.session)
-                    listing = Listing(ms, st, client, self.get_dataset(dataset_name))
+                    listing = Listing(st, client, self.get_dataset(dataset_name))
                     rows = DatasetQuery(
                         name=dataset.name, version=ds_version, catalog=self
                     ).to_db_records()
