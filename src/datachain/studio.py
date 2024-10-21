@@ -1,8 +1,10 @@
 import os
 from typing import TYPE_CHECKING
 
+from datachain.catalog.catalog import raise_remote_error
 from datachain.config import Config, ConfigLevel
 from datachain.error import DataChainError
+from datachain.remote.studio import StudioClient
 from datachain.utils import STUDIO_URL
 
 if TYPE_CHECKING:
@@ -21,6 +23,8 @@ def process_studio_cli_args(args: "Namespace"):
         return logout()
     if args.cmd == "token":
         return token()
+    if args.cmd == "ls-datasets":
+        return list_datasets(args)
     if args.cmd == "team":
         return set_team(args)
     raise DataChainError(f"Unknown command '{args.cmd}'.")
@@ -44,7 +48,7 @@ def login(args: "Namespace"):
     name = args.name
     hostname = (
         args.hostname
-        or os.environ.get("DVC_STUDIO_HOSTNAME")
+        or os.environ.get("DVC_STUDIO_URL")
         or config.get("url")
         or STUDIO_URL
     )
@@ -97,6 +101,19 @@ def token():
         )
 
     print(token)
+
+
+def list_datasets(args: "Namespace"):
+    client = StudioClient(team=args.team)
+    response = client.ls_datasets()
+    if not response.ok:
+        raise_remote_error(response.message)
+    if not response.data:
+        print("No datasets found.")
+        return
+    for d in response.data:
+        for v in d.get("versions", []):
+            print(f"{d.get("name")} (v{v.get("version")})")
 
 
 def save_config(hostname, token):

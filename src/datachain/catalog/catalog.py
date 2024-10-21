@@ -35,7 +35,6 @@ from tqdm import tqdm
 
 from datachain.cache import DataChainCache
 from datachain.client import Client
-from datachain.config import Config
 from datachain.dataset import (
     DATASET_PREFIX,
     QUERY_DATASET_PREFIX,
@@ -102,7 +101,7 @@ PULL_DATASET_SLEEP_INTERVAL = 0.1  # sleep time while waiting for chunk to be av
 PULL_DATASET_CHECK_STATUS_INTERVAL = 20  # interval to check export status in Studio
 
 
-def _raise_remote_error(error_message: str) -> NoReturn:
+def raise_remote_error(error_message: str) -> NoReturn:
     raise DataChainError(f"Error from server: {error_message}")
 
 
@@ -130,7 +129,6 @@ class DatasetRowsFetcher(NodesThreadPool):
         self,
         metastore: "AbstractMetastore",
         warehouse: "AbstractWarehouse",
-        remote_config: dict[str, Any],
         dataset_name: str,
         dataset_version: int,
         schema: dict[str, Union[SQLType, type[SQLType]]],
@@ -144,10 +142,7 @@ class DatasetRowsFetcher(NodesThreadPool):
         self.dataset_version = dataset_version
         self.schema = schema
         self.last_status_check: Optional[float] = None
-
-        self.studio_client = StudioClient(
-            remote_config["url"], remote_config["username"], remote_config["token"]
-        )
+        self.studio_client = StudioClient()
 
     def done_task(self, done):
         for task in done:
@@ -181,14 +176,14 @@ class DatasetRowsFetcher(NodesThreadPool):
             self.dataset_name, self.dataset_version
         )
         if not export_status_response.ok:
-            _raise_remote_error(export_status_response.message)
+            raise_remote_error(export_status_response.message)
 
         export_status = export_status_response.data["status"]  # type: ignore [index]
 
         if export_status == "failed":
-            _raise_remote_error("Dataset export failed in Studio")
+            raise_remote_error("Dataset export failed in Studio")
         if export_status == "removed":
-            _raise_remote_error("Dataset export removed in Studio")
+            raise_remote_error("Dataset export removed in Studio")
 
         self.last_status_check = time.time()
 
@@ -1239,15 +1234,12 @@ class Catalog:
     def get_dataset(self, name: str) -> DatasetRecord:
         return self.metastore.get_dataset(name)
 
-    def get_remote_dataset(self, name: str, *, remote_config=None) -> DatasetRecord:
-        remote_config = remote_config or Config().get_remote_config(remote="")
-        studio_client = StudioClient(
-            remote_config["url"], remote_config["username"], remote_config["token"]
-        )
+    def get_remote_dataset(self, name: str) -> DatasetRecord:
+        studio_client = StudioClient()
 
         info_response = studio_client.dataset_info(name)
         if not info_response.ok:
-            _raise_remote_error(info_response.message)
+            raise_remote_error(info_response.message)
 
         dataset_info = info_response.data
         assert isinstance(dataset_info, dict)
@@ -1455,7 +1447,6 @@ class Catalog:
         edatachain_file: Optional[str] = None,
         *,
         client_config=None,
-        remote_config=None,
     ) -> None:
         # TODO add progress bar https://github.com/iterative/dvcx/issues/750
         # TODO copy correct remote dates https://github.com/iterative/dvcx/issues/new
@@ -1477,11 +1468,8 @@ class Catalog:
             raise ValueError("Please provide output directory for instantiation")
 
         client_config = client_config or self.client_config
-        remote_config = remote_config or Config().get_remote_config(remote="")
 
-        studio_client = StudioClient(
-            remote_config["url"], remote_config["username"], remote_config["token"]
-        )
+        studio_client = StudioClient()
 
         try:
             remote_dataset_name, version = parse_dataset_uri(dataset_uri)
@@ -1495,9 +1483,7 @@ class Catalog:
             # we will create new one if it doesn't exist
             pass
 
-        remote_dataset = self.get_remote_dataset(
-            remote_dataset_name, remote_config=remote_config
-        )
+        remote_dataset = self.get_remote_dataset(remote_dataset_name)
         # if version is not specified in uri, take the latest one
         if not version:
             version = remote_dataset.latest_version
@@ -1522,7 +1508,7 @@ class Catalog:
 
         stats_response = studio_client.dataset_stats(remote_dataset_name, version)
         if not stats_response.ok:
-            _raise_remote_error(stats_response.message)
+            raise_remote_error(stats_response.message)
         dataset_stats = stats_response.data
 
         dataset_save_progress_bar = tqdm(
@@ -1554,7 +1540,7 @@ class Catalog:
             remote_dataset_name, version
         )
         if not export_response.ok:
-            _raise_remote_error(export_response.message)
+            raise_remote_error(export_response.message)
 
         signed_urls = export_response.data
 
@@ -1568,7 +1554,6 @@ class Catalog:
                 rows_fetcher = DatasetRowsFetcher(
                     metastore,
                     warehouse,
-                    remote_config,
                     dataset.name,
                     version,
                     schema,
