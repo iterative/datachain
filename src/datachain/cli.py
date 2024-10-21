@@ -174,6 +174,30 @@ def add_studio_parser(subparsers, parent_parser) -> None:
         help=studio_logout_help,
     )
 
+    studio_team_help = "Set the default team for Datachain"
+    studio_team_description = (
+        "Set the default team for Datachain to use when interacting with Studio."
+    )
+
+    team_parser = studio_subparser.add_parser(
+        "team",
+        parents=[parent_parser],
+        description=studio_team_description,
+        help=studio_team_help,
+    )
+    # Add a positional argument for the team name
+    team_parser.add_argument(
+        "team_name",
+        action="store",
+        help="The name of the team to set as the default.",
+    )
+    team_parser.add_argument(
+        "--global",
+        action="store_true",
+        default=False,
+        help="Set the team globally for all Datachain projects.",
+    )
+
     studio_token_help = "View the token datachain uses to contact Studio"  # noqa: S105 # nosec B105
 
     studio_subparser.add_parser(

@@ -21,7 +21,20 @@ def process_studio_cli_args(args: "Namespace"):
         return logout()
     if args.cmd == "token":
         return token()
+    if args.cmd == "team":
+        return set_team(args)
     raise DataChainError(f"Unknown command '{args.cmd}'.")
+
+
+def set_team(args: "Namespace"):
+    level = ConfigLevel.GLOBAL if args.__dict__.get("global") else ConfigLevel.LOCAL
+    config = Config(level)
+    with config.edit() as conf:
+        studio_conf = conf.get("studio", {})
+        studio_conf["team"] = args.team_name
+        conf["studio"] = studio_conf
+
+    print(f"Set default team to '{args.team_name}' in {config.config_file()}")
 
 
 def login(args: "Namespace"):
