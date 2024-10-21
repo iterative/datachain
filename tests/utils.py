@@ -212,3 +212,23 @@ def assert_row_names(
 def images_equal(img1: Image.Image, img2: Image.Image):
     """Checks if two image objects have exactly the same data"""
     return list(img1.getdata()) == list(img2.getdata())
+
+
+def sorted_dicts(list_of_dicts, *keys):
+    return sorted(list_of_dicts, key=lambda x: tuple(x[k] for k in keys))
+
+
+class ANY_VALUE:  # noqa: N801
+    """A helper object that compares equal to any value from the list."""
+
+    def __init__(self, *args):
+        self.values = args
+
+    def __eq__(self, other) -> bool:
+        return other in self.values
+
+    def __ne__(self, other) -> bool:
+        return other not in self.values
+
+    def __repr__(self) -> str:
+        return f"<ANY_VALUE: {', '.join(repr(val) for val in self.values)}>"

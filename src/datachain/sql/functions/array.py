@@ -44,15 +44,7 @@ class sip_hash_64(GenericFunction):  # noqa: N801
     inherit_cache = True
 
 
-class avg(GenericFunction):  # noqa: N801
-    type = Float()
-    package = "array"
-    name = "avg"
-    inherit_cache = True
-
-
 compiler_not_implemented(cosine_distance)
 compiler_not_implemented(euclidean_distance)
 compiler_not_implemented(length)
 compiler_not_implemented(sip_hash_64)
-compiler_not_implemented(avg)

@@ -15,23 +15,33 @@ import pytz
 from PIL import Image
 from sqlalchemy import Column
 
+from datachain import DataModel
 from datachain.catalog.catalog import QUERY_SCRIPT_CANCELED_EXIT_CODE
 from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.dataset import DatasetDependencyType, DatasetStats
-from datachain.lib.dc import C, DataChain, DataChainColumnError
+from datachain.lib.dc import C, DataChain
 from datachain.lib.file import File, ImageFile
-from datachain.lib.listing import (
-    LISTING_TTL,
-    is_listing_dataset,
-    parse_listing_uri,
-)
+from datachain.lib.listing import LISTING_TTL, is_listing_dataset, parse_listing_uri
 from datachain.lib.tar import process_tar
 from datachain.lib.udf import Mapper
-from datachain.lib.utils import DataChainError
+from datachain.lib.utils import DataChainColumnError, DataChainError
 from datachain.query.dataset import QueryStep
 from datachain.sql.functions import path as pathfunc
 from datachain.sql.functions.array import cosine_distance, euclidean_distance
-from tests.utils import NUM_TREE, TARRED_TREE, images_equal, text_embedding
+from tests.utils import (
+    ANY_VALUE,
+    NUM_TREE,
+    TARRED_TREE,
+    images_equal,
+    sorted_dicts,
+    text_embedding,
+)
+
+DF_DATA = {
+    "first_name": ["Alice", "Bob", "Charlie", "David", "Eva"],
+    "age": [25, 30, 35, 40, 45],
+    "city": ["New York", "Los Angeles", "Chicago", "Houston", "Phoenix"],
+}
 
 
 def _get_listing_datasets(session):
@@ -1307,3 +1317,191 @@ def test_datachain_save_with_job(test_session, catalog, datachain_job_id):
     dataset = catalog.get_dataset("my-ds")
     result_job_id = dataset.get_version(dataset.latest_version).job_id
     assert result_job_id == datachain_job_id
+
+
+@pytest.mark.parametrize("partition_by", ["file_info.path", "file_info__path"])
+@pytest.mark.parametrize("signal_name", ["file.size", "file__size"])
+def test_group_by_signals(cloud_test_catalog, partition_by, signal_name):
+    from datachain import func
+
+    session = cloud_test_catalog.session
+    src_uri = cloud_test_catalog.src_uri
+
+    class FileInfo(DataModel):
+        path: str = ""
+        name: str = ""
+
+    def file_info(file: File) -> FileInfo:
+        full_path = file.source.rstrip("/") + "/" + file.path
+        rel_path = posixpath.relpath(full_path, src_uri)
+        path_parts = rel_path.split("/", 1)
+        return FileInfo(
+            path=path_parts[0] if len(path_parts) > 1 else "",
+            name=path_parts[1] if len(path_parts) > 1 else path_parts[0],
+        )
+
+    ds = (
+        DataChain.from_storage(src_uri, session=session)
+        .map(file_info, params=["file"], output={"file_info": FileInfo})
+        .group_by(
+            cnt=func.count(),
+            sum=func.sum(signal_name),
+            value=func.any_value(signal_name),
+            partition_by=partition_by,
+        )
+        .save("my-ds")
+    )
+
+    assert ds.signals_schema.serialize() == {
+        "file_info__path": "str",
+        "cnt": "int",
+        "sum": "int",
+        "value": "int",
+    }
+    assert sorted_dicts(ds.to_records(), "file_info__path") == sorted_dicts(
+        [
+            {"file_info__path": "", "cnt": 1, "sum": 13, "value": ANY_VALUE(13)},
+            {"file_info__path": "cats", "cnt": 2, "sum": 8, "value": ANY_VALUE(4)},
+            {"file_info__path": "dogs", "cnt": 4, "sum": 15, "value": ANY_VALUE(3, 4)},
+        ],
+        "file_info__path",
+    )
+
+
+@pytest.mark.parametrize("partition_by", ["file_info.path", "file_info__path"])
+@pytest.mark.parametrize("order_by", ["file_info.name", "file_info__name"])
+def test_window_signals(cloud_test_catalog, partition_by, order_by):
+    from datachain import func
+
+    session = cloud_test_catalog.session
+    src_uri = cloud_test_catalog.src_uri
+
+    class FileInfo(DataModel):
+        path: str = ""
+        name: str = ""
+
+    def file_info(file: File) -> FileInfo:
+        full_path = file.source.rstrip("/") + "/" + file.path
+        rel_path = posixpath.relpath(full_path, src_uri)
+        path_parts = rel_path.split("/", 1)
+        return FileInfo(
+            path=path_parts[0] if len(path_parts) > 1 else "",
+            name=path_parts[1] if len(path_parts) > 1 else path_parts[0],
+        )
+
+    window = func.window(partition_by=partition_by, order_by=order_by, desc=True)
+
+    ds = (
+        DataChain.from_storage(src_uri, session=session)
+        .map(file_info, params=["file"], output={"file_info": FileInfo})
+        .mutate(row_number=func.row_number().over(window))
+        .save("my-ds")
+    )
+
+    results = {}
+    for r in ds.to_records():
+        filename = (
+            r["file_info__path"] + "/" + r["file_info__name"]
+            if r["file_info__path"]
+            else r["file_info__name"]
+        )
+        results[filename] = r["row_number"]
+
+    assert results == {
+        "cats/cat2": 1,
+        "cats/cat1": 2,
+        "description": 1,
+        "dogs/others/dog4": 1,
+        "dogs/dog3": 2,
+        "dogs/dog2": 3,
+        "dogs/dog1": 4,
+    }
+
+
+def test_window_signals_random(cloud_test_catalog):
+    from datachain import func
+
+    session = cloud_test_catalog.session
+    src_uri = cloud_test_catalog.src_uri
+
+    class FileInfo(DataModel):
+        path: str = ""
+        name: str = ""
+
+    def file_info(file: File) -> FileInfo:
+        full_path = file.source.rstrip("/") + "/" + file.path
+        rel_path = posixpath.relpath(full_path, src_uri)
+        path_parts = rel_path.split("/", 1)
+        return FileInfo(
+            path=path_parts[0] if len(path_parts) > 1 else "",
+            name=path_parts[1] if len(path_parts) > 1 else path_parts[0],
+        )
+
+    window = func.window(partition_by="file_info.path", order_by="sys.rand")
+
+    ds = (
+        DataChain.from_storage(src_uri, session=session)
+        .map(file_info, params=["file"], output={"file_info": FileInfo})
+        .mutate(row_number=func.row_number().over(window))
+        .filter(C("row_number") < 3)
+        .select_except("row_number")
+        .save("my-ds")
+    )
+
+    results = {}
+    for r in ds.to_records():
+        results.setdefault(r["file_info__path"], []).append(r["file_info__name"])
+
+    assert results[""] == ["description"]
+    assert sorted(results["cats"]) == sorted(["cat1", "cat2"])
+
+    assert len(results["dogs"]) == 2
+    all_dogs = ["dog1", "dog2", "dog3", "others/dog4"]
+    for dog in results["dogs"]:
+        assert dog in all_dogs
+        all_dogs.remove(dog)
+    assert len(all_dogs) == 2
+
+
+def test_to_from_csv_remote(cloud_test_catalog_upload):
+    ctc = cloud_test_catalog_upload
+    path = f"{ctc.src_uri}/test.csv"
+
+    df = pd.DataFrame(DF_DATA)
+    dc_to = DataChain.from_pandas(df, session=ctc.session)
+    dc_to.to_csv(path)
+
+    dc_from = DataChain.from_csv(path, session=ctc.session)
+    df1 = dc_from.select("first_name", "age", "city").to_pandas()
+    assert df1.equals(df)
+
+
+@pytest.mark.parametrize("chunk_size", (1000, 2))
+@pytest.mark.parametrize("kwargs", ({}, {"compression": "gzip"}))
+def test_to_from_parquet_remote(cloud_test_catalog_upload, chunk_size, kwargs):
+    ctc = cloud_test_catalog_upload
+    path = f"{ctc.src_uri}/test.parquet"
+
+    df = pd.DataFrame(DF_DATA)
+    dc_to = DataChain.from_pandas(df, session=ctc.session)
+    dc_to.to_parquet(path, chunk_size=chunk_size, **kwargs)
+
+    dc_from = DataChain.from_parquet(path, session=ctc.session)
+    df1 = dc_from.select("first_name", "age", "city").to_pandas()
+
+    assert df1.equals(df)
+
+
+@pytest.mark.parametrize("chunk_size", (1000, 2))
+def test_to_from_parquet_partitioned_remote(cloud_test_catalog_upload, chunk_size):
+    ctc = cloud_test_catalog_upload
+    path = f"{ctc.src_uri}/parquets"
+
+    df = pd.DataFrame(DF_DATA)
+    dc_to = DataChain.from_pandas(df, session=ctc.session)
+    dc_to.to_parquet(path, partition_cols=["first_name"], chunk_size=chunk_size)
+
+    dc_from = DataChain.from_parquet(path, session=ctc.session)
+    df1 = dc_from.select("first_name", "age", "city").to_pandas()
+    df1 = df1.sort_values("first_name").reset_index(drop=True)
+    assert df1.equals(df)

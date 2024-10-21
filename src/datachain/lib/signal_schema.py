@@ -27,6 +27,7 @@ from datachain.lib.convert.sql_to_python import sql_to_python
 from datachain.lib.convert.unflatten import unflatten_to_json_pos
 from datachain.lib.data_model import DataModel, DataType, DataValue
 from datachain.lib.file import File
+from datachain.lib.func import Func
 from datachain.lib.model_store import ModelStore
 from datachain.lib.utils import DataChainParamsError
 from datachain.query.schema import DEFAULT_DELIMITER, Column
@@ -400,6 +401,12 @@ class SignalSchema:
             if ModelStore.is_pydantic(finfo.annotation):
                 SignalSchema._set_file_stream(getattr(obj, field), catalog, cache)
 
+    def get_column_type(self, col_name: str) -> DataType:
+        for path, _type, has_subtree, _ in self.get_flat_tree():
+            if not has_subtree and DEFAULT_DELIMITER.join(path) == col_name:
+                return _type
+        raise SignalResolvingError([col_name], "is not found")
+
     def db_signals(
         self, name: Optional[str] = None, as_columns=False
     ) -> Union[list[str], list[Column]]:
@@ -488,9 +495,12 @@ class SignalSchema:
                 # changing the type of existing signal, e.g File -> ImageFile
                 del new_values[name]
                 new_values[name] = args_map[name]
+            elif isinstance(value, Func):
+                # adding new signal with function
+                new_values[name] = value.get_result_type(self)
             else:
                 # adding new signal
-                new_values.update(sql_to_python({name: value}))
+                new_values[name] = sql_to_python(value)
 
         return SignalSchema(new_values)
 
@@ -534,12 +544,12 @@ class SignalSchema:
             for name, val in values.items()
         }
 
-    def get_flat_tree(self) -> Iterator[tuple[list[str], type, bool, int]]:
+    def get_flat_tree(self) -> Iterator[tuple[list[str], DataType, bool, int]]:
         yield from self._get_flat_tree(self.tree, [], 0)
 
     def _get_flat_tree(
         self, tree: dict, prefix: list[str], depth: int
-    ) -> Iterator[tuple[list[str], type, bool, int]]:
+    ) -> Iterator[tuple[list[str], DataType, bool, int]]:
         for name, (type_, substree) in tree.items():
             suffix = name.split(".")
             new_prefix = prefix + suffix

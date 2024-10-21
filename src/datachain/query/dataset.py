@@ -591,10 +591,6 @@ class UDFSignal(UDFStep):
             return query, []
         table = self.catalog.warehouse.create_pre_udf_table(query)
         q: Select = sqlalchemy.select(*table.c)
-        if query._order_by_clauses:
-            # we are adding ordering only if it's explicitly added by user in
-            # query part before adding signals
-            q = q.order_by(table.c.sys__id)
         return q, [table]
 
     def create_result_query(
@@ -630,11 +626,6 @@ class UDFSignal(UDFStep):
             else:
                 res = sqlalchemy.select(*cols1).select_from(subq)
 
-            if query._order_by_clauses:
-                # if ordering is used in query part before adding signals, we
-                # will have it as order by id from select from pre-created udf table
-                res = res.order_by(subq.c.sys__id)
-
             if self.partition_by is not None:
                 subquery = res.subquery()
                 res = sqlalchemy.select(*subquery.c).select_from(subquery)
@@ -666,13 +657,6 @@ class RowGenerator(UDFStep):
     def create_result_query(
         self, udf_table, query: Select
     ) -> tuple[QueryGeneratorFunc, list["sqlalchemy.Column"]]:
-        if not query._order_by_clauses:
-            # if we are not selecting all rows in UDF, we need to ensure that
-            # we get the same rows as we got as inputs of UDF since selecting
-            # without ordering can be non deterministic in some databases
-            c = query.selected_columns
-            query = query.order_by(c.sys__id)
-
         udf_table_query = udf_table.select().subquery()
         udf_table_cols: list[sqlalchemy.Label[Any]] = [
             label(c.name, c) for c in udf_table_query.columns
@@ -957,24 +941,24 @@ class SQLJoin(Step):
 
 
 @frozen
-class GroupBy(Step):
-    """Group rows by a specific column."""
+class SQLGroupBy(SQLClause):
+    cols: Sequence[Union[str, ColumnElement]]
+    group_by: Sequence[Union[str, ColumnElement]]
 
-    cols: PartitionByType
+    def apply_sql_clause(self, query) -> Select:
+        if not self.cols:
+            raise ValueError("No columns to select")
+        if not self.group_by:
+            raise ValueError("No columns to group by")
 
-    def clone(self) -> "Self":
-        return self.__class__(self.cols)
+        subquery = query.subquery()
 
-    def apply(
-        self, query_generator: QueryGenerator, temp_tables: list[str]
-    ) -> StepResult:
-        query = query_generator.select()
-        grouped_query = query.group_by(*self.cols)
+        cols = [
+            subquery.c[str(c)] if isinstance(c, (str, C)) else c
+            for c in [*self.group_by, *self.cols]
+        ]
 
-        def q(*columns):
-            return grouped_query.with_only_columns(*columns)
-
-        return step_result(q, grouped_query.selected_columns)
+        return sqlalchemy.select(*cols).select_from(subquery).group_by(*self.group_by)
 
 
 def _validate_columns(
@@ -1130,23 +1114,12 @@ class DatasetQuery:
             query.steps = query.steps[-1:] + query.steps[:-1]
 
         result = query.starting_step.apply()
-        group_by = None
         self.dependencies.update(result.dependencies)
 
         for step in query.steps:
-            if isinstance(step, GroupBy):
-                if group_by is not None:
-                    raise TypeError("only one group_by allowed")
-                group_by = step
-                continue
-
             result = step.apply(
                 result.query_generator, self.temp_table_names
             )  # a chain of steps linked by results
-            self.dependencies.update(result.dependencies)
-
-        if group_by:
-            result = group_by.apply(result.query_generator, self.temp_table_names)
             self.dependencies.update(result.dependencies)
 
         return result.query_generator
@@ -1410,9 +1383,13 @@ class DatasetQuery:
         return query.as_scalar()
 
     @detach
-    def group_by(self, *cols: ColumnElement) -> "Self":
+    def group_by(
+        self,
+        cols: Sequence[ColumnElement],
+        group_by: Sequence[ColumnElement],
+    ) -> "Self":
         query = self.clone()
-        query.steps.append(GroupBy(cols))
+        query.steps.append(SQLGroupBy(cols, group_by))
         return query
 
     @detach
@@ -1590,6 +1567,8 @@ class DatasetQuery:
                 **kwargs,
             )
             version = version or dataset.latest_version
+
+            self.session.add_dataset_version(dataset=dataset, version=version)
 
             dr = self.catalog.warehouse.dataset_rows(dataset)
 

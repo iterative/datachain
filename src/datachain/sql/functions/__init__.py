@@ -1,7 +1,7 @@
 from sqlalchemy.sql.expression import func
 
 from . import array, path, string
-from .array import avg
+from .aggregate import avg
 from .conditional import greatest, least
 from .random import rand
 

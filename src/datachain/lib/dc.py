@@ -1,6 +1,8 @@
 import copy
 import os
+import os.path
 import re
+import sys
 from collections.abc import Iterator, Sequence
 from functools import wraps
 from typing import (
@@ -31,6 +33,7 @@ from datachain.lib.data_model import DataModel, DataType, dict_to_data_model
 from datachain.lib.dataset_info import DatasetInfo
 from datachain.lib.file import ArrowRow, File, get_file_type
 from datachain.lib.file import ExportPlacement as FileExportPlacement
+from datachain.lib.func import Func
 from datachain.lib.listing import (
     is_listing_dataset,
     is_listing_expired,
@@ -44,26 +47,18 @@ from datachain.lib.meta_formats import read_meta, read_schema
 from datachain.lib.model_store import ModelStore
 from datachain.lib.settings import Settings
 from datachain.lib.signal_schema import SignalSchema
-from datachain.lib.udf import (
-    Aggregator,
-    BatchMapper,
-    Generator,
-    Mapper,
-    UDFBase,
-)
+from datachain.lib.udf import Aggregator, BatchMapper, Generator, Mapper, UDFBase
 from datachain.lib.udf_signature import UdfSignature
-from datachain.lib.utils import DataChainParamsError
+from datachain.lib.utils import DataChainColumnError, DataChainParamsError
 from datachain.query import Session
-from datachain.query.dataset import (
-    DatasetQuery,
-    PartitionByType,
-)
-from datachain.query.schema import DEFAULT_DELIMITER, Column, DatasetRow
+from datachain.query.dataset import DatasetQuery, PartitionByType
+from datachain.query.schema import DEFAULT_DELIMITER, Column, ColumnMeta
 from datachain.sql.functions import path as pathfunc
 from datachain.telemetry import telemetry
 from datachain.utils import batched_it, inside_notebook
 
 if TYPE_CHECKING:
+    from pyarrow import DataType as ArrowDataType
     from typing_extensions import Concatenate, ParamSpec, Self
 
     from datachain.lib.hf import HFDatasetType
@@ -148,11 +143,6 @@ class DatasetMergeError(DataChainParamsError):  # noqa: D101
             else ""
         )
         super().__init__(f"Merge error on='{on_str}'{right_on_str}: {msg}")
-
-
-class DataChainColumnError(DataChainParamsError):  # noqa: D101
-    def __init__(self, col_name, msg):  # noqa: D107
-        super().__init__(f"Error for column {col_name}: {msg}")
 
 
 OutputType = Union[None, DataType, Sequence[str], dict[str, DataType]]
@@ -988,10 +978,9 @@ class DataChain:
         row is left in the result set.
 
         Example:
-        ```py
-         dc.distinct("file.parent", "file.name")
-        )
-        ```
+            ```py
+            dc.distinct("file.parent", "file.name")
+            ```
         """
         return self._evolve(
             query=self._query.distinct(
@@ -1017,6 +1006,63 @@ class DataChain:
             query=self._query.select(*columns), signal_schema=new_schema
         )
 
+    def group_by(
+        self,
+        *,
+        partition_by: Union[str, Sequence[str]],
+        **kwargs: Func,
+    ) -> "Self":
+        """Group rows by specified set of signals and return new signals
+        with aggregated values.
+
+        The supported functions:
+           count(), sum(), avg(), min(), max(), any_value(), collect(), concat()
+
+        Example:
+            ```py
+            chain = chain.group_by(
+                cnt=func.count(),
+                partition_by=("file_source", "file_ext"),
+            )
+            ```
+        """
+        if isinstance(partition_by, str):
+            partition_by = [partition_by]
+        if not partition_by:
+            raise ValueError("At least one column should be provided for partition_by")
+
+        if not kwargs:
+            raise ValueError("At least one column should be provided for group_by")
+        for col_name, func in kwargs.items():
+            if not isinstance(func, Func):
+                raise DataChainColumnError(
+                    col_name,
+                    f"Column {col_name} has type {type(func)} but expected Func object",
+                )
+
+        partition_by_columns: list[Column] = []
+        signal_columns: list[Column] = []
+        schema_fields: dict[str, DataType] = {}
+
+        # validate partition_by columns and add them to the schema
+        for col_name in partition_by:
+            col_db_name = ColumnMeta.to_db_name(col_name)
+            col_type = self.signals_schema.get_column_type(col_db_name)
+            col = Column(col_db_name, python_to_sql(col_type))
+            partition_by_columns.append(col)
+            schema_fields[col_db_name] = col_type
+
+        # validate signal columns and add them to the schema
+        for col_name, func in kwargs.items():
+            col = func.get_column(self.signals_schema, label=col_name)
+            signal_columns.append(col)
+            schema_fields[col_name] = func.get_result_type(self.signals_schema)
+
+        return self._evolve(
+            query=self._query.group_by(signal_columns, partition_by_columns),
+            signal_schema=SignalSchema(schema_fields),
+        )
+
     def mutate(self, **kwargs) -> "Self":
         """Create new signals based on existing signals.
 
@@ -1031,17 +1077,26 @@ class DataChain:
         The supported functions:
            Numerical:   +, -, *, /, rand(), avg(), count(), func(),
                         greatest(), least(), max(), min(), sum()
-           String:      length(), split()
+           String:      length(), split(), replace(), regexp_replace()
            Filename:    name(), parent(), file_stem(), file_ext()
            Array:       length(), sip_hash_64(), euclidean_distance(),
                         cosine_distance()
+           Window:      row_number(), rank(), dense_rank(), first()
 
         Example:
         ```py
          dc.mutate(
-                area=Column("image.height") * Column("image.width"),
-                extension=file_ext(Column("file.name")),
-                dist=cosine_distance(embedding_text, embedding_image)
+            area=Column("image.height") * Column("image.width"),
+            extension=file_ext(Column("file.name")),
+            dist=cosine_distance(embedding_text, embedding_image)
+        )
+        ```
+
+        Window function example:
+        ```py
+        window = func.window(partition_by="file.parent", order_by="file.size")
+        dc.mutate(
+            row_number=func.row_number().over(window),
         )
         ```
 
@@ -1052,7 +1107,7 @@ class DataChain:
         Example:
         ```py
          dc.mutate(
-                newkey=Column("oldkey")
+            newkey=Column("oldkey")
         )
         ```
         """
@@ -1065,7 +1120,7 @@ class DataChain:
                     "Use a different name for the new column.",
                 )
         for col_name, expr in kwargs.items():
-            if not isinstance(expr, Column) and isinstance(expr.type, NullType):
+            if not isinstance(expr, (Column, Func)) and isinstance(expr.type, NullType):
                 raise DataChainColumnError(
                     col_name, f"Cannot infer type with expression {expr}"
                 )
@@ -1077,6 +1132,9 @@ class DataChain:
                 # renaming existing column
                 for signal in schema.db_signals(name=value.name, as_columns=True):
                     mutated[signal.name.replace(value.name, name, 1)] = signal  # type: ignore[union-attr]
+            elif isinstance(value, Func):
+                # adding new signal
+                mutated[name] = value.get_column(schema)
             else:
                 # adding new signal
                 mutated[name] = value
@@ -1483,12 +1541,6 @@ class DataChain:
         fr_map = {col.lower(): df[col].tolist() for col in df.columns}
 
         for column in fr_map:
-            if column in DatasetRow.schema:
-                raise DatasetPrepareError(
-                    name,
-                    f"import from pandas error - column '{column}' conflicts with"
-                    " default schema",
-                )
             if not column.isidentifier():
                 raise DatasetPrepareError(
                     name,
@@ -1716,6 +1768,7 @@ class DataChain:
         nrows=None,
         session: Optional[Session] = None,
         settings: Optional[dict] = None,
+        column_types: Optional[dict[str, "Union[str, ArrowDataType]"]] = None,
         **kwargs,
     ) -> "DataChain":
         """Generate chain from csv files.
@@ -1734,6 +1787,9 @@ class DataChain:
             nrows : Optional row limit.
             session : Session to use for the chain.
             settings : Settings to use for the chain.
+            column_types : Dictionary of column names and their corresponding types.
+                It is passed to CSV reader and for each column specified type auto
+                inference is disabled.
 
         Example:
             Reading a csv file:
@@ -1749,6 +1805,15 @@ class DataChain:
         from pandas.io.parsers.readers import STR_NA_VALUES
         from pyarrow.csv import ConvertOptions, ParseOptions, ReadOptions
         from pyarrow.dataset import CsvFileFormat
+        from pyarrow.lib import type_for_alias
+
+        if column_types:
+            column_types = {
+                name: type_for_alias(typ) if isinstance(typ, str) else typ
+                for name, typ in column_types.items()
+            }
+        else:
+            column_types = {}
 
         chain = DataChain.from_storage(
             path, session=session, settings=settings, **kwargs
@@ -1774,7 +1839,9 @@ class DataChain:
         parse_options = ParseOptions(delimiter=delimiter)
         read_options = ReadOptions(column_names=column_names)
         convert_options = ConvertOptions(
-            strings_can_be_null=True, null_values=STR_NA_VALUES
+            strings_can_be_null=True,
+            null_values=STR_NA_VALUES,
+            column_types=column_types,
         )
         format = CsvFileFormat(
             parse_options=parse_options,
@@ -1844,20 +1911,47 @@ class DataChain:
         path: Union[str, os.PathLike[str], BinaryIO],
         partition_cols: Optional[Sequence[str]] = None,
         chunk_size: int = DEFAULT_PARQUET_CHUNK_SIZE,
+        fs_kwargs: Optional[dict[str, Any]] = None,
         **kwargs,
     ) -> None:
         """Save chain to parquet file with SignalSchema metadata.
 
         Parameters:
-            path : Path or a file-like binary object to save the file.
+            path : Path or a file-like binary object to save the file. This supports
+                local paths as well as remote paths, such as s3:// or hf:// with fsspec.
             partition_cols : Column names by which to partition the dataset.
             chunk_size : The chunk size of results to read and convert to columnar
                 data, to avoid running out of memory.
+            fs_kwargs : Optional kwargs to pass to the fsspec filesystem, used only for
+                write, for fsspec-type URLs, such as s3:// or hf:// when
+                provided as the destination path.
         """
         import pyarrow as pa
         import pyarrow.parquet as pq
 
         from datachain.lib.arrow import DATACHAIN_SIGNAL_SCHEMA_PARQUET_KEY
+
+        fsspec_fs = None
+
+        if isinstance(path, str) and "://" in path:
+            from datachain.client.fsspec import Client
+
+            fs_kwargs = {
+                **self._query.catalog.client_config,
+                **(fs_kwargs or {}),
+            }
+
+            client = Client.get_implementation(path)
+
+            if path.startswith("file://"):
+                # pyarrow does not handle file:// uris, and needs a direct path instead.
+                from urllib.parse import urlparse
+
+                path = urlparse(path).path
+                if sys.platform == "win32":
+                    path = os.path.normpath(path.lstrip("/"))
+
+            fsspec_fs = client.create_fs(**fs_kwargs)
 
         _partition_cols = list(partition_cols) if partition_cols else None
         signal_schema_metadata = orjson.dumps(
@@ -1893,12 +1987,15 @@ class DataChain:
                     table,
                     root_path=path,
                     partition_cols=_partition_cols,
+                    filesystem=fsspec_fs,
                     **kwargs,
                 )
             else:
                 if first_chunk:
                     # Write to a single parquet file.
-                    parquet_writer = pq.ParquetWriter(path, parquet_schema, **kwargs)
+                    parquet_writer = pq.ParquetWriter(
+                        path, parquet_schema, filesystem=fsspec_fs, **kwargs
+                    )
                     first_chunk = False
 
                 assert parquet_writer
@@ -1911,22 +2008,43 @@ class DataChain:
         self,
         path: Union[str, os.PathLike[str]],
         delimiter: str = ",",
+        fs_kwargs: Optional[dict[str, Any]] = None,
         **kwargs,
     ) -> None:
         """Save chain to a csv (comma-separated values) file.
 
         Parameters:
-            path : Path to save the file.
+            path : Path to save the file. This supports local paths as well as
+                remote paths, such as s3:// or hf:// with fsspec.
             delimiter : Delimiter to use for the resulting file.
+            fs_kwargs : Optional kwargs to pass to the fsspec filesystem, used only for
+                write, for fsspec-type URLs, such as s3:// or hf:// when
+                provided as the destination path.
         """
         import csv
+
+        opener = open
+
+        if isinstance(path, str) and "://" in path:
+            from datachain.client.fsspec import Client
+
+            fs_kwargs = {
+                **self._query.catalog.client_config,
+                **(fs_kwargs or {}),
+            }
+
+            client = Client.get_implementation(path)
+
+            fsspec_fs = client.create_fs(**fs_kwargs)
+
+            opener = fsspec_fs.open
 
         headers, _ = self._effective_signals_schema.get_headers_with_length()
         column_names = [".".join(filter(None, header)) for header in headers]
 
         results_iter = self.collect_flatten()
 
-        with open(path, "w", newline="") as f:
+        with opener(path, "w", newline="") as f:
             writer = csv.writer(f, delimiter=delimiter, **kwargs)
             writer.writerow(column_names)
 
@@ -1984,6 +2102,8 @@ class DataChain:
                 else None
             ),
         )
+
+        session.add_dataset_version(dsr, dsr.latest_version)
 
         if isinstance(to_insert, dict):
             to_insert = [to_insert]

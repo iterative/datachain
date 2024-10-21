@@ -774,6 +774,39 @@ def test_dataset_preview_custom_columns(cloud_test_catalog, dogs_dataset):
         assert r["binary_col"] == [0, 25]
 
 
+def test_dataset_preview_order(test_session):
+    ids = list(range(10000))
+    order = ids[::-1]
+    catalog = test_session.catalog
+    dataset_name = "test"
+
+    DataChain.from_values(id=ids, order=order, session=test_session).order_by(
+        "order"
+    ).save(dataset_name)
+
+    preview_values = []
+
+    for r in catalog.get_dataset(dataset_name).get_version(1).preview:
+        id = ids.pop()
+        o = order.pop()
+        entry = (id, o)
+        preview_values.append((id, o))
+        assert (r["id"], r["order"]) == entry
+
+    DataChain.from_dataset(dataset_name, session=test_session).save(dataset_name)
+
+    for r in catalog.get_dataset(dataset_name).get_version(2).preview:
+        assert (r["id"], r["order"]) == preview_values.pop(0)
+
+    DataChain.from_dataset(dataset_name, 2, session=test_session).order_by("id").save(
+        dataset_name
+    )
+
+    for r in catalog.get_dataset(dataset_name).get_version(3).preview:
+        assert r["id"] == ids.pop(0)
+        assert r["order"] == order.pop(0)
+
+
 def test_dataset_preview_last_modified(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
 

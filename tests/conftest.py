@@ -23,7 +23,11 @@ from datachain.data_storage.sqlite import (
 from datachain.dataset import DatasetRecord
 from datachain.lib.dc import DataChain
 from datachain.query.session import Session
-from datachain.utils import DataChainDir
+from datachain.utils import (
+    ENV_DATACHAIN_GLOBAL_CONFIG_DIR,
+    ENV_DATACHAIN_SYSTEM_CONFIG_DIR,
+    DataChainDir,
+)
 
 from .utils import DEFAULT_TREE, instantiate_tree
 
@@ -36,6 +40,20 @@ collect_ignore = ["setup.py"]
 @pytest.fixture(scope="session", autouse=True)
 def add_test_env():
     os.environ["DATACHAIN_TEST"] = "true"
+
+
+@pytest.fixture(autouse=True)
+def global_config_dir(monkeypatch, tmp_path_factory):
+    global_dir = str(tmp_path_factory.mktemp("studio-login-global"))
+    monkeypatch.setenv(ENV_DATACHAIN_GLOBAL_CONFIG_DIR, global_dir)
+    yield global_dir
+
+
+@pytest.fixture(autouse=True)
+def system_config_dir(monkeypatch, tmp_path_factory):
+    system_dir = str(tmp_path_factory.mktemp("studio-login-system"))
+    monkeypatch.setenv(ENV_DATACHAIN_SYSTEM_CONFIG_DIR, system_dir)
+    yield system_dir
 
 
 @pytest.fixture(autouse=True)
@@ -524,6 +542,26 @@ def cloud_test_catalog(
     return get_cloud_test_catalog(
         cloud_server, tmp_path, id_generator, metastore, warehouse
     )
+
+
+@pytest.fixture
+def cloud_test_catalog_upload(cloud_test_catalog):
+    """This returns a version of the cloud_test_catalog that is suitable for uploading
+    files, and will perform the necessary cleanup of any uploaded files."""
+    from datachain.client.fsspec import Client
+
+    src = cloud_test_catalog.src_uri
+    client = Client.get_implementation(src)
+    fsspec_fs = client.create_fs(**cloud_test_catalog.client_config)
+    original_paths = set(fsspec_fs.ls(src))
+
+    yield cloud_test_catalog
+
+    # Cleanup any written files
+    new_paths = set(fsspec_fs.ls(src))
+    cleanup_paths = new_paths - original_paths
+    for p in cleanup_paths:
+        fsspec_fs.rm(p, recursive=True)
 
 
 @pytest.fixture
