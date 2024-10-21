@@ -112,8 +112,10 @@ def list_datasets(args: "Namespace"):
         print("No datasets found.")
         return
     for d in response.data:
+        name = d.get("name")
         for v in d.get("versions", []):
-            print(f"{d.get("name")} (v{v.get("version")})")
+            version = v.get("version")
+            print(f"{name} (v{version})")
 
 
 def save_config(hostname, token):
