@@ -9,7 +9,6 @@ import pytest
 from sqlalchemy import select
 
 from datachain.cli import ls
-from datachain.client.local import FileClient
 from datachain.lib.dc import DataChain
 from tests.utils import uppercase_scheme
 
@@ -50,48 +49,44 @@ def test_ls_root(cloud_test_catalog, cloud_type, capsys):
 
 def ls_sources_output(src, cloud_type):
     if cloud_type == "file":
-        root_uri = FileClient.root_path().as_uri()
-        prefix = src[len(root_uri) :]
-        return f"""\
-{prefix}:
+        return """\
 cats/
 description
 dogs/
-
-{prefix}/dogs:
 dog1
 dog2
 dog3
 
-{prefix}/dogs/others:
+others:
 dog4
     """
 
     return """\
 cats/
-dogs/
 description
-
-dogs/others:
-dog4
-
+dogs/
 dogs:
 dog1
 dog2
 dog3
+
+dogs/others:
+dog4
     """
 
 
 def test_ls_sources(cloud_test_catalog, cloud_type, capsys):
     src = cloud_test_catalog.src_uri
-    ls([src, f"{src}/dogs/*"], catalog=cloud_test_catalog.catalog)
+    ls([src], catalog=cloud_test_catalog.catalog)
+    ls([f"{src}/dogs/*"], catalog=cloud_test_catalog.catalog)
     captured = capsys.readouterr()
     assert same_lines(captured.out, ls_sources_output(src, cloud_type))
 
 
 def test_ls_sources_scheme_uppercased(cloud_test_catalog, cloud_type, capsys):
     src = uppercase_scheme(cloud_test_catalog.src_uri)
-    ls([src, f"{src}/dogs/*"], catalog=cloud_test_catalog.catalog)
+    ls([src], catalog=cloud_test_catalog.catalog)
+    ls([f"{src}/dogs/*"], catalog=cloud_test_catalog.catalog)
     captured = capsys.readouterr()
     assert same_lines(captured.out, ls_sources_output(src, cloud_type))
 
@@ -99,27 +94,26 @@ def test_ls_sources_scheme_uppercased(cloud_test_catalog, cloud_type, capsys):
 def test_ls_not_found(cloud_test_catalog):
     src = cloud_test_catalog.src_uri
     with pytest.raises(FileNotFoundError):
-        ls([src, f"{src}/cats/bogus*"], catalog=cloud_test_catalog.catalog)
+        ls([f"{src}/cats/bogus*"], catalog=cloud_test_catalog.catalog)
 
 
-def test_ls_not_a_directory(cloud_test_catalog):
+# TODO return file test when https://github.com/iterative/datachain/issues/318 is done
+@pytest.mark.parametrize("cloud_type", ["s3", "gs", "azure"], indirect=True)
+def test_ls_not_a_directory(cloud_test_catalog, capsys):
     src = cloud_test_catalog.src_uri
     with pytest.raises(FileNotFoundError):
-        ls([src, f"{src}/description/"], catalog=cloud_test_catalog.catalog)
+        ls([f"{src}/description/"], catalog=cloud_test_catalog.catalog)
 
 
 def ls_glob_output(src, cloud_type):
     if cloud_type == "file":
-        root_uri = FileClient.root_path().as_uri()
-        prefix = src[len(root_uri) :]
-        return f"""\
-{prefix}/dogs/others:
-dog4
-
-{prefix}/dogs:
+        return """\
 dog1
 dog2
 dog3
+
+others:
+dog4
     """
 
     return """\
@@ -151,63 +145,75 @@ def test_ls_partial_indexing(cloud_test_catalog, cloud_type, capsys):
     metastore = cloud_test_catalog.catalog.metastore
     src = cloud_test_catalog.src_uri
     if cloud_type == "file":
-        src_metastore = metastore.clone(FileClient.root_path().as_uri())
-        root_uri = FileClient.root_path().as_uri()
-        prefix = src[len(root_uri) :] + "/"
+        src_metastore = metastore.clone(f"{src}/dogs/others")
     else:
         src_metastore = metastore.clone(src)
-        prefix = ""
 
     ls([f"{src}/dogs/others/"], catalog=cloud_test_catalog.catalog)
     # These sleep calls are here to ensure that capsys can fully capture the output
     # and to avoid any flaky tests due to multithreading generating output out of order
     sleep(0.05)
     captured = capsys.readouterr()
-    assert get_partial_indexed_paths(src_metastore) == [f"{prefix}dogs/others/"]
+    if cloud_type == "file":
+        assert get_partial_indexed_paths(src_metastore) == [""]
+    else:
+        assert get_partial_indexed_paths(src_metastore) == ["dogs/others/"]
     assert "Listing" in captured.err
     assert captured.out == "dog4\n"
 
     ls([f"{src}/cats/"], catalog=cloud_test_catalog.catalog)
     sleep(0.05)
     captured = capsys.readouterr()
-    assert get_partial_indexed_paths(src_metastore) == [
-        f"{prefix}cats/",
-        f"{prefix}dogs/others/",
-    ]
+    if cloud_type == "file":
+        assert get_partial_indexed_paths(src_metastore) == [""]
+    else:
+        assert get_partial_indexed_paths(src_metastore) == [
+            "cats/",
+            "dogs/others/",
+        ]
     assert "Listing" in captured.err
     assert same_lines("cat1\ncat2\n", captured.out)
 
     ls([f"{src}/dogs/"], catalog=cloud_test_catalog.catalog)
     sleep(0.05)
     captured = capsys.readouterr()
-    assert get_partial_indexed_paths(src_metastore) == [
-        f"{prefix}cats/",
-        f"{prefix}dogs/",
-        f"{prefix}dogs/others/",
-    ]
+    if cloud_type == "file":
+        assert get_partial_indexed_paths(src_metastore) == [""]
+    else:
+        assert get_partial_indexed_paths(src_metastore) == [
+            "cats/",
+            "dogs/",
+            "dogs/others/",
+        ]
     assert "Listing" in captured.err
     assert same_lines("others/\ndog1\ndog2\ndog3\n", captured.out)
 
     ls([f"{src}/cats/"], catalog=cloud_test_catalog.catalog)
     sleep(0.05)
     captured = capsys.readouterr()
-    assert get_partial_indexed_paths(src_metastore) == [
-        f"{prefix}cats/",
-        f"{prefix}dogs/",
-        f"{prefix}dogs/others/",
-    ]
+    if cloud_type == "file":
+        assert get_partial_indexed_paths(src_metastore) == [""]
+    else:
+        assert get_partial_indexed_paths(src_metastore) == [
+            "cats/",
+            "dogs/",
+            "dogs/others/",
+        ]
     assert "Listing" not in captured.err
     assert same_lines("cat1\ncat2\n", captured.out)
 
     ls([f"{src}/"], catalog=cloud_test_catalog.catalog)
     sleep(0.05)
     captured = capsys.readouterr()
-    assert get_partial_indexed_paths(src_metastore) == [
-        f"{prefix}",
-        f"{prefix}cats/",
-        f"{prefix}dogs/",
-        f"{prefix}dogs/others/",
-    ]
+    if cloud_type == "file":
+        assert get_partial_indexed_paths(src_metastore) == [""]
+    else:
+        assert get_partial_indexed_paths(src_metastore) == [
+            "",
+            "cats/",
+            "dogs/",
+            "dogs/others/",
+        ]
     assert "Listing" in captured.err
     assert same_lines("cats/\ndogs/\ndescription\n", captured.out)
 

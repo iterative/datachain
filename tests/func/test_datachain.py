@@ -17,7 +17,6 @@ from sqlalchemy import Column
 
 from datachain import DataModel
 from datachain.catalog.catalog import QUERY_SCRIPT_CANCELED_EXIT_CODE
-from datachain.client.local import FileClient
 from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.dataset import DatasetDependencyType, DatasetStats
 from datachain.lib.dc import C, DataChain
@@ -37,6 +36,12 @@ from tests.utils import (
     sorted_dicts,
     text_embedding,
 )
+
+DF_DATA = {
+    "first_name": ["Alice", "Bob", "Charlie", "David", "Eva"],
+    "age": [25, 30, 35, 40, 45],
+    "city": ["New York", "Los Angeles", "Chicago", "Houston", "Phoenix"],
+}
 
 
 def _get_listing_datasets(session):
@@ -202,7 +207,7 @@ def test_from_storage_dependencies(cloud_test_catalog, cloud_type):
     assert len(dependencies) == 1
     assert dependencies[0].type == DatasetDependencyType.STORAGE
     if cloud_type == "file":
-        assert dependencies[0].name == FileClient.root_path().as_uri()
+        assert dependencies[0].name == uri
     else:
         assert dependencies[0].name == src_uri
 
@@ -473,7 +478,7 @@ def test_from_storage_check_rows(tmp_dir, test_session):
         stat = stats[file.name]
         mtime = stat.st_mtime if is_sqlite else float(math.floor(stat.st_mtime))
         assert file == File(
-            source=Path(tmp_dir.anchor).as_uri(),
+            source=Path(tmp_dir).as_uri(),
             path=file.path,
             size=stat.st_size,
             version="",
@@ -1295,19 +1300,14 @@ def test_process_and_open_tar(cloud_test_catalog, cloud_type):
     dc = DataChain.from_storage(ctc.src_uri, session=ctc.session).gen(file=process_tar)
     assert dc.count() == 7
 
-    if cloud_type == "file":
-        prefix = cloud_test_catalog.partial_path + "/"
-    else:
-        prefix = ""
-
     assert {(file.read(), file.path) for file in dc.collect("file")} == {
-        (b"meow", f"{prefix}animals.tar/cats/cat1"),
-        (b"mrow", f"{prefix}animals.tar/cats/cat2"),
-        (b"Cats and Dogs", f"{prefix}animals.tar/description"),
-        (b"woof", f"{prefix}animals.tar/dogs/dog1"),
-        (b"arf", f"{prefix}animals.tar/dogs/dog2"),
-        (b"bark", f"{prefix}animals.tar/dogs/dog3"),
-        (b"ruff", f"{prefix}animals.tar/dogs/others/dog4"),
+        (b"meow", "animals.tar/cats/cat1"),
+        (b"mrow", "animals.tar/cats/cat2"),
+        (b"Cats and Dogs", "animals.tar/description"),
+        (b"woof", "animals.tar/dogs/dog1"),
+        (b"arf", "animals.tar/dogs/dog2"),
+        (b"bark", "animals.tar/dogs/dog3"),
+        (b"ruff", "animals.tar/dogs/others/dog4"),
     }
 
 
@@ -1331,7 +1331,7 @@ def test_group_by_signals(cloud_test_catalog, partition_by, signal_name):
         path: str = ""
         name: str = ""
 
-    def file_info(file: File) -> DataModel:
+    def file_info(file: File) -> FileInfo:
         full_path = file.source.rstrip("/") + "/" + file.path
         rel_path = posixpath.relpath(full_path, src_uri)
         path_parts = rel_path.split("/", 1)
@@ -1366,3 +1366,142 @@ def test_group_by_signals(cloud_test_catalog, partition_by, signal_name):
         ],
         "file_info__path",
     )
+
+
+@pytest.mark.parametrize("partition_by", ["file_info.path", "file_info__path"])
+@pytest.mark.parametrize("order_by", ["file_info.name", "file_info__name"])
+def test_window_signals(cloud_test_catalog, partition_by, order_by):
+    from datachain import func
+
+    session = cloud_test_catalog.session
+    src_uri = cloud_test_catalog.src_uri
+
+    class FileInfo(DataModel):
+        path: str = ""
+        name: str = ""
+
+    def file_info(file: File) -> FileInfo:
+        full_path = file.source.rstrip("/") + "/" + file.path
+        rel_path = posixpath.relpath(full_path, src_uri)
+        path_parts = rel_path.split("/", 1)
+        return FileInfo(
+            path=path_parts[0] if len(path_parts) > 1 else "",
+            name=path_parts[1] if len(path_parts) > 1 else path_parts[0],
+        )
+
+    window = func.window(partition_by=partition_by, order_by=order_by, desc=True)
+
+    ds = (
+        DataChain.from_storage(src_uri, session=session)
+        .map(file_info, params=["file"], output={"file_info": FileInfo})
+        .mutate(row_number=func.row_number().over(window))
+        .save("my-ds")
+    )
+
+    results = {}
+    for r in ds.to_records():
+        filename = (
+            r["file_info__path"] + "/" + r["file_info__name"]
+            if r["file_info__path"]
+            else r["file_info__name"]
+        )
+        results[filename] = r["row_number"]
+
+    assert results == {
+        "cats/cat2": 1,
+        "cats/cat1": 2,
+        "description": 1,
+        "dogs/others/dog4": 1,
+        "dogs/dog3": 2,
+        "dogs/dog2": 3,
+        "dogs/dog1": 4,
+    }
+
+
+def test_window_signals_random(cloud_test_catalog):
+    from datachain import func
+
+    session = cloud_test_catalog.session
+    src_uri = cloud_test_catalog.src_uri
+
+    class FileInfo(DataModel):
+        path: str = ""
+        name: str = ""
+
+    def file_info(file: File) -> FileInfo:
+        full_path = file.source.rstrip("/") + "/" + file.path
+        rel_path = posixpath.relpath(full_path, src_uri)
+        path_parts = rel_path.split("/", 1)
+        return FileInfo(
+            path=path_parts[0] if len(path_parts) > 1 else "",
+            name=path_parts[1] if len(path_parts) > 1 else path_parts[0],
+        )
+
+    window = func.window(partition_by="file_info.path", order_by="sys.rand")
+
+    ds = (
+        DataChain.from_storage(src_uri, session=session)
+        .map(file_info, params=["file"], output={"file_info": FileInfo})
+        .mutate(row_number=func.row_number().over(window))
+        .filter(C("row_number") < 3)
+        .select_except("row_number")
+        .save("my-ds")
+    )
+
+    results = {}
+    for r in ds.to_records():
+        results.setdefault(r["file_info__path"], []).append(r["file_info__name"])
+
+    assert results[""] == ["description"]
+    assert sorted(results["cats"]) == sorted(["cat1", "cat2"])
+
+    assert len(results["dogs"]) == 2
+    all_dogs = ["dog1", "dog2", "dog3", "others/dog4"]
+    for dog in results["dogs"]:
+        assert dog in all_dogs
+        all_dogs.remove(dog)
+    assert len(all_dogs) == 2
+
+
+def test_to_from_csv_remote(cloud_test_catalog_upload):
+    ctc = cloud_test_catalog_upload
+    path = f"{ctc.src_uri}/test.csv"
+
+    df = pd.DataFrame(DF_DATA)
+    dc_to = DataChain.from_pandas(df, session=ctc.session)
+    dc_to.to_csv(path)
+
+    dc_from = DataChain.from_csv(path, session=ctc.session)
+    df1 = dc_from.select("first_name", "age", "city").to_pandas()
+    assert df1.equals(df)
+
+
+@pytest.mark.parametrize("chunk_size", (1000, 2))
+@pytest.mark.parametrize("kwargs", ({}, {"compression": "gzip"}))
+def test_to_from_parquet_remote(cloud_test_catalog_upload, chunk_size, kwargs):
+    ctc = cloud_test_catalog_upload
+    path = f"{ctc.src_uri}/test.parquet"
+
+    df = pd.DataFrame(DF_DATA)
+    dc_to = DataChain.from_pandas(df, session=ctc.session)
+    dc_to.to_parquet(path, chunk_size=chunk_size, **kwargs)
+
+    dc_from = DataChain.from_parquet(path, session=ctc.session)
+    df1 = dc_from.select("first_name", "age", "city").to_pandas()
+
+    assert df1.equals(df)
+
+
+@pytest.mark.parametrize("chunk_size", (1000, 2))
+def test_to_from_parquet_partitioned_remote(cloud_test_catalog_upload, chunk_size):
+    ctc = cloud_test_catalog_upload
+    path = f"{ctc.src_uri}/parquets"
+
+    df = pd.DataFrame(DF_DATA)
+    dc_to = DataChain.from_pandas(df, session=ctc.session)
+    dc_to.to_parquet(path, partition_cols=["first_name"], chunk_size=chunk_size)
+
+    dc_from = DataChain.from_parquet(path, session=ctc.session)
+    df1 = dc_from.select("first_name", "age", "city").to_pandas()
+    df1 = df1.sort_values("first_name").reset_index(drop=True)
+    assert df1.equals(df)

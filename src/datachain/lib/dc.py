@@ -1,6 +1,8 @@
 import copy
 import os
+import os.path
 import re
+import sys
 from collections.abc import Iterator, Sequence
 from functools import wraps
 from typing import (
@@ -23,6 +25,8 @@ from pydantic import BaseModel
 from sqlalchemy.sql.functions import GenericFunction
 from sqlalchemy.sql.sqltypes import NullType
 
+from datachain.client import Client
+from datachain.client.local import FileClient
 from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import DataModel, DataType, dict_to_data_model
@@ -401,22 +405,23 @@ class DataChain:
         file_type = get_file_type(type)
 
         client_config = {"anon": True} if anon else None
-
         session = Session.get(session, client_config=client_config, in_memory=in_memory)
+        cache = session.catalog.cache
+        client_config = session.catalog.client_config
 
-        list_dataset_name, list_uri, list_path = parse_listing_uri(
-            uri, session.catalog.cache, session.catalog.client_config
-        )
+        list_ds_name, list_uri, list_path = parse_listing_uri(uri, cache, client_config)
+        original_list_ds_name = list_ds_name
         need_listing = True
 
         for ds in cls.listings(session=session, in_memory=in_memory).collect("listing"):
             if (
                 not is_listing_expired(ds.created_at)  # type: ignore[union-attr]
-                and is_listing_subset(ds.name, list_dataset_name)  # type: ignore[union-attr]
+                and is_listing_subset(ds.name, original_list_ds_name)  # type: ignore[union-attr]
                 and not update
             ):
                 need_listing = False
-                list_dataset_name = ds.name  # type: ignore[union-attr]
+                list_ds_name = ds.name  # type: ignore[union-attr]
+                break
 
         if need_listing:
             # caching new listing to special listing dataset
@@ -428,17 +433,21 @@ class DataChain:
                     in_memory=in_memory,
                 )
                 .gen(
-                    list_bucket(
-                        list_uri,
-                        session.catalog.cache,
-                        client_config=session.catalog.client_config,
-                    ),
+                    list_bucket(list_uri, cache, client_config=client_config),
                     output={f"{object_name}": File},
                 )
-                .save(list_dataset_name, listing=True)
+                .save(list_ds_name, listing=True)
             )
 
-        dc = cls.from_dataset(list_dataset_name, session=session, settings=settings)
+        if (
+            isinstance(Client.get_client(uri, cache, **client_config), FileClient)
+            and original_list_ds_name != list_ds_name
+        ):
+            # For local file system we need to fix listing path / prefix
+            diff = original_list_ds_name.strip("/").removeprefix(list_ds_name)
+            list_path = f"{diff}/{list_path}"
+
+        dc = cls.from_dataset(list_ds_name, session=session, settings=settings)
         dc.signals_schema = dc.signals_schema.mutate({f"{object_name}": file_type})
 
         return ls(dc, list_path, recursive=recursive, object_name=object_name)
@@ -1006,6 +1015,9 @@ class DataChain:
         """Group rows by specified set of signals and return new signals
         with aggregated values.
 
+        The supported functions:
+           count(), sum(), avg(), min(), max(), any_value(), collect(), concat()
+
         Example:
             ```py
             chain = chain.group_by(
@@ -1069,13 +1081,22 @@ class DataChain:
            Filename:    name(), parent(), file_stem(), file_ext()
            Array:       length(), sip_hash_64(), euclidean_distance(),
                         cosine_distance()
+           Window:      row_number(), rank(), dense_rank(), first()
 
         Example:
         ```py
          dc.mutate(
-                area=Column("image.height") * Column("image.width"),
-                extension=file_ext(Column("file.name")),
-                dist=cosine_distance(embedding_text, embedding_image)
+            area=Column("image.height") * Column("image.width"),
+            extension=file_ext(Column("file.name")),
+            dist=cosine_distance(embedding_text, embedding_image)
+        )
+        ```
+
+        Window function example:
+        ```py
+        window = func.window(partition_by="file.parent", order_by="file.size")
+        dc.mutate(
+            row_number=func.row_number().over(window),
         )
         ```
 
@@ -1086,7 +1107,7 @@ class DataChain:
         Example:
         ```py
          dc.mutate(
-                newkey=Column("oldkey")
+            newkey=Column("oldkey")
         )
         ```
         """
@@ -1099,7 +1120,7 @@ class DataChain:
                     "Use a different name for the new column.",
                 )
         for col_name, expr in kwargs.items():
-            if not isinstance(expr, Column) and isinstance(expr.type, NullType):
+            if not isinstance(expr, (Column, Func)) and isinstance(expr.type, NullType):
                 raise DataChainColumnError(
                     col_name, f"Cannot infer type with expression {expr}"
                 )
@@ -1111,6 +1132,9 @@ class DataChain:
                 # renaming existing column
                 for signal in schema.db_signals(name=value.name, as_columns=True):
                     mutated[signal.name.replace(value.name, name, 1)] = signal  # type: ignore[union-attr]
+            elif isinstance(value, Func):
+                # adding new signal
+                mutated[name] = value.get_column(schema)
             else:
                 # adding new signal
                 mutated[name] = value
@@ -1887,20 +1911,47 @@ class DataChain:
         path: Union[str, os.PathLike[str], BinaryIO],
         partition_cols: Optional[Sequence[str]] = None,
         chunk_size: int = DEFAULT_PARQUET_CHUNK_SIZE,
+        fs_kwargs: Optional[dict[str, Any]] = None,
         **kwargs,
     ) -> None:
         """Save chain to parquet file with SignalSchema metadata.
 
         Parameters:
-            path : Path or a file-like binary object to save the file.
+            path : Path or a file-like binary object to save the file. This supports
+                local paths as well as remote paths, such as s3:// or hf:// with fsspec.
             partition_cols : Column names by which to partition the dataset.
             chunk_size : The chunk size of results to read and convert to columnar
                 data, to avoid running out of memory.
+            fs_kwargs : Optional kwargs to pass to the fsspec filesystem, used only for
+                write, for fsspec-type URLs, such as s3:// or hf:// when
+                provided as the destination path.
         """
         import pyarrow as pa
         import pyarrow.parquet as pq
 
         from datachain.lib.arrow import DATACHAIN_SIGNAL_SCHEMA_PARQUET_KEY
+
+        fsspec_fs = None
+
+        if isinstance(path, str) and "://" in path:
+            from datachain.client.fsspec import Client
+
+            fs_kwargs = {
+                **self._query.catalog.client_config,
+                **(fs_kwargs or {}),
+            }
+
+            client = Client.get_implementation(path)
+
+            if path.startswith("file://"):
+                # pyarrow does not handle file:// uris, and needs a direct path instead.
+                from urllib.parse import urlparse
+
+                path = urlparse(path).path
+                if sys.platform == "win32":
+                    path = os.path.normpath(path.lstrip("/"))
+
+            fsspec_fs = client.create_fs(**fs_kwargs)
 
         _partition_cols = list(partition_cols) if partition_cols else None
         signal_schema_metadata = orjson.dumps(
@@ -1936,12 +1987,15 @@ class DataChain:
                     table,
                     root_path=path,
                     partition_cols=_partition_cols,
+                    filesystem=fsspec_fs,
                     **kwargs,
                 )
             else:
                 if first_chunk:
                     # Write to a single parquet file.
-                    parquet_writer = pq.ParquetWriter(path, parquet_schema, **kwargs)
+                    parquet_writer = pq.ParquetWriter(
+                        path, parquet_schema, filesystem=fsspec_fs, **kwargs
+                    )
                     first_chunk = False
 
                 assert parquet_writer
@@ -1954,22 +2008,43 @@ class DataChain:
         self,
         path: Union[str, os.PathLike[str]],
         delimiter: str = ",",
+        fs_kwargs: Optional[dict[str, Any]] = None,
         **kwargs,
     ) -> None:
         """Save chain to a csv (comma-separated values) file.
 
         Parameters:
-            path : Path to save the file.
+            path : Path to save the file. This supports local paths as well as
+                remote paths, such as s3:// or hf:// with fsspec.
             delimiter : Delimiter to use for the resulting file.
+            fs_kwargs : Optional kwargs to pass to the fsspec filesystem, used only for
+                write, for fsspec-type URLs, such as s3:// or hf:// when
+                provided as the destination path.
         """
         import csv
+
+        opener = open
+
+        if isinstance(path, str) and "://" in path:
+            from datachain.client.fsspec import Client
+
+            fs_kwargs = {
+                **self._query.catalog.client_config,
+                **(fs_kwargs or {}),
+            }
+
+            client = Client.get_implementation(path)
+
+            fsspec_fs = client.create_fs(**fs_kwargs)
+
+            opener = fsspec_fs.open
 
         headers, _ = self._effective_signals_schema.get_headers_with_length()
         column_names = [".".join(filter(None, header)) for header in headers]
 
         results_iter = self.collect_flatten()
 
-        with open(path, "w", newline="") as f:
+        with opener(path, "w", newline="") as f:
             writer = csv.writer(f, delimiter=delimiter, **kwargs)
             writer.writerow(column_names)
 

@@ -14,7 +14,6 @@ from upath.implementations.cloud import CloudPath
 from datachain.catalog import Catalog
 from datachain.catalog.loader import get_id_generator, get_metastore, get_warehouse
 from datachain.cli_utils import CommaSeparatedArgs
-from datachain.client.local import FileClient
 from datachain.data_storage.sqlite import (
     SQLiteDatabaseEngine,
     SQLiteIDGenerator,
@@ -437,19 +436,6 @@ class CloudTestCatalog:
         return self.server.src_uri
 
     @property
-    def storage_uri(self):
-        if self.server.kind == "file":
-            return FileClient.root_path().as_uri()
-        return self.server.src_uri
-
-    @property
-    def partial_path(self):
-        if self.server.kind == "file":
-            _, rel_path = FileClient.split_url(self.src_uri)
-            return rel_path
-        return ""
-
-    @property
     def client_config(self):
         return self.server.client_config
 
@@ -556,6 +542,26 @@ def cloud_test_catalog(
     return get_cloud_test_catalog(
         cloud_server, tmp_path, id_generator, metastore, warehouse
     )
+
+
+@pytest.fixture
+def cloud_test_catalog_upload(cloud_test_catalog):
+    """This returns a version of the cloud_test_catalog that is suitable for uploading
+    files, and will perform the necessary cleanup of any uploaded files."""
+    from datachain.client.fsspec import Client
+
+    src = cloud_test_catalog.src_uri
+    client = Client.get_implementation(src)
+    fsspec_fs = client.create_fs(**cloud_test_catalog.client_config)
+    original_paths = set(fsspec_fs.ls(src))
+
+    yield cloud_test_catalog
+
+    # Cleanup any written files
+    new_paths = set(fsspec_fs.ls(src))
+    cleanup_paths = new_paths - original_paths
+    for p in cleanup_paths:
+        fsspec_fs.rm(p, recursive=True)
 
 
 @pytest.fixture
