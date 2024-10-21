@@ -1178,8 +1178,7 @@ class DatasetQuery:
                 selected_columns,
             )
         finally:
-            pass
-            # self.cleanup()
+            self.cleanup()
 
     def extract(
         self, *params: UDFParamSpec, workers=ASYNC_WORKERS, **kwargs
