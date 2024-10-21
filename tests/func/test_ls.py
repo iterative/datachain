@@ -1,3 +1,4 @@
+import posixpath
 import re
 from datetime import datetime
 from struct import pack
@@ -6,10 +7,10 @@ from typing import Any
 
 import msgpack
 import pytest
-from sqlalchemy import select
 
 from datachain.cli import ls
 from datachain.lib.dc import DataChain
+from datachain.lib.listing import LISTING_PREFIX
 from tests.utils import uppercase_scheme
 
 
@@ -134,86 +135,63 @@ def test_ls_glob_sub(cloud_test_catalog, cloud_type, capsys):
     assert same_lines(captured.out, ls_glob_output(src, cloud_type))
 
 
-def get_partial_indexed_paths(metastore):
-    p = metastore._partials
-    return [
-        r[0] for r in metastore.db.execute(select(p.c.path_str).order_by(p.c.path_str))
-    ]
+def list_dataset_name(uri, path):
+    return f"{LISTING_PREFIX}{uri}/{posixpath.join(path, '').lstrip('/')}"
 
 
 def test_ls_partial_indexing(cloud_test_catalog, cloud_type, capsys):
-    metastore = cloud_test_catalog.catalog.metastore
+    catalog = cloud_test_catalog.catalog
     src = cloud_test_catalog.src_uri
-    if cloud_type == "file":
-        src_metastore = metastore.clone(f"{src}/dogs/others")
-    else:
-        src_metastore = metastore.clone(src)
 
     ls([f"{src}/dogs/others/"], catalog=cloud_test_catalog.catalog)
     # These sleep calls are here to ensure that capsys can fully capture the output
     # and to avoid any flaky tests due to multithreading generating output out of order
     sleep(0.05)
     captured = capsys.readouterr()
-    if cloud_type == "file":
-        assert get_partial_indexed_paths(src_metastore) == [""]
-    else:
-        assert get_partial_indexed_paths(src_metastore) == ["dogs/others/"]
     assert "Listing" in captured.err
     assert captured.out == "dog4\n"
 
     ls([f"{src}/cats/"], catalog=cloud_test_catalog.catalog)
     sleep(0.05)
     captured = capsys.readouterr()
-    if cloud_type == "file":
-        assert get_partial_indexed_paths(src_metastore) == [""]
-    else:
-        assert get_partial_indexed_paths(src_metastore) == [
-            "cats/",
-            "dogs/others/",
-        ]
+    assert sorted(ls.name for ls in catalog.listings()) == [
+        list_dataset_name(src, "cats/"),
+        list_dataset_name(src, "dogs/others/"),
+    ]
     assert "Listing" in captured.err
     assert same_lines("cat1\ncat2\n", captured.out)
 
     ls([f"{src}/dogs/"], catalog=cloud_test_catalog.catalog)
     sleep(0.05)
     captured = capsys.readouterr()
-    if cloud_type == "file":
-        assert get_partial_indexed_paths(src_metastore) == [""]
-    else:
-        assert get_partial_indexed_paths(src_metastore) == [
-            "cats/",
-            "dogs/",
-            "dogs/others/",
-        ]
+    assert sorted(ls.name for ls in catalog.listings()) == [
+        list_dataset_name(src, "cats/"),
+        list_dataset_name(src, "dogs/"),
+        list_dataset_name(src, "dogs/others/"),
+    ]
     assert "Listing" in captured.err
     assert same_lines("others/\ndog1\ndog2\ndog3\n", captured.out)
 
     ls([f"{src}/cats/"], catalog=cloud_test_catalog.catalog)
     sleep(0.05)
     captured = capsys.readouterr()
-    if cloud_type == "file":
-        assert get_partial_indexed_paths(src_metastore) == [""]
-    else:
-        assert get_partial_indexed_paths(src_metastore) == [
-            "cats/",
-            "dogs/",
-            "dogs/others/",
-        ]
+    assert sorted(ls.name for ls in catalog.listings()) == [
+        list_dataset_name(src, "cats/"),
+        list_dataset_name(src, "dogs/"),
+        list_dataset_name(src, "dogs/others/"),
+    ]
     assert "Listing" not in captured.err
     assert same_lines("cat1\ncat2\n", captured.out)
 
     ls([f"{src}/"], catalog=cloud_test_catalog.catalog)
     sleep(0.05)
     captured = capsys.readouterr()
-    if cloud_type == "file":
-        assert get_partial_indexed_paths(src_metastore) == [""]
-    else:
-        assert get_partial_indexed_paths(src_metastore) == [
-            "",
-            "cats/",
-            "dogs/",
-            "dogs/others/",
-        ]
+    assert sorted(ls.name for ls in catalog.listings()) == [
+        list_dataset_name(src, ""),
+        list_dataset_name(src, "cats/"),
+        list_dataset_name(src, "dogs/"),
+        list_dataset_name(src, "dogs/others/"),
+    ]
     assert "Listing" in captured.err
     assert same_lines("cats/\ndogs/\ndescription\n", captured.out)
 

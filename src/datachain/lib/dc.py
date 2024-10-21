@@ -27,6 +27,7 @@ from sqlalchemy.sql.sqltypes import NullType
 
 from datachain.client import Client
 from datachain.client.local import FileClient
+from datachain.dataset import DatasetRecord
 from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import DataModel, DataType, dict_to_data_model
@@ -35,9 +36,6 @@ from datachain.lib.file import ArrowRow, File, get_file_type
 from datachain.lib.file import ExportPlacement as FileExportPlacement
 from datachain.lib.func import Func
 from datachain.lib.listing import (
-    is_listing_dataset,
-    is_listing_expired,
-    is_listing_subset,
     list_bucket,
     ls,
     parse_listing_uri,
@@ -291,6 +289,13 @@ class DataChain:
         """Version of the underlying dataset, if there is one."""
         return self._query.version
 
+    @property
+    def dataset(self) -> Optional[DatasetRecord]:
+        """Underlying dataset, if there is one."""
+        if not self.name:
+            return None
+        return self.session.catalog.get_dataset(self.name)
+
     def __or__(self, other: "Self") -> "Self":
         """Return `self.union(other)`."""
         return self.union(other)
@@ -372,6 +377,39 @@ class DataChain:
         return self
 
     @classmethod
+    def get_list_dataset_name(
+        cls, uri: str, session: Session, update: bool = False, in_memory=False
+    ) -> tuple[str, bool]:
+        """Returns correct listing dataset name that must be used for saving listing
+        operation. It takes into account existing listings and reusability of those.
+        It also returns boolean saying if returned dataset name is reused / already
+        exists or not.
+        """
+        # TODO maybe move to lib/listing.py
+        list_dataset_name, _, _ = parse_listing_uri(
+            uri, session.catalog.cache, session.catalog.client_config
+        )
+
+        catalog = session.catalog
+
+        listings = [
+            ls
+            for ls in catalog.listings()
+            if not ls.is_expired and ls.contains(list_dataset_name)
+        ]
+
+        if not listings:
+            # no existing datasets found that have input uri listed
+            return list_dataset_name, False
+
+        if not update:
+            # no need to update, choosing the most recent one
+            return sorted(listings, key=lambda ls: ls.created_at)[-1].name, True
+
+        # choosing the smallest possible one to minimize update time
+        return sorted(listings, key=lambda ls: len(ls.name))[0].name, True
+
+    @classmethod
     def from_storage(
         cls,
         uri,
@@ -409,22 +447,14 @@ class DataChain:
         cache = session.catalog.cache
         client_config = session.catalog.client_config
 
-        list_ds_name, list_uri, list_path = parse_listing_uri(uri, cache, client_config)
-        original_list_ds_name = list_ds_name
-        need_listing = True
+        original_list_ds_name, list_uri, list_path = parse_listing_uri(
+            uri, cache, client_config
+        )
+        list_ds_name, list_ds_exists = cls.get_list_dataset_name(
+            uri, session, in_memory=in_memory, update=update
+        )
 
-        for ds in cls.listings(session=session, in_memory=in_memory).collect("listing"):
-            if (
-                not is_listing_expired(ds.created_at)  # type: ignore[union-attr]
-                and is_listing_subset(ds.name, original_list_ds_name)  # type: ignore[union-attr]
-                and not update
-            ):
-                need_listing = False
-                list_ds_name = ds.name  # type: ignore[union-attr]
-                break
-
-        if need_listing:
-            # caching new listing to special listing dataset
+        if update or not list_ds_exists:
             (
                 cls.from_records(
                     DataChain.DEFAULT_FILE_RECORD,
@@ -674,19 +704,11 @@ class DataChain:
         session = Session.get(session, in_memory=in_memory)
         catalog = kwargs.get("catalog") or session.catalog
 
-        listings = [
-            ListingInfo.from_models(d, v, j)
-            for d, v, j in catalog.list_datasets_versions(
-                include_listing=True, **kwargs
-            )
-            if is_listing_dataset(d.name)
-        ]
-
         return cls.from_values(
             session=session,
             in_memory=in_memory,
             output={object_name: ListingInfo},
-            **{object_name: listings},  # type: ignore[arg-type]
+            **{object_name: catalog.listings()},  # type: ignore[arg-type]
         )
 
     def print_json_schema(  # type: ignore[override]

@@ -1,4 +1,3 @@
-import glob
 import io
 import json
 import logging
@@ -48,12 +47,10 @@ from datachain.dataset import (
     parse_dataset_uri,
 )
 from datachain.error import (
-    ClientError,
     DataChainError,
     DatasetInvalidVersionError,
     DatasetNotFoundError,
     DatasetVersionNotFoundError,
-    PendingIndexingError,
     QueryScriptCancelError,
     QueryScriptRunError,
 )
@@ -61,8 +58,8 @@ from datachain.listing import Listing
 from datachain.node import DirType, Node, NodeWithPath
 from datachain.nodes_thread_pool import NodesThreadPool
 from datachain.remote.studio import StudioClient
-from datachain.sql.types import JSON, Boolean, DateTime, Int64, SQLType, String
-from datachain.storage import Storage, StorageStatus, StorageURI
+from datachain.sql.types import DateTime, SQLType, String
+from datachain.storage import StorageURI
 from datachain.utils import (
     DataChainDir,
     batched,
@@ -483,17 +480,12 @@ def compute_metafile_data(node_groups) -> list[dict[str, Any]]:
         if not node_group.sources:
             continue
         listing: Listing = node_group.listing
-        source_path: str = node_group.source_path
-        if not node_group.is_dataset:
-            assert listing.storage
-            data_source = listing.storage.to_dict(source_path)
-        else:
-            data_source = {"uri": listing.metastore.uri}
-
-        metafile_group = {"data-source": data_source, "files": []}
+        metafile_group = {"data-source": {"uri": listing.uri}, "files": []}
         for node in node_group.instantiated_nodes:
             if not node.n.is_dir:
-                metafile_group["files"].append(node.get_metafile_data())
+                metafile_group["files"].append(  # type: ignore [attr-defined]
+                    node.get_metafile_data()
+                )
         if metafile_group["files"]:
             metafile_data.append(metafile_group)
 
@@ -569,6 +561,12 @@ class Catalog:
 
         return self._warehouse
 
+    @cached_property
+    def session(self):
+        from datachain.query.session import Session
+
+        return Session.get(catalog=self)
+
     def get_init_params(self) -> dict[str, Any]:
         return {
             **self._init_params,
@@ -599,160 +597,30 @@ class Catalog:
     def enlist_source(
         self,
         source: str,
-        ttl: int,
-        force_update=False,
-        skip_indexing=False,
+        update=False,
         client_config=None,
+        object_name="file",
+        skip_indexing=False,
     ) -> tuple[Listing, str]:
-        if force_update and skip_indexing:
-            raise ValueError(
-                "Both force_update and skip_indexing flags"
-                " cannot be True at the same time"
-            )
+        from datachain.lib.dc import DataChain
+        from datachain.query.session import Session
 
-        partial_id: Optional[int]
-        partial_path: Optional[str]
+        # from datachain.client import Client
+        session = Session.get(catalog=self)  # TODO move as property of Catalog
 
-        client_config = client_config or self.client_config
-        uri, path = Client.parse_url(source)
-        client = Client.get_client(source, self.cache, **client_config)
-        stem = os.path.basename(os.path.normpath(path))
-        prefix = (
-            posixpath.dirname(path)
-            if glob.has_magic(stem) or client.fs.isfile(source)
-            else path
+        DataChain.from_storage(
+            source, session=session, update=update, object_name=object_name
         )
-        storage_dataset_name = Storage.dataset_name(uri, posixpath.join(prefix, ""))
-        source_metastore = self.metastore.clone(uri)
+        dataset_name, _ = DataChain.get_list_dataset_name(source, session)
 
-        columns = [
-            Column("path", String),
-            Column("etag", String),
-            Column("version", String),
-            Column("is_latest", Boolean),
-            Column("last_modified", DateTime(timezone=True)),
-            Column("size", Int64),
-            Column("location", JSON),
-            Column("source", String),
-        ]
-
-        if skip_indexing:
-            source_metastore.create_storage_if_not_registered(uri)
-            storage = source_metastore.get_storage(uri)
-            source_metastore.init_partial_id(uri)
-            partial_id = source_metastore.get_next_partial_id(uri)
-
-            source_metastore = self.metastore.clone(uri=uri, partial_id=partial_id)
-            source_metastore.init(uri)
-
-            source_warehouse = self.warehouse.clone()
-            dataset = self.create_dataset(
-                storage_dataset_name, columns=columns, listing=True
-            )
-
-            return (
-                Listing(storage, source_metastore, source_warehouse, client, dataset),
-                path,
-            )
-
-        (
-            storage,
-            need_index,
-            in_progress,
-            partial_id,
-            partial_path,
-        ) = source_metastore.register_storage_for_indexing(uri, force_update, prefix)
-        if in_progress:
-            raise PendingIndexingError(f"Pending indexing operation: uri={storage.uri}")
-
-        if not need_index:
-            assert partial_id is not None
-            assert partial_path is not None
-            source_metastore = self.metastore.clone(uri=uri, partial_id=partial_id)
-            source_warehouse = self.warehouse.clone()
-            dataset = self.get_dataset(Storage.dataset_name(uri, partial_path))
-            lst = Listing(storage, source_metastore, source_warehouse, client, dataset)
-            logger.debug(
-                "Using cached listing %s. Valid till: %s",
-                storage.uri,
-                storage.expires_to_local,
-            )
-            # Listing has to have correct version of data storage
-            # initialized with correct Storage
-
-            self.update_dataset_version_with_warehouse_info(
-                dataset,
-                dataset.latest_version,
-            )
-
-            return lst, path
-
-        source_metastore.init_partial_id(uri)
-        partial_id = source_metastore.get_next_partial_id(uri)
-
-        source_metastore.init(uri)
-        source_metastore = self.metastore.clone(uri=uri, partial_id=partial_id)
-
-        source_warehouse = self.warehouse.clone()
-
-        dataset = self.create_dataset(
-            storage_dataset_name, columns=columns, listing=True
+        lst = Listing(
+            self.warehouse.clone(),
+            Client.get_client(source, self.cache, **self.client_config),
+            self.get_dataset(dataset_name),
+            object_name=object_name,
         )
 
-        lst = Listing(storage, source_metastore, source_warehouse, client, dataset)
-
-        try:
-            lst.fetch(prefix)
-
-            source_metastore.mark_storage_indexed(
-                storage.uri,
-                StorageStatus.PARTIAL if prefix else StorageStatus.COMPLETE,
-                ttl,
-                prefix=prefix,
-                partial_id=partial_id,
-                dataset=dataset,
-            )
-
-            self.update_dataset_version_with_warehouse_info(
-                dataset,
-                dataset.latest_version,
-            )
-
-        except ClientError as e:
-            # for handling cloud errors
-            error_message = INDEX_INTERNAL_ERROR_MESSAGE
-            if e.error_code in ["InvalidAccessKeyId", "SignatureDoesNotMatch"]:
-                error_message = "Invalid cloud credentials"
-
-            source_metastore.mark_storage_indexed(
-                storage.uri,
-                StorageStatus.FAILED,
-                ttl,
-                prefix=prefix,
-                error_message=error_message,
-                error_stack=traceback.format_exc(),
-                dataset=dataset,
-            )
-            self._remove_dataset_rows_and_warehouse_info(
-                dataset, dataset.latest_version
-            )
-            raise
-        except:
-            source_metastore.mark_storage_indexed(
-                storage.uri,
-                StorageStatus.FAILED,
-                ttl,
-                prefix=prefix,
-                error_message=INDEX_INTERNAL_ERROR_MESSAGE,
-                error_stack=traceback.format_exc(),
-                dataset=dataset,
-            )
-            self._remove_dataset_rows_and_warehouse_info(
-                dataset, dataset.latest_version
-            )
-            raise
-
-        lst.storage = storage
+        _, path = Client.parse_url(source)
 
         return lst, path
 
@@ -770,7 +638,6 @@ class Catalog:
     def enlist_sources(
         self,
         sources: list[str],
-        ttl: int,
         update: bool,
         skip_indexing=False,
         client_config=None,
@@ -780,10 +647,9 @@ class Catalog:
         for src in sources:  # Opt: parallel
             listing, file_path = self.enlist_source(
                 src,
-                ttl,
                 update,
-                skip_indexing=skip_indexing,
                 client_config=client_config or self.client_config,
+                skip_indexing=skip_indexing,
             )
             enlisted_sources.append((listing, file_path))
 
@@ -802,7 +668,6 @@ class Catalog:
     def enlist_sources_grouped(
         self,
         sources: list[str],
-        ttl: int,
         update: bool,
         no_glob: bool = False,
         client_config=None,
@@ -823,7 +688,6 @@ class Catalog:
                 for ds in edatachain_data:
                     listing, source_path = self.enlist_source(
                         ds["data-source"]["uri"],
-                        ttl,
                         update,
                         client_config=client_config,
                     )
@@ -843,11 +707,13 @@ class Catalog:
                 )
                 indexed_sources = []
                 for source in dataset_sources:
+                    from datachain.lib.dc import DataChain
+
                     client = self.get_client(source, **client_config)
                     uri = client.uri
-                    ms = self.metastore.clone(uri, None)
                     st = self.warehouse.clone()
-                    listing = Listing(None, ms, st, client, None)
+                    dataset_name, _ = DataChain.get_list_dataset_name(uri, self.session)
+                    listing = Listing(st, client, self.get_dataset(dataset_name))
                     rows = DatasetQuery(
                         name=dataset.name, version=ds_version, catalog=self
                     ).to_db_records()
@@ -864,7 +730,7 @@ class Catalog:
                 enlisted_sources.append((False, True, indexed_sources))
             else:
                 listing, source_path = self.enlist_source(
-                    src, ttl, update, client_config=client_config
+                    src, update, client_config=client_config
                 )
                 enlisted_sources.append((False, False, (listing, source_path)))
 
@@ -1304,6 +1170,20 @@ class Catalog:
                 for v in d.versions
             )
 
+    def listings(self):
+        """
+        Returns list of ListingInfo objects which are representing specific
+        storage listing datasets
+        """
+        from datachain.lib.listing import is_listing_dataset
+        from datachain.lib.listing_info import ListingInfo
+
+        return [
+            ListingInfo.from_models(d, v, j)
+            for d, v, j in self.list_datasets_versions(include_listing=True)
+            if is_listing_dataset(d.name)
+        ]
+
     def ls_dataset_rows(
         self, name: str, version: int, offset=None, limit=None
     ) -> list[dict]:
@@ -1428,7 +1308,6 @@ class Catalog:
         self,
         sources: list[str],
         fields: Iterable[str],
-        ttl=TTL_INT,
         update=False,
         skip_indexing=False,
         *,
@@ -1436,7 +1315,6 @@ class Catalog:
     ) -> Iterator[tuple[DataSource, Iterable[tuple]]]:
         data_sources = self.enlist_sources(
             sources,
-            ttl,
             update,
             skip_indexing=skip_indexing,
             client_config=client_config or self.client_config,
@@ -1611,7 +1489,6 @@ class Catalog:
         no_cp: bool = False,
         edatachain: bool = False,
         edatachain_file: Optional[str] = None,
-        ttl: int = TTL_INT,
         *,
         client_config=None,
     ) -> None:
@@ -1633,7 +1510,6 @@ class Catalog:
                 edatachain_only=no_cp,
                 no_edatachain_file=not edatachain,
                 edatachain_file=edatachain_file,
-                ttl=ttl,
                 client_config=client_config,
             )
         else:
@@ -1641,7 +1517,6 @@ class Catalog:
             # it needs to be done here
             self.enlist_sources(
                 sources,
-                ttl,
                 update,
                 client_config=client_config or self.client_config,
             )
@@ -1701,7 +1576,6 @@ class Catalog:
         edatachain_only: bool = False,
         no_edatachain_file: bool = False,
         no_glob: bool = False,
-        ttl: int = TTL_INT,
         *,
         client_config=None,
     ) -> list[dict[str, Any]]:
@@ -1713,7 +1587,6 @@ class Catalog:
         client_config = client_config or self.client_config
         node_groups = self.enlist_sources_grouped(
             sources,
-            ttl,
             update,
             no_glob,
             client_config=client_config,
@@ -1772,14 +1645,12 @@ class Catalog:
         self,
         sources,
         depth=0,
-        ttl=TTL_INT,
         update=False,
         *,
         client_config=None,
     ) -> Iterable[tuple[str, float]]:
         sources = self.enlist_sources(
             sources,
-            ttl,
             update,
             client_config=client_config or self.client_config,
         )
@@ -1800,7 +1671,6 @@ class Catalog:
     def find(
         self,
         sources,
-        ttl=TTL_INT,
         update=False,
         names=None,
         inames=None,
@@ -1814,7 +1684,6 @@ class Catalog:
     ) -> Iterator[str]:
         sources = self.enlist_sources(
             sources,
-            ttl,
             update,
             client_config=client_config or self.client_config,
         )
@@ -1850,7 +1719,6 @@ class Catalog:
     def index(
         self,
         sources,
-        ttl=TTL_INT,
         update=False,
         *,
         client_config=None,
@@ -1876,7 +1744,6 @@ class Catalog:
 
         self.enlist_sources(
             non_root_sources,
-            ttl,
             update,
             client_config=client_config,
             only_index=True,

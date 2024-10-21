@@ -173,10 +173,10 @@ class QueryStep(StartingStep):
             return sqlalchemy.select(*columns)
 
         dataset = self.catalog.get_dataset(self.dataset_name)
-        table = self.catalog.warehouse.dataset_rows(dataset, self.dataset_version)
+        dr = self.catalog.warehouse.dataset_rows(dataset, self.dataset_version)
 
         return step_result(
-            q, table.c, dependencies=[(self.dataset_name, self.dataset_version)]
+            q, dr.columns, dependencies=[(self.dataset_name, self.dataset_version)]
         )
 
 

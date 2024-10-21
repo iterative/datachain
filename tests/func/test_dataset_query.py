@@ -884,7 +884,7 @@ def test_simple_dataset_query(cloud_test_catalog):
     for ds_name in ("ds1", "ds2"):
         ds = metastore.get_dataset(ds_name)
         dr = warehouse.dataset_rows(ds)
-        dq = dr.select().order_by(dr.c.file__path)
+        dq = dr.select().order_by(dr.c("path"))
         ds_queries.append(dq)
 
     ds1, ds2 = (
