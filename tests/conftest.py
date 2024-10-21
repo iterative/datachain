@@ -14,7 +14,6 @@ from upath.implementations.cloud import CloudPath
 from datachain.catalog import Catalog
 from datachain.catalog.loader import get_id_generator, get_metastore, get_warehouse
 from datachain.cli_utils import CommaSeparatedArgs
-from datachain.client.local import FileClient
 from datachain.data_storage.sqlite import (
     SQLiteDatabaseEngine,
     SQLiteIDGenerator,
@@ -435,19 +434,6 @@ class CloudTestCatalog:
     @property
     def src_uri(self):
         return self.server.src_uri
-
-    @property
-    def storage_uri(self):
-        if self.server.kind == "file":
-            return FileClient.root_path().as_uri()
-        return self.server.src_uri
-
-    @property
-    def partial_path(self):
-        if self.server.kind == "file":
-            _, rel_path = FileClient.split_url(self.src_uri)
-            return rel_path
-        return ""
 
     @property
     def client_config(self):

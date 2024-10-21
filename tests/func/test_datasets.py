@@ -5,7 +5,6 @@ from unittest.mock import ANY
 import pytest
 import sqlalchemy as sa
 
-from datachain.client.local import FileClient
 from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.dataset import DatasetDependencyType, DatasetStatus
 from datachain.error import (
@@ -873,7 +872,7 @@ def test_dataset_storage_dependencies(cloud_test_catalog, cloud_type, indirect):
         {
             "id": ANY,
             "type": DatasetDependencyType.STORAGE,
-            "name": uri if cloud_type != "file" else FileClient.root_path().as_uri(),
+            "name": uri,
             "version": "1",
             "created_at": lst_dataset.get_version(1).created_at,
             "dependencies": [],

@@ -1,5 +1,6 @@
 import datetime
 import math
+import os
 import re
 from collections.abc import Generator, Iterator
 from unittest.mock import ANY
@@ -13,7 +14,6 @@ from datasets import Dataset
 from pydantic import BaseModel
 
 from datachain import Column
-from datachain.client import Client
 from datachain.lib.data_model import DataModel
 from datachain.lib.dc import C, DataChain, Sys
 from datachain.lib.file import File
@@ -247,8 +247,6 @@ def test_listings(test_session, tmp_dir):
     df.to_parquet(tmp_dir / "df.parquet")
 
     uri = tmp_dir.as_uri()
-    client = Client.get_client(uri, test_session.catalog.cache)
-
     DataChain.from_storage(uri, session=test_session)
 
     # check that listing is not returned as normal dataset
@@ -264,7 +262,7 @@ def test_listings(test_session, tmp_dir):
     assert len(listings) == 1
     listing = listings[0]
     assert isinstance(listing, ListingInfo)
-    assert listing.storage_uri == client.uri
+    assert listing.storage_uri == uri
     assert listing.is_expired is False
     assert listing.expires
     assert listing.version == 1
@@ -278,7 +276,6 @@ def test_listings_reindex(test_session, tmp_dir):
     df.to_parquet(tmp_dir / "df.parquet")
 
     uri = tmp_dir.as_uri()
-    client = Client.get_client(uri, test_session.catalog.cache)
 
     DataChain.from_storage(uri, session=test_session)
     assert len(list(DataChain.listings(session=test_session).collect("listing"))) == 1
@@ -290,10 +287,23 @@ def test_listings_reindex(test_session, tmp_dir):
     listings = list(DataChain.listings(session=test_session).collect("listing"))
     assert len(listings) == 2
     listings.sort(key=lambda lst: lst.version)
-    assert listings[0].storage_uri == client.uri
+    assert listings[0].storage_uri == uri
     assert listings[0].version == 1
-    assert listings[1].storage_uri == client.uri
+    assert listings[1].storage_uri == uri
     assert listings[1].version == 2
+
+
+def test_listings_reindex_subpath_local_file_system(test_session, tmp_dir):
+    subdir = tmp_dir / "subdir"
+    os.mkdir(subdir)
+
+    df = pd.DataFrame(DF_DATA)
+    df.to_parquet(tmp_dir / "df.parquet")
+    df.to_parquet(tmp_dir / "df2.parquet")
+    df.to_parquet(subdir / "df3.parquet")
+
+    assert DataChain.from_storage(tmp_dir.as_uri(), session=test_session).count() == 3
+    assert DataChain.from_storage(subdir.as_uri(), session=test_session).count() == 1
 
 
 def test_preserve_feature_schema(test_session):
