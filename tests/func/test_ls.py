@@ -9,8 +9,15 @@ import pytest
 from sqlalchemy import select
 
 from datachain.cli import ls
+from datachain.config import Config, ConfigLevel
 from datachain.lib.dc import DataChain
 from tests.utils import uppercase_scheme
+
+
+@pytest.fixture(autouse=True)
+def studio_config():
+    with Config(ConfigLevel.GLOBAL).edit() as conf:
+        conf["studio"] = {"token": "isat_access_token", "team": "team_name"}
 
 
 def same_lines(lines1, lines2):
