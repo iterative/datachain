@@ -54,7 +54,7 @@ def test_studio_login_arguments(mocker):
         token_name="token_name",  #  noqa: S106
         hostname="https://example.com",
         scopes="experiments",
-        client_name="Datachain",
+        client_name="DataChain",
         open_browser=False,
         post_login_message=POST_LOGIN_MESSAGE,
     )

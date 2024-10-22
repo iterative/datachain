@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 POST_LOGIN_MESSAGE = (
     "Once you've logged in, return here "
-    "and you'll be ready to start using Datachain with Studio."
+    "and you'll be ready to start using DataChain with Studio."
 )
 
 
@@ -64,7 +64,7 @@ def login(args: "Namespace"):
             hostname=hostname,
             scopes=scopes,
             open_browser=open_browser,
-            client_name="Datachain",
+            client_name="DataChain",
             post_login_message=POST_LOGIN_MESSAGE,
         )
     except StudioAuthError as exc:
