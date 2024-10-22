@@ -102,6 +102,7 @@ def test_find_names_columns(cloud_test_catalog, cloud_type):
     if cloud_type == "file":
         src_uri_path = LocalFileSystem._strip_protocol(src_uri)
 
+    print(f"uri is {src_uri}, path is {src_uri_path}")
     assert set(
         catalog.find(
             [src_uri],

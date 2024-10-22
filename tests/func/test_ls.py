@@ -49,7 +49,7 @@ def test_ls_root(cloud_test_catalog, cloud_type, capsys):
 
 
 def ls_sources_output(src, cloud_type):
-    if cloud_type == "file":
+    if cloud_type == "ffile":
         return """\
 cats/
 description
@@ -76,11 +76,15 @@ dog4
     """
 
 
-def test_ls_sources(cloud_test_catalog, cloud_type, capsys):
+def test_ls_ssources(cloud_test_catalog, cloud_type, capsys):
     src = cloud_test_catalog.src_uri
     ls([src], catalog=cloud_test_catalog.catalog)
+    # print("=====")
     ls([f"{src}/dogs/*"], catalog=cloud_test_catalog.catalog)
     captured = capsys.readouterr()
+    print("----")
+    print(captured.out)
+    print("----")
     assert same_lines(captured.out, ls_sources_output(src, cloud_type))
 
 

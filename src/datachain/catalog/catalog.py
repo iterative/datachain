@@ -55,6 +55,7 @@ from datachain.error import (
     QueryScriptRunError,
 )
 from datachain.listing import Listing
+from datachain.lib.listing import parse_listing_uri
 from datachain.node import DirType, Node, NodeWithPath
 from datachain.nodes_thread_pool import NodesThreadPool
 from datachain.remote.studio import StudioClient
@@ -510,6 +511,7 @@ def find_column_to_str(  # noqa: PLR0911
             full_path = path + "/"
         else:
             full_path = path
+        print("hereeee")
         return src.get_node_full_path_from_path(full_path)
     if column == "size":
         return str(row[field_lookup["size"]])
@@ -605,24 +607,65 @@ class Catalog:
         from datachain.lib.dc import DataChain
         from datachain.query.session import Session
 
-        # from datachain.client import Client
+        from datachain.client import Client
+        from datachain.client.local import FileClient
+        from datachain.lib.listing import listing_uri_from_name
         session = Session.get(catalog=self)  # TODO move as property of Catalog
 
         DataChain.from_storage(
             source, session=session, update=update, object_name=object_name
         )
+
+        '''
+        original_list_ds_name, list_uri, list_path = parse_listing_uri(
+            uri, cache, client_config
+        )
+        '''
+
         dataset_name, _ = DataChain.get_list_dataset_name(source, session)
+
+        ###
+        original_list_ds_name, list_uri, list_path = parse_listing_uri(
+            source, self.cache, self.client_config
+        )
+        list_ds_name, list_ds_exists = DataChain.get_list_dataset_name(
+            source, session, update=update
+        )
+        if (
+            isinstance(Client.get_client(source, self.cache, **self.client_config), FileClient)
+            and original_list_ds_name != list_ds_name
+        ):
+            # For local file system we need to fix listing path / prefix
+            diff = original_list_ds_name.strip("/").removeprefix(list_ds_name)
+            list_path = f"{diff}/{list_path}"
+
+        ###
+
+        client = Client.get_client(source, self.cache, **self.client_config)
+        # client.name = client.name + "/" + dataset_name.split("/")[-2].strip("/")
+        ln = listing_uri_from_name(list_ds_name)
+        print(f"client name in enlist is {client.name}, dataset name is {dataset_name} list path is {list_path} list uri from name is {ln}")
 
         lst = Listing(
             self.warehouse.clone(),
-            Client.get_client(source, self.cache, **self.client_config),
+            # Client.get_client(source, self.cache, **self.client_config),
+            client,
             self.get_dataset(dataset_name),
             object_name=object_name,
         )
 
-        _, path = Client.parse_url(source)
+        u, old_path = Client.parse_url(source)
+        _, u, path = parse_listing_uri(source, self.cache, self.client_config)
+        # print(f"Old path is {old_path} new path is {path}")
+        if path == "*":
+            pass
+            # path = "dogs/*"
+            # print("aaaaaa")
 
-        return lst, path
+        # print(f"Source: {source}, ds name {dataset_name}, parsed uri {u}, parsed path {path}")
+
+        # return lst, path
+        return lst, list_path
 
     def _remove_dataset_rows_and_warehouse_info(
         self, dataset: DatasetRecord, version: int, **kwargs
@@ -1698,6 +1741,7 @@ class Catalog:
             elif column == "name":
                 field_set.add("path")
             elif column == "path":
+                field_set.add("source")
                 field_set.add("dir_type")
                 field_set.add("path")
             elif column == "size":
@@ -1711,6 +1755,7 @@ class Catalog:
                 src.node, fields, names, inames, paths, ipaths, size, typ
             )
             for row in results:
+                print(row)
                 yield "\t".join(
                     find_column_to_str(row, field_lookup, src, column)
                     for column in columns

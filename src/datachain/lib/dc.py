@@ -480,6 +480,8 @@ class DataChain:
         dc = cls.from_dataset(list_ds_name, session=session, settings=settings)
         dc.signals_schema = dc.signals_schema.mutate({f"{object_name}": file_type})
 
+        # print(f"end of from_storage, list_path is {list_path}")
+
         return ls(dc, list_path, recursive=recursive, object_name=object_name)
 
     @classmethod
