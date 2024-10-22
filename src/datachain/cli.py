@@ -99,11 +99,11 @@ def add_show_args(parser: ArgumentParser) -> None:
 
 
 def add_studio_parser(subparsers, parent_parser) -> None:
-    studio_help = "Commands to authenticate Datachain with Iterative Studio"
+    studio_help = "Commands to authenticate DataChain with Iterative Studio"
     studio_description = (
-        "Authenticate Datachain with Studio and set the token. "
+        "Authenticate DataChain with Studio and set the token. "
         "Once this token has been properly configured,\n"
-        "Datachain will utilize it for seamlessly sharing datasets\n"
+        "DataChain will utilize it for seamlessly sharing datasets\n"
         "and using Studio features from CLI"
     )
 
@@ -115,13 +115,13 @@ def add_studio_parser(subparsers, parent_parser) -> None:
     )
     studio_subparser = studio_parser.add_subparsers(
         dest="cmd",
-        help="Use `Datachain studio CMD --help` to display command-specific help.",
+        help="Use `DataChain studio CMD --help` to display command-specific help.",
         required=True,
     )
 
-    studio_login_help = "Authenticate Datachain with Studio host"
+    studio_login_help = "Authenticate DataChain with Studio host"
     studio_login_description = (
-        "By default, this command authenticates the Datachain with Studio\n"
+        "By default, this command authenticates the DataChain with Studio\n"
         "using default scopes and assigns a random name as the token name."
     )
     login_parser = studio_subparser.add_parser(
@@ -161,7 +161,7 @@ def add_studio_parser(subparsers, parent_parser) -> None:
         default=False,
         help="Use authentication flow based on user code.\n"
         "You will be presented with user code to enter in browser.\n"
-        "Datachain will also use this if it cannot launch browser on your behalf.",
+        "DataChain will also use this if it cannot launch browser on your behalf.",
     )
 
     studio_logout_help = "Logout user from Studio"
@@ -172,6 +172,29 @@ def add_studio_parser(subparsers, parent_parser) -> None:
         parents=[parent_parser],
         description=studio_logout_description,
         help=studio_logout_help,
+    )
+
+    studio_team_help = "Set the default team for DataChain"
+    studio_team_description = (
+        "Set the default team for DataChain to use when interacting with Studio."
+    )
+
+    team_parser = studio_subparser.add_parser(
+        "team",
+        parents=[parent_parser],
+        description=studio_team_description,
+        help=studio_team_help,
+    )
+    team_parser.add_argument(
+        "team_name",
+        action="store",
+        help="The name of the team to set as the default.",
+    )
+    team_parser.add_argument(
+        "--global",
+        action="store_true",
+        default=False,
+        help="Set the team globally for all DataChain projects.",
     )
 
     studio_token_help = "View the token datachain uses to contact Studio"  # noqa: S105 # nosec B105

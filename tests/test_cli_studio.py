@@ -54,7 +54,7 @@ def test_studio_login_arguments(mocker):
         token_name="token_name",  #  noqa: S106
         hostname="https://example.com",
         scopes="experiments",
-        client_name="Datachain",
+        client_name="DataChain",
         open_browser=False,
         post_login_message=POST_LOGIN_MESSAGE,
     )
@@ -82,3 +82,15 @@ def test_studio_token(capsys):
         del conf["studio"]["token"]
 
     assert main(["studio", "token"]) == 1
+
+
+def test_studio_team_local():
+    assert main(["studio", "team", "team_name"]) == 0
+    config = Config(ConfigLevel.LOCAL).read()
+    assert config["studio"]["team"] == "team_name"
+
+
+def test_studio_team_global():
+    assert main(["studio", "team", "team_name", "--global"]) == 0
+    config = Config(ConfigLevel.GLOBAL).read()
+    assert config["studio"]["team"] == "team_name"
