@@ -1,3 +1,4 @@
+import posixpath
 import re
 from datetime import datetime
 from struct import pack
@@ -6,11 +7,11 @@ from typing import Any
 
 import msgpack
 import pytest
-from sqlalchemy import select
 
 from datachain.cli import ls
 from datachain.config import Config, ConfigLevel
 from datachain.lib.dc import DataChain
+from datachain.lib.listing import LISTING_PREFIX
 from tests.utils import uppercase_scheme
 
 
@@ -35,10 +36,7 @@ def test_ls_no_args(cloud_test_catalog, cloud_type, capsys):
     DataChain.from_storage(src, session=session).collect()
     ls([], catalog=catalog)
     captured = capsys.readouterr()
-    if cloud_type == "file":
-        pytest.skip("Skipping until file listing is refactored with new lst generator")
-    else:
-        assert captured.out == f"{src}/@v1\n"
+    assert captured.out == f"{src}/@v1\n"
 
 
 def test_ls_root(cloud_test_catalog, cloud_type, capsys):
@@ -54,20 +52,7 @@ def test_ls_root(cloud_test_catalog, cloud_type, capsys):
         assert src_name in buckets
 
 
-def ls_sources_output(src, cloud_type):
-    if cloud_type == "file":
-        return """\
-cats/
-description
-dogs/
-dog1
-dog2
-dog3
-
-others:
-dog4
-    """
-
+def ls_sources_output(src):
     return """\
 cats/
 description
@@ -87,7 +72,7 @@ def test_ls_sources(cloud_test_catalog, cloud_type, capsys):
     ls([src], catalog=cloud_test_catalog.catalog)
     ls([f"{src}/dogs/*"], catalog=cloud_test_catalog.catalog)
     captured = capsys.readouterr()
-    assert same_lines(captured.out, ls_sources_output(src, cloud_type))
+    assert same_lines(captured.out, ls_sources_output(src))
 
 
 def test_ls_sources_scheme_uppercased(cloud_test_catalog, cloud_type, capsys):
@@ -95,7 +80,7 @@ def test_ls_sources_scheme_uppercased(cloud_test_catalog, cloud_type, capsys):
     ls([src], catalog=cloud_test_catalog.catalog)
     ls([f"{src}/dogs/*"], catalog=cloud_test_catalog.catalog)
     captured = capsys.readouterr()
-    assert same_lines(captured.out, ls_sources_output(src, cloud_type))
+    assert same_lines(captured.out, ls_sources_output(src))
 
 
 def test_ls_not_found(cloud_test_catalog):
@@ -141,86 +126,63 @@ def test_ls_glob_sub(cloud_test_catalog, cloud_type, capsys):
     assert same_lines(captured.out, ls_glob_output(src, cloud_type))
 
 
-def get_partial_indexed_paths(metastore):
-    p = metastore._partials
-    return [
-        r[0] for r in metastore.db.execute(select(p.c.path_str).order_by(p.c.path_str))
-    ]
+def list_dataset_name(uri, path):
+    return f"{LISTING_PREFIX}{uri}/{posixpath.join(path, '').lstrip('/')}"
 
 
 def test_ls_partial_indexing(cloud_test_catalog, cloud_type, capsys):
-    metastore = cloud_test_catalog.catalog.metastore
+    catalog = cloud_test_catalog.catalog
     src = cloud_test_catalog.src_uri
-    if cloud_type == "file":
-        src_metastore = metastore.clone(f"{src}/dogs/others")
-    else:
-        src_metastore = metastore.clone(src)
 
     ls([f"{src}/dogs/others/"], catalog=cloud_test_catalog.catalog)
     # These sleep calls are here to ensure that capsys can fully capture the output
     # and to avoid any flaky tests due to multithreading generating output out of order
     sleep(0.05)
     captured = capsys.readouterr()
-    if cloud_type == "file":
-        assert get_partial_indexed_paths(src_metastore) == [""]
-    else:
-        assert get_partial_indexed_paths(src_metastore) == ["dogs/others/"]
     assert "Listing" in captured.err
     assert captured.out == "dog4\n"
 
     ls([f"{src}/cats/"], catalog=cloud_test_catalog.catalog)
     sleep(0.05)
     captured = capsys.readouterr()
-    if cloud_type == "file":
-        assert get_partial_indexed_paths(src_metastore) == [""]
-    else:
-        assert get_partial_indexed_paths(src_metastore) == [
-            "cats/",
-            "dogs/others/",
-        ]
+    assert sorted(ls.name for ls in catalog.listings()) == [
+        list_dataset_name(src, "cats/"),
+        list_dataset_name(src, "dogs/others/"),
+    ]
     assert "Listing" in captured.err
     assert same_lines("cat1\ncat2\n", captured.out)
 
     ls([f"{src}/dogs/"], catalog=cloud_test_catalog.catalog)
     sleep(0.05)
     captured = capsys.readouterr()
-    if cloud_type == "file":
-        assert get_partial_indexed_paths(src_metastore) == [""]
-    else:
-        assert get_partial_indexed_paths(src_metastore) == [
-            "cats/",
-            "dogs/",
-            "dogs/others/",
-        ]
+    assert sorted(ls.name for ls in catalog.listings()) == [
+        list_dataset_name(src, "cats/"),
+        list_dataset_name(src, "dogs/"),
+        list_dataset_name(src, "dogs/others/"),
+    ]
     assert "Listing" in captured.err
     assert same_lines("others/\ndog1\ndog2\ndog3\n", captured.out)
 
     ls([f"{src}/cats/"], catalog=cloud_test_catalog.catalog)
     sleep(0.05)
     captured = capsys.readouterr()
-    if cloud_type == "file":
-        assert get_partial_indexed_paths(src_metastore) == [""]
-    else:
-        assert get_partial_indexed_paths(src_metastore) == [
-            "cats/",
-            "dogs/",
-            "dogs/others/",
-        ]
+    assert sorted(ls.name for ls in catalog.listings()) == [
+        list_dataset_name(src, "cats/"),
+        list_dataset_name(src, "dogs/"),
+        list_dataset_name(src, "dogs/others/"),
+    ]
     assert "Listing" not in captured.err
     assert same_lines("cat1\ncat2\n", captured.out)
 
     ls([f"{src}/"], catalog=cloud_test_catalog.catalog)
     sleep(0.05)
     captured = capsys.readouterr()
-    if cloud_type == "file":
-        assert get_partial_indexed_paths(src_metastore) == [""]
-    else:
-        assert get_partial_indexed_paths(src_metastore) == [
-            "",
-            "cats/",
-            "dogs/",
-            "dogs/others/",
-        ]
+    assert sorted(ls.name for ls in catalog.listings()) == [
+        list_dataset_name(src, ""),
+        list_dataset_name(src, "cats/"),
+        list_dataset_name(src, "dogs/"),
+        list_dataset_name(src, "dogs/others/"),
+    ]
     assert "Listing" in captured.err
     assert same_lines("cats/\ndogs/\ndescription\n", captured.out)
 

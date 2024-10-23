@@ -27,6 +27,7 @@ from sqlalchemy.sql.sqltypes import NullType
 
 from datachain.client import Client
 from datachain.client.local import FileClient
+from datachain.dataset import DatasetRecord
 from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import DataModel, DataType, dict_to_data_model
@@ -35,9 +36,6 @@ from datachain.lib.file import ArrowRow, File, get_file_type
 from datachain.lib.file import ExportPlacement as FileExportPlacement
 from datachain.lib.func import Func
 from datachain.lib.listing import (
-    is_listing_dataset,
-    is_listing_expired,
-    is_listing_subset,
     list_bucket,
     ls,
     parse_listing_uri,
@@ -291,6 +289,13 @@ class DataChain:
         """Version of the underlying dataset, if there is one."""
         return self._query.version
 
+    @property
+    def dataset(self) -> Optional[DatasetRecord]:
+        """Underlying dataset, if there is one."""
+        if not self.name:
+            return None
+        return self.session.catalog.get_dataset(self.name)
+
     def __or__(self, other: "Self") -> "Self":
         """Return `self.union(other)`."""
         return self.union(other)
@@ -372,6 +377,47 @@ class DataChain:
         return self
 
     @classmethod
+    def parse_uri(
+        cls, uri: str, session: Session, update: bool = False
+    ) -> tuple[str, str, str, bool]:
+        """Returns correct listing dataset name that must be used for saving listing
+        operation. It takes into account existing listings and reusability of those.
+        It also returns boolean saying if returned dataset name is reused / already
+        exists or not, and it returns correct listing path that should be used to find
+        rows based on uri.
+        """
+        catalog = session.catalog
+        cache = catalog.cache
+        client_config = catalog.client_config
+
+        client = Client.get_client(uri, cache, **client_config)
+        ds_name, list_uri, list_path = parse_listing_uri(uri, cache, client_config)
+        listing = None
+
+        listings = [
+            ls
+            for ls in catalog.listings()
+            if not ls.is_expired and ls.contains(ds_name)
+        ]
+
+        if listings:
+            if update:
+                # choosing the smallest possible one to minimize update time
+                listing = sorted(listings, key=lambda ls: len(ls.name))[0]
+            else:
+                # no need to update, choosing the most recent one
+                listing = sorted(listings, key=lambda ls: ls.created_at)[-1]
+
+        if isinstance(client, FileClient) and listing and listing.name != ds_name:
+            # For local file system we need to fix listing path / prefix
+            # if we are reusing existing listing
+            list_path = f'{ds_name.strip("/").removeprefix(listing.name)}/{list_path}'
+
+        ds_name = listing.name if listing else ds_name
+
+        return ds_name, list_uri, list_path, bool(listing)
+
+    @classmethod
     def from_storage(
         cls,
         uri,
@@ -409,22 +455,11 @@ class DataChain:
         cache = session.catalog.cache
         client_config = session.catalog.client_config
 
-        list_ds_name, list_uri, list_path = parse_listing_uri(uri, cache, client_config)
-        original_list_ds_name = list_ds_name
-        need_listing = True
+        list_ds_name, list_uri, list_path, list_ds_exists = cls.parse_uri(
+            uri, session, update=update
+        )
 
-        for ds in cls.listings(session=session, in_memory=in_memory).collect("listing"):
-            if (
-                not is_listing_expired(ds.created_at)  # type: ignore[union-attr]
-                and is_listing_subset(ds.name, original_list_ds_name)  # type: ignore[union-attr]
-                and not update
-            ):
-                need_listing = False
-                list_ds_name = ds.name  # type: ignore[union-attr]
-                break
-
-        if need_listing:
-            # caching new listing to special listing dataset
+        if update or not list_ds_exists:
             (
                 cls.from_records(
                     DataChain.DEFAULT_FILE_RECORD,
@@ -438,14 +473,6 @@ class DataChain:
                 )
                 .save(list_ds_name, listing=True)
             )
-
-        if (
-            isinstance(Client.get_client(uri, cache, **client_config), FileClient)
-            and original_list_ds_name != list_ds_name
-        ):
-            # For local file system we need to fix listing path / prefix
-            diff = original_list_ds_name.strip("/").removeprefix(list_ds_name)
-            list_path = f"{diff}/{list_path}"
 
         dc = cls.from_dataset(list_ds_name, session=session, settings=settings)
         dc.signals_schema = dc.signals_schema.mutate({f"{object_name}": file_type})
@@ -674,19 +701,11 @@ class DataChain:
         session = Session.get(session, in_memory=in_memory)
         catalog = kwargs.get("catalog") or session.catalog
 
-        listings = [
-            ListingInfo.from_models(d, v, j)
-            for d, v, j in catalog.list_datasets_versions(
-                include_listing=True, **kwargs
-            )
-            if is_listing_dataset(d.name)
-        ]
-
         return cls.from_values(
             session=session,
             in_memory=in_memory,
             output={object_name: ListingInfo},
-            **{object_name: listings},  # type: ignore[arg-type]
+            **{object_name: catalog.listings()},  # type: ignore[arg-type]
         )
 
     def print_json_schema(  # type: ignore[override]
