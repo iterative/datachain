@@ -610,13 +610,17 @@ class Catalog:
             source, session=self.session, update=update, object_name=object_name
         )
         client = Client.get_client(source, self.cache, **self.client_config)
+
         list_ds_name, _, list_path, _ = DataChain.parse_uri(
             source, self.session, update=update
         )
 
         if isinstance(client, FileClient):
-            uri = listing_uri_from_name(list_ds_name)
-            client = Client.get_client(uri, self.cache, **self.client_config)
+            # we could be reusing existing listing dataset so client name / uri
+            # should be changed accordingly
+            client = Client.get_client(
+                listing_uri_from_name(list_ds_name), self.cache, **self.client_config
+            )
 
         lst = Listing(
             self.warehouse.clone(),

@@ -232,6 +232,12 @@ class DataTable:
         object_name = object_name or self.object_name
         return col_name(name, object_name)
 
+    def without_object(
+        self, column_name: str, object_name: Optional[str] = None
+    ) -> str:
+        object_name = object_name or self.object_name
+        return column_name.removeprefix(f"{object_name}{DEFAULT_DELIMITER}")
+
     def c(self, name: str, object_name: Optional[str] = None):
         return getattr(self.columns, self.col_name(name, object_name=object_name))
 

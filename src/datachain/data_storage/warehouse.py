@@ -17,7 +17,7 @@ from sqlalchemy.sql.expression import true
 from tqdm import tqdm
 
 from datachain.client import Client
-from datachain.data_storage.schema import col_name, convert_rows_custom_column_types
+from datachain.data_storage.schema import convert_rows_custom_column_types
 from datachain.data_storage.serializer import Serializable
 from datachain.dataset import DatasetRecord
 from datachain.node import DirType, DirTypeGroup, Node, NodeWithPath, get_path
@@ -51,12 +51,6 @@ except ImportError:
 logger = logging.getLogger("datachain")
 
 SELECT_BATCH_SIZE = 100_000  # number of rows to fetch at a time
-DEFAULT_DELIMITER = "__"  # TODO import from original source to not duplicate
-
-
-def col(query, name: str, object_name: str = "file") -> str:
-    # TODO use object_name in callers of this function
-    return getattr(query.c, col_name(name, object_name))
 
 
 class AbstractWarehouse(ABC, Serializable):
@@ -434,11 +428,13 @@ class AbstractWarehouse(ABC, Serializable):
         self,
         query: sa.Select,
         type: str,
+        dataset_rows: "DataTable",
         include_subobjects: bool = True,
-        object_name: str = "file",
     ) -> sa.Select:
+        dr = dataset_rows
+
         def col(name: str):
-            return getattr(query.selected_columns, col_name(name, object_name))
+            return getattr(query.selected_columns, dr.col_name(name))
 
         file_group: Sequence[int]
         if type in {"f", "file", "files"}:
@@ -459,19 +455,16 @@ class AbstractWarehouse(ABC, Serializable):
             q = q.where((col("location") == "") | (col("location").is_(None)))
         return q
 
-    def get_nodes(self, query, object_name: str = "file") -> Iterator[Node]:
+    def get_nodes(self, query, dataset_rows: "DataTable") -> Iterator[Node]:
         """
         This gets nodes based on the provided query, and should be used sparingly,
         as it will be slow on any OLAP database systems.
         """
+        dr = dataset_rows
         columns = [c.name for c in query.selected_columns]
         for row in self.db.execute(query):
             d = dict(zip(columns, row))
-            d = {
-                k.removeprefix(f"{object_name}{DEFAULT_DELIMITER}"): v
-                for k, v in d.items()
-            }
-            yield Node(**d)
+            yield Node(**{dr.without_object(k): v for k, v in d.items()})
 
     def get_dirs_by_parent_path(
         self,
@@ -484,13 +477,10 @@ class AbstractWarehouse(ABC, Serializable):
             dr,
             parent_path,
             type="dir",
-            conds=[
-                pathfunc.parent(sa.Column(col_name("path", dr.object_name)))
-                == parent_path
-            ],
-            order_by=[col_name("source"), col_name("path")],
+            conds=[pathfunc.parent(sa.Column(dr.col_name("path"))) == parent_path],
+            order_by=[dr.col_name("source"), dr.col_name("path")],
         )
-        return self.get_nodes(query, dr.object_name)
+        return self.get_nodes(query, dr)
 
     def _get_nodes_by_glob_path_pattern(
         self,
@@ -517,7 +507,7 @@ class AbstractWarehouse(ABC, Serializable):
                 & (de.c(q, "path") != dirpath)
             )
             .order_by(de.c(q, "source"), de.c(q, "path"), de.c(q, "version")),
-            dr.object_name,
+            dr,
         )
 
     def _get_node_by_path_list(
@@ -591,10 +581,9 @@ class AbstractWarehouse(ABC, Serializable):
         q = dir_expanded_query
 
         def with_default(column):
-            column_name = column.name.removeprefix(
-                f"{dr.object_name}{DEFAULT_DELIMITER}"
-            )
-            default = getattr(attrs.fields(Node), column_name).default
+            default = getattr(
+                attrs.fields(Node), dr.without_object(column.name)
+            ).default
             return func.coalesce(column, default).label(column.name)
 
         return sa.select(
@@ -608,7 +597,6 @@ class AbstractWarehouse(ABC, Serializable):
             with_default(dr.c("is_latest")),
             dr.c("last_modified"),
             with_default(dr.c("size")),
-            # with_default(dr.c.sys__rand),
             with_default(dr.c("rand", object_name="sys")),
             dr.c("location"),
             de.c(q, "source"),
@@ -626,7 +614,7 @@ class AbstractWarehouse(ABC, Serializable):
                 dr.c("path") == path,
                 dr.c("is_latest") == true(),
             )
-            node = next(self.get_nodes(query), None)
+            node = next(self.get_nodes(query, dr), None)
             if node:
                 return node
             path += "/"
@@ -644,7 +632,7 @@ class AbstractWarehouse(ABC, Serializable):
         path = path.removesuffix("/")
         return Node.from_dir(path)
 
-    def expand_path(self, dataset_rows: "DataTable", path: str) -> list["Node"]:
+    def expand_path(self, dataset_rows: "DataTable", path: str) -> list[Node]:
         """Simulates Unix-like shell expansion"""
         clean_path = path.strip("/")
         path_list = clean_path.split("/") if clean_path != "" else []
@@ -687,11 +675,7 @@ class AbstractWarehouse(ABC, Serializable):
         )
 
     def select_node_fields_by_parent_path_tar(
-        self,
-        dataset_rows: "DataTable",
-        parent_path: str,
-        fields: Iterable[str],
-        object_name,
+        self, dataset_rows: "DataTable", parent_path: str, fields: Iterable[str]
     ) -> Iterator[tuple[Any, ...]]:
         """
         Gets latest-version file nodes from the provided parent path
@@ -790,9 +774,7 @@ class AbstractWarehouse(ABC, Serializable):
         query = sa.select(*columns)
         query = query.where(*conds)
         if type is not None:
-            query = self.add_node_type_where(
-                query, type, include_subobjects, dr.object_name
-            )
+            query = self.add_node_type_where(query, type, dr, include_subobjects)
         if order_by is not None:
             if isinstance(order_by, str):
                 order_by = [order_by]
@@ -820,14 +802,14 @@ class AbstractWarehouse(ABC, Serializable):
         if sort is not None:
             if not isinstance(sort, list):
                 sort = [sort]
-            query = query.order_by(*(sa.text(col_name(s)) for s in sort))  # type: ignore [attr-defined]
+            query = query.order_by(*(sa.text(dr.col_name(s)) for s in sort))  # type: ignore [attr-defined]
 
         prefix_len = len(node.path)
 
         def make_node_with_path(node: Node) -> NodeWithPath:
             return NodeWithPath(node, node.path[prefix_len:].lstrip("/").split("/"))
 
-        return map(make_node_with_path, self.get_nodes(query))
+        return map(make_node_with_path, self.get_nodes(query, dr))
 
     def find(
         self,
@@ -842,9 +824,10 @@ class AbstractWarehouse(ABC, Serializable):
         Finds nodes that match certain criteria and only looks for latest nodes
         under the passed node.
         """
-        fields = [col_name(f, dataset_rows.object_name) for f in fields]
+        dr = dataset_rows
+        fields = [dr.col_name(f) for f in fields]
         query = self._find_query(
-            dataset_rows,
+            dr,
             node.path,
             fields=fields,
             type=type,
