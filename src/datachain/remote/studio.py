@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 from collections.abc import Iterable, Iterator
 from datetime import datetime, timedelta, timezone
 from struct import unpack
@@ -10,8 +11,10 @@ from typing import (
     TypeVar,
 )
 
+from datachain.config import Config
 from datachain.dataset import DatasetStats
-from datachain.utils import retry_with_backoff
+from datachain.error import DataChainError
+from datachain.utils import STUDIO_URL, retry_with_backoff
 
 T = TypeVar("T")
 LsData = Optional[list[dict[str, Any]]]
@@ -54,14 +57,54 @@ class Response(Generic[T]):
 
 
 class StudioClient:
-    def __init__(
-        self, url: str, username: str, token: str, timeout: float = 3600.0
-    ) -> None:
+    def __init__(self, timeout: float = 3600.0, team: Optional[str] = None) -> None:
         self._check_dependencies()
-        self.url = url.rstrip("/")
-        self.username = username
-        self.token = token
         self.timeout = timeout
+        self._config = None
+        self._team = team
+
+    @property
+    def token(self) -> str:
+        token = os.environ.get("DVC_STUDIO_TOKEN") or self.config.get("token")
+
+        if not token:
+            raise DataChainError(
+                "Studio token is not set. Use `datachain studio login` "
+                "or environment variable `DVC_STUDIO_TOKEN` to set it."
+            )
+
+        return token
+
+    @property
+    def url(self) -> str:
+        return (
+            os.environ.get("DVC_STUDIO_URL") or self.config.get("url") or STUDIO_URL
+        ) + "/api"
+
+    @property
+    def config(self) -> dict:
+        if self._config is None:
+            self._config = Config().read().get("studio", {})
+        return self._config  # type: ignore [return-value]
+
+    @property
+    def team(self) -> str:
+        if self._team is None:
+            self._team = self._get_team()
+        return self._team
+
+    def _get_team(self) -> str:
+        team = os.environ.get("DVC_STUDIO_TEAM") or self.config.get("team")
+
+        if not team:
+            raise DataChainError(
+                "Studio team is not set. "
+                "Use `datachain studio team <team_name>` "
+                "or environment variable `DVC_STUDIO_TEAM` to set it."
+                "You can also set it in the config file as team under studio."
+            )
+
+        return team
 
     def _check_dependencies(self) -> None:
         try:
@@ -80,7 +123,7 @@ class StudioClient:
 
         response = requests.post(
             f"{self.url}/{route}",
-            json={**data, "team_name": self.username},
+            json={**data, "team_name": self.team},
             headers={
                 "Content-Type": "application/json",
                 "Authorization": f"token {self.token}",
@@ -108,7 +151,7 @@ class StudioClient:
 
         response = requests.post(
             f"{self.url}/{route}",
-            json={**data, "team_name": self.username},
+            json={**data, "team_name": self.team},
             headers={
                 "Content-Type": "application/json",
                 "Authorization": f"token {self.token}",
@@ -174,6 +217,9 @@ class StudioClient:
             response = self._send_request_msgpack("ls", {"source": path})
             yield path, response
 
+    def ls_datasets(self) -> Response[LsData]:
+        return self._send_request("datachain/ls-datasets", {})
+
     def dataset_info(self, name: str) -> Response[DatasetInfoData]:
         def _parse_dataset_info(dataset_info):
             _parse_dates(dataset_info, ["created_at", "finished_at"])
@@ -182,7 +228,7 @@ class StudioClient:
 
             return dataset_info
 
-        response = self._send_request("dataset-info", {"dataset_name": name})
+        response = self._send_request("datachain/dataset-info", {"dataset_name": name})
         if response.ok:
             response.data = _parse_dataset_info(response.data)
         return response
@@ -192,13 +238,14 @@ class StudioClient:
     ) -> Response[DatasetRowsData]:
         req_data = {"dataset_name": name, "dataset_version": version}
         return self._send_request_msgpack(
-            "dataset-rows",
+            "datachain/dataset-rows",
             {**req_data, "offset": offset, "limit": DATASET_ROWS_CHUNK_SIZE},
         )
 
     def dataset_stats(self, name: str, version: int) -> Response[DatasetStatsData]:
         response = self._send_request(
-            "dataset-stats", {"dataset_name": name, "dataset_version": version}
+            "datachain/dataset-stats",
+            {"dataset_name": name, "dataset_version": version},
         )
         if response.ok:
             response.data = DatasetStats(**response.data)
@@ -208,12 +255,14 @@ class StudioClient:
         self, name: str, version: int
     ) -> Response[DatasetExportSignedUrls]:
         return self._send_request(
-            "dataset-export", {"dataset_name": name, "dataset_version": version}
+            "datachain/dataset-export",
+            {"dataset_name": name, "dataset_version": version},
         )
 
     def dataset_export_status(
         self, name: str, version: int
     ) -> Response[DatasetExportStatus]:
         return self._send_request(
-            "dataset-export-status", {"dataset_name": name, "dataset_version": version}
+            "datachain/dataset-export-status",
+            {"dataset_name": name, "dataset_version": version},
         )

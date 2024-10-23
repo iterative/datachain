@@ -6,11 +6,18 @@ import lz4.frame
 import pandas as pd
 import pytest
 
+from datachain.config import Config, ConfigLevel
 from datachain.dataset import DatasetStatus
 from datachain.error import DataChainError
-from datachain.utils import JSONSerialize
+from datachain.utils import STUDIO_URL, JSONSerialize
 from tests.data import ENTRIES
 from tests.utils import assert_row_names, skip_if_not_sqlite
+
+
+@pytest.fixture(autouse=True)
+def studio_config():
+    with Config(ConfigLevel.GLOBAL).edit() as conf:
+        conf["studio"] = {"token": "isat_access_token", "team": "team_name"}
 
 
 @pytest.fixture
@@ -131,22 +138,12 @@ def remote_dataset(remote_dataset_version, schema):
     }
 
 
-@pytest.fixture
-def remote_config():
-    return {
-        "url": "http://localhost:8111/api/datachain",
-        "username": "datachain",
-        "token": "isat_1LZKasZwyM46eHk6NHZZh4VCbHPRKUlQaLnYUE1bXb2U8Il0U",
-    }
-
-
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
 @pytest.mark.parametrize("dataset_uri", ["ds://dogs@v1", "ds://dogs"])
 @skip_if_not_sqlite
 def test_pull_dataset_success(
     requests_mock,
     cloud_test_catalog,
-    remote_config,
     remote_dataset,
     dog_entries_parquet_lz4,
     dataset_uri,
@@ -154,22 +151,22 @@ def test_pull_dataset_success(
     data_url = (
         "https://studio-blobvault.s3.amazonaws.com/datachain_ds_export_1_0.parquet.lz4"
     )
-    requests_mock.post(f'{remote_config["url"]}/dataset-info', json=remote_dataset)
+    requests_mock.post(f"{STUDIO_URL}/api/datachain/dataset-info", json=remote_dataset)
     requests_mock.post(
-        f'{remote_config["url"]}/dataset-stats',
+        f"{STUDIO_URL}/api/datachain/dataset-stats",
         json={"num_objects": 5, "size": 1000},
     )
-    requests_mock.post(f'{remote_config["url"]}/dataset-export', json=[data_url])
+    requests_mock.post(f"{STUDIO_URL}/api/datachain/dataset-export", json=[data_url])
     requests_mock.post(
-        f'{remote_config["url"]}/dataset-export-status',
+        f"{STUDIO_URL}/api/datachain/dataset-export-status",
         json={"status": "completed"},
     )
     requests_mock.get(data_url, content=dog_entries_parquet_lz4)
     catalog = cloud_test_catalog.catalog
 
-    catalog.pull_dataset(dataset_uri, no_cp=True, remote_config=remote_config)
+    catalog.pull_dataset(dataset_uri, no_cp=True)
     # trying to pull multiple times as it should work
-    catalog.pull_dataset(dataset_uri, no_cp=True, remote_config=remote_config)
+    catalog.pull_dataset(dataset_uri, no_cp=True)
 
     dataset = catalog.get_dataset("dogs")
     assert dataset.versions_values == [1]
@@ -203,14 +200,13 @@ def test_pull_dataset_success(
 def test_pull_dataset_wrong_dataset_uri_format(
     requests_mock,
     cloud_test_catalog,
-    remote_config,
     remote_dataset,
     dog_entries_parquet_lz4,
 ):
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(DataChainError) as exc_info:
-        catalog.pull_dataset("wrong", no_cp=True, remote_config=remote_config)
+        catalog.pull_dataset("wrong", no_cp=True)
     assert str(exc_info.value) == "Error when parsing dataset uri"
 
 
@@ -219,17 +215,16 @@ def test_pull_dataset_wrong_dataset_uri_format(
 def test_pull_dataset_wrong_version(
     requests_mock,
     cloud_test_catalog,
-    remote_config,
     remote_dataset,
 ):
     requests_mock.post(
-        f'{remote_config["url"]}/dataset-info',
+        f"{STUDIO_URL}/api/datachain/dataset-info",
         json=remote_dataset,
     )
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(DataChainError) as exc_info:
-        catalog.pull_dataset("ds://dogs@v5", no_cp=True, remote_config=remote_config)
+        catalog.pull_dataset("ds://dogs@v5", no_cp=True)
     assert str(exc_info.value) == "Dataset dogs doesn't have version 5 on server"
 
 
@@ -238,18 +233,17 @@ def test_pull_dataset_wrong_version(
 def test_pull_dataset_not_found_in_remote(
     requests_mock,
     cloud_test_catalog,
-    remote_config,
     remote_dataset,
 ):
     requests_mock.post(
-        f'{remote_config["url"]}/dataset-info',
+        f"{STUDIO_URL}/api/datachain/dataset-info",
         status_code=404,
         json={"message": "Dataset not found"},
     )
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(DataChainError) as exc_info:
-        catalog.pull_dataset("ds://dogs@v1", no_cp=True, remote_config=remote_config)
+        catalog.pull_dataset("ds://dogs@v1", no_cp=True)
     assert str(exc_info.value) == "Error from server: Dataset not found"
 
 
@@ -258,22 +252,21 @@ def test_pull_dataset_not_found_in_remote(
 def test_pull_dataset_error_on_fetching_stats(
     requests_mock,
     cloud_test_catalog,
-    remote_config,
     remote_dataset,
 ):
     requests_mock.post(
-        f'{remote_config["url"]}/dataset-info',
+        f"{STUDIO_URL}/api/datachain/dataset-info",
         json=remote_dataset,
     )
     requests_mock.post(
-        f'{remote_config["url"]}/dataset-stats',
+        f"{STUDIO_URL}/api/datachain/dataset-stats",
         status_code=400,
         json={"message": "Internal error"},
     )
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(DataChainError) as exc_info:
-        catalog.pull_dataset("ds://dogs@v1", no_cp=True, remote_config=remote_config)
+        catalog.pull_dataset("ds://dogs@v1", no_cp=True)
     assert str(exc_info.value) == "Error from server: Internal error"
 
 
@@ -283,28 +276,27 @@ def test_pull_dataset_error_on_fetching_stats(
 def test_pull_dataset_exporting_dataset_failed_in_remote(
     requests_mock,
     cloud_test_catalog,
-    remote_config,
     remote_dataset,
     export_status,
 ):
     data_url = (
         "https://studio-blobvault.s3.amazonaws.com/datachain_ds_export_1_0.parquet.lz4"
     )
-    requests_mock.post(f'{remote_config["url"]}/dataset-info', json=remote_dataset)
+    requests_mock.post(f"{STUDIO_URL}/api/datachain/dataset-info", json=remote_dataset)
     requests_mock.post(
-        f'{remote_config["url"]}/dataset-stats',
+        f"{STUDIO_URL}/api/datachain/dataset-stats",
         json={"num_objects": 5, "size": 1000},
     )
-    requests_mock.post(f'{remote_config["url"]}/dataset-export', json=[data_url])
+    requests_mock.post(f"{STUDIO_URL}/api/datachain/dataset-export", json=[data_url])
     requests_mock.post(
-        f'{remote_config["url"]}/dataset-export-status',
+        f"{STUDIO_URL}/api/datachain/dataset-export-status",
         json={"status": export_status},
     )
 
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(DataChainError) as exc_info:
-        catalog.pull_dataset("ds://dogs@v1", no_cp=True, remote_config=remote_config)
+        catalog.pull_dataset("ds://dogs@v1", no_cp=True)
     assert str(exc_info.value) == (
         f"Error from server: Dataset export {export_status} in Studio"
     )
@@ -315,25 +307,24 @@ def test_pull_dataset_exporting_dataset_failed_in_remote(
 def test_pull_dataset_empty_parquet(
     requests_mock,
     cloud_test_catalog,
-    remote_config,
     remote_dataset,
     dog_entries_parquet_lz4,
 ):
     data_url = (
         "https://studio-blobvault.s3.amazonaws.com/datachain_ds_export_1_0.parquet.lz4"
     )
-    requests_mock.post(f'{remote_config["url"]}/dataset-info', json=remote_dataset)
+    requests_mock.post(f"{STUDIO_URL}/api/datachain/dataset-info", json=remote_dataset)
     requests_mock.post(
-        f'{remote_config["url"]}/dataset-stats',
+        f"{STUDIO_URL}/api/datachain/dataset-stats",
         json={"num_objects": 5, "size": 1000},
     )
-    requests_mock.post(f'{remote_config["url"]}/dataset-export', json=[data_url])
+    requests_mock.post(f"{STUDIO_URL}/api/datachain/dataset-export", json=[data_url])
     requests_mock.post(
-        f'{remote_config["url"]}/dataset-export-status',
+        f"{STUDIO_URL}/api/datachain/dataset-export-status",
         json={"status": "completed"},
     )
     requests_mock.get(data_url, content=b"")
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(RuntimeError):
-        catalog.pull_dataset("ds://dogs@v1", no_cp=True, remote_config=remote_config)
+        catalog.pull_dataset("ds://dogs@v1", no_cp=True)

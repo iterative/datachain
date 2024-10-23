@@ -84,6 +84,30 @@ def test_studio_token(capsys):
     assert main(["studio", "token"]) == 1
 
 
+def test_studio_ls_datasets(capsys, requests_mock):
+    with Config(ConfigLevel.GLOBAL).edit() as conf:
+        conf["studio"] = {"token": "isat_access_token", "team": "team_name"}
+
+    datasets = [
+        {
+            "id": 1,
+            "name": "dogs",
+            "versions": [{"version": 1}, {"version": 2}],
+        },
+        {
+            "id": 2,
+            "name": "cats",
+            "versions": [{"version": 1}],
+        },
+    ]
+
+    requests_mock.post(f"{STUDIO_URL}/api/datachain/ls-datasets", json=datasets)
+
+    assert main(["studio", "datasets"]) == 0
+    out = capsys.readouterr().out
+    assert out.strip() == "dogs (v1)\ndogs (v2)\ncats (v1)"
+
+
 def test_studio_team_local():
     assert main(["studio", "team", "team_name"]) == 0
     config = Config(ConfigLevel.LOCAL).read()

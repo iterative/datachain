@@ -206,6 +206,25 @@ def add_studio_parser(subparsers, parent_parser) -> None:
         help=studio_token_help,
     )
 
+    studio_ls_dataset_help = "List the available datasets from Studio"
+    studio_ls_dataset_description = (
+        "This command lists all the datasets available in Studio.\n"
+        "It will show the dataset name and the number of versions available."
+    )
+
+    ls_dataset_parser = studio_subparser.add_parser(
+        "datasets",
+        parents=[parent_parser],
+        description=studio_ls_dataset_description,
+        help=studio_ls_dataset_help,
+    )
+    ls_dataset_parser.add_argument(
+        "--team",
+        action="store",
+        default=None,
+        help="The team to list datasets for. By default, it will use team from config.",
+    )
+
 
 def get_parser() -> ArgumentParser:  # noqa: PLR0915
     try:
@@ -749,16 +768,13 @@ def format_ls_entry(entry: str) -> str:
 
 
 def ls_remote(
-    url: str,
-    username: str,
-    token: str,
     paths: Iterable[str],
     long: bool = False,
 ):
     from datachain.node import long_line_str
     from datachain.remote.studio import StudioClient
 
-    client = StudioClient(url, username, token)
+    client = StudioClient()
     first = True
     for path, response in client.ls(paths):
         if not first:
@@ -798,9 +814,6 @@ def ls(
         ls_local(sources, long=long, **kwargs)
     else:
         ls_remote(
-            config["url"],
-            config["username"],
-            config["token"],
             sources,
             long=long,
         )
