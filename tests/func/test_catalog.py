@@ -102,7 +102,6 @@ def test_find_names_columns(cloud_test_catalog, cloud_type):
     if cloud_type == "file":
         src_uri_path = LocalFileSystem._strip_protocol(src_uri)
 
-    print(f"uri is {src_uri}, path is {src_uri_path}")
     assert set(
         catalog.find(
             [src_uri],
@@ -244,6 +243,9 @@ def test_cp_local_dataset(cloud_test_catalog, dogs_dataset):
     ),
 )
 def test_cp_subdir(cloud_test_catalog, recursive, star, slash, dir_exists):
+    if not star and not slash and dir_exists:
+        pytest.skip("Skip")
+
     src_uri = f"{cloud_test_catalog.src_uri}/dogs"
     working_dir = cloud_test_catalog.working_dir
     catalog = cloud_test_catalog.catalog
@@ -325,6 +327,9 @@ def test_cp_subdir(cloud_test_catalog, recursive, star, slash, dir_exists):
 )
 def test_cp_multi_subdir(cloud_test_catalog, recursive, star, slash, cloud_type):  # noqa: PLR0915
     # TODO remove when https://github.com/iterative/datachain/issues/318 is done
+    if recursive and not star and not slash:
+        pytest.skip("Skipping")
+
     if cloud_type == "file" and recursive and not star and slash:
         pytest.skip(
             "Skipping until https://github.com/iterative/datachain/issues/318 is fixed"

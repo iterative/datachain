@@ -34,6 +34,7 @@ from tqdm import tqdm
 
 from datachain.cache import DataChainCache
 from datachain.client import Client
+from datachain.client.local import FileClient
 from datachain.config import Config
 from datachain.dataset import (
     DATASET_PREFIX,
@@ -54,8 +55,8 @@ from datachain.error import (
     QueryScriptCancelError,
     QueryScriptRunError,
 )
+from datachain.lib.listing import listing_uri_from_name
 from datachain.listing import Listing
-from datachain.lib.listing import parse_listing_uri
 from datachain.node import DirType, Node, NodeWithPath
 from datachain.nodes_thread_pool import NodesThreadPool
 from datachain.remote.studio import StudioClient
@@ -462,6 +463,11 @@ def instantiate_node_groups(
             node_group.is_edatachain,
             node_group.is_dataset,
         )
+        """
+        print("Nodes to instantiate")
+        for n in instantiated_nodes:
+            print(n)
+        """
         if not virtual_only:
             listing.instantiate_nodes(
                 instantiated_nodes,
@@ -511,7 +517,6 @@ def find_column_to_str(  # noqa: PLR0911
             full_path = path + "/"
         else:
             full_path = path
-        print("hereeee")
         return src.get_node_full_path_from_path(full_path)
     if column == "size":
         return str(row[field_lookup["size"]])
@@ -605,66 +610,26 @@ class Catalog:
         skip_indexing=False,
     ) -> tuple[Listing, str]:
         from datachain.lib.dc import DataChain
-        from datachain.query.session import Session
-
-        from datachain.client import Client
-        from datachain.client.local import FileClient
-        from datachain.lib.listing import listing_uri_from_name
-        session = Session.get(catalog=self)  # TODO move as property of Catalog
 
         DataChain.from_storage(
-            source, session=session, update=update, object_name=object_name
+            source, session=self.session, update=update, object_name=object_name
         )
-
-        '''
-        original_list_ds_name, list_uri, list_path = parse_listing_uri(
-            uri, cache, client_config
-        )
-        '''
-
-        dataset_name, _ = DataChain.get_list_dataset_name(source, session)
-
-        ###
-        original_list_ds_name, list_uri, list_path = parse_listing_uri(
-            source, self.cache, self.client_config
-        )
-        list_ds_name, list_ds_exists = DataChain.get_list_dataset_name(
-            source, session, update=update
-        )
-        if (
-            isinstance(Client.get_client(source, self.cache, **self.client_config), FileClient)
-            and original_list_ds_name != list_ds_name
-        ):
-            # For local file system we need to fix listing path / prefix
-            diff = original_list_ds_name.strip("/").removeprefix(list_ds_name)
-            list_path = f"{diff}/{list_path}"
-
-        ###
-
         client = Client.get_client(source, self.cache, **self.client_config)
-        # client.name = client.name + "/" + dataset_name.split("/")[-2].strip("/")
-        ln = listing_uri_from_name(list_ds_name)
-        print(f"client name in enlist is {client.name}, dataset name is {dataset_name} list path is {list_path} list uri from name is {ln}")
+        list_ds_name, _, list_path, _ = DataChain.get_list_dataset_name(
+            source, self.session, update=update
+        )
+
+        if isinstance(client, FileClient):
+            uri = listing_uri_from_name(list_ds_name)
+            client = Client.get_client(uri, self.cache, **self.client_config)
 
         lst = Listing(
             self.warehouse.clone(),
-            # Client.get_client(source, self.cache, **self.client_config),
             client,
-            self.get_dataset(dataset_name),
+            self.get_dataset(list_ds_name),
             object_name=object_name,
         )
 
-        u, old_path = Client.parse_url(source)
-        _, u, path = parse_listing_uri(source, self.cache, self.client_config)
-        # print(f"Old path is {old_path} new path is {path}")
-        if path == "*":
-            pass
-            # path = "dogs/*"
-            # print("aaaaaa")
-
-        # print(f"Source: {source}, ds name {dataset_name}, parsed uri {u}, parsed path {path}")
-
-        # return lst, path
         return lst, list_path
 
     def _remove_dataset_rows_and_warehouse_info(
@@ -755,7 +720,9 @@ class Catalog:
                     client = self.get_client(source, **client_config)
                     uri = client.uri
                     st = self.warehouse.clone()
-                    dataset_name, _ = DataChain.get_list_dataset_name(uri, self.session)
+                    dataset_name, _, _, _ = DataChain.get_list_dataset_name(
+                        uri, self.session
+                    )
                     listing = Listing(st, client, self.get_dataset(dataset_name))
                     rows = DatasetQuery(
                         name=dataset.name, version=ds_version, catalog=self
@@ -1627,6 +1594,7 @@ class Catalog:
         If cloud source is not indexed, or has expired index, it runs indexing
         It also creates .edatachain file by default, if not specified differently
         """
+        # print(f"In cp {sources}")
         client_config = client_config or self.client_config
         node_groups = self.enlist_sources_grouped(
             sources,
@@ -1755,7 +1723,6 @@ class Catalog:
                 src.node, fields, names, inames, paths, ipaths, size, typ
             )
             for row in results:
-                print(row)
                 yield "\t".join(
                     find_column_to_str(row, field_lookup, src, column)
                     for column in columns

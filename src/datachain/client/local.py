@@ -109,7 +109,6 @@ class FileClient(Client):
         return posixpath.relpath(path, self.name)
 
     def get_full_path(self, rel_path):
-        print(f"getting full path of {rel_path}, name is {self.name}")
         full_path = Path(self.name, rel_path).as_posix()
         if rel_path.endswith("/") or not rel_path:
             full_path += "/"

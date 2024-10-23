@@ -378,36 +378,44 @@ class DataChain:
 
     @classmethod
     def get_list_dataset_name(
-        cls, uri: str, session: Session, update: bool = False, in_memory=False
-    ) -> tuple[str, bool]:
+        cls, uri: str, session: Session, update: bool = False
+    ) -> tuple[str, str, str, bool]:
         """Returns correct listing dataset name that must be used for saving listing
         operation. It takes into account existing listings and reusability of those.
         It also returns boolean saying if returned dataset name is reused / already
-        exists or not.
+        exists or not, and it returns correct listing path that should be used to find
+        rows based on uri.
         """
-        # TODO maybe move to lib/listing.py
-        list_dataset_name, _, _ = parse_listing_uri(
-            uri, session.catalog.cache, session.catalog.client_config
-        )
-
         catalog = session.catalog
+        cache = catalog.cache
+        client_config = catalog.client_config
+
+        client = Client.get_client(uri, cache, **client_config)
+        ds_name, list_uri, list_path = parse_listing_uri(uri, cache, client_config)
+        listing = None
 
         listings = [
             ls
             for ls in catalog.listings()
-            if not ls.is_expired and ls.contains(list_dataset_name)
+            if not ls.is_expired and ls.contains(ds_name)
         ]
 
-        if not listings:
-            # no existing datasets found that have input uri listed
-            return list_dataset_name, False
+        if listings:
+            if update:
+                # choosing the smallest possible one to minimize update time
+                listing = sorted(listings, key=lambda ls: len(ls.name))[0]
+            else:
+                # no need to update, choosing the most recent one
+                listing = sorted(listings, key=lambda ls: ls.created_at)[-1]
 
-        if not update:
-            # no need to update, choosing the most recent one
-            return sorted(listings, key=lambda ls: ls.created_at)[-1].name, True
+        if isinstance(client, FileClient) and listing and listing.name != ds_name:
+            # For local file system we need to fix listing path / prefix
+            # if we are reusing existing listing
+            list_path = f'{ds_name.strip("/").removeprefix(listing.name)}/{list_path}'
 
-        # choosing the smallest possible one to minimize update time
-        return sorted(listings, key=lambda ls: len(ls.name))[0].name, True
+        ds_name = listing.name if listing else ds_name
+
+        return ds_name, list_uri, list_path, bool(listing)
 
     @classmethod
     def from_storage(
@@ -447,11 +455,8 @@ class DataChain:
         cache = session.catalog.cache
         client_config = session.catalog.client_config
 
-        original_list_ds_name, list_uri, list_path = parse_listing_uri(
-            uri, cache, client_config
-        )
-        list_ds_name, list_ds_exists = cls.get_list_dataset_name(
-            uri, session, in_memory=in_memory, update=update
+        list_ds_name, list_uri, list_path, list_ds_exists = cls.get_list_dataset_name(
+            uri, session, update=update
         )
 
         if update or not list_ds_exists:
@@ -469,18 +474,8 @@ class DataChain:
                 .save(list_ds_name, listing=True)
             )
 
-        if (
-            isinstance(Client.get_client(uri, cache, **client_config), FileClient)
-            and original_list_ds_name != list_ds_name
-        ):
-            # For local file system we need to fix listing path / prefix
-            diff = original_list_ds_name.strip("/").removeprefix(list_ds_name)
-            list_path = f"{diff}/{list_path}"
-
         dc = cls.from_dataset(list_ds_name, session=session, settings=settings)
         dc.signals_schema = dc.signals_schema.mutate({f"{object_name}": file_type})
-
-        # print(f"end of from_storage, list_path is {list_path}")
 
         return ls(dc, list_path, recursive=recursive, object_name=object_name)
 

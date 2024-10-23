@@ -29,10 +29,7 @@ def test_ls_no_args(cloud_test_catalog, cloud_type, capsys):
     DataChain.from_storage(src, session=session).collect()
     ls([], catalog=catalog)
     captured = capsys.readouterr()
-    if cloud_type == "file":
-        pytest.skip("Skipping until file listing is refactored with new lst generator")
-    else:
-        assert captured.out == f"{src}/@v1\n"
+    assert captured.out == f"{src}/@v1\n"
 
 
 def test_ls_root(cloud_test_catalog, cloud_type, capsys):
@@ -48,20 +45,7 @@ def test_ls_root(cloud_test_catalog, cloud_type, capsys):
         assert src_name in buckets
 
 
-def ls_sources_output(src, cloud_type):
-    if cloud_type == "ffile":
-        return """\
-cats/
-description
-dogs/
-dog1
-dog2
-dog3
-
-others:
-dog4
-    """
-
+def ls_sources_output(src):
     return """\
 cats/
 description
@@ -76,16 +60,12 @@ dog4
     """
 
 
-def test_ls_ssources(cloud_test_catalog, cloud_type, capsys):
+def test_ls_sources(cloud_test_catalog, cloud_type, capsys):
     src = cloud_test_catalog.src_uri
     ls([src], catalog=cloud_test_catalog.catalog)
-    # print("=====")
     ls([f"{src}/dogs/*"], catalog=cloud_test_catalog.catalog)
     captured = capsys.readouterr()
-    print("----")
-    print(captured.out)
-    print("----")
-    assert same_lines(captured.out, ls_sources_output(src, cloud_type))
+    assert same_lines(captured.out, ls_sources_output(src))
 
 
 def test_ls_sources_scheme_uppercased(cloud_test_catalog, cloud_type, capsys):
@@ -93,7 +73,7 @@ def test_ls_sources_scheme_uppercased(cloud_test_catalog, cloud_type, capsys):
     ls([src], catalog=cloud_test_catalog.catalog)
     ls([f"{src}/dogs/*"], catalog=cloud_test_catalog.catalog)
     captured = capsys.readouterr()
-    assert same_lines(captured.out, ls_sources_output(src, cloud_type))
+    assert same_lines(captured.out, ls_sources_output(src))
 
 
 def test_ls_not_found(cloud_test_catalog):
