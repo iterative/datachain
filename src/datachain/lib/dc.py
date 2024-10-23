@@ -377,7 +377,7 @@ class DataChain:
         return self
 
     @classmethod
-    def get_list_dataset_name(
+    def parse_uri(
         cls, uri: str, session: Session, update: bool = False
     ) -> tuple[str, str, str, bool]:
         """Returns correct listing dataset name that must be used for saving listing
@@ -455,7 +455,7 @@ class DataChain:
         cache = session.catalog.cache
         client_config = session.catalog.client_config
 
-        list_ds_name, list_uri, list_path, list_ds_exists = cls.get_list_dataset_name(
+        list_ds_name, list_uri, list_path, list_ds_exists = cls.parse_uri(
             uri, session, update=update
         )
 

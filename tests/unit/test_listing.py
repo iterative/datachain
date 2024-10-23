@@ -38,9 +38,7 @@ def _tree_to_entries(tree: dict, path=""):
 @pytest.fixture
 def listing(test_session):
     catalog = test_session.catalog
-    dataset_name, _, _, _ = DataChain.get_list_dataset_name(
-        "s3://whatever", test_session
-    )
+    dataset_name, _, _, _ = DataChain.parse_uri("s3://whatever", test_session)
     DataChain.from_values(file=list(_tree_to_entries(TREE))).save(
         dataset_name, listing=True
     )

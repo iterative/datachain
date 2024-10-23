@@ -463,11 +463,6 @@ def instantiate_node_groups(
             node_group.is_edatachain,
             node_group.is_dataset,
         )
-        """
-        print("Nodes to instantiate")
-        for n in instantiated_nodes:
-            print(n)
-        """
         if not virtual_only:
             listing.instantiate_nodes(
                 instantiated_nodes,
@@ -615,7 +610,7 @@ class Catalog:
             source, session=self.session, update=update, object_name=object_name
         )
         client = Client.get_client(source, self.cache, **self.client_config)
-        list_ds_name, _, list_path, _ = DataChain.get_list_dataset_name(
+        list_ds_name, _, list_path, _ = DataChain.parse_uri(
             source, self.session, update=update
         )
 
@@ -720,9 +715,7 @@ class Catalog:
                     client = self.get_client(source, **client_config)
                     uri = client.uri
                     st = self.warehouse.clone()
-                    dataset_name, _, _, _ = DataChain.get_list_dataset_name(
-                        uri, self.session
-                    )
+                    dataset_name, _, _, _ = DataChain.parse_uri(uri, self.session)
                     listing = Listing(st, client, self.get_dataset(dataset_name))
                     rows = DatasetQuery(
                         name=dataset.name, version=ds_version, catalog=self
@@ -991,19 +984,16 @@ class Catalog:
             raise ValueError("Sources needs to be non empty list")
 
         from datachain.lib.dc import DataChain
-        from datachain.query.session import Session
-
-        session = Session.get(catalog=self, client_config=client_config)
 
         chains = []
         for source in sources:
             if source.startswith(DATASET_PREFIX):
                 dc = DataChain.from_dataset(
-                    source[len(DATASET_PREFIX) :], session=session
+                    source[len(DATASET_PREFIX) :], session=self.session
                 )
             else:
                 dc = DataChain.from_storage(
-                    source, session=session, recursive=recursive
+                    source, session=self.session, recursive=recursive
                 )
 
             chains.append(dc)
@@ -1594,7 +1584,6 @@ class Catalog:
         If cloud source is not indexed, or has expired index, it runs indexing
         It also creates .edatachain file by default, if not specified differently
         """
-        # print(f"In cp {sources}")
         client_config = client_config or self.client_config
         node_groups = self.enlist_sources_grouped(
             sources,
@@ -1709,7 +1698,6 @@ class Catalog:
             elif column == "name":
                 field_set.add("path")
             elif column == "path":
-                field_set.add("source")
                 field_set.add("dir_type")
                 field_set.add("path")
             elif column == "size":

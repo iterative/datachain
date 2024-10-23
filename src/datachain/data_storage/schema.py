@@ -239,10 +239,6 @@ class DataTable:
     def table(self) -> "sa.Table":
         return self.get_table()
 
-    @staticmethod
-    def to_db_name(name: str) -> str:
-        return name.replace(".", DEFAULT_DELIMITER)
-
     def apply_conditions(self, query: "Executable") -> "Executable":
         """
         Apply any conditions that belong on all selecting queries.
@@ -278,7 +274,6 @@ class DataTable:
 
     def dir_expansion(self):
         return DirExpansion(self.object_name)
-        # return DirExpansion(self.object_name).query(query)
 
 
 PARTITION_COLUMN_ID = "partition_id"
