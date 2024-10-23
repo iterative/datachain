@@ -9,9 +9,16 @@ import msgpack
 import pytest
 
 from datachain.cli import ls
+from datachain.config import Config, ConfigLevel
 from datachain.lib.dc import DataChain
 from datachain.lib.listing import LISTING_PREFIX
 from tests.utils import uppercase_scheme
+
+
+@pytest.fixture(autouse=True)
+def studio_config():
+    with Config(ConfigLevel.GLOBAL).edit() as conf:
+        conf["studio"] = {"token": "isat_access_token", "team": "team_name"}
 
 
 def same_lines(lines1, lines2):

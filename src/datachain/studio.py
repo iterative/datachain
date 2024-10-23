@@ -1,8 +1,10 @@
 import os
 from typing import TYPE_CHECKING
 
+from datachain.catalog.catalog import raise_remote_error
 from datachain.config import Config, ConfigLevel
 from datachain.error import DataChainError
+from datachain.remote.studio import StudioClient
 from datachain.utils import STUDIO_URL
 
 if TYPE_CHECKING:
@@ -10,7 +12,7 @@ if TYPE_CHECKING:
 
 POST_LOGIN_MESSAGE = (
     "Once you've logged in, return here "
-    "and you'll be ready to start using Datachain with Studio."
+    "and you'll be ready to start using DataChain with Studio."
 )
 
 
@@ -21,7 +23,22 @@ def process_studio_cli_args(args: "Namespace"):
         return logout()
     if args.cmd == "token":
         return token()
+    if args.cmd == "datasets":
+        return list_datasets(args)
+    if args.cmd == "team":
+        return set_team(args)
     raise DataChainError(f"Unknown command '{args.cmd}'.")
+
+
+def set_team(args: "Namespace"):
+    level = ConfigLevel.GLOBAL if args.__dict__.get("global") else ConfigLevel.LOCAL
+    config = Config(level)
+    with config.edit() as conf:
+        studio_conf = conf.get("studio", {})
+        studio_conf["team"] = args.team_name
+        conf["studio"] = studio_conf
+
+    print(f"Set default team to '{args.team_name}' in {config.config_file()}")
 
 
 def login(args: "Namespace"):
@@ -31,7 +48,7 @@ def login(args: "Namespace"):
     name = args.name
     hostname = (
         args.hostname
-        or os.environ.get("DVC_STUDIO_HOSTNAME")
+        or os.environ.get("DVC_STUDIO_URL")
         or config.get("url")
         or STUDIO_URL
     )
@@ -51,7 +68,7 @@ def login(args: "Namespace"):
             hostname=hostname,
             scopes=scopes,
             open_browser=open_browser,
-            client_name="Datachain",
+            client_name="DataChain",
             post_login_message=POST_LOGIN_MESSAGE,
         )
     except StudioAuthError as exc:
@@ -84,6 +101,21 @@ def token():
         )
 
     print(token)
+
+
+def list_datasets(args: "Namespace"):
+    client = StudioClient(team=args.team)
+    response = client.ls_datasets()
+    if not response.ok:
+        raise_remote_error(response.message)
+    if not response.data:
+        print("No datasets found.")
+        return
+    for d in response.data:
+        name = d.get("name")
+        for v in d.get("versions", []):
+            version = v.get("version")
+            print(f"{name} (v{version})")
 
 
 def save_config(hostname, token):
