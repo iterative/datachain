@@ -23,7 +23,7 @@ def process_studio_cli_args(args: "Namespace"):
         return logout()
     if args.cmd == "token":
         return token()
-    if args.cmd == "ls-datasets":
+    if args.cmd == "datasets":
         return list_datasets(args)
     if args.cmd == "team":
         return set_team(args)

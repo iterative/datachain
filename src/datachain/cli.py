@@ -213,7 +213,7 @@ def add_studio_parser(subparsers, parent_parser) -> None:
     )
 
     ls_dataset_parser = studio_subparser.add_parser(
-        "ls-datasets",
+        "datasets",
         parents=[parent_parser],
         description=studio_ls_dataset_description,
         help=studio_ls_dataset_help,

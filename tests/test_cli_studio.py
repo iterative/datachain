@@ -103,7 +103,7 @@ def test_studio_ls_datasets(capsys, requests_mock):
 
     requests_mock.post(f"{STUDIO_URL}/api/datachain/ls-datasets", json=datasets)
 
-    assert main(["studio", "ls-datasets"]) == 0
+    assert main(["studio", "datasets"]) == 0
     out = capsys.readouterr().out
     assert out.strip() == "dogs (v1)\ndogs (v2)\ncats (v1)"
 
