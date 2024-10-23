@@ -452,7 +452,7 @@ def cloud_type(request):
     return request.param
 
 
-@pytest.fixture(scope="session", params=[False])
+@pytest.fixture(scope="session", params=[False, True])
 def version_aware(request):
     return request.param
 
