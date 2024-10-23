@@ -329,6 +329,7 @@ class DataChain:
         parallel=None,
         workers=None,
         min_task_size=None,
+        prefetch: Optional[int] = None,
         sys: Optional[bool] = None,
     ) -> "Self":
         """Change settings for chain.
@@ -355,7 +356,7 @@ class DataChain:
         if sys is None:
             sys = self._sys
         settings = copy.copy(self._settings)
-        settings.add(Settings(cache, parallel, workers, min_task_size))
+        settings.add(Settings(cache, parallel, workers, min_task_size, prefetch))
         return self._evolve(settings=settings, _sys=sys)
 
     def reset_settings(self, settings: Optional[Settings] = None) -> "Self":
@@ -810,6 +811,8 @@ class DataChain:
             ```
         """
         udf_obj = self._udf_to_obj(Mapper, func, params, output, signal_map)
+        if (prefetch := self._settings.prefetch) is not None:
+            udf_obj.prefetch = prefetch
 
         return self._evolve(
             query=self._query.add_signals(
@@ -847,6 +850,8 @@ class DataChain:
             ```
         """
         udf_obj = self._udf_to_obj(Generator, func, params, output, signal_map)
+        if (prefetch := self._settings.prefetch) is not None:
+            udf_obj.prefetch = prefetch
         return self._evolve(
             query=self._query.generate(
                 udf_obj.to_udf_wrapper(),
