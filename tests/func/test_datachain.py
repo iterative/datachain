@@ -24,7 +24,7 @@ from datachain.lib.file import File, ImageFile
 from datachain.lib.listing import LISTING_TTL, is_listing_dataset, parse_listing_uri
 from datachain.lib.tar import process_tar
 from datachain.lib.udf import Mapper
-from datachain.lib.utils import DataChainColumnError, DataChainError
+from datachain.lib.utils import DataChainError
 from datachain.query.dataset import QueryStep
 from datachain.sql.functions import path as pathfunc
 from datachain.sql.functions.array import cosine_distance, euclidean_distance
@@ -491,15 +491,9 @@ def test_from_storage_check_rows(tmp_dir, test_session):
 
 def test_mutate_existing_column(test_session):
     ds = DataChain.from_values(ids=[1, 2, 3], session=test_session)
+    ds = ds.mutate(ids=Column("ids") + 1)
 
-    with pytest.raises(DataChainColumnError) as excinfo:
-        ds.mutate(ids=Column("ids") + 1)
-
-    assert (
-        str(excinfo.value)
-        == "Error for column ids: Cannot modify existing column with mutate()."
-        " Use a different name for the new column."
-    )
+    assert list(ds.collect()) == [(2,), (3,), (4,)]
 
 
 @pytest.mark.parametrize(
