@@ -2051,6 +2051,81 @@ class DataChain:
             for row in results_iter:
                 writer.writerow(row)
 
+    def to_json(
+        self,
+        path: Union[str, os.PathLike[str]],
+        fs_kwargs: Optional[dict[str, Any]] = None,
+        include_outer_list: bool = True,
+    ) -> None:
+        """Save chain to a JSON file.
+
+        Parameters:
+            path : Path to save the file. This supports local paths as well as
+                remote paths, such as s3:// or hf:// with fsspec.
+            fs_kwargs : Optional kwargs to pass to the fsspec filesystem, used only for
+                write, for fsspec-type URLs, such as s3:// or hf:// when
+                provided as the destination path.
+            include_outer_list : Sets whether to include an outer list for all rows.
+                Setting this to True makes the file valid JSON, while False instead
+                writes in the JSON lines format.
+        """
+        opener = open
+
+        if isinstance(path, str) and "://" in path:
+            from datachain.client.fsspec import Client
+
+            fs_kwargs = {
+                **self._query.catalog.client_config,
+                **(fs_kwargs or {}),
+            }
+
+            client = Client.get_implementation(path)
+
+            fsspec_fs = client.create_fs(**fs_kwargs)
+
+            opener = fsspec_fs.open
+
+        headers, _ = self._effective_signals_schema.get_headers_with_length()
+        column_names = [".".join(filter(None, header)) for header in headers]
+
+        results_iter = self.collect_flatten()
+
+        is_first = True
+
+        with opener(path, "wb") as f:
+            if include_outer_list:
+                # This makes the file JSON instead of JSON lines.
+                f.write(b"[\n")
+            for row in results_iter:
+                if not is_first:
+                    if include_outer_list:
+                        # This makes the file JSON instead of JSON lines.
+                        f.write(b",\n")
+                    else:
+                        f.write(b"\n")
+                else:
+                    is_first = False
+                f.write(orjson.dumps(dict(zip(column_names, row))))
+            if include_outer_list:
+                # This makes the file JSON instead of JSON lines.
+                f.write(b"\n]\n")
+
+    def to_jsonl(
+        self,
+        path: Union[str, os.PathLike[str]],
+        fs_kwargs: Optional[dict[str, Any]] = None,
+    ) -> None:
+        """Save chain to a JSON lines file.
+
+        Parameters:
+            path : Path to save the file. This supports local paths as well as
+                remote paths, such as s3:// or hf:// with fsspec.
+            fs_kwargs : Optional kwargs to pass to the fsspec filesystem, used only for
+                write, for fsspec-type URLs, such as s3:// or hf:// when
+                provided as the destination path.
+        """
+        self.to_json(path, fs_kwargs, include_outer_list=False)
+
     @classmethod
     def from_records(
         cls,

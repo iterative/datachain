@@ -1,4 +1,5 @@
 import datetime
+import json
 import math
 import os
 import re
@@ -1272,6 +1273,142 @@ def test_to_csv_features_nested(tmp_dir, test_session):
         "label_1,n2,5",
         "label_2,n1,1",
         "",
+    ]
+
+
+# These deprecation warnings occur in the datamodel-code-generator package.
+@pytest.mark.filterwarnings("ignore::pydantic.warnings.PydanticDeprecatedSince20")
+def test_to_from_json(tmp_dir, test_session):
+    df = pd.DataFrame(DF_DATA)
+    dc_to = DataChain.from_pandas(df, session=test_session)
+    path = tmp_dir / "test.json"
+    dc_to.to_json(path)
+
+    with open(path) as f:
+        values = json.load(f)
+    assert values == [
+        {"first_name": n, "age": a, "city": c}
+        for n, a, c in zip(DF_DATA["first_name"], DF_DATA["age"], DF_DATA["city"])
+    ]
+
+    dc_from = DataChain.from_json(path.as_uri(), session=test_session)
+    df1 = dc_from.select("json.first_name", "json.age", "json.city").to_pandas()
+    df1 = df1["json"]
+    assert df1.equals(df)
+
+
+# These deprecation warnings occur in the datamodel-code-generator package.
+@pytest.mark.filterwarnings("ignore::pydantic.warnings.PydanticDeprecatedSince20")
+def test_from_json_jmespath(tmp_dir, test_session):
+    df = pd.DataFrame(DF_DATA)
+    values = [
+        {"first_name": n, "age": a, "city": c}
+        for n, a, c in zip(DF_DATA["first_name"], DF_DATA["age"], DF_DATA["city"])
+    ]
+    path = tmp_dir / "test.json"
+    with open(path, "w") as f:
+        json.dump({"author": "Test User", "version": 5, "values": values}, f)
+
+    dc_from = DataChain.from_json(
+        path.as_uri(), jmespath="values", session=test_session
+    )
+    df1 = dc_from.select("values.first_name", "values.age", "values.city").to_pandas()
+    df1 = df1["values"]
+    assert df1.equals(df)
+
+
+def test_to_json_features(tmp_dir, test_session):
+    dc_to = DataChain.from_values(
+        f1=features, num=range(len(features)), session=test_session
+    )
+    path = tmp_dir / "test.json"
+    dc_to.to_json(path)
+    with open(path) as f:
+        values = json.load(f)
+    assert values == [
+        {"f1.nnn": f.nnn, "f1.count": f.count, "num": n} for n, f in enumerate(features)
+    ]
+
+
+def test_to_json_features_nested(tmp_dir, test_session):
+    dc_to = DataChain.from_values(sign1=features_nested, session=test_session)
+    path = tmp_dir / "test.json"
+    dc_to.to_json(path)
+    with open(path) as f:
+        values = json.load(f)
+    assert values == [
+        {"sign1.label": f"label_{n}", "sign1.fr.nnn": f.nnn, "sign1.fr.count": f.count}
+        for n, f in enumerate(features)
+    ]
+
+
+# These deprecation warnings occur in the datamodel-code-generator package.
+@pytest.mark.filterwarnings("ignore::pydantic.warnings.PydanticDeprecatedSince20")
+def test_to_from_jsonl(tmp_dir, test_session):
+    df = pd.DataFrame(DF_DATA)
+    dc_to = DataChain.from_pandas(df, session=test_session)
+    path = tmp_dir / "test.jsonl"
+    dc_to.to_jsonl(path)
+
+    with open(path) as f:
+        values = [json.loads(line) for line in f.read().split("\n")]
+    assert values == [
+        {"first_name": n, "age": a, "city": c}
+        for n, a, c in zip(DF_DATA["first_name"], DF_DATA["age"], DF_DATA["city"])
+    ]
+
+    dc_from = DataChain.from_jsonl(path.as_uri(), session=test_session)
+    df1 = dc_from.select("jsonl.first_name", "jsonl.age", "jsonl.city").to_pandas()
+    df1 = df1["jsonl"]
+    assert df1.equals(df)
+
+
+# These deprecation warnings occur in the datamodel-code-generator package.
+@pytest.mark.filterwarnings("ignore::pydantic.warnings.PydanticDeprecatedSince20")
+def test_from_jsonl_jmespath(tmp_dir, test_session):
+    df = pd.DataFrame(DF_DATA)
+    values = [
+        {"first_name": n, "age": a, "city": c}
+        for n, a, c in zip(DF_DATA["first_name"], DF_DATA["age"], DF_DATA["city"])
+    ]
+    path = tmp_dir / "test.jsonl"
+    with open(path, "w") as f:
+        for v in values:
+            f.write(
+                json.dumps({"data": "Contained Within", "row_version": 5, "value": v})
+            )
+            f.write("\n")
+
+    dc_from = DataChain.from_jsonl(
+        path.as_uri(), jmespath="value", session=test_session
+    )
+    df1 = dc_from.select("value.first_name", "value.age", "value.city").to_pandas()
+    df1 = df1["value"]
+    assert df1.equals(df)
+
+
+def test_to_jsonl_features(tmp_dir, test_session):
+    dc_to = DataChain.from_values(
+        f1=features, num=range(len(features)), session=test_session
+    )
+    path = tmp_dir / "test.json"
+    dc_to.to_jsonl(path)
+    with open(path) as f:
+        values = [json.loads(line) for line in f.read().split("\n")]
+    assert values == [
+        {"f1.nnn": f.nnn, "f1.count": f.count, "num": n} for n, f in enumerate(features)
+    ]
+
+
+def test_to_jsonl_features_nested(tmp_dir, test_session):
+    dc_to = DataChain.from_values(sign1=features_nested, session=test_session)
+    path = tmp_dir / "test.json"
+    dc_to.to_jsonl(path)
+    with open(path) as f:
+        values = [json.loads(line) for line in f.read().split("\n")]
+    assert values == [
+        {"sign1.label": f"label_{n}", "sign1.fr.nnn": f.nnn, "sign1.fr.count": f.count}
+        for n, f in enumerate(features)
     ]
 
 
