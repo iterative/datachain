@@ -1111,14 +1111,6 @@ class DataChain:
         )
         ```
         """
-        existing_columns = set(self.signals_schema.values.keys())
-        for col_name in kwargs:
-            if col_name in existing_columns:
-                raise DataChainColumnError(
-                    col_name,
-                    "Cannot modify existing column with mutate(). "
-                    "Use a different name for the new column.",
-                )
         for col_name, expr in kwargs.items():
             if not isinstance(expr, (Column, Func)) and isinstance(expr.type, NullType):
                 raise DataChainColumnError(
