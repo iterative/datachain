@@ -34,7 +34,6 @@ from tqdm import tqdm
 
 from datachain.cache import DataChainCache
 from datachain.client import Client
-from datachain.client.local import FileClient
 from datachain.dataset import (
     DATASET_PREFIX,
     QUERY_DATASET_PREFIX,
@@ -54,7 +53,6 @@ from datachain.error import (
     QueryScriptCancelError,
     QueryScriptRunError,
 )
-from datachain.lib.listing import listing_uri_from_name
 from datachain.listing import Listing
 from datachain.node import DirType, Node, NodeWithPath
 from datachain.nodes_thread_pool import NodesThreadPool
@@ -604,22 +602,14 @@ class Catalog:
         DataChain.from_storage(
             source, session=self.session, update=update, object_name=object_name
         )
-        client = Client.get_client(source, self.cache, **self.client_config)
 
-        list_ds_name, _, list_path, _ = DataChain.parse_uri(
+        list_ds_name, list_uri, list_path, _ = DataChain.parse_uri(
             source, self.session, update=update
         )
 
-        if isinstance(client, FileClient):
-            # we could be reusing existing listing dataset so client name / uri
-            # should be changed accordingly
-            client = Client.get_client(
-                listing_uri_from_name(list_ds_name), self.cache, **self.client_config
-            )
-
         lst = Listing(
             self.warehouse.clone(),
-            client,
+            Client.get_client(list_uri, self.cache, **self.client_config),
             self.get_dataset(list_ds_name),
             object_name=object_name,
         )
