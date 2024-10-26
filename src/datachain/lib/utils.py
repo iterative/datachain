@@ -1,4 +1,6 @@
+import re
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 
 
 class AbstractUDF(ABC):
@@ -28,3 +30,37 @@ class DataChainParamsError(DataChainError):
 class DataChainColumnError(DataChainParamsError):
     def __init__(self, col_name, msg):
         super().__init__(f"Error for column {col_name}: {msg}")
+
+
+def normalize_col_names(col_names: Sequence[str]) -> dict[str, str]:
+    gen_col_counter = 0
+    new_col_names = {}
+    org_col_names = set(col_names)
+
+    for org_column in col_names:
+        new_column = org_column.lower()
+        new_column = re.sub("[^0-9a-z_\\s-]+", "_", new_column)
+        new_column = re.sub("[-_\\s]+", "_", new_column)
+        new_column = new_column.strip("_")
+
+        if (
+            not new_column
+            or new_column[0].isdigit()
+            or (new_column != org_column and new_column in org_col_names)
+            or new_column in new_col_names
+        ):
+            while True:
+                generated_column = f"c{gen_col_counter}"
+                gen_col_counter += 1
+                if new_column:
+                    generated_column = f"{generated_column}_{new_column}"
+                if (
+                    generated_column not in org_col_names
+                    and generated_column not in new_col_names
+                ):
+                    new_column = generated_column
+                    break
+
+        new_col_names[new_column] = org_column
+
+    return new_col_names
