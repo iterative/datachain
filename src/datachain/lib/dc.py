@@ -55,7 +55,7 @@ from datachain.query.dataset import DatasetQuery, PartitionByType
 from datachain.query.schema import DEFAULT_DELIMITER, Column, ColumnMeta
 from datachain.sql.functions import path as pathfunc
 from datachain.telemetry import telemetry
-from datachain.utils import batched_it, inside_notebook
+from datachain.utils import batched_it, inside_notebook, row_to_nested_dict
 
 if TYPE_CHECKING:
     from pyarrow import DataType as ArrowDataType
@@ -2086,9 +2086,7 @@ class DataChain:
             opener = fsspec_fs.open
 
         headers, _ = self._effective_signals_schema.get_headers_with_length()
-        column_names = [".".join(filter(None, header)) for header in headers]
-
-        results_iter = self.collect_flatten()
+        headers = [list(filter(None, header)) for header in headers]
 
         is_first = True
 
@@ -2096,7 +2094,7 @@ class DataChain:
             if include_outer_list:
                 # This makes the file JSON instead of JSON lines.
                 f.write(b"[\n")
-            for row in results_iter:
+            for row in self.collect_flatten():
                 if not is_first:
                     if include_outer_list:
                         # This makes the file JSON instead of JSON lines.
@@ -2105,7 +2103,7 @@ class DataChain:
                         f.write(b"\n")
                 else:
                     is_first = False
-                f.write(orjson.dumps(dict(zip(column_names, row))))
+                f.write(orjson.dumps(row_to_nested_dict(headers, row)))
             if include_outer_list:
                 # This makes the file JSON instead of JSON lines.
                 f.write(b"\n]\n")

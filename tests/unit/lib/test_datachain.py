@@ -1326,7 +1326,8 @@ def test_to_json_features(tmp_dir, test_session):
     with open(path) as f:
         values = json.load(f)
     assert values == [
-        {"f1.nnn": f.nnn, "f1.count": f.count, "num": n} for n, f in enumerate(features)
+        {"f1": {"nnn": f.nnn, "count": f.count}, "num": n}
+        for n, f in enumerate(features)
     ]
 
 
@@ -1337,7 +1338,7 @@ def test_to_json_features_nested(tmp_dir, test_session):
     with open(path) as f:
         values = json.load(f)
     assert values == [
-        {"sign1.label": f"label_{n}", "sign1.fr.nnn": f.nnn, "sign1.fr.count": f.count}
+        {"sign1": {"label": f"label_{n}", "fr": {"nnn": f.nnn, "count": f.count}}}
         for n, f in enumerate(features)
     ]
 
@@ -1396,7 +1397,8 @@ def test_to_jsonl_features(tmp_dir, test_session):
     with open(path) as f:
         values = [json.loads(line) for line in f.read().split("\n")]
     assert values == [
-        {"f1.nnn": f.nnn, "f1.count": f.count, "num": n} for n, f in enumerate(features)
+        {"f1": {"nnn": f.nnn, "count": f.count}, "num": n}
+        for n, f in enumerate(features)
     ]
 
 
@@ -1407,7 +1409,7 @@ def test_to_jsonl_features_nested(tmp_dir, test_session):
     with open(path) as f:
         values = [json.loads(line) for line in f.read().split("\n")]
     assert values == [
-        {"sign1.label": f"label_{n}", "sign1.fr.nnn": f.nnn, "sign1.fr.count": f.count}
+        {"sign1": {"label": f"label_{n}", "fr": {"nnn": f.nnn, "count": f.count}}}
         for n, f in enumerate(features)
     ]
 

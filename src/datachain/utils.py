@@ -455,3 +455,27 @@ def env2bool(var, undefined=False):
     if var is None:
         return undefined
     return bool(re.search("1|y|yes|true", var, flags=re.IGNORECASE))
+
+
+def nested_dict_path_set(
+    data: dict[str, Any], path: Sequence[str], value: Any
+) -> dict[str, Any]:
+    """Sets a value inside a nested dict based on the list of dict keys as a path,
+    and will create sub-dicts as needed to set the value."""
+    sub_data = data
+    for element in path[:-1]:
+        if element not in sub_data:
+            sub_data[element] = {}
+        sub_data = sub_data[element]
+    sub_data[path[len(path) - 1]] = value
+    return data
+
+
+def row_to_nested_dict(
+    headers: Iterable[Sequence[str]], row: Iterable[Any]
+) -> dict[str, Any]:
+    """Converts a row to a nested dict based on the provided headers."""
+    result: dict[str, Any] = {}
+    for h, v in zip(headers, row):
+        nested_dict_path_set(result, h, v)
+    return result

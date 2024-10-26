@@ -5,7 +5,9 @@ import pytest
 from datachain.utils import (
     datachain_paths_join,
     determine_processes,
+    nested_dict_path_set,
     retry_with_backoff,
+    row_to_nested_dict,
     sizeof_fmt,
     sql_escape_like,
     suffix_to_number,
@@ -170,3 +172,48 @@ def test_determine_processes(parallel, settings, expected):
 )
 def test_uses_glob(path, expected):
     assert uses_glob(path) is expected
+
+
+@pytest.mark.parametrize(
+    "data,path,value,expected",
+    (
+        ({}, ["test"], True, {"test": True}),
+        ({"extra": False}, ["test"], True, {"extra": False, "test": True}),
+        (
+            {"extra": False},
+            ["test", "nested"],
+            True,
+            {"extra": False, "test": {"nested": True}},
+        ),
+        (
+            {"extra": False},
+            ["test", "nested", "deep"],
+            True,
+            {"extra": False, "test": {"nested": {"deep": True}}},
+        ),
+        (
+            {"extra": False, "test": {"test2": 5, "nested": {}}},
+            ["test", "nested", "deep"],
+            True,
+            {"extra": False, "test": {"test2": 5, "nested": {"deep": True}}},
+        ),
+    ),
+)
+def test_nested_dict_path_set(data, path, value, expected):
+    assert nested_dict_path_set(data, path, value) == expected
+
+
+@pytest.mark.parametrize(
+    "headers,row,expected",
+    (
+        ([["a"], ["b"]], (3, 7), {"a": 3, "b": 7}),
+        ([["a"], ["b", "c"]], (3, 7), {"a": 3, "b": {"c": 7}}),
+        (
+            [["a", "b"], ["a", "c"], ["d"], ["a", "e", "f"]],
+            (1, 5, "test", 11),
+            {"a": {"b": 1, "c": 5, "e": {"f": 11}}, "d": "test"},
+        ),
+    ),
+)
+def test_row_to_nested_dict(headers, row, expected):
+    assert row_to_nested_dict(headers, row) == expected
