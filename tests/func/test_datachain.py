@@ -1505,3 +1505,35 @@ def test_to_from_parquet_partitioned_remote(cloud_test_catalog_upload, chunk_siz
     df1 = dc_from.select("first_name", "age", "city").to_pandas()
     df1 = df1.sort_values("first_name").reset_index(drop=True)
     assert df1.equals(df)
+
+
+# These deprecation warnings occur in the datamodel-code-generator package.
+@pytest.mark.filterwarnings("ignore::pydantic.warnings.PydanticDeprecatedSince20")
+def test_to_from_json_remote(cloud_test_catalog_upload):
+    ctc = cloud_test_catalog_upload
+    path = f"{ctc.src_uri}/test.json"
+
+    df = pd.DataFrame(DF_DATA)
+    dc_to = DataChain.from_pandas(df, session=ctc.session)
+    dc_to.to_json(path)
+
+    dc_from = DataChain.from_json(path, session=ctc.session)
+    df1 = dc_from.select("json.first_name", "json.age", "json.city").to_pandas()
+    df1 = df1["json"]
+    assert df1.equals(df)
+
+
+# These deprecation warnings occur in the datamodel-code-generator package.
+@pytest.mark.filterwarnings("ignore::pydantic.warnings.PydanticDeprecatedSince20")
+def test_to_from_jsonl_remote(cloud_test_catalog_upload):
+    ctc = cloud_test_catalog_upload
+    path = f"{ctc.src_uri}/test.jsonl"
+
+    df = pd.DataFrame(DF_DATA)
+    dc_to = DataChain.from_pandas(df, session=ctc.session)
+    dc_to.to_jsonl(path)
+
+    dc_from = DataChain.from_jsonl(path, session=ctc.session)
+    df1 = dc_from.select("jsonl.first_name", "jsonl.age", "jsonl.city").to_pandas()
+    df1 = df1["jsonl"]
+    assert df1.equals(df)
