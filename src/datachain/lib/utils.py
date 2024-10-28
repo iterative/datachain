@@ -42,24 +42,19 @@ def normalize_col_names(col_names: Sequence[str]) -> dict[str, str]:
         new_column = re.sub("[^0-9a-z]+", "_", new_column)
         new_column = new_column.strip("_")
 
-        if (
-            not new_column
-            or new_column[0].isdigit()
-            or (new_column != org_column and new_column in org_col_names)
-            or new_column in new_col_names
-        ):
-            while True:
-                generated_column = f"c{gen_col_counter}"
-                gen_col_counter += 1
-                if new_column:
-                    generated_column = f"{generated_column}_{new_column}"
-                if (
-                    generated_column not in org_col_names
-                    and generated_column not in new_col_names
-                ):
-                    new_column = generated_column
-                    break
+        generated_column = new_column
 
-        new_col_names[new_column] = org_column
+        while (
+            not generated_column.isidentifier()
+            or generated_column in new_col_names
+            or (generated_column != org_column and generated_column in org_col_names)
+        ):
+            if new_column:
+                generated_column = f"c{gen_col_counter}_{new_column}"
+            else:
+                generated_column = f"c{gen_col_counter}"
+            gen_col_counter += 1
+
+        new_col_names[generated_column] = org_column
 
     return new_col_names
