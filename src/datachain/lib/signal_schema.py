@@ -20,7 +20,6 @@ from typing import (  # noqa: UP035
 )
 
 from pydantic import BaseModel, create_model
-from sqlalchemy import ColumnElement
 from typing_extensions import Literal as LiteralEx
 
 from datachain.lib.convert.python_to_sql import python_to_sql
@@ -492,14 +491,16 @@ class SignalSchema:
                 # renaming existing signal
                 del new_values[value.name]
                 new_values[name] = self.values[value.name]
+            elif name in self.values:
+                # changing the type of existing signal, e.g File -> ImageFile
+                del new_values[name]
+                new_values[name] = args_map[name]
             elif isinstance(value, Func):
                 # adding new signal with function
                 new_values[name] = value.get_result_type(self)
-            elif isinstance(value, ColumnElement):
+            else:
                 # adding new signal
                 new_values[name] = sql_to_python(value)
-            else:
-                new_values[name] = value
 
         return SignalSchema(new_values)
 

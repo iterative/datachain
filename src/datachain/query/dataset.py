@@ -10,7 +10,6 @@ from abc import ABC, abstractmethod
 from collections.abc import Generator, Iterable, Iterator, Sequence
 from copy import copy
 from functools import wraps
-from secrets import token_hex
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -721,17 +720,10 @@ class SQLMutate(SQLClause):
 
     def apply_sql_clause(self, query: Select) -> Select:
         original_subquery = query.subquery()
-        to_mutate = {c.name for c in self.args}
-
-        prefix = f"mutate{token_hex(8)}_"
-        cols = [
-            c.label(prefix + c.name) if c.name in to_mutate else c
-            for c in original_subquery.c
-        ]
         # this is needed for new column to be used in clauses
         # like ORDER BY, otherwise new column is not recognized
         subquery = (
-            sqlalchemy.select(*cols, *self.args)
+            sqlalchemy.select(*original_subquery.c, *self.args)
             .select_from(original_subquery)
             .subquery()
         )
