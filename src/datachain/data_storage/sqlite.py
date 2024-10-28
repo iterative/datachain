@@ -393,13 +393,12 @@ class SQLiteMetastore(AbstractDBMetastore):
         self,
         id_generator: "SQLiteIDGenerator",
         uri: StorageURI = StorageURI(""),
-        partial_id: Optional[int] = None,
         db: Optional["SQLiteDatabaseEngine"] = None,
         db_file: Optional[str] = None,
         in_memory: bool = False,
     ):
         self.schema: DefaultSchema = DefaultSchema()
-        super().__init__(id_generator, uri, partial_id)
+        super().__init__(id_generator, uri)
 
         # needed for dropping tables in correct order for tests because of
         # foreign keys
@@ -418,20 +417,13 @@ class SQLiteMetastore(AbstractDBMetastore):
     def clone(
         self,
         uri: StorageURI = StorageURI(""),
-        partial_id: Optional[int] = None,
         use_new_connection: bool = False,
     ) -> "SQLiteMetastore":
-        if not uri:
-            if partial_id is not None:
-                raise ValueError("if partial_id is used, uri cannot be empty")
-            if self.uri:
-                uri = self.uri
-                if self.partial_id:
-                    partial_id = self.partial_id
+        if not uri and self.uri:
+            uri = self.uri
         return SQLiteMetastore(
             self.id_generator.clone(),
             uri=uri,
-            partial_id=partial_id,
             db=self.db.clone(),
         )
 
@@ -446,7 +438,6 @@ class SQLiteMetastore(AbstractDBMetastore):
             {
                 "id_generator_clone_params": self.id_generator.clone_params(),
                 "uri": self.uri,
-                "partial_id": self.partial_id,
                 "db_clone_params": self.db.clone_params(),
             },
         )
@@ -457,7 +448,6 @@ class SQLiteMetastore(AbstractDBMetastore):
         *,
         id_generator_clone_params: tuple[Callable, list, dict[str, Any]],
         uri: StorageURI,
-        partial_id: Optional[int],
         db_clone_params: tuple[Callable, list, dict[str, Any]],
     ) -> "SQLiteMetastore":
         (
@@ -469,14 +459,11 @@ class SQLiteMetastore(AbstractDBMetastore):
         return cls(
             id_generator=id_generator_class(*id_generator_args, **id_generator_kwargs),
             uri=uri,
-            partial_id=partial_id,
             db=db_class(*db_args, **db_kwargs),
         )
 
     def _init_tables(self) -> None:
         """Initialize tables."""
-        self.db.create_table(self._storages, if_not_exists=True)
-        self.default_table_names.append(self._storages.name)
         self.db.create_table(self._datasets, if_not_exists=True)
         self.default_table_names.append(self._datasets.name)
         self.db.create_table(self._datasets_versions, if_not_exists=True)
@@ -487,26 +474,13 @@ class SQLiteMetastore(AbstractDBMetastore):
         self.default_table_names.append(self._jobs.name)
 
     def init(self, uri: StorageURI) -> None:
-        if not uri:
-            raise ValueError("uri for init() cannot be empty")
-        partials_table = self._partials_table(uri)
-        self.db.create_table(partials_table, if_not_exists=True)
-
-    @classmethod
-    def _buckets_columns(cls) -> list["SchemaItem"]:
-        """Buckets (storages) table columns."""
-        return [*super()._buckets_columns(), UniqueConstraint("uri")]
+        # TODO remove init
+        pass
 
     @classmethod
     def _datasets_columns(cls) -> list["SchemaItem"]:
         """Datasets table columns."""
         return [*super()._datasets_columns(), UniqueConstraint("name")]
-
-    def _storages_insert(self) -> "Insert":
-        return sqlite.insert(self._storages)
-
-    def _partials_insert(self) -> "Insert":
-        return sqlite.insert(self._partials)
 
     def _datasets_insert(self) -> "Insert":
         return sqlite.insert(self._datasets)
@@ -526,13 +500,9 @@ class SQLiteMetastore(AbstractDBMetastore):
             self._datasets_dependencies.c.id,
             self._datasets_dependencies.c.dataset_id,
             self._datasets_dependencies.c.dataset_version_id,
-            self._datasets_dependencies.c.bucket_id,
-            self._datasets_dependencies.c.bucket_version,
             self._datasets.c.name,
-            self._datasets.c.created_at,
             self._datasets_versions.c.version,
             self._datasets_versions.c.created_at,
-            self._storages.c.uri,
         ]
 
     #

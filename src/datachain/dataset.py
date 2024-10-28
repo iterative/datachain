@@ -3,7 +3,6 @@ import json
 from dataclasses import dataclass, fields
 from datetime import datetime
 from typing import (
-    TYPE_CHECKING,
     Any,
     Optional,
     TypeVar,
@@ -14,9 +13,6 @@ from urllib.parse import urlparse
 from datachain.client import Client
 from datachain.error import DatasetVersionNotFoundError
 from datachain.sql.types import NAME_TYPES_MAPPING, SQLType
-
-if TYPE_CHECKING:
-    from datachain.storage import StorageURI
 
 T = TypeVar("T", bound="DatasetRecord")
 V = TypeVar("V", bound="DatasetVersion")
@@ -94,13 +90,9 @@ class DatasetDependency:
         id: int,
         dataset_id: Optional[int],
         dataset_version_id: Optional[int],
-        bucket_id: Optional[int],
-        bucket_version: Optional[str],
         dataset_name: Optional[str],
-        dataset_created_at: Optional[datetime],
         dataset_version: Optional[int],
         dataset_version_created_at: Optional[datetime],
-        bucket_uri: Optional["StorageURI"],
     ) -> Optional["DatasetDependency"]:
         from datachain.lib.listing import is_listing_dataset, listing_uri_from_name
 
@@ -124,7 +116,7 @@ class DatasetDependency:
                 if dataset_version
                 else None
             ),
-            dataset_version_created_at or dataset_created_at,  # type: ignore[arg-type]
+            dataset_version_created_at,  # type: ignore[arg-type]
             [],
         )
 

@@ -1702,31 +1702,13 @@ class Catalog:
         *,
         client_config=None,
     ) -> None:
-        root_sources = [
-            src for src in sources if Client.get_implementation(src).is_root_url(src)
-        ]
-        non_root_sources = [
-            src
-            for src in sources
-            if not Client.get_implementation(src).is_root_url(src)
-        ]
-
-        client_config = client_config or self.client_config
-
-        # for root sources (e.g s3://) we are just getting all buckets and
-        # saving them as storages, without further indexing in each bucket
-        for source in root_sources:
-            for bucket in Client.get_implementation(source).ls_buckets(**client_config):
-                client = self.get_client(bucket.uri, **client_config)
-                print(f"Registering storage {client.uri}")
-                self.metastore.create_storage_if_not_registered(client.uri)
-
         self.enlist_sources(
-            non_root_sources,
+            sources,
             update,
-            client_config=client_config,
+            client_config=client_config or self.client_config,
             only_index=True,
         )
 
     def find_stale_storages(self) -> None:
-        self.metastore.find_stale_storages()
+        # TODO reimplement this logic with listing datasets
+        pass

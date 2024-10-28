@@ -1,9 +1,7 @@
 import copy
-import hashlib
 import json
 import logging
 import os
-import posixpath
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from datetime import datetime, timezone
@@ -24,7 +22,6 @@ from sqlalchemy import (
     UniqueConstraint,
     select,
 )
-from sqlalchemy.sql import func
 
 from datachain.data_storage import JobQueryType, JobStatus
 from datachain.data_storage.serializer import Serializable
@@ -36,12 +33,11 @@ from datachain.dataset import (
 )
 from datachain.error import (
     DatasetNotFoundError,
-    StorageNotFoundError,
     TableMissingError,
 )
 from datachain.job import Job
-from datachain.storage import Storage, StorageStatus, StorageURI
-from datachain.utils import JSONSerialize, is_expired
+from datachain.storage import StorageURI
+from datachain.utils import JSONSerialize
 
 if TYPE_CHECKING:
     from sqlalchemy import Delete, Insert, Select, Update
@@ -60,10 +56,8 @@ class AbstractMetastore(ABC, Serializable):
     """
 
     uri: StorageURI
-    partial_id: Optional[int]
 
     schema: "schema.Schema"
-    storage_class: type[Storage] = Storage
     dataset_class: type[DatasetRecord] = DatasetRecord
     dependency_class: type[DatasetDependency] = DatasetDependency
     job_class: type[Job] = Job
@@ -71,10 +65,8 @@ class AbstractMetastore(ABC, Serializable):
     def __init__(
         self,
         uri: StorageURI = StorageURI(""),
-        partial_id: Optional[int] = None,
     ):
         self.uri = uri
-        self.partial_id: Optional[int] = partial_id
 
     def __enter__(self) -> "AbstractMetastore":
         """Returns self upon entering context manager."""
@@ -87,7 +79,6 @@ class AbstractMetastore(ABC, Serializable):
     def clone(
         self,
         uri: StorageURI = StorageURI(""),
-        partial_id: Optional[int] = None,
         use_new_connection: bool = False,
     ) -> "AbstractMetastore":
         """Clones AbstractMetastore implementation for some Storage input.
@@ -113,96 +104,6 @@ class AbstractMetastore(ABC, Serializable):
 
     def cleanup_for_tests(self) -> None:
         """Cleanup for tests."""
-
-    #
-    # Storages
-    #
-
-    @abstractmethod
-    def create_storage_if_not_registered(self, uri: StorageURI) -> None:
-        """Saves new storage if it doesn't exist in database."""
-
-    @abstractmethod
-    def register_storage_for_indexing(
-        self,
-        uri: StorageURI,
-        force_update: bool = True,
-        prefix: str = "",
-    ) -> tuple[Storage, bool, bool, Optional[int], Optional[str]]:
-        """
-        Prepares storage for indexing operation.
-        This method should be called before index operation is started
-        It returns:
-            - storage, prepared for indexing
-            - boolean saying if indexing is needed
-            - boolean saying if indexing is currently pending (running)
-            - partial id
-            - partial path
-        """
-
-    @abstractmethod
-    def find_stale_storages(self) -> None:
-        """
-        Finds all pending storages for which the last inserted node has happened
-        before STALE_MINUTES_LIMIT minutes, and marks it as STALE.
-        """
-
-    @abstractmethod
-    def mark_storage_indexed(
-        self,
-        uri: StorageURI,
-        status: int,
-        ttl: int,
-        end_time: Optional[datetime] = None,
-        prefix: str = "",
-        partial_id: int = 0,
-        error_message: str = "",
-        error_stack: str = "",
-        dataset: Optional[DatasetRecord] = None,
-    ) -> None:
-        """
-        Marks storage as indexed.
-        This method should be called when index operation is finished.
-        """
-
-    @abstractmethod
-    def update_last_inserted_at(self, uri: Optional[StorageURI] = None) -> None:
-        """Updates last inserted datetime in bucket with current time."""
-
-    @abstractmethod
-    def get_storage(self, uri: StorageURI) -> Storage:
-        """
-        Gets storage representation from database.
-        E.g. if s3 is used as storage this would be s3 bucket data.
-        """
-
-    @abstractmethod
-    def mark_storage_pending(self, storage: Storage) -> Storage:
-        """Marks storage as pending."""
-
-    #
-    # Partial Indexes
-    #
-
-    @abstractmethod
-    def init_partial_id(self, uri: StorageURI) -> None:
-        """Initializes partial id for given storage."""
-
-    @abstractmethod
-    def get_next_partial_id(self, uri: StorageURI) -> int:
-        """Returns next partial id for given storage."""
-
-    @abstractmethod
-    def get_valid_partial_id(
-        self, uri: StorageURI, prefix: str, raise_exc: bool = True
-    ) -> tuple[Optional[int], Optional[str]]:
-        """
-        Returns valid partial id and it's path, if they exist, for a given storage.
-        """
-
-    @abstractmethod
-    def get_last_partial_path(self, uri: StorageURI) -> Optional[str]:
-        """Returns last partial path for given storage."""
 
     #
     # Datasets
@@ -397,8 +298,6 @@ class AbstractDBMetastore(AbstractMetastore):
     and has shared logic for all database systems currently in use.
     """
 
-    PARTIALS_TABLE_NAME_PREFIX = "prt_"
-    STORAGE_TABLE = "buckets"
     DATASET_TABLE = "datasets"
     DATASET_VERSION_TABLE = "datasets_versions"
     DATASET_DEPENDENCY_TABLE = "datasets_dependencies"
@@ -411,10 +310,9 @@ class AbstractDBMetastore(AbstractMetastore):
         self,
         id_generator: "AbstractIDGenerator",
         uri: StorageURI = StorageURI(""),
-        partial_id: Optional[int] = None,
     ):
         self.id_generator = id_generator
-        super().__init__(uri, partial_id)
+        super().__init__(uri)
 
     @abstractmethod
     def init(self, uri: StorageURI) -> None:
@@ -427,21 +325,6 @@ class AbstractDBMetastore(AbstractMetastore):
     def cleanup_tables(self, temp_table_names: list[str]) -> None:
         """Cleanup temp tables."""
         self.id_generator.delete_uris(temp_table_names)
-
-    @classmethod
-    def _buckets_columns(cls) -> list["SchemaItem"]:
-        """Buckets (storages) table columns."""
-        return [
-            Column("id", Integer, primary_key=True, nullable=False),
-            Column("uri", Text, nullable=False),
-            Column("timestamp", DateTime(timezone=True)),
-            Column("expires", DateTime(timezone=True)),
-            Column("started_inserting_at", DateTime(timezone=True)),
-            Column("last_inserted_at", DateTime(timezone=True)),
-            Column("status", Integer, nullable=False),
-            Column("error_message", Text, nullable=False, default=""),
-            Column("error_stack", Text, nullable=False, default=""),
-        ]
 
     @classmethod
     def _datasets_columns(cls) -> list["SchemaItem"]:
@@ -543,58 +426,11 @@ class AbstractDBMetastore(AbstractMetastore):
                 ForeignKey(f"{cls.DATASET_VERSION_TABLE}.id"),
                 nullable=True,
             ),
-            # TODO remove when https://github.com/iterative/dvcx/issues/1121 is done
-            # If we unify datasets and bucket listing then both bucket fields won't
-            # be needed
-            Column(
-                "bucket_id",
-                Integer,
-                ForeignKey(f"{cls.STORAGE_TABLE}.id"),
-                nullable=True,
-            ),
-            Column("bucket_version", Text, nullable=True),
         ]
-
-    @classmethod
-    def _storage_partial_columns(cls) -> list["SchemaItem"]:
-        """Storage partial table columns."""
-        return [
-            Column("path_str", Text, nullable=False),
-            # This is generated before insert and is not the SQLite rowid,
-            # so it is not the primary key.
-            Column("partial_id", Integer, nullable=False, index=True),
-            Column("timestamp", DateTime(timezone=True)),
-            Column("expires", DateTime(timezone=True)),
-        ]
-
-    def _get_storage_partial_table(self, name: str) -> Table:
-        table = self.db.metadata.tables.get(name)
-        if table is None:
-            table = Table(
-                name,
-                self.db.metadata,
-                *self._storage_partial_columns(),
-            )
-        return table
 
     #
     # Query Tables
     #
-
-    def _partials_table(self, uri: StorageURI) -> Table:
-        return self._get_storage_partial_table(self._partials_table_name(uri))
-
-    @cached_property
-    def _storages(self) -> Table:
-        return Table(self.STORAGE_TABLE, self.db.metadata, *self._buckets_columns())
-
-    @cached_property
-    def _partials(self) -> Table:
-        assert (
-            self._current_partials_table_name
-        ), "Partials can only be used if uri/current_partials_table_name is set"
-        return self._get_storage_partial_table(self._current_partials_table_name)
-
     @cached_property
     def _datasets(self) -> Table:
         return Table(self.DATASET_TABLE, self.db.metadata, *self._datasets_columns())
@@ -618,32 +454,6 @@ class AbstractDBMetastore(AbstractMetastore):
     #
     # Query Starters (These can be overridden by subclasses)
     #
-
-    @abstractmethod
-    def _storages_insert(self) -> "Insert": ...
-
-    def _storages_select(self, *columns) -> "Select":
-        if not columns:
-            return self._storages.select()
-        return select(*columns)
-
-    def _storages_update(self) -> "Update":
-        return self._storages.update()
-
-    def _storages_delete(self) -> "Delete":
-        return self._storages.delete()
-
-    @abstractmethod
-    def _partials_insert(self) -> "Insert": ...
-
-    def _partials_select(self, *columns) -> "Select":
-        if not columns:
-            return self._partials.select()
-        return select(*columns)
-
-    def _partials_update(self) -> "Update":
-        return self._partials.update()
-
     @abstractmethod
     def _datasets_insert(self) -> "Insert": ...
 
@@ -685,275 +495,6 @@ class AbstractDBMetastore(AbstractMetastore):
 
     def _datasets_dependencies_delete(self) -> "Delete":
         return self._datasets_dependencies.delete()
-
-    #
-    # Table Name Internal Functions
-    #
-
-    def _partials_table_name(self, uri: StorageURI) -> str:
-        sha = hashlib.sha256(uri.encode("utf-8")).hexdigest()[:12]
-        return f"{self.PARTIALS_TABLE_NAME_PREFIX}_{sha}"
-
-    @property
-    def _current_partials_table_name(self) -> Optional[str]:
-        if not self.uri:
-            return None
-        return self._partials_table_name(self.uri)
-
-    #
-    # Storages
-    #
-
-    def create_storage_if_not_registered(self, uri: StorageURI, conn=None) -> None:
-        """Saves new storage if it doesn't exist in database."""
-        query = self._storages_insert().values(
-            uri=uri,
-            status=StorageStatus.CREATED,
-            error_message="",
-            error_stack="",
-        )
-        if hasattr(query, "on_conflict_do_nothing"):
-            # SQLite and PostgreSQL both support 'on_conflict_do_nothing',
-            # but generic SQL does not
-            query = query.on_conflict_do_nothing()
-        self.db.execute(query, conn=conn)
-
-    def register_storage_for_indexing(
-        self,
-        uri: StorageURI,
-        force_update: bool = True,
-        prefix: str = "",
-    ) -> tuple[Storage, bool, bool, Optional[int], Optional[str]]:
-        """
-        Prepares storage for indexing operation.
-        This method should be called before index operation is started
-        It returns:
-            - storage, prepared for indexing
-            - boolean saying if indexing is needed
-            - boolean saying if indexing is currently pending (running)
-            - partial id
-            - partial path
-        """
-        # This ensures that all calls to the DB are in a single transaction
-        # and commit is automatically called once this function returns
-        with self.db.transaction() as conn:
-            # Create storage if it doesn't exist
-            self.create_storage_if_not_registered(uri, conn=conn)
-            storage = self.get_storage(uri, conn=conn)
-
-            if storage.status == StorageStatus.PENDING:
-                return storage, False, True, None, None
-
-            if storage.is_expired or storage.status == StorageStatus.STALE:
-                storage = self.mark_storage_pending(storage, conn=conn)
-                return storage, True, False, None, None
-
-            if (
-                storage.status in (StorageStatus.PARTIAL, StorageStatus.COMPLETE)
-                and not force_update
-            ):
-                partial_id, partial_path = self.get_valid_partial_id(
-                    uri, prefix, raise_exc=False
-                )
-                if partial_id is not None:
-                    return storage, False, False, partial_id, partial_path
-                return storage, True, False, None, None
-
-            storage = self.mark_storage_pending(storage, conn=conn)
-            return storage, True, False, None, None
-
-    def find_stale_storages(self) -> None:
-        """
-        Finds all pending storages for which the last inserted node has happened
-        before STALE_MINUTES_LIMIT minutes, and marks it as STALE.
-        """
-        s = self._storages
-        with self.db.transaction() as conn:
-            pending_storages = map(
-                self.storage_class._make,
-                self.db.execute(
-                    self._storages_select().where(s.c.status == StorageStatus.PENDING),
-                    conn=conn,
-                ),
-            )
-            for storage in pending_storages:
-                if storage.is_stale:
-                    print(f"Marking storage {storage.uri} as stale")
-                    self._mark_storage_stale(storage.id, conn=conn)
-
-    def mark_storage_indexed(
-        self,
-        uri: StorageURI,
-        status: int,
-        ttl: int,
-        end_time: Optional[datetime] = None,
-        prefix: str = "",
-        partial_id: int = 0,
-        error_message: str = "",
-        error_stack: str = "",
-        dataset: Optional[DatasetRecord] = None,
-    ) -> None:
-        """
-        Marks storage as indexed.
-        This method should be called when index operation is finished.
-        """
-        if status == StorageStatus.PARTIAL and not prefix:
-            raise AssertionError("Partial indexing requires a prefix")
-
-        if end_time is None:
-            end_time = datetime.now(timezone.utc)
-        expires = Storage.get_expiration_time(end_time, ttl)
-
-        s = self._storages
-        with self.db.transaction() as conn:
-            self.db.execute(
-                self._storages_update()
-                .where(s.c.uri == uri)
-                .values(  # type: ignore [attr-defined]
-                    timestamp=end_time,
-                    expires=expires,
-                    status=status,
-                    last_inserted_at=end_time,
-                    error_message=error_message,
-                    error_stack=error_stack,
-                ),
-                conn=conn,
-            )
-
-            if not self._current_partials_table_name:
-                # This only occurs in tests
-                return
-
-            if status in (StorageStatus.PARTIAL, StorageStatus.COMPLETE):
-                dir_prefix = posixpath.join(prefix, "")
-                self.db.execute(
-                    self._partials_insert().values(
-                        path_str=dir_prefix,
-                        timestamp=end_time,
-                        expires=expires,
-                        partial_id=partial_id,
-                    ),
-                    conn=conn,
-                )
-
-            # update underlying dataset status as well
-            if status == StorageStatus.FAILED and dataset:
-                self.update_dataset_status(
-                    dataset,
-                    DatasetStatus.FAILED,
-                    dataset.latest_version,
-                    error_message=error_message,
-                    error_stack=error_stack,
-                    conn=conn,
-                )
-
-            if status in (StorageStatus.PARTIAL, StorageStatus.COMPLETE) and dataset:
-                self.update_dataset_status(
-                    dataset, DatasetStatus.COMPLETE, dataset.latest_version, conn=conn
-                )
-
-    def update_last_inserted_at(self, uri: Optional[StorageURI] = None) -> None:
-        """Updates last inserted datetime in bucket with current time"""
-        uri = uri or self.uri
-        updates = {"last_inserted_at": datetime.now(timezone.utc)}
-        s = self._storages
-        self.db.execute(
-            self._storages_update().where(s.c.uri == uri).values(**updates)  # type: ignore [attr-defined]
-        )
-
-    def get_storage(self, uri: StorageURI, conn=None) -> Storage:
-        """
-        Gets storage representation from database.
-        E.g. if s3 is used as storage this would be s3 bucket data
-        """
-        s = self._storages
-        result = next(
-            self.db.execute(self._storages_select().where(s.c.uri == uri), conn=conn),
-            None,
-        )
-        if not result:
-            raise StorageNotFoundError(f"Storage {uri} not found.")
-
-        return self.storage_class._make(result)
-
-    def mark_storage_pending(self, storage: Storage, conn=None) -> Storage:
-        # Update status to pending and dates
-        updates = {
-            "status": StorageStatus.PENDING,
-            "timestamp": None,
-            "expires": None,
-            "last_inserted_at": None,
-            "started_inserting_at": datetime.now(timezone.utc),
-        }
-        storage = storage._replace(**updates)  # type: ignore [arg-type]
-        s = self._storages
-        self.db.execute(
-            self._storages_update().where(s.c.uri == storage.uri).values(**updates),  # type: ignore [attr-defined]
-            conn=conn,
-        )
-        return storage
-
-    def _mark_storage_stale(self, storage_id: int, conn=None) -> None:
-        # Update status to pending and dates
-        updates = {"status": StorageStatus.STALE, "timestamp": None, "expires": None}
-        s = self._storages
-        self.db.execute(
-            self._storages.update().where(s.c.id == storage_id).values(**updates),  # type: ignore [attr-defined]
-            conn=conn,
-        )
-
-    #
-    # Partial Indexes
-    #
-
-    def init_partial_id(self, uri: StorageURI) -> None:
-        """Initializes partial id for given storage."""
-        if not uri:
-            raise ValueError("uri for get_next_partial_id() cannot be empty")
-        self.id_generator.init_id(f"partials:{uri}")
-
-    def get_next_partial_id(self, uri: StorageURI) -> int:
-        """Returns next partial id for given storage."""
-        if not uri:
-            raise ValueError("uri for get_next_partial_id() cannot be empty")
-        return self.id_generator.get_next_id(f"partials:{uri}")
-
-    def get_valid_partial_id(
-        self, uri: StorageURI, prefix: str, raise_exc: bool = True
-    ) -> tuple[Optional[int], Optional[str]]:
-        """
-        Returns valid partial id and it's path, if they exist, for a given storage.
-        """
-        # This SQL statement finds all entries that are
-        # prefixes of the given prefix, matching this or parent directories
-        # that are indexed.
-        dir_prefix = posixpath.join(prefix, "")
-        p = self._partials_table(uri)
-        expire_values = self.db.execute(
-            select(p.c.expires, p.c.partial_id, p.c.path_str)
-            .where(
-                p.c.path_str == func.substr(dir_prefix, 1, func.length(p.c.path_str))
-            )
-            .order_by(p.c.expires.desc())
-        )
-        for expires, partial_id, path_str in expire_values:
-            if not is_expired(expires):
-                return partial_id, path_str
-        if raise_exc:
-            raise RuntimeError(f"Unable to get valid partial_id: {uri=}, {prefix=}")
-        return None, None
-
-    def get_last_partial_path(self, uri: StorageURI) -> Optional[str]:
-        """Returns last partial path for given storage."""
-        p = self._partials_table(uri)
-        if not self.db.has_table(p.name):
-            raise StorageNotFoundError(f"Storage {uri} partials are not found.")
-        last_partial = self.db.execute(
-            select(p.c.path_str).order_by(p.c.timestamp.desc()).limit(1)
-        )
-        for (path_str,) in last_partial:
-            return path_str
-        return None
 
     #
     # Datasets
@@ -1298,7 +839,6 @@ class AbstractDBMetastore(AbstractMetastore):
         d = self._datasets
         dd = self._datasets_dependencies
         dv = self._datasets_versions
-        s = self._storages
 
         dataset_version = dataset.get_version(version)
 
@@ -1307,9 +847,9 @@ class AbstractDBMetastore(AbstractMetastore):
         query = (
             self._datasets_dependencies_select(*select_cols)
             .select_from(
-                dd.join(d, dd.c.dataset_id == d.c.id, isouter=True)
-                .join(s, dd.c.bucket_id == s.c.id, isouter=True)
-                .join(dv, dd.c.dataset_version_id == dv.c.id, isouter=True)
+                dd.join(d, dd.c.dataset_id == d.c.id, isouter=True).join(
+                    dv, dd.c.dataset_version_id == dv.c.id, isouter=True
+                )
             )
             .where(
                 (dd.c.source_dataset_id == dataset.id)
