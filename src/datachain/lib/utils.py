@@ -39,8 +39,7 @@ def normalize_col_names(col_names: Sequence[str]) -> dict[str, str]:
 
     for org_column in col_names:
         new_column = org_column.lower()
-        new_column = re.sub("[^0-9a-z_\\s-]+", "_", new_column)
-        new_column = re.sub("[-_\\s]+", "_", new_column)
+        new_column = re.sub("[^0-9a-z]+", "_", new_column)
         new_column = new_column.strip("_")
 
         if (
