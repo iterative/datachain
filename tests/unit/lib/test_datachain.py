@@ -284,7 +284,9 @@ def test_listings(test_session, tmp_dir):
     assert listing.expires
     assert listing.version == 1
     assert listing.num_objects == 1
-    assert listing.size == 2912
+    # Exact number if unreliable here since it depends on the PyArrow version
+    assert listing.size > 1000
+    assert listing.size < 5000
     assert listing.status == 4
 
 
