@@ -168,13 +168,21 @@ def test_parquet_convert_column_names():
             ("dot.notation.col", pa.int32()),
             ("with-dashes", pa.int32()),
             ("with spaces", pa.int32()),
+            ("with-multiple--dashes", pa.int32()),
+            ("with__underscores", pa.int32()),
+            ("__leading__underscores", pa.int32()),
+            ("trailing__underscores__", pa.int32()),
         ]
     )
     assert list(schema_to_output(schema)) == [
         "uppercasecol",
-        "dotnotationcol",
-        "withdashes",
-        "withspaces",
+        "dot_notation_col",
+        "with_dashes",
+        "with_spaces",
+        "with_multiple_dashes",
+        "with_underscores",
+        "leading_underscores",
+        "trailing_underscores",
     ]
 
 
