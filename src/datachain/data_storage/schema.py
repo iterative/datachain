@@ -26,6 +26,13 @@ if TYPE_CHECKING:
     from sqlalchemy.sql.elements import ColumnElement
 
 
+DEFAULT_DELIMITER = "__"
+
+
+def col_name(name: str, object_name: str = "file") -> str:
+    return f"{object_name}{DEFAULT_DELIMITER}{name}"
+
+
 def dedup_columns(columns: Iterable[sa.Column]) -> list[sa.Column]:
     """
     Removes duplicate columns from a list of columns.
@@ -76,64 +83,81 @@ def convert_rows_custom_column_types(
 
 
 class DirExpansion:
-    @staticmethod
-    def base_select(q):
+    def __init__(self, object_name: str):
+        self.object_name = object_name
+
+    def col_name(self, name: str, object_name: Optional[str] = None) -> str:
+        object_name = object_name or self.object_name
+        return col_name(name, object_name)
+
+    def c(self, query, name: str, object_name: Optional[str] = None) -> str:
+        return getattr(query.c, self.col_name(name, object_name=object_name))
+
+    def base_select(self, q):
         return sa.select(
-            q.c.sys__id,
-            false().label("is_dir"),
-            q.c.source,
-            q.c.path,
-            q.c.version,
-            q.c.location,
+            self.c(q, "id", object_name="sys"),
+            false().label(self.col_name("is_dir")),
+            self.c(q, "source"),
+            self.c(q, "path"),
+            self.c(q, "version"),
+            self.c(q, "location"),
         )
 
-    @staticmethod
-    def apply_group_by(q):
+    def apply_group_by(self, q):
         return (
             sa.select(
                 f.min(q.c.sys__id).label("sys__id"),
-                q.c.is_dir,
-                q.c.source,
-                q.c.path,
-                q.c.version,
-                f.max(q.c.location).label("location"),
+                self.c(q, "is_dir"),
+                self.c(q, "source"),
+                self.c(q, "path"),
+                self.c(q, "version"),
+                f.max(self.c(q, "location")).label(self.col_name("location")),
             )
             .select_from(q)
-            .group_by(q.c.source, q.c.path, q.c.is_dir, q.c.version)
-            .order_by(q.c.source, q.c.path, q.c.is_dir, q.c.version)
+            .group_by(
+                self.c(q, "source"),
+                self.c(q, "path"),
+                self.c(q, "is_dir"),
+                self.c(q, "version"),
+            )
+            .order_by(
+                self.c(q, "source"),
+                self.c(q, "path"),
+                self.c(q, "is_dir"),
+                self.c(q, "version"),
+            )
         )
 
-    @classmethod
-    def query(cls, q):
-        q = cls.base_select(q).cte(recursive=True)
-        parent = path.parent(q.c.path)
+    def query(self, q):
+        q = self.base_select(q).cte(recursive=True)
+        parent = path.parent(self.c(q, "path"))
         q = q.union_all(
             sa.select(
                 sa.literal(-1).label("sys__id"),
-                true().label("is_dir"),
-                q.c.source,
-                parent.label("path"),
-                sa.literal("").label("version"),
-                null().label("location"),
+                true().label(self.col_name("is_dir")),
+                self.c(q, "source"),
+                parent.label(self.col_name("path")),
+                sa.literal("").label(self.col_name("version")),
+                null().label(self.col_name("location")),
             ).where(parent != "")
         )
-        return cls.apply_group_by(q)
+        return self.apply_group_by(q)
 
 
 class DataTable:
-    dataset_dir_expansion = staticmethod(DirExpansion.query)
-
     def __init__(
         self,
         name: str,
         engine: "Engine",
         metadata: Optional["sa.MetaData"] = None,
         column_types: Optional[dict[str, SQLType]] = None,
+        object_name: str = "file",
     ):
         self.name: str = name
         self.engine = engine
         self.metadata: sa.MetaData = metadata if metadata is not None else sa.MetaData()
         self.column_types: dict[str, SQLType] = column_types or {}
+        self.object_name = object_name
 
     @staticmethod
     def copy_column(
@@ -204,9 +228,18 @@ class DataTable:
     def columns(self) -> "ReadOnlyColumnCollection[str, sa.Column[Any]]":
         return self.table.columns
 
-    @property
-    def c(self):
-        return self.columns
+    def col_name(self, name: str, object_name: Optional[str] = None) -> str:
+        object_name = object_name or self.object_name
+        return col_name(name, object_name)
+
+    def without_object(
+        self, column_name: str, object_name: Optional[str] = None
+    ) -> str:
+        object_name = object_name or self.object_name
+        return column_name.removeprefix(f"{object_name}{DEFAULT_DELIMITER}")
+
+    def c(self, name: str, object_name: Optional[str] = None):
+        return getattr(self.columns, self.col_name(name, object_name=object_name))
 
     @property
     def table(self) -> "sa.Table":
@@ -246,7 +279,7 @@ class DataTable:
         ]
 
     def dir_expansion(self):
-        return self.dataset_dir_expansion(self)
+        return DirExpansion(self.object_name)
 
 
 PARTITION_COLUMN_ID = "partition_id"

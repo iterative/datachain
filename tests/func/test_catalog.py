@@ -9,18 +9,17 @@ from fsspec.implementations.local import LocalFileSystem
 from datachain import DataChain, File
 from datachain.catalog import parse_edatachain_file
 from datachain.cli import garbage_collect
-from datachain.error import StorageNotFoundError
-from datachain.storage import Storage
+from datachain.error import DatasetNotFoundError
+from datachain.lib.listing import parse_listing_uri
 from tests.data import ENTRIES
-from tests.utils import DEFAULT_TREE, make_index, skip_if_not_sqlite, tree_from_path
+from tests.utils import DEFAULT_TREE, skip_if_not_sqlite, tree_from_path
 
 
-def storage_stats(uri, catalog):
-    partial_path = catalog.metastore.get_last_partial_path(uri)
-    if partial_path is None:
-        return None
-    dataset = catalog.get_dataset(Storage.dataset_name(uri, partial_path))
-
+def listing_stats(uri, catalog):
+    list_dataset_name, _, _ = parse_listing_uri(
+        uri, catalog.cache, catalog.client_config
+    )
+    dataset = catalog.get_dataset(list_dataset_name)
     return catalog.dataset_stats(dataset.name, dataset.latest_version)
 
 
@@ -29,15 +28,14 @@ def pre_created_ds_name():
     return "pre_created_dataset"
 
 
-@pytest.fixture
-def fake_index(catalog):
-    src = "s3://whatever"
-    make_index(catalog, src, ENTRIES)
-    return src
-
-
-def test_find(catalog, fake_index):
-    src_uri = fake_index
+@pytest.mark.parametrize(
+    "cloud_type",
+    ["s3", "gs", "azure"],
+    indirect=True,
+)
+def test_find(cloud_test_catalog, cloud_type):
+    src_uri = cloud_test_catalog.src_uri
+    catalog = cloud_test_catalog.catalog
     dirs = ["cats/", "dogs/", "dogs/others/"]
     expected_paths = dirs + [entry.path for entry in ENTRIES]
     assert set(catalog.find([src_uri])) == {
@@ -48,8 +46,14 @@ def test_find(catalog, fake_index):
         set(catalog.find([f"{src_uri}/does_not_exist"]))
 
 
-def test_find_names_paths_size_type(catalog, fake_index):
-    src_uri = fake_index
+@pytest.mark.parametrize(
+    "cloud_type",
+    ["s3", "gs", "azure"],
+    indirect=True,
+)
+def test_find_names_paths_size_type(cloud_test_catalog):
+    src_uri = cloud_test_catalog.src_uri
+    catalog = cloud_test_catalog.catalog
 
     assert set(catalog.find([src_uri], names=["*cat*"])) == {
         f"{src_uri}/cats/",
@@ -159,7 +163,7 @@ def test_cp_root(cloud_test_catalog, recursive, star, dir_exists, cloud_type):
     edatachain_contents = yaml.safe_load(dest.with_suffix(".edatachain").read_text())
     assert len(edatachain_contents) == 1
     data = edatachain_contents[0]
-    assert data["data-source"]["uri"] == src_path.rstrip("/")
+    assert data["data-source"]["uri"] == src_uri.rstrip("/") + "/"
     expected_file_count = 7 if recursive else 1
     assert len(data["files"]) == expected_file_count
     files_by_name = {f["name"]: f for f in data["files"]}
@@ -239,6 +243,9 @@ def test_cp_local_dataset(cloud_test_catalog, dogs_dataset):
     ),
 )
 def test_cp_subdir(cloud_test_catalog, recursive, star, slash, dir_exists):
+    if not star and not slash and dir_exists:
+        pytest.skip("Fix in https://github.com/iterative/datachain/issues/535")
+
     src_uri = f"{cloud_test_catalog.src_uri}/dogs"
     working_dir = cloud_test_catalog.working_dir
     catalog = cloud_test_catalog.catalog
@@ -271,7 +278,7 @@ def test_cp_subdir(cloud_test_catalog, recursive, star, slash, dir_exists):
     edatachain_contents = yaml.safe_load(dest.with_suffix(".edatachain").read_text())
     assert len(edatachain_contents) == 1
     data = edatachain_contents[0]
-    assert data["data-source"]["uri"] == src_path.rstrip("/")
+    assert data["data-source"]["uri"] == src_uri.rstrip("/") + "/"
     expected_file_count = 4 if recursive else 3
     assert len(data["files"]) == expected_file_count
     files_by_name = {f["name"]: f for f in data["files"]}
@@ -319,11 +326,12 @@ def test_cp_subdir(cloud_test_catalog, recursive, star, slash, dir_exists):
     ),
 )
 def test_cp_multi_subdir(cloud_test_catalog, recursive, star, slash, cloud_type):  # noqa: PLR0915
-    # TODO remove when https://github.com/iterative/datachain/issues/318 is done
+    if recursive and not star and not slash:
+        pytest.skip("Fix in https://github.com/iterative/datachain/issues/535")
+
     if cloud_type == "file" and recursive and not star and slash:
-        pytest.skip(
-            "Skipping until https://github.com/iterative/datachain/issues/318 is fixed"
-        )
+        pytest.skip("Fix in https://github.com/iterative/datachain/issues/535")
+
     sources = [
         f"{cloud_test_catalog.src_uri}/cats",
         f"{cloud_test_catalog.src_uri}/dogs",
@@ -358,8 +366,8 @@ def test_cp_multi_subdir(cloud_test_catalog, recursive, star, slash, cloud_type)
     assert len(edatachain_contents) == 2
     data_cats = edatachain_contents[0]
     data_dogs = edatachain_contents[1]
-    assert data_cats["data-source"]["uri"] == src_paths[0].rstrip("/")
-    assert data_dogs["data-source"]["uri"] == src_paths[1].rstrip("/")
+    assert data_cats["data-source"]["uri"] == sources[0].rstrip("/") + "/"
+    assert data_dogs["data-source"]["uri"] == sources[1].rstrip("/") + "/"
     assert len(data_cats["files"]) == 2
     assert len(data_dogs["files"]) == 4 if recursive else 3
     cat_files_by_name = {f["name"]: f for f in data_cats["files"]}
@@ -411,7 +419,8 @@ def test_cp_multi_subdir(cloud_test_catalog, recursive, star, slash, cloud_type)
 
 
 def test_cp_double_subdir(cloud_test_catalog):
-    src_path = f"{cloud_test_catalog.src_uri}/dogs/others"
+    src_uri = cloud_test_catalog.src_uri
+    src_path = f"{src_uri}/dogs/others"
     working_dir = cloud_test_catalog.working_dir
     catalog = cloud_test_catalog.catalog
     dest = working_dir / "data"
@@ -423,7 +432,7 @@ def test_cp_double_subdir(cloud_test_catalog):
     edatachain_contents = yaml.safe_load(dest.with_suffix(".edatachain").read_text())
     assert len(edatachain_contents) == 1
     data = edatachain_contents[0]
-    assert data["data-source"]["uri"] == src_path.rstrip("/")
+    assert data["data-source"]["uri"] == src_path.rstrip("/") + "/"
     assert len(data["files"]) == 1
     files_by_name = {f["name"]: f for f in data["files"]}
 
@@ -463,14 +472,12 @@ def test_storage_mutation(cloud_test_catalog):
     catalog.cp([src_path], str(dest / "local"), no_edatachain_file=True)
     assert tree_from_path(dest) == {"local": "original"}
 
-    # Storage modified without reindexing, we get the old version from cache.
     (cloud_test_catalog.src / "foo").write_text("modified")
     dest = working_dir / "data2"
     dest.mkdir()
     catalog.cp([src_path], str(dest / "local"), no_edatachain_file=True)
     assert tree_from_path(dest) == {"local": "original"}
 
-    # Storage modified without reindexing.
     # Since the old version cannot be found in storage or cache, it's an error.
     catalog.cache.clear()
     dest = working_dir / "data3"
@@ -479,7 +486,6 @@ def test_storage_mutation(cloud_test_catalog):
         catalog.cp([src_path], str(dest / "local"), no_edatachain_file=True)
     assert tree_from_path(dest) == {}
 
-    # Storage modified with reindexing, we get the new version.
     catalog.index([src_path], update=True)
     dest = working_dir / "data4"
     dest.mkdir()
@@ -514,7 +520,7 @@ def test_cp_edatachain_file_options(cloud_test_catalog):
     edatachain_contents = yaml.safe_load(edatachain_file.read_text())
     assert len(edatachain_contents) == 1
     data = edatachain_contents[0]
-    assert data["data-source"]["uri"] == src_path
+    assert data["data-source"]["uri"] == f"{cloud_test_catalog.src_uri}/dogs/"
     expected_file_count = 3
     assert len(data["files"]) == expected_file_count
     files_by_name = {f["name"]: f for f in data["files"]}
@@ -554,14 +560,12 @@ def test_cp_edatachain_file_options(cloud_test_catalog):
     # Check the returned DataChain data contents
     assert len(edatachain_only_data) == len(edatachain_contents)
     edatachain_only_source = edatachain_only_data[0]
-    assert edatachain_only_source["data-source"]["uri"] == src_path.rstrip("/")
+    assert data["data-source"]["uri"] == f"{cloud_test_catalog.src_uri}/dogs/"
     assert edatachain_only_source["files"] == data["files"]
 
 
 def test_cp_edatachain_file_sources(cloud_test_catalog):  # noqa: PLR0915
-    pytest.skip(
-        "Skipping until https://github.com/iterative/datachain/issues/318 is fixed"
-    )
+    pytest.skip("Fix in https://github.com/iterative/datachain/issues/535")
     sources = [
         f"{cloud_test_catalog.src_uri}/cats/",
         f"{cloud_test_catalog.src_uri}/dogs/*",
@@ -613,8 +617,8 @@ def test_cp_edatachain_file_sources(cloud_test_catalog):  # noqa: PLR0915
     assert len(edatachain_data) == 2
     data_cats1 = edatachain_data[0]
     data_dogs1 = edatachain_data[1]
-    assert data_cats1["data-source"]["uri"] == sources[0].rstrip("/")
-    assert data_dogs1["data-source"]["uri"] == sources[1].rstrip("/")
+    assert data_cats1["data-source"]["uri"] == sources[0]
+    assert data_dogs1["data-source"]["uri"] == sources[1].rstrip("*")
     assert len(data_cats1["files"]) == 2
     assert len(data_dogs1["files"]) == 4
     cat_files_by_name1 = {f["name"]: f for f in data_cats1["files"]}
@@ -655,8 +659,8 @@ def test_cp_edatachain_file_sources(cloud_test_catalog):  # noqa: PLR0915
     assert len(edatachain_contents) == 2
     data_cats2 = edatachain_contents[0]
     data_dogs2 = edatachain_contents[1]
-    assert data_cats2["data-source"]["uri"] == sources[0].rstrip("/")
-    assert data_dogs2["data-source"]["uri"] == sources[1].rstrip("/")
+    assert data_cats2["data-source"]["uri"] == sources[0]
+    assert data_dogs2["data-source"]["uri"] == sources[1].rstrip("*")
     assert len(data_cats2["files"]) == 2
     assert len(data_dogs2["files"]) == 4
     cat_files_by_name2 = {f["name"]: f for f in data_cats2["files"]}
@@ -774,25 +778,25 @@ def test_dataset_stats(test_session):
 
 
 @pytest.mark.parametrize("cloud_type", ["s3", "azure", "gs"], indirect=True)
-def test_storage_stats(cloud_test_catalog):
+def test_listing_stats(cloud_test_catalog):
     catalog = cloud_test_catalog.catalog
     src_uri = cloud_test_catalog.src_uri
 
-    with pytest.raises(StorageNotFoundError):
-        storage_stats(src_uri, catalog)
+    with pytest.raises(DatasetNotFoundError):
+        listing_stats(src_uri, catalog)
 
-    catalog.enlist_source(src_uri, ttl=1234)
-    stats = storage_stats(src_uri, catalog)
+    catalog.enlist_source(src_uri)
+    stats = listing_stats(src_uri, catalog)
     assert stats.num_objects == 7
     assert stats.size == 36
 
-    catalog.enlist_source(f"{src_uri}/dogs/", ttl=1234, force_update=True)
-    stats = storage_stats(src_uri, catalog)
+    catalog.enlist_source(f"{src_uri}/dogs/", update=True)
+    stats = listing_stats(src_uri, catalog)
     assert stats.num_objects == 4
     assert stats.size == 15
 
-    catalog.enlist_source(f"{src_uri}/dogs/", ttl=1234)
-    stats = storage_stats(src_uri, catalog)
+    catalog.enlist_source(f"{src_uri}/dogs/")
+    stats = listing_stats(src_uri, catalog)
     assert stats.num_objects == 4
     assert stats.size == 15
 
@@ -801,14 +805,16 @@ def test_storage_stats(cloud_test_catalog):
 def test_enlist_source_handles_slash(cloud_test_catalog):
     catalog = cloud_test_catalog.catalog
     src_uri = cloud_test_catalog.src_uri
+    src_path = f"{src_uri}/dogs"
 
-    catalog.enlist_source(f"{src_uri}/dogs", ttl=1234)
-    stats = storage_stats(src_uri, catalog)
+    catalog.enlist_source(src_path)
+    stats = listing_stats(src_path, catalog)
     assert stats.num_objects == len(DEFAULT_TREE["dogs"])
     assert stats.size == 15
 
-    catalog.enlist_source(f"{src_uri}/dogs/", ttl=1234, force_update=True)
-    stats = storage_stats(src_uri, catalog)
+    src_path = f"{src_uri}/dogs"
+    catalog.enlist_source(src_path, update=True)
+    stats = listing_stats(src_path, catalog)
     assert stats.num_objects == len(DEFAULT_TREE["dogs"])
     assert stats.size == 15
 
@@ -817,9 +823,10 @@ def test_enlist_source_handles_slash(cloud_test_catalog):
 def test_enlist_source_handles_glob(cloud_test_catalog):
     catalog = cloud_test_catalog.catalog
     src_uri = cloud_test_catalog.src_uri
+    src_path = f"{src_uri}/dogs/*.jpg"
 
-    catalog.enlist_source(f"{src_uri}/dogs/*.jpg", ttl=1234)
-    stats = storage_stats(src_uri, catalog)
+    catalog.enlist_source(src_path)
+    stats = listing_stats(src_path, catalog)
 
     assert stats.num_objects == len(DEFAULT_TREE["dogs"])
     assert stats.size == 15
@@ -829,9 +836,10 @@ def test_enlist_source_handles_glob(cloud_test_catalog):
 def test_enlist_source_handles_file(cloud_test_catalog):
     catalog = cloud_test_catalog.catalog
     src_uri = cloud_test_catalog.src_uri
+    src_path = f"{src_uri}/dogs/dog1"
 
-    catalog.enlist_source(f"{src_uri}/dogs/dog1", ttl=1234)
-    stats = storage_stats(src_uri, catalog)
+    catalog.enlist_source(src_path)
+    stats = listing_stats(src_path, catalog)
     assert stats.num_objects == len(DEFAULT_TREE["dogs"])
     assert stats.size == 15
 

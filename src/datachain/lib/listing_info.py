@@ -30,3 +30,7 @@ class ListingInfo(DatasetInfo):
     def last_inserted_at(self):
         # TODO we need to add updated_at to dataset version or explicit last_inserted_at
         raise NotImplementedError
+
+    def contains(self, other_name: str) -> bool:
+        """Checks if this listing contains another one"""
+        return other_name.startswith(self.name)

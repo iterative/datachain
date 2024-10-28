@@ -117,7 +117,7 @@ def test_from_storage_reindex_expired(tmp_dir, test_session):
     test_session.catalog.metastore.update_dataset_version(
         test_session.catalog.get_dataset(lst_ds_name),
         1,
-        created_at=datetime.now(timezone.utc) - timedelta(seconds=LISTING_TTL + 20),
+        finished_at=datetime.now(timezone.utc) - timedelta(seconds=LISTING_TTL + 20),
     )
 
     # listing was updated because listing dataset was expired

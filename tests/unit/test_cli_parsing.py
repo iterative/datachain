@@ -39,9 +39,8 @@ def test_find_columns_type():
 def test_cli_parser():
     parser = get_parser()
 
-    args = parser.parse_args(("ls", "s3://example-bucket/", "--ttl", "1d"))
+    args = parser.parse_args(("ls", "s3://example-bucket/"))
 
-    assert args.ttl == 24 * 60 * 60
     assert args.sources == ["s3://example-bucket/"]
 
     assert args.quiet == 0

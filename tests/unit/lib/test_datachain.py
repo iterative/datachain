@@ -167,7 +167,9 @@ def test_from_records_empty_chain_with_schema(test_session):
     # check that columns have actually been created from schema
     catalog = test_session.catalog
     dr = catalog.warehouse.dataset_rows(catalog.get_dataset(ds_name))
-    assert sorted([c.name for c in dr.c]) == sorted(ds.signals_schema.db_signals())
+    assert sorted([c.name for c in dr.columns]) == sorted(
+        ds.signals_schema.db_signals()
+    )
 
 
 def test_from_records_empty_chain_without_schema(test_session):
@@ -192,7 +194,9 @@ def test_from_records_empty_chain_without_schema(test_session):
     # check that columns have actually been created from schema
     catalog = test_session.catalog
     dr = catalog.warehouse.dataset_rows(catalog.get_dataset(ds_name))
-    assert sorted([c.name for c in dr.c]) == sorted(ds.signals_schema.db_signals())
+    assert sorted([c.name for c in dr.columns]) == sorted(
+        ds.signals_schema.db_signals()
+    )
 
 
 def test_datasets(test_session):

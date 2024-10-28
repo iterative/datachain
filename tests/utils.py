@@ -17,21 +17,6 @@ from datachain.dataset import DatasetDependency, DatasetRecord
 from datachain.lib.dc import DataChain
 from datachain.lib.tar import process_tar
 from datachain.query import C
-from datachain.storage import StorageStatus
-
-
-def make_index(catalog, src: str, entries, ttl: int = 1234):
-    lst, _ = catalog.enlist_source(src, ttl, skip_indexing=True)
-    lst.insert_entries(entries)
-    lst.insert_entries_done()
-    lst.metastore.mark_storage_indexed(
-        src,
-        StorageStatus.COMPLETE,
-        ttl=ttl,
-        prefix="",
-        partial_id=lst.metastore.partial_id,
-    )
-
 
 DEFAULT_TREE: dict[str, Any] = {
     "description": "Cats and Dogs",

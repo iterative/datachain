@@ -250,12 +250,6 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         help="AWS anon (aka awscli's --no-sign-request)",
     )
     parent_parser.add_argument(
-        "--ttl",
-        type=human_time_type,
-        default=TTL_HUMAN,
-        help="Time-to-live of data source cache. Negative equals forever.",
-    )
-    parent_parser.add_argument(
         "-u", "--update", action="count", default=0, help="Update cache"
     )
     parent_parser.add_argument(
@@ -1011,7 +1005,6 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
                 edatachain_only=False,
                 no_edatachain_file=True,
                 no_glob=args.no_glob,
-                ttl=args.ttl,
             )
         elif args.command == "clone":
             catalog.clone(
@@ -1021,7 +1014,6 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
                 update=bool(args.update),
                 recursive=bool(args.recursive),
                 no_glob=args.no_glob,
-                ttl=args.ttl,
                 no_cp=args.no_cp,
                 edatachain=args.edatachain,
                 edatachain_file=args.edatachain_file,
@@ -1047,7 +1039,6 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
                 args.sources,
                 long=bool(args.long),
                 remote=args.remote,
-                ttl=args.ttl,
                 update=bool(args.update),
                 client_config=client_config,
             )
@@ -1081,7 +1072,6 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
                 show_bytes=args.bytes,
                 depth=args.depth,
                 si=args.si,
-                ttl=args.ttl,
                 update=bool(args.update),
                 client_config=client_config,
             )
@@ -1089,7 +1079,6 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
             results_found = False
             for result in catalog.find(
                 args.sources,
-                ttl=args.ttl,
                 update=bool(args.update),
                 names=args.name,
                 inames=args.iname,
@@ -1107,7 +1096,6 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
             index(
                 catalog,
                 args.sources,
-                ttl=args.ttl,
                 update=bool(args.update),
             )
         elif args.command == "completion":

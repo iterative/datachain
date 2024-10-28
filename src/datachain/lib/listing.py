@@ -1,6 +1,5 @@
 import posixpath
 from collections.abc import Iterator
-from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Callable, Optional, TypeVar
 
 from fsspec.asyn import get_loop
@@ -109,18 +108,3 @@ def listing_uri_from_name(dataset_name: str) -> str:
     if not is_listing_dataset(dataset_name):
         raise ValueError(f"Dataset {dataset_name} is not a listing")
     return dataset_name.removeprefix(LISTING_PREFIX)
-
-
-def is_listing_expired(created_at: datetime) -> bool:
-    """Checks if listing has expired based on it's creation date"""
-    return datetime.now(timezone.utc) > created_at + timedelta(seconds=LISTING_TTL)
-
-
-def is_listing_subset(ds1_name: str, ds2_name: str) -> bool:
-    """
-    Checks if one listing contains another one by comparing corresponding dataset names
-    """
-    assert ds1_name.endswith("/")
-    assert ds2_name.endswith("/")
-
-    return ds2_name.startswith(ds1_name)
