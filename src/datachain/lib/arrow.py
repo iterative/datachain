@@ -1,3 +1,4 @@
+import re
 from collections.abc import Sequence
 from tempfile import NamedTemporaryFile
 from typing import TYPE_CHECKING, Any, Optional
@@ -12,7 +13,6 @@ from datachain.lib.file import ArrowRow, File
 from datachain.lib.model_store import ModelStore
 from datachain.lib.signal_schema import SignalSchema
 from datachain.lib.udf import Generator
-from datachain.lib.utils import normalize_col_names
 
 if TYPE_CHECKING:
     from datasets.features.features import Features
@@ -128,7 +128,7 @@ def schema_to_output(schema: pa.Schema, col_names: Optional[Sequence[str]] = Non
     signal_schema = _get_datachain_schema(schema)
     if signal_schema:
         return signal_schema.values
-    columns = list(normalize_col_names(col_names).keys())  # type: ignore[arg-type]
+    columns = _convert_col_names(col_names)  # type: ignore[arg-type]
     hf_schema = _get_hf_schema(schema)
     if hf_schema:
         return {
@@ -141,6 +141,19 @@ def schema_to_output(schema: pa.Schema, col_names: Optional[Sequence[str]] = Non
             dtype = Optional[dtype]  # type: ignore[assignment]
         output[column] = dtype
     return output
+
+
+def _convert_col_names(col_names: Sequence[str]) -> list[str]:
+    default_column = 0
+    converted_col_names = []
+    for column in col_names:
+        column = column.lower()
+        column = re.sub("[^0-9a-z_]+", "", column)
+        if not column:
+            column = f"c{default_column}"
+            default_column += 1
+        converted_col_names.append(column)
+    return converted_col_names
 
 
 def arrow_type_mapper(col_type: pa.DataType, column: str = "") -> type:  # noqa: PLR0911

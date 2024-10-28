@@ -36,18 +36,6 @@ DF_DATA = {
     "city": ["New York", "Los Angeles", "Chicago", "Houston", "Phoenix"],
 }
 
-DF_DATA_NESTED_NOT_NORMALIZED = {
-    "nAmE": [
-        {"first-SELECT": "Alice", "l--as@t": "Smith"},
-        {"l--as@t": "Jones", "first-SELECT": "Bob"},
-        {"first-SELECT": "Charlie", "l--as@t": "Brown"},
-        {"first-SELECT": "David", "l--as@t": "White"},
-        {"first-SELECT": "Eva", "l--as@t": "Black"},
-    ],
-    "AgE": [25, 30, 35, 40, 45],
-    "citY": ["New York", "Los Angeles", "Chicago", "Houston", "Phoenix"],
-}
-
 DF_OTHER_DATA = {
     "last_name": ["Smith", "Jones"],
     "country": ["USA", "Russia"],
@@ -284,9 +272,7 @@ def test_listings(test_session, tmp_dir):
     assert listing.expires
     assert listing.version == 1
     assert listing.num_objects == 1
-    # Exact number if unreliable here since it depends on the PyArrow version
-    assert listing.size > 1000
-    assert listing.size < 5000
+    assert listing.size == 2912
     assert listing.status == 4
 
 
@@ -1000,25 +986,6 @@ def test_parse_tabular_format(tmp_dir, test_session):
     )
     df1 = dc.select("first_name", "age", "city").to_pandas()
     assert df1.equals(df)
-
-
-def test_parse_nested_json(tmp_dir, test_session):
-    df = pd.DataFrame(DF_DATA_NESTED_NOT_NORMALIZED)
-    path = tmp_dir / "test.jsonl"
-    path.write_text(df.to_json(orient="records", lines=True))
-    dc = DataChain.from_storage(path.as_uri(), session=test_session).parse_tabular(
-        format="json"
-    )
-    # Field names are normalized, values are preserved
-    # E.g. nAmE -> name, l--as@t -> l_as_t, etc
-    df1 = dc.select("name", "age", "city").to_pandas()
-
-    assert df1["name"]["first_select"].to_list() == [
-        d["first-SELECT"] for d in df["nAmE"].to_list()
-    ]
-    assert df1["name"]["l_as_t"].to_list() == [
-        d["l--as@t"] for d in df["nAmE"].to_list()
-    ]
 
 
 def test_parse_tabular_partitions(tmp_dir, test_session):
