@@ -54,7 +54,6 @@ from datachain.error import (
     QueryScriptCancelError,
     QueryScriptRunError,
 )
-from datachain.listing import Listing
 from datachain.node import DirType, Node, NodeWithPath
 from datachain.nodes_thread_pool import NodesThreadPool
 from datachain.remote.studio import StudioClient
@@ -76,6 +75,7 @@ if TYPE_CHECKING:
     from datachain.dataset import DatasetVersion
     from datachain.job import Job
     from datachain.lib.file import File
+    from datachain.listing import Listing
 
 logger = logging.getLogger("datachain")
 
@@ -236,7 +236,7 @@ class DatasetRowsFetcher(NodesThreadPool):
 class NodeGroup:
     """Class for a group of nodes from the same source"""
 
-    listing: Listing
+    listing: "Listing"
     sources: list[DataSource]
 
     # The source path within the bucket
@@ -591,8 +591,9 @@ class Catalog:
         client_config=None,
         object_name="file",
         skip_indexing=False,
-    ) -> tuple[Listing, str]:
+    ) -> tuple["Listing", str]:
         from datachain.lib.dc import DataChain
+        from datachain.listing import Listing
 
         DataChain.from_storage(
             source, session=self.session, update=update, object_name=object_name
@@ -660,7 +661,8 @@ class Catalog:
         no_glob: bool = False,
         client_config=None,
     ) -> list[NodeGroup]:
-        from datachain.query import DatasetQuery
+        from datachain.listing import Listing
+        from datachain.query.dataset import DatasetQuery
 
         def _row_to_node(d: dict[str, Any]) -> Node:
             del d["file__source"]
@@ -876,7 +878,7 @@ class Catalog:
     def update_dataset_version_with_warehouse_info(
         self, dataset: DatasetRecord, version: int, rows_dropped=False, **kwargs
     ) -> None:
-        from datachain.query import DatasetQuery
+        from datachain.query.dataset import DatasetQuery
 
         dataset_version = dataset.get_version(version)
 
@@ -1177,7 +1179,7 @@ class Catalog:
     def ls_dataset_rows(
         self, name: str, version: int, offset=None, limit=None
     ) -> list[dict]:
-        from datachain.query import DatasetQuery
+        from datachain.query.dataset import DatasetQuery
 
         dataset = self.get_dataset(name)
 

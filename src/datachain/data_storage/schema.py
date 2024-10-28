@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from sqlalchemy.sql import func as f
 from sqlalchemy.sql.expression import false, null, true
 
-from datachain.sql.functions import path
+from datachain.lib.func.inner import path
 from datachain.sql.types import Int, SQLType, UInt64
 
 if TYPE_CHECKING:

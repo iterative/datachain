@@ -15,19 +15,18 @@ import pytz
 from PIL import Image
 from sqlalchemy import Column
 
-from datachain import DataModel
+from datachain import DataModel, func
 from datachain.catalog.catalog import QUERY_SCRIPT_CANCELED_EXIT_CODE
 from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.dataset import DatasetDependencyType, DatasetStats
 from datachain.lib.dc import C, DataChain
 from datachain.lib.file import File, ImageFile
+from datachain.lib.func import path as pathfunc
 from datachain.lib.listing import LISTING_TTL, is_listing_dataset, parse_listing_uri
 from datachain.lib.tar import process_tar
 from datachain.lib.udf import Mapper
 from datachain.lib.utils import DataChainError
 from datachain.query.dataset import QueryStep
-from datachain.sql.functions import path as pathfunc
-from datachain.sql.functions.array import cosine_distance, euclidean_distance
 from tests.utils import (
     ANY_VALUE,
     NUM_TREE,
@@ -951,7 +950,7 @@ def test_udf_after_limit(cloud_test_catalog):
     expected = [(f"{i:06d}", i) for i in range(100)]
     dc = (
         DataChain.from_storage(ctc.src_uri, session=ctc.session)
-        .mutate(name=pathfunc.name(C("file.path")))
+        .mutate(name=pathfunc.name("file.path"))
         .save()
     )
     # We test a few different orderings here, because we've had strange
@@ -1286,8 +1285,8 @@ def test_similarity_search(cloud_test_catalog):
         DataChain.from_storage(src_uri, session=session)
         .map(embedding=calc_emb, output={"embedding": list[float]})
         .mutate(
-            cos_dist=cosine_distance(C("embedding"), target_embedding),
-            eucl_dist=euclidean_distance(C("embedding"), target_embedding),
+            cos_dist=func.cosine_distance("embedding", target_embedding),
+            eucl_dist=func.euclidean_distance("embedding", target_embedding),
         )
         .order_by("file.path")
     )
@@ -1383,6 +1382,38 @@ def test_group_by_signals(cloud_test_catalog, partition_by, signal_name):
             {"file_info__path": "dogs", "cnt": 4, "sum": 15, "value": ANY_VALUE(3, 4)},
         ],
         "file_info__path",
+    )
+
+
+def test_group_by_func(cloud_test_catalog):
+    from datachain import func
+
+    session = cloud_test_catalog.session
+    src_uri = cloud_test_catalog.src_uri
+
+    ds = (
+        DataChain.from_storage(src_uri, session=session)
+        .group_by(
+            cnt=func.count(),
+            sum=func.sum("file.size"),
+            partition_by=func.path.parent("file.path").label("file_dir"),
+        )
+        .save("my-ds")
+    )
+
+    assert ds.signals_schema.serialize() == {
+        "file_dir": "str",
+        "cnt": "int",
+        "sum": "int",
+    }
+    assert sorted_dicts(ds.to_records(), "file_dir") == sorted_dicts(
+        [
+            {"file_dir": "", "cnt": 1, "sum": 13},
+            {"file_dir": "cats", "cnt": 2, "sum": 8},
+            {"file_dir": "dogs", "cnt": 3, "sum": 11},
+            {"file_dir": "dogs/others", "cnt": 1, "sum": 4},
+        ],
+        "file_dir",
     )
 
 

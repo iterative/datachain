@@ -12,8 +12,8 @@ from datachain.error import (
     DatasetNotFoundError,
     DatasetVersionNotFoundError,
 )
+from datachain.lib.func.inner import path as pathfunc
 from datachain.query import C, DatasetQuery, Object, Stream
-from datachain.sql.functions import path as pathfunc
 from datachain.sql.types import String
 from tests.utils import assert_row_names, dataset_dependency_asdict
 

@@ -1,6 +1,5 @@
 from datachain import C, DataChain
-from datachain.sql import literal
-from datachain.sql.functions import array, greatest, least, path, string
+from datachain.lib.func import array, greatest, least, path, string
 
 
 def num_chars_udf(file):
@@ -18,7 +17,7 @@ dc.map(num_chars_udf, params=["file"], output={"num_chars": list[str]}).select(
 (
     dc.mutate(
         length=string.length(path.name(C("file.path"))),
-        parts=string.split(path.name(C("file.path")), literal(".")),
+        parts=string.split(path.name(C("file.path")), "."),
     )
     .select("file.path", "length", "parts")
     .show(5)
@@ -35,8 +34,8 @@ dc.map(num_chars_udf, params=["file"], output={"num_chars": list[str]}).select(
 
 
 chain = dc.mutate(
-    a=array.length(string.split(C("file.path"), literal("/"))),
-    b=array.length(string.split(path.name(C("file.path")), literal("0"))),
+    a=array.length(string.split("file.path", "/")),
+    b=array.length(string.split(path.name("file.path"), "0")),
 )
 
 (

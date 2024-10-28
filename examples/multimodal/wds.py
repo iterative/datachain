@@ -1,9 +1,9 @@
 import os
 
 from datachain import DataChain
+from datachain.lib.func import path
 from datachain.lib.webdataset import process_webdataset
 from datachain.lib.webdataset_laion import WDSLaion, process_laion_meta
-from datachain.sql.functions import path
 
 IMAGE_TARS = os.getenv(
     "IMAGE_TARS", "gs://datachain-demo/datacomp-small/shards/000000[0-5]*.tar"

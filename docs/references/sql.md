@@ -5,14 +5,14 @@ for operations like [`DataChain.filter`](datachain.md#datachain.lib.dc.DataChain
     and [`DataChain.mutate`](datachain.md#datachain.lib.dc.DataChain.mutate). Import
     these functions from `datachain.sql.functions`.
 
-::: datachain.sql.functions.avg
-::: datachain.sql.functions.count
-::: datachain.sql.functions.greatest
-::: datachain.sql.functions.least
-::: datachain.sql.functions.max
-::: datachain.sql.functions.min
-::: datachain.sql.functions.rand
-::: datachain.sql.functions.sum
-::: datachain.sql.functions.array
-::: datachain.sql.functions.path
-::: datachain.sql.functions.string
+::: datachain.lib.func.avg
+::: datachain.lib.func.count
+::: datachain.lib.func.greatest
+::: datachain.lib.func.least
+::: datachain.lib.func.max
+::: datachain.lib.func.min
+::: datachain.lib.func.rand
+::: datachain.lib.func.sum
+::: datachain.lib.func.array
+::: datachain.lib.func.path
+::: datachain.lib.func.string

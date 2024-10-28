@@ -2,12 +2,12 @@ import logging
 from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
-from datachain.node import Node
 from datachain.nodes_thread_pool import NodesThreadPool
 
 if TYPE_CHECKING:
     from datachain.cache import DataChainCache
     from datachain.client.fsspec import Client
+    from datachain.node import Node
 
 logger = logging.getLogger("datachain")
 
@@ -22,7 +22,7 @@ class NodesFetcher(NodesThreadPool):
         for task in done:
             task.result()
 
-    def do_task(self, chunk: Iterable[Node]) -> None:
+    def do_task(self, chunk: Iterable["Node"]) -> None:
         from fsspec import Callback
 
         class _CB(Callback):
