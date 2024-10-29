@@ -127,9 +127,8 @@ namespaces = false
 [tool.setuptools_scm]
 
 [tool.pytest.ini_options]
-addopts = "-rfEs -m 'not benchmark and not examples'"
+addopts = "-rfEs -m 'not examples' --benchmark-skip"
 markers = [
-  "benchmark: benchmarks.",
   "e2e: End-to-end tests",
   "examples: All examples",
   "computer_vision: Computer vision examples",
