@@ -1,2 +1,2 @@
-def test_version(bench_datachain):
-    bench_datachain("--help", rounds=100)
+def test_version(benchmark):
+    benchmark("--help", rounds=100)

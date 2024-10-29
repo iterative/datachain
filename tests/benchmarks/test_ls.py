@@ -1,2 +1,2 @@
-def test_ls(bench_datachain, tmp_dir, bucket):
-    bench_datachain("ls", bucket, "--anon")
+def test_ls(benchmark, tmp_dir, bucket):
+    benchmark("ls", bucket, "--anon")
