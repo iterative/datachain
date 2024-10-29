@@ -30,13 +30,13 @@ from datachain.dataset import (
     DatasetRecord,
     DatasetStatus,
     DatasetVersion,
+    StorageURI,
 )
 from datachain.error import (
     DatasetNotFoundError,
     TableMissingError,
 )
 from datachain.job import Job
-from datachain.storage import StorageURI
 from datachain.utils import JSONSerialize
 
 if TYPE_CHECKING:
@@ -64,9 +64,9 @@ class AbstractMetastore(ABC, Serializable):
 
     def __init__(
         self,
-        uri: StorageURI = StorageURI(""),
+        uri: Optional[StorageURI] = None,
     ):
-        self.uri = uri
+        self.uri = uri or StorageURI("")
 
     def __enter__(self) -> "AbstractMetastore":
         """Returns self upon entering context manager."""
@@ -78,17 +78,13 @@ class AbstractMetastore(ABC, Serializable):
     @abstractmethod
     def clone(
         self,
-        uri: StorageURI = StorageURI(""),
+        uri: Optional[StorageURI] = None,
         use_new_connection: bool = False,
     ) -> "AbstractMetastore":
         """Clones AbstractMetastore implementation for some Storage input.
         Setting use_new_connection will always use a new database connection.
         New connections should only be used if needed due to errors with
         closed connections."""
-
-    @abstractmethod
-    def init(self, uri: StorageURI) -> None:
-        """Initialize partials table for given storage uri."""
 
     def close(self) -> None:
         """Closes any active database or HTTP connections."""
@@ -309,14 +305,11 @@ class AbstractDBMetastore(AbstractMetastore):
     def __init__(
         self,
         id_generator: "AbstractIDGenerator",
-        uri: StorageURI = StorageURI(""),
+        uri: Optional[StorageURI] = None,
     ):
+        uri = uri or StorageURI("")
         self.id_generator = id_generator
         super().__init__(uri)
-
-    @abstractmethod
-    def init(self, uri: StorageURI) -> None:
-        """Initialize partials table for given storage uri."""
 
     def close(self) -> None:
         """Closes any active database connections."""

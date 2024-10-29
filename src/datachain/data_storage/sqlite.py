@@ -29,12 +29,11 @@ from datachain.data_storage import AbstractDBMetastore, AbstractWarehouse
 from datachain.data_storage.db_engine import DatabaseEngine
 from datachain.data_storage.id_generator import AbstractDBIDGenerator
 from datachain.data_storage.schema import DefaultSchema
-from datachain.dataset import DatasetRecord
+from datachain.dataset import DatasetRecord, StorageURI
 from datachain.error import DataChainError
 from datachain.sql.sqlite import create_user_defined_sql_functions, sqlite_dialect
 from datachain.sql.sqlite.base import load_usearch_extension
 from datachain.sql.types import SQLType
-from datachain.storage import StorageURI
 from datachain.utils import DataChainDir, batched_it
 
 if TYPE_CHECKING:
@@ -392,11 +391,12 @@ class SQLiteMetastore(AbstractDBMetastore):
     def __init__(
         self,
         id_generator: "SQLiteIDGenerator",
-        uri: StorageURI = StorageURI(""),
+        uri: Optional[StorageURI] = None,
         db: Optional["SQLiteDatabaseEngine"] = None,
         db_file: Optional[str] = None,
         in_memory: bool = False,
     ):
+        uri = uri or StorageURI("")
         self.schema: DefaultSchema = DefaultSchema()
         super().__init__(id_generator, uri)
 
@@ -416,11 +416,13 @@ class SQLiteMetastore(AbstractDBMetastore):
 
     def clone(
         self,
-        uri: StorageURI = StorageURI(""),
+        uri: Optional[StorageURI] = None,
         use_new_connection: bool = False,
     ) -> "SQLiteMetastore":
+        uri = uri or StorageURI("")
         if not uri and self.uri:
             uri = self.uri
+
         return SQLiteMetastore(
             self.id_generator.clone(),
             uri=uri,
@@ -472,10 +474,6 @@ class SQLiteMetastore(AbstractDBMetastore):
         self.default_table_names.append(self._datasets_dependencies.name)
         self.db.create_table(self._jobs, if_not_exists=True)
         self.default_table_names.append(self._jobs.name)
-
-    def init(self, uri: StorageURI) -> None:
-        # TODO remove init
-        pass
 
     @classmethod
     def _datasets_columns(cls) -> list["SchemaItem"]:

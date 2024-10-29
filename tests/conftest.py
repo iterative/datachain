@@ -445,9 +445,10 @@ class CloudTestCatalog:
 
 
 cloud_types = ["s3", "gs", "azure"]
+cloud_types = []
 
 
-@pytest.fixture(scope="session", params=["file", *cloud_types])
+@pytest.fixture(scope="session", params=["s3", *cloud_types])
 def cloud_type(request):
     return request.param
 

@@ -15,7 +15,7 @@ from datachain.data_storage.sqlite import (
     SQLiteMetastore,
     SQLiteWarehouse,
 )
-from datachain.storage import StorageURI
+from datachain.dataset import StorageURI
 
 
 class DistributedClass:

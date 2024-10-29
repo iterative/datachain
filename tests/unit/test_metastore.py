@@ -6,7 +6,7 @@ from datachain.data_storage.sqlite import (
     SQLiteIDGenerator,
     SQLiteMetastore,
 )
-from datachain.storage import StorageURI
+from datachain.dataset import StorageURI
 
 
 def test_sqlite_metastore(sqlite_db):

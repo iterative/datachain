@@ -42,6 +42,7 @@ from datachain.dataset import (
     DatasetStats,
     DatasetStatus,
     RowDict,
+    StorageURI,
     create_dataset_uri,
     parse_dataset_uri,
 )
@@ -58,7 +59,6 @@ from datachain.node import DirType, Node, NodeWithPath
 from datachain.nodes_thread_pool import NodesThreadPool
 from datachain.remote.studio import StudioClient
 from datachain.sql.types import DateTime, SQLType, String
-from datachain.storage import StorageURI
 from datachain.utils import (
     DataChainDir,
     batched,

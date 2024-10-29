@@ -4,13 +4,13 @@ from dataclasses import dataclass, fields
 from datetime import datetime
 from typing import (
     Any,
+    NewType,
     Optional,
     TypeVar,
     Union,
 )
 from urllib.parse import urlparse
 
-from datachain.client import Client
 from datachain.error import DatasetVersionNotFoundError
 from datachain.sql.types import NAME_TYPES_MAPPING, SQLType
 
@@ -21,6 +21,13 @@ DD = TypeVar("DD", bound="DatasetDependency")
 DATASET_PREFIX = "ds://"
 QUERY_DATASET_PREFIX = "ds_query_"
 LISTING_PREFIX = "lst__"
+
+
+# StorageURI represents a normalised URI to a valid storage location (full bucket or
+# absolute local path).
+# Valid examples: s3://foo, file:///var/data
+# Invalid examples: s3://foo/, s3://foo/bar, file://~
+StorageURI = NewType("StorageURI", str)
 
 
 def parse_dataset_uri(uri: str) -> tuple[str, Optional[int]]:
@@ -94,6 +101,7 @@ class DatasetDependency:
         dataset_version: Optional[int],
         dataset_version_created_at: Optional[datetime],
     ) -> Optional["DatasetDependency"]:
+        from datachain.client import Client
         from datachain.lib.listing import is_listing_dataset, listing_uri_from_name
 
         if not dataset_id:
@@ -440,6 +448,8 @@ class DatasetRecord:
         For bucket listing we implicitly create underlying dataset to hold data. This
         method is checking if this is one of those datasets.
         """
+        from datachain.client import Client
+
         # TODO refactor and maybe remove method in
         # https://github.com/iterative/datachain/issues/318
         return Client.is_data_source_uri(self.name) or self.name.startswith(

@@ -3,8 +3,8 @@ from typing import TYPE_CHECKING, Any, Optional
 
 import attrs
 
+from datachain.dataset import StorageURI
 from datachain.lib.file import File
-from datachain.storage import StorageURI
 from datachain.utils import TIME_ZERO, time_to_str
 
 if TYPE_CHECKING:
