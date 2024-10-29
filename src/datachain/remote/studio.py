@@ -131,6 +131,15 @@ class StudioClient:
             timeout=self.timeout,
         )
         ok = response.ok
+        if not ok:
+            if response.status_code == 403:
+                message = f"Not authorized for the team {self.team}"
+                raise DataChainError(message)
+            logger.error(
+                "Got bad response from Studio, content is %s",
+                response.content.decode("utf-8"),
+            )
+
         content = msgpack.unpackb(response.content, ext_hook=self._unpacker_hook)
         response_data = content.get("data")
         if ok and response_data is None:
@@ -172,13 +181,13 @@ class StudioClient:
             data = {}
 
         if not ok:
-            logger.error(
-                "Got bad response from Studio, content is %s",
-                response.content.decode("utf-8"),
-            )
             if response.status_code == 403:
-                message = "Not authorized"
+                message = f"Not authorized for the team {self.team}"
             else:
+                logger.error(
+                    "Got bad response from Studio, content is %s",
+                    response.content.decode("utf-8"),
+                )
                 message = data.get("message", "")
         else:
             message = ""
@@ -214,7 +223,7 @@ class StudioClient:
         # to handle cases where a path will be expanded (i.e. globs)
         response: Response[LsData]
         for path in paths:
-            response = self._send_request_msgpack("ls", {"source": path})
+            response = self._send_request_msgpack("datachain/ls", {"source": path})
             yield path, response
 
     def ls_datasets(self) -> Response[LsData]:
