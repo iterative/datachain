@@ -101,6 +101,6 @@ jobs:
           pytest
           --config-file=pyproject.toml -rs
           --splits=6 --group=${{ matrix.group }} --durations-path=../../.github/.test_durations
-          -m 'not benchmark'
+          --benchmark-skip
           tests ../datachain/tests
         working-directory: backend/datachain_server
