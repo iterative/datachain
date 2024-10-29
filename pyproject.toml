@@ -214,6 +214,7 @@ ignore = [
 select = [
   "B",  # flake8-bugbear
   "C4",  # flake8-comprehensions
+  "C420",  # unnecessary-dict-comprehension-for-iterable
   "C90",  # mccabe
   "W",  # pycodestyle - Warning
   "E",  # pycodestyle - Error
@@ -252,11 +253,10 @@ select = [
   "NPY",  # numpy
   "TRY004",  # type-check-without-type-error
   "TRY201",  # verbose-raise
-  "TRY302",  # useless-try-except
+  "TRY203",  # useless-try-except
   "TRY401",  # verbose-log-message
   "RUF022",  # unsorted-dunder-all
   "RUF023",  # unsorted-dunder-slots
-  "RUF025",  # unnecessary-dict-comprehension-for-iterable
   "RUF027",  # missing-f-string-syntax
   "RUF030",  # assert-with-print-message
   "RUF101",  # redirected-noqa
