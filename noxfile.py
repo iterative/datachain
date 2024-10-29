@@ -22,8 +22,7 @@ def bench(session: nox.Session) -> None:
     session.install(".[tests]")
     session.run(
         "pytest",
-        "-m",
-        "benchmark",
+        "--benchmark-only",
         "--benchmark-group-by",
         "func",
         *session.posargs,
