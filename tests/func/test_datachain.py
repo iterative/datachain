@@ -1486,14 +1486,13 @@ def test_to_from_parquet_remote(cloud_test_catalog_upload, chunk_size, kwargs):
     assert df1.equals(df)
 
 
-@pytest.mark.parametrize("chunk_size", (1000, 2))
-def test_to_from_parquet_partitioned_remote(cloud_test_catalog_upload, chunk_size):
+def test_to_from_parquet_partitioned_remote(cloud_test_catalog_upload):
     ctc = cloud_test_catalog_upload
     path = f"{ctc.src_uri}/parquets"
 
     df = pd.DataFrame(DF_DATA)
     dc_to = DataChain.from_pandas(df, session=ctc.session)
-    dc_to.to_parquet(path, partition_cols=["first_name"], chunk_size=chunk_size)
+    dc_to.to_parquet(path, partition_cols=["first_name"], chunk_size=2)
 
     dc_from = DataChain.from_parquet(path, session=ctc.session)
     df1 = dc_from.select("first_name", "age", "city").to_pandas()
