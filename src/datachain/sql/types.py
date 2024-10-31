@@ -335,7 +335,10 @@ class JSON(SQLType):
         return db_defaults(dialect).json()
 
     def on_read_convert(self, value, dialect):
-        return read_converter(dialect).json(value)
+        try:
+            return read_converter(dialect).json(value)
+        except orjson.JSONDecodeError:
+            return value
 
 
 class DateTime(SQLType):

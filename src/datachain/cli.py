@@ -4,7 +4,7 @@ import shlex
 import sys
 import traceback
 from argparse import Action, ArgumentParser, ArgumentTypeError, Namespace
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from importlib.metadata import PackageNotFoundError, version
 from itertools import chain
 from multiprocessing import freeze_support
@@ -474,10 +474,24 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         help="List files in the long format",
     )
     parse_ls.add_argument(
-        "--remote",
-        action="store",
-        default="",
-        help="Name of remote to use",
+        "--studio",
+        action="store_true",
+        default=False,
+        help="List the files in the Studio",
+    )
+    parse_ls.add_argument(
+        "-L",
+        "--local",
+        action="store_true",
+        default=False,
+        help="List local files only",
+    )
+    parse_ls.add_argument(
+        "-a",
+        "--all",
+        action="store_true",
+        default=True,
+        help="List all files including hidden files",
     )
 
     parse_du = subp.add_parser(
@@ -795,22 +809,18 @@ def ls_remote(
 def ls(
     sources,
     long: bool = False,
-    remote: str = "",
-    config: Optional[Mapping[str, str]] = None,
+    studio: bool = False,
+    local: bool = False,
+    all: bool = False,
     **kwargs,
 ):
-    if config is None:
-        from .config import Config
+    if local or studio:
+        all = False
 
-        config = Config().get_remote_config(remote=remote)
-    remote_type = config["type"]
-    if remote_type == "local":
+    if all or local:
         ls_local(sources, long=long, **kwargs)
-    else:
-        ls_remote(
-            sources,
-            long=long,
-        )
+    if all or studio:
+        ls_remote(sources, long=long)
 
 
 def ls_datasets(catalog: "Catalog"):
@@ -1038,7 +1048,9 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
             ls(
                 args.sources,
                 long=bool(args.long),
-                remote=args.remote,
+                studio=bool(args.studio),
+                local=bool(args.local),
+                all=bool(args.all),
                 update=bool(args.update),
                 client_config=client_config,
             )

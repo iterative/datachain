@@ -693,14 +693,22 @@ class Catalog:
                 dataset = self.get_dataset(ds_name)
                 if not ds_version:
                     ds_version = dataset.latest_version
+
+                print(
+                    "Dataset:", dataset, "from", self.metastore, "version", ds_version
+                )
                 dataset_sources = self.warehouse.get_dataset_sources(
                     dataset,
                     ds_version,
                 )
+                print("Dataset sources:", dataset_sources, "from", self.warehouse)
                 indexed_sources = []
                 for source in dataset_sources:
                     from datachain.lib.dc import DataChain
 
+                    print(
+                        f"Enlisting {source} among dataset sources: {dataset_sources}"
+                    )
                     client = self.get_client(source, **client_config)
                     uri = client.uri
                     st = self.warehouse.clone()
@@ -1326,6 +1334,8 @@ class Catalog:
         def _instantiate_dataset():
             if no_cp:
                 return
+
+            print(f"Instantiating dataset {dataset_uri} locally to {output}")
             self.cp(
                 [dataset_uri],
                 output,
@@ -1564,6 +1574,7 @@ class Catalog:
         It also creates .edatachain file by default, if not specified differently
         """
         client_config = client_config or self.client_config
+        print(f"Enlisting sources for {sources}")
         node_groups = self.enlist_sources_grouped(
             sources,
             update,

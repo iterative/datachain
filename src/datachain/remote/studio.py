@@ -135,10 +135,7 @@ class StudioClient:
             if response.status_code == 403:
                 message = f"Not authorized for the team {self.team}"
                 raise DataChainError(message)
-            logger.error(
-                "Got bad response from Studio, content is %s",
-                response.content.decode("utf-8"),
-            )
+            logger.error("Got bad response from Studio")
 
         content = msgpack.unpackb(response.content, ext_hook=self._unpacker_hook)
         response_data = content.get("data")
