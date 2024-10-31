@@ -568,12 +568,6 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     )
     add_sources_arg(parse_index)
 
-    subp.add_parser(
-        "find-stale-storages",
-        parents=[parent_parser],
-        description="Finds and marks stale storages",
-    )
-
     show_parser = subp.add_parser(
         "show",
         parents=[parent_parser],
@@ -1100,8 +1094,6 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
             )
         elif args.command == "completion":
             print(completion(args.shell))
-        elif args.command == "find-stale-storages":
-            catalog.find_stale_storages()
         elif args.command == "query":
             query(
                 catalog,

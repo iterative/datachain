@@ -1708,7 +1708,3 @@ class Catalog:
             client_config=client_config or self.client_config,
             only_index=True,
         )
-
-    def find_stale_storages(self) -> None:
-        # TODO reimplement this logic with listing datasets
-        pass
