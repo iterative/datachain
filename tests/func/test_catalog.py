@@ -741,11 +741,6 @@ def test_ls_prefix_not_found(cloud_test_catalog):
         list(catalog.ls([f"{src_uri}/bogus/"], fields=["name"]))
 
 
-def clear_storages(catalog):
-    ds = catalog.metastore
-    ds.db.execute(ds._storages.delete())
-
-
 def test_index_error(cloud_test_catalog):
     protocol = cloud_test_catalog.src_uri.split("://", 1)[0]
     # XXX: different clients raise inconsistent exceptions

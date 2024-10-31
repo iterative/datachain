@@ -31,10 +31,11 @@ from datachain.error import ClientError as DataChainClientError
 from datachain.lib.file import File
 from datachain.nodes_fetcher import NodesFetcher
 from datachain.nodes_thread_pool import NodeChunk
-from datachain.storage import StorageURI
 
 if TYPE_CHECKING:
     from fsspec.spec import AbstractFileSystem
+
+    from datachain.dataset import StorageURI
 
 
 logger = logging.getLogger("datachain")
@@ -63,7 +64,7 @@ def _is_win_local_path(uri: str) -> bool:
 
 class Bucket(NamedTuple):
     name: str
-    uri: StorageURI
+    uri: "StorageURI"
     created: Optional[datetime]
 
 
@@ -115,7 +116,7 @@ class Client(ABC):
         return DATA_SOURCE_URI_PATTERN.match(name) is not None
 
     @staticmethod
-    def parse_url(source: str) -> tuple[StorageURI, str]:
+    def parse_url(source: str) -> tuple["StorageURI", str]:
         cls = Client.get_implementation(source)
         storage_name, rel_path = cls.split_url(source)
         return cls.get_uri(storage_name), rel_path
@@ -148,7 +149,7 @@ class Client(ABC):
     @classmethod
     def from_source(
         cls,
-        uri: StorageURI,
+        uri: "StorageURI",
         cache: DataChainCache,
         **kwargs,
     ) -> "Client":
@@ -156,6 +157,8 @@ class Client(ABC):
 
     @classmethod
     def ls_buckets(cls, **kwargs) -> Iterator[Bucket]:
+        from datachain.dataset import StorageURI
+
         for entry in cls.create_fs(**kwargs).ls(cls.PREFIX, detail=True):
             name = entry["name"].rstrip("/")
             yield Bucket(
@@ -169,7 +172,9 @@ class Client(ABC):
         return url == cls.PREFIX
 
     @classmethod
-    def get_uri(cls, name) -> StorageURI:
+    def get_uri(cls, name) -> "StorageURI":
+        from datachain.dataset import StorageURI
+
         return StorageURI(f"{cls.PREFIX}{name}")
 
     @classmethod

@@ -15,7 +15,7 @@ from datachain.data_storage.sqlite import (
     SQLiteMetastore,
     SQLiteWarehouse,
 )
-from datachain.storage import StorageURI
+from datachain.dataset import StorageURI
 
 
 class DistributedClass:
@@ -55,12 +55,10 @@ def test_get_id_generator_in_memory():
 def test_get_metastore(sqlite_db):
     id_generator = SQLiteIDGenerator(sqlite_db, table_prefix="prefix")
     uri = StorageURI("s3://bucket")
-    partial_id = 37
 
-    metastore = SQLiteMetastore(id_generator, uri, partial_id, sqlite_db)
+    metastore = SQLiteMetastore(id_generator, uri, sqlite_db)
     assert metastore.id_generator == id_generator
     assert metastore.uri == uri
-    assert metastore.partial_id == partial_id
     assert metastore.db == sqlite_db
 
     with patch.dict(os.environ, {"DATACHAIN__METASTORE": metastore.serialize()}):
@@ -73,7 +71,6 @@ def test_get_metastore(sqlite_db):
             == metastore.id_generator._table_prefix
         )
         assert metastore2.uri == uri
-        assert metastore2.partial_id == partial_id
         assert metastore2.db.db_file == sqlite_db.db_file
         assert metastore2.clone_params() == metastore.clone_params()
 
@@ -174,8 +171,7 @@ def test_get_distributed_class():
 def test_get_catalog(sqlite_db):
     id_generator = SQLiteIDGenerator(sqlite_db, table_prefix="prefix")
     uri = StorageURI("s3://bucket")
-    partial_id = 73
-    metastore = SQLiteMetastore(id_generator, uri, partial_id, sqlite_db)
+    metastore = SQLiteMetastore(id_generator, uri, sqlite_db)
     warehouse = SQLiteWarehouse(id_generator, sqlite_db)
     env = {
         "DATACHAIN__ID_GENERATOR": id_generator.serialize(),
@@ -204,7 +200,6 @@ def test_get_catalog(sqlite_db):
             == metastore.id_generator._table_prefix
         )
         assert catalog.metastore.uri == uri
-        assert catalog.metastore.partial_id == partial_id
         assert catalog.metastore.db.db_file == sqlite_db.db_file
         assert catalog.metastore.clone_params() == metastore.clone_params()
 

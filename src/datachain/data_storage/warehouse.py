@@ -19,11 +19,10 @@ from tqdm import tqdm
 from datachain.client import Client
 from datachain.data_storage.schema import convert_rows_custom_column_types
 from datachain.data_storage.serializer import Serializable
-from datachain.dataset import DatasetRecord
+from datachain.dataset import DatasetRecord, StorageURI
 from datachain.node import DirType, DirTypeGroup, Node, NodeWithPath, get_path
 from datachain.sql.functions import path as pathfunc
 from datachain.sql.types import Int, SQLType
-from datachain.storage import StorageURI
 from datachain.utils import sql_escape_like
 
 if TYPE_CHECKING:

@@ -5,7 +5,6 @@ from unittest.mock import ANY
 
 import pytest
 import sqlalchemy
-from dateutil.parser import isoparse
 
 from datachain.dataset import DatasetDependencyType, DatasetStatus
 from datachain.error import (
@@ -255,7 +254,7 @@ def test_chain_after_save(cloud_test_catalog, dogs_cats_dataset):
     [("s3", True)],
     indirect=True,
 )
-def test_select(cloud_test_catalog, animal_dataset):
+def test_sselect(cloud_test_catalog, animal_dataset):
     catalog = cloud_test_catalog.catalog
     ds = DatasetQuery(animal_dataset.name, catalog=catalog)
     q = (
@@ -948,26 +947,24 @@ def test_to_db_records(cloud_test_catalog, cats_dataset):
 def test_dataset_dependencies_one_storage_as_dependency(
     cloud_test_catalog, listed_bucket, indirect, cats_dataset
 ):
-    pytest.skip(
-        "Skipping as new dependencies are not working with old indexing "
-        "It will be fixed after https://github.com/iterative/datachain/issues/340"
-    )
     ds_name = uuid.uuid4().hex
     catalog = cloud_test_catalog.catalog
-    storage = catalog.metastore.get_storage(cloud_test_catalog.src_uri)
+    listing = catalog.listings()[0]
 
     DatasetQuery(cats_dataset.name, catalog=catalog).save(ds_name)
 
     assert [
         dataset_dependency_asdict(d)
-        for d in catalog.get_dataset_dependencies(ds_name, 1, indirect=indirect)
+        for d in catalog.get_dataset_dependencies(
+            cats_dataset.name, 1, indirect=indirect
+        )
     ] == [
         {
             "id": ANY,
             "type": DatasetDependencyType.STORAGE,
-            "name": storage.uri,
-            "version": storage.timestamp_str,
-            "created_at": isoparse(storage.timestamp_str),
+            "name": cloud_test_catalog.src_uri,
+            "version": str(1),
+            "created_at": listing.created_at,
             "dependencies": [],
         }
     ]
@@ -977,13 +974,9 @@ def test_dataset_dependencies_one_storage_as_dependency(
 def test_dataset_dependencies_one_registered_dataset_as_dependency(
     cloud_test_catalog, dogs_dataset, indirect
 ):
-    pytest.skip(
-        "Skipping as new dependencies are not working with old indexing "
-        "It will be fixed after https://github.com/iterative/datachain/issues/340"
-    )
     ds_name = uuid.uuid4().hex
     catalog = cloud_test_catalog.catalog
-    storage = catalog.metastore.get_storage(cloud_test_catalog.src_uri)
+    listing = catalog.listings()[0]
 
     DatasetQuery(name=dogs_dataset.name, catalog=catalog).save(ds_name)
 
@@ -1003,9 +996,9 @@ def test_dataset_dependencies_one_registered_dataset_as_dependency(
             {
                 "id": ANY,
                 "type": DatasetDependencyType.STORAGE,
-                "name": storage.uri,
-                "version": storage.timestamp_str,
-                "created_at": isoparse(storage.timestamp_str),
+                "name": cloud_test_catalog.src_uri,
+                "version": str(1),
+                "created_at": listing.created_at,
                 "dependencies": [],
             }
         ]
@@ -1024,15 +1017,11 @@ def test_dataset_dependencies_one_registered_dataset_as_dependency(
 def test_dataset_dependencies_multiple_direct_dataset_dependencies(
     cloud_test_catalog, dogs_dataset, cats_dataset, method
 ):
-    pytest.skip(
-        "Skipping as new dependencies are not working with old indexing "
-        "It will be fixed after https://github.com/iterative/datachain/issues/340"
-    )
     # multiple direct dataset dependencies can be achieved with methods that are
     # combining multiple DatasetQuery instances into new one like union or join
     ds_name = uuid.uuid4().hex
     catalog = cloud_test_catalog.catalog
-    storage = catalog.metastore.get_storage(cloud_test_catalog.src_uri)
+    listing = catalog.listings()[0]
 
     dogs = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
     cats = DatasetQuery(name=cats_dataset.name, version=1, catalog=catalog)
@@ -1045,9 +1034,9 @@ def test_dataset_dependencies_multiple_direct_dataset_dependencies(
     storage_depenedncy = {
         "id": ANY,
         "type": DatasetDependencyType.STORAGE,
-        "name": storage.uri,
-        "version": storage.timestamp_str,
-        "created_at": isoparse(storage.timestamp_str),
+        "name": cloud_test_catalog.src_uri,
+        "version": str(1),
+        "created_at": listing.created_at,
         "dependencies": [],
     }
 
@@ -1099,13 +1088,9 @@ def test_dataset_dependencies_multiple_direct_dataset_dependencies(
 def test_dataset_dependencies_multiple_union(
     cloud_test_catalog, dogs_dataset, cats_dataset
 ):
-    pytest.skip(
-        "Skipping as new dependencies are not working with old indexing "
-        "It will be fixed after https://github.com/iterative/datachain/issues/340"
-    )
     ds_name = uuid.uuid4().hex
     catalog = cloud_test_catalog.catalog
-    storage = catalog.metastore.get_storage(cloud_test_catalog.src_uri)
+    listing = catalog.listings()[0]
 
     dogs = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
     cats = DatasetQuery(name=cats_dataset.name, version=1, catalog=catalog)
@@ -1116,9 +1101,9 @@ def test_dataset_dependencies_multiple_union(
     storage_depenedncy = {
         "id": ANY,
         "type": DatasetDependencyType.STORAGE,
-        "name": storage.uri,
-        "version": storage.timestamp_str,
-        "created_at": isoparse(storage.timestamp_str),
+        "name": cloud_test_catalog.src_uri,
+        "version": str(1),
+        "created_at": listing.created_at,
         "dependencies": [],
     }
 

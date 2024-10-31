@@ -6,17 +6,16 @@ from datachain.data_storage.sqlite import (
     SQLiteIDGenerator,
     SQLiteMetastore,
 )
-from datachain.storage import StorageURI
+from datachain.dataset import StorageURI
 
 
 def test_sqlite_metastore(sqlite_db):
     id_generator = SQLiteIDGenerator(sqlite_db, table_prefix="prefix")
     uri = StorageURI("s3://bucket")
 
-    obj = SQLiteMetastore(id_generator, uri, 1, sqlite_db)
+    obj = SQLiteMetastore(id_generator, uri, sqlite_db)
     assert obj.id_generator == id_generator
     assert obj.uri == uri
-    assert obj.partial_id == 1
     assert obj.db == sqlite_db
 
     # Test clone
@@ -25,7 +24,6 @@ def test_sqlite_metastore(sqlite_db):
     assert obj2.id_generator.db.db_file == obj.id_generator.db.db_file
     assert obj2.id_generator._table_prefix == obj.id_generator._table_prefix
     assert obj2.uri == uri
-    assert obj2.partial_id == 1
     assert obj2.db.db_file == sqlite_db.db_file
     assert obj2.clone_params() == obj.clone_params()
 
@@ -39,7 +37,6 @@ def test_sqlite_metastore(sqlite_db):
     assert args == []
     assert str(kwargs["id_generator_clone_params"]) == str(id_generator.clone_params())
     assert kwargs["uri"] == uri
-    assert kwargs["partial_id"] == 1
     assert str(kwargs["db_clone_params"]) == str(sqlite_db.clone_params())
 
     # Test deserialization
@@ -48,6 +45,5 @@ def test_sqlite_metastore(sqlite_db):
     assert obj3.id_generator.db.db_file == id_generator.db.db_file
     assert obj3.id_generator._table_prefix == id_generator._table_prefix
     assert obj3.uri == uri
-    assert obj3.partial_id == 1
     assert obj3.db.db_file == sqlite_db.db_file
     assert obj3.clone_params() == obj.clone_params()

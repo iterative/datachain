@@ -280,7 +280,6 @@ def test_create_dataset_whole_bucket(listed_bucket, cloud_test_catalog):
     }
 
     assert_row_names(catalog, ds1, ds1.latest_version, expected_rows)
-
     assert_row_names(catalog, ds2, ds2.latest_version, expected_rows)
 
 

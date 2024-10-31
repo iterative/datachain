@@ -18,10 +18,6 @@ class DatasetInvalidVersionError(Exception):
     pass
 
 
-class StorageNotFoundError(NotFoundError):
-    pass
-
-
 class PendingIndexingError(Exception):
     """An indexing operation is already in progress."""
 

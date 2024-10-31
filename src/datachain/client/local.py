@@ -2,15 +2,17 @@ import os
 import posixpath
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 from fsspec.implementations.local import LocalFileSystem
 
 from datachain.lib.file import File
-from datachain.storage import StorageURI
 
 from .fsspec import Client
+
+if TYPE_CHECKING:
+    from datachain.dataset import StorageURI
 
 
 class FileClient(Client):
@@ -28,7 +30,9 @@ class FileClient(Client):
         raise TypeError("Signed urls are not implemented for local file system")
 
     @classmethod
-    def get_uri(cls, name) -> StorageURI:
+    def get_uri(cls, name) -> "StorageURI":
+        from datachain.dataset import StorageURI
+
         return StorageURI(f'{cls.PREFIX}/{name.removeprefix("/")}')
 
     @classmethod
