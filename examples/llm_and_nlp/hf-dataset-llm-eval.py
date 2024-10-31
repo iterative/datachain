@@ -19,24 +19,23 @@ class DialogEval(DataModel):
 
 
 def eval_dialog(user_input: str, bot_response: str) -> DialogEval:
-    client = OpenAI()
+    client = InferenceClient("meta-llama/Llama-3.1-70B-Instruct")  # change model here
 
-    completion = client.beta.chat.completions.parse(
-        model="gpt-4o-2024-08-06",
+    completion = client.chat_completion(
         messages=[
             {
                 "role": "user",
                 "content": f"{PROMPT}\n\nUser: {user_input}\nBot: {bot_response}",
             },
         ],
-        response_format=DialogEval,
+        response_format={"type": "json", "value": DialogEval.model_json_schema()},
     )
 
     message = completion.choices[0].message
-    if message.parsed:
-        return message.parsed
-
-    return DialogEval(result="Error", reason="Failed to parse response.")
+    try:
+        return DialogEval.model_validate_json(message.content)
+    except ValueError:
+        return DialogEval(result="Error", reason="Failed to parse response.")
 
 
 # Run OpenAI in parallel for each example
