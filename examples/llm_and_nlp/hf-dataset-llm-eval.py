@@ -1,7 +1,4 @@
-import os
-
-from dotenv import load_dotenv
-from openai import OpenAI
+from huggingface_hub import InferenceClient
 
 from datachain import C, DataChain, DataModel
 
@@ -10,8 +7,6 @@ Was this dialog successful? Put result as a single word: Success or Failure.
 Explain the reason in a few words.
 """
 
-load_dotenv(".env.test")
-
 
 class DialogEval(DataModel):
     result: str
@@ -19,7 +14,7 @@ class DialogEval(DataModel):
 
 
 def eval_dialog(user_input: str, bot_response: str) -> DialogEval:
-    client = InferenceClient("meta-llama/Llama-3.1-70B-Instruct")  # change model here
+    client = InferenceClient("meta-llama/Llama-3.1-70B-Instruct")
 
     completion = client.chat_completion(
         messages=[
@@ -40,25 +35,21 @@ def eval_dialog(user_input: str, bot_response: str) -> DialogEval:
 
 # Run OpenAI in parallel for each example
 # Get result as Pydantic model that DataChain can understand and serialize
-# Save to HF as CSV
+# Save to HF as Parquet
 (
     DataChain.from_csv(
         "hf://datasets/infinite-dataset-hub/MobilePlanAssistant/data.csv"
     )
     .settings(parallel=10)
     .map(response=eval_dialog)
-    .to_csv(
-        "hf://datasets/dvcorg/test-datachain-llm-eval/data.csv",
-        fs_kwargs={"token": os.environ["HF_API_TOKEN"]},
-    )
+    .to_parquet("hf://datasets/dvcorg/test-datachain-llm-eval/data.parquet")
 )
 
 # Read it back to filter and show
 (
-    DataChain.from_csv(
-        "hf://datasets/dvcorg/test-datachain-llm-eval/data.csv",
-        column_types={"source.file.location": "str"},
+    DataChain.from_parquet(
+        "hf://datasets/dvcorg/test-datachain-llm-eval/data.parquet", source=False
     )
-    .filter(C("response_result") == "Failure")
+    .filter(C("response.result") == "Failure")
     .show(3)
 )
