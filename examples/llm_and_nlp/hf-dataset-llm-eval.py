@@ -13,6 +13,8 @@ class DialogEval(DataModel):
     reason: str
 
 
+# DataChain function to evaluate dialog.
+# DataChain is using types for inputs, results to automatically infer schema.
 def eval_dialog(user_input: str, bot_response: str) -> DialogEval:
     client = InferenceClient("meta-llama/Llama-3.1-70B-Instruct")
 
@@ -33,9 +35,10 @@ def eval_dialog(user_input: str, bot_response: str) -> DialogEval:
         return DialogEval(result="Error", reason="Failed to parse response.")
 
 
-# Run OpenAI in parallel for each example
-# Get result as Pydantic model that DataChain can understand and serialize
-# Save to HF as Parquet
+# Run HF inference in parallel for each example.
+# Get result as Pydantic model that DataChain can understand and serialize it.
+# Save to HF as Parquet. Dataset can be previewed here:
+# https://huggingface.co/datasets/dvcorg/test-datachain-llm-eval/viewer
 (
     DataChain.from_csv(
         "hf://datasets/infinite-dataset-hub/MobilePlanAssistant/data.csv"
@@ -45,7 +48,8 @@ def eval_dialog(user_input: str, bot_response: str) -> DialogEval:
     .to_parquet("hf://datasets/dvcorg/test-datachain-llm-eval/data.parquet")
 )
 
-# Read it back to filter and show
+# Read it back to filter and show.
+# It restores the Pydantic model from Parquet under the hood.
 (
     DataChain.from_parquet(
         "hf://datasets/dvcorg/test-datachain-llm-eval/data.parquet", source=False
