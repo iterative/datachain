@@ -23,6 +23,7 @@ class HfClient(Client):
 
     def info_to_file(self, v: dict[str, Any], path: str) -> File:
         return File(
+            source=self.uri,
             path=path,
             size=v["size"],
             version=v["last_commit"].oid,

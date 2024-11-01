@@ -152,4 +152,6 @@ jobs:
         run: uv pip install nox --system
 
       - name: Run examples
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: nox -s examples -p ${{ matrix.pyv }} -- -m "${{ matrix.group }}"
