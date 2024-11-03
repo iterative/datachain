@@ -1,4 +1,5 @@
 from datachain.lib import func
+from datachain.lib import models
 from datachain.lib.data_model import DataModel, DataType, is_chain_type
 from datachain.lib.dc import C, Column, DataChain, Sys
 from datachain.lib.file import (
@@ -38,5 +39,6 @@ __all__ = [
     "func",
     "is_chain_type",
     "metrics",
+    "models",
     "param",
 ]

@@ -20,9 +20,6 @@ from PIL import Image
 from pyarrow.dataset import dataset
 from pydantic import Field, field_validator
 
-if TYPE_CHECKING:
-    from typing_extensions import Self
-
 from datachain.client.fileslice import FileSlice
 from datachain.lib.data_model import DataModel
 from datachain.lib.utils import DataChainError
