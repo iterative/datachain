@@ -981,10 +981,22 @@ class DataChain:
 
     @resolve_columns
     def order_by(self, *args, descending: bool = False) -> "Self":
-        """Orders by specified set of signals.
+        """Orders by specified set of columns.
 
         Parameters:
             descending (bool): Whether to sort in descending order or not.
+
+        Example:
+            ```py
+            dc.order_by("similarity_score", descending=True).limit(10)
+            ```
+
+        Note:
+            Order is not guaranteed when steps are added after an `order_by` statement.
+            I.e. when using `from_dataset` an `order_by` statement should be used if
+            the order of the records in the chain is important.
+            Using `order_by` directly before `limit` will give expected results.
+            See https://github.com/iterative/datachain/issues/477 for further details.
         """
         if descending:
             args = tuple(sqlalchemy.desc(a) for a in args)
