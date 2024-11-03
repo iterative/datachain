@@ -138,9 +138,7 @@ def convert_feature(val: Any, feat: Any, anno: Any) -> Any:  # noqa: PLR0911
         return HFAudio(**val)
 
 
-def get_output_schema(
-    features: Features, model_name: str = "", stream: bool = True
-) -> dict[str, DataType]:
+def get_output_schema(features: Features) -> dict[str, DataType]:
     """Generate UDF output schema from huggingface datasets features."""
     fields_dict = {}
     for name, val in features.items():
