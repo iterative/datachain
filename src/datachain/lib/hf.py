@@ -138,17 +138,15 @@ def convert_feature(val: Any, feat: Any, anno: Any) -> Any:  # noqa: PLR0911
         return HFAudio(**val)
 
 
-def get_output_schema(
-    features: Features, model_name: str = "", stream: bool = True
-) -> dict[str, DataType]:
+def get_output_schema(features: Features) -> dict[str, DataType]:
     """Generate UDF output schema from huggingface datasets features."""
     fields_dict = {}
     for name, val in features.items():
-        fields_dict[name] = _feature_to_chain_type(name, val)  # type: ignore[assignment]
-    return fields_dict  # type: ignore[return-value]
+        fields_dict[name] = _feature_to_chain_type(name, val)
+    return fields_dict
 
 
-def _feature_to_chain_type(name: str, val: Any) -> type:  # noqa: PLR0911
+def _feature_to_chain_type(name: str, val: Any) -> DataType:  # noqa: PLR0911
     if isinstance(val, Value):
         return arrow_type_mapper(val.pa_type)
     if isinstance(val, ClassLabel):

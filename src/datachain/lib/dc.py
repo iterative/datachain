@@ -1690,7 +1690,7 @@ class DataChain:
 
         model_name = model_name or object_name or ""
         hf_features = next(iter(ds_dict.values())).features
-        output = output | get_output_schema(hf_features, model_name)
+        output = output | get_output_schema(hf_features)
         model = dict_to_data_model(model_name, output)
         if object_name:
             output = {object_name: model}
