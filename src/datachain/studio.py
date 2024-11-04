@@ -1,5 +1,5 @@
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from datachain.catalog.catalog import raise_remote_error
 from datachain.config import Config, ConfigLevel
@@ -24,7 +24,7 @@ def process_studio_cli_args(args: "Namespace"):
     if args.cmd == "token":
         return token()
     if args.cmd == "datasets":
-        return list_datasets(args)
+        return list_datasets(args.team)
     if args.cmd == "team":
         return set_team(args)
     raise DataChainError(f"Unknown command '{args.cmd}'.")
@@ -103,14 +103,16 @@ def token():
     print(token)
 
 
-def list_datasets(args: "Namespace"):
-    client = StudioClient(team=args.team)
+def list_datasets(team: Optional[str] = None):
+    client = StudioClient(team=team)
     response = client.ls_datasets()
     if not response.ok:
         raise_remote_error(response.message)
     if not response.data:
         print("No datasets found.")
         return
+
+    print("Datasets in Studio:")
     for d in response.data:
         name = d.get("name")
         for v in d.get("versions", []):

@@ -4,7 +4,7 @@ import shlex
 import sys
 import traceback
 from argparse import Action, ArgumentParser, ArgumentTypeError, Namespace
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from importlib.metadata import PackageNotFoundError, version
 from itertools import chain
 from multiprocessing import freeze_support
@@ -14,8 +14,10 @@ import shtab
 
 from datachain import Session, utils
 from datachain.cli_utils import BooleanOptionalAction, CommaSeparatedArgs, KeyValueArgs
+from datachain.config import Config
+from datachain.error import DataChainError
 from datachain.lib.dc import DataChain
-from datachain.studio import process_studio_cli_args
+from datachain.studio import list_datasets, process_studio_cli_args
 from datachain.telemetry import telemetry
 
 if TYPE_CHECKING:
@@ -416,7 +418,36 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         help="Dataset labels",
     )
 
-    subp.add_parser("ls-datasets", parents=[parent_parser], description="List datasets")
+    datasets_parser = subp.add_parser(
+        "datasets", parents=[parent_parser], description="List datasets"
+    )
+    datasets_parser.add_argument(
+        "--studio",
+        action="store_true",
+        default=False,
+        help="List the files in the Studio",
+    )
+    datasets_parser.add_argument(
+        "-L",
+        "--local",
+        action="store_true",
+        default=False,
+        help="List local files only",
+    )
+    datasets_parser.add_argument(
+        "-a",
+        "--all",
+        action="store_true",
+        default=True,
+        help="List all files including hidden files",
+    )
+    datasets_parser.add_argument(
+        "--team",
+        action="store",
+        default=None,
+        help="The team to list datasets for. By default, it will use team from config.",
+    )
+
     rm_dataset_parser = subp.add_parser(
         "rm-dataset", parents=[parent_parser], description="Removes dataset"
     )
@@ -474,10 +505,30 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         help="List files in the long format",
     )
     parse_ls.add_argument(
-        "--remote",
+        "--studio",
+        action="store_true",
+        default=False,
+        help="List the files in the Studio",
+    )
+    parse_ls.add_argument(
+        "-L",
+        "--local",
+        action="store_true",
+        default=False,
+        help="List local files only",
+    )
+    parse_ls.add_argument(
+        "-a",
+        "--all",
+        action="store_true",
+        default=True,
+        help="List all files including hidden files",
+    )
+    parse_ls.add_argument(
+        "--team",
         action="store",
-        default="",
-        help="Name of remote to use",
+        default=None,
+        help="The team to list datasets for. By default, it will use team from config.",
     )
 
     parse_du = subp.add_parser(
@@ -758,11 +809,12 @@ def format_ls_entry(entry: str) -> str:
 def ls_remote(
     paths: Iterable[str],
     long: bool = False,
+    team: Optional[str] = None,
 ):
     from datachain.node import long_line_str
     from datachain.remote.studio import StudioClient
 
-    client = StudioClient()
+    client = StudioClient(team=team)
     first = True
     for path, response in client.ls(paths):
         if not first:
@@ -789,25 +841,55 @@ def ls_remote(
 def ls(
     sources,
     long: bool = False,
-    remote: str = "",
-    config: Optional[Mapping[str, str]] = None,
+    studio: bool = False,
+    local: bool = False,
+    all: bool = False,
+    team: Optional[str] = None,
     **kwargs,
 ):
-    if config is None:
-        from .config import Config
-
-        config = Config().get_remote_config(remote=remote)
-    remote_type = config["type"]
-    if remote_type == "local":
-        ls_local(sources, long=long, **kwargs)
-    else:
-        ls_remote(
-            sources,
-            long=long,
+    token = Config().read().get("studio", {}).get("token")
+    if studio and not token:
+        raise DataChainError(
+            "Not logged in to Studio. Log in with 'datachain studio login'."
         )
 
+    if local or studio:
+        all = False
 
-def ls_datasets(catalog: "Catalog"):
+    if all or local:
+        ls_local(sources, long=long, **kwargs)
+
+    if (all or studio) and token:
+        ls_remote(sources, long=long, team=team)
+
+
+def datasets(
+    catalog: "Catalog",
+    studio: bool = False,
+    local: bool = False,
+    all: bool = False,
+    team: Optional[str] = None,
+):
+    token = Config().read().get("studio", {}).get("token")
+    if studio and not token:
+        raise DataChainError(
+            "Not logged in to Studio. Log in with 'datachain studio login'."
+        )
+
+    if local or studio:
+        all = False
+
+    if all or local:
+        list_datasets_local(catalog)
+        print()
+
+    if (all or studio) and token:
+        list_datasets(team=team)
+        print()
+
+
+def list_datasets_local(catalog: "Catalog"):
+    print("Datasets locally available:")
     for d in catalog.ls_datasets():
         for v in d.versions:
             print(f"{d.name} (v{v.version})")
@@ -1032,12 +1114,21 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
             ls(
                 args.sources,
                 long=bool(args.long),
-                remote=args.remote,
+                studio=args.studio,
+                local=args.local,
+                all=args.all,
+                team=args.team,
                 update=bool(args.update),
                 client_config=client_config,
             )
-        elif args.command == "ls-datasets":
-            ls_datasets(catalog)
+        elif args.command == "datasets":
+            datasets(
+                catalog=catalog,
+                studio=args.studio,
+                local=args.local,
+                all=args.all,
+                team=args.team,
+            )
         elif args.command == "show":
             show(
                 catalog,

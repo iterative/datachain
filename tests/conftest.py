@@ -14,6 +14,7 @@ from upath.implementations.cloud import CloudPath
 from datachain.catalog import Catalog
 from datachain.catalog.loader import get_id_generator, get_metastore, get_warehouse
 from datachain.cli_utils import CommaSeparatedArgs
+from datachain.config import Config, ConfigLevel
 from datachain.data_storage.sqlite import (
     SQLiteDatabaseEngine,
     SQLiteIDGenerator,
@@ -26,6 +27,7 @@ from datachain.query.session import Session
 from datachain.utils import (
     ENV_DATACHAIN_GLOBAL_CONFIG_DIR,
     ENV_DATACHAIN_SYSTEM_CONFIG_DIR,
+    STUDIO_URL,
     DataChainDir,
 )
 
@@ -673,3 +675,24 @@ def dataset_rows():
         }
         for i in range(19)
     ]
+
+
+@pytest.fixture
+def studio_datasets(requests_mock):
+    with Config(ConfigLevel.GLOBAL).edit() as conf:
+        conf["studio"] = {"token": "isat_access_token", "team": "team_name"}
+
+    datasets = [
+        {
+            "id": 1,
+            "name": "dogs",
+            "versions": [{"version": 1}, {"version": 2}],
+        },
+        {
+            "id": 2,
+            "name": "cats",
+            "versions": [{"version": 1}],
+        },
+    ]
+
+    requests_mock.post(f"{STUDIO_URL}/api/datachain/ls-datasets", json=datasets)

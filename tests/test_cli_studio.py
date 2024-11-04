@@ -84,28 +84,10 @@ def test_studio_token(capsys):
     assert main(["studio", "token"]) == 1
 
 
-def test_studio_ls_datasets(capsys, requests_mock):
-    with Config(ConfigLevel.GLOBAL).edit() as conf:
-        conf["studio"] = {"token": "isat_access_token", "team": "team_name"}
-
-    datasets = [
-        {
-            "id": 1,
-            "name": "dogs",
-            "versions": [{"version": 1}, {"version": 2}],
-        },
-        {
-            "id": 2,
-            "name": "cats",
-            "versions": [{"version": 1}],
-        },
-    ]
-
-    requests_mock.post(f"{STUDIO_URL}/api/datachain/ls-datasets", json=datasets)
-
+def test_studio_ls_datasets(capsys, studio_datasets):
     assert main(["studio", "datasets"]) == 0
     out = capsys.readouterr().out
-    assert out.strip() == "dogs (v1)\ndogs (v2)\ncats (v1)"
+    assert out.strip() == "Datasets in Studio:\ndogs (v1)\ndogs (v2)\ncats (v1)"
 
 
 def test_studio_team_local():
@@ -118,3 +100,35 @@ def test_studio_team_global():
     assert main(["studio", "team", "team_name", "--global"]) == 0
     config = Config(ConfigLevel.GLOBAL).read()
     assert config["studio"]["team"] == "team_name"
+
+
+def test_studio_datasets(capsys, studio_datasets, mocker):
+    def list_datasets_local(_):
+        print("Datasets locally available:")
+        print("local (v1)")
+        return 0
+
+    mocker.patch("datachain.cli.list_datasets_local", side_effect=list_datasets_local)
+    local_output = "Datasets locally available:\nlocal (v1)"
+    studio_output = "Datasets in Studio:\ndogs (v1)\ndogs (v2)\ncats (v1)"
+    both_output = local_output + "\n\n" + studio_output
+
+    assert main(["datasets", "--local"]) == 0
+    out = capsys.readouterr().out
+    assert out.strip() == local_output
+
+    assert main(["datasets", "--studio"]) == 0
+    out = capsys.readouterr().out
+    assert out.strip() == studio_output
+
+    assert main(["datasets", "--local", "--studio"]) == 0
+    out = capsys.readouterr().out
+    assert out.strip() == both_output
+
+    assert main(["datasets", "--all"]) == 0
+    out = capsys.readouterr().out
+    assert out.strip() == both_output
+
+    assert main(["datasets"]) == 0
+    out = capsys.readouterr().out
+    assert out.strip() == both_output

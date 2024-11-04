@@ -138,28 +138,28 @@ E2E_STEPS = (
         },
     },
     {
-        "command": ("datachain", "ls-datasets"),
-        "expected": "mnt (v1)\n",
+        "command": ("datachain", "datasets"),
+        "expected": "Datasets locally available:\nmnt (v1)\n",
     },
     {
-        "command": ("datachain", "ls-datasets"),
-        "expected": "mnt (v1)\n",
+        "command": ("datachain", "datasets"),
+        "expected": "Datasets locally available:\nmnt (v1)\n",
     },
     {
         "command": ("datachain", "edit-dataset", "mnt", "--new-name", "mnt-new"),
         "expected": "",
     },
     {
-        "command": ("datachain", "ls-datasets"),
-        "expected": "mnt-new (v1)\n",
+        "command": ("datachain", "datasets"),
+        "expected": "Datasets locally available:\nmnt-new (v1)\n",
     },
     {
         "command": ("datachain", "rm-dataset", "mnt-new", "--version", "1"),
         "expected": "",
     },
     {
-        "command": ("datachain", "ls-datasets"),
-        "expected": "",
+        "command": ("datachain", "datasets"),
+        "expected": "Datasets locally available:\n",
     },
     {
         "command": ("datachain", "gc"),
@@ -200,7 +200,7 @@ def run_step(step, catalog):
             step["expected"].lstrip("\n").split("\n")
         )
     else:
-        assert result.stdout == step["expected"].lstrip("\n")
+        assert result.stdout.strip("\n") == step["expected"].strip("\n")
     if step.get("listing"):
         assert "Listing" in result.stderr
     else:
