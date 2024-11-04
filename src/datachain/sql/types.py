@@ -338,6 +338,7 @@ class JSON(SQLType):
         try:
             return read_converter(dialect).json(value)
         except orjson.JSONDecodeError:
+            # Return invalid json like '' as it is.
             return value
 
 

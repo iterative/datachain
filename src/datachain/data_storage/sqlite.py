@@ -224,7 +224,6 @@ class SQLiteDatabaseEngine(DatabaseEngine):
         return self.db.execute(sql, parameters)
 
     def insert_dataframe(self, table_name: str, df) -> int:
-        df["sys__rand"] = df["sys__rand"].apply(lambda x: int(str(x)[:11]))
         return df.to_sql(table_name, self.db, if_exists="append", index=False)
 
     def cursor(self, factory=None):
@@ -648,8 +647,10 @@ class SQLiteWarehouse(AbstractWarehouse):
         cur = self.db.cursor()
         cur.row_factory = sqlite3.Row  # type: ignore[assignment]
 
-        rows = list(self.db.execute(query, cursor=cur))
-        return [StorageURI(row["file__source"]) for row in rows]
+        return [
+            StorageURI(row["file__source"])
+            for row in self.db.execute(query, cursor=cur)
+        ]
 
     def merge_dataset_rows(
         self,
