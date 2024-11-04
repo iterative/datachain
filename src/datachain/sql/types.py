@@ -187,6 +187,22 @@ class Int32(Int):
         return read_converter(dialect).int32(value)
 
 
+class UInt32(Int):
+    def load_dialect_impl(self, dialect):
+        return converter(dialect).uint32()
+
+    @staticmethod
+    def default_value(dialect):
+        return type_defaults(dialect).uint32()
+
+    @staticmethod
+    def db_default_value(dialect):
+        return db_defaults(dialect).uint32()
+
+    def on_read_convert(self, value, dialect):
+        return read_converter(dialect).uint32(value)
+
+
 class Int64(Int):
     def load_dialect_impl(self, dialect):
         return converter(dialect).int64()
@@ -395,6 +411,9 @@ class TypeReadConverter:
     def int32(self, value):
         return value
 
+    def uint32(self, value):
+        return value
+
     def int64(self, value):
         return value
 
@@ -421,6 +440,8 @@ class TypeReadConverter:
 
     def json(self, value):
         if isinstance(value, str):
+            if value == "":
+                return {}
             return orjson.loads(value)
         return value
 
@@ -444,6 +465,9 @@ class TypeConverter:
         return types.Integer()
 
     def int32(self):
+        return self.int()
+
+    def uint32(self):
         return self.int()
 
     def int64(self):
@@ -487,6 +511,9 @@ class TypeDefaults:
     def int32(self):
         return None
 
+    def uint32(self):
+        return None
+
     def int64(self):
         return None
 
@@ -528,6 +555,9 @@ class DBDefaults:
     def int32(self):
         return self.int()
 
+    def uint32(self):
+        return self.int()
+
     def int64(self):
         return self.int()
 
@@ -561,6 +591,7 @@ TYPES = [
     Boolean,
     Int,
     Int32,
+    UInt32,
     Int64,
     UInt64,
     Float,
