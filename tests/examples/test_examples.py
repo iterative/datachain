@@ -19,8 +19,12 @@ llm_and_nlp_examples = sorted(
     [
         filename
         for filename in glob.glob("examples/llm_and_nlp/**/*.py", recursive=True)
-        # no anthropic token
+        # no anthropic token, HF runs against actual API - thus run it only once
         if "claude" not in filename
+        and (
+            "hf-" not in filename
+            or (sys.platform == "darwin" and sys.version_info >= (3, 12))
+        )
     ]
 )
 
