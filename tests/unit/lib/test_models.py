@@ -12,8 +12,8 @@ def test_bbox_from_xywh():
 
 
 def test_pose():
-    x = list(x * 0.5 for x in range(17))
-    y = list(y * 1.5 for y in range(17))
+    x = [x * 0.5 for x in range(17)]
+    y = [y * 1.5 for y in range(17)]
     pose = models.Pose(x=x, y=y)
     assert pose.model_dump() == {"x": x, "y": y}
     assert pose.x[models.yolo.PoseBodyPart.nose] == 0
