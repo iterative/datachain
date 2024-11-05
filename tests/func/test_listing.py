@@ -17,7 +17,7 @@ def test_listing_generator(cloud_test_catalog, cloud_type):
     entries = sorted(
         [e for e in ENTRIES if e.path.startswith("cats/")], key=lambda e: e.path
     )
-    files = sorted(dc.collect("file"), key=lambda f: f.path)
+    files = dc.order_by("file.path").collect("file")
 
     for cat_file, cat_entry in zip(files, entries):
         assert cat_file.source == ctc.src_uri
