@@ -11,6 +11,7 @@ from multiprocessing import freeze_support
 from typing import TYPE_CHECKING, Optional, Union
 
 import shtab
+from tabulate import tabulate
 
 from datachain import Session, utils
 from datachain.cli_utils import BooleanOptionalAction, CommaSeparatedArgs, KeyValueArgs
@@ -867,7 +868,7 @@ def datasets(
     catalog: "Catalog",
     studio: bool = False,
     local: bool = False,
-    all: bool = False,
+    all: bool = True,
     team: Optional[str] = None,
 ):
     token = Config().read().get("studio", {}).get("token")
@@ -879,20 +880,42 @@ def datasets(
     if local or studio:
         all = False
 
-    if all or local:
-        list_datasets_local(catalog)
-        print()
+    all = all and not (local or studio)
 
-    if (all or studio) and token:
-        list_datasets(team=team)
-        print()
+    local_datasets = set(list_datasets_local(catalog)) if all or local else set()
+    studio_datasets = (
+        set(list_datasets(team=team)) if (all or studio) and token else set()
+    )
+
+    rows = [
+        _datasets_tabulate_row(
+            name=name,
+            version=version,
+            both=(all or (local and studio)) and token,
+            local=(name, version) in local_datasets,
+            studio=(name, version) in studio_datasets,
+        )
+        for name, version in local_datasets.union(studio_datasets)
+    ]
+
+    print(tabulate(rows, headers="keys"))
 
 
 def list_datasets_local(catalog: "Catalog"):
-    print("Datasets locally available:")
     for d in catalog.ls_datasets():
         for v in d.versions:
-            print(f"{d.name} (v{v.version})")
+            yield (d.name, v.version)
+
+
+def _datasets_tabulate_row(name, version, both, local, studio):
+    row = {
+        "Name": name,
+        "Version": version,
+    }
+    if both:
+        row["Studio"] = "\u2714" if studio else "\u2716"
+        row["Local"] = "\u2714" if local else "\u2716"
+    return row
 
 
 def rm_dataset(

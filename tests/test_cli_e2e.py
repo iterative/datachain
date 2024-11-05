@@ -4,6 +4,15 @@ import subprocess
 from textwrap import dedent
 
 import pytest
+import tabulate
+
+
+def _tabulated_datasets(name, version):
+    row = [
+        {"Name": name, "Version": version},
+    ]
+    return tabulate.tabulate(row, headers="keys")
+
 
 MNT_FILE_TREE = {
     "01375.png": 324,
@@ -139,11 +148,11 @@ E2E_STEPS = (
     },
     {
         "command": ("datachain", "datasets"),
-        "expected": "Datasets locally available:\nmnt (v1)\n",
+        "expected": _tabulated_datasets("mnt", 1),
     },
     {
         "command": ("datachain", "datasets"),
-        "expected": "Datasets locally available:\nmnt (v1)\n",
+        "expected": _tabulated_datasets("mnt", 1),
     },
     {
         "command": ("datachain", "edit-dataset", "mnt", "--new-name", "mnt-new"),
@@ -151,7 +160,7 @@ E2E_STEPS = (
     },
     {
         "command": ("datachain", "datasets"),
-        "expected": "Datasets locally available:\nmnt-new (v1)\n",
+        "expected": _tabulated_datasets("mnt-new", 1),
     },
     {
         "command": ("datachain", "rm-dataset", "mnt-new", "--version", "1"),
@@ -159,7 +168,7 @@ E2E_STEPS = (
     },
     {
         "command": ("datachain", "datasets"),
-        "expected": "Datasets locally available:\n",
+        "expected": "",
     },
     {
         "command": ("datachain", "gc"),

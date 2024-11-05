@@ -693,6 +693,11 @@ def studio_datasets(requests_mock):
             "name": "cats",
             "versions": [{"version": 1}],
         },
+        {
+            "id": 3,
+            "name": "both",
+            "versions": [{"version": 1}],
+        },
     ]
 
     requests_mock.post(f"{STUDIO_URL}/api/datachain/ls-datasets", json=datasets)
