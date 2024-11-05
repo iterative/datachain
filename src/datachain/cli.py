@@ -844,7 +844,7 @@ def ls(
     long: bool = False,
     studio: bool = False,
     local: bool = False,
-    all: bool = False,
+    all: bool = True,
     team: Optional[str] = None,
     **kwargs,
 ):
