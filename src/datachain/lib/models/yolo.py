@@ -11,6 +11,7 @@ More information about YOLO can be found here:
 - https://docs.ultralytics.com/
 """
 
+
 class PoseBodyPart:
     """
     An enumeration of body parts for YOLO pose keypoints.
