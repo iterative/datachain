@@ -15,7 +15,7 @@ from datachain.lib.listing import LISTING_PREFIX
 from tests.utils import uppercase_scheme
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def studio_config(global_config_dir):
     with Config(ConfigLevel.GLOBAL).edit() as conf:
         conf["studio"] = {"token": "isat_access_token", "team": "team_name"}
