@@ -5,7 +5,7 @@ from unittest.mock import ANY
 import pytest
 import sqlalchemy as sa
 
-from datachain.data_storage.sqlite import SQLiteWarehouse
+from datachain.data_storage.schema import DataTable
 from datachain.dataset import DatasetDependencyType, DatasetStatus
 from datachain.error import (
     DatasetInvalidVersionError,
@@ -827,10 +827,7 @@ def test_row_random(cloud_test_catalog):
     # Random values are unique
     assert len(set(random_values)) == len(random_values)
 
-    if isinstance(catalog.warehouse, SQLiteWarehouse):
-        RAND_MAX = 2**63  # noqa: N806
-    else:
-        RAND_MAX = 2**64  # noqa: N806
+    RAND_MAX = DataTable.MAX_RANDOM  # noqa: N806
 
     # Values are drawn uniformly from range(2**63)
     assert 0 <= min(random_values) < 0.4 * RAND_MAX
