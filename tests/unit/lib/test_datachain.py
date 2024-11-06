@@ -1824,6 +1824,32 @@ def test_order_by_with_nested_columns(test_session, with_function):
     ]
 
 
+def test_order_by_collect(test_session):
+    numbers = [6, 2, 3, 1, 5, 7, 4]
+    letters = ["u", "y", "x", "z", "v", "t", "w"]
+
+    dc = DataChain.from_values(number=numbers, letter=letters, session=test_session)
+    assert list(dc.order_by("number").collect()) == [
+        (1, "z"),
+        (2, "y"),
+        (3, "x"),
+        (4, "w"),
+        (5, "v"),
+        (6, "u"),
+        (7, "t"),
+    ]
+
+    assert list(dc.order_by("letter").collect()) == [
+        (7, "t"),
+        (6, "u"),
+        (5, "v"),
+        (4, "w"),
+        (3, "x"),
+        (2, "y"),
+        (1, "z"),
+    ]
+
+
 @pytest.mark.parametrize("with_function", [True, False])
 def test_order_by_descending(test_session, with_function):
     names = ["a.txt", "c.txt", "d.txt", "a.txt", "b.txt"]
@@ -1852,7 +1878,7 @@ def test_union(test_session):
     chain2 = DataChain.from_values(value=[3, 4], session=test_session)
     chain3 = chain1 | chain2
     assert chain3.count() == 4
-    assert sorted(chain3.collect("value")) == [1, 2, 3, 4]
+    assert list(chain3.order_by("value").collect("value")) == [1, 2, 3, 4]
 
 
 def test_union_different_columns(test_session):
@@ -1887,7 +1913,7 @@ def test_union_different_column_order(test_session):
     chain2 = DataChain.from_values(
         name=["different", "order"], value=[9, 10], session=test_session
     )
-    assert sorted(chain1.union(chain2).collect()) == [
+    assert list(chain1.union(chain2).order_by("value").collect()) == [
         (1, "chain"),
         (2, "more"),
         (9, "different"),

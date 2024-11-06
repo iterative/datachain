@@ -27,6 +27,7 @@ from datachain.sql.types import (
     Int32,
     Int64,
     String,
+    UInt32,
     UInt64,
 )
 
@@ -721,6 +722,7 @@ def test_mutate_change_type():
         [Boolean, bool],
         [Int, int],
         [Int32, int],
+        [UInt32, int],
         [Int64, int],
         [UInt64, int],
         [Float, float],
