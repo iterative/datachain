@@ -145,6 +145,8 @@ class DirExpansion:
 
 
 class DataTable:
+    MAX_RANDOM = 2**63 - 1
+
     def __init__(
         self,
         name: str,
@@ -269,8 +271,8 @@ class DataTable:
     def delete(self):
         return self.apply_conditions(self.table.delete())
 
-    @staticmethod
-    def sys_columns():
+    @classmethod
+    def sys_columns(cls):
         return [
             sa.Column("sys__id", Int, primary_key=True),
             sa.Column(

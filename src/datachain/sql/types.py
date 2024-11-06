@@ -440,6 +440,8 @@ class TypeReadConverter:
 
     def json(self, value):
         if isinstance(value, str):
+            if value == "":
+                return {}
             return orjson.loads(value)
         return value
 

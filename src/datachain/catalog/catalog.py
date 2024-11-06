@@ -58,7 +58,7 @@ from datachain.listing import Listing
 from datachain.node import DirType, Node, NodeWithPath
 from datachain.nodes_thread_pool import NodesThreadPool
 from datachain.remote.studio import StudioClient
-from datachain.sql.types import DateTime, SQLType, String
+from datachain.sql.types import DateTime, SQLType
 from datachain.utils import (
     DataChainDir,
     batched,
@@ -195,11 +195,6 @@ class DatasetRowsFetcher(NodesThreadPool):
         # as timestamps so we need to parse it back to datetime objects
         for c in [c for c, t in self.schema.items() if t == DateTime]:
             df[c] = pd.to_datetime(df[c], unit="s")
-
-        # strings are represented as binaries in parquet export so need to
-        # decode it back to strings
-        for c in [c for c, t in self.schema.items() if t == String]:
-            df[c] = df[c].str.decode("utf-8")
 
     def do_task(self, urls):
         import lz4.frame
@@ -1403,6 +1398,7 @@ class Catalog:
             query_script=remote_dataset_version.query_script,
             create_rows=True,
             columns=columns,
+            feature_schema=remote_dataset_version.feature_schema,
             validate_version=False,
         )
 

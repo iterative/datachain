@@ -49,19 +49,17 @@ def dog_entries_parquet_lz4(dog_entries) -> bytes:
         """
         adapted = {}
         for k, v in row.items():
-            if isinstance(v, str):
-                adapted[k] = v.encode("utf-8")
-            elif isinstance(v, datetime):
+            if isinstance(v, datetime):
                 adapted[k] = v.timestamp()
             elif v is None:
-                adapted[k] = b""
+                adapted[k] = ""
             else:
                 adapted[k] = v
 
         adapted["sys__id"] = 1
         adapted["sys__rand"] = 1
-        adapted["file__location"] = b""
-        adapted["file__source"] = b"s3://dogs"
+        adapted["file__location"] = ""
+        adapted["file__source"] = "s3://dogs"
         return adapted
 
     dog_entries = [_adapt_row(e) for e in dog_entries]
