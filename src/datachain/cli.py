@@ -849,13 +849,7 @@ def ls(
     **kwargs,
 ):
     token = Config().read().get("studio", {}).get("token")
-    if studio and not token:
-        raise DataChainError(
-            "Not logged in to Studio. Log in with 'datachain studio login'."
-        )
-
-    if local or studio:
-        all = False
+    all, local, studio = _determine_flavors(studio, local, all, token)
 
     if all or local:
         ls_local(sources, long=long, **kwargs)
@@ -872,15 +866,7 @@ def datasets(
     team: Optional[str] = None,
 ):
     token = Config().read().get("studio", {}).get("token")
-    if studio and not token:
-        raise DataChainError(
-            "Not logged in to Studio. Log in with 'datachain studio login'."
-        )
-
-    if local or studio:
-        all = False
-
-    all = all and not (local or studio)
+    all, local, studio = _determine_flavors(studio, local, all, token)
 
     local_datasets = set(list_datasets_local(catalog)) if all or local else set()
     studio_datasets = (
@@ -1056,6 +1042,20 @@ def completion(shell: str) -> str:
         get_parser(),
         shell=shell,
     )
+
+
+def _determine_flavors(studio: bool, local: bool, all: bool, token: Optional[str]):
+    if studio and not token:
+        raise DataChainError(
+            "Not logged in to Studio. Log in with 'datachain studio login'."
+        )
+
+    if local or studio:
+        all = False
+
+    all = all and not (local or studio)
+
+    return all, local, studio
 
 
 def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR0915
