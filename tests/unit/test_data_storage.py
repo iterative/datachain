@@ -18,7 +18,6 @@ from datachain.sql.types import (
     Int32,
     Int64,
     String,
-    UInt32,
     UInt64,
 )
 from tests.utils import (
@@ -174,7 +173,6 @@ def test_convert_type(cloud_test_catalog):
         [Boolean(), False],
         [Int(), 0],
         [Int32(), 0],
-        [UInt32(), 0],
         [Int64(), 0],
         [UInt64(), 0],
         [Float(), lambda val: math.isnan(val)],
