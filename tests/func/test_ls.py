@@ -239,7 +239,7 @@ def test_ls_remote_sources(cloud_type, capsys, monkeypatch, studio_config):
     src = f"{cloud_type}://bucket"
     with monkeypatch.context() as m:
         m.setattr("requests.post", mock_post)
-        ls([src, f"{src}/dogs/others", f"{src}/dogs"])
+        ls([src, f"{src}/dogs/others", f"{src}/dogs"], studio=True)
     captured = capsys.readouterr()
     assert captured.out == ls_remote_sources_output.format(src=src)
 
