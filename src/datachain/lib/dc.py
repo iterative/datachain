@@ -995,7 +995,8 @@ class DataChain:
             Order is not guaranteed when steps are added after an `order_by` statement.
             I.e. when using `from_dataset` an `order_by` statement should be used if
             the order of the records in the chain is important.
-            Using `order_by` directly before `limit` will give expected results.
+            Using `order_by` directly before `limit`, `collect` and `collect_flatten`
+            will give expected results.
             See https://github.com/iterative/datachain/issues/477 for further details.
         """
         if descending:
@@ -1191,7 +1192,7 @@ class DataChain:
                           a tuple of row values.
         """
         db_signals = self._effective_signals_schema.db_signals()
-        with self._query.select(*db_signals).as_iterable() as rows:
+        with self._query.ordered_select(*db_signals).as_iterable() as rows:
             if row_factory:
                 rows = (row_factory(db_signals, r) for r in rows)
             yield from rows
@@ -1282,7 +1283,7 @@ class DataChain:
         chain = self.select(*cols) if cols else self
         signals_schema = chain._effective_signals_schema
         db_signals = signals_schema.db_signals()
-        with self._query.select(*db_signals).as_iterable() as rows:
+        with self._query.ordered_select(*db_signals).as_iterable() as rows:
             for row in rows:
                 ret = signals_schema.row_to_features(
                     row, catalog=chain.session.catalog, cache=chain._settings.cache

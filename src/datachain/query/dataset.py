@@ -1277,6 +1277,27 @@ class DatasetQuery:
         return query
 
     @detach
+    def ordered_select(self, *args, **kwargs) -> "Self":
+        """
+        Select the given columns or expressions using a subquery whilst
+        maintaining query ordering (only applicable if last step was order_by).
+
+        If used with no arguments, this simply creates a subquery and
+        select all columns from it.
+
+        Example:
+            >>> ds.ordered_select(C.name, C.size * 10)
+            >>> ds.ordered_select(C.name, size10x=C.size * 10)
+        """
+        named_args = [v.label(k) for k, v in kwargs.items()]
+        query = self.clone()
+        order_by = query.last_step if query.is_ordered else None
+        query.steps.append(SQLSelect((*args, *named_args)))
+        if order_by:
+            query.steps.append(order_by)
+        return query
+
+    @detach
     def select_except(self, *args) -> "Self":
         """
         Exclude certain columns from this query using a subquery.
@@ -1338,7 +1359,7 @@ class DatasetQuery:
         query = self.clone(new_table=False)
         if (
             query.steps
-            and (last_step := query.steps[-1])
+            and (last_step := query.last_step)
             and isinstance(last_step, SQLLimit)
         ):
             query.steps[-1] = SQLLimit(min(n, last_step.n))
@@ -1591,3 +1612,11 @@ class DatasetQuery:
         finally:
             self.cleanup()
         return self.__class__(name=name, version=version, catalog=self.catalog)
+
+    @property
+    def is_ordered(self) -> bool:
+        return isinstance(self.last_step, SQLOrderBy)
+
+    @property
+    def last_step(self) -> Optional[Step]:
+        return self.steps[-1] if self.steps else None

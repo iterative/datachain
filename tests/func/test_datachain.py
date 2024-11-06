@@ -448,6 +448,30 @@ def test_show_no_truncate(capsys, test_session):
         assert details[i] in normalized_output
 
 
+@pytest.mark.parametrize("ordered_by", ["letter", "number"])
+def test_show_ordered(capsys, test_session, ordered_by):
+    numbers = [6, 2, 3, 1, 5, 7, 4]
+    letters = ["u", "y", "x", "z", "v", "t", "w"]
+
+    DataChain.from_values(
+        number=numbers, letter=letters, session=test_session
+    ).order_by(ordered_by).show()
+
+    captured = capsys.readouterr()
+    normalized_lines = [
+        re.sub(r"\s+", " ", line).strip() for line in captured.out.strip().split("\n")
+    ]
+
+    ordered_entries = sorted(
+        zip(numbers, letters), key=lambda x: x[0 if ordered_by == "number" else 1]
+    )
+
+    assert normalized_lines[0].strip() == "number letter"
+    for i, line in enumerate(normalized_lines[1:]):
+        number, letter = ordered_entries[i]
+        assert line == f"{i} {number} {letter}"
+
+
 def test_from_storage_dataset_stats(tmp_dir, test_session):
     for i in range(4):
         (tmp_dir / f"file{i}.txt").write_text(f"file{i}")
