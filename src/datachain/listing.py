@@ -1,6 +1,7 @@
 import glob
 import os
 from collections.abc import Iterable, Iterator
+from functools import cached_property
 from itertools import zip_longest
 from typing import TYPE_CHECKING, Optional
 
@@ -15,28 +16,34 @@ from datachain.utils import suffix_to_number
 if TYPE_CHECKING:
     from datachain.catalog.datasource import DataSource
     from datachain.client import Client
-    from datachain.data_storage import AbstractWarehouse
+    from datachain.data_storage import AbstractMetastore, AbstractWarehouse
     from datachain.dataset import DatasetRecord
 
 
 class Listing:
     def __init__(
         self,
+        metastore: "AbstractMetastore",
         warehouse: "AbstractWarehouse",
         client: "Client",
-        dataset: Optional["DatasetRecord"],
+        dataset_name: Optional["str"] = None,
+        dataset_version: Optional[int] = None,
         object_name: str = "file",
     ):
+        self.metastore = metastore
         self.warehouse = warehouse
         self.client = client
-        self.dataset = dataset  # dataset representing bucket listing
+        self.dataset_name = dataset_name  # dataset representing bucket listing
+        self.dataset_version = dataset_version  # dataset representing bucket listing
         self.object_name = object_name
 
     def clone(self) -> "Listing":
         return self.__class__(
+            self.metastore.clone(),
             self.warehouse.clone(),
             self.client,
-            self.dataset,
+            self.dataset_name,
+            self.dataset_version,
             self.object_name,
         )
 
@@ -53,12 +60,22 @@ class Listing:
     def uri(self):
         from datachain.lib.listing import listing_uri_from_name
 
-        return listing_uri_from_name(self.dataset.name)
+        assert self.dataset_name
 
-    @property
+        return listing_uri_from_name(self.dataset_name)
+
+    @cached_property
+    def dataset(self) -> "DatasetRecord":
+        assert self.dataset_name
+        return self.metastore.get_dataset(self.dataset_name)
+
+    @cached_property
     def dataset_rows(self):
+        dataset = self.dataset
         return self.warehouse.dataset_rows(
-            self.dataset, self.dataset.latest_version, object_name=self.object_name
+            dataset,
+            self.dataset_version or dataset.latest_version,
+            object_name=self.object_name,
         )
 
     def expand_path(self, path, use_glob=True) -> list[Node]:
