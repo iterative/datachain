@@ -18,7 +18,12 @@ from datachain.cli_utils import BooleanOptionalAction, CommaSeparatedArgs, KeyVa
 from datachain.config import Config
 from datachain.error import DataChainError
 from datachain.lib.dc import DataChain
-from datachain.studio import list_datasets, process_studio_cli_args
+from datachain.studio import (
+    edit_studio_dataset,
+    list_datasets,
+    process_studio_cli_args,
+    remove_studio_dataset,
+)
 from datachain.telemetry import telemetry
 
 if TYPE_CHECKING:
@@ -418,6 +423,18 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         nargs="+",
         help="Dataset labels",
     )
+    parse_edit_dataset.add_argument(
+        "--studio",
+        action="store_true",
+        default=False,
+        help="Remove dataset from Studio",
+    )
+    parse_edit_dataset.add_argument(
+        "--team",
+        action="store",
+        default=None,
+        help="The team to edit a dataset. By default, it will use team from config.",
+    )
 
     datasets_parser = subp.add_parser(
         "datasets", parents=[parent_parser], description="List datasets"
@@ -465,6 +482,18 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         default=False,
         action=BooleanOptionalAction,
         help="Force delete registered dataset with all of it's versions",
+    )
+    rm_dataset_parser.add_argument(
+        "--studio",
+        action="store_true",
+        default=False,
+        help="Remove dataset from Studio",
+    )
+    rm_dataset_parser.add_argument(
+        "--team",
+        action="store",
+        default=None,
+        help="The team to delete a dataset. By default, it will use team from config.",
     )
 
     dataset_stats_parser = subp.add_parser(
@@ -909,8 +938,28 @@ def rm_dataset(
     name: str,
     version: Optional[int] = None,
     force: Optional[bool] = False,
+    studio: bool = False,
+    team: Optional[str] = None,
 ):
-    catalog.remove_dataset(name, version=version, force=force)
+    if studio:
+        remove_studio_dataset(team, name, version, force)
+    else:
+        catalog.remove_dataset(name, version=version, force=force)
+
+
+def edit_dataset(
+    catalog: "Catalog",
+    name: str,
+    new_name: Optional[str] = None,
+    description: Optional[str] = None,
+    labels: Optional[list[str]] = None,
+    studio: bool = False,
+    team: Optional[str] = None,
+):
+    if studio:
+        edit_studio_dataset(team, name, new_name, description, labels)
+    else:
+        catalog.edit_dataset(name, new_name, description, labels)
 
 
 def dataset_stats(
@@ -1127,11 +1176,14 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
                 edatachain_file=args.edatachain_file,
             )
         elif args.command == "edit-dataset":
-            catalog.edit_dataset(
+            edit_dataset(
+                catalog,
                 args.name,
-                description=args.description,
                 new_name=args.new_name,
+                description=args.description,
                 labels=args.labels,
+                studio=args.studio,
+                team=args.team,
             )
         elif args.command == "ls":
             ls(
@@ -1164,7 +1216,14 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
                 schema=args.schema,
             )
         elif args.command == "rm-dataset":
-            rm_dataset(catalog, args.name, version=args.version, force=args.force)
+            rm_dataset(
+                catalog,
+                args.name,
+                version=args.version,
+                force=args.force,
+                studio=args.studio,
+                team=args.team,
+            )
         elif args.command == "dataset-stats":
             dataset_stats(
                 catalog,

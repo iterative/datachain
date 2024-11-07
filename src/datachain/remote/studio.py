@@ -178,17 +178,9 @@ class StudioClient:
             data = {}
 
         if not ok:
-            logger.error(
-                "Got bad response from Studio, content is %s",
-                response.content.decode("utf-8"),
-            )
             if response.status_code == 403:
                 message = f"Not authorized for the team {self.team}"
             else:
-                logger.error(
-                    "Got bad response from Studio, content is %s",
-                    response.content.decode("utf-8"),
-                )
                 message = data.get("message", "")
         else:
             message = ""
@@ -229,6 +221,38 @@ class StudioClient:
 
     def ls_datasets(self) -> Response[LsData]:
         return self._send_request("datachain/ls-datasets", {})
+
+    def edit_dataset(
+        self,
+        name: str,
+        new_name: Optional[str] = None,
+        description: Optional[str] = None,
+        labels: Optional[list[str]] = None,
+    ) -> Response[DatasetInfoData]:
+        return self._send_request(
+            "datachain/edit-dataset",
+            {
+                "dataset_name": name,
+                "new_name": new_name,
+                "description": description,
+                "labels": labels,
+            },
+        )
+
+    def rm_dataset(
+        self,
+        name: str,
+        version: Optional[int] = None,
+        force: Optional[bool] = False,
+    ) -> Response[DatasetInfoData]:
+        return self._send_request(
+            "datachain/rm-dataset",
+            {
+                "dataset_name": name,
+                "version": version,
+                "force": force,
+            },
+        )
 
     def dataset_info(self, name: str) -> Response[DatasetInfoData]:
         def _parse_dataset_info(dataset_info):
