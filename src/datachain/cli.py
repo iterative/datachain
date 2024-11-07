@@ -408,18 +408,15 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     parse_edit_dataset.add_argument(
         "--new-name",
         action="store",
-        default="",
         help="Dataset new name",
     )
     parse_edit_dataset.add_argument(
         "--description",
         action="store",
-        default="",
         help="Dataset description",
     )
     parse_edit_dataset.add_argument(
         "--labels",
-        default=[],
         nargs="+",
         help="Dataset labels",
     )

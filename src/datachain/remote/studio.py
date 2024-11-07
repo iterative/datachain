@@ -229,14 +229,22 @@ class StudioClient:
         description: Optional[str] = None,
         labels: Optional[list[str]] = None,
     ) -> Response[DatasetInfoData]:
+        body = {
+            "dataset_name": name,
+        }
+
+        if new_name is not None:
+            body["new_name"] = new_name
+
+        if description is not None:
+            body["description"] = description
+
+        if labels is not None:
+            body["labels"] = labels  # type: ignore[assignment]
+
         return self._send_request(
             "datachain/edit-dataset",
-            {
-                "dataset_name": name,
-                "new_name": new_name,
-                "description": description,
-                "labels": labels,
-            },
+            body,
         )
 
     def rm_dataset(
