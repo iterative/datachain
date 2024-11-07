@@ -2,13 +2,28 @@ from datachain.lib import models
 
 
 def test_bbox():
-    bbox = models.BBox(x1=0.5, y1=1.5, x2=2.5, y2=3.5)
-    assert bbox.model_dump() == {"x1": 0.5, "y1": 1.5, "x2": 2.5, "y2": 3.5}
+    bbox = models.BBox(title="BBox", x1=0.5, y1=1.5, x2=2.5, y2=3.5)
+    assert bbox.model_dump() == {
+        "title": "BBox",
+        "x1": 0.5,
+        "y1": 1.5,
+        "x2": 2.5,
+        "y2": 3.5,
+    }
 
 
 def test_bbox_from_xywh():
     bbox = models.BBox.from_xywh([0.5, 1.5, 2.5, 3.5])
-    assert bbox.model_dump() == {"x1": 0.5, "y1": 1.5, "x2": 3, "y2": 5}
+    assert bbox.model_dump() == {"title": "", "x1": 0.5, "y1": 1.5, "x2": 3, "y2": 5}
+
+    bbox = models.BBox.from_xywh([0.5, 1.5, 2.5, 3.5], title="BBox")
+    assert bbox.model_dump() == {
+        "title": "BBox",
+        "x1": 0.5,
+        "y1": 1.5,
+        "x2": 3,
+        "y2": 5,
+    }
 
 
 def test_pose():
