@@ -15,8 +15,8 @@ from datachain.lib.listing import LISTING_PREFIX
 from tests.utils import uppercase_scheme
 
 
-@pytest.fixture(autouse=True)
-def studio_config():
+@pytest.fixture
+def studio_config(global_config_dir):
     with Config(ConfigLevel.GLOBAL).edit() as conf:
         conf["studio"] = {"token": "isat_access_token", "team": "team_name"}
 
@@ -235,20 +235,11 @@ dog3
 """
 
 
-def test_ls_remote_sources(cloud_type, capsys, monkeypatch):
+def test_ls_remote_sources(cloud_type, capsys, monkeypatch, studio_config):
     src = f"{cloud_type}://bucket"
-    token = "35NmrvSlsGVxTYIglxSsBIQHRrMpi6irSSYcAL0flijOytCHc"  # noqa: S105
     with monkeypatch.context() as m:
         m.setattr("requests.post", mock_post)
-        ls(
-            [src, f"{src}/dogs/others", f"{src}/dogs"],
-            config={
-                "type": "http",
-                "url": "http://localhost:8111/api/datachain",
-                "username": "datachain-team",
-                "token": f"isat_{token}",
-            },
-        )
+        ls([src, f"{src}/dogs/others", f"{src}/dogs"], studio=True)
     captured = capsys.readouterr()
     assert captured.out == ls_remote_sources_output.format(src=src)
 

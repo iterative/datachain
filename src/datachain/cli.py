@@ -4,18 +4,21 @@ import shlex
 import sys
 import traceback
 from argparse import Action, ArgumentParser, ArgumentTypeError, Namespace
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from importlib.metadata import PackageNotFoundError, version
 from itertools import chain
 from multiprocessing import freeze_support
 from typing import TYPE_CHECKING, Optional, Union
 
 import shtab
+from tabulate import tabulate
 
 from datachain import Session, utils
 from datachain.cli_utils import BooleanOptionalAction, CommaSeparatedArgs, KeyValueArgs
+from datachain.config import Config
+from datachain.error import DataChainError
 from datachain.lib.dc import DataChain
-from datachain.studio import process_studio_cli_args
+from datachain.studio import list_datasets, process_studio_cli_args
 from datachain.telemetry import telemetry
 
 if TYPE_CHECKING:
@@ -416,7 +419,36 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         help="Dataset labels",
     )
 
-    subp.add_parser("ls-datasets", parents=[parent_parser], description="List datasets")
+    datasets_parser = subp.add_parser(
+        "datasets", parents=[parent_parser], description="List datasets"
+    )
+    datasets_parser.add_argument(
+        "--studio",
+        action="store_true",
+        default=False,
+        help="List the files in the Studio",
+    )
+    datasets_parser.add_argument(
+        "-L",
+        "--local",
+        action="store_true",
+        default=False,
+        help="List local files only",
+    )
+    datasets_parser.add_argument(
+        "-a",
+        "--all",
+        action="store_true",
+        default=True,
+        help="List all files including hidden files",
+    )
+    datasets_parser.add_argument(
+        "--team",
+        action="store",
+        default=None,
+        help="The team to list datasets for. By default, it will use team from config.",
+    )
+
     rm_dataset_parser = subp.add_parser(
         "rm-dataset", parents=[parent_parser], description="Removes dataset"
     )
@@ -474,10 +506,30 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         help="List files in the long format",
     )
     parse_ls.add_argument(
-        "--remote",
+        "--studio",
+        action="store_true",
+        default=False,
+        help="List the files in the Studio",
+    )
+    parse_ls.add_argument(
+        "-L",
+        "--local",
+        action="store_true",
+        default=False,
+        help="List local files only",
+    )
+    parse_ls.add_argument(
+        "-a",
+        "--all",
+        action="store_true",
+        default=True,
+        help="List all files including hidden files",
+    )
+    parse_ls.add_argument(
+        "--team",
         action="store",
-        default="",
-        help="Name of remote to use",
+        default=None,
+        help="The team to list datasets for. By default, it will use team from config.",
     )
 
     parse_du = subp.add_parser(
@@ -758,11 +810,12 @@ def format_ls_entry(entry: str) -> str:
 def ls_remote(
     paths: Iterable[str],
     long: bool = False,
+    team: Optional[str] = None,
 ):
     from datachain.node import long_line_str
     from datachain.remote.studio import StudioClient
 
-    client = StudioClient()
+    client = StudioClient(team=team)
     first = True
     for path, response in client.ls(paths):
         if not first:
@@ -789,28 +842,66 @@ def ls_remote(
 def ls(
     sources,
     long: bool = False,
-    remote: str = "",
-    config: Optional[Mapping[str, str]] = None,
+    studio: bool = False,
+    local: bool = False,
+    all: bool = True,
+    team: Optional[str] = None,
     **kwargs,
 ):
-    if config is None:
-        from .config import Config
+    token = Config().read().get("studio", {}).get("token")
+    all, local, studio = _determine_flavors(studio, local, all, token)
 
-        config = Config().get_remote_config(remote=remote)
-    remote_type = config["type"]
-    if remote_type == "local":
+    if all or local:
         ls_local(sources, long=long, **kwargs)
-    else:
-        ls_remote(
-            sources,
-            long=long,
+
+    if (all or studio) and token:
+        ls_remote(sources, long=long, team=team)
+
+
+def datasets(
+    catalog: "Catalog",
+    studio: bool = False,
+    local: bool = False,
+    all: bool = True,
+    team: Optional[str] = None,
+):
+    token = Config().read().get("studio", {}).get("token")
+    all, local, studio = _determine_flavors(studio, local, all, token)
+
+    local_datasets = set(list_datasets_local(catalog)) if all or local else set()
+    studio_datasets = (
+        set(list_datasets(team=team)) if (all or studio) and token else set()
+    )
+
+    rows = [
+        _datasets_tabulate_row(
+            name=name,
+            version=version,
+            both=(all or (local and studio)) and token,
+            local=(name, version) in local_datasets,
+            studio=(name, version) in studio_datasets,
         )
+        for name, version in local_datasets.union(studio_datasets)
+    ]
+
+    print(tabulate(rows, headers="keys"))
 
 
-def ls_datasets(catalog: "Catalog"):
+def list_datasets_local(catalog: "Catalog"):
     for d in catalog.ls_datasets():
         for v in d.versions:
-            print(f"{d.name} (v{v.version})")
+            yield (d.name, v.version)
+
+
+def _datasets_tabulate_row(name, version, both, local, studio):
+    row = {
+        "Name": name,
+        "Version": version,
+    }
+    if both:
+        row["Studio"] = "\u2714" if studio else "\u2716"
+        row["Local"] = "\u2714" if local else "\u2716"
+    return row
 
 
 def rm_dataset(
@@ -953,6 +1044,20 @@ def completion(shell: str) -> str:
     )
 
 
+def _determine_flavors(studio: bool, local: bool, all: bool, token: Optional[str]):
+    if studio and not token:
+        raise DataChainError(
+            "Not logged in to Studio. Log in with 'datachain studio login'."
+        )
+
+    if local or studio:
+        all = False
+
+    all = all and not (local or studio)
+
+    return all, local, studio
+
+
 def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR0915
     # Required for Windows multiprocessing support
     freeze_support()
@@ -1032,12 +1137,21 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
             ls(
                 args.sources,
                 long=bool(args.long),
-                remote=args.remote,
+                studio=args.studio,
+                local=args.local,
+                all=args.all,
+                team=args.team,
                 update=bool(args.update),
                 client_config=client_config,
             )
-        elif args.command == "ls-datasets":
-            ls_datasets(catalog)
+        elif args.command == "datasets":
+            datasets(
+                catalog=catalog,
+                studio=args.studio,
+                local=args.local,
+                all=args.all,
+                team=args.team,
+            )
         elif args.command == "show":
             show(
                 catalog,
