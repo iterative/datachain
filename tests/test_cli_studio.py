@@ -1,4 +1,5 @@
 from dvc_studio_client.auth import AuthorizationExpiredError
+from tabulate import tabulate
 
 from datachain.cli import main
 from datachain.config import Config, ConfigLevel
@@ -84,28 +85,20 @@ def test_studio_token(capsys):
     assert main(["studio", "token"]) == 1
 
 
-def test_studio_ls_datasets(capsys, requests_mock):
-    with Config(ConfigLevel.GLOBAL).edit() as conf:
-        conf["studio"] = {"token": "isat_access_token", "team": "team_name"}
-
-    datasets = [
-        {
-            "id": 1,
-            "name": "dogs",
-            "versions": [{"version": 1}, {"version": 2}],
-        },
-        {
-            "id": 2,
-            "name": "cats",
-            "versions": [{"version": 1}],
-        },
-    ]
-
-    requests_mock.post(f"{STUDIO_URL}/api/datachain/ls-datasets", json=datasets)
-
+def test_studio_ls_datasets(capsys, studio_datasets):
     assert main(["studio", "datasets"]) == 0
     out = capsys.readouterr().out
-    assert out.strip() == "dogs (v1)\ndogs (v2)\ncats (v1)"
+
+    expected_rows = [
+        {"Name": "dogs", "Version": "1"},
+        {"Name": "dogs", "Version": "2"},
+        {
+            "Name": "cats",
+            "Version": "1",
+        },
+        {"Name": "both", "Version": "1"},
+    ]
+    assert out.strip() == tabulate(expected_rows, headers="keys")
 
 
 def test_studio_team_local():
@@ -118,3 +111,56 @@ def test_studio_team_global():
     assert main(["studio", "team", "team_name", "--global"]) == 0
     config = Config(ConfigLevel.GLOBAL).read()
     assert config["studio"]["team"] == "team_name"
+
+
+def test_studio_datasets(capsys, studio_datasets, mocker):
+    def list_datasets_local(_):
+        yield "local", 1
+        yield "both", 1
+
+    mocker.patch("datachain.cli.list_datasets_local", side_effect=list_datasets_local)
+    local_rows = [
+        {"Name": "both", "Version": "1"},
+        {"Name": "local", "Version": "1"},
+    ]
+    local_output = tabulate(local_rows, headers="keys")
+
+    studio_rows = [
+        {"Name": "both", "Version": "1"},
+        {
+            "Name": "cats",
+            "Version": "1",
+        },
+        {"Name": "dogs", "Version": "1"},
+        {"Name": "dogs", "Version": "2"},
+    ]
+    studio_output = tabulate(studio_rows, headers="keys")
+
+    both_rows = [
+        {"Name": "both", "Version": "1", "Studio": "\u2714", "Local": "\u2714"},
+        {"Name": "cats", "Version": "1", "Studio": "\u2714", "Local": "\u2716"},
+        {"Name": "dogs", "Version": "1", "Studio": "\u2714", "Local": "\u2716"},
+        {"Name": "dogs", "Version": "2", "Studio": "\u2714", "Local": "\u2716"},
+        {"Name": "local", "Version": "1", "Studio": "\u2716", "Local": "\u2714"},
+    ]
+    both_output = tabulate(both_rows, headers="keys")
+
+    assert main(["datasets", "--local"]) == 0
+    out = capsys.readouterr().out
+    assert sorted(out.splitlines()) == sorted(local_output.splitlines())
+
+    assert main(["datasets", "--studio"]) == 0
+    out = capsys.readouterr().out
+    assert sorted(out.splitlines()) == sorted(studio_output.splitlines())
+
+    assert main(["datasets", "--local", "--studio"]) == 0
+    out = capsys.readouterr().out
+    assert sorted(out.splitlines()) == sorted(both_output.splitlines())
+
+    assert main(["datasets", "--all"]) == 0
+    out = capsys.readouterr().out
+    assert sorted(out.splitlines()) == sorted(both_output.splitlines())
+
+    assert main(["datasets"]) == 0
+    out = capsys.readouterr().out
+    assert sorted(out.splitlines()) == sorted(both_output.splitlines())

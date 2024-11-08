@@ -4,6 +4,15 @@ import subprocess
 from textwrap import dedent
 
 import pytest
+import tabulate
+
+
+def _tabulated_datasets(name, version):
+    row = [
+        {"Name": name, "Version": version},
+    ]
+    return tabulate.tabulate(row, headers="keys")
+
 
 MNT_FILE_TREE = {
     "01375.png": 324,
@@ -138,27 +147,27 @@ E2E_STEPS = (
         },
     },
     {
-        "command": ("datachain", "ls-datasets"),
-        "expected": "mnt (v1)\n",
+        "command": ("datachain", "datasets"),
+        "expected": _tabulated_datasets("mnt", 1),
     },
     {
-        "command": ("datachain", "ls-datasets"),
-        "expected": "mnt (v1)\n",
+        "command": ("datachain", "datasets"),
+        "expected": _tabulated_datasets("mnt", 1),
     },
     {
         "command": ("datachain", "edit-dataset", "mnt", "--new-name", "mnt-new"),
         "expected": "",
     },
     {
-        "command": ("datachain", "ls-datasets"),
-        "expected": "mnt-new (v1)\n",
+        "command": ("datachain", "datasets"),
+        "expected": _tabulated_datasets("mnt-new", 1),
     },
     {
         "command": ("datachain", "rm-dataset", "mnt-new", "--version", "1"),
         "expected": "",
     },
     {
-        "command": ("datachain", "ls-datasets"),
+        "command": ("datachain", "datasets"),
         "expected": "",
     },
     {
@@ -200,7 +209,7 @@ def run_step(step, catalog):
             step["expected"].lstrip("\n").split("\n")
         )
     else:
-        assert result.stdout == step["expected"].lstrip("\n")
+        assert result.stdout.strip("\n") == step["expected"].strip("\n")
     if step.get("listing"):
         assert "Listing" in result.stderr
     else:
