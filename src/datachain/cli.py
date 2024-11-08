@@ -424,7 +424,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         "--studio",
         action="store_true",
         default=False,
-        help="Remove dataset from Studio",
+        help="Edit dataset from Studio",
     )
     parse_edit_dataset.add_argument(
         "--team",
