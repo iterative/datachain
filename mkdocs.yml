@@ -63,7 +63,7 @@ theme:
         name: Switch to system preference
 
 extra_css:
-- css/mkdocstrings.css
+  - css/mkdocstrings.css
 
 nav:
   - Home: index.md
