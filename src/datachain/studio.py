@@ -50,7 +50,24 @@ def set_team(args: "Namespace"):
     print(f"Set default team to '{args.team_name}' in {config.config_file()}")
 
 
-def login(args: "Namespace"):
+def login(args: "Namespace") -> int:
+    """
+    Login to studio using the CLI.
+
+    This function is called when the user runs `datachain studio login`.
+    It will prompt the user to login to studio and save the token to the
+    config file.
+
+    Keyword Arguments:
+        name (str): The name of the token to save in the config file
+        hostname (str): The hostname of the studio server. Defaults to `https://studio.datachain.ai`
+        scopes (List[str]): The scopes to request from the user
+
+
+    Returns:
+        int: 0 on success, 1 on failure
+    """
+
     from dvc_studio_client.auth import StudioAuthError, get_access_token
 
     config = Config().read().get("studio", {})

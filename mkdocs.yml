@@ -1,4 +1,4 @@
-site_name: ''
+site_name: 'DataChain Documentation'
 site_url: https://docs.datachain.ai
 site_description: Wrangle unstructured AI data at scale
 
@@ -62,6 +62,9 @@ theme:
         icon: material/weather-night
         name: Switch to system preference
 
+extra_css:
+- css/mkdocstrings.css
+
 nav:
   - Home: index.md
   - API reference:
@@ -72,6 +75,8 @@ nav:
       - references/udf.md
       - references/torch.md
       - references/sql.md
+  - CLI Documentation:
+      - cli/index.md
   - DataChain Website: https://datachain.ai" target="_blank"
 
 markdown_extensions:
