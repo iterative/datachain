@@ -1,3 +1,4 @@
+import base64
 import json
 import logging
 import os
@@ -23,7 +24,8 @@ DatasetStatsData = Optional[DatasetStats]
 DatasetRowsData = Optional[Iterable[dict[str, Any]]]
 DatasetExportStatus = Optional[dict[str, Any]]
 DatasetExportSignedUrls = Optional[list[str]]
-
+FileUploadData = Optional[dict[str, Any]]
+JobData = Optional[dict[str, Any]]
 
 logger = logging.getLogger("datachain")
 
@@ -276,3 +278,33 @@ class StudioClient:
             "datachain/dataset-export-status",
             {"dataset_name": name, "dataset_version": version},
         )
+
+    def upload_file(self, file_name: str, content: bytes) -> Response[FileUploadData]:
+        data = {
+            "file_content": base64.b64encode(content).decode("utf-8"),
+            "file_name": file_name,
+        }
+        return self._send_request("datachain/upload-file", data)
+
+    def create_job(
+        self,
+        query: str,
+        query_type: str,
+        environment: Optional[str] = None,
+        workers: Optional[int] = None,
+        query_name: Optional[str] = None,
+        files: Optional[list[str]] = None,
+        python_version: Optional[str] = None,
+        requirements: Optional[str] = None,
+    ) -> Response[JobData]:
+        data = {
+            "query": query,
+            "query_type": query_type,
+            "environment": environment,
+            "workers": workers,
+            "query_name": query_name,
+            "files": files,
+            "python_version": python_version,
+            "requirements": requirements,
+        }
+        return self._send_request("datachain/job", data)
