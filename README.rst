@@ -19,32 +19,40 @@
    :target: https://github.com/iterative/datachain/actions/workflows/tests.yml
    :alt: Tests
 
-DataChain is a modern Pythonic data-frame library designed for artificial intelligence.
-It is made to organize your unstructured data into datasets and wrangle it at scale on
-your local machine. Datachain does not abstract or hide the AI models and API calls, but helps to integrate them into the postmodern data stack.
+DataChain is a Python-based AI-data warehouse for transforming and analyzing unstructured
+data like images, audio, videos, text and PDFs. It integrates with external storage
+(e.g., S3) to process data efficiently without data duplication and manages metadata
+in an internal database for easy and efficient querying.
+
+
+Use Cases
+=========
+
+1. **Multimodal Dataset Preparation and Curation**: ideal for organizing and
+   refining data in pre-training, finetuning or LLM evaluating stages.
+2. **GenAI Data Analytics**: Enables advanced analytics for multimodal data and
+   ad-hoc analytics using LLMs.
 
 Key Features
 ============
 
-📂 **Storage as a Source of Truth.**
-   - Process unstructured data without redundant copies from S3, GCP, Azure, and local
-     file systems.
-   - Multimodal data support: images, video, text, PDFs, JSONs, CSVs, parquet.
+📂 **Multimodal Dataset Versioning.**
+   - Version unstructured data without redundant data copies, by supporitng
+     references to S3, GCP, Azure, and local file systems.
+   - Multimodal data support: images, video, text, PDFs, JSONs, CSVs, parquet, etc.
    - Unite files and metadata together into persistent, versioned, columnar datasets.
 
-🐍 **Python-friendly data pipelines.**
-   - Operate on Python objects and object fields.
-   - Built-in parallelization and out-of-memory compute without SQL or Spark.
+🐍 **Python-friendly.**
+   - Operate on Python objects and object fields: float scores, strings, matrixes,
+     LLM response objects.
+   - Run Python code in a high-scale, terabytes size datasets, with built-in
+     parallelization and memory-efficient computing — no SQL or Spark required.
 
 🧠 **Data Enrichment and Processing.**
    - Generate metadata using local AI models and LLM APIs.
-   - Filter, join, and group by metadata. Search by vector embeddings.
+   - Filter, join, and group datasets by metadata. Search by vector embeddings.
+   - High-performance vectorized operations on Python objects: sum, count, avg, etc.
    - Pass datasets to Pytorch and Tensorflow, or export them back into storage.
-
-🚀 **Efficiency.**
-   - Parallelization, out-of-memory workloads and data caching.
-   - Vectorized operations on Python object fields: sum, count, avg, etc.
-   - Optimized vector search.
 
 
 Quick Start
@@ -328,6 +336,19 @@ name suffix, the following code will do it:
     loader = DataLoader(chain, batch_size=1)
 
 
+DataChain Studio Platform
+-------------------------
+
+`DataChain Studio`_ is a proprietary solution for teams that offers:
+
+- **Centralized dataset registry** to manage data, code and dependency
+  dependencies in one place.
+- **Data Lineage** for data sources as well as direvative dataset.
+- **UI for Multimodal Data** like images, videos, and PDFs.
+- **Scalable Compute** to handle large datasets (100M+ files) and in-house
+  AI model inference.
+- **Access control** including SSO and team based collaboration.
+
 Tutorials
 ---------
 
@@ -361,6 +382,5 @@ Community and Support
 .. _Pydantic: https://github.com/pydantic/pydantic
 .. _publicly available: https://radar.kit.edu/radar/en/dataset/FdJmclKpjHzLfExE.ExpBot%2B-%2BA%2Bdataset%2Bof%2B79%2Bdialogs%2Bwith%2Ban%2Bexperimental%2Bcustomer%2Bservice%2Bchatbot
 .. _SQLite: https://www.sqlite.org/
-.. _Getting Started: https://datachain.dvc.ai/
-.. |Flowchart| image:: https://github.com/iterative/datachain/blob/main/docs/assets/flowchart.png?raw=true
-   :alt: DataChain FlowChart
+.. _Getting Started: https://docs.datachain.ai/
+.. _DataChain Studio: https://studio.datachain.ai/
