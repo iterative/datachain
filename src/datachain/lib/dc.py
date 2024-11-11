@@ -30,7 +30,7 @@ from datachain.client.local import FileClient
 from datachain.dataset import DatasetRecord
 from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.convert.values_to_tuples import values_to_tuples
-from datachain.lib.data_model import DataModel, DataType, dict_to_data_model
+from datachain.lib.data_model import DataModel, DataType, DataValue, dict_to_data_model
 from datachain.lib.dataset_info import DatasetInfo
 from datachain.lib.file import ArrowRow, File, get_file_type
 from datachain.lib.file import ExportPlacement as FileExportPlacement
@@ -1262,15 +1262,15 @@ class DataChain:
         return self.results(row_factory=to_dict)
 
     @overload
-    def collect(self) -> Iterator[tuple[DataType, ...]]: ...
+    def collect(self) -> Iterator[tuple[DataValue, ...]]: ...
 
     @overload
-    def collect(self, col: str) -> Iterator[DataType]: ...  # type: ignore[overload-overlap]
+    def collect(self, col: str) -> Iterator[DataValue]: ...
 
     @overload
-    def collect(self, *cols: str) -> Iterator[tuple[DataType, ...]]: ...
+    def collect(self, *cols: str) -> Iterator[tuple[DataValue, ...]]: ...
 
-    def collect(self, *cols: str) -> Iterator[Union[DataType, tuple[DataType, ...]]]:  # type: ignore[overload-overlap,misc]
+    def collect(self, *cols: str) -> Iterator[Union[DataValue, tuple[DataValue, ...]]]:  # type: ignore[overload-overlap,misc]
         """Yields rows of values, optionally limited to the specified columns.
 
         Args:
