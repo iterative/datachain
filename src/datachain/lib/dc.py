@@ -642,6 +642,59 @@ class DataChain:
         }
         return chain.gen(**signal_dict)  # type: ignore[misc, arg-type]
 
+    def explode(
+        self,
+        col: str,
+        model_name: Optional[str] = None,
+        object_name: Optional[str] = None,
+    ) -> "DataChain":
+        """Explodes a column containing JSON objects (dict or str DataChain type) into
+           individual columns based on the schema of the JSON. Schema is inferred from
+           the first row of the column.
+
+        Args:
+            col: the name of the column containing JSON to be exploded.
+            model_name: optional generated model name.  By default generates the name
+                automatically.
+            object_name: optional generated object column name. By default generates the
+                name automatically.
+
+        Returns:
+            DataChain: A new DataChain instance with the new set of columns.
+        """
+        import json
+
+        import pyarrow as pa
+
+        from datachain.lib.arrow import schema_to_output
+
+        json_value = next(self.limit(1).collect(col))
+        json_dict = (
+            json.loads(json_value) if isinstance(json_value, str) else json_value
+        )
+
+        if not isinstance(json_dict, dict):
+            raise TypeError(f"Column {col} should be a string or dict type with JSON")
+
+        schema = pa.Table.from_pylist([json_dict]).schema
+        output = schema_to_output(schema, None)
+
+        if not model_name:
+            model_name = f"{col.title()}ExplodedModel"
+
+        model = dict_to_data_model(model_name, output)
+
+        def json_to_model(json_value: Union[str, dict]):
+            json_dict = (
+                json.loads(json_value) if isinstance(json_value, str) else json_value
+            )
+            return model.model_validate(json_dict)
+
+        if not object_name:
+            object_name = f"{col}_expl"
+
+        return self.map(json_to_model, params=col, output={object_name: model})
+
     @classmethod
     def datasets(
         cls,
