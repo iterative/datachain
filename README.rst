@@ -95,7 +95,7 @@ Batch inference with a simple sentiment model using the `transformers` library:
 
     pip install transformers
 
-The code below downloads files the cloud, and applies a user-defined function
+The code below downloads files from the cloud, and applies a user-defined function
 to each one of them. All files with a positive sentiment
 detected are then copied to the local directory.
 
