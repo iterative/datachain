@@ -1,18 +1,9 @@
 
-|PyPI| |Python Version| |Codecov| |Tests|
+|PyPI|
 
 .. |PyPI| image:: https://img.shields.io/pypi/v/datachain.svg
    :target: https://pypi.org/project/datachain
    :alt: PyPI
-.. |Python Version| image:: https://img.shields.io/pypi/pyversions/datachain
-   :target: https://pypi.org/project/datachain
-   :alt: Python Version
-.. |Codecov| image:: https://codecov.io/gh/iterative/datachain/graph/badge.svg?token=byliXGGyGB
-   :target: https://codecov.io/gh/iterative/datachain
-   :alt: Codecov
-.. |Tests| image:: https://github.com/iterative/datachain/actions/workflows/tests.yml/badge.svg
-   :target: https://github.com/iterative/datachain/actions/workflows/tests.yml
-   :alt: Tests
 
 DataChain is a Python-based AI-data warehouse for transforming and analyzing unstructured
 data like images, audio, videos, text and PDFs. It integrates with external storage
