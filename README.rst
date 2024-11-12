@@ -1,7 +1,10 @@
 
-|PyPI|
+|PyPI| |Py|
 
 .. |PyPI| image:: https://img.shields.io/pypi/v/datachain.svg
+   :target: https://pypi.org/project/datachain
+   :alt: PyPI
+.. |Py| image:: https://img.shields.io/pypi/v/datachain.svg
    :target: https://pypi.org/project/datachain
    :alt: PyPI
 
