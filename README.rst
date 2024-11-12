@@ -4,7 +4,7 @@
 .. |PyPI| image:: https://img.shields.io/pypi/pyversions/datachain
    :target: https://pypi.org/project/datachain
    :alt: PyPI
-.. |PyPy| image:: https://img.shields.io/pypi/pyversions/datachain
+.. |PyPy| image:: https://img.shields.io/pypi/v/datachain.svg
    :target: https://pypi.org/project/datachain
    :alt: PyPI
 
