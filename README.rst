@@ -1,11 +1,6 @@
-================
-|logo| DataChain
-================
 
 |PyPI| |Python Version| |Codecov| |Tests|
 
-.. |logo| image:: docs/assets/datachain.svg
-   :height: 24
 .. |PyPI| image:: https://img.shields.io/pypi/v/datachain.svg
    :target: https://pypi.org/project/datachain
    :alt: PyPI
