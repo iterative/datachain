@@ -1,15 +1,13 @@
 
-|PyPI| |Py| |PyPy|
+|PyPI| |PyPy|
 
-.. |PyPI| image:: https://img.shields.io/pypi/v/datachain.svg
+.. |PyPI| image:: https://img.shields.io/pypi/pyversions/datachain
    :target: https://pypi.org/project/datachain
    :alt: PyPI
-.. |Py| image:: https://img.shields.io/pypi/v/datachain.svg
+.. |PyPy| image:: https://img.shields.io/pypi/pyversions/datachain
    :target: https://pypi.org/project/datachain
    :alt: PyPI
-.. |PyPy| image:: https://img.shields.io/pypi/v/datachain.svg
-   :target: https://pypi.org/project/datachain
-   :alt: PyPI
+
 
 DataChain is a Python-based AI-data warehouse for transforming and analyzing unstructured
 data like images, audio, videos, text and PDFs. It integrates with external storage
