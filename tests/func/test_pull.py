@@ -1,6 +1,7 @@
 import io
 import json
 from datetime import datetime
+from uuid import uuid4
 
 import lz4.frame
 import pandas as pd
@@ -90,6 +91,7 @@ def schema():
 def remote_dataset_version(schema, dataset_rows):
     return {
         "id": 1,
+        "uuid": str(uuid4()),
         "dataset_id": 1,
         "version": 1,
         "status": 4,
@@ -179,6 +181,7 @@ def test_pull_dataset_success(
     assert dataset_version.schema
     assert dataset_version.num_objects == 4
     assert dataset_version.size == 15
+    assert dataset_version.uuid
 
     assert_row_names(
         catalog,

@@ -352,6 +352,7 @@ class AbstractDBMetastore(AbstractMetastore):
         """Datasets versions table columns."""
         return [
             Column("id", Integer, primary_key=True),
+            Column("uuid", Text, nullable=False, default=uuid4()),
             Column(
                 "dataset_id",
                 Integer,
@@ -555,6 +556,7 @@ class AbstractDBMetastore(AbstractMetastore):
 
         query = self._datasets_versions_insert().values(
             dataset_id=dataset.id,
+            uuid=str(uuid4()),
             version=version,
             status=status,
             feature_schema=json.dumps(feature_schema or {}),

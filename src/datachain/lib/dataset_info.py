@@ -1,6 +1,7 @@
 import json
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Optional, Union
+from uuid import uuid4
 
 from pydantic import Field, field_validator
 
@@ -15,6 +16,7 @@ if TYPE_CHECKING:
 
 class DatasetInfo(DataModel):
     name: str
+    uuid: str = Field(default=str(uuid4()))
     version: int = Field(default=1)
     status: int = Field(default=DatasetStatus.CREATED)
     created_at: datetime = Field(default=TIME_ZERO)
@@ -60,6 +62,7 @@ class DatasetInfo(DataModel):
         job: Optional[Job],
     ) -> "Self":
         return cls(
+            uuid=version.uuid,
             name=dataset.name,
             version=version.version,
             status=version.status,
