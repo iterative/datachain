@@ -440,9 +440,6 @@ class UDFStep(Step, ABC):
                 udf_info = {
                     "udf_data": filtered_cloudpickle_dumps(self.udf),
                     "catalog_init": self.catalog.get_init_params(),
-                    "id_generator_clone_params": (
-                        self.catalog.id_generator.clone_params()
-                    ),
                     "metastore_clone_params": self.catalog.metastore.clone_params(),
                     "warehouse_clone_params": self.catalog.warehouse.clone_params(),
                     "table": udf_table,

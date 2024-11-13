@@ -15,7 +15,6 @@ from typing import (
 )
 
 import sqlalchemy
-from packaging import version
 from sqlalchemy import MetaData, Table, UniqueConstraint, exists, select
 from sqlalchemy.dialects import sqlite
 from sqlalchemy.schema import CreateIndex, CreateTable, DropTable
@@ -27,7 +26,6 @@ from tqdm import tqdm
 import datachain.sql.sqlite
 from datachain.data_storage import AbstractDBMetastore, AbstractWarehouse
 from datachain.data_storage.db_engine import DatabaseEngine
-from datachain.data_storage.id_generator import AbstractDBIDGenerator
 from datachain.data_storage.schema import DefaultSchema
 from datachain.dataset import DatasetRecord, StorageURI
 from datachain.error import DataChainError
@@ -274,123 +272,16 @@ class SQLiteDatabaseEngine(DatabaseEngine):
         self.execute_str(f"ALTER TABLE {comp_old_name} RENAME TO {comp_new_name}")
 
 
-class SQLiteIDGenerator(AbstractDBIDGenerator):
-    _db: "SQLiteDatabaseEngine"
-
-    def __init__(
-        self,
-        db: Optional["SQLiteDatabaseEngine"] = None,
-        table_prefix: Optional[str] = None,
-        skip_db_init: bool = False,
-        db_file: Optional[str] = None,
-        in_memory: bool = False,
-    ):
-        db_file = get_db_file_in_memory(db_file, in_memory)
-
-        db = db or SQLiteDatabaseEngine.from_db_file(db_file)
-
-        super().__init__(db, table_prefix, skip_db_init)
-
-    def clone(self) -> "SQLiteIDGenerator":
-        """Clones SQLiteIDGenerator implementation."""
-        return SQLiteIDGenerator(
-            self._db.clone(), self._table_prefix, skip_db_init=True
-        )
-
-    def clone_params(self) -> tuple[Callable[..., Any], list[Any], dict[str, Any]]:
-        """
-        Returns the function, args, and kwargs needed to instantiate a cloned copy
-        of this SQLiteIDGenerator implementation, for use in separate processes
-        or machines.
-        """
-        return (
-            SQLiteIDGenerator.init_after_clone,
-            [],
-            {
-                "db_clone_params": self._db.clone_params(),
-                "table_prefix": self._table_prefix,
-            },
-        )
-
-    @classmethod
-    def init_after_clone(
-        cls,
-        *,
-        db_clone_params: tuple[Callable, list, dict[str, Any]],
-        table_prefix: Optional[str] = None,
-    ) -> "SQLiteIDGenerator":
-        """
-        Initializes a new instance of this SQLiteIDGenerator implementation
-        using the given parameters, which were obtained from a call to clone_params.
-        """
-        (db_class, db_args, db_kwargs) = db_clone_params
-        return cls(
-            db=db_class(*db_args, **db_kwargs),
-            table_prefix=table_prefix,
-            skip_db_init=True,
-        )
-
-    @property
-    def db(self) -> "SQLiteDatabaseEngine":
-        return self._db
-
-    def init_id(self, uri: str) -> None:
-        """Initializes the ID generator for the given URI with zero last_id."""
-        self._db.execute(
-            sqlite.insert(self._table)
-            .values(uri=uri, last_id=0)
-            .on_conflict_do_nothing()
-        )
-
-    def get_next_ids(self, uri: str, count: int) -> range:
-        """Returns a range of IDs for the given URI."""
-
-        sqlite_version = version.parse(sqlite3.sqlite_version)
-        is_returning_supported = sqlite_version >= version.parse("3.35.0")
-        if is_returning_supported:
-            stmt = (
-                sqlite.insert(self._table)
-                .values(uri=uri, last_id=count)
-                .on_conflict_do_update(
-                    index_elements=["uri"],
-                    set_={"last_id": self._table.c.last_id + count},
-                )
-                .returning(self._table.c.last_id)
-            )
-            last_id = self._db.execute(stmt).fetchone()[0]
-        else:
-            # Older versions of SQLite are still the default under Ubuntu LTS,
-            # e.g. Ubuntu 20.04 LTS (Focal Fossa) uses 3.31.1
-            # Transactions ensure no concurrency conflicts
-            with self._db.transaction() as conn:
-                stmt_ins = (
-                    sqlite.insert(self._table)
-                    .values(uri=uri, last_id=count)
-                    .on_conflict_do_update(
-                        index_elements=["uri"],
-                        set_={"last_id": self._table.c.last_id + count},
-                    )
-                )
-                self._db.execute(stmt_ins, conn=conn)
-
-                stmt_sel = select(self._table.c.last_id).where(self._table.c.uri == uri)
-                last_id = self._db.execute(stmt_sel, conn=conn).fetchone()[0]
-
-        return range(last_id - count + 1, last_id + 1)
-
-
 class SQLiteMetastore(AbstractDBMetastore):
     """
     SQLite Metastore uses SQLite3 for storing indexed data locally.
     This is currently used for the local cli.
     """
 
-    id_generator: "SQLiteIDGenerator"
     db: "SQLiteDatabaseEngine"
 
     def __init__(
         self,
-        id_generator: "SQLiteIDGenerator",
         uri: Optional[StorageURI] = None,
         db: Optional["SQLiteDatabaseEngine"] = None,
         db_file: Optional[str] = None,
@@ -398,7 +289,7 @@ class SQLiteMetastore(AbstractDBMetastore):
     ):
         uri = uri or StorageURI("")
         self.schema: DefaultSchema = DefaultSchema()
-        super().__init__(id_generator, uri)
+        super().__init__(uri)
 
         # needed for dropping tables in correct order for tests because of
         # foreign keys
@@ -423,11 +314,7 @@ class SQLiteMetastore(AbstractDBMetastore):
         if not uri and self.uri:
             uri = self.uri
 
-        return SQLiteMetastore(
-            self.id_generator.clone(),
-            uri=uri,
-            db=self.db.clone(),
-        )
+        return SQLiteMetastore(uri=uri, db=self.db.clone())
 
     def clone_params(self) -> tuple[Callable[..., Any], list[Any], dict[str, Any]]:
         """
@@ -438,7 +325,6 @@ class SQLiteMetastore(AbstractDBMetastore):
             SQLiteMetastore.init_after_clone,
             [],
             {
-                "id_generator_clone_params": self.id_generator.clone_params(),
                 "uri": self.uri,
                 "db_clone_params": self.db.clone_params(),
             },
@@ -448,21 +334,11 @@ class SQLiteMetastore(AbstractDBMetastore):
     def init_after_clone(
         cls,
         *,
-        id_generator_clone_params: tuple[Callable, list, dict[str, Any]],
         uri: StorageURI,
         db_clone_params: tuple[Callable, list, dict[str, Any]],
     ) -> "SQLiteMetastore":
-        (
-            id_generator_class,
-            id_generator_args,
-            id_generator_kwargs,
-        ) = id_generator_clone_params
         (db_class, db_args, db_kwargs) = db_clone_params
-        return cls(
-            id_generator=id_generator_class(*id_generator_args, **id_generator_kwargs),
-            uri=uri,
-            db=db_class(*db_args, **db_kwargs),
-        )
+        return cls(uri=uri, db=db_class(*db_args, **db_kwargs))
 
     def _init_tables(self) -> None:
         """Initialize tables."""
@@ -517,7 +393,6 @@ class SQLiteWarehouse(AbstractWarehouse):
     This is currently used for the local cli.
     """
 
-    id_generator: "SQLiteIDGenerator"
     db: "SQLiteDatabaseEngine"
 
     # Cache for our defined column types to dialect specific TypeEngine relations
@@ -525,13 +400,12 @@ class SQLiteWarehouse(AbstractWarehouse):
 
     def __init__(
         self,
-        id_generator: "SQLiteIDGenerator",
         db: Optional["SQLiteDatabaseEngine"] = None,
         db_file: Optional[str] = None,
         in_memory: bool = False,
     ):
         self.schema: DefaultSchema = DefaultSchema()
-        super().__init__(id_generator)
+        super().__init__()
 
         db_file = get_db_file_in_memory(db_file, in_memory)
 
@@ -542,7 +416,7 @@ class SQLiteWarehouse(AbstractWarehouse):
         self.close()
 
     def clone(self, use_new_connection: bool = False) -> "SQLiteWarehouse":
-        return SQLiteWarehouse(self.id_generator.clone(), db=self.db.clone())
+        return SQLiteWarehouse(db=self.db.clone())
 
     def clone_params(self) -> tuple[Callable[..., Any], list[Any], dict[str, Any]]:
         """
@@ -552,29 +426,17 @@ class SQLiteWarehouse(AbstractWarehouse):
         return (
             SQLiteWarehouse.init_after_clone,
             [],
-            {
-                "id_generator_clone_params": self.id_generator.clone_params(),
-                "db_clone_params": self.db.clone_params(),
-            },
+            {"db_clone_params": self.db.clone_params()},
         )
 
     @classmethod
     def init_after_clone(
         cls,
         *,
-        id_generator_clone_params: tuple[Callable, list, dict[str, Any]],
         db_clone_params: tuple[Callable, list, dict[str, Any]],
     ) -> "SQLiteWarehouse":
-        (
-            id_generator_class,
-            id_generator_args,
-            id_generator_kwargs,
-        ) = id_generator_clone_params
         (db_class, db_args, db_kwargs) = db_clone_params
-        return cls(
-            id_generator=id_generator_class(*id_generator_args, **id_generator_kwargs),
-            db=db_class(*db_args, **db_kwargs),
-        )
+        return cls(db=db_class(*db_args, **db_kwargs))
 
     def _reflect_tables(self, filter_tables=None):
         """

@@ -12,12 +12,11 @@ from pytest import MonkeyPatch, TempPathFactory
 from upath.implementations.cloud import CloudPath
 
 from datachain.catalog import Catalog
-from datachain.catalog.loader import get_id_generator, get_metastore, get_warehouse
+from datachain.catalog.loader import get_metastore, get_warehouse
 from datachain.cli_utils import CommaSeparatedArgs
 from datachain.config import Config, ConfigLevel
 from datachain.data_storage.sqlite import (
     SQLiteDatabaseEngine,
-    SQLiteIDGenerator,
     SQLiteMetastore,
     SQLiteWarehouse,
 )
@@ -155,34 +154,14 @@ def cleanup_sqlite_db(
 
 
 @pytest.fixture
-def id_generator():
-    if os.environ.get("DATACHAIN_ID_GENERATOR"):
-        _id_generator = get_id_generator()
-        yield _id_generator
-
-        _id_generator.cleanup_for_tests()
-    else:
-        db = SQLiteDatabaseEngine.from_db_file(":memory:")
-        _id_generator = SQLiteIDGenerator(db)
-        yield _id_generator
-
-        _id_generator.cleanup_for_tests()
-
-    # Close the connection so that the SQLite file is no longer open, to avoid
-    # pytest throwing: OSError: [Errno 24] Too many open files
-    # Or, for other implementations, prevent "too many clients" errors.
-    _id_generator.close_on_exit()
-
-
-@pytest.fixture
-def metastore(id_generator):
+def metastore():
     if os.environ.get("DATACHAIN_METASTORE"):
-        _metastore = get_metastore(id_generator)
+        _metastore = get_metastore()
         yield _metastore
 
         _metastore.cleanup_for_tests()
     else:
-        _metastore = SQLiteMetastore(id_generator, db_file=":memory:")
+        _metastore = SQLiteMetastore(db_file=":memory:")
         yield _metastore
 
         cleanup_sqlite_db(_metastore.db.clone(), _metastore.default_table_names)
@@ -206,16 +185,16 @@ def check_temp_tables_cleaned_up(original_warehouse):
 
 
 @pytest.fixture
-def warehouse(id_generator, metastore):
+def warehouse(metastore):
     if os.environ.get("DATACHAIN_WAREHOUSE"):
-        _warehouse = get_warehouse(id_generator)
+        _warehouse = get_warehouse()
         yield _warehouse
         try:
             check_temp_tables_cleaned_up(_warehouse)
         finally:
             _warehouse.cleanup_for_tests()
     else:
-        _warehouse = SQLiteWarehouse(id_generator, db_file=":memory:")
+        _warehouse = SQLiteWarehouse(db_file=":memory:")
         yield _warehouse
         try:
             check_temp_tables_cleaned_up(_warehouse)
@@ -228,8 +207,8 @@ def warehouse(id_generator, metastore):
 
 
 @pytest.fixture
-def catalog(id_generator, metastore, warehouse):
-    return Catalog(id_generator=id_generator, metastore=metastore, warehouse=warehouse)
+def catalog(metastore, warehouse):
+    return Catalog(metastore=metastore, warehouse=warehouse)
 
 
 @pytest.fixture
@@ -239,34 +218,14 @@ def test_session(catalog):
 
 
 @pytest.fixture
-def id_generator_tmpfile(tmp_path):
-    if os.environ.get("DATACHAIN_ID_GENERATOR"):
-        _id_generator = get_id_generator()
-        yield _id_generator
-
-        _id_generator.cleanup_for_tests()
-    else:
-        db = SQLiteDatabaseEngine.from_db_file(tmp_path / "test.db")
-        _id_generator = SQLiteIDGenerator(db)
-        yield _id_generator
-
-        _id_generator.cleanup_for_tests()
-
-    # Close the connection so that the SQLite file is no longer open, to avoid
-    # pytest throwing: OSError: [Errno 24] Too many open files
-    # Or, for other implementations, prevent "too many clients" errors.
-    _id_generator.close_on_exit()
-
-
-@pytest.fixture
-def metastore_tmpfile(tmp_path, id_generator_tmpfile):
+def metastore_tmpfile(tmp_path):
     if os.environ.get("DATACHAIN_METASTORE"):
-        _metastore = get_metastore(id_generator_tmpfile)
+        _metastore = get_metastore()
         yield _metastore
 
         _metastore.cleanup_for_tests()
     else:
-        _metastore = SQLiteMetastore(id_generator_tmpfile, db_file=tmp_path / "test.db")
+        _metastore = SQLiteMetastore(db_file=tmp_path / "test.db")
         yield _metastore
 
         cleanup_sqlite_db(_metastore.db.clone(), _metastore.default_table_names)
@@ -278,16 +237,16 @@ def metastore_tmpfile(tmp_path, id_generator_tmpfile):
 
 
 @pytest.fixture
-def warehouse_tmpfile(tmp_path, id_generator_tmpfile, metastore_tmpfile):
+def warehouse_tmpfile(tmp_path, metastore_tmpfile):
     if os.environ.get("DATACHAIN_WAREHOUSE"):
-        _warehouse = get_warehouse(id_generator_tmpfile)
+        _warehouse = get_warehouse()
         yield _warehouse
         try:
             check_temp_tables_cleaned_up(_warehouse)
         finally:
             _warehouse.cleanup_for_tests()
     else:
-        _warehouse = SQLiteWarehouse(id_generator_tmpfile, db_file=tmp_path / "test.db")
+        _warehouse = SQLiteWarehouse(db_file=tmp_path / "test.db")
         yield _warehouse
         try:
             check_temp_tables_cleaned_up(_warehouse)
@@ -302,14 +261,10 @@ def warehouse_tmpfile(tmp_path, id_generator_tmpfile, metastore_tmpfile):
 
 
 @pytest.fixture
-def catalog_tmpfile(id_generator_tmpfile, metastore_tmpfile, warehouse_tmpfile):
+def catalog_tmpfile(metastore_tmpfile, warehouse_tmpfile):
     # For testing parallel and distributed processing, as these cannot use
     # in-memory databases.
-    return Catalog(
-        id_generator=id_generator_tmpfile,
-        metastore=metastore_tmpfile,
-        warehouse=warehouse_tmpfile,
-    )
+    return Catalog(metastore=metastore_tmpfile, warehouse=warehouse_tmpfile)
 
 
 @pytest.fixture
@@ -515,14 +470,13 @@ def cloud_server_credentials(cloud_server, monkeypatch):
         monkeypatch.setenv("AWS_DEFAULT_REGION", cfg.get("region_name"))
 
 
-def get_cloud_test_catalog(cloud_server, tmp_path, id_generator, metastore, warehouse):
+def get_cloud_test_catalog(cloud_server, tmp_path, metastore, warehouse):
     cache_dir = tmp_path / ".datachain" / "cache"
     cache_dir.mkdir(parents=True)
     tmpfile_dir = tmp_path / ".datachain" / "tmp"
     tmpfile_dir.mkdir()
 
     catalog = Catalog(
-        id_generator=id_generator,
         metastore=metastore,
         warehouse=warehouse,
         cache_dir=str(cache_dir),
@@ -537,13 +491,10 @@ def cloud_test_catalog(
     cloud_server,
     cloud_server_credentials,
     tmp_path,
-    id_generator,
     metastore,
     warehouse,
 ):
-    return get_cloud_test_catalog(
-        cloud_server, tmp_path, id_generator, metastore, warehouse
-    )
+    return get_cloud_test_catalog(cloud_server, tmp_path, metastore, warehouse)
 
 
 @pytest.fixture
@@ -571,14 +522,12 @@ def cloud_test_catalog_tmpfile(
     cloud_server,
     cloud_server_credentials,
     tmp_path,
-    id_generator_tmpfile,
     metastore_tmpfile,
     warehouse_tmpfile,
 ):
     return get_cloud_test_catalog(
         cloud_server,
         tmp_path,
-        id_generator_tmpfile,
         metastore_tmpfile,
         warehouse_tmpfile,
     )

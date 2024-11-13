@@ -41,7 +41,6 @@ def test_atomicity_feature_file(tmp_dir, catalog_tmpfile):
         encoding="utf-8",
         env={
             **os.environ,
-            "DATACHAIN__ID_GENERATOR": catalog_tmpfile.id_generator.serialize(),
             "DATACHAIN__METASTORE": catalog_tmpfile.metastore.serialize(),
             "DATACHAIN__WAREHOUSE": catalog_tmpfile.warehouse.serialize(),
         },
