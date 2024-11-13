@@ -138,6 +138,7 @@ class AbstractMetastore(ABC, Serializable):
         size: Optional[int] = None,
         preview: Optional[list[dict]] = None,
         job_id: Optional[str] = None,
+        uuid: Optional[str] = None,
     ) -> DatasetRecord:
         """Creates new dataset version."""
 
@@ -352,6 +353,7 @@ class AbstractDBMetastore(AbstractMetastore):
         """Datasets versions table columns."""
         return [
             Column("id", Integer, primary_key=True),
+            Column("uuid", Text, nullable=False, default=uuid4()),
             Column(
                 "dataset_id",
                 Integer,
@@ -545,6 +547,7 @@ class AbstractDBMetastore(AbstractMetastore):
         size: Optional[int] = None,
         preview: Optional[list[dict]] = None,
         job_id: Optional[str] = None,
+        uuid: Optional[str] = None,
         conn=None,
     ) -> DatasetRecord:
         """Creates new dataset version."""
@@ -555,6 +558,7 @@ class AbstractDBMetastore(AbstractMetastore):
 
         query = self._datasets_versions_insert().values(
             dataset_id=dataset.id,
+            uuid=uuid or str(uuid4()),
             version=version,
             status=status,
             feature_schema=json.dumps(feature_schema or {}),

@@ -13,6 +13,8 @@ from datachain.utils import STUDIO_URL, JSONSerialize
 from tests.data import ENTRIES
 from tests.utils import assert_row_names, skip_if_not_sqlite
 
+DATASET_UUID = "20f5a2f1-fc9a-4e36-8b91-5a530f289451"
+
 
 @pytest.fixture(autouse=True)
 def studio_config():
@@ -90,6 +92,7 @@ def schema():
 def remote_dataset_version(schema, dataset_rows):
     return {
         "id": 1,
+        "uuid": DATASET_UUID,
         "dataset_id": 1,
         "version": 1,
         "status": 4,
@@ -179,6 +182,7 @@ def test_pull_dataset_success(
     assert dataset_version.schema
     assert dataset_version.num_objects == 4
     assert dataset_version.size == 15
+    assert dataset_version.uuid == DATASET_UUID
 
     assert_row_names(
         catalog,

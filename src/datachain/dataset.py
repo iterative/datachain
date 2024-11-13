@@ -163,6 +163,7 @@ class DatasetStatus:
 @dataclass
 class DatasetVersion:
     id: int
+    uuid: str
     dataset_id: int
     version: int
     status: int
@@ -184,6 +185,7 @@ class DatasetVersion:
     def parse(  # noqa: PLR0913
         cls: type[V],
         id: int,
+        uuid: str,
         dataset_id: int,
         version: int,
         status: int,
@@ -203,6 +205,7 @@ class DatasetVersion:
     ):
         return cls(
             id,
+            uuid,
             dataset_id,
             version,
             status,
@@ -306,6 +309,7 @@ class DatasetRecord:
         query_script: str,
         schema: str,
         version_id: int,
+        version_uuid: str,
         version_dataset_id: int,
         version: int,
         version_status: int,
@@ -331,6 +335,7 @@ class DatasetRecord:
 
         dataset_version = DatasetVersion.parse(
             version_id,
+            version_uuid,
             version_dataset_id,
             version,
             version_status,

@@ -769,6 +769,7 @@ class Catalog:
         create_rows: Optional[bool] = True,
         validate_version: Optional[bool] = True,
         listing: Optional[bool] = False,
+        uuid: Optional[str] = None,
     ) -> "DatasetRecord":
         """
         Creates new dataset of a specific version.
@@ -816,6 +817,7 @@ class Catalog:
             query_script=query_script,
             create_rows_table=create_rows,
             columns=columns,
+            uuid=uuid,
         )
 
     def create_new_dataset_version(
@@ -832,6 +834,7 @@ class Catalog:
         script_output="",
         create_rows_table=True,
         job_id: Optional[str] = None,
+        uuid: Optional[str] = None,
     ) -> DatasetRecord:
         """
         Creates dataset version if it doesn't exist.
@@ -855,6 +858,7 @@ class Catalog:
             schema=schema,
             job_id=job_id,
             ignore_if_exists=True,
+            uuid=uuid,
         )
 
         if create_rows_table:
@@ -1400,6 +1404,7 @@ class Catalog:
             columns=columns,
             feature_schema=remote_dataset_version.feature_schema,
             validate_version=False,
+            uuid=remote_dataset_version.uuid,
         )
 
         # asking remote to export dataset rows table to s3 and to return signed
