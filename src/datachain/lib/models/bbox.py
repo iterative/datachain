@@ -1,11 +1,7 @@
-from typing import Optional
-
-from pydantic import Field
-
-from datachain.lib.data_model import DataModel
+from typing import NamedTuple
 
 
-class BBox(DataModel):
+class BBox(NamedTuple):
     """
     A data model for representing bounding boxes.
 
@@ -21,25 +17,110 @@ class BBox(DataModel):
         - (x2, y2): The bottom-right corner of the box.
     """
 
-    title: str = Field(default="")
-    x1: float = Field(default=0)
-    y1: float = Field(default=0)
-    x2: float = Field(default=0)
-    y2: float = Field(default=0)
+    x1: int
+    y1: int
+    x2: int
+    y2: int
 
     @staticmethod
-    def from_xywh(bbox: list[float], title: Optional[str] = None) -> "BBox":
-        """
-        Converts a bounding box in (x, y, width, height) format
-        to a BBox data model instance.
+    def from_list(coords: list[float]) -> "BBox":
+        assert len(coords) == 4, "Bounding box coordinates must be a list of 4 floats."
+        assert all(
+            isinstance(value, (int, float)) for value in coords
+        ), "Bounding box coordinates must be integers or floats."
+        return BBox(
+            x1=round(coords[0]),
+            y1=round(coords[1]),
+            x2=round(coords[2]),
+            y2=round(coords[3]),
+        )
 
-        Args:
-            bbox (list[float]): A bounding box, represented as a list
-                                of four floats [x, y, width, height].
+    @staticmethod
+    def from_dict(coords: dict[str, float]) -> "BBox":
+        assert (
+            len(coords) == 4
+        ), "Bounding box coordinates must be a dictionary of 4 floats."
+        assert all(
+            key in coords for key in ["x1", "y1", "x2", "y2"]
+        ), "Bounding box coordinates must contain keys with coordinates."
+        assert all(
+            isinstance(value, (int, float)) for value in coords.values()
+        ), "Bounding box coordinates must be integers or floats."
+        return BBox(
+            x1=round(coords["x1"]),
+            y1=round(coords["y1"]),
+            x2=round(coords["x2"]),
+            y2=round(coords["y2"]),
+        )
 
-        Returns:
-            BBox2D: An instance of the BBox data model.
-        """
-        assert len(bbox) == 4, f"Bounding box must have 4 elements, got f{len(bbox)}"
-        x, y, w, h = bbox
-        return BBox(title=title or "", x1=x, y1=y, x2=x + w, y2=y + h)
+
+class OBBox(NamedTuple):
+    """
+    A data model for representing oriented bounding boxes.
+
+    Attributes:
+        x1 (float): The x-coordinate of the first corner of the bounding box.
+        y1 (float): The y-coordinate of the first corner of the bounding box.
+        x2 (float): The x-coordinate of the second corner of the bounding box.
+        y2 (float): The y-coordinate of the second corner of the bounding box.
+        x3 (float): The x-coordinate of the third corner of the bounding box.
+        y3 (float): The y-coordinate of the third corner of the bounding box.
+        x4 (float): The x-coordinate of the fourth corner of the bounding box.
+        y4 (float): The y-coordinate of the fourth corner of the bounding box.
+
+    The oriented bounding box is defined by four points:
+        - (x1, y1): The first corner of the box.
+        - (x2, y2): The second corner of the box.
+        - (x3, y3): The third corner of the box.
+        - (x4, y4): The fourth corner of the box.
+    """
+
+    x1: int
+    y1: int
+    x2: int
+    y2: int
+    x3: int
+    y3: int
+    x4: int
+    y4: int
+
+    @staticmethod
+    def from_list(coords: list[float]) -> "OBBox":
+        assert (
+            len(coords) == 8
+        ), "Oriented bounding box coordinates must be a list of 8 floats."
+        assert all(
+            isinstance(value, (int, float)) for value in coords
+        ), "Oriented bounding box coordinates must be integers or floats."
+        return OBBox(
+            x1=round(coords[0]),
+            y1=round(coords[1]),
+            x2=round(coords[2]),
+            y2=round(coords[3]),
+            x3=round(coords[4]),
+            y3=round(coords[5]),
+            x4=round(coords[6]),
+            y4=round(coords[7]),
+        )
+
+    @staticmethod
+    def from_dict(coords: dict[str, float]) -> "OBBox":
+        assert (
+            len(coords) == 8
+        ), "Oriented bounding box coordinates must be a dictionary of 8 floats."
+        assert all(
+            key in coords for key in ["x1", "y1", "x2", "y2", "x3", "y3", "x4", "y4"]
+        ), "Oriented bounding box coordinates must contain keys with coordinates."
+        assert all(
+            isinstance(value, (int, float)) for value in coords.values()
+        ), "Oriented bounding box coordinates must be integers or floats."
+        return OBBox(
+            x1=round(coords["x1"]),
+            y1=round(coords["y1"]),
+            x2=round(coords["x2"]),
+            y2=round(coords["y2"]),
+            x3=round(coords["x3"]),
+            y3=round(coords["y3"]),
+            x4=round(coords["x4"]),
+            y4=round(coords["y4"]),
+        )

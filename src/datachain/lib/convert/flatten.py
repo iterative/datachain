@@ -26,6 +26,9 @@ def _flatten_fields_values(fields, obj: BaseModel):
     for name, f_info in fields.items():
         anno = f_info.annotation
         # Optimization: Access attributes directly to skip the model_dump() call.
+        if not hasattr(obj, name) and not f_info.is_required():
+            yield f_info.get_default()
+            continue
         value = getattr(obj, name)
         if isinstance(value, list):
             yield _flatten_list_field(value)
