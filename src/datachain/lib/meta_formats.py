@@ -114,6 +114,7 @@ def read_meta(  # noqa: C901
             )
         )
         (model_output,) = chain.collect("meta_schema")
+        assert isinstance(model_output, str)
         if print_schema:
             print(f"{model_output}")
         # Below 'spec' should be a dynamically converted DataModel from Pydantic
