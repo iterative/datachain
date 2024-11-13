@@ -44,9 +44,10 @@ def listing(test_session):
     )
 
     return Listing(
+        catalog.metastore.clone(),
         catalog.warehouse.clone(),
         Client.get_client("s3://whatever", catalog.cache, **catalog.client_config),
-        catalog.get_dataset(dataset_name),
+        dataset_name=dataset_name,
         object_name="file",
     )
 
