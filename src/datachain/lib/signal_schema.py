@@ -522,8 +522,17 @@ class SignalSchema:
 
     def get_signals(self, target_type: type[DataModel]) -> Iterator[str]:
         for path, type_, has_subtree, _ in self.get_flat_tree():
-            if has_subtree and issubclass(type_, target_type):
+            if has_subtree and isclass(target_type) and issubclass(type_, target_type):
                 yield ".".join(path)
+                continue
+            elif not has_subtree:
+                origin = get_origin(type_)
+                if origin == Optional:
+                    type_ = get_args(type_)[0]
+                elif origin == Union and target_type in get_args(type_):
+                    type_ = target_type
+                if type_ == target_type:
+                    yield ".".join(path)
 
     def create_model(self, name: str) -> type[DataModel]:
         fields = {key: (value, None) for key, value in self.values.items()}
