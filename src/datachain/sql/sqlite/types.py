@@ -1,3 +1,4 @@
+import json
 import sqlite3
 
 import orjson
@@ -36,6 +37,15 @@ def convert_array(arr):
 
 
 def adapt_np_array(arr):
+    def _json_serialize(obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return obj
+
+    if np.issubdtype(arr.dtype, np.object_):
+        # orjson cannot parse arrays with object subtype
+        return json.dumps(arr.tolist(), default=_json_serialize)
+
     return orjson.dumps(arr, option=orjson.OPT_SERIALIZE_NUMPY).decode("utf-8")
 
 
