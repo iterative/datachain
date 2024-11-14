@@ -459,6 +459,77 @@ def test_order_by_limit(cloud_test_catalog, save, animal_dataset):
     ]
 
 
+@pytest.mark.parametrize("save", [True, False])
+@pytest.mark.parametrize(
+    "cloud_type,version_aware",
+    [("s3", True)],
+    indirect=True,
+)
+def test_limit(cloud_test_catalog, save, animal_dataset):
+    catalog = cloud_test_catalog.catalog
+    q = DatasetQuery(animal_dataset.name, catalog=catalog).limit(2)
+    if save:
+        ds_name = "animals_cats"
+        q.save(ds_name)
+        result = DatasetQuery(name=ds_name, catalog=catalog).db_results()
+        dataset_record = catalog.get_dataset(ds_name)
+        assert dataset_record.status == DatasetStatus.COMPLETE
+    else:
+        result = q.db_results()
+
+    assert len(result) == 2
+    assert [posixpath.basename(r[3]) for r in result] == ["cat1", "cat2"]
+
+
+@pytest.mark.parametrize("save", [True, False])
+@pytest.mark.parametrize(
+    "cloud_type,version_aware",
+    [("s3", True)],
+    indirect=True,
+)
+def test_offset_limit(cloud_test_catalog, save, animal_dataset):
+    catalog = cloud_test_catalog.catalog
+    q = DatasetQuery(animal_dataset.name, catalog=catalog).offset(3).limit(2)
+    if save:
+        ds_name = "animals_cats"
+        q.save(ds_name)
+        result = DatasetQuery(name=ds_name, catalog=catalog).db_results()
+        dataset_record = catalog.get_dataset(ds_name)
+        assert dataset_record.status == DatasetStatus.COMPLETE
+    else:
+        result = q.db_results()
+
+    assert len(result) == 2
+    assert [posixpath.basename(r[3]) for r in result] == ["dog1", "dog2"]
+
+
+@pytest.mark.parametrize("save", [True, False])
+@pytest.mark.parametrize(
+    "cloud_type,version_aware",
+    [("s3", True)],
+    indirect=True,
+)
+def test_mutate_offset_limit(cloud_test_catalog, save, animal_dataset):
+    catalog = cloud_test_catalog.catalog
+    q = (
+        DatasetQuery(animal_dataset.name, catalog=catalog)
+        .mutate(size10x=C("file.size") * 10)
+        .offset(3)
+        .limit(2)
+    )
+    if save:
+        ds_name = "animals_cats"
+        q.save(ds_name)
+        result = DatasetQuery(name=ds_name, catalog=catalog).db_results()
+        dataset_record = catalog.get_dataset(ds_name)
+        assert dataset_record.status == DatasetStatus.COMPLETE
+    else:
+        result = q.db_results()
+
+    assert len(result) == 2
+    assert [posixpath.basename(r[3]) for r in result] == ["dog1", "dog2"]
+
+
 @pytest.mark.parametrize(
     "cloud_type,version_aware",
     [("s3", True)],
