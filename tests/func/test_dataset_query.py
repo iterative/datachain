@@ -460,14 +460,13 @@ def test_order_by_limit(cloud_test_catalog, save, animal_dataset):
 
 
 @pytest.mark.parametrize("save", [True, False])
-@pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
-    indirect=True,
-)
 def test_limit(cloud_test_catalog, save, animal_dataset):
     catalog = cloud_test_catalog.catalog
-    q = DatasetQuery(animal_dataset.name, catalog=catalog).limit(2)
+    q = (
+        DatasetQuery(animal_dataset.name, catalog=catalog)
+        .order_by(C("file.path"))
+        .limit(2)
+    )
     if save:
         ds_name = "animals_cats"
         q.save(ds_name)
@@ -482,14 +481,14 @@ def test_limit(cloud_test_catalog, save, animal_dataset):
 
 
 @pytest.mark.parametrize("save", [True, False])
-@pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
-    indirect=True,
-)
 def test_offset_limit(cloud_test_catalog, save, animal_dataset):
     catalog = cloud_test_catalog.catalog
-    q = DatasetQuery(animal_dataset.name, catalog=catalog).offset(3).limit(2)
+    q = (
+        DatasetQuery(animal_dataset.name, catalog=catalog)
+        .order_by(C("file.path"))
+        .offset(3)
+        .limit(2)
+    )
     if save:
         ds_name = "animals_cats"
         q.save(ds_name)
@@ -504,15 +503,11 @@ def test_offset_limit(cloud_test_catalog, save, animal_dataset):
 
 
 @pytest.mark.parametrize("save", [True, False])
-@pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
-    indirect=True,
-)
 def test_mutate_offset_limit(cloud_test_catalog, save, animal_dataset):
     catalog = cloud_test_catalog.catalog
     q = (
         DatasetQuery(animal_dataset.name, catalog=catalog)
+        .order_by(C("file.path"))
         .mutate(size10x=C("file.size") * 10)
         .offset(3)
         .limit(2)
