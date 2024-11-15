@@ -6,7 +6,6 @@ from typing import Annotated, Literal, Union, get_args, get_origin
 from pydantic import BaseModel
 from typing_extensions import Literal as LiteralEx
 
-from datachain.lib import models
 from datachain.lib.model_store import ModelStore
 from datachain.sql.types import (
     JSON,
@@ -32,9 +31,6 @@ PYTHON_TO_SQL = {
     bytes: Binary,  # Note, list of bytes is not supported yet
     list: Array,
     dict: JSON,
-    # custom types
-    models.BBox: Array(Int64),
-    models.OBBox: Array(Int64),
 }
 
 

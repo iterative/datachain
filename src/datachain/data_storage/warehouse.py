@@ -11,7 +11,6 @@ from urllib.parse import urlparse
 
 import attrs
 import sqlalchemy as sa
-from pydantic.v1.typing import is_namedtuple
 from sqlalchemy import Table, case, select
 from sqlalchemy.sql import func
 from sqlalchemy.sql.expression import true
@@ -109,14 +108,13 @@ class AbstractWarehouse(ABC, Serializable):
 
         exc = None
         try:
-            is_list = value_type in (list, tuple, set) or is_namedtuple(value_type)
-            if col_python_type is list and is_list:
+            if col_python_type is list and value_type in (list, tuple, set):
                 if len(val) == 0:
                     return []
                 item_python_type = self.python_type(col_type.item_type)
                 if item_python_type is not list:
                     if isinstance(val[0], item_python_type):
-                        return list(val) if is_namedtuple(value_type) else val
+                        return val
                     if item_python_type is float and isinstance(val[0], int):
                         return [float(i) for i in val]
                 # Optimization: Reuse these values for each function call within the

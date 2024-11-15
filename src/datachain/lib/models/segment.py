@@ -8,6 +8,7 @@ class Segments(DataModel):
     A data model for representing segments.
 
     Attributes:
+        title (str): The title of the segments.
         x (list[int]): The x-coordinates of the segments.
         y (list[int]): The y-coordinates of the segments.
 
@@ -15,11 +16,12 @@ class Segments(DataModel):
     corresponds to a specific segment.
     """
 
+    title: str = Field(default="")
     x: list[int] = Field(default=None)
     y: list[int] = Field(default=None)
 
     @staticmethod
-    def from_list(points: list[list[float]]) -> "Segments":
+    def from_list(points: list[list[float]], title: str = "") -> "Segments":
         assert len(points) == 2, "Segments coordinates must be a list of 2 lists."
         points_x, points_y = points
         assert len(points_x) == len(
@@ -29,12 +31,13 @@ class Segments(DataModel):
             isinstance(value, (int, float)) for value in [*points_x, *points_y]
         ), "Segments coordinates must be integers or floats."
         return Segments(
+            title=title,
             x=[round(coord) for coord in points_x],
             y=[round(coord) for coord in points_y],
         )
 
     @staticmethod
-    def from_dict(points: dict[str, list[float]]) -> "Segments":
+    def from_dict(points: dict[str, list[float]], title: str = "") -> "Segments":
         assert len(points) == 2, "Segments coordinates must be a dictionary of 2 lists."
         assert all(
             key in points for key in ["x", "y"]
@@ -44,6 +47,7 @@ class Segments(DataModel):
             isinstance(value, (int, float)) for value in [*points_x, *points_y]
         ), "Segments coordinates must be integers or floats."
         return Segments(
+            title=title,
             x=[round(coord) for coord in points_x],
             y=[round(coord) for coord in points_y],
         )

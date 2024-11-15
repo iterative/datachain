@@ -12,13 +12,12 @@ More information about YOLO can be found here:
 """
 
 from io import BytesIO
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from PIL import Image
 from pydantic import Field
 
 from datachain.lib.data_model import DataModel
-from datachain.lib.model_store import ModelStore
 from datachain.lib.models.bbox import BBox, OBBox
 
 if TYPE_CHECKING:
@@ -29,10 +28,20 @@ if TYPE_CHECKING:
 
 
 class YoloBBox(DataModel):
+    """
+    A class representing a bounding box detected by a YOLO model.
+
+    Attributes:
+        cls: The class of the detected object.
+        name: The name of the detected object.
+        confidence: The confidence score of the detection.
+        box: The bounding box of the detected object
+    """
+
     cls: int = Field(default=-1)
     name: str = Field(default="")
     confidence: float = Field(default=0)
-    box: Optional[BBox] = Field(default=None)
+    box: BBox = Field(default=None)
 
     @staticmethod
     def from_file(yolo: "YOLO", file: "File") -> "YoloBBox":
@@ -46,18 +55,31 @@ class YoloBBox(DataModel):
         summary = result.summary()
         if not summary:
             return YoloBBox()
-        box = None
-        if "box" in summary[0]:
-            box = BBox.from_dict(summary[0]["box"])
+        name = summary[0].get("name", "")
+        box = (
+            BBox.from_dict(summary[0]["box"], title=name)
+            if "box" in summary[0]
+            else BBox()
+        )
         return YoloBBox(
             cls=summary[0]["class"],
-            name=summary[0]["name"],
+            name=name,
             confidence=summary[0]["confidence"],
             box=box,
         )
 
 
 class YoloBBoxes(DataModel):
+    """
+    A class representing a list of bounding boxes detected by a YOLO model.
+
+    Attributes:
+        cls: A list of classes of the detected objects.
+        name: A list of names of the detected objects.
+        confidence: A list of confidence scores of the detections.
+        box: A list of bounding boxes of the detected objects
+    """
+
     cls: list[int]
     name: list[str]
     confidence: list[float]
@@ -70,26 +92,37 @@ class YoloBBoxes(DataModel):
 
     @staticmethod
     def from_results(results: list["Results"]) -> "YoloBBoxes":
-        cls, name, confidence, box = [], [], [], []
+        cls, names, confidence, box = [], [], [], []
         for r in results:
             for s in r.summary():
+                name = s.get("name", "")
                 cls.append(s["class"])
-                name.append(s["name"])
+                names.append(name)
                 confidence.append(s["confidence"])
-                box.append(BBox.from_dict(s.get("box", {})))
+                box.append(BBox.from_dict(s.get("box", {}), title=name))
         return YoloBBoxes(
             cls=cls,
-            name=name,
+            name=names,
             confidence=confidence,
             box=box,
         )
 
 
 class YoloOBBox(DataModel):
+    """
+    A class representing an oriented bounding box detected by a YOLO model.
+
+    Attributes:
+        cls: The class of the detected object.
+        name: The name of the detected object.
+        confidence: The confidence score of the detection.
+        box: The oriented bounding box of the detected object.
+    """
+
     cls: int = Field(default=-1)
     name: str = Field(default="")
     confidence: float = Field(default=0)
-    box: Optional[OBBox] = Field(default=None)
+    box: OBBox = Field(default=None)
 
     @staticmethod
     def from_file(yolo: "YOLO", file: "File") -> "YoloOBBox":
@@ -103,18 +136,31 @@ class YoloOBBox(DataModel):
         summary = result.summary()
         if not summary:
             return YoloOBBox()
-        box = None
-        if "box" in summary[0]:
-            box = OBBox.from_dict(summary[0]["box"])
+        name = summary[0].get("name", "")
+        box = (
+            OBBox.from_dict(summary[0]["box"], title=name)
+            if "box" in summary[0]
+            else OBBox()
+        )
         return YoloOBBox(
             cls=summary[0]["class"],
-            name=summary[0]["name"],
+            name=name,
             confidence=summary[0]["confidence"],
             box=box,
         )
 
 
 class YoloOBBoxes(DataModel):
+    """
+    A class representing a list of oriented bounding boxes detected by a YOLO model.
+
+    Attributes:
+        cls: A list of classes of the detected objects.
+        name: A list of names of the detected objects.
+        confidence: A list of confidence scores of the detections.
+        box: A list of oriented bounding boxes of the detected objects.
+    """
+
     cls: list[int]
     name: list[str]
     confidence: list[float]
@@ -127,22 +173,17 @@ class YoloOBBoxes(DataModel):
 
     @staticmethod
     def from_results(results: list["Results"]) -> "YoloOBBoxes":
-        cls, name, confidence, box = [], [], [], []
+        cls, names, confidence, box = [], [], [], []
         for r in results:
             for s in r.summary():
+                name = s.get("name", "")
                 cls.append(s["class"])
-                name.append(s["name"])
+                names.append(name)
                 confidence.append(s["confidence"])
-                box.append(OBBox.from_dict(s.get("box", {})))
+                box.append(OBBox.from_dict(s.get("box", {}), title=name))
         return YoloOBBoxes(
             cls=cls,
-            name=name,
+            name=names,
             confidence=confidence,
             box=box,
         )
-
-
-ModelStore.register(YoloBBox)
-ModelStore.register(YoloBBoxes)
-ModelStore.register(YoloOBBox)
-ModelStore.register(YoloOBBoxes)
