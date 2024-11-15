@@ -11,12 +11,11 @@ More information about YOLO can be found here:
 - https://docs.ultralytics.com/
 """
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from pydantic import Field
 
 from datachain.lib.data_model import DataModel
-from datachain.lib.model_store import ModelStore
 from datachain.lib.models.bbox import BBox
 from datachain.lib.models.pose import Pose3D
 
@@ -47,10 +46,21 @@ class YoloPoseBodyPart:
 
 
 class YoloPose(DataModel):
+    """
+    A data model for YOLO pose keypoints.
+
+    Attributes:
+        cls: The class of the pose.
+        name: The name of the pose.
+        confidence: The confidence score of the pose.
+        box: The bounding box of the pose.
+        keypoints: The 3D pose keypoints.
+    """
+
     cls: int = Field(default=-1)
     name: str = Field(default="")
     confidence: float = Field(default=0)
-    box: Optional[BBox] = Field(default=None)
+    box: BBox = Field(default=None)
     keypoints: Pose3D = Field(default=None)
 
     @staticmethod
@@ -58,14 +68,20 @@ class YoloPose(DataModel):
         summary = result.summary()
         if not summary:
             return YoloPose()
-        box, keypoints = None, Pose3D()
-        if "box" in summary[0]:
-            box = BBox.from_dict(summary[0]["box"])
-        if "keypoints" in summary[0]:
-            keypoints = Pose3D.from_dict(summary[0]["keypoints"])
+        name = summary[0].get("name", "")
+        box = (
+            BBox.from_dict(summary[0]["box"], title=name)
+            if "box" in summary[0]
+            else BBox()
+        )
+        keypoints = (
+            Pose3D.from_dict(summary[0]["keypoints"])
+            if "keypoints" in summary[0]
+            else Pose3D()
+        )
         return YoloPose(
             cls=summary[0]["class"],
-            name=summary[0]["name"],
+            name=name,
             confidence=summary[0]["confidence"],
             box=box,
             keypoints=keypoints,
@@ -73,6 +89,17 @@ class YoloPose(DataModel):
 
 
 class YoloPoses(DataModel):
+    """
+    A data model for a list of YOLO pose keypoints.
+
+    Attributes:
+        cls: The classes of the poses.
+        name: The names of the poses.
+        confidence: The confidence scores of the poses.
+        box: The bounding boxes of the poses.
+        keypoints: The 3D pose keypoints of the poses.
+    """
+
     cls: list[int]
     name: list[str]
     confidence: list[float]
@@ -81,22 +108,19 @@ class YoloPoses(DataModel):
 
     @staticmethod
     def from_results(results: list["Results"]) -> "YoloPoses":
-        cls, name, confidence, box, keypoints = [], [], [], [], []
+        cls, names, confidence, box, keypoints = [], [], [], [], []
         for r in results:
             for s in r.summary():
+                name = s.get("name", "")
                 cls.append(s["class"])
-                name.append(s["name"])
+                names.append(name)
                 confidence.append(s["confidence"])
-                box.append(BBox.from_dict(s.get("box", {})))
+                box.append(BBox.from_dict(s.get("box", {}), title=name))
                 keypoints.append(Pose3D.from_dict(s.get("keypoints", {})))
         return YoloPoses(
             cls=cls,
-            name=name,
+            name=names,
             confidence=confidence,
             box=box,
             keypoints=keypoints,
         )
-
-
-ModelStore.register(YoloPose)
-ModelStore.register(YoloPoses)
