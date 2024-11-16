@@ -1313,6 +1313,48 @@ def test_to_csv_features_nested(tmp_dir, test_session):
     ]
 
 
+@pytest.mark.parametrize("column_type", (str, dict))
+@pytest.mark.parametrize("object_name", (None, "test_object_name"))
+@pytest.mark.parametrize("model_name", (None, "TestModelNameExploded"))
+def test_explode(tmp_dir, test_session, column_type, object_name, model_name):
+    df = pd.DataFrame(DF_DATA)
+    path = tmp_dir / "test.json"
+    df.to_json(path, orient="records", lines=True)
+
+    dc = (
+        DataChain.from_storage(path.as_uri(), session=test_session)
+        .gen(
+            content=lambda file: (ln for ln in file.read_text().split("\n") if ln),
+            output=column_type,
+        )
+        .explode("content", object_name=object_name, model_name=model_name)
+    )
+
+    object_name = object_name or "content_expl"
+    model_name = model_name or "ContentExplodedModel"
+
+    assert set(
+        dc.collect(
+            f"{object_name}.first_name", f"{object_name}.age", f"{object_name}.city"
+        )
+    ) == {
+        ("Alice", 25, "New York"),
+        ("Bob", 30, "Los Angeles"),
+        ("Charlie", 35, "Chicago"),
+        ("David", 40, "Houston"),
+        ("Eva", 45, "Phoenix"),
+    }
+
+    assert next(dc.limit(1).collect(object_name)).__class__.__name__ == model_name
+
+
+def test_explode_raises_on_wrong_column_type(test_session):
+    dc = DataChain.from_values(f1=features, session=test_session)
+
+    with pytest.raises(TypeError):
+        dc.explode("f1.count")
+
+
 # These deprecation warnings occur in the datamodel-code-generator package.
 @pytest.mark.filterwarnings("ignore::pydantic.warnings.PydanticDeprecatedSince20")
 def test_to_from_json(tmp_dir, test_session):
