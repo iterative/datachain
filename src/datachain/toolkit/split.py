@@ -10,9 +10,14 @@ def train_test_split(dc: DataChain, weights: list[float]) -> list[DataChain]:
     It is particularly useful for creating training, validation, and test datasets.
 
     Args:
-        dc (DataChain): The DataChain instance to split.
-        weights (list[float]): A list of positive weights indicating the relative
-                               proportions of the splits.
+        dc (DataChain):
+            The DataChain instance to split.
+        weights (list[float]):
+            A list of weights indicating the relative proportions of the splits.
+            The weights do not need to sum to 1; they will be normalized internally.
+            For example:
+            - `[0.7, 0.3]` corresponds to a 70/30 split;
+            - `[2, 1, 1]` corresponds to a 50/25/25 split.
 
     Returns:
         list[DataChain]:
@@ -43,22 +48,20 @@ def train_test_split(dc: DataChain, weights: list[float]) -> list[DataChain]:
         val.save("dataset_val")
         ```
 
-    Notes:
-        - The splits are random but deterministic, based on Dataset `sys__rand` field.
-        - The weights do not need to sum to 1; they will be normalized internally.
-          For example:
-            - `[0.7, 0.3]` corresponds to a 70/30 split;
-            - `[2, 1, 1]` corresponds to a 50/25/25 split;
+    Note:
+        The splits are random but deterministic, based on Dataset `sys__rand` field.
     """
     if len(weights) < 2:
         raise ValueError("Weights should have at least two elements")
+    if any(weight < 0 for weight in weights):
+        raise ValueError("Weights should be non-negative")
 
-    weights_normalized = [round(weight * 1000 / sum(weights)) for weight in weights]
+    weights_normalized = [weight / sum(weights) for weight in weights]
 
     return [
         dc.filter(
-            C("sys__rand") % 1000 >= sum(weights_normalized[:index]),
-            C("sys__rand") % 1000 < sum(weights_normalized[: index + 1]),
+            C("sys__rand") % 1000 >= sum(weights_normalized[:index]) * 1000,
+            C("sys__rand") % 1000 < sum(weights_normalized[: index + 1]) * 1000,
         )
         for index, _ in enumerate(weights_normalized)
     ]

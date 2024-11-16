@@ -33,3 +33,10 @@ def test_train_test_split_random(pseudo_random_ds, weights, expected):
 
     for i, dc in enumerate(res):
         assert list(dc.collect("sys.id")) == expected[i]
+
+
+def test_train_test_split_errors(not_random_ds):
+    with pytest.raises(ValueError, match="Weights should have at least two elements"):
+        train_test_split(not_random_ds, [0.5])
+    with pytest.raises(ValueError, match="Weights should be non-negative"):
+        train_test_split(not_random_ds, [-1, 1])
