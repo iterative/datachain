@@ -22,7 +22,7 @@ from datachain.data_storage.sqlite import (
     SQLiteWarehouse,
 )
 from datachain.dataset import DatasetRecord
-from datachain.lib.dc import DataChain
+from datachain.lib.dc import DataChain, Sys
 from datachain.query.session import Session
 from datachain.utils import (
     ENV_DATACHAIN_GLOBAL_CONFIG_DIR,
@@ -701,3 +701,43 @@ def studio_datasets(requests_mock):
     ]
 
     requests_mock.post(f"{STUDIO_URL}/api/datachain/ls-datasets", json=datasets)
+
+
+@pytest.fixture
+def not_random_ds(test_session):
+    return DataChain.from_records(
+        [
+            {"sys__id": 1, "sys__rand": 50, "fib": 0},
+            {"sys__id": 2, "sys__rand": 150, "fib": 1},
+            {"sys__id": 3, "sys__rand": 250, "fib": 1},
+            {"sys__id": 4, "sys__rand": 350, "fib": 2},
+            {"sys__id": 5, "sys__rand": 450, "fib": 3},
+            {"sys__id": 6, "sys__rand": 550, "fib": 5},
+            {"sys__id": 7, "sys__rand": 650, "fib": 8},
+            {"sys__id": 8, "sys__rand": 750, "fib": 13},
+            {"sys__id": 9, "sys__rand": 850, "fib": 21},
+            {"sys__id": 10, "sys__rand": 950, "fib": 34},
+        ],
+        session=test_session,
+        schema={"sys": Sys, "fib": int},
+    )
+
+
+@pytest.fixture
+def pseudo_random_ds(test_session):
+    return DataChain.from_records(
+        [
+            {"sys__id": 1, "sys__rand": 1344339883, "fib": 0},
+            {"sys__id": 2, "sys__rand": 3901153096, "fib": 1},
+            {"sys__id": 3, "sys__rand": 4255991360, "fib": 1},
+            {"sys__id": 4, "sys__rand": 2526403609, "fib": 2},
+            {"sys__id": 5, "sys__rand": 1871733386, "fib": 3},
+            {"sys__id": 6, "sys__rand": 9380910850, "fib": 5},
+            {"sys__id": 7, "sys__rand": 2770679740, "fib": 8},
+            {"sys__id": 8, "sys__rand": 2538886575, "fib": 13},
+            {"sys__id": 9, "sys__rand": 3969542617, "fib": 21},
+            {"sys__id": 10, "sys__rand": 7541790992, "fib": 34},
+        ],
+        session=test_session,
+        schema={"sys": Sys, "fib": int},
+    )
