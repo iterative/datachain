@@ -60,8 +60,8 @@ def train_test_split(dc: DataChain, weights: list[float]) -> list[DataChain]:
 
     return [
         dc.filter(
-            C("sys__rand") % 1000 >= sum(weights_normalized[:index]) * 1000,
-            C("sys__rand") % 1000 < sum(weights_normalized[: index + 1]) * 1000,
+            C("sys__rand") % 1000 >= round(sum(weights_normalized[:index]) * 1000),
+            C("sys__rand") % 1000 < round(sum(weights_normalized[: index + 1]) * 1000),
         )
         for index, _ in enumerate(weights_normalized)
     ]
