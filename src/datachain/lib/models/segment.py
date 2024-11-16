@@ -38,10 +38,7 @@ class Segments(DataModel):
 
     @staticmethod
     def from_dict(points: dict[str, list[float]], title: str = "") -> "Segments":
-        assert len(points) == 2, "Segments coordinates must be a dictionary of 2 lists."
-        assert all(
-            key in points for key in ["x", "y"]
-        ), "Segments coordinates must contain keys 'x' and 'y'."
+        assert set(points) == {"x", "y"}, "Segments coordinates must contain keys 'x' and 'y'."
         points_x, points_y = points["x"], points["y"]
         assert all(
             isinstance(value, (int, float)) for value in [*points_x, *points_y]
