@@ -83,12 +83,7 @@ class OBBox(DataModel):
 
     @staticmethod
     def from_dict(coords: dict[str, float], title: str = "") -> "OBBox":
-        assert (
-            len(coords) == 8
-        ), "Oriented bounding box coordinates must be a dictionary of 8 floats."
-        assert all(
-            key in coords for key in ["x1", "y1", "x2", "y2", "x3", "y3", "x4", "y4"]
-        ), "Oriented bounding box coordinates must contain keys with coordinates."
+        assert set(coords) == {"x1", "y1", "x2", "y2", "x3", "y3", "x4", "y4"}, "Oriented bounding box coordinates must contain keys with coordinates."
         assert all(
             isinstance(value, (int, float)) for value in coords.values()
         ), "Oriented bounding box coordinates must be integers or floats."
