@@ -35,10 +35,7 @@ class Pose(DataModel):
 
     @staticmethod
     def from_dict(points: dict[str, list[float]]) -> "Pose":
-        assert len(points) == 2, "Pose coordinates must be a dictionary of 2 lists."
-        assert all(
-            key in points for key in ["x", "y"]
-        ), "Pose coordinates must contain keys 'x' and 'y'."
+        assert set(points) == {"x", "y"}, "Pose coordinates must contain keys 'x' and 'y'."
         points_x, points_y = points["x"], points["y"]
         assert (
             len(points_x) == len(points_y) == 17
