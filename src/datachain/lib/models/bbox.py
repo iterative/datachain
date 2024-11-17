@@ -35,9 +35,7 @@ class BBox(DataModel):
         assert (
             len(coords) == 4
         ), "Bounding box coordinates must be a dictionary of 4 floats."
-        assert all(
-            key in coords for key in ["x1", "y1", "x2", "y2"]
-        ), "Bounding box coordinates must contain keys with coordinates."
+        assert set(coords) == {"x1", "y1", "x2", "y2"}, "Bounding box coordinates must contain keys with coordinates."
         assert all(
             isinstance(value, (int, float)) for value in coords.values()
         ), "Bounding box coordinates must be integers or floats."
