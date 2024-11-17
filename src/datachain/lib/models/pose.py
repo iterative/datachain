@@ -35,7 +35,10 @@ class Pose(DataModel):
 
     @staticmethod
     def from_dict(points: dict[str, list[float]]) -> "Pose":
-        assert set(points) == {"x", "y"}, "Pose coordinates must contain keys 'x' and 'y'."
+        assert set(points) == {
+            "x",
+            "y",
+        }, "Pose coordinates must contain keys 'x' and 'y'."
         points_x, points_y = points["x"], points["y"]
         assert (
             len(points_x) == len(points_y) == 17
