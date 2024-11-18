@@ -36,7 +36,14 @@ def convert_array(arr):
 
 
 def adapt_np_array(arr):
-    return orjson.dumps(arr, option=orjson.OPT_SERIALIZE_NUMPY).decode("utf-8")
+    def _json_serialize(obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return obj
+
+    return orjson.dumps(
+        arr, option=orjson.OPT_SERIALIZE_NUMPY, default=_json_serialize
+    ).decode("utf-8")
 
 
 def adapt_np_generic(val):
