@@ -1,9 +1,6 @@
 from datachain import C, DataChain
 
 
-UINT64_MAX = 2**64-1  # Maximum value for an UInt64
-
-
 def train_test_split(dc: DataChain, weights: list[float]) -> list[DataChain]:
     """
     Splits a DataChain into multiple subsets based on the provided weights.
