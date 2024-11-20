@@ -22,9 +22,9 @@ def test_train_test_split_not_random(not_random_ds, weights, expected):
 @pytest.mark.parametrize(
     "weights,expected",
     [
-        [[1, 1], [[2, 3, 5], [1, 4, 6, 7, 8, 9, 10]]],
-        [[4, 1], [[2, 3, 4, 5, 7, 8, 9], [1, 6, 10]]],
-        [[0.7, 0.2, 0.1], [[2, 3, 4, 5, 8, 9], [1, 6, 7], [10]]],
+        [[1, 1], [[1, 5, 6, 7, 8], [2, 3, 4, 9, 10]]],
+        [[4, 1], [[1, 3, 5, 6, 7, 8, 9], [2, 4, 10]]],
+        [[0.7, 0.2, 0.1], [[1, 3, 5, 6, 7, 8, 9], [2, 4], [10]]],
     ],
 )
 def test_train_test_split_random(pseudo_random_ds, weights, expected):
