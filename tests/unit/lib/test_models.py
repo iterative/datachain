@@ -1,15 +1,15 @@
 import pytest
 
-from datachain.lib import models
-from datachain.lib.models.ultralytics.pose import YoloPoseBodyPart
+from datachain import model
+from datachain.model.ultralytics.pose import YoloPoseBodyPart
 
 
 @pytest.mark.parametrize(
     "bbox",
     [
-        models.BBox(title="BBox", coords=[0, 1, 2, 3]),
-        models.BBox.from_list([0.3, 1.1, 1.7, 3.4], title="BBox"),
-        models.BBox.from_dict({"x1": 0, "y1": 0.8, "x2": 2.2, "y2": 2.9}, title="BBox"),
+        model.BBox(title="BBox", coords=[0, 1, 2, 3]),
+        model.BBox.from_list([0.3, 1.1, 1.7, 3.4], title="BBox"),
+        model.BBox.from_dict({"x1": 0, "y1": 0.8, "x2": 2.2, "y2": 2.9}, title="BBox"),
     ],
 )
 def test_bbox(bbox):
@@ -22,9 +22,9 @@ def test_bbox(bbox):
 @pytest.mark.parametrize(
     "obbox",
     [
-        models.OBBox(title="OBBox", coords=[0, 1, 2, 3, 4, 5, 6, 7]),
-        models.OBBox.from_list([0.3, 1.1, 1.7, 3.4, 4.0, 4.9, 5.6, 7.0], title="OBBox"),
-        models.OBBox.from_dict(
+        model.OBBox(title="OBBox", coords=[0, 1, 2, 3, 4, 5, 6, 7]),
+        model.OBBox.from_list([0.3, 1.1, 1.7, 3.4, 4.0, 4.9, 5.6, 7.0], title="OBBox"),
+        model.OBBox.from_dict(
             {
                 "x1": 0,
                 "y1": 0.8,
@@ -49,9 +49,9 @@ def test_obbox(obbox):
 @pytest.mark.parametrize(
     "pose",
     [
-        models.Pose(x=list(range(17)), y=[y * 2 for y in range(17)]),
-        models.Pose.from_list([list(range(17)), [y * 2 for y in range(17)]]),
-        models.Pose.from_dict({"x": list(range(17)), "y": [y * 2 for y in range(17)]}),
+        model.Pose(x=list(range(17)), y=[y * 2 for y in range(17)]),
+        model.Pose.from_list([list(range(17)), [y * 2 for y in range(17)]]),
+        model.Pose.from_dict({"x": list(range(17)), "y": [y * 2 for y in range(17)]}),
     ],
 )
 def test_pose(pose):
@@ -64,13 +64,13 @@ def test_pose(pose):
 @pytest.mark.parametrize(
     "pose",
     [
-        models.Pose3D(
+        model.Pose3D(
             x=list(range(17)), y=[y * 2 for y in range(17)], visible=[0.2] * 17
         ),
-        models.Pose3D.from_list(
+        model.Pose3D.from_list(
             [list(range(17)), [y * 2 for y in range(17)], [0.2] * 17]
         ),
-        models.Pose3D.from_dict(
+        model.Pose3D.from_dict(
             {
                 "x": list(range(17)),
                 "y": [y * 2 for y in range(17)],
@@ -108,9 +108,9 @@ def test_pose3d(pose):
 @pytest.mark.parametrize(
     "segments",
     [
-        models.Segments(x=[0, 1, 2], y=[2, 3, 5], title="Segments"),
-        models.Segments.from_list([[0, 1, 2], [2, 3, 5]], title="Segments"),
-        models.Segments.from_dict({"x": [0, 1, 2], "y": [2, 3, 5]}, title="Segments"),
+        model.Segment(x=[0, 1, 2], y=[2, 3, 5], title="Segments"),
+        model.Segment.from_list([[0, 1, 2], [2, 3, 5]], title="Segments"),
+        model.Segment.from_dict({"x": [0, 1, 2], "y": [2, 3, 5]}, title="Segments"),
     ],
 )
 def test_segments(segments):
@@ -122,7 +122,7 @@ def test_segments(segments):
 
 
 def test_yolo_pose_body_parts():
-    pose = models.Pose(x=list(range(17)), y=list(range(17)))
+    pose = model.Pose(x=list(range(17)), y=list(range(17)))
     assert pose.x[YoloPoseBodyPart.nose] == 0
     assert pose.x[YoloPoseBodyPart.left_eye] == 1
     assert pose.x[YoloPoseBodyPart.right_eye] == 2

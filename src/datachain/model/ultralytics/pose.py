@@ -16,8 +16,8 @@ from typing import TYPE_CHECKING
 from pydantic import Field
 
 from datachain.lib.data_model import DataModel
-from datachain.lib.models.bbox import BBox
-from datachain.lib.models.pose import Pose3D
+from datachain.model.bbox import BBox
+from datachain.model.pose import Pose3D
 
 if TYPE_CHECKING:
     from ultralytics.engine.results import Results
@@ -54,27 +54,27 @@ class YoloPose(DataModel):
         name: The name of the pose.
         confidence: The confidence score of the pose.
         box: The bounding box of the pose.
-        keypoints: The 3D pose keypoints.
+        pose: The 3D pose keypoints.
     """
 
     cls: int = Field(default=-1)
     name: str = Field(default="")
     confidence: float = Field(default=0)
-    box: BBox = Field(default=None)
-    keypoints: Pose3D = Field(default=None)
+    box: BBox
+    pose: Pose3D
 
     @staticmethod
     def from_result(result: "Results") -> "YoloPose":
         summary = result.summary()
         if not summary:
-            return YoloPose()
+            return YoloPose(box=BBox(), pose=Pose3D())
         name = summary[0].get("name", "")
         box = (
             BBox.from_dict(summary[0]["box"], title=name)
             if "box" in summary[0]
             else BBox()
         )
-        keypoints = (
+        pose = (
             Pose3D.from_dict(summary[0]["keypoints"])
             if "keypoints" in summary[0]
             else Pose3D()
@@ -84,7 +84,7 @@ class YoloPose(DataModel):
             name=name,
             confidence=summary[0]["confidence"],
             box=box,
-            keypoints=keypoints,
+            pose=pose,
         )
 
 
@@ -97,18 +97,18 @@ class YoloPoses(DataModel):
         name: The names of the poses.
         confidence: The confidence scores of the poses.
         box: The bounding boxes of the poses.
-        keypoints: The 3D pose keypoints of the poses.
+        pose: The 3D pose keypoints of the poses.
     """
 
     cls: list[int]
     name: list[str]
     confidence: list[float]
     box: list[BBox]
-    keypoints: list[Pose3D]
+    pose: list[Pose3D]
 
     @staticmethod
     def from_results(results: list["Results"]) -> "YoloPoses":
-        cls, names, confidence, box, keypoints = [], [], [], [], []
+        cls, names, confidence, box, pose = [], [], [], [], []
         for r in results:
             for s in r.summary():
                 name = s.get("name", "")
@@ -116,11 +116,11 @@ class YoloPoses(DataModel):
                 names.append(name)
                 confidence.append(s["confidence"])
                 box.append(BBox.from_dict(s.get("box", {}), title=name))
-                keypoints.append(Pose3D.from_dict(s.get("keypoints", {})))
+                pose.append(Pose3D.from_dict(s.get("keypoints", {})))
         return YoloPoses(
             cls=cls,
             name=names,
             confidence=confidence,
             box=box,
-            keypoints=keypoints,
+            pose=pose,
         )

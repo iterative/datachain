@@ -5,7 +5,7 @@ from datachain.lib.data_model import DataModel
 
 class BBox(DataModel):
     """
-    A data model for representing bounding boxes.
+    A data model for representing bounding box.
 
     Attributes:
         title (str): The title of the bounding box.
