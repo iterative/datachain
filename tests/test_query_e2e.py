@@ -4,10 +4,10 @@ import signal
 import subprocess
 import sys
 import textwrap
-from io import TextIOWrapper
+import threading
 from textwrap import dedent
 from threading import Thread
-from typing import Callable
+from typing import IO
 
 import pytest
 
@@ -118,50 +118,40 @@ E2E_STEPS = (
 )
 
 
-def watch_process_thread(
-    stream: TextIOWrapper, output_lines: list[str], watch_value: str, callback: Callable
-) -> None:
-    """
-    Watches either the stdout or stderr stream from a given process,
-    reads the output into output_lines, and watches for the given watch_value,
-    then calls callback once found.
-    """
-    while (line := stream.readline()) != "":
-        line = line.strip()
-        output_lines.append(line)
-        if watch_value in line:
-            callback()
-
-
 def communicate_and_interrupt_process(
     process: subprocess.Popen, interrupt_after: str
 ) -> tuple[str, str]:
-    def interrupt_step() -> None:
-        if sys.platform == "win32":
-            # Windows has a different mechanism of sending a Ctrl-C event.
-            process.send_signal(signal.CTRL_C_EVENT)
-        else:
-            process.send_signal(signal.SIGINT)
+    if sys.platform == "win32":
+        # Windows has a different mechanism of sending a Ctrl-C event.
+        interrupt_signal = signal.CTRL_C_EVENT
+    else:
+        interrupt_signal = signal.SIGINT
 
     stdout_lines: list[str] = []
     stderr_lines: list[str] = []
-    watch_threads = (
-        Thread(
-            target=watch_process_thread,
-            name="Test-Query-E2E-Interrupt-stdout",
-            daemon=True,
-            args=[process.stdout, stdout_lines, interrupt_after, interrupt_step],
-        ),
-        Thread(
-            target=watch_process_thread,
-            name="Test-Query-E2E-Interrupt-stderr",
-            daemon=True,
-            args=[process.stderr, stderr_lines, interrupt_after, interrupt_step],
-        ),
-    )
-    for t in watch_threads:
-        t.start()
+    lock = threading.Lock()
+    interrupted = False
+
+    def interrupt_step(stream: IO[str], output_lines: list[str]) -> None:
+        nonlocal interrupted
+        for line in iter(stream.readline, ""):
+            output_lines.append(line)
+            if not interrupted and interrupt_after in line:
+                with lock:
+                    if not interrupted:
+                        process.send_signal(interrupt_signal)
+                        interrupted = True
+
+    watch_threads = []
+    for args in (process.stdout, stdout_lines), (process.stderr, stderr_lines):
+        th = Thread(target=interrupt_step, name=f"E2E-Interrupt-{args[0]}", args=args)
+        watch_threads.append(th)
+        th.start()
+
     process.wait(timeout=E2E_STEP_TIMEOUT_SEC)
+
+    for th in watch_threads:
+        th.join()
     return "\n".join(stdout_lines), "\n".join(stderr_lines)
 
 
