@@ -20,14 +20,14 @@ class Pose(DataModel):
 
     @staticmethod
     def from_list(points: list[list[float]]) -> "Pose":
-        assert len(points) == 2, "Pose coordinates must be a list of 2 lists."
+        assert len(points) == 2, "Pose must be a list of 2 lists: x and y coordinates."
         points_x, points_y = points
         assert (
             len(points_x) == len(points_y) == 17
         ), "Pose x and y coordinates must have the same length of 17."
         assert all(
             isinstance(value, (int, float)) for value in [*points_x, *points_y]
-        ), "Pose coordinates must be integers or floats."
+        ), "Pose coordinates must be floats or integers."
         return Pose(
             x=[round(coord) for coord in points_x],
             y=[round(coord) for coord in points_y],
@@ -35,21 +35,11 @@ class Pose(DataModel):
 
     @staticmethod
     def from_dict(points: dict[str, list[float]]) -> "Pose":
-        assert set(points) == {
+        assert isinstance(points, dict) and set(points) == {
             "x",
             "y",
-        }, "Pose coordinates must contain keys 'x' and 'y'."
-        points_x, points_y = points["x"], points["y"]
-        assert (
-            len(points_x) == len(points_y) == 17
-        ), "Pose x and y coordinates must have the same length of 17."
-        assert all(
-            isinstance(value, (int, float)) for value in [*points_x, *points_y]
-        ), "Pose coordinates must be integers or floats."
-        return Pose(
-            x=[round(coord) for coord in points_x],
-            y=[round(coord) for coord in points_y],
-        )
+        }, "Pose must be a dict with keys 'x' and 'y'."
+        return Pose.from_list([points["x"], points["y"]])
 
 
 class Pose3D(DataModel):
@@ -71,15 +61,17 @@ class Pose3D(DataModel):
 
     @staticmethod
     def from_list(points: list[list[float]]) -> "Pose3D":
-        assert len(points) == 3, "Pose coordinates must be a list of 3 lists."
+        assert (
+            len(points) == 3
+        ), "Pose3D must be a list of 3 lists: x, y coordinates and visible."
         points_x, points_y, points_v = points
         assert (
             len(points_x) == len(points_y) == len(points_v) == 17
-        ), "Pose x, y, and visibility coordinates must have the same length of 17."
+        ), "Pose3D x, y coordinates and visible must have the same length of 17."
         assert all(
             isinstance(value, (int, float))
             for value in [*points_x, *points_y, *points_v]
-        ), "Pose coordinates must be integers or floats."
+        ), "Pose3D coordinates must be floats or integers."
         return Pose3D(
             x=[round(coord) for coord in points_x],
             y=[round(coord) for coord in points_y],
@@ -88,21 +80,9 @@ class Pose3D(DataModel):
 
     @staticmethod
     def from_dict(points: dict[str, list[float]]) -> "Pose3D":
-        assert set(points) == {
+        assert isinstance(points, dict) and set(points) == {
             "x",
             "y",
             "visible",
-        }, "Pose coordinates must contain keys 'x', 'y', and 'visible'."
-        points_x, points_y, points_v = points["x"], points["y"], points["visible"]
-        assert (
-            len(points_x) == len(points_y) == len(points_v) == 17
-        ), "Pose x, y, and visibility coordinates must have the same length of 17."
-        assert all(
-            isinstance(value, (int, float))
-            for value in [*points_x, *points_y, *points_v]
-        ), "Pose coordinates must be integers or floats."
-        return Pose3D(
-            x=[round(coord) for coord in points_x],
-            y=[round(coord) for coord in points_y],
-            visible=points_v,
-        )
+        }, "Pose3D must be a dict with keys 'x', 'y' and 'visible'."
+        return Pose3D.from_list([points["x"], points["y"], points["visible"]])

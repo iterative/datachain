@@ -21,10 +21,10 @@ class BBox(DataModel):
 
     @staticmethod
     def from_list(coords: list[float], title: str = "") -> "BBox":
-        assert len(coords) == 4, "Bounding box coordinates must be a list of 4 floats."
+        assert len(coords) == 4, "Bounding box must be a list of 4 coordinates."
         assert all(
             isinstance(value, (int, float)) for value in coords
-        ), "Bounding box coordinates must be integers or floats."
+        ), "Bounding box coordinates must be floats or integers."
         return BBox(
             title=title,
             coords=[round(c) for c in coords],
@@ -32,26 +32,15 @@ class BBox(DataModel):
 
     @staticmethod
     def from_dict(coords: dict[str, float], title: str = "") -> "BBox":
-        assert (
-            len(coords) == 4
-        ), "Bounding box coordinates must be a dictionary of 4 floats."
-        assert set(coords) == {
+        assert isinstance(coords, dict) and set(coords) == {
             "x1",
             "y1",
             "x2",
             "y2",
-        }, "Bounding box coordinates must contain keys with coordinates."
-        assert all(
-            isinstance(value, (int, float)) for value in coords.values()
-        ), "Bounding box coordinates must be integers or floats."
-        return BBox(
+        }, "Bounding box must be a dictionary with keys 'x1', 'y1', 'x2' and 'y2'."
+        return BBox.from_list(
+            [coords["x1"], coords["y1"], coords["x2"], coords["y2"]],
             title=title,
-            coords=[
-                round(coords["x1"]),
-                round(coords["y1"]),
-                round(coords["x2"]),
-                round(coords["y2"]),
-            ],
         )
 
 
@@ -77,10 +66,10 @@ class OBBox(DataModel):
     def from_list(coords: list[float], title: str = "") -> "OBBox":
         assert (
             len(coords) == 8
-        ), "Oriented bounding box coordinates must be a list of 8 floats."
+        ), "Oriented bounding box must be a list of 8 coordinates."
         assert all(
             isinstance(value, (int, float)) for value in coords
-        ), "Oriented bounding box coordinates must be integers or floats."
+        ), "Oriented bounding box coordinates must be floats or integers."
         return OBBox(
             title=title,
             coords=[round(c) for c in coords],
@@ -88,7 +77,7 @@ class OBBox(DataModel):
 
     @staticmethod
     def from_dict(coords: dict[str, float], title: str = "") -> "OBBox":
-        assert set(coords) == {
+        assert isinstance(coords, dict) and set(coords) == {
             "x1",
             "y1",
             "x2",
@@ -97,20 +86,17 @@ class OBBox(DataModel):
             "y3",
             "x4",
             "y4",
-        }, "Oriented bounding box coordinates must contain keys with coordinates."
-        assert all(
-            isinstance(value, (int, float)) for value in coords.values()
-        ), "Oriented bounding box coordinates must be integers or floats."
-        return OBBox(
-            title=title,
-            coords=[
-                round(coords["x1"]),
-                round(coords["y1"]),
-                round(coords["x2"]),
-                round(coords["y2"]),
-                round(coords["x3"]),
-                round(coords["y3"]),
-                round(coords["x4"]),
-                round(coords["y4"]),
+        }, "Oriented bounding box must be a dictionary with coordinates."
+        return OBBox.from_list(
+            [
+                coords["x1"],
+                coords["y1"],
+                coords["x2"],
+                coords["y2"],
+                coords["x3"],
+                coords["y3"],
+                coords["x4"],
+                coords["y4"],
             ],
+            title=title,
         )
