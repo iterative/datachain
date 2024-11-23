@@ -109,7 +109,7 @@ E2E_STEPS = (
         ),
         "interrupt_after": "UDF Processing Started",
         "expected_in_stderr": "KeyboardInterrupt",
-        "expected_not_in_stderr": "semaphore",
+        "expected_not_in_stderr": "Warning",
     },
     {
         "command": ("datachain", "gc"),
