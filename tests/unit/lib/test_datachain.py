@@ -37,15 +37,16 @@ DF_DATA = {
 }
 
 DF_DATA_NESTED_NOT_NORMALIZED = {
-    "nAmE": [
+    "nA-mE": [
+        {"first-SELECT": "Ivan"},
         {"first-SELECT": "Alice", "l--as@t": "Smith"},
         {"l--as@t": "Jones", "first-SELECT": "Bob"},
         {"first-SELECT": "Charlie", "l--as@t": "Brown"},
         {"first-SELECT": "David", "l--as@t": "White"},
         {"first-SELECT": "Eva", "l--as@t": "Black"},
     ],
-    "AgE": [25, 30, 35, 40, 45],
-    "citY": ["New York", "Los Angeles", "Chicago", "Houston", "Phoenix"],
+    "AgE": [41, 25, 30, 35, 40, 45],
+    "citY": ["San Francisco", "New York", "Los Angeles", None, "Houston", "Phoenix"],
 }
 
 DF_OTHER_DATA = {
@@ -1011,13 +1012,17 @@ def test_parse_nested_json(tmp_dir, test_session):
     )
     # Field names are normalized, values are preserved
     # E.g. nAmE -> name, l--as@t -> l_as_t, etc
-    df1 = dc.select("name", "age", "city").to_pandas()
+    df1 = dc.select("na_me", "age", "city").to_pandas()
 
-    assert df1["name"]["first_select"].to_list() == [
-        d["first-SELECT"] for d in df["nAmE"].to_list()
+    # In CH we replace None with '' for peforance reasons,
+    # have to handle it here
+    string_default = String.default_value(test_session.catalog.warehouse.db.dialect)
+
+    assert df1["na_me"]["first_select"].to_list() == [
+        d["first-SELECT"] for d in df["nA-mE"].to_list()
     ]
-    assert df1["name"]["l_as_t"].to_list() == [
-        d["l--as@t"] for d in df["nAmE"].to_list()
+    assert df1["na_me"]["l_as_t"].to_list() == [
+        d.get("l--as@t", string_default) for d in df["nA-mE"].to_list()
     ]
 
 
@@ -1317,7 +1322,7 @@ def test_to_csv_features_nested(tmp_dir, test_session):
 @pytest.mark.parametrize("object_name", (None, "test_object_name"))
 @pytest.mark.parametrize("model_name", (None, "TestModelNameExploded"))
 def test_explode(tmp_dir, test_session, column_type, object_name, model_name):
-    df = pd.DataFrame(DF_DATA)
+    df = pd.DataFrame(DF_DATA_NESTED_NOT_NORMALIZED)
     path = tmp_dir / "test.json"
     df.to_json(path, orient="records", lines=True)
 
@@ -1327,22 +1332,34 @@ def test_explode(tmp_dir, test_session, column_type, object_name, model_name):
             content=lambda file: (ln for ln in file.read_text().split("\n") if ln),
             output=column_type,
         )
-        .explode("content", object_name=object_name, model_name=model_name)
+        .explode(
+            "content",
+            object_name=object_name,
+            model_name=model_name,
+            schema_sample_size=2,
+        )
     )
 
     object_name = object_name or "content_expl"
     model_name = model_name or "ContentExplodedModel"
 
+    # In CH we have (atm at least) None coтverted to ''
+    # for performance reasons, so we need to handle this case
+    string_default = String.default_value(test_session.catalog.warehouse.db.dialect)
+
     assert set(
         dc.collect(
-            f"{object_name}.first_name", f"{object_name}.age", f"{object_name}.city"
+            f"{object_name}.na_me.first_select",
+            f"{object_name}.age",
+            f"{object_name}.city",
         )
     ) == {
         ("Alice", 25, "New York"),
         ("Bob", 30, "Los Angeles"),
-        ("Charlie", 35, "Chicago"),
+        ("Charlie", 35, string_default),
         ("David", 40, "Houston"),
         ("Eva", 45, "Phoenix"),
+        ("Ivan", 41, "San Francisco"),
     }
 
     assert next(dc.limit(1).collect(object_name)).__class__.__name__ == model_name
