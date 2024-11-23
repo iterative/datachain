@@ -210,10 +210,12 @@ class SQLiteDatabaseEngine(DatabaseEngine):
 
     @retry_sqlite_locks
     def executemany(
-        self, query, params, cursor: Optional[sqlite3.Cursor] = None
+        self, query, params, cursor: Optional[sqlite3.Cursor] = None, conn=None
     ) -> sqlite3.Cursor:
         if cursor:
             return cursor.executemany(self.compile(query).string, params)
+        if conn:
+            return conn.executemany(self.compile(query).string, params)
         return self.db.executemany(self.compile(query).string, params)
 
     @retry_sqlite_locks
@@ -223,7 +225,14 @@ class SQLiteDatabaseEngine(DatabaseEngine):
         return self.db.execute(sql, parameters)
 
     def insert_dataframe(self, table_name: str, df) -> int:
-        return df.to_sql(table_name, self.db, if_exists="append", index=False)
+        return df.to_sql(
+            table_name,
+            self.db,
+            if_exists="append",
+            index=False,
+            method="multi",
+            chunksize=1000,
+        )
 
     def cursor(self, factory=None):
         if factory is None:
@@ -682,10 +691,15 @@ class SQLiteWarehouse(AbstractWarehouse):
         rows = list(rows)
         if not rows:
             return
-        self.db.executemany(
-            table.insert().values({f: bindparam(f) for f in rows[0]}),
-            rows,
-        )
+
+        with self.db.transaction() as conn:
+            # transactions speeds up inserts significantly as there is no separate
+            # transaction created for each insert row
+            self.db.executemany(
+                table.insert().values({f: bindparam(f) for f in rows[0]}),
+                rows,
+                conn=conn,
+            )
 
     def insert_dataset_rows(self, df, dataset: DatasetRecord, version: int) -> int:
         dr = self.dataset_rows(dataset, version)
