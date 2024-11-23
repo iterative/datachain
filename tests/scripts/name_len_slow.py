@@ -36,5 +36,5 @@ DataChain.from_storage(
     "gs://dvcx-datalakes/dogs-and-cats/",
     anon=True,
 ).filter(C("file.path").glob("*cat*")).settings(parallel=1).map(
-    name_len, params=["file.path"], output={"name_len": int}
+    name_len, params=["file"], output={"name_len": int}
 ).save("name_len")

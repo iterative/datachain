@@ -473,33 +473,31 @@ class UDFStep(Step, ABC):
                 # Otherwise process single-threaded (faster for smaller UDFs)
                 warehouse = self.catalog.warehouse
 
-                with contextlib.closing(
-                    batching(warehouse.dataset_select_paginated, query)
-                ) as udf_inputs:
-                    download_cb = get_download_callback()
-                    processed_cb = get_processed_callback()
-                    generated_cb = get_generated_callback(self.is_generator)
-                    try:
-                        udf_results = self.udf.run(
-                            udf_fields,
-                            udf_inputs,
-                            self.catalog,
-                            self.is_generator,
-                            self.cache,
-                            download_cb,
-                            processed_cb,
-                        )
-                        process_udf_outputs(
-                            warehouse,
-                            udf_table,
-                            udf_results,
-                            self.udf,
-                            cb=generated_cb,
-                        )
-                    finally:
-                        download_cb.close()
-                        processed_cb.close()
-                        generated_cb.close()
+                udf_inputs = batching(warehouse.dataset_select_paginated, query)
+                download_cb = get_download_callback()
+                processed_cb = get_processed_callback()
+                generated_cb = get_generated_callback(self.is_generator)
+                try:
+                    udf_results = self.udf.run(
+                        udf_fields,
+                        udf_inputs,
+                        self.catalog,
+                        self.is_generator,
+                        self.cache,
+                        download_cb,
+                        processed_cb,
+                    )
+                    process_udf_outputs(
+                        warehouse,
+                        udf_table,
+                        udf_results,
+                        self.udf,
+                        cb=generated_cb,
+                    )
+                finally:
+                    download_cb.close()
+                    processed_cb.close()
+                    generated_cb.close()
 
                 warehouse.insert_rows_done(udf_table)
 

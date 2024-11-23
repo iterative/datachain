@@ -58,10 +58,14 @@ def train_test_split(dc: DataChain, weights: list[float]) -> list[DataChain]:
 
     weights_normalized = [weight / sum(weights) for weight in weights]
 
+    resolution = 2**31 - 1  # Maximum positive value for a 32-bit signed integer.
+
     return [
         dc.filter(
-            C("sys__rand") % 1000 >= round(sum(weights_normalized[:index]) * 1000),
-            C("sys__rand") % 1000 < round(sum(weights_normalized[: index + 1]) * 1000),
+            C("sys__rand") % resolution
+            >= round(sum(weights_normalized[:index]) * resolution),
+            C("sys__rand") % resolution
+            < round(sum(weights_normalized[: index + 1]) * resolution),
         )
         for index, _ in enumerate(weights_normalized)
     ]
