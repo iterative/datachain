@@ -42,7 +42,7 @@ def process_json(data_string, jmespath):
 # Print a dynamic datamodel-codegen output from JSON or CSV on stdout
 def read_schema(source_file, data_type="csv", expr=None, model_name=None):
     data_string = ""
-    # using uiid to get around issue #1617
+    # using uuid to get around issue #1617
     if not model_name:
         # comply with Python class names
         uid_str = str(generate_uuid()).replace("-", "")
@@ -113,7 +113,10 @@ def read_meta(  # noqa: C901
                 output=str,
             )
         )
-        (model_output,) = chain.collect("meta_schema")
+        chain_rows = list(chain.collect("meta_schema"))
+        if len(chain_rows) == 0:
+            raise ValueError(f"Failed to infer schema from {schema_from}")
+        model_output = chain_rows[0]
         assert isinstance(model_output, str)
         if print_schema:
             print(f"{model_output}")
