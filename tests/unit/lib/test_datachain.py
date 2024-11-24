@@ -1343,7 +1343,7 @@ def test_explode(tmp_dir, test_session, column_type, object_name, model_name):
     object_name = object_name or "content_expl"
     model_name = model_name or "ContentExplodedModel"
 
-    # In CH we have (atm at least) None coтverted to ''
+    # In CH we have (atm at least) None converted to ''
     # for performance reasons, so we need to handle this case
     string_default = String.default_value(test_session.catalog.warehouse.db.dialect)
 
