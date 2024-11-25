@@ -427,6 +427,20 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         help="Edit dataset from Studio",
     )
     parse_edit_dataset.add_argument(
+        "-L",
+        "--local",
+        action="store_true",
+        default=False,
+        help="Edit local dataset only",
+    )
+    parse_edit_dataset.add_argument(
+        "-a",
+        "--all",
+        action="store_true",
+        default=True,
+        help="Edit both datasets from studio and local",
+    )
+    parse_edit_dataset.add_argument(
         "--team",
         action="store",
         default=None,
@@ -485,6 +499,20 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         action="store_true",
         default=False,
         help="Remove dataset from Studio",
+    )
+    rm_dataset_parser.add_argument(
+        "-L",
+        "--local",
+        action="store_true",
+        default=False,
+        help="Remove local datasets only",
+    )
+    datasets_parser.add_argument(
+        "-a",
+        "--all",
+        action="store_true",
+        default=True,
+        help="Remove both local and studio",
     )
     rm_dataset_parser.add_argument(
         "--team",
@@ -936,12 +964,18 @@ def rm_dataset(
     version: Optional[int] = None,
     force: Optional[bool] = False,
     studio: bool = False,
+    local: bool = False,
+    all: bool = True,
     team: Optional[str] = None,
 ):
-    if studio:
-        remove_studio_dataset(team, name, version, force)
-    else:
+    token = Config().read().get("studio", {}).get("token")
+    all, local, studio = _determine_flavors(studio, local, all, token)
+
+    if all or local:
         catalog.remove_dataset(name, version=version, force=force)
+
+    if (all or studio) and token:
+        remove_studio_dataset(team, name, version, force)
 
 
 def edit_dataset(
@@ -951,12 +985,18 @@ def edit_dataset(
     description: Optional[str] = None,
     labels: Optional[list[str]] = None,
     studio: bool = False,
+    local: bool = False,
+    all: bool = True,
     team: Optional[str] = None,
 ):
-    if studio:
-        edit_studio_dataset(team, name, new_name, description, labels)
-    else:
+    token = Config().read().get("studio", {}).get("token")
+    all, local, studio = _determine_flavors(studio, local, all, token)
+
+    if all or local:
         catalog.edit_dataset(name, new_name, description, labels)
+
+    if (all or studio) and token:
+        edit_studio_dataset(team, name, new_name, description, labels)
 
 
 def dataset_stats(
@@ -1180,6 +1220,8 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
                 description=args.description,
                 labels=args.labels,
                 studio=args.studio,
+                local=args.local,
+                all=args.all,
                 team=args.team,
             )
         elif args.command == "ls":
@@ -1219,6 +1261,8 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
                 version=args.version,
                 force=args.force,
                 studio=args.studio,
+                local=args.local,
+                all=args.all,
                 team=args.team,
             )
         elif args.command == "dataset-stats":
