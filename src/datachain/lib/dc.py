@@ -30,7 +30,7 @@ from datachain.client.local import FileClient
 from datachain.dataset import DatasetRecord
 from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.convert.values_to_tuples import values_to_tuples
-from datachain.lib.data_model import DataModel, DataType, dict_to_data_model
+from datachain.lib.data_model import DataModel, DataType, DataValue, dict_to_data_model
 from datachain.lib.dataset_info import DatasetInfo
 from datachain.lib.file import ArrowRow, File, get_file_type
 from datachain.lib.file import ExportPlacement as FileExportPlacement
@@ -334,6 +334,7 @@ class DataChain:
         parallel=None,
         workers=None,
         min_task_size=None,
+        prefetch: Optional[int] = None,
         sys: Optional[bool] = None,
     ) -> "Self":
         """Change settings for chain.
@@ -360,7 +361,7 @@ class DataChain:
         if sys is None:
             sys = self._sys
         settings = copy.copy(self._settings)
-        settings.add(Settings(cache, parallel, workers, min_task_size))
+        settings.add(Settings(cache, parallel, workers, min_task_size, prefetch))
         return self._evolve(settings=settings, _sys=sys)
 
     def reset_settings(self, settings: Optional[Settings] = None) -> "Self":
@@ -642,6 +643,64 @@ class DataChain:
         }
         return chain.gen(**signal_dict)  # type: ignore[misc, arg-type]
 
+    def explode(
+        self,
+        col: str,
+        model_name: Optional[str] = None,
+        object_name: Optional[str] = None,
+        schema_sample_size: int = 1,
+    ) -> "DataChain":
+        """Explodes a column containing JSON objects (dict or str DataChain type) into
+           individual columns based on the schema of the JSON. Schema is inferred from
+           the first row of the column.
+
+        Args:
+            col: the name of the column containing JSON to be exploded.
+            model_name: optional generated model name.  By default generates the name
+                automatically.
+            object_name: optional generated object column name. By default generates the
+                name automatically.
+            schema_sample_size: the number of rows to use for inferring the schema of
+                the JSON (in case some fields are optional and it's not enough to
+                analyze a single row).
+
+        Returns:
+            DataChain: A new DataChain instance with the new set of columns.
+        """
+        import json
+
+        import pyarrow as pa
+
+        from datachain.lib.arrow import schema_to_output
+
+        json_values = list(self.limit(schema_sample_size).collect(col))
+        json_dicts = [
+            json.loads(json_value) if isinstance(json_value, str) else json_value
+            for json_value in json_values
+        ]
+
+        if any(not isinstance(json_dict, dict) for json_dict in json_dicts):
+            raise TypeError(f"Column {col} should be a string or dict type with JSON")
+
+        schema = pa.Table.from_pylist(json_dicts).schema
+        output, original_names = schema_to_output(schema, None)
+
+        if not model_name:
+            model_name = f"{col.title()}ExplodedModel"
+
+        model = dict_to_data_model(model_name, output, original_names)
+
+        def json_to_model(json_value: Union[str, dict]):
+            json_dict = (
+                json.loads(json_value) if isinstance(json_value, str) else json_value
+            )
+            return model.model_validate(json_dict)
+
+        if not object_name:
+            object_name = f"{col}_expl"
+
+        return self.map(json_to_model, params=col, output={object_name: model})
+
     @classmethod
     def datasets(
         cls,
@@ -722,7 +781,7 @@ class DataChain:
             ```py
             uri = "gs://datachain-demo/coco2017/annotations_captions/"
             chain = DataChain.from_storage(uri)
-            chain = chain.show_json_schema()
+            chain = chain.print_json_schema()
             chain.save()
             ```
         """
@@ -829,6 +888,8 @@ class DataChain:
             ```
         """
         udf_obj = self._udf_to_obj(Mapper, func, params, output, signal_map)
+        if (prefetch := self._settings.prefetch) is not None:
+            udf_obj.prefetch = prefetch
 
         return self._evolve(
             query=self._query.add_signals(
@@ -866,6 +927,8 @@ class DataChain:
             ```
         """
         udf_obj = self._udf_to_obj(Generator, func, params, output, signal_map)
+        if (prefetch := self._settings.prefetch) is not None:
+            udf_obj.prefetch = prefetch
         return self._evolve(
             query=self._query.generate(
                 udf_obj.to_udf_wrapper(),
@@ -895,12 +958,32 @@ class DataChain:
         2. Group-based UDF function input: Instead of individual rows, the function
            receives a list all rows within each group defined by `partition_by`.
 
-        Example:
+        Examples:
             ```py
             chain = chain.agg(
                 total=lambda category, amount: [sum(amount)],
                 output=float,
                 partition_by="category",
+            )
+            chain.save("new_dataset")
+            ```
+
+            An alternative syntax, when you need to specify a more complex function:
+
+            ```py
+            # It automatically resolves which columns to pass to the function
+            # by looking at the function signature.
+            def agg_sum(
+                file: list[File], amount: list[float]
+            ) -> Iterator[tuple[File, float]]:
+                yield file[0], sum(amount)
+
+            chain = chain.agg(
+                agg_sum,
+                output={"file": File, "total": float},
+                # Alternative syntax is to use `C` (short for Column) to specify
+                # a column name or a nested column, e.g. C("file.path").
+                partition_by=C("category"),
             )
             chain.save("new_dataset")
             ```
@@ -1242,15 +1325,15 @@ class DataChain:
         return self.results(row_factory=to_dict)
 
     @overload
-    def collect(self) -> Iterator[tuple[DataType, ...]]: ...
+    def collect(self) -> Iterator[tuple[DataValue, ...]]: ...
 
     @overload
-    def collect(self, col: str) -> Iterator[DataType]: ...  # type: ignore[overload-overlap]
+    def collect(self, col: str) -> Iterator[DataValue]: ...
 
     @overload
-    def collect(self, *cols: str) -> Iterator[tuple[DataType, ...]]: ...
+    def collect(self, *cols: str) -> Iterator[tuple[DataValue, ...]]: ...
 
-    def collect(self, *cols: str) -> Iterator[Union[DataType, tuple[DataType, ...]]]:  # type: ignore[overload-overlap,misc]
+    def collect(self, *cols: str) -> Iterator[Union[DataValue, tuple[DataValue, ...]]]:  # type: ignore[overload-overlap,misc]
         """Yields rows of values, optionally limited to the specified columns.
 
         Args:
@@ -1756,13 +1839,14 @@ class DataChain:
         if col_names or not output:
             try:
                 schema = infer_schema(self, **kwargs)
-                output = schema_to_output(schema, col_names)
+                output, _ = schema_to_output(schema, col_names)
             except ValueError as e:
                 raise DatasetPrepareError(self.name, e) from e
 
         if isinstance(output, dict):
             model_name = model_name or object_name or ""
             model = dict_to_data_model(model_name, output)
+            output = model
         else:
             model = output  # type: ignore[assignment]
 
@@ -1773,6 +1857,7 @@ class DataChain:
                 name: info.annotation  # type: ignore[misc]
                 for name, info in output.model_fields.items()
             }
+
         if source:
             output = {"source": ArrowRow} | output  # type: ignore[assignment,operator]
         return self.gen(

@@ -56,6 +56,7 @@ def test_create_dataset_no_version_specified(cloud_test_catalog, create_rows):
     assert dataset.schema["similarity"] == Float32
     assert dataset_version.schema["similarity"] == Float32
     assert dataset_version.status == DatasetStatus.PENDING
+    assert dataset_version.uuid
     assert dataset.status == DatasetStatus.CREATED  # dataset status is deprecated
     if create_rows:
         assert dataset_version.num_objects == 0
@@ -85,6 +86,7 @@ def test_create_dataset_with_explicit_version(cloud_test_catalog, create_rows):
     assert dataset.schema["similarity"] == Float32
     assert dataset_version.schema["similarity"] == Float32
     assert dataset_version.status == DatasetStatus.PENDING
+    assert dataset_version.uuid
     assert dataset.status == DatasetStatus.CREATED
     if create_rows:
         assert dataset_version.num_objects == 0
@@ -178,6 +180,7 @@ def test_create_dataset_from_sources(listed_bucket, cloud_test_catalog):
     assert dataset_version.error_stack == ""
     assert dataset_version.script_output == ""
     assert dataset_version.sources == f"{src_uri}/dogs/*"
+    assert dataset_version.uuid
 
     dr = catalog.warehouse.schema.dataset_row_cls
     sys_schema = {c.name: type(c.type) for c in dr.sys_columns()}
@@ -214,6 +217,7 @@ def test_create_dataset_from_sources_dataset(cloud_test_catalog, dogs_dataset):
     assert dataset_version.error_stack == ""
     assert dataset_version.script_output == ""
     assert dataset_version.sources == f"ds://{dogs_dataset.name}"
+    assert dataset_version.uuid
 
     dr = catalog.warehouse.schema.dataset_row_cls
     sys_schema = {c.name: type(c.type) for c in dr.sys_columns()}

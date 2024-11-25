@@ -6,12 +6,15 @@ import lz4.frame
 import pandas as pd
 import pytest
 
+from datachain.client.fsspec import Client
 from datachain.config import Config, ConfigLevel
 from datachain.dataset import DatasetStatus
 from datachain.error import DataChainError
 from datachain.utils import STUDIO_URL, JSONSerialize
 from tests.data import ENTRIES
-from tests.utils import assert_row_names, skip_if_not_sqlite
+from tests.utils import assert_row_names, skip_if_not_sqlite, tree_from_path
+
+DATASET_UUID = "20f5a2f1-fc9a-4e36-8b91-5a530f289451"
 
 
 @pytest.fixture(autouse=True)
@@ -38,10 +41,11 @@ def dog_entries():
 
 
 @pytest.fixture
-def dog_entries_parquet_lz4(dog_entries) -> bytes:
+def dog_entries_parquet_lz4(dog_entries, cloud_test_catalog) -> bytes:
     """
     Returns dogs entries in lz4 compressed parquet format
     """
+    src_uri = cloud_test_catalog.src_uri
 
     def _adapt_row(row):
         """
@@ -59,7 +63,7 @@ def dog_entries_parquet_lz4(dog_entries) -> bytes:
         adapted["sys__id"] = 1
         adapted["sys__rand"] = 1
         adapted["file__location"] = ""
-        adapted["file__source"] = "s3://dogs"
+        adapted["file__source"] = src_uri
         return adapted
 
     dog_entries = [_adapt_row(e) for e in dog_entries]
@@ -74,7 +78,7 @@ def dog_entries_parquet_lz4(dog_entries) -> bytes:
 def schema():
     return {
         "id": {"type": "UInt64"},
-        "sys__rand": {"type": "Int64"},
+        "sys__rand": {"type": "UInt64"},
         "file__path": {"type": "String"},
         "file__etag": {"type": "String"},
         "file__version": {"type": "String"},
@@ -90,6 +94,7 @@ def schema():
 def remote_dataset_version(schema, dataset_rows):
     return {
         "id": 1,
+        "uuid": DATASET_UUID,
         "dataset_id": 1,
         "version": 1,
         "status": 4,
@@ -138,6 +143,7 @@ def remote_dataset(remote_dataset_version, schema):
 
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
 @pytest.mark.parametrize("dataset_uri", ["ds://dogs@v1", "ds://dogs"])
+@pytest.mark.parametrize("instantiate", [True, False])
 @skip_if_not_sqlite
 def test_pull_dataset_success(
     requests_mock,
@@ -145,7 +151,10 @@ def test_pull_dataset_success(
     remote_dataset,
     dog_entries_parquet_lz4,
     dataset_uri,
+    instantiate,
 ):
+    src_uri = cloud_test_catalog.src_uri
+    working_dir = cloud_test_catalog.working_dir
     data_url = (
         "https://studio-blobvault.s3.amazonaws.com/datachain_ds_export_1_0.parquet.lz4"
     )
@@ -162,9 +171,16 @@ def test_pull_dataset_success(
     requests_mock.get(data_url, content=dog_entries_parquet_lz4)
     catalog = cloud_test_catalog.catalog
 
-    catalog.pull_dataset(dataset_uri, no_cp=True)
-    # trying to pull multiple times as it should work
-    catalog.pull_dataset(dataset_uri, no_cp=True)
+    dest = None
+
+    if instantiate:
+        dest = working_dir / "data"
+        dest.mkdir()
+        catalog.pull_dataset(dataset_uri, output=str(dest), no_cp=False)
+    else:
+        # trying to pull multiple times since that should work as well
+        catalog.pull_dataset(dataset_uri, no_cp=True)
+        catalog.pull_dataset(dataset_uri, no_cp=True)
 
     dataset = catalog.get_dataset("dogs")
     assert dataset.versions_values == [1]
@@ -179,6 +195,7 @@ def test_pull_dataset_success(
     assert dataset_version.schema
     assert dataset_version.num_objects == 4
     assert dataset_version.size == 15
+    assert dataset_version.uuid == DATASET_UUID
 
     assert_row_names(
         catalog,
@@ -191,6 +208,20 @@ def test_pull_dataset_success(
             "dog4",
         },
     )
+
+    client = Client.get_client(src_uri, None)
+
+    if instantiate:
+        assert tree_from_path(dest) == {
+            f"{client.name}": {
+                "dogs": {
+                    "dog1": "woof",
+                    "dog2": "arf",
+                    "dog3": "bark",
+                    "others": {"dog4": "ruff"},
+                }
+            }
+        }
 
 
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)

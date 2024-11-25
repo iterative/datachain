@@ -603,9 +603,10 @@ class Catalog:
         )
 
         lst = Listing(
+            self.metastore.clone(),
             self.warehouse.clone(),
             Client.get_client(list_uri, self.cache, **self.client_config),
-            self.get_dataset(list_ds_name),
+            dataset_name=list_ds_name,
             object_name=object_name,
         )
 
@@ -698,9 +699,13 @@ class Catalog:
 
                     client = self.get_client(source, **client_config)
                     uri = client.uri
-                    st = self.warehouse.clone()
                     dataset_name, _, _, _ = DataChain.parse_uri(uri, self.session)
-                    listing = Listing(st, client, self.get_dataset(dataset_name))
+                    listing = Listing(
+                        self.metastore.clone(),
+                        self.warehouse.clone(),
+                        client,
+                        dataset_name=dataset_name,
+                    )
                     rows = DatasetQuery(
                         name=dataset.name, version=ds_version, catalog=self
                     ).to_db_records()
@@ -769,6 +774,7 @@ class Catalog:
         create_rows: Optional[bool] = True,
         validate_version: Optional[bool] = True,
         listing: Optional[bool] = False,
+        uuid: Optional[str] = None,
     ) -> "DatasetRecord":
         """
         Creates new dataset of a specific version.
@@ -816,6 +822,7 @@ class Catalog:
             query_script=query_script,
             create_rows_table=create_rows,
             columns=columns,
+            uuid=uuid,
         )
 
     def create_new_dataset_version(
@@ -832,6 +839,7 @@ class Catalog:
         script_output="",
         create_rows_table=True,
         job_id: Optional[str] = None,
+        uuid: Optional[str] = None,
     ) -> DatasetRecord:
         """
         Creates dataset version if it doesn't exist.
@@ -855,6 +863,7 @@ class Catalog:
             schema=schema,
             job_id=job_id,
             ignore_if_exists=True,
+            uuid=uuid,
         )
 
         if create_rows_table:
@@ -1350,6 +1359,13 @@ class Catalog:
             # we will create new one if it doesn't exist
             pass
 
+        if dataset and version and dataset.has_version(version):
+            """No need to communicate with Studio at all"""
+            dataset_uri = create_dataset_uri(remote_dataset_name, version)
+            print(f"Local copy of dataset {dataset_uri} already present")
+            _instantiate_dataset()
+            return
+
         remote_dataset = self.get_remote_dataset(remote_dataset_name)
         # if version is not specified in uri, take the latest one
         if not version:
@@ -1400,6 +1416,7 @@ class Catalog:
             columns=columns,
             feature_schema=remote_dataset_version.feature_schema,
             validate_version=False,
+            uuid=remote_dataset_version.uuid,
         )
 
         # asking remote to export dataset rows table to s3 and to return signed

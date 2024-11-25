@@ -232,7 +232,10 @@ class AbstractWarehouse(ABC, Serializable):
                 if limit < page_size:
                     paginated_query = paginated_query.limit(None).limit(limit)
 
-            results = self.dataset_rows_select(paginated_query.offset(offset))
+            # Ensure we're using a thread-local connection
+            with self.clone() as wh:
+                # Cursor results are not thread-safe, so we convert them to a list
+                results = list(wh.dataset_rows_select(paginated_query.offset(offset)))
 
             processed = False
             for row in results:
