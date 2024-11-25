@@ -648,6 +648,7 @@ class DataChain:
         col: str,
         model_name: Optional[str] = None,
         object_name: Optional[str] = None,
+        schema_sample_size: int = 1,
     ) -> "DataChain":
         """Explodes a column containing JSON objects (dict or str DataChain type) into
            individual columns based on the schema of the JSON. Schema is inferred from
@@ -659,6 +660,9 @@ class DataChain:
                 automatically.
             object_name: optional generated object column name. By default generates the
                 name automatically.
+            schema_sample_size: the number of rows to use for inferring the schema of
+                the JSON (in case some fields are optional and it's not enough to
+                analyze a single row).
 
         Returns:
             DataChain: A new DataChain instance with the new set of columns.
@@ -669,21 +673,22 @@ class DataChain:
 
         from datachain.lib.arrow import schema_to_output
 
-        json_value = next(self.limit(1).collect(col))
-        json_dict = (
+        json_values = list(self.limit(schema_sample_size).collect(col))
+        json_dicts = [
             json.loads(json_value) if isinstance(json_value, str) else json_value
-        )
+            for json_value in json_values
+        ]
 
-        if not isinstance(json_dict, dict):
+        if any(not isinstance(json_dict, dict) for json_dict in json_dicts):
             raise TypeError(f"Column {col} should be a string or dict type with JSON")
 
-        schema = pa.Table.from_pylist([json_dict]).schema
-        output = schema_to_output(schema, None)
+        schema = pa.Table.from_pylist(json_dicts).schema
+        output, original_names = schema_to_output(schema, None)
 
         if not model_name:
             model_name = f"{col.title()}ExplodedModel"
 
-        model = dict_to_data_model(model_name, output)
+        model = dict_to_data_model(model_name, output, original_names)
 
         def json_to_model(json_value: Union[str, dict]):
             json_dict = (
@@ -776,7 +781,7 @@ class DataChain:
             ```py
             uri = "gs://datachain-demo/coco2017/annotations_captions/"
             chain = DataChain.from_storage(uri)
-            chain = chain.show_json_schema()
+            chain = chain.print_json_schema()
             chain.save()
             ```
         """
@@ -1834,13 +1839,14 @@ class DataChain:
         if col_names or not output:
             try:
                 schema = infer_schema(self, **kwargs)
-                output = schema_to_output(schema, col_names)
+                output, _ = schema_to_output(schema, col_names)
             except ValueError as e:
                 raise DatasetPrepareError(self.name, e) from e
 
         if isinstance(output, dict):
             model_name = model_name or object_name or ""
             model = dict_to_data_model(model_name, output)
+            output = model
         else:
             model = output  # type: ignore[assignment]
 
@@ -1851,6 +1857,7 @@ class DataChain:
                 name: info.annotation  # type: ignore[misc]
                 for name, info in output.model_fields.items()
             }
+
         if source:
             output = {"source": ArrowRow} | output  # type: ignore[assignment,operator]
         return self.gen(

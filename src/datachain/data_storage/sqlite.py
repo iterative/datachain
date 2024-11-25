@@ -122,7 +122,9 @@ class SQLiteDatabaseEngine(DatabaseEngine):
         return cls(*cls._connect(db_file=db_file))
 
     @staticmethod
-    def _connect(db_file: Optional[str] = None):
+    def _connect(
+        db_file: Optional[str] = None,
+    ) -> tuple["Engine", "MetaData", sqlite3.Connection, str]:
         try:
             if db_file == ":memory:":
                 # Enable multithreaded usage of the same in-memory db
@@ -130,9 +132,8 @@ class SQLiteDatabaseEngine(DatabaseEngine):
                     _get_in_memory_uri(), uri=True, detect_types=DETECT_TYPES
                 )
             else:
-                db = sqlite3.connect(
-                    db_file or DataChainDir.find().db, detect_types=DETECT_TYPES
-                )
+                db_file = db_file or DataChainDir.find().db
+                db = sqlite3.connect(db_file, detect_types=DETECT_TYPES)
             create_user_defined_sql_functions(db)
             engine = sqlalchemy.create_engine(
                 "sqlite+pysqlite:///", creator=lambda: db, future=True

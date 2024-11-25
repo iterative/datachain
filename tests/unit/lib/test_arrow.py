@@ -74,7 +74,8 @@ def test_arrow_generator_output_schema(tmp_path, catalog):
     stream = File(path=pq_path.as_posix(), source="file://")
     stream._set_stream(catalog, caching_enabled=False)
 
-    output_schema = dict_to_data_model("", schema_to_output(table.schema))
+    output, original_names = schema_to_output(table.schema)
+    output_schema = dict_to_data_model("", output, original_names)
     func = ArrowGenerator(output_schema=output_schema)
     objs = list(func.process(stream))
 
@@ -97,7 +98,9 @@ def test_arrow_generator_hf(tmp_path, catalog):
     stream = File(path=pq_path.as_posix(), source="file:///")
     stream._set_stream(catalog, caching_enabled=False)
 
-    output_schema = dict_to_data_model("", schema_to_output(ds._data.schema, ["col"]))
+    output, original_names = schema_to_output(ds._data.schema, ["col"])
+
+    output_schema = dict_to_data_model("", output, original_names)
     func = ArrowGenerator(output_schema=output_schema)
     for obj in func.process(stream):
         assert isinstance(obj[1].col, HFClassLabel)
@@ -154,7 +157,11 @@ def test_schema_to_output():
             ("strict_int", pa.int32(), False),
         ]
     )
-    assert schema_to_output(schema) == {
+
+    output, original_names = schema_to_output(schema)
+
+    assert original_names == ["some_int", "some_string", "strict_int"]
+    assert output == {
         "some_int": Optional[int],
         "some_string": Optional[str],
         "strict_int": int,
@@ -174,7 +181,20 @@ def test_parquet_convert_column_names():
             ("trailing__underscores__", pa.int32()),
         ]
     )
-    assert list(schema_to_output(schema)) == [
+
+    output, original_names = schema_to_output(schema)
+
+    assert original_names == [
+        "UpperCaseCol",
+        "dot.notation.col",
+        "with-dashes",
+        "with spaces",
+        "with-multiple--dashes",
+        "with__underscores",
+        "__leading__underscores",
+        "trailing__underscores__",
+    ]
+    assert list(output) == [
         "uppercasecol",
         "dot_notation_col",
         "with_dashes",
@@ -193,13 +213,21 @@ def test_parquet_missing_column_names():
             ("", pa.int32()),
         ]
     )
-    assert list(schema_to_output(schema)) == ["c0", "c1"]
+
+    output, original_names = schema_to_output(schema)
+
+    assert original_names == ["", ""]
+    assert list(output) == ["c0", "c1"]
 
 
 def test_parquet_override_column_names():
     schema = pa.schema([("some_int", pa.int32()), ("some_string", pa.string())])
     col_names = ["n1", "n2"]
-    assert schema_to_output(schema, col_names) == {
+
+    output, original_names = schema_to_output(schema, col_names)
+
+    assert original_names == ["n1", "n2"]
+    assert output == {
         "n1": Optional[int],
         "n2": Optional[str],
     }
