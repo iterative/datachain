@@ -187,7 +187,7 @@ def test_studio_edit_dataset(capsys, mocker):
             == 1
         )
         out = capsys.readouterr().err
-        assert "Studio token is not set" in out
+        assert "Not logged in to Studio" in out
 
         # Set the studio token
         with Config(ConfigLevel.GLOBAL).edit() as conf:
@@ -253,7 +253,7 @@ def test_studio_rm_dataset(capsys, mocker):
         # Studio token is required
         assert main(["rm-dataset", "name", "--team", "team_name", "--studio"]) == 1
         out = capsys.readouterr().err
-        assert "Studio token is not set" in out
+        assert "Not logged in to Studio" in out
 
         # Set the studio token
         with Config(ConfigLevel.GLOBAL).edit() as conf:

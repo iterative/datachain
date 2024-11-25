@@ -507,7 +507,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         default=False,
         help="Remove local datasets only",
     )
-    datasets_parser.add_argument(
+    rm_dataset_parser.add_argument(
         "-a",
         "--all",
         action="store_true",
