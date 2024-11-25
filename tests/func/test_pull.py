@@ -9,7 +9,7 @@ import pytest
 from datachain.client.fsspec import Client
 from datachain.config import Config, ConfigLevel
 from datachain.dataset import DatasetStatus
-from datachain.error import DataChainError
+from datachain.error import DataChainError, DatasetNotFoundError
 from datachain.utils import STUDIO_URL, JSONSerialize
 from tests.data import ENTRIES
 from tests.utils import assert_row_names, skip_if_not_sqlite, tree_from_path
@@ -120,7 +120,7 @@ def remote_dataset_version(schema, dataset_rows):
 def remote_dataset(remote_dataset_version, schema):
     return {
         "id": 1,
-        "name": "remote",
+        "name": "dogs",
         "description": "",
         "labels": [],
         "schema": schema,
@@ -141,34 +141,68 @@ def remote_dataset(remote_dataset_version, schema):
     }
 
 
-@pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
-@pytest.mark.parametrize("dataset_uri", ["ds://dogs@v1", "ds://dogs"])
-@pytest.mark.parametrize("instantiate", [True, False])
-@skip_if_not_sqlite
-def test_pull_dataset_success(
-    requests_mock,
-    cloud_test_catalog,
-    remote_dataset,
-    dog_entries_parquet_lz4,
-    dataset_uri,
-    instantiate,
-):
-    src_uri = cloud_test_catalog.src_uri
-    working_dir = cloud_test_catalog.working_dir
-    data_url = (
+@pytest.fixture
+def remote_dataset_chunk_url():
+    return (
         "https://studio-blobvault.s3.amazonaws.com/datachain_ds_export_1_0.parquet.lz4"
     )
+
+
+@pytest.fixture
+def remote_dataset_info(requests_mock, remote_dataset):
     requests_mock.post(f"{STUDIO_URL}/api/datachain/dataset-info", json=remote_dataset)
+
+
+@pytest.fixture
+def remote_dataset_stats(requests_mock):
     requests_mock.post(
         f"{STUDIO_URL}/api/datachain/dataset-stats",
         json={"num_objects": 5, "size": 1000},
     )
-    requests_mock.post(f"{STUDIO_URL}/api/datachain/dataset-export", json=[data_url])
+
+
+@pytest.fixture
+def dataset_export(requests_mock, remote_dataset_chunk_url):
+    requests_mock.post(
+        f"{STUDIO_URL}/api/datachain/dataset-export", json=[remote_dataset_chunk_url]
+    )
+
+
+@pytest.fixture
+def dataset_export_status(requests_mock):
     requests_mock.post(
         f"{STUDIO_URL}/api/datachain/dataset-export-status",
         json={"status": "completed"},
     )
-    requests_mock.get(data_url, content=dog_entries_parquet_lz4)
+
+
+@pytest.fixture
+def dataset_export_data_chunk(
+    requests_mock, remote_dataset_chunk_url, dog_entries_parquet_lz4
+):
+    requests_mock.get(remote_dataset_chunk_url, content=dog_entries_parquet_lz4)
+
+
+@pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
+@pytest.mark.parametrize("dataset_uri", ["ds://dogs@v1", "ds://dogs"])
+@pytest.mark.parametrize("local_ds_name", [None, "other"])
+@pytest.mark.parametrize("local_ds_version", [None, 2])
+@pytest.mark.parametrize("instantiate", [True, False])
+@skip_if_not_sqlite
+def test_pull_dataset_success(
+    cloud_test_catalog,
+    remote_dataset_info,
+    remote_dataset_stats,
+    dataset_export,
+    dataset_export_status,
+    dataset_export_data_chunk,
+    dataset_uri,
+    local_ds_name,
+    local_ds_version,
+    instantiate,
+):
+    src_uri = cloud_test_catalog.src_uri
+    working_dir = cloud_test_catalog.working_dir
     catalog = cloud_test_catalog.catalog
 
     dest = None
@@ -176,19 +210,30 @@ def test_pull_dataset_success(
     if instantiate:
         dest = working_dir / "data"
         dest.mkdir()
-        catalog.pull_dataset(dataset_uri, output=str(dest), no_cp=False)
+        catalog.pull_dataset(
+            dataset_uri,
+            output=str(dest),
+            local_ds_name=local_ds_name,
+            local_ds_version=local_ds_version,
+            no_cp=False,
+        )
     else:
         # trying to pull multiple times since that should work as well
-        catalog.pull_dataset(dataset_uri, no_cp=True)
-        catalog.pull_dataset(dataset_uri, no_cp=True)
+        for _ in range(2):
+            catalog.pull_dataset(
+                dataset_uri,
+                local_ds_name=local_ds_name,
+                local_ds_version=local_ds_version,
+                no_cp=True,
+            )
 
-    dataset = catalog.get_dataset("dogs")
-    assert dataset.versions_values == [1]
+    dataset = catalog.get_dataset(local_ds_name or "dogs")
+    assert dataset.versions_values == [local_ds_version or 1]
     assert dataset.status == DatasetStatus.COMPLETE
     assert dataset.created_at
     assert dataset.finished_at
     assert dataset.schema
-    dataset_version = dataset.get_version(1)
+    dataset_version = dataset.get_version(local_ds_version or 1)
     assert dataset_version.status == DatasetStatus.COMPLETE
     assert dataset_version.created_at
     assert dataset_version.finished_at
@@ -200,7 +245,7 @@ def test_pull_dataset_success(
     assert_row_names(
         catalog,
         dataset,
-        1,
+        local_ds_version or 1,
         {
             "dog1",
             "dog2",
@@ -230,7 +275,6 @@ def test_pull_dataset_wrong_dataset_uri_format(
     requests_mock,
     cloud_test_catalog,
     remote_dataset,
-    dog_entries_parquet_lz4,
 ):
     catalog = cloud_test_catalog.catalog
 
@@ -244,12 +288,8 @@ def test_pull_dataset_wrong_dataset_uri_format(
 def test_pull_dataset_wrong_version(
     requests_mock,
     cloud_test_catalog,
-    remote_dataset,
+    remote_dataset_info,
 ):
-    requests_mock.post(
-        f"{STUDIO_URL}/api/datachain/dataset-info",
-        json=remote_dataset,
-    )
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(DataChainError) as exc_info:
@@ -262,7 +302,6 @@ def test_pull_dataset_wrong_version(
 def test_pull_dataset_not_found_in_remote(
     requests_mock,
     cloud_test_catalog,
-    remote_dataset,
 ):
     requests_mock.post(
         f"{STUDIO_URL}/api/datachain/dataset-info",
@@ -281,12 +320,8 @@ def test_pull_dataset_not_found_in_remote(
 def test_pull_dataset_error_on_fetching_stats(
     requests_mock,
     cloud_test_catalog,
-    remote_dataset,
+    remote_dataset_info,
 ):
-    requests_mock.post(
-        f"{STUDIO_URL}/api/datachain/dataset-info",
-        json=remote_dataset,
-    )
     requests_mock.post(
         f"{STUDIO_URL}/api/datachain/dataset-stats",
         status_code=400,
@@ -305,18 +340,11 @@ def test_pull_dataset_error_on_fetching_stats(
 def test_pull_dataset_exporting_dataset_failed_in_remote(
     requests_mock,
     cloud_test_catalog,
-    remote_dataset,
+    remote_dataset_info,
+    remote_dataset_stats,
+    dataset_export,
     export_status,
 ):
-    data_url = (
-        "https://studio-blobvault.s3.amazonaws.com/datachain_ds_export_1_0.parquet.lz4"
-    )
-    requests_mock.post(f"{STUDIO_URL}/api/datachain/dataset-info", json=remote_dataset)
-    requests_mock.post(
-        f"{STUDIO_URL}/api/datachain/dataset-stats",
-        json={"num_objects": 5, "size": 1000},
-    )
-    requests_mock.post(f"{STUDIO_URL}/api/datachain/dataset-export", json=[data_url])
     requests_mock.post(
         f"{STUDIO_URL}/api/datachain/dataset-export-status",
         json={"status": export_status},
@@ -336,24 +364,72 @@ def test_pull_dataset_exporting_dataset_failed_in_remote(
 def test_pull_dataset_empty_parquet(
     requests_mock,
     cloud_test_catalog,
-    remote_dataset,
-    dog_entries_parquet_lz4,
+    remote_dataset_info,
+    remote_dataset_stats,
+    dataset_export,
+    dataset_export_status,
+    remote_dataset_chunk_url,
 ):
-    data_url = (
-        "https://studio-blobvault.s3.amazonaws.com/datachain_ds_export_1_0.parquet.lz4"
-    )
-    requests_mock.post(f"{STUDIO_URL}/api/datachain/dataset-info", json=remote_dataset)
-    requests_mock.post(
-        f"{STUDIO_URL}/api/datachain/dataset-stats",
-        json={"num_objects": 5, "size": 1000},
-    )
-    requests_mock.post(f"{STUDIO_URL}/api/datachain/dataset-export", json=[data_url])
-    requests_mock.post(
-        f"{STUDIO_URL}/api/datachain/dataset-export-status",
-        json={"status": "completed"},
-    )
-    requests_mock.get(data_url, content=b"")
+    requests_mock.get(remote_dataset_chunk_url, content=b"")
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(RuntimeError):
         catalog.pull_dataset("ds://dogs@v1", no_cp=True)
+
+
+@pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
+@skip_if_not_sqlite
+def test_pull_dataset_already_exists_locally(
+    cloud_test_catalog,
+    remote_dataset_info,
+    remote_dataset_stats,
+    dataset_export,
+    dataset_export_status,
+    dataset_export_data_chunk,
+):
+    catalog = cloud_test_catalog.catalog
+
+    catalog.pull_dataset("ds://dogs@v1", local_ds_name="other", no_cp=True)
+    catalog.pull_dataset("ds://dogs@v1", no_cp=True)
+
+    other = catalog.get_dataset("other")
+    other_version = other.get_version(1)
+    assert other_version.uuid == DATASET_UUID
+    assert other_version.num_objects == 4
+    assert other_version.size == 15
+
+    # dataset with same uuid created only once, on first pull with local name "other"
+    with pytest.raises(DatasetNotFoundError):
+        catalog.get_dataset("dogs")
+
+
+@pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
+@pytest.mark.parametrize("local_ds_name", [None, "other"])
+@skip_if_not_sqlite
+def test_pull_dataset_local_name_already_exists(
+    cloud_test_catalog,
+    remote_dataset_info,
+    remote_dataset_stats,
+    dataset_export,
+    dataset_export_status,
+    dataset_export_data_chunk,
+    local_ds_name,
+):
+    catalog = cloud_test_catalog.catalog
+    src_uri = cloud_test_catalog.src_uri
+
+    catalog.create_dataset_from_sources(
+        local_ds_name or "dogs", [f"{src_uri}/dogs/*"], recursive=True
+    )
+    with pytest.raises(DataChainError) as exc_info:
+        catalog.pull_dataset("ds://dogs@v1", local_ds_name=local_ds_name, no_cp=True)
+
+    assert str(exc_info.value) == (
+        f'Local dataset ds://{local_ds_name or "dogs"}@v1 already exists, please'
+        ' choose different local dataset name or version'
+    )
+
+    # able to save it as version 2 of local dataset name
+    catalog.pull_dataset(
+        "ds://dogs@v1", local_ds_name=local_ds_name, local_ds_version=2, no_cp=True
+    )

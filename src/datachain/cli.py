@@ -395,6 +395,18 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         "--edatachain-file",
         help="Use a different filename for the resulting .edatachain file",
     )
+    parse_pull.add_argument(
+        "--local-name",
+        action="store",
+        default=None,
+        help="Name of the local dataset",
+    )
+    parse_pull.add_argument(
+        "--local-version",
+        action="store",
+        default=None,
+        help="Version of the local dataset",
+    )
 
     parse_edit_dataset = subp.add_parser(
         "edit-dataset", parents=[parent_parser], description="Edit dataset metadata"
@@ -1121,6 +1133,8 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
             catalog.pull_dataset(
                 args.dataset,
                 args.output,
+                local_ds_name=args.local_name,
+                local_ds_version=args.local_version,
                 no_cp=args.no_cp,
                 force=bool(args.force),
                 edatachain=args.edatachain,
