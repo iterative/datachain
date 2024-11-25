@@ -1,4 +1,5 @@
 import base64
+import os
 import pickle
 
 import pytest
@@ -9,16 +10,26 @@ from datachain.data_storage.sqlite import SQLiteDatabaseEngine, get_db_file_in_m
 from tests.utils import skip_if_not_sqlite
 
 
-@pytest.mark.parametrize("db_file", [":memory:", "file.db"])
+@pytest.mark.parametrize(
+    "db_file,expected_db_file",
+    [
+        (":memory:", ":memory:"),
+        ("file.db", "file.db"),
+        (None, os.path.join(".datachain", "db")),
+    ],
+)
 @skip_if_not_sqlite
-def test_init_clone(db_file):
+def test_init_clone(tmp_dir, db_file, expected_db_file):
+    if db_file is None:
+        expected_db_file = os.fspath(tmp_dir / expected_db_file)
+
     with SQLiteDatabaseEngine.from_db_file(db_file) as db:
-        assert db.db_file == db_file
+        assert db.db_file == expected_db_file
 
         # Test clone
         with db.clone() as db2:
             assert isinstance(db2, SQLiteDatabaseEngine)
-            assert db2.db_file == db_file
+            assert db2.db_file == expected_db_file
 
 
 @pytest.mark.parametrize(
