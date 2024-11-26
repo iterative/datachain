@@ -33,6 +33,7 @@ class DataChainColumnError(DataChainParamsError):
 
 
 def normalize_col_names(col_names: Sequence[str]) -> dict[str, str]:
+    """Returns normalized_name -> original_name dict."""
     gen_col_counter = 0
     new_col_names = {}
     org_col_names = set(col_names)
