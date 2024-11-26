@@ -86,6 +86,7 @@ markdown_extensions:
   - def_list
   - footnotes
   - md_in_html
+  - mkdocs-argparse
   - pymdownx.details
   - pymdownx.highlight:
       anchor_linenums: true

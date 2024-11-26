@@ -1,5 +1,5 @@
 # CLI Documentation
 
-## Studio
-
-::: datachain.studio.login
+::: mkdocs-argparse
+    :module: datachain.cli
+    :function: get_parser
