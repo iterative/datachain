@@ -49,11 +49,11 @@ class WDSLaion(WDSBasic):
 class LaionMeta(BaseModel):
     file: File
     index: Optional[int] = Field(default=None)
-    b32_img: list[float] = Field(default=None)
-    b32_txt: list[float] = Field(default=None)
-    l14_img: list[float] = Field(default=None)
-    l14_txt: list[float] = Field(default=None)
-    dedup: list[float] = Field(default=None)
+    b32_img: list[float] = Field(default_factory=list)
+    b32_txt: list[float] = Field(default_factory=list)
+    l14_img: list[float] = Field(default_factory=list)
+    l14_txt: list[float] = Field(default_factory=list)
+    dedup: list[float] = Field(default_factory=list)
 
 
 def process_laion_meta(file: File) -> Iterator[LaionMeta]:

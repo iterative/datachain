@@ -17,8 +17,8 @@ class Segment(DataModel):
     """
 
     title: str = Field(default="")
-    x: list[int] = Field(default=None)
-    y: list[int] = Field(default=None)
+    x: list[int] = Field(default_factory=list)
+    y: list[int] = Field(default_factory=list)
 
     @staticmethod
     def from_list(points: list[list[float]], title: str = "") -> "Segment":
