@@ -146,6 +146,7 @@ def remote_dataset(remote_dataset_version, schema):
 @pytest.mark.parametrize("instantiate", [True, False])
 @skip_if_not_sqlite
 def test_pull_dataset_success(
+    mocker,
     requests_mock,
     cloud_test_catalog,
     remote_dataset,
@@ -153,6 +154,11 @@ def test_pull_dataset_success(
     dataset_uri,
     instantiate,
 ):
+    mocker.patch(
+        "datachain.catalog.catalog.DatasetRowsFetcher.should_check_for_status",
+        return_value=True,
+    )
+
     src_uri = cloud_test_catalog.src_uri
     working_dir = cloud_test_catalog.working_dir
     data_url = (
