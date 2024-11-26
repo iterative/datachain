@@ -349,7 +349,7 @@ class DataChain:
             workers : number of distributed workers. Only for Studio mode. (default=1)
             min_task_size : minimum number of tasks (default=1)
             prefetch: number of workers to use for downloading files in advance.
-                      This is enabled by default and uses 2 worker.
+                      This is enabled by default and uses 2 workers.
                       To disable prefetching, set it to 0.
 
         Example:
