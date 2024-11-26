@@ -1,6 +1,7 @@
 import logging
 import re
 import sqlite3
+import warnings
 from collections.abc import Iterable
 from datetime import MAXYEAR, MINYEAR, datetime, timezone
 from types import MappingProxyType
@@ -418,14 +419,22 @@ def compile_collect(element, compiler, **kwargs):
     return compiler.process(func.json_group_array(*element.clauses.clauses), **kwargs)
 
 
-def load_usearch_extension(conn) -> bool:
+def load_usearch_extension(conn: sqlite3.Connection) -> bool:
     try:
         # usearch is part of the vector optional dependencies
         # we use the extension's cosine and euclidean distance functions
         from usearch import sqlite_path
 
         conn.enable_load_extension(True)
-        conn.load_extension(sqlite_path())
+
+        with warnings.catch_warnings():
+            # usearch binary is not available for Windows, see: https://github.com/unum-cloud/usearch/issues/427.
+            # and, sometimes fail to download the binary in other platforms
+            # triggering UserWarning.
+
+            warnings.filterwarnings("ignore", category=UserWarning, module="usearch")
+            conn.load_extension(sqlite_path())
+
         conn.enable_load_extension(False)
         return True
 

@@ -98,7 +98,7 @@ class HFGenerator(Generator):
         with tqdm(desc=desc, unit=" rows") as pbar:
             for row in ds:
                 output_dict = {}
-                if split:
+                if split and "split" in self.output_schema.model_fields:
                     output_dict["split"] = split
                 for name, feat in ds.features.items():
                     anno = self.output_schema.model_fields[name].annotation

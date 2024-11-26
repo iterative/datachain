@@ -55,7 +55,7 @@ class Node:
     last_modified: Optional[datetime] = None
     size: int = 0
     location: Optional[str] = None
-    source: StorageURI = StorageURI("")
+    source: StorageURI = StorageURI("")  # noqa: RUF009
     dir_type: int = DirType.FILE
 
     @property

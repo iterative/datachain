@@ -21,7 +21,7 @@ from datachain.data_storage.sqlite import (
     SQLiteWarehouse,
 )
 from datachain.dataset import DatasetRecord
-from datachain.lib.dc import DataChain
+from datachain.lib.dc import DataChain, Sys
 from datachain.query.session import Session
 from datachain.utils import (
     ENV_DATACHAIN_GLOBAL_CONFIG_DIR,
@@ -650,3 +650,43 @@ def studio_datasets(requests_mock):
     ]
 
     requests_mock.post(f"{STUDIO_URL}/api/datachain/ls-datasets", json=datasets)
+
+
+@pytest.fixture
+def not_random_ds(test_session):
+    return DataChain.from_records(
+        [
+            {"sys__id": 1, "sys__rand": 200000000, "fib": 0},
+            {"sys__id": 2, "sys__rand": 400000000, "fib": 1},
+            {"sys__id": 3, "sys__rand": 600000000, "fib": 1},
+            {"sys__id": 4, "sys__rand": 800000000, "fib": 2},
+            {"sys__id": 5, "sys__rand": 1000000000, "fib": 3},
+            {"sys__id": 6, "sys__rand": 1200000000, "fib": 5},
+            {"sys__id": 7, "sys__rand": 1400000000, "fib": 8},
+            {"sys__id": 8, "sys__rand": 1600000000, "fib": 13},
+            {"sys__id": 9, "sys__rand": 1800000000, "fib": 21},
+            {"sys__id": 10, "sys__rand": 2000000000, "fib": 34},
+        ],
+        session=test_session,
+        schema={"sys": Sys, "fib": int},
+    )
+
+
+@pytest.fixture
+def pseudo_random_ds(test_session):
+    return DataChain.from_records(
+        [
+            {"sys__id": 1, "sys__rand": 2406827533654413759, "fib": 0},
+            {"sys__id": 2, "sys__rand": 743035223448130834, "fib": 1},
+            {"sys__id": 3, "sys__rand": 8572034894545971037, "fib": 1},
+            {"sys__id": 4, "sys__rand": 3413911135601125438, "fib": 2},
+            {"sys__id": 5, "sys__rand": 8036488725627198326, "fib": 3},
+            {"sys__id": 6, "sys__rand": 2020789040280779494, "fib": 5},
+            {"sys__id": 7, "sys__rand": 8478782014085172114, "fib": 8},
+            {"sys__id": 8, "sys__rand": 1374262678671783922, "fib": 13},
+            {"sys__id": 9, "sys__rand": 7728884931956308771, "fib": 21},
+            {"sys__id": 10, "sys__rand": 5591681088079559562, "fib": 34},
+        ],
+        session=test_session,
+        schema={"sys": Sys, "fib": int},
+    )

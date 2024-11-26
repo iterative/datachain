@@ -454,49 +454,44 @@ class UDFStep(Step, ABC):
                 # Run the UDFDispatcher in another process to avoid needing
                 # if __name__ == '__main__': in user scripts
                 exec_cmd = get_datachain_executable()
+                cmd = [*exec_cmd, "internal-run-udf"]
                 envs = dict(os.environ)
                 envs.update({"PYTHONPATH": os.getcwd()})
                 process_data = filtered_cloudpickle_dumps(udf_info)
-                result = subprocess.run(  # noqa: S603
-                    [*exec_cmd, "internal-run-udf"],
-                    input=process_data,
-                    check=False,
-                    env=envs,
-                )
-                if result.returncode != 0:
-                    raise RuntimeError("UDF Execution Failed!")
 
+                with subprocess.Popen(cmd, env=envs, stdin=subprocess.PIPE) as process:  # noqa: S603
+                    process.communicate(process_data)
+                    if process.poll():
+                        raise RuntimeError("UDF Execution Failed!")
             else:
                 # Otherwise process single-threaded (faster for smaller UDFs)
                 warehouse = self.catalog.warehouse
 
-                with contextlib.closing(
-                    batching(warehouse.dataset_select_paginated, query)
-                ) as udf_inputs:
-                    download_cb = get_download_callback()
-                    processed_cb = get_processed_callback()
-                    generated_cb = get_generated_callback(self.is_generator)
-                    try:
-                        udf_results = self.udf.run(
-                            udf_fields,
-                            udf_inputs,
-                            self.catalog,
-                            self.is_generator,
-                            self.cache,
-                            download_cb,
-                            processed_cb,
-                        )
-                        process_udf_outputs(
-                            warehouse,
-                            udf_table,
-                            udf_results,
-                            self.udf,
-                            cb=generated_cb,
-                        )
-                    finally:
-                        download_cb.close()
-                        processed_cb.close()
-                        generated_cb.close()
+                udf_inputs = batching(warehouse.dataset_select_paginated, query)
+                download_cb = get_download_callback()
+                processed_cb = get_processed_callback()
+                generated_cb = get_generated_callback(self.is_generator)
+                try:
+                    udf_results = self.udf.run(
+                        udf_fields,
+                        udf_inputs,
+                        self.catalog,
+                        self.is_generator,
+                        self.cache,
+                        download_cb,
+                        processed_cb,
+                    )
+                    process_udf_outputs(
+                        warehouse,
+                        udf_table,
+                        udf_results,
+                        self.udf,
+                        cb=generated_cb,
+                    )
+                finally:
+                    download_cb.close()
+                    processed_cb.close()
+                    generated_cb.close()
 
                 warehouse.insert_rows_done(udf_table)
 

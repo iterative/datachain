@@ -599,9 +599,10 @@ class Catalog:
         )
 
         lst = Listing(
+            self.metastore.clone(),
             self.warehouse.clone(),
             Client.get_client(list_uri, self.cache, **self.client_config),
-            self.get_dataset(list_ds_name),
+            dataset_name=list_ds_name,
             object_name=object_name,
         )
 
@@ -694,9 +695,13 @@ class Catalog:
 
                     client = self.get_client(source, **client_config)
                     uri = client.uri
-                    st = self.warehouse.clone()
                     dataset_name, _, _, _ = DataChain.parse_uri(uri, self.session)
-                    listing = Listing(st, client, self.get_dataset(dataset_name))
+                    listing = Listing(
+                        self.metastore.clone(),
+                        self.warehouse.clone(),
+                        client,
+                        dataset_name=dataset_name,
+                    )
                     rows = DatasetQuery(
                         name=dataset.name, version=ds_version, catalog=self
                     ).to_db_records()
@@ -1348,6 +1353,13 @@ class Catalog:
         except DatasetNotFoundError:
             # we will create new one if it doesn't exist
             pass
+
+        if dataset and version and dataset.has_version(version):
+            """No need to communicate with Studio at all"""
+            dataset_uri = create_dataset_uri(remote_dataset_name, version)
+            print(f"Local copy of dataset {dataset_uri} already present")
+            _instantiate_dataset()
+            return
 
         remote_dataset = self.get_remote_dataset(remote_dataset_name)
         # if version is not specified in uri, take the latest one
