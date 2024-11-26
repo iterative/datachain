@@ -20,6 +20,7 @@ from sqlalchemy import (
     Table,
     Text,
     UniqueConstraint,
+    literal,
     select,
 )
 
@@ -671,7 +672,7 @@ class AbstractDBMetastore(AbstractMetastore):
             if dataset:
                 yield dataset
 
-    def _base_dataset_query(self):
+    def _base_dataset_query(self, cols: Optional[list[Column]] = None):
         if not (
             self.db.has_table(self._datasets.name)
             and self.db.has_table(self._datasets_versions.name)
@@ -680,21 +681,52 @@ class AbstractDBMetastore(AbstractMetastore):
 
         d = self._datasets
         dv = self._datasets_versions
-        query = self._datasets_select(
-            *(getattr(d.c, f) for f in self._dataset_fields),
-            *(getattr(dv.c, f) for f in self._dataset_version_fields),
-        )
+        if not cols:
+            cols = [
+                *(getattr(d.c, f) for f in self._dataset_fields),
+                *(getattr(dv.c, f) for f in self._dataset_version_fields),
+            ]
+
+        query = self._datasets_select(*cols)
         j = d.join(dv, d.c.id == dv.c.dataset_id, isouter=True)
         return query.select_from(j)
 
+    def _base_list_datasets_query(self):
+        d = self._datasets
+        dv = self._datasets_versions
+
+        def _get_columns(
+            table: Table, table_columns: list[str], excluded_columns: list[str]
+        ):
+            cols = []
+            for f in table_columns:
+                if f in excluded_columns:
+                    empty_column_for_performance = literal("").label(f)
+                    cols.append(empty_column_for_performance)
+                    continue
+
+                cols.append(getattr(table.c, f))
+            return cols
+
+        excluded_columns = ["feature_schema", "preview"]
+
+        return self._base_dataset_query(
+            [
+                *(_get_columns(d, self._dataset_fields, excluded_columns)),
+                *(_get_columns(dv, self._dataset_version_fields, excluded_columns)),
+            ]
+        )
+
     def list_datasets(self) -> Iterator["DatasetRecord"]:
         """Lists all datasets."""
-        yield from self._parse_datasets(self.db.execute(self._base_dataset_query()))
+        yield from self._parse_datasets(
+            self.db.execute(self._base_list_datasets_query())
+        )
 
     def list_datasets_by_prefix(
         self, prefix: str, conn=None
     ) -> Iterator["DatasetRecord"]:
-        query = self._base_dataset_query()
+        query = self._base_list_datasets_query()
         query = query.where(self._datasets.c.name.startswith(prefix))
         yield from self._parse_datasets(self.db.execute(query))
 
