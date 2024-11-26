@@ -457,18 +457,15 @@ class UDFStep(Step, ABC):
                 # Run the UDFDispatcher in another process to avoid needing
                 # if __name__ == '__main__': in user scripts
                 exec_cmd = get_datachain_executable()
+                cmd = [*exec_cmd, "internal-run-udf"]
                 envs = dict(os.environ)
                 envs.update({"PYTHONPATH": os.getcwd()})
                 process_data = filtered_cloudpickle_dumps(udf_info)
-                result = subprocess.run(  # noqa: S603
-                    [*exec_cmd, "internal-run-udf"],
-                    input=process_data,
-                    check=False,
-                    env=envs,
-                )
-                if result.returncode != 0:
-                    raise RuntimeError("UDF Execution Failed!")
 
+                with subprocess.Popen(cmd, env=envs, stdin=subprocess.PIPE) as process:  # noqa: S603
+                    process.communicate(process_data)
+                    if process.poll():
+                        raise RuntimeError("UDF Execution Failed!")
             else:
                 # Otherwise process single-threaded (faster for smaller UDFs)
                 warehouse = self.catalog.warehouse
