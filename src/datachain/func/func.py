@@ -281,18 +281,17 @@ def get_db_col_type(signals_schema: "SignalSchema", col: ColT) -> "DataType":
 def math_func(
     name: str,
     inner: Callable,
-    args: Sequence[Union[ColT, float]],
+    params: Sequence[Union[ColT, float]],
     result_type: Optional["DataType"] = None,
 ) -> Func:
     """Returns math function from the columns."""
-    cols, func_args = [], []
-    for arg in args:
+    cols, args = [], []
+    for arg in params:
         if isinstance(arg, (int, float)):
-            func_args.append(arg)
+            args.append(arg)
         else:
             cols.append(arg)
-
-    return Func(name, inner, cols=cols, args=func_args, result_type=result_type)
+    return Func(name, inner, cols=cols, args=args, result_type=result_type)
 
 
 def math_add(*args: Union[ColT, float]) -> Func:
@@ -312,12 +311,12 @@ def math_mul(*args: Union[ColT, float]) -> Func:
 
 def math_truediv(*args: Union[ColT, float]) -> Func:
     """Computes the division of the column."""
-    return math_func("divide", lambda a1, a2: a1 / a2, args, result_type=float)
+    return math_func("div", lambda a1, a2: a1 / a2, args, result_type=float)
 
 
 def math_floordiv(*args: Union[ColT, float]) -> Func:
     """Computes the floor division of the column."""
-    return math_func("divide", lambda a1, a2: a1 // a2, args, result_type=float)
+    return math_func("floordiv", lambda a1, a2: a1 // a2, args, result_type=float)
 
 
 def math_mod(*args: Union[ColT, float]) -> Func:
