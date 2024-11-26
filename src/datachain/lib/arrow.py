@@ -116,31 +116,43 @@ def infer_schema(chain: "DataChain", **kwargs) -> pa.Schema:
     return pa.unify_schemas(schemas)
 
 
-def schema_to_output(schema: pa.Schema, col_names: Optional[Sequence[str]] = None):
-    """Generate UDF output schema from pyarrow schema."""
+def schema_to_output(
+    schema: pa.Schema, col_names: Optional[Sequence[str]] = None
+) -> tuple[dict[str, type], list[str]]:
+    """
+    Generate UDF output schema from pyarrow schema.
+    Returns a tuple of output schema and original column names (since they may be
+    normalized in the output dict).
+    """
+    signal_schema = _get_datachain_schema(schema)
+    if signal_schema:
+        return signal_schema.values, list(signal_schema.values)
+
     if col_names and (len(schema) != len(col_names)):
         raise ValueError(
             "Error generating output from Arrow schema - "
             f"Schema has {len(schema)} columns but got {len(col_names)} column names."
         )
     if not col_names:
-        col_names = schema.names
-    signal_schema = _get_datachain_schema(schema)
-    if signal_schema:
-        return signal_schema.values
-    columns = list(normalize_col_names(col_names).keys())  # type: ignore[arg-type]
+        col_names = schema.names or []
+
+    normalized_col_dict = normalize_col_names(col_names)
+    col_names = list(normalized_col_dict)
+
     hf_schema = _get_hf_schema(schema)
     if hf_schema:
         return {
-            column: hf_type for hf_type, column in zip(hf_schema[1].values(), columns)
-        }
+            column: hf_type for hf_type, column in zip(hf_schema[1].values(), col_names)
+        }, list(normalized_col_dict.values())
+
     output = {}
-    for field, column in zip(schema, columns):
-        dtype = arrow_type_mapper(field.type, column)  # type: ignore[assignment]
+    for field, column in zip(schema, col_names):
+        dtype = arrow_type_mapper(field.type, column)
         if field.nullable and not ModelStore.is_pydantic(dtype):
             dtype = Optional[dtype]  # type: ignore[assignment]
         output[column] = dtype
-    return output
+
+    return output, list(normalized_col_dict.values())
 
 
 def arrow_type_mapper(col_type: pa.DataType, column: str = "") -> type:  # noqa: PLR0911

@@ -358,7 +358,7 @@ class Client(ABC):
     ) -> BinaryIO:
         """Open a file, including files in tar archives."""
         if use_cache and (cache_path := self.cache.get_path(file)):
-            return open(cache_path, mode="rb")  # noqa: SIM115
+            return open(cache_path, mode="rb")
         assert not file.location
         return FileWrapper(self.fs.open(self.get_full_path(file.path)), cb)  # type: ignore[return-value]
 

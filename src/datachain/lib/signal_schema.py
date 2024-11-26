@@ -378,7 +378,7 @@ class SignalSchema:
 
     def row_to_features(
         self, row: Sequence, catalog: "Catalog", cache: bool = False
-    ) -> list[DataType]:
+    ) -> list[DataValue]:
         res = []
         pos = 0
         for fr_cls in self.values.values():

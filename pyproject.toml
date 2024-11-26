@@ -82,7 +82,7 @@ tests = [
   "pytest-sugar>=0.9.6",
   "pytest-cov>=4.1.0",
   "pytest-mock>=3.12.0",
-  "pytest-servers[all]>=0.5.7",
+  "pytest-servers[all]>=0.5.8",
   "pytest-benchmark[histogram]",
   "pytest-xdist>=3.3.1",
   "virtualenv",
@@ -110,7 +110,8 @@ examples = [
   "unstructured[pdf,embed-huggingface]<0.16.0",
   "pdfplumber==0.11.4",
   "huggingface_hub[hf_transfer]",
-  "onnx==1.16.1"
+  "onnx==1.16.1",
+  "ultralytics==8.3.29"
 ]
 
 [project.urls]

@@ -28,7 +28,7 @@ jobs:
           python-version: '3.9'
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
           cache-suffix: lint
@@ -82,7 +82,7 @@ jobs:
           python-version: ${{ matrix.pyv }}
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
           cache-suffix: tests-${{ matrix.pyv }}
@@ -104,7 +104,7 @@ jobs:
         shell: bash
 
       - name: Upload coverage report
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.xml
@@ -142,7 +142,7 @@ jobs:
           python-version: ${{ matrix.pyv }}
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
           cache-suffix: examples-${{ matrix.pyv }}
