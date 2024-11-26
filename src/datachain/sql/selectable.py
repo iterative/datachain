@@ -1,8 +1,6 @@
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql import expression, selectable
 
-from datachain.lib.func.inner.base import Function
-
 
 class Values(selectable.Values):
     def __init__(self, data, columns=None, **kwargs):
@@ -24,7 +22,7 @@ def values(data, columns=None, **kwargs) -> Values:
 
 
 def process_column_expression(col):
-    if isinstance(col, Function):
+    if hasattr(col, "get_column"):
         return col.get_column()
     if isinstance(col, str):
         return expression.column(col)

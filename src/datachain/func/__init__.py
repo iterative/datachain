@@ -17,11 +17,10 @@ from .aggregate import (
 )
 from .array import cosine_distance, euclidean_distance, length, sip_hash_64
 from .conditional import greatest, least
-from .func import Func, window
 from .random import rand
+from .window import window
 
 __all__ = [
-    "Func",
     "any_value",
     "array",
     "avg",

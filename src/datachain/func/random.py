@@ -1,5 +1,6 @@
+from datachain.sql.functions import random
+
 from .func import Func
-from .inner import random
 
 
 def rand() -> Func:

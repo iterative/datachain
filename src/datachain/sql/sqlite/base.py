@@ -15,8 +15,8 @@ from sqlalchemy.sql.elements import literal
 from sqlalchemy.sql.expression import case
 from sqlalchemy.sql.functions import func
 
-from datachain.lib.func.inner import aggregate, array, conditional, random, string
-from datachain.lib.func.inner import path as sql_path
+from datachain.sql.functions import aggregate, array, conditional, random, string
+from datachain.sql.functions import path as sql_path
 from datachain.sql.selectable import Values, base_values_compiler
 from datachain.sql.sqlite.types import (
     SQLiteTypeConverter,

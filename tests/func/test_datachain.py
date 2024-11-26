@@ -19,9 +19,9 @@ from datachain import DataModel, func
 from datachain.catalog.catalog import QUERY_SCRIPT_CANCELED_EXIT_CODE
 from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.dataset import DatasetDependencyType, DatasetStats
+from datachain.func import path as pathfunc
 from datachain.lib.dc import C, DataChain
 from datachain.lib.file import File, ImageFile
-from datachain.lib.func import path as pathfunc
 from datachain.lib.listing import LISTING_TTL, is_listing_dataset, parse_listing_uri
 from datachain.lib.tar import process_tar
 from datachain.lib.udf import Mapper

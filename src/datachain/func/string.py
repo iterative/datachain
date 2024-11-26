@@ -2,8 +2,9 @@ from typing import Optional, Union, get_origin
 
 from sqlalchemy import literal
 
+from datachain.sql.functions import string
+
 from .func import Func
-from .inner import string
 
 
 def length(col: Union[str, Func]) -> Func:

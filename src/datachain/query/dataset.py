@@ -43,10 +43,10 @@ from datachain.data_storage.schema import (
 )
 from datachain.dataset import DatasetStatus, RowDict
 from datachain.error import DatasetNotFoundError, QueryScriptCancelError
-from datachain.lib.func.inner.base import Function
-from datachain.lib.func.inner.random import rand
+from datachain.func.base import Function
 from datachain.lib.udf import UDFAdapter
 from datachain.progress import CombinedDownloadCallback
+from datachain.sql.functions.random import rand
 from datachain.utils import (
     batched,
     determine_processes,

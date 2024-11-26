@@ -1,6 +1,5 @@
 import inspect
 from collections.abc import Sequence
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 from sqlalchemy import BindParameter, ColumnElement, desc
@@ -9,7 +8,7 @@ from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.utils import DataChainColumnError, DataChainParamsError
 from datachain.query.schema import Column, ColumnMeta
 
-from .inner.base import Function
+from .base import Function
 
 if TYPE_CHECKING:
     from sqlalchemy import TableClause
@@ -17,54 +16,10 @@ if TYPE_CHECKING:
     from datachain import DataType
     from datachain.lib.signal_schema import SignalSchema
 
+    from .window import Window
+
 
 ColT = Union[str, ColumnElement, "Func"]
-
-
-@dataclass
-class Window:
-    """Represents a window specification for SQL window functions."""
-
-    partition_by: str
-    order_by: str
-    desc: bool = False
-
-
-def window(partition_by: str, order_by: str, desc: bool = False) -> Window:
-    """
-    Defines a window specification for SQL window functions.
-
-    The `window` function specifies how to partition and order the result set
-    for the associated window function. It is used to define the scope of the rows
-    that the window function will operate on.
-
-    Args:
-        partition_by (str): The column name by which to partition the result set.
-                            Rows with the same value in the partition column
-                            will be grouped together for the window function.
-        order_by (str): The column name by which to order the rows
-                        within each partition. This determines the sequence in which
-                        the window function is applied.
-        desc (bool, optional): If True, the rows will be ordered in descending order.
-                               Defaults to False, which orders the rows
-                               in ascending order.
-
-    Returns:
-        Window: A Window object representing the window specification.
-
-    Example:
-        ```py
-        window = func.window(partition_by="signal.category", order_by="created_at")
-        dc.mutate(
-            row_number=func.row_number().over(window),
-        )
-        ```
-    """
-    return Window(
-        ColumnMeta.to_db_name(partition_by),
-        ColumnMeta.to_db_name(order_by),
-        desc,
-    )
 
 
 class Func(Function):
@@ -79,7 +34,7 @@ class Func(Function):
         result_type: Optional["DataType"] = None,
         is_array: bool = False,
         is_window: bool = False,
-        window: Optional[Window] = None,
+        window: Optional["Window"] = None,
         label: Optional[str] = None,
     ) -> None:
         self.name = name
@@ -95,7 +50,7 @@ class Func(Function):
     def __str__(self) -> str:
         return self.name + "()"
 
-    def over(self, window: Window) -> "Func":
+    def over(self, window: "Window") -> "Func":
         if not self.is_window:
             raise DataChainParamsError(f"{self} doesn't support window (over())")
 
@@ -141,34 +96,94 @@ class Func(Function):
         return list[col_type] if self.is_array else col_type  # type: ignore[valid-type]
 
     def __add__(self, other: Union[ColT, float]) -> "Func":
-        return sum(self, other)
+        return math_add(self, other)
 
     def __radd__(self, other: Union[ColT, float]) -> "Func":
-        return sum(other, self)
+        return math_add(other, self)
 
     def __sub__(self, other: Union[ColT, float]) -> "Func":
-        return sub(self, other)
+        return math_sub(self, other)
 
     def __rsub__(self, other: Union[ColT, float]) -> "Func":
-        return sub(other, self)
+        return math_sub(other, self)
 
     def __mul__(self, other: Union[ColT, float]) -> "Func":
-        return multiply(self, other)
+        return math_mul(self, other)
 
     def __rmul__(self, other: Union[ColT, float]) -> "Func":
-        return multiply(other, self)
+        return math_mul(other, self)
 
     def __truediv__(self, other: Union[ColT, float]) -> "Func":
-        return divide(self, other)
+        return math_truediv(self, other)
 
     def __rtruediv__(self, other: Union[ColT, float]) -> "Func":
-        return divide(other, self)
+        return math_truediv(other, self)
 
-    def __gt__(self, other: Union[ColT, float]) -> "Func":
-        return gt(self, other)
+    def __floordiv__(self, other: Union[ColT, float]) -> "Func":
+        return math_floordiv(self, other)
+
+    def __rfloordiv__(self, other: Union[ColT, float]) -> "Func":
+        return math_floordiv(other, self)
+
+    def __mod__(self, other: Union[ColT, float]) -> "Func":
+        return math_mod(self, other)
+
+    def __rmod__(self, other: Union[ColT, float]) -> "Func":
+        return math_mod(other, self)
+
+    def __pow__(self, other: Union[ColT, float]) -> "Func":
+        return math_pow(self, other)
+
+    def __rpow__(self, other: Union[ColT, float]) -> "Func":
+        return math_pow(other, self)
+
+    def __lshift__(self, other: Union[ColT, float]) -> "Func":
+        return math_lshift(self, other)
+
+    def __rlshift__(self, other: Union[ColT, float]) -> "Func":
+        return math_lshift(other, self)
+
+    def __rshift__(self, other: Union[ColT, float]) -> "Func":
+        return math_rshift(self, other)
+
+    def __rrshift__(self, other: Union[ColT, float]) -> "Func":
+        return math_rshift(other, self)
+
+    def __and__(self, other: Union[ColT, float]) -> "Func":
+        return math_and(self, other)
+
+    def __rand__(self, other: Union[ColT, float]) -> "Func":
+        return math_and(other, self)
+
+    def __or__(self, other: Union[ColT, float]) -> "Func":
+        return math_or(self, other)
+
+    def __ror__(self, other: Union[ColT, float]) -> "Func":
+        return math_or(other, self)
+
+    def __xor__(self, other: Union[ColT, float]) -> "Func":
+        return math_xor(self, other)
+
+    def __rxor__(self, other: Union[ColT, float]) -> "Func":
+        return math_xor(other, self)
 
     def __lt__(self, other: Union[ColT, float]) -> "Func":
-        return lt(self, other)
+        return math_lt(self, other)
+
+    def __le__(self, other: Union[ColT, float]) -> "Func":
+        return math_le(self, other)
+
+    def __eq__(self, other):
+        return math_eq(self, other)
+
+    def __ne__(self, other):
+        return math_ne(self, other)
+
+    def __gt__(self, other: Union[ColT, float]) -> "Func":
+        return math_gt(self, other)
+
+    def __ge__(self, other: Union[ColT, float]) -> "Func":
+        return math_ge(self, other)
 
     def label(self, label: str) -> "Func":
         return Func(
@@ -263,79 +278,108 @@ def get_db_col_type(signals_schema: "SignalSchema", col: ColT) -> "DataType":
     )
 
 
-def sum(*args: Union[ColT, float]) -> Func:
+def math_func(
+    name: str,
+    inner: Callable,
+    args: Sequence[Union[ColT, float]],
+    result_type: Optional["DataType"] = None,
+) -> Func:
+    """Returns math function from the columns."""
+    cols, func_args = [], []
+    for arg in args:
+        if isinstance(arg, (int, float)):
+            func_args.append(arg)
+        else:
+            cols.append(arg)
+
+    return Func(name, inner, cols=cols, args=func_args, result_type=result_type)
+
+
+def math_add(*args: Union[ColT, float]) -> Func:
     """Computes the sum of the column."""
-    cols, func_args = [], []
-    for arg in args:
-        if isinstance(arg, (int, float)):
-            func_args.append(arg)
-        else:
-            cols.append(arg)
-
-    return Func("sum", lambda a1, a2: a1 + a2, cols=cols, args=func_args)
+    return math_func("add", lambda a1, a2: a1 + a2, args)
 
 
-def sub(*args: Union[ColT, float]) -> Func:
+def math_sub(*args: Union[ColT, float]) -> Func:
     """Computes the diff of the column."""
-    cols, func_args = [], []
-    for arg in args:
-        if isinstance(arg, (int, float)):
-            func_args.append(arg)
-        else:
-            cols.append(arg)
-
-    return Func("sub", lambda a1, a2: a1 - a2, cols=cols, args=func_args)
+    return math_func("sub", lambda a1, a2: a1 - a2, args)
 
 
-def multiply(*args: Union[ColT, float]) -> Func:
+def math_mul(*args: Union[ColT, float]) -> Func:
     """Computes the product of the column."""
-    cols, func_args = [], []
-    for arg in args:
-        if isinstance(arg, (int, float)):
-            func_args.append(arg)
-        else:
-            cols.append(arg)
-
-    return Func("multiply", lambda a1, a2: a1 * a2, cols=cols, args=func_args)
+    return math_func("mul", lambda a1, a2: a1 * a2, args)
 
 
-def divide(*args: Union[ColT, float]) -> Func:
+def math_truediv(*args: Union[ColT, float]) -> Func:
     """Computes the division of the column."""
-    cols, func_args = [], []
-    for arg in args:
-        if isinstance(arg, (int, float)):
-            func_args.append(arg)
-        else:
-            cols.append(arg)
-
-    return Func(
-        "divide", lambda a1, a2: a1 / a2, cols=cols, args=func_args, result_type=float
-    )
+    return math_func("divide", lambda a1, a2: a1 / a2, args, result_type=float)
 
 
-def gt(*args: Union[ColT, float]) -> Func:
-    """Computes the greater than comparison of the column."""
-    cols, func_args = [], []
-    for arg in args:
-        if isinstance(arg, (int, float)):
-            func_args.append(arg)
-        else:
-            cols.append(arg)
-
-    return Func(
-        "gt", lambda a1, a2: a1 > a2, cols=cols, args=func_args, result_type=bool
-    )
+def math_floordiv(*args: Union[ColT, float]) -> Func:
+    """Computes the floor division of the column."""
+    return math_func("divide", lambda a1, a2: a1 // a2, args, result_type=float)
 
 
-def lt(*args: Union[ColT, float]) -> Func:
+def math_mod(*args: Union[ColT, float]) -> Func:
+    """Computes the modulo of the column."""
+    return math_func("mod", lambda a1, a2: a1 % a2, args, result_type=float)
+
+
+def math_pow(*args: Union[ColT, float]) -> Func:
+    """Computes the power of the column."""
+    return math_func("pow", lambda a1, a2: a1**a2, args, result_type=float)
+
+
+def math_lshift(*args: Union[ColT, float]) -> Func:
+    """Computes the left shift of the column."""
+    return math_func("lshift", lambda a1, a2: a1 << a2, args, result_type=int)
+
+
+def math_rshift(*args: Union[ColT, float]) -> Func:
+    """Computes the right shift of the column."""
+    return math_func("rshift", lambda a1, a2: a1 >> a2, args, result_type=int)
+
+
+def math_and(*args: Union[ColT, float]) -> Func:
+    """Computes the logical AND of the column."""
+    return math_func("and", lambda a1, a2: a1 & a2, args, result_type=bool)
+
+
+def math_or(*args: Union[ColT, float]) -> Func:
+    """Computes the logical OR of the column."""
+    return math_func("or", lambda a1, a2: a1 | a2, args, result_type=bool)
+
+
+def math_xor(*args: Union[ColT, float]) -> Func:
+    """Computes the logical XOR of the column."""
+    return math_func("xor", lambda a1, a2: a1 ^ a2, args, result_type=bool)
+
+
+def math_lt(*args: Union[ColT, float]) -> Func:
     """Computes the less than comparison of the column."""
-    cols, func_args = [], []
-    for arg in args:
-        if isinstance(arg, (int, float)):
-            func_args.append(arg)
-        else:
-            cols.append(arg)
+    return math_func("lt", lambda a1, a2: a1 < a2, args, result_type=bool)
 
-    return Func(
-        "lt", lambda a1, a2: a1 < a2, cols=cols, args=func_args, result_type=bool
-    )
+
+def math_le(*args: Union[ColT, float]) -> Func:
+    """Computes the less than or equal comparison of the column."""
+    return math_func("le", lambda a1, a2: a1 <= a2, args, result_type=bool)
+
+
+def math_eq(*args: Union[ColT, float]) -> Func:
+    """Computes the equality comparison of the column."""
+    return math_func("eq", lambda a1, a2: a1 == a2, args, result_type=bool)
+
+
+def math_ne(*args: Union[ColT, float]) -> Func:
+    """Computes the inequality comparison of the column."""
+    return math_func("ne", lambda a1, a2: a1 != a2, args, result_type=bool)
+
+
+def math_gt(*args: Union[ColT, float]) -> Func:
+    """Computes the greater than comparison of the column."""
+    return math_func("gt", lambda a1, a2: a1 > a2, args, result_type=bool)
+
+
+def math_ge(*args: Union[ColT, float]) -> Func:
+    """Computes the greater than or equal comparison of the column."""
+    return math_func("ge", lambda a1, a2: a1 >= a2, args, result_type=bool)

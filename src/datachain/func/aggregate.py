@@ -2,8 +2,9 @@ from typing import Optional
 
 from sqlalchemy import func as sa_func
 
+from datachain.sql.functions import aggregate
+
 from .func import Func
-from .inner import aggregate
 
 
 def count(col: Optional[str] = None) -> Func:

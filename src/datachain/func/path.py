@@ -1,5 +1,6 @@
+from datachain.sql.functions import path
+
 from .func import ColT, Func
-from .inner import path
 
 
 def parent(col: ColT) -> Func:

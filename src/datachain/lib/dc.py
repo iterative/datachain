@@ -28,15 +28,14 @@ from sqlalchemy.sql.sqltypes import NullType
 from datachain.client import Client
 from datachain.client.local import FileClient
 from datachain.dataset import DatasetRecord
+from datachain.func.base import Function
+from datachain.func.func import Func
 from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import DataModel, DataType, DataValue, dict_to_data_model
 from datachain.lib.dataset_info import DatasetInfo
 from datachain.lib.file import ArrowRow, File, get_file_type
 from datachain.lib.file import ExportPlacement as FileExportPlacement
-from datachain.lib.func import Func
-from datachain.lib.func.inner import path as pathfunc
-from datachain.lib.func.inner.base import Function
 from datachain.lib.listing import (
     list_bucket,
     ls,
@@ -53,6 +52,7 @@ from datachain.lib.utils import DataChainColumnError, DataChainParamsError
 from datachain.query import Session
 from datachain.query.dataset import DatasetQuery, PartitionByType
 from datachain.query.schema import DEFAULT_DELIMITER, Column, ColumnMeta
+from datachain.sql.functions import path as pathfunc
 from datachain.telemetry import telemetry
 from datachain.utils import batched_it, inside_notebook, row_to_nested_dict
 
@@ -2427,9 +2427,9 @@ class DataChain:
             dc.filter(C("file.name").glob("*.jpg"))
             ```
 
-            Using `datachain.lib.func`
+            Using `datachain.func`
             ```py
-            from datachain.lib.func import string
+            from datachain.func import string
             dc.filter(string.length(C("file.name")) > 5)
             ```
 

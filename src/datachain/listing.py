@@ -9,8 +9,8 @@ from sqlalchemy import Column
 from sqlalchemy.sql import func
 from tqdm import tqdm
 
-from datachain.lib.func.inner import path as pathfunc
 from datachain.node import DirType, Node, NodeWithPath
+from datachain.sql.functions import path as pathfunc
 from datachain.utils import suffix_to_number
 
 if TYPE_CHECKING:

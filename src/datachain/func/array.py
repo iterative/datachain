@@ -1,8 +1,9 @@
 from collections.abc import Sequence
 from typing import Union
 
+from datachain.sql.functions import array
+
 from .func import Func
-from .inner import array
 
 
 def cosine_distance(*args: Union[str, Sequence]) -> Func:

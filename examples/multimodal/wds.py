@@ -1,7 +1,7 @@
 import os
 
 from datachain import DataChain
-from datachain.lib.func import path
+from datachain.func import path
 from datachain.lib.webdataset import process_webdataset
 from datachain.lib.webdataset_laion import WDSLaion, process_laion_meta
 

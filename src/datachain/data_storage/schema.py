@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from sqlalchemy.sql import func as f
 from sqlalchemy.sql.expression import false, null, true
 
-from datachain.lib.func.inner import path
+from datachain.sql.functions import path as pathfunc
 from datachain.sql.types import Int, SQLType, UInt64
 
 if TYPE_CHECKING:
@@ -130,7 +130,7 @@ class DirExpansion:
 
     def query(self, q):
         q = self.base_select(q).cte(recursive=True)
-        parent = path.parent(self.c(q, "path"))
+        parent = pathfunc.parent(self.c(q, "path"))
         q = q.union_all(
             sa.select(
                 sa.literal(-1).label("sys__id"),

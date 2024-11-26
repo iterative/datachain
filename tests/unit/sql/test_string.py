@@ -1,6 +1,6 @@
 import pytest
 
-from datachain.lib.func import literal, string
+from datachain.func import literal, string
 from datachain.sql import select
 
 

@@ -1868,7 +1868,7 @@ def test_order_by_with_nested_columns(test_session, with_function):
         file=[File(path=name) for name in names], session=test_session
     )
     if with_function:
-        from datachain.lib.func.inner.random import rand
+        from datachain.sql.functions.random import rand
 
         dc = dc.order_by("file.path", rand())
     else:
@@ -1917,7 +1917,7 @@ def test_order_by_descending(test_session, with_function):
         file=[File(path=name) for name in names], session=test_session
     )
     if with_function:
-        from datachain.lib.func.inner.random import rand
+        from datachain.sql.functions.random import rand
 
         dc = dc.order_by("file.path", rand(), descending=True)
     else:

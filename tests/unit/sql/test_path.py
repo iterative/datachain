@@ -5,8 +5,8 @@ import pytest
 from sqlalchemy import func as sa_func
 
 from datachain import func
-from datachain.lib.func.inner import path as sql_path
 from datachain.sql import select
+from datachain.sql.functions import path as pathfunc
 
 PATHS = ["", "/", "name", "/name", "name/", "some/long/path"]
 EXT_PATHS = [
@@ -34,11 +34,11 @@ def file_ext(path):
     return pp.splitext(path)[1].lstrip(".")
 
 
-@pytest.mark.parametrize("func_base", [sa_func.path, sql_path])
+@pytest.mark.parametrize("func_base", [sa_func.path, pathfunc])
 @pytest.mark.parametrize("func_name", ["parent", "name"])
 def test_default_not_implement(func_base, func_name):
     """
-    Importing datachain.lib.func.inner.path should register a custom compiler
+    Importing datachain.sql.functions.path should register a custom compiler
     which raises an exception for these functions with the default
     SQLAlchemy dialect.
     """

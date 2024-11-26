@@ -1,7 +1,8 @@
 from typing import Union
 
+from datachain.sql.functions import conditional
+
 from .func import ColT, Func
-from .inner import conditional
 
 
 def greatest(*args: Union[ColT, float]) -> Func:

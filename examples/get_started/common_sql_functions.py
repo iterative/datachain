@@ -1,5 +1,5 @@
 from datachain import C, DataChain
-from datachain.lib.func import array, greatest, least, path, string
+from datachain.func import array, greatest, least, path, string
 
 
 def num_chars_udf(file):

@@ -3,7 +3,7 @@ import json
 from PIL import Image
 
 from datachain import C, DataChain, File, model
-from datachain.lib.func import path
+from datachain.func import path
 
 
 def openimage_detect(args):

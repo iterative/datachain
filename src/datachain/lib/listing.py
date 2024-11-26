@@ -8,8 +8,8 @@ from sqlalchemy.sql.expression import true
 from datachain.asyn import iter_over_async
 from datachain.client import Client
 from datachain.lib.file import File
-from datachain.lib.func.inner import path as pathfunc
 from datachain.query.schema import Column
+from datachain.sql.functions import path as pathfunc
 from datachain.telemetry import telemetry
 from datachain.utils import uses_glob
 
