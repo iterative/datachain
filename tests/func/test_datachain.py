@@ -212,17 +212,20 @@ def test_from_storage_dependencies(cloud_test_catalog, cloud_type):
 
 
 @pytest.mark.parametrize("use_cache", [True, False])
-def test_map_file(cloud_test_catalog, use_cache):
+@pytest.mark.parametrize("prefetch", [0, 2])
+def test_map_file(cloud_test_catalog, use_cache, prefetch):
     ctc = cloud_test_catalog
 
     def new_signal(file: File) -> str:
+        assert bool(file.get_local_path()) is (use_cache and prefetch > 0)
         with file.open() as f:
             return file.name + " -> " + f.read().decode("utf-8")
 
     dc = (
         DataChain.from_storage(ctc.src_uri, session=ctc.session)
-        .settings(cache=use_cache)
+        .settings(cache=use_cache, prefetch=prefetch)
         .map(signal=new_signal)
+        .save()
     )
 
     expected = {

@@ -1,17 +1,9 @@
 import json
 
 from PIL import Image
-from pydantic import BaseModel
 
-from datachain import C, DataChain, File
+from datachain import C, DataChain, File, model
 from datachain.lib.func import path
-
-
-class BBox(BaseModel):
-    x_min: int
-    x_max: int
-    y_min: int
-    y_max: int
 
 
 def openimage_detect(args):
@@ -30,11 +22,13 @@ def openimage_detect(args):
         detections = json.load(stream_json).get("detections", [])
 
     for i, detect in enumerate(detections):
-        bbox = BBox(
-            x_min=int(detect["XMin"] * img.width),
-            x_max=int(detect["XMax"] * img.width),
-            y_min=int(detect["YMin"] * img.height),
-            y_max=int(detect["YMax"] * img.height),
+        bbox = model.BBox.from_list(
+            [
+                detect["XMin"] * img.width,
+                detect["XMax"] * img.width,
+                detect["YMin"] * img.height,
+                detect["YMax"] * img.height,
+            ]
         )
 
         fstream = File(
@@ -56,7 +50,7 @@ source = "gs://datachain-demo/openimages-v6-test-jsonpairs/"
         openimage_detect,
         partition_by=path.file_stem("file.path"),
         params=["file"],
-        output={"file": File, "bbox": BBox},
+        output={"file": File, "bbox": model.BBox},
     )
     .show()
 )

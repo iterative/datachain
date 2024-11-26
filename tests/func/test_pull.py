@@ -78,7 +78,7 @@ def dog_entries_parquet_lz4(dog_entries, cloud_test_catalog) -> bytes:
 def schema():
     return {
         "id": {"type": "UInt64"},
-        "sys__rand": {"type": "Int64"},
+        "sys__rand": {"type": "UInt64"},
         "file__path": {"type": "String"},
         "file__etag": {"type": "String"},
         "file__version": {"type": "String"},

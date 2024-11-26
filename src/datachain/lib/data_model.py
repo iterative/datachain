@@ -1,8 +1,8 @@
 from collections.abc import Sequence
 from datetime import datetime
-from typing import ClassVar, Union, get_args, get_origin
+from typing import ClassVar, Optional, Union, get_args, get_origin
 
-from pydantic import BaseModel, Field, create_model
+from pydantic import AliasChoices, BaseModel, Field, create_model
 
 from datachain.lib.model_store import ModelStore
 from datachain.lib.utils import normalize_col_names
@@ -60,17 +60,33 @@ def is_chain_type(t: type) -> bool:
     return False
 
 
-def dict_to_data_model(name: str, data_dict: dict[str, DataType]) -> type[BaseModel]:
-    # Gets a map of a normalized_name -> original_name
-    columns = normalize_col_names(list(data_dict.keys()))
-    # We reverse if for convenience to original_name -> normalized_name
-    columns = {v: k for k, v in columns.items()}
+def dict_to_data_model(
+    name: str,
+    data_dict: dict[str, DataType],
+    original_names: Optional[list[str]] = None,
+) -> type[BaseModel]:
+    if not original_names:
+        # Gets a map of a normalized_name -> original_name
+        columns = normalize_col_names(list(data_dict))
+        data_dict = dict(zip(columns.keys(), data_dict.values()))
+        original_names = list(columns.values())
 
     fields = {
-        columns[name]: (anno, Field(alias=name)) for name, anno in data_dict.items()
+        name: (
+            anno,
+            Field(
+                validation_alias=AliasChoices(name, original_names[idx] or name),
+                default=None,
+            ),
+        )
+        for idx, (name, anno) in enumerate(data_dict.items())
     }
+
+    class _DataModelStrict(BaseModel, extra="forbid"):
+        pass
+
     return create_model(
         name,
-        __base__=(DataModel,),  # type: ignore[call-overload]
+        __base__=_DataModelStrict,
         **fields,
     )  # type: ignore[call-overload]

@@ -101,7 +101,7 @@ def test_hf_image(tmp_path):
     img.save(train_dir / "img1.png")
 
     ds = load_dataset("imagefolder", data_dir=tmp_path)
-    schema = get_output_schema(ds["train"].features)
+    schema = {"split": str} | get_output_schema(ds["train"].features)
     assert schema["image"] is HFImage
 
     gen = HFGenerator(ds, dict_to_data_model("", schema))
@@ -122,7 +122,7 @@ def test_hf_audio(tmp_path):
     write(train_dir / "example.wav", samplerate, data.astype(np.int16))
 
     ds = load_dataset("audiofolder", data_dir=tmp_path)
-    schema = get_output_schema(ds["train"].features)
+    schema = {"split": str} | get_output_schema(ds["train"].features)
 
     gen = HFGenerator(ds, dict_to_data_model("", schema))
     gen.setup()
