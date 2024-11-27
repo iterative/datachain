@@ -38,6 +38,7 @@ from datachain.dataset import (
     DATASET_PREFIX,
     QUERY_DATASET_PREFIX,
     DatasetDependency,
+    DatasetListRecord,
     DatasetRecord,
     DatasetStats,
     DatasetStatus,
@@ -72,7 +73,7 @@ if TYPE_CHECKING:
         AbstractMetastore,
         AbstractWarehouse,
     )
-    from datachain.dataset import DatasetVersion
+    from datachain.dataset import DatasetListVersion
     from datachain.job import Job
     from datachain.lib.file import File
     from datachain.listing import Listing
@@ -1135,7 +1136,7 @@ class Catalog:
 
         return direct_dependencies
 
-    def ls_datasets(self, include_listing: bool = False) -> Iterator[DatasetRecord]:
+    def ls_datasets(self, include_listing: bool = False) -> Iterator[DatasetListRecord]:
         datasets = self.metastore.list_datasets()
         for d in datasets:
             if not d.is_bucket_listing or include_listing:
@@ -1144,7 +1145,7 @@ class Catalog:
     def list_datasets_versions(
         self,
         include_listing: bool = False,
-    ) -> Iterator[tuple[DatasetRecord, "DatasetVersion", Optional["Job"]]]:
+    ) -> Iterator[tuple[DatasetListRecord, "DatasetListVersion", Optional["Job"]]]:
         """Iterate over all dataset versions with related jobs."""
         datasets = list(self.ls_datasets(include_listing=include_listing))
 
