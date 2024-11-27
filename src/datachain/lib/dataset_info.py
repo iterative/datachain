@@ -23,8 +23,8 @@ class DatasetInfo(DataModel):
     finished_at: Optional[datetime] = Field(default=None)
     num_objects: Optional[int] = Field(default=None)
     size: Optional[int] = Field(default=None)
-    params: dict[str, str] = Field(default_factory=dict)
-    metrics: dict[str, Any] = Field(default_factory=dict)
+    params: dict[str, str] = Field(default={})
+    metrics: dict[str, Any] = Field(default={})
     error_message: str = Field(default="")
     error_stack: str = Field(default="")
 

@@ -15,8 +15,8 @@ class Pose(DataModel):
     corresponds to a specific body part.
     """
 
-    x: list[int] = Field(default_factory=list)
-    y: list[int] = Field(default_factory=list)
+    x: list[int] = Field(default=[])
+    y: list[int] = Field(default=[])
 
     @staticmethod
     def from_list(points: list[list[float]]) -> "Pose":
@@ -55,9 +55,9 @@ class Pose3D(DataModel):
     where each index corresponds to a specific body part.
     """
 
-    x: list[int] = Field(default_factory=list)
-    y: list[int] = Field(default_factory=list)
-    visible: list[float] = Field(default_factory=list)
+    x: list[int] = Field(default=[])
+    y: list[int] = Field(default=[])
+    visible: list[float] = Field(default=[])
 
     @staticmethod
     def from_list(points: list[list[float]]) -> "Pose3D":
