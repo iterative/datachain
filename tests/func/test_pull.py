@@ -110,7 +110,7 @@ def remote_dataset_version(schema, dataset_rows):
         "schema": schema,
         "sources": "",
         "query_script": (
-            'from datachain.query import DatasetQuery\nDatasetQuery(path="s3://ldb-public")',
+            'from datachain.query.dataset import DatasetQuery\nDatasetQuery(path="s3://ldb-public")',
         ),
         "created_by_id": 1,
     }

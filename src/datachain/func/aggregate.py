@@ -2,7 +2,7 @@ from typing import Optional
 
 from sqlalchemy import func as sa_func
 
-from datachain.sql import functions as dc_func
+from datachain.sql.functions import aggregate
 
 from .func import Func
 
@@ -31,7 +31,9 @@ def count(col: Optional[str] = None) -> Func:
     Notes:
         - Result column will always be of type int.
     """
-    return Func("count", inner=sa_func.count, col=col, result_type=int)
+    return Func(
+        "count", inner=sa_func.count, cols=[col] if col else None, result_type=int
+    )
 
 
 def sum(col: str) -> Func:
@@ -59,7 +61,7 @@ def sum(col: str) -> Func:
         - The `sum` function should be used on numeric columns.
         - Result column type will be the same as the input column type.
     """
-    return Func("sum", inner=sa_func.sum, col=col)
+    return Func("sum", inner=sa_func.sum, cols=[col])
 
 
 def avg(col: str) -> Func:
@@ -87,7 +89,7 @@ def avg(col: str) -> Func:
         - The `avg` function should be used on numeric columns.
         - Result column will always be of type float.
     """
-    return Func("avg", inner=dc_func.aggregate.avg, col=col, result_type=float)
+    return Func("avg", inner=aggregate.avg, cols=[col], result_type=float)
 
 
 def min(col: str) -> Func:
@@ -115,7 +117,7 @@ def min(col: str) -> Func:
         - The `min` function can be used with numeric, date, and string columns.
         - Result column will have the same type as the input column.
     """
-    return Func("min", inner=sa_func.min, col=col)
+    return Func("min", inner=sa_func.min, cols=[col])
 
 
 def max(col: str) -> Func:
@@ -143,7 +145,7 @@ def max(col: str) -> Func:
         - The `max` function can be used with numeric, date, and string columns.
         - Result column will have the same type as the input column.
     """
-    return Func("max", inner=sa_func.max, col=col)
+    return Func("max", inner=sa_func.max, cols=[col])
 
 
 def any_value(col: str) -> Func:
@@ -174,7 +176,7 @@ def any_value(col: str) -> Func:
         - The result of `any_value` is non-deterministic,
           meaning it may return different values for different executions.
     """
-    return Func("any_value", inner=dc_func.aggregate.any_value, col=col)
+    return Func("any_value", inner=aggregate.any_value, cols=[col])
 
 
 def collect(col: str) -> Func:
@@ -203,7 +205,7 @@ def collect(col: str) -> Func:
         - The `collect` function can be used with numeric and string columns.
         - Result column will have an array type.
     """
-    return Func("collect", inner=dc_func.aggregate.collect, col=col, is_array=True)
+    return Func("collect", inner=aggregate.collect, cols=[col], is_array=True)
 
 
 def concat(col: str, separator="") -> Func:
@@ -236,9 +238,9 @@ def concat(col: str, separator="") -> Func:
     """
 
     def inner(arg):
-        return dc_func.aggregate.group_concat(arg, separator)
+        return aggregate.group_concat(arg, separator)
 
-    return Func("concat", inner=inner, col=col, result_type=str)
+    return Func("concat", inner=inner, cols=[col], result_type=str)
 
 
 def row_number() -> Func:
@@ -350,4 +352,4 @@ def first(col: str) -> Func:
           in the specified order.
         - The result column will have the same type as the input column.
     """
-    return Func("first", inner=sa_func.first_value, col=col, is_window=True)
+    return Func("first", inner=sa_func.first_value, cols=[col], is_window=True)

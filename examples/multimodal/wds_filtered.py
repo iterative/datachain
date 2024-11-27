@@ -1,9 +1,7 @@
 import datachain.error
-from datachain import C, DataChain
+from datachain import C, DataChain, func
 from datachain.lib.webdataset import process_webdataset
 from datachain.lib.webdataset_laion import WDSLaion
-from datachain.sql import literal
-from datachain.sql.functions import array, greatest, least, string
 
 name = "wds"
 try:
@@ -20,14 +18,12 @@ except datachain.error.DatasetNotFoundError:
 wds.print_schema()
 
 filtered = (
-    wds.filter(string.length(C("laion.txt")) > 5)
-    .filter(array.length(string.split(C("laion.txt"), literal(" "))) > 2)
+    wds.filter(func.string.length("laion.txt") > 5)
+    .filter(func.array.length(func.string.split("laion.txt", " ")) > 2)
+    .filter(func.least("laion.json.original_width", "laion.json.original_height") > 200)
     .filter(
-        least(C("laion.json.original_width"), C("laion.json.original_height")) > 200
-    )
-    .filter(
-        greatest(C("laion.json.original_width"), C("laion.json.original_height"))
-        / least(C("laion.json.original_width"), C("laion.json.original_height"))
+        func.greatest("laion.json.original_width", "laion.json.original_height")
+        / func.least("laion.json.original_width", "laion.json.original_height")
         < 3.0
     )
     .save()

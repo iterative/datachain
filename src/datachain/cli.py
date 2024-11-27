@@ -957,7 +957,7 @@ def show(
     schema: bool = False,
 ) -> None:
     from datachain.lib.dc import DataChain
-    from datachain.query import DatasetQuery
+    from datachain.query.dataset import DatasetQuery
     from datachain.utils import show_records
 
     dataset = catalog.get_dataset(name)
