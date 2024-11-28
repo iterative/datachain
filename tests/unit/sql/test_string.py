@@ -1,7 +1,7 @@
 import pytest
 
-from datachain.sql import literal, select
-from datachain.sql.functions import string
+from datachain.func import literal, string
+from datachain.sql import select
 
 
 def test_length(warehouse):

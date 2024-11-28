@@ -15,7 +15,9 @@ from datachain.error import DatasetVersionNotFoundError
 from datachain.sql.types import NAME_TYPES_MAPPING, SQLType
 
 T = TypeVar("T", bound="DatasetRecord")
+LT = TypeVar("LT", bound="DatasetListRecord")
 V = TypeVar("V", bound="DatasetVersion")
+LV = TypeVar("LV", bound="DatasetListVersion")
 DD = TypeVar("DD", bound="DatasetDependency")
 
 DATASET_PREFIX = "ds://"
@@ -265,6 +267,59 @@ class DatasetVersion:
 
 
 @dataclass
+class DatasetListVersion:
+    id: int
+    uuid: str
+    dataset_id: int
+    version: int
+    status: int
+    created_at: datetime
+    finished_at: Optional[datetime]
+    error_message: str
+    error_stack: str
+    num_objects: Optional[int]
+    size: Optional[int]
+    query_script: str = ""
+    job_id: Optional[str] = None
+
+    @classmethod
+    def parse(
+        cls: type[LV],
+        id: int,
+        uuid: str,
+        dataset_id: int,
+        version: int,
+        status: int,
+        created_at: datetime,
+        finished_at: Optional[datetime],
+        error_message: str,
+        error_stack: str,
+        num_objects: Optional[int],
+        size: Optional[int],
+        query_script: str = "",
+        job_id: Optional[str] = None,
+    ):
+        return cls(
+            id,
+            uuid,
+            dataset_id,
+            version,
+            status,
+            created_at,
+            finished_at,
+            error_message,
+            error_stack,
+            num_objects,
+            size,
+            query_script,
+            job_id,
+        )
+
+    def __hash__(self):
+        return hash(f"{self.dataset_id}_{self.version}")
+
+
+@dataclass
 class DatasetRecord:
     id: int
     name: str
@@ -462,20 +517,6 @@ class DatasetRecord:
         return f"{DATASET_PREFIX}{identifier}"
 
     @property
-    def is_bucket_listing(self) -> bool:
-        """
-        For bucket listing we implicitly create underlying dataset to hold data. This
-        method is checking if this is one of those datasets.
-        """
-        from datachain.client import Client
-
-        # TODO refactor and maybe remove method in
-        # https://github.com/iterative/datachain/issues/318
-        return Client.is_data_source_uri(self.name) or self.name.startswith(
-            LISTING_PREFIX
-        )
-
-    @property
     def versions_values(self) -> list[int]:
         """
         Extracts actual versions from list of DatasetVersion objects
@@ -511,6 +552,93 @@ class DatasetRecord:
         versions = [DatasetVersion.from_dict(v) for v in d.pop("versions", [])]
         kwargs = {f.name: d[f.name] for f in fields(cls) if f.name in d}
         return cls(**kwargs, versions=versions)
+
+
+@dataclass
+class DatasetListRecord:
+    id: int
+    name: str
+    description: Optional[str]
+    labels: list[str]
+    versions: list[DatasetListVersion]
+    created_at: Optional[datetime] = None
+
+    @classmethod
+    def parse(  # noqa: PLR0913
+        cls: type[LT],
+        id: int,
+        name: str,
+        description: Optional[str],
+        labels: str,
+        created_at: datetime,
+        version_id: int,
+        version_uuid: str,
+        version_dataset_id: int,
+        version: int,
+        version_status: int,
+        version_created_at: datetime,
+        version_finished_at: Optional[datetime],
+        version_error_message: str,
+        version_error_stack: str,
+        version_num_objects: Optional[int],
+        version_size: Optional[int],
+        version_query_script: Optional[str],
+        version_job_id: Optional[str] = None,
+    ) -> "DatasetListRecord":
+        labels_lst: list[str] = json.loads(labels) if labels else []
+
+        dataset_version = DatasetListVersion.parse(
+            version_id,
+            version_uuid,
+            version_dataset_id,
+            version,
+            version_status,
+            version_created_at,
+            version_finished_at,
+            version_error_message,
+            version_error_stack,
+            version_num_objects,
+            version_size,
+            version_query_script,  # type: ignore[arg-type]
+            version_job_id,
+        )
+
+        return cls(
+            id,
+            name,
+            description,
+            labels_lst,
+            [dataset_version],
+            created_at,
+        )
+
+    def merge_versions(self, other: "DatasetListRecord") -> "DatasetListRecord":
+        """Merge versions from another dataset"""
+        if other.id != self.id:
+            raise RuntimeError("Cannot merge versions of datasets with different ids")
+        if not other.versions:
+            # nothing to merge
+            return self
+        if not self.versions:
+            self.versions = []
+
+        self.versions = list(set(self.versions + other.versions))
+        self.versions.sort(key=lambda v: v.version)
+        return self
+
+    @property
+    def is_bucket_listing(self) -> bool:
+        """
+        For bucket listing we implicitly create underlying dataset to hold data. This
+        method is checking if this is one of those datasets.
+        """
+        from datachain.client import Client
+
+        # TODO refactor and maybe remove method in
+        # https://github.com/iterative/datachain/issues/318
+        return Client.is_data_source_uri(self.name) or self.name.startswith(
+            LISTING_PREFIX
+        )
 
 
 class RowDict(dict):

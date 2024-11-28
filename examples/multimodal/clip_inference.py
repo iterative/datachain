@@ -3,8 +3,7 @@ import torch
 from torch.nn.functional import cosine_similarity
 from torch.utils.data import DataLoader
 
-from datachain import C, DataChain
-from datachain.sql.functions import path
+from datachain import C, DataChain, func
 
 source = "gs://datachain-demo/50k-laion-files/000000/00000000*"
 
@@ -18,8 +17,8 @@ def create_dataset():
     )
     return imgs.merge(
         captions,
-        on=path.file_stem(imgs.c("file.path")),
-        right_on=path.file_stem(captions.c("file.path")),
+        on=func.path.file_stem(imgs.c("file.path")),
+        right_on=func.path.file_stem(captions.c("file.path")),
     )
 
 

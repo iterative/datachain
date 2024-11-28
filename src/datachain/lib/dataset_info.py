@@ -5,7 +5,11 @@ from uuid import uuid4
 
 from pydantic import Field, field_validator
 
-from datachain.dataset import DatasetRecord, DatasetStatus, DatasetVersion
+from datachain.dataset import (
+    DatasetListRecord,
+    DatasetListVersion,
+    DatasetStatus,
+)
 from datachain.job import Job
 from datachain.lib.data_model import DataModel
 from datachain.utils import TIME_ZERO
@@ -23,8 +27,8 @@ class DatasetInfo(DataModel):
     finished_at: Optional[datetime] = Field(default=None)
     num_objects: Optional[int] = Field(default=None)
     size: Optional[int] = Field(default=None)
-    params: dict[str, str] = Field(default=dict)
-    metrics: dict[str, Any] = Field(default=dict)
+    params: dict[str, str] = Field(default={})
+    metrics: dict[str, Any] = Field(default={})
     error_message: str = Field(default="")
     error_stack: str = Field(default="")
 
@@ -57,8 +61,8 @@ class DatasetInfo(DataModel):
     @classmethod
     def from_models(
         cls,
-        dataset: DatasetRecord,
-        version: DatasetVersion,
+        dataset: DatasetListRecord,
+        version: DatasetListVersion,
         job: Optional[Job],
     ) -> "Self":
         return cls(
