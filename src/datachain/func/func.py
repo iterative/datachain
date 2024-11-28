@@ -98,94 +98,94 @@ class Func(Function):
         return list[col_type] if self.is_array else col_type  # type: ignore[valid-type]
 
     def __add__(self, other: Union[ColT, float]) -> "Func":
-        return math_add(self, other)
+        if isinstance(other, (int, float)):
+            return Func("add", lambda a: a + other, [self])
+        return Func("add", lambda a1, a2: a1 + a2, [self, other])
 
     def __radd__(self, other: Union[ColT, float]) -> "Func":
-        return math_add(other, self)
+        if isinstance(other, (int, float)):
+            return Func("add", lambda a: other + a, [self])
+        return Func("add", lambda a1, a2: a1 + a2, [other, self])
 
     def __sub__(self, other: Union[ColT, float]) -> "Func":
-        return math_sub(self, other)
+        if isinstance(other, (int, float)):
+            return Func("sub", lambda a: a - other, [self])
+        return Func("sub", lambda a1, a2: a1 - a2, [self, other])
 
     def __rsub__(self, other: Union[ColT, float]) -> "Func":
-        return math_sub(other, self)
+        if isinstance(other, (int, float)):
+            return Func("sub", lambda a: other - a, [self])
+        return Func("sub", lambda a1, a2: a1 - a2, [other, self])
 
     def __mul__(self, other: Union[ColT, float]) -> "Func":
-        return math_mul(self, other)
+        if isinstance(other, (int, float)):
+            return Func("mul", lambda a: a * other, [self])
+        return Func("mul", lambda a1, a2: a1 * a2, [self, other])
 
     def __rmul__(self, other: Union[ColT, float]) -> "Func":
-        return math_mul(other, self)
+        if isinstance(other, (int, float)):
+            return Func("mul", lambda a: other * a, [self])
+        return Func("mul", lambda a1, a2: a1 * a2, [other, self])
 
     def __truediv__(self, other: Union[ColT, float]) -> "Func":
-        return math_truediv(self, other)
+        if isinstance(other, (int, float)):
+            return Func("div", lambda a: a / other, [self])
+        return Func("div", lambda a1, a2: a1 / a2, [self, other])
 
     def __rtruediv__(self, other: Union[ColT, float]) -> "Func":
-        return math_truediv(other, self)
+        if isinstance(other, (int, float)):
+            return Func("div", lambda a: other / a, [self])
+        return Func("div", lambda a1, a2: a1 / a2, [other, self])
 
     def __floordiv__(self, other: Union[ColT, float]) -> "Func":
-        return math_floordiv(self, other)
+        if isinstance(other, (int, float)):
+            return Func("floordiv", lambda a: a // other, [self])
+        return Func("floordiv", lambda a1, a2: a1 // a2, [self, other])
 
     def __rfloordiv__(self, other: Union[ColT, float]) -> "Func":
-        return math_floordiv(other, self)
+        if isinstance(other, (int, float)):
+            return Func("floordiv", lambda a: other // a, [self])
+        return Func("floordiv", lambda a1, a2: a1 // a2, [other, self])
 
     def __mod__(self, other: Union[ColT, float]) -> "Func":
-        return math_mod(self, other)
+        if isinstance(other, (int, float)):
+            return Func("mod", lambda a: a % other, [self])
+        return Func("mod", lambda a1, a2: a1 % a2, [self, other])
 
     def __rmod__(self, other: Union[ColT, float]) -> "Func":
-        return math_mod(other, self)
-
-    def __pow__(self, other: Union[ColT, float]) -> "Func":
-        return math_pow(self, other)
-
-    def __rpow__(self, other: Union[ColT, float]) -> "Func":
-        return math_pow(other, self)
-
-    def __lshift__(self, other: Union[ColT, float]) -> "Func":
-        return math_lshift(self, other)
-
-    def __rlshift__(self, other: Union[ColT, float]) -> "Func":
-        return math_lshift(other, self)
-
-    def __rshift__(self, other: Union[ColT, float]) -> "Func":
-        return math_rshift(self, other)
-
-    def __rrshift__(self, other: Union[ColT, float]) -> "Func":
-        return math_rshift(other, self)
-
-    def __and__(self, other: Union[ColT, float]) -> "Func":
-        return math_and(self, other)
-
-    def __rand__(self, other: Union[ColT, float]) -> "Func":
-        return math_and(other, self)
-
-    def __or__(self, other: Union[ColT, float]) -> "Func":
-        return math_or(self, other)
-
-    def __ror__(self, other: Union[ColT, float]) -> "Func":
-        return math_or(other, self)
-
-    def __xor__(self, other: Union[ColT, float]) -> "Func":
-        return math_xor(self, other)
-
-    def __rxor__(self, other: Union[ColT, float]) -> "Func":
-        return math_xor(other, self)
+        if isinstance(other, (int, float)):
+            return Func("mod", lambda a: other % a, [self])
+        return Func("mod", lambda a1, a2: a1 % a2, [other, self])
 
     def __lt__(self, other: Union[ColT, float]) -> "Func":
-        return math_lt(self, other)
+        if isinstance(other, (int, float)):
+            return Func("lt", lambda a: a < other, [self], result_type=bool)
+        return Func("lt", lambda a1, a2: a1 < a2, [self, other], result_type=bool)
 
     def __le__(self, other: Union[ColT, float]) -> "Func":
-        return math_le(self, other)
+        if isinstance(other, (int, float)):
+            return Func("le", lambda a: a <= other, [self], result_type=bool)
+        return Func("le", lambda a1, a2: a1 <= a2, [self, other], result_type=bool)
 
     def __eq__(self, other):
-        return math_eq(self, other)
+        if isinstance(other, (int, float)):
+            return Func("eq", lambda a: a == other, [self], result_type=bool)
+        return Func("eq", lambda a1, a2: a1 == a2, [self, other], result_type=bool)
 
     def __ne__(self, other):
-        return math_ne(self, other)
+        if isinstance(other, (int, float)):
+            return Func("ne", lambda a: a != other, [self], result_type=bool)
+        return Func("ne", lambda a1, a2: a1 != a2, [self, other], result_type=bool)
 
     def __gt__(self, other: Union[ColT, float]) -> "Func":
-        return math_gt(self, other)
+        if isinstance(other, (int, float)):
+            return Func("gt", lambda a: a > other, [self], result_type=bool)
+        return Func("gt", lambda a1, a2: a1 > a2, [self, other], result_type=bool)
 
     def __ge__(self, other: Union[ColT, float]) -> "Func":
-        return math_ge(self, other)
+        if isinstance(other, (int, float)):
+            return Func("ge", lambda a: a >= other, [self], result_type=bool)
+        return Func("ge", lambda a1, a2: a1 >= a2, [self, other], result_type=bool)
 
     def label(self, label: str) -> "Func":
         return Func(
@@ -281,109 +281,3 @@ def get_db_col_type(signals_schema: "SignalSchema", col: ColT) -> "DataType":
     return signals_schema.get_column_type(
         col.name if isinstance(col, ColumnElement) else col
     )
-
-
-def math_func(
-    name: str,
-    inner: Callable,
-    params: Sequence[Union[ColT, float]],
-    result_type: Optional["DataType"] = None,
-) -> Func:
-    """Returns math function from the columns."""
-    cols, args = [], []
-    for arg in params:
-        if isinstance(arg, (int, float)):
-            args.append(arg)
-        else:
-            cols.append(arg)
-    return Func(name, inner, cols=cols, args=args, result_type=result_type)
-
-
-def math_add(*args: Union[ColT, float]) -> Func:
-    """Computes the sum of the column."""
-    return math_func("add", lambda a1, a2: a1 + a2, args)
-
-
-def math_sub(*args: Union[ColT, float]) -> Func:
-    """Computes the diff of the column."""
-    return math_func("sub", lambda a1, a2: a1 - a2, args)
-
-
-def math_mul(*args: Union[ColT, float]) -> Func:
-    """Computes the product of the column."""
-    return math_func("mul", lambda a1, a2: a1 * a2, args)
-
-
-def math_truediv(*args: Union[ColT, float]) -> Func:
-    """Computes the division of the column."""
-    return math_func("div", lambda a1, a2: a1 / a2, args, result_type=float)
-
-
-def math_floordiv(*args: Union[ColT, float]) -> Func:
-    """Computes the floor division of the column."""
-    return math_func("floordiv", lambda a1, a2: a1 // a2, args, result_type=float)
-
-
-def math_mod(*args: Union[ColT, float]) -> Func:
-    """Computes the modulo of the column."""
-    return math_func("mod", lambda a1, a2: a1 % a2, args, result_type=float)
-
-
-def math_pow(*args: Union[ColT, float]) -> Func:
-    """Computes the power of the column."""
-    return math_func("pow", lambda a1, a2: a1**a2, args, result_type=float)
-
-
-def math_lshift(*args: Union[ColT, float]) -> Func:
-    """Computes the left shift of the column."""
-    return math_func("lshift", lambda a1, a2: a1 << a2, args, result_type=int)
-
-
-def math_rshift(*args: Union[ColT, float]) -> Func:
-    """Computes the right shift of the column."""
-    return math_func("rshift", lambda a1, a2: a1 >> a2, args, result_type=int)
-
-
-def math_and(*args: Union[ColT, float]) -> Func:
-    """Computes the logical AND of the column."""
-    return math_func("and", lambda a1, a2: a1 & a2, args, result_type=bool)
-
-
-def math_or(*args: Union[ColT, float]) -> Func:
-    """Computes the logical OR of the column."""
-    return math_func("or", lambda a1, a2: a1 | a2, args, result_type=bool)
-
-
-def math_xor(*args: Union[ColT, float]) -> Func:
-    """Computes the logical XOR of the column."""
-    return math_func("xor", lambda a1, a2: a1 ^ a2, args, result_type=bool)
-
-
-def math_lt(*args: Union[ColT, float]) -> Func:
-    """Computes the less than comparison of the column."""
-    return math_func("lt", lambda a1, a2: a1 < a2, args, result_type=bool)
-
-
-def math_le(*args: Union[ColT, float]) -> Func:
-    """Computes the less than or equal comparison of the column."""
-    return math_func("le", lambda a1, a2: a1 <= a2, args, result_type=bool)
-
-
-def math_eq(*args: Union[ColT, float]) -> Func:
-    """Computes the equality comparison of the column."""
-    return math_func("eq", lambda a1, a2: a1 == a2, args, result_type=bool)
-
-
-def math_ne(*args: Union[ColT, float]) -> Func:
-    """Computes the inequality comparison of the column."""
-    return math_func("ne", lambda a1, a2: a1 != a2, args, result_type=bool)
-
-
-def math_gt(*args: Union[ColT, float]) -> Func:
-    """Computes the greater than comparison of the column."""
-    return math_func("gt", lambda a1, a2: a1 > a2, args, result_type=bool)
-
-
-def math_ge(*args: Union[ColT, float]) -> Func:
-    """Computes the greater than or equal comparison of the column."""
-    return math_func("ge", lambda a1, a2: a1 >= a2, args, result_type=bool)
