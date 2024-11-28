@@ -74,7 +74,7 @@ if TYPE_CHECKING:
         AbstractMetastore,
         AbstractWarehouse,
     )
-    from datachain.dataset import DatasetListVersion
+    from datachain.dataset import DatasetListVersion, DatasetVersion
     from datachain.job import Job
     from datachain.lib.file import File
     from datachain.listing import Listing
@@ -1105,6 +1105,13 @@ class Catalog:
     def get_dataset_version(self, name: str, version: int) -> DatasetVersionRecord:
         return self.metastore.get_dataset_version(name, version)
 
+    def get_version(self, name: str, version: Optional[int]) -> "DatasetVersion":
+        if version:
+            return self.get_dataset_version(name, version).version
+
+        dataset = self.get_dataset(name)
+        return dataset.get_version(dataset.latest_version)
+
     def get_remote_dataset(self, name: str) -> DatasetRecord:
         studio_client = StudioClient()
 
@@ -1222,8 +1229,7 @@ class Catalog:
         """
         Returns tuple with dataset stats: total number of rows and total dataset size.
         """
-        dataset = self.get_dataset(name)
-        dataset_version = dataset.get_version(version or dataset.latest_version)
+        dataset_version = self.get_version(name, version)
         return DatasetStats(
             num_objects=dataset_version.num_objects,
             size=dataset_version.size,
@@ -1281,7 +1287,7 @@ class Catalog:
         from datachain.lib.file import File
         from datachain.lib.signal_schema import DEFAULT_DELIMITER, SignalSchema
 
-        version = self.get_dataset(dataset_name).get_version(dataset_version)
+        version = self.get_version(dataset_name, dataset_version)
         schema = SignalSchema.deserialize(version.feature_schema)
 
         if signal_name not in schema.get_signals(File):

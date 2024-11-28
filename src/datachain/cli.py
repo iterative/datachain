@@ -1046,8 +1046,7 @@ def show(
     from datachain.query.dataset import DatasetQuery
     from datachain.utils import show_records
 
-    dataset = catalog.get_dataset(name)
-    dataset_version = dataset.get_version(version or dataset.latest_version)
+    dataset_version = catalog.get_version(name, version)
 
     query = (
         DatasetQuery(name=name, version=version, catalog=catalog)
