@@ -15,6 +15,7 @@ from datachain.error import DatasetVersionNotFoundError
 from datachain.sql.types import NAME_TYPES_MAPPING, SQLType
 
 T = TypeVar("T", bound="DatasetRecord")
+VT = TypeVar("VT", bound="DatasetVersionRecord")
 LT = TypeVar("LT", bound="DatasetListRecord")
 V = TypeVar("V", bound="DatasetVersion")
 LV = TypeVar("LV", bound="DatasetListVersion")
@@ -538,6 +539,139 @@ class DatasetRecord:
         versions = [DatasetVersion.from_dict(v) for v in d.pop("versions", [])]
         kwargs = {f.name: d[f.name] for f in fields(cls) if f.name in d}
         return cls(**kwargs, versions=versions)
+
+
+@dataclass
+class DatasetVersionRecord:
+    id: int
+    name: str
+    description: Optional[str]
+    labels: list[str]
+    schema: dict[str, Union[SQLType, type[SQLType]]]
+    feature_schema: dict
+    version: DatasetVersion
+    status: int = DatasetStatus.CREATED
+    created_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+    error_message: str = ""
+    error_stack: str = ""
+    script_output: str = ""
+    sources: str = ""
+    query_script: str = ""
+
+    @staticmethod
+    def parse_schema(
+        ct: dict[str, Any],
+    ) -> dict[str, Union[SQLType, type[SQLType]]]:
+        return {
+            c_name: NAME_TYPES_MAPPING[c_type["type"]].from_dict(c_type)  # type: ignore [attr-defined]
+            for c_name, c_type in ct.items()
+        }
+
+    @classmethod
+    def parse(  # noqa: PLR0913
+        cls: type[VT],
+        id: int,
+        name: str,
+        description: Optional[str],
+        labels: str,
+        status: int,
+        feature_schema: Optional[str],
+        created_at: datetime,
+        finished_at: Optional[datetime],
+        error_message: str,
+        error_stack: str,
+        script_output: str,
+        sources: str,
+        query_script: str,
+        schema: str,
+        version_id: int,
+        version_uuid: str,
+        version_dataset_id: int,
+        version: int,
+        version_status: int,
+        version_feature_schema: Optional[str],
+        version_created_at: datetime,
+        version_finished_at: Optional[datetime],
+        version_error_message: str,
+        version_error_stack: str,
+        version_script_output: str,
+        version_num_objects: Optional[int],
+        version_size: Optional[int],
+        version_preview: Optional[str],
+        version_sources: Optional[str],
+        version_query_script: Optional[str],
+        version_schema: str,
+        version_job_id: Optional[str] = None,
+    ) -> "DatasetVersionRecord":
+        labels_lst: list[str] = json.loads(labels) if labels else []
+        schema_dct: dict[str, Any] = json.loads(schema) if schema else {}
+        version_schema_dct: dict[str, str] = (
+            json.loads(version_schema) if version_schema else {}
+        )
+
+        dataset_version = DatasetVersion.parse(
+            version_id,
+            version_uuid,
+            version_dataset_id,
+            version,
+            version_status,
+            version_feature_schema,
+            version_created_at,
+            version_finished_at,
+            version_error_message,
+            version_error_stack,
+            version_script_output,
+            version_num_objects,
+            version_size,
+            version_preview,
+            cls.parse_schema(version_schema_dct),  # type: ignore[arg-type]
+            version_sources,  # type: ignore[arg-type]
+            version_query_script,  # type: ignore[arg-type]
+            version_job_id,
+        )
+
+        return cls(
+            id,
+            name,
+            description,
+            labels_lst,
+            cls.parse_schema(schema_dct),  # type: ignore[arg-type]
+            json.loads(feature_schema) if feature_schema else {},
+            dataset_version,
+            status,
+            created_at,
+            finished_at,
+            error_message,
+            error_stack,
+            script_output,
+            sources,
+            query_script,
+        )
+
+    @property
+    def serialized_schema(self) -> dict[str, Any]:
+        return {
+            c_name: c_type.to_dict()
+            if isinstance(c_type, SQLType)
+            else c_type().to_dict()
+            for c_name, c_type in self.schema.items()
+        }
+
+    def get_schema(self, version: int) -> dict[str, Union[SQLType, type[SQLType]]]:
+        return self.version.schema if version else self.schema
+
+    def identifier(self) -> str:
+        """
+        Get identifier in the form my-dataset@v3
+        """
+        return f"{self.name}@v{self.version.version}"
+
+    def uri(self, version: int) -> str:
+        """
+        Dataset uri example: ds://dogs@v3
+        """
+        return f"{DATASET_PREFIX}{self.identifier()}"
 
 
 @dataclass

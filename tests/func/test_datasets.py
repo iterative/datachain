@@ -148,6 +148,20 @@ def test_get_dataset(cloud_test_catalog, dogs_dataset):
         catalog.get_dataset("wrong name")
 
 
+def test_get_dataset_version(cloud_test_catalog, dogs_dataset):
+    catalog = cloud_test_catalog.catalog
+
+    dataset = catalog.get_dataset_version(dogs_dataset.name, 1)
+    assert dataset.name == dogs_dataset.name
+    assert dataset.version.version == 1
+
+    with pytest.raises(DatasetVersionNotFoundError):
+        catalog.get_dataset_version("wrong name", 1)
+
+    with pytest.raises(DatasetVersionNotFoundError):
+        catalog.get_dataset_version(dogs_dataset.name, 10000000000000000)
+
+
 # Returns None if the table does not exist
 def get_table_row_count(db, table_name):
     if not db.has_table(table_name):

@@ -42,6 +42,7 @@ from datachain.dataset import (
     DatasetRecord,
     DatasetStats,
     DatasetStatus,
+    DatasetVersionRecord,
     RowDict,
     StorageURI,
     create_dataset_uri,
@@ -1100,6 +1101,9 @@ class Catalog:
 
     def get_dataset(self, name: str) -> DatasetRecord:
         return self.metastore.get_dataset(name)
+
+    def get_dataset_version(self, name: str, version: int) -> DatasetVersionRecord:
+        return self.metastore.get_dataset_version(name, version)
 
     def get_remote_dataset(self, name: str) -> DatasetRecord:
         studio_client = StudioClient()

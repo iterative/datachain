@@ -32,10 +32,12 @@ from datachain.dataset import (
     DatasetRecord,
     DatasetStatus,
     DatasetVersion,
+    DatasetVersionRecord,
     StorageURI,
 )
 from datachain.error import (
     DatasetNotFoundError,
+    DatasetVersionNotFoundError,
     TableMissingError,
 )
 from datachain.job import Job
@@ -62,6 +64,7 @@ class AbstractMetastore(ABC, Serializable):
     schema: "schema.Schema"
     dataset_class: type[DatasetRecord] = DatasetRecord
     dataset_list_class: type[DatasetListRecord] = DatasetListRecord
+    dataset_version_class: type[DatasetVersionRecord] = DatasetVersionRecord
     dataset_list_version_class: type[DatasetListVersion] = DatasetListVersion
     dependency_class: type[DatasetDependency] = DatasetDependency
     job_class: type[Job] = Job
@@ -180,6 +183,10 @@ class AbstractMetastore(ABC, Serializable):
     @abstractmethod
     def get_dataset(self, name: str) -> DatasetRecord:
         """Gets a single dataset by name."""
+
+    @abstractmethod
+    def get_dataset_version(self, name: str, version: int) -> DatasetVersionRecord:
+        """Gets a single dataset with a single version by name and version"""
 
     @abstractmethod
     def update_dataset_status(
@@ -685,6 +692,13 @@ class AbstractDBMetastore(AbstractMetastore):
             return None
         return reduce(lambda ds, version: ds.merge_versions(version), versions)
 
+    def _parse_dataset_version(self, rows) -> Optional[DatasetVersionRecord]:
+        versions = [self.dataset_version_class.parse(*r) for r in rows]
+        if not versions:
+            return None
+        assert len(versions) == 1
+        return versions[0]
+
     def _parse_datasets(self, rows) -> Iterator["DatasetRecord"]:
         # grouping rows by dataset id
         for _, g in groupby(rows, lambda r: r[0]):
@@ -727,9 +741,9 @@ class AbstractDBMetastore(AbstractMetastore):
         j = d.join(dv, d.c.id == dv.c.dataset_id, isouter=isouter)
         return query.select_from(j)
 
-    def _base_dataset_query(self):
+    def _base_dataset_query(self, isouter=True):
         return self._get_dataset_query(
-            self._dataset_fields, self._dataset_version_fields
+            self._dataset_fields, self._dataset_version_fields, isouter=isouter
         )
 
     def _base_list_datasets_query(self):
@@ -758,6 +772,21 @@ class AbstractDBMetastore(AbstractMetastore):
         ds = self._parse_dataset(self.db.execute(query, conn=conn))
         if not ds:
             raise DatasetNotFoundError(f"Dataset {name} not found.")
+        return ds
+
+    def get_dataset_version(
+        self, name: str, version: int, conn=None
+    ) -> DatasetVersionRecord:
+        """Gets a single dataset with a single version by name and version"""
+        d = self._datasets
+        dv = self._datasets_versions
+        query = self._base_dataset_query(isouter=False)
+        query = query.where((d.c.name == name) & (dv.c.version == version))  # type: ignore [attr-defined]
+        ds = self._parse_dataset_version(self.db.execute(query, conn=conn))
+        if not ds:
+            raise DatasetVersionNotFoundError(
+                f"Dataset {name} with {version} not found."
+            )
         return ds
 
     def remove_dataset_version(
