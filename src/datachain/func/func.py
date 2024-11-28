@@ -2,8 +2,9 @@ import inspect
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
-from sqlalchemy import BindParameter, Case, ColumnElement, desc
+from sqlalchemy import BindParameter, Case, ColumnElement, Integer, cast, desc
 from sqlalchemy.ext.hybrid import Comparator
+from sqlalchemy.sql import func as sa_func
 
 from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.convert.sql_to_python import sql_to_python
@@ -129,23 +130,35 @@ class Func(Function):
 
     def __truediv__(self, other: Union[ColT, float]) -> "Func":
         if isinstance(other, (int, float)):
-            return Func("div", lambda a: a / other, [self])
-        return Func("div", lambda a1, a2: a1 / a2, [self, other])
+            return Func("div", lambda a: _truediv(a, other), [self], result_type=float)
+        return Func(
+            "div", lambda a1, a2: _truediv(a1, a2), [self, other], result_type=float
+        )
 
     def __rtruediv__(self, other: Union[ColT, float]) -> "Func":
         if isinstance(other, (int, float)):
-            return Func("div", lambda a: other / a, [self])
-        return Func("div", lambda a1, a2: a1 / a2, [other, self])
+            return Func("div", lambda a: _truediv(other, a), [self], result_type=float)
+        return Func(
+            "div", lambda a1, a2: _truediv(a1, a2), [other, self], result_type=float
+        )
 
     def __floordiv__(self, other: Union[ColT, float]) -> "Func":
         if isinstance(other, (int, float)):
-            return Func("floordiv", lambda a: a // other, [self])
-        return Func("floordiv", lambda a1, a2: a1 // a2, [self, other])
+            return Func(
+                "floordiv", lambda a: _floordiv(a, other), [self], result_type=int
+            )
+        return Func(
+            "floordiv", lambda a1, a2: _floordiv(a1, a2), [self, other], result_type=int
+        )
 
     def __rfloordiv__(self, other: Union[ColT, float]) -> "Func":
         if isinstance(other, (int, float)):
-            return Func("floordiv", lambda a: other // a, [self])
-        return Func("floordiv", lambda a1, a2: a1 // a2, [other, self])
+            return Func(
+                "floordiv", lambda a: _floordiv(other, a), [self], result_type=int
+            )
+        return Func(
+            "floordiv", lambda a1, a2: _floordiv(a1, a2), [other, self], result_type=int
+        )
 
     def __mod__(self, other: Union[ColT, float]) -> "Func":
         if isinstance(other, (int, float)):
@@ -281,3 +294,14 @@ def get_db_col_type(signals_schema: "SignalSchema", col: ColT) -> "DataType":
     return signals_schema.get_column_type(
         col.name if isinstance(col, ColumnElement) else col
     )
+
+
+def _truediv(a, b):
+    # Using sqlalchemy.sql.func.divide here instead of / operator
+    # because of a bug in ClickHouse SQLAlchemy dialect
+    # See https://github.com/xzkostyan/clickhouse-sqlalchemy/issues/335
+    return sa_func.divide(a, b)
+
+
+def _floordiv(a, b):
+    return cast(_truediv(a, b), Integer)

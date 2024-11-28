@@ -163,6 +163,10 @@ def sqlite_string_split(string: str, sep: str, maxsplit: int = -1) -> str:
     return orjson.dumps(string.split(sep, maxsplit)).decode("utf-8")
 
 
+def sqlite_divide(a: float, b: float) -> float:
+    return a / b
+
+
 def register_user_defined_sql_functions() -> None:
     # Register optional functions if we have the necessary dependencies
     # and otherwise register functions that will raise an exception with
@@ -194,6 +198,7 @@ def register_user_defined_sql_functions() -> None:
         conn.create_function(
             "regexp_replace", 3, sqlite_regexp_replace, deterministic=True
         )
+        conn.create_function("divide", 2, sqlite_divide, deterministic=True)
 
     _registered_function_creators["string_functions"] = create_string_functions
 
