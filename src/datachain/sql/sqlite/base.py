@@ -15,7 +15,14 @@ from sqlalchemy.sql.elements import literal
 from sqlalchemy.sql.expression import case
 from sqlalchemy.sql.functions import func
 
-from datachain.sql.functions import aggregate, array, conditional, random, string
+from datachain.sql.functions import (
+    aggregate,
+    array,
+    conditional,
+    numeric,
+    random,
+    string,
+)
 from datachain.sql.functions import path as sql_path
 from datachain.sql.selectable import Values, base_values_compiler
 from datachain.sql.sqlite.types import (
@@ -89,6 +96,9 @@ def setup():
     compiles(aggregate.group_concat, "sqlite")(compile_group_concat)
     compiles(aggregate.any_value, "sqlite")(compile_any_value)
     compiles(aggregate.collect, "sqlite")(compile_collect)
+    compiles(numeric.bit_and, "sqlite")(compile_bitwise_and)
+    compiles(numeric.bit_or, "sqlite")(compile_bitwise_or)
+    compiles(numeric.bit_xor, "sqlite")(compile_bitwise_xor)
 
     if load_usearch_extension(sqlite3.connect(":memory:")):
         compiles(array.cosine_distance, "sqlite")(compile_cosine_distance_ext)
@@ -189,6 +199,14 @@ def register_user_defined_sql_functions() -> None:
 
     _registered_function_creators["vector_functions"] = create_vector_functions
 
+    def create_numeric_functions(conn):
+        conn.create_function("divide", 2, sqlite_divide, deterministic=True)
+        conn.create_function("bitwise_and", 2, lambda a, b: a & b, deterministic=True)
+        conn.create_function("bitwise_or", 2, lambda a, b: a | b, deterministic=True)
+        conn.create_function("bitwise_xor", 2, lambda a, b: a ^ b, deterministic=True)
+
+    _registered_function_creators["numeric_functions"] = create_numeric_functions
+
     def sqlite_regexp_replace(string: str, pattern: str, replacement: str) -> str:
         return re.sub(pattern, replacement, string)
 
@@ -198,7 +216,6 @@ def register_user_defined_sql_functions() -> None:
         conn.create_function(
             "regexp_replace", 3, sqlite_regexp_replace, deterministic=True
         )
-        conn.create_function("divide", 2, sqlite_divide, deterministic=True)
 
     _registered_function_creators["string_functions"] = create_string_functions
 
@@ -319,6 +336,18 @@ def compile_euclidean_distance_ext(element, compiler, **kwargs):
 def compile_euclidean_distance(element, compiler, **kwargs):
     run_compiler_hook("euclidean_distance")
     return f"euclidean_distance({compiler.process(element.clauses, **kwargs)})"
+
+
+def compile_bitwise_and(element, compiler, **kwargs):
+    return compiler.process(func.bitwise_and(*element.clauses.clauses), **kwargs)
+
+
+def compile_bitwise_or(element, compiler, **kwargs):
+    return compiler.process(func.bitwise_or(*element.clauses.clauses), **kwargs)
+
+
+def compile_bitwise_xor(element, compiler, **kwargs):
+    return compiler.process(func.bitwise_xor(*element.clauses.clauses), **kwargs)
 
 
 def py_json_array_length(arr):

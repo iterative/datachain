@@ -227,6 +227,96 @@ def test_mod_mutate(dc):
     assert list(res) == [0, 0, 0, 0, 0]
 
 
+def test_and():
+    rnd1, rnd2 = rand(), rand()
+
+    f = rnd1 & 2
+    assert str(f) == "and()"
+    assert f.cols == [rnd1]
+    assert f.args == []
+
+    f = 2 & rnd2
+    assert str(f) == "and()"
+    assert f.cols == [rnd2]
+    assert f.args == []
+
+    f = rnd1 & rnd2
+    assert str(f) == "and()"
+    assert f.cols == [rnd1, rnd2]
+    assert f.args == []
+
+
+def test_and_mutate(dc):
+    res = dc.mutate(test=strlen("val") & 2).collect("test")
+    assert list(res) == [0, 2, 2, 0, 0]
+
+    res = dc.mutate(test=2 & strlen("val")).collect("test")
+    assert list(res) == [0, 2, 2, 0, 0]
+
+    res = dc.mutate(test=strlen("val") & strlen("val")).collect("test")
+    assert list(res) == [1, 2, 3, 4, 5]
+
+
+def test_or():
+    rnd1, rnd2 = rand(), rand()
+
+    f = rnd1 | 2
+    assert str(f) == "or()"
+    assert f.cols == [rnd1]
+    assert f.args == []
+
+    f = 2 | rnd2
+    assert str(f) == "or()"
+    assert f.cols == [rnd2]
+    assert f.args == []
+
+    f = rnd1 | rnd2
+    assert str(f) == "or()"
+    assert f.cols == [rnd1, rnd2]
+    assert f.args == []
+
+
+def test_or_mutate(dc):
+    res = dc.mutate(test=strlen("val") | 2).collect("test")
+    assert list(res) == [3, 2, 3, 6, 7]
+
+    res = dc.mutate(test=2 | strlen("val")).collect("test")
+    assert list(res) == [3, 2, 3, 6, 7]
+
+    res = dc.mutate(test=strlen("val") | strlen("val")).collect("test")
+    assert list(res) == [1, 2, 3, 4, 5]
+
+
+def test_xor():
+    rnd1, rnd2 = rand(), rand()
+
+    f = rnd1 ^ 2
+    assert str(f) == "xor()"
+    assert f.cols == [rnd1]
+    assert f.args == []
+
+    f = 2 ^ rnd2
+    assert str(f) == "xor()"
+    assert f.cols == [rnd2]
+    assert f.args == []
+
+    f = rnd1 ^ rnd2
+    assert str(f) == "xor()"
+    assert f.cols == [rnd1, rnd2]
+    assert f.args == []
+
+
+def test_xor_mutate(dc):
+    res = dc.mutate(test=strlen("val") ^ 2).collect("test")
+    assert list(res) == [3, 0, 1, 6, 7]
+
+    res = dc.mutate(test=2 ^ strlen("val")).collect("test")
+    assert list(res) == [3, 0, 1, 6, 7]
+
+    res = dc.mutate(test=strlen("val") ^ strlen("val")).collect("test")
+    assert list(res) == [0, 0, 0, 0, 0]
+
+
 def test_lt():
     rnd1, rnd2 = rand(), rand()
 

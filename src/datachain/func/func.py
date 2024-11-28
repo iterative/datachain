@@ -10,6 +10,7 @@ from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.convert.sql_to_python import sql_to_python
 from datachain.lib.utils import DataChainColumnError, DataChainParamsError
 from datachain.query.schema import Column, ColumnMeta
+from datachain.sql.functions import numeric
 
 from .base import Function
 
@@ -169,6 +170,36 @@ class Func(Function):
         if isinstance(other, (int, float)):
             return Func("mod", lambda a: other % a, [self])
         return Func("mod", lambda a1, a2: a1 % a2, [other, self])
+
+    def __and__(self, other: Union[ColT, float]) -> "Func":
+        if isinstance(other, (int, float)):
+            return Func("and", lambda a: numeric.bit_and(a, other), [self])
+        return Func("and", lambda a1, a2: numeric.bit_and(a1, a2), [self, other])
+
+    def __rand__(self, other: Union[ColT, float]) -> "Func":
+        if isinstance(other, (int, float)):
+            return Func("and", lambda a: numeric.bit_and(other, a), [self])
+        return Func("and", lambda a1, a2: numeric.bit_and(a1, a2), [other, self])
+
+    def __or__(self, other: Union[ColT, float]) -> "Func":
+        if isinstance(other, (int, float)):
+            return Func("or", lambda a: numeric.bit_or(a, other), [self])
+        return Func("or", lambda a1, a2: numeric.bit_or(a1, a2), [self, other])
+
+    def __ror__(self, other: Union[ColT, float]) -> "Func":
+        if isinstance(other, (int, float)):
+            return Func("or", lambda a: numeric.bit_or(other, a), [self])
+        return Func("or", lambda a1, a2: numeric.bit_or(a1, a2), [other, self])
+
+    def __xor__(self, other: Union[ColT, float]) -> "Func":
+        if isinstance(other, (int, float)):
+            return Func("xor", lambda a: numeric.bit_xor(a, other), [self])
+        return Func("xor", lambda a1, a2: numeric.bit_xor(a1, a2), [self, other])
+
+    def __rxor__(self, other: Union[ColT, float]) -> "Func":
+        if isinstance(other, (int, float)):
+            return Func("xor", lambda a: numeric.bit_xor(other, a), [self])
+        return Func("xor", lambda a1, a2: numeric.bit_xor(a1, a2), [other, self])
 
     def __lt__(self, other: Union[ColT, float]) -> "Func":
         if isinstance(other, (int, float)):
