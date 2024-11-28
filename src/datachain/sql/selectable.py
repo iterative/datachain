@@ -9,7 +9,9 @@ class Values(selectable.Values):
             columns = [expression.column(f"c{i}") for i in range(1, num_columns + 1)]
         else:
             columns = [
-                expression.column(c) if isinstance(c, str) else c for c in columns
+                process_column_expression(c)
+                for c in columns
+                # expression.column(c) if isinstance(c, str) else c for c in columns
             ]
         super().__init__(*columns, **kwargs)
         self._data += tuple(data)
@@ -19,13 +21,17 @@ def values(data, columns=None, **kwargs) -> Values:
     return Values(data, columns=columns, **kwargs)
 
 
-def process_column_expressions(columns):
-    return [expression.column(c) if isinstance(c, str) else c for c in columns]
+def process_column_expression(col):
+    if hasattr(col, "get_column"):
+        return col.get_column()
+    if isinstance(col, str):
+        return expression.column(col)
+    return col
 
 
 def select(*columns, **kwargs) -> "expression.Select":
-    columns = process_column_expressions(columns)
-    return expression.select(*columns, **kwargs)
+    columns_processed = [process_column_expression(c) for c in columns]
+    return expression.select(*columns_processed, **kwargs)
 
 
 def base_values_compiler(column_name_func, element, compiler, **kwargs):

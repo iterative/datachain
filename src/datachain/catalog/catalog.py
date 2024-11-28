@@ -38,6 +38,7 @@ from datachain.dataset import (
     DATASET_PREFIX,
     QUERY_DATASET_PREFIX,
     DatasetDependency,
+    DatasetListRecord,
     DatasetRecord,
     DatasetStats,
     DatasetStatus,
@@ -54,7 +55,6 @@ from datachain.error import (
     QueryScriptCancelError,
     QueryScriptRunError,
 )
-from datachain.listing import Listing
 from datachain.node import DirType, Node, NodeWithPath
 from datachain.nodes_thread_pool import NodesThreadPool
 from datachain.remote.studio import StudioClient
@@ -72,9 +72,10 @@ if TYPE_CHECKING:
         AbstractMetastore,
         AbstractWarehouse,
     )
-    from datachain.dataset import DatasetVersion
+    from datachain.dataset import DatasetListVersion
     from datachain.job import Job
     from datachain.lib.file import File
+    from datachain.listing import Listing
 
 logger = logging.getLogger("datachain")
 
@@ -235,7 +236,7 @@ class DatasetRowsFetcher(NodesThreadPool):
 class NodeGroup:
     """Class for a group of nodes from the same source"""
 
-    listing: Listing
+    listing: "Listing"
     sources: list[DataSource]
 
     # The source path within the bucket
@@ -587,8 +588,9 @@ class Catalog:
         client_config=None,
         object_name="file",
         skip_indexing=False,
-    ) -> tuple[Listing, str]:
+    ) -> tuple["Listing", str]:
         from datachain.lib.dc import DataChain
+        from datachain.listing import Listing
 
         DataChain.from_storage(
             source, session=self.session, update=update, object_name=object_name
@@ -656,7 +658,8 @@ class Catalog:
         no_glob: bool = False,
         client_config=None,
     ) -> list[NodeGroup]:
-        from datachain.query import DatasetQuery
+        from datachain.listing import Listing
+        from datachain.query.dataset import DatasetQuery
 
         def _row_to_node(d: dict[str, Any]) -> Node:
             del d["file__source"]
@@ -872,7 +875,7 @@ class Catalog:
     def update_dataset_version_with_warehouse_info(
         self, dataset: DatasetRecord, version: int, rows_dropped=False, **kwargs
     ) -> None:
-        from datachain.query import DatasetQuery
+        from datachain.query.dataset import DatasetQuery
 
         dataset_version = dataset.get_version(version)
 
@@ -1128,7 +1131,7 @@ class Catalog:
 
         return direct_dependencies
 
-    def ls_datasets(self, include_listing: bool = False) -> Iterator[DatasetRecord]:
+    def ls_datasets(self, include_listing: bool = False) -> Iterator[DatasetListRecord]:
         datasets = self.metastore.list_datasets()
         for d in datasets:
             if not d.is_bucket_listing or include_listing:
@@ -1137,7 +1140,7 @@ class Catalog:
     def list_datasets_versions(
         self,
         include_listing: bool = False,
-    ) -> Iterator[tuple[DatasetRecord, "DatasetVersion", Optional["Job"]]]:
+    ) -> Iterator[tuple[DatasetListRecord, "DatasetListVersion", Optional["Job"]]]:
         """Iterate over all dataset versions with related jobs."""
         datasets = list(self.ls_datasets(include_listing=include_listing))
 
@@ -1172,7 +1175,7 @@ class Catalog:
     def ls_dataset_rows(
         self, name: str, version: int, offset=None, limit=None
     ) -> list[dict]:
-        from datachain.query import DatasetQuery
+        from datachain.query.dataset import DatasetQuery
 
         dataset = self.get_dataset(name)
 

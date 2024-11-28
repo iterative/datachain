@@ -1,3 +1,4 @@
+import requests_mock
 from dvc_studio_client.auth import AuthorizationExpiredError
 from tabulate import tabulate
 
@@ -164,3 +165,121 @@ def test_studio_datasets(capsys, studio_datasets, mocker):
     assert main(["datasets"]) == 0
     out = capsys.readouterr().out
     assert sorted(out.splitlines()) == sorted(both_output.splitlines())
+
+
+def test_studio_edit_dataset(capsys, mocker):
+    with requests_mock.mock() as m:
+        m.post(f"{STUDIO_URL}/api/datachain/edit-dataset", json={})
+
+        # Studio token is required
+        assert (
+            main(
+                [
+                    "edit-dataset",
+                    "name",
+                    "--new-name",
+                    "new-name",
+                    "--team",
+                    "team_name",
+                    "--studio",
+                ]
+            )
+            == 1
+        )
+        out = capsys.readouterr().err
+        assert "Not logged in to Studio" in out
+
+        # Set the studio token
+        with Config(ConfigLevel.GLOBAL).edit() as conf:
+            conf["studio"] = {"token": "isat_access_token", "team": "team_name"}
+
+        assert (
+            main(
+                [
+                    "edit-dataset",
+                    "name",
+                    "--new-name",
+                    "new-name",
+                    "--team",
+                    "team_name",
+                    "--studio",
+                ]
+            )
+            == 0
+        )
+
+        assert m.called
+
+        last_request = m.last_request
+        assert last_request.json() == {
+            "dataset_name": "name",
+            "new_name": "new-name",
+            "team_name": "team_name",
+        }
+
+        # With all arguments
+        assert (
+            main(
+                [
+                    "edit-dataset",
+                    "name",
+                    "--new-name",
+                    "new-name",
+                    "--description",
+                    "description",
+                    "--labels",
+                    "label1",
+                    "--team",
+                    "team_name",
+                    "--studio",
+                ]
+            )
+            == 0
+        )
+        last_request = m.last_request
+        assert last_request.json() == {
+            "dataset_name": "name",
+            "new_name": "new-name",
+            "description": "description",
+            "labels": ["label1"],
+            "team_name": "team_name",
+        }
+
+
+def test_studio_rm_dataset(capsys, mocker):
+    with requests_mock.mock() as m:
+        m.post(f"{STUDIO_URL}/api/datachain/rm-dataset", json={})
+
+        # Studio token is required
+        assert main(["rm-dataset", "name", "--team", "team_name", "--studio"]) == 1
+        out = capsys.readouterr().err
+        assert "Not logged in to Studio" in out
+
+        # Set the studio token
+        with Config(ConfigLevel.GLOBAL).edit() as conf:
+            conf["studio"] = {"token": "isat_access_token", "team": "team_name"}
+
+        assert (
+            main(
+                [
+                    "rm-dataset",
+                    "name",
+                    "--team",
+                    "team_name",
+                    "--version",
+                    "1",
+                    "--force",
+                    "--studio",
+                ]
+            )
+            == 0
+        )
+        assert m.called
+
+        last_request = m.last_request
+        assert last_request.json() == {
+            "dataset_name": "name",
+            "team_name": "team_name",
+            "version": 1,
+            "force": True,
+        }
