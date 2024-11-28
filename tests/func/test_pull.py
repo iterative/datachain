@@ -425,8 +425,8 @@ def test_pull_dataset_local_name_already_exists(
         catalog.pull_dataset("ds://dogs@v1", local_ds_name=local_ds_name, no_cp=True)
 
     assert str(exc_info.value) == (
-        f'Local dataset ds://{local_ds_name or "dogs"}@v1 already exists, please'
-        ' choose different local dataset name or version'
+        f'Local dataset ds://{local_ds_name or "dogs"}@v1 already exists with different'
+        ' uuid, please choose different local dataset name or version'
     )
 
     # able to save it as version 2 of local dataset name

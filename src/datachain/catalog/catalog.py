@@ -1405,8 +1405,8 @@ class Catalog:
             local_dataset = self.get_dataset(local_ds_name)
             if local_dataset and local_dataset.has_version(local_ds_version):
                 raise DataChainError(
-                    f"Local dataset {local_ds_uri} already exists, please"
-                    " choose different local dataset name or version"
+                    f"Local dataset {local_ds_uri} already exists with different uuid,"
+                    " please choose different local dataset name or version"
                 )
         except DatasetNotFoundError:
             pass
