@@ -685,13 +685,6 @@ class AbstractDBMetastore(AbstractMetastore):
             return None
         return reduce(lambda ds, version: ds.merge_versions(version), versions)
 
-    def _parse_datasets(self, rows) -> Iterator["DatasetRecord"]:
-        # grouping rows by dataset id
-        for _, g in groupby(rows, lambda r: r[0]):
-            dataset = self._parse_dataset(list(g))
-            if dataset:
-                yield dataset
-
     def _parse_list_dataset(self, rows) -> Optional[DatasetListRecord]:
         versions = [self.dataset_list_class.parse(*r) for r in rows]
         if not versions:
