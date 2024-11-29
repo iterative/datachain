@@ -283,3 +283,73 @@ def test_studio_rm_dataset(capsys, mocker):
             "version": 1,
             "force": True,
         }
+
+
+def test_studio_run(capsys, mocker, tmp_dir):
+    with Config(ConfigLevel.GLOBAL).edit() as conf:
+        conf["studio"] = {"token": "isat_access_token", "team": "team_name"}
+
+    with requests_mock.mock() as m:
+        m.post(f"{STUDIO_URL}/api/datachain/upload-file", json={"blob": {"id": 1}})
+        m.post(
+            f"{STUDIO_URL}/api/datachain/job",
+            json={"job": {"id": 1, "url": "https://example.com"}},
+        )
+
+        (tmp_dir / "env_file.txt").write_text("ENV_FROM_FILE=1")
+        (tmp_dir / "reqs.txt").write_text("pyjokes")
+        (tmp_dir / "file.txt").write_text("file content")
+        (tmp_dir / "example_query.py").write_text("print(1)")
+
+        assert (
+            main(
+                [
+                    "studio",
+                    "run",
+                    "example_query.py",
+                    "--env-file",
+                    "env_file.txt",
+                    "--env",
+                    "ENV_FROM_ARGS=1",
+                    "--workers",
+                    "2",
+                    "--files",
+                    "file.txt",
+                    "--python-version",
+                    "3.12",
+                    "--req-file",
+                    "reqs.txt",
+                    "--req",
+                    "stupidity",
+                ]
+            )
+            == 0
+        )
+
+    out = capsys.readouterr().out
+    assert out.strip() == "Job 1 created\nOpen the job in Studio at https://example.com"
+
+    first_request = m.request_history[0]
+    second_request = m.request_history[1]
+
+    assert first_request.method == "POST"
+    assert first_request.url == f"{STUDIO_URL}/api/datachain/upload-file"
+    assert first_request.json() == {
+        "file_content": "ZmlsZSBjb250ZW50",
+        "file_name": "file.txt",
+        "team_name": "team_name",
+    }
+
+    assert second_request.method == "POST"
+    assert second_request.url == f"{STUDIO_URL}/api/datachain/job"
+    assert second_request.json() == {
+        "query": "print(1)",
+        "query_type": "PYTHON",
+        "environment": "ENV_FROM_FILE=1\nENV_FROM_ARGS=1",
+        "workers": 2,
+        "query_name": "example_query.py",
+        "files": ["1"],
+        "python_version": "3.12",
+        "requirements": "pyjokes\nstupidity",
+        "team_name": "team_name",
+    }
