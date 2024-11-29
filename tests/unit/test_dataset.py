@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone
 
 import pytest
@@ -6,7 +7,7 @@ from sqlalchemy.dialects.sqlite import dialect as sqlite_dialect
 from sqlalchemy.schema import CreateTable
 
 from datachain.data_storage.schema import DataTable
-from datachain.dataset import DatasetDependency, DatasetDependencyType
+from datachain.dataset import DatasetDependency, DatasetDependencyType, DatasetVersion
 from datachain.sql.types import (
     JSON,
     Array,
@@ -106,3 +107,34 @@ def test_dataset_dependency_dataset_name(dep_name, dep_type, expected):
     )
 
     assert dep.dataset_name == expected
+
+
+@pytest.mark.parametrize(
+    "use_string",
+    [True, False],
+)
+def test_dataset_version_from_dict(use_string):
+    preview = [{"id": 1, "thing": "a"}, {"id": 2, "thing": "b"}]
+
+    preview_data = json.dumps(preview) if use_string else preview
+
+    data = {
+        "id": 1,
+        "uuid": "98928be4-b6e8-4b7b-a7c5-2ce3b33130d8",
+        "dataset_id": 40,
+        "version": 2,
+        "status": 1,
+        "feature_schema": {},
+        "created_at": datetime.fromisoformat("2023-10-01T12:00:00"),
+        "finished_at": None,
+        "error_message": "",
+        "error_stack": "",
+        "script_output": "",
+        "schema": {},
+        "num_objects": 100,
+        "size": 1000000,
+        "preview": preview_data,
+    }
+
+    dataset_version = DatasetVersion.from_dict(data)
+    assert dataset_version.preview == preview
