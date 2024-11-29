@@ -12,8 +12,6 @@ from typing import (
 )
 from urllib.parse import urlparse
 
-import orjson
-
 from datachain.error import DatasetVersionNotFoundError
 from datachain.sql.types import NAME_TYPES_MAPPING, SQLType
 
@@ -266,7 +264,7 @@ class DatasetVersion:
     @cached_property
     def preview(self) -> Optional[list[dict]]:
         if isinstance(self._preview_data, str):
-            return orjson.loads(self._preview_data)
+            return json.loads(self._preview_data)
         return self._preview_data if self._preview_data else None
 
     @classmethod
