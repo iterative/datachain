@@ -99,6 +99,8 @@ def setup():
     compiles(numeric.bit_and, "sqlite")(compile_bitwise_and)
     compiles(numeric.bit_or, "sqlite")(compile_bitwise_or)
     compiles(numeric.bit_xor, "sqlite")(compile_bitwise_xor)
+    compiles(numeric.bit_rshift, "sqlite")(compile_bitwise_rshift)
+    compiles(numeric.bit_lshift, "sqlite")(compile_bitwise_lshift)
 
     if load_usearch_extension(sqlite3.connect(":memory:")):
         compiles(array.cosine_distance, "sqlite")(compile_cosine_distance_ext)
@@ -173,10 +175,6 @@ def sqlite_string_split(string: str, sep: str, maxsplit: int = -1) -> str:
     return orjson.dumps(string.split(sep, maxsplit)).decode("utf-8")
 
 
-def sqlite_divide(a: float, b: float) -> float:
-    return a / b
-
-
 def register_user_defined_sql_functions() -> None:
     # Register optional functions if we have the necessary dependencies
     # and otherwise register functions that will raise an exception with
@@ -200,10 +198,16 @@ def register_user_defined_sql_functions() -> None:
     _registered_function_creators["vector_functions"] = create_vector_functions
 
     def create_numeric_functions(conn):
-        conn.create_function("divide", 2, sqlite_divide, deterministic=True)
+        conn.create_function("divide", 2, lambda a, b: a / b, deterministic=True)
         conn.create_function("bitwise_and", 2, lambda a, b: a & b, deterministic=True)
         conn.create_function("bitwise_or", 2, lambda a, b: a | b, deterministic=True)
         conn.create_function("bitwise_xor", 2, lambda a, b: a ^ b, deterministic=True)
+        conn.create_function(
+            "bitwise_rshift", 2, lambda a, b: a >> b, deterministic=True
+        )
+        conn.create_function(
+            "bitwise_lshift", 2, lambda a, b: a << b, deterministic=True
+        )
 
     _registered_function_creators["numeric_functions"] = create_numeric_functions
 
@@ -348,6 +352,14 @@ def compile_bitwise_or(element, compiler, **kwargs):
 
 def compile_bitwise_xor(element, compiler, **kwargs):
     return compiler.process(func.bitwise_xor(*element.clauses.clauses), **kwargs)
+
+
+def compile_bitwise_rshift(element, compiler, **kwargs):
+    return compiler.process(func.bitwise_rshift(*element.clauses.clauses), **kwargs)
+
+
+def compile_bitwise_lshift(element, compiler, **kwargs):
+    return compiler.process(func.bitwise_lshift(*element.clauses.clauses), **kwargs)
 
 
 def py_json_array_length(arr):

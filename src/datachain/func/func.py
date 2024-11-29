@@ -163,13 +163,13 @@ class Func(Function):
 
     def __mod__(self, other: Union[ColT, float]) -> "Func":
         if isinstance(other, (int, float)):
-            return Func("mod", lambda a: a % other, [self])
-        return Func("mod", lambda a1, a2: a1 % a2, [self, other])
+            return Func("mod", lambda a: a % other, [self], result_type=int)
+        return Func("mod", lambda a1, a2: a1 % a2, [self, other], result_type=int)
 
     def __rmod__(self, other: Union[ColT, float]) -> "Func":
         if isinstance(other, (int, float)):
-            return Func("mod", lambda a: other % a, [self])
-        return Func("mod", lambda a1, a2: a1 % a2, [other, self])
+            return Func("mod", lambda a: other % a, [self], result_type=int)
+        return Func("mod", lambda a1, a2: a1 % a2, [other, self], result_type=int)
 
     def __and__(self, other: Union[ColT, float]) -> "Func":
         if isinstance(other, (int, float)):
@@ -200,6 +200,26 @@ class Func(Function):
         if isinstance(other, (int, float)):
             return Func("xor", lambda a: numeric.bit_xor(other, a), [self])
         return Func("xor", lambda a1, a2: numeric.bit_xor(a1, a2), [other, self])
+
+    def __rshift__(self, other: Union[ColT, float]) -> "Func":
+        if isinstance(other, (int, float)):
+            return Func("rshift", lambda a: numeric.bit_rshift(a, other), [self])
+        return Func("rshift", lambda a1, a2: numeric.bit_rshift(a1, a2), [self, other])
+
+    def __rrshift__(self, other: Union[ColT, float]) -> "Func":
+        if isinstance(other, (int, float)):
+            return Func("rshift", lambda a: numeric.bit_rshift(other, a), [self])
+        return Func("rshift", lambda a1, a2: numeric.bit_rshift(a1, a2), [other, self])
+
+    def __lshift__(self, other: Union[ColT, float]) -> "Func":
+        if isinstance(other, (int, float)):
+            return Func("lshift", lambda a: numeric.bit_lshift(a, other), [self])
+        return Func("lshift", lambda a1, a2: numeric.bit_lshift(a1, a2), [self, other])
+
+    def __rlshift__(self, other: Union[ColT, float]) -> "Func":
+        if isinstance(other, (int, float)):
+            return Func("lshift", lambda a: numeric.bit_lshift(other, a), [self])
+        return Func("lshift", lambda a1, a2: numeric.bit_lshift(a1, a2), [other, self])
 
     def __lt__(self, other: Union[ColT, float]) -> "Func":
         if isinstance(other, (int, float)):

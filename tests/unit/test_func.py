@@ -317,6 +317,66 @@ def test_xor_mutate(dc):
     assert list(res) == [0, 0, 0, 0, 0]
 
 
+def test_rshift():
+    rnd1, rnd2 = rand(), rand()
+
+    f = rnd1 >> 2
+    assert str(f) == "rshift()"
+    assert f.cols == [rnd1]
+    assert f.args == []
+
+    f = 2 >> rnd2
+    assert str(f) == "rshift()"
+    assert f.cols == [rnd2]
+    assert f.args == []
+
+    f = rnd1 >> rnd2
+    assert str(f) == "rshift()"
+    assert f.cols == [rnd1, rnd2]
+    assert f.args == []
+
+
+def test_rshift_mutate(dc):
+    res = dc.mutate(test=strlen("val") >> 2).collect("test")
+    assert list(res) == [0, 0, 0, 1, 1]
+
+    res = dc.mutate(test=2 >> strlen("val")).collect("test")
+    assert list(res) == [1, 0, 0, 0, 0]
+
+    res = dc.mutate(test=strlen("val") >> strlen("val")).collect("test")
+    assert list(res) == [0, 0, 0, 0, 0]
+
+
+def test_lshift():
+    rnd1, rnd2 = rand(), rand()
+
+    f = rnd1 << 2
+    assert str(f) == "lshift()"
+    assert f.cols == [rnd1]
+    assert f.args == []
+
+    f = 2 << rnd2
+    assert str(f) == "lshift()"
+    assert f.cols == [rnd2]
+    assert f.args == []
+
+    f = rnd1 << rnd2
+    assert str(f) == "lshift()"
+    assert f.cols == [rnd1, rnd2]
+    assert f.args == []
+
+
+def test_lshift_mutate(dc):
+    res = dc.mutate(test=strlen("val") << 2).collect("test")
+    assert list(res) == [4, 8, 12, 16, 20]
+
+    res = dc.mutate(test=2 << strlen("val")).collect("test")
+    assert list(res) == [4, 8, 16, 32, 64]
+
+    res = dc.mutate(test=strlen("val") << strlen("val")).collect("test")
+    assert list(res) == [2, 8, 24, 64, 160]
+
+
 def test_lt():
     rnd1, rnd2 = rand(), rand()
 

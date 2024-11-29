@@ -15,6 +15,16 @@ class bit_xor(ReturnTypeFromArgs):  # noqa: N801
     inherit_cache = True
 
 
+class bit_rshift(ReturnTypeFromArgs):  # noqa: N801
+    inherit_cache = True
+
+
+class bit_lshift(ReturnTypeFromArgs):  # noqa: N801
+    inherit_cache = True
+
+
 compiler_not_implemented(bit_and)
 compiler_not_implemented(bit_or)
 compiler_not_implemented(bit_xor)
+compiler_not_implemented(bit_rshift)
+compiler_not_implemented(bit_lshift)
