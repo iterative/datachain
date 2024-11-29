@@ -1105,11 +1105,11 @@ class Catalog:
     def get_dataset(self, name: str) -> DatasetRecord:
         return self.metastore.get_dataset(name)
 
-    def get_dataset_with_uuid(self, uuid: str) -> DatasetRecord:
+    def get_dataset_with_version_uuid(self, uuid: str) -> DatasetRecord:
         """Returns dataset that contains version with specific uuid"""
         for dataset in self.ls_datasets():
             if dataset.has_version_with_uuid(uuid):
-                return dataset
+                return self.get_dataset(dataset.name)
         raise DatasetNotFoundError(f"Dataset with version uuid {uuid} not found.")
 
     def get_remote_dataset(self, name: str) -> DatasetRecord:
@@ -1376,7 +1376,7 @@ class Catalog:
             remote_ds_version = remote_ds.get_version(version)
         except (DatasetVersionNotFoundError, StopIteration) as exc:
             raise DataChainError(
-                f"Dataset {remote_ds_name} doesn't have version {version}" " on server"
+                f"Dataset {remote_ds_name} doesn't have version {version} on server"
             ) from exc
 
         local_ds_name = local_ds_name or remote_ds.name
@@ -1385,8 +1385,8 @@ class Catalog:
 
         try:
             # try to find existing dataset with the same uuid to avoid pulling again
-            existing_ds = self.get_dataset_with_uuid(remote_ds_version.uuid)
-            existing_ds_version = existing_ds.get_version_with_uuid(
+            existing_ds = self.get_dataset_with_version_uuid(remote_ds_version.uuid)
+            existing_ds_version = existing_ds.get_version_by_uuid(
                 remote_ds_version.uuid
             )
             existing_ds_uri = create_dataset_uri(

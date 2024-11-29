@@ -461,9 +461,6 @@ class DatasetRecord:
     def has_version(self, version: int) -> bool:
         return version in self.versions_values
 
-    def has_version_with_uuid(self, uuid: str) -> bool:
-        return any(v.uuid == uuid for v in self.versions)
-
     def is_valid_next_version(self, version: int) -> bool:
         """
         Checks if a number can be a valid next latest version for dataset.
@@ -482,16 +479,17 @@ class DatasetRecord:
             if v.version == version
         )
 
-    def get_version_with_uuid(self, uuid: str) -> DatasetVersion:
-        if not self.has_version_with_uuid(uuid):
+    def get_version_by_uuid(self, uuid: str) -> DatasetVersion:
+        try:
+            return next(
+                v
+                for v in self.versions  # type: ignore [union-attr]
+                if v.uuid == uuid
+            )
+        except StopIteration:
             raise DatasetVersionNotFoundError(
                 f"Dataset {self.name} does not have version with uuid {uuid}"
-            )
-        return next(
-            v
-            for v in self.versions  # type: ignore [union-attr]
-            if v.uuid == uuid
-        )
+            ) from None
 
     def remove_version(self, version: int) -> None:
         if not self.versions or not self.has_version(version):
@@ -639,6 +637,9 @@ class DatasetListRecord:
         return Client.is_data_source_uri(self.name) or self.name.startswith(
             LISTING_PREFIX
         )
+
+    def has_version_with_uuid(self, uuid: str) -> bool:
+        return any(v.uuid == uuid for v in self.versions)
 
 
 class RowDict(dict):
