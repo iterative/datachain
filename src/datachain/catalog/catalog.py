@@ -42,7 +42,6 @@ from datachain.dataset import (
     DatasetRecord,
     DatasetStats,
     DatasetStatus,
-    RowDict,
     StorageURI,
     create_dataset_uri,
     parse_dataset_uri,
@@ -75,7 +74,6 @@ if TYPE_CHECKING:
     )
     from datachain.dataset import DatasetListVersion
     from datachain.job import Job
-    from datachain.lib.file import File
     from datachain.listing import Listing
 
 logger = logging.getLogger("datachain")
@@ -1267,35 +1265,6 @@ class Catalog:
 
         dataset = self.get_dataset(name)
         return self.update_dataset(dataset, **update_data)
-
-    def get_file_from_row(
-        self, dataset_name: str, dataset_version: int, row: RowDict, signal_name: str
-    ) -> "File":
-        """
-        Function that returns specific file signal from dataset row by name.
-        """
-        from datachain.lib.file import File
-        from datachain.lib.signal_schema import DEFAULT_DELIMITER, SignalSchema
-
-        version = self.get_dataset(dataset_name).get_version(dataset_version)
-        schema = SignalSchema.deserialize(version.feature_schema)
-
-        if signal_name not in schema.get_signals(File):
-            raise RuntimeError(
-                f"File signal with path {signal_name} not found in ",
-                f"dataset {dataset_name}@v{dataset_version} signals schema",
-            )
-
-        prefix = signal_name.replace(".", DEFAULT_DELIMITER) + DEFAULT_DELIMITER
-        file_signals = {
-            c_name.removeprefix(prefix): c_value
-            for c_name, c_value in row.items()
-            if c_name.startswith(prefix)
-            and DEFAULT_DELIMITER not in c_name.removeprefix(prefix)
-            and c_name.removeprefix(prefix) in File.model_fields
-        }
-
-        return File(**file_signals)
 
     def ls(
         self,
