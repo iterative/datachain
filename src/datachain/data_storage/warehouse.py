@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from sqlalchemy.sql.selectable import Join, Select
     from sqlalchemy.types import TypeEngine
 
-    from datachain.data_storage import AbstractIDGenerator, schema
+    from datachain.data_storage import schema
     from datachain.data_storage.db_engine import DatabaseEngine
     from datachain.data_storage.schema import DataTable
     from datachain.lib.file import File
@@ -69,12 +69,8 @@ class AbstractWarehouse(ABC, Serializable):
     UDF_TABLE_NAME_PREFIX = "udf_"
     TMP_TABLE_NAME_PREFIX = "tmp_"
 
-    id_generator: "AbstractIDGenerator"
     schema: "schema.Schema"
     db: "DatabaseEngine"
-
-    def __init__(self, id_generator: "AbstractIDGenerator"):
-        self.id_generator = id_generator
 
     def __enter__(self) -> "AbstractWarehouse":
         return self

@@ -55,7 +55,7 @@ def test_merge_objects(test_session):
 
     i = 0
     j = 0
-    for items in ch.collect():
+    for items in ch.order_by("emp.person.name", "team.player").collect():
         assert len(items) == 2
 
         empl, player = items
@@ -245,7 +245,7 @@ def test_merge_with_itself(test_session):
     merged = ch.merge(ch, "emp.id")
 
     count = 0
-    for left, right in merged.collect():
+    for left, right in merged.order_by("emp.id").collect():
         assert isinstance(left, Employee)
         assert isinstance(right, Employee)
         assert left == right == employees[count]
@@ -259,7 +259,7 @@ def test_merge_with_itself_column(test_session):
     merged = ch.merge(ch, C("emp.id"))
 
     count = 0
-    for left, right in merged.collect():
+    for left, right in merged.order_by("emp.id").collect():
         assert isinstance(left, Employee)
         assert isinstance(right, Employee)
         assert left == right == employees[count]
@@ -283,8 +283,9 @@ def test_merge_on_expression(test_session):
         (left_member, right_member) for left_member in team for right_member in team
     ]
 
+    merged.show()
     count = 0
-    for left, right_dc in merged.collect():
+    for left, right_dc in merged.order_by("team.player", "right_team.player").collect():
         assert isinstance(left, TeamMember)
         assert isinstance(right_dc, TeamMember)
         left_member, right_member = cross_team[count]

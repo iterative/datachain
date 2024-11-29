@@ -68,7 +68,6 @@ from .datasource import DataSource
 
 if TYPE_CHECKING:
     from datachain.data_storage import (
-        AbstractIDGenerator,
         AbstractMetastore,
         AbstractWarehouse,
     )
@@ -522,7 +521,6 @@ def find_column_to_str(  # noqa: PLR0911
 class Catalog:
     def __init__(
         self,
-        id_generator: "AbstractIDGenerator",
         metastore: "AbstractMetastore",
         warehouse: "AbstractWarehouse",
         cache_dir=None,
@@ -535,7 +533,6 @@ class Catalog:
     ):
         datachain_dir = DataChainDir(cache=cache_dir, tmp=tmp_dir)
         datachain_dir.init()
-        self.id_generator = id_generator
         self.metastore = metastore
         self._warehouse = warehouse
         self.cache = DataChainCache(datachain_dir.cache, datachain_dir.tmp)
@@ -569,7 +566,6 @@ class Catalog:
     def copy(self, cache=True, db=True):
         result = copy(self)
         if not db:
-            result.id_generator = None
             result.metastore = None
             result._warehouse = None
             result.warehouse = None
@@ -969,7 +965,6 @@ class Catalog:
         are cleaned up as soon as they are no longer needed.
         """
         self.warehouse.cleanup_tables(names)
-        self.id_generator.delete_uris(names)
 
     def create_dataset_from_sources(
         self,

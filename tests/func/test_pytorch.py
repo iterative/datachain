@@ -83,7 +83,7 @@ def test_to_pytorch(fake_dataset):
 def test_hf_to_pytorch(catalog, fake_image_dir):
     hf_ds = load_dataset("imagefolder", data_dir=fake_image_dir)
     chain = DataChain.from_hf(hf_ds)
-    pt_ds = chain.to_pytorch()
+    pt_ds = chain.order_by("label").to_pytorch()
     img, label = next(iter(pt_ds))
     assert isinstance(img, Tensor)
     assert label == 0

@@ -85,7 +85,6 @@ class Session:
         if self.is_new_catalog:
             self.catalog.metastore.close_on_exit()
             self.catalog.warehouse.close_on_exit()
-            self.catalog.id_generator.close_on_exit()
 
         if Session.SESSION_CONTEXTS:
             Session.SESSION_CONTEXTS.pop()
