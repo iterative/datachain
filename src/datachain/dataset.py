@@ -2,6 +2,7 @@ import builtins
 import json
 from dataclasses import dataclass, fields
 from datetime import datetime
+from functools import cached_property
 from typing import (
     Any,
     NewType,
@@ -10,6 +11,8 @@ from typing import (
     Union,
 )
 from urllib.parse import urlparse
+
+import orjson
 
 from datachain.error import DatasetVersionNotFoundError
 from datachain.sql.types import NAME_TYPES_MAPPING, SQLType
@@ -178,7 +181,7 @@ class DatasetVersion:
     schema: dict[str, Union[SQLType, type[SQLType]]]
     num_objects: Optional[int]
     size: Optional[int]
-    preview: Optional[list[dict]]
+    _preview_data: Optional[Union[str, list[dict]]]
     sources: str = ""
     query_script: str = ""
     job_id: Optional[str] = None
@@ -199,7 +202,7 @@ class DatasetVersion:
         script_output: str,
         num_objects: Optional[int],
         size: Optional[int],
-        preview: Optional[str],
+        preview: Optional[Union[str, list[dict]]],
         schema: dict[str, Union[SQLType, type[SQLType]]],
         sources: str = "",
         query_script: str = "",
@@ -220,7 +223,7 @@ class DatasetVersion:
             schema,
             num_objects,
             size,
-            json.loads(preview) if preview else None,
+            preview,
             sources,
             query_script,
             job_id,
@@ -260,9 +263,17 @@ class DatasetVersion:
             for c_name, c_type in self.schema.items()
         }
 
+    @cached_property
+    def preview(self) -> Optional[list[dict]]:
+        if isinstance(self._preview_data, str):
+            return orjson.loads(self._preview_data)
+        return self._preview_data if self._preview_data else None
+
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "DatasetVersion":
         kwargs = {f.name: d[f.name] for f in fields(cls) if f.name in d}
+        if not hasattr(kwargs, "_preview_data"):
+            kwargs["_preview_data"] = d.get("preview")
         return cls(**kwargs)
 
 
