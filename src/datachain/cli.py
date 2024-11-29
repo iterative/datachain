@@ -233,6 +233,67 @@ def add_studio_parser(subparsers, parent_parser) -> None:
         help="The team to list datasets for. By default, it will use team from config.",
     )
 
+    studio_run_help = "Run a job in Studio"
+    studio_run_description = "This command runs a job in Studio."
+
+    studio_run_parser = studio_subparser.add_parser(
+        "run",
+        parents=[parent_parser],
+        description=studio_run_description,
+        help=studio_run_help,
+    )
+
+    studio_run_parser.add_argument(
+        "query_file",
+        action="store",
+        help="The query file to run.",
+    )
+
+    studio_run_parser.add_argument(
+        "--team",
+        action="store",
+        default=None,
+        help="The team to run a job for. By default, it will use team from config.",
+    )
+    studio_run_parser.add_argument(
+        "--env-file",
+        action="store",
+        help="File containing environment variables to set for the job.",
+    )
+
+    studio_run_parser.add_argument(
+        "--env",
+        nargs="+",
+        help="Environment variable. Can be specified multiple times. Format: KEY=VALUE",
+    )
+
+    studio_run_parser.add_argument(
+        "--workers",
+        type=int,
+        help="Number of workers to use for the job.",
+    )
+    studio_run_parser.add_argument(
+        "--files",
+        nargs="+",
+        help="Files to include in the job.",
+    )
+    studio_run_parser.add_argument(
+        "--python-version",
+        action="store",
+        help="Python version to use for the job (e.g. '3.9', '3.10', '3.11').",
+    )
+    studio_run_parser.add_argument(
+        "--req-file",
+        action="store",
+        help="File containing Python package requirements.",
+    )
+
+    studio_run_parser.add_argument(
+        "--req",
+        nargs="+",
+        help="Python package requirement. Can be specified multiple times.",
+    )
+
 
 def get_parser() -> ArgumentParser:  # noqa: PLR0915
     try:
