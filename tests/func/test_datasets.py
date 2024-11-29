@@ -15,7 +15,7 @@ from datachain.error import (
 from datachain.lib.dc import DataChain
 from datachain.lib.file import File
 from datachain.lib.listing import parse_listing_uri
-from datachain.query import DatasetQuery
+from datachain.query.dataset import DatasetQuery
 from datachain.sql.types import Float32, Int, Int64
 from tests.utils import assert_row_names, dataset_dependency_asdict
 

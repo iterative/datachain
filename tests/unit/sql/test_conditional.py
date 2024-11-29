@@ -1,20 +1,27 @@
 import pytest
 
-from datachain.sql import column, select, values
-from datachain.sql import literal as lit
-from datachain.sql.functions import greatest, least
+from datachain import func
+from datachain.sql import select, values
 
 
 @pytest.mark.parametrize(
     "args,expected",
     [
-        ([lit("abc"), lit("bcd"), lit("Abc"), lit("cd")], "cd"),
+        (
+            [
+                func.literal("abc"),
+                func.literal("bcd"),
+                func.literal("Abc"),
+                func.literal("cd"),
+            ],
+            "cd",
+        ),
         ([3, 1, 2.0, 3.1, 2.5, -1], 3.1),
         ([4], 4),
     ],
 )
 def test_greatest(warehouse, args, expected):
-    query = select(greatest(*args))
+    query = select(func.greatest(*args))
     result = tuple(warehouse.db.execute(query))
     assert result == ((expected,),)
 
@@ -22,13 +29,21 @@ def test_greatest(warehouse, args, expected):
 @pytest.mark.parametrize(
     "args,expected",
     [
-        ([lit("abc"), lit("bcd"), lit("Abc"), lit("cd")], "Abc"),
+        (
+            [
+                func.literal("abc"),
+                func.literal("bcd"),
+                func.literal("Abc"),
+                func.literal("cd"),
+            ],
+            "Abc",
+        ),
         ([3, 1, 2.0, 3.1, 2.5, -1], -1),
         ([4], 4),
     ],
 )
 def test_least(warehouse, args, expected):
-    query = select(least(*args))
+    query = select(func.least(*args))
     result = tuple(warehouse.db.execute(query))
     assert result == ((expected,),)
 
@@ -36,9 +51,9 @@ def test_least(warehouse, args, expected):
 @pytest.mark.parametrize(
     "expr,expected",
     [
-        (greatest(column("a")), [(3,), (8,), (9,)]),
-        (least(column("a")), [(3,), (8,), (9,)]),
-        (least(column("a"), column("b")), [(3,), (7,), (1,)]),
+        (func.greatest("a"), [(3,), (8,), (9,)]),
+        (func.least("a"), [(3,), (8,), (9,)]),
+        (func.least("a", "b"), [(3,), (7,), (1,)]),
     ],
 )
 def test_conditionals_with_multiple_rows(warehouse, expr, expected):

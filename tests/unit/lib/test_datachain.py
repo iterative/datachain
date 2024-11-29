@@ -1868,7 +1868,7 @@ def test_order_by_with_nested_columns(test_session, with_function):
         file=[File(path=name) for name in names], session=test_session
     )
     if with_function:
-        from datachain.sql.functions import rand
+        from datachain.sql.functions.random import rand
 
         dc = dc.order_by("file.path", rand())
     else:
@@ -1917,7 +1917,7 @@ def test_order_by_descending(test_session, with_function):
         file=[File(path=name) for name in names], session=test_session
     )
     if with_function:
-        from datachain.sql.functions import rand
+        from datachain.sql.functions.random import rand
 
         dc = dc.order_by("file.path", rand(), descending=True)
     else:
@@ -2272,22 +2272,20 @@ def test_mutate_with_multiplication(test_session):
 
 
 def test_mutate_with_sql_func(test_session):
-    from datachain.sql import functions as func
+    from datachain import func
 
     ds = DataChain.from_values(id=[1, 2], session=test_session)
-    assert (
-        ds.mutate(new=func.avg(ds.column("id"))).signals_schema.values["new"] is float
-    )
+    assert ds.mutate(new=func.avg("id")).signals_schema.values["new"] is float
 
 
 def test_mutate_with_complex_expression(test_session):
-    from datachain.sql import functions as func
+    from datachain import func
 
     ds = DataChain.from_values(id=[1, 2], name=["Jim", "Jon"], session=test_session)
     assert (
-        ds.mutate(
-            new=(func.sum(ds.column("id"))) * (5 - func.min(ds.column("id")))
-        ).signals_schema.values["new"]
+        ds.mutate(new=func.sum("id") * (5 - func.min("id"))).signals_schema.values[
+            "new"
+        ]
         is int
     )
 
