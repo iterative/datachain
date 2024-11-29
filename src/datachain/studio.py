@@ -143,6 +143,35 @@ def list_datasets(team: Optional[str] = None):
             yield (name, version)
 
 
+def edit_studio_dataset(
+    team_name: Optional[str],
+    name: str,
+    new_name: Optional[str] = None,
+    description: Optional[str] = None,
+    labels: Optional[list[str]] = None,
+):
+    client = StudioClient(team=team_name)
+    response = client.edit_dataset(name, new_name, description, labels)
+    if not response.ok:
+        raise_remote_error(response.message)
+
+    print(f"Dataset {name} updated")
+
+
+def remove_studio_dataset(
+    team_name: Optional[str],
+    name: str,
+    version: Optional[int] = None,
+    force: Optional[bool] = False,
+):
+    client = StudioClient(team=team_name)
+    response = client.rm_dataset(name, version, force)
+    if not response.ok:
+        raise_remote_error(response.message)
+
+    print(f"Dataset {name} removed")
+
+
 def save_config(hostname, token):
     config = Config(ConfigLevel.GLOBAL)
     with config.edit() as conf:

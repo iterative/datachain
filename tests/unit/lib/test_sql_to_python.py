@@ -3,7 +3,6 @@ from sqlalchemy.sql.sqltypes import NullType
 
 from datachain import Column
 from datachain.lib.convert.sql_to_python import sql_to_python
-from datachain.sql import functions as func
 from datachain.sql.types import Float, Int64, String
 
 
@@ -15,8 +14,6 @@ from datachain.sql.types import Float, Int64, String
         (Column("score", Float), float),
         # SQL expression
         (Column("age", Int64) - 2, int),
-        # SQL function
-        (func.avg(Column("age", Int64)), float),
         # Default type
         (Column("null", NullType), str),
     ],

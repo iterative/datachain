@@ -18,7 +18,12 @@ from datachain.cli_utils import BooleanOptionalAction, CommaSeparatedArgs, KeyVa
 from datachain.config import Config
 from datachain.error import DataChainError
 from datachain.lib.dc import DataChain
-from datachain.studio import list_datasets, process_studio_cli_args
+from datachain.studio import (
+    edit_studio_dataset,
+    list_datasets,
+    process_studio_cli_args,
+    remove_studio_dataset,
+)
 from datachain.telemetry import telemetry
 
 if TYPE_CHECKING:
@@ -456,6 +461,18 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         "--edatachain-file",
         help="Use a different filename for the resulting .edatachain file",
     )
+    parse_pull.add_argument(
+        "--local-name",
+        action="store",
+        default=None,
+        help="Name of the local dataset",
+    )
+    parse_pull.add_argument(
+        "--local-version",
+        action="store",
+        default=None,
+        help="Version of the local dataset",
+    )
 
     parse_edit_dataset = subp.add_parser(
         "edit-dataset", parents=[parent_parser], description="Edit dataset metadata"
@@ -464,20 +481,43 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     parse_edit_dataset.add_argument(
         "--new-name",
         action="store",
-        default="",
         help="Dataset new name",
     )
     parse_edit_dataset.add_argument(
         "--description",
         action="store",
-        default="",
         help="Dataset description",
     )
     parse_edit_dataset.add_argument(
         "--labels",
-        default=[],
         nargs="+",
         help="Dataset labels",
+    )
+    parse_edit_dataset.add_argument(
+        "--studio",
+        action="store_true",
+        default=False,
+        help="Edit dataset from Studio",
+    )
+    parse_edit_dataset.add_argument(
+        "-L",
+        "--local",
+        action="store_true",
+        default=False,
+        help="Edit local dataset only",
+    )
+    parse_edit_dataset.add_argument(
+        "-a",
+        "--all",
+        action="store_true",
+        default=True,
+        help="Edit both datasets from studio and local",
+    )
+    parse_edit_dataset.add_argument(
+        "--team",
+        action="store",
+        default=None,
+        help="The team to edit a dataset. By default, it will use team from config.",
     )
 
     datasets_parser = subp.add_parser(
@@ -526,6 +566,32 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         default=False,
         action=BooleanOptionalAction,
         help="Force delete registered dataset with all of it's versions",
+    )
+    rm_dataset_parser.add_argument(
+        "--studio",
+        action="store_true",
+        default=False,
+        help="Remove dataset from Studio",
+    )
+    rm_dataset_parser.add_argument(
+        "-L",
+        "--local",
+        action="store_true",
+        default=False,
+        help="Remove local datasets only",
+    )
+    rm_dataset_parser.add_argument(
+        "-a",
+        "--all",
+        action="store_true",
+        default=True,
+        help="Remove both local and studio",
+    )
+    rm_dataset_parser.add_argument(
+        "--team",
+        action="store",
+        default=None,
+        help="The team to delete a dataset. By default, it will use team from config.",
     )
 
     dataset_stats_parser = subp.add_parser(
@@ -970,8 +1036,40 @@ def rm_dataset(
     name: str,
     version: Optional[int] = None,
     force: Optional[bool] = False,
+    studio: bool = False,
+    local: bool = False,
+    all: bool = True,
+    team: Optional[str] = None,
 ):
-    catalog.remove_dataset(name, version=version, force=force)
+    token = Config().read().get("studio", {}).get("token")
+    all, local, studio = _determine_flavors(studio, local, all, token)
+
+    if all or local:
+        catalog.remove_dataset(name, version=version, force=force)
+
+    if (all or studio) and token:
+        remove_studio_dataset(team, name, version, force)
+
+
+def edit_dataset(
+    catalog: "Catalog",
+    name: str,
+    new_name: Optional[str] = None,
+    description: Optional[str] = None,
+    labels: Optional[list[str]] = None,
+    studio: bool = False,
+    local: bool = False,
+    all: bool = True,
+    team: Optional[str] = None,
+):
+    token = Config().read().get("studio", {}).get("token")
+    all, local, studio = _determine_flavors(studio, local, all, token)
+
+    if all or local:
+        catalog.edit_dataset(name, new_name, description, labels)
+
+    if (all or studio) and token:
+        edit_studio_dataset(team, name, new_name, description, labels)
 
 
 def dataset_stats(
@@ -1018,7 +1116,7 @@ def show(
     schema: bool = False,
 ) -> None:
     from datachain.lib.dc import DataChain
-    from datachain.query import DatasetQuery
+    from datachain.query.dataset import DatasetQuery
     from datachain.utils import show_records
 
     dataset = catalog.get_dataset(name)
@@ -1182,17 +1280,24 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
             catalog.pull_dataset(
                 args.dataset,
                 args.output,
+                local_ds_name=args.local_name,
+                local_ds_version=args.local_version,
                 no_cp=args.no_cp,
                 force=bool(args.force),
                 edatachain=args.edatachain,
                 edatachain_file=args.edatachain_file,
             )
         elif args.command == "edit-dataset":
-            catalog.edit_dataset(
+            edit_dataset(
+                catalog,
                 args.name,
-                description=args.description,
                 new_name=args.new_name,
+                description=args.description,
                 labels=args.labels,
+                studio=args.studio,
+                local=args.local,
+                all=args.all,
+                team=args.team,
             )
         elif args.command == "ls":
             ls(
@@ -1225,7 +1330,16 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
                 schema=args.schema,
             )
         elif args.command == "rm-dataset":
-            rm_dataset(catalog, args.name, version=args.version, force=args.force)
+            rm_dataset(
+                catalog,
+                args.name,
+                version=args.version,
+                force=args.force,
+                studio=args.studio,
+                local=args.local,
+                all=args.all,
+                team=args.team,
+            )
         elif args.command == "dataset-stats":
             dataset_stats(
                 catalog,

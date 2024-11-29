@@ -3,7 +3,7 @@ import json
 from PIL import Image
 
 from datachain import C, DataChain, File, model
-from datachain.sql.functions import path
+from datachain.func import path
 
 
 def openimage_detect(args):
@@ -48,7 +48,7 @@ source = "gs://datachain-demo/openimages-v6-test-jsonpairs/"
     .filter(C("file.path").glob("*.jpg") | C("file.path").glob("*.json"))
     .agg(
         openimage_detect,
-        partition_by=path.file_stem(C("file.path")),
+        partition_by=path.file_stem("file.path"),
         params=["file"],
         output={"file": File, "bbox": model.BBox},
     )

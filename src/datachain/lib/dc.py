@@ -28,13 +28,14 @@ from sqlalchemy.sql.sqltypes import NullType
 from datachain.client import Client
 from datachain.client.local import FileClient
 from datachain.dataset import DatasetRecord
+from datachain.func.base import Function
+from datachain.func.func import Func
 from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import DataModel, DataType, DataValue, dict_to_data_model
 from datachain.lib.dataset_info import DatasetInfo
 from datachain.lib.file import ArrowRow, File, get_file_type
 from datachain.lib.file import ExportPlacement as FileExportPlacement
-from datachain.lib.func import Func
 from datachain.lib.listing import (
     list_bucket,
     ls,
@@ -112,9 +113,29 @@ class DatasetFromValuesError(DataChainParamsError):  # noqa: D101
         super().__init__(f"Dataset{name} from values error: {msg}")
 
 
-def _get_merge_error_str(col: Union[str, sqlalchemy.ColumnElement]) -> str:
+MergeColType = Union[str, Function, sqlalchemy.ColumnElement]
+
+
+def _validate_merge_on(
+    on: Union[MergeColType, Sequence[MergeColType]],
+    ds: "DataChain",
+) -> Sequence[MergeColType]:
+    if isinstance(on, (str, sqlalchemy.ColumnElement)):
+        return [on]
+    if isinstance(on, Function):
+        return [on.get_column(table=ds._query.table)]
+    if isinstance(on, Sequence):
+        return [
+            c.get_column(table=ds._query.table) if isinstance(c, Function) else c
+            for c in on
+        ]
+
+
+def _get_merge_error_str(col: MergeColType) -> str:
     if isinstance(col, str):
         return col
+    if isinstance(col, Function):
+        return f"{col.name}()"
     if isinstance(col, sqlalchemy.Column):
         return col.name.replace(DEFAULT_DELIMITER, ".")
     if isinstance(col, sqlalchemy.ColumnElement) and hasattr(col, "name"):
@@ -125,11 +146,13 @@ def _get_merge_error_str(col: Union[str, sqlalchemy.ColumnElement]) -> str:
 class DatasetMergeError(DataChainParamsError):  # noqa: D101
     def __init__(  # noqa: D107
         self,
-        on: Sequence[Union[str, sqlalchemy.ColumnElement]],
-        right_on: Optional[Sequence[Union[str, sqlalchemy.ColumnElement]]],
+        on: Union[MergeColType, Sequence[MergeColType]],
+        right_on: Optional[Union[MergeColType, Sequence[MergeColType]]],
         msg: str,
     ):
-        def _get_str(on: Sequence[Union[str, sqlalchemy.ColumnElement]]) -> str:
+        def _get_str(
+            on: Union[MergeColType, Sequence[MergeColType]],
+        ) -> str:
             if not isinstance(on, Sequence):
                 return str(on)  # type: ignore[unreachable]
             return ", ".join([_get_merge_error_str(col) for col in on])
@@ -1127,7 +1150,7 @@ class DataChain:
     def group_by(
         self,
         *,
-        partition_by: Union[str, Sequence[str]],
+        partition_by: Union[str, Func, Sequence[Union[str, Func]]],
         **kwargs: Func,
     ) -> "Self":
         """Group rows by specified set of signals and return new signals
@@ -1144,11 +1167,37 @@ class DataChain:
             )
             ```
         """
-        if isinstance(partition_by, str):
+        if isinstance(partition_by, (str, Func)):
             partition_by = [partition_by]
         if not partition_by:
             raise ValueError("At least one column should be provided for partition_by")
 
+        partition_by_columns: list[Column] = []
+        signal_columns: list[Column] = []
+        schema_fields: dict[str, DataType] = {}
+
+        # validate partition_by columns and add them to the schema
+        for col in partition_by:
+            if isinstance(col, str):
+                col_db_name = ColumnMeta.to_db_name(col)
+                col_type = self.signals_schema.get_column_type(col_db_name)
+                column = Column(col_db_name, python_to_sql(col_type))
+            elif isinstance(col, Function):
+                column = col.get_column(self.signals_schema)
+                col_db_name = column.name
+                col_type = column.type.python_type
+            else:
+                raise DataChainColumnError(
+                    col,
+                    (
+                        f"partition_by column {col} has type {type(col)}"
+                        " but expected str or Function"
+                    ),
+                )
+            partition_by_columns.append(column)
+            schema_fields[col_db_name] = col_type
+
+        # validate signal columns and add them to the schema
         if not kwargs:
             raise ValueError("At least one column should be provided for group_by")
         for col_name, func in kwargs.items():
@@ -1157,23 +1206,8 @@ class DataChain:
                     col_name,
                     f"Column {col_name} has type {type(func)} but expected Func object",
                 )
-
-        partition_by_columns: list[Column] = []
-        signal_columns: list[Column] = []
-        schema_fields: dict[str, DataType] = {}
-
-        # validate partition_by columns and add them to the schema
-        for col_name in partition_by:
-            col_db_name = ColumnMeta.to_db_name(col_name)
-            col_type = self.signals_schema.get_column_type(col_db_name)
-            col = Column(col_db_name, python_to_sql(col_type))
-            partition_by_columns.append(col)
-            schema_fields[col_db_name] = col_type
-
-        # validate signal columns and add them to the schema
-        for col_name, func in kwargs.items():
-            col = func.get_column(self.signals_schema, label=col_name)
-            signal_columns.append(col)
+            column = func.get_column(self.signals_schema, label=col_name)
+            signal_columns.append(column)
             schema_fields[col_name] = func.get_result_type(self.signals_schema)
 
         return self._evolve(
@@ -1421,25 +1455,16 @@ class DataChain:
     def merge(
         self,
         right_ds: "DataChain",
-        on: Union[
-            str,
-            sqlalchemy.ColumnElement,
-            Sequence[Union[str, sqlalchemy.ColumnElement]],
-        ],
-        right_on: Union[
-            str,
-            sqlalchemy.ColumnElement,
-            Sequence[Union[str, sqlalchemy.ColumnElement]],
-            None,
-        ] = None,
+        on: Union[MergeColType, Sequence[MergeColType]],
+        right_on: Optional[Union[MergeColType, Sequence[MergeColType]]] = None,
         inner=False,
         rname="right_",
     ) -> "Self":
         """Merge two chains based on the specified criteria.
 
         Parameters:
-            right_ds : Chain to join with.
-            on : Predicate or list of Predicates to join on. If both chains have the
+            right_ds: Chain to join with.
+            on: Predicate or list of Predicates to join on. If both chains have the
                 same predicates then this predicate is enough for the join. Otherwise,
                 `right_on` parameter has to specify the predicates for the other chain.
             right_on: Optional predicate or list of Predicates
@@ -1456,23 +1481,24 @@ class DataChain:
         if on is None:
             raise DatasetMergeError(["None"], None, "'on' must be specified")
 
-        if isinstance(on, (str, sqlalchemy.ColumnElement)):
-            on = [on]
-        elif not isinstance(on, Sequence):
+        on = _validate_merge_on(on, self)
+        if not on:
             raise DatasetMergeError(
                 on,
                 right_on,
-                f"'on' must be 'str' or 'Sequence' object but got type '{type(on)}'",
+                (
+                    "'on' must be 'str', 'Func' or 'Sequence' object "
+                    f"but got type '{type(on)}'"
+                ),
             )
 
         if right_on is not None:
-            if isinstance(right_on, (str, sqlalchemy.ColumnElement)):
-                right_on = [right_on]
-            elif not isinstance(right_on, Sequence):
+            right_on = _validate_merge_on(right_on, right_ds)
+            if not right_on:
                 raise DatasetMergeError(
                     on,
                     right_on,
-                    "'right_on' must be 'str' or 'Sequence' object"
+                    "'right_on' must be 'str', 'Func' or 'Sequence' object"
                     f" but got type '{type(right_on)}'",
                 )
 
@@ -1488,10 +1514,12 @@ class DataChain:
 
         def _resolve(
             ds: DataChain,
-            col: Union[str, sqlalchemy.ColumnElement],
+            col: Union[str, Function, sqlalchemy.ColumnElement],
             side: Union[str, None],
         ):
             try:
+                if isinstance(col, Function):
+                    return ds.c(col.get_column())
                 return ds.c(col) if isinstance(col, (str, C)) else col
             except ValueError:
                 if side:
@@ -2399,9 +2427,9 @@ class DataChain:
             dc.filter(C("file.name").glob("*.jpg"))
             ```
 
-            Using `datachain.sql.functions`
+            Using `datachain.func`
             ```py
-            from datachain.sql.functions import string
+            from datachain.func import string
             dc.filter(string.length(C("file.name")) > 5)
             ```
 

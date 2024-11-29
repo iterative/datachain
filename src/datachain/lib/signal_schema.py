@@ -23,12 +23,12 @@ from pydantic import BaseModel, create_model
 from sqlalchemy import ColumnElement
 from typing_extensions import Literal as LiteralEx
 
+from datachain.func.func import Func
 from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.convert.sql_to_python import sql_to_python
 from datachain.lib.convert.unflatten import unflatten_to_json_pos
 from datachain.lib.data_model import DataModel, DataType, DataValue
 from datachain.lib.file import File
-from datachain.lib.func import Func
 from datachain.lib.model_store import ModelStore
 from datachain.lib.utils import DataChainParamsError
 from datachain.query.schema import DEFAULT_DELIMITER, Column

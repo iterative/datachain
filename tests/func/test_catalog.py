@@ -772,6 +772,27 @@ def test_dataset_stats(test_session):
     assert dataset_version2.size == 18
 
 
+def test_ls_datasets_no_json(test_session):
+    ids = [1, 2, 3]
+    values = tuple(zip(["a", "b", "c"], [1, 2, 3]))
+
+    DataChain.from_values(
+        ids=ids,
+        file=[File(path=name, size=size) for name, size in values],
+        session=test_session,
+    ).save()
+    datasets = test_session.catalog.ls_datasets()
+    assert datasets
+    for d in datasets:
+        assert hasattr(d, "id")
+        assert not hasattr(d, "feature_schema")
+        assert d.versions
+        for v in d.versions:
+            assert hasattr(v, "id")
+            assert not hasattr(v, "preview")
+            assert not hasattr(v, "feature_schema")
+
+
 @pytest.mark.parametrize("cloud_type", ["s3", "azure", "gs"], indirect=True)
 def test_listing_stats(cloud_test_catalog):
     catalog = cloud_test_catalog.catalog
