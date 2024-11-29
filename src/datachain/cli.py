@@ -262,9 +262,9 @@ def add_studio_parser(subparsers, parent_parser) -> None:
     )
 
     studio_run_parser.add_argument(
-        "--envs",
+        "--env",
         nargs="+",
-        help="Environment variables to set for the job.",
+        help="Environment variable. Can be specified multiple times. Format: KEY=VALUE",
     )
 
     studio_run_parser.add_argument(
@@ -289,9 +289,9 @@ def add_studio_parser(subparsers, parent_parser) -> None:
     )
 
     studio_run_parser.add_argument(
-        "--reqs",
+        "--req",
         nargs="+",
-        help="Python package requirements.",
+        help="Python package requirement. Can be specified multiple times.",
     )
 
 

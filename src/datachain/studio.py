@@ -39,11 +39,11 @@ def process_studio_cli_args(args: "Namespace"):
             args.query_file,
             args.team,
             args.env_file,
-            args.envs,
+            args.env,
             args.workers,
             args.files,
             args.python_version,
-            args.reqs,
+            args.req,
             args.req_file,
         )
 
@@ -187,23 +187,23 @@ def create_job(
     query_file: str,
     team_name: Optional[str],
     env_file: Optional[str] = None,
-    envs: Optional[list[str]] = None,
+    env: Optional[list[str]] = None,
     workers: Optional[int] = None,
     files: Optional[list[str]] = None,
     python_version: Optional[str] = None,
-    reqs: Optional[str] = None,
+    req: Optional[list[str]] = None,
     req_file: Optional[str] = None,
 ):
     query_type = "PYTHON" if query_file.endswith(".py") else "SHELL"
     with open(query_file) as f:
         query = f.read()
 
-    environment = "\n".join(envs) if envs else ""
+    environment = "\n".join(env) if env else ""
     if env_file:
         with open(env_file) as f:
             environment = f.read() + "\n" + environment
 
-    requirements = "\n".join(reqs) if reqs else ""
+    requirements = "\n".join(req) if req else ""
     if req_file:
         with open(req_file) as f:
             requirements = f.read() + "\n" + requirements
@@ -228,6 +228,7 @@ def create_job(
         raise DataChainError("Failed to create job")
 
     print(f"Job {response.data.get('job', {}).get('id')} created")
+    print("Open the job in Studio at", response.data.get("job", {}).get("url"))
 
 
 def upload_files(client: StudioClient, files: list[str]) -> list[str]:

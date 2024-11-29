@@ -306,7 +306,7 @@ def test_studio_run(capsys, mocker, tmp_dir):
                     "example_query.py",
                     "--env-file",
                     "env_file.txt",
-                    "--envs",
+                    "--env",
                     "ENV_FROM_ARGS=1",
                     "--workers",
                     "2",
@@ -316,7 +316,7 @@ def test_studio_run(capsys, mocker, tmp_dir):
                     "3.12",
                     "--req-file",
                     "reqs.txt",
-                    "--reqs",
+                    "--req",
                     "stupidity",
                 ]
             )
