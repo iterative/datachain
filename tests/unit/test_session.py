@@ -4,7 +4,8 @@ import pytest
 import sqlalchemy as sa
 
 from datachain.error import DatasetNotFoundError
-from datachain.query import DatasetQuery, Session
+from datachain.query.dataset import DatasetQuery
+from datachain.query.session import Session
 from datachain.sql.types import String
 
 

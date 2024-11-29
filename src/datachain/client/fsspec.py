@@ -28,7 +28,6 @@ from tqdm import tqdm
 from datachain.cache import DataChainCache
 from datachain.client.fileslice import FileWrapper
 from datachain.error import ClientError as DataChainClientError
-from datachain.lib.file import File
 from datachain.nodes_fetcher import NodesFetcher
 from datachain.nodes_thread_pool import NodeChunk
 
@@ -36,6 +35,7 @@ if TYPE_CHECKING:
     from fsspec.spec import AbstractFileSystem
 
     from datachain.dataset import StorageURI
+    from datachain.lib.file import File
 
 
 logger = logging.getLogger("datachain")
@@ -45,7 +45,7 @@ DELIMITER = "/"  # Path delimiter.
 
 DATA_SOURCE_URI_PATTERN = re.compile(r"^[\w]+:\/\/.*$")
 
-ResultQueue = asyncio.Queue[Optional[Sequence[File]]]
+ResultQueue = asyncio.Queue[Optional[Sequence["File"]]]
 
 
 def _is_win_local_path(uri: str) -> bool:
@@ -212,7 +212,7 @@ class Client(ABC):
 
     async def scandir(
         self, start_prefix: str, method: str = "default"
-    ) -> AsyncIterator[Sequence[File]]:
+    ) -> AsyncIterator[Sequence["File"]]:
         try:
             impl = getattr(self, f"_fetch_{method}")
         except AttributeError:
@@ -317,7 +317,7 @@ class Client(ABC):
         return f"{self.PREFIX}{self.name}/{rel_path}"
 
     @abstractmethod
-    def info_to_file(self, v: dict[str, Any], parent: str) -> File: ...
+    def info_to_file(self, v: dict[str, Any], parent: str) -> "File": ...
 
     def fetch_nodes(
         self,
@@ -354,7 +354,7 @@ class Client(ABC):
             copy2(src, dst)
 
     def open_object(
-        self, file: File, use_cache: bool = True, cb: Callback = DEFAULT_CALLBACK
+        self, file: "File", use_cache: bool = True, cb: Callback = DEFAULT_CALLBACK
     ) -> BinaryIO:
         """Open a file, including files in tar archives."""
         if use_cache and (cache_path := self.cache.get_path(file)):
@@ -362,19 +362,19 @@ class Client(ABC):
         assert not file.location
         return FileWrapper(self.fs.open(self.get_full_path(file.path)), cb)  # type: ignore[return-value]
 
-    def download(self, file: File, *, callback: Callback = DEFAULT_CALLBACK) -> None:
+    def download(self, file: "File", *, callback: Callback = DEFAULT_CALLBACK) -> None:
         sync(get_loop(), functools.partial(self._download, file, callback=callback))
 
-    async def _download(self, file: File, *, callback: "Callback" = None) -> None:
+    async def _download(self, file: "File", *, callback: "Callback" = None) -> None:
         if self.cache.contains(file):
             # Already in cache, so there's nothing to do.
             return
         await self._put_in_cache(file, callback=callback)
 
-    def put_in_cache(self, file: File, *, callback: "Callback" = None) -> None:
+    def put_in_cache(self, file: "File", *, callback: "Callback" = None) -> None:
         sync(get_loop(), functools.partial(self._put_in_cache, file, callback=callback))
 
-    async def _put_in_cache(self, file: File, *, callback: "Callback" = None) -> None:
+    async def _put_in_cache(self, file: "File", *, callback: "Callback" = None) -> None:
         assert not file.location
         if file.etag:
             etag = await self.get_current_etag(file)
