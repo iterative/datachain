@@ -291,7 +291,10 @@ def test_studio_run(capsys, mocker, tmp_dir):
 
     with requests_mock.mock() as m:
         m.post(f"{STUDIO_URL}/api/datachain/upload-file", json={"blob": {"id": 1}})
-        m.post(f"{STUDIO_URL}/api/datachain/job", json={"job": {"id": 1}})
+        m.post(
+            f"{STUDIO_URL}/api/datachain/job",
+            json={"job": {"id": 1, "url": "https://example.com"}},
+        )
 
         (tmp_dir / "env_file.txt").write_text("ENV_FROM_FILE=1")
         (tmp_dir / "reqs.txt").write_text("pyjokes")
@@ -324,7 +327,7 @@ def test_studio_run(capsys, mocker, tmp_dir):
         )
 
     out = capsys.readouterr().out
-    assert out.strip() == "Job 1 created"
+    assert out.strip() == "Job 1 created\nOpen the job in Studio at https://example.com"
 
     first_request = m.request_history[0]
     second_request = m.request_history[1]
