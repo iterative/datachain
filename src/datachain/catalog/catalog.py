@@ -207,7 +207,6 @@ class DatasetRowsFetcher(NodesThreadPool):
             r = requests.get(url, timeout=PULL_DATASET_CHUNK_TIMEOUT)
             if r.status_code == 404:
                 time.sleep(PULL_DATASET_SLEEP_INTERVAL)
-                # moving to the next url
                 continue
             r.raise_for_status()
             return r.content
