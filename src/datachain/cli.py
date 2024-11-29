@@ -419,7 +419,18 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
 
     add_studio_parser(subp, parent_parser)
 
-    parse_pull = subp.add_parser(
+    datasets_parser = subp.add_parser(
+        "datasets",
+        aliases=["ds"],
+        parents=[parent_parser],
+        description="Commands for managing datasers",
+    )
+    datasets_subparser = datasets_parser.add_subparsers(
+        dest="datasets_cmd",
+        help="Use `datachain datasets CMD --help` to display command specific help",
+    )
+
+    parse_pull = datasets_subparser.add_parser(
         "pull",
         parents=[parent_parser],
         description="Pull specific dataset version from SaaS",
@@ -474,8 +485,8 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         help="Version of the local dataset",
     )
 
-    parse_edit_dataset = subp.add_parser(
-        "edit-dataset", parents=[parent_parser], description="Edit dataset metadata"
+    parse_edit_dataset = datasets_subparser.add_parser(
+        "edit", parents=[parent_parser], description="Edit dataset metadata"
     )
     parse_edit_dataset.add_argument("name", type=str, help="Dataset name")
     parse_edit_dataset.add_argument(
@@ -520,8 +531,8 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         help="The team to edit a dataset. By default, it will use team from config.",
     )
 
-    datasets_parser = subp.add_parser(
-        "datasets", parents=[parent_parser], description="List datasets"
+    datasets_parser = datasets_subparser.add_parser(
+        "ls", parents=[parent_parser], description="List datasets"
     )
     datasets_parser.add_argument(
         "--studio",
@@ -550,8 +561,8 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         help="The team to list datasets for. By default, it will use team from config.",
     )
 
-    rm_dataset_parser = subp.add_parser(
-        "rm-dataset", parents=[parent_parser], description="Removes dataset"
+    rm_dataset_parser = datasets_subparser.add_parser(
+        "rm", parents=[parent_parser], description="Removes dataset", aliases=["remove"]
     )
     rm_dataset_parser.add_argument("name", type=str, help="Dataset name")
     rm_dataset_parser.add_argument(
@@ -594,8 +605,8 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         help="The team to delete a dataset. By default, it will use team from config.",
     )
 
-    dataset_stats_parser = subp.add_parser(
-        "dataset-stats",
+    dataset_stats_parser = datasets_subparser.add_parser(
+        "stats",
         parents=[parent_parser],
         description="Shows basic dataset stats",
     )
@@ -1276,29 +1287,59 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
                 edatachain=args.edatachain,
                 edatachain_file=args.edatachain_file,
             )
-        elif args.command == "pull":
-            catalog.pull_dataset(
-                args.dataset,
-                args.output,
-                local_ds_name=args.local_name,
-                local_ds_version=args.local_version,
-                no_cp=args.no_cp,
-                force=bool(args.force),
-                edatachain=args.edatachain,
-                edatachain_file=args.edatachain_file,
-            )
-        elif args.command == "edit-dataset":
-            edit_dataset(
-                catalog,
-                args.name,
-                new_name=args.new_name,
-                description=args.description,
-                labels=args.labels,
-                studio=args.studio,
-                local=args.local,
-                all=args.all,
-                team=args.team,
-            )
+        elif args.command in ("datasets", "ds"):
+            if args.datasets_cmd == "pull":
+                catalog.pull_dataset(
+                    args.dataset,
+                    args.output,
+                    local_ds_name=args.local_name,
+                    local_ds_version=args.local_version,
+                    no_cp=args.no_cp,
+                    force=bool(args.force),
+                    edatachain=args.edatachain,
+                    edatachain_file=args.edatachain_file,
+                )
+            elif args.datasets_cmd == "edit":
+                edit_dataset(
+                    catalog,
+                    args.name,
+                    new_name=args.new_name,
+                    description=args.description,
+                    labels=args.labels,
+                    studio=args.studio,
+                    local=args.local,
+                    all=args.all,
+                    team=args.team,
+                )
+            elif args.datasets_cmd == "ls":
+                datasets(
+                    catalog=catalog,
+                    studio=args.studio,
+                    local=args.local,
+                    all=args.all,
+                    team=args.team,
+                )
+            elif args.datasets_cmd in ("rm", "remove"):
+                rm_dataset(
+                    catalog,
+                    args.name,
+                    version=args.version,
+                    force=args.force,
+                    studio=args.studio,
+                    local=args.local,
+                    all=args.all,
+                    team=args.team,
+                )
+            elif args.datasets_cmd == "stats":
+                dataset_stats(
+                    catalog,
+                    args.name,
+                    args.version,
+                    show_bytes=args.bytes,
+                    si=args.si,
+                )
+            else:
+                raise Exception(f"Unexpected command {args.datasets_cmd}")
         elif args.command == "ls":
             ls(
                 args.sources,
@@ -1310,14 +1351,7 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
                 update=bool(args.update),
                 client_config=client_config,
             )
-        elif args.command == "datasets":
-            datasets(
-                catalog=catalog,
-                studio=args.studio,
-                local=args.local,
-                all=args.all,
-                team=args.team,
-            )
+
         elif args.command == "show":
             show(
                 catalog,
@@ -1329,25 +1363,7 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
                 no_collapse=args.no_collapse,
                 schema=args.schema,
             )
-        elif args.command == "rm-dataset":
-            rm_dataset(
-                catalog,
-                args.name,
-                version=args.version,
-                force=args.force,
-                studio=args.studio,
-                local=args.local,
-                all=args.all,
-                team=args.team,
-            )
-        elif args.command == "dataset-stats":
-            dataset_stats(
-                catalog,
-                args.name,
-                args.version,
-                show_bytes=args.bytes,
-                si=args.si,
-            )
+
         elif args.command == "du":
             du(
                 catalog,
