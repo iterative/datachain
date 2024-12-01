@@ -215,7 +215,7 @@ class DatasetDiffOperation(Step):
         Should return select query that calculates desired diff between dataset queries
         """
 
-    def apply(self, query_generator, temp_tables: list[str]):
+    def apply(self, query_generator, temp_tables: list[str]) -> "StepResult":
         source_query = query_generator.exclude(("sys__id",))
         target_query = self.dq.apply_steps().select()
         temp_tables.extend(self.dq.temp_table_names)

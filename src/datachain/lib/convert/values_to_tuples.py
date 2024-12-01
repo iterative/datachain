@@ -11,7 +11,7 @@ from datachain.lib.utils import DataChainParamsError
 
 
 class ValuesToTupleError(DataChainParamsError):
-    def __init__(self, ds_name, msg):
+    def __init__(self, ds_name: str, msg: str):
         if ds_name:
             ds_name = f"' {ds_name}'"
         super().__init__(f"Cannot convert signals for dataset{ds_name}: {msg}")
