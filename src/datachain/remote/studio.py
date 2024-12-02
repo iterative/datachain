@@ -119,18 +119,27 @@ class StudioClient:
                 "\tpip install 'datachain[remote]'"
             ) from None
 
-    def _send_request_msgpack(self, route: str, data: dict[str, Any]) -> Response[Any]:
+    def _send_request_msgpack(
+        self, route: str, data: dict[str, Any], method: Optional[str] = "post"
+    ) -> Response[Any]:
         import msgpack
         import requests
 
-        response = requests.post(
-            f"{self.url}/{route}",
-            json={**data, "team_name": self.team},
+        kwargs = (
+            {"params": {**data, "team_name": self.team}}
+            if method == "get"
+            else {"json": {**data, "team_name": self.team}}
+        )
+
+        response = requests.request(
+            method=method,  # type: ignore[arg-type]
+            url=f"{self.url}/{route}",
             headers={
                 "Content-Type": "application/json",
                 "Authorization": f"token {self.token}",
             },
             timeout=self.timeout,
+            **kwargs,  # type: ignore[arg-type]
         )
         ok = response.ok
         if not ok:
@@ -148,7 +157,9 @@ class StudioClient:
         return Response(response_data, ok, message)
 
     @retry_with_backoff(retries=5)
-    def _send_request(self, route: str, data: dict[str, Any]) -> Response[Any]:
+    def _send_request(
+        self, route: str, data: dict[str, Any], method: Optional[str] = "post"
+    ) -> Response[Any]:
         """
         Function that communicate Studio API.
         It will raise an exception, and try to retry, if 5xx status code is
@@ -157,14 +168,21 @@ class StudioClient:
         """
         import requests
 
-        response = requests.post(
-            f"{self.url}/{route}",
-            json={**data, "team_name": self.team},
+        kwargs = (
+            {"params": {**data, "team_name": self.team}}
+            if method == "get"
+            else {"json": {**data, "team_name": self.team}}
+        )
+
+        response = requests.request(
+            method=method,  # type: ignore[arg-type]
+            url=f"{self.url}/{route}",
             headers={
                 "Content-Type": "application/json",
                 "Authorization": f"token {self.token}",
             },
             timeout=self.timeout,
+            **kwargs,  # type: ignore[arg-type]
         )
         try:
             response.raise_for_status()
@@ -222,7 +240,7 @@ class StudioClient:
             yield path, response
 
     def ls_datasets(self) -> Response[LsData]:
-        return self._send_request("datachain/ls-datasets", {})
+        return self._send_request("datachain/datasets", {}, method="get")
 
     def edit_dataset(
         self,
@@ -232,20 +250,14 @@ class StudioClient:
         labels: Optional[list[str]] = None,
     ) -> Response[DatasetInfoData]:
         body = {
+            "new_name": new_name,
             "dataset_name": name,
+            "description": description,
+            "labels": labels,
         }
 
-        if new_name is not None:
-            body["new_name"] = new_name
-
-        if description is not None:
-            body["description"] = description
-
-        if labels is not None:
-            body["labels"] = labels  # type: ignore[assignment]
-
         return self._send_request(
-            "datachain/edit-dataset",
+            "datachain/datasets",
             body,
         )
 
@@ -256,12 +268,13 @@ class StudioClient:
         force: Optional[bool] = False,
     ) -> Response[DatasetInfoData]:
         return self._send_request(
-            "datachain/rm-dataset",
+            "datachain/datasets",
             {
                 "dataset_name": name,
                 "version": version,
                 "force": force,
             },
+            method="delete",
         )
 
     def dataset_info(self, name: str) -> Response[DatasetInfoData]:
@@ -272,7 +285,9 @@ class StudioClient:
 
             return dataset_info
 
-        response = self._send_request("datachain/dataset-info", {"dataset_name": name})
+        response = self._send_request(
+            "datachain/datasets/info", {"dataset_name": name}, method="get"
+        )
         if response.ok:
             response.data = _parse_dataset_info(response.data)
         return response
@@ -282,14 +297,16 @@ class StudioClient:
     ) -> Response[DatasetRowsData]:
         req_data = {"dataset_name": name, "dataset_version": version}
         return self._send_request_msgpack(
-            "datachain/dataset-rows",
+            "datachain/datasets/rows",
             {**req_data, "offset": offset, "limit": DATASET_ROWS_CHUNK_SIZE},
+            method="get",
         )
 
     def dataset_stats(self, name: str, version: int) -> Response[DatasetStatsData]:
         response = self._send_request(
-            "datachain/dataset-stats",
+            "datachain/datasets/stats",
             {"dataset_name": name, "dataset_version": version},
+            method="get",
         )
         if response.ok:
             response.data = DatasetStats(**response.data)
@@ -299,16 +316,18 @@ class StudioClient:
         self, name: str, version: int
     ) -> Response[DatasetExportSignedUrls]:
         return self._send_request(
-            "datachain/dataset-export",
+            "datachain/datasets/export",
             {"dataset_name": name, "dataset_version": version},
+            method="get",
         )
 
     def dataset_export_status(
         self, name: str, version: int
     ) -> Response[DatasetExportStatus]:
         return self._send_request(
-            "datachain/dataset-export-status",
+            "datachain/datasets/export-status",
             {"dataset_name": name, "dataset_version": version},
+            method="get",
         )
 
     def upload_file(self, file_name: str, content: bytes) -> Response[FileUploadData]:

@@ -169,7 +169,7 @@ def test_studio_datasets(capsys, studio_datasets, mocker):
 
 def test_studio_edit_dataset(capsys, mocker):
     with requests_mock.mock() as m:
-        m.post(f"{STUDIO_URL}/api/datachain/edit-dataset", json={})
+        m.post(f"{STUDIO_URL}/api/datachain/datasets", json={})
 
         # Studio token is required
         assert (
@@ -217,6 +217,8 @@ def test_studio_edit_dataset(capsys, mocker):
             "dataset_name": "name",
             "new_name": "new-name",
             "team_name": "team_name",
+            "description": None,
+            "labels": None,
         }
 
         # With all arguments
@@ -251,7 +253,7 @@ def test_studio_edit_dataset(capsys, mocker):
 
 def test_studio_rm_dataset(capsys, mocker):
     with requests_mock.mock() as m:
-        m.post(f"{STUDIO_URL}/api/datachain/rm-dataset", json={})
+        m.delete(f"{STUDIO_URL}/api/datachain/datasets", json={})
 
         # Studio token is required
         assert main(["datasets", "rm", "name", "--team", "team_name", "--studio"]) == 1
