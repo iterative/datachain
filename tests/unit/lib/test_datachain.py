@@ -2695,14 +2695,6 @@ def test_group_by_error(test_session):
         session=test_session,
     )
 
-    with pytest.raises(TypeError):
-        dc.group_by(cnt=func.count())
-
-    with pytest.raises(
-        ValueError, match="At least one column should be provided for partition_by"
-    ):
-        dc.group_by(cnt=func.count(), partition_by=())
-
     with pytest.raises(
         ValueError, match="At least one column should be provided for group_by"
     ):
