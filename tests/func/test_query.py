@@ -15,7 +15,6 @@ def catalog_info_filepath(cloud_test_catalog_tmpfile, tmp_path):
 
     catalog_info = {
         "catalog_init_params": catalog.get_init_params(),
-        "id_generator_params": catalog.id_generator.clone_params(),
         "metastore_params": catalog.metastore.clone_params(),
         "warehouse_params": catalog.warehouse.clone_params(),
     }
@@ -36,12 +35,6 @@ def setup_catalog(query: str, catalog_info_filepath: str) -> str:
     with open(catalog_info_filepath, "rb") as f:
         catalog_info = cloudpickle.load(f)
     (
-        id_generator_class,
-        id_generator_args,
-        id_generator_kwargs,
-    ) = catalog_info["id_generator_params"]
-    id_generator = id_generator_class(*id_generator_args, **id_generator_kwargs)
-    (
         metastore_class,
         metastore_args,
         metastore_kwargs,
@@ -54,7 +47,6 @@ def setup_catalog(query: str, catalog_info_filepath: str) -> str:
     ) = catalog_info["warehouse_params"]
     warehouse = warehouse_class(*warehouse_args, **warehouse_kwargs)
     catalog = Catalog(
-        id_generator=id_generator,
         metastore=metastore,
         warehouse=warehouse,
         **catalog_info["catalog_init_params"],

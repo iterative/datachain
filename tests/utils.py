@@ -217,3 +217,13 @@ class ANY_VALUE:  # noqa: N801
 
     def __repr__(self) -> str:
         return f"<ANY_VALUE: {', '.join(repr(val) for val in self.values)}>"
+
+
+def sort_df(df):
+    """Sorts dataframe by all columns"""
+    return df.sort_values(by=df.columns.tolist()).reset_index(drop=True)
+
+
+def df_equal(df1, df2) -> bool:
+    """Helper function to check if two dataframes are equal regardless of ordering"""
+    return sort_df(df1).equals(sort_df(df2))

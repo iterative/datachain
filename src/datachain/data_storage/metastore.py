@@ -45,7 +45,7 @@ if TYPE_CHECKING:
     from sqlalchemy import Delete, Insert, Select, Update
     from sqlalchemy.schema import SchemaItem
 
-    from datachain.data_storage import AbstractIDGenerator, schema
+    from datachain.data_storage import schema
     from datachain.data_storage.db_engine import DatabaseEngine
 
 logger = logging.getLogger("datachain")
@@ -304,16 +304,10 @@ class AbstractDBMetastore(AbstractMetastore):
     DATASET_DEPENDENCY_TABLE = "datasets_dependencies"
     JOBS_TABLE = "jobs"
 
-    id_generator: "AbstractIDGenerator"
     db: "DatabaseEngine"
 
-    def __init__(
-        self,
-        id_generator: "AbstractIDGenerator",
-        uri: Optional[StorageURI] = None,
-    ):
+    def __init__(self, uri: Optional[StorageURI] = None):
         uri = uri or StorageURI("")
-        self.id_generator = id_generator
         super().__init__(uri)
 
     def close(self) -> None:
@@ -322,7 +316,6 @@ class AbstractDBMetastore(AbstractMetastore):
 
     def cleanup_tables(self, temp_table_names: list[str]) -> None:
         """Cleanup temp tables."""
-        self.id_generator.delete_uris(temp_table_names)
 
     @classmethod
     def _datasets_columns(cls) -> list["SchemaItem"]:
@@ -684,13 +677,6 @@ class AbstractDBMetastore(AbstractMetastore):
         if not versions:
             return None
         return reduce(lambda ds, version: ds.merge_versions(version), versions)
-
-    def _parse_datasets(self, rows) -> Iterator["DatasetRecord"]:
-        # grouping rows by dataset id
-        for _, g in groupby(rows, lambda r: r[0]):
-            dataset = self._parse_dataset(list(g))
-            if dataset:
-                yield dataset
 
     def _parse_list_dataset(self, rows) -> Optional[DatasetListRecord]:
         versions = [self.dataset_list_class.parse(*r) for r in rows]

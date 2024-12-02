@@ -70,20 +70,17 @@ class PytorchDataset(IterableDataset):
         # For compatibility with multiprocessing,
         # we can only store params in __init__(), as Catalog isn't picklable
         # see https://github.com/iterative/dvcx/issues/954
-        self._idgen_params = catalog.id_generator.clone_params()
         self._ms_params = catalog.metastore.clone_params()
         self._wh_params = catalog.warehouse.clone_params()
         self._catalog_params = catalog.get_init_params()
         self.catalog: Optional[Catalog] = None
 
     def _get_catalog(self) -> "Catalog":
-        idgen_cls, idgen_args, idgen_kwargs = self._idgen_params
-        idgen = idgen_cls(*idgen_args, **idgen_kwargs)
         ms_cls, ms_args, ms_kwargs = self._ms_params
         ms = ms_cls(*ms_args, **ms_kwargs)
         wh_cls, wh_args, wh_kwargs = self._wh_params
         wh = wh_cls(*wh_args, **wh_kwargs)
-        return Catalog(idgen, ms, wh, **self._catalog_params)
+        return Catalog(ms, wh, **self._catalog_params)
 
     def __iter__(self) -> Iterator[Any]:
         if self.catalog is None:

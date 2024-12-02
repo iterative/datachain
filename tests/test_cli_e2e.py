@@ -147,27 +147,27 @@ E2E_STEPS = (
         },
     },
     {
-        "command": ("datachain", "datasets"),
+        "command": ("datachain", "datasets", "ls"),
         "expected": _tabulated_datasets("mnt", 1),
     },
     {
-        "command": ("datachain", "datasets"),
+        "command": ("datachain", "datasets", "ls"),
         "expected": _tabulated_datasets("mnt", 1),
     },
     {
-        "command": ("datachain", "edit-dataset", "mnt", "--new-name", "mnt-new"),
+        "command": ("datachain", "datasets", "edit", "mnt", "--new-name", "mnt-new"),
         "expected": "",
     },
     {
-        "command": ("datachain", "datasets"),
+        "command": ("datachain", "datasets", "ls"),
         "expected": _tabulated_datasets("mnt-new", 1),
     },
     {
-        "command": ("datachain", "rm-dataset", "mnt-new", "--version", "1"),
+        "command": ("datachain", "datasets", "rm", "mnt-new", "--version", "1"),
         "expected": "",
     },
     {
-        "command": ("datachain", "datasets"),
+        "command": ("datachain", "datasets", "ls"),
         "expected": "",
     },
     {
@@ -199,7 +199,6 @@ def run_step(step, catalog):
         encoding="utf-8",
         env={
             **os.environ,
-            "DATACHAIN__ID_GENERATOR": catalog.id_generator.serialize(),
             "DATACHAIN__METASTORE": catalog.metastore.serialize(),
             "DATACHAIN__WAREHOUSE": catalog.warehouse.serialize(),
         },

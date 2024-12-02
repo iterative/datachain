@@ -96,6 +96,7 @@ def test_bootstrap_in_chain():
         DataChain.from_values(val=prime)
         .setup(init_val=lambda: base)
         .map(x=lambda val, init_val: val + init_val, output=int)
+        .order_by("x")
         .collect("x")
     )
 

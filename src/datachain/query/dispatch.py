@@ -65,7 +65,6 @@ def udf_entrypoint() -> int:
     dispatch = UDFDispatcher(
         udf_info["udf_data"],
         udf_info["catalog_init"],
-        udf_info["id_generator_clone_params"],
         udf_info["metastore_clone_params"],
         udf_info["warehouse_clone_params"],
         udf_fields=udf_info["udf_fields"],
@@ -119,7 +118,6 @@ class UDFDispatcher:
         self,
         udf_data,
         catalog_init_params,
-        id_generator_clone_params,
         metastore_clone_params,
         warehouse_clone_params,
         udf_fields: "Sequence[str]",
@@ -129,11 +127,6 @@ class UDFDispatcher:
     ):
         self.udf_data = udf_data
         self.catalog_init_params = catalog_init_params
-        (
-            self.id_generator_class,
-            self.id_generator_args,
-            self.id_generator_kwargs,
-        ) = id_generator_clone_params
         (
             self.metastore_class,
             self.metastore_args,
@@ -155,18 +148,13 @@ class UDFDispatcher:
 
     def _create_worker(self) -> "UDFWorker":
         if not self.catalog:
-            id_generator = self.id_generator_class(
-                *self.id_generator_args, **self.id_generator_kwargs
-            )
             metastore = self.metastore_class(
                 *self.metastore_args, **self.metastore_kwargs
             )
             warehouse = self.warehouse_class(
                 *self.warehouse_args, **self.warehouse_kwargs
             )
-            self.catalog = Catalog(
-                id_generator, metastore, warehouse, **self.catalog_init_params
-            )
+            self.catalog = Catalog(metastore, warehouse, **self.catalog_init_params)
         self.udf = loads(self.udf_data)
         return UDFWorker(
             self.catalog,
