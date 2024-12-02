@@ -1,4 +1,4 @@
-from sqlalchemy import literal
+from sqlalchemy import case, literal
 
 from . import array, path, random, string
 from .aggregate import (
@@ -24,6 +24,7 @@ __all__ = [
     "any_value",
     "array",
     "avg",
+    "case",
     "collect",
     "concat",
     "cosine_distance",
