@@ -2762,6 +2762,34 @@ def test_group_by_error(test_session):
         dc.group_by(foo=func.sum("col2"), partition_by="col3")
 
 
+def test_group_by_case(test_session):
+    from datachain import func
+
+    ds = (
+        DataChain.from_values(
+            col1=[1.0, 0.0, 3.2, 0.1, 5.9, -1.0],
+            col2=[0.0, 6.1, -0.05, 3.7, 0.1, -3.0],
+            session=test_session,
+        )
+        .group_by(
+            col1=func.sum(func.case((C("col1") > 0.1, 1), else_=0)),
+            col2=func.sum(func.case((C("col2") < 0.0, 1), else_=0)),
+        )
+        .save("my-ds")
+    )
+
+    assert ds.signals_schema.serialize() == {
+        "col1": "int",
+        "col2": "int",
+    }
+    assert ds.to_records() == [
+        {
+            "col1": 3,
+            "col2": 2,
+        }
+    ]
+
+
 @pytest.mark.parametrize("desc", [True, False])
 def test_window_functions(test_session, desc):
     from datachain import func
