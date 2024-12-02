@@ -2742,6 +2742,7 @@ def test_group_by_no_partition_by(test_session):
             col4=["1", "2", "3", "4", "5", "6"],
             session=test_session,
         )
+        .order_by("col4")
         .group_by(
             cnt=func.count(),
             cnt_col=func.count("col2"),
