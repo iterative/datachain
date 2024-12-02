@@ -1,5 +1,6 @@
-from sqlalchemy.sql.functions import ReturnTypeFromArgs
+from sqlalchemy.sql.functions import GenericFunction, ReturnTypeFromArgs
 
+from datachain.sql.types import Int64
 from datachain.sql.utils import compiler_not_implemented
 
 
@@ -23,8 +24,20 @@ class bit_lshift(ReturnTypeFromArgs):  # noqa: N801
     inherit_cache = True
 
 
+class int_hash_64(GenericFunction):  # noqa: N801
+    """
+    Computes the 64-bit hash of an integer.
+    """
+
+    type = Int64()
+    package = "hash"
+    name = "int_hash_64"
+    inherit_cache = True
+
+
 compiler_not_implemented(bit_and)
 compiler_not_implemented(bit_or)
 compiler_not_implemented(bit_xor)
 compiler_not_implemented(bit_rshift)
 compiler_not_implemented(bit_lshift)
+compiler_not_implemented(int_hash_64)

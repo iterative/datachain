@@ -173,53 +173,129 @@ class Func(Function):
 
     def __and__(self, other: Union[ColT, float]) -> "Func":
         if isinstance(other, (int, float)):
-            return Func("and", lambda a: numeric.bit_and(a, other), [self])
-        return Func("and", lambda a1, a2: numeric.bit_and(a1, a2), [self, other])
+            return Func(
+                "and", lambda a: numeric.bit_and(a, other), [self], result_type=int
+            )
+        return Func(
+            "and",
+            lambda a1, a2: numeric.bit_and(a1, a2),
+            [self, other],
+            result_type=int,
+        )
 
     def __rand__(self, other: Union[ColT, float]) -> "Func":
         if isinstance(other, (int, float)):
-            return Func("and", lambda a: numeric.bit_and(other, a), [self])
-        return Func("and", lambda a1, a2: numeric.bit_and(a1, a2), [other, self])
+            return Func(
+                "and", lambda a: numeric.bit_and(other, a), [self], result_type=int
+            )
+        return Func(
+            "and",
+            lambda a1, a2: numeric.bit_and(a1, a2),
+            [other, self],
+            result_type=int,
+        )
 
     def __or__(self, other: Union[ColT, float]) -> "Func":
         if isinstance(other, (int, float)):
-            return Func("or", lambda a: numeric.bit_or(a, other), [self])
-        return Func("or", lambda a1, a2: numeric.bit_or(a1, a2), [self, other])
+            return Func(
+                "or", lambda a: numeric.bit_or(a, other), [self], result_type=int
+            )
+        return Func(
+            "or", lambda a1, a2: numeric.bit_or(a1, a2), [self, other], result_type=int
+        )
 
     def __ror__(self, other: Union[ColT, float]) -> "Func":
         if isinstance(other, (int, float)):
-            return Func("or", lambda a: numeric.bit_or(other, a), [self])
-        return Func("or", lambda a1, a2: numeric.bit_or(a1, a2), [other, self])
+            return Func(
+                "or", lambda a: numeric.bit_or(other, a), [self], result_type=int
+            )
+        return Func(
+            "or", lambda a1, a2: numeric.bit_or(a1, a2), [other, self], result_type=int
+        )
 
     def __xor__(self, other: Union[ColT, float]) -> "Func":
         if isinstance(other, (int, float)):
-            return Func("xor", lambda a: numeric.bit_xor(a, other), [self])
-        return Func("xor", lambda a1, a2: numeric.bit_xor(a1, a2), [self, other])
+            return Func(
+                "xor", lambda a: numeric.bit_xor(a, other), [self], result_type=int
+            )
+        return Func(
+            "xor",
+            lambda a1, a2: numeric.bit_xor(a1, a2),
+            [self, other],
+            result_type=int,
+        )
 
     def __rxor__(self, other: Union[ColT, float]) -> "Func":
         if isinstance(other, (int, float)):
-            return Func("xor", lambda a: numeric.bit_xor(other, a), [self])
-        return Func("xor", lambda a1, a2: numeric.bit_xor(a1, a2), [other, self])
+            return Func(
+                "xor", lambda a: numeric.bit_xor(other, a), [self], result_type=int
+            )
+        return Func(
+            "xor",
+            lambda a1, a2: numeric.bit_xor(a1, a2),
+            [other, self],
+            result_type=int,
+        )
 
     def __rshift__(self, other: Union[ColT, float]) -> "Func":
         if isinstance(other, (int, float)):
-            return Func("rshift", lambda a: numeric.bit_rshift(a, other), [self])
-        return Func("rshift", lambda a1, a2: numeric.bit_rshift(a1, a2), [self, other])
+            return Func(
+                "rshift",
+                lambda a: numeric.bit_rshift(a, other),
+                [self],
+                result_type=int,
+            )
+        return Func(
+            "rshift",
+            lambda a1, a2: numeric.bit_rshift(a1, a2),
+            [self, other],
+            result_type=int,
+        )
 
     def __rrshift__(self, other: Union[ColT, float]) -> "Func":
         if isinstance(other, (int, float)):
-            return Func("rshift", lambda a: numeric.bit_rshift(other, a), [self])
-        return Func("rshift", lambda a1, a2: numeric.bit_rshift(a1, a2), [other, self])
+            return Func(
+                "rshift",
+                lambda a: numeric.bit_rshift(other, a),
+                [self],
+                result_type=int,
+            )
+        return Func(
+            "rshift",
+            lambda a1, a2: numeric.bit_rshift(a1, a2),
+            [other, self],
+            result_type=int,
+        )
 
     def __lshift__(self, other: Union[ColT, float]) -> "Func":
         if isinstance(other, (int, float)):
-            return Func("lshift", lambda a: numeric.bit_lshift(a, other), [self])
-        return Func("lshift", lambda a1, a2: numeric.bit_lshift(a1, a2), [self, other])
+            return Func(
+                "lshift",
+                lambda a: numeric.bit_lshift(a, other),
+                [self],
+                result_type=int,
+            )
+        return Func(
+            "lshift",
+            lambda a1, a2: numeric.bit_lshift(a1, a2),
+            [self, other],
+            result_type=int,
+        )
 
     def __rlshift__(self, other: Union[ColT, float]) -> "Func":
         if isinstance(other, (int, float)):
-            return Func("lshift", lambda a: numeric.bit_lshift(other, a), [self])
-        return Func("lshift", lambda a1, a2: numeric.bit_lshift(a1, a2), [other, self])
+            return Func(
+                "lshift",
+                lambda a: numeric.bit_lshift(other, a),
+                [self],
+                result_type=int,
+            )
+        return Func(
+            "lshift",
+            lambda a1, a2: numeric.bit_lshift(a1, a2),
+            [other, self],
+            result_type=int,
+        )
 
     def __lt__(self, other: Union[ColT, float]) -> "Func":
         if isinstance(other, (int, float)):

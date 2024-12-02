@@ -54,6 +54,8 @@ slash = literal("/")
 empty_str = literal("")
 dot = literal(".")
 
+MAX_INT64 = 2**64 - 1
+
 
 def setup():
     global setup_is_complete  # noqa: PLW0603
@@ -101,6 +103,7 @@ def setup():
     compiles(numeric.bit_xor, "sqlite")(compile_bitwise_xor)
     compiles(numeric.bit_rshift, "sqlite")(compile_bitwise_rshift)
     compiles(numeric.bit_lshift, "sqlite")(compile_bitwise_lshift)
+    compiles(numeric.int_hash_64, "sqlite")(compile_int_hash_64)
 
     if load_usearch_extension(sqlite3.connect(":memory:")):
         compiles(array.cosine_distance, "sqlite")(compile_cosine_distance_ext)
@@ -175,6 +178,19 @@ def sqlite_string_split(string: str, sep: str, maxsplit: int = -1) -> str:
     return orjson.dumps(string.split(sep, maxsplit)).decode("utf-8")
 
 
+def sqlite_int_hash_64(x: int) -> int:
+    """IntHash64 implementation from ClickHouse."""
+    x ^= 0x4CF2D2BAAE6DA887
+    x ^= x >> 33
+    x = (x * 0xFF51AFD7ED558CCD) & MAX_INT64
+    x ^= x >> 33
+    x = (x * 0xC4CEB9FE1A85EC53) & MAX_INT64
+    x ^= x >> 33
+    # SQLite does not support unsigned 64-bit integers,
+    # so we need to convert to signed 64-bit
+    return x if x < 1 << 63 else (x & MAX_INT64) - (1 << 64)
+
+
 def register_user_defined_sql_functions() -> None:
     # Register optional functions if we have the necessary dependencies
     # and otherwise register functions that will raise an exception with
@@ -208,6 +224,7 @@ def register_user_defined_sql_functions() -> None:
         conn.create_function(
             "bitwise_lshift", 2, lambda a, b: a << b, deterministic=True
         )
+        conn.create_function("int_hash_64", 1, sqlite_int_hash_64, deterministic=True)
 
     _registered_function_creators["numeric_functions"] = create_numeric_functions
 
@@ -360,6 +377,10 @@ def compile_bitwise_rshift(element, compiler, **kwargs):
 
 def compile_bitwise_lshift(element, compiler, **kwargs):
     return compiler.process(func.bitwise_lshift(*element.clauses.clauses), **kwargs)
+
+
+def compile_int_hash_64(element, compiler, **kwargs):
+    return compiler.process(func.int_hash_64(*element.clauses.clauses), **kwargs)
 
 
 def py_json_array_length(arr):

@@ -2,9 +2,11 @@ import pytest
 from sqlalchemy import Label
 
 from datachain import DataChain
+from datachain.func import int_hash_64
 from datachain.func.random import rand
 from datachain.func.string import length as strlen
 from datachain.lib.signal_schema import SignalSchema
+from datachain.sql.sqlite.base import sqlite_int_hash_64
 
 
 @pytest.fixture()
@@ -558,3 +560,27 @@ def test_ge_mutate(dc):
 
     res = dc.mutate(test=strlen("val") >= strlen("val")).order_by("num").collect("test")
     assert list(res) == [1, 1, 1, 1, 1]
+
+
+@pytest.mark.parametrize(
+    "value,inthash",
+    [
+        [0, 4761183170873013810],
+        [1, 10577349846663553072 - (1 << 64)],
+        [5, 15228578409069794350 - (1 << 64)],
+        [123456, 13379111408315310133 - (1 << 64)],
+    ],
+)
+def test_sqlite_int_hash_64(value, inthash):
+    assert sqlite_int_hash_64(value) == inthash
+
+
+def test_int_hash_64_mutate(dc):
+    res = dc.mutate(test=int_hash_64(strlen("val"))).order_by("num").collect("test")
+    assert [x & (2**64 - 1) for x in res] == [
+        10577349846663553072,
+        18198135717204167749,
+        9624464864560415994,
+        7766709361750702608,
+        15228578409069794350,
+    ]

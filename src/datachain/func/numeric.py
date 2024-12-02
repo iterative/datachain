@@ -2,7 +2,7 @@ from typing import Union
 
 from datachain.sql.functions import numeric
 
-from .func import Func
+from .func import ColT, Func
 
 
 def bit_xor(*args: Union[str, int]) -> Func:
@@ -44,3 +44,30 @@ def bit_xor(*args: Union[str, int]) -> Func:
         args=func_args,
         result_type=int,
     )
+
+
+def int_hash_64(col: ColT) -> Func:
+    """
+    Returns the 64-bit hash of an integer.
+
+    Args:
+        col (str | literal): String to compute the hash of.
+            If a string is provided, it is assumed to be the name of the column.
+            If a literal is provided, it is assumed to be an int literal.
+            If a Func is provided, it is assumed to be a function returning an int.
+
+    Returns:
+        Func: A Func object that represents the 64-bit hash function.
+
+    Example:
+        ```py
+        dc.mutate(
+            val_hash=func.int_hash_64("val"),
+        )
+        ```
+
+    Note:
+        - Result column will always be of type int.
+    """
+
+    return Func("int_hash_64", inner=numeric.int_hash_64, cols=[col], result_type=int)

@@ -38,6 +38,10 @@ class length(GenericFunction):  # noqa: N801
 
 
 class sip_hash_64(GenericFunction):  # noqa: N801
+    """
+    Computes the SipHash-64 hash of the array.
+    """
+
     type = Int64()
     package = "hash"
     name = "sip_hash_64"
