@@ -5,7 +5,89 @@ from datachain.sql.functions import numeric
 from .func import ColT, Func
 
 
-def bit_xor(*args: Union[str, int]) -> Func:
+def bit_and(*args: Union[ColT, int]) -> Func:
+    """
+    Computes the bitwise AND operation between two values.
+
+    Args:
+        args (str | int): Two values to compute the bitwise AND operation between.
+            If a string is provided, it is assumed to be the name of the column vector.
+            If an integer is provided, it is assumed to be a constant value.
+
+    Returns:
+        Func: A Func object that represents the bitwise AND function.
+
+    Example:
+        ```py
+        dc.mutate(
+            xor1=func.bit_and("signal.values", 0x0F),
+        )
+        ```
+
+    Notes:
+        - Result column will always be of type int.
+    """
+    cols, func_args = [], []
+    for arg in args:
+        if isinstance(arg, int):
+            func_args.append(arg)
+        else:
+            cols.append(arg)
+
+    if len(cols) + len(func_args) != 2:
+        raise ValueError("bit_and() requires exactly two arguments")
+
+    return Func(
+        "bit_and",
+        inner=numeric.bit_and,
+        cols=cols,
+        args=func_args,
+        result_type=int,
+    )
+
+
+def bit_or(*args: Union[ColT, int]) -> Func:
+    """
+    Computes the bitwise AND operation between two values.
+
+    Args:
+        args (str | int): Two values to compute the bitwise OR operation between.
+            If a string is provided, it is assumed to be the name of the column vector.
+            If an integer is provided, it is assumed to be a constant value.
+
+    Returns:
+        Func: A Func object that represents the bitwise OR function.
+
+    Example:
+        ```py
+        dc.mutate(
+            xor1=func.bit_or("signal.values", 0x0F),
+        )
+        ```
+
+    Notes:
+        - Result column will always be of type int.
+    """
+    cols, func_args = [], []
+    for arg in args:
+        if isinstance(arg, int):
+            func_args.append(arg)
+        else:
+            cols.append(arg)
+
+    if len(cols) + len(func_args) != 2:
+        raise ValueError("bit_or() requires exactly two arguments")
+
+    return Func(
+        "bit_or",
+        inner=numeric.bit_or,
+        cols=cols,
+        args=func_args,
+        result_type=int,
+    )
+
+
+def bit_xor(*args: Union[ColT, int]) -> Func:
     """
     Computes the bitwise XOR operation between two values.
 
@@ -29,10 +111,10 @@ def bit_xor(*args: Union[str, int]) -> Func:
     """
     cols, func_args = [], []
     for arg in args:
-        if isinstance(arg, str):
-            cols.append(arg)
-        else:
+        if isinstance(arg, int):
             func_args.append(arg)
+        else:
+            cols.append(arg)
 
     if len(cols) + len(func_args) != 2:
         raise ValueError("bit_xor() requires exactly two arguments")
@@ -46,14 +128,14 @@ def bit_xor(*args: Union[str, int]) -> Func:
     )
 
 
-def int_hash_64(col: ColT) -> Func:
+def int_hash_64(col: Union[ColT, int]) -> Func:
     """
     Returns the 64-bit hash of an integer.
 
     Args:
-        col (str | literal): String to compute the hash of.
+        col (str | int): String to compute the hash of.
             If a string is provided, it is assumed to be the name of the column.
-            If a literal is provided, it is assumed to be an int literal.
+            If a int is provided, it is assumed to be an int literal.
             If a Func is provided, it is assumed to be a function returning an int.
 
     Returns:
@@ -69,5 +151,12 @@ def int_hash_64(col: ColT) -> Func:
     Note:
         - Result column will always be of type int.
     """
+    cols, args = [], []
+    if isinstance(col, int):
+        args.append(col)
+    else:
+        cols.append(col)
 
-    return Func("int_hash_64", inner=numeric.int_hash_64, cols=[col], result_type=int)
+    return Func(
+        "int_hash_64", inner=numeric.int_hash_64, cols=cols, args=args, result_type=int
+    )

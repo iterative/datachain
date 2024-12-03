@@ -17,7 +17,7 @@ from .aggregate import (
 )
 from .array import cosine_distance, euclidean_distance, length, sip_hash_64
 from .conditional import greatest, least
-from .numeric import bit_xor, int_hash_64
+from .numeric import bit_and, bit_or, bit_xor, int_hash_64
 from .random import rand
 from .window import window
 
@@ -25,6 +25,8 @@ __all__ = [
     "any_value",
     "array",
     "avg",
+    "bit_and",
+    "bit_or",
     "bit_xor",
     "case",
     "collect",
