@@ -40,7 +40,6 @@ from datachain.dataset import (
     DatasetRecord,
     DatasetStats,
     DatasetStatus,
-    RowDict,
     StorageURI,
     create_dataset_uri,
     parse_dataset_uri,
@@ -63,13 +62,11 @@ from .datasource import DataSource
 
 if TYPE_CHECKING:
     from datachain.data_storage import (
-        AbstractIDGenerator,
         AbstractMetastore,
         AbstractWarehouse,
     )
     from datachain.dataset import DatasetListVersion
     from datachain.job import Job
-    from datachain.lib.file import File
     from datachain.listing import Listing
 
 logger = logging.getLogger("datachain")
@@ -525,7 +522,6 @@ def find_column_to_str(  # noqa: PLR0911
 class Catalog:
     def __init__(
         self,
-        id_generator: "AbstractIDGenerator",
         metastore: "AbstractMetastore",
         warehouse: "AbstractWarehouse",
         cache_dir=None,
@@ -538,7 +534,6 @@ class Catalog:
     ):
         datachain_dir = DataChainDir(cache=cache_dir, tmp=tmp_dir)
         datachain_dir.init()
-        self.id_generator = id_generator
         self.metastore = metastore
         self._warehouse = warehouse
         self.cache = DataChainCache(datachain_dir.cache, datachain_dir.tmp)
@@ -572,7 +567,6 @@ class Catalog:
     def copy(self, cache=True, db=True):
         result = copy(self)
         if not db:
-            result.id_generator = None
             result.metastore = None
             result._warehouse = None
             result.warehouse = None
@@ -972,7 +966,6 @@ class Catalog:
         are cleaned up as soon as they are no longer needed.
         """
         self.warehouse.cleanup_tables(names)
-        self.id_generator.delete_uris(names)
 
     def create_dataset_from_sources(
         self,
@@ -1279,35 +1272,6 @@ class Catalog:
 
         dataset = self.get_dataset(name)
         return self.update_dataset(dataset, **update_data)
-
-    def get_file_from_row(
-        self, dataset_name: str, dataset_version: int, row: RowDict, signal_name: str
-    ) -> "File":
-        """
-        Function that returns specific file signal from dataset row by name.
-        """
-        from datachain.lib.file import File
-        from datachain.lib.signal_schema import DEFAULT_DELIMITER, SignalSchema
-
-        version = self.get_dataset(dataset_name).get_version(dataset_version)
-        schema = SignalSchema.deserialize(version.feature_schema)
-
-        if signal_name not in schema.get_signals(File):
-            raise RuntimeError(
-                f"File signal with path {signal_name} not found in ",
-                f"dataset {dataset_name}@v{dataset_version} signals schema",
-            )
-
-        prefix = signal_name.replace(".", DEFAULT_DELIMITER) + DEFAULT_DELIMITER
-        file_signals = {
-            c_name.removeprefix(prefix): c_value
-            for c_name, c_value in row.items()
-            if c_name.startswith(prefix)
-            and DEFAULT_DELIMITER not in c_name.removeprefix(prefix)
-            and c_name.removeprefix(prefix) in File.model_fields
-        }
-
-        return File(**file_signals)
 
     def ls(
         self,

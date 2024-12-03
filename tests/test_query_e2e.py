@@ -183,7 +183,6 @@ def run_step(step, catalog):  # noqa: PLR0912
             encoding="utf-8",
             env={
                 **os.environ,
-                "DATACHAIN__ID_GENERATOR": catalog.id_generator.serialize(),
                 "DATACHAIN__METASTORE": catalog.metastore.serialize(),
                 "DATACHAIN__WAREHOUSE": catalog.warehouse.serialize(),
             },

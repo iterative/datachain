@@ -2,9 +2,11 @@ import inspect
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
-from sqlalchemy import BindParameter, ColumnElement, desc
+from sqlalchemy import BindParameter, Case, ColumnElement, desc
+from sqlalchemy.ext.hybrid import Comparator
 
 from datachain.lib.convert.python_to_sql import python_to_sql
+from datachain.lib.convert.sql_to_python import sql_to_python
 from datachain.lib.utils import DataChainColumnError, DataChainParamsError
 from datachain.query.schema import Column, ColumnMeta
 
@@ -71,7 +73,7 @@ class Func(Function):
         return (
             [
                 col
-                if isinstance(col, (Func, BindParameter))
+                if isinstance(col, (Func, BindParameter, Case, Comparator))
                 else ColumnMeta.to_db_name(
                     col.name if isinstance(col, ColumnElement) else col
                 )
@@ -272,6 +274,9 @@ class Func(Function):
 def get_db_col_type(signals_schema: "SignalSchema", col: ColT) -> "DataType":
     if isinstance(col, Func):
         return col.get_result_type(signals_schema)
+
+    if isinstance(col, ColumnElement) and not hasattr(col, "name"):
+        return sql_to_python(col)
 
     return signals_schema.get_column_type(
         col.name if isinstance(col, ColumnElement) else col

@@ -31,7 +31,7 @@ def test_e2e(test_session):
 
     dc = DataChain.from_values(fib=fib, odds=values, session=test_session)
 
-    vals = list(dc.collect())
+    vals = list(dc.order_by("fib").collect())
     lst1 = [item[0] for item in vals]
     lst2 = [item[1] for item in vals]
 
@@ -53,7 +53,7 @@ def test_single_e2e(test_session):
 
     dc = DataChain.from_values(fib=fib, session=test_session)
 
-    vals = list(dc.collect())
+    vals = list(dc.order_by("fib").collect())
     flattened = [item for sublist in vals for item in sublist]
 
     assert flattened == fib

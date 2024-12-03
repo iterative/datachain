@@ -28,7 +28,7 @@ from datachain.lib.signal_schema import (
 from datachain.lib.udf_signature import UdfSignatureError
 from datachain.lib.utils import DataChainColumnError, DataChainParamsError
 from datachain.sql.types import Float, Int64, String
-from tests.utils import ANY_VALUE, skip_if_not_sqlite, sorted_dicts
+from tests.utils import ANY_VALUE, df_equal, skip_if_not_sqlite, sort_df, sorted_dicts
 
 DF_DATA = {
     "first_name": ["Alice", "Bob", "Charlie", "David", "Eva"],
@@ -65,17 +65,25 @@ class MyNested(BaseModel):
     fr: MyFr
 
 
-features = [MyFr(nnn="n1", count=3), MyFr(nnn="n2", count=5), MyFr(nnn="n1", count=1)]
+features = sorted(
+    [MyFr(nnn="n1", count=3), MyFr(nnn="n2", count=5), MyFr(nnn="n1", count=1)],
+    key=lambda f: (f.nnn, f.count),
+)
+
 features_nested = [
     MyNested(fr=fr, label=f"label_{num}") for num, fr in enumerate(features)
 ]
+
+
+def sort_files(files):
+    return sorted(files, key=lambda f: (f.path, f.size))
 
 
 def test_pandas_conversion(test_session):
     df = pd.DataFrame(DF_DATA)
     df1 = DataChain.from_pandas(df, session=test_session)
     df1 = df1.select("first_name", "age", "city").to_pandas()
-    assert df1.equals(df)
+    assert df_equal(df1, df)
 
 
 @skip_if_not_sqlite
@@ -152,15 +160,15 @@ def test_from_features_basic_in_memory():
     assert set(ds.schema.values()) == {File}
 
 
-def test_from_features(test_session):
+def test_from_ffeatures(test_session):
     ds = DataChain.from_records(DataChain.DEFAULT_FILE_RECORD, session=test_session)
     ds = ds.gen(
         lambda prm: list(zip([File(path="")] * len(features), features)),
         params="path",
         output={"file": File, "t1": MyFr},
     )
-    for i, (_, t1) in enumerate(ds.collect()):
-        assert t1 == features[i]
+
+    assert [r[1] for r in ds.order_by("t1.nnn", "t1.count").collect()] == features
 
 
 def test_from_records_empty_chain_with_schema(test_session):
@@ -350,7 +358,7 @@ def test_from_features_simple_types(test_session):
 
     ds = DataChain.from_values(fib=fib, odds=values, session=test_session)
 
-    df = ds.to_pandas()
+    df = sort_df(ds.to_pandas())
     assert len(df) == len(fib)
     assert df["fib"].tolist() == fib
     assert df["odds"].tolist() == values
@@ -414,8 +422,9 @@ def test_file_list(test_session):
 
     ds = DataChain.from_values(file=files, session=test_session)
 
-    for i, values in enumerate(ds.collect()):
-        assert values[0] == files[i]
+    assert sort_files(files) == [
+        r[0] for r in ds.order_by("file.path", "file.size").collect()
+    ]
 
 
 def test_gen(test_session):
@@ -437,7 +446,7 @@ def test_gen(test_session):
         output={"x": _TestFr},
     )
 
-    for i, (x,) in enumerate(ds.collect()):
+    for i, (x,) in enumerate(ds.order_by("x.my_name", "x.sqrt").collect()):
         assert isinstance(x, _TestFr)
 
         fr = features[i]
@@ -461,7 +470,7 @@ def test_map(test_session):
         output={"x": _TestFr},
     )
 
-    x_list = list(dc.collect("x"))
+    x_list = list(dc.order_by("x.my_name", "x.sqrt").collect("x"))
     test_frs = [
         _TestFr(sqrt=math.sqrt(fr.count), my_name=fr.nnn + "_suf") for fr in features
     ]
@@ -492,7 +501,7 @@ def test_agg(test_session):
         output={"x": _TestFr},
     )
 
-    assert list(dc.collect("x")) == [
+    assert list(dc.order_by("x.my_name").collect("x")) == [
         _TestFr(
             f=File(path=""),
             cnt=sum(fr.count for fr in features if fr.nnn == "n1"),
@@ -518,24 +527,28 @@ def test_agg_two_params(test_session):
         MyFr(nnn="n1", count=2),
     ]
 
-    ds = DataChain.from_values(t1=features, t2=features2, session=test_session).agg(
-        x=lambda frs1, frs2: [
-            _TestFr(
-                f=File(path=""),
-                cnt=sum(f1.count + f2.count for f1, f2 in zip(frs1, frs2)),
-                my_name="-".join([fr.nnn for fr in frs1]),
-            )
-        ],
-        partition_by=C.t1.nnn,
-        params=("t1", "t2"),
-        output={"x": _TestFr},
+    ds = (
+        DataChain.from_values(t1=features, t2=features2, session=test_session)
+        .order_by("t1.nnn", "t2.nnn")
+        .agg(
+            x=lambda frs1, frs2: [
+                _TestFr(
+                    f=File(path=""),
+                    cnt=sum(f1.count + f2.count for f1, f2 in zip(frs1, frs2)),
+                    my_name="-".join([fr.nnn for fr in frs1]),
+                )
+            ],
+            partition_by=C.t1.nnn,
+            params=("t1", "t2"),
+            output={"x": _TestFr},
+        )
     )
 
-    assert list(ds.collect("x.my_name")) == ["n1-n1", "n2"]
-    assert list(ds.collect("x.cnt")) == [12, 15]
+    assert list(ds.order_by("x.my_name").collect("x.my_name")) == ["n1-n1", "n2"]
+    assert list(ds.order_by("x.cnt").collect("x.cnt")) == [7, 20]
 
 
-def test_agg_simple_iterator(test_session):
+def test_agg_simple_iiterator(test_session):
     def func(key, val) -> Iterator[tuple[File, str]]:
         for i in range(val):
             yield File(path=""), f"{key}_{i}"
@@ -544,7 +557,7 @@ def test_agg_simple_iterator(test_session):
     values = [3, 1, 2]
     ds = DataChain.from_values(key=keys, val=values, session=test_session).gen(res=func)
 
-    df = ds.to_pandas()
+    df = sort_df(ds.to_pandas())
     res = df["res_1"].tolist()
     assert res == ["a_0", "a_1", "a_2", "b_0", "c_0", "c_1"]
 
@@ -593,8 +606,8 @@ def test_agg_tuple_result_iterator(test_session):
         x=func, partition_by=C("key")
     )
 
-    assert list(ds.collect("x_1.name")) == ["n1-n1", "n2"]
-    assert list(ds.collect("x_1.size")) == [10, 5]
+    assert list(ds.order_by("x_1.name").collect("x_1.name")) == ["n1-n1", "n2"]
+    assert list(ds.order_by("x_1.size").collect("x_1.size")) == [5, 10]
 
 
 def test_agg_tuple_result_generator(test_session):
@@ -609,12 +622,14 @@ def test_agg_tuple_result_generator(test_session):
 
     keys = ["n1", "n2", "n1"]
     values = [1, 5, 9]
-    ds = DataChain.from_values(key=keys, val=values, session=test_session).agg(
-        x=func, partition_by=C("key")
+    ds = (
+        DataChain.from_values(key=keys, val=values, session=test_session)
+        .agg(x=func, partition_by=C("key"))
+        .order_by("x_1.name")
     )
 
-    assert list(ds.collect("x_1.name")) == ["n1-n1", "n2"]
-    assert list(ds.collect("x_1.size")) == [10, 5]
+    assert list(ds.order_by("x_1.name").collect("x_1.name")) == ["n1-n1", "n2"]
+    assert list(ds.order_by("x_1.size").collect("x_1.size")) == [5, 10]
 
 
 def test_batch_map(test_session):
@@ -634,7 +649,7 @@ def test_batch_map(test_session):
         output={"x": _TestFr},
     )
 
-    x_list = list(dc.collect("x"))
+    x_list = list(dc.order_by("x.my_name", "x.sqrt").collect("x"))
     test_frs = [
         _TestFr(sqrt=math.sqrt(fr.count), my_name=fr.nnn + "_suf") for fr in features
     ]
@@ -693,8 +708,12 @@ def test_batch_map_two_params(test_session):
         output={"x": _TestFr},
     )
 
-    assert list(ds.collect("x.my_name")) == ["n1-n1", "n2-n2", "n1-n1"]
-    assert list(ds.collect("x.cnt")) == [9, 15, 3]
+    assert list(ds.order_by("x.my_name").collect("x.my_name")) == [
+        "n1-n1",
+        "n1-n2",
+        "n2-n1",
+    ]
+    assert list(ds.order_by("x.cnt").collect("x.cnt")) == [7, 7, 13]
 
 
 def test_batch_map_tuple_result_iterator(test_session):
@@ -704,7 +723,7 @@ def test_batch_map_tuple_result_iterator(test_session):
 
     dc = DataChain.from_values(t1=[1, 4, 9], session=test_session).batch_map(x=sqrt)
 
-    assert list(dc.collect("x")) == [1, 2, 3]
+    assert list(dc.order_by("x").collect("x")) == [1, 2, 3]
 
 
 def test_collect(test_session):
@@ -713,7 +732,7 @@ def test_collect(test_session):
     )
 
     n = 0
-    for sample in dc.collect():
+    for sample in dc.order_by("f1.nnn", "f1.count").collect():
         assert len(sample) == 2
         fr, num = sample
 
@@ -730,7 +749,7 @@ def test_collect(test_session):
 def test_collect_nested_feature(test_session):
     dc = DataChain.from_values(sign1=features_nested, session=test_session)
 
-    for n, sample in enumerate(dc.collect()):
+    for n, sample in enumerate(dc.order_by("sign1.fr.nnn", "sign1.fr.count").collect()):
         assert len(sample) == 1
         nested = sample[0]
 
@@ -740,22 +759,23 @@ def test_collect_nested_feature(test_session):
 
 def test_select_feature(test_session):
     dc = DataChain.from_values(my_n=features_nested, session=test_session)
+    dc_ordered = dc.order_by("my_n.fr.nnn", "my_n.fr.count")
 
-    samples = dc.select("my_n").collect()
+    samples = dc_ordered.select("my_n").collect()
     n = 0
     for sample in samples:
         assert sample[0] == features_nested[n]
         n += 1
     assert n == len(features_nested)
 
-    samples = dc.select("my_n.fr").collect()
+    samples = dc_ordered.select("my_n.fr").collect()
     n = 0
     for sample in samples:
         assert sample[0] == features[n]
         n += 1
     assert n == len(features_nested)
 
-    samples = dc.select("my_n.label", "my_n.fr.count").collect()
+    samples = dc_ordered.select("my_n.label", "my_n.fr.count").collect()
     n = 0
     for sample in samples:
         label, count = sample
@@ -768,7 +788,11 @@ def test_select_feature(test_session):
 def test_select_columns_intersection(test_session):
     dc = DataChain.from_values(my_n=features_nested, session=test_session)
 
-    samples = dc.select("my_n.fr", "my_n.fr.count").collect()
+    samples = (
+        dc.order_by("my_n.fr.nnn", "my_n.fr.count")
+        .select("my_n.fr", "my_n.fr.count")
+        .collect()
+    )
     n = 0
     for sample in samples:
         fr, count = sample
@@ -781,7 +805,7 @@ def test_select_columns_intersection(test_session):
 def test_select_except(test_session):
     dc = DataChain.from_values(fr1=features_nested, fr2=features, session=test_session)
 
-    samples = dc.select_except("fr2").collect()
+    samples = dc.order_by("fr1.fr.nnn", "fr1.fr.count").select_except("fr2").collect()
     n = 0
     for sample in samples:
         fr = sample[0]
@@ -937,11 +961,12 @@ def test_unsupported_output_type(test_session):
 def test_collect_single_item(test_session):
     names = ["f1.jpg", "f1.json", "f1.txt", "f2.jpg", "f2.json"]
     sizes = [1, 2, 3, 4, 5]
-    files = [File(path=name, size=size) for name, size in zip(names, sizes)]
+    files = sort_files([File(path=name, size=size) for name, size in zip(names, sizes)])
 
     scores = [0.1, 0.2, 0.3, 0.4, 0.5]
 
     chain = DataChain.from_values(file=files, score=scores, session=test_session)
+    chain = chain.order_by("file.path", "file.size")
 
     assert list(chain.collect("file")) == files
     assert list(chain.collect("file.path")) == names
@@ -958,14 +983,14 @@ def test_collect_single_item(test_session):
 
 
 def test_default_output_type(test_session):
-    names = ["f1.jpg", "f1.json", "f1.txt", "f2.jpg", "f2.json"]
+    names = sorted(["f1.jpg", "f1.json", "f1.txt", "f2.jpg", "f2.json"])
     suffix = "-new"
 
     chain = DataChain.from_values(name=names, session=test_session).map(
         res1=lambda name: name + suffix
     )
 
-    assert list(chain.collect("res1")) == [t + suffix for t in names]
+    assert list(chain.order_by("name").collect("res1")) == [t + suffix for t in names]
 
 
 def test_parse_tabular(tmp_dir, test_session):
@@ -975,7 +1000,7 @@ def test_parse_tabular(tmp_dir, test_session):
     dc = DataChain.from_storage(path.as_uri(), session=test_session).parse_tabular()
     df1 = dc.select("first_name", "age", "city").to_pandas()
 
-    assert df1.equals(df)
+    assert df_equal(df1, df)
 
 
 @skip_if_not_sqlite
@@ -989,7 +1014,7 @@ def test_parse_tabular_in_memory(tmp_dir):
     assert dc.session.catalog.warehouse.db.db_file == ":memory:"
     df1 = dc.select("first_name", "age", "city").to_pandas()
 
-    assert df1.equals(df)
+    assert df_equal(df1, df)
 
 
 def test_parse_tabular_format(tmp_dir, test_session):
@@ -1000,7 +1025,7 @@ def test_parse_tabular_format(tmp_dir, test_session):
         format="json"
     )
     df1 = dc.select("first_name", "age", "city").to_pandas()
-    assert df1.equals(df)
+    assert df_equal(df1, df)
 
 
 def test_parse_nested_json(tmp_dir, test_session):
@@ -1018,12 +1043,15 @@ def test_parse_nested_json(tmp_dir, test_session):
     # have to handle it here
     string_default = String.default_value(test_session.catalog.warehouse.db.dialect)
 
-    assert df1["na_me"]["first_select"].to_list() == [
+    assert sorted(df1["na_me"]["first_select"].to_list()) == sorted(
         d["first-SELECT"] for d in df["nA-mE"].to_list()
-    ]
-    assert df1["na_me"]["l_as_t"].to_list() == [
-        d.get("l--as@t", string_default) for d in df["nA-mE"].to_list()
-    ]
+    )
+    assert sorted(
+        df1["na_me"]["l_as_t"].to_list(), key=lambda x: (x is None, x)
+    ) == sorted(
+        [d.get("l--as@t", string_default) for d in df["nA-mE"].to_list()],
+        key=lambda x: (x is None, x),
+    )
 
 
 def test_parse_tabular_partitions(tmp_dir, test_session):
@@ -1037,7 +1065,7 @@ def test_parse_tabular_partitions(tmp_dir, test_session):
     )
     df1 = dc.select("first_name", "age", "city").to_pandas()
     df1 = df1.sort_values("first_name").reset_index(drop=True)
-    assert df1.equals(df.loc[:0])
+    assert df_equal(df1, df.loc[:0])
 
 
 def test_parse_tabular_empty(tmp_dir, test_session):
@@ -1071,7 +1099,7 @@ def test_parse_tabular_unify_schema(tmp_dir, test_session):
         .sort_values("first_name")
         .reset_index(drop=True)
     )
-    assert df.equals(df_combined)
+    assert df_equal(df, df_combined)
 
 
 def test_parse_tabular_output_dict(tmp_dir, test_session):
@@ -1084,7 +1112,7 @@ def test_parse_tabular_output_dict(tmp_dir, test_session):
     )
     df1 = dc.select("fname", "age", "loc").to_pandas()
     df.columns = ["fname", "age", "loc"]
-    assert df1.equals(df)
+    assert df_equal(df1, df)
 
 
 def test_parse_tabular_output_feature(tmp_dir, test_session):
@@ -1101,7 +1129,7 @@ def test_parse_tabular_output_feature(tmp_dir, test_session):
     )
     df1 = dc.select("fname", "age", "loc").to_pandas()
     df.columns = ["fname", "age", "loc"]
-    assert df1.equals(df)
+    assert df_equal(df1, df)
 
 
 def test_parse_tabular_output_list(tmp_dir, test_session):
@@ -1114,7 +1142,7 @@ def test_parse_tabular_output_list(tmp_dir, test_session):
     )
     df1 = dc.select("fname", "age", "loc").to_pandas()
     df.columns = ["fname", "age", "loc"]
-    assert df1.equals(df)
+    assert df_equal(df1, df)
 
 
 def test_parse_tabular_nrows(tmp_dir, test_session):
@@ -1126,7 +1154,7 @@ def test_parse_tabular_nrows(tmp_dir, test_session):
     )
     df1 = dc.select("first_name", "age", "city").to_pandas()
 
-    assert df1.equals(df[:2])
+    assert df_equal(df1, df[:2])
 
 
 def test_parse_tabular_nrows_invalid(tmp_dir, test_session):
@@ -1145,7 +1173,7 @@ def test_from_csv(tmp_dir, test_session):
     df.to_csv(path, index=False)
     dc = DataChain.from_csv(path.as_uri(), session=test_session)
     df1 = dc.select("first_name", "age", "city").to_pandas()
-    assert df1.equals(df)
+    assert df_equal(df1, df)
 
 
 def test_to_from_csv(tmp_dir, test_session):
@@ -1155,7 +1183,7 @@ def test_to_from_csv(tmp_dir, test_session):
     dc_to.to_csv(path)
     dc_from = DataChain.from_csv(path.as_uri(), session=test_session)
     df1 = dc_from.select("first_name", "age", "city").to_pandas()
-    assert df1.equals(df)
+    assert df_equal(df1, df)
 
 
 @skip_if_not_sqlite
@@ -1165,7 +1193,7 @@ def test_from_csv_in_memory(tmp_dir):
     df.to_csv(path, index=False)
     dc = DataChain.from_csv(path.as_uri(), in_memory=True)
     df1 = dc.select("first_name", "age", "city").to_pandas()
-    assert df1.equals(df)
+    assert df_equal(df1, df)
 
 
 @skip_if_not_sqlite
@@ -1176,7 +1204,7 @@ def test_to_from_csv_in_memory(tmp_dir):
     dc_to.to_csv(path)
     dc_from = DataChain.from_csv(path.as_uri(), in_memory=True)
     df1 = dc_from.select("first_name", "age", "city").to_pandas()
-    assert df1.equals(df)
+    assert df_equal(df1, df)
 
 
 def test_from_csv_no_header_error(tmp_dir, test_session):
@@ -1198,7 +1226,7 @@ def test_from_csv_no_header_output_dict(tmp_dir, test_session):
         session=test_session,
     )
     df1 = dc.select("first_name", "age", "city").to_pandas()
-    assert (df1.values != df.values).sum() == 0
+    assert (sort_df(df1).values != sort_df(df).values).sum() == 0
 
 
 def test_from_csv_no_header_output_feature(tmp_dir, test_session):
@@ -1214,7 +1242,7 @@ def test_from_csv_no_header_output_feature(tmp_dir, test_session):
         path.as_uri(), header=False, output=Output, session=test_session
     )
     df1 = dc.select("first_name", "age", "city").to_pandas()
-    assert (df1.values != df.values).sum() == 0
+    assert (sort_df(df1).values != sort_df(df).values).sum() == 0
 
 
 def test_from_csv_no_header_output_list(tmp_dir, test_session):
@@ -1228,7 +1256,7 @@ def test_from_csv_no_header_output_list(tmp_dir, test_session):
         session=test_session,
     )
     df1 = dc.select("first_name", "age", "city").to_pandas()
-    assert (df1.values != df.values).sum() == 0
+    assert (sort_df(df1).values != sort_df(df).values).sum() == 0
 
 
 def test_from_csv_tab_delimited(tmp_dir, test_session):
@@ -1237,7 +1265,7 @@ def test_from_csv_tab_delimited(tmp_dir, test_session):
     df.to_csv(path, sep="\t", index=False)
     dc = DataChain.from_csv(path.as_uri(), delimiter="\t", session=test_session)
     df1 = dc.select("first_name", "age", "city").to_pandas()
-    assert df1.equals(df)
+    assert df_equal(df1, df)
 
 
 @skip_if_not_sqlite
@@ -1267,7 +1295,7 @@ def test_from_csv_nrows(tmp_dir, test_session):
     df.to_csv(path, index=False)
     dc = DataChain.from_csv(path.as_uri(), nrows=2, session=test_session)
     df1 = dc.select("first_name", "age", "city").to_pandas()
-    assert df1.equals(df[:2])
+    assert df_equal(df1, df[:2])
 
 
 def test_from_csv_column_types(tmp_dir, test_session):
@@ -1286,10 +1314,10 @@ def test_to_csv_features(tmp_dir, test_session):
         f1=features, num=range(len(features)), session=test_session
     )
     path = tmp_dir / "test.csv"
-    dc_to.to_csv(path)
+    dc_to.order_by("f1.nnn", "f1.count").to_csv(path)
     with open(path) as f:
         lines = f.read().split("\n")
-    assert lines == ["f1.nnn,f1.count,num", "n1,3,0", "n2,5,1", "n1,1,2", ""]
+    assert lines == ["f1.nnn,f1.count,num", "n1,1,0", "n1,3,1", "n2,5,2", ""]
 
 
 def test_to_tsv_features(tmp_dir, test_session):
@@ -1297,23 +1325,23 @@ def test_to_tsv_features(tmp_dir, test_session):
         f1=features, num=range(len(features)), session=test_session
     )
     path = tmp_dir / "test.csv"
-    dc_to.to_csv(path, delimiter="\t")
+    dc_to.order_by("f1.nnn", "f1.count").to_csv(path, delimiter="\t")
     with open(path) as f:
         lines = f.read().split("\n")
-    assert lines == ["f1.nnn\tf1.count\tnum", "n1\t3\t0", "n2\t5\t1", "n1\t1\t2", ""]
+    assert lines == ["f1.nnn\tf1.count\tnum", "n1\t1\t0", "n1\t3\t1", "n2\t5\t2", ""]
 
 
 def test_to_csv_features_nested(tmp_dir, test_session):
     dc_to = DataChain.from_values(sign1=features_nested, session=test_session)
     path = tmp_dir / "test.csv"
-    dc_to.to_csv(path)
+    dc_to.order_by("sign1.fr.nnn", "sign1.fr.count").to_csv(path)
     with open(path) as f:
         lines = f.read().split("\n")
     assert lines == [
         "sign1.label,sign1.fr.nnn,sign1.fr.count",
-        "label_0,n1,3",
-        "label_1,n2,5",
-        "label_2,n1,1",
+        "label_0,n1,1",
+        "label_1,n1,3",
+        "label_2,n2,5",
         "",
     ]
 
@@ -1378,7 +1406,7 @@ def test_to_from_json(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
     dc_to = DataChain.from_pandas(df, session=test_session)
     path = tmp_dir / "test.json"
-    dc_to.to_json(path)
+    dc_to.order_by("first_name", "age").to_json(path)
 
     with open(path) as f:
         values = json.load(f)
@@ -1390,7 +1418,7 @@ def test_to_from_json(tmp_dir, test_session):
     dc_from = DataChain.from_json(path.as_uri(), session=test_session)
     df1 = dc_from.select("json.first_name", "json.age", "json.city").to_pandas()
     df1 = df1["json"]
-    assert df1.equals(df)
+    assert df_equal(df1, df)
 
 
 # These deprecation warnings occur in the datamodel-code-generator package.
@@ -1410,7 +1438,7 @@ def test_from_json_jmespath(tmp_dir, test_session):
     )
     df1 = dc_from.select("values.first_name", "values.age", "values.city").to_pandas()
     df1 = df1["values"]
-    assert df1.equals(df)
+    assert df_equal(df1, df)
 
 
 def test_to_json_features(tmp_dir, test_session):
@@ -1418,7 +1446,7 @@ def test_to_json_features(tmp_dir, test_session):
         f1=features, num=range(len(features)), session=test_session
     )
     path = tmp_dir / "test.json"
-    dc_to.to_json(path)
+    dc_to.order_by("f1.nnn", "f1.count").to_json(path)
     with open(path) as f:
         values = json.load(f)
     assert values == [
@@ -1430,7 +1458,7 @@ def test_to_json_features(tmp_dir, test_session):
 def test_to_json_features_nested(tmp_dir, test_session):
     dc_to = DataChain.from_values(sign1=features_nested, session=test_session)
     path = tmp_dir / "test.json"
-    dc_to.to_json(path)
+    dc_to.order_by("sign1.fr.nnn", "sign1.fr.count").to_json(path)
     with open(path) as f:
         values = json.load(f)
     assert values == [
@@ -1445,7 +1473,7 @@ def test_to_from_jsonl(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
     dc_to = DataChain.from_pandas(df, session=test_session)
     path = tmp_dir / "test.jsonl"
-    dc_to.to_jsonl(path)
+    dc_to.order_by("first_name", "age").to_jsonl(path)
 
     with open(path) as f:
         values = [json.loads(line) for line in f.read().split("\n")]
@@ -1457,7 +1485,7 @@ def test_to_from_jsonl(tmp_dir, test_session):
     dc_from = DataChain.from_jsonl(path.as_uri(), session=test_session)
     df1 = dc_from.select("jsonl.first_name", "jsonl.age", "jsonl.city").to_pandas()
     df1 = df1["jsonl"]
-    assert df1.equals(df)
+    assert df_equal(df1, df)
 
 
 # These deprecation warnings occur in the datamodel-code-generator package.
@@ -1481,7 +1509,7 @@ def test_from_jsonl_jmespath(tmp_dir, test_session):
     )
     df1 = dc_from.select("value.first_name", "value.age", "value.city").to_pandas()
     df1 = df1["value"]
-    assert df1.equals(df)
+    assert df_equal(df1, df)
 
 
 def test_to_jsonl_features(tmp_dir, test_session):
@@ -1489,7 +1517,7 @@ def test_to_jsonl_features(tmp_dir, test_session):
         f1=features, num=range(len(features)), session=test_session
     )
     path = tmp_dir / "test.json"
-    dc_to.to_jsonl(path)
+    dc_to.order_by("f1.nnn", "f1.count").to_jsonl(path)
     with open(path) as f:
         values = [json.loads(line) for line in f.read().split("\n")]
     assert values == [
@@ -1501,7 +1529,7 @@ def test_to_jsonl_features(tmp_dir, test_session):
 def test_to_jsonl_features_nested(tmp_dir, test_session):
     dc_to = DataChain.from_values(sign1=features_nested, session=test_session)
     path = tmp_dir / "test.json"
-    dc_to.to_jsonl(path)
+    dc_to.order_by("sign1.fr.nnn", "sign1.fr.count").to_jsonl(path)
     with open(path) as f:
         values = [json.loads(line) for line in f.read().split("\n")]
     assert values == [
@@ -1517,7 +1545,7 @@ def test_from_parquet(tmp_dir, test_session):
     dc = DataChain.from_parquet(path.as_uri(), session=test_session)
     df1 = dc.select("first_name", "age", "city").to_pandas()
 
-    assert df1.equals(df)
+    assert df_equal(df1, df)
 
 
 @skip_if_not_sqlite
@@ -1528,7 +1556,7 @@ def test_from_parquet_in_memory(tmp_dir):
     dc = DataChain.from_parquet(path.as_uri(), in_memory=True)
     df1 = dc.select("first_name", "age", "city").to_pandas()
 
-    assert df1.equals(df)
+    assert df_equal(df1, df)
 
 
 def test_from_parquet_partitioned(tmp_dir, test_session):
@@ -1538,7 +1566,7 @@ def test_from_parquet_partitioned(tmp_dir, test_session):
     dc = DataChain.from_parquet(path.as_uri(), session=test_session)
     df1 = dc.select("first_name", "age", "city").to_pandas()
     df1 = df1.sort_values("first_name").reset_index(drop=True)
-    assert df1.equals(df)
+    assert df_equal(df1, df)
 
 
 def test_to_parquet(tmp_dir, test_session):
@@ -1549,7 +1577,7 @@ def test_to_parquet(tmp_dir, test_session):
     dc.to_parquet(path)
 
     assert path.is_file()
-    pd.testing.assert_frame_equal(pd.read_parquet(path), df)
+    pd.testing.assert_frame_equal(sort_df(pd.read_parquet(path)), sort_df(df))
 
 
 def test_to_parquet_partitioned(tmp_dir, test_session):
@@ -1579,12 +1607,12 @@ def test_to_from_parquet(tmp_dir, test_session, chunk_size, kwargs):
     dc_to.to_parquet(path, chunk_size=chunk_size, **kwargs)
 
     assert path.is_file()
-    pd.testing.assert_frame_equal(pd.read_parquet(path), df)
+    pd.testing.assert_frame_equal(sort_df(pd.read_parquet(path)), sort_df(df))
 
     dc_from = DataChain.from_parquet(path.as_uri(), session=test_session)
     df1 = dc_from.select("first_name", "age", "city").to_pandas()
 
-    assert df1.equals(df)
+    assert df_equal(df1, df)
 
 
 @pytest.mark.parametrize("chunk_size", (1000, 2))
@@ -1624,7 +1652,7 @@ def test_to_from_parquet_features(tmp_dir, test_session, chunk_size):
     dc_from = DataChain.from_parquet(path.as_uri(), session=test_session)
 
     n = 0
-    for sample in dc_from.select("f1", "num").collect():
+    for sample in dc_from.order_by("f1.nnn", "f1.count").select("f1", "num").collect():
         assert len(sample) == 2
         fr, num = sample
 
@@ -1649,7 +1677,9 @@ def test_to_from_parquet_nested_features(tmp_dir, test_session, chunk_size):
 
     dc_from = DataChain.from_parquet(path.as_uri(), session=test_session)
 
-    for n, sample in enumerate(dc_from.select("sign1").collect()):
+    for n, sample in enumerate(
+        dc_from.order_by("sign1.fr.nnn", "sign1.fr.count").select("sign1").collect()
+    ):
         assert len(sample) == 1
         nested = sample[0]
 
@@ -1670,7 +1700,9 @@ def test_to_from_parquet_two_top_level_features(tmp_dir, test_session, chunk_siz
 
     dc_from = DataChain.from_parquet(path.as_uri(), session=test_session)
 
-    for n, sample in enumerate(dc_from.select("f1", "nest1").collect()):
+    for n, sample in enumerate(
+        dc_from.order_by("f1.nnn", "f1.count").select("f1", "nest1").collect()
+    ):
         assert len(sample) == 2
         fr, nested = sample
 
@@ -1690,6 +1722,7 @@ def test_parallel(processes, test_session_tmpfile):
         DataChain.from_values(key=vals, session=test_session_tmpfile)
         .settings(parallel=processes)
         .map(res=lambda key: prefix + key)
+        .order_by("res")
         .collect("res")
     )
 
@@ -1763,7 +1796,9 @@ def test_parse_tabular_object_name(tmp_dir, test_session):
 
 
 def test_sys_feature(test_session):
-    ds = DataChain.from_values(t1=features, session=test_session)
+    ds = DataChain.from_values(t1=features, session=test_session).order_by(
+        "t1.nnn", "t1.count"
+    )
     ds_sys = ds.settings(sys=True)
     assert not ds._sys
     assert ds_sys._sys
@@ -1773,9 +1808,9 @@ def test_sys_feature(test_session):
 
     sys_cls = Sys.model_construct
     assert args == [
-        (sys_cls(id=1, rand=ANY), MyFr(nnn="n1", count=3)),
-        (sys_cls(id=2, rand=ANY), MyFr(nnn="n2", count=5)),
-        (sys_cls(id=3, rand=ANY), MyFr(nnn="n1", count=1)),
+        (sys_cls(id=1, rand=ANY), MyFr(nnn="n1", count=1)),
+        (sys_cls(id=2, rand=ANY), MyFr(nnn="n1", count=3)),
+        (sys_cls(id=3, rand=ANY), MyFr(nnn="n2", count=5)),
     ]
     assert "sys" not in test_session.catalog.get_dataset("ds_sys").feature_schema
 
@@ -1785,9 +1820,9 @@ def test_sys_feature(test_session):
     args = []
     ds_no_sys.map(res=lambda t1: args.append(t1)).save("ds_no_sys")
     assert args == [
+        MyFr(nnn="n1", count=1),
         MyFr(nnn="n1", count=3),
         MyFr(nnn="n2", count=5),
-        MyFr(nnn="n1", count=1),
     ]
     assert "sys" not in test_session.catalog.get_dataset("ds_no_sys").feature_schema
 
@@ -1798,7 +1833,7 @@ def test_to_pandas_multi_level(test_session):
     assert "t1" in df.columns
     assert "nnn" in df["t1"].columns
     assert "count" in df["t1"].columns
-    assert df["t1"]["count"].tolist() == [3, 5, 1]
+    assert sort_df(df)["t1"]["count"].tolist() == [1, 3, 5]
 
 
 def test_to_pandas_multi_level_flatten(test_session):
@@ -1809,7 +1844,7 @@ def test_to_pandas_multi_level_flatten(test_session):
     assert "t1.nnn" in df.columns
     assert "t1.count" in df.columns
     assert len(df.columns) == 2
-    assert df["t1.count"].tolist() == [3, 5, 1]
+    assert sort_df(df)["t1.count"].tolist() == [1, 3, 5]
 
 
 def test_to_pandas_empty(test_session):
@@ -1849,8 +1884,10 @@ def test_to_pandas_empty(test_session):
 
 
 def test_mutate(test_session):
-    chain = DataChain.from_values(t1=features, session=test_session).mutate(
-        circle=2 * 3.14 * Column("t1.count"), place="pref_" + Column("t1.nnn")
+    chain = (
+        DataChain.from_values(t1=features, session=test_session)
+        .order_by("t1.nnn", "t1.count")
+        .mutate(circle=2 * 3.14 * Column("t1.count"), place="pref_" + Column("t1.nnn"))
     )
 
     assert chain.signals_schema.values["circle"] is float
@@ -2044,7 +2081,7 @@ def test_subtract_error(test_session):
 
 def test_column_math(test_session):
     fib = [1, 1, 2, 3, 5, 8]
-    chain = DataChain.from_values(num=fib, session=test_session)
+    chain = DataChain.from_values(num=fib, session=test_session).order_by("num")
 
     ch = chain.mutate(add2=chain.column("num") + 2)
     assert list(ch.collect("add2")) == [x + 2 for x in fib]
@@ -2066,7 +2103,7 @@ def test_from_values_array_of_floats(test_session):
     embeddings = [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]]
     chain = DataChain.from_values(emd=embeddings, session=test_session)
 
-    assert list(chain.collect("emd")) == embeddings
+    assert list(chain.order_by("emd").collect("emd")) == embeddings
 
 
 def test_custom_model_with_nested_lists(test_session):
@@ -2315,9 +2352,10 @@ def test_from_values_nan_inf(test_session):
     vals = [float("nan"), float("inf"), float("-inf")]
     dc = DataChain.from_values(vals=vals, session=test_session)
     res = list(dc.collect("vals"))
-    assert np.isnan(res[0])
-    assert np.isposinf(res[1])
-    assert np.isneginf(res[2])
+    assert len(res) == 3
+    assert any(r for r in res if np.isnan(r))
+    assert any(r for r in res if np.isposinf(r))
+    assert any(r for r in res if np.isneginf(r))
 
 
 def test_from_pandas_nan_inf(test_session):
@@ -2325,9 +2363,10 @@ def test_from_pandas_nan_inf(test_session):
     df = pd.DataFrame({"vals": vals})
     dc = DataChain.from_pandas(df, session=test_session)
     res = list(dc.collect("vals"))
-    assert np.isnan(res[0])
-    assert np.isposinf(res[1])
-    assert np.isneginf(res[2])
+    assert len(res) == 3
+    assert any(r for r in res if np.isnan(r))
+    assert any(r for r in res if np.isposinf(r))
+    assert any(r for r in res if np.isneginf(r))
 
 
 def test_from_parquet_nan_inf(tmp_dir, test_session):
@@ -2338,9 +2377,10 @@ def test_from_parquet_nan_inf(tmp_dir, test_session):
     dc = DataChain.from_parquet(path.as_uri(), session=test_session)
 
     res = list(dc.collect("vals"))
-    assert np.isnan(res[0])
-    assert np.isposinf(res[1])
-    assert np.isneginf(res[2])
+    assert len(res) == 3
+    assert any(r for r in res if np.isnan(r))
+    assert any(r for r in res if np.isposinf(r))
+    assert any(r for r in res if np.isneginf(r))
 
 
 def test_from_csv_nan_inf(tmp_dir, test_session):
@@ -2351,21 +2391,22 @@ def test_from_csv_nan_inf(tmp_dir, test_session):
     dc = DataChain.from_csv(path.as_uri(), session=test_session)
 
     res = list(dc.collect("vals"))
-    assert np.isnan(res[0])
-    assert np.isposinf(res[1])
-    assert np.isneginf(res[2])
+    assert len(res) == 3
+    assert any(r for r in res if np.isnan(r))
+    assert any(r for r in res if np.isposinf(r))
+    assert any(r for r in res if np.isneginf(r))
 
 
 def test_from_hf(test_session):
     ds = Dataset.from_dict(DF_DATA)
     df = DataChain.from_hf(ds, session=test_session).to_pandas()
-    assert df.equals(pd.DataFrame(DF_DATA))
+    assert df_equal(df, pd.DataFrame(DF_DATA))
 
 
 def test_from_hf_object_name(test_session):
     ds = Dataset.from_dict(DF_DATA)
     df = DataChain.from_hf(ds, session=test_session, object_name="obj").to_pandas()
-    assert df["obj"].equals(pd.DataFrame(DF_DATA))
+    assert df_equal(df["obj"], pd.DataFrame(DF_DATA))
 
 
 def test_from_hf_invalid(test_session):
@@ -2382,6 +2423,7 @@ def test_group_by_int(test_session):
             col2=[1, 2, 3, 4, 5, 6],
             session=test_session,
         )
+        .order_by("col1", "col2")
         .group_by(
             cnt=func.count(),
             cnt_col=func.count("col2"),
@@ -2456,6 +2498,7 @@ def test_group_by_float(test_session):
             col2=[1.5, 2.5, 3.5, 4.5, 5.5, 6.5],
             session=test_session,
         )
+        .order_by("col1", "col2")
         .group_by(
             cnt=func.count(),
             cnt_col=func.count("col2"),
@@ -2530,6 +2573,7 @@ def test_group_by_str(test_session):
             col2=["1", "2", "3", "4", "5", "6"],
             session=test_session,
         )
+        .order_by("col1", "col2")
         .group_by(
             cnt=func.count(),
             cnt_col=func.count("col2"),
@@ -2606,6 +2650,7 @@ def test_group_by_multiple_partition_by(test_session):
             col4=["1", "2", "3", "4", "5", "6"],
             session=test_session,
         )
+        .order_by("col1", "col2", "col3", "col4")
         .group_by(
             cnt=func.count(),
             cnt_col=func.count("col2"),
@@ -2686,6 +2731,49 @@ def test_group_by_multiple_partition_by(test_session):
     )
 
 
+def test_group_by_no_partition_by(test_session):
+    from datachain import func
+
+    ds = (
+        DataChain.from_values(
+            col1=["a", "a", "b", "b", "b", "c"],
+            col2=[1, 2, 1, 2, 1, 2],
+            col3=[1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            col4=["1", "2", "3", "4", "5", "6"],
+            session=test_session,
+        )
+        .order_by("col4")
+        .group_by(
+            cnt=func.count(),
+            cnt_col=func.count("col2"),
+            sum=func.sum("col3"),
+            concat=func.concat("col4"),
+            value=func.any_value("col3"),
+            collect=func.collect("col3"),
+        )
+        .save("my-ds")
+    )
+
+    assert ds.signals_schema.serialize() == {
+        "cnt": "int",
+        "cnt_col": "int",
+        "sum": "float",
+        "concat": "str",
+        "value": "float",
+        "collect": "list[float]",
+    }
+    assert ds.to_records() == [
+        {
+            "cnt": 6,
+            "cnt_col": 6,
+            "sum": 21.0,
+            "concat": "123456",
+            "value": 1.0,
+            "collect": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        },
+    ]
+
+
 def test_group_by_error(test_session):
     from datachain import func
 
@@ -2694,14 +2782,6 @@ def test_group_by_error(test_session):
         col2=[1, 2, 3, 4, 5, 6],
         session=test_session,
     )
-
-    with pytest.raises(TypeError):
-        dc.group_by(cnt=func.count())
-
-    with pytest.raises(
-        ValueError, match="At least one column should be provided for partition_by"
-    ):
-        dc.group_by(cnt=func.count(), partition_by=())
 
     with pytest.raises(
         ValueError, match="At least one column should be provided for group_by"
@@ -2723,6 +2803,34 @@ def test_group_by_error(test_session):
         SignalResolvingError, match="cannot resolve signal name 'col3': is not found"
     ):
         dc.group_by(foo=func.sum("col2"), partition_by="col3")
+
+
+def test_group_by_case(test_session):
+    from datachain import func
+
+    ds = (
+        DataChain.from_values(
+            col1=[1.0, 0.0, 3.2, 0.1, 5.9, -1.0],
+            col2=[0.0, 6.1, -0.05, 3.7, 0.1, -3.0],
+            session=test_session,
+        )
+        .group_by(
+            col1=func.sum(func.case((C("col1") > 0.1, 1), else_=0)),
+            col2=func.sum(func.case((C("col2") < 0.0, 1), else_=0)),
+        )
+        .save("my-ds")
+    )
+
+    assert ds.signals_schema.serialize() == {
+        "col1": "int",
+        "col2": "int",
+    }
+    assert ds.to_records() == [
+        {
+            "col1": 3,
+            "col2": 2,
+        }
+    ]
 
 
 @pytest.mark.parametrize("desc", [True, False])
