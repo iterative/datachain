@@ -1,7 +1,16 @@
-from datachain import C, DataChain
+from typing import Optional
+
+from datachain import DataChain
+from datachain.func import bit_and, bit_xor, int_hash_64
+
+MAX_SIGNED_INT64 = (1 << 63) - 1  # Maximum positive value for a 64-bit signed integer.
 
 
-def train_test_split(dc: DataChain, weights: list[float]) -> list[DataChain]:
+def train_test_split(
+    dc: DataChain,
+    weights: list[float],
+    seed: Optional[int] = None,
+) -> list[DataChain]:
     """
     Splits a DataChain into multiple subsets based on the provided weights.
 
@@ -18,6 +27,8 @@ def train_test_split(dc: DataChain, weights: list[float]) -> list[DataChain]:
             For example:
             - `[0.7, 0.3]` corresponds to a 70/30 split;
             - `[2, 1, 1]` corresponds to a 50/25/25 split.
+        seed (int, optional):
+            The seed for the random number generator. Defaults to None.
 
     Returns:
         list[DataChain]:
@@ -56,16 +67,28 @@ def train_test_split(dc: DataChain, weights: list[float]) -> list[DataChain]:
     if any(weight < 0 for weight in weights):
         raise ValueError("Weights should be non-negative")
 
+    def scale(multiplier: float) -> int:
+        if multiplier < 0:
+            multiplier = 0.0
+        if multiplier > 1:
+            multiplier = 1.0
+        numerator, denominator = float(multiplier).as_integer_ratio()
+        return MAX_SIGNED_INT64 * numerator // denominator
+
     weights_normalized = [weight / sum(weights) for weight in weights]
+    limits = [
+        [
+            scale(sum(weights_normalized[:index])),
+            scale(sum(weights_normalized[: index + 1])),
+        ]
+        for index, _ in enumerate(weights_normalized)
+    ]
 
-    resolution = 2**31 - 1  # Maximum positive value for a 32-bit signed integer.
-
+    rand_col = "sys__rand" if seed is None else int_hash_64(bit_xor("sys__rand", seed))
     return [
         dc.filter(
-            C("sys__rand") % resolution
-            >= round(sum(weights_normalized[:index]) * resolution),
-            C("sys__rand") % resolution
-            < round(sum(weights_normalized[: index + 1]) * resolution),
+            bit_and(rand_col, MAX_SIGNED_INT64) >= min_,
+            bit_and(rand_col, MAX_SIGNED_INT64) < max_,
         )
-        for index, _ in enumerate(weights_normalized)
+        for min_, max_ in limits
     ]
