@@ -966,8 +966,6 @@ class SQLGroupBy(SQLClause):
     def apply_sql_clause(self, query) -> Select:
         if not self.cols:
             raise ValueError("No columns to select")
-        if not self.group_by:
-            raise ValueError("No columns to group by")
 
         subquery = query.subquery()
 

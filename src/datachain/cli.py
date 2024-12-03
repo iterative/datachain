@@ -16,7 +16,7 @@ from tabulate import tabulate
 from datachain import Session, utils
 from datachain.cli_utils import BooleanOptionalAction, CommaSeparatedArgs, KeyValueArgs
 from datachain.config import Config
-from datachain.error import DataChainError
+from datachain.error import DataChainError, DatasetNotFoundError
 from datachain.lib.dc import DataChain
 from datachain.studio import (
     edit_studio_dataset,
@@ -1056,7 +1056,10 @@ def rm_dataset(
     all, local, studio = _determine_flavors(studio, local, all, token)
 
     if all or local:
-        catalog.remove_dataset(name, version=version, force=force)
+        try:
+            catalog.remove_dataset(name, version=version, force=force)
+        except DatasetNotFoundError:
+            print("Dataset not found in local", file=sys.stderr)
 
     if (all or studio) and token:
         remove_studio_dataset(team, name, version, force)
@@ -1077,7 +1080,10 @@ def edit_dataset(
     all, local, studio = _determine_flavors(studio, local, all, token)
 
     if all or local:
-        catalog.edit_dataset(name, new_name, description, labels)
+        try:
+            catalog.edit_dataset(name, new_name, description, labels)
+        except DatasetNotFoundError:
+            print("Dataset not found in local", file=sys.stderr)
 
     if (all or studio) and token:
         edit_studio_dataset(team, name, new_name, description, labels)

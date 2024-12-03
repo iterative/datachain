@@ -1150,7 +1150,7 @@ class DataChain:
     def group_by(
         self,
         *,
-        partition_by: Union[str, Func, Sequence[Union[str, Func]]],
+        partition_by: Optional[Union[str, Func, Sequence[Union[str, Func]]]] = None,
         **kwargs: Func,
     ) -> "Self":
         """Group rows by specified set of signals and return new signals
@@ -1167,10 +1167,10 @@ class DataChain:
             )
             ```
         """
-        if isinstance(partition_by, (str, Func)):
+        if partition_by is None:
+            partition_by = []
+        elif isinstance(partition_by, (str, Func)):
             partition_by = [partition_by]
-        if not partition_by:
-            raise ValueError("At least one column should be provided for partition_by")
 
         partition_by_columns: list[Column] = []
         signal_columns: list[Column] = []

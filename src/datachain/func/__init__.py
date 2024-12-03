@@ -1,4 +1,4 @@
-from sqlalchemy import literal
+from sqlalchemy import case, literal
 
 from . import array, path, random, string
 from .aggregate import (
@@ -17,6 +17,7 @@ from .aggregate import (
 )
 from .array import cosine_distance, euclidean_distance, length, sip_hash_64
 from .conditional import greatest, least
+from .numeric import bit_and, bit_or, bit_xor, int_hash_64
 from .random import rand
 from .window import window
 
@@ -24,6 +25,10 @@ __all__ = [
     "any_value",
     "array",
     "avg",
+    "bit_and",
+    "bit_or",
+    "bit_xor",
+    "case",
     "collect",
     "concat",
     "cosine_distance",
@@ -32,6 +37,7 @@ __all__ = [
     "euclidean_distance",
     "first",
     "greatest",
+    "int_hash_64",
     "least",
     "length",
     "literal",

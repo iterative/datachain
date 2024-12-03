@@ -155,7 +155,7 @@ def edit_studio_dataset(
     if not response.ok:
         raise_remote_error(response.message)
 
-    print(f"Dataset {name} updated")
+    print(f"Dataset '{name}' updated in Studio")
 
 
 def remove_studio_dataset(
@@ -169,7 +169,7 @@ def remove_studio_dataset(
     if not response.ok:
         raise_remote_error(response.message)
 
-    print(f"Dataset {name} removed")
+    print(f"Dataset '{name}' removed from Studio")
 
 
 def save_config(hostname, token):
