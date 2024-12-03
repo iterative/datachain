@@ -649,7 +649,7 @@ def studio_datasets(requests_mock):
         },
     ]
 
-    requests_mock.post(f"{STUDIO_URL}/api/datachain/ls-datasets", json=datasets)
+    requests_mock.get(f"{STUDIO_URL}/api/datachain/datasets", json=datasets)
 
 
 @pytest.fixture
