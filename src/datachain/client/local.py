@@ -7,12 +7,12 @@ from urllib.parse import urlparse
 
 from fsspec.implementations.local import LocalFileSystem
 
-from datachain.cache import DataChainCache
 from datachain.lib.file import File
 
 from .fsspec import Client
 
 if TYPE_CHECKING:
+    from datachain.cache import DataChainCache
     from datachain.dataset import StorageURI
 
 
@@ -25,7 +25,7 @@ class FileClient(Client):
         self,
         name: str,
         fs_kwargs: dict[str, Any],
-        cache: DataChainCache,
+        cache: "DataChainCache",
         use_symlinks: bool = False,
     ) -> None:
         super().__init__(name, fs_kwargs, cache)
@@ -82,7 +82,7 @@ class FileClient(Client):
         return bucket, path
 
     @classmethod
-    def from_name(cls, name: str, cache: DataChainCache, kwargs) -> "FileClient":
+    def from_name(cls, name: str, cache: "DataChainCache", kwargs) -> "FileClient":
         use_symlinks = kwargs.pop("use_symlinks", False)
         return cls(name, kwargs, cache, use_symlinks=use_symlinks)
 
@@ -90,7 +90,7 @@ class FileClient(Client):
     def from_source(
         cls,
         uri: str,
-        cache: DataChainCache,
+        cache: "DataChainCache",
         use_symlinks: bool = False,
         **kwargs,
     ) -> "FileClient":
