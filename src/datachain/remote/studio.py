@@ -120,14 +120,14 @@ class StudioClient:
             ) from None
 
     def _send_request_msgpack(
-        self, route: str, data: dict[str, Any], method: Optional[str] = "post"
+        self, route: str, data: dict[str, Any], method: Optional[str] = "POST"
     ) -> Response[Any]:
         import msgpack
         import requests
 
         kwargs = (
             {"params": {**data, "team_name": self.team}}
-            if method == "get"
+            if method == "GET"
             else {"json": {**data, "team_name": self.team}}
         )
 
@@ -158,7 +158,7 @@ class StudioClient:
 
     @retry_with_backoff(retries=5)
     def _send_request(
-        self, route: str, data: dict[str, Any], method: Optional[str] = "post"
+        self, route: str, data: dict[str, Any], method: Optional[str] = "POST"
     ) -> Response[Any]:
         """
         Function that communicate Studio API.
@@ -170,7 +170,7 @@ class StudioClient:
 
         kwargs = (
             {"params": {**data, "team_name": self.team}}
-            if method == "get"
+            if method == "GET"
             else {"json": {**data, "team_name": self.team}}
         )
 
@@ -240,7 +240,7 @@ class StudioClient:
             yield path, response
 
     def ls_datasets(self) -> Response[LsData]:
-        return self._send_request("datachain/datasets", {}, method="get")
+        return self._send_request("datachain/datasets", {}, method="GET")
 
     def edit_dataset(
         self,
@@ -274,7 +274,7 @@ class StudioClient:
                 "version": version,
                 "force": force,
             },
-            method="delete",
+            method="DELETE",
         )
 
     def dataset_info(self, name: str) -> Response[DatasetInfoData]:
@@ -286,7 +286,7 @@ class StudioClient:
             return dataset_info
 
         response = self._send_request(
-            "datachain/datasets/info", {"dataset_name": name}, method="get"
+            "datachain/datasets/info", {"dataset_name": name}, method="GET"
         )
         if response.ok:
             response.data = _parse_dataset_info(response.data)
@@ -299,14 +299,14 @@ class StudioClient:
         return self._send_request_msgpack(
             "datachain/datasets/rows",
             {**req_data, "offset": offset, "limit": DATASET_ROWS_CHUNK_SIZE},
-            method="get",
+            method="GET",
         )
 
     def dataset_stats(self, name: str, version: int) -> Response[DatasetStatsData]:
         response = self._send_request(
             "datachain/datasets/stats",
             {"dataset_name": name, "dataset_version": version},
-            method="get",
+            method="GET",
         )
         if response.ok:
             response.data = DatasetStats(**response.data)
@@ -318,7 +318,7 @@ class StudioClient:
         return self._send_request(
             "datachain/datasets/export",
             {"dataset_name": name, "dataset_version": version},
-            method="get",
+            method="GET",
         )
 
     def dataset_export_status(
@@ -327,7 +327,7 @@ class StudioClient:
         return self._send_request(
             "datachain/datasets/export-status",
             {"dataset_name": name, "dataset_version": version},
-            method="get",
+            method="GET",
         )
 
     def upload_file(self, file_name: str, content: bytes) -> Response[FileUploadData]:
