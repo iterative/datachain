@@ -84,7 +84,7 @@ def train_test_split(
         for index, _ in enumerate(weights_normalized)
     ]
 
-    rand_col = "sys__rand" if seed is None else int_hash_64(bit_xor("sys__rand", seed))
+    rand_col = "sys.rand" if seed is None else int_hash_64(bit_xor("sys.rand", seed))
     return [
         dc.filter(
             bit_and(rand_col, MAX_SIGNED_INT64) >= min_,
