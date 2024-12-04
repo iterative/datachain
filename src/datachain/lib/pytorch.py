@@ -12,6 +12,7 @@ from tqdm import tqdm
 from datachain import Session
 from datachain.catalog import Catalog, get_catalog
 from datachain.lib.dc import DataChain
+from datachain.lib.settings import Settings
 from datachain.lib.text import convert_text
 
 if TYPE_CHECKING:
@@ -39,6 +40,7 @@ class PytorchDataset(IterableDataset):
         tokenizer: Optional[Callable] = None,
         tokenizer_kwargs: Optional[dict[str, Any]] = None,
         num_samples: int = 0,
+        dc_settings: Optional[Settings] = None,
     ):
         """
         Pytorch IterableDataset that streams DataChain datasets.
@@ -65,6 +67,7 @@ class PytorchDataset(IterableDataset):
         if catalog is None:
             catalog = get_catalog()
         self._init_catalog(catalog)
+        self._dc_settings = dc_settings if dc_settings else Settings()
 
     def _init_catalog(self, catalog: "Catalog"):
         # For compatibility with multiprocessing,
@@ -89,7 +92,7 @@ class PytorchDataset(IterableDataset):
         total_rank, total_workers = self.get_rank_and_workers()
         ds = DataChain.from_dataset(
             name=self.name, version=self.version, session=session
-        )
+        ).settings(cache=self._dc_settings.cache, prefetch=self._dc_settings.prefetch)
         ds = ds.remove_file_signals()
 
         if self.num_samples > 0:
