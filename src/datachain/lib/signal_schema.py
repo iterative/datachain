@@ -402,12 +402,20 @@ class SignalSchema:
             if ModelStore.is_pydantic(finfo.annotation):
                 SignalSchema._set_file_stream(getattr(obj, field), catalog, cache)
 
-    def get_column_type(self, col_name: str, leaf_only: bool = True) -> DataType:
+    def get_column_type(self, col_name: str, with_subtree: bool = False) -> DataType:
+        """
+        Returns column type by column name.
+
+        If `with_subtree` is True, then it will return the type of the column
+        even if it has a subtree (e.g. model with nested fields), otherwise it will
+        return the type of the column (standard type field, not the model).
+
+        If column is not found, raises `SignalResolvingError`.
+        """
         for path, _type, has_subtree, _ in self.get_flat_tree():
-            if (
-                not (leaf_only and has_subtree)
-                and DEFAULT_DELIMITER.join(path) == col_name
-            ):
+            if (with_subtree or not has_subtree) and DEFAULT_DELIMITER.join(
+                path
+            ) == col_name:
                 return _type
         raise SignalResolvingError([col_name], "is not found")
 
@@ -499,7 +507,9 @@ class SignalSchema:
             if isinstance(value, Column):
                 # adding new signal from existing signal field
                 try:
-                    new_values[name] = self.get_column_type(value.name, leaf_only=False)
+                    new_values[name] = self.get_column_type(
+                        value.name, with_subtree=True
+                    )
                     continue
                 except SignalResolvingError:
                     pass
