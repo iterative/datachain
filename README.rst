@@ -37,7 +37,7 @@ Key Features
 ============
 
 📂 **Multimodal Dataset Versioning.**
-   - Version unstructured data without redundant data copies, by supporitng
+   - Version unstructured data without redundant data copies, by supporting
      references to S3, GCP, Azure, and local file systems.
    - Multimodal data support: images, video, text, PDFs, JSONs, CSVs, parquet, etc.
    - Unite files and metadata together into persistent, versioned, columnar datasets.

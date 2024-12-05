@@ -34,6 +34,19 @@ def process_studio_cli_args(args: "Namespace"):
         print(tabulate(rows, headers="keys"))
         return 0
 
+    if args.cmd == "run":
+        return create_job(
+            args.query_file,
+            args.team,
+            args.env_file,
+            args.env,
+            args.workers,
+            args.files,
+            args.python_version,
+            args.req,
+            args.req_file,
+        )
+
     if args.cmd == "team":
         return set_team(args)
     raise DataChainError(f"Unknown command '{args.cmd}'.")
@@ -130,6 +143,35 @@ def list_datasets(team: Optional[str] = None):
             yield (name, version)
 
 
+def edit_studio_dataset(
+    team_name: Optional[str],
+    name: str,
+    new_name: Optional[str] = None,
+    description: Optional[str] = None,
+    labels: Optional[list[str]] = None,
+):
+    client = StudioClient(team=team_name)
+    response = client.edit_dataset(name, new_name, description, labels)
+    if not response.ok:
+        raise_remote_error(response.message)
+
+    print(f"Dataset '{name}' updated in Studio")
+
+
+def remove_studio_dataset(
+    team_name: Optional[str],
+    name: str,
+    version: Optional[int] = None,
+    force: Optional[bool] = False,
+):
+    client = StudioClient(team=team_name)
+    response = client.rm_dataset(name, version, force)
+    if not response.ok:
+        raise_remote_error(response.message)
+
+    print(f"Dataset '{name}' removed from Studio")
+
+
 def save_config(hostname, token):
     config = Config(ConfigLevel.GLOBAL)
     with config.edit() as conf:
@@ -139,3 +181,70 @@ def save_config(hostname, token):
         conf["studio"] = studio_conf
 
     return config.config_file()
+
+
+def create_job(
+    query_file: str,
+    team_name: Optional[str],
+    env_file: Optional[str] = None,
+    env: Optional[list[str]] = None,
+    workers: Optional[int] = None,
+    files: Optional[list[str]] = None,
+    python_version: Optional[str] = None,
+    req: Optional[list[str]] = None,
+    req_file: Optional[str] = None,
+):
+    query_type = "PYTHON" if query_file.endswith(".py") else "SHELL"
+    with open(query_file) as f:
+        query = f.read()
+
+    environment = "\n".join(env) if env else ""
+    if env_file:
+        with open(env_file) as f:
+            environment = f.read() + "\n" + environment
+
+    requirements = "\n".join(req) if req else ""
+    if req_file:
+        with open(req_file) as f:
+            requirements = f.read() + "\n" + requirements
+
+    client = StudioClient(team=team_name)
+    file_ids = upload_files(client, files) if files else []
+
+    response = client.create_job(
+        query=query,
+        query_type=query_type,
+        environment=environment,
+        workers=workers,
+        query_name=os.path.basename(query_file),
+        files=file_ids,
+        python_version=python_version,
+        requirements=requirements,
+    )
+    if not response.ok:
+        raise_remote_error(response.message)
+
+    if not response.data:
+        raise DataChainError("Failed to create job")
+
+    print(f"Job {response.data.get('job', {}).get('id')} created")
+    print("Open the job in Studio at", response.data.get("job", {}).get("url"))
+
+
+def upload_files(client: StudioClient, files: list[str]) -> list[str]:
+    file_ids = []
+    for file in files:
+        file_name = os.path.basename(file)
+        with open(file, "rb") as f:
+            file_content = f.read()
+        response = client.upload_file(file_name, file_content)
+        if not response.ok:
+            raise_remote_error(response.message)
+
+        if not response.data:
+            raise DataChainError(f"Failed to upload file {file_name}")
+
+        file_id = response.data.get("blob", {}).get("id")
+        if file_id:
+            file_ids.append(str(file_id))
+    return file_ids

@@ -19,6 +19,7 @@ ds_name = "feature_class"
 ds = (
     DataChain.from_storage("gs://dvcx-datalakes/dogs-and-cats/")
     .filter(C("file.path").glob("*cat*.jpg"))  # type: ignore [attr-defined]
+    .order_by("file.path")
     .limit(5)
     .settings(cache=True, parallel=2)
     .map(emd=lambda file: Embedding(value=512), output=Embedding)

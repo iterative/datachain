@@ -15,9 +15,11 @@ class DialogEval(DataModel):
 
 # DataChain function to evaluate dialog.
 # DataChain is using types for inputs, results to automatically infer schema.
-def eval_dialog(user_input: str, bot_response: str) -> DialogEval:
-    client = InferenceClient("meta-llama/Llama-3.1-70B-Instruct")
-
+def eval_dialog(
+    client: InferenceClient,
+    user_input: str,
+    bot_response: str,
+) -> DialogEval:
     completion = client.chat_completion(
         messages=[
             {
@@ -44,6 +46,7 @@ def eval_dialog(user_input: str, bot_response: str) -> DialogEval:
         "hf://datasets/infinite-dataset-hub/MobilePlanAssistant/data.csv"
     )
     .settings(parallel=10)
+    .setup(client=lambda: InferenceClient("meta-llama/Llama-3.1-70B-Instruct"))
     .map(response=eval_dialog)
     .to_parquet("hf://datasets/dvcorg/test-datachain-llm-eval/data.parquet")
 )

@@ -43,9 +43,10 @@ from datachain.data_storage.schema import (
 )
 from datachain.dataset import DatasetStatus, RowDict
 from datachain.error import DatasetNotFoundError, QueryScriptCancelError
+from datachain.func.base import Function
 from datachain.lib.udf import UDFAdapter
 from datachain.progress import CombinedDownloadCallback
-from datachain.sql.functions import rand
+from datachain.sql.functions.random import rand
 from datachain.utils import (
     batched,
     determine_processes,
@@ -65,15 +66,16 @@ if TYPE_CHECKING:
     from datachain.catalog import Catalog
     from datachain.data_storage import AbstractWarehouse
     from datachain.dataset import DatasetRecord
-
-    from .udf import UDFResult
+    from datachain.lib.udf import UDFResult
 
     P = ParamSpec("P")
 
 
 INSERT_BATCH_SIZE = 10000
 
-PartitionByType = Union[ColumnElement, Sequence[ColumnElement]]
+PartitionByType = Union[
+    Function, ColumnElement, Sequence[Union[Function, ColumnElement]]
+]
 JoinPredicateType = Union[str, ColumnClause, ColumnElement]
 DatasetDependencyType = tuple[str, int]
 
@@ -440,9 +442,6 @@ class UDFStep(Step, ABC):
                 udf_info = {
                     "udf_data": filtered_cloudpickle_dumps(self.udf),
                     "catalog_init": self.catalog.get_init_params(),
-                    "id_generator_clone_params": (
-                        self.catalog.id_generator.clone_params()
-                    ),
                     "metastore_clone_params": self.catalog.metastore.clone_params(),
                     "warehouse_clone_params": self.catalog.warehouse.clone_params(),
                     "table": udf_table,
@@ -517,13 +516,17 @@ class UDFStep(Step, ABC):
         else:
             list_partition_by = [self.partition_by]
 
+        partition_by = [
+            p.get_column() if isinstance(p, Function) else p for p in list_partition_by
+        ]
+
         # create table with partitions
         tbl = self.catalog.warehouse.create_udf_table(partition_columns())
 
         # fill table with partitions
         cols = [
             query.selected_columns.sys__id,
-            f.dense_rank().over(order_by=list_partition_by).label(PARTITION_COLUMN_ID),
+            f.dense_rank().over(order_by=partition_by).label(PARTITION_COLUMN_ID),
         ]
         self.catalog.warehouse.db.execute(
             tbl.insert().from_select(cols, query.with_only_columns(*cols))
@@ -680,6 +683,12 @@ class SQLClause(Step, ABC):
 
         return step_result(q, new_query.selected_columns)
 
+    def parse_cols(
+        self,
+        cols: Sequence[Union[Function, ColumnElement]],
+    ) -> tuple[ColumnElement, ...]:
+        return tuple(c.get_column() if isinstance(c, Function) else c for c in cols)
+
     @abstractmethod
     def apply_sql_clause(self, query):
         pass
@@ -687,12 +696,14 @@ class SQLClause(Step, ABC):
 
 @frozen
 class SQLSelect(SQLClause):
-    args: tuple[Union[str, ColumnElement], ...]
+    args: tuple[Union[Function, ColumnElement], ...]
 
     def apply_sql_clause(self, query) -> Select:
         subquery = query.subquery()
-
-        args = [subquery.c[str(c)] if isinstance(c, (str, C)) else c for c in self.args]
+        args = [
+            subquery.c[str(c)] if isinstance(c, (str, C)) else c
+            for c in self.parse_cols(self.args)
+        ]
         if not args:
             args = subquery.c
 
@@ -701,22 +712,25 @@ class SQLSelect(SQLClause):
 
 @frozen
 class SQLSelectExcept(SQLClause):
-    args: tuple[str, ...]
+    args: tuple[Union[Function, ColumnElement], ...]
 
     def apply_sql_clause(self, query: Select) -> Select:
         subquery = query.subquery()
-        names = set(self.args)
-        args = [c for c in subquery.c if c.name not in names]
+        args = [c for c in subquery.c if c.name not in set(self.parse_cols(self.args))]
         return sqlalchemy.select(*args).select_from(subquery)
 
 
 @frozen
 class SQLMutate(SQLClause):
-    args: tuple[ColumnElement, ...]
+    args: tuple[Union[Function, ColumnElement], ...]
 
     def apply_sql_clause(self, query: Select) -> Select:
         original_subquery = query.subquery()
-        to_mutate = {c.name for c in self.args}
+        args = [
+            original_subquery.c[str(c)] if isinstance(c, (str, C)) else c
+            for c in self.parse_cols(self.args)
+        ]
+        to_mutate = {c.name for c in args}
 
         prefix = f"mutate{token_hex(8)}_"
         cols = [
@@ -726,9 +740,7 @@ class SQLMutate(SQLClause):
         # this is needed for new column to be used in clauses
         # like ORDER BY, otherwise new column is not recognized
         subquery = (
-            sqlalchemy.select(*cols, *self.args)
-            .select_from(original_subquery)
-            .subquery()
+            sqlalchemy.select(*cols, *args).select_from(original_subquery).subquery()
         )
 
         return sqlalchemy.select(*subquery.c).select_from(subquery)
@@ -736,21 +748,24 @@ class SQLMutate(SQLClause):
 
 @frozen
 class SQLFilter(SQLClause):
-    expressions: tuple[ColumnElement, ...]
+    expressions: tuple[Union[Function, ColumnElement], ...]
 
     def __and__(self, other):
-        return self.__class__(self.expressions + other)
+        expressions = self.parse_cols(self.expressions)
+        return self.__class__(expressions + other)
 
     def apply_sql_clause(self, query: Select) -> Select:
-        return query.filter(*self.expressions)
+        expressions = self.parse_cols(self.expressions)
+        return query.filter(*expressions)
 
 
 @frozen
 class SQLOrderBy(SQLClause):
-    args: tuple[ColumnElement, ...]
+    args: tuple[Union[Function, ColumnElement], ...]
 
     def apply_sql_clause(self, query: Select) -> Select:
-        return query.order_by(*self.args)
+        args = self.parse_cols(self.args)
+        return query.order_by(*args)
 
 
 @frozen
@@ -945,23 +960,29 @@ class SQLJoin(Step):
 
 @frozen
 class SQLGroupBy(SQLClause):
-    cols: Sequence[Union[str, ColumnElement]]
-    group_by: Sequence[Union[str, ColumnElement]]
+    cols: Sequence[Union[str, Function, ColumnElement]]
+    group_by: Sequence[Union[str, Function, ColumnElement]]
 
     def apply_sql_clause(self, query) -> Select:
         if not self.cols:
             raise ValueError("No columns to select")
-        if not self.group_by:
-            raise ValueError("No columns to group by")
 
         subquery = query.subquery()
 
-        cols = [
-            subquery.c[str(c)] if isinstance(c, (str, C)) else c
-            for c in [*self.group_by, *self.cols]
+        group_by = [
+            c.get_column() if isinstance(c, Function) else c for c in self.group_by
         ]
 
-        return sqlalchemy.select(*cols).select_from(subquery).group_by(*self.group_by)
+        cols = [
+            c.get_column()
+            if isinstance(c, Function)
+            else subquery.c[str(c)]
+            if isinstance(c, (str, C))
+            else c
+            for c in (*group_by, *self.cols)
+        ]
+
+        return sqlalchemy.select(*cols).select_from(subquery).group_by(*group_by)
 
 
 def _validate_columns(

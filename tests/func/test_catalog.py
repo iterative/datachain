@@ -772,6 +772,27 @@ def test_dataset_stats(test_session):
     assert dataset_version2.size == 18
 
 
+def test_ls_datasets_no_json(test_session):
+    ids = [1, 2, 3]
+    values = tuple(zip(["a", "b", "c"], [1, 2, 3]))
+
+    DataChain.from_values(
+        ids=ids,
+        file=[File(path=name, size=size) for name, size in values],
+        session=test_session,
+    ).save()
+    datasets = test_session.catalog.ls_datasets()
+    assert datasets
+    for d in datasets:
+        assert hasattr(d, "id")
+        assert not hasattr(d, "feature_schema")
+        assert d.versions
+        for v in d.versions:
+            assert hasattr(v, "id")
+            assert not hasattr(v, "preview")
+            assert not hasattr(v, "feature_schema")
+
+
 @pytest.mark.parametrize("cloud_type", ["s3", "azure", "gs"], indirect=True)
 def test_listing_stats(cloud_test_catalog):
     catalog = cloud_test_catalog.catalog
@@ -857,83 +878,3 @@ def test_garbage_collect(cloud_test_catalog, from_cli, capsys):
     else:
         catalog.cleanup_tables(temp_tables)
     assert catalog.get_temp_table_names() == []
-
-
-def test_get_file_from_row(cloud_test_catalog, dogs_dataset):
-    catalog = cloud_test_catalog.catalog
-    catalog.metastore.update_dataset_version(
-        dogs_dataset,
-        1,
-        feature_schema={
-            "name": "str",
-            "age": "str",
-            "f1": "File@v1",
-            "f2": "File@v1",
-        },
-    )
-    row = {
-        "name": "Jon",
-        "age": 25,
-        "f1__source": "s3://first_bucket",
-        "f1__path": "image1.jpg",
-        "f2__source": "s3://second_bucket",
-        "f2__path": "image2.jpg",
-    }
-
-    assert catalog.get_file_from_row(dogs_dataset.name, 1, row, "f1") == File(
-        source="s3://first_bucket",
-        path="image1.jpg",
-    )
-    assert catalog.get_file_from_row(dogs_dataset.name, 1, row, "f2") == File(
-        source="s3://second_bucket",
-        path="image2.jpg",
-    )
-
-
-def test_get_file_from_row_with_custom_types(cloud_test_catalog, dogs_dataset):
-    catalog = cloud_test_catalog.catalog
-    catalog.metastore.update_dataset_version(
-        dogs_dataset,
-        1,
-        feature_schema={
-            "name": "str",
-            "age": "str",
-            "f1": "File@v1",
-            "f2": "File@v1",
-            "_custom_types": {
-                "File@v1": {"source": "str", "path": "str"},
-            },
-        },
-    )
-    row = {
-        "name": "Jon",
-        "age": 25,
-        "f1__source": "s3://first_bucket",
-        "f1__path": "image1.jpg",
-        "f2__source": "s3://second_bucket",
-        "f2__path": "image2.jpg",
-    }
-
-    assert catalog.get_file_from_row(dogs_dataset.name, 1, row, "f1") == File(
-        source="s3://first_bucket",
-        path="image1.jpg",
-    )
-
-
-def test_get_file_from_row_no_signals(cloud_test_catalog, dogs_dataset):
-    catalog = cloud_test_catalog.catalog
-    catalog.metastore.update_dataset_version(
-        dogs_dataset,
-        1,
-        feature_schema={
-            "name": "str",
-            "age": "str",
-        },
-    )
-    row = {
-        "name": "Jon",
-        "age": 25,
-    }
-
-    with pytest.raises(RuntimeError):
-        assert catalog.get_file_from_row(dogs_dataset.name, 1, row, "missing")

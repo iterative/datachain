@@ -27,6 +27,8 @@ from datachain.data_storage import JobQueryType, JobStatus
 from datachain.data_storage.serializer import Serializable
 from datachain.dataset import (
     DatasetDependency,
+    DatasetListRecord,
+    DatasetListVersion,
     DatasetRecord,
     DatasetStatus,
     DatasetVersion,
@@ -43,7 +45,7 @@ if TYPE_CHECKING:
     from sqlalchemy import Delete, Insert, Select, Update
     from sqlalchemy.schema import SchemaItem
 
-    from datachain.data_storage import AbstractIDGenerator, schema
+    from datachain.data_storage import schema
     from datachain.data_storage.db_engine import DatabaseEngine
 
 logger = logging.getLogger("datachain")
@@ -59,6 +61,8 @@ class AbstractMetastore(ABC, Serializable):
 
     schema: "schema.Schema"
     dataset_class: type[DatasetRecord] = DatasetRecord
+    dataset_list_class: type[DatasetListRecord] = DatasetListRecord
+    dataset_list_version_class: type[DatasetListVersion] = DatasetListVersion
     dependency_class: type[DatasetDependency] = DatasetDependency
     job_class: type[Job] = Job
 
@@ -166,11 +170,11 @@ class AbstractMetastore(ABC, Serializable):
         """
 
     @abstractmethod
-    def list_datasets(self) -> Iterator[DatasetRecord]:
+    def list_datasets(self) -> Iterator[DatasetListRecord]:
         """Lists all datasets."""
 
     @abstractmethod
-    def list_datasets_by_prefix(self, prefix: str) -> Iterator["DatasetRecord"]:
+    def list_datasets_by_prefix(self, prefix: str) -> Iterator["DatasetListRecord"]:
         """Lists all datasets which names start with prefix."""
 
     @abstractmethod
@@ -300,16 +304,10 @@ class AbstractDBMetastore(AbstractMetastore):
     DATASET_DEPENDENCY_TABLE = "datasets_dependencies"
     JOBS_TABLE = "jobs"
 
-    id_generator: "AbstractIDGenerator"
     db: "DatabaseEngine"
 
-    def __init__(
-        self,
-        id_generator: "AbstractIDGenerator",
-        uri: Optional[StorageURI] = None,
-    ):
+    def __init__(self, uri: Optional[StorageURI] = None):
         uri = uri or StorageURI("")
-        self.id_generator = id_generator
         super().__init__(uri)
 
     def close(self) -> None:
@@ -318,7 +316,6 @@ class AbstractDBMetastore(AbstractMetastore):
 
     def cleanup_tables(self, temp_table_names: list[str]) -> None:
         """Cleanup temp tables."""
-        self.id_generator.delete_uris(temp_table_names)
 
     @classmethod
     def _datasets_columns(cls) -> list["SchemaItem"]:
@@ -346,6 +343,14 @@ class AbstractDBMetastore(AbstractMetastore):
             c.name  # type: ignore [attr-defined]
             for c in self._datasets_columns()
             if c.name  # type: ignore [attr-defined]
+        ]
+
+    @cached_property
+    def _dataset_list_fields(self) -> list[str]:
+        return [
+            c.name  # type: ignore [attr-defined]
+            for c in self._datasets_columns()
+            if c.name in self.dataset_list_class.__dataclass_fields__  # type: ignore [attr-defined]
         ]
 
     @classmethod
@@ -388,6 +393,15 @@ class AbstractDBMetastore(AbstractMetastore):
             c.name  # type: ignore [attr-defined]
             for c in self._datasets_versions_columns()
             if c.name  # type: ignore [attr-defined]
+        ]
+
+    @cached_property
+    def _dataset_list_version_fields(self) -> list[str]:
+        return [
+            c.name  # type: ignore [attr-defined]
+            for c in self._datasets_versions_columns()
+            if c.name  # type: ignore [attr-defined]
+            in self.dataset_list_version_class.__dataclass_fields__
         ]
 
     @classmethod
@@ -664,14 +678,25 @@ class AbstractDBMetastore(AbstractMetastore):
             return None
         return reduce(lambda ds, version: ds.merge_versions(version), versions)
 
-    def _parse_datasets(self, rows) -> Iterator["DatasetRecord"]:
+    def _parse_list_dataset(self, rows) -> Optional[DatasetListRecord]:
+        versions = [self.dataset_list_class.parse(*r) for r in rows]
+        if not versions:
+            return None
+        return reduce(lambda ds, version: ds.merge_versions(version), versions)
+
+    def _parse_dataset_list(self, rows) -> Iterator["DatasetListRecord"]:
         # grouping rows by dataset id
         for _, g in groupby(rows, lambda r: r[0]):
-            dataset = self._parse_dataset(list(g))
+            dataset = self._parse_list_dataset(list(g))
             if dataset:
                 yield dataset
 
-    def _base_dataset_query(self):
+    def _get_dataset_query(
+        self,
+        dataset_fields: list[str],
+        dataset_version_fields: list[str],
+        isouter: bool = True,
+    ):
         if not (
             self.db.has_table(self._datasets.name)
             and self.db.has_table(self._datasets_versions.name)
@@ -680,23 +705,36 @@ class AbstractDBMetastore(AbstractMetastore):
 
         d = self._datasets
         dv = self._datasets_versions
+
         query = self._datasets_select(
-            *(getattr(d.c, f) for f in self._dataset_fields),
-            *(getattr(dv.c, f) for f in self._dataset_version_fields),
+            *(getattr(d.c, f) for f in dataset_fields),
+            *(getattr(dv.c, f) for f in dataset_version_fields),
         )
-        j = d.join(dv, d.c.id == dv.c.dataset_id, isouter=True)
+        j = d.join(dv, d.c.id == dv.c.dataset_id, isouter=isouter)
         return query.select_from(j)
 
-    def list_datasets(self) -> Iterator["DatasetRecord"]:
+    def _base_dataset_query(self):
+        return self._get_dataset_query(
+            self._dataset_fields, self._dataset_version_fields
+        )
+
+    def _base_list_datasets_query(self):
+        return self._get_dataset_query(
+            self._dataset_list_fields, self._dataset_list_version_fields, isouter=False
+        )
+
+    def list_datasets(self) -> Iterator["DatasetListRecord"]:
         """Lists all datasets."""
-        yield from self._parse_datasets(self.db.execute(self._base_dataset_query()))
+        yield from self._parse_dataset_list(
+            self.db.execute(self._base_list_datasets_query())
+        )
 
     def list_datasets_by_prefix(
         self, prefix: str, conn=None
-    ) -> Iterator["DatasetRecord"]:
-        query = self._base_dataset_query()
+    ) -> Iterator["DatasetListRecord"]:
+        query = self._base_list_datasets_query()
         query = query.where(self._datasets.c.name.startswith(prefix))
-        yield from self._parse_datasets(self.db.execute(query))
+        yield from self._parse_dataset_list(self.db.execute(query))
 
     def get_dataset(self, name: str, conn=None) -> DatasetRecord:
         """Gets a single dataset by name"""

@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from sqlalchemy.sql.selectable import Join, Select
     from sqlalchemy.types import TypeEngine
 
-    from datachain.data_storage import AbstractIDGenerator, schema
+    from datachain.data_storage import schema
     from datachain.data_storage.db_engine import DatabaseEngine
     from datachain.data_storage.schema import DataTable
     from datachain.lib.file import File
@@ -69,12 +69,8 @@ class AbstractWarehouse(ABC, Serializable):
     UDF_TABLE_NAME_PREFIX = "udf_"
     TMP_TABLE_NAME_PREFIX = "tmp_"
 
-    id_generator: "AbstractIDGenerator"
     schema: "schema.Schema"
     db: "DatabaseEngine"
-
-    def __init__(self, id_generator: "AbstractIDGenerator"):
-        self.id_generator = id_generator
 
     def __enter__(self) -> "AbstractWarehouse":
         return self
@@ -224,28 +220,28 @@ class AbstractWarehouse(ABC, Serializable):
         offset = 0
         num_yielded = 0
 
-        while True:
-            if limit is not None:
-                limit -= num_yielded
-                if limit == 0:
-                    break
-                if limit < page_size:
-                    paginated_query = paginated_query.limit(None).limit(limit)
+        # Ensure we're using a thread-local connection
+        with self.clone() as wh:
+            while True:
+                if limit is not None:
+                    limit -= num_yielded
+                    if limit == 0:
+                        break
+                    if limit < page_size:
+                        paginated_query = paginated_query.limit(None).limit(limit)
 
-            # Ensure we're using a thread-local connection
-            with self.clone() as wh:
                 # Cursor results are not thread-safe, so we convert them to a list
                 results = list(wh.dataset_rows_select(paginated_query.offset(offset)))
 
-            processed = False
-            for row in results:
-                processed = True
-                yield row
-                num_yielded += 1
+                processed = False
+                for row in results:
+                    processed = True
+                    yield row
+                    num_yielded += 1
 
-            if not processed:
-                break  # no more results
-            offset += page_size
+                if not processed:
+                    break  # no more results
+                offset += page_size
 
     #
     # Table Name Internal Functions

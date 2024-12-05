@@ -15,10 +15,11 @@ import pytz
 from PIL import Image
 from sqlalchemy import Column
 
-from datachain import DataModel
+from datachain import DataModel, func
 from datachain.catalog.catalog import QUERY_SCRIPT_CANCELED_EXIT_CODE
 from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.dataset import DatasetDependencyType, DatasetStats
+from datachain.func import path as pathfunc
 from datachain.lib.dc import C, DataChain
 from datachain.lib.file import File, ImageFile
 from datachain.lib.listing import LISTING_TTL, is_listing_dataset, parse_listing_uri
@@ -26,12 +27,11 @@ from datachain.lib.tar import process_tar
 from datachain.lib.udf import Mapper
 from datachain.lib.utils import DataChainError
 from datachain.query.dataset import QueryStep
-from datachain.sql.functions import path as pathfunc
-from datachain.sql.functions.array import cosine_distance, euclidean_distance
 from tests.utils import (
     ANY_VALUE,
     NUM_TREE,
     TARRED_TREE,
+    df_equal,
     images_equal,
     sorted_dicts,
     text_embedding,
@@ -345,7 +345,7 @@ def test_show(capsys, test_session):
             None,
         ],
         session=test_session,
-    ).show()
+    ).order_by("first_name").show()
     captured = capsys.readouterr()
     normalized_output = re.sub(r"\s+", " ", captured.out)
     assert "first_name age city" in normalized_output
@@ -397,7 +397,7 @@ def test_show_transpose(capsys, test_session):
         first_name=first_name,
         last_name=last_name,
         session=test_session,
-    ).show(transpose=True)
+    ).order_by("first_name", "last_name").show(transpose=True)
     captured = capsys.readouterr()
     stripped_output = re.sub(r"\s+", " ", captured.out)
     assert " ".join(first_name) in stripped_output
@@ -520,7 +520,7 @@ def test_mutate_existing_column(test_session):
     ds = DataChain.from_values(ids=[1, 2, 3], session=test_session)
     ds = ds.mutate(ids=Column("ids") + 1)
 
-    assert list(ds.collect()) == [(2,), (3,), (4,)]
+    assert list(ds.order_by("ids").collect()) == [(2,), (3,), (4,)]
 
 
 @pytest.mark.parametrize(
@@ -954,7 +954,7 @@ def test_udf_after_limit(cloud_test_catalog):
     expected = [(f"{i:06d}", i) for i in range(100)]
     dc = (
         DataChain.from_storage(ctc.src_uri, session=ctc.session)
-        .mutate(name=pathfunc.name(C("file.path")))
+        .mutate(name=pathfunc.name("file.path"))
         .save()
     )
     # We test a few different orderings here, because we've had strange
@@ -1289,8 +1289,8 @@ def test_similarity_search(cloud_test_catalog):
         DataChain.from_storage(src_uri, session=session)
         .map(embedding=calc_emb, output={"embedding": list[float]})
         .mutate(
-            cos_dist=cosine_distance(C("embedding"), target_embedding),
-            eucl_dist=euclidean_distance(C("embedding"), target_embedding),
+            cos_dist=func.cosine_distance("embedding", target_embedding),
+            eucl_dist=func.euclidean_distance("embedding", target_embedding),
         )
         .order_by("file.path")
     )
@@ -1386,6 +1386,38 @@ def test_group_by_signals(cloud_test_catalog, partition_by, signal_name):
             {"file_info__path": "dogs", "cnt": 4, "sum": 15, "value": ANY_VALUE(3, 4)},
         ],
         "file_info__path",
+    )
+
+
+def test_group_by_func(cloud_test_catalog):
+    from datachain import func
+
+    session = cloud_test_catalog.session
+    src_uri = cloud_test_catalog.src_uri
+
+    ds = (
+        DataChain.from_storage(src_uri, session=session)
+        .group_by(
+            cnt=func.count(),
+            sum=func.sum("file.size"),
+            partition_by=func.path.parent("file.path").label("file_dir"),
+        )
+        .save("my-ds")
+    )
+
+    assert ds.signals_schema.serialize() == {
+        "file_dir": "str",
+        "cnt": "int",
+        "sum": "int",
+    }
+    assert sorted_dicts(ds.to_records(), "file_dir") == sorted_dicts(
+        [
+            {"file_dir": "", "cnt": 1, "sum": 13},
+            {"file_dir": "cats", "cnt": 2, "sum": 8},
+            {"file_dir": "dogs", "cnt": 3, "sum": 11},
+            {"file_dir": "dogs/others", "cnt": 1, "sum": 4},
+        ],
+        "file_dir",
     )
 
 
@@ -1494,7 +1526,7 @@ def test_to_from_csv_remote(cloud_test_catalog_upload):
 
     dc_from = DataChain.from_csv(path, session=ctc.session)
     df1 = dc_from.select("first_name", "age", "city").to_pandas()
-    assert df1.equals(df)
+    assert df_equal(df1, df)
 
 
 @pytest.mark.parametrize("chunk_size", (1000, 2))
@@ -1510,7 +1542,7 @@ def test_to_from_parquet_remote(cloud_test_catalog_upload, chunk_size, kwargs):
     dc_from = DataChain.from_parquet(path, session=ctc.session)
     df1 = dc_from.select("first_name", "age", "city").to_pandas()
 
-    assert df1.equals(df)
+    assert df_equal(df1, df)
 
 
 def test_to_from_parquet_partitioned_remote(cloud_test_catalog_upload):
@@ -1524,7 +1556,7 @@ def test_to_from_parquet_partitioned_remote(cloud_test_catalog_upload):
     dc_from = DataChain.from_parquet(path, session=ctc.session)
     df1 = dc_from.select("first_name", "age", "city").to_pandas()
     df1 = df1.sort_values("first_name").reset_index(drop=True)
-    assert df1.equals(df)
+    assert df_equal(df1, df)
 
 
 # These deprecation warnings occur in the datamodel-code-generator package.
@@ -1540,7 +1572,7 @@ def test_to_from_json_remote(cloud_test_catalog_upload):
     dc_from = DataChain.from_json(path, session=ctc.session)
     df1 = dc_from.select("json.first_name", "json.age", "json.city").to_pandas()
     df1 = df1["json"]
-    assert df1.equals(df)
+    assert df_equal(df1, df)
 
 
 # These deprecation warnings occur in the datamodel-code-generator package.
@@ -1556,4 +1588,4 @@ def test_to_from_jsonl_remote(cloud_test_catalog_upload):
     dc_from = DataChain.from_jsonl(path, session=ctc.session)
     df1 = dc_from.select("jsonl.first_name", "jsonl.age", "jsonl.city").to_pandas()
     df1 = df1["jsonl"]
-    assert df1.equals(df)
+    assert df_equal(df1, df)

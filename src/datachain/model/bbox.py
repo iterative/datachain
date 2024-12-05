@@ -17,7 +17,7 @@ class BBox(DataModel):
     """
 
     title: str = Field(default="")
-    coords: list[int] = Field(default=None)
+    coords: list[int] = Field(default=[])
 
     @staticmethod
     def from_list(coords: list[float], title: str = "") -> "BBox":
@@ -60,7 +60,7 @@ class OBBox(DataModel):
     """
 
     title: str = Field(default="")
-    coords: list[int] = Field(default=None)
+    coords: list[int] = Field(default=[])
 
     @staticmethod
     def from_list(coords: list[float], title: str = "") -> "OBBox":

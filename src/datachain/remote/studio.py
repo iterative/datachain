@@ -1,3 +1,4 @@
+import base64
 import json
 import logging
 import os
@@ -23,7 +24,8 @@ DatasetStatsData = Optional[DatasetStats]
 DatasetRowsData = Optional[Iterable[dict[str, Any]]]
 DatasetExportStatus = Optional[dict[str, Any]]
 DatasetExportSignedUrls = Optional[list[str]]
-
+FileUploadData = Optional[dict[str, Any]]
+JobData = Optional[dict[str, Any]]
 
 logger = logging.getLogger("datachain")
 
@@ -117,18 +119,27 @@ class StudioClient:
                 "\tpip install 'datachain[remote]'"
             ) from None
 
-    def _send_request_msgpack(self, route: str, data: dict[str, Any]) -> Response[Any]:
+    def _send_request_msgpack(
+        self, route: str, data: dict[str, Any], method: Optional[str] = "POST"
+    ) -> Response[Any]:
         import msgpack
         import requests
 
-        response = requests.post(
-            f"{self.url}/{route}",
-            json={**data, "team_name": self.team},
+        kwargs = (
+            {"params": {**data, "team_name": self.team}}
+            if method == "GET"
+            else {"json": {**data, "team_name": self.team}}
+        )
+
+        response = requests.request(
+            method=method,  # type: ignore[arg-type]
+            url=f"{self.url}/{route}",
             headers={
                 "Content-Type": "application/json",
                 "Authorization": f"token {self.token}",
             },
             timeout=self.timeout,
+            **kwargs,  # type: ignore[arg-type]
         )
         ok = response.ok
         if not ok:
@@ -146,7 +157,9 @@ class StudioClient:
         return Response(response_data, ok, message)
 
     @retry_with_backoff(retries=5)
-    def _send_request(self, route: str, data: dict[str, Any]) -> Response[Any]:
+    def _send_request(
+        self, route: str, data: dict[str, Any], method: Optional[str] = "POST"
+    ) -> Response[Any]:
         """
         Function that communicate Studio API.
         It will raise an exception, and try to retry, if 5xx status code is
@@ -155,14 +168,21 @@ class StudioClient:
         """
         import requests
 
-        response = requests.post(
-            f"{self.url}/{route}",
-            json={**data, "team_name": self.team},
+        kwargs = (
+            {"params": {**data, "team_name": self.team}}
+            if method == "GET"
+            else {"json": {**data, "team_name": self.team}}
+        )
+
+        response = requests.request(
+            method=method,  # type: ignore[arg-type]
+            url=f"{self.url}/{route}",
             headers={
                 "Content-Type": "application/json",
                 "Authorization": f"token {self.token}",
             },
             timeout=self.timeout,
+            **kwargs,  # type: ignore[arg-type]
         )
         try:
             response.raise_for_status()
@@ -178,17 +198,9 @@ class StudioClient:
             data = {}
 
         if not ok:
-            logger.error(
-                "Got bad response from Studio, content is %s",
-                response.content.decode("utf-8"),
-            )
             if response.status_code == 403:
                 message = f"Not authorized for the team {self.team}"
             else:
-                logger.error(
-                    "Got bad response from Studio, content is %s",
-                    response.content.decode("utf-8"),
-                )
                 message = data.get("message", "")
         else:
             message = ""
@@ -228,7 +240,42 @@ class StudioClient:
             yield path, response
 
     def ls_datasets(self) -> Response[LsData]:
-        return self._send_request("datachain/ls-datasets", {})
+        return self._send_request("datachain/datasets", {}, method="GET")
+
+    def edit_dataset(
+        self,
+        name: str,
+        new_name: Optional[str] = None,
+        description: Optional[str] = None,
+        labels: Optional[list[str]] = None,
+    ) -> Response[DatasetInfoData]:
+        body = {
+            "new_name": new_name,
+            "dataset_name": name,
+            "description": description,
+            "labels": labels,
+        }
+
+        return self._send_request(
+            "datachain/datasets",
+            body,
+        )
+
+    def rm_dataset(
+        self,
+        name: str,
+        version: Optional[int] = None,
+        force: Optional[bool] = False,
+    ) -> Response[DatasetInfoData]:
+        return self._send_request(
+            "datachain/datasets",
+            {
+                "dataset_name": name,
+                "version": version,
+                "force": force,
+            },
+            method="DELETE",
+        )
 
     def dataset_info(self, name: str) -> Response[DatasetInfoData]:
         def _parse_dataset_info(dataset_info):
@@ -238,7 +285,9 @@ class StudioClient:
 
             return dataset_info
 
-        response = self._send_request("datachain/dataset-info", {"dataset_name": name})
+        response = self._send_request(
+            "datachain/datasets/info", {"dataset_name": name}, method="GET"
+        )
         if response.ok:
             response.data = _parse_dataset_info(response.data)
         return response
@@ -248,14 +297,16 @@ class StudioClient:
     ) -> Response[DatasetRowsData]:
         req_data = {"dataset_name": name, "dataset_version": version}
         return self._send_request_msgpack(
-            "datachain/dataset-rows",
+            "datachain/datasets/rows",
             {**req_data, "offset": offset, "limit": DATASET_ROWS_CHUNK_SIZE},
+            method="GET",
         )
 
     def dataset_stats(self, name: str, version: int) -> Response[DatasetStatsData]:
         response = self._send_request(
-            "datachain/dataset-stats",
+            "datachain/datasets/stats",
             {"dataset_name": name, "dataset_version": version},
+            method="GET",
         )
         if response.ok:
             response.data = DatasetStats(**response.data)
@@ -265,14 +316,46 @@ class StudioClient:
         self, name: str, version: int
     ) -> Response[DatasetExportSignedUrls]:
         return self._send_request(
-            "datachain/dataset-export",
+            "datachain/datasets/export",
             {"dataset_name": name, "dataset_version": version},
+            method="GET",
         )
 
     def dataset_export_status(
         self, name: str, version: int
     ) -> Response[DatasetExportStatus]:
         return self._send_request(
-            "datachain/dataset-export-status",
+            "datachain/datasets/export-status",
             {"dataset_name": name, "dataset_version": version},
+            method="GET",
         )
+
+    def upload_file(self, file_name: str, content: bytes) -> Response[FileUploadData]:
+        data = {
+            "file_content": base64.b64encode(content).decode("utf-8"),
+            "file_name": file_name,
+        }
+        return self._send_request("datachain/upload-file", data)
+
+    def create_job(
+        self,
+        query: str,
+        query_type: str,
+        environment: Optional[str] = None,
+        workers: Optional[int] = None,
+        query_name: Optional[str] = None,
+        files: Optional[list[str]] = None,
+        python_version: Optional[str] = None,
+        requirements: Optional[str] = None,
+    ) -> Response[JobData]:
+        data = {
+            "query": query,
+            "query_type": query_type,
+            "environment": environment,
+            "workers": workers,
+            "query_name": query_name,
+            "files": files,
+            "python_version": python_version,
+            "requirements": requirements,
+        }
+        return self._send_request("datachain/job", data)
