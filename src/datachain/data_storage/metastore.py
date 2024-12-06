@@ -725,9 +725,10 @@ class AbstractDBMetastore(AbstractMetastore):
 
     def list_datasets(self) -> Iterator["DatasetListRecord"]:
         """Lists all datasets."""
-        yield from self._parse_dataset_list(
-            self.db.execute(self._base_list_datasets_query())
+        query = self._base_list_datasets_query().order_by(
+            self._datasets.c.name, self._datasets_versions.c.version
         )
+        yield from self._parse_dataset_list(self.db.execute(query))
 
     def list_datasets_by_prefix(
         self, prefix: str, conn=None
