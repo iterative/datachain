@@ -2731,6 +2731,49 @@ def test_group_by_multiple_partition_by(test_session):
     )
 
 
+def test_group_by_no_partition_by(test_session):
+    from datachain import func
+
+    ds = (
+        DataChain.from_values(
+            col1=["a", "a", "b", "b", "b", "c"],
+            col2=[1, 2, 1, 2, 1, 2],
+            col3=[1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            col4=["1", "2", "3", "4", "5", "6"],
+            session=test_session,
+        )
+        .order_by("col4")
+        .group_by(
+            cnt=func.count(),
+            cnt_col=func.count("col2"),
+            sum=func.sum("col3"),
+            concat=func.concat("col4"),
+            value=func.any_value("col3"),
+            collect=func.collect("col3"),
+        )
+        .save("my-ds")
+    )
+
+    assert ds.signals_schema.serialize() == {
+        "cnt": "int",
+        "cnt_col": "int",
+        "sum": "float",
+        "concat": "str",
+        "value": "float",
+        "collect": "list[float]",
+    }
+    assert ds.to_records() == [
+        {
+            "cnt": 6,
+            "cnt_col": 6,
+            "sum": 21.0,
+            "concat": "123456",
+            "value": 1.0,
+            "collect": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        },
+    ]
+
+
 def test_group_by_error(test_session):
     from datachain import func
 
@@ -2739,14 +2782,6 @@ def test_group_by_error(test_session):
         col2=[1, 2, 3, 4, 5, 6],
         session=test_session,
     )
-
-    with pytest.raises(TypeError):
-        dc.group_by(cnt=func.count())
-
-    with pytest.raises(
-        ValueError, match="At least one column should be provided for partition_by"
-    ):
-        dc.group_by(cnt=func.count(), partition_by=())
 
     with pytest.raises(
         ValueError, match="At least one column should be provided for group_by"
@@ -2768,6 +2803,34 @@ def test_group_by_error(test_session):
         SignalResolvingError, match="cannot resolve signal name 'col3': is not found"
     ):
         dc.group_by(foo=func.sum("col2"), partition_by="col3")
+
+
+def test_group_by_case(test_session):
+    from datachain import func
+
+    ds = (
+        DataChain.from_values(
+            col1=[1.0, 0.0, 3.2, 0.1, 5.9, -1.0],
+            col2=[0.0, 6.1, -0.05, 3.7, 0.1, -3.0],
+            session=test_session,
+        )
+        .group_by(
+            col1=func.sum(func.case((C("col1") > 0.1, 1), else_=0)),
+            col2=func.sum(func.case((C("col2") < 0.0, 1), else_=0)),
+        )
+        .save("my-ds")
+    )
+
+    assert ds.signals_schema.serialize() == {
+        "col1": "int",
+        "col2": "int",
+    }
+    assert ds.to_records() == [
+        {
+            "col1": 3,
+            "col2": 2,
+        }
+    ]
 
 
 @pytest.mark.parametrize("desc", [True, False])

@@ -150,28 +150,28 @@ def remote_dataset_chunk_url():
 
 @pytest.fixture
 def remote_dataset_info(requests_mock, remote_dataset):
-    requests_mock.post(f"{STUDIO_URL}/api/datachain/dataset-info", json=remote_dataset)
+    requests_mock.get(f"{STUDIO_URL}/api/datachain/datasets/info", json=remote_dataset)
 
 
 @pytest.fixture
 def remote_dataset_stats(requests_mock):
-    requests_mock.post(
-        f"{STUDIO_URL}/api/datachain/dataset-stats",
+    requests_mock.get(
+        f"{STUDIO_URL}/api/datachain/datasets/stats",
         json={"num_objects": 5, "size": 1000},
     )
 
 
 @pytest.fixture
 def dataset_export(requests_mock, remote_dataset_chunk_url):
-    requests_mock.post(
-        f"{STUDIO_URL}/api/datachain/dataset-export", json=[remote_dataset_chunk_url]
+    requests_mock.get(
+        f"{STUDIO_URL}/api/datachain/datasets/export", json=[remote_dataset_chunk_url]
     )
 
 
 @pytest.fixture
 def dataset_export_status(requests_mock):
-    requests_mock.post(
-        f"{STUDIO_URL}/api/datachain/dataset-export-status",
+    requests_mock.get(
+        f"{STUDIO_URL}/api/datachain/datasets/export-status",
         json={"status": "completed"},
     )
 
@@ -303,8 +303,8 @@ def test_pull_dataset_not_found_in_remote(
     requests_mock,
     cloud_test_catalog,
 ):
-    requests_mock.post(
-        f"{STUDIO_URL}/api/datachain/dataset-info",
+    requests_mock.get(
+        f"{STUDIO_URL}/api/datachain/datasets/info",
         status_code=404,
         json={"message": "Dataset not found"},
     )
@@ -322,8 +322,8 @@ def test_pull_dataset_error_on_fetching_stats(
     cloud_test_catalog,
     remote_dataset_info,
 ):
-    requests_mock.post(
-        f"{STUDIO_URL}/api/datachain/dataset-stats",
+    requests_mock.get(
+        f"{STUDIO_URL}/api/datachain/datasets/stats",
         status_code=400,
         json={"message": "Internal error"},
     )
@@ -345,8 +345,8 @@ def test_pull_dataset_exporting_dataset_failed_in_remote(
     dataset_export,
     export_status,
 ):
-    requests_mock.post(
-        f"{STUDIO_URL}/api/datachain/dataset-export-status",
+    requests_mock.get(
+        f"{STUDIO_URL}/api/datachain/datasets/export-status",
         json={"status": export_status},
     )
 

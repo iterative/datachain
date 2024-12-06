@@ -772,6 +772,38 @@ def test_dataset_stats(test_session):
     assert dataset_version2.size == 18
 
 
+def test_ls_datasets_ordered(test_session):
+    ids = [1, 2, 3]
+    values = tuple(zip(["a", "b", "c"], ids))
+
+    assert not list(test_session.catalog.ls_datasets())
+
+    dc = DataChain.from_values(
+        ids=ids,
+        file=[File(path=name, size=size) for name, size in values],
+        session=test_session,
+    )
+    dc.save("cats")
+    dc.save("dogs")
+    dc.save("cats")
+    dc.save("cats")
+    dc.save("cats")
+    datasets = list(test_session.catalog.ls_datasets())
+
+    assert [
+        (d.name, v.version)
+        for d in datasets
+        for v in d.versions
+        if not d.name.startswith("session_")
+    ] == [
+        ("cats", 1),
+        ("cats", 2),
+        ("cats", 3),
+        ("cats", 4),
+        ("dogs", 1),
+    ]
+
+
 def test_ls_datasets_no_json(test_session):
     ids = [1, 2, 3]
     values = tuple(zip(["a", "b", "c"], [1, 2, 3]))
