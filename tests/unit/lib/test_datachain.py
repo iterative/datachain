@@ -3013,6 +3013,60 @@ def test_diff(test_session, added, deleted, modified, unchanged):
 @pytest.mark.parametrize("deleted", (True, False))
 @pytest.mark.parametrize("modified", (True, False))
 @pytest.mark.parametrize("unchanged", (True, False))
+@pytest.mark.parametrize("on_self", (True, False))
+def test_diff_on_equal_datasets(
+    test_session, added, deleted, modified, unchanged, on_self
+):
+    num_statuses = sum(1 if s else 0 for s in [added, deleted, modified, unchanged])
+    if num_statuses == 0:
+        pytest.skip("This case is tested in another test")
+
+    ds1 = DataChain.from_values(
+        id=[1, 2, 3],
+        name=["John", "Doe", "Andy"],
+        session=test_session,
+    ).save("ds1")
+
+    if on_self:
+        ds2 = ds1
+    else:
+        ds2 = DataChain.from_values(
+            id=[1, 2, 3],
+            name=["John", "Doe", "Andy"],
+            session=test_session,
+        ).save("ds2")
+
+    diff = ds1.diff(
+        ds2,
+        added=added,
+        deleted=deleted,
+        modified=modified,
+        unchanged=unchanged,
+        on=["id"],
+        status_col="diff",
+    )
+
+    if not unchanged:
+        expected = []
+    else:
+        expected = [
+            ("U", 1, "John"),
+            ("U", 2, "Doe"),
+            ("U", 3, "Andy"),
+        ]
+
+    collect_fields = ["diff", "id", "name"]
+    if num_statuses == 1:
+        expected = [row[1:] for row in expected]
+        collect_fields = collect_fields[1:]
+
+    assert list(diff.order_by("id").collect(*collect_fields)) == expected
+
+
+@pytest.mark.parametrize("added", (True, False))
+@pytest.mark.parametrize("deleted", (True, False))
+@pytest.mark.parametrize("modified", (True, False))
+@pytest.mark.parametrize("unchanged", (True, False))
 def test_diff_files(test_session, added, deleted, modified, unchanged):
     num_statuses = sum(1 if s else 0 for s in [added, deleted, modified, unchanged])
     if num_statuses == 0:
