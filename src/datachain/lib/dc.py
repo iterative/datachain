@@ -22,6 +22,7 @@ import orjson
 import pandas as pd
 import sqlalchemy
 from pydantic import BaseModel
+from sqlalchemy import case, literal
 from sqlalchemy.sql.functions import GenericFunction
 from sqlalchemy.sql.sqltypes import NullType
 
@@ -98,6 +99,24 @@ def resolve_columns(
         return method(self, *resolved_args, **kwargs)
 
     return _inner
+
+
+def get_nested_db_signals(
+    schema: SignalSchema, nested: str, signals: list[str]
+) -> list[str]:
+    """Returns the subset of nested signals where last part of each signal match
+    some name.
+    """
+    nested_signals = schema.resolve(nested).db_signals()
+
+    return [
+        next(
+            ns
+            for ns in nested_signals  # type: ignore[misc]
+            if ns.split(DEFAULT_DELIMITER)[-1] == s
+        )
+        for s in signals
+    ]
 
 
 class DatasetPrepareError(DataChainParamsError):  # noqa: D101
@@ -1622,6 +1641,129 @@ class DataChain:
                 )  # type: ignore[arg-type]
             )
         return self._evolve(query=self._query.subtract(other._query, signals))  # type: ignore[arg-type]
+
+    def diff(
+        self,
+        other: "DataChain",
+        added: bool = True,
+        deleted: bool = True,
+        modified: bool = True,
+        unchanged: bool = False,
+        on_file: Optional[str] = None,
+        right_on_file: Optional[str] = None,
+        on: Optional[Union[str, Sequence[str]]] = None,
+        right_on: Optional[Union[str, Sequence[str]]] = None,
+        status_col: Optional[str] = None,
+    ) -> "Self":
+        """Diff returning difference between two datasets."""
+        rname = "right_"
+
+        num_statuses = sum(1 if s else 0 for s in [added, deleted, modified, unchanged])
+
+        if num_statuses > 1 and not status_col:
+            raise ValueError(
+                "Status column name is needed if more than one status is asked"
+            )
+
+        if num_statuses == 0:
+            raise ValueError(
+                "At least one of added, deleted, modified, unchanged flags must be set"
+            )
+
+        # we still need status column for internal implementation even if not
+        # needed in output
+        status_col = status_col or "sys__diff"
+
+        cols = self.signals_schema.db_signals()
+        right_cols = other.signals_schema.db_signals()
+
+        if on_file:
+            right_on_file = right_on_file or on_file
+            cols_on = get_nested_db_signals(
+                self.signals_schema, on_file, ["source", "path"]
+            )
+            right_cols_on = get_nested_db_signals(
+                other.signals_schema, right_on_file, ["source", "path"]
+            )
+            cols_comp = get_nested_db_signals(
+                self.signals_schema, on_file, ["version", "etag"]
+            )
+            right_cols_comp = get_nested_db_signals(
+                other.signals_schema, right_on_file, ["version", "etag"]
+            )
+        elif on:
+            right_on = right_on or on
+            cols_on = self.signals_schema.resolve(*on).db_signals()  # type: ignore[assignment]
+            right_cols_on = other.signals_schema.resolve(*right_on).db_signals()  # type: ignore[assignment]
+            cols_comp = [c for c in cols if c in right_cols]  # type: ignore[misc]
+            right_cols_comp = cols_comp
+        else:
+            raise ValueError("'on' or 'on_file' must be specified")
+
+        diff_cond = []
+        if added:
+            added_cond = sqlalchemy.and_(
+                *[
+                    C(c) == None  # noqa: E711
+                    for c in [f"{rname}{r_c}" for r_c in right_cols_on]
+                ]
+            )
+            diff_cond.append((added_cond, "A"))
+        if modified:
+            modified_cond = sqlalchemy.or_(
+                *[
+                    C(c) != C(f"{rname}{rc}")
+                    for c, rc in zip(cols_comp, right_cols_comp)
+                ]
+            )
+            diff_cond.append((modified_cond, "M"))
+        if unchanged:
+            unchanged_cond = sqlalchemy.and_(
+                *[
+                    C(c) == C(f"{rname}{rc}")
+                    for c, rc in zip(cols_comp, right_cols_comp)
+                ]
+            )
+            diff_cond.append((unchanged_cond, "U"))
+
+        diff = case(*diff_cond, else_=None).label(status_col)
+
+        left_right_merge = self.merge(
+            other, on=cols_on, right_on=right_cols_on, inner=False, rname=rname
+        )._query.select(*([C(c) for c in cols] + [diff]))
+
+        right_left_merge = (
+            other.merge(
+                self, on=cols_on, right_on=right_cols_on, inner=False, rname=rname
+            )
+            ._query.select(
+                *(
+                    [C(c) for c in right_cols if c in cols]
+                    + [
+                        literal(None).label(c)  # type: ignore[misc,arg-type]
+                        for c in cols
+                        if c not in right_cols
+                    ]
+                    + [literal("D").label(status_col)]
+                )
+            )
+            .filter(sqlalchemy.and_(*[C(f"{rname}{c}") == None for c in cols_on]))  # noqa: E711
+        )
+
+        if not deleted:
+            res = left_right_merge
+        elif deleted and not any([added, modified, unchanged]):
+            res = right_left_merge
+        else:
+            res = left_right_merge.union(right_left_merge)
+
+        res = res.filter(C(status_col) != None)  # noqa: E711
+
+        schema = self.signals_schema
+        if num_statuses > 1:
+            schema = SignalSchema({status_col: str}) | schema
+
+        return self._evolve(query=res, signal_schema=schema)
 
     @classmethod
     def from_values(
