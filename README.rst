@@ -28,16 +28,20 @@ in an internal database for easy and efficient querying.
 Use Cases
 =========
 
-1. **Multimodal Dataset Preparation and Curation**: ideal for organizing and
-   refining data in pre-training, finetuning or LLM evaluating stages.
-2. **GenAI Data Analytics**: Enables advanced analytics for multimodal data and
-   ad-hoc analytics using LLMs.
+1. **ETL.** Pythonic framework for describing and running unstructured data transformations
+   and enrichments, applying models to data, including LLMs.
+2. **Analytics.** DataChain dataset is a table that combines all the information about data
+   objects in one place + it provides dataframe-like API and vecrorized engine to do analytics
+   on these tables at scale.
+3. **Versioning.** DataChain doesn't store, require moving or copying data (unlike DVC).
+   Perfect use case is a bucket with thousands or millions of images, videos, audio, PDFs.
+
 
 Key Features
 ============
 
 📂 **Multimodal Dataset Versioning.**
-   - Version unstructured data without redundant data copies, by supporting
+   - Version unstructured data without moving or creating data copies, by supporting
      references to S3, GCP, Azure, and local file systems.
    - Multimodal data support: images, video, text, PDFs, JSONs, CSVs, parquet, etc.
    - Unite files and metadata together into persistent, versioned, columnar datasets.
@@ -145,7 +149,7 @@ detected are then copied to the local directory.
 
 
 LLM judging chatbots
-=============================
+====================
 
 LLMs can work as universal classifiers. In the example below,
 we employ a free API from Mistral to judge the `publicly available`_ chatbot dialogs. Please get a free
@@ -255,7 +259,7 @@ Output:
 
 
 Iterating over Python data structures
-=============================================
+=====================================
 
 In the previous examples, datasets were saved in the embedded database
 (`SQLite`_ in folder `.datachain` of the working directory).
@@ -343,7 +347,7 @@ DataChain Studio Platform
 
 - **Centralized dataset registry** to manage data, code and dependency
   dependencies in one place.
-- **Data Lineage** for data sources as well as direvative dataset.
+- **Data Lineage** for data sources as well as derivative dataset.
 - **UI for Multimodal Data** like images, videos, and PDFs.
 - **Scalable Compute** to handle large datasets (100M+ files) and in-house
   AI model inference.
@@ -368,7 +372,7 @@ To learn more, see the `Contributor Guide`_.
 Community and Support
 ---------------------
 
-* `Docs <https://datachain.dvc.ai/>`_
+* `Docs <https://docs.datachain.ai/>`_
 * `File an issue`_ if you encounter any problems
 * `Discord Chat <https://dvc.org/chat>`_
 * `Email <mailto:support@dvc.org>`_
