@@ -160,3 +160,49 @@ def int_hash_64(col: Union[ColT, int]) -> Func:
     return Func(
         "int_hash_64", inner=numeric.int_hash_64, cols=cols, args=args, result_type=int
     )
+
+
+def bit_hamming_distance(*args: Union[ColT, int]) -> Func:
+    """
+    Computes the Hamming distance between the bit representations of two integer values.
+
+    The Hamming distance is the number of positions at which the corresponding bits
+    are different. This function returns the dissimilarity between the integers,
+    where 0 indicates identical integers and values closer to the number of bits
+    in the integer indicate higher dissimilarity.
+
+    Args:
+        args (str | literal): Two integers to compute the Hamming distance between.
+            If a string is provided, it is assumed to be the name of the column.
+            If a literal is provided, it is assumed to be an integer literal.
+
+    Returns:
+        Func: A Func object that represents the Hamming distance function.
+
+    Example:
+        ```py
+        dc.mutate(
+            ham_dist=func.bit_hamming_distance("embed1", 123456s),
+        )
+        ```
+
+    Notes:
+        - Result column will always be of type int.
+    """
+    cols, func_args = [], []
+    for arg in args:
+        if isinstance(arg, int):
+            func_args.append(arg)
+        else:
+            cols.append(arg)
+
+    if len(cols) + len(func_args) != 2:
+        raise ValueError("bit_hamming_distance() requires exactly two arguments")
+
+    return Func(
+        "bit_hamming_distance",
+        inner=numeric.bit_hamming_distance,
+        cols=cols,
+        args=func_args,
+        result_type=int,
+    )
