@@ -174,7 +174,7 @@ def byte_hamming_distance(*args: Union[str, Func]) -> Func:
     Example:
         ```py
         dc.mutate(
-            ham_dist=func.byte_hamming_distance("embed1", "embed2"),
+            ham_dist=func.byte_hamming_distance("file.phash", literal("hello")),
         )
         ```
 
