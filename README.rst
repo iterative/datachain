@@ -29,12 +29,12 @@ Use Cases
 =========
 
 1. **ETL.** Pythonic framework for describing and running unstructured data transformations
-   and enrichments, applyting models to data, including LLMs.
+   and enrichments, applying models to data, including LLMs.
 2. **Analytics.** DataChain dataset is a table that combines all the information about data
    objects in one place + it provides dataframe-like API and vecrorized engine to do analytics
    on these tables at scale.
 3. **Versioning.** DataChain doesn't store, require moving or copying data (unlike DVC).
-   Pefect use case is a bucket with thousands or millions of images, videos, audio, PDFs.
+   Perfect use case is a bucket with thousands or millions of images, videos, audio, PDFs.
 
 
 Key Features
