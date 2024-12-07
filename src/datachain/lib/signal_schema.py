@@ -402,9 +402,20 @@ class SignalSchema:
             if ModelStore.is_pydantic(finfo.annotation):
                 SignalSchema._set_file_stream(getattr(obj, field), catalog, cache)
 
-    def get_column_type(self, col_name: str) -> DataType:
+    def get_column_type(self, col_name: str, with_subtree: bool = False) -> DataType:
+        """
+        Returns column type by column name.
+
+        If `with_subtree` is True, then it will return the type of the column
+        even if it has a subtree (e.g. model with nested fields), otherwise it will
+        return the type of the column (standard type field, not the model).
+
+        If column is not found, raises `SignalResolvingError`.
+        """
         for path, _type, has_subtree, _ in self.get_flat_tree():
-            if not has_subtree and DEFAULT_DELIMITER.join(path) == col_name:
+            if (with_subtree or not has_subtree) and DEFAULT_DELIMITER.join(
+                path
+            ) == col_name:
                 return _type
         raise SignalResolvingError([col_name], "is not found")
 
@@ -492,14 +503,25 @@ class SignalSchema:
                 # renaming existing signal
                 del new_values[value.name]
                 new_values[name] = self.values[value.name]
-            elif isinstance(value, Func):
+                continue
+            if isinstance(value, Column):
+                # adding new signal from existing signal field
+                try:
+                    new_values[name] = self.get_column_type(
+                        value.name, with_subtree=True
+                    )
+                    continue
+                except SignalResolvingError:
+                    pass
+            if isinstance(value, Func):
                 # adding new signal with function
                 new_values[name] = value.get_result_type(self)
-            elif isinstance(value, ColumnElement):
+                continue
+            if isinstance(value, ColumnElement):
                 # adding new signal
                 new_values[name] = sql_to_python(value)
-            else:
-                new_values[name] = value
+                continue
+            new_values[name] = value
 
         return SignalSchema(new_values)
 
