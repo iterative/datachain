@@ -195,7 +195,10 @@ def sqlite_int_hash_64(x: int) -> int:
 
 def sqlite_bit_hamming_distance(a: int, b: int) -> int:
     """Calculate the Hamming distance between two integers."""
-    return ((a & MAX_INT64) ^ (b & MAX_INT64)).bit_count()
+    diff = (a & MAX_INT64) ^ (b & MAX_INT64)
+    if hasattr(diff, "bit_count"):
+        return diff.bit_count()
+    return bin(diff).count("1")
 
 
 def sqlite_byte_hamming_distance(a: str, b: str) -> int:
