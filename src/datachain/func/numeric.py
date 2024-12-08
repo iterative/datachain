@@ -182,7 +182,7 @@ def bit_hamming_distance(*args: Union[ColT, int]) -> Func:
     Example:
         ```py
         dc.mutate(
-            ham_dist=func.bit_hamming_distance("embed1", 123456s),
+            ham_dist=func.bit_hamming_distance("embed1", 123456),
         )
         ```
 
