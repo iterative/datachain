@@ -90,6 +90,7 @@ def setup():
     compiles(string.split, "sqlite")(compile_string_split)
     compiles(string.regexp_replace, "sqlite")(compile_string_regexp_replace)
     compiles(string.replace, "sqlite")(compile_string_replace)
+    compiles(string.byte_hamming_distance, "sqlite")(compile_byte_hamming_distance)
     compiles(conditional.greatest, "sqlite")(compile_greatest)
     compiles(conditional.least, "sqlite")(compile_least)
     compiles(Values, "sqlite")(compile_values)
@@ -104,6 +105,7 @@ def setup():
     compiles(numeric.bit_rshift, "sqlite")(compile_bitwise_rshift)
     compiles(numeric.bit_lshift, "sqlite")(compile_bitwise_lshift)
     compiles(numeric.int_hash_64, "sqlite")(compile_int_hash_64)
+    compiles(numeric.bit_hamming_distance, "sqlite")(compile_bit_hamming_distance)
 
     if load_usearch_extension(sqlite3.connect(":memory:")):
         compiles(array.cosine_distance, "sqlite")(compile_cosine_distance_ext)
@@ -191,6 +193,26 @@ def sqlite_int_hash_64(x: int) -> int:
     return x if x < 1 << 63 else (x & MAX_INT64) - (1 << 64)
 
 
+def sqlite_bit_hamming_distance(a: int, b: int) -> int:
+    """Calculate the Hamming distance between two integers."""
+    diff = (a & MAX_INT64) ^ (b & MAX_INT64)
+    if hasattr(diff, "bit_count"):
+        return diff.bit_count()
+    return bin(diff).count("1")
+
+
+def sqlite_byte_hamming_distance(a: str, b: str) -> int:
+    """Calculate the Hamming distance between two strings."""
+    diff = 0
+    if len(a) < len(b):
+        diff = len(b) - len(a)
+        b = b[: len(a)]
+    elif len(b) < len(a):
+        diff = len(a) - len(b)
+        a = a[: len(b)]
+    return diff + sum(c1 != c2 for c1, c2 in zip(a, b))
+
+
 def register_user_defined_sql_functions() -> None:
     # Register optional functions if we have the necessary dependencies
     # and otherwise register functions that will raise an exception with
@@ -225,6 +247,9 @@ def register_user_defined_sql_functions() -> None:
             "bitwise_lshift", 2, lambda a, b: a << b, deterministic=True
         )
         conn.create_function("int_hash_64", 1, sqlite_int_hash_64, deterministic=True)
+        conn.create_function(
+            "bit_hamming_distance", 2, sqlite_bit_hamming_distance, deterministic=True
+        )
 
     _registered_function_creators["numeric_functions"] = create_numeric_functions
 
@@ -236,6 +261,9 @@ def register_user_defined_sql_functions() -> None:
         conn.create_function("split", 3, sqlite_string_split, deterministic=True)
         conn.create_function(
             "regexp_replace", 3, sqlite_regexp_replace, deterministic=True
+        )
+        conn.create_function(
+            "byte_hamming_distance", 2, sqlite_byte_hamming_distance, deterministic=True
         )
 
     _registered_function_creators["string_functions"] = create_string_functions
@@ -381,6 +409,18 @@ def compile_bitwise_lshift(element, compiler, **kwargs):
 
 def compile_int_hash_64(element, compiler, **kwargs):
     return compiler.process(func.int_hash_64(*element.clauses.clauses), **kwargs)
+
+
+def compile_bit_hamming_distance(element, compiler, **kwargs):
+    return compiler.process(
+        func.bit_hamming_distance(*element.clauses.clauses), **kwargs
+    )
+
+
+def compile_byte_hamming_distance(element, compiler, **kwargs):
+    return compiler.process(
+        func.byte_hamming_distance(*element.clauses.clauses), **kwargs
+    )
 
 
 def py_json_array_length(arr):

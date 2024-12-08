@@ -35,9 +35,21 @@ class int_hash_64(GenericFunction):  # noqa: N801
     inherit_cache = True
 
 
+class bit_hamming_distance(GenericFunction):  # noqa: N801
+    """
+    Returns the Hamming distance between two integers.
+    """
+
+    type = Int64()
+    package = "numeric"
+    name = "hamming_distance"
+    inherit_cache = True
+
+
 compiler_not_implemented(bit_and)
 compiler_not_implemented(bit_or)
 compiler_not_implemented(bit_xor)
 compiler_not_implemented(bit_rshift)
 compiler_not_implemented(bit_lshift)
 compiler_not_implemented(int_hash_64)
+compiler_not_implemented(bit_hamming_distance)
