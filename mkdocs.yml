@@ -1,4 +1,4 @@
-site_name: ''
+site_name: 'DataChain'
 site_url: https://docs.datachain.ai
 site_description: Wrangle unstructured AI data at scale
 
@@ -16,7 +16,7 @@ validation:
 theme:
   name: material
   custom_dir: docs/overrides
-  logo: assets/datachain-white.svg
+  logo: assets/datachain.svg
   favicon: assets/datachain.svg
   icon:
     repo: fontawesome/brands/github
@@ -63,7 +63,12 @@ theme:
         name: Switch to system preference
 
 nav:
-  - Home: index.md
+  - Home:
+      - 🔗 Welcome to DataChain: index.md
+      - 🏃🏼‍♂️ Quick Start: quick-start.md
+      - 🎯 Examples: examples.md
+      - 📚 Tutorials: tutorials.md
+      - 🤝 Contributing: contributing.md
   - API reference:
       - references/index.md
       - references/datachain.md
