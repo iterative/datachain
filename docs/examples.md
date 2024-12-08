@@ -33,7 +33,7 @@
     ```
 
     1. `pip install datachain`
-    2. `pip install transformers` 
+    2. `pip install transformers`
 
     Here is how we can view the results in a plot:
 
