@@ -165,8 +165,8 @@ def byte_hamming_distance(*args: Union[str, Func]) -> Func:
 
     Args:
         args (str | literal): Two strings to compute the Hamming distance between.
-            If a string is provided, it is assumed to be the name of the column.
-            If a literal is provided, it is assumed to be a string literal.
+            If a str is provided, it is assumed to be the name of the column.
+            If a Literal is provided, it is assumed to be a string literal.
 
     Returns:
         Func: A Func object that represents the Hamming distance function.
