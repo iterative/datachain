@@ -172,9 +172,9 @@ def bit_hamming_distance(*args: Union[ColT, int]) -> Func:
     in the integer indicate higher dissimilarity.
 
     Args:
-        args (str | literal): Two integers to compute the Hamming distance between.
-            If a string is provided, it is assumed to be the name of the column.
-            If a literal is provided, it is assumed to be an integer literal.
+        args (str | int): Two integers to compute the Hamming distance between.
+            If a str is provided, it is assumed to be the name of the column.
+            If an int is provided, it is assumed to be an integer literal.
 
     Returns:
         Func: A Func object that represents the Hamming distance function.
