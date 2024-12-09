@@ -2,11 +2,20 @@ import pytest
 from sqlalchemy import Label
 
 from datachain import DataChain
-from datachain.func import int_hash_64
+from datachain.func import (
+    bit_hamming_distance,
+    byte_hamming_distance,
+    int_hash_64,
+    literal,
+)
 from datachain.func.random import rand
 from datachain.func.string import length as strlen
 from datachain.lib.signal_schema import SignalSchema
-from datachain.sql.sqlite.base import sqlite_int_hash_64
+from datachain.sql.sqlite.base import (
+    sqlite_bit_hamming_distance,
+    sqlite_byte_hamming_distance,
+    sqlite_int_hash_64,
+)
 
 
 @pytest.fixture()
@@ -584,3 +593,52 @@ def test_int_hash_64_mutate(dc):
         7766709361750702608,
         15228578409069794350,
     ]
+
+
+@pytest.mark.parametrize(
+    "value1,value2,distance",
+    [
+        [0, 0, 0],
+        [0, 1, 1],
+        [2, 3, 1],
+        [2, 4, 2],
+        [0, 2**64 - 1, 64],
+        [-(2**63), 2**63 - 1, 64],
+        [-(2**63), 2**63, 0],
+    ],
+)
+def test_sqlite_bit_hamming_distance(value1, value2, distance):
+    assert sqlite_bit_hamming_distance(value1, value2) == distance
+
+
+def test_bit_hamming_distance_mutate(dc):
+    res = (
+        dc.mutate(test=bit_hamming_distance(strlen("val"), 5))
+        .order_by("num")
+        .collect("test")
+    )
+    assert list(res) == [1, 3, 2, 1, 0]
+
+
+@pytest.mark.parametrize(
+    "value1,value2,distance",
+    [
+        ["", "", 0],
+        ["", "a", 1],
+        ["foo", "foo", 0],
+        ["foo", "bar", 3],
+        ["foo", "foobar", 3],
+        ["karolin", "kathrin", 3],
+    ],
+)
+def test_sqlite_byte_hamming_distance(value1, value2, distance):
+    assert sqlite_byte_hamming_distance(value1, value2) == distance
+
+
+def test_byte_hamming_distance_mutate(dc):
+    res = (
+        dc.mutate(test=byte_hamming_distance("val", literal("xxx")))
+        .order_by("num")
+        .collect("test")
+    )
+    assert list(res) == [2, 1, 0, 1, 2]
