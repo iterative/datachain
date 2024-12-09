@@ -1,3 +1,7 @@
+---
+title: API Reference
+---
+
 # API Reference
 
 DataChain's API is organized into several modules:

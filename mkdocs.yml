@@ -27,7 +27,6 @@ theme:
     - navigation.tabs
     - navigation.path
     - navigation.top
-    - navigation.prune
     - navigation.footer
     - toc.follow
     - content.action.edit
@@ -37,7 +36,6 @@ theme:
     - content.tooltips
     - search.highlight
     - search.suggest
-    - navigation.sections
 
   palette:
     # Palette toggle for automatic mode
@@ -68,18 +66,18 @@ nav:
       - 🏃🏼‍♂️ Quick Start: quick-start.md
       - 🎯 Examples: examples.md
       - 📚 Tutorials: tutorials.md
-      - 🐍 API Reference: references/index.md
+      - 🐍 API Reference:
+        - Overview: references/index.md
+        - DataChain: references/datachain.md
+        - DataType: references/datatype.md
+        - File: references/file.md
+        - UDF: references/udf.md
+        - Torch: references/torch.md
+        - SQL: references/sql.md
       - 🤝 Contributing: contributing.md
-  - API Reference:
-      - references/index.md
-      - references/datachain.md
-      - references/datatype.md
-      - references/file.md
-      - references/udf.md
-      - references/torch.md
-      - references/sql.md
-  - DataChain Website: https://datachain.ai" target="_blank"
-  - Studio: https://studio.datachain.ai" target="_blank"
+
+  - DataChain Website ↗ : https://datachain.ai" target="_blank"
+  - Studio ↗ : https://studio.datachain.ai" target="_blank"
 
 markdown_extensions:
   - abbr
@@ -105,7 +103,11 @@ markdown_extensions:
   - pymdownx.tilde
   - tables
   - toc:
-      permalink: true
+      permalink: ''
+
+# Custom permalink style: https://github.com/squidfunk/mkdocs-material/discussions/3535
+extra_css:
+  - css/github-permalink-style.css
 
 extra:
   social:
