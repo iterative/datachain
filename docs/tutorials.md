@@ -1,3 +1,7 @@
+---
+title: Tutorials
+---
+
 # Tutorials
 
 * Multimodal: [GitHub](https://github.com/iterative/datachain-examples/blob/main/multimodal/clip_fine_tuning.ipynb) or [Google Colab](https://colab.research.google.com/github/iterative/datachain-examples/blob/main/multimodal/clip_fine_tuning.ipynb)
