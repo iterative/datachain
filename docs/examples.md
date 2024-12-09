@@ -225,7 +225,7 @@ Here is an example from MS COCO “captions” JSON which employs separate secti
 }
 ```
 
-Note how complicated the setup is. Every image is references by the name, and the metadata for this file is keyed by the “id” field. This same field is references later in the “annotations’ array, which is present in JSON files describing captions and the detected instances. The categories for the instances are stored in the “categories” array.
+Note how complicated the setup is. Every image is references by the name, and the metadata for this file is keyed by the “id” field. This same field is references later in the “annotations" array, which is present in JSON files describing captions and the detected instances. The categories for the instances are stored in the “categories” array.
 
 However, Datachain can easily parse the entire COCO structure via several reading and merging operators:
 
