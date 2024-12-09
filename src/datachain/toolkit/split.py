@@ -68,7 +68,7 @@ def train_test_split(
         raise ValueError("Weights should be non-negative")
 
     def scale(multiplier: float) -> int:
-        multiplier = min(max(0, multiplier), 1.0)
+        multiplier = min(max(0.0, multiplier), 1.0)
         numerator, denominator = float(multiplier).as_integer_ratio()
         return MAX_SIGNED_INT64 * numerator // denominator
 
