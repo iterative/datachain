@@ -1659,6 +1659,13 @@ class DataChain:
         """Diff returning difference between two datasets."""
         rname = "right_"
 
+        def _rprefix(c: str, rc: str) -> str:
+            """Returns prefix of right of two companion left - right columns
+            from merge. If companion columns have the same name then prefix will
+            be present in right column name, otherwise it won't.
+            """
+            return rname if c == rc else ""
+
         num_statuses = sum(1 if s else 0 for s in [added, deleted, modified, unchanged])
 
         if num_statuses > 1 and not status_col:
@@ -1708,7 +1715,7 @@ class DataChain:
                 *[
                     C(c) == None  # noqa: E711
                     for c in [
-                        f"{rname}{rc}" if rc == c else rc
+                        f"{_rprefix(c, rc)}{rc}"
                         for c, rc in zip(cols_on, right_cols_on)
                     ]
                 ]
@@ -1717,7 +1724,7 @@ class DataChain:
         if modified:
             modified_cond = sqlalchemy.or_(
                 *[
-                    C(c) != C(f"{rname}{rc}") if rc == c else C(c) != C(rc)
+                    C(c) != C(f"{_rprefix(c, rc)}{rc}")
                     for c, rc in zip(cols_comp, right_cols_comp)
                 ]
             )
@@ -1725,7 +1732,7 @@ class DataChain:
         if unchanged:
             unchanged_cond = sqlalchemy.and_(
                 *[
-                    C(c) == C(f"{rname}{rc}") if rc == c else C(c) == C(rc)
+                    C(c) == C(f"{_rprefix(c, rc)}{rc}")
                     for c, rc in zip(cols_comp, right_cols_comp)
                 ]
             )
@@ -1764,7 +1771,7 @@ class DataChain:
             .filter(
                 sqlalchemy.and_(
                     *[
-                        C(f"{rname}{c}") == None if c == rc else C(c) == None  # noqa: E711
+                        C(f"{_rprefix(c, rc)}{c}") == None  # noqa: E711
                         for c, rc in zip(cols_on, right_cols_on)
                     ]
                 )
