@@ -170,3 +170,13 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: nox -s examples -p ${{ matrix.pyv }} -- -m "${{ matrix.group }}"
+
+  check:
+    if: always()
+    needs: [lint, datachain, examples]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: re-actors/alls-green@release/v1
+        with:
+          allowed-failures: examples
+          jobs: ${{ toJSON(needs) }}
