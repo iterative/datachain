@@ -55,6 +55,7 @@ dependencies = [
 docs = [
   "mkdocs>=1.5.2",
   "mkdocs-gen-files>=0.5.0",
+  "mkdocs-argparse>=0.0.1",
   "mkdocs-material>=9.3.1",
   "mkdocs-section-index>=0.3.6",
   "mkdocstrings-python>=1.6.3",

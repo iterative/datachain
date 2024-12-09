@@ -1,0 +1,5 @@
+@media screen and (min-width: 76.25em) {
+  .md-header__topic {
+      display: none;
+  }
+}
