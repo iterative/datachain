@@ -82,7 +82,7 @@ Community and Support
 
 
 DataChain Studio Platform
-========================
+=========================
 
 `DataChain Studio`_ is a proprietary solution for teams that offers:
 
