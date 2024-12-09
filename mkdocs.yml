@@ -54,8 +54,8 @@ theme:
     # Palette toggle for dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: black
-      accent: lime
+      primary: teal
+      accent: teal
       toggle:
         icon: material/weather-night
         name: Switch to system preference
