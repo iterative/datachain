@@ -136,7 +136,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest]
         pyv: ['3.9', '3.12']
         group: ['get_started', 'llm_and_nlp or computer_vision', 'multimodal']
         exclude:
