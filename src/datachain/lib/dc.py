@@ -101,24 +101,6 @@ def resolve_columns(
     return _inner
 
 
-def get_nested_db_signals(
-    schema: SignalSchema, nested: str, signals: list[str]
-) -> list[str]:
-    """Returns the subset of nested signals where last part of each signal match
-    some name.
-    """
-    nested_signals = schema.resolve(nested).db_signals()
-
-    return [
-        next(
-            ns
-            for ns in nested_signals  # type: ignore[misc]
-            if ns.split(DEFAULT_DELIMITER)[-1] == s
-        )
-        for s in signals
-    ]
-
-
 class DatasetPrepareError(DataChainParamsError):  # noqa: D101
     def __init__(self, name, msg, output=None):  # noqa: D107
         name = f" '{name}'" if name else ""
@@ -1646,14 +1628,14 @@ class DataChain:
     def diff(
         self,
         other: "DataChain",
+        on: Union[str, Sequence[str]],
+        right_on: Optional[Union[str, Sequence[str]]] = None,
+        compare: Optional[Union[str, Sequence[str]]] = None,
+        right_compare: Optional[Union[str, Sequence[str]]] = None,
         added: bool = True,
         deleted: bool = True,
         modified: bool = True,
         unchanged: bool = False,
-        on_file: Optional[str] = None,
-        right_on_file: Optional[str] = None,
-        on: Optional[Union[str, Sequence[str]]] = None,
-        right_on: Optional[Union[str, Sequence[str]]] = None,
         status_col: Optional[str] = None,
     ) -> "Self":
         """Diff returning difference between two datasets."""
@@ -1682,31 +1664,20 @@ class DataChain:
         # needed in output
         status_col = status_col or "sys__diff"
 
+        # calculate on and compare column names
+        right_on = right_on or on
         cols = self.signals_schema.db_signals()
         right_cols = other.signals_schema.db_signals()
 
-        if on_file:
-            right_on_file = right_on_file or on_file
-            cols_on = get_nested_db_signals(
-                self.signals_schema, on_file, ["source", "path"]
-            )
-            right_cols_on = get_nested_db_signals(
-                other.signals_schema, right_on_file, ["source", "path"]
-            )
-            cols_comp = get_nested_db_signals(
-                self.signals_schema, on_file, ["version", "etag"]
-            )
-            right_cols_comp = get_nested_db_signals(
-                other.signals_schema, right_on_file, ["version", "etag"]
-            )
-        elif on:
-            right_on = right_on or on
-            cols_on = self.signals_schema.resolve(*on).db_signals()  # type: ignore[assignment]
-            right_cols_on = other.signals_schema.resolve(*right_on).db_signals()  # type: ignore[assignment]
-            cols_comp = [c for c in cols if c in right_cols]  # type: ignore[misc]
-            right_cols_comp = cols_comp
+        on = self.signals_schema.resolve(*on).db_signals()  # type: ignore[assignment]
+        right_on = other.signals_schema.resolve(*right_on).db_signals()  # type: ignore[assignment]
+        if compare:
+            right_compare = right_compare or compare
+            compare = self.signals_schema.resolve(*compare).db_signals()  # type: ignore[assignment]
+            right_compare = other.signals_schema.resolve(*right_compare).db_signals()  # type: ignore[assignment]
         else:
-            raise ValueError("'on' or 'on_file' must be specified")
+            compare = [c for c in cols if c in right_cols]  # type: ignore[misc, assignment]
+            right_compare = compare
 
         diff_cond = []
 
@@ -1714,10 +1685,7 @@ class DataChain:
             added_cond = sqlalchemy.and_(
                 *[
                     C(c) == None  # noqa: E711
-                    for c in [
-                        f"{_rprefix(c, rc)}{rc}"
-                        for c, rc in zip(cols_on, right_cols_on)
-                    ]
+                    for c in [f"{_rprefix(c, rc)}{rc}" for c, rc in zip(on, right_on)]
                 ]
             )
             diff_cond.append((added_cond, "A"))
@@ -1725,7 +1693,7 @@ class DataChain:
             modified_cond = sqlalchemy.or_(
                 *[
                     C(c) != C(f"{_rprefix(c, rc)}{rc}")
-                    for c, rc in zip(cols_comp, right_cols_comp)
+                    for c, rc in zip(compare, right_compare)
                 ]
             )
             diff_cond.append((modified_cond, "M"))
@@ -1733,7 +1701,7 @@ class DataChain:
             unchanged_cond = sqlalchemy.and_(
                 *[
                     C(c) == C(f"{_rprefix(c, rc)}{rc}")
-                    for c, rc in zip(cols_comp, right_cols_comp)
+                    for c, rc in zip(compare, right_compare)
                 ]
             )
             diff_cond.append((unchanged_cond, "U"))
@@ -1741,29 +1709,23 @@ class DataChain:
         diff = case(*diff_cond, else_=None).label(status_col)
 
         left_right_merge = self.merge(
-            other, on=cols_on, right_on=right_cols_on, inner=False, rname=rname
+            other, on=on, right_on=right_on, inner=False, rname=rname
         )._query.select(
-            *(
-                [C(c) for c in cols_on]
-                + [C(c) for c in cols if c not in cols_on]
-                + [diff]
-            )
+            *([C(c) for c in on] + [C(c) for c in cols if c not in on] + [diff])
         )
 
         right_left_merge = (
-            other.merge(
-                self, on=right_cols_on, right_on=cols_on, inner=False, rname=rname
-            )
+            other.merge(self, on=right_on, right_on=on, inner=False, rname=rname)
             ._query.select(
                 *(
                     [
                         C(c) if c == rc else literal(None).label(c)
-                        for c, rc in zip(cols_on, right_cols_on)
+                        for c, rc in zip(on, right_on)
                     ]
                     + [
-                        C(c) if c == rc else literal(None).label(c)  # type: ignore[arg-type]
-                        for c, rc in zip(cols, right_cols)
-                        if c not in cols_on
+                        C(c) if c in right_cols else literal(None).label(c)  # type: ignore[arg-type]
+                        for c in cols
+                        if c not in on
                     ]
                     + [literal("D").label(status_col)]
                 )
@@ -1772,7 +1734,7 @@ class DataChain:
                 sqlalchemy.and_(
                     *[
                         C(f"{_rprefix(c, rc)}{c}") == None  # noqa: E711
-                        for c, rc in zip(cols_on, right_cols_on)
+                        for c, rc in zip(on, right_on)
                     ]
                 )
             )
