@@ -1446,6 +1446,7 @@ class DataChain:
             tokenizer=tokenizer,
             tokenizer_kwargs=tokenizer_kwargs,
             num_samples=num_samples,
+            dc_settings=chain._settings,
         )
 
     def remove_file_signals(self) -> "Self":  # noqa: D102
