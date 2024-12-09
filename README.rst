@@ -62,7 +62,7 @@ Key Features
 Getting Started
 ===============
 
-Visit `Docs <https://docs.datachain.ai/quick-start>`_ to learn more and get started.
+Visit `Quick Start <https://docs.datachain.ai/quick-start>`_ to get started with `DataChain` and learn more.
 
 
 Contributing
