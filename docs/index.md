@@ -1,7 +1,9 @@
-# <a href="https://docs.datachain.ai"><img src="/assets/datachain.svg" alt="DataChain"></a> DataChain
+# <a class="main-header-link" href="/" ><img style="display: inline-block;" src="/assets/datachain.svg" alt="DataChain"> <span style="display: inline-block;"> DataChain</span></a>
 
 <style>
-.md-content .md-typeset h1 { text-align: center; font-weight: bold; }
+.md-content .md-typeset h1 { font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 5px; }
+.md-content .md-typeset h1 .main-header-link { display: flex; align-items: center; justify-content: center; gap: 8px;
+ }
 </style>
 
 <p align="center">
@@ -26,7 +28,7 @@
 
 DataChain is a Python-based AI-data warehouse for transforming and
 analyzing unstructured data like images, audio, videos, text and PDFs.
-It integrates with external storage (e.g., S3) to process data
+It integrates with external storage (e.g. S3, GCP, Azure, HuggingFace) to process data
 efficiently without data duplication and manages metadata in an internal
 database for easy and efficient querying.
 
@@ -39,7 +41,7 @@ database for easy and efficient querying.
     information about data objects in one place + it provides
     dataframe-like API and vecrorized engine to do analytics on these
     tables at scale.
-3.  **Versioning.** DataChain doesn\'t store, require moving or copying
+3.  **Versioning.** DataChain doesn't store, require moving or copying
     data (unlike DVC). Perfect use case is a bucket with thousands or
     millions of images, videos, audio, PDFs.
 
@@ -82,6 +84,7 @@ The following pages provide detailed documentation on DataChain's features, arch
 - [🎯 Examples](examples.md): Explore practical examples and use cases.
 - [📚 Tutorials](tutorials.md): Learn how to use DataChain for specific tasks.
 - [📚 API Reference](references/index.md): Dive into the technical details and API reference.
+- [🤝 Contributing](contributing.md): Learn how to contribute to DataChain.
 
 
 <!-- Open source and Studio -->

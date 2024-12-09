@@ -18,9 +18,9 @@
 ## Selecting files using JSON metadata
 
 A storage consists of images of cats and dogs
-([dog.1048.jpg]{.title-ref}, [cat.1009.jpg]{.title-ref}), annotated with
-ground truth and model inferences in the \'json-pairs\' format, where
-each image has a matching JSON file like \`cat.1009.json\`:
+(`dog.1048.jpg`, `cat.1009.jpg`), annotated with
+ground truth and model inferences in the _`json-pairs`_ format, where
+each image has a matching JSON file like `cat.1009.json`:
 
 ``` json
 {
@@ -29,7 +29,7 @@ each image has a matching JSON file like \`cat.1009.json\`:
 }
 ```
 
-Example of downloading only \"high-confidence cat\" inferred images
+Example of downloading only _`high-confidence cat`_ inferred images
 using JSON metadata:
 
 ``` py
@@ -49,7 +49,7 @@ likely_cats.export_files("high-confidence-cats/", signal="file")
 ## Data curation with a local AI model
 
 Batch inference with a simple sentiment model using the
-[transformers]{.title-ref} library:
+`transformers` library:
 
 ``` shell
 pip install transformers
@@ -153,7 +153,7 @@ LLM responses may contain valuable information for analytics -- such as
 the number of tokens used, or the model performance parameters.
 
 Instead of extracting this information from the Mistral response data
-structure (class [ChatCompletionResponse]{.title-ref}), DataChain can
+structure (class `ChatCompletionResponse`), DataChain can
 serialize the entire LLM response to the internal DB:
 
 ``` py
@@ -203,10 +203,8 @@ name                  usage        usage             usage
 ## Iterating over Python data structures
 
 In the previous examples, datasets were saved in the embedded database
-([SQLite](https://www.sqlite.org/) in folder [.datachain]{.title-ref} of
-the working directory). These datasets were automatically versioned, and
-can be accessed using
-[DataChain.from_dataset(\"dataset_name\")]{.title-ref}.
+(`SQLite` in folder `.datachain` of the working directory). These datasets were automatically versioned, and
+can be accessed using `DataChain.from_dataset("dataset_name")`.
 
 Here is how to retrieve a saved dataset and iterate over the objects:
 
@@ -236,8 +234,8 @@ gs://datachain-demo/chatbot-KiT/13.txt: Success, file size: 3657, tokens: 1101
 ## Vectorized analytics over Python objects
 
 Some operations can run inside the DB without deserialization. For
-instance, let\'s calculate the total cost of using the LLM APIs,
-assuming the Mixtral call costs \$2 per 1M input tokens and \$6 per 1M
+instance, let's calculate the total cost of using the LLM APIs,
+assuming the Mixtral call costs $2 per 1M input tokens and $6 per 1M
 output tokens:
 
 ``` py
@@ -276,7 +274,13 @@ chain = (
         tokenizer=processor.tokenizer,
     )
 )
+
 loader = DataLoader(chain, batch_size=1)
+
 ```
 
-Checkout [examples](examples.md) for more examples.
+**See also:**
+
+- [Examples](examples.md)
+- [Tutorials](tutorials.md)
+- [API Reference](references/index.md)

@@ -68,8 +68,9 @@ nav:
       - 🏃🏼‍♂️ Quick Start: quick-start.md
       - 🎯 Examples: examples.md
       - 📚 Tutorials: tutorials.md
+      - 🐍 API Reference: references/index.md
       - 🤝 Contributing: contributing.md
-  - API reference:
+  - API Reference:
       - references/index.md
       - references/datachain.md
       - references/datatype.md
@@ -78,6 +79,7 @@ nav:
       - references/torch.md
       - references/sql.md
   - DataChain Website: https://datachain.ai" target="_blank"
+  - Studio: https://studio.datachain.ai" target="_blank"
 
 markdown_extensions:
   - abbr

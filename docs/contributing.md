@@ -72,7 +72,7 @@ the [pytest](https://pytest.readthedocs.io/) testing framework.
 
 ## Build documentation
 
-If you\'ve made any changes to the documentation (including changes to
+If you've made any changes to the documentation (including changes to
 function signatures, class definitions, or docstrings that will appear
 in the API documentation), make sure it builds successfully.
 
@@ -100,8 +100,7 @@ Your pull request needs to meet the following guidelines for acceptance:
 
 Feel free to submit early, though---we can always iterate on this.
 
-To run linting and code formatting checks, you can invoke a
-[lint]{.title-ref} session in nox:
+To run linting and code formatting checks, you can invoke a `lint` session in nox:
 
 ``` console
 $ nox -s lint

@@ -175,7 +175,7 @@ Datachain avoids redundant operations. Execution is triggered only when a downst
 
 “Save” operation nails execution results and automatically refers to them every time the downstream functions ask for data. Saving without an explicit name generates an auto-named dataset which serves the same purpose.
 
-Datachain natively supports parallelism in execution. If an API or a local model supports parallel requests, the `settings` operator can split the load across multiple workers (see the [code example above](https://www.notion.so/DataChain-Getting-Started-3ed9414febac48f888f90cdaa2ca7667?pvs=21))
+Datachain natively supports parallelism in execution. If an API or a local model supports parallel requests, the `settings` operator can split the load across multiple workers (see the [code example above](#handling-python-objects))
 
 ### Reading external metadata
 
@@ -266,7 +266,7 @@ images_with_dogs.select("annotations", "file.name").show()
 ```
 For in-depth review of working with JSON metadata, please follow this tutorial:
 
-[https://github.com/iterative/datachain-examples/blob/main/formats/json-metadata-tutorial.ipynb](https://github.com/iterative/datachain-examples/blob/main/formats/json-metadata-tutorial.ipynb) [Google Colab](https://colab.research.google.com/github/iterative/datachain-examples/blob/main/formats/json-metadata-tutorial.ipynb)
+[GitHub](https://github.com/iterative/datachain-examples/blob/main/formats/json-metadata-tutorial.ipynb) or [Google Colab](https://colab.research.google.com/github/iterative/datachain-examples/blob/main/formats/json-metadata-tutorial.ipynb)
 
 ### Passing data to training
 
@@ -286,4 +286,4 @@ train(loader, model, optimizer)
 
 See a larger example for CLIP fine-tuning here:
 
-[https://github.com/iterative/datachain-examples/blob/main/multimodal/clip_fine_tuning.ipynb](https://github.com/iterative/datachain-examples/blob/main/multimodal/clip_fine_tuning.ipynb) [Google Colab](https://colab.research.google.com/github/iterative/datachain-examples/blob/main/multimodal/clip_fine_tuning.ipynb)
+[GitHub](https://github.com/iterative/datachain-examples/blob/main/multimodal/clip_fine_tuning.ipynb) or [Google Colab](https://colab.research.google.com/github/iterative/datachain-examples/blob/main/multimodal/clip_fine_tuning.ipynb)
