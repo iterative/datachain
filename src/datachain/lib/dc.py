@@ -1702,18 +1702,22 @@ class DataChain:
             raise ValueError("'on' or 'on_file' must be specified")
 
         diff_cond = []
+
         if added:
             added_cond = sqlalchemy.and_(
                 *[
                     C(c) == None  # noqa: E711
-                    for c in [f"{rname}{r_c}" for r_c in right_cols_on]
+                    for c in [
+                        f"{rname}{rc}" if rc == c else rc
+                        for c, rc in zip(cols_on, right_cols_on)
+                    ]
                 ]
             )
             diff_cond.append((added_cond, "A"))
         if modified:
             modified_cond = sqlalchemy.or_(
                 *[
-                    C(c) != C(f"{rname}{rc}")
+                    C(c) != C(f"{rname}{rc}") if rc == c else C(c) != C(rc)
                     for c, rc in zip(cols_comp, right_cols_comp)
                 ]
             )
@@ -1721,7 +1725,7 @@ class DataChain:
         if unchanged:
             unchanged_cond = sqlalchemy.and_(
                 *[
-                    C(c) == C(f"{rname}{rc}")
+                    C(c) == C(f"{rname}{rc}") if rc == c else C(c) == C(rc)
                     for c, rc in zip(cols_comp, right_cols_comp)
                 ]
             )
@@ -1731,24 +1735,40 @@ class DataChain:
 
         left_right_merge = self.merge(
             other, on=cols_on, right_on=right_cols_on, inner=False, rname=rname
-        )._query.select(*([C(c) for c in cols] + [diff]))
+        )._query.select(
+            *(
+                [C(c) for c in cols_on]
+                + [C(c) for c in cols if c not in cols_on]
+                + [diff]
+            )
+        )
 
         right_left_merge = (
             other.merge(
-                self, on=cols_on, right_on=right_cols_on, inner=False, rname=rname
+                self, on=right_cols_on, right_on=cols_on, inner=False, rname=rname
             )
             ._query.select(
                 *(
-                    [C(c) for c in right_cols if c in cols]
+                    [
+                        C(c) if c == rc else literal(None).label(c)
+                        for c, rc in zip(cols_on, right_cols_on)
+                    ]
                     + [
-                        literal(None).label(c)  # type: ignore[misc,arg-type]
-                        for c in cols
-                        if c not in right_cols
+                        C(c) if c == rc else literal(None).label(c)  # type: ignore[arg-type]
+                        for c, rc in zip(cols, right_cols)
+                        if c not in cols_on
                     ]
                     + [literal("D").label(status_col)]
                 )
             )
-            .filter(sqlalchemy.and_(*[C(f"{rname}{c}") == None for c in cols_on]))  # noqa: E711
+            .filter(
+                sqlalchemy.and_(
+                    *[
+                        C(f"{rname}{c}") == None if c == rc else C(c) == None  # noqa: E711
+                        for c, rc in zip(cols_on, right_cols_on)
+                    ]
+                )
+            )
         )
 
         if not deleted:
