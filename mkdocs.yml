@@ -67,17 +67,17 @@ nav:
       - 🎯 Examples: examples.md
       - 📚 Tutorials: tutorials.md
       - 🐍 API Reference:
-        - Overview: references/index.md
-        - DataChain: references/datachain.md
-        - DataType: references/datatype.md
-        - File: references/file.md
-        - UDF: references/udf.md
-        - Torch: references/torch.md
-        - SQL: references/sql.md
+          - Overview: references/index.md
+          - DataChain: references/datachain.md
+          - DataType: references/datatype.md
+          - File: references/file.md
+          - UDF: references/udf.md
+          - Torch: references/torch.md
+          - SQL: references/sql.md
       - 🤝 Contributing: contributing.md
 
-  - DataChain Website ↗ : https://datachain.ai" target="_blank"
-  - Studio ↗ : https://studio.datachain.ai" target="_blank"
+  - DataChain Website ↗: https://datachain.ai" target="_blank"
+  - Studio ↗: https://studio.datachain.ai" target="_blank"
 
 markdown_extensions:
   - abbr
