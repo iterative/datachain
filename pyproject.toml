@@ -107,7 +107,7 @@ examples = [
   "numpy>=1,<2",
   "defusedxml",
   "accelerate",
-  "unstructured[pdf,embed-huggingface]<0.16.0",
+  "unstructured[pdf,embed-huggingface]<0.17.0",
   "pdfplumber==0.11.4",
   "huggingface_hub[hf_transfer]",
   "onnx==1.16.1",
