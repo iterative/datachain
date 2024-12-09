@@ -654,18 +654,20 @@ def studio_datasets(requests_mock):
 
 @pytest.fixture
 def not_random_ds(test_session):
+    # `sys__rand` column is carefully crafted to ensure that `train_test_split` func
+    # will always return columns in the `sys__id` order if no seed is provided.
     return DataChain.from_records(
         [
-            {"sys__id": 1, "sys__rand": 200000000, "fib": 0},
-            {"sys__id": 2, "sys__rand": 400000000, "fib": 1},
-            {"sys__id": 3, "sys__rand": 600000000, "fib": 1},
-            {"sys__id": 4, "sys__rand": 800000000, "fib": 2},
-            {"sys__id": 5, "sys__rand": 1000000000, "fib": 3},
-            {"sys__id": 6, "sys__rand": 1200000000, "fib": 5},
-            {"sys__id": 7, "sys__rand": 1400000000, "fib": 8},
-            {"sys__id": 8, "sys__rand": 1600000000, "fib": 13},
-            {"sys__id": 9, "sys__rand": 1800000000, "fib": 21},
-            {"sys__id": 10, "sys__rand": 2000000000, "fib": 34},
+            {"sys__id": 1, "sys__rand": 5656980871717583182, "fib": 0},
+            {"sys__id": 2, "sys__rand": 8264763963075908010, "fib": 1},
+            {"sys__id": 3, "sys__rand": 1501974359575874336, "fib": 1},
+            {"sys__id": 4, "sys__rand": 3965730437403728835, "fib": 2},
+            {"sys__id": 5, "sys__rand": 7394224036566418212, "fib": 3},
+            {"sys__id": 6, "sys__rand": 1027688423822502479, "fib": 5},
+            {"sys__id": 7, "sys__rand": 8901684874241010820, "fib": 8},
+            {"sys__id": 8, "sys__rand": 7639171679093076462, "fib": 13},
+            {"sys__id": 9, "sys__rand": 257933377869659202, "fib": 21},
+            {"sys__id": 10, "sys__rand": 1841131025744629573, "fib": 34},
         ],
         session=test_session,
         schema={"sys": Sys, "fib": int},
