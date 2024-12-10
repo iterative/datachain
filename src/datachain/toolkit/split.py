@@ -77,8 +77,8 @@ def train_test_split(
 
     return [
         dc.filter(
-            rand_col >= round(sum(weights_normalized[:index]) * (RESOLUTION + 1)),
-            rand_col < round(sum(weights_normalized[: index + 1]) * (RESOLUTION + 1)),
+            rand_col >= round(sum(weights_normalized[:index]) * (RESOLUTION - 1)),
+            rand_col < round(sum(weights_normalized[: index + 1]) * (RESOLUTION - 1)),
         )
         for index, _ in enumerate(weights_normalized)
     ]
