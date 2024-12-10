@@ -28,7 +28,7 @@ class DataChainParamsError(DataChainError):
 
 
 class DataChainColumnError(DataChainParamsError):
-    def __init__(self, col_name, msg):
+    def __init__(self, col_name: str, msg: str):
         super().__init__(f"Error for column {col_name}: {msg}")
 
 
