@@ -112,7 +112,7 @@ examples = [
   "huggingface_hub[hf_transfer]",
   "onnx==1.16.1",
   "ultralytics==8.3.37",
-  "scikit-learn<1.6",
+  "scikit-learn<1.6"
 ]
 
 [project.urls]
