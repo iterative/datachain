@@ -658,16 +658,16 @@ def not_random_ds(test_session):
     # will always return columns in the `sys__id` order if no seed is provided.
     return DataChain.from_records(
         [
-            {"sys__id": 1, "sys__rand": 3398273711618747276, "fib": 0},
+            {"sys__id": 1, "sys__rand": 8025184816406567794, "fib": 0},
             {"sys__id": 2, "sys__rand": 8264763963075908010, "fib": 1},
-            {"sys__id": 3, "sys__rand": 2466105069438384471, "fib": 1},
+            {"sys__id": 3, "sys__rand": 338514328625642097, "fib": 1},
             {"sys__id": 4, "sys__rand": 508807229144041274, "fib": 2},
             {"sys__id": 5, "sys__rand": 8730460072520445744, "fib": 3},
             {"sys__id": 6, "sys__rand": 154987448000528066, "fib": 5},
-            {"sys__id": 7, "sys__rand": 4042600467130455702, "fib": 8},
-            {"sys__id": 8, "sys__rand": 7213364538346925057, "fib": 13},
-            {"sys__id": 9, "sys__rand": 2695061131372526602, "fib": 21},
-            {"sys__id": 10, "sys__rand": 2779685447872158540, "fib": 34},
+            {"sys__id": 7, "sys__rand": 6310705427500864020, "fib": 8},
+            {"sys__id": 8, "sys__rand": 2154127460471345108, "fib": 13},
+            {"sys__id": 9, "sys__rand": 2584481985215516118, "fib": 21},
+            {"sys__id": 10, "sys__rand": 5771949255753972681, "fib": 34},
         ],
         session=test_session,
         schema={"sys": Sys, "fib": int},
