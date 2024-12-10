@@ -166,9 +166,12 @@ jobs:
       - name: Install nox
         run: uv pip install nox --system
 
+      # HF runs against actual API - thus run it only once
+      - name: Set hf token
+        if: matrix.os == 'ubuntu-latest' && matrix.pyv == '3.12'
+        run: echo 'HF_TOKEN=${{ secrets.HF_TOKEN }}' >> "$GITHUB_ENV"
+
       - name: Run examples
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: nox -s examples -p ${{ matrix.pyv }} -- -m "${{ matrix.group }}"
 
   check:
