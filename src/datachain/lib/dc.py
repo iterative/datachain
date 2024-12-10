@@ -1625,7 +1625,7 @@ class DataChain:
             )
         return self._evolve(query=self._query.subtract(other._query, signals))  # type: ignore[arg-type]
 
-    def diff(
+    def diff(  # noqa: PLR0912, C901
         self,
         other: "DataChain",
         on: Union[str, Sequence[str]],
@@ -1647,6 +1647,33 @@ class DataChain:
             be present in right column name, otherwise it won't.
             """
             return rname if c == rc else ""
+
+        def _to_list(obj: Union[str, Sequence[str]]) -> list[str]:
+            return [obj] if isinstance(obj, str) else list(obj)
+
+        if on is None:
+            raise ValueError("'on' must be specified")
+
+        on = _to_list(on)
+        if right_on:
+            right_on = _to_list(right_on)
+            if len(on) != len(right_on):
+                raise ValueError("'on' and 'right_on' must be have the same length")
+
+        if compare:
+            compare = _to_list(compare)
+
+        if right_compare:
+            if not compare:
+                raise ValueError(
+                    "'compare' must be defined if 'right_compare' is defined"
+                )
+
+            right_compare = _to_list(right_compare)
+            if len(compare) != len(right_compare):
+                raise ValueError(
+                    "'compare' and 'right_compare' must be have the same length"
+                )
 
         num_statuses = sum(1 if s else 0 for s in [added, deleted, modified, unchanged])
 
