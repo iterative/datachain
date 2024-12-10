@@ -22,6 +22,7 @@ import orjson
 import pandas as pd
 import sqlalchemy
 from pydantic import BaseModel
+from sqlalchemy import case, literal
 from sqlalchemy.sql.functions import GenericFunction
 from sqlalchemy.sql.sqltypes import NullType
 
@@ -1623,6 +1624,208 @@ class DataChain:
                 )  # type: ignore[arg-type]
             )
         return self._evolve(query=self._query.subtract(other._query, signals))  # type: ignore[arg-type]
+
+    def diff(  # noqa: PLR0912, C901
+        self,
+        other: "DataChain",
+        on: Union[str, Sequence[str]],
+        right_on: Optional[Union[str, Sequence[str]]] = None,
+        compare: Optional[Union[str, Sequence[str]]] = None,
+        right_compare: Optional[Union[str, Sequence[str]]] = None,
+        added: bool = True,
+        deleted: bool = True,
+        modified: bool = True,
+        unchanged: bool = False,
+        status_col: Optional[str] = None,
+    ) -> "Self":
+        """Returning difference between two chains. Result is new chain that
+        has additional column with possible values: `A`, `D`, `M`, `U` representing
+        added, deleted, modified and unchanged row. Note that if only one "status"
+        is asked, by setting proper flags, this additional column is not created
+        as it would have only one value for all rows. Beside additional diff column,
+        new chain has schema of the chain on which method was called.
+
+        Parameters:
+            other: Chain to calculate diff from.
+            on: Column or list of columns to match on. If both chains have the
+                same columns then this column is enough for the match. Otherwise,
+                `right_on` parameter has to specify the columns for the other chain.
+                This value is used to find corresponding row in other dataset. If not
+                found there, row is considered as added (or removed if vice versa), and
+                if found then row can be either modified or unchanged.
+            right_on: Optional column or list of columns
+                for the `other` to match.
+            compare: Column or list of columns to compare on. If both chains have
+                the same columns then this column is enough for the compare. Otherwise,
+                `right_compare` parameter has to specify the columns for the other
+                chain. This value is used to see if row is modified or unchanged. If
+                not set, all columns will be used for comparison
+            right_compare: Optional column or list of columns
+                    for the `other` to compare to.
+            added (bool): Whether to return added rows in resulting chain.
+            deleted (bool): Whether to return deleted rows in resulting chain.
+            modified (bool): Whether to return modified rows in resulting chain.
+            unchanged (bool): Whether to return unchanged rows in resulting chain.
+            status_col (str): Name of the new column that is created in resulting chain
+                representing diff status.
+
+        Example:
+            ```py
+            diff = persons.diff(
+                new_persons,
+                on=["id"],
+                right_on=["other_id"],
+                compare=["name"],
+                added=True,
+                deleted=True,
+                modified=True,
+                unchanged=True,
+                status_col="diff"
+            )
+            ```
+        """
+        rname = "right_"
+
+        def _rprefix(c: str, rc: str) -> str:
+            """Returns prefix of right of two companion left - right columns
+            from merge. If companion columns have the same name then prefix will
+            be present in right column name, otherwise it won't.
+            """
+            return rname if c == rc else ""
+
+        def _to_list(obj: Union[str, Sequence[str]]) -> list[str]:
+            return [obj] if isinstance(obj, str) else list(obj)
+
+        if on is None:
+            raise ValueError("'on' must be specified")
+
+        on = _to_list(on)
+        if right_on:
+            right_on = _to_list(right_on)
+            if len(on) != len(right_on):
+                raise ValueError("'on' and 'right_on' must be have the same length")
+
+        if compare:
+            compare = _to_list(compare)
+
+        if right_compare:
+            if not compare:
+                raise ValueError(
+                    "'compare' must be defined if 'right_compare' is defined"
+                )
+
+            right_compare = _to_list(right_compare)
+            if len(compare) != len(right_compare):
+                raise ValueError(
+                    "'compare' and 'right_compare' must be have the same length"
+                )
+
+        num_statuses = sum(1 if s else 0 for s in [added, deleted, modified, unchanged])
+
+        if num_statuses > 1 and not status_col:
+            raise ValueError(
+                "Status column name is needed if more than one status is asked"
+            )
+
+        if num_statuses == 0:
+            raise ValueError(
+                "At least one of added, deleted, modified, unchanged flags must be set"
+            )
+
+        # we still need status column for internal implementation even if not
+        # needed in output
+        status_col = status_col or "sys__diff"
+
+        # calculate on and compare column names
+        right_on = right_on or on
+        cols = self.signals_schema.db_signals()
+        right_cols = other.signals_schema.db_signals()
+
+        on = self.signals_schema.resolve(*on).db_signals()  # type: ignore[assignment]
+        right_on = other.signals_schema.resolve(*right_on).db_signals()  # type: ignore[assignment]
+        if compare:
+            right_compare = right_compare or compare
+            compare = self.signals_schema.resolve(*compare).db_signals()  # type: ignore[assignment]
+            right_compare = other.signals_schema.resolve(*right_compare).db_signals()  # type: ignore[assignment]
+        else:
+            compare = [c for c in cols if c in right_cols]  # type: ignore[misc, assignment]
+            right_compare = compare
+
+        diff_cond = []
+
+        if added:
+            added_cond = sqlalchemy.and_(
+                *[
+                    C(c) == None  # noqa: E711
+                    for c in [f"{_rprefix(c, rc)}{rc}" for c, rc in zip(on, right_on)]
+                ]
+            )
+            diff_cond.append((added_cond, "A"))
+        if modified:
+            modified_cond = sqlalchemy.or_(
+                *[
+                    C(c) != C(f"{_rprefix(c, rc)}{rc}")
+                    for c, rc in zip(compare, right_compare)
+                ]
+            )
+            diff_cond.append((modified_cond, "M"))
+        if unchanged:
+            unchanged_cond = sqlalchemy.and_(
+                *[
+                    C(c) == C(f"{_rprefix(c, rc)}{rc}")
+                    for c, rc in zip(compare, right_compare)
+                ]
+            )
+            diff_cond.append((unchanged_cond, "U"))
+
+        diff = case(*diff_cond, else_=None).label(status_col)
+
+        left_right_merge = self.merge(
+            other, on=on, right_on=right_on, inner=False, rname=rname
+        )._query.select(
+            *([C(c) for c in on] + [C(c) for c in cols if c not in on] + [diff])
+        )
+
+        right_left_merge = (
+            other.merge(self, on=right_on, right_on=on, inner=False, rname=rname)
+            ._query.select(
+                *(
+                    [
+                        C(c) if c == rc else literal(None).label(c)
+                        for c, rc in zip(on, right_on)
+                    ]
+                    + [
+                        C(c) if c in right_cols else literal(None).label(c)  # type: ignore[arg-type]
+                        for c in cols
+                        if c not in on
+                    ]
+                    + [literal("D").label(status_col)]
+                )
+            )
+            .filter(
+                sqlalchemy.and_(
+                    *[
+                        C(f"{_rprefix(c, rc)}{c}") == None  # noqa: E711
+                        for c, rc in zip(on, right_on)
+                    ]
+                )
+            )
+        )
+
+        if not deleted:
+            res = left_right_merge
+        elif deleted and not any([added, modified, unchanged]):
+            res = right_left_merge
+        else:
+            res = left_right_merge.union(right_left_merge)
+
+        res = res.filter(C(status_col) != None)  # noqa: E711
+
+        schema = self.signals_schema
+        if num_statuses > 1:
+            schema = SignalSchema({status_col: str}) | schema
+
+        return self._evolve(query=res, signal_schema=schema)
 
     @classmethod
     def from_values(

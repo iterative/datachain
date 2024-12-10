@@ -2944,3 +2944,396 @@ def test_window_error(test_session):
         ),
     ):
         dc.mutate(first=func.sum("col2").over(window))
+
+
+@pytest.mark.parametrize("added", (True, False))
+@pytest.mark.parametrize("deleted", (True, False))
+@pytest.mark.parametrize("modified", (True, False))
+@pytest.mark.parametrize("unchanged", (True, False))
+def test_diff(test_session, added, deleted, modified, unchanged):
+    num_statuses = sum(1 if s else 0 for s in [added, deleted, modified, unchanged])
+
+    ds1 = DataChain.from_values(
+        id=[1, 2, 4],
+        name=["John1", "Doe", "Andy"],
+        session=test_session,
+    ).save("ds1")
+
+    ds2 = DataChain.from_values(
+        id=[1, 3, 4],
+        name=["John", "Mark", "Andy"],
+        session=test_session,
+    ).save("ds2")
+
+    if num_statuses == 0:
+        with pytest.raises(ValueError) as exc_info:
+            diff = ds1.diff(
+                ds2,
+                added=added,
+                deleted=deleted,
+                modified=modified,
+                unchanged=unchanged,
+                on=["id"],
+                status_col="diff",
+            )
+        assert str(exc_info.value) == (
+            "At least one of added, deleted, modified, unchanged flags must be set"
+        )
+        return
+
+    diff = ds1.diff(
+        ds2,
+        added=added,
+        deleted=deleted,
+        modified=modified,
+        unchanged=unchanged,
+        on=["id"],
+        status_col="diff",
+    )
+
+    expected = []
+    if modified:
+        expected.append(("M", 1, "John1"))
+    if added:
+        expected.append(("A", 2, "Doe"))
+    if deleted:
+        expected.append(("D", 3, "Mark"))
+    if unchanged:
+        expected.append(("U", 4, "Andy"))
+
+    collect_fields = ["diff", "id", "name"]
+    if num_statuses == 1:
+        expected = [row[1:] for row in expected]
+        collect_fields = collect_fields[1:]
+
+    assert list(diff.order_by("id").collect(*collect_fields)) == expected
+
+
+@pytest.mark.parametrize("added", (True, False))
+@pytest.mark.parametrize("deleted", (True, False))
+@pytest.mark.parametrize("modified", (True, False))
+@pytest.mark.parametrize("unchanged", (True, False))
+@pytest.mark.parametrize("right_name", ("name", "other_name"))
+def test_diff_with_explicit_compare(
+    test_session, added, deleted, modified, unchanged, right_name
+):
+    num_statuses = sum(1 if s else 0 for s in [added, deleted, modified, unchanged])
+    if num_statuses == 0:
+        pytest.skip("This case is tested in another test")
+
+    ds1 = DataChain.from_values(
+        id=[1, 2, 4],
+        name=["John1", "Doe", "Andy"],
+        city=["New York", "Boston", "San Francisco"],
+        session=test_session,
+    ).save("ds1")
+
+    ds2_data = {
+        "id": [1, 3, 4],
+        "city": ["Washington", "Seattle", "Miami"],
+        f"{right_name}": ["John", "Mark", "Andy"],
+        "session": test_session,
+    }
+
+    ds2 = DataChain.from_values(**ds2_data).save("ds2")
+
+    diff = ds1.diff(
+        ds2,
+        on=["id"],
+        compare=["name"],
+        right_compare=[right_name],
+        added=added,
+        deleted=deleted,
+        modified=modified,
+        unchanged=unchanged,
+        status_col="diff",
+    )
+
+    expected = []
+    if modified:
+        expected.append(("M", 1, "John1", "New York"))
+    if added:
+        expected.append(("A", 2, "Doe", "Boston"))
+    if deleted:
+        expected.append(
+            ("D", 3, None if right_name == "other_name" else "Mark", "Seattle")
+        )
+    if unchanged:
+        expected.append(("U", 4, "Andy", "San Francisco"))
+
+    collect_fields = ["diff", "id", "name", "city"]
+    if num_statuses == 1:
+        expected = [row[1:] for row in expected]
+        collect_fields = collect_fields[1:]
+
+    assert list(diff.order_by("id").collect(*collect_fields)) == expected
+
+
+@pytest.mark.parametrize("added", (True, False))
+@pytest.mark.parametrize("deleted", (True, False))
+@pytest.mark.parametrize("modified", (True, False))
+@pytest.mark.parametrize("unchanged", (True, False))
+def test_diff_different_left_right_on_columns(
+    test_session, added, deleted, modified, unchanged
+):
+    num_statuses = sum(1 if s else 0 for s in [added, deleted, modified, unchanged])
+    if num_statuses == 0:
+        pytest.skip("This case is tested in another test")
+
+    ds1 = DataChain.from_values(
+        id=[1, 2, 4],
+        name=["John1", "Doe", "Andy"],
+        session=test_session,
+    ).save("ds1")
+
+    ds2 = DataChain.from_values(
+        other_id=[1, 3, 4],
+        name=["John", "Mark", "Andy"],
+        session=test_session,
+    ).save("ds2")
+
+    diff = ds1.diff(
+        ds2,
+        added=added,
+        deleted=deleted,
+        modified=modified,
+        unchanged=unchanged,
+        on=["id"],
+        right_on=["other_id"],
+        status_col="diff",
+    )
+
+    expected = []
+    if unchanged:
+        expected.append(("U", 4, "Andy"))
+    if added:
+        expected.append(("A", 2, "Doe"))
+    if modified:
+        expected.append(("M", 1, "John1"))
+    if deleted:
+        expected.append(("D", None, "Mark"))
+
+    collect_fields = ["diff", "id", "name"]
+    if num_statuses == 1:
+        expected = [row[1:] for row in expected]
+        collect_fields = collect_fields[1:]
+
+    assert list(diff.order_by("name").collect(*collect_fields)) == expected
+
+
+@pytest.mark.parametrize("added", (True, False))
+@pytest.mark.parametrize("deleted", (True, False))
+@pytest.mark.parametrize("modified", (True, False))
+@pytest.mark.parametrize("unchanged", (True, False))
+@pytest.mark.parametrize("on_self", (True, False))
+def test_diff_on_equal_datasets(
+    test_session, added, deleted, modified, unchanged, on_self
+):
+    num_statuses = sum(1 if s else 0 for s in [added, deleted, modified, unchanged])
+    if num_statuses == 0:
+        pytest.skip("This case is tested in another test")
+
+    ds1 = DataChain.from_values(
+        id=[1, 2, 3],
+        name=["John", "Doe", "Andy"],
+        session=test_session,
+    ).save("ds1")
+
+    if on_self:
+        ds2 = ds1
+    else:
+        ds2 = DataChain.from_values(
+            id=[1, 2, 3],
+            name=["John", "Doe", "Andy"],
+            session=test_session,
+        ).save("ds2")
+
+    diff = ds1.diff(
+        ds2,
+        added=added,
+        deleted=deleted,
+        modified=modified,
+        unchanged=unchanged,
+        on=["id"],
+        status_col="diff",
+    )
+
+    if not unchanged:
+        expected = []
+    else:
+        expected = [
+            ("U", 1, "John"),
+            ("U", 2, "Doe"),
+            ("U", 3, "Andy"),
+        ]
+
+    collect_fields = ["diff", "id", "name"]
+    if num_statuses == 1:
+        expected = [row[1:] for row in expected]
+        collect_fields = collect_fields[1:]
+
+    assert list(diff.order_by("id").collect(*collect_fields)) == expected
+
+
+def test_diff_multiple_columns(test_session):
+    ds1 = DataChain.from_values(
+        id=[1, 2, 4],
+        name=["John", "Doe", "Andy"],
+        city=["London", "New York", "Tokyo"],
+        session=test_session,
+    ).save("ds1")
+    ds2 = DataChain.from_values(
+        id=[1, 3, 4],
+        name=["John", "Mark", "Andy"],
+        city=["Paris", "Berlin", "Tokyo"],
+        session=test_session,
+    ).save("ds2")
+
+    diff = ds1.diff(ds2, unchanged=True, on=["id"], status_col="diff")
+
+    assert sorted_dicts(diff.to_records(), "id") == sorted_dicts(
+        [
+            {"diff": "M", "id": 1, "name": "John", "city": "London"},
+            {"diff": "A", "id": 2, "name": "Doe", "city": "New York"},
+            {"diff": "D", "id": 3, "name": "Mark", "city": "Berlin"},
+            {"diff": "U", "id": 4, "name": "Andy", "city": "Tokyo"},
+        ],
+        "id",
+    )
+
+
+def test_diff_multiple_match_columns(test_session):
+    ds1 = DataChain.from_values(
+        id=[1, 2, 4],
+        name=["John", "Doe", "Andy"],
+        city=["London", "New York", "Tokyo"],
+        session=test_session,
+    ).save("ds1")
+    ds2 = DataChain.from_values(
+        id=[1, 3, 4],
+        name=["John", "John", "Andy"],
+        city=["Paris", "Berlin", "Tokyo"],
+        session=test_session,
+    ).save("ds2")
+
+    diff = ds1.diff(ds2, unchanged=True, on=["id", "name"], status_col="diff")
+
+    assert sorted_dicts(diff.to_records(), "id") == sorted_dicts(
+        [
+            {"diff": "M", "id": 1, "name": "John", "city": "London"},
+            {"diff": "A", "id": 2, "name": "Doe", "city": "New York"},
+            {"diff": "D", "id": 3, "name": "John", "city": "Berlin"},
+            {"diff": "U", "id": 4, "name": "Andy", "city": "Tokyo"},
+        ],
+        "id",
+    )
+
+
+def test_diff_additional_column_on_left(test_session):
+    pytest.skip()
+    ds1 = DataChain.from_values(
+        id=[1, 2, 4],
+        name=["John", "Doe", "Andy"],
+        city=["London", "New York", "Tokyo"],
+        session=test_session,
+    ).save("ds1")
+    ds2 = DataChain.from_values(
+        id=[1, 3, 4],
+        name=["John", "Mark", "Andy"],
+        session=test_session,
+    ).save("ds2")
+
+    diff = ds1.diff(ds2, unchanged=True, on=["id"], status_col="diff")
+
+    assert sorted_dicts(diff.to_records(), "id") == sorted_dicts(
+        [
+            {"diff": "M", "id": 1, "name": "John", "city": "London"},
+            {"diff": "A", "id": 2, "name": "Doe", "city": "New York"},
+            {"diff": "D", "id": 3, "name": "Mark", "city": None},
+            {"diff": "M", "id": 4, "name": "Andy", "city": "Tokyo"},
+        ],
+        "id",
+    )
+
+
+def test_diff_additional_column_on_right(test_session):
+    pytest.skip()
+    ds1 = DataChain.from_values(
+        id=[1, 2, 4],
+        name=["John", "Doe", "Andy"],
+        session=test_session,
+    ).save("ds1")
+    ds2 = DataChain.from_values(
+        id=[1, 3, 4],
+        name=["John", "Mark", "Andy"],
+        city=["London", "New York", "Tokyo"],
+        session=test_session,
+    ).save("ds2")
+
+    diff = ds1.diff(ds2, unchanged=True, on=["id"], status_col="diff")
+
+    assert sorted_dicts(diff.to_records(), "id") == sorted_dicts(
+        [
+            {"diff": "M", "id": 1, "name": "John"},
+            {"diff": "A", "id": 2, "name": "Doe"},
+            {"diff": "D", "id": 3, "name": "Mark"},
+            {"diff": "M", "id": 4, "name": "Andy"},
+        ],
+        "id",
+    )
+
+
+def test_diff_status_column_missing(test_session):
+    ds1 = DataChain.from_values(id=[1, 2, 4], session=test_session).save("ds1")
+    ds2 = DataChain.from_values(id=[1, 2, 4], session=test_session).save("ds2")
+
+    with pytest.raises(ValueError) as exc_info:
+        ds1.diff(ds2, on=["id"])
+
+    assert str(exc_info.value) == (
+        "Status column name is needed if more than one status is asked"
+    )
+
+
+def test_diff_missing_on(test_session):
+    ds1 = DataChain.from_values(id=[1, 2, 4], session=test_session).save("ds1")
+    ds2 = DataChain.from_values(id=[1, 2, 4], session=test_session).save("ds2")
+
+    with pytest.raises(ValueError) as exc_info:
+        ds1.diff(ds2, on=None)
+
+    assert str(exc_info.value) == "'on' must be specified"
+
+
+def test_diff_right_on_wrong_length(test_session):
+    ds1 = DataChain.from_values(id=[1, 2, 4], session=test_session).save("ds1")
+    ds2 = DataChain.from_values(id=[1, 2, 4], session=test_session).save("ds2")
+
+    with pytest.raises(ValueError) as exc_info:
+        ds1.diff(ds2, on=["id"], right_on=["id", "name"])
+
+    assert str(exc_info.value) == "'on' and 'right_on' must be have the same length"
+
+
+def test_diff_right_compare_defined_but_not_compare(test_session):
+    ds1 = DataChain.from_values(id=[1, 2, 4], session=test_session).save("ds1")
+    ds2 = DataChain.from_values(id=[1, 2, 4], session=test_session).save("ds2")
+
+    with pytest.raises(ValueError) as exc_info:
+        ds1.diff(ds2, on=["id"], right_compare=["name"])
+
+    assert str(exc_info.value) == (
+        "'compare' must be defined if 'right_compare' is defined"
+    )
+
+
+def test_diff_right_compare_wrong_length(test_session):
+    ds1 = DataChain.from_values(id=[1, 2, 4], session=test_session).save("ds1")
+    ds2 = DataChain.from_values(id=[1, 2, 4], session=test_session).save("ds2")
+
+    with pytest.raises(ValueError) as exc_info:
+        ds1.diff(ds2, on=["id"], compare=["name"], right_compare=["name", "city"])
+
+    assert str(exc_info.value) == (
+        "'compare' and 'right_compare' must be have the same length"
+    )
