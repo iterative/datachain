@@ -15,27 +15,9 @@ get_started_examples = sorted(
     ]
 )
 
-llm_and_nlp_examples = sorted(
-    [
-        filename
-        for filename in glob.glob("examples/llm_and_nlp/**/*.py", recursive=True)
-        # no anthropic token, HF runs against actual API - thus run it only once
-        if "claude" not in filename
-        and (
-            "hf-" not in filename
-            or (sys.platform == "darwin" and sys.version_info >= (3, 12))
-        )
-    ]
-)
+llm_and_nlp_examples = sorted(glob.glob("examples/llm_and_nlp/**/*.py", recursive=True))
 
-multimodal_examples = sorted(
-    [
-        filename
-        for filename in glob.glob("examples/multimodal/**/*.py", recursive=True)
-        # no OpenAI token
-        if "openai" not in filename
-    ]
-)
+multimodal_examples = sorted(glob.glob("examples/multimodal/**/*.py", recursive=True))
 
 computer_vision_examples = sorted(
     [
@@ -84,6 +66,14 @@ def test_get_started_examples(example):
 @pytest.mark.llm_and_nlp
 @pytest.mark.parametrize("example", llm_and_nlp_examples)
 def test_llm_and_nlp_examples(example):
+    name = os.path.basename(example)
+    if "hf-" in name:
+        import huggingface_hub
+
+        if not huggingface_hub.get_token():
+            pytest.skip("Hugging Face token not set")
+    if "claude" in name and "ANTHROPIC_API_KEY" not in os.environ:
+        pytest.skip("ANTHROPIC_API_KEY not set")
     smoke_test(example)
 
 
@@ -91,6 +81,8 @@ def test_llm_and_nlp_examples(example):
 @pytest.mark.multimodal
 @pytest.mark.parametrize("example", multimodal_examples)
 def test_multimodal(example):
+    if "openai" in os.path.basename(example) and "OPENAI_API_KEY" not in os.environ:
+        pytest.skip("OPENAI_API_KEY not set")
     smoke_test(
         example,
         {

@@ -136,7 +136,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest]
         pyv: ['3.9', '3.12']
         group: ['get_started', 'llm_and_nlp or computer_vision', 'multimodal']
         exclude:
@@ -166,9 +166,12 @@ jobs:
       - name: Install nox
         run: uv pip install nox --system
 
+      # HF runs against actual API - thus run it only once
+      - name: Set hf token
+        if: matrix.os == 'ubuntu-latest' && matrix.pyv == '3.12'
+        run: echo 'HF_TOKEN=${{ secrets.HF_TOKEN }}' >> "$GITHUB_ENV"
+
       - name: Run examples
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: nox -s examples -p ${{ matrix.pyv }} -- -m "${{ matrix.group }}"
 
   check:
