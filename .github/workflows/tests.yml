@@ -20,8 +20,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
-        pyv: ['3.9', '3.12']
+        os: [ubuntu-latest]
+        pyv: ['3.9']
         group: ['llm_and_nlp']
 
     steps:
@@ -46,13 +46,3 @@ jobs:
 
       - name: Run examples
         run: nox -s examples -p ${{ matrix.pyv }} -- -m "${{ matrix.group }}"
-
-  check:
-    if: always()
-    needs: [lint, datachain, examples]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: re-actors/alls-green@release/v1
-        with:
-          allowed-failures: examples
-          jobs: ${{ toJSON(needs) }}

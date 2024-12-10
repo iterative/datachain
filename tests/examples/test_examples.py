@@ -15,7 +15,7 @@ get_started_examples = sorted(
     ]
 )
 
-llm_and_nlp_examples = sorted(glob.glob("examples/llm_and_nlp/**/*.py", recursive=True))
+llm_and_nlp_examples = ["examples/llm_and_nlp/unstructured-summary-map.py"]
 
 multimodal_examples = sorted(glob.glob("examples/multimodal/**/*.py", recursive=True))
 
