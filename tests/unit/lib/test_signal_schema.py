@@ -703,6 +703,11 @@ def test_mutate_rename():
     assert schema.values == {"new_name": str}
 
 
+def test_mutate_rename_leaf(nested_file_schema):
+    schema = nested_file_schema.mutate({"new_name": Column("my_f__nested_file")})
+    assert schema.values == {**nested_file_schema.values, "new_name": File}
+
+
 def test_mutate_new_signal():
     schema = SignalSchema({"name": str})
     schema = schema.mutate({"age": Column("age", Float)})

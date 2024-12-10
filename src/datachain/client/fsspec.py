@@ -172,7 +172,7 @@ class Client(ABC):
         return url == cls.PREFIX
 
     @classmethod
-    def get_uri(cls, name) -> "StorageURI":
+    def get_uri(cls, name: str) -> "StorageURI":
         from datachain.dataset import StorageURI
 
         return StorageURI(f"{cls.PREFIX}{name}")
@@ -278,7 +278,9 @@ class Client(ABC):
     ) -> None:
         await self._fetch_nested(start_prefix, result_queue)
 
-    async def _fetch_dir(self, prefix, pbar, result_queue: ResultQueue) -> set[str]:
+    async def _fetch_dir(
+        self, prefix: str, pbar, result_queue: ResultQueue
+    ) -> set[str]:
         path = f"{self.name}/{prefix}"
         infos = await self.ls_dir(path)
         files = []
