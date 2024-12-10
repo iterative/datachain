@@ -23,11 +23,12 @@ source = "gs://datachain-demo/nlp-infobooks/*.pdf"
 
 def partition_object(file):
     with file.open() as f:
-        print("no. of chars", len(f.read_bytes()))
+        print("no. of chars", len(f.read()))
     with file.open() as raw:
         elements = partition(
             file=raw, metadata_filename=file.name, strategy=PartitionStrategy.FAST
         )
+        print(f"{elements=}")
     title = str(elements[0])
     text = "\n\n".join([str(el) for el in elements])
     df = convert_to_dataframe(elements)
