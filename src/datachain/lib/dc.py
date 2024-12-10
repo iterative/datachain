@@ -1625,7 +1625,7 @@ class DataChain:
             )
         return self._evolve(query=self._query.subtract(other._query, signals))  # type: ignore[arg-type]
 
-    def diff(  # noqa: PLR0912, C901
+    def compare(  # noqa: PLR0912, C901
         self,
         other: "DataChain",
         on: Union[str, Sequence[str]],

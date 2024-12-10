@@ -2950,7 +2950,7 @@ def test_window_error(test_session):
 @pytest.mark.parametrize("deleted", (True, False))
 @pytest.mark.parametrize("modified", (True, False))
 @pytest.mark.parametrize("unchanged", (True, False))
-def test_diff(test_session, added, deleted, modified, unchanged):
+def test_compare(test_session, added, deleted, modified, unchanged):
     num_statuses = sum(1 if s else 0 for s in [added, deleted, modified, unchanged])
 
     ds1 = DataChain.from_values(
@@ -2967,7 +2967,7 @@ def test_diff(test_session, added, deleted, modified, unchanged):
 
     if num_statuses == 0:
         with pytest.raises(ValueError) as exc_info:
-            diff = ds1.diff(
+            diff = ds1.compare(
                 ds2,
                 added=added,
                 deleted=deleted,
@@ -2981,7 +2981,7 @@ def test_diff(test_session, added, deleted, modified, unchanged):
         )
         return
 
-    diff = ds1.diff(
+    diff = ds1.compare(
         ds2,
         added=added,
         deleted=deleted,
@@ -3014,7 +3014,7 @@ def test_diff(test_session, added, deleted, modified, unchanged):
 @pytest.mark.parametrize("modified", (True, False))
 @pytest.mark.parametrize("unchanged", (True, False))
 @pytest.mark.parametrize("right_name", ("name", "other_name"))
-def test_diff_with_explicit_compare(
+def test_compare_with_explicit_compare(
     test_session, added, deleted, modified, unchanged, right_name
 ):
     num_statuses = sum(1 if s else 0 for s in [added, deleted, modified, unchanged])
@@ -3037,7 +3037,7 @@ def test_diff_with_explicit_compare(
 
     ds2 = DataChain.from_values(**ds2_data).save("ds2")
 
-    diff = ds1.diff(
+    diff = ds1.compare(
         ds2,
         on=["id"],
         compare=["name"],
@@ -3073,7 +3073,7 @@ def test_diff_with_explicit_compare(
 @pytest.mark.parametrize("deleted", (True, False))
 @pytest.mark.parametrize("modified", (True, False))
 @pytest.mark.parametrize("unchanged", (True, False))
-def test_diff_different_left_right_on_columns(
+def test_compare_different_left_right_on_columns(
     test_session, added, deleted, modified, unchanged
 ):
     num_statuses = sum(1 if s else 0 for s in [added, deleted, modified, unchanged])
@@ -3092,7 +3092,7 @@ def test_diff_different_left_right_on_columns(
         session=test_session,
     ).save("ds2")
 
-    diff = ds1.diff(
+    diff = ds1.compare(
         ds2,
         added=added,
         deleted=deleted,
@@ -3126,7 +3126,7 @@ def test_diff_different_left_right_on_columns(
 @pytest.mark.parametrize("modified", (True, False))
 @pytest.mark.parametrize("unchanged", (True, False))
 @pytest.mark.parametrize("on_self", (True, False))
-def test_diff_on_equal_datasets(
+def test_compare_on_equal_datasets(
     test_session, added, deleted, modified, unchanged, on_self
 ):
     num_statuses = sum(1 if s else 0 for s in [added, deleted, modified, unchanged])
@@ -3148,7 +3148,7 @@ def test_diff_on_equal_datasets(
             session=test_session,
         ).save("ds2")
 
-    diff = ds1.diff(
+    diff = ds1.compare(
         ds2,
         added=added,
         deleted=deleted,
@@ -3175,7 +3175,7 @@ def test_diff_on_equal_datasets(
     assert list(diff.order_by("id").collect(*collect_fields)) == expected
 
 
-def test_diff_multiple_columns(test_session):
+def test_compare_multiple_columns(test_session):
     ds1 = DataChain.from_values(
         id=[1, 2, 4],
         name=["John", "Doe", "Andy"],
@@ -3189,7 +3189,7 @@ def test_diff_multiple_columns(test_session):
         session=test_session,
     ).save("ds2")
 
-    diff = ds1.diff(ds2, unchanged=True, on=["id"], status_col="diff")
+    diff = ds1.compare(ds2, unchanged=True, on=["id"], status_col="diff")
 
     assert sorted_dicts(diff.to_records(), "id") == sorted_dicts(
         [
@@ -3202,7 +3202,7 @@ def test_diff_multiple_columns(test_session):
     )
 
 
-def test_diff_multiple_match_columns(test_session):
+def test_compare_multiple_match_columns(test_session):
     ds1 = DataChain.from_values(
         id=[1, 2, 4],
         name=["John", "Doe", "Andy"],
@@ -3216,7 +3216,7 @@ def test_diff_multiple_match_columns(test_session):
         session=test_session,
     ).save("ds2")
 
-    diff = ds1.diff(ds2, unchanged=True, on=["id", "name"], status_col="diff")
+    diff = ds1.compare(ds2, unchanged=True, on=["id", "name"], status_col="diff")
 
     assert sorted_dicts(diff.to_records(), "id") == sorted_dicts(
         [
@@ -3229,7 +3229,7 @@ def test_diff_multiple_match_columns(test_session):
     )
 
 
-def test_diff_additional_column_on_left(test_session):
+def test_compare_additional_column_on_left(test_session):
     pytest.skip()
     ds1 = DataChain.from_values(
         id=[1, 2, 4],
@@ -3243,7 +3243,7 @@ def test_diff_additional_column_on_left(test_session):
         session=test_session,
     ).save("ds2")
 
-    diff = ds1.diff(ds2, unchanged=True, on=["id"], status_col="diff")
+    diff = ds1.compare(ds2, unchanged=True, on=["id"], status_col="diff")
 
     assert sorted_dicts(diff.to_records(), "id") == sorted_dicts(
         [
@@ -3256,7 +3256,7 @@ def test_diff_additional_column_on_left(test_session):
     )
 
 
-def test_diff_additional_column_on_right(test_session):
+def test_compare_additional_column_on_right(test_session):
     pytest.skip()
     ds1 = DataChain.from_values(
         id=[1, 2, 4],
@@ -3270,7 +3270,7 @@ def test_diff_additional_column_on_right(test_session):
         session=test_session,
     ).save("ds2")
 
-    diff = ds1.diff(ds2, unchanged=True, on=["id"], status_col="diff")
+    diff = ds1.compare(ds2, unchanged=True, on=["id"], status_col="diff")
 
     assert sorted_dicts(diff.to_records(), "id") == sorted_dicts(
         [
@@ -3283,56 +3283,56 @@ def test_diff_additional_column_on_right(test_session):
     )
 
 
-def test_diff_status_column_missing(test_session):
+def test_compare_status_column_missing(test_session):
     ds1 = DataChain.from_values(id=[1, 2, 4], session=test_session).save("ds1")
     ds2 = DataChain.from_values(id=[1, 2, 4], session=test_session).save("ds2")
 
     with pytest.raises(ValueError) as exc_info:
-        ds1.diff(ds2, on=["id"])
+        ds1.compare(ds2, on=["id"])
 
     assert str(exc_info.value) == (
         "Status column name is needed if more than one status is asked"
     )
 
 
-def test_diff_missing_on(test_session):
+def test_compare_missing_on(test_session):
     ds1 = DataChain.from_values(id=[1, 2, 4], session=test_session).save("ds1")
     ds2 = DataChain.from_values(id=[1, 2, 4], session=test_session).save("ds2")
 
     with pytest.raises(ValueError) as exc_info:
-        ds1.diff(ds2, on=None)
+        ds1.compare(ds2, on=None)
 
     assert str(exc_info.value) == "'on' must be specified"
 
 
-def test_diff_right_on_wrong_length(test_session):
+def test_compare_right_on_wrong_length(test_session):
     ds1 = DataChain.from_values(id=[1, 2, 4], session=test_session).save("ds1")
     ds2 = DataChain.from_values(id=[1, 2, 4], session=test_session).save("ds2")
 
     with pytest.raises(ValueError) as exc_info:
-        ds1.diff(ds2, on=["id"], right_on=["id", "name"])
+        ds1.compare(ds2, on=["id"], right_on=["id", "name"])
 
     assert str(exc_info.value) == "'on' and 'right_on' must be have the same length"
 
 
-def test_diff_right_compare_defined_but_not_compare(test_session):
+def test_compare_right_compare_defined_but_not_compare(test_session):
     ds1 = DataChain.from_values(id=[1, 2, 4], session=test_session).save("ds1")
     ds2 = DataChain.from_values(id=[1, 2, 4], session=test_session).save("ds2")
 
     with pytest.raises(ValueError) as exc_info:
-        ds1.diff(ds2, on=["id"], right_compare=["name"])
+        ds1.compare(ds2, on=["id"], right_compare=["name"])
 
     assert str(exc_info.value) == (
         "'compare' must be defined if 'right_compare' is defined"
     )
 
 
-def test_diff_right_compare_wrong_length(test_session):
+def test_compare_right_compare_wrong_length(test_session):
     ds1 = DataChain.from_values(id=[1, 2, 4], session=test_session).save("ds1")
     ds2 = DataChain.from_values(id=[1, 2, 4], session=test_session).save("ds2")
 
     with pytest.raises(ValueError) as exc_info:
-        ds1.diff(ds2, on=["id"], compare=["name"], right_compare=["name", "city"])
+        ds1.compare(ds2, on=["id"], compare=["name"], right_compare=["name", "city"])
 
     assert str(exc_info.value) == (
         "'compare' and 'right_compare' must be have the same length"
