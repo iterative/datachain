@@ -22,6 +22,8 @@ source = "gs://datachain-demo/nlp-infobooks/*.pdf"
 
 
 def partition_object(file):
+    with file.open() as f:
+      print("no. of chars", len(f.read_bytes()))
     with file.open() as raw:
         elements = partition(
             file=raw, metadata_filename=file.name, strategy=PartitionStrategy.FAST
