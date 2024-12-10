@@ -1,7 +1,9 @@
 import copy
 import os
 import os.path
+import random
 import re
+import string
 import sys
 from collections.abc import Iterator, Sequence
 from functools import wraps
@@ -1734,7 +1736,10 @@ class DataChain:
 
         # we still need status column for internal implementation even if not
         # needed in output
-        status_col = status_col or "sys__diff"
+        status_col = status_col or "diff_" + "".join(
+            random.choice(string.ascii_letters)  # noqa: S311
+            for _ in range(10)
+        )
 
         # calculate on and compare column names
         right_on = right_on or on
