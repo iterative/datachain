@@ -71,14 +71,14 @@ def train_test_split(
 
     rand_col = C("sys.rand")
     if seed is not None:
-        uniform_seed = random.Random(seed).randrange(1, RESOLUTION + 1)  # noqa: S311
-        rand_col = (rand_col % (RESOLUTION + 1)) * uniform_seed  # type: ignore[assignment]
+        uniform_seed = random.Random(seed).randrange(1, RESOLUTION)  # noqa: S311
+        rand_col = (rand_col % RESOLUTION) * uniform_seed  # type: ignore[assignment]
     rand_col = rand_col % RESOLUTION  # type: ignore[assignment]
 
     return [
         dc.filter(
-            rand_col >= round(sum(weights_normalized[:index]) * RESOLUTION),
-            rand_col < round(sum(weights_normalized[: index + 1]) * RESOLUTION),
+            rand_col >= round(sum(weights_normalized[:index]) * (RESOLUTION - 1)),
+            rand_col < round(sum(weights_normalized[: index + 1]) * (RESOLUTION - 1)),
         )
         for index, _ in enumerate(weights_normalized)
     ]
