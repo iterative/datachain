@@ -2,7 +2,7 @@ import base64
 import json
 import logging
 import os
-from collections.abc import Iterable, Iterator
+from collections.abc import AsyncIterator, Iterable, Iterator
 from datetime import datetime, timedelta, timezone
 from struct import unpack
 from typing import (
@@ -11,6 +11,9 @@ from typing import (
     Optional,
     TypeVar,
 )
+from urllib.parse import urlparse, urlunparse
+
+import websockets
 
 from datachain.config import Config
 from datachain.dataset import DatasetStats
@@ -22,6 +25,7 @@ LsData = Optional[list[dict[str, Any]]]
 DatasetInfoData = Optional[dict[str, Any]]
 DatasetStatsData = Optional[DatasetStats]
 DatasetRowsData = Optional[Iterable[dict[str, Any]]]
+DatasetJobVersionsData = Optional[dict[str, Any]]
 DatasetExportStatus = Optional[dict[str, Any]]
 DatasetExportSignedUrls = Optional[list[str]]
 FileUploadData = Optional[dict[str, Any]]
@@ -231,6 +235,38 @@ class StudioClient:
 
         return msgpack.ExtType(code, data)
 
+    async def tail_job_logs(self, job_id: str) -> AsyncIterator[dict]:
+        """
+        Follow job logs via websocket connection.
+
+        Args:
+            job_id: ID of the job to follow logs for
+
+        Yields:
+            Dict containing either job status updates or log messages
+        """
+        parsed_url = urlparse(self.url)
+        ws_url = urlunparse(parsed_url._replace(scheme="ws"))
+        ws_url = f"{ws_url}/logs/follow/?job_id={job_id}&team_name={self.team}"
+
+        async with websockets.connect(
+            ws_url,
+            additional_headers={"Authorization": f"token {self.token}"},
+        ) as websocket:
+            while True:
+                try:
+                    message = await websocket.recv()
+                    data = json.loads(message)
+
+                    # Yield the parsed message data
+                    yield data
+
+                except websockets.exceptions.ConnectionClosed:
+                    break
+                except Exception as e:  # noqa: BLE001
+                    logger.error("Error receiving websocket message: %s", e)
+                    break
+
     def ls(self, paths: Iterable[str]) -> Iterator[tuple[str, Response[LsData]]]:
         # TODO: change LsData (response.data value) to be list of lists
         # to handle cases where a path will be expanded (i.e. globs)
@@ -299,6 +335,13 @@ class StudioClient:
         return self._send_request_msgpack(
             "datachain/datasets/rows",
             {**req_data, "offset": offset, "limit": DATASET_ROWS_CHUNK_SIZE},
+            method="GET",
+        )
+
+    def dataset_job_versions(self, job_id: str) -> Response[DatasetJobVersionsData]:
+        return self._send_request(
+            "datachain/datasets/dataset_job_versions",
+            {"job_id": job_id},
             method="GET",
         )
 
