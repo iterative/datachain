@@ -65,20 +65,14 @@ def compare(  # noqa: PLR0912, C901
                 "'compare' and 'right_compare' must be have the same length"
             )
 
-    num_statuses = sum(1 if s else 0 for s in [added, deleted, modified, unchanged])
-
-    if num_statuses > 1 and not status_col:
-        raise ValueError(
-            "Status column name is needed if more than one status is asked"
-        )
-
-    if num_statuses == 0:
+    if not any([added, deleted, modified, unchanged]):
         raise ValueError(
             "At least one of added, deleted, modified, unchanged flags must be set"
         )
 
     # we still need status column for internal implementation even if not
     # needed in output
+    need_status_col = bool(status_col)
     status_col = status_col or "diff_" + "".join(
         random.choice(string.ascii_letters)  # noqa: S311
         for _ in range(10)
@@ -170,7 +164,7 @@ def compare(  # noqa: PLR0912, C901
     res = res.filter(C(status_col) != None)  # noqa: E711
 
     schema = left.signals_schema
-    if num_statuses > 1:
+    if need_status_col:
         schema = SignalSchema({status_col: str}) | schema
 
     return left._evolve(query=res, signal_schema=schema)
