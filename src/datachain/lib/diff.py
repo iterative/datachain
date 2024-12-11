@@ -89,6 +89,14 @@ def compare(  # noqa: PLR0912, C901
         right_compare = right_compare or compare
         compare = left.signals_schema.resolve(*compare).db_signals()  # type: ignore[assignment]
         right_compare = right.signals_schema.resolve(*right_compare).db_signals()  # type: ignore[assignment]
+    elif not compare and len(cols) != len(right_cols):
+        # here we will mark all rows that are not added or deleted as modified since
+        # there was no explicit list of compare columns provided (meaning we need
+        # to check all columns to determine if row is modified or unchanged), but
+        # the number of columns on left and right is not the same (one of the chains
+        # have additional column)
+        compare = None
+        right_compare = None
     else:
         compare = [c for c in cols if c in right_cols]  # type: ignore[misc, assignment]
         right_compare = compare
@@ -103,24 +111,24 @@ def compare(  # noqa: PLR0912, C901
             ]
         )
         diff_cond.append((added_cond, "A"))
-    if modified:
+    if modified and compare:
         modified_cond = sa.or_(
             *[
                 C(c) != C(f"{_rprefix(c, rc)}{rc}")
-                for c, rc in zip(compare, right_compare)
+                for c, rc in zip(compare, right_compare)  # type: ignore[arg-type]
             ]
         )
         diff_cond.append((modified_cond, "M"))
-    if unchanged:
+    if unchanged and compare:
         unchanged_cond = sa.and_(
             *[
                 C(c) == C(f"{_rprefix(c, rc)}{rc}")
-                for c, rc in zip(compare, right_compare)
+                for c, rc in zip(compare, right_compare)  # type: ignore[arg-type]
             ]
         )
         diff_cond.append((unchanged_cond, "U"))
 
-    diff = sa.case(*diff_cond, else_=None).label(status_col)
+    diff = sa.case(*diff_cond, else_=None if compare else "M").label(status_col)
 
     left_right_merge = left.merge(
         right, on=on, right_on=right_on, inner=False, rname=rname

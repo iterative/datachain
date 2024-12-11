@@ -3214,7 +3214,6 @@ def test_compare_multiple_match_columns(test_session):
 
 
 def test_compare_additional_column_on_left(test_session):
-    pytest.skip()
     ds1 = DataChain.from_values(
         id=[1, 2, 4],
         name=["John", "Doe", "Andy"],
@@ -3241,7 +3240,6 @@ def test_compare_additional_column_on_left(test_session):
 
 
 def test_compare_additional_column_on_right(test_session):
-    pytest.skip()
     ds1 = DataChain.from_values(
         id=[1, 2, 4],
         name=["John", "Doe", "Andy"],
