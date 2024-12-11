@@ -7,7 +7,6 @@ from torch import float32
 from torch.distributed import get_rank, get_world_size
 from torch.utils.data import IterableDataset, get_worker_info
 from torchvision.transforms import v2
-from tqdm import tqdm
 
 from datachain import Session
 from datachain.asyn import AsyncMapper
@@ -112,10 +111,7 @@ class PytorchDataset(IterableDataset):
             from datachain.lib.udf import _prefetch_input
 
             rows = AsyncMapper(_prefetch_input, rows, workers=self.prefetch).iterate()
-
-        desc = f"Parsed PyTorch dataset for rank={total_rank} worker"
-        with tqdm(rows, desc=desc, unit=" rows", position=total_rank) as rows_it:
-            yield from map(self._process_row, rows_it)
+        yield from map(self._process_row, rows)
 
     def _process_row(self, row_features):
         row = []
