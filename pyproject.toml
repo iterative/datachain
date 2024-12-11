@@ -104,7 +104,6 @@ dev = [
 ]
 examples = [
   "datachain[tests]",
-  "numpy>=1,<2",
   "defusedxml",
   "accelerate",
   "unstructured_ingest[embed-huggingface]",
