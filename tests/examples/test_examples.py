@@ -74,17 +74,6 @@ def test_llm_and_nlp_examples(example):
             pytest.skip("Hugging Face token not set")
     if "claude" in name and "ANTHROPIC_API_KEY" not in os.environ:
         pytest.skip("ANTHROPIC_API_KEY not set")
-    if "unstructured-summary-map" in name:
-        import nltk
-
-        # pre-download nltk data manually
-        # Older version of unstructured uses their own hosted dataset, which is down.
-        # See: https://github.com/Unstructured-IO/unstructured/issues/3795.
-        # We cannot update to the latest version of unstructured because of https://github.com/Unstructured-IO/unstructured/issues/3731.
-
-        nltk.download("averaged_perceptron_tagger_eng", quiet=True)
-        nltk.download("punkt_tab", quiet=True)
-
     smoke_test(example)
 
 
