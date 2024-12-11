@@ -5,6 +5,7 @@ To install the required dependencies:
 
 """
 
+import multiprocessing
 import os
 from posixpath import basename
 
@@ -54,6 +55,7 @@ class CNN(nn.Module):
 if __name__ == "__main__":
     ds = (
         DataChain.from_storage(STORAGE, type="image")
+        .settings(cache=True, prefetch=25)
         .filter(C("file.path").glob("*.jpg"))
         .map(
             label=lambda path: label_to_int(basename(path)[:3], CLASSES),
@@ -64,8 +66,9 @@ if __name__ == "__main__":
 
     train_loader = DataLoader(
         ds.to_pytorch(transform=transform),
-        batch_size=16,
-        num_workers=2,
+        batch_size=25,
+        num_workers=4,
+        multiprocessing_context=multiprocessing.get_context("spawn"),
     )
 
     model = CNN()

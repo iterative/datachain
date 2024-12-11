@@ -6,14 +6,7 @@ from typing import Optional
 
 import pytest
 
-get_started_examples = sorted(
-    [
-        filename
-        for filename in glob.glob("examples/get_started/**/*.py", recursive=True)
-        # torch-loader will not finish within an hour on Linux runner
-        if "torch" not in filename or os.environ.get("RUNNER_OS") != "Linux"
-    ]
-)
+get_started_examples = sorted(glob.glob("examples/get_started/**/*.py", recursive=True))
 
 llm_and_nlp_examples = sorted(glob.glob("examples/llm_and_nlp/**/*.py", recursive=True))
 
