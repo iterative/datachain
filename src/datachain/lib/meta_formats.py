@@ -6,7 +6,6 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Callable
 
-import datamodel_code_generator
 import jmespath as jsp
 from pydantic import BaseModel, ConfigDict, Field, ValidationError  # noqa: F401
 
@@ -66,6 +65,8 @@ def read_schema(source_file, data_type="csv", expr=None, model_name=None):
         if data_type == "jsonl":
             data_type = "json"  # treat json line as plain JSON in auto-schema
         data_string = json.dumps(json_object)
+
+    import datamodel_code_generator
 
     input_file_types = {i.value: i for i in datamodel_code_generator.InputFileType}
     input_file_type = input_file_types[data_type]
