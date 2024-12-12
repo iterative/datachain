@@ -48,7 +48,8 @@ dependencies = [
   "iterative-telemetry>=0.0.9",
   "platformdirs",
   "dvc-studio-client>=0.21,<1",
-  "tabulate"
+  "tabulate",
+  "websockets"
 ]
 
 [project.optional-dependencies]
