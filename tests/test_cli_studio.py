@@ -291,6 +291,24 @@ def test_studio_rm_dataset(capsys, mocker):
         }
 
 
+def test_studio_cancel_job(capsys, mocker):
+    job_id = "8bddde6c-c3ca-41b0-9d87-ee945bfdce70"
+    with requests_mock.mock() as m:
+        m.post(f"{STUDIO_URL}/api/datachain/job/{job_id}/cancel", json={})
+
+        # Studio token is required
+        assert main(["studio", "cancel", job_id]) == 1
+        out = capsys.readouterr().err
+        assert "Not logged in to Studio" in out
+
+        # Set the studio token
+        with Config(ConfigLevel.GLOBAL).edit() as conf:
+            conf["studio"] = {"token": "isat_access_token", "team": "team_name"}
+
+        assert main(["studio", "cancel", job_id]) == 0
+        assert m.called
+
+
 def test_studio_run(capsys, mocker, tmp_dir):
     with Config(ConfigLevel.GLOBAL).edit() as conf:
         conf["studio"] = {"token": "isat_access_token", "team": "team_name"}
