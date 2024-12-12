@@ -124,6 +124,7 @@ class String(SQLType):
         return db_defaults(dialect).string()
 
     def on_read_convert(self, value, dialect):
+        print(f"CONVERTING VALUE {value}")
         return read_converter(dialect).string(value)
 
 

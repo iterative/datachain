@@ -30,6 +30,7 @@ def compare(  # noqa: PLR0912, C901
 ) -> "DataChain":
     """Comparing two chains by identifying rows that are added, deleted, modified
     or unchanged"""
+    from datachain.sql.types import String
 
     rname = "right_"
 
@@ -129,18 +130,24 @@ def compare(  # noqa: PLR0912, C901
         diff_cond.append((unchanged_cond, "U"))
 
     diff = sa.case(*diff_cond, else_=None if compare else "M").label(status_col)
+    diff.type = String()
+    print("DIFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
+    print(diff.type)
 
     left_right_merge = left.merge(
         right, on=on, right_on=right_on, inner=False, rname=rname
     )._query.select(
-        *([C(c) for c in on] + [C(c) for c in cols if c not in on] + [diff])
+        *([C("sys__id"), C("sys__rand")] + [C(c) for c in on] + [C(c) for c in cols if c not in on] + [diff])
     )
 
+    diff_col = sa.literal("D").label(status_col)
+    diff_col.type = String()
     right_left_merge = (
         right.merge(left, on=right_on, right_on=on, inner=False, rname=rname)
         ._query.select(
             *(
-                [
+                [C("sys__id"), C("sys__rand")]
+                + [
                     C(c) if c == rc else sa.literal(None).label(c)
                     for c, rc in zip(on, right_on)
                 ]
@@ -149,7 +156,7 @@ def compare(  # noqa: PLR0912, C901
                     for c in cols
                     if c not in on
                 ]
-                + [sa.literal("D").label(status_col)]
+                + [diff_col]
             )
         )
         .filter(
@@ -172,11 +179,13 @@ def compare(  # noqa: PLR0912, C901
     res = res.filter(C(status_col) != None)  # noqa: E711
 
     schema = left.signals_schema
+    print(f"NEED STATUS COLUMN {need_status_col}")
     if need_status_col:
-        from datachain.sql.types import String
-        schema = SignalSchema({status_col: String}) | schema
+        schema = SignalSchema({status_col: str}) | schema
         print(schema)
 
+    print("NWQ SCHEMA ISSSSSSSSSSSSSSSSSSSSS")
+    print(schema.db_signals())
     r = left._evolve(query=res, signal_schema=schema)
     print("column types are")
     print(r._query.column_types)

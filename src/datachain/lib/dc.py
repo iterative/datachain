@@ -1735,8 +1735,6 @@ class DataChain:
         )
         if object_name:
             output = {object_name: dict_to_data_model(object_name, output)}  # type: ignore[arg-type]
-        print("OUTPUT IS")
-        print(output)
         return chain.gen(_func_fr, output=output)
 
     @classmethod

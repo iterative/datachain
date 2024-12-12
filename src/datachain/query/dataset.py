@@ -178,10 +178,6 @@ class QueryStep(StartingStep):
         dataset = self.catalog.get_dataset(self.dataset_name)
         dr = self.catalog.warehouse.dataset_rows(dataset, self.dataset_version)
 
-        print("query step columns")
-        from datachain.sql.types import SQLType
-        for c in dr.columns:
-            print(f"{c.name} - {c.type} - {isinstance(c.type, SQLType)}")
         return step_result(
             q, dr.columns, dependencies=[(self.dataset_name, self.dataset_version)]
         )
@@ -703,22 +699,19 @@ class SQLSelect(SQLClause):
     args: tuple[Union[Function, ColumnElement], ...]
 
     def apply_sql_clause(self, query) -> Select:
-        print("IN SQLSelect args are")
-        print("IN SQLSelect args are")
-        print("IN SQLSelect args are")
-        print("IN SQLSelect args are")
-        print("IN SQLSelect args are")
-        print(self.args)
         from datachain.sql.types import SQLType, String
         subquery = query.subquery()
         args = [
             subquery.c[str(c)] if isinstance(c, (str, C)) else c
             for c in self.parse_cols(self.args)
         ]
+        print("In SQLSelect")
         for c in args:
+            continue
             if c.name == "diff":
-                c.type = String()
-            print(f"{c.name} - {c.type} - {isinstance(c.type, SQLType)}")
+                pass
+                # c.type = String()
+            # print(f"{c.name} - {c.type} - {isinstance(c.type, SQLType)}")
 
         if not args:
             args = subquery.c
@@ -826,6 +819,7 @@ class SQLUnion(Step):
     def apply(
         self, query_generator: QueryGenerator, temp_tables: list[str]
     ) -> StepResult:
+        print("In Union")
         q1 = self.query1.apply_steps().select().subquery()
         temp_tables.extend(self.query1.temp_table_names)
         q2 = self.query2.apply_steps().select().subquery()
@@ -1084,8 +1078,6 @@ class DatasetQuery:
         if "sys__id" in self.column_types:
             self.column_types.pop("sys__id")
         self.starting_step = QueryStep(self.catalog, name, self.version)
-        print("feature schema in DatasetQuery __init__ is")
-        print(self.feature_schema)
 
     def __iter__(self):
         return iter(self.db_results())
@@ -1618,6 +1610,12 @@ class DatasetQuery:
                 c if isinstance(c, Column) else Column(c.name, c.type)
                 for c in query.columns
             ]
+            print("columns before saveeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
+            from datachain.sql.types import SQLType
+            for c in columns:
+                print(f"{c.name} - {c.type} -{type(c.type)} - {isinstance(c.type, SQLType)}")
+            print("feature schma is")
+            print(feature_schema)
             if not [c for c in columns if c.name != "sys__id"]:
                 raise RuntimeError(
                     "No columns to save in the query. "
@@ -1636,6 +1634,11 @@ class DatasetQuery:
             self.session.add_dataset_version(dataset=dataset, version=version)
 
             dr = self.catalog.warehouse.dataset_rows(dataset)
+            print("TABLE COLUMNSSSSSSSSSSSSSSSSSSSSSS before save")
+            print(dr.columns)
+            print("query is")
+            print(query)
+            print(query.select())
 
             self.catalog.warehouse.copy_table(dr.get_table(), query.select())
 

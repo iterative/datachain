@@ -1969,12 +1969,33 @@ def test_order_by_descending(test_session, with_function):
     ]
 
 
-def test_union(test_session):
+def test_uunion(test_session):
     chain1 = DataChain.from_values(value=[1, 2], session=test_session)
     chain2 = DataChain.from_values(value=[3, 4], session=test_session)
+    print("CHAIN 1 DB RESULTSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS")
+    print(chain1._query.db_results())
+    new_schema = chain1.signals_schema.resolve("value")
+    new_schema = SignalSchema({"sys": Sys}) | new_schema
+    chain1 = chain1._evolve(
+        query=chain1._query.select(C("value")),
+        signal_schema=new_schema
+    )
+    print("CHAIN 1 DB RESULTSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS")
+    print(chain1._query.db_results())
+    # chain1 = DataChain.from_dataset("chain1")
+    # chain2 = DataChain.from_dataset("chain2")
     chain3 = chain1 | chain2
+    chain3.save("chain3")
+    chain3 = DataChain.from_dataset("chain3")
     assert chain3.count() == 4
+    v = list(chain3.collect())
+    v = chain3._query.db_results()
+    # v = chain3.results()
+    print("PRINTINGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG")
+    print(v)
+    print(chain3.schema)
     assert list(chain3.order_by("value").collect("value")) == [1, 2, 3, 4]
+    assert 1 == 2
 
 
 def test_union_different_columns(test_session):
@@ -2947,7 +2968,7 @@ def test_window_error(test_session):
 
 
 @pytest.mark.parametrize("added", (True,))
-@pytest.mark.parametrize("deleted", (True,))
+@pytest.mark.parametrize("deleted", (False,))
 @pytest.mark.parametrize("modified", (True,))
 @pytest.mark.parametrize("unchanged", (True,))
 @pytest.mark.parametrize("status_col", ("diff",))
@@ -2990,6 +3011,13 @@ def test_ccompare(test_session, added, deleted, modified, unchanged, status_col)
         status_col="diff",
     )
 
+    diff2 = diff.save("diff")
+    diff2 = DataChain.from_dataset("diff")
+    print(f"DB SIGNALS ARE {diff.signals_schema.db_signals()}")
+    print(diff2.show())
+    print(diff2._query.db_results())
+    print("#################################################################")
+
     expected = []
     if modified:
         expected.append(("M", 1, "John1"))
@@ -3005,12 +3033,8 @@ def test_ccompare(test_session, added, deleted, modified, unchanged, status_col)
         expected = [row[1:] for row in expected]
         collect_fields = collect_fields[1:]
 
-    print("BEFORE PRINT")
-    print("BEFORE PRINT")
-    print("BEFORE PRINT")
-    print(diff._query.column_types)
     print(list(diff.collect(*collect_fields)))
-    assert 1 == 2
+    # assert 1 == 2
     assert list(diff.order_by("id").collect(*collect_fields)) == expected
 
 

@@ -851,6 +851,12 @@ class Catalog:
             c.name: c.type.to_dict() for c in columns if isinstance(c.type, SQLType)
         }
 
+        print("SCHEMA TO CREATE ISSSSSSSSSSSSSS")
+        print(schema)
+        print("columns are")
+        for c in columns:
+            print(f"{c.name} - {c.type} -{type(c.type)} - {isinstance(c.type, SQLType)}")
+
         dataset = self.metastore.create_dataset_version(
             dataset,
             version,
