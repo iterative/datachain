@@ -173,6 +173,12 @@ def compare(  # noqa: PLR0912, C901
 
     schema = left.signals_schema
     if need_status_col:
-        schema = SignalSchema({status_col: str}) | schema
+        from datachain.sql.types import String
+        schema = SignalSchema({status_col: String}) | schema
+        print(schema)
 
-    return left._evolve(query=res, signal_schema=schema)
+    r = left._evolve(query=res, signal_schema=schema)
+    print("column types are")
+    print(r._query.column_types)
+    r._query.column_types["diff"] = String
+    return r

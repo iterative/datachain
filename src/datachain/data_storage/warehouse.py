@@ -313,6 +313,12 @@ class AbstractWarehouse(ABC, Serializable):
         """
         Fetch dataset rows from database.
         """
+        print("IN DS ROWS SELECT, selected columns are")
+        print(query.selected_columns)
+        for c in query.selected_columns:
+            print(c.name)
+            print(c.type)
+            print(isinstance(c.type, SQLType))
         rows = self.db.execute(query, **kwargs)
         yield from convert_rows_custom_column_types(
             query.selected_columns, rows, self.db.dialect

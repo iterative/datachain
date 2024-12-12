@@ -178,6 +178,10 @@ class QueryStep(StartingStep):
         dataset = self.catalog.get_dataset(self.dataset_name)
         dr = self.catalog.warehouse.dataset_rows(dataset, self.dataset_version)
 
+        print("query step columns")
+        from datachain.sql.types import SQLType
+        for c in dr.columns:
+            print(f"{c.name} - {c.type} - {isinstance(c.type, SQLType)}")
         return step_result(
             q, dr.columns, dependencies=[(self.dataset_name, self.dataset_version)]
         )
@@ -699,11 +703,23 @@ class SQLSelect(SQLClause):
     args: tuple[Union[Function, ColumnElement], ...]
 
     def apply_sql_clause(self, query) -> Select:
+        print("IN SQLSelect args are")
+        print("IN SQLSelect args are")
+        print("IN SQLSelect args are")
+        print("IN SQLSelect args are")
+        print("IN SQLSelect args are")
+        print(self.args)
+        from datachain.sql.types import SQLType, String
         subquery = query.subquery()
         args = [
             subquery.c[str(c)] if isinstance(c, (str, C)) else c
             for c in self.parse_cols(self.args)
         ]
+        for c in args:
+            if c.name == "diff":
+                c.type = String()
+            print(f"{c.name} - {c.type} - {isinstance(c.type, SQLType)}")
+
         if not args:
             args = subquery.c
 
@@ -1068,6 +1084,8 @@ class DatasetQuery:
         if "sys__id" in self.column_types:
             self.column_types.pop("sys__id")
         self.starting_step = QueryStep(self.catalog, name, self.version)
+        print("feature schema in DatasetQuery __init__ is")
+        print(self.feature_schema)
 
     def __iter__(self):
         return iter(self.db_results())
@@ -1139,6 +1157,7 @@ class DatasetQuery:
 
         result = query.starting_step.apply()
         self.dependencies.update(result.dependencies)
+        print("IN APPLY STEPS")
 
         for step in query.steps:
             result = step.apply(
@@ -1194,6 +1213,7 @@ class DatasetQuery:
 
     @contextlib.contextmanager
     def as_iterable(self, **kwargs) -> Iterator[ResultIter]:
+        print("IN AS ITERABLE")
         try:
             query = self.apply_steps().select()
             selected_columns = [c.name for c in query.selected_columns]

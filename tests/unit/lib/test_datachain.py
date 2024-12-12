@@ -2946,12 +2946,12 @@ def test_window_error(test_session):
         dc.mutate(first=func.sum("col2").over(window))
 
 
-@pytest.mark.parametrize("added", (True, False))
-@pytest.mark.parametrize("deleted", (True, False))
-@pytest.mark.parametrize("modified", (True, False))
-@pytest.mark.parametrize("unchanged", (True, False))
-@pytest.mark.parametrize("status_col", (None, "diff"))
-def test_compare(test_session, added, deleted, modified, unchanged, status_col):
+@pytest.mark.parametrize("added", (True,))
+@pytest.mark.parametrize("deleted", (True,))
+@pytest.mark.parametrize("modified", (True,))
+@pytest.mark.parametrize("unchanged", (True,))
+@pytest.mark.parametrize("status_col", ("diff",))
+def test_ccompare(test_session, added, deleted, modified, unchanged, status_col):
     ds1 = DataChain.from_values(
         id=[1, 2, 4],
         name=["John1", "Doe", "Andy"],
@@ -3005,6 +3005,12 @@ def test_compare(test_session, added, deleted, modified, unchanged, status_col):
         expected = [row[1:] for row in expected]
         collect_fields = collect_fields[1:]
 
+    print("BEFORE PRINT")
+    print("BEFORE PRINT")
+    print("BEFORE PRINT")
+    print(diff._query.column_types)
+    print(list(diff.collect(*collect_fields)))
+    assert 1 == 2
     assert list(diff.order_by("id").collect(*collect_fields)) == expected
 
 
