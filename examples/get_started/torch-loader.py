@@ -19,7 +19,7 @@ from datachain import C, DataChain
 from datachain.torch import label_to_int
 
 STORAGE = "gs://datachain-demo/dogs-and-cats/"
-NUM_EPOCHS = os.getenv("NUM_EPOCHS", "3")
+NUM_EPOCHS = int(os.getenv("NUM_EPOCHS", "3"))
 
 # Define transformation for data preprocessing
 transform = v2.Compose(
@@ -69,6 +69,7 @@ if __name__ == "__main__":
         ds.to_pytorch(transform=transform),
         batch_size=25,
         num_workers=4,
+        persistent_workers=True,
         multiprocessing_context=multiprocessing.get_context("spawn"),
     )
 
@@ -77,7 +78,7 @@ if __name__ == "__main__":
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
     # Train the model
-    for epoch in range(int(NUM_EPOCHS)):
+    for epoch in range(NUM_EPOCHS):
         with tqdm(
             train_loader, desc=f"epoch {epoch + 1}/{NUM_EPOCHS}", unit="batch"
         ) as loader:
