@@ -81,6 +81,8 @@ def examples(session: nox.Session) -> None:
     session.install(".[examples]")
     session.run(
         "pytest",
+        "--durations=0",
+        "tests/examples",
         "-m",
         "examples",
         *session.posargs,
