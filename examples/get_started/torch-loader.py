@@ -68,7 +68,7 @@ if __name__ == "__main__":
     train_loader = DataLoader(
         ds.to_pytorch(transform=transform),
         batch_size=25,
-        num_workers=4,
+        num_workers=max(4, os.cpu_count() or 2),
         persistent_workers=True,
         multiprocessing_context=multiprocessing.get_context("spawn"),
     )
