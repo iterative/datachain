@@ -2972,7 +2972,7 @@ def test_window_error(test_session):
 @pytest.mark.parametrize("unchanged", (True, False))
 @pytest.mark.parametrize("status_col", ("diff", None))
 @pytest.mark.parametrize("save", (True, False))
-def test_ccompare(test_session, added, deleted, modified, unchanged, status_col, save):
+def test_compare(test_session, added, deleted, modified, unchanged, status_col, save):
     ds1 = DataChain.from_values(
         id=[1, 2, 4],
         name=["John1", "Doe", "Andy"],
@@ -3112,10 +3112,10 @@ def test_compare_with_explicit_compare_fields(
     assert list(diff.order_by("id").collect(*collect_fields)) == expected
 
 
-@pytest.mark.parametrize("added", (False,))
-@pytest.mark.parametrize("deleted", (True,))
-@pytest.mark.parametrize("modified", (False,))
-@pytest.mark.parametrize("unchanged", (False,))
+@pytest.mark.parametrize("added", (True, False))
+@pytest.mark.parametrize("deleted", (True, False))
+@pytest.mark.parametrize("modified", (True, False))
+@pytest.mark.parametrize("unchanged", (True, False))
 def test_compare_different_left_right_on_columns(
     test_session, added, deleted, modified, unchanged
 ):
@@ -3162,7 +3162,6 @@ def test_compare_different_left_right_on_columns(
 
     collect_fields = ["diff", "id", "name"]
     assert list(diff.order_by("name").collect(*collect_fields)) == expected
-    assert 1 == 2
 
 
 @pytest.mark.parametrize("added", (True, False))

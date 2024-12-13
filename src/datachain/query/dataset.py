@@ -1075,6 +1075,7 @@ class DatasetQuery:
         if "sys__id" in self.column_types:
             self.column_types.pop("sys__id")
         self.starting_step = QueryStep(self.catalog, name, self.version)
+        self.dialect = self.catalog.warehouse.db.dialect
 
     def __iter__(self):
         return iter(self.db_results())
@@ -1203,6 +1204,8 @@ class DatasetQuery:
     def as_iterable(self, **kwargs) -> Iterator[ResultIter]:
         try:
             query = self.apply_steps().select()
+            print("QUWRY ISSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS in as iterable")
+            print(query)
             selected_columns = [c.name for c in query.selected_columns]
             yield ResultIter(
                 self.catalog.warehouse.dataset_rows_select(query, **kwargs),

@@ -161,26 +161,31 @@ def compare(  # noqa: PLR0912, C901
         ]
     )
     print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+    print(left._query.column_types)
+    print(left._query.column_types["id"].default_value(left._query.dialect))
+    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
 
     right_left_merge = (
         right.merge(left, on=right_on, right_on=on, inner=False, rname=rname)
+        .filter(
+            sa.and_(*[C(f"{_rprefix(c, rc)}{c}") == None for c, rc in zip(on, right_on)])
+        )
         ._query.select(
             *(
                 [C("sys__id"), C("sys__rand")]
                 + [
-                    C(c) if c == rc else sa.literal(0).label(c)
+                    C(c) if c == rc
+                    else sa.literal(left._query.column_types[c].default_value(left._query.dialect)).label(c)
                     for c, rc in zip(on, right_on)
                 ]
                 + [
-                    C(c) if c in right_cols else sa.literal(None).label(c)  # type: ignore[arg-type]
+                    C(c) if c in right_cols
+                    else sa.literal(left._query.column_types[c].default_value(left._query.dialect)).label(c)  # type: ignore[arg-type]
                     for c in cols
                     if c not in on
                 ]
                 + [diff_col]
             )
-        )
-        .filter(
-            sa.and_(*[C(f"{_rprefix(c, rc)}{c}") == 0 for c, rc in zip(on, right_on)])
         )
     )
     print("filter cond")
@@ -209,5 +214,5 @@ def compare(  # noqa: PLR0912, C901
     # r = r.filter(C(status_col) != None)
     print("column types are")
     print(r._query.column_types)
-    r._query.column_types["diff"] = String
+    # r._query.column_types["diff"] = String
     return r
