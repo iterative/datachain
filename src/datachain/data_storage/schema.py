@@ -66,13 +66,13 @@ def convert_rows_custom_column_types(
     custom_columns_types: list[tuple[int, SQLType]] = [
         (idx, c.type) for idx, c in enumerate(columns) if isinstance(c.type, SQLType)
     ]
-    '''
+    """
     print("in convert rows custom column types")
     print("columns")
     print(columns)
     print("custom column types")
     print(custom_columns_types)
-    '''
+    """
 
     if not custom_columns_types:
         yield from rows
@@ -227,7 +227,6 @@ class DataTable:
 
         column_types = self.column_types | {c.name: c.type for c in self.sys_columns()}
         # adjusting types for custom columns to be instances of SQLType if possible
-        print("MAGICCCCC!!!!!")
         for c in table.columns:
             if c.name in column_types:
                 t = column_types[c.name]

@@ -133,22 +133,42 @@ def compare(  # noqa: PLR0912, C901
     diff.type = String()
     print("DIFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
     print(diff.type)
-
+    print(left.signals_schema.values)
+    left_right_schema = SignalSchema({"id": int, "name": str, "diff": str})
     left_right_merge = left.merge(
         right, on=on, right_on=right_on, inner=False, rname=rname
     )._query.select(
-        *([C("sys__id"), C("sys__rand")] + [C(c) for c in on] + [C(c) for c in cols if c not in on] + [diff])
+        *(
+            [C("sys__id"), C("sys__rand")]
+            + [C(c) for c in on]
+            + [C(c) for c in cols if c not in on]
+            + [diff]
+        )
     )
+    # left_right_merge = left._evolve(query=left_right_merge, signal_schema=left_right_schema)
 
     diff_col = sa.literal("D").label(status_col)
     diff_col.type = String()
+    print("MERGE RESULTttttttttttttttttttttttttttttttttttttt")
+    m = right.merge(left, on=right_on, right_on=on, inner=False, rname=rname)
+    print(m.show())
+    print([C(c) if c == rc else sa.literal(0).label(c) for c, rc in zip(on, right_on)])
+    print(
+        [
+            C(c) if c in right_cols else sa.literal(None).label(c)
+            for c in cols
+            if c not in on
+        ]
+    )
+    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+
     right_left_merge = (
         right.merge(left, on=right_on, right_on=on, inner=False, rname=rname)
         ._query.select(
             *(
                 [C("sys__id"), C("sys__rand")]
                 + [
-                    C(c) if c == rc else sa.literal(None).label(c)
+                    C(c) if c == rc else sa.literal(0).label(c)
                     for c, rc in zip(on, right_on)
                 ]
                 + [
@@ -160,14 +180,12 @@ def compare(  # noqa: PLR0912, C901
             )
         )
         .filter(
-            sa.and_(
-                *[
-                    C(f"{_rprefix(c, rc)}{c}") == None  # noqa: E711
-                    for c, rc in zip(on, right_on)
-                ]
-            )
+            sa.and_(*[C(f"{_rprefix(c, rc)}{c}") == 0 for c, rc in zip(on, right_on)])
         )
     )
+    print("filter cond")
+    print([C(f"{_rprefix(c, rc)}{c}") for c, rc in zip(on, right_on)])
+    print(right_left_merge.db_results())
 
     if not deleted:
         res = left_right_merge
@@ -181,12 +199,14 @@ def compare(  # noqa: PLR0912, C901
     schema = left.signals_schema
     print(f"NEED STATUS COLUMN {need_status_col}")
     if need_status_col:
+        # res = res.select()
         schema = SignalSchema({status_col: str}) | schema
         print(schema)
 
     print("NWQ SCHEMA ISSSSSSSSSSSSSSSSSSSSS")
     print(schema.db_signals())
-    r = left._evolve(query=res, signal_schema=schema)
+    r = left._evolve(query=res.select(), signal_schema=schema)
+    # r = r.filter(C(status_col) != None)
     print("column types are")
     print(r._query.column_types)
     r._query.column_types["diff"] = String

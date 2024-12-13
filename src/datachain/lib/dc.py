@@ -1402,11 +1402,7 @@ class DataChain:
         """
         chain = self.select(*cols) if cols else self
         signals_schema = chain._effective_signals_schema
-        print("effective signals schema")
-        print(signals_schema)
         db_signals = signals_schema.db_signals()
-        print("db signals")
-        print(db_signals)
         with self._query.ordered_select(*db_signals).as_iterable() as rows:
             for row in rows:
                 ret = signals_schema.row_to_features(

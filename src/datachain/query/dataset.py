@@ -699,13 +699,11 @@ class SQLSelect(SQLClause):
     args: tuple[Union[Function, ColumnElement], ...]
 
     def apply_sql_clause(self, query) -> Select:
-        from datachain.sql.types import SQLType, String
         subquery = query.subquery()
         args = [
             subquery.c[str(c)] if isinstance(c, (str, C)) else c
             for c in self.parse_cols(self.args)
         ]
-        print("In SQLSelect")
         for c in args:
             continue
             if c.name == "diff":
@@ -819,7 +817,6 @@ class SQLUnion(Step):
     def apply(
         self, query_generator: QueryGenerator, temp_tables: list[str]
     ) -> StepResult:
-        print("In Union")
         q1 = self.query1.apply_steps().select().subquery()
         temp_tables.extend(self.query1.temp_table_names)
         q2 = self.query2.apply_steps().select().subquery()
@@ -1149,7 +1146,6 @@ class DatasetQuery:
 
         result = query.starting_step.apply()
         self.dependencies.update(result.dependencies)
-        print("IN APPLY STEPS")
 
         for step in query.steps:
             result = step.apply(
@@ -1205,7 +1201,6 @@ class DatasetQuery:
 
     @contextlib.contextmanager
     def as_iterable(self, **kwargs) -> Iterator[ResultIter]:
-        print("IN AS ITERABLE")
         try:
             query = self.apply_steps().select()
             selected_columns = [c.name for c in query.selected_columns]
@@ -1610,12 +1605,14 @@ class DatasetQuery:
                 c if isinstance(c, Column) else Column(c.name, c.type)
                 for c in query.columns
             ]
+            """
             print("columns before saveeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
             from datachain.sql.types import SQLType
             for c in columns:
                 print(f"{c.name} - {c.type} -{type(c.type)} - {isinstance(c.type, SQLType)}")
             print("feature schma is")
             print(feature_schema)
+            """
             if not [c for c in columns if c.name != "sys__id"]:
                 raise RuntimeError(
                     "No columns to save in the query. "
@@ -1638,7 +1635,6 @@ class DatasetQuery:
             print(dr.columns)
             print("query is")
             print(query)
-            print(query.select())
 
             self.catalog.warehouse.copy_table(dr.get_table(), query.select())
 

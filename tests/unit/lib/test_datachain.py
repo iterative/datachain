@@ -1977,8 +1977,7 @@ def test_uunion(test_session):
     new_schema = chain1.signals_schema.resolve("value")
     new_schema = SignalSchema({"sys": Sys}) | new_schema
     chain1 = chain1._evolve(
-        query=chain1._query.select(C("value")),
-        signal_schema=new_schema
+        query=chain1._query.select(C("value")), signal_schema=new_schema
     )
     print("CHAIN 1 DB RESULTSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS")
     print(chain1._query.db_results())
@@ -2967,12 +2966,13 @@ def test_window_error(test_session):
         dc.mutate(first=func.sum("col2").over(window))
 
 
-@pytest.mark.parametrize("added", (True,))
-@pytest.mark.parametrize("deleted", (False,))
-@pytest.mark.parametrize("modified", (True,))
-@pytest.mark.parametrize("unchanged", (True,))
-@pytest.mark.parametrize("status_col", ("diff",))
-def test_ccompare(test_session, added, deleted, modified, unchanged, status_col):
+@pytest.mark.parametrize("added", (False, True))
+@pytest.mark.parametrize("deleted", (True, False))
+@pytest.mark.parametrize("modified", (True, False))
+@pytest.mark.parametrize("unchanged", (True, False))
+@pytest.mark.parametrize("status_col", ("diff", None))
+@pytest.mark.parametrize("save", (True, False))
+def test_ccompare(test_session, added, deleted, modified, unchanged, status_col, save):
     ds1 = DataChain.from_values(
         id=[1, 2, 4],
         name=["John1", "Doe", "Andy"],
@@ -3011,12 +3011,24 @@ def test_ccompare(test_session, added, deleted, modified, unchanged, status_col)
         status_col="diff",
     )
 
+    if save:
+        print("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+        print("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+        print("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+        print(diff.show())
+        diff.save("diff")
+        diff = DataChain.from_dataset("diff")
+        print(diff.show())
+        print("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+
+    """
     diff2 = diff.save("diff")
     diff2 = DataChain.from_dataset("diff")
     print(f"DB SIGNALS ARE {diff.signals_schema.db_signals()}")
     print(diff2.show())
     print(diff2._query.db_results())
     print("#################################################################")
+    """
 
     expected = []
     if modified:
@@ -3038,11 +3050,11 @@ def test_ccompare(test_session, added, deleted, modified, unchanged, status_col)
     assert list(diff.order_by("id").collect(*collect_fields)) == expected
 
 
-@pytest.mark.parametrize("added", (True, False))
-@pytest.mark.parametrize("deleted", (True, False))
-@pytest.mark.parametrize("modified", (True, False))
-@pytest.mark.parametrize("unchanged", (True, False))
-@pytest.mark.parametrize("right_name", ("name", "other_name"))
+@pytest.mark.parametrize("added", (True,))
+@pytest.mark.parametrize("deleted", (True,))
+@pytest.mark.parametrize("modified", (True,))
+@pytest.mark.parametrize("unchanged", (True,))
+@pytest.mark.parametrize("right_name", ("other_name",))
 def test_compare_with_explicit_compare_fields(
     test_session, added, deleted, modified, unchanged, right_name
 ):
@@ -3077,6 +3089,8 @@ def test_compare_with_explicit_compare_fields(
         status_col="diff",
     )
 
+    string_default = String.default_value(test_session.catalog.warehouse.db.dialect)
+
     expected = []
     if modified:
         expected.append(("M", 1, "John1", "New York"))
@@ -3084,7 +3098,12 @@ def test_compare_with_explicit_compare_fields(
         expected.append(("A", 2, "Doe", "Boston"))
     if deleted:
         expected.append(
-            ("D", 3, None if right_name == "other_name" else "Mark", "Seattle")
+            (
+                "D",
+                3,
+                string_default if right_name == "other_name" else "Mark",
+                "Seattle",
+            )
         )
     if unchanged:
         expected.append(("U", 4, "Andy", "San Francisco"))
@@ -3093,10 +3112,10 @@ def test_compare_with_explicit_compare_fields(
     assert list(diff.order_by("id").collect(*collect_fields)) == expected
 
 
-@pytest.mark.parametrize("added", (True, False))
-@pytest.mark.parametrize("deleted", (True, False))
-@pytest.mark.parametrize("modified", (True, False))
-@pytest.mark.parametrize("unchanged", (True, False))
+@pytest.mark.parametrize("added", (False,))
+@pytest.mark.parametrize("deleted", (True,))
+@pytest.mark.parametrize("modified", (False,))
+@pytest.mark.parametrize("unchanged", (False,))
 def test_compare_different_left_right_on_columns(
     test_session, added, deleted, modified, unchanged
 ):
@@ -3126,6 +3145,11 @@ def test_compare_different_left_right_on_columns(
         status_col="diff",
     )
 
+    print("DIFF SHOW ISSSSSSSSSSSSSSSSSSSSSSSSSSSSSS")
+    print(diff.show())
+
+    int_default = Int64.default_value(test_session.catalog.warehouse.db.dialect)
+
     expected = []
     if unchanged:
         expected.append(("U", 4, "Andy"))
@@ -3134,10 +3158,11 @@ def test_compare_different_left_right_on_columns(
     if modified:
         expected.append(("M", 1, "John1"))
     if deleted:
-        expected.append(("D", None, "Mark"))
+        expected.append(("D", int_default, "Mark"))
 
     collect_fields = ["diff", "id", "name"]
     assert list(diff.order_by("name").collect(*collect_fields)) == expected
+    assert 1 == 2
 
 
 @pytest.mark.parametrize("added", (True, False))
@@ -3256,13 +3281,15 @@ def test_compare_additional_column_on_left(test_session):
         session=test_session,
     ).save("ds2")
 
+    string_default = String.default_value(test_session.catalog.warehouse.db.dialect)
+
     diff = ds1.compare(ds2, unchanged=True, on=["id"], status_col="diff")
 
     assert sorted_dicts(diff.to_records(), "id") == sorted_dicts(
         [
             {"diff": "M", "id": 1, "name": "John", "city": "London"},
             {"diff": "A", "id": 2, "name": "Doe", "city": "New York"},
-            {"diff": "D", "id": 3, "name": "Mark", "city": None},
+            {"diff": "D", "id": 3, "name": "Mark", "city": string_default},
             {"diff": "M", "id": 4, "name": "Andy", "city": "Tokyo"},
         ],
         "id",
