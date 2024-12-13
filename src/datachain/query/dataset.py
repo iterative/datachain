@@ -44,7 +44,6 @@ from datachain.data_storage.schema import (
 from datachain.dataset import DatasetStatus, RowDict
 from datachain.error import DatasetNotFoundError, QueryScriptCancelError
 from datachain.func.base import Function
-from datachain.lib.udf import UDFAdapter
 from datachain.progress import CombinedDownloadCallback
 from datachain.sql.functions.random import rand
 from datachain.utils import (
@@ -66,7 +65,7 @@ if TYPE_CHECKING:
     from datachain.catalog import Catalog
     from datachain.data_storage import AbstractWarehouse
     from datachain.dataset import DatasetRecord
-    from datachain.lib.udf import UDFResult
+    from datachain.lib.udf import UDFAdapter, UDFResult
 
     P = ParamSpec("P")
 
@@ -302,7 +301,7 @@ def adjust_outputs(
     return row
 
 
-def get_udf_col_types(warehouse: "AbstractWarehouse", udf: UDFAdapter) -> list[tuple]:
+def get_udf_col_types(warehouse: "AbstractWarehouse", udf: "UDFAdapter") -> list[tuple]:
     """Optimization: Precompute UDF column types so these don't have to be computed
     in the convert_type function for each row in a loop."""
     dialect = warehouse.db.dialect
@@ -323,7 +322,7 @@ def process_udf_outputs(
     warehouse: "AbstractWarehouse",
     udf_table: "Table",
     udf_results: Iterator[Iterable["UDFResult"]],
-    udf: UDFAdapter,
+    udf: "UDFAdapter",
     batch_size: int = INSERT_BATCH_SIZE,
     cb: Callback = DEFAULT_CALLBACK,
 ) -> None:
@@ -367,7 +366,7 @@ def get_generated_callback(is_generator: bool = False) -> Callback:
 
 @frozen
 class UDFStep(Step, ABC):
-    udf: UDFAdapter
+    udf: "UDFAdapter"
     catalog: "Catalog"
     partition_by: Optional[PartitionByType] = None
     parallel: Optional[int] = None
@@ -478,7 +477,6 @@ class UDFStep(Step, ABC):
                         udf_fields,
                         udf_inputs,
                         self.catalog,
-                        self.is_generator,
                         self.cache,
                         download_cb,
                         processed_cb,
@@ -1487,7 +1485,7 @@ class DatasetQuery:
     @detach
     def add_signals(
         self,
-        udf: UDFAdapter,
+        udf: "UDFAdapter",
         parallel: Optional[int] = None,
         workers: Union[bool, int] = False,
         min_task_size: Optional[int] = None,
@@ -1531,7 +1529,7 @@ class DatasetQuery:
     @detach
     def generate(
         self,
-        udf: UDFAdapter,
+        udf: "UDFAdapter",
         parallel: Optional[int] = None,
         workers: Union[bool, int] = False,
         min_task_size: Optional[int] = None,

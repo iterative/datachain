@@ -1,9 +1,10 @@
 import contextlib
-from collections.abc import Iterator, Sequence
+from collections.abc import Sequence
 from itertools import chain
 from multiprocessing import cpu_count
 from sys import stdin
-from typing import Optional
+from threading import Timer
+from typing import TYPE_CHECKING, Optional
 
 import attrs
 import multiprocess
@@ -13,22 +14,23 @@ from multiprocess import get_context
 
 from datachain.catalog import Catalog
 from datachain.catalog.loader import get_distributed_class
-from datachain.lib.udf import UDFAdapter, UDFResult
+from datachain.query.batch import RowsOutputBatch
 from datachain.query.dataset import (
     get_download_callback,
     get_generated_callback,
     get_processed_callback,
     process_udf_outputs,
 )
-from datachain.query.queue import (
-    get_from_queue,
-    marshal,
-    msgpack_pack,
-    msgpack_unpack,
-    put_into_queue,
-    unmarshal,
-)
-from datachain.utils import batched_it
+from datachain.query.queue import get_from_queue, put_into_queue
+from datachain.query.utils import get_query_id_column
+from datachain.utils import batched, flatten
+
+if TYPE_CHECKING:
+    from sqlalchemy import Select, Table
+
+    from datachain.data_storage import AbstractMetastore, AbstractWarehouse
+    from datachain.lib.udf import UDFAdapter
+    from datachain.query.batch import BatchingStrategy
 
 DEFAULT_BATCH_SIZE = 10000
 STOP_SIGNAL = "STOP"
@@ -54,12 +56,9 @@ def udf_entrypoint() -> int:
     # Load UDF info from stdin
     udf_info = load(stdin.buffer)
 
-    (
-        warehouse_class,
-        warehouse_args,
-        warehouse_kwargs,
-    ) = udf_info["warehouse_clone_params"]
-    warehouse = warehouse_class(*warehouse_args, **warehouse_kwargs)
+    query: Select = udf_info["query"]
+    table: Table = udf_info["table"]
+    batching: BatchingStrategy = udf_info["batching"]
 
     # Parallel processing (faster for more CPU-heavy UDFs)
     dispatch = UDFDispatcher(
@@ -67,40 +66,38 @@ def udf_entrypoint() -> int:
         udf_info["catalog_init"],
         udf_info["metastore_clone_params"],
         udf_info["warehouse_clone_params"],
+        query=query,
+        table=table,
         udf_fields=udf_info["udf_fields"],
         cache=udf_info["cache"],
         is_generator=udf_info.get("is_generator", False),
+        is_batching=batching.is_batching,
     )
 
-    query = udf_info["query"]
-    batching = udf_info["batching"]
-    table = udf_info["table"]
     n_workers = udf_info["processes"]
-    udf = loads(udf_info["udf_data"])
     if n_workers is True:
-        # Use default number of CPUs (cores)
-        n_workers = None
+        n_workers = None  # Use default number of CPUs (cores)
+
+    wh_cls, wh_args, wh_kwargs = udf_info["warehouse_clone_params"]
+    warehouse: AbstractWarehouse = wh_cls(*wh_args, **wh_kwargs)
 
     with contextlib.closing(
-        batching(warehouse.dataset_select_paginated, query)
+        batching(warehouse.db.execute, query, ids_only=True)
     ) as udf_inputs:
         download_cb = get_download_callback()
         processed_cb = get_processed_callback()
         generated_cb = get_generated_callback(dispatch.is_generator)
         try:
-            udf_results = dispatch.run_udf_parallel(
-                marshal(udf_inputs),
+            dispatch.run_udf_parallel(
+                udf_inputs,
                 n_workers=n_workers,
                 processed_cb=processed_cb,
                 download_cb=download_cb,
             )
-            process_udf_outputs(warehouse, table, udf_results, udf, cb=generated_cb)
         finally:
             download_cb.close()
             processed_cb.close()
             generated_cb.close()
-
-    warehouse.insert_rows_done(table)
 
     return 0
 
@@ -120,26 +117,24 @@ class UDFDispatcher:
         catalog_init_params,
         metastore_clone_params,
         warehouse_clone_params,
+        query: "Select",
+        table: "Table",
         udf_fields: "Sequence[str]",
         cache: bool,
         is_generator: bool = False,
+        is_batching: bool = False,
         buffer_size: int = DEFAULT_BATCH_SIZE,
     ):
         self.udf_data = udf_data
         self.catalog_init_params = catalog_init_params
-        (
-            self.metastore_class,
-            self.metastore_args,
-            self.metastore_kwargs,
-        ) = metastore_clone_params
-        (
-            self.warehouse_class,
-            self.warehouse_args,
-            self.warehouse_kwargs,
-        ) = warehouse_clone_params
+        self.metastore_clone_params = metastore_clone_params
+        self.warehouse_clone_params = warehouse_clone_params
+        self.query = query
+        self.table = table
         self.udf_fields = udf_fields
         self.cache = cache
         self.is_generator = is_generator
+        self.is_batching = is_batching
         self.buffer_size = buffer_size
         self.catalog = None
         self.task_queue = None
@@ -148,12 +143,10 @@ class UDFDispatcher:
 
     def _create_worker(self) -> "UDFWorker":
         if not self.catalog:
-            metastore = self.metastore_class(
-                *self.metastore_args, **self.metastore_kwargs
-            )
-            warehouse = self.warehouse_class(
-                *self.warehouse_args, **self.warehouse_kwargs
-            )
+            ms_cls, ms_args, ms_kwargs = self.metastore_clone_params
+            metastore: AbstractMetastore = ms_cls(*ms_args, **ms_kwargs)
+            ws_cls, ws_args, ws_kwargs = self.warehouse_clone_params
+            warehouse: AbstractWarehouse = ws_cls(*ws_args, **ws_kwargs)
             self.catalog = Catalog(metastore, warehouse, **self.catalog_init_params)
         self.udf = loads(self.udf_data)
         return UDFWorker(
@@ -161,7 +154,9 @@ class UDFDispatcher:
             self.udf,
             self.task_queue,
             self.done_queue,
-            self.is_generator,
+            self.query,
+            self.table,
+            self.is_batching,
             self.cache,
             self.udf_fields,
         )
@@ -194,7 +189,7 @@ class UDFDispatcher:
         input_queue=None,
         processed_cb: Callback = DEFAULT_CALLBACK,
         download_cb: Callback = DEFAULT_CALLBACK,
-    ) -> Iterator[Sequence[UDFResult]]:
+    ) -> None:
         n_workers = get_n_workers_from_arg(n_workers)
 
         if self.buffer_size < n_workers:
@@ -224,6 +219,9 @@ class UDFDispatcher:
             input_finished = False
 
             if not streaming_mode:
+                if not self.is_batching:
+                    input_rows = batched(flatten(input_rows), DEFAULT_BATCH_SIZE)
+
                 # Stop all workers after the input rows have finished processing
                 input_data = chain(input_rows, [STOP_SIGNAL] * n_workers)
 
@@ -238,19 +236,17 @@ class UDFDispatcher:
             # Process all tasks
             while n_workers > 0:
                 result = get_from_queue(self.done_queue)
+
+                if downloaded := result.get("downloaded"):
+                    download_cb.relative_update(downloaded)
+                if processed := result.get("processed"):
+                    processed_cb.relative_update(processed)
+
                 status = result["status"]
-                if status == NOTIFY_STATUS:
-                    if downloaded := result.get("downloaded"):
-                        download_cb.relative_update(downloaded)
-                    if processed := result.get("processed"):
-                        processed_cb.relative_update(processed)
+                if status in (OK_STATUS, NOTIFY_STATUS):
+                    pass  # Do nothing here
                 elif status == FINISHED_STATUS:
-                    # Worker finished
-                    n_workers -= 1
-                elif status == OK_STATUS:
-                    if processed := result.get("processed"):
-                        processed_cb.relative_update(processed)
-                    yield msgpack_unpack(result["result"])
+                    n_workers -= 1  # Worker finished
                 else:  # Failed / error
                     n_workers -= 1
                     if exc := result.get("exception"):
@@ -311,11 +307,13 @@ class ProcessedCallback(Callback):
 
 @attrs.define
 class UDFWorker:
-    catalog: Catalog
-    udf: UDFAdapter
+    catalog: "Catalog"
+    udf: "UDFAdapter"
     task_queue: "multiprocess.Queue"
     done_queue: "multiprocess.Queue"
-    is_generator: bool
+    query: "Select"
+    table: "Table"
+    is_batching: bool
     cache: bool
     udf_fields: Sequence[str]
     cb: Callback = attrs.field()
@@ -325,31 +323,57 @@ class UDFWorker:
         return WorkerCallback(self.done_queue)
 
     def run(self) -> None:
+        warehouse = self.catalog.warehouse.clone()
         processed_cb = ProcessedCallback()
+
         udf_results = self.udf.run(
             self.udf_fields,
-            unmarshal(self.get_inputs()),
+            self.get_inputs(),
             self.catalog,
-            self.is_generator,
             self.cache,
             download_cb=self.cb,
             processed_cb=processed_cb,
         )
-        for udf_output in udf_results:
-            for batch in batched_it(udf_output, DEFAULT_BATCH_SIZE):
-                put_into_queue(
-                    self.done_queue,
-                    {
-                        "status": OK_STATUS,
-                        "result": msgpack_pack(list(batch)),
-                    },
-                )
+        process_udf_outputs(
+            warehouse,
+            self.table,
+            self.notify_and_process(udf_results, processed_cb),
+            self.udf,
+            cb=processed_cb,
+        )
+        warehouse.insert_rows_done(self.table)
+
+        put_into_queue(
+            self.done_queue,
+            {"status": FINISHED_STATUS, "processed": processed_cb.processed_rows},
+        )
+
+    def notify_and_process(self, udf_results, processed_cb):
+        for row in udf_results:
             put_into_queue(
                 self.done_queue,
-                {"status": NOTIFY_STATUS, "processed": processed_cb.processed_rows},
+                {"status": OK_STATUS, "processed": processed_cb.processed_rows},
             )
-        put_into_queue(self.done_queue, {"status": FINISHED_STATUS})
+            yield row
 
     def get_inputs(self):
-        while (batch := get_from_queue(self.task_queue)) != STOP_SIGNAL:
-            yield batch
+        warehouse = self.catalog.warehouse.clone()
+        col_id = get_query_id_column(self.query)
+
+        if self.is_batching:
+            while (batch := get_from_queue(self.task_queue)) != STOP_SIGNAL:
+                ids = [row[0] for row in batch.rows]
+                rows = warehouse.dataset_rows_select(self.query.where(col_id.in_(ids)))
+                yield RowsOutputBatch(list(rows))
+        else:
+            while (batch := get_from_queue(self.task_queue)) != STOP_SIGNAL:
+                rows = warehouse.dataset_rows_select(
+                    self.query.where(col_id.in_(batch))
+                )
+                yield from rows
+
+
+class RepeatTimer(Timer):
+    def run(self):
+        while not self.finished.wait(self.interval):
+            self.function(*self.args, **self.kwargs)
