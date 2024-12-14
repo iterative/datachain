@@ -1969,32 +1969,12 @@ def test_order_by_descending(test_session, with_function):
     ]
 
 
-def test_uunion(test_session):
+def test_union(test_session):
     chain1 = DataChain.from_values(value=[1, 2], session=test_session)
     chain2 = DataChain.from_values(value=[3, 4], session=test_session)
-    print("CHAIN 1 DB RESULTSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS")
-    print(chain1._query.db_results())
-    new_schema = chain1.signals_schema.resolve("value")
-    new_schema = SignalSchema({"sys": Sys}) | new_schema
-    chain1 = chain1._evolve(
-        query=chain1._query.select(C("value")), signal_schema=new_schema
-    )
-    print("CHAIN 1 DB RESULTSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS")
-    print(chain1._query.db_results())
-    # chain1 = DataChain.from_dataset("chain1")
-    # chain2 = DataChain.from_dataset("chain2")
     chain3 = chain1 | chain2
-    chain3.save("chain3")
-    chain3 = DataChain.from_dataset("chain3")
     assert chain3.count() == 4
-    v = list(chain3.collect())
-    v = chain3._query.db_results()
-    # v = chain3.results()
-    print("PRINTINGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG")
-    print(v)
-    print(chain3.schema)
     assert list(chain3.order_by("value").collect("value")) == [1, 2, 3, 4]
-    assert 1 == 2
 
 
 def test_union_different_columns(test_session):
@@ -2966,7 +2946,7 @@ def test_window_error(test_session):
         dc.mutate(first=func.sum("col2").over(window))
 
 
-@pytest.mark.parametrize("added", (False, True))
+@pytest.mark.parametrize("added", (True, False))
 @pytest.mark.parametrize("deleted", (True, False))
 @pytest.mark.parametrize("modified", (True, False))
 @pytest.mark.parametrize("unchanged", (True, False))
@@ -3012,23 +2992,8 @@ def test_compare(test_session, added, deleted, modified, unchanged, status_col, 
     )
 
     if save:
-        print("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-        print("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-        print("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-        print(diff.show())
         diff.save("diff")
         diff = DataChain.from_dataset("diff")
-        print(diff.show())
-        print("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-
-    """
-    diff2 = diff.save("diff")
-    diff2 = DataChain.from_dataset("diff")
-    print(f"DB SIGNALS ARE {diff.signals_schema.db_signals()}")
-    print(diff2.show())
-    print(diff2._query.db_results())
-    print("#################################################################")
-    """
 
     expected = []
     if modified:
@@ -3045,9 +3010,34 @@ def test_compare(test_session, added, deleted, modified, unchanged, status_col, 
         expected = [row[1:] for row in expected]
         collect_fields = collect_fields[1:]
 
-    print(list(diff.collect(*collect_fields)))
-    # assert 1 == 2
     assert list(diff.order_by("id").collect(*collect_fields)) == expected
+
+
+def test_compare_with_from_dataset(test_session):
+    ds1 = DataChain.from_values(
+        id=[1, 2, 4],
+        name=["John1", "Doe", "Andy"],
+        session=test_session,
+    ).save("ds1")
+
+    ds2 = DataChain.from_values(
+        id=[1, 3, 4],
+        name=["John", "Mark", "Andy"],
+        session=test_session,
+    ).save("ds2")
+
+    # this adds sys columns to ds1 and ds2
+    ds1 = DataChain.from_dataset("ds1")
+    ds2 = DataChain.from_dataset("ds2")
+
+    diff = ds1.compare(ds2, unchanged=True, on=["id"], status_col="diff")
+
+    assert list(diff.order_by("id").collect("diff", "id", "name")) == [
+        ("M", 1, "John1"),
+        ("A", 2, "Doe"),
+        ("D", 3, "Mark"),
+        ("U", 4, "Andy"),
+    ]
 
 
 @pytest.mark.parametrize("added", (True,))
@@ -3144,9 +3134,6 @@ def test_compare_different_left_right_on_columns(
         right_on=["other_id"],
         status_col="diff",
     )
-
-    print("DIFF SHOW ISSSSSSSSSSSSSSSSSSSSSSSSSSSSSS")
-    print(diff.show())
 
     int_default = Int64.default_value(test_session.catalog.warehouse.db.dialect)
 

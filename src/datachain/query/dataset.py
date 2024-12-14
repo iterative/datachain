@@ -704,13 +704,6 @@ class SQLSelect(SQLClause):
             subquery.c[str(c)] if isinstance(c, (str, C)) else c
             for c in self.parse_cols(self.args)
         ]
-        for c in args:
-            continue
-            if c.name == "diff":
-                pass
-                # c.type = String()
-            # print(f"{c.name} - {c.type} - {isinstance(c.type, SQLType)}")
-
         if not args:
             args = subquery.c
 
@@ -1204,8 +1197,6 @@ class DatasetQuery:
     def as_iterable(self, **kwargs) -> Iterator[ResultIter]:
         try:
             query = self.apply_steps().select()
-            print("QUWRY ISSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS in as iterable")
-            print(query)
             selected_columns = [c.name for c in query.selected_columns]
             yield ResultIter(
                 self.catalog.warehouse.dataset_rows_select(query, **kwargs),
@@ -1608,14 +1599,6 @@ class DatasetQuery:
                 c if isinstance(c, Column) else Column(c.name, c.type)
                 for c in query.columns
             ]
-            """
-            print("columns before saveeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
-            from datachain.sql.types import SQLType
-            for c in columns:
-                print(f"{c.name} - {c.type} -{type(c.type)} - {isinstance(c.type, SQLType)}")
-            print("feature schma is")
-            print(feature_schema)
-            """
             if not [c for c in columns if c.name != "sys__id"]:
                 raise RuntimeError(
                     "No columns to save in the query. "
@@ -1634,10 +1617,6 @@ class DatasetQuery:
             self.session.add_dataset_version(dataset=dataset, version=version)
 
             dr = self.catalog.warehouse.dataset_rows(dataset)
-            print("TABLE COLUMNSSSSSSSSSSSSSSSSSSSSSS before save")
-            print(dr.columns)
-            print("query is")
-            print(query)
 
             self.catalog.warehouse.copy_table(dr.get_table(), query.select())
 

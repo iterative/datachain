@@ -66,13 +66,6 @@ def convert_rows_custom_column_types(
     custom_columns_types: list[tuple[int, SQLType]] = [
         (idx, c.type) for idx, c in enumerate(columns) if isinstance(c.type, SQLType)
     ]
-    """
-    print("in convert rows custom column types")
-    print("columns")
-    print(columns)
-    print("custom column types")
-    print(custom_columns_types)
-    """
 
     if not custom_columns_types:
         yield from rows

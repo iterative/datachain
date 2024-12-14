@@ -608,7 +608,6 @@ class SQLiteWarehouse(AbstractWarehouse):
             col_id = sqlalchemy.column("sys__id")
         select_ids = query.with_only_columns(col_id)
 
-        print(select_ids)
         ids = self.db.execute(select_ids).fetchall()
 
         select_q = (

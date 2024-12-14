@@ -7,6 +7,7 @@ import sqlalchemy as sa
 
 from datachain.lib.signal_schema import SignalSchema
 from datachain.query.schema import Column
+from datachain.sql.types import String
 
 if TYPE_CHECKING:
     from datachain.lib.dc import DataChain
@@ -15,7 +16,7 @@ if TYPE_CHECKING:
 C = Column
 
 
-def compare(  # noqa: PLR0912, C901
+def compare(  # noqa: PLR0912, PLR0915, C901
     left: "DataChain",
     right: "DataChain",
     on: Union[str, Sequence[str]],
@@ -30,7 +31,7 @@ def compare(  # noqa: PLR0912, C901
 ) -> "DataChain":
     """Comparing two chains by identifying rows that are added, deleted, modified
     or unchanged"""
-    from datachain.sql.types import String
+    dialect = left._query.dialect
 
     rname = "right_"
 
@@ -81,8 +82,14 @@ def compare(  # noqa: PLR0912, C901
 
     # calculate on and compare column names
     right_on = right_on or on
-    cols = left.signals_schema.db_signals()
-    right_cols = right.signals_schema.db_signals()
+    cols = [
+        c for c in left.signals_schema.db_signals() if c not in ["sys__id", "sys__rand"]
+    ]
+    right_cols = [
+        c
+        for c in right.signals_schema.db_signals()
+        if c not in ["sys__id", "sys__rand"]
+    ]
 
     on = left.signals_schema.resolve(*on).db_signals()  # type: ignore[assignment]
     right_on = right.signals_schema.resolve(*right_on).db_signals()  # type: ignore[assignment]
@@ -131,10 +138,7 @@ def compare(  # noqa: PLR0912, C901
 
     diff = sa.case(*diff_cond, else_=None if compare else "M").label(status_col)
     diff.type = String()
-    print("DIFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
-    print(diff.type)
-    print(left.signals_schema.values)
-    left_right_schema = SignalSchema({"id": int, "name": str, "diff": str})
+
     left_right_merge = left.merge(
         right, on=on, right_on=right_on, inner=False, rname=rname
     )._query.select(
@@ -145,42 +149,34 @@ def compare(  # noqa: PLR0912, C901
             + [diff]
         )
     )
-    # left_right_merge = left._evolve(query=left_right_merge, signal_schema=left_right_schema)
 
     diff_col = sa.literal("D").label(status_col)
     diff_col.type = String()
-    print("MERGE RESULTttttttttttttttttttttttttttttttttttttt")
-    m = right.merge(left, on=right_on, right_on=on, inner=False, rname=rname)
-    print(m.show())
-    print([C(c) if c == rc else sa.literal(0).label(c) for c, rc in zip(on, right_on)])
-    print(
-        [
-            C(c) if c in right_cols else sa.literal(None).label(c)
-            for c in cols
-            if c not in on
-        ]
-    )
-    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-    print(left._query.column_types)
-    print(left._query.column_types["id"].default_value(left._query.dialect))
-    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
 
     right_left_merge = (
         right.merge(left, on=right_on, right_on=on, inner=False, rname=rname)
         .filter(
-            sa.and_(*[C(f"{_rprefix(c, rc)}{c}") == None for c, rc in zip(on, right_on)])
+            sa.and_(
+                *[C(f"{_rprefix(c, rc)}{c}") == None for c, rc in zip(on, right_on)]  # noqa: E711
+            )
         )
         ._query.select(
             *(
                 [C("sys__id"), C("sys__rand")]
                 + [
-                    C(c) if c == rc
-                    else sa.literal(left._query.column_types[c].default_value(left._query.dialect)).label(c)
+                    C(c)  # type: ignore[misc]
+                    if c == rc
+                    else sa.literal(
+                        left._query.column_types[c].default_value(dialect)  # type: ignore[index]
+                    ).label(c)
                     for c, rc in zip(on, right_on)
                 ]
                 + [
-                    C(c) if c in right_cols
-                    else sa.literal(left._query.column_types[c].default_value(left._query.dialect)).label(c)  # type: ignore[arg-type]
+                    C(c)  # type: ignore[misc]
+                    if c in right_cols
+                    else sa.literal(
+                        left._query.column_types[c].default_value(dialect)  # type: ignore[index]
+                    ).label(c)  # type: ignore[arg-type]
                     for c in cols
                     if c not in on
                 ]
@@ -188,9 +184,6 @@ def compare(  # noqa: PLR0912, C901
             )
         )
     )
-    print("filter cond")
-    print([C(f"{_rprefix(c, rc)}{c}") for c, rc in zip(on, right_on)])
-    print(right_left_merge.db_results())
 
     if not deleted:
         res = left_right_merge
@@ -202,17 +195,10 @@ def compare(  # noqa: PLR0912, C901
     res = res.filter(C(status_col) != None)  # noqa: E711
 
     schema = left.signals_schema
-    print(f"NEED STATUS COLUMN {need_status_col}")
     if need_status_col:
-        # res = res.select()
+        res = res.select()
         schema = SignalSchema({status_col: str}) | schema
-        print(schema)
+    else:
+        res = res.select_except(C(status_col))
 
-    print("NWQ SCHEMA ISSSSSSSSSSSSSSSSSSSSS")
-    print(schema.db_signals())
-    r = left._evolve(query=res.select(), signal_schema=schema)
-    # r = r.filter(C(status_col) != None)
-    print("column types are")
-    print(r._query.column_types)
-    # r._query.column_types["diff"] = String
-    return r
+    return left._evolve(query=res, signal_schema=schema)

@@ -395,7 +395,6 @@ class Binary(SQLType):
         return db_defaults(dialect).binary()
 
     def on_read_convert(self, value, dialect):
-        print(f"Converting value {value}")
         return read_converter(dialect).binary(value)
 
 
