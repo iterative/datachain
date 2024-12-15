@@ -82,14 +82,8 @@ def compare(  # noqa: PLR0912, PLR0915, C901
 
     # calculate on and compare column names
     right_on = right_on or on
-    cols = [
-        c for c in left.signals_schema.db_signals() if c not in ["sys__id", "sys__rand"]
-    ]
-    right_cols = [
-        c
-        for c in right.signals_schema.db_signals()
-        if c not in ["sys__id", "sys__rand"]
-    ]
+    cols = left.signals_schema.clone_without_sys_signals().db_signals()
+    right_cols = right.signals_schema.clone_without_sys_signals().db_signals()
 
     on = left.signals_schema.resolve(*on).db_signals()  # type: ignore[assignment]
     right_on = right.signals_schema.resolve(*right_on).db_signals()  # type: ignore[assignment]
@@ -141,9 +135,10 @@ def compare(  # noqa: PLR0912, PLR0915, C901
 
     left_right_merge = left.merge(
         right, on=on, right_on=right_on, inner=False, rname=rname
-    )._query.select(
+    )
+    left_right_merge_select = left_right_merge._query.select(
         *(
-            [C("sys__id"), C("sys__rand")]
+            [C(c) for c in left_right_merge.signals_schema.db_signals("sys")]
             + [C(c) for c in on]
             + [C(c) for c in cols if c not in on]
             + [diff]
@@ -153,44 +148,43 @@ def compare(  # noqa: PLR0912, PLR0915, C901
     diff_col = sa.literal("D").label(status_col)
     diff_col.type = String()
 
-    right_left_merge = (
-        right.merge(left, on=right_on, right_on=on, inner=False, rname=rname)
-        .filter(
-            sa.and_(
-                *[C(f"{_rprefix(c, rc)}{c}") == None for c, rc in zip(on, right_on)]  # noqa: E711
-            )
+    right_left_merge = right.merge(
+        left, on=right_on, right_on=on, inner=False, rname=rname
+    ).filter(
+        sa.and_(
+            *[C(f"{_rprefix(c, rc)}{c}") == None for c, rc in zip(on, right_on)]  # noqa: E711
         )
-        ._query.select(
-            *(
-                [C("sys__id"), C("sys__rand")]
-                + [
-                    C(c)  # type: ignore[misc]
-                    if c == rc
-                    else sa.literal(
-                        left._query.column_types[c].default_value(dialect)  # type: ignore[index]
-                    ).label(c)
-                    for c, rc in zip(on, right_on)
-                ]
-                + [
-                    C(c)  # type: ignore[misc]
-                    if c in right_cols
-                    else sa.literal(
-                        left._query.column_types[c].default_value(dialect)  # type: ignore[index]
-                    ).label(c)  # type: ignore[arg-type]
-                    for c in cols
-                    if c not in on
-                ]
-                + [diff_col]
-            )
+    )
+    right_left_merge_select = right_left_merge._query.select(
+        *(
+            [C(c) for c in right_left_merge.signals_schema.db_signals("sys")]
+            + [
+                C(c)  # type: ignore[misc]
+                if c == rc
+                else sa.literal(
+                    left._query.column_types[c].default_value(dialect)  # type: ignore[index]
+                ).label(c)
+                for c, rc in zip(on, right_on)
+            ]
+            + [
+                C(c)  # type: ignore[misc]
+                if c in right_cols
+                else sa.literal(
+                    left._query.column_types[c].default_value(dialect)  # type: ignore[index]
+                ).label(c)  # type: ignore[arg-type]
+                for c in cols
+                if c not in on
+            ]
+            + [diff_col]
         )
     )
 
     if not deleted:
-        res = left_right_merge
+        res = left_right_merge_select
     elif deleted and not any([added, modified, unchanged]):
-        res = right_left_merge
+        res = right_left_merge_select
     else:
-        res = left_right_merge.union(right_left_merge)
+        res = left_right_merge_select.union(right_left_merge_select)
 
     res = res.filter(C(status_col) != None)  # noqa: E711
 
