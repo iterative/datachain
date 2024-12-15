@@ -294,6 +294,28 @@ def add_studio_parser(subparsers, parent_parser) -> None:
         help="Python package requirement. Can be specified multiple times.",
     )
 
+    studio_cancel_help = "Cancel a job in Studio"
+    studio_cancel_description = "This command cancels a job in Studio."
+
+    studio_cancel_parser = studio_subparser.add_parser(
+        "cancel",
+        parents=[parent_parser],
+        description=studio_cancel_description,
+        help=studio_cancel_help,
+    )
+
+    studio_cancel_parser.add_argument(
+        "job_id",
+        action="store",
+        help="The job ID to cancel.",
+    )
+    studio_cancel_parser.add_argument(
+        "--team",
+        action="store",
+        default=None,
+        help="The team to cancel a job for. By default, it will use team from config.",
+    )
+
 
 def get_parser() -> ArgumentParser:  # noqa: PLR0915
     try:
