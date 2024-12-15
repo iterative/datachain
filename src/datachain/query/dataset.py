@@ -35,7 +35,6 @@ from sqlalchemy.sql.schema import TableClause
 from sqlalchemy.sql.selectable import Select
 
 from datachain.asyn import ASYNC_WORKERS, AsyncMapper, OrderedMapper
-from datachain.catalog import QUERY_SCRIPT_CANCELED_EXIT_CODE, get_catalog
 from datachain.data_storage.schema import (
     PARTITION_COLUMN_ID,
     partition_col_names,
@@ -394,6 +393,8 @@ class UDFStep(Step, ABC):
         """
 
     def populate_udf_table(self, udf_table: "Table", query: Select) -> None:
+        from datachain.catalog import QUERY_SCRIPT_CANCELED_EXIT_CODE
+
         use_partitioning = self.partition_by is not None
         batching = self.udf.get_batching(use_partitioning)
         workers = self.workers
@@ -1088,6 +1089,8 @@ class DatasetQuery:
     def delete(
         name: str, version: Optional[int] = None, catalog: Optional["Catalog"] = None
     ) -> None:
+        from datachain.catalog import get_catalog
+
         catalog = catalog or get_catalog()
         version = version or catalog.get_dataset(name).latest_version
         catalog.remove_dataset(name, version)

@@ -19,7 +19,6 @@ from typing import (
 )
 
 import orjson
-import pandas as pd
 import sqlalchemy
 from pydantic import BaseModel
 from sqlalchemy.sql.functions import GenericFunction
@@ -57,6 +56,7 @@ from datachain.telemetry import telemetry
 from datachain.utils import batched_it, inside_notebook, row_to_nested_dict
 
 if TYPE_CHECKING:
+    import pandas as pd
     from pyarrow import DataType as ArrowDataType
     from typing_extensions import Concatenate, ParamSpec, Self
 
@@ -1777,6 +1777,8 @@ class DataChain:
         Parameters:
             flatten : Whether to use a multiindex or flatten column names.
         """
+        import pandas as pd
+
         headers, max_length = self._effective_signals_schema.get_headers_with_length()
         if flatten or max_length < 2:
             columns = [".".join(filter(None, header)) for header in headers]
@@ -1800,6 +1802,8 @@ class DataChain:
             transpose : Whether to transpose rows and columns.
             truncate : Whether or not to truncate the contents of columns.
         """
+        import pandas as pd
+
         dc = self.limit(limit) if limit > 0 else self  # type: ignore[misc]
         df = dc.to_pandas(flatten)
 

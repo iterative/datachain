@@ -36,6 +36,11 @@ Use Cases
 3. **Versioning.** DataChain doesn't store, require moving or copying data (unlike DVC).
    Perfect use case is a bucket with thousands or millions of images, videos, audio, PDFs.
 
+Getting Started
+===============
+
+Visit `Quick Start <https://docs.datachain.ai/quick-start>`_ and `Docs <https://docs.datachain.ai/>`_
+to get started with `DataChain` and learn more.
 
 Key Features
 ============
@@ -57,12 +62,6 @@ Key Features
    - Filter, join, and group datasets by metadata. Search by vector embeddings.
    - High-performance vectorized operations on Python objects: sum, count, avg, etc.
    - Pass datasets to Pytorch and Tensorflow, or export them back into storage.
-
-
-Getting Started
-===============
-
-Visit `Quick Start <https://docs.datachain.ai/quick-start>`_ to get started with `DataChain` and learn more.
 
 
 Contributing
