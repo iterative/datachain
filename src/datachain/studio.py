@@ -19,7 +19,7 @@ POST_LOGIN_MESSAGE = (
 )
 
 
-def process_studio_cli_args(args: "Namespace"):
+def process_studio_cli_args(args: "Namespace"):  # noqa: PLR0911
     if args.cmd == "login":
         return login(args)
     if args.cmd == "logout":
@@ -46,6 +46,9 @@ def process_studio_cli_args(args: "Namespace"):
             args.req,
             args.req_file,
         )
+
+    if args.cmd == "cancel":
+        return cancel_job(args.job_id, args.team)
 
     if args.cmd == "team":
         return set_team(args)
@@ -155,7 +158,7 @@ def edit_studio_dataset(
     if not response.ok:
         raise_remote_error(response.message)
 
-    print(f"Dataset {name} updated")
+    print(f"Dataset '{name}' updated in Studio")
 
 
 def remove_studio_dataset(
@@ -169,7 +172,7 @@ def remove_studio_dataset(
     if not response.ok:
         raise_remote_error(response.message)
 
-    print(f"Dataset {name} removed")
+    print(f"Dataset '{name}' removed from Studio")
 
 
 def save_config(hostname, token):
@@ -248,3 +251,18 @@ def upload_files(client: StudioClient, files: list[str]) -> list[str]:
         if file_id:
             file_ids.append(str(file_id))
     return file_ids
+
+
+def cancel_job(job_id: str, team_name: Optional[str]):
+    token = Config().read().get("studio", {}).get("token")
+    if not token:
+        raise DataChainError(
+            "Not logged in to Studio. Log in with 'datachain studio login'."
+        )
+
+    client = StudioClient(team=team_name)
+    response = client.cancel_job(job_id)
+    if not response.ok:
+        raise_remote_error(response.message)
+
+    print(f"Job {job_id} canceled")

@@ -152,3 +152,49 @@ def regexp_replace(col: Union[str, Func], regex: str, replacement: str) -> Func:
         args = None
 
     return Func("regexp_replace", inner=inner, cols=cols, args=args, result_type=str)
+
+
+def byte_hamming_distance(*args: Union[str, Func]) -> Func:
+    """
+    Computes the Hamming distance between two strings.
+
+    The Hamming distance is the number of positions at which the corresponding
+    characters are different. This function returns the dissimilarity between
+    the strings, where 0 indicates identical strings and values closer to the length
+    of the strings indicate higher dissimilarity.
+
+    Args:
+        args (str | literal): Two strings to compute the Hamming distance between.
+            If a str is provided, it is assumed to be the name of the column.
+            If a Literal is provided, it is assumed to be a string literal.
+
+    Returns:
+        Func: A Func object that represents the Hamming distance function.
+
+    Example:
+        ```py
+        dc.mutate(
+            ham_dist=func.byte_hamming_distance("file.phash", literal("hello")),
+        )
+        ```
+
+    Notes:
+        - Result column will always be of type int.
+    """
+    cols, func_args = [], []
+    for arg in args:
+        if get_origin(arg) is literal:
+            func_args.append(arg)
+        else:
+            cols.append(arg)
+
+    if len(cols) + len(func_args) != 2:
+        raise ValueError("byte_hamming_distance() requires exactly two arguments")
+
+    return Func(
+        "byte_hamming_distance",
+        inner=string.byte_hamming_distance,
+        cols=cols,
+        args=func_args,
+        result_type=int,
+    )

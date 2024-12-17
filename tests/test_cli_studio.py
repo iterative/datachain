@@ -169,7 +169,7 @@ def test_studio_datasets(capsys, studio_datasets, mocker):
 
 def test_studio_edit_dataset(capsys, mocker):
     with requests_mock.mock() as m:
-        m.post(f"{STUDIO_URL}/api/datachain/edit-dataset", json={})
+        m.post(f"{STUDIO_URL}/api/datachain/datasets", json={})
 
         # Studio token is required
         assert (
@@ -217,6 +217,8 @@ def test_studio_edit_dataset(capsys, mocker):
             "dataset_name": "name",
             "new_name": "new-name",
             "team_name": "team_name",
+            "description": None,
+            "labels": None,
         }
 
         # With all arguments
@@ -251,7 +253,7 @@ def test_studio_edit_dataset(capsys, mocker):
 
 def test_studio_rm_dataset(capsys, mocker):
     with requests_mock.mock() as m:
-        m.post(f"{STUDIO_URL}/api/datachain/rm-dataset", json={})
+        m.delete(f"{STUDIO_URL}/api/datachain/datasets", json={})
 
         # Studio token is required
         assert main(["datasets", "rm", "name", "--team", "team_name", "--studio"]) == 1
@@ -287,6 +289,24 @@ def test_studio_rm_dataset(capsys, mocker):
             "version": 1,
             "force": True,
         }
+
+
+def test_studio_cancel_job(capsys, mocker):
+    job_id = "8bddde6c-c3ca-41b0-9d87-ee945bfdce70"
+    with requests_mock.mock() as m:
+        m.post(f"{STUDIO_URL}/api/datachain/job/{job_id}/cancel", json={})
+
+        # Studio token is required
+        assert main(["studio", "cancel", job_id]) == 1
+        out = capsys.readouterr().err
+        assert "Not logged in to Studio" in out
+
+        # Set the studio token
+        with Config(ConfigLevel.GLOBAL).edit() as conf:
+            conf["studio"] = {"token": "isat_access_token", "team": "team_name"}
+
+        assert main(["studio", "cancel", job_id]) == 0
+        assert m.called
 
 
 def test_studio_run(capsys, mocker, tmp_dir):

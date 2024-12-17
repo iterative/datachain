@@ -7,11 +7,12 @@ from torch import float32
 from torch.distributed import get_rank, get_world_size
 from torch.utils.data import IterableDataset, get_worker_info
 from torchvision.transforms import v2
-from tqdm import tqdm
 
 from datachain import Session
+from datachain.asyn import AsyncMapper
 from datachain.catalog import Catalog, get_catalog
 from datachain.lib.dc import DataChain
+from datachain.lib.settings import Settings
 from datachain.lib.text import convert_text
 
 if TYPE_CHECKING:
@@ -30,6 +31,8 @@ def label_to_int(value: str, classes: list) -> int:
 
 
 class PytorchDataset(IterableDataset):
+    prefetch: int = 2
+
     def __init__(
         self,
         name: str,
@@ -39,6 +42,7 @@ class PytorchDataset(IterableDataset):
         tokenizer: Optional[Callable] = None,
         tokenizer_kwargs: Optional[dict[str, Any]] = None,
         num_samples: int = 0,
+        dc_settings: Optional[Settings] = None,
     ):
         """
         Pytorch IterableDataset that streams DataChain datasets.
@@ -66,6 +70,11 @@ class PytorchDataset(IterableDataset):
             catalog = get_catalog()
         self._init_catalog(catalog)
 
+        dc_settings = dc_settings or Settings()
+        self.cache = dc_settings.cache
+        if (prefetch := dc_settings.prefetch) is not None:
+            self.prefetch = prefetch
+
     def _init_catalog(self, catalog: "Catalog"):
         # For compatibility with multiprocessing,
         # we can only store params in __init__(), as Catalog isn't picklable
@@ -82,51 +91,55 @@ class PytorchDataset(IterableDataset):
         wh = wh_cls(*wh_args, **wh_kwargs)
         return Catalog(ms, wh, **self._catalog_params)
 
-    def __iter__(self) -> Iterator[Any]:
-        if self.catalog is None:
-            self.catalog = self._get_catalog()
-        session = Session.get(catalog=self.catalog)
-        total_rank, total_workers = self.get_rank_and_workers()
+    def _rows_iter(self, total_rank: int, total_workers: int):
+        catalog = self._get_catalog()
+        session = Session("PyTorch", catalog=catalog)
         ds = DataChain.from_dataset(
             name=self.name, version=self.version, session=session
-        )
+        ).settings(cache=self.cache, prefetch=self.prefetch)
         ds = ds.remove_file_signals()
 
         if self.num_samples > 0:
             ds = ds.sample(self.num_samples)
         ds = ds.chunk(total_rank, total_workers)
-        desc = f"Parsed PyTorch dataset for rank={total_rank} worker"
-        with tqdm(desc=desc, unit=" rows") as pbar:
-            for row_features in ds.collect():
-                row = []
-                for fr in row_features:
-                    if hasattr(fr, "read"):
-                        row.append(fr.read())  # type: ignore[unreachable]
-                    else:
-                        row.append(fr)
-                # Apply transforms
-                if self.transform:
-                    try:
-                        if isinstance(self.transform, v2.Transform):
-                            row = self.transform(row)
-                        for i, val in enumerate(row):
-                            if isinstance(val, Image.Image):
-                                row[i] = self.transform(val)
-                    except ValueError:
-                        logger.warning(
-                            "Skipping transform due to unsupported data types."
-                        )
-                        self.transform = None
-                if self.tokenizer:
-                    for i, val in enumerate(row):
-                        if isinstance(val, str) or (
-                            isinstance(val, list) and isinstance(val[0], str)
-                        ):
-                            row[i] = convert_text(
-                                val, self.tokenizer, self.tokenizer_kwargs
-                            ).squeeze(0)  # type: ignore[union-attr]
-                yield row
-                pbar.update(1)
+        yield from ds.collect()
+
+    def __iter__(self) -> Iterator[Any]:
+        total_rank, total_workers = self.get_rank_and_workers()
+        rows = self._rows_iter(total_rank, total_workers)
+        if self.prefetch > 0:
+            from datachain.lib.udf import _prefetch_input
+
+            rows = AsyncMapper(_prefetch_input, rows, workers=self.prefetch).iterate()
+        yield from map(self._process_row, rows)
+
+    def _process_row(self, row_features):
+        row = []
+        for fr in row_features:
+            if hasattr(fr, "read"):
+                row.append(fr.read())  # type: ignore[unreachable]
+            else:
+                row.append(fr)
+        # Apply transforms
+        if self.transform:
+            try:
+                if isinstance(self.transform, v2.Transform):
+                    row = self.transform(row)
+                for i, val in enumerate(row):
+                    if isinstance(val, Image.Image):
+                        row[i] = self.transform(val)
+            except ValueError:
+                logger.warning("Skipping transform due to unsupported data types.")
+                self.transform = None
+        if self.tokenizer:
+            for i, val in enumerate(row):
+                if isinstance(val, str) or (
+                    isinstance(val, list) and isinstance(val[0], str)
+                ):
+                    row[i] = convert_text(
+                        val, self.tokenizer, self.tokenizer_kwargs
+                    ).squeeze(0)  # type: ignore[union-attr]
+        return row
 
     @staticmethod
     def get_rank_and_workers() -> tuple[int, int]:

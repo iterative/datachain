@@ -150,28 +150,28 @@ def remote_dataset_chunk_url():
 
 @pytest.fixture
 def remote_dataset_info(requests_mock, remote_dataset):
-    requests_mock.post(f"{STUDIO_URL}/api/datachain/dataset-info", json=remote_dataset)
+    requests_mock.get(f"{STUDIO_URL}/api/datachain/datasets/info", json=remote_dataset)
 
 
 @pytest.fixture
 def remote_dataset_stats(requests_mock):
-    requests_mock.post(
-        f"{STUDIO_URL}/api/datachain/dataset-stats",
+    requests_mock.get(
+        f"{STUDIO_URL}/api/datachain/datasets/stats",
         json={"num_objects": 5, "size": 1000},
     )
 
 
 @pytest.fixture
 def dataset_export(requests_mock, remote_dataset_chunk_url):
-    requests_mock.post(
-        f"{STUDIO_URL}/api/datachain/dataset-export", json=[remote_dataset_chunk_url]
+    requests_mock.get(
+        f"{STUDIO_URL}/api/datachain/datasets/export", json=[remote_dataset_chunk_url]
     )
 
 
 @pytest.fixture
 def dataset_export_status(requests_mock):
-    requests_mock.post(
-        f"{STUDIO_URL}/api/datachain/dataset-export-status",
+    requests_mock.get(
+        f"{STUDIO_URL}/api/datachain/datasets/export-status",
         json={"status": "completed"},
     )
 
@@ -221,7 +221,7 @@ def test_pull_dataset_success(
             output=str(dest),
             local_ds_name=local_ds_name,
             local_ds_version=local_ds_version,
-            no_cp=False,
+            cp=True,
         )
     else:
         # trying to pull multiple times since that should work as well
@@ -230,7 +230,7 @@ def test_pull_dataset_success(
                 dataset_uri,
                 local_ds_name=local_ds_name,
                 local_ds_version=local_ds_version,
-                no_cp=True,
+                cp=False,
             )
 
     dataset = catalog.get_dataset(local_ds_name or "dogs")
@@ -285,7 +285,7 @@ def test_pull_dataset_wrong_dataset_uri_format(
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(DataChainError) as exc_info:
-        catalog.pull_dataset("wrong", no_cp=True)
+        catalog.pull_dataset("wrong")
     assert str(exc_info.value) == "Error when parsing dataset uri"
 
 
@@ -299,7 +299,7 @@ def test_pull_dataset_wrong_version(
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(DataChainError) as exc_info:
-        catalog.pull_dataset("ds://dogs@v5", no_cp=True)
+        catalog.pull_dataset("ds://dogs@v5")
     assert str(exc_info.value) == "Dataset dogs doesn't have version 5 on server"
 
 
@@ -309,15 +309,15 @@ def test_pull_dataset_not_found_in_remote(
     requests_mock,
     cloud_test_catalog,
 ):
-    requests_mock.post(
-        f"{STUDIO_URL}/api/datachain/dataset-info",
+    requests_mock.get(
+        f"{STUDIO_URL}/api/datachain/datasets/info",
         status_code=404,
         json={"message": "Dataset not found"},
     )
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(DataChainError) as exc_info:
-        catalog.pull_dataset("ds://dogs@v1", no_cp=True)
+        catalog.pull_dataset("ds://dogs@v1")
     assert str(exc_info.value) == "Error from server: Dataset not found"
 
 
@@ -328,15 +328,15 @@ def test_pull_dataset_error_on_fetching_stats(
     cloud_test_catalog,
     remote_dataset_info,
 ):
-    requests_mock.post(
-        f"{STUDIO_URL}/api/datachain/dataset-stats",
+    requests_mock.get(
+        f"{STUDIO_URL}/api/datachain/datasets/stats",
         status_code=400,
         json={"message": "Internal error"},
     )
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(DataChainError) as exc_info:
-        catalog.pull_dataset("ds://dogs@v1", no_cp=True)
+        catalog.pull_dataset("ds://dogs@v1")
     assert str(exc_info.value) == "Error from server: Internal error"
 
 
@@ -351,15 +351,15 @@ def test_pull_dataset_exporting_dataset_failed_in_remote(
     dataset_export,
     export_status,
 ):
-    requests_mock.post(
-        f"{STUDIO_URL}/api/datachain/dataset-export-status",
+    requests_mock.get(
+        f"{STUDIO_URL}/api/datachain/datasets/export-status",
         json={"status": export_status},
     )
 
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(DataChainError) as exc_info:
-        catalog.pull_dataset("ds://dogs@v1", no_cp=True)
+        catalog.pull_dataset("ds://dogs@v1")
     assert str(exc_info.value) == (
         f"Error from server: Dataset export {export_status} in Studio"
     )
@@ -380,7 +380,7 @@ def test_pull_dataset_empty_parquet(
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(RuntimeError):
-        catalog.pull_dataset("ds://dogs@v1", no_cp=True)
+        catalog.pull_dataset("ds://dogs@v1")
 
 
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
@@ -395,8 +395,8 @@ def test_pull_dataset_already_exists_locally(
 ):
     catalog = cloud_test_catalog.catalog
 
-    catalog.pull_dataset("ds://dogs@v1", local_ds_name="other", no_cp=True)
-    catalog.pull_dataset("ds://dogs@v1", no_cp=True)
+    catalog.pull_dataset("ds://dogs@v1", local_ds_name="other")
+    catalog.pull_dataset("ds://dogs@v1")
 
     other = catalog.get_dataset("other")
     other_version = other.get_version(1)
@@ -428,7 +428,7 @@ def test_pull_dataset_local_name_already_exists(
         local_ds_name or "dogs", [f"{src_uri}/dogs/*"], recursive=True
     )
     with pytest.raises(DataChainError) as exc_info:
-        catalog.pull_dataset("ds://dogs@v1", local_ds_name=local_ds_name, no_cp=True)
+        catalog.pull_dataset("ds://dogs@v1", local_ds_name=local_ds_name)
 
     assert str(exc_info.value) == (
         f'Local dataset ds://{local_ds_name or "dogs"}@v1 already exists with different'
@@ -437,5 +437,5 @@ def test_pull_dataset_local_name_already_exists(
 
     # able to save it as version 2 of local dataset name
     catalog.pull_dataset(
-        "ds://dogs@v1", local_ds_name=local_ds_name, local_ds_version=2, no_cp=True
+        "ds://dogs@v1", local_ds_name=local_ds_name, local_ds_version=2
     )

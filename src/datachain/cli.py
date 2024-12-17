@@ -16,7 +16,7 @@ from tabulate import tabulate
 from datachain import Session, utils
 from datachain.cli_utils import BooleanOptionalAction, CommaSeparatedArgs, KeyValueArgs
 from datachain.config import Config
-from datachain.error import DataChainError
+from datachain.error import DataChainError, DatasetNotFoundError
 from datachain.lib.dc import DataChain
 from datachain.studio import (
     edit_studio_dataset,
@@ -294,6 +294,28 @@ def add_studio_parser(subparsers, parent_parser) -> None:
         help="Python package requirement. Can be specified multiple times.",
     )
 
+    studio_cancel_help = "Cancel a job in Studio"
+    studio_cancel_description = "This command cancels a job in Studio."
+
+    studio_cancel_parser = studio_subparser.add_parser(
+        "cancel",
+        parents=[parent_parser],
+        description=studio_cancel_description,
+        help=studio_cancel_help,
+    )
+
+    studio_cancel_parser.add_argument(
+        "job_id",
+        action="store",
+        help="The job ID to cancel.",
+    )
+    studio_cancel_parser.add_argument(
+        "--team",
+        action="store",
+        default=None,
+        help="The team to cancel a job for. By default, it will use team from config.",
+    )
+
 
 def get_parser() -> ArgumentParser:  # noqa: PLR0915
     try:
@@ -457,10 +479,10 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         help="Copy directories recursively",
     )
     parse_pull.add_argument(
-        "--no-cp",
+        "--cp",
         default=False,
         action="store_true",
-        help="Do not copy files, just pull a remote dataset into local DB",
+        help="Copy actual files after pulling remote dataset into local DB",
     )
     parse_pull.add_argument(
         "--edatachain",
@@ -1056,7 +1078,10 @@ def rm_dataset(
     all, local, studio = _determine_flavors(studio, local, all, token)
 
     if all or local:
-        catalog.remove_dataset(name, version=version, force=force)
+        try:
+            catalog.remove_dataset(name, version=version, force=force)
+        except DatasetNotFoundError:
+            print("Dataset not found in local", file=sys.stderr)
 
     if (all or studio) and token:
         remove_studio_dataset(team, name, version, force)
@@ -1077,7 +1102,10 @@ def edit_dataset(
     all, local, studio = _determine_flavors(studio, local, all, token)
 
     if all or local:
-        catalog.edit_dataset(name, new_name, description, labels)
+        try:
+            catalog.edit_dataset(name, new_name, description, labels)
+        except DatasetNotFoundError:
+            print("Dataset not found in local", file=sys.stderr)
 
     if (all or studio) and token:
         edit_studio_dataset(team, name, new_name, description, labels)
@@ -1294,7 +1322,7 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
                     args.output,
                     local_ds_name=args.local_name,
                     local_ds_version=args.local_version,
-                    no_cp=args.no_cp,
+                    cp=args.cp,
                     force=bool(args.force),
                     edatachain=args.edatachain,
                     edatachain_file=args.edatachain_file,

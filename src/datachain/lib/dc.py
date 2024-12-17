@@ -19,7 +19,6 @@ from typing import (
 )
 
 import orjson
-import pandas as pd
 import sqlalchemy
 from pydantic import BaseModel
 from sqlalchemy.sql.functions import GenericFunction
@@ -57,6 +56,7 @@ from datachain.telemetry import telemetry
 from datachain.utils import batched_it, inside_notebook, row_to_nested_dict
 
 if TYPE_CHECKING:
+    import pandas as pd
     from pyarrow import DataType as ArrowDataType
     from typing_extensions import Concatenate, ParamSpec, Self
 
@@ -1446,6 +1446,7 @@ class DataChain:
             tokenizer=tokenizer,
             tokenizer_kwargs=tokenizer_kwargs,
             num_samples=num_samples,
+            dc_settings=chain._settings,
         )
 
     def remove_file_signals(self) -> "Self":  # noqa: D102
@@ -1623,6 +1624,82 @@ class DataChain:
             )
         return self._evolve(query=self._query.subtract(other._query, signals))  # type: ignore[arg-type]
 
+    def compare(
+        self,
+        other: "DataChain",
+        on: Union[str, Sequence[str]],
+        right_on: Optional[Union[str, Sequence[str]]] = None,
+        compare: Optional[Union[str, Sequence[str]]] = None,
+        right_compare: Optional[Union[str, Sequence[str]]] = None,
+        added: bool = True,
+        deleted: bool = True,
+        modified: bool = True,
+        unchanged: bool = False,
+        status_col: Optional[str] = None,
+    ) -> "DataChain":
+        """Comparing two chains by identifying rows that are added, deleted, modified
+        or unchanged. Result is the new chain that has additional column with possible
+        values: `A`, `D`, `M`, `U` representing added, deleted, modified and unchanged
+        rows respectively. Note that if only one "status" is asked, by setting proper
+        flags, this additional column is not created as it would have only one value
+        for all rows. Beside additional diff column, new chain has schema of the chain
+        on which method was called.
+
+        Parameters:
+            other: Chain to calculate diff from.
+            on: Column or list of columns to match on. If both chains have the
+                same columns then this column is enough for the match. Otherwise,
+                `right_on` parameter has to specify the columns for the other chain.
+                This value is used to find corresponding row in other dataset. If not
+                found there, row is considered as added (or removed if vice versa), and
+                if found then row can be either modified or unchanged.
+            right_on: Optional column or list of columns
+                for the `other` to match.
+            compare: Column or list of columns to compare on. If both chains have
+                the same columns then this column is enough for the compare. Otherwise,
+                `right_compare` parameter has to specify the columns for the other
+                chain. This value is used to see if row is modified or unchanged. If
+                not set, all columns will be used for comparison
+            right_compare: Optional column or list of columns
+                    for the `other` to compare to.
+            added (bool): Whether to return added rows in resulting chain.
+            deleted (bool): Whether to return deleted rows in resulting chain.
+            modified (bool): Whether to return modified rows in resulting chain.
+            unchanged (bool): Whether to return unchanged rows in resulting chain.
+            status_col (str): Name of the new column that is created in resulting chain
+                representing diff status.
+
+        Example:
+            ```py
+            diff = persons.diff(
+                new_persons,
+                on=["id"],
+                right_on=["other_id"],
+                compare=["name"],
+                added=True,
+                deleted=True,
+                modified=True,
+                unchanged=True,
+                status_col="diff"
+            )
+            ```
+        """
+        from datachain.lib.diff import compare as chain_compare
+
+        return chain_compare(
+            self,
+            other,
+            on,
+            right_on=right_on,
+            compare=compare,
+            right_compare=right_compare,
+            added=added,
+            deleted=deleted,
+            modified=modified,
+            unchanged=unchanged,
+            status_col=status_col,
+        )
+
     @classmethod
     def from_values(
         cls,
@@ -1700,6 +1777,8 @@ class DataChain:
         Parameters:
             flatten : Whether to use a multiindex or flatten column names.
         """
+        import pandas as pd
+
         headers, max_length = self._effective_signals_schema.get_headers_with_length()
         if flatten or max_length < 2:
             columns = [".".join(filter(None, header)) for header in headers]
@@ -1723,6 +1802,8 @@ class DataChain:
             transpose : Whether to transpose rows and columns.
             truncate : Whether or not to truncate the contents of columns.
         """
+        import pandas as pd
+
         dc = self.limit(limit) if limit > 0 else self  # type: ignore[misc]
         df = dc.to_pandas(flatten)
 

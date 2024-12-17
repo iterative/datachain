@@ -1,7 +1,16 @@
+import random
+from typing import Optional
+
 from datachain import C, DataChain
 
+RESOLUTION = 2**31 - 1  # Maximum positive value for a 32-bit signed integer.
 
-def train_test_split(dc: DataChain, weights: list[float]) -> list[DataChain]:
+
+def train_test_split(
+    dc: DataChain,
+    weights: list[float],
+    seed: Optional[int] = None,
+) -> list[DataChain]:
     """
     Splits a DataChain into multiple subsets based on the provided weights.
 
@@ -18,6 +27,8 @@ def train_test_split(dc: DataChain, weights: list[float]) -> list[DataChain]:
             For example:
             - `[0.7, 0.3]` corresponds to a 70/30 split;
             - `[2, 1, 1]` corresponds to a 50/25/25 split.
+        seed (int, optional):
+            The seed for the random number generator. Defaults to None.
 
     Returns:
         list[DataChain]:
@@ -58,14 +69,16 @@ def train_test_split(dc: DataChain, weights: list[float]) -> list[DataChain]:
 
     weights_normalized = [weight / sum(weights) for weight in weights]
 
-    resolution = 2**31 - 1  # Maximum positive value for a 32-bit signed integer.
+    rand_col = C("sys.rand")
+    if seed is not None:
+        uniform_seed = random.Random(seed).randrange(1, RESOLUTION)  # noqa: S311
+        rand_col = (rand_col % RESOLUTION) * uniform_seed  # type: ignore[assignment]
+    rand_col = rand_col % RESOLUTION  # type: ignore[assignment]
 
     return [
         dc.filter(
-            C("sys__rand") % resolution
-            >= round(sum(weights_normalized[:index]) * resolution),
-            C("sys__rand") % resolution
-            < round(sum(weights_normalized[: index + 1]) * resolution),
+            rand_col >= round(sum(weights_normalized[:index]) * (RESOLUTION - 1)),
+            rand_col < round(sum(weights_normalized[: index + 1]) * (RESOLUTION - 1)),
         )
         for index, _ in enumerate(weights_normalized)
     ]
