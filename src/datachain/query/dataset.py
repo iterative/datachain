@@ -44,6 +44,8 @@ from datachain.dataset import DatasetStatus, RowDict
 from datachain.error import DatasetNotFoundError, QueryScriptCancelError
 from datachain.func.base import Function
 from datachain.progress import CombinedDownloadCallback
+from datachain.query.schema import C, UDFParamSpec, normalize_param
+from datachain.query.session import Session
 from datachain.sql.functions.random import rand
 from datachain.utils import (
     batched,
@@ -51,9 +53,6 @@ from datachain.utils import (
     filtered_cloudpickle_dumps,
     get_datachain_executable,
 )
-
-from .schema import C, UDFParamSpec, normalize_param
-from .session import Session
 
 if TYPE_CHECKING:
     from sqlalchemy.sql.elements import ClauseElement
@@ -65,6 +64,7 @@ if TYPE_CHECKING:
     from datachain.data_storage import AbstractWarehouse
     from datachain.dataset import DatasetRecord
     from datachain.lib.udf import UDFAdapter, UDFResult
+    from datachain.query.udf import UdfInfo
 
     P = ParamSpec("P")
 
@@ -346,6 +346,8 @@ def process_udf_outputs(
         for row_chunk in batched(rows, batch_size):
             warehouse.insert_rows(udf_table, row_chunk)
 
+    warehouse.insert_rows_done(udf_table)
+
 
 def get_download_callback() -> Callback:
     return CombinedDownloadCallback(
@@ -439,7 +441,7 @@ class UDFStep(Step, ABC):
                     raise RuntimeError(
                         "In-memory databases cannot be used with parallel processing."
                     )
-                udf_info = {
+                udf_info: UdfInfo = {
                     "udf_data": filtered_cloudpickle_dumps(self.udf),
                     "catalog_init": self.catalog.get_init_params(),
                     "metastore_clone_params": self.catalog.metastore.clone_params(),
@@ -463,8 +465,8 @@ class UDFStep(Step, ABC):
 
                 with subprocess.Popen(cmd, env=envs, stdin=subprocess.PIPE) as process:  # noqa: S603
                     process.communicate(process_data)
-                    if process.poll():
-                        raise RuntimeError("UDF Execution Failed!")
+                    if ret := process.poll():
+                        raise RuntimeError(f"UDF Execution Failed! Exit code: {ret}")
             else:
                 # Otherwise process single-threaded (faster for smaller UDFs)
                 warehouse = self.catalog.warehouse
@@ -493,8 +495,6 @@ class UDFStep(Step, ABC):
                     download_cb.close()
                     processed_cb.close()
                     generated_cb.close()
-
-                warehouse.insert_rows_done(udf_table)
 
         except QueryScriptCancelError:
             self.catalog.warehouse.close()
