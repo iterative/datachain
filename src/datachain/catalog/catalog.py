@@ -1297,7 +1297,7 @@ class Catalog:
         output: Optional[str] = None,
         local_ds_name: Optional[str] = None,
         local_ds_version: Optional[int] = None,
-        no_cp: bool = False,
+        cp: bool = False,
         force: bool = False,
         edatachain: bool = False,
         edatachain_file: Optional[str] = None,
@@ -1305,7 +1305,7 @@ class Catalog:
         client_config=None,
     ) -> None:
         def _instantiate(ds_uri: str) -> None:
-            if no_cp:
+            if not cp:
                 return
             assert output
             self.cp(
@@ -1318,7 +1318,7 @@ class Catalog:
             )
             print(f"Dataset {ds_uri} instantiated locally to {output}")
 
-        if not output and not no_cp:
+        if cp and not output:
             raise ValueError("Please provide output directory for instantiation")
 
         studio_client = StudioClient()

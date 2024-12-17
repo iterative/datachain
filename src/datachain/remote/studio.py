@@ -402,3 +402,10 @@ class StudioClient:
             "requirements": requirements,
         }
         return self._send_request("datachain/job", data)
+
+    def cancel_job(
+        self,
+        job_id: str,
+    ) -> Response[JobData]:
+        url = f"datachain/job/{job_id}/cancel"
+        return self._send_request(url, data={}, method="POST")

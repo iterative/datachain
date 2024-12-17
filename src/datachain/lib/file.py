@@ -17,7 +17,6 @@ from urllib.request import url2pathname
 
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 from PIL import Image
-from pyarrow.dataset import dataset
 from pydantic import Field, field_validator
 
 from datachain.client.fileslice import FileSlice
@@ -452,6 +451,8 @@ class ArrowRow(DataModel):
     @contextmanager
     def open(self):
         """Stream row contents from indexed file."""
+        from pyarrow.dataset import dataset
+
         if self.file._caching_enabled:
             self.file.ensure_cached()
             path = self.file.get_local_path()

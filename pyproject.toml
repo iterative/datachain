@@ -105,14 +105,14 @@ dev = [
 ]
 examples = [
   "datachain[tests]",
-  "numpy>=1,<2",
   "defusedxml",
   "accelerate",
-  "unstructured[pdf,embed-huggingface]<0.16.0",
+  "unstructured_ingest[embed-huggingface]",
+  "unstructured[pdf]",
   "pdfplumber==0.11.4",
   "huggingface_hub[hf_transfer]",
   "onnx==1.16.1",
-  "ultralytics==8.3.37"
+  "ultralytics==8.3.50"
 ]
 
 [project.urls]
