@@ -1700,6 +1700,77 @@ class DataChain:
             status_col=status_col,
         )
 
+    def diff(
+        self,
+        other: "DataChain",
+        on: str = "file",
+        right_on: Optional[str] = None,
+        added: bool = True,
+        deleted: bool = True,
+        modified: bool = True,
+        unchanged: bool = False,
+        status_col: Optional[str] = None,
+    ) -> "DataChain":
+        """Similar as .compare() but for file based chains, i.e. those that have
+        File object, or it's derivatives, in it. For matching file `source` and
+        `path` are used, and for comparing file `version` and `etag`.
+
+        Parameters:
+            other: Chain to calculate diff from.
+            on: File signal to match on. If both chains have the
+                same file signal then this column is enough for the match. Otherwise,
+                `right_on` parameter has to specify the file signal for the other chain.
+                This value is used to find corresponding row in other dataset. If not
+                found there, row is considered as added (or removed if vice versa), and
+                if found then row can be either modified or unchanged.
+            right_on: Optional file signal for the `other` to match.
+            added (bool): Whether to return added rows in resulting chain.
+            deleted (bool): Whether to return deleted rows in resulting chain.
+            modified (bool): Whether to return modified rows in resulting chain.
+            unchanged (bool): Whether to return unchanged rows in resulting chain.
+            status_col (str): Name of the new column that is created in resulting chain
+                representing diff status.
+
+        Example:
+            ```py
+            diff = images.diff(
+                new_images,
+                on=["file"],
+                right_on=["other_file"],
+                added=True,
+                deleted=True,
+                modified=True,
+                unchanged=True,
+                status_col="diff"
+            )
+            ```
+        """
+        on_file_signals = ["source", "path"]
+        compare_file_signals = ["version", "etag"]
+
+        def get_file_signals(file: str, signals):
+            return [f"{file}.{c}" for c in signals]
+
+        right_on = right_on or on
+
+        on_cols = get_file_signals(on, on_file_signals)
+        right_on_cols = get_file_signals(right_on, on_file_signals)
+        compare_cols = get_file_signals(on, compare_file_signals)
+        right_compare_cols = get_file_signals(right_on, compare_file_signals)
+
+        return self.compare(
+            other,
+            on_cols,
+            right_on=right_on_cols,
+            compare=compare_cols,
+            right_compare=right_compare_cols,
+            added=added,
+            deleted=deleted,
+            modified=modified,
+            unchanged=unchanged,
+            status_col=status_col,
+        )
+
     @classmethod
     def from_values(
         cls,

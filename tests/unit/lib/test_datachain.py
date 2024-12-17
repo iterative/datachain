@@ -3350,3 +3350,108 @@ def test_compare_right_compare_wrong_length(test_session):
     assert str(exc_info.value) == (
         "'compare' and 'right_compare' must be have the same length"
     )
+
+
+@pytest.mark.parametrize("added", (True, False))
+@pytest.mark.parametrize("deleted", (True, False))
+@pytest.mark.parametrize("modified", (True, False))
+@pytest.mark.parametrize("unchanged", (True, False))
+@pytest.mark.parametrize("status_col", ("diff", None))
+def test_diff(test_session, added, deleted, modified, unchanged, status_col):
+    if not any([added, deleted, modified, unchanged]):
+        pytest.skip("This case is tested in another test")
+
+    fs1 = File(source="s1", path="p1", version="2", etag="e2")
+    fs1_updated = File(source="s1", path="p1", version="1", etag="e1")
+    fs2 = File(source="s2", path="p2", version="1", etag="e1")
+    fs3 = File(source="s3", path="p3", version="1", etag="e1")
+    fs4 = File(source="s4", path="p4", version="1", etag="e1")
+
+    ds1 = DataChain.from_values(
+        file=[fs1_updated, fs2, fs4], score=[1, 2, 4], session=test_session
+    )
+    ds2 = DataChain.from_values(
+        file=[fs1, fs3, fs4], score=[1, 3, 4], session=test_session
+    )
+
+    diff = ds1.diff(
+        ds2,
+        added=added,
+        deleted=deleted,
+        modified=modified,
+        unchanged=unchanged,
+        on="file",
+        status_col=status_col,
+    )
+
+    expected = []
+    if modified:
+        expected.append(("M", fs1_updated, 1))
+    if added:
+        expected.append(("A", fs2, 2))
+    if deleted:
+        expected.append(("D", fs3, 3))
+    if unchanged:
+        expected.append(("U", fs4, 4))
+
+    collect_fields = ["diff", "file", "score"]
+    if not status_col:
+        expected = [row[1:] for row in expected]
+        collect_fields = collect_fields[1:]
+
+    assert list(diff.order_by("file.source").collect(*collect_fields)) == expected
+
+
+@pytest.mark.parametrize("added", (True, False))
+@pytest.mark.parametrize("deleted", (True, False))
+@pytest.mark.parametrize("modified", (True, False))
+@pytest.mark.parametrize("unchanged", (True, False))
+@pytest.mark.parametrize("status_col", ("diff", None))
+def test_diff_nested(test_session, added, deleted, modified, unchanged, status_col):
+    if not any([added, deleted, modified, unchanged]):
+        pytest.skip("This case is tested in another test")
+
+    class Nested(BaseModel):
+        file: File
+
+    fs1 = Nested(file=File(source="s1", path="p1", version="2", etag="e2"))
+    fs1_updated = Nested(file=File(source="s1", path="p1", version="1", etag="e1"))
+    fs2 = Nested(file=File(source="s2", path="p2", version="1", etag="e1"))
+    fs3 = Nested(file=File(source="s3", path="p3", version="1", etag="e1"))
+    fs4 = Nested(file=File(source="s4", path="p4", version="1", etag="e1"))
+
+    ds1 = DataChain.from_values(
+        nested=[fs1_updated, fs2, fs4], score=[1, 2, 4], session=test_session
+    )
+    ds2 = DataChain.from_values(
+        nested=[fs1, fs3, fs4], score=[1, 3, 4], session=test_session
+    )
+
+    diff = ds1.diff(
+        ds2,
+        added=added,
+        deleted=deleted,
+        modified=modified,
+        unchanged=unchanged,
+        on="nested.file",
+        status_col=status_col,
+    )
+
+    expected = []
+    if modified:
+        expected.append(("M", fs1_updated, 1))
+    if added:
+        expected.append(("A", fs2, 2))
+    if deleted:
+        expected.append(("D", fs3, 3))
+    if unchanged:
+        expected.append(("U", fs4, 4))
+
+    collect_fields = ["diff", "nested", "score"]
+    if not status_col:
+        expected = [row[1:] for row in expected]
+        collect_fields = collect_fields[1:]
+
+    assert (
+        list(diff.order_by("nested.file.source").collect(*collect_fields)) == expected
+    )
