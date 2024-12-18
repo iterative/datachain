@@ -1,8 +1,8 @@
-import random
-import string
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Optional, Union
 
+from datachain.lib.diff import CompareStatus, get_status_col_name
+from datachain.lib.diff import compare as chain_compare
 from datachain.query.schema import Column
 
 if TYPE_CHECKING:
@@ -76,12 +76,7 @@ def compare(
         )
         ```
     """
-    from datachain.lib.diff import compare as chain_compare
-
-    status_col = "diff_" + "".join(
-        random.choice(string.ascii_letters)  # noqa: S311
-        for _ in range(10)
-    )
+    status_col = get_status_col_name()
 
     res = chain_compare(
         left,
@@ -98,13 +93,19 @@ def compare(
     )
 
     chains = {}
+
+    def filter_by_status(compare_status) -> "DataChain":
+        return res.filter(C(status_col) == compare_status).select_except(status_col)
+
     if added:
-        chains["A"] = res.filter(C(status_col) == "A").select_except(status_col)
+        chains[CompareStatus.ADDED.value] = filter_by_status(CompareStatus.ADDED)
     if deleted:
-        chains["D"] = res.filter(C(status_col) == "D").select_except(status_col)
+        chains[CompareStatus.DELETED.value] = filter_by_status(CompareStatus.DELETED)
     if modified:
-        chains["M"] = res.filter(C(status_col) == "M").select_except(status_col)
+        chains[CompareStatus.MODIFIED.value] = filter_by_status(CompareStatus.MODIFIED)
     if unchanged:
-        chains["U"] = res.filter(C(status_col) == "U").select_except(status_col)
+        chains[CompareStatus.UNCHANGED.value] = filter_by_status(
+            CompareStatus.UNCHANGED
+        )
 
     return chains
