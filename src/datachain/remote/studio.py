@@ -246,7 +246,9 @@ class StudioClient:
             Dict containing either job status updates or log messages
         """
         parsed_url = urlparse(self.url)
-        ws_url = urlunparse(parsed_url._replace(scheme="wss" if parsed_url.scheme == "https" else "ws"))
+        ws_url = urlunparse(
+            parsed_url._replace(scheme="wss" if parsed_url.scheme == "https" else "ws")
+        )
         ws_url = f"{ws_url}/logs/follow/?job_id={job_id}&team_name={self.team}"
 
         async with websockets.connect(
