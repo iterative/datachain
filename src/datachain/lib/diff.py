@@ -16,6 +16,56 @@ if TYPE_CHECKING:
 C = Column
 
 
+def compare():
+    """
+    P1
+        id  |   name    | ldiff
+        -----------------------
+        1       John1      1
+        2       Doe        1
+        4       Andy       1
+
+    P2
+        id  |   name    | rdiff
+        -----------------------
+        1       John       1
+        3       Mark       1
+        4       Andy       1
+
+    OUTER_JOIN:  join = l.outer_join(r, on ="id")
+        id | name | r_id | r_name |  ldiff  | rdiff |
+        ---------------------------------------------
+        1    John1   1       John      1        1
+        2    Doe                       1
+                     3       Mark               1
+        4    Andy    4       Andy      1        1
+
+    MUTATE:  mutate = join.mutate()
+        id | name | r_id | r_name |  ldiff  | rdiff |
+        ---------------------------------------------
+        1    John1   1       John      1        1
+        2    Doe                       1
+                     3       Mark               1
+        4    Andy    4       Andy      1        1
+
+
+
+    """
+
+    from datachain.func import _case, _isnon
+
+    l = dc1.mutate(ldiff=1)
+    r = dc2.mutate(rdiff=1)
+
+    dc_diff = (
+        l.outer_join(r, on="id", rname=f"r_{name}")
+        .mutate(d1=_case(_isnon(ldiff), "A", "D"))
+        .mutate(d2=_case(_isnon(rdiff), "A", "D"))
+        .mutate(diff=_case(d1 != d2, "A", "D"))
+        .select_except("d1", "d2", "ldiff", "rdiff")
+    )
+
+
 def compare(  # noqa: PLR0912, PLR0915, C901
     left: "DataChain",
     right: "DataChain",
