@@ -263,7 +263,7 @@ def batched_it(iterable: Iterable[_T_co], n: int) -> Iterator[Iterator[_T_co]]:
 
 def flatten(items):
     for item in items:
-        if isinstance(item, list):
+        if isinstance(item, (list, tuple)):
             yield from item
         else:
             yield item
