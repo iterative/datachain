@@ -81,7 +81,7 @@ def least(*args: Union[ColT, float]) -> Func:
     )
 
 
-def case(*args: Union[ColT, float], case_=None) -> Func:
+def case(*args: Union[ColT, float], else_=None) -> Func:
     """
     Returns the least (smallest) value from the given input values.
 
