@@ -64,3 +64,22 @@ def test_conditionals_with_multiple_rows(warehouse, expr, expected):
     query = select(expr).select_from(values([(3, 5), (8, 7), (9, 1)], ["a", "b"]))
     result = list(warehouse.db.execute(query))
     assert result == expected
+
+
+@pytest.mark.parametrize(
+    "val,expected",
+    [
+        (1, "A"),
+        (2, "D"),
+        (3, "B"),
+        (4, "D"),
+        (5, "C"),
+        (100, "D"),
+    ],
+)
+def test_case(warehouse, val, expected):
+    query = select(
+        func.case(*[(val < 2, "A"), (2 < val < 4, "B"), (4 < val < 6, "C")], else_="D")
+    )
+    result = tuple(warehouse.db.execute(query))
+    assert result == ((expected,),)

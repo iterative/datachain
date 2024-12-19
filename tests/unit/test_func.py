@@ -300,6 +300,9 @@ def test_or_mutate(dc):
     res = dc.mutate(test=strlen("val") | strlen("val")).order_by("num").collect("test")
     assert list(res) == [1, 2, 3, 4, 5]
 
+    res = dc.mutate(test=False | True).order_by("num").collect("test")
+    assert list(res) == [1, 2, 3, 4, 5]
+
 
 def test_xor():
     rnd1, rnd2 = rand(), rand()
@@ -642,3 +645,14 @@ def test_byte_hamming_distance_mutate(dc):
         .collect("test")
     )
     assert list(res) == [2, 1, 0, 1, 2]
+
+
+def test_case_mutate(dc):
+    res = dc.mutate(test=strlen("val") == 2).order_by("num").collect("test")
+    assert list(res) == [0, 1, 0, 0, 0]
+
+    res = dc.mutate(test=strlen("val") == 4).order_by("num").collect("test")
+    assert list(res) == [0, 0, 0, 1, 0]
+
+    res = dc.mutate(test=strlen("val") == strlen("val")).order_by("num").collect("test")
+    assert list(res) == [1, 1, 1, 1, 1]

@@ -41,8 +41,8 @@ def compare():
         4    Andy    4       Andy      1        1
 
     MUTATE:  mutate = join.mutate()
-        id | name | r_id | r_name |  ldiff  | rdiff |
-        ---------------------------------------------
+        id | name | r_id | r_name |  ldiff  | rdiff | d1 | d2 | diff |
+        ---------------------------------------------------------------
         1    John1   1       John      1        1
         2    Doe                       1
                      3       Mark               1
@@ -57,11 +57,21 @@ def compare():
     l = dc1.mutate(ldiff=1)
     r = dc2.mutate(rdiff=1)
 
+    # diff_cond.append((unchanged_cond, "U"))
+    # diff = sa.case(*diff_cond, else_=None if compare else "M").label(status_col)
     dc_diff = (
         l.outer_join(r, on="id", rname=f"r_{name}")
         .mutate(d1=_case(_isnon(ldiff), "A", "D"))
-        .mutate(d2=_case(_isnon(rdiff), "A", "D"))
-        .mutate(diff=_case(d1 != d2, "A", "D"))
+        # .mutate(d2=_case(_isnon(rdiff), "A", "D"))
+        # .mutate(diff=_case(d1 != d2, "A", "D"))
+        .mutate(
+            diff=_case(
+                (_isnon(ldiff), "D"),
+                (_isnon(rdiff), "A"),
+                (_or(C("name") != C("rname")), "M"),
+                else_="U",
+            )
+        )
         .select_except("d1", "d2", "ldiff", "rdiff")
     )
 
