@@ -1634,12 +1634,12 @@ class DataChain:
         added: bool = True,
         deleted: bool = True,
         modified: bool = True,
-        unchanged: bool = False,
+        same: bool = False,
         status_col: Optional[str] = None,
     ) -> "DataChain":
         """Comparing two chains by identifying rows that are added, deleted, modified
-        or unchanged. Result is the new chain that has additional column with possible
-        values: `A`, `D`, `M`, `U` representing added, deleted, modified and unchanged
+        or same. Result is the new chain that has additional column with possible
+        values: `A`, `D`, `M`, `U` representing added, deleted, modified and same
         rows respectively. Note that if only one "status" is asked, by setting proper
         flags, this additional column is not created as it would have only one value
         for all rows. Beside additional diff column, new chain has schema of the chain
@@ -1652,20 +1652,20 @@ class DataChain:
                 `right_on` parameter has to specify the columns for the other chain.
                 This value is used to find corresponding row in other dataset. If not
                 found there, row is considered as added (or removed if vice versa), and
-                if found then row can be either modified or unchanged.
+                if found then row can be either modified or same.
             right_on: Optional column or list of columns
                 for the `other` to match.
             compare: Column or list of columns to compare on. If both chains have
                 the same columns then this column is enough for the compare. Otherwise,
                 `right_compare` parameter has to specify the columns for the other
-                chain. This value is used to see if row is modified or unchanged. If
+                chain. This value is used to see if row is modified or same. If
                 not set, all columns will be used for comparison
             right_compare: Optional column or list of columns
                     for the `other` to compare to.
             added (bool): Whether to return added rows in resulting chain.
             deleted (bool): Whether to return deleted rows in resulting chain.
             modified (bool): Whether to return modified rows in resulting chain.
-            unchanged (bool): Whether to return unchanged rows in resulting chain.
+            same (bool): Whether to return unchanged rows in resulting chain.
             status_col (str): Name of the new column that is created in resulting chain
                 representing diff status.
 
@@ -1679,7 +1679,7 @@ class DataChain:
                 added=True,
                 deleted=True,
                 modified=True,
-                unchanged=True,
+                same=True,
                 status_col="diff"
             )
             ```
@@ -1696,7 +1696,80 @@ class DataChain:
             added=added,
             deleted=deleted,
             modified=modified,
-            unchanged=unchanged,
+            same=same,
+            status_col=status_col,
+        )
+
+    def diff(
+        self,
+        other: "DataChain",
+        on: str = "file",
+        right_on: Optional[str] = None,
+        added: bool = True,
+        modified: bool = True,
+        deleted: bool = False,
+        same: bool = False,
+        status_col: Optional[str] = None,
+    ) -> "DataChain":
+        """Similar to `.compare()`, which is more generic method to calculate difference
+        between two chains. Unlike `.compare()`, this method works only on those chains
+        that have `File` object, or it's derivatives, in it. File `source` and `path`
+        are used for matching, and file `version` and `etag` for comparing, while in
+        `.compare()` user needs to provide arbitrary columns for matching and comparing.
+
+        Parameters:
+            other: Chain to calculate diff from.
+            on: File signal to match on. If both chains have the
+                same file signal then this column is enough for the match. Otherwise,
+                `right_on` parameter has to specify the file signal for the other chain.
+                This value is used to find corresponding row in other dataset. If not
+                found there, row is considered as added (or removed if vice versa), and
+                if found then row can be either modified or same.
+            right_on: Optional file signal for the `other` to match.
+            added (bool): Whether to return added rows in resulting chain.
+            deleted (bool): Whether to return deleted rows in resulting chain.
+            modified (bool): Whether to return modified rows in resulting chain.
+            same (bool): Whether to return unchanged rows in resulting chain.
+            status_col (str): Optional name of the new column that is created in
+                resulting chain representing diff status.
+
+        Example:
+            ```py
+            diff = images.diff(
+                new_images,
+                on="file",
+                right_on="other_file",
+                added=True,
+                deleted=True,
+                modified=True,
+                same=True,
+                status_col="diff"
+            )
+            ```
+        """
+        on_file_signals = ["source", "path"]
+        compare_file_signals = ["version", "etag"]
+
+        def get_file_signals(file: str, signals):
+            return [f"{file}.{c}" for c in signals]
+
+        right_on = right_on or on
+
+        on_cols = get_file_signals(on, on_file_signals)
+        right_on_cols = get_file_signals(right_on, on_file_signals)
+        compare_cols = get_file_signals(on, compare_file_signals)
+        right_compare_cols = get_file_signals(right_on, compare_file_signals)
+
+        return self.compare(
+            other,
+            on_cols,
+            right_on=right_on_cols,
+            compare=compare_cols,
+            right_compare=right_compare_cols,
+            added=added,
+            deleted=deleted,
+            modified=modified,
+            same=same,
             status_col=status_col,
         )
 
