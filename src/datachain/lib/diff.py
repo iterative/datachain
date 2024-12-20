@@ -26,11 +26,11 @@ def compare(  # noqa: PLR0912, PLR0915, C901
     added: bool = True,
     deleted: bool = True,
     modified: bool = True,
-    unchanged: bool = True,
+    same: bool = True,
     status_col: Optional[str] = None,
 ) -> "DataChain":
     """Comparing two chains by identifying rows that are added, deleted, modified
-    or unchanged"""
+    or same"""
     dialect = left._query.dialect
 
     rname = "right_"
@@ -67,9 +67,9 @@ def compare(  # noqa: PLR0912, PLR0915, C901
                 "'compare' and 'right_compare' must be have the same length"
             )
 
-    if not any([added, deleted, modified, unchanged]):
+    if not any([added, deleted, modified, same]):
         raise ValueError(
-            "At least one of added, deleted, modified, unchanged flags must be set"
+            "At least one of added, deleted, modified, same flags must be set"
         )
 
     # we still need status column for internal implementation even if not
@@ -94,7 +94,7 @@ def compare(  # noqa: PLR0912, PLR0915, C901
     elif not compare and len(cols) != len(right_cols):
         # here we will mark all rows that are not added or deleted as modified since
         # there was no explicit list of compare columns provided (meaning we need
-        # to check all columns to determine if row is modified or unchanged), but
+        # to check all columns to determine if row is modified or same), but
         # the number of columns on left and right is not the same (one of the chains
         # have additional column)
         compare = None
@@ -121,14 +121,14 @@ def compare(  # noqa: PLR0912, PLR0915, C901
             ]
         )
         diff_cond.append((modified_cond, "M"))
-    if unchanged and compare:
-        unchanged_cond = sa.and_(
+    if same and compare:
+        same_cond = sa.and_(
             *[
                 C(c) == C(f"{_rprefix(c, rc)}{rc}")
                 for c, rc in zip(compare, right_compare)  # type: ignore[arg-type]
             ]
         )
-        diff_cond.append((unchanged_cond, "U"))
+        diff_cond.append((same_cond, "S"))
 
     diff = sa.case(*diff_cond, else_=None if compare else "M").label(status_col)
     diff.type = String()
@@ -181,7 +181,7 @@ def compare(  # noqa: PLR0912, PLR0915, C901
 
     if not deleted:
         res = left_right_merge_select
-    elif deleted and not any([added, modified, unchanged]):
+    elif deleted and not any([added, modified, same]):
         res = right_left_merge_select
     else:
         res = left_right_merge_select.union(right_left_merge_select)

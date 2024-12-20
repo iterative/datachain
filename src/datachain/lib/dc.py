@@ -1634,12 +1634,12 @@ class DataChain:
         added: bool = True,
         deleted: bool = True,
         modified: bool = True,
-        unchanged: bool = False,
+        same: bool = False,
         status_col: Optional[str] = None,
     ) -> "DataChain":
         """Comparing two chains by identifying rows that are added, deleted, modified
-        or unchanged. Result is the new chain that has additional column with possible
-        values: `A`, `D`, `M`, `U` representing added, deleted, modified and unchanged
+        or same. Result is the new chain that has additional column with possible
+        values: `A`, `D`, `M`, `U` representing added, deleted, modified and same
         rows respectively. Note that if only one "status" is asked, by setting proper
         flags, this additional column is not created as it would have only one value
         for all rows. Beside additional diff column, new chain has schema of the chain
@@ -1652,20 +1652,20 @@ class DataChain:
                 `right_on` parameter has to specify the columns for the other chain.
                 This value is used to find corresponding row in other dataset. If not
                 found there, row is considered as added (or removed if vice versa), and
-                if found then row can be either modified or unchanged.
+                if found then row can be either modified or same.
             right_on: Optional column or list of columns
                 for the `other` to match.
             compare: Column or list of columns to compare on. If both chains have
                 the same columns then this column is enough for the compare. Otherwise,
                 `right_compare` parameter has to specify the columns for the other
-                chain. This value is used to see if row is modified or unchanged. If
+                chain. This value is used to see if row is modified or same. If
                 not set, all columns will be used for comparison
             right_compare: Optional column or list of columns
                     for the `other` to compare to.
             added (bool): Whether to return added rows in resulting chain.
             deleted (bool): Whether to return deleted rows in resulting chain.
             modified (bool): Whether to return modified rows in resulting chain.
-            unchanged (bool): Whether to return unchanged rows in resulting chain.
+            same (bool): Whether to return unchanged rows in resulting chain.
             status_col (str): Name of the new column that is created in resulting chain
                 representing diff status.
 
@@ -1679,7 +1679,7 @@ class DataChain:
                 added=True,
                 deleted=True,
                 modified=True,
-                unchanged=True,
+                same=True,
                 status_col="diff"
             )
             ```
@@ -1696,7 +1696,7 @@ class DataChain:
             added=added,
             deleted=deleted,
             modified=modified,
-            unchanged=unchanged,
+            same=same,
             status_col=status_col,
         )
 
@@ -1708,7 +1708,7 @@ class DataChain:
         added: bool = True,
         modified: bool = True,
         deleted: bool = False,
-        unchanged: bool = False,
+        same: bool = False,
         status_col: Optional[str] = None,
     ) -> "DataChain":
         """Similar to `.compare()`, which is more generic method to calculate difference
@@ -1724,12 +1724,12 @@ class DataChain:
                 `right_on` parameter has to specify the file signal for the other chain.
                 This value is used to find corresponding row in other dataset. If not
                 found there, row is considered as added (or removed if vice versa), and
-                if found then row can be either modified or unchanged.
+                if found then row can be either modified or same.
             right_on: Optional file signal for the `other` to match.
             added (bool): Whether to return added rows in resulting chain.
             deleted (bool): Whether to return deleted rows in resulting chain.
             modified (bool): Whether to return modified rows in resulting chain.
-            unchanged (bool): Whether to return unchanged rows in resulting chain.
+            same (bool): Whether to return unchanged rows in resulting chain.
             status_col (str): Optional name of the new column that is created in
                 resulting chain representing diff status.
 
@@ -1742,7 +1742,7 @@ class DataChain:
                 added=True,
                 deleted=True,
                 modified=True,
-                unchanged=True,
+                same=True,
                 status_col="diff"
             )
             ```
@@ -1769,7 +1769,7 @@ class DataChain:
             added=added,
             deleted=deleted,
             modified=modified,
-            unchanged=unchanged,
+            same=same,
             status_col=status_col,
         )
 

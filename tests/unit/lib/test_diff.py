@@ -10,10 +10,10 @@ from tests.utils import sorted_dicts
 @pytest.mark.parametrize("added", (True, False))
 @pytest.mark.parametrize("deleted", (True, False))
 @pytest.mark.parametrize("modified", (True, False))
-@pytest.mark.parametrize("unchanged", (True, False))
+@pytest.mark.parametrize("same", (True, False))
 @pytest.mark.parametrize("status_col", ("diff", None))
 @pytest.mark.parametrize("save", (True, False))
-def test_compare(test_session, added, deleted, modified, unchanged, status_col, save):
+def test_compare(test_session, added, deleted, modified, same, status_col, save):
     ds1 = DataChain.from_values(
         id=[1, 2, 4],
         name=["John1", "Doe", "Andy"],
@@ -26,19 +26,19 @@ def test_compare(test_session, added, deleted, modified, unchanged, status_col, 
         session=test_session,
     ).save("ds2")
 
-    if not any([added, deleted, modified, unchanged]):
+    if not any([added, deleted, modified, same]):
         with pytest.raises(ValueError) as exc_info:
             diff = ds1.compare(
                 ds2,
                 added=added,
                 deleted=deleted,
                 modified=modified,
-                unchanged=unchanged,
+                same=same,
                 on=["id"],
                 status_col=status_col,
             )
         assert str(exc_info.value) == (
-            "At least one of added, deleted, modified, unchanged flags must be set"
+            "At least one of added, deleted, modified, same flags must be set"
         )
         return
 
@@ -47,7 +47,7 @@ def test_compare(test_session, added, deleted, modified, unchanged, status_col, 
         added=added,
         deleted=deleted,
         modified=modified,
-        unchanged=unchanged,
+        same=same,
         on=["id"],
         status_col="diff",
     )
@@ -63,8 +63,8 @@ def test_compare(test_session, added, deleted, modified, unchanged, status_col, 
         expected.append(("A", 2, "Doe"))
     if deleted:
         expected.append(("D", 3, "Mark"))
-    if unchanged:
-        expected.append(("U", 4, "Andy"))
+    if same:
+        expected.append(("S", 4, "Andy"))
 
     collect_fields = ["diff", "id", "name"]
     if not status_col:
@@ -91,25 +91,25 @@ def test_compare_with_from_dataset(test_session):
     ds1 = DataChain.from_dataset("ds1")
     ds2 = DataChain.from_dataset("ds2")
 
-    diff = ds1.compare(ds2, unchanged=True, on=["id"], status_col="diff")
+    diff = ds1.compare(ds2, same=True, on=["id"], status_col="diff")
 
     assert list(diff.order_by("id").collect("diff", "id", "name")) == [
         ("M", 1, "John1"),
         ("A", 2, "Doe"),
         ("D", 3, "Mark"),
-        ("U", 4, "Andy"),
+        ("S", 4, "Andy"),
     ]
 
 
 @pytest.mark.parametrize("added", (True, False))
 @pytest.mark.parametrize("deleted", (True, False))
 @pytest.mark.parametrize("modified", (True, False))
-@pytest.mark.parametrize("unchanged", (True, False))
+@pytest.mark.parametrize("same", (True, False))
 @pytest.mark.parametrize("right_name", ("other_name", "name"))
 def test_compare_with_explicit_compare_fields(
-    test_session, added, deleted, modified, unchanged, right_name
+    test_session, added, deleted, modified, same, right_name
 ):
-    if not any([added, deleted, modified, unchanged]):
+    if not any([added, deleted, modified, same]):
         pytest.skip("This case is tested in another test")
 
     ds1 = DataChain.from_values(
@@ -136,7 +136,7 @@ def test_compare_with_explicit_compare_fields(
         added=added,
         deleted=deleted,
         modified=modified,
-        unchanged=unchanged,
+        same=same,
         status_col="diff",
     )
 
@@ -156,8 +156,8 @@ def test_compare_with_explicit_compare_fields(
                 "Seattle",
             )
         )
-    if unchanged:
-        expected.append(("U", 4, "Andy", "San Francisco"))
+    if same:
+        expected.append(("S", 4, "Andy", "San Francisco"))
 
     collect_fields = ["diff", "id", "name", "city"]
     assert list(diff.order_by("id").collect(*collect_fields)) == expected
@@ -166,11 +166,11 @@ def test_compare_with_explicit_compare_fields(
 @pytest.mark.parametrize("added", (True, False))
 @pytest.mark.parametrize("deleted", (True, False))
 @pytest.mark.parametrize("modified", (True, False))
-@pytest.mark.parametrize("unchanged", (True, False))
+@pytest.mark.parametrize("same", (True, False))
 def test_compare_different_left_right_on_columns(
-    test_session, added, deleted, modified, unchanged
+    test_session, added, deleted, modified, same
 ):
-    if not any([added, deleted, modified, unchanged]):
+    if not any([added, deleted, modified, same]):
         pytest.skip("This case is tested in another test")
 
     ds1 = DataChain.from_values(
@@ -190,7 +190,7 @@ def test_compare_different_left_right_on_columns(
         added=added,
         deleted=deleted,
         modified=modified,
-        unchanged=unchanged,
+        same=same,
         on=["id"],
         right_on=["other_id"],
         status_col="diff",
@@ -199,8 +199,8 @@ def test_compare_different_left_right_on_columns(
     int_default = Int64.default_value(test_session.catalog.warehouse.db.dialect)
 
     expected = []
-    if unchanged:
-        expected.append(("U", 4, "Andy"))
+    if same:
+        expected.append(("S", 4, "Andy"))
     if added:
         expected.append(("A", 2, "Doe"))
     if modified:
@@ -215,12 +215,12 @@ def test_compare_different_left_right_on_columns(
 @pytest.mark.parametrize("added", (True, False))
 @pytest.mark.parametrize("deleted", (True, False))
 @pytest.mark.parametrize("modified", (True, False))
-@pytest.mark.parametrize("unchanged", (True, False))
+@pytest.mark.parametrize("same", (True, False))
 @pytest.mark.parametrize("on_self", (True, False))
 def test_compare_on_equal_datasets(
-    test_session, added, deleted, modified, unchanged, on_self
+    test_session, added, deleted, modified, same, on_self
 ):
-    if not any([added, deleted, modified, unchanged]):
+    if not any([added, deleted, modified, same]):
         pytest.skip("This case is tested in another test")
 
     ds1 = DataChain.from_values(
@@ -243,18 +243,18 @@ def test_compare_on_equal_datasets(
         added=added,
         deleted=deleted,
         modified=modified,
-        unchanged=unchanged,
+        same=same,
         on=["id"],
         status_col="diff",
     )
 
-    if not unchanged:
+    if not same:
         expected = []
     else:
         expected = [
-            ("U", 1, "John"),
-            ("U", 2, "Doe"),
-            ("U", 3, "Andy"),
+            ("S", 1, "John"),
+            ("S", 2, "Doe"),
+            ("S", 3, "Andy"),
         ]
 
     collect_fields = ["diff", "id", "name"]
@@ -275,14 +275,14 @@ def test_compare_multiple_columns(test_session):
         session=test_session,
     ).save("ds2")
 
-    diff = ds1.compare(ds2, unchanged=True, on=["id"], status_col="diff")
+    diff = ds1.compare(ds2, same=True, on=["id"], status_col="diff")
 
     assert sorted_dicts(diff.to_records(), "id") == sorted_dicts(
         [
             {"diff": "M", "id": 1, "name": "John", "city": "London"},
             {"diff": "A", "id": 2, "name": "Doe", "city": "New York"},
             {"diff": "D", "id": 3, "name": "Mark", "city": "Berlin"},
-            {"diff": "U", "id": 4, "name": "Andy", "city": "Tokyo"},
+            {"diff": "S", "id": 4, "name": "Andy", "city": "Tokyo"},
         ],
         "id",
     )
@@ -302,14 +302,14 @@ def test_compare_multiple_match_columns(test_session):
         session=test_session,
     ).save("ds2")
 
-    diff = ds1.compare(ds2, unchanged=True, on=["id", "name"], status_col="diff")
+    diff = ds1.compare(ds2, same=True, on=["id", "name"], status_col="diff")
 
     assert sorted_dicts(diff.to_records(), "id") == sorted_dicts(
         [
             {"diff": "M", "id": 1, "name": "John", "city": "London"},
             {"diff": "A", "id": 2, "name": "Doe", "city": "New York"},
             {"diff": "D", "id": 3, "name": "John", "city": "Berlin"},
-            {"diff": "U", "id": 4, "name": "Andy", "city": "Tokyo"},
+            {"diff": "S", "id": 4, "name": "Andy", "city": "Tokyo"},
         ],
         "id",
     )
@@ -330,7 +330,7 @@ def test_compare_additional_column_on_left(test_session):
 
     string_default = String.default_value(test_session.catalog.warehouse.db.dialect)
 
-    diff = ds1.compare(ds2, unchanged=True, on=["id"], status_col="diff")
+    diff = ds1.compare(ds2, same=True, on=["id"], status_col="diff")
 
     assert sorted_dicts(diff.to_records(), "id") == sorted_dicts(
         [
@@ -356,7 +356,7 @@ def test_compare_additional_column_on_right(test_session):
         session=test_session,
     ).save("ds2")
 
-    diff = ds1.compare(ds2, unchanged=True, on=["id"], status_col="diff")
+    diff = ds1.compare(ds2, same=True, on=["id"], status_col="diff")
 
     assert sorted_dicts(diff.to_records(), "id") == sorted_dicts(
         [
@@ -433,7 +433,7 @@ def test_diff(test_session, status_col):
         added=True,
         deleted=True,
         modified=True,
-        unchanged=True,
+        same=True,
         on="file",
         status_col=status_col,
     )
@@ -442,7 +442,7 @@ def test_diff(test_session, status_col):
         ("M", fs1_updated, 1),
         ("A", fs2, 2),
         ("D", fs3, 3),
-        ("U", fs4, 4),
+        ("S", fs4, 4),
     ]
 
     collect_fields = ["diff", "file", "score"]
@@ -476,7 +476,7 @@ def test_diff_nested(test_session, status_col):
         added=True,
         deleted=True,
         modified=True,
-        unchanged=True,
+        same=True,
         on="nested.file",
         status_col=status_col,
     )
@@ -485,7 +485,7 @@ def test_diff_nested(test_session, status_col):
         ("M", fs1_updated, 1),
         ("A", fs2, 2),
         ("D", fs3, 3),
-        ("U", fs4, 4),
+        ("S", fs4, 4),
     ]
 
     collect_fields = ["diff", "nested", "score"]
