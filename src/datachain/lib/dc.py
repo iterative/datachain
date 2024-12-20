@@ -1711,9 +1711,11 @@ class DataChain:
         unchanged: bool = False,
         status_col: Optional[str] = None,
     ) -> "DataChain":
-        """Similar as .compare() but for file based chains, i.e. those that have
-        File object, or it's derivatives, in it. For matching file `source` and
-        `path` are used, and for comparing file `version` and `etag`.
+        """Similar to `.compare()`, which is more generic method to calculate difference
+        between two chains. Unlike `.compare()`, this method works only on those chains
+        that have `File` object, or it's derivatives, in it. File `source` and `path`
+        are used for matching, and file `version` and `etag` for comparing, while in
+        `.compare()` user needs to provide arbitrary columns for matching and comparing.
 
         Parameters:
             other: Chain to calculate diff from.
