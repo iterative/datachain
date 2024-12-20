@@ -1706,8 +1706,8 @@ class DataChain:
         on: str = "file",
         right_on: Optional[str] = None,
         added: bool = True,
-        deleted: bool = True,
         modified: bool = True,
+        deleted: bool = False,
         unchanged: bool = False,
         status_col: Optional[str] = None,
     ) -> "DataChain":

@@ -26,7 +26,7 @@ def compare(  # noqa: PLR0912, PLR0915, C901
     added: bool = True,
     deleted: bool = True,
     modified: bool = True,
-    unchanged: bool = False,
+    unchanged: bool = True,
     status_col: Optional[str] = None,
 ) -> "DataChain":
     """Comparing two chains by identifying rows that are added, deleted, modified
