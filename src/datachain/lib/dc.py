@@ -1730,8 +1730,8 @@ class DataChain:
             deleted (bool): Whether to return deleted rows in resulting chain.
             modified (bool): Whether to return modified rows in resulting chain.
             unchanged (bool): Whether to return unchanged rows in resulting chain.
-            status_col (str): Name of the new column that is created in resulting chain
-                representing diff status.
+            status_col (str): Optional name of the new column that is created in
+                resulting chain representing diff status.
 
         Example:
             ```py
