@@ -155,23 +155,22 @@ def compare(  # noqa: PLR0912, PLR0915, C901
             *[C(f"{_rprefix(c, rc)}{c}") == None for c, rc in zip(on, right_on)]  # noqa: E711
         )
     )
+
+    def _default_val(chain: "DataChain", col: str):
+        col_type = chain._query.column_types[col]  # type: ignore[index]
+        val = sa.literal(col_type.default_value(dialect)).label(col)
+        val.type = col_type()
+        return val
+
     right_left_merge_select = right_left_merge._query.select(
         *(
             [C(c) for c in right_left_merge.signals_schema.db_signals("sys")]
             + [
-                C(c)  # type: ignore[misc]
-                if c == rc
-                else sa.literal(
-                    left._query.column_types[c].default_value(dialect)  # type: ignore[index]
-                ).label(c)
+                C(c) if c == rc else _default_val(left, c)
                 for c, rc in zip(on, right_on)
             ]
             + [
-                C(c)  # type: ignore[misc]
-                if c in right_cols
-                else sa.literal(
-                    left._query.column_types[c].default_value(dialect)  # type: ignore[index]
-                ).label(c)  # type: ignore[arg-type]
+                C(c) if c in right_cols else _default_val(left, c)  # type: ignore[arg-type]
                 for c in cols
                 if c not in on
             ]
