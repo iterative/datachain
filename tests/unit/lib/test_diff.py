@@ -101,11 +101,11 @@ def test_compare_with_from_dataset(test_session):
     ]
 
 
-@pytest.mark.parametrize("added", (True,))
-@pytest.mark.parametrize("deleted", (True,))
-@pytest.mark.parametrize("modified", (True,))
-@pytest.mark.parametrize("unchanged", (True,))
-@pytest.mark.parametrize("right_name", ("other_name",))
+@pytest.mark.parametrize("added", (True, False))
+@pytest.mark.parametrize("deleted", (True, False))
+@pytest.mark.parametrize("modified", (True, False))
+@pytest.mark.parametrize("unchanged", (True, False))
+@pytest.mark.parametrize("right_name", ("other_name", "name"))
 def test_compare_with_explicit_compare_fields(
     test_session, added, deleted, modified, unchanged, right_name
 ):
@@ -413,15 +413,8 @@ def test_compare_right_compare_wrong_length(test_session):
     )
 
 
-@pytest.mark.parametrize("added", (True, False))
-@pytest.mark.parametrize("deleted", (True, False))
-@pytest.mark.parametrize("modified", (True, False))
-@pytest.mark.parametrize("unchanged", (True, False))
 @pytest.mark.parametrize("status_col", ("diff", None))
-def test_diff(test_session, added, deleted, modified, unchanged, status_col):
-    if not any([added, deleted, modified, unchanged]):
-        pytest.skip("This case is tested in another test")
-
+def test_diff(test_session, status_col):
     fs1 = File(source="s1", path="p1", version="2", etag="e2")
     fs1_updated = File(source="s1", path="p1", version="1", etag="e1")
     fs2 = File(source="s2", path="p2", version="1", etag="e1")
@@ -437,23 +430,20 @@ def test_diff(test_session, added, deleted, modified, unchanged, status_col):
 
     diff = ds1.diff(
         ds2,
-        added=added,
-        deleted=deleted,
-        modified=modified,
-        unchanged=unchanged,
+        added=True,
+        deleted=True,
+        modified=True,
+        unchanged=True,
         on="file",
         status_col=status_col,
     )
 
-    expected = []
-    if modified:
-        expected.append(("M", fs1_updated, 1))
-    if added:
-        expected.append(("A", fs2, 2))
-    if deleted:
-        expected.append(("D", fs3, 3))
-    if unchanged:
-        expected.append(("U", fs4, 4))
+    expected = [
+        ("M", fs1_updated, 1),
+        ("A", fs2, 2),
+        ("D", fs3, 3),
+        ("U", fs4, 4),
+    ]
 
     collect_fields = ["diff", "file", "score"]
     if not status_col:
@@ -463,15 +453,8 @@ def test_diff(test_session, added, deleted, modified, unchanged, status_col):
     assert list(diff.order_by("file.source").collect(*collect_fields)) == expected
 
 
-@pytest.mark.parametrize("added", (True, False))
-@pytest.mark.parametrize("deleted", (True, False))
-@pytest.mark.parametrize("modified", (True, False))
-@pytest.mark.parametrize("unchanged", (True, False))
 @pytest.mark.parametrize("status_col", ("diff", None))
-def test_diff_nested(test_session, added, deleted, modified, unchanged, status_col):
-    if not any([added, deleted, modified, unchanged]):
-        pytest.skip("This case is tested in another test")
-
+def test_diff_nested(test_session, status_col):
     class Nested(BaseModel):
         file: File
 
@@ -490,23 +473,20 @@ def test_diff_nested(test_session, added, deleted, modified, unchanged, status_c
 
     diff = ds1.diff(
         ds2,
-        added=added,
-        deleted=deleted,
-        modified=modified,
-        unchanged=unchanged,
+        added=True,
+        deleted=True,
+        modified=True,
+        unchanged=True,
         on="nested.file",
         status_col=status_col,
     )
 
-    expected = []
-    if modified:
-        expected.append(("M", fs1_updated, 1))
-    if added:
-        expected.append(("A", fs2, 2))
-    if deleted:
-        expected.append(("D", fs3, 3))
-    if unchanged:
-        expected.append(("U", fs4, 4))
+    expected = [
+        ("M", fs1_updated, 1),
+        ("A", fs2, 2),
+        ("D", fs3, 3),
+        ("U", fs4, 4),
+    ]
 
     collect_fields = ["diff", "nested", "score"]
     if not status_col:
