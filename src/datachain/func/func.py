@@ -72,6 +72,8 @@ class Func(Function):
 
     @property
     def _db_cols(self) -> Sequence[ColT]:
+        print("cols are")
+        print(self.cols)
         return (
             [
                 col
@@ -86,6 +88,7 @@ class Func(Function):
         )
 
     def _db_col_type(self, signals_schema: "SignalSchema") -> Optional["DataType"]:
+        print(self._db_cols)
         if not self._db_cols:
             return None
 
@@ -360,6 +363,8 @@ class Func(Function):
         if self.result_type:
             return self.result_type
 
+        print(signals_schema)
+        print(self._db_col_type(signals_schema))
         if signals_schema and (col_type := self._db_col_type(signals_schema)):
             return col_type
 
