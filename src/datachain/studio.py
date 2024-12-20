@@ -1,3 +1,4 @@
+import asyncio
 import os
 from typing import TYPE_CHECKING, Optional
 
@@ -230,8 +231,34 @@ def create_job(
     if not response.data:
         raise DataChainError("Failed to create job")
 
-    print(f"Job {response.data.get('job', {}).get('id')} created")
+    job_id = response.data.get("job", {}).get("id")
+    print(f"Job {job_id} created")
     print("Open the job in Studio at", response.data.get("job", {}).get("url"))
+    print("=" * 40)
+
+    # Sync usage
+    async def _run():
+        async for message in client.tail_job_logs(job_id):
+            if "logs" in message:
+                for log in message["logs"]:
+                    print(log["message"], end="")
+            elif "job" in message:
+                print(f"\n>>>> Job is now in {message['job']['status']} status.")
+
+    asyncio.run(_run())
+
+    response = client.dataset_job_versions(job_id)
+    if not response.ok:
+        raise_remote_error(response.message)
+
+    response_data = response.data
+    if response_data:
+        dataset_versions = response_data.get("dataset_versions", [])
+        print("\n\n>>>> Dataset versions created during the job:")
+        for version in dataset_versions:
+            print(f"    - {version.get('dataset_name')}@v{version.get('version')}")
+    else:
+        print("No dataset versions created during the job.")
 
 
 def upload_files(client: StudioClient, files: list[str]) -> list[str]:
