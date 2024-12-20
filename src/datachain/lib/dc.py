@@ -1735,8 +1735,8 @@ class DataChain:
             ```py
             diff = images.diff(
                 new_images,
-                on=["file"],
-                right_on=["other_file"],
+                on="file",
+                right_on="other_file",
                 added=True,
                 deleted=True,
                 modified=True,
