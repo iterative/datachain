@@ -8,11 +8,11 @@ import attrs
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 from pydantic import BaseModel
 
-from datachain.asyn import AsyncMapper
 from datachain.dataset import RowDict
 from datachain.lib.convert.flatten import flatten
 from datachain.lib.data_model import DataValue
 from datachain.lib.file import File
+from datachain.lib.prefetcher import rows_prefetcher
 from datachain.lib.utils import AbstractUDF, DataChainError, DataChainParamsError
 from datachain.query.batch import (
     Batch,
@@ -280,13 +280,6 @@ class UDFBase(AbstractUDF):
         return result_objs
 
 
-async def _prefetch_input(row):
-    for obj in row:
-        if isinstance(obj, File):
-            await obj._prefetch()
-    return row
-
-
 class Mapper(UDFBase):
     """Inherit from this class to pass to `DataChain.map()`."""
 
@@ -308,9 +301,13 @@ class Mapper(UDFBase):
             for row in udf_inputs
         )
         if self.prefetch > 0:
-            prepared_inputs = AsyncMapper(
-                _prefetch_input, prepared_inputs, workers=self.prefetch
-            ).iterate()
+            prepared_inputs = rows_prefetcher(
+                self.catalog,
+                "0",
+                prepared_inputs,
+                self.prefetch,
+                download_cb=download_cb,
+            )
 
         with contextlib.closing(prepared_inputs):
             for id_, *udf_args in prepared_inputs:
@@ -385,9 +382,13 @@ class Generator(UDFBase):
             self._prepare_row(row, udf_fields, cache, download_cb) for row in udf_inputs
         )
         if self.prefetch > 0:
-            prepared_inputs = AsyncMapper(
-                _prefetch_input, prepared_inputs, workers=self.prefetch
-            ).iterate()
+            prepared_inputs = rows_prefetcher(
+                self.catalog,
+                "0",
+                prepared_inputs,
+                self.prefetch,
+                download_cb=download_cb,
+            )
 
         with contextlib.closing(prepared_inputs):
             for row in prepared_inputs:

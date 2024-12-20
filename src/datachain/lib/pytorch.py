@@ -1,5 +1,7 @@
 import logging
+import multiprocessing
 from collections.abc import Iterator
+from contextlib import closing
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from PIL import Image
@@ -9,9 +11,9 @@ from torch.utils.data import IterableDataset, get_worker_info
 from torchvision.transforms import v2
 
 from datachain import Session
-from datachain.asyn import AsyncMapper
 from datachain.catalog import Catalog, get_catalog
 from datachain.lib.dc import DataChain
+from datachain.lib.prefetcher import rows_prefetcher
 from datachain.lib.settings import Settings
 from datachain.lib.text import convert_text
 
@@ -107,11 +109,20 @@ class PytorchDataset(IterableDataset):
     def __iter__(self) -> Iterator[Any]:
         total_rank, total_workers = self.get_rank_and_workers()
         rows = self._rows_iter(total_rank, total_workers)
-        if self.prefetch > 0:
-            from datachain.lib.udf import _prefetch_input
 
-            rows = AsyncMapper(_prefetch_input, rows, workers=self.prefetch).iterate()
-        yield from map(self._process_row, rows)
+        from datachain.query.dataset import get_download_callback
+
+        position = multiprocessing.current_process()._identity[0] - 1
+        download_cb = get_download_callback(
+            f"{total_rank}/{total_workers}", position=position
+        )
+        catalog = self._get_catalog()
+        if self.prefetch > 0:
+            rows = rows_prefetcher(
+                catalog, total_rank, rows, self.prefetch, download_cb=download_cb
+            )
+        with download_cb, closing(rows):
+            yield from map(self._process_row, rows)
 
     def _process_row(self, row_features):
         row = []

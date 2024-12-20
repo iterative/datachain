@@ -4,12 +4,17 @@ from typing import TYPE_CHECKING, Optional
 from dvc_data.hashfile.db.local import LocalHashFileDB
 from dvc_objects.fs.local import LocalFileSystem
 from fsspec.callbacks import Callback, TqdmCallback
+from tqdm import tqdm
+from tqdm.std import TqdmDefaultWriteLock
 
 from .progress import Tqdm
 
 if TYPE_CHECKING:
     from datachain.client import Client
     from datachain.lib.file import File
+
+
+tqdm.set_lock(TqdmDefaultWriteLock())
 
 
 def try_scandir(path):

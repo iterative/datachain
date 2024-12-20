@@ -44,7 +44,7 @@ from datachain.dataset import DatasetStatus, RowDict
 from datachain.error import DatasetNotFoundError, QueryScriptCancelError
 from datachain.func.base import Function
 from datachain.lib.udf import UDFAdapter
-from datachain.progress import CombinedDownloadCallback
+from datachain.progress import CombinedDownloadCallback, TqdmCombinedDownloadCallback
 from datachain.sql.functions.random import rand
 from datachain.utils import (
     batched,
@@ -348,9 +348,15 @@ def process_udf_outputs(
             warehouse.insert_rows(udf_table, row_chunk)
 
 
-def get_download_callback() -> Callback:
-    return CombinedDownloadCallback(
-        {"desc": "Download", "unit": "B", "unit_scale": True, "unit_divisor": 1024}
+def get_download_callback(suffix: str = "", **kwargs) -> CombinedDownloadCallback:
+    return TqdmCombinedDownloadCallback(
+        {
+            "desc": "Download" + suffix,
+            "unit": "B",
+            "unit_scale": True,
+            "unit_divisor": 1024,
+            **kwargs,
+        },
     )
 
 
