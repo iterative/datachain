@@ -430,7 +430,11 @@ class DataChain:
         if listings:
             if update:
                 # choosing the smallest possible one to minimize update time
-                listing = sorted(listings, key=lambda ls: len(ls.name))[0]
+                listing = sorted(listings, key=lambda ls: len(ls.name), reverse=True)[0]
+                if listing.name != ds_name:
+                    # better to create a separate new listing rather then updating
+                    # potentially a very big one that we don't need now
+                    listing = None
             else:
                 # no need to update, choosing the most recent one
                 listing = sorted(listings, key=lambda ls: ls.created_at)[-1]
