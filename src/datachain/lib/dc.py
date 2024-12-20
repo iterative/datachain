@@ -410,8 +410,9 @@ class DataChain:
         """Returns correct listing dataset name that must be used for saving listing
         operation. It takes into account existing listings and reusability of those.
         It also returns boolean saying if returned dataset name is reused / already
-        exists or not, and it returns correct listing path that should be used to find
-        rows based on uri.
+        exists or not (on update it always returns False - just because there was no
+        reason to complicate it so far). And it returns correct listing path that should
+        be used to find rows based on uri.
         """
         catalog = session.catalog
         cache = catalog.cache
@@ -427,17 +428,18 @@ class DataChain:
             if not ls.is_expired and ls.contains(ds_name)
         ]
 
-        if listings:
-            if update:
-                # choosing the smallest possible one to minimize update time
-                listing = sorted(listings, key=lambda ls: len(ls.name))[0]
-            else:
-                # no need to update, choosing the most recent one
-                listing = sorted(listings, key=lambda ls: ls.created_at)[-1]
+        # if no need to update - choosing the most recent one;
+        # otherwise, we'll using the exact original `ds_name`` in this case:
+        # - if a "bigger" listing exists, we don't want to update it, it's better
+        #   to create a new "smaller" one on "update=True"
+        # - if an exact listing exists it will have the same name as `ds_name`
+        #   anyway below
+        if listings and not update:
+            listing = sorted(listings, key=lambda ls: ls.created_at)[-1]
 
+        # for local file system we need to fix listing path / prefix
+        # if we are reusing existing listing
         if isinstance(client, FileClient) and listing and listing.name != ds_name:
-            # For local file system we need to fix listing path / prefix
-            # if we are reusing existing listing
             list_path = f'{ds_name.strip("/").removeprefix(listing.name)}/{list_path}'
 
         ds_name = listing.name if listing else ds_name
