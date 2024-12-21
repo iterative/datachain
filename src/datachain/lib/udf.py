@@ -85,7 +85,6 @@ class UDFAdapter:
         udf_fields: "Sequence[str]",
         udf_inputs: "Iterable[RowsOutput]",
         catalog: "Catalog",
-        is_generator: bool,
         cache: bool,
         download_cb: Callback = DEFAULT_CALLBACK,
         processed_cb: Callback = DEFAULT_CALLBACK,

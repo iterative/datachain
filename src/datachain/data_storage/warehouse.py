@@ -216,7 +216,6 @@ class AbstractWarehouse(ABC, Serializable):
         limit = query._limit
         paginated_query = query.limit(page_size)
 
-        results = None
         offset = 0
         num_yielded = 0
 
