@@ -840,13 +840,17 @@ def test_listing_stats(cloud_test_catalog):
 
     catalog.enlist_source(f"{src_uri}/dogs/", update=True)
     stats = listing_stats(src_uri, catalog)
+    assert stats.num_objects == 7
+    assert stats.size == 36
+
+    stats = listing_stats(f"{src_uri}/dogs/", catalog)
     assert stats.num_objects == 4
     assert stats.size == 15
 
     catalog.enlist_source(f"{src_uri}/dogs/")
     stats = listing_stats(src_uri, catalog)
-    assert stats.num_objects == 4
-    assert stats.size == 15
+    assert stats.num_objects == 7
+    assert stats.size == 36
 
 
 @pytest.mark.parametrize("cloud_type", ["s3", "azure", "gs"], indirect=True)
