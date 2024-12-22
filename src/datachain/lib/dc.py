@@ -41,7 +41,7 @@ from datachain.lib.listing import (
     parse_listing_uri,
 )
 from datachain.lib.listing_info import ListingInfo
-from datachain.lib.meta_formats import read_meta, read_schema
+from datachain.lib.meta_formats import read_meta
 from datachain.lib.model_store import ModelStore
 from datachain.lib.settings import Settings
 from datachain.lib.signal_schema import SignalSchema
@@ -554,8 +554,7 @@ class DataChain:
         jmespath: Optional[str] = None,
         object_name: Optional[str] = "",
         model_name: Optional[str] = None,
-        print_schema: Optional[bool] = False,
-        meta_type: Optional[str] = "json",
+        format: Optional[str] = "json",
         nrows=None,
         **kwargs,
     ) -> "DataChain":
@@ -564,12 +563,12 @@ class DataChain:
         Parameters:
             path : storage URI with directory. URI must start with storage prefix such
                 as `s3://`, `gs://`, `az://` or "file:///"
-            type : read file as "binary", "text", or "image" data. Default is "binary".
+            type : read file as "binary", "text", or "image" data. Default is "text".
             spec : optional Data Model
             schema_from : path to sample to infer spec (if schema not provided)
             object_name : generated object column name
             model_name : optional generated model name
-            print_schema : print auto-generated schema
+            format: "json", "jsonl"
             jmespath : optional JMESPATH expression to reduce JSON
             nrows : optional row limit for jsonl and JSON arrays
 
@@ -594,75 +593,14 @@ class DataChain:
         if (not object_name) and jmespath:
             object_name = jmespath_to_name(jmespath)
         if not object_name:
-            object_name = meta_type
+            object_name = format
         chain = DataChain.from_storage(uri=path, type=type, **kwargs)
         signal_dict = {
             object_name: read_meta(
                 schema_from=schema_from,
-                meta_type=meta_type,
+                format=format,
                 spec=spec,
                 model_name=model_name,
-                print_schema=print_schema,
-                jmespath=jmespath,
-                nrows=nrows,
-            )
-        }
-        return chain.gen(**signal_dict)  # type: ignore[misc, arg-type]
-
-    @classmethod
-    def from_jsonl(
-        cls,
-        path,
-        type: Literal["binary", "text", "image"] = "text",
-        spec: Optional[DataType] = None,
-        schema_from: Optional[str] = "auto",
-        jmespath: Optional[str] = None,
-        object_name: Optional[str] = "",
-        model_name: Optional[str] = None,
-        print_schema: Optional[bool] = False,
-        meta_type: Optional[str] = "jsonl",
-        nrows=None,
-        **kwargs,
-    ) -> "DataChain":
-        """Get data from JSON lines. It returns the chain itself.
-
-        Parameters:
-            path : storage URI with directory. URI must start with storage prefix such
-                as `s3://`, `gs://`, `az://` or "file:///"
-            type : read file as "binary", "text", or "image" data. Default is "binary".
-            spec : optional Data Model
-            schema_from : path to sample to infer spec (if schema not provided)
-            object_name : generated object column name
-            model_name : optional generated model name
-            print_schema : print auto-generated schema
-            jmespath : optional JMESPATH expression to reduce JSON
-            nrows : optional row limit for jsonl and JSON arrays
-
-        Example:
-            infer JSONl schema from data, limit parsing to 1 row
-            ```py
-            chain = DataChain.from_jsonl("gs://myjsonl", nrows=1)
-            ```
-        """
-        if schema_from == "auto":
-            schema_from = path
-
-        def jmespath_to_name(s: str):
-            name_end = re.search(r"\W", s).start() if re.search(r"\W", s) else len(s)  # type: ignore[union-attr]
-            return s[:name_end]
-
-        if (not object_name) and jmespath:
-            object_name = jmespath_to_name(jmespath)
-        if not object_name:
-            object_name = meta_type
-        chain = DataChain.from_storage(uri=path, type=type, **kwargs)
-        signal_dict = {
-            object_name: read_meta(
-                schema_from=schema_from,
-                meta_type=meta_type,
-                spec=spec,
-                model_name=model_name,
-                print_schema=print_schema,
                 jmespath=jmespath,
                 nrows=nrows,
             )
@@ -791,47 +729,6 @@ class DataChain:
             in_memory=in_memory,
             output={object_name: ListingInfo},
             **{object_name: catalog.listings()},  # type: ignore[arg-type]
-        )
-
-    def print_json_schema(  # type: ignore[override]
-        self, jmespath: Optional[str] = None, model_name: Optional[str] = None
-    ) -> "Self":
-        """Print JSON data model and save it. It returns the chain itself.
-
-        Parameters:
-            jmespath : JMESPATH expression to reduce JSON
-            model_name : generated model name
-
-        Example:
-            print JSON schema and save to column "meta_from":
-            ```py
-            uri = "gs://datachain-demo/coco2017/annotations_captions/"
-            chain = DataChain.from_storage(uri)
-            chain = chain.print_json_schema()
-            chain.save()
-            ```
-        """
-        return self.map(
-            meta_schema=lambda file: read_schema(
-                file, data_type="json", expr=jmespath, model_name=model_name
-            ),
-            output=str,
-        )
-
-    def print_jsonl_schema(  # type: ignore[override]
-        self, jmespath: Optional[str] = None, model_name: Optional[str] = None
-    ) -> "Self":
-        """Print JSON data model and save it. It returns the chain itself.
-
-        Parameters:
-            jmespath : JMESPATH expression to reduce JSON
-            model_name : generated model name
-        """
-        return self.map(
-            meta_schema=lambda file: read_schema(
-                file, data_type="jsonl", expr=jmespath, model_name=model_name
-            ),
-            output=str,
         )
 
     def save(  # type: ignore[override]
