@@ -69,7 +69,7 @@ class Session:
         self.catalog = catalog or get_catalog(
             client_config=client_config, in_memory=in_memory
         )
-        self.dataset_versions: list[tuple[DatasetRecord, int]] = []
+        self.dataset_versions: list[tuple[DatasetRecord, int, bool]] = []
 
     def __enter__(self):
         # Push the current context onto the stack
@@ -89,8 +89,10 @@ class Session:
         if Session.SESSION_CONTEXTS:
             Session.SESSION_CONTEXTS.pop()
 
-    def add_dataset_version(self, dataset: "DatasetRecord", version: int) -> None:
-        self.dataset_versions.append((dataset, version))
+    def add_dataset_version(
+        self, dataset: "DatasetRecord", version: int, listing: bool = False
+    ) -> None:
+        self.dataset_versions.append((dataset, version, listing))
 
     def generate_temp_dataset_name(self) -> str:
         return self.get_temp_prefix() + uuid4().hex[: self.TEMP_TABLE_UUID_LEN]
@@ -111,8 +113,9 @@ class Session:
         if not self.dataset_versions:
             return
 
-        for dataset, version in self.dataset_versions:
-            self.catalog.remove_dataset_version(dataset, version)
+        for dataset, version, listing in self.dataset_versions:
+            if not listing:
+                self.catalog.remove_dataset_version(dataset, version)
 
         self.dataset_versions.clear()
 
