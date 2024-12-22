@@ -1585,7 +1585,7 @@ def test_to_from_jsonl_remote(cloud_test_catalog_upload):
     dc_to = DataChain.from_pandas(df, session=ctc.session)
     dc_to.to_jsonl(path)
 
-    dc_from = DataChain.from_jsonl(path, session=ctc.session)
+    dc_from = DataChain.from_json(path, format="jsonl", session=ctc.session)
     df1 = dc_from.select("jsonl.first_name", "jsonl.age", "jsonl.city").to_pandas()
     df1 = df1["jsonl"]
     assert df_equal(df1, df)

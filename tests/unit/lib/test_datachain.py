@@ -1482,7 +1482,7 @@ def test_to_from_jsonl(tmp_dir, test_session):
         for n, a, c in zip(DF_DATA["first_name"], DF_DATA["age"], DF_DATA["city"])
     ]
 
-    dc_from = DataChain.from_jsonl(path.as_uri(), session=test_session)
+    dc_from = DataChain.from_json(path.as_uri(), format="jsonl", session=test_session)
     df1 = dc_from.select("jsonl.first_name", "jsonl.age", "jsonl.city").to_pandas()
     df1 = df1["jsonl"]
     assert df_equal(df1, df)
@@ -1504,8 +1504,8 @@ def test_from_jsonl_jmespath(tmp_dir, test_session):
             )
             f.write("\n")
 
-    dc_from = DataChain.from_jsonl(
-        path.as_uri(), jmespath="value", session=test_session
+    dc_from = DataChain.from_json(
+        path.as_uri(), format="jsonl", jmespath="value", session=test_session
     )
     df1 = dc_from.select("value.first_name", "value.age", "value.city").to_pandas()
     df1 = df1["value"]
