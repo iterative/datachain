@@ -136,7 +136,9 @@ def test_from_storage_partials(cloud_test_catalog):
     catalog = session.catalog
 
     def _list_dataset_name(uri: str) -> str:
-        return parse_listing_uri(uri, catalog.cache, catalog.client_config)[0]
+        name = parse_listing_uri(uri, catalog.cache, catalog.client_config)[0]
+        assert name
+        return name
 
     dogs_uri = f"{src_uri}/dogs"
     DataChain.from_storage(dogs_uri, session=session)
@@ -178,7 +180,9 @@ def test_from_storage_partials_with_update(cloud_test_catalog):
     catalog = session.catalog
 
     def _list_dataset_name(uri: str) -> str:
-        return parse_listing_uri(uri, catalog.cache, catalog.client_config)[0]
+        name = parse_listing_uri(uri, catalog.cache, catalog.client_config)[0]
+        assert name
+        return name
 
     uri = f"{src_uri}/cats"
     DataChain.from_storage(uri, session=session)

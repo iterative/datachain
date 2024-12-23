@@ -204,6 +204,10 @@ class Client(ABC):
         info = await self.fs._info(self.get_full_path(file.path))
         return self.info_to_file(info, "").etag
 
+    def get_file_info(self, path: str) -> "File":
+        info = self.fs.info(self.get_full_path(path))
+        return self.info_to_file(info, path)
+
     async def get_size(self, path: str) -> int:
         return await self.fs._size(path)
 
