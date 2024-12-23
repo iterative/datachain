@@ -11,7 +11,6 @@ from typing import (
     BinaryIO,
     Callable,
     ClassVar,
-    Literal,
     Optional,
     TypeVar,
     Union,
@@ -33,13 +32,9 @@ from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import DataModel, DataType, DataValue, dict_to_data_model
 from datachain.lib.dataset_info import DatasetInfo
-from datachain.lib.file import ArrowRow, File, get_file_type
+from datachain.lib.file import ArrowRow, File, FileType, get_file_type
 from datachain.lib.file import ExportPlacement as FileExportPlacement
-from datachain.lib.listing import (
-    list_bucket,
-    ls,
-    parse_listing_uri,
-)
+from datachain.lib.listing import list_bucket, ls, parse_listing_uri
 from datachain.lib.listing_info import ListingInfo
 from datachain.lib.meta_formats import read_meta
 from datachain.lib.model_store import ModelStore
@@ -449,7 +444,7 @@ class DataChain:
         cls,
         uri,
         *,
-        type: Literal["binary", "text", "image"] = "binary",
+        type: FileType = "binary",
         session: Optional[Session] = None,
         settings: Optional[dict] = None,
         in_memory: bool = False,
@@ -548,7 +543,7 @@ class DataChain:
     def from_json(
         cls,
         path,
-        type: Literal["binary", "text", "image"] = "text",
+        type: FileType = "text",
         spec: Optional[DataType] = None,
         schema_from: Optional[str] = "auto",
         jmespath: Optional[str] = None,
