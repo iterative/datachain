@@ -96,7 +96,7 @@ tests = [
 ]
 dev = [
   "datachain[docs,tests]",
-  "mypy==1.13.0",
+  "mypy==1.14.0",
   "types-python-dateutil",
   "types-pytz",
   "types-PyYAML",
