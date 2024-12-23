@@ -465,8 +465,8 @@ class UDFStep(Step, ABC):
 
                 with subprocess.Popen(cmd, env=envs, stdin=subprocess.PIPE) as process:  # noqa: S603
                     process.communicate(process_data)
-                    if ret := process.poll():
-                        raise RuntimeError(f"UDF Execution Failed! Exit code: {ret}")
+                    if retval := process.poll():
+                        raise RuntimeError(f"UDF Execution Failed! Exit code: {retval}")
             else:
                 # Otherwise process single-threaded (faster for smaller UDFs)
                 warehouse = self.catalog.warehouse

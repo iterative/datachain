@@ -72,7 +72,7 @@ def udf_entrypoint() -> int:
     )[0]
 
     with contextlib.closing(
-        batching(warehouse.db.execute, query, ids_only=True)
+        batching(warehouse.dataset_select_paginated, query, ids_only=True)
     ) as udf_inputs:
         download_cb = get_download_callback()
         processed_cb = get_processed_callback()

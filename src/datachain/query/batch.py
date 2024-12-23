@@ -118,7 +118,6 @@ class Partition(BatchingStrategy):
         batch: list[Sequence] = []
 
         query_fields = [str(c.name) for c in query.selected_columns]
-        # query_fields = [column_name(col) for col in query.inner_columns]
         id_column_idx = query_fields.index("sys__id")
         partition_column_idx = query_fields.index(PARTITION_COLUMN_ID)
 
