@@ -114,13 +114,14 @@ DataChain can parallelize API calls; the free Mistral tier supports up
 to 4 requests at the same time.
 
 ``` py
+import os
 from mistralai import Mistral
 from datachain import File, DataChain, Column
 
 PROMPT = "Was this dialog successful? Answer in a single word: Success or Failure."
 
 def eval_dialogue(file: File) -> bool:
-     client = Mistral()
+     client = Mistral(api_key = os.environ["MISTRAL_API_KEY"])
      response = client.chat.complete(
          model="open-mixtral-8x22b",
          messages=[{"role": "system", "content": PROMPT},
@@ -130,7 +131,6 @@ def eval_dialogue(file: File) -> bool:
 
 chain = (
    DataChain.from_storage("gs://datachain-demo/chatbot-KiT/", object_name="file")
-   .settings(parallel=4, cache=True)
    .map(is_success=eval_dialogue)
    .save("mistral_files")
 )
