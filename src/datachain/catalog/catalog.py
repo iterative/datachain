@@ -52,6 +52,7 @@ from datachain.error import (
     QueryScriptCancelError,
     QueryScriptRunError,
 )
+from datachain.lib.listing import get_listing
 from datachain.node import DirType, Node, NodeWithPath
 from datachain.nodes_thread_pool import NodesThreadPool
 from datachain.remote.studio import StudioClient
@@ -599,7 +600,7 @@ class Catalog:
             source, session=self.session, update=update, object_name=object_name
         )
 
-        list_ds_name, list_uri, list_path, _ = DataChain.parse_uri(
+        list_ds_name, list_uri, list_path, _ = get_listing(
             source, self.session, update=update
         )
 
@@ -697,11 +698,9 @@ class Catalog:
                 )
                 indexed_sources = []
                 for source in dataset_sources:
-                    from datachain.lib.dc import DataChain
-
                     client = self.get_client(source, **client_config)
                     uri = client.uri
-                    dataset_name, _, _, _ = DataChain.parse_uri(uri, self.session)
+                    dataset_name, _, _, _ = get_listing(uri, self.session)
                     listing = Listing(
                         self.metastore.clone(),
                         self.warehouse.clone(),

@@ -23,8 +23,6 @@ from pydantic import BaseModel
 from sqlalchemy.sql.functions import GenericFunction
 from sqlalchemy.sql.sqltypes import NullType
 
-from datachain.client import Client
-from datachain.client.local import FileClient
 from datachain.dataset import DatasetRecord
 from datachain.func.base import Function
 from datachain.func.func import Func
@@ -34,7 +32,7 @@ from datachain.lib.data_model import DataModel, DataType, DataValue, dict_to_dat
 from datachain.lib.dataset_info import DatasetInfo
 from datachain.lib.file import ArrowRow, File, FileType, get_file_type
 from datachain.lib.file import ExportPlacement as FileExportPlacement
-from datachain.lib.listing import list_bucket, ls, parse_listing_uri
+from datachain.lib.listing import get_listing, list_bucket, ls
 from datachain.lib.listing_info import ListingInfo
 from datachain.lib.meta_formats import read_meta
 from datachain.lib.model_store import ModelStore
@@ -399,49 +397,6 @@ class DataChain:
         return self
 
     @classmethod
-    def parse_uri(
-        cls, uri: str, session: Session, update: bool = False
-    ) -> tuple[str, str, str, bool]:
-        """Returns correct listing dataset name that must be used for saving listing
-        operation. It takes into account existing listings and reusability of those.
-        It also returns boolean saying if returned dataset name is reused / already
-        exists or not (on update it always returns False - just because there was no
-        reason to complicate it so far). And it returns correct listing path that should
-        be used to find rows based on uri.
-        """
-        catalog = session.catalog
-        cache = catalog.cache
-        client_config = catalog.client_config
-
-        client = Client.get_client(uri, cache, **client_config)
-        ds_name, list_uri, list_path = parse_listing_uri(uri, cache, client_config)
-        listing = None
-
-        listings = [
-            ls
-            for ls in catalog.listings()
-            if not ls.is_expired and ls.contains(ds_name)
-        ]
-
-        # if no need to update - choosing the most recent one;
-        # otherwise, we'll using the exact original `ds_name`` in this case:
-        # - if a "bigger" listing exists, we don't want to update it, it's better
-        #   to create a new "smaller" one on "update=True"
-        # - if an exact listing exists it will have the same name as `ds_name`
-        #   anyway below
-        if listings and not update:
-            listing = sorted(listings, key=lambda ls: ls.created_at)[-1]
-
-        # for local file system we need to fix listing path / prefix
-        # if we are reusing existing listing
-        if isinstance(client, FileClient) and listing and listing.name != ds_name:
-            list_path = f'{ds_name.strip("/").removeprefix(listing.name)}/{list_path}'
-
-        ds_name = listing.name if listing else ds_name
-
-        return ds_name, list_uri, list_path, bool(listing)
-
-    @classmethod
     def from_storage(
         cls,
         uri,
@@ -479,7 +434,7 @@ class DataChain:
         cache = session.catalog.cache
         client_config = session.catalog.client_config
 
-        list_ds_name, list_uri, list_path, list_ds_exists = cls.parse_uri(
+        list_ds_name, list_uri, list_path, list_ds_exists = get_listing(
             uri, session, update=update
         )
 
