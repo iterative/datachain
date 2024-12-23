@@ -41,7 +41,7 @@ from datachain.lib.listing import (
     parse_listing_uri,
 )
 from datachain.lib.listing_info import ListingInfo
-from datachain.lib.meta_formats import read_meta, read_schema
+from datachain.lib.meta_formats import read_meta
 from datachain.lib.model_store import ModelStore
 from datachain.lib.settings import Settings
 from datachain.lib.signal_schema import SignalSchema
@@ -554,8 +554,7 @@ class DataChain:
         jmespath: Optional[str] = None,
         object_name: Optional[str] = "",
         model_name: Optional[str] = None,
-        print_schema: Optional[bool] = False,
-        meta_type: Optional[str] = "json",
+        format: Optional[str] = "json",
         nrows=None,
         **kwargs,
     ) -> "DataChain":
@@ -564,12 +563,12 @@ class DataChain:
         Parameters:
             path : storage URI with directory. URI must start with storage prefix such
                 as `s3://`, `gs://`, `az://` or "file:///"
-            type : read file as "binary", "text", or "image" data. Default is "binary".
+            type : read file as "binary", "text", or "image" data. Default is "text".
             spec : optional Data Model
             schema_from : path to sample to infer spec (if schema not provided)
             object_name : generated object column name
             model_name : optional generated model name
-            print_schema : print auto-generated schema
+            format: "json", "jsonl"
             jmespath : optional JMESPATH expression to reduce JSON
             nrows : optional row limit for jsonl and JSON arrays
 
@@ -594,75 +593,14 @@ class DataChain:
         if (not object_name) and jmespath:
             object_name = jmespath_to_name(jmespath)
         if not object_name:
-            object_name = meta_type
+            object_name = format
         chain = DataChain.from_storage(uri=path, type=type, **kwargs)
         signal_dict = {
             object_name: read_meta(
                 schema_from=schema_from,
-                meta_type=meta_type,
+                format=format,
                 spec=spec,
                 model_name=model_name,
-                print_schema=print_schema,
-                jmespath=jmespath,
-                nrows=nrows,
-            )
-        }
-        return chain.gen(**signal_dict)  # type: ignore[misc, arg-type]
-
-    @classmethod
-    def from_jsonl(
-        cls,
-        path,
-        type: Literal["binary", "text", "image"] = "text",
-        spec: Optional[DataType] = None,
-        schema_from: Optional[str] = "auto",
-        jmespath: Optional[str] = None,
-        object_name: Optional[str] = "",
-        model_name: Optional[str] = None,
-        print_schema: Optional[bool] = False,
-        meta_type: Optional[str] = "jsonl",
-        nrows=None,
-        **kwargs,
-    ) -> "DataChain":
-        """Get data from JSON lines. It returns the chain itself.
-
-        Parameters:
-            path : storage URI with directory. URI must start with storage prefix such
-                as `s3://`, `gs://`, `az://` or "file:///"
-            type : read file as "binary", "text", or "image" data. Default is "binary".
-            spec : optional Data Model
-            schema_from : path to sample to infer spec (if schema not provided)
-            object_name : generated object column name
-            model_name : optional generated model name
-            print_schema : print auto-generated schema
-            jmespath : optional JMESPATH expression to reduce JSON
-            nrows : optional row limit for jsonl and JSON arrays
-
-        Example:
-            infer JSONl schema from data, limit parsing to 1 row
-            ```py
-            chain = DataChain.from_jsonl("gs://myjsonl", nrows=1)
-            ```
-        """
-        if schema_from == "auto":
-            schema_from = path
-
-        def jmespath_to_name(s: str):
-            name_end = re.search(r"\W", s).start() if re.search(r"\W", s) else len(s)  # type: ignore[union-attr]
-            return s[:name_end]
-
-        if (not object_name) and jmespath:
-            object_name = jmespath_to_name(jmespath)
-        if not object_name:
-            object_name = meta_type
-        chain = DataChain.from_storage(uri=path, type=type, **kwargs)
-        signal_dict = {
-            object_name: read_meta(
-                schema_from=schema_from,
-                meta_type=meta_type,
-                spec=spec,
-                model_name=model_name,
-                print_schema=print_schema,
                 jmespath=jmespath,
                 nrows=nrows,
             )
@@ -791,47 +729,6 @@ class DataChain:
             in_memory=in_memory,
             output={object_name: ListingInfo},
             **{object_name: catalog.listings()},  # type: ignore[arg-type]
-        )
-
-    def print_json_schema(  # type: ignore[override]
-        self, jmespath: Optional[str] = None, model_name: Optional[str] = None
-    ) -> "Self":
-        """Print JSON data model and save it. It returns the chain itself.
-
-        Parameters:
-            jmespath : JMESPATH expression to reduce JSON
-            model_name : generated model name
-
-        Example:
-            print JSON schema and save to column "meta_from":
-            ```py
-            uri = "gs://datachain-demo/coco2017/annotations_captions/"
-            chain = DataChain.from_storage(uri)
-            chain = chain.print_json_schema()
-            chain.save()
-            ```
-        """
-        return self.map(
-            meta_schema=lambda file: read_schema(
-                file, data_type="json", expr=jmespath, model_name=model_name
-            ),
-            output=str,
-        )
-
-    def print_jsonl_schema(  # type: ignore[override]
-        self, jmespath: Optional[str] = None, model_name: Optional[str] = None
-    ) -> "Self":
-        """Print JSON data model and save it. It returns the chain itself.
-
-        Parameters:
-            jmespath : JMESPATH expression to reduce JSON
-            model_name : generated model name
-        """
-        return self.map(
-            meta_schema=lambda file: read_schema(
-                file, data_type="jsonl", expr=jmespath, model_name=model_name
-            ),
-            output=str,
         )
 
     def save(  # type: ignore[override]
@@ -1634,12 +1531,12 @@ class DataChain:
         added: bool = True,
         deleted: bool = True,
         modified: bool = True,
-        unchanged: bool = False,
+        same: bool = False,
         status_col: Optional[str] = None,
     ) -> "DataChain":
         """Comparing two chains by identifying rows that are added, deleted, modified
-        or unchanged. Result is the new chain that has additional column with possible
-        values: `A`, `D`, `M`, `U` representing added, deleted, modified and unchanged
+        or same. Result is the new chain that has additional column with possible
+        values: `A`, `D`, `M`, `U` representing added, deleted, modified and same
         rows respectively. Note that if only one "status" is asked, by setting proper
         flags, this additional column is not created as it would have only one value
         for all rows. Beside additional diff column, new chain has schema of the chain
@@ -1652,20 +1549,20 @@ class DataChain:
                 `right_on` parameter has to specify the columns for the other chain.
                 This value is used to find corresponding row in other dataset. If not
                 found there, row is considered as added (or removed if vice versa), and
-                if found then row can be either modified or unchanged.
+                if found then row can be either modified or same.
             right_on: Optional column or list of columns
                 for the `other` to match.
             compare: Column or list of columns to compare on. If both chains have
                 the same columns then this column is enough for the compare. Otherwise,
                 `right_compare` parameter has to specify the columns for the other
-                chain. This value is used to see if row is modified or unchanged. If
+                chain. This value is used to see if row is modified or same. If
                 not set, all columns will be used for comparison
             right_compare: Optional column or list of columns
                     for the `other` to compare to.
             added (bool): Whether to return added rows in resulting chain.
             deleted (bool): Whether to return deleted rows in resulting chain.
             modified (bool): Whether to return modified rows in resulting chain.
-            unchanged (bool): Whether to return unchanged rows in resulting chain.
+            same (bool): Whether to return unchanged rows in resulting chain.
             status_col (str): Name of the new column that is created in resulting chain
                 representing diff status.
 
@@ -1679,7 +1576,7 @@ class DataChain:
                 added=True,
                 deleted=True,
                 modified=True,
-                unchanged=True,
+                same=True,
                 status_col="diff"
             )
             ```
@@ -1696,7 +1593,80 @@ class DataChain:
             added=added,
             deleted=deleted,
             modified=modified,
-            unchanged=unchanged,
+            same=same,
+            status_col=status_col,
+        )
+
+    def diff(
+        self,
+        other: "DataChain",
+        on: str = "file",
+        right_on: Optional[str] = None,
+        added: bool = True,
+        modified: bool = True,
+        deleted: bool = False,
+        same: bool = False,
+        status_col: Optional[str] = None,
+    ) -> "DataChain":
+        """Similar to `.compare()`, which is more generic method to calculate difference
+        between two chains. Unlike `.compare()`, this method works only on those chains
+        that have `File` object, or it's derivatives, in it. File `source` and `path`
+        are used for matching, and file `version` and `etag` for comparing, while in
+        `.compare()` user needs to provide arbitrary columns for matching and comparing.
+
+        Parameters:
+            other: Chain to calculate diff from.
+            on: File signal to match on. If both chains have the
+                same file signal then this column is enough for the match. Otherwise,
+                `right_on` parameter has to specify the file signal for the other chain.
+                This value is used to find corresponding row in other dataset. If not
+                found there, row is considered as added (or removed if vice versa), and
+                if found then row can be either modified or same.
+            right_on: Optional file signal for the `other` to match.
+            added (bool): Whether to return added rows in resulting chain.
+            deleted (bool): Whether to return deleted rows in resulting chain.
+            modified (bool): Whether to return modified rows in resulting chain.
+            same (bool): Whether to return unchanged rows in resulting chain.
+            status_col (str): Optional name of the new column that is created in
+                resulting chain representing diff status.
+
+        Example:
+            ```py
+            diff = images.diff(
+                new_images,
+                on="file",
+                right_on="other_file",
+                added=True,
+                deleted=True,
+                modified=True,
+                same=True,
+                status_col="diff"
+            )
+            ```
+        """
+        on_file_signals = ["source", "path"]
+        compare_file_signals = ["version", "etag"]
+
+        def get_file_signals(file: str, signals):
+            return [f"{file}.{c}" for c in signals]
+
+        right_on = right_on or on
+
+        on_cols = get_file_signals(on, on_file_signals)
+        right_on_cols = get_file_signals(right_on, on_file_signals)
+        compare_cols = get_file_signals(on, compare_file_signals)
+        right_compare_cols = get_file_signals(right_on, compare_file_signals)
+
+        return self.compare(
+            other,
+            on_cols,
+            right_on=right_on_cols,
+            compare=compare_cols,
+            right_compare=right_compare_cols,
+            added=added,
+            deleted=deleted,
+            modified=modified,
+            same=same,
             status_col=status_col,
         )
 
