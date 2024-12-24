@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 import orjson
 import pyarrow as pa
-from pyarrow.dataset import CsvFileFormat, dataset
+from pyarrow.dataset import CsvFileFormat, dataset, get_partition_keys, partitioning
 from tqdm import tqdm
 
 from datachain.lib.data_model import dict_to_data_model
@@ -23,6 +23,23 @@ if TYPE_CHECKING:
 
 
 DATACHAIN_SIGNAL_SCHEMA_PARQUET_KEY = b"DataChain SignalSchema"
+
+
+def _get_partition_keys_from_path(path, schema, flavor) -> dict[str, str]:
+    if not flavor:
+        return {}
+
+    if isinstance(flavor, str):
+        _partitioning = partitioning(schema=schema, flavor=flavor)
+    else:
+        _partitioning = flavor
+
+    try:
+        partitioning_expr = _partitioning.parse(path)
+    except AttributeError:
+        return {}
+
+    return get_partition_keys(partitioning_expr)
 
 
 class ArrowGenerator(Generator):
@@ -53,10 +70,19 @@ class ArrowGenerator(Generator):
         self.kwargs = kwargs
 
     def process(self, file: File):
+        partition_keys = {}
         if file._caching_enabled:
             file.ensure_cached()
             path = file.get_local_path()
             ds = dataset(path, schema=self.input_schema, **self.kwargs)
+            flavor = self.kwargs.get("partitioning")
+            # Extract partition keys from the file's original path.
+            # Since the dataset is opened using the cached local path,
+            # the original partition keys may not be preserved and
+            # need to be re-derived.
+            partition_keys = _get_partition_keys_from_path(
+                file.get_path(), self.input_schema, flavor
+            )
         elif self.nrows:
             path = _nrows_file(file, self.nrows)
             ds = dataset(path, schema=self.input_schema, **self.kwargs)
@@ -74,6 +100,7 @@ class ArrowGenerator(Generator):
         with tqdm(desc="Parsed by pyarrow", unit=" rows") as pbar:
             for record_batch in ds.to_batches():
                 for record in record_batch.to_pylist():
+                    record.update(partition_keys)
                     if use_datachain_schema and self.output_schema:
                         vals = [_nested_model_instantiate(record, self.output_schema)]
                     else:
