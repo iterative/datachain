@@ -1,8 +1,12 @@
 import os
+from collections.abc import Iterator
+from contextlib import contextmanager
+from tempfile import mkdtemp
 from typing import TYPE_CHECKING, Optional
 
 from dvc_data.hashfile.db.local import LocalHashFileDB
 from dvc_objects.fs.local import LocalFileSystem
+from dvc_objects.fs.utils import remove
 from fsspec.callbacks import Callback, TqdmCallback
 
 from .progress import Tqdm
@@ -20,6 +24,23 @@ def try_scandir(path):
         pass
 
 
+def get_temp_cache(tmp_dir: str, prefix: Optional[str] = None) -> "DataChainCache":
+    cache_dir = mkdtemp(prefix=prefix, dir=tmp_dir)
+    return DataChainCache(cache_dir, tmp_dir=tmp_dir)
+
+
+@contextmanager
+def temporary_cache(
+    tmp_dir: str, prefix: Optional[str] = None, delete: bool = True
+) -> Iterator["DataChainCache"]:
+    cache = get_temp_cache(tmp_dir, prefix=prefix)
+    try:
+        yield cache
+    finally:
+        if delete:
+            cache.destroy()
+
+
 class DataChainCache:
     def __init__(self, cache_dir: str, tmp_dir: str):
         self.odb = LocalHashFileDB(
@@ -27,6 +48,9 @@ class DataChainCache:
             cache_dir,
             tmp_dir=tmp_dir,
         )
+
+    def __eq__(self, other) -> bool:
+        return self.odb == other.odb
 
     @property
     def cache_dir(self):
@@ -90,11 +114,15 @@ class DataChainCache:
             with open(dst, mode="wb") as f:
                 f.write(contents)
 
-    def clear(self):
+    def clear(self) -> None:
         """
         Completely clear the cache.
         """
         self.odb.clear()
+
+    def destroy(self) -> None:
+        # `clear` leaves the prefix directory structure intact.
+        remove(self.cache_dir)
 
     def get_total_size(self) -> int:
         total = 0

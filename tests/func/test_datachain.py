@@ -222,7 +222,7 @@ def test_map_file(cloud_test_catalog, use_cache, prefetch):
     ctc = cloud_test_catalog
 
     def new_signal(file: File) -> str:
-        assert bool(file.get_local_path()) is (use_cache and prefetch > 0)
+        assert bool(file.get_local_path()) is (prefetch > 0)
         with file.open() as f:
             return file.name + " -> " + f.read().decode("utf-8")
 
