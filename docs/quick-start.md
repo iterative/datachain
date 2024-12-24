@@ -59,6 +59,8 @@ Batch inference with a simple sentiment model using the
 pip install transformers
 ```
 
+Note, `transformers` works only if `torch`, `tensorflow` >= 2.0, or `flax` are installed.
+
 The code below downloads files from the cloud, and applies a
 user-defined function to each one of them. All files with a positive
 sentiment detected are then copied to the local directory.
