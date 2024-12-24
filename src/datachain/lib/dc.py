@@ -557,7 +557,9 @@ class DataChain:
                 nrows=nrows,
             )
         }
-        return chain.gen(**signal_dict)  # type: ignore[misc, arg-type]
+        # disable prefetch if nrows is set
+        settings = {"prefetch": 0} if nrows else {}
+        return chain.settings(**settings).gen(**signal_dict)  # type: ignore[misc, arg-type]
 
     def explode(
         self,
@@ -1894,7 +1896,10 @@ class DataChain:
 
         if source:
             output = {"source": ArrowRow} | output  # type: ignore[assignment,operator]
-        return self.gen(
+
+        # disable prefetch if nrows is set
+        settings = {"prefetch": 0} if nrows else {}
+        return self.settings(**settings).gen(  # type: ignore[arg-type]
             ArrowGenerator(schema, model, source, nrows, **kwargs), output=output
         )
 
@@ -1976,8 +1981,6 @@ class DataChain:
             else:
                 msg = f"error parsing csv - incompatible output type {type(output)}"
                 raise DatasetPrepareError(chain.name, msg)
-        elif nrows:
-            nrows += 1
 
         parse_options = ParseOptions(delimiter=delimiter)
         read_options = ReadOptions(column_names=column_names)
