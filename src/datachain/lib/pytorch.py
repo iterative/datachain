@@ -1,5 +1,7 @@
 import logging
-from collections.abc import Iterator
+import os
+from collections.abc import Generator, Iterator
+from contextlib import closing
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from PIL import Image
@@ -9,11 +11,14 @@ from torch.utils.data import IterableDataset, get_worker_info
 from torchvision.transforms import v2
 
 from datachain import Session
-from datachain.asyn import AsyncMapper
+from datachain.cache import get_temp_cache
 from datachain.catalog import Catalog, get_catalog
 from datachain.lib.dc import DataChain
+from datachain.lib.prefetcher import rows_prefetcher
 from datachain.lib.settings import Settings
 from datachain.lib.text import convert_text
+from datachain.progress import CombinedDownloadCallback
+from datachain.query.dataset import get_download_callback
 
 if TYPE_CHECKING:
     from torchvision.transforms.v2 import Transform
@@ -75,6 +80,17 @@ class PytorchDataset(IterableDataset):
         if (prefetch := dc_settings.prefetch) is not None:
             self.prefetch = prefetch
 
+        if self.cache:
+            self._cache = catalog.cache
+        else:
+            tmp_dir = catalog.cache.tmp_dir
+            assert tmp_dir
+            self._cache = get_temp_cache(tmp_dir, prefix="prefetch-")
+
+    def close(self) -> None:
+        if not self.cache:
+            self._cache.destroy()
+
     def _init_catalog(self, catalog: "Catalog"):
         # For compatibility with multiprocessing,
         # we can only store params in __init__(), as Catalog isn't picklable
@@ -91,7 +107,9 @@ class PytorchDataset(IterableDataset):
         wh = wh_cls(*wh_args, **wh_kwargs)
         return Catalog(ms, wh, **self._catalog_params)
 
-    def _rows_iter(self, total_rank: int, total_workers: int):
+    def _row_iter(
+        self, total_rank: int, total_workers: int
+    ) -> Generator[tuple[Any, ...], None, None]:
         catalog = self._get_catalog()
         session = Session("PyTorch", catalog=catalog)
         ds = DataChain.from_dataset(
@@ -106,12 +124,26 @@ class PytorchDataset(IterableDataset):
 
     def __iter__(self) -> Iterator[Any]:
         total_rank, total_workers = self.get_rank_and_workers()
-        rows = self._rows_iter(total_rank, total_workers)
-        if self.prefetch > 0:
-            from datachain.lib.udf import _prefetch_input
 
-            rows = AsyncMapper(_prefetch_input, rows, workers=self.prefetch).iterate()
-        yield from map(self._process_row, rows)
+        download_cb = CombinedDownloadCallback()
+        if os.getenv("DATACHAIN_SHOW_PREFETCH_PROGRESS"):
+            download_cb = get_download_callback(
+                f"{total_rank}/{total_workers}", position=total_rank
+            )
+
+        rows = self._row_iter(total_rank, total_workers)
+        if self.prefetch > 0:
+            catalog = self._get_catalog()
+            rows = rows_prefetcher(
+                catalog,
+                rows,
+                self.prefetch,
+                cache=self._cache,
+                download_cb=download_cb,
+            )
+
+        with download_cb, closing(rows):
+            yield from map(self._process_row, rows)
 
     def _process_row(self, row_features):
         row = []

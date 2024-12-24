@@ -43,7 +43,8 @@ from datachain.data_storage.schema import (
 from datachain.dataset import DatasetStatus, RowDict
 from datachain.error import DatasetNotFoundError, QueryScriptCancelError
 from datachain.func.base import Function
-from datachain.progress import CombinedDownloadCallback
+from datachain.lib.udf import UDFAdapter
+from datachain.progress import CombinedDownloadCallback, TqdmCombinedDownloadCallback
 from datachain.query.schema import C, UDFParamSpec, normalize_param
 from datachain.query.session import Session
 from datachain.sql.functions.random import rand
@@ -357,7 +358,8 @@ def get_download_callback() -> Callback:
             "unit_scale": True,
             "unit_divisor": 1024,
             "leave": False,
-        }
+            **kwargs,
+        },
     )
 
 
