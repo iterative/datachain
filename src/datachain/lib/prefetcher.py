@@ -31,9 +31,9 @@ async def _prefetch_input(row: T, catalog: "Catalog", download_cb: Callback) -> 
 
     for obj in row:
         if isinstance(obj, File):
-            obj._set_stream(catalog, True, download_cb)
-            await obj._prefetch()
-            callback()
+            prefetched = await obj._prefetch(catalog, download_cb)
+            if prefetched:
+                callback()
     return row
 
 
