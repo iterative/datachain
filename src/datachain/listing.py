@@ -157,11 +157,7 @@ class Listing:
 
         counter = 0
         for node in all_nodes:
-            dst = os.path.join(output, *node.path)
-            dst_dir = os.path.dirname(dst)
-            os.makedirs(dst_dir, exist_ok=True)
-            file = node.n.to_file(self.client.uri)
-            self.client.instantiate_object(file, dst, progress_bar, force)
+            node.instantiate(self.client, output, progress_bar, force=force)
             counter += 1
             if counter > 1000:
                 progress_bar.update(counter)

@@ -94,7 +94,7 @@ def parse_listing_uri(uri: str, cache, client_config) -> tuple[Optional[str], st
     storage_uri, path = Client.parse_url(uri)
     telemetry.log_param("client", client.PREFIX)
 
-    if client.fs.isfile(uri):
+    if not uri.endswith("/") and client.fs.isfile(uri):
         return None, f'{storage_uri}/{path.lstrip("/")}', path
     if uses_glob(path):
         lst_uri_path = posixpath.dirname(path)
