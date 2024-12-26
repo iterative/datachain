@@ -39,8 +39,8 @@ using JSON metadata:
 ``` py
 from datachain import Column, DataChain
 
-meta = DataChain.from_json("gs://datachain-demo/dogs-and-cats/*json", object_name="meta")
-images = DataChain.from_storage("gs://datachain-demo/dogs-and-cats/*jpg")
+meta = DataChain.from_json("gs://datachain-demo/dogs-and-cats/*json", object_name="meta", anon=True)
+images = DataChain.from_storage("gs://datachain-demo/dogs-and-cats/*jpg", anon=True)
 
 images_id = images.map(id=lambda file: file.path.split('.')[-2])
 annotated = images_id.merge(meta, on="id", right_on="meta.id")
@@ -78,7 +78,7 @@ def is_positive_dialogue_ending(file) -> bool:
 
 chain = (
    DataChain.from_storage("gs://datachain-demo/chatbot-KiT/",
-                          object_name="file", type="text")
+                          object_name="file", type="text", anon=True)
    .settings(parallel=8, cache=True)
    .map(is_positive=is_positive_dialogue_ending)
    .save("file_response")
@@ -132,7 +132,7 @@ def eval_dialogue(file: File) -> bool:
      return result.lower().startswith("success")
 
 chain = (
-   DataChain.from_storage("gs://datachain-demo/chatbot-KiT/", object_name="file")
+   DataChain.from_storage("gs://datachain-demo/chatbot-KiT/", object_name="file", anon=True)
    .map(is_success=eval_dialogue)
    .save("mistral_files")
 )
@@ -177,7 +177,7 @@ def eval_dialog(file: File) -> ChatCompletionResponse:
                    {"role": "user", "content": file.read()}])
 
 chain = (
-   DataChain.from_storage("gs://datachain-demo/chatbot-KiT/", object_name="file")
+   DataChain.from_storage("gs://datachain-demo/chatbot-KiT/", object_name="file", anon=True)
    .settings(parallel=4, cache=True)
    .map(response=eval_dialog)
    .map(status=lambda response: response.choices[0].message.content.lower()[:7])
@@ -273,7 +273,7 @@ from datachain import C, DataChain
 processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
 chain = (
-    DataChain.from_storage("gs://datachain-demo/dogs-and-cats/", type="image")
+    DataChain.from_storage("gs://datachain-demo/dogs-and-cats/", type="image", anon=True)
     .map(label=lambda name: name.split(".")[0], params=["file.name"])
     .select("file", "label").to_pytorch(
         transform=processor.image_processor,
