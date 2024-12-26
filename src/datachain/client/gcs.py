@@ -32,6 +32,15 @@ class GCSClient(Client):
 
         return cast(GCSFileSystem, super().create_fs(**kwargs))
 
+    def url(self, path: str, expires: int = 3600, **kwargs) -> str:
+        try:
+            return self.fs.sign(self.get_full_path(path), expiration=expires, **kwargs)
+        except AttributeError as exc:
+            is_anon = self.fs.storage_options.get("token") == "anon"
+            if is_anon and "you need a private key to sign credentials" in str(exc):
+                return f"https://storage.googleapis.com/{self.name}/{path}"
+            raise
+
     @staticmethod
     def parse_timestamp(timestamp: str) -> datetime:
         """
