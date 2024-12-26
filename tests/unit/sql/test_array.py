@@ -1,6 +1,7 @@
 import math
 
 import pytest
+from pytest import approx
 
 from datachain import func
 from datachain.sql import select
@@ -14,7 +15,8 @@ def test_cosine_distance(warehouse):
         func.cosine_distance([0.0, 10.0], [1.0, 0.0]).label("cos4"),
     )
     result = tuple(warehouse.db.execute(query))
-    assert result == ((0.0, 0.0, 1.0, 1.0),)
+    # using approx due to https://github.com/unum-cloud/usearch/issues/320
+    assert result == ((approx(0.0, abs=1e-6), approx(0.0, abs=1e-6), 1.0, 1.0),)
 
 
 def test_euclidean_distance(warehouse):

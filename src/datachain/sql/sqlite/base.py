@@ -217,23 +217,6 @@ def register_user_defined_sql_functions() -> None:
     # Register optional functions if we have the necessary dependencies
     # and otherwise register functions that will raise an exception with
     # installation instructions
-    try:
-        from .vector import cosine_distance, euclidean_distance
-    except ImportError as exc:
-        # We want to throw an exception when trying to compile these
-        # functions and also if the functions are called using raw SQL.
-        cosine_distance = missing_vector_function("cosine_distance", exc)
-        euclidean_distance = missing_vector_function("euclidean_distance", exc)
-        _compiler_hooks["cosine_distance"] = cosine_distance
-        _compiler_hooks["euclidean_distance"] = euclidean_distance
-
-    def create_vector_functions(conn):
-        conn.create_function("cosine_distance", 2, cosine_distance, deterministic=True)
-        conn.create_function(
-            "euclidean_distance", 2, euclidean_distance, deterministic=True
-        )
-
-    _registered_function_creators["vector_functions"] = create_vector_functions
 
     def create_numeric_functions(conn):
         conn.create_function("divide", 2, lambda a, b: a / b, deterministic=True)
