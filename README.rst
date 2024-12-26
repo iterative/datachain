@@ -42,6 +42,88 @@ Getting Started
 Visit `Quick Start <https://docs.datachain.ai/quick-start>`_ and `Docs <https://docs.datachain.ai/>`_
 to get started with `DataChain` and learn more.
 
+.. code:: bash
+
+        pip install datachain
+
+
+Example: download subset of files based on metadata
+---------------------------------------------------
+
+Sometimes users only need to download a specific subset of files from cloud storage,
+rather than the entire dataset.
+For example, you could use a JSON file's metadata to download just cat images with
+high confidence scores.
+
+
+.. code:: py
+
+    from datachain import Column, DataChain
+
+    meta = DataChain.from_json("gs://datachain-demo/dogs-and-cats/*json", object_name="meta", anon=True)
+    images = DataChain.from_storage("gs://datachain-demo/dogs-and-cats/*jpg", anon=True)
+
+    images_id = images.map(id=lambda file: file.path.split('.')[-2])
+    annotated = images_id.merge(meta, on="id", right_on="meta.id")
+
+    likely_cats = annotated.filter((Column("meta.inference.confidence") > 0.93) \
+                                   & (Column("meta.inference.class_") == "cat"))
+    likely_cats.export_files("high-confidence-cats/", signal="file")
+
+
+Example: LLM based text-file evaluation
+---------------------------------------
+
+In this example, we evaluate chatbot conversations stored in text files
+using LLM based evaluation.
+
+.. code:: shell
+
+    $ pip install mistralai (Requires version >=1.0.0)
+    $ export MISTRAL_API_KEY=_your_key_
+
+Python code:
+
+.. code:: py
+
+    from mistralai import Mistral
+    from datachain import File, DataChain, Column
+
+    PROMPT = "Was this dialog successful? Answer in a single word: Success or Failure."
+
+    def eval_dialogue(file: File) -> bool:
+         client = Mistral()
+         response = client.chat.complete(
+             model="open-mixtral-8x22b",
+             messages=[{"role": "system", "content": PROMPT},
+                       {"role": "user", "content": file.read()}])
+         result = response.choices[0].message.content
+         return result.lower().startswith("success")
+
+    chain = (
+       DataChain.from_storage("gs://datachain-demo/chatbot-KiT/", object_name="file", anon=True)
+       .settings(parallel=4, cache=True)
+       .map(is_success=eval_dialogue)
+       .save("mistral_files")
+    )
+
+    successful_chain = chain.filter(Column("is_success") == True)
+    successful_chain.export_files("./output_mistral")
+
+    print(f"{successful_chain.count()} files were exported")
+
+
+
+With the instruction above, the Mistral model considers 31/50 files to hold the successful dialogues:
+
+.. code:: shell
+
+    $ ls output_mistral/datachain-demo/chatbot-KiT/
+    1.txt  15.txt 18.txt 2.txt  22.txt 25.txt 28.txt 33.txt 37.txt 4.txt  41.txt ...
+    $ ls output_mistral/datachain-demo/chatbot-KiT/ | wc -l
+    31
+
+
 Key Features
 ============
 
