@@ -1,9 +1,11 @@
 from collections.abc import Sequence
-from tempfile import NamedTemporaryFile
+from itertools import islice
 from typing import TYPE_CHECKING, Any, Optional
 
+import fsspec.implementations.reference
 import orjson
 import pyarrow as pa
+from fsspec.core import split_protocol
 from pyarrow.dataset import CsvFileFormat, dataset
 from tqdm import tqdm
 
@@ -25,7 +27,18 @@ if TYPE_CHECKING:
 DATACHAIN_SIGNAL_SCHEMA_PARQUET_KEY = b"DataChain SignalSchema"
 
 
+class ReferenceFileSystem(fsspec.implementations.reference.ReferenceFileSystem):
+    def _open(self, path, mode="rb", *args, **kwargs):
+        # overriding because `fsspec`'s `ReferenceFileSystem._open`
+        # reads the whole file in-memory.
+        (uri,) = self.references[path]
+        protocol, _ = split_protocol(uri)
+        return self.fss[protocol]._open(uri, mode, *args, **kwargs)
+
+
 class ArrowGenerator(Generator):
+    DEFAULT_BATCH_SIZE = 2**17  # same as `pyarrow._dataset._DEFAULT_BATCH_SIZE`
+
     def __init__(
         self,
         input_schema: Optional["pa.Schema"] = None,
@@ -55,57 +68,80 @@ class ArrowGenerator(Generator):
     def process(self, file: File):
         if file._caching_enabled:
             file.ensure_cached()
-            path = file.get_local_path()
-            ds = dataset(path, schema=self.input_schema, **self.kwargs)
-        elif self.nrows:
-            path = _nrows_file(file, self.nrows)
-            ds = dataset(path, schema=self.input_schema, **self.kwargs)
+            cache_path = file.get_local_path()
+            fs_path = file.path
+            fs = ReferenceFileSystem({fs_path: [cache_path]})
         else:
-            path = file.get_path()
-            ds = dataset(
-                path, filesystem=file.get_fs(), schema=self.input_schema, **self.kwargs
-            )
+            fs, fs_path = file.get_fs(), file.get_path()
+
+        ds = dataset(fs_path, schema=self.input_schema, filesystem=fs, **self.kwargs)
+
         hf_schema = _get_hf_schema(ds.schema)
         use_datachain_schema = (
             bool(ds.schema.metadata)
             and DATACHAIN_SIGNAL_SCHEMA_PARQUET_KEY in ds.schema.metadata
         )
-        index = 0
-        with tqdm(desc="Parsed by pyarrow", unit=" rows") as pbar:
-            for record_batch in ds.to_batches():
-                for record in record_batch.to_pylist():
-                    if use_datachain_schema and self.output_schema:
-                        vals = [_nested_model_instantiate(record, self.output_schema)]
-                    else:
-                        vals = list(record.values())
-                        if self.output_schema:
-                            fields = self.output_schema.model_fields
-                            vals_dict = {}
-                            for i, ((field, field_info), val) in enumerate(
-                                zip(fields.items(), vals)
-                            ):
-                                anno = field_info.annotation
-                                if hf_schema:
-                                    from datachain.lib.hf import convert_feature
 
-                                    feat = list(hf_schema[0].values())[i]
-                                    vals_dict[field] = convert_feature(val, feat, anno)
-                                elif ModelStore.is_pydantic(anno):
-                                    vals_dict[field] = anno(**val)  # type: ignore[misc]
-                                else:
-                                    vals_dict[field] = val
-                            vals = [self.output_schema(**vals_dict)]
-                    if self.source:
-                        kwargs: dict = self.kwargs
-                        # Can't serialize CsvFileFormat; may lose formatting options.
-                        if isinstance(kwargs.get("format"), CsvFileFormat):
-                            kwargs["format"] = "csv"
-                        arrow_file = ArrowRow(file=file, index=index, kwargs=kwargs)
-                        yield [arrow_file, *vals]
-                    else:
-                        yield vals
-                    index += 1
-                pbar.update(len(record_batch))
+        kw = {}
+        if self.nrows:
+            kw = {"batch_size": min(self.DEFAULT_BATCH_SIZE, self.nrows)}
+
+        def iter_records():
+            for record_batch in ds.to_batches(**kw):
+                yield from record_batch.to_pylist()
+
+        it = islice(iter_records(), self.nrows)
+        with tqdm(it, desc="Parsed by pyarrow", unit="rows", total=self.nrows) as pbar:
+            for index, record in enumerate(pbar):
+                yield self._process_record(
+                    record, file, index, hf_schema, use_datachain_schema
+                )
+
+    def _process_record(
+        self,
+        record: dict[str, Any],
+        file: File,
+        index: int,
+        hf_schema: Optional[tuple["Features", dict[str, "DataType"]]],
+        use_datachain_schema: bool,
+    ):
+        if use_datachain_schema and self.output_schema:
+            vals = [_nested_model_instantiate(record, self.output_schema)]
+        else:
+            vals = self._process_non_datachain_record(record, hf_schema)
+
+        if self.source:
+            kwargs: dict = self.kwargs
+            # Can't serialize CsvFileFormat; may lose formatting options.
+            if isinstance(kwargs.get("format"), CsvFileFormat):
+                kwargs["format"] = "csv"
+            arrow_file = ArrowRow(file=file, index=index, kwargs=kwargs)
+            return [arrow_file, *vals]
+        return vals
+
+    def _process_non_datachain_record(
+        self,
+        record: dict[str, Any],
+        hf_schema: Optional[tuple["Features", dict[str, "DataType"]]],
+    ):
+        vals = list(record.values())
+        if not self.output_schema:
+            return vals
+
+        fields = self.output_schema.model_fields
+        vals_dict = {}
+        for i, ((field, field_info), val) in enumerate(zip(fields.items(), vals)):
+            anno = field_info.annotation
+            if hf_schema:
+                from datachain.lib.hf import convert_feature
+
+                feat = list(hf_schema[0].values())[i]
+                vals_dict[field] = convert_feature(val, feat, anno)
+            elif ModelStore.is_pydantic(anno):
+                vals_dict[field] = anno(**val)  # type: ignore[misc]
+            else:
+                vals_dict[field] = val
+        return [self.output_schema(**vals_dict)]
 
 
 def infer_schema(chain: "DataChain", **kwargs) -> pa.Schema:
@@ -188,18 +224,6 @@ def arrow_type_mapper(col_type: pa.DataType, column: str = "") -> type:  # noqa:
     if isinstance(col_type, pa.lib.DictionaryType):
         return arrow_type_mapper(col_type.value_type)  # type: ignore[return-value]
     raise TypeError(f"{col_type!r} datatypes not supported, column: {column}")
-
-
-def _nrows_file(file: File, nrows: int) -> str:
-    tf = NamedTemporaryFile(delete=False)  # noqa: SIM115
-    with file.open(mode="r") as reader:
-        with open(tf.name, "a") as writer:
-            for row, line in enumerate(reader):
-                if row >= nrows:
-                    break
-                writer.write(line)
-                writer.write("\n")
-    return tf.name
 
 
 def _get_hf_schema(
