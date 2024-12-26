@@ -36,7 +36,8 @@ class GCSClient(Client):
         try:
             return self.fs.sign(self.get_full_path(path), expiration=expires, **kwargs)
         except AttributeError as exc:
-            if "you need a private key to sign credentials" in str(exc):
+            is_anon = self.fs.storage_options.get("token") == "anon"
+            if is_anon and "you need a private key to sign credentials" in str(exc):
                 return f"https://storage.googleapis.com/{self.name}/{path}"
             raise
 
