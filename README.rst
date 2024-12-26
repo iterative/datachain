@@ -79,7 +79,7 @@ using LLM based evaluation.
 
 .. code:: shell
 
-    $ pip install mistralai (Requires version >=1.0.0)
+    $ pip install mistralai # Requires version >=1.0.0
     $ export MISTRAL_API_KEY=_your_key_
 
 Python code:
