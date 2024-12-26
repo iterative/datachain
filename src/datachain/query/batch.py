@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Callable, Optional, Union
 
 from datachain.data_storage.schema import PARTITION_COLUMN_ID
 from datachain.data_storage.warehouse import SELECT_BATCH_SIZE
+from datachain.query.utils import get_query_column, get_query_id_column
 
 if TYPE_CHECKING:
     from sqlalchemy import Select
@@ -23,11 +24,14 @@ RowsOutput = Union[Sequence, RowsOutputBatch]
 class BatchingStrategy(ABC):
     """BatchingStrategy provides means of batching UDF executions."""
 
+    is_batching: bool
+
     @abstractmethod
     def __call__(
         self,
-        execute: Callable[..., Generator[Sequence, None, None]],
+        execute: Callable,
         query: "Select",
+        ids_only: bool = False,
     ) -> Generator[RowsOutput, None, None]:
         """Apply the provided parameters to the UDF."""
 
@@ -38,11 +42,16 @@ class NoBatching(BatchingStrategy):
     batch UDF calls.
     """
 
+    is_batching = False
+
     def __call__(
         self,
-        execute: Callable[..., Generator[Sequence, None, None]],
+        execute: Callable,
         query: "Select",
+        ids_only: bool = False,
     ) -> Generator[Sequence, None, None]:
+        if ids_only:
+            query = query.with_only_columns(get_query_id_column(query))
         return execute(query)
 
 
@@ -52,14 +61,20 @@ class Batch(BatchingStrategy):
     is passed a sequence of multiple parameter sets.
     """
 
+    is_batching = True
+
     def __init__(self, count: int):
         self.count = count
 
     def __call__(
         self,
-        execute: Callable[..., Generator[Sequence, None, None]],
+        execute: Callable,
         query: "Select",
+        ids_only: bool = False,
     ) -> Generator[RowsOutputBatch, None, None]:
+        if ids_only:
+            query = query.with_only_columns(get_query_id_column(query))
+
         # choose page size that is a multiple of the batch size
         page_size = math.ceil(SELECT_BATCH_SIZE / self.count) * self.count
 
@@ -84,19 +99,30 @@ class Partition(BatchingStrategy):
     Dataset rows need to be sorted by the grouping column.
     """
 
+    is_batching = True
+
     def __call__(
         self,
-        execute: Callable[..., Generator[Sequence, None, None]],
+        execute: Callable,
         query: "Select",
+        ids_only: bool = False,
     ) -> Generator[RowsOutputBatch, None, None]:
+        id_col = get_query_id_column(query)
+        if (partition_col := get_query_column(query, PARTITION_COLUMN_ID)) is None:
+            raise RuntimeError("partition column not found in query")
+
+        if ids_only:
+            query = query.with_only_columns(id_col, partition_col)
+
         current_partition: Optional[int] = None
         batch: list[Sequence] = []
 
         query_fields = [str(c.name) for c in query.selected_columns]
+        id_column_idx = query_fields.index("sys__id")
         partition_column_idx = query_fields.index(PARTITION_COLUMN_ID)
 
         ordered_query = query.order_by(None).order_by(
-            PARTITION_COLUMN_ID,
+            partition_col,
             *query._order_by_clauses,
         )
 
@@ -108,7 +134,7 @@ class Partition(BatchingStrategy):
                     if len(batch) > 0:
                         yield RowsOutputBatch(batch)
                         batch = []
-                batch.append(row)
+                batch.append([row[id_column_idx]] if ids_only else row)
 
             if len(batch) > 0:
                 yield RowsOutputBatch(batch)
