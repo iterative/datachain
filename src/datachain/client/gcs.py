@@ -35,19 +35,12 @@ class GCSClient(Client):
     def url(self, path: str, expires: int = 3600, **kwargs) -> str:
         """
         Generate a signed URL for the given path.
-        If the client is anonymous, a public URL is returned instead.
+        If the client is anonymous, a public URL is returned instead
+        (see https://cloud.google.com/storage/docs/access-public-data#api-link).
         """
-        fs = cast(GCSFileSystem, self.fs)
-        if fs.storage_options.get("token") == "anon":
-            return self.public_url(path)
-        return fs.sign(self.get_full_path(path), expiration=expires, **kwargs)
-
-    def public_url(self, path: str) -> str:
-        """
-        Generate a public URL for the given path.
-        See https://cloud.google.com/storage/docs/access-public-data#api-link
-        """
-        return f"https://storage.googleapis.com/{self.name}/{path}"
+        if self.fs.storage_options.get("token") == "anon":
+            return f"https://storage.googleapis.com/{self.name}/{path}"
+        return self.fs.sign(self.get_full_path(path), expiration=expires, **kwargs)
 
     @staticmethod
     def parse_timestamp(timestamp: str) -> datetime:
