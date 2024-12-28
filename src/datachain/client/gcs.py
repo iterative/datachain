@@ -4,6 +4,7 @@ import os
 from collections.abc import Iterable
 from datetime import datetime
 from typing import Any, Optional, cast
+from urllib.parse import urlsplit
 
 from dateutil.parser import isoparse
 from gcsfs import GCSFileSystem
@@ -131,3 +132,26 @@ class GCSClient(Client):
             last_modified=self.parse_timestamp(v["updated"]),
             size=v.get("size", ""),
         )
+
+    @classmethod
+    def _split_version(cls, path: str) -> tuple[str, Optional[str]]:
+        parts = list(urlsplit(path))
+        scheme = parts[0]
+        parts = GCSFileSystem._split_path(  # pylint: disable=protected-access
+            path, version_aware=True
+        )
+        bucket, key, generation = parts
+        scheme = f"{scheme}://" if scheme else ""
+        return f"{scheme}{bucket}/{key}", generation
+
+    @classmethod
+    def _join_version(cls, path: str, version_id: Optional[str]) -> str:
+        path, path_version = cls._split_version(path)
+        if path_version:
+            raise ValueError("path already includes an object generation")
+        return f"{path}#{version_id}" if version_id else path
+
+    @classmethod
+    def version_path(cls, path: str, version_id: Optional[str]) -> str:
+        path, _ = cls._split_version(path)
+        return cls._join_version(path, version_id)

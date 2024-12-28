@@ -64,6 +64,7 @@ def dog_entries_parquet_lz4(dog_entries, cloud_test_catalog) -> bytes:
         adapted["sys__rand"] = 1
         adapted["file__location"] = ""
         adapted["file__source"] = src_uri
+        adapted["file__version"] = ""
         return adapted
 
     dog_entries = [_adapt_row(e) for e in dog_entries]
