@@ -39,6 +39,15 @@ def list_bucket(uri: str, cache, client_config=None) -> Callable:
     return list_func
 
 
+def get_file_info(uri: str, cache, client_config=None) -> File:
+    """
+    Wrapper to return File object by its URI
+    """
+    client = Client.get_client(uri, cache, **(client_config or {}))  # type: ignore[arg-type]
+    _, path = Client.parse_url(uri)
+    return client.get_file_info(path)
+
+
 def ls(
     dc: D,
     path: str,
@@ -76,7 +85,7 @@ def ls(
     return dc.filter(pathfunc.parent(_file_c("path")) == path.lstrip("/").rstrip("/*"))
 
 
-def parse_listing_uri(uri: str, cache, client_config) -> tuple[str, str, str]:
+def parse_listing_uri(uri: str, cache, client_config) -> tuple[Optional[str], str, str]:
     """
     Parsing uri and returns listing dataset name, listing uri and listing path
     """
@@ -85,7 +94,9 @@ def parse_listing_uri(uri: str, cache, client_config) -> tuple[str, str, str]:
     storage_uri, path = Client.parse_url(uri)
     telemetry.log_param("client", client.PREFIX)
 
-    if uses_glob(path) or client.fs.isfile(uri):
+    if not uri.endswith("/") and client.fs.isfile(uri):
+        return None, f'{storage_uri}/{path.lstrip("/")}', path
+    if uses_glob(path):
         lst_uri_path = posixpath.dirname(path)
     else:
         storage_uri, path = Client.parse_url(f'{uri.rstrip("/")}/')
@@ -113,7 +124,7 @@ def listing_uri_from_name(dataset_name: str) -> str:
 
 def get_listing(
     uri: str, session: "Session", update: bool = False
-) -> tuple[str, str, str, bool]:
+) -> tuple[Optional[str], str, str, bool]:
     """Returns correct listing dataset name that must be used for saving listing
     operation. It takes into account existing listings and reusability of those.
     It also returns boolean saying if returned dataset name is reused / already
@@ -130,6 +141,10 @@ def get_listing(
     client = Client.get_client(uri, cache, **client_config)
     ds_name, list_uri, list_path = parse_listing_uri(uri, cache, client_config)
     listing = None
+
+    # if we don't want to use cached dataset (e.g. for a single file listing)
+    if not ds_name:
+        return None, list_uri, list_path, False
 
     listings = [
         ls for ls in catalog.listings() if not ls.is_expired and ls.contains(ds_name)

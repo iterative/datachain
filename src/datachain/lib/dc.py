@@ -32,7 +32,7 @@ from datachain.lib.data_model import DataModel, DataType, DataValue, dict_to_dat
 from datachain.lib.dataset_info import DatasetInfo
 from datachain.lib.file import ArrowRow, File, FileType, get_file_type
 from datachain.lib.file import ExportPlacement as FileExportPlacement
-from datachain.lib.listing import get_listing, list_bucket, ls
+from datachain.lib.listing import get_file_info, get_listing, list_bucket, ls
 from datachain.lib.listing_info import ListingInfo
 from datachain.lib.meta_formats import read_meta
 from datachain.lib.model_store import ModelStore
@@ -437,6 +437,18 @@ class DataChain:
         list_ds_name, list_uri, list_path, list_ds_exists = get_listing(
             uri, session, update=update
         )
+
+        # ds_name is None if object is a file, we don't want to use cache
+        # or do listing in that case - just read that single object
+        if not list_ds_name:
+            dc = cls.from_values(
+                session=session,
+                settings=settings,
+                in_memory=in_memory,
+                file=[get_file_info(list_uri, cache, client_config=client_config)],
+            )
+            dc.signals_schema = dc.signals_schema.mutate({f"{object_name}": file_type})
+            return dc
 
         if update or not list_ds_exists:
             (
@@ -1634,7 +1646,7 @@ class DataChain:
         output: OutputType = None,
         object_name: str = "",
         **fr_map,
-    ) -> "DataChain":
+    ) -> "Self":
         """Generate chain from list of values.
 
         Example:
@@ -1647,7 +1659,7 @@ class DataChain:
         def _func_fr() -> Iterator[tuple_type]:  # type: ignore[valid-type]
             yield from tuples
 
-        chain = DataChain.from_records(
+        chain = cls.from_records(
             DataChain.DEFAULT_FILE_RECORD,
             session=session,
             settings=settings,

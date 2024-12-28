@@ -240,7 +240,8 @@ class DatasetRowsFetcher(NodesThreadPool):
 class NodeGroup:
     """Class for a group of nodes from the same source"""
 
-    listing: "Listing"
+    listing: Optional["Listing"]
+    client: "Client"
     sources: list[DataSource]
 
     # The source path within the bucket
@@ -268,9 +269,7 @@ class NodeGroup:
         Download this node group to cache.
         """
         if self.sources:
-            self.listing.client.fetch_nodes(
-                self.iternodes(recursive), shared_progress_bar=pbar
-            )
+            self.client.fetch_nodes(self.iternodes(recursive), shared_progress_bar=pbar)
 
 
 def check_output_dataset_file(
@@ -375,7 +374,7 @@ def collect_nodes_for_cp(
 
     # Collect all sources to process
     for node_group in node_groups:
-        listing: Listing = node_group.listing
+        listing: Optional[Listing] = node_group.listing
         valid_sources: list[DataSource] = []
         for dsrc in node_group.sources:
             if dsrc.is_single_object():
@@ -383,6 +382,7 @@ def collect_nodes_for_cp(
                 total_files += 1
                 valid_sources.append(dsrc)
             else:
+                assert listing
                 node = dsrc.node
                 if not recursive:
                     print(f"{node.full_path} is a directory (not copied).")
@@ -433,37 +433,51 @@ def instantiate_node_groups(
     )
 
     output_dir = output
+    output_file = None
     if copy_to_filename:
         output_dir = os.path.dirname(output)
         if not output_dir:
             output_dir = "."
+        output_file = os.path.basename(output)
 
     # Instantiate these nodes
     for node_group in node_groups:
         if not node_group.sources:
             continue
-        listing: Listing = node_group.listing
+        listing: Optional[Listing] = node_group.listing
         source_path: str = node_group.source_path
 
         copy_dir_contents = always_copy_dir_contents or source_path.endswith("/")
-        instantiated_nodes = listing.collect_nodes_to_instantiate(
-            node_group.sources,
-            copy_to_filename,
-            recursive,
-            copy_dir_contents,
-            source_path,
-            node_group.is_edatachain,
-            node_group.is_dataset,
-        )
-        if not virtual_only:
-            listing.instantiate_nodes(
-                instantiated_nodes,
-                output_dir,
-                total_files,
-                force=force,
-                shared_progress_bar=instantiate_progress_bar,
+        if not listing:
+            source = node_group.sources[0]
+            client = source.client
+            node = NodeWithPath(source.node, [output_file or source.node.path])
+            instantiated_nodes = [node]
+            if not virtual_only:
+                node.instantiate(
+                    client, output_dir, instantiate_progress_bar, force=force
+                )
+        else:
+            instantiated_nodes = listing.collect_nodes_to_instantiate(
+                node_group.sources,
+                copy_to_filename,
+                recursive,
+                copy_dir_contents,
+                source_path,
+                node_group.is_edatachain,
+                node_group.is_dataset,
             )
+            if not virtual_only:
+                listing.instantiate_nodes(
+                    instantiated_nodes,
+                    output_dir,
+                    total_files,
+                    force=force,
+                    shared_progress_bar=instantiate_progress_bar,
+                )
+
         node_group.instantiated_nodes = instantiated_nodes
+
     if instantiate_progress_bar:
         instantiate_progress_bar.close()
 
@@ -592,7 +606,7 @@ class Catalog:
         client_config=None,
         object_name="file",
         skip_indexing=False,
-    ) -> tuple["Listing", str]:
+    ) -> tuple[Optional["Listing"], "Client", str]:
         from datachain.lib.dc import DataChain
         from datachain.listing import Listing
 
@@ -603,16 +617,19 @@ class Catalog:
         list_ds_name, list_uri, list_path, _ = get_listing(
             source, self.session, update=update
         )
+        lst = None
+        client = Client.get_client(list_uri, self.cache, **self.client_config)
 
-        lst = Listing(
-            self.metastore.clone(),
-            self.warehouse.clone(),
-            Client.get_client(list_uri, self.cache, **self.client_config),
-            dataset_name=list_ds_name,
-            object_name=object_name,
-        )
+        if list_ds_name:
+            lst = Listing(
+                self.metastore.clone(),
+                self.warehouse.clone(),
+                client,
+                dataset_name=list_ds_name,
+                object_name=object_name,
+            )
 
-        return lst, list_path
+        return lst, client, list_path
 
     def _remove_dataset_rows_and_warehouse_info(
         self, dataset: DatasetRecord, version: int, **kwargs
@@ -635,13 +652,13 @@ class Catalog:
     ) -> Optional[list["DataSource"]]:
         enlisted_sources = []
         for src in sources:  # Opt: parallel
-            listing, file_path = self.enlist_source(
+            listing, client, file_path = self.enlist_source(
                 src,
                 update,
                 client_config=client_config or self.client_config,
                 skip_indexing=skip_indexing,
             )
-            enlisted_sources.append((listing, file_path))
+            enlisted_sources.append((listing, client, file_path))
 
         if only_index:
             # sometimes we don't really need listing result (e.g on indexing process)
@@ -649,10 +666,16 @@ class Catalog:
             return None
 
         dsrc_all: list[DataSource] = []
-        for listing, file_path in enlisted_sources:
-            nodes = listing.expand_path(file_path)
-            dir_only = file_path.endswith("/")
-            dsrc_all.extend(DataSource(listing, node, dir_only) for node in nodes)
+        for listing, client, file_path in enlisted_sources:
+            if not listing:
+                nodes = [Node.from_file(client.get_file_info(file_path))]
+                dir_only = False
+            else:
+                nodes = listing.expand_path(file_path)
+                dir_only = file_path.endswith("/")
+            dsrc_all.extend(
+                DataSource(listing, client, node, dir_only) for node in nodes
+            )
         return dsrc_all
 
     def enlist_sources_grouped(
@@ -667,7 +690,7 @@ class Catalog:
 
         def _row_to_node(d: dict[str, Any]) -> Node:
             del d["file__source"]
-            return Node.from_dict(d)
+            return Node.from_row(d)
 
         enlisted_sources: list[tuple[bool, bool, Any]] = []
         client_config = client_config or self.client_config
@@ -677,7 +700,7 @@ class Catalog:
                 edatachain_data = parse_edatachain_file(src)
                 indexed_sources = []
                 for ds in edatachain_data:
-                    listing, source_path = self.enlist_source(
+                    listing, _, source_path = self.enlist_source(
                         ds["data-source"]["uri"],
                         update,
                         client_config=client_config,
@@ -701,6 +724,7 @@ class Catalog:
                     client = self.get_client(source, **client_config)
                     uri = client.uri
                     dataset_name, _, _, _ = get_listing(uri, self.session)
+                    assert dataset_name
                     listing = Listing(
                         self.metastore.clone(),
                         self.warehouse.clone(),
@@ -713,6 +737,7 @@ class Catalog:
                     indexed_sources.append(
                         (
                             listing,
+                            client,
                             source,
                             [_row_to_node(r) for r in rows],
                             ds_name,
@@ -722,25 +747,28 @@ class Catalog:
 
                 enlisted_sources.append((False, True, indexed_sources))
             else:
-                listing, source_path = self.enlist_source(
+                listing, client, source_path = self.enlist_source(
                     src, update, client_config=client_config
                 )
-                enlisted_sources.append((False, False, (listing, source_path)))
+                enlisted_sources.append((False, False, (listing, client, source_path)))
 
         node_groups = []
         for is_datachain, is_dataset, payload in enlisted_sources:  # Opt: parallel
             if is_dataset:
                 for (
                     listing,
+                    client,
                     source_path,
                     nodes,
                     dataset_name,
                     dataset_version,
                 ) in payload:
-                    dsrc = [DataSource(listing, node) for node in nodes]
+                    assert listing
+                    dsrc = [DataSource(listing, client, node) for node in nodes]
                     node_groups.append(
                         NodeGroup(
                             listing,
+                            client,
                             dsrc,
                             source_path,
                             dataset_name=dataset_name,
@@ -749,18 +777,30 @@ class Catalog:
                     )
             elif is_datachain:
                 for listing, source_path, paths in payload:
-                    dsrc = [DataSource(listing, listing.resolve_path(p)) for p in paths]
+                    assert listing
+                    dsrc = [
+                        DataSource(listing, listing.client, listing.resolve_path(p))
+                        for p in paths
+                    ]
                     node_groups.append(
-                        NodeGroup(listing, dsrc, source_path, is_edatachain=True)
+                        NodeGroup(
+                            listing,
+                            listing.client,
+                            dsrc,
+                            source_path,
+                            is_edatachain=True,
+                        )
                     )
             else:
-                listing, source_path = payload
-                as_container = source_path.endswith("/")
-                dsrc = [
-                    DataSource(listing, n, as_container)
-                    for n in listing.expand_path(source_path, use_glob=not no_glob)
-                ]
-                node_groups.append(NodeGroup(listing, dsrc, source_path))
+                listing, client, source_path = payload
+                if not listing:
+                    nodes = [Node.from_file(client.get_file_info(source_path))]
+                    as_container = False
+                else:
+                    as_container = source_path.endswith("/")
+                    nodes = listing.expand_path(source_path, use_glob=not no_glob)
+                dsrc = [DataSource(listing, client, n, as_container) for n in nodes]
+                node_groups.append(NodeGroup(listing, client, dsrc, source_path))
 
         return node_groups
 

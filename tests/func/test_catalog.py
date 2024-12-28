@@ -462,7 +462,7 @@ def test_cp_single_file(cloud_test_catalog, no_glob):
 
 
 @pytest.mark.parametrize("tree", [{"foo": "original"}], indirect=True)
-def test_storage_mutation(cloud_test_catalog):
+def test_cp_file_storage_mutation(cloud_test_catalog):
     working_dir = cloud_test_catalog.working_dir
     catalog = cloud_test_catalog.catalog
     src_path = f"{cloud_test_catalog.src_uri}/foo"
@@ -476,21 +476,58 @@ def test_storage_mutation(cloud_test_catalog):
     dest = working_dir / "data2"
     dest.mkdir()
     catalog.cp([src_path], str(dest / "local"), no_edatachain_file=True)
-    assert tree_from_path(dest) == {"local": "original"}
+    assert tree_from_path(dest) == {"local": "modified"}
 
-    # Since the old version cannot be found in storage or cache, it's an error.
+    # For a file we access it directly, we don't take the entry from listing
+    # so we don't check the previous etag with the new modified one
     catalog.cache.clear()
     dest = working_dir / "data3"
     dest.mkdir()
-    with pytest.raises(FileNotFoundError):
-        catalog.cp([src_path], str(dest / "local"), no_edatachain_file=True)
-    assert tree_from_path(dest) == {}
+    catalog.cp([src_path], str(dest / "local"), no_edatachain_file=True)
+    assert tree_from_path(dest) == {"local": "modified"}
 
     catalog.index([src_path], update=True)
     dest = working_dir / "data4"
     dest.mkdir()
     catalog.cp([src_path], str(dest / "local"), no_edatachain_file=True)
     assert tree_from_path(dest) == {"local": "modified"}
+
+
+@pytest.mark.parametrize("tree", [{"foo-dir": "original"}], indirect=True)
+def test_cp_dir_storage_mutation(cloud_test_catalog):
+    working_dir = cloud_test_catalog.working_dir
+    catalog = cloud_test_catalog.catalog
+    src_path = f"{cloud_test_catalog.src_uri}/"
+
+    dest = working_dir / "data1"
+    dest.mkdir()
+    catalog.cp([src_path], str(dest / "local"), no_edatachain_file=True, recursive=True)
+    assert tree_from_path(dest) == {"local": {"foo-dir": "original"}}
+
+    (cloud_test_catalog.src / "foo-dir").write_text("modified")
+    dest = working_dir / "data2"
+    dest.mkdir()
+    catalog.cp([src_path], str(dest / "local"), no_edatachain_file=True, recursive=True)
+    assert tree_from_path(dest) == {"local": {"foo-dir": "original"}}
+
+    # For a dir we access files through listing
+    # so it finds a etag for the origin file, but it's now not in cache + it
+    # is modified on the local storage, so we can't find the file referenced
+    # by the listing anymore
+    catalog.cache.clear()
+    dest = working_dir / "data3"
+    dest.mkdir()
+    with pytest.raises(FileNotFoundError):
+        catalog.cp(
+            [src_path], str(dest / "local"), no_edatachain_file=True, recursive=True
+        )
+    assert tree_from_path(dest) == {"local": {}}
+
+    catalog.index([src_path], update=True)
+    dest = working_dir / "data4"
+    dest.mkdir()
+    catalog.cp([src_path], str(dest / "local"), no_edatachain_file=True, recursive=True)
+    assert tree_from_path(dest) == {"local": {"foo-dir": "modified"}}
 
 
 def test_cp_edatachain_file_options(cloud_test_catalog):
@@ -734,6 +771,42 @@ def test_ls_glob(cloud_test_catalog):
     ) == [("dog1", ["dog1"]), ("dog2", ["dog2"]), ("dog3", ["dog3"])]
 
 
+def test_ls_file(cloud_test_catalog):
+    src_uri = cloud_test_catalog.src_uri
+    catalog = cloud_test_catalog.catalog
+
+    assert sorted(
+        (source.node.name, [r[0] for r in results])
+        for source, results in catalog.ls([f"{src_uri}/dogs/dog1"], fields=["name"])
+    ) == [("dog1", ["dog1"])]
+
+
+def test_ls_dir_same_name_as_file(cloud_test_catalog, cloud_type):
+    src_uri = cloud_test_catalog.src_uri
+    catalog = cloud_test_catalog.catalog
+
+    path = f"{src_uri}/dogs/dog1"
+
+    # check that file exists
+    assert sorted(
+        (source.node.name, [r[0] for r in results])
+        for source, results in catalog.ls([path], fields=["name"])
+    ) == [("dog1", ["dog1"])]
+
+    if cloud_type == "file":
+        # should be fixed upstream in fsspec
+        # boils down to https://github.com/fsspec/filesystem_spec/pull/1567#issuecomment-2563160414
+        # fsspec removes the trailing slash and returns a file, that's why we are
+        # are not getting an error here
+        assert sorted(
+            (source.node.name, [r[0] for r in results])
+            for source, results in catalog.ls([f"{path}/"], fields=["name"])
+        ) == [("", ["."])]
+    else:
+        with pytest.raises(FileNotFoundError):
+            next(catalog.ls([f"{path}/"], fields=["name"]))
+
+
 def test_ls_prefix_not_found(cloud_test_catalog):
     src_uri = cloud_test_catalog.src_uri
     catalog = cloud_test_catalog.catalog
@@ -891,9 +964,8 @@ def test_enlist_source_handles_file(cloud_test_catalog):
     src_path = f"{src_uri}/dogs/dog1"
 
     catalog.enlist_source(src_path)
-    stats = listing_stats(src_path, catalog)
-    assert stats.num_objects == len(DEFAULT_TREE["dogs"])
-    assert stats.size == 15
+    with pytest.raises(DatasetNotFoundError):
+        listing_stats(src_path, catalog)
 
 
 @pytest.mark.parametrize("from_cli", [False, True])
