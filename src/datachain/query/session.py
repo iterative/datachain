@@ -55,7 +55,7 @@ class Session:
         client_config: Optional[dict] = None,
         in_memory: bool = False,
     ):
-        if re.match(r"^[0-9a-zA-Z]+$", name) is None:
+        if re.match(r"^[0-9a-zA-Z]*$", name) is None:
             raise ValueError(
                 f"Session name can contain only letters or numbers - '{name}' given."
             )
