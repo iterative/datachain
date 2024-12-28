@@ -461,18 +461,18 @@ def test_cp_single_file(cloud_test_catalog, no_glob):
     assert tree_from_path(dest) == {"local_dog": "woof"}
 
 
-@pytest.mark.parametrize("tree", [{"foo": "original"}], indirect=True)
+@pytest.mark.parametrize("tree", [{"bar-file": "original"}], indirect=True)
 def test_cp_file_storage_mutation(cloud_test_catalog):
     working_dir = cloud_test_catalog.working_dir
     catalog = cloud_test_catalog.catalog
-    src_path = f"{cloud_test_catalog.src_uri}/foo"
+    src_path = f"{cloud_test_catalog.src_uri}/bar-file"
 
     dest = working_dir / "data1"
     dest.mkdir()
     catalog.cp([src_path], str(dest / "local"), no_edatachain_file=True)
     assert tree_from_path(dest) == {"local": "original"}
 
-    (cloud_test_catalog.src / "foo").write_text("modified")
+    (cloud_test_catalog.src / "bar-file").write_text("modified")
     dest = working_dir / "data2"
     dest.mkdir()
     catalog.cp([src_path], str(dest / "local"), no_edatachain_file=True)
@@ -493,8 +493,8 @@ def test_cp_file_storage_mutation(cloud_test_catalog):
     assert tree_from_path(dest) == {"local": "modified"}
 
 
-@pytest.mark.parametrize("tree", [{"foo-dir": "original"}], indirect=True)
-def test_cp_dir_storage_mutation(cloud_test_catalog):
+@pytest.mark.parametrize("tree", [{"foo-file": "original"}], indirect=True)
+def test_cp_dir_storage_mutation(cloud_test_catalog, version_aware):
     working_dir = cloud_test_catalog.working_dir
     catalog = cloud_test_catalog.catalog
     src_path = f"{cloud_test_catalog.src_uri}/"
@@ -502,32 +502,39 @@ def test_cp_dir_storage_mutation(cloud_test_catalog):
     dest = working_dir / "data1"
     dest.mkdir()
     catalog.cp([src_path], str(dest / "local"), no_edatachain_file=True, recursive=True)
-    assert tree_from_path(dest) == {"local": {"foo-dir": "original"}}
+    assert tree_from_path(dest) == {"local": {"foo-file": "original"}}
 
-    (cloud_test_catalog.src / "foo-dir").write_text("modified")
+    (cloud_test_catalog.src / "foo-file").write_text("modified")
     dest = working_dir / "data2"
     dest.mkdir()
     catalog.cp([src_path], str(dest / "local"), no_edatachain_file=True, recursive=True)
-    assert tree_from_path(dest) == {"local": {"foo-dir": "original"}}
+    assert tree_from_path(dest) == {"local": {"foo-file": "original"}}
 
     # For a dir we access files through listing
     # so it finds a etag for the origin file, but it's now not in cache + it
     # is modified on the local storage, so we can't find the file referenced
-    # by the listing anymore
+    # by the listing anymore if FS is not version aware, or we can find
+    # the original version and download if FS support versioning
     catalog.cache.clear()
     dest = working_dir / "data3"
     dest.mkdir()
-    with pytest.raises(FileNotFoundError):
+    if version_aware:
         catalog.cp(
             [src_path], str(dest / "local"), no_edatachain_file=True, recursive=True
         )
-    assert tree_from_path(dest) == {"local": {}}
+        assert tree_from_path(dest) == {"local": {"foo-file": "original"}}
+    else:
+        with pytest.raises(FileNotFoundError):
+            catalog.cp(
+                [src_path], str(dest / "local"), no_edatachain_file=True, recursive=True
+            )
+            assert tree_from_path(dest) == {"local": {}}
 
     catalog.index([src_path], update=True)
     dest = working_dir / "data4"
     dest.mkdir()
     catalog.cp([src_path], str(dest / "local"), no_edatachain_file=True, recursive=True)
-    assert tree_from_path(dest) == {"local": {"foo-dir": "modified"}}
+    assert tree_from_path(dest) == {"local": {"foo-file": "modified"}}
 
 
 def test_cp_edatachain_file_options(cloud_test_catalog):
