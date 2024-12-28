@@ -3,6 +3,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import pytest
+import requests
 import yaml
 from fsspec.implementations.local import LocalFileSystem
 
@@ -993,3 +994,61 @@ def test_garbage_collect(cloud_test_catalog, from_cli, capsys):
     else:
         catalog.cleanup_tables(temp_tables)
     assert catalog.get_temp_table_names() == []
+
+
+@pytest.fixture
+def gcs_fake_credentials(monkeypatch):
+    # For signed URL tests to work we need to setup some fake credentials
+    # that looks like real ones
+    monkeypatch.setenv(
+        "GOOGLE_APPLICATION_CREDENTIALS",
+        os.path.dirname(__file__) + "/fake-service-account-credentials.json",
+    )
+
+
+@pytest.mark.parametrize("tree", [{"test-signed-file": "original"}], indirect=True)
+@pytest.mark.parametrize(
+    "cloud_type, version_aware",
+    (["s3", False], ["azure", False], ["gs", False]),
+    indirect=True,
+)
+def test_signed_url(cloud_test_catalog, gcs_fake_credentials):
+    signed_url = cloud_test_catalog.catalog.signed_url(
+        cloud_test_catalog.src_uri, "test-signed-file"
+    )
+    content = requests.get(signed_url, timeout=10).text
+    assert content == "original"
+
+
+@pytest.mark.parametrize(
+    "tree", [{"test-signed-file-versioned": "original"}], indirect=True
+)
+@pytest.mark.parametrize(
+    "cloud_type, version_aware",
+    (["s3", True], ["azure", True], ["gs", True]),
+    indirect=True,
+)
+def test_signed_url_versioned(cloud_test_catalog, gcs_fake_credentials):
+    file_name = "test-signed-file-versioned"
+    src_uri = cloud_test_catalog.src_uri
+    catalog = cloud_test_catalog.catalog
+    client = catalog.get_client(src_uri)
+
+    original_version = client.get_file_info(file_name).version
+
+    (cloud_test_catalog.src / file_name).write_text("modified")
+
+    modified_version = client.get_file_info(file_name).version
+
+    for version, expected in [
+        (original_version, "original"),
+        (modified_version, "modified"),
+    ]:
+        signed_url = catalog.signed_url(
+            src_uri,
+            file_name,
+            version_id=version,
+        )
+
+        content = requests.get(signed_url, timeout=10).text
+        assert content == expected

@@ -4,7 +4,6 @@ import os
 from collections.abc import Iterable
 from datetime import datetime
 from typing import Any, Optional, cast
-from urllib.parse import urlsplit
 
 from dateutil.parser import isoparse
 from gcsfs import GCSFileSystem
@@ -39,9 +38,13 @@ class GCSClient(Client):
         If the client is anonymous, a public URL is returned instead
         (see https://cloud.google.com/storage/docs/access-public-data#api-link).
         """
+        version_id = kwargs.pop("version_id", None)
         if self.fs.storage_options.get("token") == "anon":
-            return f"https://storage.googleapis.com/{self.name}/{path}"
-        return self.fs.sign(self.get_full_path(path), expiration=expires, **kwargs)
+            query = f"?generation={version_id}" if version_id else ""
+            return f"https://storage.googleapis.com/{self.name}/{path}{query}"
+        return self.fs.sign(
+            self.get_full_path(path, version_id), expiration=expires, **kwargs
+        )
 
     @staticmethod
     def parse_timestamp(timestamp: str) -> datetime:
@@ -134,24 +137,5 @@ class GCSClient(Client):
         )
 
     @classmethod
-    def _split_version(cls, path: str) -> tuple[str, Optional[str]]:
-        parts = list(urlsplit(path))
-        scheme = parts[0]
-        parts = GCSFileSystem._split_path(  # pylint: disable=protected-access
-            path, version_aware=True
-        )
-        bucket, key, generation = parts
-        scheme = f"{scheme}://" if scheme else ""
-        return f"{scheme}{bucket}/{key}", generation
-
-    @classmethod
-    def _join_version(cls, path: str, version_id: Optional[str]) -> str:
-        path, path_version = cls._split_version(path)
-        if path_version:
-            raise ValueError("path already includes an object generation")
-        return f"{path}#{version_id}" if version_id else path
-
-    @classmethod
     def version_path(cls, path: str, version_id: Optional[str]) -> str:
-        path, _ = cls._split_version(path)
-        return cls._join_version(path, version_id)
+        return f"{path}#{version_id}" if version_id else path
