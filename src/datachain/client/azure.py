@@ -1,4 +1,5 @@
-from typing import Any
+from typing import Any, Optional
+from urllib.parse import parse_qs, urlsplit, urlunsplit
 
 from adlfs import AzureBlobFileSystem
 from tqdm import tqdm
@@ -24,6 +25,16 @@ class AzureClient(Client):
             last_modified=v["last_modified"],
             size=v.get("size", ""),
         )
+
+    def url(self, path: str, expires: int = 3600, **kwargs) -> str:
+        """
+        Generate a signed URL for the given path.
+        """
+        version_id = kwargs.pop("version_id", None)
+        result = self.fs.sign(
+            self.get_full_path(path, version_id), expiration=expires, **kwargs
+        )
+        return result + (f"&versionid={version_id}" if version_id else "")
 
     async def _fetch_flat(self, start_prefix: str, result_queue: ResultQueue) -> None:
         prefix = start_prefix
@@ -56,5 +67,14 @@ class AzureClient(Client):
                         )
         finally:
             result_queue.put_nowait(None)
+
+    @classmethod
+    def version_path(cls, path: str, version_id: Optional[str]) -> str:
+        parts = list(urlsplit(path))
+        query = parse_qs(parts[3])
+        if "versionid" in query:
+            raise ValueError("path already includes a version query")
+        parts[3] = f"versionid={version_id}" if version_id else ""
+        return urlunsplit(parts)
 
     _fetch_default = _fetch_flat

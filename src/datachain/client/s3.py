@@ -1,5 +1,6 @@
 import asyncio
 from typing import Any, Optional, cast
+from urllib.parse import parse_qs, urlsplit, urlunsplit
 
 from botocore.exceptions import NoCredentialsError
 from s3fs import S3FileSystem
@@ -120,6 +121,15 @@ class ClientS3(Client):
             last_modified=v.get("LastModified", ""),
             size=v["Size"],
         )
+
+    @classmethod
+    def version_path(cls, path: str, version_id: Optional[str]) -> str:
+        parts = list(urlsplit(path))
+        query = parse_qs(parts[3])
+        if "versionId" in query:
+            raise ValueError("path already includes a version query")
+        parts[3] = f"versionId={version_id}" if version_id else ""
+        return urlunsplit(parts)
 
     async def _fetch_dir(
         self,

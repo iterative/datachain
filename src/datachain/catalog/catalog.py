@@ -1236,10 +1236,16 @@ class Catalog:
 
         return q.to_db_records()
 
-    def signed_url(self, source: str, path: str, client_config=None) -> str:
+    def signed_url(
+        self,
+        source: str,
+        path: str,
+        version_id: Optional[str] = None,
+        client_config=None,
+    ) -> str:
         client_config = client_config or self.client_config
         client = Client.get_client(source, self.cache, **client_config)
-        return client.url(path)
+        return client.url(path, version_id=version_id)
 
     def export_dataset_table(
         self,

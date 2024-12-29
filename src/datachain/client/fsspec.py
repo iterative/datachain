@@ -202,7 +202,11 @@ class Client(ABC):
         return self._fs
 
     def url(self, path: str, expires: int = 3600, **kwargs) -> str:
-        return self.fs.sign(self.get_full_path(path), expiration=expires, **kwargs)
+        return self.fs.sign(
+            self.get_full_path(path, kwargs.pop("version_id", None)),
+            expiration=expires,
+            **kwargs,
+        )
 
     async def get_current_etag(self, file: "File") -> str:
         kwargs = {}
