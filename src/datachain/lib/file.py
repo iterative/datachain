@@ -364,7 +364,7 @@ class File(DataModel):
 
         try:
             info = client.fs.info(client.get_full_path(self.path))
-            converted_info = client.info_to_file(info, self.source)
+            converted_info = client.info_to_file(info, self.path)
             return type(self)(
                 path=self.path,
                 source=self.source,

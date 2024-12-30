@@ -215,7 +215,7 @@ class Client(ABC):
         info = await self.fs._info(
             self.get_full_path(file.path, file.version), **kwargs
         )
-        return self.info_to_file(info, "").etag
+        return self.info_to_file(info, file.path).etag
 
     def get_file_info(self, path: str, version_id: Optional[str] = None) -> "File":
         info = self.fs.info(self.get_full_path(path, version_id), version_id=version_id)
@@ -343,7 +343,7 @@ class Client(ABC):
         return self.version_path(f"{self.PREFIX}{self.name}/{rel_path}", version_id)
 
     @abstractmethod
-    def info_to_file(self, v: dict[str, Any], parent: str) -> "File": ...
+    def info_to_file(self, v: dict[str, Any], path: str) -> "File": ...
 
     def fetch_nodes(
         self,
