@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from datachain import Column
 from datachain.lib.data_model import DataModel
-from datachain.lib.dc import C, DataChain, Sys
+from datachain.lib.dc import C, DataChain, DatasetPrepareError, Sys
 from datachain.lib.file import File
 from datachain.lib.listing import LISTING_PREFIX
 from datachain.lib.listing_info import ListingInfo
@@ -1068,10 +1068,18 @@ def test_parse_tabular_partitions(tmp_dir, test_session):
     assert df_equal(df1, df.loc[:0])
 
 
-def test_parse_tabular_empty(tmp_dir, test_session):
-    path = tmp_dir / "test.parquet"
-    with pytest.raises(FileNotFoundError):
-        DataChain.from_storage(path.as_uri(), session=test_session).parse_tabular()
+def test_parse_tabular_no_files(test_session):
+    dc = DataChain.from_values(
+        f1=features, num=range(len(features)), session=test_session, in_memory=True
+    )
+    with pytest.raises(DatasetPrepareError):
+        dc.parse_tabular()
+
+    schema = {"file": File, "my_col": int}
+    dc = DataChain.from_records([], schema=schema, session=test_session, in_memory=True)
+
+    with pytest.raises(DatasetPrepareError):
+        dc.parse_tabular()
 
 
 def test_parse_tabular_unify_schema(tmp_dir, test_session):

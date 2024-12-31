@@ -1882,6 +1882,9 @@ class DataChain:
                     "`nrows` only supported for csv and json formats.",
                 )
 
+        if "file" not in self.schema or not self.count():
+            raise DatasetPrepareError(self.name, "no files to parse.")
+
         schema = None
         col_names = output if isinstance(output, Sequence) else None
         if col_names or not output:
