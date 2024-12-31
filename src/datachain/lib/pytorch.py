@@ -1,6 +1,6 @@
 import logging
 import os
-from collections.abc import Generator, Iterator
+from collections.abc import Generator, Iterable, Iterator
 from contextlib import closing
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
@@ -80,7 +80,7 @@ class PytorchDataset(IterableDataset):
         if (prefetch := dc_settings.prefetch) is not None:
             self.prefetch = prefetch
 
-        if self.cache:
+        if self.cache or not self.prefetch:
             self._cache = catalog.cache
         else:
             tmp_dir = catalog.cache.tmp_dir
@@ -122,9 +122,8 @@ class PytorchDataset(IterableDataset):
         ds = ds.chunk(total_rank, total_workers)
         yield from ds.collect()
 
-    def __iter__(self) -> Iterator[Any]:
+    def _iter_with_prefetch(self) -> Generator[tuple[Any], None, None]:
         total_rank, total_workers = self.get_rank_and_workers()
-
         download_cb = CombinedDownloadCallback()
         if os.getenv("DATACHAIN_SHOW_PREFETCH_PROGRESS"):
             download_cb = get_download_callback(
@@ -142,10 +141,14 @@ class PytorchDataset(IterableDataset):
                 download_cb=download_cb,
             )
 
-        with download_cb, closing(rows):
+        with download_cb:
+            yield from rows
+
+    def __iter__(self) -> Iterator[list[Any]]:
+        with closing(self._iter_with_prefetch()) as rows:
             yield from map(self._process_row, rows)
 
-    def _process_row(self, row_features):
+    def _process_row(self, row_features: Iterable[Any]) -> list[Any]:
         row = []
         for fr in row_features:
             if hasattr(fr, "read"):
