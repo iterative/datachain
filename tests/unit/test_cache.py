@@ -1,6 +1,8 @@
+import os
+
 import pytest
 
-from datachain.cache import DataChainCache
+from datachain.cache import DataChainCache, get_temp_cache, temporary_cache
 from datachain.lib.file import File
 
 
@@ -53,3 +55,27 @@ def test_remove(cache):
     assert cache.contains(uid)
     cache.remove(uid)
     assert not cache.contains(uid)
+
+
+def test_destroy(cache: DataChainCache):
+    file = File(source="s3://foo", path="data/bar", etag="xyz", size=3, location=None)
+    cache.store_data(file, b"foo")
+    assert cache.contains(file)
+
+    cache.destroy()
+    assert not os.path.exists(cache.cache_dir)
+
+
+def test_get_temp_cache(tmp_path):
+    temp = get_temp_cache(tmp_path, prefix="test-")
+    assert os.path.isdir(temp.cache_dir)
+    assert isinstance(temp, DataChainCache)
+    head, tail = os.path.split(temp.cache_dir)
+    assert head == str(tmp_path)
+    assert tail.startswith("test-")
+
+
+def test_temporary_cache(tmp_path):
+    with temporary_cache(tmp_path, prefix="test-") as temp:
+        assert os.path.isdir(temp.cache_dir)
+    assert not os.path.exists(temp.cache_dir)

@@ -106,13 +106,7 @@ class DataChainCache:
             os.unlink(tmp_info)
 
     def store_data(self, file: "File", contents: bytes) -> None:
-        checksum = file.get_hash()
-        dst = self.path_from_checksum(checksum)
-        if not os.path.exists(dst):
-            # Create the file only if it's not already in cache
-            os.makedirs(os.path.dirname(dst), exist_ok=True)
-            with open(dst, mode="wb") as f:
-                f.write(contents)
+        self.odb.add_bytes(file.get_hash(), contents)
 
     def clear(self) -> None:
         """
