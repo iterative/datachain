@@ -18,7 +18,7 @@ def create_global_config(global_config_dir):
     conf["level"] = "global"
     conf["global"] = True
     conf["studio"] = {
-        "url": "https://studio.dvc.ai",
+        "url": "https://studio.datachain.ai",
         "token": "global-token",
         "global-conf": "exists",
     }
@@ -32,7 +32,7 @@ def create_system_config(system_config_dir):
     conf["level"] = "system"
     conf["system"] = True
     conf["studio"] = {
-        "url": "https://studio.dvc.ai",
+        "url": "https://studio.datachain.ai",
         "token": "system-token",
         "system-conf": "exists",
     }
@@ -46,7 +46,7 @@ def create_local_config(current_dir):
     conf["level"] = "local"
     conf["local"] = True
     conf["studio"] = {
-        "url": "https://studio.dvc.ai",
+        "url": "https://studio.datachain.ai",
         "token": "local-token",
         "local-conf": "exists",
     }
@@ -74,7 +74,7 @@ def test_read_config(global_config_dir, system_config_dir, current_dir):
         "level": "system",
         "system": True,
         "studio": {
-            "url": "https://studio.dvc.ai",
+            "url": "https://studio.datachain.ai",
             "token": "system-token",
             "system-conf": "exists",
         },
@@ -89,7 +89,7 @@ def test_read_config(global_config_dir, system_config_dir, current_dir):
         "global": True,
         "system": True,
         "studio": {
-            "url": "https://studio.dvc.ai",
+            "url": "https://studio.datachain.ai",
             "token": "global-token",
             "global-conf": "exists",
             "system-conf": "exists",
@@ -106,7 +106,7 @@ def test_read_config(global_config_dir, system_config_dir, current_dir):
         "system": True,
         "local": True,
         "studio": {
-            "url": "https://studio.dvc.ai",
+            "url": "https://studio.datachain.ai",
             "token": "local-token",
             "global-conf": "exists",
             "system-conf": "exists",
@@ -119,7 +119,7 @@ def test_read_config(global_config_dir, system_config_dir, current_dir):
         "level": "global",
         "global": True,
         "studio": {
-            "url": "https://studio.dvc.ai",
+            "url": "https://studio.datachain.ai",
             "token": "global-token",
             "global-conf": "exists",
         },
@@ -143,7 +143,7 @@ def test_edit_config_local_level(current_dir):
         "local": True,
         "new_key": "new_value",
         "studio": {
-            "url": "https://studio.dvc.ai",
+            "url": "https://studio.datachain.ai",
             "token": "new-token",
             "local-conf": "exists",
         },
@@ -167,7 +167,7 @@ def test_edit_config_global_level(global_config_dir):
         "global": True,
         "new_key": "new_value",
         "studio": {
-            "url": "https://studio.dvc.ai",
+            "url": "https://studio.datachain.ai",
             "token": "new-token",
             "global-conf": "exists",
         },
