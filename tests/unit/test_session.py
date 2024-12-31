@@ -42,6 +42,11 @@ def test_global_session_naming(catalog):
     assert re.match(pattern, ds_tmp.name) is not None
 
 
+def test_session_empty_name():
+    name = Session("").name
+    assert name.startswith(Session.GLOBAL_SESSION_NAME + "_")
+
+
 def test_ephemeral_dataset_lifecycle(catalog):
     session_name = "asd3d4"
     with Session(session_name, catalog=catalog) as session:

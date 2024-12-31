@@ -64,6 +64,7 @@ def dog_entries_parquet_lz4(dog_entries, cloud_test_catalog) -> bytes:
         adapted["sys__rand"] = 1
         adapted["file__location"] = ""
         adapted["file__source"] = src_uri
+        adapted["file__version"] = ""
         return adapted
 
     dog_entries = [_adapt_row(e) for e in dog_entries]
@@ -190,6 +191,7 @@ def dataset_export_data_chunk(
 @pytest.mark.parametrize("instantiate", [True, False])
 @skip_if_not_sqlite
 def test_pull_dataset_success(
+    mocker,
     cloud_test_catalog,
     remote_dataset_info,
     remote_dataset_stats,
@@ -201,6 +203,11 @@ def test_pull_dataset_success(
     local_ds_version,
     instantiate,
 ):
+    mocker.patch(
+        "datachain.catalog.catalog.DatasetRowsFetcher.should_check_for_status",
+        return_value=True,
+    )
+
     src_uri = cloud_test_catalog.src_uri
     working_dir = cloud_test_catalog.working_dir
     catalog = cloud_test_catalog.catalog
@@ -215,7 +222,7 @@ def test_pull_dataset_success(
             output=str(dest),
             local_ds_name=local_ds_name,
             local_ds_version=local_ds_version,
-            no_cp=False,
+            cp=True,
         )
     else:
         # trying to pull multiple times since that should work as well
@@ -224,7 +231,7 @@ def test_pull_dataset_success(
                 dataset_uri,
                 local_ds_name=local_ds_name,
                 local_ds_version=local_ds_version,
-                no_cp=True,
+                cp=False,
             )
 
     dataset = catalog.get_dataset(local_ds_name or "dogs")
@@ -279,7 +286,7 @@ def test_pull_dataset_wrong_dataset_uri_format(
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(DataChainError) as exc_info:
-        catalog.pull_dataset("wrong", no_cp=True)
+        catalog.pull_dataset("wrong")
     assert str(exc_info.value) == "Error when parsing dataset uri"
 
 
@@ -293,7 +300,7 @@ def test_pull_dataset_wrong_version(
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(DataChainError) as exc_info:
-        catalog.pull_dataset("ds://dogs@v5", no_cp=True)
+        catalog.pull_dataset("ds://dogs@v5")
     assert str(exc_info.value) == "Dataset dogs doesn't have version 5 on server"
 
 
@@ -311,7 +318,7 @@ def test_pull_dataset_not_found_in_remote(
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(DataChainError) as exc_info:
-        catalog.pull_dataset("ds://dogs@v1", no_cp=True)
+        catalog.pull_dataset("ds://dogs@v1")
     assert str(exc_info.value) == "Error from server: Dataset not found"
 
 
@@ -330,7 +337,7 @@ def test_pull_dataset_error_on_fetching_stats(
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(DataChainError) as exc_info:
-        catalog.pull_dataset("ds://dogs@v1", no_cp=True)
+        catalog.pull_dataset("ds://dogs@v1")
     assert str(exc_info.value) == "Error from server: Internal error"
 
 
@@ -353,7 +360,7 @@ def test_pull_dataset_exporting_dataset_failed_in_remote(
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(DataChainError) as exc_info:
-        catalog.pull_dataset("ds://dogs@v1", no_cp=True)
+        catalog.pull_dataset("ds://dogs@v1")
     assert str(exc_info.value) == (
         f"Error from server: Dataset export {export_status} in Studio"
     )
@@ -374,7 +381,7 @@ def test_pull_dataset_empty_parquet(
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(RuntimeError):
-        catalog.pull_dataset("ds://dogs@v1", no_cp=True)
+        catalog.pull_dataset("ds://dogs@v1")
 
 
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
@@ -389,8 +396,8 @@ def test_pull_dataset_already_exists_locally(
 ):
     catalog = cloud_test_catalog.catalog
 
-    catalog.pull_dataset("ds://dogs@v1", local_ds_name="other", no_cp=True)
-    catalog.pull_dataset("ds://dogs@v1", no_cp=True)
+    catalog.pull_dataset("ds://dogs@v1", local_ds_name="other")
+    catalog.pull_dataset("ds://dogs@v1")
 
     other = catalog.get_dataset("other")
     other_version = other.get_version(1)
@@ -422,7 +429,7 @@ def test_pull_dataset_local_name_already_exists(
         local_ds_name or "dogs", [f"{src_uri}/dogs/*"], recursive=True
     )
     with pytest.raises(DataChainError) as exc_info:
-        catalog.pull_dataset("ds://dogs@v1", local_ds_name=local_ds_name, no_cp=True)
+        catalog.pull_dataset("ds://dogs@v1", local_ds_name=local_ds_name)
 
     assert str(exc_info.value) == (
         f'Local dataset ds://{local_ds_name or "dogs"}@v1 already exists with different'
@@ -431,5 +438,5 @@ def test_pull_dataset_local_name_already_exists(
 
     # able to save it as version 2 of local dataset name
     catalog.pull_dataset(
-        "ds://dogs@v1", local_ds_name=local_ds_name, local_ds_version=2, no_cp=True
+        "ds://dogs@v1", local_ds_name=local_ds_name, local_ds_version=2
     )

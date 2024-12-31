@@ -30,7 +30,7 @@ APPNAME = "datachain"
 APPAUTHOR = "iterative"
 ENV_DATACHAIN_SYSTEM_CONFIG_DIR = "DATACHAIN_SYSTEM_CONFIG_DIR"
 ENV_DATACHAIN_GLOBAL_CONFIG_DIR = "DATACHAIN_GLOBAL_CONFIG_DIR"
-STUDIO_URL = "https://studio.dvc.ai"
+STUDIO_URL = "https://studio.datachain.ai"
 
 
 T = TypeVar("T", bound="DataChainDir")
@@ -263,7 +263,7 @@ def batched_it(iterable: Iterable[_T_co], n: int) -> Iterator[Iterator[_T_co]]:
 
 def flatten(items):
     for item in items:
-        if isinstance(item, list):
+        if isinstance(item, (list, tuple)):
             yield from item
         else:
             yield item

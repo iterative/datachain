@@ -7,6 +7,8 @@ from datachain.client import Client
 from datachain.lib.dc import DataChain
 from datachain.lib.file import File
 from datachain.lib.listing import (
+    LISTING_PREFIX,
+    get_listing,
     is_listing_dataset,
     listing_uri_from_name,
     parse_listing_uri,
@@ -38,7 +40,7 @@ def _tree_to_entries(tree: dict, path=""):
 @pytest.fixture
 def listing(test_session):
     catalog = test_session.catalog
-    dataset_name, _, _, _ = DataChain.parse_uri("s3://whatever", test_session)
+    dataset_name, _, _, _ = get_listing("file:///whatever", test_session)
     DataChain.from_values(file=list(_tree_to_entries(TREE))).save(
         dataset_name, listing=True
     )
@@ -46,10 +48,35 @@ def listing(test_session):
     return Listing(
         catalog.metastore.clone(),
         catalog.warehouse.clone(),
-        Client.get_client("s3://whatever", catalog.cache, **catalog.client_config),
+        Client.get_client("file:///whatever", catalog.cache, **catalog.client_config),
         dataset_name=dataset_name,
         object_name="file",
     )
+
+
+def test_get_listing_returns_exact_math_on_update(test_session):
+    # Context: https://github.com/iterative/datachain/pull/726
+    # On update it should be returning the exact match (not a "bigger" one)
+    dataset_name_dir1, _, _, exists = get_listing("file:///whatever/dir1", test_session)
+    DataChain.from_values(file=list(_tree_to_entries(TREE["dir1"]))).save(
+        dataset_name_dir1, listing=True
+    )
+    assert dataset_name_dir1 == f"{LISTING_PREFIX}file:///whatever/dir1/"
+    assert not exists
+
+    dataset_name, _, _, exists = get_listing("file:///whatever", test_session)
+    DataChain.from_values(file=list(_tree_to_entries(TREE))).save(
+        dataset_name, listing=True
+    )
+    assert dataset_name == f"{LISTING_PREFIX}file:///whatever/"
+    assert not exists
+
+    dataset_name_dir1, _, _, exists = get_listing(
+        "file:///whatever/dir1", test_session, update=True
+    )
+    assert dataset_name_dir1 == f"{LISTING_PREFIX}file:///whatever/dir1/"
+    # On update it is always false (there was no reason to complicate it for now)
+    assert not exists
 
 
 def test_resolve_path_in_root(listing):
@@ -134,7 +161,7 @@ def test_list_dir(listing):
 
 def test_list_file(listing):
     file = listing.resolve_path("dir1/dataset.csv")
-    src = DataSource(listing, file)
+    src = DataSource(listing, listing.client, file)
     results = list(src.ls(["sys__id", "name", "dir_type"]))
     assert {r[1] for r in results} == {"dataset.csv"}
     assert results[0][0] == file.sys__id

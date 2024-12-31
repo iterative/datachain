@@ -43,8 +43,9 @@ from datachain.data_storage.schema import (
 from datachain.dataset import DatasetStatus, RowDict
 from datachain.error import DatasetNotFoundError, QueryScriptCancelError
 from datachain.func.base import Function
-from datachain.lib.udf import UDFAdapter
 from datachain.progress import CombinedDownloadCallback
+from datachain.query.schema import C, UDFParamSpec, normalize_param
+from datachain.query.session import Session
 from datachain.sql.functions.random import rand
 from datachain.utils import (
     batched,
@@ -52,9 +53,6 @@ from datachain.utils import (
     filtered_cloudpickle_dumps,
     get_datachain_executable,
 )
-
-from .schema import C, UDFParamSpec, normalize_param
-from .session import Session
 
 if TYPE_CHECKING:
     from sqlalchemy.sql.elements import ClauseElement
@@ -65,7 +63,8 @@ if TYPE_CHECKING:
     from datachain.catalog import Catalog
     from datachain.data_storage import AbstractWarehouse
     from datachain.dataset import DatasetRecord
-    from datachain.lib.udf import UDFResult
+    from datachain.lib.udf import UDFAdapter, UDFResult
+    from datachain.query.udf import UdfInfo
 
     P = ParamSpec("P")
 
@@ -301,7 +300,7 @@ def adjust_outputs(
     return row
 
 
-def get_udf_col_types(warehouse: "AbstractWarehouse", udf: UDFAdapter) -> list[tuple]:
+def get_udf_col_types(warehouse: "AbstractWarehouse", udf: "UDFAdapter") -> list[tuple]:
     """Optimization: Precompute UDF column types so these don't have to be computed
     in the convert_type function for each row in a loop."""
     dialect = warehouse.db.dialect
@@ -322,7 +321,7 @@ def process_udf_outputs(
     warehouse: "AbstractWarehouse",
     udf_table: "Table",
     udf_results: Iterator[Iterable["UDFResult"]],
-    udf: UDFAdapter,
+    udf: "UDFAdapter",
     batch_size: int = INSERT_BATCH_SIZE,
     cb: Callback = DEFAULT_CALLBACK,
 ) -> None:
@@ -347,6 +346,8 @@ def process_udf_outputs(
         for row_chunk in batched(rows, batch_size):
             warehouse.insert_rows(udf_table, row_chunk)
 
+    warehouse.insert_rows_done(udf_table)
+
 
 def get_download_callback() -> Callback:
     return CombinedDownloadCallback(
@@ -366,7 +367,7 @@ def get_generated_callback(is_generator: bool = False) -> Callback:
 
 @frozen
 class UDFStep(Step, ABC):
-    udf: UDFAdapter
+    udf: "UDFAdapter"
     catalog: "Catalog"
     partition_by: Optional[PartitionByType] = None
     parallel: Optional[int] = None
@@ -440,7 +441,7 @@ class UDFStep(Step, ABC):
                     raise RuntimeError(
                         "In-memory databases cannot be used with parallel processing."
                     )
-                udf_info = {
+                udf_info: UdfInfo = {
                     "udf_data": filtered_cloudpickle_dumps(self.udf),
                     "catalog_init": self.catalog.get_init_params(),
                     "metastore_clone_params": self.catalog.metastore.clone_params(),
@@ -464,8 +465,8 @@ class UDFStep(Step, ABC):
 
                 with subprocess.Popen(cmd, env=envs, stdin=subprocess.PIPE) as process:  # noqa: S603
                     process.communicate(process_data)
-                    if process.poll():
-                        raise RuntimeError("UDF Execution Failed!")
+                    if retval := process.poll():
+                        raise RuntimeError(f"UDF Execution Failed! Exit code: {retval}")
             else:
                 # Otherwise process single-threaded (faster for smaller UDFs)
                 warehouse = self.catalog.warehouse
@@ -479,7 +480,6 @@ class UDFStep(Step, ABC):
                         udf_fields,
                         udf_inputs,
                         self.catalog,
-                        self.is_generator,
                         self.cache,
                         download_cb,
                         processed_cb,
@@ -495,8 +495,6 @@ class UDFStep(Step, ABC):
                     download_cb.close()
                     processed_cb.close()
                     generated_cb.close()
-
-                warehouse.insert_rows_done(udf_table)
 
         except QueryScriptCancelError:
             self.catalog.warehouse.close()
@@ -1491,7 +1489,7 @@ class DatasetQuery:
     @detach
     def add_signals(
         self,
-        udf: UDFAdapter,
+        udf: "UDFAdapter",
         parallel: Optional[int] = None,
         workers: Union[bool, int] = False,
         min_task_size: Optional[int] = None,
@@ -1535,7 +1533,7 @@ class DatasetQuery:
     @detach
     def generate(
         self,
-        udf: UDFAdapter,
+        udf: "UDFAdapter",
         parallel: Optional[int] = None,
         workers: Union[bool, int] = False,
         min_task_size: Optional[int] = None,
@@ -1617,7 +1615,9 @@ class DatasetQuery:
             )
             version = version or dataset.latest_version
 
-            self.session.add_dataset_version(dataset=dataset, version=version)
+            self.session.add_dataset_version(
+                dataset=dataset, version=version, listing=kwargs.get("listing", False)
+            )
 
             dr = self.catalog.warehouse.dataset_rows(dataset)
 

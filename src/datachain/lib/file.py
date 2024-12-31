@@ -39,6 +39,8 @@ logger = logging.getLogger("datachain")
 # how to create file path when exporting
 ExportPlacement = Literal["filename", "etag", "fullpath", "checksum"]
 
+FileType = Literal["binary", "text", "image"]
+
 
 class VFileError(DataChainError):
     def __init__(self, file: "File", message: str, vtype: str = ""):
@@ -362,7 +364,7 @@ class File(DataModel):
 
         try:
             info = client.fs.info(client.get_full_path(self.path))
-            converted_info = client.info_to_file(info, self.source)
+            converted_info = client.info_to_file(info, self.path)
             return type(self)(
                 path=self.path,
                 source=self.source,
@@ -470,7 +472,7 @@ class ArrowRow(DataModel):
             return record_batch.to_pylist()[0]
 
 
-def get_file_type(type_: Literal["binary", "text", "image"] = "binary") -> type[File]:
+def get_file_type(type_: FileType = "binary") -> type[File]:
     file: type[File] = File
     if type_ == "text":
         file = TextFile

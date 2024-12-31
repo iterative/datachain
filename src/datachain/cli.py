@@ -479,10 +479,10 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         help="Copy directories recursively",
     )
     parse_pull.add_argument(
-        "--no-cp",
+        "--cp",
         default=False,
         action="store_true",
-        help="Do not copy files, just pull a remote dataset into local DB",
+        help="Copy actual files after pulling remote dataset into local DB",
     )
     parse_pull.add_argument(
         "--edatachain",
@@ -1322,7 +1322,7 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
                     args.output,
                     local_ds_name=args.local_name,
                     local_ds_version=args.local_version,
-                    no_cp=args.no_cp,
+                    cp=args.cp,
                     force=bool(args.force),
                     edatachain=args.edatachain,
                     edatachain_file=args.edatachain_file,
