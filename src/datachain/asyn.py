@@ -8,7 +8,7 @@ from collections.abc import (
     Iterable,
     Iterator,
 )
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait
 from heapq import heappop, heappush
 from typing import Any, Callable, Generic, Optional, TypeVar
 
@@ -179,6 +179,7 @@ class AsyncMapper(Generic[InputT, ResultT]):
             self.shutdown_producer()
             if not async_run.done():
                 async_run.cancel()
+                wait([async_run])
 
     def __iter__(self):
         return self.iterate()
