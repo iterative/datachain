@@ -1,6 +1,7 @@
 import random
 import string
 from collections.abc import Sequence
+from enum import Enum
 from typing import TYPE_CHECKING, Optional, Union
 
 import sqlalchemy as sa
@@ -14,6 +15,21 @@ if TYPE_CHECKING:
 
 
 C = Column
+
+
+def get_status_col_name() -> str:
+    """Returns new unique status col name"""
+    return "diff_" + "".join(
+        random.choice(string.ascii_letters)  # noqa: S311
+        for _ in range(10)
+    )
+
+
+class CompareStatus(str, Enum):
+    ADDED = "A"
+    DELETED = "D"
+    MODIFIED = "M"
+    SAME = "S"
 
 
 def compare(  # noqa: PLR0912, PLR0915, C901
@@ -72,13 +88,10 @@ def compare(  # noqa: PLR0912, PLR0915, C901
             "At least one of added, deleted, modified, same flags must be set"
         )
 
-    # we still need status column for internal implementation even if not
-    # needed in output
     need_status_col = bool(status_col)
-    status_col = status_col or "diff_" + "".join(
-        random.choice(string.ascii_letters)  # noqa: S311
-        for _ in range(10)
-    )
+    # we still need status column for internal implementation even if not
+    # needed in the output
+    status_col = status_col or get_status_col_name()
 
     # calculate on and compare column names
     right_on = right_on or on
@@ -112,7 +125,7 @@ def compare(  # noqa: PLR0912, PLR0915, C901
                 for c in [f"{_rprefix(c, rc)}{rc}" for c, rc in zip(on, right_on)]
             ]
         )
-        diff_cond.append((added_cond, "A"))
+        diff_cond.append((added_cond, CompareStatus.ADDED))
     if modified and compare:
         modified_cond = sa.or_(
             *[
@@ -120,7 +133,7 @@ def compare(  # noqa: PLR0912, PLR0915, C901
                 for c, rc in zip(compare, right_compare)  # type: ignore[arg-type]
             ]
         )
-        diff_cond.append((modified_cond, "M"))
+        diff_cond.append((modified_cond, CompareStatus.MODIFIED))
     if same and compare:
         same_cond = sa.and_(
             *[
@@ -128,9 +141,11 @@ def compare(  # noqa: PLR0912, PLR0915, C901
                 for c, rc in zip(compare, right_compare)  # type: ignore[arg-type]
             ]
         )
-        diff_cond.append((same_cond, "S"))
+        diff_cond.append((same_cond, CompareStatus.SAME))
 
-    diff = sa.case(*diff_cond, else_=None if compare else "M").label(status_col)
+    diff = sa.case(*diff_cond, else_=None if compare else CompareStatus.MODIFIED).label(
+        status_col
+    )
     diff.type = String()
 
     left_right_merge = left.merge(
@@ -145,7 +160,7 @@ def compare(  # noqa: PLR0912, PLR0915, C901
         )
     )
 
-    diff_col = sa.literal("D").label(status_col)
+    diff_col = sa.literal(CompareStatus.DELETED).label(status_col)
     diff_col.type = String()
 
     right_left_merge = right.merge(

@@ -1,6 +1,7 @@
 import pytest
 
 from datachain.lib.dc import DataChain
+from datachain.lib.diff import CompareStatus
 from datachain.toolkit import compare, train_test_split
 
 
@@ -55,8 +56,8 @@ def test_train_test_split_errors(not_random_ds):
 @pytest.mark.parametrize("added", (True, False))
 @pytest.mark.parametrize("deleted", (True, False))
 @pytest.mark.parametrize("modified", (True, False))
-@pytest.mark.parametrize("unchanged", (True, False))
-def test_compare(test_session, added, deleted, modified, unchanged):
+@pytest.mark.parametrize("same", (True, False))
+def test_compare(test_session, added, deleted, modified, same):
     ds1 = DataChain.from_values(
         id=[1, 2, 4],
         name=["John1", "Doe", "Andy"],
@@ -69,7 +70,7 @@ def test_compare(test_session, added, deleted, modified, unchanged):
         session=test_session,
     ).save("ds2")
 
-    if not any([added, deleted, modified, unchanged]):
+    if not any([added, deleted, modified, same]):
         with pytest.raises(ValueError) as exc_info:
             compare(
                 ds1,
@@ -77,11 +78,11 @@ def test_compare(test_session, added, deleted, modified, unchanged):
                 added=added,
                 deleted=deleted,
                 modified=modified,
-                unchanged=unchanged,
+                same=same,
                 on=["id"],
             )
         assert str(exc_info.value) == (
-            "At least one of added, deleted, modified, unchanged flags must be set"
+            "At least one of added, deleted, modified, same flags must be set"
         )
         return
 
@@ -91,26 +92,28 @@ def test_compare(test_session, added, deleted, modified, unchanged):
         added=added,
         deleted=deleted,
         modified=modified,
-        unchanged=unchanged,
+        same=same,
         on=["id"],
     )
 
     collect_fields = ["id", "name"]
     if added:
-        assert "diff" not in chains["A"].signals_schema.db_signals()
-        assert list(chains["A"].order_by("id").collect(*collect_fields)) == [(2, "Doe")]
+        assert "diff" not in chains[CompareStatus.ADDED].signals_schema.db_signals()
+        assert list(
+            chains[CompareStatus.ADDED].order_by("id").collect(*collect_fields)
+        ) == [(2, "Doe")]
     if deleted:
-        assert "diff" not in chains["D"].signals_schema.db_signals()
-        assert list(chains["D"].order_by("id").collect(*collect_fields)) == [
-            (3, "Mark")
-        ]
+        assert "diff" not in chains[CompareStatus.DELETED].signals_schema.db_signals()
+        assert list(
+            chains[CompareStatus.DELETED].order_by("id").collect(*collect_fields)
+        ) == [(3, "Mark")]
     if modified:
-        assert "diff" not in chains["M"].signals_schema.db_signals()
-        assert list(chains["M"].order_by("id").collect(*collect_fields)) == [
-            (1, "John1")
-        ]
-    if unchanged:
-        assert "diff" not in chains["U"].signals_schema.db_signals()
-        assert list(chains["U"].order_by("id").collect(*collect_fields)) == [
-            (4, "Andy")
-        ]
+        assert "diff" not in chains[CompareStatus.MODIFIED].signals_schema.db_signals()
+        assert list(
+            chains[CompareStatus.MODIFIED].order_by("id").collect(*collect_fields)
+        ) == [(1, "John1")]
+    if same:
+        assert "diff" not in chains[CompareStatus.SAME].signals_schema.db_signals()
+        assert list(
+            chains[CompareStatus.SAME].order_by("id").collect(*collect_fields)
+        ) == [(4, "Andy")]
