@@ -3,7 +3,7 @@ import json
 import pytest
 
 from datachain.lib.file import TextFile
-from datachain.lib.meta_formats import read_meta, read_schema
+from datachain.lib.meta_formats import gen_datamodel_code, read_meta
 
 example = {
     "id": "1",
@@ -23,7 +23,7 @@ example = {
 
 
 @pytest.mark.filterwarnings("ignore::pydantic.warnings.PydanticDeprecatedSince20")
-def test_read_schema(tmp_dir, catalog):
+def test_gen_datamodel_code(tmp_dir, catalog):
     (tmp_dir / "valid.json").write_text(json.dumps(example), encoding="utf8")
     file = TextFile(path=tmp_dir / "valid.json")
     file._set_stream(catalog)
@@ -59,7 +59,7 @@ class Image(UserModel):
 DataModel.register(Image)
 spec = Image"""
 
-    actual = read_schema(file, data_type="json", model_name="Image")
+    actual = gen_datamodel_code(file, format="json", model_name="Image")
     actual = "\n".join(actual.splitlines()[4:])  # remove header
     assert actual == expected
 
@@ -72,7 +72,7 @@ def test_read_meta(tmp_dir, catalog):
 
     parser = read_meta(
         schema_from=str(tmp_dir / "valid.json"),
-        meta_type="jsonl",
+        format="jsonl",
         model_name="Image",
     )
     rows = list(parser(file))

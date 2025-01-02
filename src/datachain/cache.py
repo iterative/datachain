@@ -61,14 +61,16 @@ class DataChainCache:
         tmp_info = odb_fs.join(self.odb.tmp_dir, tmp_fname())  # type: ignore[arg-type]
         size = file.size
         if size < 0:
-            size = await client.get_size(from_path)
+            size = await client.get_size(from_path, version_id=file.version)
         cb = callback or TqdmCallback(
             tqdm_kwargs={"desc": odb_fs.name(from_path), "bytes": True},
             tqdm_cls=Tqdm,
             size=size,
         )
         try:
-            await client.get_file(from_path, tmp_info, callback=cb)
+            await client.get_file(
+                from_path, tmp_info, callback=cb, version_id=file.version
+            )
         finally:
             if not callback:
                 cb.close()
