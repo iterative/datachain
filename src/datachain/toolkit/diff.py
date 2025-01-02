@@ -24,18 +24,10 @@ def compare(
     modified: bool = True,
     same: bool = False,
 ) -> dict[str, "DataChain"]:
-    """Comparing two chains by identifying rows that are added, deleted, modified
-    or same. Result is the new chain that has additional column with possible
-    values: `A`, `D`, `M`, `U` representing added, deleted, modified and same
-    rows respectively. Note that if only one "status" is asked, by setting proper
-    flags, this additional column is not created as it would have only one value
-    for all rows. Beside additional diff column, new chain has schema of the chain
-    on which method was called.
-
-    Comparing two chains and returning multiple chains, one for each of `added`,
+    """Comparing two chains and returning multiple chains, one for each of `added`,
     `deleted`, `modified` and `same` status. Result is returned in form of
     dictionary where each item represents one of the statuses and key values
-    are `A`, `D`, `M`, `U` corresponding. Note that status column is not in the
+    are `A`, `D`, `M`, `S` corresponding. Note that status column is not in the
     resulting chains.
 
     Parameters:
