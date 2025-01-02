@@ -120,7 +120,6 @@ def case(
         raise DataChainParamsError("Missing case statements")
 
     for arg in args:
-        # if type_ and type_ != type(arg[1]):
         if type_ and not isinstance(arg[1], type_):
             raise DataChainParamsError("Case statement values must be of the same type")
         type_ = type(arg[1])
