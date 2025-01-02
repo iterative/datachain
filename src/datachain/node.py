@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -9,6 +10,8 @@ from datachain.utils import TIME_ZERO, time_to_str
 
 if TYPE_CHECKING:
     from typing_extensions import Self
+
+    from datachain.client import Client
 
 
 class DirType:
@@ -114,7 +117,21 @@ class Node:
         )
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any], file_prefix: str = "file") -> "Self":
+    def from_file(cls, f: File) -> "Self":
+        return cls(
+            source=StorageURI(f.source),
+            path=f.path,
+            etag=f.etag,
+            is_latest=f.is_latest,
+            size=f.size,
+            last_modified=f.last_modified,
+            version=f.version,
+            location=str(f.location) if f.location else None,
+            dir_type=DirType.FILE,
+        )
+
+    @classmethod
+    def from_row(cls, d: dict[str, Any], file_prefix: str = "file") -> "Self":
         def _dval(field_name: str):
             return d.get(f"{file_prefix}__{field_name}")
 
@@ -173,6 +190,15 @@ class NodeWithPath:
         if self.n.is_dir and path:
             path += "/"
         return path
+
+    def instantiate(
+        self, client: "Client", output: str, progress_bar, *, force: bool = False
+    ):
+        dst = os.path.join(output, *self.path)
+        dst_dir = os.path.dirname(dst)
+        os.makedirs(dst_dir, exist_ok=True)
+        file = self.n.to_file(client.uri)
+        client.instantiate_object(file, dst, progress_bar, force)
 
 
 TIME_FMT = "%Y-%m-%d %H:%M"

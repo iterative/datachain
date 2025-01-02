@@ -138,6 +138,10 @@ class Client(ABC):
         return fs
 
     @classmethod
+    def version_path(cls, path: str, version_id: Optional[str]) -> str:
+        return path
+
+    @classmethod
     def from_name(
         cls,
         name: str,
@@ -198,17 +202,37 @@ class Client(ABC):
         return self._fs
 
     def url(self, path: str, expires: int = 3600, **kwargs) -> str:
-        return self.fs.sign(self.get_full_path(path), expiration=expires, **kwargs)
+        return self.fs.sign(
+            self.get_full_path(path, kwargs.pop("version_id", None)),
+            expiration=expires,
+            **kwargs,
+        )
 
     async def get_current_etag(self, file: "File") -> str:
-        info = await self.fs._info(self.get_full_path(file.path))
-        return self.info_to_file(info, "").etag
+        kwargs = {}
+        if self.fs.version_aware:
+            kwargs["version_id"] = file.version
+        info = await self.fs._info(
+            self.get_full_path(file.path, file.version), **kwargs
+        )
+        return self.info_to_file(info, file.path).etag
 
-    async def get_size(self, path: str) -> int:
-        return await self.fs._size(path)
+    def get_file_info(self, path: str, version_id: Optional[str] = None) -> "File":
+        info = self.fs.info(self.get_full_path(path, version_id), version_id=version_id)
+        return self.info_to_file(info, path)
 
-    async def get_file(self, lpath, rpath, callback):
-        return await self.fs._get_file(lpath, rpath, callback=callback)
+    async def get_size(self, path: str, version_id: Optional[str] = None) -> int:
+        return await self.fs._size(
+            self.version_path(path, version_id), version_id=version_id
+        )
+
+    async def get_file(self, lpath, rpath, callback, version_id: Optional[str] = None):
+        return await self.fs._get_file(
+            self.version_path(lpath, version_id),
+            rpath,
+            callback=callback,
+            version_id=version_id,
+        )
 
     async def scandir(
         self, start_prefix: str, method: str = "default"
@@ -315,11 +339,11 @@ class Client(ABC):
     def rel_path(self, path: str) -> str:
         return self.fs.split_path(path)[1]
 
-    def get_full_path(self, rel_path: str) -> str:
-        return f"{self.PREFIX}{self.name}/{rel_path}"
+    def get_full_path(self, rel_path: str, version_id: Optional[str] = None) -> str:
+        return self.version_path(f"{self.PREFIX}{self.name}/{rel_path}", version_id)
 
     @abstractmethod
-    def info_to_file(self, v: dict[str, Any], parent: str) -> "File": ...
+    def info_to_file(self, v: dict[str, Any], path: str) -> "File": ...
 
     def fetch_nodes(
         self,
@@ -362,7 +386,9 @@ class Client(ABC):
         if use_cache and (cache_path := self.cache.get_path(file)):
             return open(cache_path, mode="rb")
         assert not file.location
-        return FileWrapper(self.fs.open(self.get_full_path(file.path)), cb)  # type: ignore[return-value]
+        return FileWrapper(
+            self.fs.open(self.get_full_path(file.path, file.version)), cb
+        )  # type: ignore[return-value]
 
     def download(self, file: "File", *, callback: Callback = DEFAULT_CALLBACK) -> None:
         sync(get_loop(), functools.partial(self._download, file, callback=callback))

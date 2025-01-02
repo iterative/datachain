@@ -32,6 +32,20 @@ class GCSClient(Client):
 
         return cast(GCSFileSystem, super().create_fs(**kwargs))
 
+    def url(self, path: str, expires: int = 3600, **kwargs) -> str:
+        """
+        Generate a signed URL for the given path.
+        If the client is anonymous, a public URL is returned instead
+        (see https://cloud.google.com/storage/docs/access-public-data#api-link).
+        """
+        version_id = kwargs.pop("version_id", None)
+        if self.fs.storage_options.get("token") == "anon":
+            query = f"?generation={version_id}" if version_id else ""
+            return f"https://storage.googleapis.com/{self.name}/{path}{query}"
+        return self.fs.sign(
+            self.get_full_path(path, version_id), expiration=expires, **kwargs
+        )
+
     @staticmethod
     def parse_timestamp(timestamp: str) -> datetime:
         """
@@ -121,3 +135,7 @@ class GCSClient(Client):
             last_modified=self.parse_timestamp(v["updated"]),
             size=v.get("size", ""),
         )
+
+    @classmethod
+    def version_path(cls, path: str, version_id: Optional[str]) -> str:
+        return f"{path}#{version_id}" if version_id else path

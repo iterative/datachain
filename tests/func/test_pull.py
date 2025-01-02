@@ -64,6 +64,7 @@ def dog_entries_parquet_lz4(dog_entries, cloud_test_catalog) -> bytes:
         adapted["sys__rand"] = 1
         adapted["file__location"] = ""
         adapted["file__source"] = src_uri
+        adapted["file__version"] = ""
         return adapted
 
     dog_entries = [_adapt_row(e) for e in dog_entries]
@@ -190,6 +191,7 @@ def dataset_export_data_chunk(
 @pytest.mark.parametrize("instantiate", [True, False])
 @skip_if_not_sqlite
 def test_pull_dataset_success(
+    mocker,
     cloud_test_catalog,
     remote_dataset_info,
     remote_dataset_stats,
@@ -201,6 +203,11 @@ def test_pull_dataset_success(
     local_ds_version,
     instantiate,
 ):
+    mocker.patch(
+        "datachain.catalog.catalog.DatasetRowsFetcher.should_check_for_status",
+        return_value=True,
+    )
+
     src_uri = cloud_test_catalog.src_uri
     working_dir = cloud_test_catalog.working_dir
     catalog = cloud_test_catalog.catalog

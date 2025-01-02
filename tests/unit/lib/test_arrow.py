@@ -10,9 +10,11 @@ from datasets import Dataset
 from datachain.lib.arrow import (
     ArrowGenerator,
     arrow_type_mapper,
+    infer_schema,
     schema_to_output,
 )
 from datachain.lib.data_model import dict_to_data_model
+from datachain.lib.dc import DataChain
 from datachain.lib.file import ArrowRow, File
 from datachain.lib.hf import HFClassLabel
 
@@ -104,6 +106,32 @@ def test_arrow_generator_hf(tmp_path, catalog):
     func = ArrowGenerator(output_schema=output_schema)
     for obj in func.process(stream):
         assert isinstance(obj[1].col, HFClassLabel)
+
+
+@pytest.mark.parametrize("cache", [True, False])
+def test_arrow_generator_partitioned(tmp_path, catalog, cache):
+    pq_path = tmp_path / "parquets"
+    pylist = [
+        {"first_name": "Alice", "age": 25, "city": "New York"},
+        {"first_name": "Bob", "age": 30, "city": "Los Angeles"},
+        {"first_name": "Charlie", "age": 35, "city": "Chicago"},
+    ]
+    table = pa.Table.from_pylist(pylist)
+    pq.write_to_dataset(table, pq_path, partition_cols=["first_name"])
+
+    output, original_names = schema_to_output(table.schema)
+    output_schema = dict_to_data_model("", output, original_names)
+    func = ArrowGenerator(
+        table.schema, output_schema=output_schema, partitioning="hive"
+    )
+
+    for path in pq_path.rglob("*.parquet"):
+        stream = File(path=path.as_posix(), source="file://")
+        stream._set_stream(catalog, caching_enabled=cache)
+
+        (o,) = list(func.process(stream))
+        assert isinstance(o[0], ArrowRow)
+        assert dict(o[1]) in pylist
 
 
 @pytest.mark.parametrize(
@@ -238,3 +266,10 @@ def test_parquet_override_column_names_invalid():
     col_names = ["n1", "n2", "n3"]
     with pytest.raises(ValueError):
         schema_to_output(schema, col_names)
+
+
+def test_infer_schema_no_files(test_session):
+    schema = {"file": File, "my_col": int}
+    dc = DataChain.from_records([], schema=schema, session=test_session, in_memory=True)
+    with pytest.raises(ValueError):
+        infer_schema(dc)

@@ -3,6 +3,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import pytest
+import requests
 import yaml
 from fsspec.implementations.local import LocalFileSystem
 
@@ -461,36 +462,80 @@ def test_cp_single_file(cloud_test_catalog, no_glob):
     assert tree_from_path(dest) == {"local_dog": "woof"}
 
 
-@pytest.mark.parametrize("tree", [{"foo": "original"}], indirect=True)
-def test_storage_mutation(cloud_test_catalog):
+@pytest.mark.parametrize("tree", [{"bar-file": "original"}], indirect=True)
+def test_cp_file_storage_mutation(cloud_test_catalog):
     working_dir = cloud_test_catalog.working_dir
     catalog = cloud_test_catalog.catalog
-    src_path = f"{cloud_test_catalog.src_uri}/foo"
+    src_path = f"{cloud_test_catalog.src_uri}/bar-file"
 
     dest = working_dir / "data1"
     dest.mkdir()
     catalog.cp([src_path], str(dest / "local"), no_edatachain_file=True)
     assert tree_from_path(dest) == {"local": "original"}
 
-    (cloud_test_catalog.src / "foo").write_text("modified")
+    (cloud_test_catalog.src / "bar-file").write_text("modified")
     dest = working_dir / "data2"
     dest.mkdir()
     catalog.cp([src_path], str(dest / "local"), no_edatachain_file=True)
-    assert tree_from_path(dest) == {"local": "original"}
+    assert tree_from_path(dest) == {"local": "modified"}
 
-    # Since the old version cannot be found in storage or cache, it's an error.
+    # For a file we access it directly, we don't take the entry from listing
+    # so we don't check the previous etag with the new modified one
     catalog.cache.clear()
     dest = working_dir / "data3"
     dest.mkdir()
-    with pytest.raises(FileNotFoundError):
-        catalog.cp([src_path], str(dest / "local"), no_edatachain_file=True)
-    assert tree_from_path(dest) == {}
+    catalog.cp([src_path], str(dest / "local"), no_edatachain_file=True)
+    assert tree_from_path(dest) == {"local": "modified"}
 
     catalog.index([src_path], update=True)
     dest = working_dir / "data4"
     dest.mkdir()
     catalog.cp([src_path], str(dest / "local"), no_edatachain_file=True)
     assert tree_from_path(dest) == {"local": "modified"}
+
+
+@pytest.mark.parametrize("tree", [{"foo-file": "original"}], indirect=True)
+def test_cp_dir_storage_mutation(cloud_test_catalog, version_aware):
+    working_dir = cloud_test_catalog.working_dir
+    catalog = cloud_test_catalog.catalog
+    src_path = f"{cloud_test_catalog.src_uri}/"
+
+    dest = working_dir / "data1"
+    dest.mkdir()
+    catalog.cp([src_path], str(dest / "local"), no_edatachain_file=True, recursive=True)
+    assert tree_from_path(dest) == {"local": {"foo-file": "original"}}
+
+    (cloud_test_catalog.src / "foo-file").write_text("modified")
+    dest = working_dir / "data2"
+    dest.mkdir()
+    catalog.cp([src_path], str(dest / "local"), no_edatachain_file=True, recursive=True)
+    assert tree_from_path(dest) == {"local": {"foo-file": "original"}}
+
+    # For a dir we access files through listing
+    # so it finds a etag for the origin file, but it's now not in cache + it
+    # is modified on the local storage, so we can't find the file referenced
+    # by the listing anymore if FS is not version aware, or we can find
+    # the original version and download if FS support versioning
+    catalog.cache.clear()
+    dest = working_dir / "data3"
+    dest.mkdir()
+    if version_aware:
+        catalog.cp(
+            [src_path], str(dest / "local"), no_edatachain_file=True, recursive=True
+        )
+        assert tree_from_path(dest) == {"local": {"foo-file": "original"}}
+    else:
+        with pytest.raises(FileNotFoundError):
+            catalog.cp(
+                [src_path], str(dest / "local"), no_edatachain_file=True, recursive=True
+            )
+            assert tree_from_path(dest) == {"local": {}}
+
+    catalog.index([src_path], update=True)
+    dest = working_dir / "data4"
+    dest.mkdir()
+    catalog.cp([src_path], str(dest / "local"), no_edatachain_file=True, recursive=True)
+    assert tree_from_path(dest) == {"local": {"foo-file": "modified"}}
 
 
 def test_cp_edatachain_file_options(cloud_test_catalog):
@@ -734,6 +779,42 @@ def test_ls_glob(cloud_test_catalog):
     ) == [("dog1", ["dog1"]), ("dog2", ["dog2"]), ("dog3", ["dog3"])]
 
 
+def test_ls_file(cloud_test_catalog):
+    src_uri = cloud_test_catalog.src_uri
+    catalog = cloud_test_catalog.catalog
+
+    assert sorted(
+        (source.node.name, [r[0] for r in results])
+        for source, results in catalog.ls([f"{src_uri}/dogs/dog1"], fields=["name"])
+    ) == [("dog1", ["dog1"])]
+
+
+def test_ls_dir_same_name_as_file(cloud_test_catalog, cloud_type):
+    src_uri = cloud_test_catalog.src_uri
+    catalog = cloud_test_catalog.catalog
+
+    path = f"{src_uri}/dogs/dog1"
+
+    # check that file exists
+    assert sorted(
+        (source.node.name, [r[0] for r in results])
+        for source, results in catalog.ls([path], fields=["name"])
+    ) == [("dog1", ["dog1"])]
+
+    if cloud_type == "file":
+        # should be fixed upstream in fsspec
+        # boils down to https://github.com/fsspec/filesystem_spec/pull/1567#issuecomment-2563160414
+        # fsspec removes the trailing slash and returns a file, that's why we are
+        # are not getting an error here
+        assert sorted(
+            (source.node.name, [r[0] for r in results])
+            for source, results in catalog.ls([f"{path}/"], fields=["name"])
+        ) == [("", ["."])]
+    else:
+        with pytest.raises(FileNotFoundError):
+            next(catalog.ls([f"{path}/"], fields=["name"]))
+
+
 def test_ls_prefix_not_found(cloud_test_catalog):
     src_uri = cloud_test_catalog.src_uri
     catalog = cloud_test_catalog.catalog
@@ -840,13 +921,17 @@ def test_listing_stats(cloud_test_catalog):
 
     catalog.enlist_source(f"{src_uri}/dogs/", update=True)
     stats = listing_stats(src_uri, catalog)
+    assert stats.num_objects == 7
+    assert stats.size == 36
+
+    stats = listing_stats(f"{src_uri}/dogs/", catalog)
     assert stats.num_objects == 4
     assert stats.size == 15
 
     catalog.enlist_source(f"{src_uri}/dogs/")
     stats = listing_stats(src_uri, catalog)
-    assert stats.num_objects == 4
-    assert stats.size == 15
+    assert stats.num_objects == 7
+    assert stats.size == 36
 
 
 @pytest.mark.parametrize("cloud_type", ["s3", "azure", "gs"], indirect=True)
@@ -887,9 +972,8 @@ def test_enlist_source_handles_file(cloud_test_catalog):
     src_path = f"{src_uri}/dogs/dog1"
 
     catalog.enlist_source(src_path)
-    stats = listing_stats(src_path, catalog)
-    assert stats.num_objects == len(DEFAULT_TREE["dogs"])
-    assert stats.size == 15
+    with pytest.raises(DatasetNotFoundError):
+        listing_stats(src_path, catalog)
 
 
 @pytest.mark.parametrize("from_cli", [False, True])
@@ -910,3 +994,61 @@ def test_garbage_collect(cloud_test_catalog, from_cli, capsys):
     else:
         catalog.cleanup_tables(temp_tables)
     assert catalog.get_temp_table_names() == []
+
+
+@pytest.fixture
+def gcs_fake_credentials(monkeypatch):
+    # For signed URL tests to work we need to setup some fake credentials
+    # that looks like real ones
+    monkeypatch.setenv(
+        "GOOGLE_APPLICATION_CREDENTIALS",
+        os.path.dirname(__file__) + "/fake-service-account-credentials.json",
+    )
+
+
+@pytest.mark.parametrize("tree", [{"test-signed-file": "original"}], indirect=True)
+@pytest.mark.parametrize(
+    "cloud_type, version_aware",
+    (["s3", False], ["azure", False], ["gs", False]),
+    indirect=True,
+)
+def test_signed_url(cloud_test_catalog, gcs_fake_credentials):
+    signed_url = cloud_test_catalog.catalog.signed_url(
+        cloud_test_catalog.src_uri, "test-signed-file"
+    )
+    content = requests.get(signed_url, timeout=10).text
+    assert content == "original"
+
+
+@pytest.mark.parametrize(
+    "tree", [{"test-signed-file-versioned": "original"}], indirect=True
+)
+@pytest.mark.parametrize(
+    "cloud_type, version_aware",
+    (["s3", True], ["azure", True], ["gs", True]),
+    indirect=True,
+)
+def test_signed_url_versioned(cloud_test_catalog, gcs_fake_credentials):
+    file_name = "test-signed-file-versioned"
+    src_uri = cloud_test_catalog.src_uri
+    catalog = cloud_test_catalog.catalog
+    client = catalog.get_client(src_uri)
+
+    original_version = client.get_file_info(file_name).version
+
+    (cloud_test_catalog.src / file_name).write_text("modified")
+
+    modified_version = client.get_file_info(file_name).version
+
+    for version, expected in [
+        (original_version, "original"),
+        (modified_version, "modified"),
+    ]:
+        signed_url = catalog.signed_url(
+            src_uri,
+            file_name,
+            version_id=version,
+        )
+
+        content = requests.get(signed_url, timeout=10).text
+        assert content == expected

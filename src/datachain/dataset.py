@@ -92,6 +92,7 @@ class DatasetDependency:
             return self.name
 
         list_dataset_name, _, _ = parse_listing_uri(self.name.strip("/"), None, {})
+        assert list_dataset_name
         return list_dataset_name
 
     @classmethod
