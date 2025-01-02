@@ -659,5 +659,7 @@ def test_byte_hamming_distance_mutate(dc):
 )
 def test_case_mutate(dc, val, else_, type_):
     res = dc.mutate(test=case((C("num") < 2, val), else_=else_))
-    assert list(res.collect("test")) == [val, else_, else_, else_, else_]
+    assert list(res.order_by("test").collect("test")) == sorted(
+        [val, else_, else_, else_, else_]
+    )
     assert res.schema["test"] == type_
