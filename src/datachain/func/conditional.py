@@ -1,5 +1,9 @@
 from typing import Union
 
+from sqlalchemy import case as sql_case
+from sqlalchemy.sql.elements import BinaryExpression
+
+from datachain.lib.utils import DataChainParamsError
 from datachain.sql.functions import conditional
 
 from .func import ColT, Func
@@ -81,76 +85,50 @@ def least(*args: Union[ColT, float]) -> Func:
     )
 
 
-def case(*args: Union[ColT, float], case_=None) -> Func:
+def case(
+    *args: tuple[BinaryExpression, Union[int, float, complex, bool, str]], else_=None
+) -> Func:
     """
-    Returns the least (smallest) value from the given input values.
+    Returns the case function that produces case expression which has a list of
+    conditions and corresponding results. Results can only be python primitives
+    like string, numbes or booleans. Result type is inferred from condition results.
 
     Args:
-        args (ColT | str | int | float | Sequence): The values to compare.
-            If a string is provided, it is assumed to be the name of the column.
-            If a Func is provided, it is assumed to be a function returning a value.
-            If an int, float, or Sequence is provided, it is assumed to be a literal.
+        args (tuple(BinaryExpression, value(str | int | float | complex | bool):
+            - Tuple of binary expression and values pair which corresponds to one
+            case condition - value
+        else_ (str | int | float | complex | bool): else value in case expression
 
     Returns:
-        Func: A Func object that represents the least function.
+        Func: A Func object that represents the case function.
 
     Example:
         ```py
         dc.mutate(
-            least=func.least("signal.value", 0),
+            res=func.case((C("num") > 0, "P"), (C("num") < 0, "N"), else_="Z"),
         )
         ```
 
     Note:
         - Result column will always be of the same type as the input columns.
     """
-    cols, func_args = [], []
+    supported_types = [int, float, complex, str, bool]
+
+    type_ = type(else_) if else_ else None
+
+    if not args:
+        raise DataChainParamsError("Missing case statements")
 
     for arg in args:
-        if isinstance(arg, (str, Func)):
-            cols.append(arg)
-        else:
-            func_args.append(arg)
+        # if type_ and type_ != type(arg[1]):
+        if type_ and not isinstance(arg[1], type_):
+            raise DataChainParamsError("Case statement values must be of the same type")
+        type_ = type(arg[1])
 
-    return Func("case", inner=conditional.case, cols=cols, args=func_args)
-
-
-def isnone(col: Union[str, Func]) -> Func:
-    """
-    Takes a column and split character and returns an array of the parts.
-
-    Args:
-        col (str | literal): Column to split.
-            If a string is provided, it is assumed to be the name of the column.
-            If a literal is provided, it is assumed to be a string literal.
-            If a Func is provided, it is assumed to be a function returning a string.
-        sep (str): Separator to split the string.
-        limit (int, optional): Maximum number of splits to perform.
-
-    Returns:
-        Func: A Func object that represents the split function.
-
-    Example:
-        ```py
-        dc.mutate(
-            path_parts=func.string.split("file.path", "/"),
-            str_words=func.string.length("Random string", " "),
+    if type_ not in supported_types:
+        raise DataChainParamsError(
+            f"Case supports only python literals ({supported_types}) for values"
         )
-        ```
 
-    Note:
-        - Result column will always be of type array of strings.
-    """
-
-    def inner(arg):
-        print(f"arg is {arg}")
-        return arg == None
-
-    if get_origin(col) is literal:
-        cols = None
-        args = [col]
-    else:
-        cols = [col]
-        args = None
-
-    return Func("isnone", inner=inner, cols=cols, args=args, result_type=bool)
+    kwargs = {"else_": else_}
+    return Func("case", inner=sql_case, args=args, kwargs=kwargs, result_type=type_)

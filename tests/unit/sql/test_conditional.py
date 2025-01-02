@@ -1,6 +1,7 @@
 import pytest
 
 from datachain import func
+from datachain.lib.utils import DataChainParamsError
 from datachain.sql import select, values
 
 
@@ -83,3 +84,26 @@ def test_case(warehouse, val, expected):
     )
     result = tuple(warehouse.db.execute(query))
     assert result == ((expected,),)
+
+
+def test_case_missing_statements(warehouse):
+    with pytest.raises(DataChainParamsError) as exc_info:
+        select(func.case(*[], else_="D"))
+    assert str(exc_info.value) == "Missing case statements"
+
+
+def test_case_not_same_result_types(warehouse):
+    val = 2
+    with pytest.raises(DataChainParamsError) as exc_info:
+        select(func.case(*[(val > 1, "A"), (2 < val < 4, 5)], else_="D"))
+    assert str(exc_info.value) == "Case statement values must be of the same type"
+
+
+def test_case_wrong_result_type(warehouse):
+    val = 2
+    with pytest.raises(DataChainParamsError) as exc_info:
+        select(func.case(*[(val > 1, ["a", "b"]), (2 < val < 4, [])], else_=[]))
+    assert str(exc_info.value) == (
+        "Case supports only python literals ([<class 'int'>, <class 'float'>, "
+        "<class 'complex'>, <class 'str'>, <class 'bool'>]) for values"
+    )

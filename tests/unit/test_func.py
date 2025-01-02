@@ -1,10 +1,11 @@
 import pytest
 from sqlalchemy import Label
 
-from datachain import DataChain
+from datachain import C, DataChain
 from datachain.func import (
     bit_hamming_distance,
     byte_hamming_distance,
+    case,
     int_hash_64,
     literal,
 )
@@ -647,12 +648,16 @@ def test_byte_hamming_distance_mutate(dc):
     assert list(res) == [2, 1, 0, 1, 2]
 
 
-def test_case_mutate(dc):
-    res = dc.mutate(test=strlen("val") == 2).order_by("num").collect("test")
-    assert list(res) == [0, 1, 0, 0, 0]
-
-    res = dc.mutate(test=strlen("val") == 4).order_by("num").collect("test")
-    assert list(res) == [0, 0, 0, 1, 0]
-
-    res = dc.mutate(test=strlen("val") == strlen("val")).order_by("num").collect("test")
-    assert list(res) == [1, 1, 1, 1, 1]
+@pytest.mark.parametrize(
+    "val,else_,type_",
+    [
+        ["A", "D", str],
+        [1, 2, int],
+        [1.5, 2.5, float],
+        [True, False, bool],
+    ],
+)
+def test_case_mutate(dc, val, else_, type_):
+    res = dc.mutate(test=case((C("num") < 2, val), else_=else_))
+    assert list(res.collect("test")) == [val, else_, else_, else_, else_]
+    assert res.schema["test"] == type_

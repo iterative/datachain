@@ -93,7 +93,6 @@ def setup():
     compiles(string.byte_hamming_distance, "sqlite")(compile_byte_hamming_distance)
     compiles(conditional.greatest, "sqlite")(compile_greatest)
     compiles(conditional.least, "sqlite")(compile_least)
-    compiles(conditional.case, "sqlite")(compile_case)
     compiles(Values, "sqlite")(compile_values)
     compiles(random.rand, "sqlite")(compile_rand)
     compiles(aggregate.avg, "sqlite")(compile_avg)
@@ -498,10 +497,6 @@ def compile_least(element, compiler, **kwargs):
     else:
         expr = func.min(*args)
     return compiler.process(expr, **kwargs)
-
-
-def compile_case(element, compiler, **kwargs):
-    return compiler.process(func.case(*element.clauses.clauses), **kwargs)
 
 
 def compile_values(element, compiler, **kwargs):

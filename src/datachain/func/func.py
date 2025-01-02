@@ -35,6 +35,7 @@ class Func(Function):
         inner: Callable,
         cols: Optional[Sequence[ColT]] = None,
         args: Optional[Sequence[Any]] = None,
+        kwargs: Optional[dict[str, Any]] = None,
         result_type: Optional["DataType"] = None,
         is_array: bool = False,
         is_window: bool = False,
@@ -45,6 +46,7 @@ class Func(Function):
         self.inner = inner
         self.cols = cols or []
         self.args = args or []
+        self.kwargs = kwargs or {}
         self.result_type = result_type
         self.is_array = is_array
         self.is_window = is_window
@@ -63,6 +65,7 @@ class Func(Function):
             self.inner,
             self.cols,
             self.args,
+            self.kwargs,
             self.result_type,
             self.is_array,
             self.is_window,
@@ -333,6 +336,7 @@ class Func(Function):
             self.inner,
             self.cols,
             self.args,
+            self.kwargs,
             self.result_type,
             self.is_array,
             self.is_window,
@@ -387,7 +391,7 @@ class Func(Function):
             return col
 
         cols = [get_col(col) for col in self._db_cols]
-        func_col = self.inner(*cols, *self.args)
+        func_col = self.inner(*cols, *self.args, **self.kwargs)
 
         if self.is_window:
             if not self.window:

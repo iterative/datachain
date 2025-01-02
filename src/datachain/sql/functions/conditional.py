@@ -7,7 +7,3 @@ class greatest(ReturnTypeFromArgs):  # noqa: N801
 
 class least(ReturnTypeFromArgs):  # noqa: N801
     inherit_cache = True
-
-
-class case(ReturnTypeFromArgs):  # noqa: N801
-    inherit_cache = True
