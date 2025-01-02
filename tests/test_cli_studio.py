@@ -318,7 +318,7 @@ def test_studio_cancel_job(capsys, mocker):
         m.post(f"{STUDIO_URL}/api/datachain/job/{job_id}/cancel", json={})
 
         # Studio token is required
-        assert main(["studio", "cancel", job_id]) == 1
+        assert main(["jobs", "cancel", job_id]) == 1
         out = capsys.readouterr().err
         assert "Not logged in to Studio" in out
 
@@ -326,7 +326,7 @@ def test_studio_cancel_job(capsys, mocker):
         with Config(ConfigLevel.GLOBAL).edit() as conf:
             conf["studio"] = {"token": "isat_access_token", "team": "team_name"}
 
-        assert main(["studio", "cancel", job_id]) == 0
+        assert main(["jobs", "cancel", job_id]) == 0
         assert m.called
 
 
@@ -356,7 +356,7 @@ def test_studio_run(capsys, mocker, tmp_dir):
         assert (
             main(
                 [
-                    "studio",
+                    "jobs",
                     "run",
                     "example_query.py",
                     "--env-file",
