@@ -48,7 +48,7 @@ def process_studio_cli_args(args: "Namespace"):
         return logout()
     if args.cmd == "token":
         return token()
-    if args.cmd == "datasets":
+    if args.cmd == "dataset":
         rows = [
             {"Name": name, "Version": version}
             for name, version in list_datasets(args.team)

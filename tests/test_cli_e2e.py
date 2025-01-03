@@ -147,27 +147,27 @@ E2E_STEPS = (
         },
     },
     {
-        "command": ("datachain", "datasets", "ls"),
+        "command": ("datachain", "dataset", "ls"),
         "expected": _tabulated_datasets("mnt", 1),
     },
     {
-        "command": ("datachain", "datasets", "ls"),
+        "command": ("datachain", "dataset", "ls"),
         "expected": _tabulated_datasets("mnt", 1),
     },
     {
-        "command": ("datachain", "datasets", "edit", "mnt", "--new-name", "mnt-new"),
+        "command": ("datachain", "dataset", "edit", "mnt", "--new-name", "mnt-new"),
         "expected": "",
     },
     {
-        "command": ("datachain", "datasets", "ls"),
+        "command": ("datachain", "dataset", "ls"),
         "expected": _tabulated_datasets("mnt-new", 1),
     },
     {
-        "command": ("datachain", "datasets", "rm", "mnt-new", "--version", "1"),
+        "command": ("datachain", "dataset", "rm", "mnt-new", "--version", "1"),
         "expected": "",
     },
     {
-        "command": ("datachain", "datasets", "ls"),
+        "command": ("datachain", "dataset", "ls"),
         "expected": "",
     },
     {

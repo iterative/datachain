@@ -113,7 +113,7 @@ def add_jobs_parser(subparsers, parent_parser) -> None:
         "This will help us to run, cancel and view the status of the job in Studio. "
     )
     jobs_parser = subparsers.add_parser(
-        "jobs", parents=[parent_parser], description=jobs_description, help=jobs_help
+        "job", parents=[parent_parser], description=jobs_description, help=jobs_help
     )
     jobs_subparser = jobs_parser.add_subparsers(
         dest="cmd",
@@ -344,7 +344,7 @@ def add_studio_parser(subparsers, parent_parser) -> None:
     )
 
     ls_dataset_parser = studio_subparser.add_parser(
-        "datasets",
+        "dataset",
         parents=[parent_parser],
         description=studio_ls_dataset_description,
         help=studio_ls_dataset_help,
@@ -483,7 +483,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     add_jobs_parser(subp, parent_parser)
 
     datasets_parser = subp.add_parser(
-        "datasets",
+        "dataset",
         aliases=["ds"],
         parents=[parent_parser],
         description="Commands for managing datasers",
@@ -1356,7 +1356,7 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
                 edatachain=args.edatachain,
                 edatachain_file=args.edatachain_file,
             )
-        elif args.command in ("datasets", "ds"):
+        elif args.command in ("dataset", "ds"):
             if args.datasets_cmd == "pull":
                 catalog.pull_dataset(
                     args.dataset,
@@ -1481,7 +1481,7 @@ def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901, PLR0912, PLR09
             garbage_collect(catalog)
         elif args.command == "studio":
             process_studio_cli_args(args)
-        elif args.command == "jobs":
+        elif args.command == "job":
             process_jobs_args(args)
         else:
             print(f"invalid command: {args.command}", file=sys.stderr)
