@@ -149,6 +149,10 @@ def infer_schema(chain: "DataChain", **kwargs) -> pa.Schema:
     for file in chain.collect("file"):
         ds = dataset(file.get_path(), filesystem=file.get_fs(), **kwargs)  # type: ignore[union-attr]
         schemas.append(ds.schema)
+    if not schemas:
+        raise ValueError(
+            "Cannot infer schema (no files to process or can't access them)"
+        )
     return pa.unify_schemas(schemas)
 
 

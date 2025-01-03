@@ -20,21 +20,7 @@ POST_LOGIN_MESSAGE = (
 )
 
 
-def process_studio_cli_args(args: "Namespace"):  # noqa: PLR0911
-    if args.cmd == "login":
-        return login(args)
-    if args.cmd == "logout":
-        return logout()
-    if args.cmd == "token":
-        return token()
-    if args.cmd == "datasets":
-        rows = [
-            {"Name": name, "Version": version}
-            for name, version in list_datasets(args.team)
-        ]
-        print(tabulate(rows, headers="keys"))
-        return 0
-
+def process_jobs_args(args: "Namespace"):
     if args.cmd == "run":
         return create_job(
             args.query_file,
@@ -50,6 +36,25 @@ def process_studio_cli_args(args: "Namespace"):  # noqa: PLR0911
 
     if args.cmd == "cancel":
         return cancel_job(args.job_id, args.team)
+    if args.cmd == "logs":
+        return show_job_logs(args.job_id, args.team)
+    raise DataChainError(f"Unknown command '{args.cmd}'.")
+
+
+def process_studio_cli_args(args: "Namespace"):
+    if args.cmd == "login":
+        return login(args)
+    if args.cmd == "logout":
+        return logout()
+    if args.cmd == "token":
+        return token()
+    if args.cmd == "dataset":
+        rows = [
+            {"Name": name, "Version": version}
+            for name, version in list_datasets(args.team)
+        ]
+        print(tabulate(rows, headers="keys"))
+        return 0
 
     if args.cmd == "team":
         return set_team(args)
@@ -187,6 +192,32 @@ def save_config(hostname, token):
     return config.config_file()
 
 
+def show_logs_from_client(client, job_id):
+    # Sync usage
+    async def _run():
+        async for message in client.tail_job_logs(job_id):
+            if "logs" in message:
+                for log in message["logs"]:
+                    print(log["message"], end="")
+            elif "job" in message:
+                print(f"\n>>>> Job is now in {message['job']['status']} status.")
+
+    asyncio.run(_run())
+
+    response = client.dataset_job_versions(job_id)
+    if not response.ok:
+        raise_remote_error(response.message)
+
+    response_data = response.data
+    if response_data:
+        dataset_versions = response_data.get("dataset_versions", [])
+        print("\n\n>>>> Dataset versions created during the job:")
+        for version in dataset_versions:
+            print(f"    - {version.get('dataset_name')}@v{version.get('version')}")
+    else:
+        print("No dataset versions created during the job.")
+
+
 def create_job(
     query_file: str,
     team_name: Optional[str],
@@ -236,29 +267,7 @@ def create_job(
     print("Open the job in Studio at", response.data.get("job", {}).get("url"))
     print("=" * 40)
 
-    # Sync usage
-    async def _run():
-        async for message in client.tail_job_logs(job_id):
-            if "logs" in message:
-                for log in message["logs"]:
-                    print(log["message"], end="")
-            elif "job" in message:
-                print(f"\n>>>> Job is now in {message['job']['status']} status.")
-
-    asyncio.run(_run())
-
-    response = client.dataset_job_versions(job_id)
-    if not response.ok:
-        raise_remote_error(response.message)
-
-    response_data = response.data
-    if response_data:
-        dataset_versions = response_data.get("dataset_versions", [])
-        print("\n\n>>>> Dataset versions created during the job:")
-        for version in dataset_versions:
-            print(f"    - {version.get('dataset_name')}@v{version.get('version')}")
-    else:
-        print("No dataset versions created during the job.")
+    show_logs_from_client(client, job_id)
 
 
 def upload_files(client: StudioClient, files: list[str]) -> list[str]:
@@ -293,3 +302,14 @@ def cancel_job(job_id: str, team_name: Optional[str]):
         raise_remote_error(response.message)
 
     print(f"Job {job_id} canceled")
+
+
+def show_job_logs(job_id: str, team_name: Optional[str]):
+    token = Config().read().get("studio", {}).get("token")
+    if not token:
+        raise DataChainError(
+            "Not logged in to Studio. Log in with 'datachain studio login'."
+        )
+
+    client = StudioClient(team=team_name)
+    show_logs_from_client(client, job_id)
