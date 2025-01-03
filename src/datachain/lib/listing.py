@@ -85,6 +85,24 @@ def ls(
     return dc.filter(pathfunc.parent(_file_c("path")) == path.lstrip("/").rstrip("/*"))
 
 
+def _isfile(client: "Client", path: str) -> bool:
+    """
+    Returns True if uri points to a file
+    """
+    try:
+        info = client.fs.info(path)
+        name = info.get("name")
+        # case for special simulated directories on some clouds
+        # e.g. Google creates a zero byte file with the same name as the
+        # directory with a trailing slash at the end
+        if not name or name.endswith("/"):
+            return False
+
+        return info["type"] == "file"
+    except:  # noqa: E722
+        return False
+
+
 def parse_listing_uri(uri: str, cache, client_config) -> tuple[Optional[str], str, str]:
     """
     Parsing uri and returns listing dataset name, listing uri and listing path
@@ -94,7 +112,7 @@ def parse_listing_uri(uri: str, cache, client_config) -> tuple[Optional[str], st
     storage_uri, path = Client.parse_url(uri)
     telemetry.log_param("client", client.PREFIX)
 
-    if not uri.endswith("/") and client.fs.isfile(uri):
+    if not uri.endswith("/") and _isfile(client, uri):
         return None, f'{storage_uri}/{path.lstrip("/")}', path
     if uses_glob(path):
         lst_uri_path = posixpath.dirname(path)
