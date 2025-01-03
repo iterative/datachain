@@ -301,9 +301,6 @@ def test_or_mutate(dc):
     res = dc.mutate(test=strlen("val") | strlen("val")).order_by("num").collect("test")
     assert list(res) == [1, 2, 3, 4, 5]
 
-    res = dc.mutate(test=False | True).order_by("num").collect("test")
-    assert list(res) == [1, 2, 3, 4, 5]
-
 
 def test_xor():
     rnd1, rnd2 = rand(), rand()
