@@ -2,6 +2,7 @@ import logging
 import os
 from collections.abc import Generator, Iterable, Iterator
 from contextlib import closing
+from functools import partial
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from PIL import Image
@@ -11,10 +12,10 @@ from torch.utils.data import IterableDataset, get_worker_info
 from torchvision.transforms import v2
 
 from datachain import Session
+from datachain.asyn import AsyncMapper
 from datachain.cache import get_temp_cache
 from datachain.catalog import Catalog, get_catalog
 from datachain.lib.dc import DataChain
-from datachain.lib.prefetcher import rows_prefetcher
 from datachain.lib.settings import Settings
 from datachain.lib.text import convert_text
 from datachain.progress import CombinedDownloadCallback
@@ -105,10 +106,14 @@ class PytorchDataset(IterableDataset):
         ms = ms_cls(*ms_args, **ms_kwargs)
         wh_cls, wh_args, wh_kwargs = self._wh_params
         wh = wh_cls(*wh_args, **wh_kwargs)
-        return Catalog(ms, wh, **self._catalog_params)
+        catalog = Catalog(ms, wh, **self._catalog_params)
+        catalog.cache = self._cache
+        return catalog
 
     def _row_iter(
-        self, total_rank: int, total_workers: int
+        self,
+        total_rank: int,
+        total_workers: int,
     ) -> Generator[tuple[Any, ...], None, None]:
         catalog = self._get_catalog()
         session = Session("PyTorch", catalog=catalog)
@@ -132,16 +137,17 @@ class PytorchDataset(IterableDataset):
 
         rows = self._row_iter(total_rank, total_workers)
         if self.prefetch > 0:
-            catalog = self._get_catalog()
-            rows = rows_prefetcher(
-                catalog,
-                rows,
-                self.prefetch,
-                cache=self._cache,
-                download_cb=download_cb,
-            )
+            from datachain.lib.udf import _prefetch_input
 
-        with download_cb:
+            func = partial(
+                _prefetch_input,
+                download_cb=download_cb,
+                after_prefetch=download_cb.increment_file_count,
+            )
+            mapper = AsyncMapper(func, rows, workers=self.prefetch)
+            rows = mapper.iterate()  # type: ignore[assignment]
+
+        with download_cb, closing(rows):
             yield from rows
 
     def __iter__(self) -> Iterator[list[Any]]:
