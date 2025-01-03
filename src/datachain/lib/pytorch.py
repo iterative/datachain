@@ -2,7 +2,6 @@ import logging
 import os
 from collections.abc import Generator, Iterable, Iterator
 from contextlib import closing
-from functools import partial
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from PIL import Image
@@ -12,7 +11,6 @@ from torch.utils.data import IterableDataset, get_worker_info
 from torchvision.transforms import v2
 
 from datachain import Session
-from datachain.asyn import AsyncMapper
 from datachain.cache import get_temp_cache
 from datachain.catalog import Catalog, get_catalog
 from datachain.lib.dc import DataChain
@@ -128,6 +126,8 @@ class PytorchDataset(IterableDataset):
         yield from ds.collect()
 
     def _iter_with_prefetch(self) -> Generator[tuple[Any], None, None]:
+        from datachain.lib.udf import _prefetch_inputs
+
         total_rank, total_workers = self.get_rank_and_workers()
         download_cb = CombinedDownloadCallback()
         if os.getenv("DATACHAIN_SHOW_PREFETCH_PROGRESS"):
@@ -136,16 +136,12 @@ class PytorchDataset(IterableDataset):
             )
 
         rows = self._row_iter(total_rank, total_workers)
-        if self.prefetch > 0:
-            from datachain.lib.udf import _prefetch_input
-
-            func = partial(
-                _prefetch_input,
-                download_cb=download_cb,
-                after_prefetch=download_cb.increment_file_count,
-            )
-            mapper = AsyncMapper(func, rows, workers=self.prefetch)
-            rows = mapper.iterate()  # type: ignore[assignment]
+        rows = _prefetch_inputs(
+            rows,
+            self.prefetch,
+            download_cb=download_cb,
+            after_prefetch=download_cb.increment_file_count,
+        )
 
         with download_cb, closing(rows):
             yield from rows
