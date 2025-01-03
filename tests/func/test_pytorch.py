@@ -84,21 +84,21 @@ def test_to_pytorch(fake_dataset):
     assert img.size() == Size([3, 64, 64])
 
 
-@pytest.mark.parametrize("cache", (True, False))
-@pytest.mark.parametrize("prefetch", (0, 10))
-def test_prefetch(mocker, catalog, fake_dataset, cache, prefetch):
+@pytest.mark.parametrize("use_cache", (True, False))
+@pytest.mark.parametrize("prefetch", (0, 2))
+def test_prefetch(mocker, catalog, fake_dataset, use_cache, prefetch):
     catalog.cache.clear()
 
     dataset = fake_dataset.limit(10)
-    ds = dataset.settings(cache=cache, prefetch=prefetch).to_pytorch()
+    ds = dataset.settings(cache=use_cache, prefetch=prefetch).to_pytorch()
 
     iter_with_prefetch = ds._iter_with_prefetch
-    _cache = ds._cache
+    cache = ds._cache
 
     def is_prefetched(file: File):
         assert file._catalog
-        assert file._catalog.cache == _cache
-        return _cache.contains(file)
+        assert file._catalog.cache == cache
+        return cache.contains(file)
 
     def check_prefetched():
         for row in iter_with_prefetch():
@@ -118,7 +118,7 @@ def test_prefetch(mocker, catalog, fake_dataset, cache, prefetch):
         assert next(rows)
     m.assert_called_once()
     # cache directory should be removed after `close()` if the cache is not enabled
-    assert os.path.exists(_cache.cache_dir) == cache
+    assert os.path.exists(cache.cache_dir) == use_cache
 
 
 def test_hf_to_pytorch(catalog, fake_image_dir):

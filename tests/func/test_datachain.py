@@ -220,9 +220,24 @@ def test_from_storage_dependencies(cloud_test_catalog, cloud_type):
 @pytest.mark.parametrize("prefetch", [0, 2])
 def test_map_file(cloud_test_catalog, use_cache, prefetch):
     ctc = cloud_test_catalog
+    ctc.catalog.cache.clear()
+
+    def is_prefetched(file: File) -> bool:
+        return file._catalog.cache.contains(file) and bool(file.get_local_path())
+
+    def verify_cache_used(file):
+        catalog = file._catalog
+        if use_cache or not prefetch:
+            assert catalog.cache == cloud_test_catalog.catalog.cache
+            return
+        head, tail = os.path.split(catalog.cache.cache_dir)
+        assert head == catalog.cache.tmp_dir
+        assert tail.startswith("prefetch-")
 
     def new_signal(file: File) -> str:
-        assert bool(file.get_local_path()) is (prefetch > 0)
+        assert is_prefetched(file) == (prefetch > 0)
+        verify_cache_used(file)
+
         with file.open() as f:
             return file.name + " -> " + f.read().decode("utf-8")
 
@@ -1271,6 +1286,56 @@ def test_gen_with_new_columns_wrong_type(cloud_test_catalog, dogs_dataset):
         DataChain.from_storage(cloud_test_catalog.src_uri, session=session).gen(
             new_val=gen_func, output={"new_val": int}
         ).show()
+
+
+@pytest.mark.parametrize("use_cache", [True, False])
+@pytest.mark.parametrize("prefetch", [0, 2])
+def test_gen_file(cloud_test_catalog, use_cache, prefetch):
+    ctc = cloud_test_catalog
+    ctc.catalog.cache.clear()
+
+    def is_prefetched(file: File) -> bool:
+        return file._catalog.cache.contains(file) and bool(file.get_local_path())
+
+    def verify_cache_used(file):
+        catalog = file._catalog
+        if use_cache or not prefetch:
+            assert catalog.cache == cloud_test_catalog.catalog.cache
+            return
+        head, tail = os.path.split(catalog.cache.cache_dir)
+        assert head == catalog.cache.tmp_dir
+        assert tail.startswith("prefetch-")
+
+    def new_signal(file: File) -> list[str]:
+        assert is_prefetched(file) == (prefetch > 0)
+        verify_cache_used(file)
+
+        with file.open("rb") as f:
+            return [file.name, f.read().decode("utf-8")]
+
+    dc = (
+        DataChain.from_storage(ctc.src_uri, session=ctc.session)
+        .settings(cache=use_cache, prefetch=prefetch)
+        .gen(signal=new_signal, output=str)
+        .save()
+    )
+    expected = {
+        "Cats and Dogs",
+        "arf",
+        "bark",
+        "cat1",
+        "cat2",
+        "description",
+        "dog1",
+        "dog2",
+        "dog3",
+        "dog4",
+        "meow",
+        "mrow",
+        "ruff",
+        "woof",
+    }
+    assert set(dc.collect("signal")) == expected
 
 
 def test_similarity_search(cloud_test_catalog):

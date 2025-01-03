@@ -1,18 +1,20 @@
-import contextlib
 import sys
 import traceback
 from collections.abc import Iterable, Iterator, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from contextlib import closing, nullcontext
+from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar
 
 import attrs
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 from pydantic import BaseModel
 
+from datachain.asyn import AsyncMapper
+from datachain.cache import temporary_cache
+from datachain.catalog.catalog import clone_catalog_with_cache
 from datachain.dataset import RowDict
 from datachain.lib.convert.flatten import flatten
 from datachain.lib.data_model import DataValue
 from datachain.lib.file import File
-from datachain.lib.prefetcher import rows_prefetcher
 from datachain.lib.utils import AbstractUDF, DataChainError, DataChainParamsError
 from datachain.query.batch import (
     Batch,
@@ -24,13 +26,17 @@ from datachain.query.batch import (
 
 if TYPE_CHECKING:
     from collections import abc
+    from contextlib import AbstractContextManager
 
     from typing_extensions import Self
 
+    from datachain.cache import DataChainCache as Cache
     from datachain.catalog import Catalog
     from datachain.lib.signal_schema import SignalSchema
     from datachain.lib.udf_signature import UdfSignature
     from datachain.query.batch import RowsOutput
+
+T = TypeVar("T", bound=Sequence[Any])
 
 
 class UdfError(DataChainParamsError):
@@ -279,10 +285,42 @@ class UDFBase(AbstractUDF):
         return result_objs
 
 
+def noop(*args, **kwargs):
+    pass
+
+
+async def _prefetch_input(
+    row: T,
+    download_cb: Optional["Callback"] = None,
+    after_prefetch: "Callable[[], None]" = noop,
+) -> T:
+    for obj in row:
+        if isinstance(obj, File) and await obj._prefetch(download_cb):
+            after_prefetch()
+    return row
+
+
 class Mapper(UDFBase):
     """Inherit from this class to pass to `DataChain.map()`."""
 
     prefetch: int = 2
+
+    def _iter_with_prefetch(
+        self,
+        udf_fields: "Sequence[str]",
+        udf_inputs: "Iterable[Sequence[Any]]",
+        cache: bool,
+        download_cb: Callback = DEFAULT_CALLBACK,
+    ) -> "abc.Generator[Sequence[Any], None, None]":
+        prepared_inputs: abc.Generator[Sequence[Any], None, None] = (
+            self._prepare_row_and_id(row, udf_fields, cache, download_cb)
+            for row in udf_inputs
+        )
+        if self.prefetch > 0:
+            prepared_inputs = AsyncMapper(
+                _prefetch_input, prepared_inputs, workers=self.prefetch
+            ).iterate()
+        yield from prepared_inputs
 
     def run(
         self,
@@ -293,31 +331,33 @@ class Mapper(UDFBase):
         download_cb: Callback = DEFAULT_CALLBACK,
         processed_cb: Callback = DEFAULT_CALLBACK,
     ) -> Iterator[Iterable[UDFResult]]:
-        self.catalog = catalog
-        self.setup()
-        prepared_inputs: abc.Generator[Sequence[Any], None, None] = (
-            self._prepare_row_and_id(row, udf_fields, cache, download_cb)
-            for row in udf_inputs
-        )
-        if self.prefetch > 0:
-            _cache = self.catalog.cache if cache else None
-            prepared_inputs = rows_prefetcher(
-                self.catalog,
-                prepared_inputs,
-                self.prefetch,
-                cache=_cache,
-                download_cb=download_cb,
+        _cache = catalog.cache
+        tmp_dir = _cache.tmp_dir
+        assert tmp_dir
+
+        cache_ctx: AbstractContextManager[Cache] = nullcontext(_cache)
+        if self.prefetch > 0 and not cache:
+            cache_ctx = temporary_cache(tmp_dir, prefix="prefetch-")
+
+        with cache_ctx as _cache:
+            self.catalog = clone_catalog_with_cache(catalog, _cache)
+            self.setup()
+
+            prepared_inputs = self._iter_with_prefetch(
+                udf_fields, udf_inputs, cache, download_cb
             )
+            with closing(prepared_inputs):
+                for id_, *udf_args in prepared_inputs:
+                    result_objs = self.process_safe(udf_args)
+                    udf_output = self._flatten_row(result_objs)
+                    output = [
+                        {"sys__id": id_} | dict(zip(self.signal_names, udf_output))
+                    ]
+                    processed_cb.relative_update(1)
+                    yield output
 
-        with contextlib.closing(prepared_inputs):
-            for id_, *udf_args in prepared_inputs:
-                result_objs = self.process_safe(udf_args)
-                udf_output = self._flatten_row(result_objs)
-                output = [{"sys__id": id_} | dict(zip(self.signal_names, udf_output))]
-                processed_cb.relative_update(1)
-                yield output
-
-        self.teardown()
+            self.teardown()
+            self.catalog = catalog
 
 
 class BatchMapper(UDFBase):
@@ -367,6 +407,22 @@ class Generator(UDFBase):
     is_output_batched = True
     prefetch: int = 2
 
+    def _iter_with_prefetch(
+        self,
+        udf_fields: "Sequence[str]",
+        udf_inputs: "Iterable[Sequence[Any]]",
+        cache: bool,
+        download_cb: Callback = DEFAULT_CALLBACK,
+    ) -> "abc.Generator[Sequence[Any], None, None]":
+        prepared_inputs: abc.Generator[Sequence[Any], None, None] = (
+            self._prepare_row(row, udf_fields, cache, download_cb) for row in udf_inputs
+        )
+        if self.prefetch > 0:
+            prepared_inputs = AsyncMapper(
+                _prefetch_input, prepared_inputs, workers=self.prefetch
+            ).iterate()
+        yield from prepared_inputs
+
     def run(
         self,
         udf_fields: "Sequence[str]",
@@ -376,30 +432,30 @@ class Generator(UDFBase):
         download_cb: Callback = DEFAULT_CALLBACK,
         processed_cb: Callback = DEFAULT_CALLBACK,
     ) -> Iterator[Iterable[UDFResult]]:
-        self.catalog = catalog
-        self.setup()
-        prepared_inputs: abc.Generator[Sequence[Any], None, None] = (
-            self._prepare_row(row, udf_fields, cache, download_cb) for row in udf_inputs
-        )
-        if self.prefetch > 0:
-            _cache = self.catalog.cache if cache else None
-            prepared_inputs = rows_prefetcher(
-                self.catalog,
-                prepared_inputs,
-                self.prefetch,
-                cache=_cache,
-                download_cb=download_cb,
+        _cache = catalog.cache
+        tmp_dir = _cache.tmp_dir
+        assert tmp_dir
+
+        cache_ctx: AbstractContextManager[Cache] = nullcontext(_cache)
+        if self.prefetch > 0 and not cache:
+            cache_ctx = temporary_cache(tmp_dir, prefix="prefetch-")
+
+        with cache_ctx as _cache:
+            self.catalog = clone_catalog_with_cache(catalog, _cache)
+            self.setup()
+
+            prepared_inputs = self._iter_with_prefetch(
+                udf_fields, udf_inputs, cache, download_cb
             )
-
-        with contextlib.closing(prepared_inputs):
-            for row in prepared_inputs:
-                result_objs = self.process_safe(row)
-                udf_outputs = (self._flatten_row(row) for row in result_objs)
-                output = (dict(zip(self.signal_names, row)) for row in udf_outputs)
-                processed_cb.relative_update(1)
-                yield output
-
-        self.teardown()
+            with closing(prepared_inputs):
+                for row in prepared_inputs:
+                    result_objs = self.process_safe(row)
+                    udf_outputs = (self._flatten_row(row) for row in result_objs)
+                    output = (dict(zip(self.signal_names, row)) for row in udf_outputs)
+                    processed_cb.relative_update(1)
+                    yield output
+            self.teardown()
+            self.catalog = catalog
 
 
 class Aggregator(UDFBase):
