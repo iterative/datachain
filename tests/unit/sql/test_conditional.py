@@ -1,6 +1,7 @@
 import pytest
 
 from datachain import func
+from datachain.lib.utils import DataChainParamsError
 from datachain.sql import select, values
 
 
@@ -64,3 +65,45 @@ def test_conditionals_with_multiple_rows(warehouse, expr, expected):
     query = select(expr).select_from(values([(3, 5), (8, 7), (9, 1)], ["a", "b"]))
     result = list(warehouse.db.execute(query))
     assert result == expected
+
+
+@pytest.mark.parametrize(
+    "val,expected",
+    [
+        (1, "A"),
+        (2, "D"),
+        (3, "B"),
+        (4, "D"),
+        (5, "C"),
+        (100, "D"),
+    ],
+)
+def test_case(warehouse, val, expected):
+    query = select(
+        func.case(*[(val < 2, "A"), (2 < val < 4, "B"), (4 < val < 6, "C")], else_="D")
+    )
+    result = tuple(warehouse.db.execute(query))
+    assert result == ((expected,),)
+
+
+def test_case_missing_statements(warehouse):
+    with pytest.raises(DataChainParamsError) as exc_info:
+        select(func.case(*[], else_="D"))
+    assert str(exc_info.value) == "Missing case statements"
+
+
+def test_case_not_same_result_types(warehouse):
+    val = 2
+    with pytest.raises(DataChainParamsError) as exc_info:
+        select(func.case(*[(val > 1, "A"), (2 < val < 4, 5)], else_="D"))
+    assert str(exc_info.value) == "Case statement values must be of the same type"
+
+
+def test_case_wrong_result_type(warehouse):
+    val = 2
+    with pytest.raises(DataChainParamsError) as exc_info:
+        select(func.case(*[(val > 1, ["a", "b"]), (2 < val < 4, [])], else_=[]))
+    assert str(exc_info.value) == (
+        "Case supports only python literals ([<class 'int'>, <class 'float'>, "
+        "<class 'complex'>, <class 'str'>, <class 'bool'>]) for values"
+    )

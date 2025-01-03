@@ -1,5 +1,9 @@
 from typing import Union
 
+from sqlalchemy import case as sql_case
+from sqlalchemy.sql.elements import BinaryExpression
+
+from datachain.lib.utils import DataChainParamsError
 from datachain.sql.functions import conditional
 
 from .func import ColT, Func
@@ -79,3 +83,51 @@ def least(*args: Union[ColT, float]) -> Func:
     return Func(
         "least", inner=conditional.least, cols=cols, args=func_args, result_type=int
     )
+
+
+def case(
+    *args: tuple[BinaryExpression, Union[int, float, complex, bool, str]], else_=None
+) -> Func:
+    """
+    Returns the case function that produces case expression which has a list of
+    conditions and corresponding results. Results can only be python primitives
+    like string, numbes or booleans. Result type is inferred from condition results.
+
+    Args:
+        args (tuple(BinaryExpression, value(str | int | float | complex | bool):
+            - Tuple of binary expression and values pair which corresponds to one
+            case condition - value
+        else_ (str | int | float | complex | bool): else value in case expression
+
+    Returns:
+        Func: A Func object that represents the case function.
+
+    Example:
+        ```py
+        dc.mutate(
+            res=func.case((C("num") > 0, "P"), (C("num") < 0, "N"), else_="Z"),
+        )
+        ```
+
+    Note:
+        - Result column will always be of the same type as the input columns.
+    """
+    supported_types = [int, float, complex, str, bool]
+
+    type_ = type(else_) if else_ else None
+
+    if not args:
+        raise DataChainParamsError("Missing case statements")
+
+    for arg in args:
+        if type_ and not isinstance(arg[1], type_):
+            raise DataChainParamsError("Case statement values must be of the same type")
+        type_ = type(arg[1])
+
+    if type_ not in supported_types:
+        raise DataChainParamsError(
+            f"Case supports only python literals ({supported_types}) for values"
+        )
+
+    kwargs = {"else_": else_}
+    return Func("case", inner=sql_case, args=args, kwargs=kwargs, result_type=type_)
