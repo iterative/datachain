@@ -7,6 +7,7 @@ To install the required dependencies:
 
 import multiprocessing
 import os
+from contextlib import closing
 from posixpath import basename
 
 import torch
@@ -56,7 +57,7 @@ class CNN(nn.Module):
 if __name__ == "__main__":
     ds = (
         DataChain.from_storage(STORAGE, type="image")
-        .settings(cache=True, prefetch=25)
+        .settings(prefetch=25)
         .filter(C("file.path").glob("*.jpg"))
         .map(
             label=lambda path: label_to_int(basename(path)[:3], CLASSES),
@@ -65,10 +66,11 @@ if __name__ == "__main__":
         )
     )
 
+    dataset = ds.to_pytorch(transform=transform)
     train_loader = DataLoader(
-        ds.to_pytorch(transform=transform),
+        dataset,
         batch_size=25,
-        num_workers=max(4, os.cpu_count() or 2),
+        num_workers=min(4, os.cpu_count() or 2),
         persistent_workers=True,
         multiprocessing_context=multiprocessing.get_context("spawn"),
     )
@@ -78,19 +80,20 @@ if __name__ == "__main__":
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
     # Train the model
-    for epoch in range(NUM_EPOCHS):
-        with tqdm(
-            train_loader, desc=f"epoch {epoch + 1}/{NUM_EPOCHS}", unit="batch"
-        ) as loader:
-            for data in loader:
-                inputs, labels = data
-                optimizer.zero_grad()
+    with closing(dataset):
+        for epoch in range(NUM_EPOCHS):
+            with tqdm(
+                train_loader, desc=f"epoch {epoch + 1}/{NUM_EPOCHS}", unit="batch"
+            ) as loader:
+                for data in loader:
+                    inputs, labels = data
+                    optimizer.zero_grad()
 
-                # Forward pass
-                outputs = model(inputs)
-                loss = criterion(outputs, labels)
+                    # Forward pass
+                    outputs = model(inputs)
+                    loss = criterion(outputs, labels)
 
-                # Backward pass and optimize
-                loss.backward()
-                optimizer.step()
-                loader.set_postfix(loss=loss.item())
+                    # Backward pass and optimize
+                    loss.backward()
+                    optimizer.step()
+                    loader.set_postfix(loss=loss.item())
