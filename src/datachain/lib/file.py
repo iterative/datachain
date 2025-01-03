@@ -272,6 +272,9 @@ class File(DataModel):
     async def _prefetch(self) -> None:
         if self._caching_enabled:
             client = self._catalog.get_client(self.source)
+            # https://github.com/iterative/datachain/issues/746
+            if client.protocol == "hf":
+                return
             await client._download(self, callback=self._download_cb)
 
     def get_local_path(self) -> Optional[str]:
