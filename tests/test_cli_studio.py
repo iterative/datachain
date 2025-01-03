@@ -108,7 +108,7 @@ def test_studio_token(capsys):
 
 
 def test_studio_ls_datasets(capsys, studio_datasets):
-    assert main(["studio", "datasets"]) == 0
+    assert main(["studio", "dataset"]) == 0
     out = capsys.readouterr().out
 
     expected_rows = [
@@ -167,23 +167,23 @@ def test_studio_datasets(capsys, studio_datasets, mocker):
     ]
     both_output = tabulate(both_rows, headers="keys")
 
-    assert main(["datasets", "ls", "--local"]) == 0
+    assert main(["dataset", "ls", "--local"]) == 0
     out = capsys.readouterr().out
     assert sorted(out.splitlines()) == sorted(local_output.splitlines())
 
-    assert main(["datasets", "ls", "--studio"]) == 0
+    assert main(["dataset", "ls", "--studio"]) == 0
     out = capsys.readouterr().out
     assert sorted(out.splitlines()) == sorted(studio_output.splitlines())
 
-    assert main(["datasets", "ls", "--local", "--studio"]) == 0
+    assert main(["dataset", "ls", "--local", "--studio"]) == 0
     out = capsys.readouterr().out
     assert sorted(out.splitlines()) == sorted(both_output.splitlines())
 
-    assert main(["datasets", "ls", "--all"]) == 0
+    assert main(["dataset", "ls", "--all"]) == 0
     out = capsys.readouterr().out
     assert sorted(out.splitlines()) == sorted(both_output.splitlines())
 
-    assert main(["datasets", "ls"]) == 0
+    assert main(["dataset", "ls"]) == 0
     out = capsys.readouterr().out
     assert sorted(out.splitlines()) == sorted(both_output.splitlines())
 
@@ -196,7 +196,7 @@ def test_studio_edit_dataset(capsys, mocker):
         assert (
             main(
                 [
-                    "datasets",
+                    "dataset",
                     "edit",
                     "name",
                     "--new-name",
@@ -218,7 +218,7 @@ def test_studio_edit_dataset(capsys, mocker):
         assert (
             main(
                 [
-                    "datasets",
+                    "dataset",
                     "edit",
                     "name",
                     "--new-name",
@@ -246,7 +246,7 @@ def test_studio_edit_dataset(capsys, mocker):
         assert (
             main(
                 [
-                    "datasets",
+                    "dataset",
                     "edit",
                     "name",
                     "--new-name",
@@ -277,7 +277,7 @@ def test_studio_rm_dataset(capsys, mocker):
         m.delete(f"{STUDIO_URL}/api/datachain/datasets", json={})
 
         # Studio token is required
-        assert main(["datasets", "rm", "name", "--team", "team_name", "--studio"]) == 1
+        assert main(["dataset", "rm", "name", "--team", "team_name", "--studio"]) == 1
         out = capsys.readouterr().err
         assert "Not logged in to Studio" in out
 
@@ -288,7 +288,7 @@ def test_studio_rm_dataset(capsys, mocker):
         assert (
             main(
                 [
-                    "datasets",
+                    "dataset",
                     "rm",
                     "name",
                     "--team",
@@ -318,7 +318,7 @@ def test_studio_cancel_job(capsys, mocker):
         m.post(f"{STUDIO_URL}/api/datachain/job/{job_id}/cancel", json={})
 
         # Studio token is required
-        assert main(["studio", "cancel", job_id]) == 1
+        assert main(["job", "cancel", job_id]) == 1
         out = capsys.readouterr().err
         assert "Not logged in to Studio" in out
 
@@ -326,7 +326,7 @@ def test_studio_cancel_job(capsys, mocker):
         with Config(ConfigLevel.GLOBAL).edit() as conf:
             conf["studio"] = {"token": "isat_access_token", "team": "team_name"}
 
-        assert main(["studio", "cancel", job_id]) == 0
+        assert main(["job", "cancel", job_id]) == 0
         assert m.called
 
 
@@ -356,7 +356,7 @@ def test_studio_run(capsys, mocker, tmp_dir):
         assert (
             main(
                 [
-                    "studio",
+                    "job",
                     "run",
                     "example_query.py",
                     "--env-file",
