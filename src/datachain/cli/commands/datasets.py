@@ -13,7 +13,7 @@ from datachain.config import Config
 from datachain.error import DatasetNotFoundError
 
 
-def datasets(
+def list_datasets(
     catalog: "Catalog",
     studio: bool = False,
     local: bool = False,

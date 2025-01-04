@@ -12,11 +12,11 @@ from .commands import (
     clear_cache,
     completion,
     dataset_stats,
-    datasets,
     du,
     edit_dataset,
     garbage_collect,
     index,
+    list_datasets,
     ls,
     query,
     rm_dataset,
@@ -148,7 +148,7 @@ def handle_dataset_command(args, catalog):
             all=args.all,
             team=args.team,
         ),
-        "ls": lambda: datasets(
+        "ls": lambda: list_datasets(
             catalog=catalog,
             studio=args.studio,
             local=args.local,

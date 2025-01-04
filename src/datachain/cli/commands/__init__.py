@@ -1,7 +1,7 @@
 from .datasets import (
     dataset_stats,
-    datasets,
     edit_dataset,
+    list_datasets,
     list_datasets_local,
     rm_dataset,
 )
@@ -16,11 +16,11 @@ __all__ = [
     "clear_cache",
     "completion",
     "dataset_stats",
-    "datasets",
     "du",
     "edit_dataset",
     "garbage_collect",
     "index",
+    "list_datasets",
     "list_datasets_local",
     "ls",
     "query",
