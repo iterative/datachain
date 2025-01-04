@@ -7,7 +7,6 @@ To install the required dependencies:
 
 import multiprocessing
 import os
-from contextlib import closing
 from posixpath import basename
 
 import torch
@@ -66,9 +65,8 @@ if __name__ == "__main__":
         )
     )
 
-    dataset = ds.to_pytorch(transform=transform)
     train_loader = DataLoader(
-        dataset,
+        ds.to_pytorch(transform=transform),
         batch_size=25,
         num_workers=min(4, os.cpu_count() or 2),
         persistent_workers=True,
@@ -91,11 +89,11 @@ if __name__ == "__main__":
                 inputs, labels = data
                 optimizer.zero_grad()
 
-                    # Forward pass
-                    outputs = model(inputs)
-                    loss = criterion(outputs, labels)
+                # Forward pass
+                outputs = model(inputs)
+                loss = criterion(outputs, labels)
 
-                    # Backward pass and optimize
-                    loss.backward()
-                    optimizer.step()
-                    loader.set_postfix(loss=loss.item())
+                # Backward pass and optimize
+                loss.backward()
+                optimizer.step()
+                loader.set_postfix(loss=loss.item())

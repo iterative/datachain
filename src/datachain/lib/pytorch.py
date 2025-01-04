@@ -1,5 +1,6 @@
 import logging
 import os
+import weakref
 from collections.abc import Generator, Iterable, Iterator
 from contextlib import closing
 from typing import TYPE_CHECKING, Any, Callable, Optional
@@ -85,6 +86,7 @@ class PytorchDataset(IterableDataset):
             tmp_dir = catalog.cache.tmp_dir
             assert tmp_dir
             self._cache = get_temp_cache(tmp_dir, prefix="prefetch-")
+            weakref.finalize(self, self.close)
 
     def close(self) -> None:
         if not self.cache:
