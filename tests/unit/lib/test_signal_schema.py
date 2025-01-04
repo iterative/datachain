@@ -129,8 +129,22 @@ def test_feature_schema_serialize_optional():
 
     assert len(signals) == 3
     assert signals["name"] == "Union[str, NoneType]"
-    assert signals["feature"] == "Union[MyType1, NoneType]"
-    assert signals["_custom_types"] == {"MyType1@v1": {"aa": "int", "bb": "str"}}
+    assert signals["feature"] == "Union[MyType1@v1, NoneType]"
+    assert signals["_custom_types"] == {
+        "MyType1@v1": {
+            "_custom_types_schema_version": 2,
+            "fields": {"aa": "int", "bb": "str"},
+            "bases": [
+                ("MyType1", "tests.unit.lib.test_signal_schema", "MyType1@v1"),
+                ("DataModel", "datachain.lib.data_model", "DataModel@v1"),
+                ("BaseModel", "pydantic.main", None),
+                ("object", "builtins", None),
+            ],
+        }
+    }
+
+    deserialized_schema = SignalSchema.deserialize(signals)
+    assert deserialized_schema.values == schema
 
 
 def test_feature_schema_serialize_list():
@@ -142,8 +156,22 @@ def test_feature_schema_serialize_list():
 
     assert len(signals) == 3
     assert signals["name"] == "Union[str, NoneType]"
-    assert signals["features"] == "list[MyType1]"
-    assert signals["_custom_types"] == {"MyType1@v1": {"aa": "int", "bb": "str"}}
+    assert signals["features"] == "list[MyType1@v1]"
+    assert signals["_custom_types"] == {
+        "MyType1@v1": {
+            "_custom_types_schema_version": 2,
+            "fields": {"aa": "int", "bb": "str"},
+            "bases": [
+                ("MyType1", "tests.unit.lib.test_signal_schema", "MyType1@v1"),
+                ("DataModel", "datachain.lib.data_model", "DataModel@v1"),
+                ("BaseModel", "pydantic.main", None),
+                ("object", "builtins", None),
+            ],
+        }
+    }
+
+    deserialized_schema = SignalSchema.deserialize(signals)
+    assert deserialized_schema.values == schema
 
 
 def test_feature_schema_serialize_list_old():
@@ -155,8 +183,27 @@ def test_feature_schema_serialize_list_old():
 
     assert len(signals) == 3
     assert signals["name"] == "Union[str, NoneType]"
-    assert signals["features"] == "list[MyType1]"
-    assert signals["_custom_types"] == {"MyType1@v1": {"aa": "int", "bb": "str"}}
+    assert signals["features"] == "list[MyType1@v1]"
+    assert signals["_custom_types"] == {
+        "MyType1@v1": {
+            "_custom_types_schema_version": 2,
+            "fields": {"aa": "int", "bb": "str"},
+            "bases": [
+                ("MyType1", "tests.unit.lib.test_signal_schema", "MyType1@v1"),
+                ("DataModel", "datachain.lib.data_model", "DataModel@v1"),
+                ("BaseModel", "pydantic.main", None),
+                ("object", "builtins", None),
+            ],
+        }
+    }
+
+    new_schema = {
+        "name": Optional[str],
+        "features": list[MyType1],
+    }
+
+    deserialized_schema = SignalSchema.deserialize(signals)
+    assert deserialized_schema.values == new_schema
 
 
 def test_feature_schema_serialize_nested_types():
@@ -168,11 +215,32 @@ def test_feature_schema_serialize_nested_types():
 
     assert len(signals) == 3
     assert signals["name"] == "Union[str, NoneType]"
-    assert signals["feature_nested"] == "Union[MyType2, NoneType]"
+    assert signals["feature_nested"] == "Union[MyType2@v1, NoneType]"
     assert signals["_custom_types"] == {
-        "MyType1@v1": {"aa": "int", "bb": "str"},
-        "MyType2@v1": {"deep": "MyType1@v1", "name": "str"},
+        "MyType1@v1": {
+            "_custom_types_schema_version": 2,
+            "fields": {"aa": "int", "bb": "str"},
+            "bases": [
+                ("MyType1", "tests.unit.lib.test_signal_schema", "MyType1@v1"),
+                ("DataModel", "datachain.lib.data_model", "DataModel@v1"),
+                ("BaseModel", "pydantic.main", None),
+                ("object", "builtins", None),
+            ],
+        },
+        "MyType2@v1": {
+            "_custom_types_schema_version": 2,
+            "fields": {"name": "str", "deep": "MyType1@v1"},
+            "bases": [
+                ("MyType2", "tests.unit.lib.test_signal_schema", "MyType2@v1"),
+                ("DataModel", "datachain.lib.data_model", "DataModel@v1"),
+                ("BaseModel", "pydantic.main", None),
+                ("object", "builtins", None),
+            ],
+        },
     }
+
+    deserialized_schema = SignalSchema.deserialize(signals)
+    assert deserialized_schema.values == schema
 
 
 def test_feature_schema_serialize_nested_duplicate_types():
@@ -185,12 +253,33 @@ def test_feature_schema_serialize_nested_duplicate_types():
 
     assert len(signals) == 4
     assert signals["name"] == "Union[str, NoneType]"
-    assert signals["feature_nested"] == "Union[MyType2, NoneType]"
-    assert signals["feature_not_nested"] == "Union[MyType1, NoneType]"
+    assert signals["feature_nested"] == "Union[MyType2@v1, NoneType]"
+    assert signals["feature_not_nested"] == "Union[MyType1@v1, NoneType]"
     assert signals["_custom_types"] == {
-        "MyType1@v1": {"aa": "int", "bb": "str"},
-        "MyType2@v1": {"deep": "MyType1@v1", "name": "str"},
+        "MyType1@v1": {
+            "_custom_types_schema_version": 2,
+            "fields": {"aa": "int", "bb": "str"},
+            "bases": [
+                ("MyType1", "tests.unit.lib.test_signal_schema", "MyType1@v1"),
+                ("DataModel", "datachain.lib.data_model", "DataModel@v1"),
+                ("BaseModel", "pydantic.main", None),
+                ("object", "builtins", None),
+            ],
+        },
+        "MyType2@v1": {
+            "_custom_types_schema_version": 2,
+            "fields": {"name": "str", "deep": "MyType1@v1"},
+            "bases": [
+                ("MyType2", "tests.unit.lib.test_signal_schema", "MyType2@v1"),
+                ("DataModel", "datachain.lib.data_model", "DataModel@v1"),
+                ("BaseModel", "pydantic.main", None),
+                ("object", "builtins", None),
+            ],
+        },
     }
+
+    deserialized_schema = SignalSchema.deserialize(signals)
+    assert deserialized_schema.values == schema
 
 
 def test_feature_schema_serialize_complex():
@@ -202,16 +291,50 @@ def test_feature_schema_serialize_complex():
 
     assert len(signals) == 3
     assert signals["name"] == "Union[str, NoneType]"
-    assert signals["feature"] == "Union[MyTypeComplex, NoneType]"
+    assert signals["feature"] == "Union[MyTypeComplex@v1, NoneType]"
     assert signals["_custom_types"] == {
-        "MyType1@v1": {"aa": "int", "bb": "str"},
-        "MyType2@v1": {"deep": "MyType1@v1", "name": "str"},
+        "MyType1@v1": {
+            "_custom_types_schema_version": 2,
+            "fields": {"aa": "int", "bb": "str"},
+            "bases": [
+                ("MyType1", "tests.unit.lib.test_signal_schema", "MyType1@v1"),
+                ("DataModel", "datachain.lib.data_model", "DataModel@v1"),
+                ("BaseModel", "pydantic.main", None),
+                ("object", "builtins", None),
+            ],
+        },
+        "MyType2@v1": {
+            "_custom_types_schema_version": 2,
+            "fields": {"name": "str", "deep": "MyType1@v1"},
+            "bases": [
+                ("MyType2", "tests.unit.lib.test_signal_schema", "MyType2@v1"),
+                ("DataModel", "datachain.lib.data_model", "DataModel@v1"),
+                ("BaseModel", "pydantic.main", None),
+                ("object", "builtins", None),
+            ],
+        },
         "MyTypeComplex@v1": {
-            "name": "str",
-            "items": "list[MyType1]",
-            "lookup": "dict[str, MyType2]",
+            "_custom_types_schema_version": 2,
+            "fields": {
+                "name": "str",
+                "items": "list[MyType1@v1]",
+                "lookup": "dict[str, MyType2@v1]",
+            },
+            "bases": [
+                (
+                    "MyTypeComplex",
+                    "tests.unit.lib.test_signal_schema",
+                    "MyTypeComplex@v1",
+                ),
+                ("DataModel", "datachain.lib.data_model", "DataModel@v1"),
+                ("BaseModel", "pydantic.main", None),
+                ("object", "builtins", None),
+            ],
         },
     }
+
+    deserialized_schema = SignalSchema.deserialize(signals)
+    assert deserialized_schema.values == schema
 
 
 def test_feature_schema_serialize_complex_old():
@@ -223,14 +346,45 @@ def test_feature_schema_serialize_complex_old():
 
     assert len(signals) == 3
     assert signals["name"] == "Union[str, NoneType]"
-    assert signals["feature"] == "Union[MyTypeComplexOld, NoneType]"
+    assert signals["feature"] == "Union[MyTypeComplexOld@v1, NoneType]"
     assert signals["_custom_types"] == {
-        "MyType1@v1": {"aa": "int", "bb": "str"},
-        "MyType2@v1": {"deep": "MyType1@v1", "name": "str"},
+        "MyType1@v1": {
+            "_custom_types_schema_version": 2,
+            "fields": {"aa": "int", "bb": "str"},
+            "bases": [
+                ("MyType1", "tests.unit.lib.test_signal_schema", "MyType1@v1"),
+                ("DataModel", "datachain.lib.data_model", "DataModel@v1"),
+                ("BaseModel", "pydantic.main", None),
+                ("object", "builtins", None),
+            ],
+        },
+        "MyType2@v1": {
+            "_custom_types_schema_version": 2,
+            "fields": {"name": "str", "deep": "MyType1@v1"},
+            "bases": [
+                ("MyType2", "tests.unit.lib.test_signal_schema", "MyType2@v1"),
+                ("DataModel", "datachain.lib.data_model", "DataModel@v1"),
+                ("BaseModel", "pydantic.main", None),
+                ("object", "builtins", None),
+            ],
+        },
         "MyTypeComplexOld@v1": {
-            "name": "str",
-            "items": "list[MyType1]",
-            "lookup": "dict[str, MyType2]",
+            "_custom_types_schema_version": 2,
+            "fields": {
+                "name": "str",
+                "items": "list[MyType1@v1]",
+                "lookup": "dict[str, MyType2@v1]",
+            },
+            "bases": [
+                (
+                    "MyTypeComplexOld",
+                    "tests.unit.lib.test_signal_schema",
+                    "MyTypeComplexOld@v1",
+                ),
+                ("DataModel", "datachain.lib.data_model", "DataModel@v1"),
+                ("BaseModel", "pydantic.main", None),
+                ("object", "builtins", None),
+            ],
         },
     }
 
@@ -502,14 +656,14 @@ def test_print_types():
         int: "int",
         float: "float",
         None: "NoneType",
-        MyType2: "MyType2",
+        MyType2: "MyType2@v1",
         Any: "Any",
         Literal: "Literal",
         Final: "Final",
-        Optional[MyType2]: "Union[MyType2, NoneType]",
+        Optional[MyType2]: "Union[MyType2@v1, NoneType]",
         Union[str, int]: "Union[str, int]",
         Union[str, int, bool]: "Union[str, int, bool]",
-        Union[Optional[MyType2]]: "Union[MyType2, NoneType]",
+        Union[Optional[MyType2]]: "Union[MyType2@v1, NoneType]",
         list: "list",
         list[bool]: "list[bool]",
         List[bool]: "list[bool]",  # noqa: UP006
@@ -518,8 +672,8 @@ def test_print_types():
         dict: "dict",
         dict[str, bool]: "dict[str, bool]",
         Dict[str, bool]: "dict[str, bool]",  # noqa: UP006
-        dict[str, Optional[MyType1]]: "dict[str, Union[MyType1, NoneType]]",
-        Dict[str, Optional[MyType1]]: "dict[str, Union[MyType1, NoneType]]",  # noqa: UP006
+        dict[str, Optional[MyType1]]: "dict[str, Union[MyType1@v1, NoneType]]",
+        Dict[str, Optional[MyType1]]: "dict[str, Union[MyType1@v1, NoneType]]",  # noqa: UP006
         Union[str, list[str]]: "Union[str, list[str]]",
         Union[str, List[str]]: "Union[str, list[str]]",  # noqa: UP006
         Optional[Literal["x"]]: "Union[Literal, NoneType]",
