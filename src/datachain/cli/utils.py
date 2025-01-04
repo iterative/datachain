@@ -1,4 +1,8 @@
-from argparse import SUPPRESS, Action, ArgumentError, _AppendAction
+import logging
+from argparse import SUPPRESS, Action, ArgumentError, Namespace, _AppendAction
+from typing import Optional
+
+from datachain.error import DataChainError
 
 
 class BooleanOptionalAction(Action):
@@ -70,3 +74,25 @@ class KeyValueArgs(_AppendAction):  # pylint: disable=protected-access
             items[key.strip()] = value
 
         setattr(namespace, self.dest, items)
+
+
+def get_logging_level(args: Namespace) -> int:
+    if args.quiet:
+        return logging.CRITICAL
+    if args.verbose:
+        return logging.DEBUG
+    return logging.INFO
+
+
+def determine_flavors(studio: bool, local: bool, all: bool, token: Optional[str]):
+    if studio and not token:
+        raise DataChainError(
+            "Not logged in to Studio. Log in with 'datachain studio login'."
+        )
+
+    if local or studio:
+        all = False
+
+    all = all and not (local or studio)
+
+    return all, local, studio
