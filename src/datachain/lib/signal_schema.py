@@ -165,12 +165,25 @@ class SignalSchema:
             # This type is already stored in custom_types.
             return version_name
         fields = {}
+
         for field_name, info in fr.model_fields.items():
             field_type = info.annotation
             # All fields should be typed.
             assert field_type
             fields[field_name] = SignalSchema._serialize_type(field_type, custom_types)
-        custom_types[version_name] = fields
+
+        bases: list[tuple[str, str, Optional[str]]] = []
+        for type_ in fr.__mro__:
+            model_store_name = (
+                ModelStore.get_name(type_) if issubclass(type_, DataModel) else None
+            )
+            bases.append((type_.__name__, type_.__module__, model_store_name))
+
+        custom_types[version_name] = {
+            "_custom_types_schema_version": 2,
+            "fields": fields,
+            "bases": bases,
+        }
         return version_name
 
     @staticmethod
@@ -184,7 +197,6 @@ class SignalSchema:
             if st is None or not ModelStore.is_pydantic(st):
                 continue
             # Register and save feature types.
-            ModelStore.register(st)
             st_version_name = ModelStore.get_name(st)
             if st is fr:
                 # If the main type is Pydantic, then use the ModelStore version name.
@@ -226,6 +238,23 @@ class SignalSchema:
             raise TypeError("Unclosed square bracket when parsing subtype list")
         subtypes.append(type_name[start:].strip())
         return subtypes
+
+    @staticmethod
+    def _get_custom_type_fields(
+        type_name: str, custom_types: dict[str, Any]
+    ) -> dict[str, Any]:
+        custom_type_description = custom_types.get(type_name)
+
+        if custom_type_description is None:
+            raise SignalSchemaError(
+                f"cannot deserialize '{type_name}' from custom types"
+            )
+
+        # Backward compatibility with the old custom types schema version that didn't
+        # include bases, and only had fields.
+        if "_custom_types_schema_version" not in custom_type_description:
+            return custom_type_description
+        return custom_type_description["fields"]
 
     @staticmethod
     def _resolve_type(type_name: str, custom_types: dict[str, Any]) -> Optional[type]:  # noqa: PLR0911
@@ -273,7 +302,7 @@ class SignalSchema:
             return fr
 
         if type_name in custom_types:
-            fields = custom_types[type_name]
+            fields = SignalSchema._get_custom_type_fields(type_name, custom_types)
             fields = {
                 field_name: SignalSchema._resolve_type(field_type_str, custom_types)
                 for field_name, field_type_str in fields.items()
@@ -662,6 +691,9 @@ class SignalSchema:
                 stacklevel=2,
             )
             return "Any"
+        if ModelStore.is_pydantic(type_):
+            ModelStore.register(type_)
+            return ModelStore.get_name(type_)
         return type_.__name__
 
     @staticmethod
