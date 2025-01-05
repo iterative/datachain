@@ -138,7 +138,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
         pyv: ['3.9', '3.12']
-        group: ['get_started', 'llm_and_nlp or computer_vision', 'multimodal']
+        group: ['get_started', 'computer_vision', 'llm_and_nlp', 'multimodal']
         exclude:
           - {os: ubuntu-latest, pyv: '3.9', group: 'multimodal'}
           - {os: ubuntu-latest, pyv: '3.12', group: 'multimodal'}
