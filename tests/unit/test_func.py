@@ -6,6 +6,7 @@ from datachain.func import (
     bit_hamming_distance,
     byte_hamming_distance,
     case,
+    ifelse,
     int_hash_64,
     literal,
 )
@@ -658,5 +659,22 @@ def test_case_mutate(dc, val, else_, type_):
     res = dc.mutate(test=case((C("num") < 2, val), else_=else_))
     assert list(res.order_by("test").collect("test")) == sorted(
         [val, else_, else_, else_, else_]
+    )
+    assert res.schema["test"] == type_
+
+
+@pytest.mark.parametrize(
+    "if_val,else_val,type_",
+    [
+        ["A", "D", str],
+        [1, 2, int],
+        [1.5, 2.5, float],
+        [True, False, bool],
+    ],
+)
+def test_ifelse_mutate(dc, if_val, else_val, type_):
+    res = dc.mutate(test=ifelse(C("num") < 2, if_val, else_val))
+    assert list(res.order_by("test").collect("test")) == sorted(
+        [if_val, else_val, else_val, else_val, else_val]
     )
     assert res.schema["test"] == type_
