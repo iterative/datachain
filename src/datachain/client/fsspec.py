@@ -390,6 +390,12 @@ class Client(ABC):
             self.fs.open(self.get_full_path(file.path, file.version)), cb
         )  # type: ignore[return-value]
 
+    def upload(self, path: str, data: bytes) -> "File":
+        full_path = self.get_full_path(path)
+        self.fs.pipe_file(full_path, data)
+        file_info = self.fs.info(full_path)
+        return self.info_to_file(file_info, path)
+
     def download(self, file: "File", *, callback: Callback = DEFAULT_CALLBACK) -> None:
         sync(get_loop(), functools.partial(self._download, file, callback=callback))
 
