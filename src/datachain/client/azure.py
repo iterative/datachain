@@ -42,7 +42,7 @@ class AzureClient(Client):
             prefix = prefix.lstrip(DELIMITER) + DELIMITER
         found = False
         try:
-            with tqdm(desc=f"Listing {self.uri}", unit=" objects") as pbar:
+            with tqdm(desc=f"Listing {self.uri}", unit=" objects", leave=False) as pbar:
                 async with self.fs.service_client.get_container_client(
                     container=self.name
                 ) as container_client:

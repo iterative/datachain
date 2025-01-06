@@ -249,7 +249,7 @@ class Client(ABC):
         await main_task
 
     async def _fetch_nested(self, start_prefix: str, result_queue: ResultQueue) -> None:
-        progress_bar = tqdm(desc=f"Listing {self.uri}", unit=" objects")
+        progress_bar = tqdm(desc=f"Listing {self.uri}", unit=" objects", leave=False)
         loop = get_loop()
 
         queue: asyncio.Queue[str] = asyncio.Queue()

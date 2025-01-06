@@ -63,7 +63,7 @@ class DataChainCache:
         if size < 0:
             size = await client.get_size(from_path, version_id=file.version)
         cb = callback or TqdmCallback(
-            tqdm_kwargs={"desc": odb_fs.name(from_path), "bytes": True},
+            tqdm_kwargs={"desc": odb_fs.name(from_path), "bytes": True, "leave": False},
             tqdm_cls=Tqdm,
             size=size,
         )
