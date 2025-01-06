@@ -350,10 +350,10 @@ def process_udf_outputs(
     warehouse.insert_rows_done(udf_table)
 
 
-def get_download_callback() -> Callback:
-    return CombinedDownloadCallback(
+def get_download_callback(suffix: str = "", **kwargs) -> CombinedDownloadCallback:
+    return TqdmCombinedDownloadCallback(
         {
-            "desc": "Download",
+            "desc": "Download" + suffix,
             "unit": "B",
             "unit_scale": True,
             "unit_divisor": 1024,
