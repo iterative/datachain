@@ -67,6 +67,8 @@ def test_llm_and_nlp_examples(example):
             pytest.skip("Hugging Face token not set")
     if "claude" in name and "ANTHROPIC_API_KEY" not in os.environ:
         pytest.skip("ANTHROPIC_API_KEY not set")
+    if "unstructured" in name and sys.platform == "win32":
+        pytest.skip("Unstructured package broken on Windows")
     smoke_test(example)
 
 
