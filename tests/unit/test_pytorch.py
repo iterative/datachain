@@ -29,20 +29,26 @@ def test_cache(catalog, cache, prefetch):
 
 @pytest.mark.parametrize("cache", [True, False])
 def test_close(mocker, catalog, cache):
-    ds = PytorchDataset("fake", 1, catalog, dc_settings=Settings(cache=cache))
     spy = mocker.spy(DataChainCache, "destroy")
+    ds = PytorchDataset("fake", 1, catalog, dc_settings=Settings(cache=cache))
 
     ds.close()
-    assert spy.called == (not cache)
-    assert os.path.exists(ds._cache.cache_dir) == (not cache)
+
+    if cache:
+        spy.assert_not_called()
+    else:
+        spy.assert_called_once()
 
 
 @pytest.mark.parametrize("cache", [True, False])
-def test_cache_is_destroyed_on_gc(catalog, cache):
+def test_cache_is_destroyed_on_gc(mocker, catalog, cache):
+    spy = mocker.patch.object(DataChainCache, "destroy")
     ds = PytorchDataset("fake", 1, catalog, dc_settings=Settings(cache=cache))
-    cache_dir = ds._cache.cache_dir
 
     del ds
     gc.collect()
 
-    assert os.path.exists(cache_dir) == cache
+    if cache:
+        spy.assert_not_called()
+    else:
+        spy.assert_called_once()
