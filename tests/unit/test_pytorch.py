@@ -1,3 +1,4 @@
+import gc
 import os
 
 import pytest
@@ -33,3 +34,15 @@ def test_close(mocker, catalog, cache):
 
     ds.close()
     assert spy.called == (not cache)
+    assert os.path.exists(ds._cache.cache_dir) == (not cache)
+
+
+@pytest.mark.parametrize("cache", [True, False])
+def test_cache_is_destroyed_on_gc(catalog, cache):
+    ds = PytorchDataset("fake", 1, catalog, dc_settings=Settings(cache=cache))
+    cache_dir = ds._cache.cache_dir
+
+    del ds
+    gc.collect()
+
+    assert os.path.exists(cache_dir) == cache

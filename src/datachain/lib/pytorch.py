@@ -86,7 +86,7 @@ class PytorchDataset(IterableDataset):
             tmp_dir = catalog.cache.tmp_dir
             assert tmp_dir
             self._cache = get_temp_cache(tmp_dir, prefix="prefetch-")
-            weakref.finalize(self, self.close)
+            weakref.finalize(self, self._cache.destroy)
 
     def close(self) -> None:
         if not self.cache:
