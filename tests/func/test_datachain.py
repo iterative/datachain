@@ -260,6 +260,7 @@ def test_map_file(cloud_test_catalog, use_cache, prefetch):
     assert set(dc.collect("signal")) == expected
     for file in dc.collect("file"):
         assert bool(file.get_local_path()) is use_cache
+    assert not os.listdir(ctc.catalog.cache.tmp_dir)
 
 
 @pytest.mark.parametrize("use_cache", [False, True])
@@ -1336,6 +1337,7 @@ def test_gen_file(cloud_test_catalog, use_cache, prefetch):
         "woof",
     }
     assert set(dc.collect("signal")) == expected
+    assert not os.listdir(ctc.catalog.cache.tmp_dir)
 
 
 def test_similarity_search(cloud_test_catalog):

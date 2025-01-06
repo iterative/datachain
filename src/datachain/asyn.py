@@ -14,6 +14,8 @@ from typing import Any, Callable, Generic, Optional, TypeVar
 
 from fsspec.asyn import get_loop
 
+from datachain.utils import safe_closing
+
 ASYNC_WORKERS = 20
 
 InputT = TypeVar("InputT", contravariant=True)  # noqa: PLC0105
@@ -64,11 +66,13 @@ class AsyncMapper(Generic[InputT, ResultT]):
         return task
 
     def _produce(self) -> None:
-        for item in self.iterable:
-            if self._shutdown_producer.is_set():
-                return
-            fut = asyncio.run_coroutine_threadsafe(self.work_queue.put(item), self.loop)
-            fut.result()  # wait until the item is in the queue
+        with safe_closing(self.iterable):
+            for item in self.iterable:
+                if self._shutdown_producer.is_set():
+                    return
+                coro = self.work_queue.put(item)
+                fut = asyncio.run_coroutine_threadsafe(coro, self.loop)
+                fut.result()  # wait until the item is in the queue
 
     async def produce(self) -> None:
         await self.to_thread(self._produce)

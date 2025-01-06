@@ -24,6 +24,7 @@ from datachain.query.batch import (
     Partition,
     RowsOutputBatch,
 )
+from datachain.utils import safe_closing
 
 if TYPE_CHECKING:
     from collections import abc
@@ -338,15 +339,18 @@ class Mapper(UDFBase):
     ) -> Iterator[Iterable[UDFResult]]:
         self.setup()
 
+        def _prepare_rows(udf_inputs) -> "abc.Generator[Sequence[Any], None, None]":
+            with safe_closing(udf_inputs):
+                for row in udf_inputs:
+                    yield self._prepare_row_and_id(
+                        row, udf_fields, catalog, cache, download_cb
+                    )
+
         with _get_cache(catalog.cache, self.prefetch, use_cache=cache) as _cache:
             catalog = clone_catalog_with_cache(catalog, _cache)
 
-            prepared_inputs: abc.Generator[Sequence[Any], None, None] = (
-                self._prepare_row_and_id(row, udf_fields, catalog, cache, download_cb)
-                for row in udf_inputs
-            )
+            prepared_inputs = _prepare_rows(udf_inputs)
             prepared_inputs = _prefetch_inputs(prepared_inputs, self.prefetch)
-
             with closing(prepared_inputs):
                 for id_, *udf_args in prepared_inputs:
                     result_objs = self.process_safe(udf_args)
@@ -419,15 +423,18 @@ class Generator(UDFBase):
     ) -> Iterator[Iterable[UDFResult]]:
         self.setup()
 
+        def _prepare_rows(udf_inputs) -> "abc.Generator[Sequence[Any], None, None]":
+            with safe_closing(udf_inputs):
+                for row in udf_inputs:
+                    yield self._prepare_row(
+                        row, udf_fields, catalog, cache, download_cb
+                    )
+
         with _get_cache(catalog.cache, self.prefetch, use_cache=cache) as _cache:
             catalog = clone_catalog_with_cache(catalog, _cache)
 
-            prepared_inputs: abc.Generator[Sequence[Any], None, None] = (
-                self._prepare_row(row, udf_fields, catalog, cache, download_cb)
-                for row in udf_inputs
-            )
+            prepared_inputs = _prepare_rows(udf_inputs)
             prepared_inputs = _prefetch_inputs(prepared_inputs, self.prefetch)
-
             with closing(prepared_inputs):
                 for row in prepared_inputs:
                     result_objs = self.process_safe(row)
