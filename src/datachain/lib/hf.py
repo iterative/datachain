@@ -95,7 +95,7 @@ class HFGenerator(Generator):
         ds = self.ds_dict[split]
         if split:
             desc += f" split '{split}'"
-        with tqdm(desc=desc, unit=" rows") as pbar:
+        with tqdm(desc=desc, unit=" rows", leave=False) as pbar:
             for row in ds:
                 output_dict = {}
                 if split and "split" in self.output_schema.model_fields:

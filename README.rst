@@ -31,7 +31,7 @@ Use Cases
 1. **ETL.** Pythonic framework for describing and running unstructured data transformations
    and enrichments, applying models to data, including LLMs.
 2. **Analytics.** DataChain dataset is a table that combines all the information about data
-   objects in one place + it provides dataframe-like API and vecrorized engine to do analytics
+   objects in one place + it provides dataframe-like API and vectorized engine to do analytics
    on these tables at scale.
 3. **Versioning.** DataChain doesn't store, require moving or copying data (unlike DVC).
    Perfect use case is a bucket with thousands or millions of images, videos, audio, PDFs.
@@ -167,7 +167,7 @@ DataChain Studio Platform
 
 `DataChain Studio`_ is a proprietary solution for teams that offers:
 
-- **Centralized dataset registry** to manage data, code and dependency
+- **Centralized dataset registry** to manage data, code and
   dependencies in one place.
 - **Data Lineage** for data sources as well as derivative dataset.
 - **UI for Multimodal Data** like images, videos, and PDFs.

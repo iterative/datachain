@@ -140,7 +140,10 @@ def test_studio_datasets(capsys, studio_datasets, mocker):
         yield "local", 1
         yield "both", 1
 
-    mocker.patch("datachain.cli.list_datasets_local", side_effect=list_datasets_local)
+    mocker.patch(
+        "datachain.cli.commands.datasets.list_datasets_local",
+        side_effect=list_datasets_local,
+    )
     local_rows = [
         {"Name": "both", "Version": "1"},
         {"Name": "local", "Version": "1"},

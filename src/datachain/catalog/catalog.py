@@ -405,6 +405,7 @@ def get_download_bar(bar_format: str, total_size: int):
         unit_scale=True,
         unit_divisor=1000,
         total=total_size,
+        leave=False,
     )
 
 
@@ -429,6 +430,7 @@ def instantiate_node_groups(
             unit_scale=True,
             unit_divisor=1000,
             total=total_files,
+            leave=False,
         )
     )
 
@@ -532,6 +534,12 @@ def find_column_to_str(  # noqa: PLR0911
         # Unknown - this only happens if a type was added elsewhere but not here
         return "u"
     return ""
+
+
+def clone_catalog_with_cache(catalog: "Catalog", cache: "DataChainCache") -> "Catalog":
+    clone = catalog.copy()
+    clone.cache = cache
+    return clone
 
 
 class Catalog:
@@ -1437,6 +1445,7 @@ class Catalog:
             unit_scale=True,
             unit_divisor=1000,
             total=ds_stats.num_objects,  # type: ignore [union-attr]
+            leave=False,
         )
 
         schema = DatasetRecord.parse_schema(remote_ds_version.schema)

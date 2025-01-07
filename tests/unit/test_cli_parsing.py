@@ -4,26 +4,11 @@ from argparse import ArgumentParser, ArgumentTypeError
 import pytest
 
 from datachain.cli import (
-    TTL_HUMAN,
-    TTL_INT,
-    find_columns_type,
     get_logging_level,
     get_parser,
-    human_time_type,
 )
-from datachain.cli_utils import CommaSeparatedArgs, KeyValueArgs
-
-
-def test_human_time_type():
-    assert human_time_type(TTL_HUMAN) == TTL_INT
-    assert human_time_type("1h") == 60 * 60
-    assert human_time_type("30s") == 30
-    assert human_time_type("2w") == 2 * 7 * 24 * 60 * 60
-
-    assert human_time_type("", can_be_none=True) is None
-
-    with pytest.raises(ArgumentTypeError):
-        human_time_type("bogus")
+from datachain.cli.parser.utils import find_columns_type
+from datachain.cli.utils import CommaSeparatedArgs, KeyValueArgs
 
 
 def test_find_columns_type():
