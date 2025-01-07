@@ -482,6 +482,21 @@ def test_map(test_session):
         assert x.my_name == test_fr.my_name
 
 
+def test_map_existing_column_after_step(test_session):
+    dc = DataChain.from_values(t1=features, session=test_session).map(
+        x=lambda _: "test",
+        params="t1",
+        output={"x": str},
+    )
+
+    with pytest.raises(ValueError):
+        dc.map(
+            x=lambda _: "test",
+            params="t1",
+            output={"x": str},
+        ).exec()
+
+
 def test_agg(test_session):
     class _TestFr(BaseModel):
         f: File

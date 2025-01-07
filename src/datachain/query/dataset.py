@@ -602,6 +602,13 @@ class UDFSignal(UDFStep):
         signal_name_cols = {c.name: c for c in signal_cols}
         cols = signal_cols
 
+        overlap = {c.name for c in original_cols} & {c.name for c in cols}
+        if overlap:
+            raise ValueError(
+                "Column already exists or added in the previous steps: "
+                + ", ".join(overlap)
+            )
+
         def q(*columns):
             cols1 = []
             cols2 = []
