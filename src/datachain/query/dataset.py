@@ -351,17 +351,23 @@ def process_udf_outputs(
 
 def get_download_callback() -> Callback:
     return CombinedDownloadCallback(
-        {"desc": "Download", "unit": "B", "unit_scale": True, "unit_divisor": 1024}
+        {
+            "desc": "Download",
+            "unit": "B",
+            "unit_scale": True,
+            "unit_divisor": 1024,
+            "leave": False,
+        }
     )
 
 
 def get_processed_callback() -> Callback:
-    return TqdmCallback({"desc": "Processed", "unit": " rows"})
+    return TqdmCallback({"desc": "Processed", "unit": " rows", "leave": False})
 
 
 def get_generated_callback(is_generator: bool = False) -> Callback:
     if is_generator:
-        return TqdmCallback({"desc": "Generated", "unit": " rows"})
+        return TqdmCallback({"desc": "Generated", "unit": " rows", "leave": False})
     return DEFAULT_CALLBACK
 
 

@@ -405,6 +405,7 @@ def get_download_bar(bar_format: str, total_size: int):
         unit_scale=True,
         unit_divisor=1000,
         total=total_size,
+        leave=False,
     )
 
 
@@ -429,6 +430,7 @@ def instantiate_node_groups(
             unit_scale=True,
             unit_divisor=1000,
             total=total_files,
+            leave=False,
         )
     )
 
@@ -1437,6 +1439,7 @@ class Catalog:
             unit_scale=True,
             unit_divisor=1000,
             total=ds_stats.num_objects,  # type: ignore [union-attr]
+            leave=False,
         )
 
         schema = DatasetRecord.parse_schema(remote_ds_version.schema)
