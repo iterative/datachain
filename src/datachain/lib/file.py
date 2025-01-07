@@ -269,10 +269,21 @@ class File(DataModel):
         client = self._catalog.get_client(self.source)
         client.download(self, callback=self._download_cb)
 
-    async def _prefetch(self) -> None:
-        if self._caching_enabled:
-            client = self._catalog.get_client(self.source)
-            await client._download(self, callback=self._download_cb)
+    async def _prefetch(self, download_cb: Optional["Callback"] = None) -> bool:
+        from datachain.client.hf import HfClient
+
+        if self._catalog is None:
+            raise RuntimeError("cannot prefetch file because catalog is not setup")
+
+        client = self._catalog.get_client(self.source)
+        if client.protocol == HfClient.protocol:
+            return False
+
+        await client._download(self, callback=download_cb or self._download_cb)
+        self._set_stream(
+            self._catalog, caching_enabled=True, download_cb=DEFAULT_CALLBACK
+        )
+        return True
 
     def get_local_path(self) -> Optional[str]:
         """Return path to a file in a local cache.

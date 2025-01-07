@@ -14,7 +14,9 @@ from multiprocess import get_context
 from sqlalchemy.sql import func
 
 from datachain.catalog import Catalog
+from datachain.catalog.catalog import clone_catalog_with_cache
 from datachain.catalog.loader import get_distributed_class
+from datachain.lib.udf import _get_cache
 from datachain.query.batch import RowsOutput, RowsOutputBatch
 from datachain.query.dataset import (
     get_download_callback,
@@ -25,7 +27,7 @@ from datachain.query.dataset import (
 from datachain.query.queue import get_from_queue, put_into_queue
 from datachain.query.udf import UdfInfo
 from datachain.query.utils import get_query_id_column
-from datachain.utils import batched, flatten
+from datachain.utils import batched, flatten, safe_closing
 
 if TYPE_CHECKING:
     from sqlalchemy import Select, Table
@@ -304,21 +306,25 @@ class UDFWorker:
         processed_cb = ProcessedCallback()
         generated_cb = get_generated_callback(self.is_generator)
 
-        udf_results = self.udf.run(
-            self.udf_fields,
-            self.get_inputs(),
-            self.catalog,
-            self.cache,
-            download_cb=self.cb,
-            processed_cb=processed_cb,
-        )
-        process_udf_outputs(
-            self.catalog.warehouse,
-            self.table,
-            self.notify_and_process(udf_results, processed_cb),
-            self.udf,
-            cb=generated_cb,
-        )
+        prefetch = self.udf.prefetch
+        with _get_cache(self.catalog.cache, prefetch, use_cache=self.cache) as _cache:
+            catalog = clone_catalog_with_cache(self.catalog, _cache)
+            udf_results = self.udf.run(
+                self.udf_fields,
+                self.get_inputs(),
+                catalog,
+                self.cache,
+                download_cb=self.cb,
+                processed_cb=processed_cb,
+            )
+            with safe_closing(udf_results):
+                process_udf_outputs(
+                    catalog.warehouse,
+                    self.table,
+                    self.notify_and_process(udf_results, processed_cb),
+                    self.udf,
+                    cb=generated_cb,
+                )
 
         put_into_queue(
             self.done_queue,

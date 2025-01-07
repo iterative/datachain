@@ -8,11 +8,13 @@ from collections.abc import (
     Iterable,
     Iterator,
 )
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait
 from heapq import heappop, heappush
 from typing import Any, Callable, Generic, Optional, TypeVar
 
 from fsspec.asyn import get_loop
+
+from datachain.utils import safe_closing
 
 ASYNC_WORKERS = 20
 
@@ -56,6 +58,7 @@ class AsyncMapper(Generic[InputT, ResultT]):
         self.pool = ThreadPoolExecutor(workers)
         self._tasks: set[asyncio.Task] = set()
         self._shutdown_producer = threading.Event()
+        self._producer_is_shutdown = threading.Event()
 
     def start_task(self, coro: Coroutine) -> asyncio.Task:
         task = self.loop.create_task(coro)
@@ -64,11 +67,16 @@ class AsyncMapper(Generic[InputT, ResultT]):
         return task
 
     def _produce(self) -> None:
-        for item in self.iterable:
-            if self._shutdown_producer.is_set():
-                return
-            fut = asyncio.run_coroutine_threadsafe(self.work_queue.put(item), self.loop)
-            fut.result()  # wait until the item is in the queue
+        try:
+            with safe_closing(self.iterable):
+                for item in self.iterable:
+                    if self._shutdown_producer.is_set():
+                        return
+                    coro = self.work_queue.put(item)
+                    fut = asyncio.run_coroutine_threadsafe(coro, self.loop)
+                    fut.result()  # wait until the item is in the queue
+        finally:
+            self._producer_is_shutdown.set()
 
     async def produce(self) -> None:
         await self.to_thread(self._produce)
@@ -179,6 +187,8 @@ class AsyncMapper(Generic[InputT, ResultT]):
             self.shutdown_producer()
             if not async_run.done():
                 async_run.cancel()
+                wait([async_run])
+            self._producer_is_shutdown.wait()
 
     def __iter__(self):
         return self.iterate()
