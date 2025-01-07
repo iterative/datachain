@@ -11,7 +11,6 @@ from pydantic import BaseModel
 
 from datachain.asyn import AsyncMapper
 from datachain.cache import temporary_cache
-from datachain.catalog.catalog import clone_catalog_with_cache
 from datachain.dataset import RowDict
 from datachain.lib.convert.flatten import flatten
 from datachain.lib.data_model import DataValue
@@ -106,6 +105,10 @@ class UDFAdapter:
             processed_cb,
         )
 
+    @property
+    def prefetch(self) -> int:
+        return self.inner.prefetch
+
 
 class UDFBase(AbstractUDF):
     """Base class for stateful user-defined functions.
@@ -156,6 +159,7 @@ class UDFBase(AbstractUDF):
     """
 
     is_output_batched = False
+    prefetch: int = 0
 
     def __init__(self):
         self.params: Optional[SignalSchema] = None
@@ -346,20 +350,15 @@ class Mapper(UDFBase):
                         row, udf_fields, catalog, cache, download_cb
                     )
 
-        with _get_cache(catalog.cache, self.prefetch, use_cache=cache) as _cache:
-            catalog = clone_catalog_with_cache(catalog, _cache)
-
-            prepared_inputs = _prepare_rows(udf_inputs)
-            prepared_inputs = _prefetch_inputs(prepared_inputs, self.prefetch)
-            with closing(prepared_inputs):
-                for id_, *udf_args in prepared_inputs:
-                    result_objs = self.process_safe(udf_args)
-                    udf_output = self._flatten_row(result_objs)
-                    output = [
-                        {"sys__id": id_} | dict(zip(self.signal_names, udf_output))
-                    ]
-                    processed_cb.relative_update(1)
-                    yield output
+        prepared_inputs = _prepare_rows(udf_inputs)
+        prepared_inputs = _prefetch_inputs(prepared_inputs, self.prefetch)
+        with closing(prepared_inputs):
+            for id_, *udf_args in prepared_inputs:
+                result_objs = self.process_safe(udf_args)
+                udf_output = self._flatten_row(result_objs)
+                output = [{"sys__id": id_} | dict(zip(self.signal_names, udf_output))]
+                processed_cb.relative_update(1)
+                yield output
 
         self.teardown()
 
@@ -430,18 +429,15 @@ class Generator(UDFBase):
                         row, udf_fields, catalog, cache, download_cb
                     )
 
-        with _get_cache(catalog.cache, self.prefetch, use_cache=cache) as _cache:
-            catalog = clone_catalog_with_cache(catalog, _cache)
-
-            prepared_inputs = _prepare_rows(udf_inputs)
-            prepared_inputs = _prefetch_inputs(prepared_inputs, self.prefetch)
-            with closing(prepared_inputs):
-                for row in prepared_inputs:
-                    result_objs = self.process_safe(row)
-                    udf_outputs = (self._flatten_row(row) for row in result_objs)
-                    output = (dict(zip(self.signal_names, row)) for row in udf_outputs)
-                    processed_cb.relative_update(1)
-                    yield output
+        prepared_inputs = _prepare_rows(udf_inputs)
+        prepared_inputs = _prefetch_inputs(prepared_inputs, self.prefetch)
+        with closing(prepared_inputs):
+            for row in prepared_inputs:
+                result_objs = self.process_safe(row)
+                udf_outputs = (self._flatten_row(row) for row in result_objs)
+                output = (dict(zip(self.signal_names, row)) for row in udf_outputs)
+                processed_cb.relative_update(1)
+                yield output
 
         self.teardown()
 

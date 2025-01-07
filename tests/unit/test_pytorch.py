@@ -30,7 +30,9 @@ def test_cache(catalog, cache, prefetch):
 @pytest.mark.parametrize("cache", [True, False])
 def test_close(mocker, catalog, cache):
     spy = mocker.spy(DataChainCache, "destroy")
-    ds = PytorchDataset("fake", 1, catalog, dc_settings=Settings(cache=cache))
+    ds = PytorchDataset(
+        "fake", 1, catalog, dc_settings=Settings(cache=cache, prefetch=10)
+    )
 
     ds.close()
 
@@ -41,9 +43,11 @@ def test_close(mocker, catalog, cache):
 
 
 @pytest.mark.parametrize("cache", [True, False])
-def test_cache_is_destroyed_on_gc(mocker, catalog, cache):
+def test_prefetch_cache_gets_destroyed_on_gc(mocker, catalog, cache):
     spy = mocker.patch.object(DataChainCache, "destroy")
-    ds = PytorchDataset("fake", 1, catalog, dc_settings=Settings(cache=cache))
+    ds = PytorchDataset(
+        "fake", 1, catalog, dc_settings=Settings(cache=cache, prefetch=10)
+    )
 
     del ds
     gc.collect()

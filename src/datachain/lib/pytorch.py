@@ -23,6 +23,8 @@ from datachain.query.dataset import get_download_callback
 if TYPE_CHECKING:
     from torchvision.transforms.v2 import Transform
 
+    from datachain.cache import DataChainCache as Cache
+
 
 logger = logging.getLogger("datachain")
 
@@ -80,17 +82,18 @@ class PytorchDataset(IterableDataset):
         if (prefetch := dc_settings.prefetch) is not None:
             self.prefetch = prefetch
 
-        if self.cache or not self.prefetch:
-            self._cache = catalog.cache
-        else:
+        self._cache = catalog.cache
+        self._prefetch_cache: Optional[Cache] = None
+        if prefetch and not self.cache:
             tmp_dir = catalog.cache.tmp_dir
             assert tmp_dir
-            self._cache = get_temp_cache(tmp_dir, prefix="prefetch-")
-            weakref.finalize(self, self._cache.destroy)
+            self._prefetch_cache = get_temp_cache(tmp_dir, prefix="prefetch-")
+            self._cache = self._prefetch_cache
+            weakref.finalize(self, self._prefetch_cache.destroy)
 
     def close(self) -> None:
-        if not self.cache:
-            self._cache.destroy()
+        if self._prefetch_cache:
+            self._prefetch_cache.destroy()
 
     def _init_catalog(self, catalog: "Catalog"):
         # For compatibility with multiprocessing,
@@ -134,7 +137,9 @@ class PytorchDataset(IterableDataset):
         download_cb = CombinedDownloadCallback()
         if os.getenv("DATACHAIN_SHOW_PREFETCH_PROGRESS"):
             download_cb = get_download_callback(
-                f"{total_rank}/{total_workers}", position=total_rank
+                f"{total_rank}/{total_workers}",
+                position=total_rank,
+                leave=True,
             )
 
         rows = self._row_iter(total_rank, total_workers)

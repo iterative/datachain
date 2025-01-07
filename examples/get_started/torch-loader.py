@@ -80,10 +80,7 @@ if __name__ == "__main__":
     # Train the model
     for epoch in range(NUM_EPOCHS):
         with tqdm(
-            train_loader,
-            desc=f"epoch {epoch + 1}/{NUM_EPOCHS}",
-            unit="batch",
-            leave=False,
+            train_loader, desc=f"epoch {epoch + 1}/{NUM_EPOCHS}", unit="batch"
         ) as loader:
             for data in loader:
                 inputs, labels = data

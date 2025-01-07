@@ -117,8 +117,8 @@ def test_prefetch(mocker, catalog, fake_dataset, use_cache, prefetch):
     with closing(ds), closing(iter(ds)) as rows:
         assert next(rows)
     m.assert_called_once()
-    # cache directory should be removed after `close()` if the cache is not enabled
-    assert os.path.exists(cache.cache_dir) == use_cache
+    # prefetch cache directory should be removed after `close()`
+    assert os.path.exists(cache.cache_dir) == (use_cache or not prefetch)
 
 
 def test_hf_to_pytorch(catalog, fake_image_dir):

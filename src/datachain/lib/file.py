@@ -280,7 +280,9 @@ class File(DataModel):
             return False
 
         await client._download(self, callback=download_cb or self._download_cb)
-        self._download_cb = DEFAULT_CALLBACK
+        self._set_stream(
+            self._catalog, caching_enabled=True, download_cb=DEFAULT_CALLBACK
+        )
         return True
 
     def get_local_path(self) -> Optional[str]:
