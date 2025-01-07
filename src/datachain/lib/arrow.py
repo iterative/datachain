@@ -91,7 +91,9 @@ class ArrowGenerator(Generator):
                 yield from record_batch.to_pylist()
 
         it = islice(iter_records(), self.nrows)
-        with tqdm(it, desc="Parsed by pyarrow", unit="rows", total=self.nrows) as pbar:
+        with tqdm(
+            it, desc="Parsed by pyarrow", unit="rows", total=self.nrows, leave=False
+        ) as pbar:
             for index, record in enumerate(pbar):
                 yield self._process_record(
                     record, file, index, hf_schema, use_datachain_schema

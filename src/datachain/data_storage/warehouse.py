@@ -904,8 +904,11 @@ class AbstractWarehouse(ABC, Serializable):
         This should be implemented to ensure that the provided tables
         are cleaned up as soon as they are no longer needed.
         """
-        with tqdm(desc="Cleanup", unit=" tables") as pbar:
-            for name in set(names):
+        to_drop = set(names)
+        with tqdm(
+            desc="Cleanup", unit=" tables", total=len(to_drop), leave=False
+        ) as pbar:
+            for name in to_drop:
                 self.db.drop_table(Table(name, self.db.metadata), if_exists=True)
                 pbar.update(1)
 

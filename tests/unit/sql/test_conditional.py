@@ -89,14 +89,14 @@ def test_case(warehouse, val, expected):
 def test_case_missing_statements(warehouse):
     with pytest.raises(DataChainParamsError) as exc_info:
         select(func.case(*[], else_="D"))
-    assert str(exc_info.value) == "Missing case statements"
+    assert str(exc_info.value) == "Missing statements"
 
 
 def test_case_not_same_result_types(warehouse):
     val = 2
     with pytest.raises(DataChainParamsError) as exc_info:
         select(func.case(*[(val > 1, "A"), (2 < val < 4, 5)], else_="D"))
-    assert str(exc_info.value) == "Case statement values must be of the same type"
+    assert str(exc_info.value) == "Statement values must be of the same type"
 
 
 def test_case_wrong_result_type(warehouse):
@@ -104,9 +104,26 @@ def test_case_wrong_result_type(warehouse):
     with pytest.raises(DataChainParamsError) as exc_info:
         select(func.case(*[(val > 1, ["a", "b"]), (2 < val < 4, [])], else_=[]))
     assert str(exc_info.value) == (
-        "Case supports only python literals ([<class 'int'>, <class 'float'>, "
-        "<class 'complex'>, <class 'str'>, <class 'bool'>]) for values"
+        "Only python literals ([<class 'int'>, <class 'float'>, "
+        "<class 'complex'>, <class 'str'>, <class 'bool'>]) are supported for values"
     )
+
+
+@pytest.mark.parametrize(
+    "val,expected",
+    [
+        (1, "L"),
+        (2, "L"),
+        (3, "L"),
+        (4, "H"),
+        (5, "H"),
+        (100, "H"),
+    ],
+)
+def test_ifelse(warehouse, val, expected):
+    query = select(func.ifelse(val <= 3, "L", "H"))
+    result = tuple(warehouse.db.execute(query))
+    assert result == ((expected,),)
 
 
 @pytest.mark.parametrize(

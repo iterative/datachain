@@ -1,3 +1,8 @@
+import os
+
+os.environ["YOLO_VERBOSE"] = "false"
+
+
 from io import BytesIO
 
 from PIL import Image

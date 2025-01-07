@@ -6,7 +6,9 @@ from datachain.func import (
     bit_hamming_distance,
     byte_hamming_distance,
     case,
+    ifelse,
     int_hash_64,
+    isnone,
     literal,
 )
 from datachain.func.random import rand
@@ -663,11 +665,26 @@ def test_case_mutate(dc, val, else_, type_):
     assert res.schema["test"] == type_
 
 
+@pytest.mark.parametrize(
+    "if_val,else_val,type_",
+    [
+        ["A", "D", str],
+        [1, 2, int],
+        [1.5, 2.5, float],
+        [True, False, bool],
+    ],
+)
+def test_ifelse_mutate(dc, if_val, else_val, type_):
+    res = dc.mutate(test=ifelse(C("num") < 2, if_val, else_val))
+    assert list(res.order_by("test").collect("test")) == sorted(
+        [if_val, else_val, else_val, else_val, else_val]
+    )
+    assert res.schema["test"] == type_
+
+
 @pytest.mark.parametrize("col", ["val", C("val")])
 @skip_if_not_sqlite
 def test_isnone_mutate(col):
-    from datachain.func.conditional import isnone
-
     dc = DataChain.from_values(
         num=list(range(1, 6)),
         val=[None if i > 3 else "A" for i in range(1, 6)],

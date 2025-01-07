@@ -9,6 +9,8 @@ from datachain.sql.functions import conditional
 
 from .func import ColT, Func
 
+CaseT = Union[int, float, complex, bool, str]
+
 
 def greatest(*args: Union[ColT, float]) -> Func:
     """
@@ -86,9 +88,7 @@ def least(*args: Union[ColT, float]) -> Func:
     )
 
 
-def case(
-    *args: tuple[BinaryExpression, Union[int, float, complex, bool, str]], else_=None
-) -> Func:
+def case(*args: tuple[BinaryExpression, CaseT], else_=None) -> Func:
     """
     Returns the case function that produces case expression which has a list of
     conditions and corresponding results. Results can only be python primitives
@@ -109,29 +109,51 @@ def case(
             res=func.case((C("num") > 0, "P"), (C("num") < 0, "N"), else_="Z"),
         )
         ```
-
-    Note:
-        - Result column will always be of the same type as the input columns.
     """
     supported_types = [int, float, complex, str, bool]
 
     type_ = type(else_) if else_ else None
 
     if not args:
-        raise DataChainParamsError("Missing case statements")
+        raise DataChainParamsError("Missing statements")
 
     for arg in args:
         if type_ and not isinstance(arg[1], type_):
-            raise DataChainParamsError("Case statement values must be of the same type")
+            raise DataChainParamsError("Statement values must be of the same type")
         type_ = type(arg[1])
 
     if type_ not in supported_types:
         raise DataChainParamsError(
-            f"Case supports only python literals ({supported_types}) for values"
+            f"Only python literals ({supported_types}) are supported for values"
         )
 
     kwargs = {"else_": else_}
     return Func("case", inner=sql_case, args=args, kwargs=kwargs, result_type=type_)
+
+
+def ifelse(condition: BinaryExpression, if_val: CaseT, else_val: CaseT) -> Func:
+    """
+    Returns the ifelse function that produces if expression which has a condition
+    and values for true and false outcome. Results can only be python primitives
+    like string, numbes or booleans. Result type is inferred from the values.
+
+    Args:
+        condition: BinaryExpression - condition which is evaluated
+        if_val: (str | int | float | complex | bool): value for true condition outcome
+        else_val: (str | int | float | complex | bool): value for false condition
+         outcome
+
+    Returns:
+        Func: A Func object that represents the ifelse function.
+
+    Example:
+        ```py
+        dc.mutate(
+            res=func.ifelse(C("num") > 0, "P", "N"),
+        )
+        ```
+    """
+    return case((condition, if_val), else_=else_val)
 
 
 def isnone(col: Union[str, Column]) -> Func:

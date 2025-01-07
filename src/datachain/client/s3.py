@@ -61,7 +61,7 @@ class ClientS3(Client):
 
         async def process_pages(page_queue, result_queue):
             found = False
-            with tqdm(desc=f"Listing {self.uri}", unit=" objects") as pbar:
+            with tqdm(desc=f"Listing {self.uri}", unit=" objects", leave=False) as pbar:
                 while (res := await page_queue.get()) is not None:
                     if res:
                         found = True
