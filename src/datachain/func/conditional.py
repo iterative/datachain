@@ -4,6 +4,7 @@ from sqlalchemy import case as sql_case
 from sqlalchemy.sql.elements import BinaryExpression
 
 from datachain.lib.utils import DataChainParamsError
+from datachain.query.schema import Column
 from datachain.sql.functions import conditional
 
 from .func import ColT, Func
@@ -131,3 +132,28 @@ def case(
 
     kwargs = {"else_": else_}
     return Func("case", inner=sql_case, args=args, kwargs=kwargs, result_type=type_)
+
+
+def isnone(col: Union[str, Column]) -> Func:
+    """
+    Returns True if column value or literal is None, otherwise False
+    Args:
+        col (str | Column | literal): Column or literal to check if None.
+            If a string is provided, it is assumed to be the name of the column.
+            If a literal is provided, it is assumed to be a string literal.
+
+    Returns:
+        Func: A Func object that represents the conditional to check if column is None.
+
+    Example:
+        ```py
+        dc.mutate(test=isnone("value"))
+        ```
+    """
+    from datachain import C
+
+    if isinstance(col, str):
+        # if string, it is assumed to be the name of the column
+        col = C(col)
+
+    return case((col == None, True), else_=False)  # type: ignore [arg-type]  # noqa: E711

@@ -17,6 +17,7 @@ from datachain.sql.sqlite.base import (
     sqlite_byte_hamming_distance,
     sqlite_int_hash_64,
 )
+from tests.utils import skip_if_not_sqlite
 
 
 @pytest.fixture()
@@ -660,3 +661,20 @@ def test_case_mutate(dc, val, else_, type_):
         [val, else_, else_, else_, else_]
     )
     assert res.schema["test"] == type_
+
+
+@pytest.mark.parametrize("col", ["val", C("val")])
+@skip_if_not_sqlite
+def test_isnone_mutate(col):
+    from datachain.func.conditional import isnone
+
+    dc = DataChain.from_values(
+        num=list(range(1, 6)),
+        val=[None if i > 3 else "A" for i in range(1, 6)],
+    )
+
+    res = dc.mutate(test=isnone(col))
+    assert list(res.order_by("test").collect("test")) == sorted(
+        [False, False, False, True, True]
+    )
+    assert res.schema["test"] is bool

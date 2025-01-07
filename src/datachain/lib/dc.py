@@ -1141,7 +1141,12 @@ class DataChain:
                     mutated[signal.name.replace(value.name, name, 1)] = signal  # type: ignore[union-attr]
             elif isinstance(value, Func):
                 # adding new signal
-                mutated[name] = value.get_column(schema)
+                # mutated[name] = value.get_column(schema)
+                v = value.get_column(schema)
+                print("in mutate")
+                print(v)
+                print(type(v))
+                mutated[name] = v
             else:
                 # adding new signal
                 mutated[name] = value

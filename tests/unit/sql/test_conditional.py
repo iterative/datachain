@@ -107,3 +107,18 @@ def test_case_wrong_result_type(warehouse):
         "Case supports only python literals ([<class 'int'>, <class 'float'>, "
         "<class 'complex'>, <class 'str'>, <class 'bool'>]) for values"
     )
+
+
+@pytest.mark.parametrize(
+    "val,expected",
+    [
+        [None, True],
+        [func.literal("abcd"), False],
+    ],
+)
+def test_isnone(warehouse, val, expected):
+    from datachain.func.conditional import isnone
+
+    query = select(isnone(val))
+    result = tuple(warehouse.db.execute(query))
+    assert result == ((expected,),)
