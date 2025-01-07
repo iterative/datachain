@@ -1242,11 +1242,11 @@ class Catalog:
         path: str,
         version_id: Optional[str] = None,
         client_config=None,
-        headers: Optional[dict[str, str]] = None,
+        **kwargs,
     ) -> str:
         client_config = client_config or self.client_config
         client = Client.get_client(source, self.cache, **client_config)
-        return client.url(path, version_id=version_id, headers=headers)
+        return client.url(path, version_id=version_id, **kwargs)
 
     def export_dataset_table(
         self,
