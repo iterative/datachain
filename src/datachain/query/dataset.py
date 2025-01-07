@@ -351,17 +351,23 @@ def process_udf_outputs(
 
 def get_download_callback() -> Callback:
     return CombinedDownloadCallback(
-        {"desc": "Download", "unit": "B", "unit_scale": True, "unit_divisor": 1024}
+        {
+            "desc": "Download",
+            "unit": "B",
+            "unit_scale": True,
+            "unit_divisor": 1024,
+            "leave": False,
+        }
     )
 
 
 def get_processed_callback() -> Callback:
-    return TqdmCallback({"desc": "Processed", "unit": " rows"})
+    return TqdmCallback({"desc": "Processed", "unit": " rows", "leave": False})
 
 
 def get_generated_callback(is_generator: bool = False) -> Callback:
     if is_generator:
-        return TqdmCallback({"desc": "Generated", "unit": " rows"})
+        return TqdmCallback({"desc": "Generated", "unit": " rows", "leave": False})
     return DEFAULT_CALLBACK
 
 
@@ -601,6 +607,13 @@ class UDFSignal(UDFStep):
         signal_cols = [c for c in udf_table.c if c.name != "sys__id"]
         signal_name_cols = {c.name: c for c in signal_cols}
         cols = signal_cols
+
+        overlap = {c.name for c in original_cols} & {c.name for c in cols}
+        if overlap:
+            raise ValueError(
+                "Column already exists or added in the previous steps: "
+                + ", ".join(overlap)
+            )
 
         def q(*columns):
             cols1 = []

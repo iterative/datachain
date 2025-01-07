@@ -83,7 +83,7 @@ class GCSClient(Client):
         self, page_queue: PageQueue, result_queue: ResultQueue
     ) -> bool:
         found = False
-        with tqdm(desc=f"Listing {self.uri}", unit=" objects") as pbar:
+        with tqdm(desc=f"Listing {self.uri}", unit=" objects", leave=False) as pbar:
             while (page := await page_queue.get()) is not None:
                 if page:
                     found = True

@@ -670,7 +670,7 @@ class SQLiteWarehouse(AbstractWarehouse):
         ]
         table = self.create_udf_table(columns)
 
-        with tqdm(desc="Preparing", unit=" rows") as pbar:
+        with tqdm(desc="Preparing", unit=" rows", leave=False) as pbar:
             self.copy_table(table, query, progress_cb=pbar.update)
 
         return table

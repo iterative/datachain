@@ -32,7 +32,7 @@ jobs:
           POSTGRES_DB: database
           POSTGRES_HOST_AUTH_METHOD: trust
       clickhouse:
-        image: clickhouse/clickhouse-server:24.6
+        image: clickhouse/clickhouse-server:24.8
         ports:
           - 8123:8123
           - 9010:9000
