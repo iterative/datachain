@@ -1,10 +1,8 @@
 def add_studio_parser(subparsers, parent_parser) -> None:
-    studio_help = "Commands to authenticate DataChain with Iterative Studio"
+    studio_help = "Manage Iterative Studio authentication"
     studio_description = (
-        "Authenticate DataChain with Studio and set the token. "
-        "Once this token has been properly configured,\n"
-        "DataChain will utilize it for seamlessly sharing datasets\n"
-        "and using Studio features from CLI"
+        "Manage authentication and settings for Iterative Studio. "
+        "Configure tokens for sharing datasets and using Studio features."
     )
 
     studio_parser = subparsers.add_parser(
@@ -15,14 +13,14 @@ def add_studio_parser(subparsers, parent_parser) -> None:
     )
     studio_subparser = studio_parser.add_subparsers(
         dest="cmd",
-        help="Use `DataChain studio CMD --help` to display command-specific help.",
+        help="Use `DataChain studio CMD --help` to display command-specific help",
         required=True,
     )
 
-    studio_login_help = "Authenticate DataChain with Studio host"
+    studio_login_help = "Authenticate with Iterative Studio"
     studio_login_description = (
-        "By default, this command authenticates the DataChain with Studio\n"
-        "using default scopes and assigns a random name as the token name."
+        "Authenticate with Iterative Studio using default scopes. "
+        "A random name will be assigned as the token name if not specified."
     )
     login_parser = studio_subparser.add_parser(
         "login",
@@ -36,14 +34,14 @@ def add_studio_parser(subparsers, parent_parser) -> None:
         "--hostname",
         action="store",
         default=None,
-        help="The hostname of the Studio instance to authenticate with.",
+        help="Hostname of the Studio instance",
     )
     login_parser.add_argument(
         "-s",
         "--scopes",
         action="store",
         default=None,
-        help="The scopes for the authentication token. ",
+        help="Authentication token scopes",
     )
 
     login_parser.add_argument(
@@ -51,21 +49,20 @@ def add_studio_parser(subparsers, parent_parser) -> None:
         "--name",
         action="store",
         default=None,
-        help="The name of the authentication token. It will be used to\n"
-        "identify token shown in Studio profile.",
+        help="Authentication token name (shown in Studio profile)",
     )
 
     login_parser.add_argument(
         "--no-open",
         action="store_true",
         default=False,
-        help="Use authentication flow based on user code.\n"
-        "You will be presented with user code to enter in browser.\n"
-        "DataChain will also use this if it cannot launch browser on your behalf.",
+        help="Use code-based authentication without browser",
     )
 
-    studio_logout_help = "Logout user from Studio"
-    studio_logout_description = "This removes the studio token from your global config."
+    studio_logout_help = "Log out from Iterative Studio"
+    studio_logout_description = (
+        "Remove the Studio authentication token from global config."
+    )
 
     studio_subparser.add_parser(
         "logout",
@@ -74,10 +71,8 @@ def add_studio_parser(subparsers, parent_parser) -> None:
         help=studio_logout_help,
     )
 
-    studio_team_help = "Set the default team for DataChain"
-    studio_team_description = (
-        "Set the default team for DataChain to use when interacting with Studio."
-    )
+    studio_team_help = "Set default team for Studio operations"
+    studio_team_description = "Set the default team for Iterative Studio operations."
 
     team_parser = studio_subparser.add_parser(
         "team",
@@ -88,28 +83,31 @@ def add_studio_parser(subparsers, parent_parser) -> None:
     team_parser.add_argument(
         "team_name",
         action="store",
-        help="The name of the team to set as the default.",
+        help="Name of the team to set as default",
     )
     team_parser.add_argument(
         "--global",
         action="store_true",
         default=False,
-        help="Set the team globally for all DataChain projects.",
+        help="Set team globally for all projects",
     )
 
-    studio_token_help = "View the token datachain uses to contact Studio"  # noqa: S105 # nosec B105
+    studio_token_help = "View Studio authentication token"  # noqa: S105
+    studio_token_description = (
+        "Display the current authentication token for Iterative Studio."  # noqa: S105
+    )
 
     studio_subparser.add_parser(
         "token",
         parents=[parent_parser],
-        description=studio_token_help,
+        description=studio_token_description,
         help=studio_token_help,
     )
 
-    studio_ls_dataset_help = "List the available datasets from Studio"
+    studio_ls_dataset_help = "List available Studio datasets"
     studio_ls_dataset_description = (
-        "This command lists all the datasets available in Studio.\n"
-        "It will show the dataset name and the number of versions available."
+        "List all datasets available in Iterative Studio, showing dataset names "
+        "and version counts."
     )
 
     ls_dataset_parser = studio_subparser.add_parser(
@@ -122,5 +120,5 @@ def add_studio_parser(subparsers, parent_parser) -> None:
         "--team",
         action="store",
         default=None,
-        help="The team to list datasets for. By default, it will use team from config.",
+        help="Team to list datasets for (default: from config)",
     )
