@@ -536,6 +536,12 @@ def find_column_to_str(  # noqa: PLR0911
     return ""
 
 
+def clone_catalog_with_cache(catalog: "Catalog", cache: "DataChainCache") -> "Catalog":
+    clone = catalog.copy()
+    clone.cache = cache
+    return clone
+
+
 class Catalog:
     def __init__(
         self,

@@ -451,6 +451,7 @@ class DataChain:
             return dc
 
         if update or not list_ds_exists:
+            # disable prefetch for listing, as it pre-downloads all files
             (
                 cls.from_records(
                     DataChain.DEFAULT_FILE_RECORD,
@@ -458,6 +459,7 @@ class DataChain:
                     settings=settings,
                     in_memory=in_memory,
                 )
+                .settings(prefetch=0)
                 .gen(
                     list_bucket(list_uri, cache, client_config=client_config),
                     output={f"{object_name}": File},

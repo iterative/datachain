@@ -1,3 +1,6 @@
+import os
+from contextlib import closing
+
 import open_clip
 import pytest
 import torch
@@ -7,6 +10,7 @@ from torchvision.datasets import FakeData
 from torchvision.transforms import v2
 
 from datachain.lib.dc import DataChain
+from datachain.lib.file import File
 from datachain.lib.pytorch import PytorchDataset
 
 
@@ -78,6 +82,43 @@ def test_to_pytorch(fake_dataset):
     assert isinstance(text, Tensor)
     assert isinstance(label, int)
     assert img.size() == Size([3, 64, 64])
+
+
+@pytest.mark.parametrize("use_cache", (True, False))
+@pytest.mark.parametrize("prefetch", (0, 2))
+def test_prefetch(mocker, catalog, fake_dataset, use_cache, prefetch):
+    catalog.cache.clear()
+
+    dataset = fake_dataset.limit(10)
+    ds = dataset.settings(cache=use_cache, prefetch=prefetch).to_pytorch()
+
+    iter_with_prefetch = ds._iter_with_prefetch
+    cache = ds._cache
+
+    def is_prefetched(file: File):
+        assert file._catalog
+        assert file._catalog.cache == cache
+        return cache.contains(file)
+
+    def check_prefetched():
+        for row in iter_with_prefetch():
+            files = [f for f in row if isinstance(f, File)]
+            assert files
+            files_not_in_cache = [f for f in files if not is_prefetched(f)]
+            if prefetch:
+                assert not files_not_in_cache, "Some files are not in cache"
+            else:
+                assert files == files_not_in_cache, "Some files are in cache"
+            yield row
+
+    # we peek internally with `_iter_with_prefetch` to check if the files are prefetched
+    # as `__iter__` transforms them.
+    m = mocker.patch.object(ds, "_iter_with_prefetch", wraps=check_prefetched)
+    with closing(ds), closing(iter(ds)) as rows:
+        assert next(rows)
+    m.assert_called_once()
+    # prefetch cache directory should be removed after `close()`
+    assert os.path.exists(cache.cache_dir) == (use_cache or not prefetch)
 
 
 def test_hf_to_pytorch(catalog, fake_image_dir):
