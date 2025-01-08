@@ -191,8 +191,7 @@ class AbstractWarehouse(ABC, Serializable):
         table_name = self.dataset_table_name(dataset.name, version)
         return self.schema.dataset_row_cls(
             table_name,
-            self.db.engine,
-            self.db.metadata,
+            self.db,
             dataset.get_schema(version),
             object_name=object_name,
         )
@@ -220,7 +219,7 @@ class AbstractWarehouse(ABC, Serializable):
         num_yielded = 0
 
         # Ensure we're using a thread-local connection
-        with self.clone() as wh:
+        with self.clone(use_new_connection=True) as wh:
             while True:
                 if limit is not None:
                     limit -= num_yielded
