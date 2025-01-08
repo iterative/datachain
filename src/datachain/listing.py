@@ -153,6 +153,7 @@ class Listing:
             unit_scale=True,
             unit_divisor=1000,
             total=total_files,
+            leave=False,
         )
 
         counter = 0

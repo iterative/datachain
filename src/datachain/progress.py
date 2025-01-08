@@ -5,6 +5,7 @@ import sys
 from threading import RLock
 from typing import Any, ClassVar
 
+from fsspec import Callback
 from fsspec.callbacks import TqdmCallback
 from tqdm import tqdm
 
@@ -61,7 +62,7 @@ class Tqdm(tqdm):
         disable  : If (default: None) or False,
             will be determined by logging level.
             May be overridden to `True` due to non-TTY status.
-            Skip override by specifying env var `DVC_IGNORE_ISATTY`.
+            Skip override by specifying env var `DATACHAIN_IGNORE_ISATTY`.
         kwargs  : anything accepted by `tqdm.tqdm()`
         """
         kwargs = kwargs.copy()
@@ -77,7 +78,7 @@ class Tqdm(tqdm):
         # auto-disable based on TTY
         if (
             not disable
-            and not env2bool("DVC_IGNORE_ISATTY")
+            and not env2bool("DATACHAIN_IGNORE_ISATTY")
             and hasattr(file, "isatty")
         ):
             disable = not file.isatty()
@@ -132,8 +133,24 @@ class Tqdm(tqdm):
         return d
 
 
-class CombinedDownloadCallback(TqdmCallback):
+class CombinedDownloadCallback(Callback):
     def set_size(self, size):
         # This is a no-op to prevent fsspec's .get_file() from setting the combined
         # download size to the size of the current file.
         pass
+
+    def increment_file_count(self, n: int = 1) -> None:
+        pass
+
+
+class TqdmCombinedDownloadCallback(CombinedDownloadCallback, TqdmCallback):
+    def __init__(self, tqdm_kwargs=None, *args, **kwargs):
+        self.files_count = 0
+        tqdm_kwargs = tqdm_kwargs or {}
+        tqdm_kwargs.setdefault("postfix", {}).setdefault("files", self.files_count)
+        super().__init__(tqdm_kwargs, *args, **kwargs)
+
+    def increment_file_count(self, n: int = 1) -> None:
+        self.files_count += n
+        if self.tqdm is not None:
+            self.tqdm.postfix = f"{self.files_count} files"

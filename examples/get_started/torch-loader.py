@@ -56,7 +56,7 @@ class CNN(nn.Module):
 if __name__ == "__main__":
     ds = (
         DataChain.from_storage(STORAGE, type="image")
-        .settings(cache=True, prefetch=25)
+        .settings(prefetch=25)
         .filter(C("file.path").glob("*.jpg"))
         .map(
             label=lambda path: label_to_int(basename(path)[:3], CLASSES),
@@ -68,7 +68,7 @@ if __name__ == "__main__":
     train_loader = DataLoader(
         ds.to_pytorch(transform=transform),
         batch_size=25,
-        num_workers=max(4, os.cpu_count() or 2),
+        num_workers=min(4, os.cpu_count() or 2),
         persistent_workers=True,
         multiprocessing_context=multiprocessing.get_context("spawn"),
     )

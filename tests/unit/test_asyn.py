@@ -1,5 +1,7 @@
 import asyncio
 import functools
+import itertools
+import threading
 from collections import Counter
 from contextlib import contextmanager
 from queue import Queue
@@ -141,6 +143,37 @@ def test_mapper_deadlock(create_mapper):
     # Check that iteration terminates cleanly
     queue.put(None)
     assert list(it) == []
+
+
+@pytest.mark.parametrize("create_mapper", [AsyncMapper, OrderedMapper])
+@pytest.mark.parametrize("stop_at", [10, None])
+def test_mapper_closes_iterable(create_mapper, stop_at):
+    """Test that the iterable is closed when the `.iterate()` is closed or exhausted."""
+
+    async def process(x):
+        return x
+
+    iterable_closed = False
+    start_thread = None
+    close_thread = None
+
+    def gen():
+        nonlocal iterable_closed, start_thread, close_thread
+        start_thread = threading.get_ident()
+        try:
+            yield from range(50)
+        finally:
+            iterable_closed = True
+            close_thread = threading.get_ident()
+
+    mapper = create_mapper(process, gen(), workers=10, loop=get_loop())
+    it = mapper.iterate()
+    list(itertools.islice(it, stop_at))
+    if stop_at is not None:
+        it.close()
+    assert iterable_closed
+    assert start_thread == close_thread
+    assert start_thread != threading.get_ident()
 
 
 @pytest.mark.parametrize("create_mapper", [AsyncMapper, OrderedMapper])

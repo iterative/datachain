@@ -13,7 +13,7 @@ from upath.implementations.cloud import CloudPath
 
 from datachain.catalog import Catalog
 from datachain.catalog.loader import get_metastore, get_warehouse
-from datachain.cli_utils import CommaSeparatedArgs
+from datachain.cli.utils import CommaSeparatedArgs
 from datachain.config import Config, ConfigLevel
 from datachain.data_storage.sqlite import (
     SQLiteDatabaseEngine,

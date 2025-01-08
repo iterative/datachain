@@ -9,6 +9,7 @@ import stat
 import sys
 import time
 from collections.abc import Iterable, Iterator, Sequence
+from contextlib import contextmanager
 from datetime import date, datetime, timezone
 from itertools import chain, islice
 from typing import TYPE_CHECKING, Any, Optional, TypeVar, Union
@@ -22,6 +23,7 @@ from pydantic import BaseModel
 
 if TYPE_CHECKING:
     import pandas as pd
+    from typing_extensions import Self
 
 NUL = b"\0"
 TIME_ZERO = datetime.fromtimestamp(0, tz=timezone.utc)
@@ -33,7 +35,7 @@ ENV_DATACHAIN_GLOBAL_CONFIG_DIR = "DATACHAIN_GLOBAL_CONFIG_DIR"
 STUDIO_URL = "https://studio.datachain.ai"
 
 
-T = TypeVar("T", bound="DataChainDir")
+T = TypeVar("T")
 
 
 class DataChainDir:
@@ -90,7 +92,7 @@ class DataChainDir:
         return osp.join(root_dir, cls.DEFAULT)
 
     @classmethod
-    def find(cls: type[T], create: bool = True) -> T:
+    def find(cls, create: bool = True) -> "Self":
         try:
             root = os.environ[cls.ENV_VAR]
         except KeyError:
@@ -479,3 +481,12 @@ def row_to_nested_dict(
     for h, v in zip(headers, row):
         nested_dict_path_set(result, h, v)
     return result
+
+
+@contextmanager
+def safe_closing(thing: T) -> Iterator[T]:
+    try:
+        yield thing
+    finally:
+        if hasattr(thing, "close"):
+            thing.close()
