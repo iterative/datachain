@@ -1536,7 +1536,7 @@ class DataChain:
 
         Example:
             ```py
-            diff = persons.diff(
+            res = persons.compare(
                 new_persons,
                 on=["id"],
                 right_on=["other_id"],
@@ -1549,9 +1549,9 @@ class DataChain:
             )
             ```
         """
-        from datachain.lib.diff import compare as chain_compare
+        from datachain.diff import _compare
 
-        return chain_compare(
+        return _compare(
             self,
             other,
             on,

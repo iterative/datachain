@@ -1,6 +1,7 @@
 import pytest
 from pydantic import BaseModel
 
+from datachain.diff import CompareStatus
 from datachain.lib.dc import DataChain
 from datachain.lib.file import File
 from datachain.sql.types import Int64, String
@@ -58,13 +59,13 @@ def test_compare(test_session, added, deleted, modified, same, status_col, save)
 
     expected = []
     if modified:
-        expected.append(("M", 1, "John1"))
+        expected.append((CompareStatus.MODIFIED, 1, "John1"))
     if added:
-        expected.append(("A", 2, "Doe"))
+        expected.append((CompareStatus.ADDED, 2, "Doe"))
     if deleted:
-        expected.append(("D", 3, "Mark"))
+        expected.append((CompareStatus.DELETED, 3, "Mark"))
     if same:
-        expected.append(("S", 4, "Andy"))
+        expected.append((CompareStatus.SAME, 4, "Andy"))
 
     collect_fields = ["diff", "id", "name"]
     if not status_col:
@@ -94,10 +95,10 @@ def test_compare_with_from_dataset(test_session):
     diff = ds1.compare(ds2, same=True, on=["id"], status_col="diff")
 
     assert list(diff.order_by("id").collect("diff", "id", "name")) == [
-        ("M", 1, "John1"),
-        ("A", 2, "Doe"),
-        ("D", 3, "Mark"),
-        ("S", 4, "Andy"),
+        (CompareStatus.MODIFIED, 1, "John1"),
+        (CompareStatus.ADDED, 2, "Doe"),
+        (CompareStatus.DELETED, 3, "Mark"),
+        (CompareStatus.SAME, 4, "Andy"),
     ]
 
 
@@ -144,20 +145,20 @@ def test_compare_with_explicit_compare_fields(
 
     expected = []
     if modified:
-        expected.append(("M", 1, "John1", "New York"))
+        expected.append((CompareStatus.MODIFIED, 1, "John1", "New York"))
     if added:
-        expected.append(("A", 2, "Doe", "Boston"))
+        expected.append((CompareStatus.ADDED, 2, "Doe", "Boston"))
     if deleted:
         expected.append(
             (
-                "D",
+                CompareStatus.DELETED,
                 3,
                 string_default if right_name == "other_name" else "Mark",
                 "Seattle",
             )
         )
     if same:
-        expected.append(("S", 4, "Andy", "San Francisco"))
+        expected.append((CompareStatus.SAME, 4, "Andy", "San Francisco"))
 
     collect_fields = ["diff", "id", "name", "city"]
     assert list(diff.order_by("id").collect(*collect_fields)) == expected
@@ -200,13 +201,13 @@ def test_compare_different_left_right_on_columns(
 
     expected = []
     if same:
-        expected.append(("S", 4, "Andy"))
+        expected.append((CompareStatus.SAME, 4, "Andy"))
     if added:
-        expected.append(("A", 2, "Doe"))
+        expected.append((CompareStatus.ADDED, 2, "Doe"))
     if modified:
-        expected.append(("M", 1, "John1"))
+        expected.append((CompareStatus.MODIFIED, 1, "John1"))
     if deleted:
-        expected.append(("D", int_default, "Mark"))
+        expected.append((CompareStatus.DELETED, int_default, "Mark"))
 
     collect_fields = ["diff", "id", "name"]
     assert list(diff.order_by("name").collect(*collect_fields)) == expected
@@ -252,9 +253,9 @@ def test_compare_on_equal_datasets(
         expected = []
     else:
         expected = [
-            ("S", 1, "John"),
-            ("S", 2, "Doe"),
-            ("S", 3, "Andy"),
+            (CompareStatus.SAME, 1, "John"),
+            (CompareStatus.SAME, 2, "Doe"),
+            (CompareStatus.SAME, 3, "Andy"),
         ]
 
     collect_fields = ["diff", "id", "name"]
@@ -279,10 +280,10 @@ def test_compare_multiple_columns(test_session):
 
     assert sorted_dicts(diff.to_records(), "id") == sorted_dicts(
         [
-            {"diff": "M", "id": 1, "name": "John", "city": "London"},
-            {"diff": "A", "id": 2, "name": "Doe", "city": "New York"},
-            {"diff": "D", "id": 3, "name": "Mark", "city": "Berlin"},
-            {"diff": "S", "id": 4, "name": "Andy", "city": "Tokyo"},
+            {"diff": CompareStatus.MODIFIED, "id": 1, "name": "John", "city": "London"},
+            {"diff": CompareStatus.ADDED, "id": 2, "name": "Doe", "city": "New York"},
+            {"diff": CompareStatus.DELETED, "id": 3, "name": "Mark", "city": "Berlin"},
+            {"diff": CompareStatus.SAME, "id": 4, "name": "Andy", "city": "Tokyo"},
         ],
         "id",
     )
@@ -306,10 +307,10 @@ def test_compare_multiple_match_columns(test_session):
 
     assert sorted_dicts(diff.to_records(), "id") == sorted_dicts(
         [
-            {"diff": "M", "id": 1, "name": "John", "city": "London"},
-            {"diff": "A", "id": 2, "name": "Doe", "city": "New York"},
-            {"diff": "D", "id": 3, "name": "John", "city": "Berlin"},
-            {"diff": "S", "id": 4, "name": "Andy", "city": "Tokyo"},
+            {"diff": CompareStatus.MODIFIED, "id": 1, "name": "John", "city": "London"},
+            {"diff": CompareStatus.ADDED, "id": 2, "name": "Doe", "city": "New York"},
+            {"diff": CompareStatus.DELETED, "id": 3, "name": "John", "city": "Berlin"},
+            {"diff": CompareStatus.SAME, "id": 4, "name": "Andy", "city": "Tokyo"},
         ],
         "id",
     )
@@ -334,10 +335,15 @@ def test_compare_additional_column_on_left(test_session):
 
     assert sorted_dicts(diff.to_records(), "id") == sorted_dicts(
         [
-            {"diff": "M", "id": 1, "name": "John", "city": "London"},
-            {"diff": "A", "id": 2, "name": "Doe", "city": "New York"},
-            {"diff": "D", "id": 3, "name": "Mark", "city": string_default},
-            {"diff": "M", "id": 4, "name": "Andy", "city": "Tokyo"},
+            {"diff": CompareStatus.MODIFIED, "id": 1, "name": "John", "city": "London"},
+            {"diff": CompareStatus.ADDED, "id": 2, "name": "Doe", "city": "New York"},
+            {
+                "diff": CompareStatus.DELETED,
+                "id": 3,
+                "name": "Mark",
+                "city": string_default,
+            },
+            {"diff": CompareStatus.MODIFIED, "id": 4, "name": "Andy", "city": "Tokyo"},
         ],
         "id",
     )
@@ -360,10 +366,10 @@ def test_compare_additional_column_on_right(test_session):
 
     assert sorted_dicts(diff.to_records(), "id") == sorted_dicts(
         [
-            {"diff": "M", "id": 1, "name": "John"},
-            {"diff": "A", "id": 2, "name": "Doe"},
-            {"diff": "D", "id": 3, "name": "Mark"},
-            {"diff": "M", "id": 4, "name": "Andy"},
+            {"diff": CompareStatus.MODIFIED, "id": 1, "name": "John"},
+            {"diff": CompareStatus.ADDED, "id": 2, "name": "Doe"},
+            {"diff": CompareStatus.DELETED, "id": 3, "name": "Mark"},
+            {"diff": CompareStatus.MODIFIED, "id": 4, "name": "Andy"},
         ],
         "id",
     )
@@ -439,10 +445,10 @@ def test_diff(test_session, status_col):
     )
 
     expected = [
-        ("M", fs1_updated, 1),
-        ("A", fs2, 2),
-        ("D", fs3, 3),
-        ("S", fs4, 4),
+        (CompareStatus.MODIFIED, fs1_updated, 1),
+        (CompareStatus.ADDED, fs2, 2),
+        (CompareStatus.DELETED, fs3, 3),
+        (CompareStatus.SAME, fs4, 4),
     ]
 
     collect_fields = ["diff", "file", "score"]
@@ -482,10 +488,10 @@ def test_diff_nested(test_session, status_col):
     )
 
     expected = [
-        ("M", fs1_updated, 1),
-        ("A", fs2, 2),
-        ("D", fs3, 3),
-        ("S", fs4, 4),
+        (CompareStatus.MODIFIED, fs1_updated, 1),
+        (CompareStatus.ADDED, fs2, 2),
+        (CompareStatus.DELETED, fs3, 3),
+        (CompareStatus.SAME, fs4, 4),
     ]
 
     collect_fields = ["diff", "nested", "score"]
