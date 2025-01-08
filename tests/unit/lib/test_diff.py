@@ -1,8 +1,8 @@
 import pytest
 from pydantic import BaseModel
 
+from datachain.diff import CompareStatus
 from datachain.lib.dc import DataChain
-from datachain.lib.diff import CompareStatus
 from datachain.lib.file import File
 from datachain.sql.types import Int64, String
 from tests.utils import sorted_dicts
