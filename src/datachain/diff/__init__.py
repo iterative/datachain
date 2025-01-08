@@ -10,10 +10,6 @@ from datachain.lib.signal_schema import SignalSchema
 from datachain.query.schema import Column
 from datachain.sql.types import String
 
-# from datachain.lib.diff import CompareStatus, get_status_col_name
-# from datachain.lib.diff import compare as chain_compare
-
-
 if TYPE_CHECKING:
     from datachain.lib.dc import DataChain
 
