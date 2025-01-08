@@ -57,10 +57,12 @@ class ClientS3(Client):
         """
         version_id = kwargs.pop("version_id", None)
         content_disposition = kwargs.pop("content_disposition", None)
+        if content_disposition:
+            kwargs["ResponseContentDisposition"] = content_disposition
+
         return self.fs.sign(
             self.get_full_path(path, version_id),
             expiration=expires,
-            ResponseContentDisposition=content_disposition,
             **kwargs,
         )
 
