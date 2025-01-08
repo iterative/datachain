@@ -1,17 +1,17 @@
 def add_jobs_parser(subparsers, parent_parser) -> None:
-    jobs_help = "Manage jobs in Iterative Studio"
-    jobs_description = "Commands to manage job execution in Iterative Studio."
+    jobs_help = "Manage jobs in Studio"
+    jobs_description = "Commands to manage job execution in Studio."
     jobs_parser = subparsers.add_parser(
         "job", parents=[parent_parser], description=jobs_description, help=jobs_help
     )
     jobs_subparser = jobs_parser.add_subparsers(
         dest="cmd",
-        help="Use `DataChain studio CMD --help` to display command-specific help",
+        help="Use `datachain studio CMD --help` to display command-specific help",
         required=True,
     )
 
     studio_run_help = "Run a job in Studio"
-    studio_run_description = "Run a job in Iterative Studio."
+    studio_run_description = "Run a job in Studio."
 
     studio_run_parser = jobs_subparser.add_parser(
         "run",
@@ -72,7 +72,7 @@ def add_jobs_parser(subparsers, parent_parser) -> None:
     )
 
     studio_cancel_help = "Cancel a job in Studio"
-    studio_cancel_description = "Cancel a running job in Iterative Studio."
+    studio_cancel_description = "Cancel a running job in Studio."
 
     studio_cancel_parser = jobs_subparser.add_parser(
         "cancel",
@@ -94,9 +94,7 @@ def add_jobs_parser(subparsers, parent_parser) -> None:
     )
 
     studio_log_help = "Show job logs and status in Studio"
-    studio_log_description = (
-        "Display logs and current status of jobs in Iterative Studio."
-    )
+    studio_log_description = "Display logs and current status of jobs in Studio."
 
     studio_log_parser = jobs_subparser.add_parser(
         "logs",

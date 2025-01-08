@@ -1,7 +1,7 @@
 def add_studio_parser(subparsers, parent_parser) -> None:
-    studio_help = "Manage Iterative Studio authentication"
+    studio_help = "Manage Studio authentication"
     studio_description = (
-        "Manage authentication and settings for Iterative Studio. "
+        "Manage authentication and settings for Studio. "
         "Configure tokens for sharing datasets and using Studio features."
     )
 
@@ -13,13 +13,13 @@ def add_studio_parser(subparsers, parent_parser) -> None:
     )
     studio_subparser = studio_parser.add_subparsers(
         dest="cmd",
-        help="Use `DataChain studio CMD --help` to display command-specific help",
+        help="Use `datachain studio CMD --help` to display command-specific help",
         required=True,
     )
 
-    studio_login_help = "Authenticate with Iterative Studio"
+    studio_login_help = "Authenticate with Studio"
     studio_login_description = (
-        "Authenticate with Iterative Studio using default scopes. "
+        "Authenticate with Studio using default scopes. "
         "A random name will be assigned as the token name if not specified."
     )
     login_parser = studio_subparser.add_parser(
@@ -59,7 +59,7 @@ def add_studio_parser(subparsers, parent_parser) -> None:
         help="Use code-based authentication without browser",
     )
 
-    studio_logout_help = "Log out from Iterative Studio"
+    studio_logout_help = "Log out from Studio"
     studio_logout_description = (
         "Remove the Studio authentication token from global config."
     )
@@ -72,7 +72,7 @@ def add_studio_parser(subparsers, parent_parser) -> None:
     )
 
     studio_team_help = "Set default team for Studio operations"
-    studio_team_description = "Set the default team for Iterative Studio operations."
+    studio_team_description = "Set the default team for Studio operations."
 
     team_parser = studio_subparser.add_parser(
         "team",
@@ -93,9 +93,7 @@ def add_studio_parser(subparsers, parent_parser) -> None:
     )
 
     studio_token_help = "View Studio authentication token"  # noqa: S105
-    studio_token_description = (
-        "Display the current authentication token for Iterative Studio."  # noqa: S105
-    )
+    studio_token_description = "Display the current authentication token for Studio."  # noqa: S105
 
     studio_subparser.add_parser(
         "token",
@@ -106,7 +104,7 @@ def add_studio_parser(subparsers, parent_parser) -> None:
 
     studio_ls_dataset_help = "List available Studio datasets"
     studio_ls_dataset_description = (
-        "List all datasets available in Iterative Studio, showing dataset names "
+        "List all datasets available in Studio, showing dataset names "
         "and version counts."
     )
 

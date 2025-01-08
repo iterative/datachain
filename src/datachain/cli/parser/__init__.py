@@ -152,12 +152,12 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     parse_pull = datasets_subparser.add_parser(
         "pull",
         parents=[parent_parser],
-        description="Pull specific dataset version from SaaS.",
+        description="Pull specific dataset version from Studio.",
     )
     parse_pull.add_argument(
         "dataset",
         type=str,
-        help="Name and version of remote dataset created in SaaS",
+        help="Name and version of remote dataset created in Studio",
     )
     parse_pull.add_argument("-o", "--output", type=str, help="Output")
     parse_pull.add_argument(
