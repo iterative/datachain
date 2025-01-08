@@ -51,6 +51,19 @@ class ClientS3(Client):
 
         return cast(S3FileSystem, super().create_fs(**kwargs))
 
+    def url(self, path: str, expires: int = 3600, **kwargs) -> str:
+        """
+        Generate a signed URL for the given path.
+        """
+        version_id = kwargs.pop("version_id", None)
+        content_disposition = kwargs.pop("content_disposition", None)
+        return self.fs.sign(
+            self.get_full_path(path, version_id),
+            expiration=expires,
+            ResponseContentDisposition=content_disposition,
+            **kwargs,
+        )
+
     async def _fetch_flat(self, start_prefix: str, result_queue: ResultQueue) -> None:
         async def get_pages(it, page_queue):
             try:

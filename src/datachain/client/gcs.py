@@ -39,11 +39,15 @@ class GCSClient(Client):
         (see https://cloud.google.com/storage/docs/access-public-data#api-link).
         """
         version_id = kwargs.pop("version_id", None)
+        content_disposition = kwargs.pop("content_disposition", None)
         if self.fs.storage_options.get("token") == "anon":
             query = f"?generation={version_id}" if version_id else ""
             return f"https://storage.googleapis.com/{self.name}/{path}{query}"
         return self.fs.sign(
-            self.get_full_path(path, version_id), expiration=expires, **kwargs
+            self.get_full_path(path, version_id),
+            expiration=expires,
+            response_disposition=content_disposition,
+            **kwargs,
         )
 
     @staticmethod
