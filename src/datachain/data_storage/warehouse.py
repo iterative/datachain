@@ -219,7 +219,7 @@ class AbstractWarehouse(ABC, Serializable):
         num_yielded = 0
 
         # Ensure we're using a thread-local connection
-        with self.clone(use_new_connection=True) as wh:
+        with self.clone() as wh:
             while True:
                 if limit is not None:
                     limit -= num_yielded
