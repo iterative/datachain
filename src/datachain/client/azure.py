@@ -31,8 +31,12 @@ class AzureClient(Client):
         Generate a signed URL for the given path.
         """
         version_id = kwargs.pop("version_id", None)
+        content_disposition = kwargs.pop("content_disposition", None)
         result = self.fs.sign(
-            self.get_full_path(path, version_id), expiration=expires, **kwargs
+            self.get_full_path(path, version_id),
+            expiration=expires,
+            content_disposition=content_disposition,
+            **kwargs,
         )
         return result + (f"&versionid={version_id}" if version_id else "")
 
