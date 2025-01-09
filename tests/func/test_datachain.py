@@ -1660,3 +1660,18 @@ def test_to_from_jsonl_remote(cloud_test_catalog_upload):
     df1 = dc_from.select("jsonl.first_name", "jsonl.age", "jsonl.city").to_pandas()
     df1 = df1["jsonl"]
     assert df_equal(df1, df)
+
+
+def test_datachain_functional_after_exceptions(test_session):
+    def func(key: str) -> str:
+        raise Exception("Test Error!")
+
+    keys = ["a", "b", "c"]
+    values = [3, 1, 2]
+    dc = DataChain.from_values(key=keys, val=values, session=test_session)
+    # Running a few times, since sessions closing and cleaning up
+    # DB connections on errors. We need to make sure that it reconnects
+    # if needed.
+    for _ in range(4):
+        with pytest.raises(Exception, match="Test Error!"):
+            dc.map(res=func).exec()
