@@ -666,6 +666,59 @@ def test_case_mutate(dc, val, else_, type_):
 
 
 @pytest.mark.parametrize(
+    "val,else_,type_",
+    [
+        ["A", "D", str],
+        [1, 2, int],
+        [1.5, 2.5, float],
+        [True, False, bool],
+    ],
+)
+def test_nested_case_on_condition_mutate(dc, val, else_, type_):
+    res = dc.mutate(
+        test=case((case((C("num") < 2, True), else_=False), val), else_=else_)
+    )
+    assert list(res.order_by("test").collect("test")) == sorted(
+        [val, else_, else_, else_, else_]
+    )
+    assert res.schema["test"] == type_
+
+
+@pytest.mark.parametrize(
+    "v1,v2,v3,type_",
+    [
+        ["A", "B", "C", str],
+        [1, 2, 3, int],
+        [1.5, 2.5, 3.5, float],
+        [False, True, True, bool],
+    ],
+)
+def test_nested_case_on_value_mutate(dc, v1, v2, v3, type_):
+    res = dc.mutate(
+        test=case((C("num") < 4, case((C("num") < 2, v1), else_=v2)), else_=v3)
+    )
+    assert list(res.order_by("num").collect("test")) == sorted([v1, v2, v2, v3, v3])
+    assert res.schema["test"] == type_
+
+
+@pytest.mark.parametrize(
+    "v1,v2,v3,type_",
+    [
+        ["A", "B", "C", str],
+        [1, 2, 3, int],
+        [1.5, 2.5, 3.5, float],
+        [False, True, True, bool],
+    ],
+)
+def test_nested_case_on_else_mutate(dc, v1, v2, v3, type_):
+    res = dc.mutate(
+        test=case((C("num") < 3, v1), else_=case((C("num") < 4, v2), else_=v3))
+    )
+    assert list(res.order_by("num").collect("test")) == sorted([v1, v1, v2, v3, v3])
+    assert res.schema["test"] == type_
+
+
+@pytest.mark.parametrize(
     "if_val,else_val,type_",
     [
         ["A", "D", str],
@@ -695,3 +748,16 @@ def test_isnone_mutate(col):
         [False, False, False, True, True]
     )
     assert res.schema["test"] is bool
+
+
+@pytest.mark.parametrize("col", [C("val"), "val"])
+@skip_if_not_sqlite
+def test_isnone_with_ifelse_mutate(col):
+    dc = DataChain.from_values(
+        num=list(range(1, 6)),
+        val=[None if i > 3 else "A" for i in range(1, 6)],
+    )
+
+    res = dc.mutate(test=ifelse(isnone(col), "NONE", "NOT_NONE"))
+    assert list(res.order_by("num").collect("test")) == ["NOT_NONE"] * 3 + ["NONE"] * 2
+    assert res.schema["test"] is str

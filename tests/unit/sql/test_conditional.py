@@ -96,7 +96,9 @@ def test_case_not_same_result_types(warehouse):
     val = 2
     with pytest.raises(DataChainParamsError) as exc_info:
         select(func.case(*[(val > 1, "A"), (2 < val < 4, 5)], else_="D"))
-    assert str(exc_info.value) == "Statement values must be of the same type"
+    assert str(exc_info.value) == (
+        "Statement values must be of the same type, got <class 'str'> amd <class 'int'>"
+    )
 
 
 def test_case_wrong_result_type(warehouse):

@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from .window import Window
 
 
-ColT = Union[str, ColumnElement, "Func"]
+ColT = Union[str, ColumnElement, "Func", tuple]
 
 
 class Func(Function):
@@ -78,7 +78,7 @@ class Func(Function):
         return (
             [
                 col
-                if isinstance(col, (Func, BindParameter, Case, Comparator))
+                if isinstance(col, (Func, BindParameter, Case, Comparator, tuple))
                 else ColumnMeta.to_db_name(
                     col.name if isinstance(col, ColumnElement) else col
                 )
@@ -382,6 +382,8 @@ class Func(Function):
         sql_type = python_to_sql(col_type)
 
         def get_col(col: ColT) -> ColT:
+            if isinstance(col, tuple):
+                return tuple(get_col(x) for x in col)
             if isinstance(col, Func):
                 return col.get_column(signals_schema, table=table)
             if isinstance(col, str):
@@ -391,7 +393,8 @@ class Func(Function):
             return col
 
         cols = [get_col(col) for col in self._db_cols]
-        func_col = self.inner(*cols, *self.args, **self.kwargs)
+        kwargs = {k: get_col(v) for k, v in self.kwargs.items()}
+        func_col = self.inner(*cols, *self.args, **kwargs)
 
         if self.is_window:
             if not self.window:
@@ -423,7 +426,7 @@ def get_db_col_type(signals_schema: "SignalSchema", col: ColT) -> "DataType":
         return sql_to_python(col)
 
     return signals_schema.get_column_type(
-        col.name if isinstance(col, ColumnElement) else col
+        col.name if isinstance(col, ColumnElement) else col  # type: ignore[arg-type]
     )
 
 

@@ -9,7 +9,7 @@ from datachain.sql.functions import conditional
 
 from .func import ColT, Func
 
-CaseT = Union[int, float, complex, bool, str]
+CaseT = Union[int, float, complex, bool, str, Func]
 
 
 def greatest(*args: Union[ColT, float]) -> Func:
@@ -88,7 +88,7 @@ def least(*args: Union[ColT, float]) -> Func:
     )
 
 
-def case(*args: tuple[BinaryExpression, CaseT], else_=None) -> Func:
+def case(*args: tuple, else_=None) -> Func:
     """
     Returns the case function that produces case expression which has a list of
     conditions and corresponding results. Results can only be python primitives
@@ -112,15 +112,24 @@ def case(*args: tuple[BinaryExpression, CaseT], else_=None) -> Func:
     """
     supported_types = [int, float, complex, str, bool]
 
-    type_ = type(else_) if else_ else None
+    def _get_type(val):
+        if isinstance(val, Func):
+            # nested functions
+            return val.result_type
+        return type(val)
 
     if not args:
         raise DataChainParamsError("Missing statements")
 
+    type_ = _get_type(else_) if else_ is not None else None
+
     for arg in args:
-        if type_ and not isinstance(arg[1], type_):
-            raise DataChainParamsError("Statement values must be of the same type")
-        type_ = type(arg[1])
+        arg_type = _get_type(arg[1])
+        if type_ and arg_type != type_:
+            raise DataChainParamsError(
+                f"Statement values must be of the same type, got {type_} amd {arg_type}"
+            )
+        type_ = arg_type
 
     if type_ not in supported_types:
         raise DataChainParamsError(
@@ -128,7 +137,8 @@ def case(*args: tuple[BinaryExpression, CaseT], else_=None) -> Func:
         )
 
     kwargs = {"else_": else_}
-    return Func("case", inner=sql_case, args=args, kwargs=kwargs, result_type=type_)
+
+    return Func("case", inner=sql_case, cols=args, kwargs=kwargs, result_type=type_)
 
 
 def ifelse(condition: BinaryExpression, if_val: CaseT, else_val: CaseT) -> Func:
