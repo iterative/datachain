@@ -32,6 +32,78 @@ class CompareStatus(str, Enum):
     SAME = "S"
 
 
+def _comparev2(
+    left: "DataChain",
+    right: "DataChain",
+    on: Union[str, Sequence[str]],
+    right_on: Optional[Union[str, Sequence[str]]] = None,
+    compare: Optional[Union[str, Sequence[str]]] = None,
+    right_compare: Optional[Union[str, Sequence[str]]] = None,
+    added: bool = True,
+    deleted: bool = True,
+    modified: bool = True,
+    same: bool = True,
+    status_col: Optional[str] = None,
+):
+    """
+    P1
+        id  |   name    | ldiff
+        -----------------------
+        1       John1      1
+        2       Doe        1
+        4       Andy       1
+
+    P2
+        id  |   name    | rdiff
+        -----------------------
+        1       John       1
+        3       Mark       1
+        4       Andy       1
+
+    OUTER_JOIN:  join = l.outer_join(r, on ="id")
+        id | name | r_id | r_name |  ldiff  | rdiff |
+        ---------------------------------------------
+        1    John1   1       John      1        1
+        2    Doe                       1
+                     3       Mark               1
+        4    Andy    4       Andy      1        1
+
+    MUTATE:  mutate = join.mutate()
+        id | name | r_id | r_name |  ldiff  | rdiff | d1 | d2 | diff |
+        ---------------------------------------------------------------
+        1    John1   1       John      1        1
+        2    Doe                       1
+                     3       Mark               1
+        4    Andy    4       Andy      1        1
+
+
+
+    """
+
+    from datachain.func import _case, _isnon
+
+    l = dc1.mutate(ldiff=1)
+    r = dc2.mutate(rdiff=1)
+
+    # diff_cond.append((unchanged_cond, "U"))
+    # diff = sa.case(*diff_cond, else_=None if compare else "M").label(status_col)
+    dc_diff = (
+        l.outer_join(r, on="id", rname=f"r_{name}")
+        # .mutate(d1=_case(_isnon(ldiff), "A", "D"))
+        # .mutate(d2=_case(_isnon(rdiff), "A", "D"))
+        # .mutate(diff=_case(d1 != d2, "A", "D"))
+        .mutate(
+            diff=_case(
+                (_isnon(ldiff), "D"),
+                (_isnon(rdiff), "A"),
+                (C("name") != C("rname"), "M"),
+                # (_or(C("name") != C("rname")), "M"),
+                else_="U",
+            )
+        )
+        .select_except("d1", "d2", "ldiff", "rdiff")
+    )
+
 def _compare(  # noqa: PLR0912, PLR0915, C901
     left: "DataChain",
     right: "DataChain",
