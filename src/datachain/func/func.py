@@ -381,19 +381,23 @@ class Func(Function):
         col_type = self.get_result_type(signals_schema)
         sql_type = python_to_sql(col_type)
 
-        def get_col(col: ColT) -> ColT:
+        def get_col(col: ColT, string_as_literal=False) -> ColT:
+            # string_as_literal is used only for conditionals like `case()` where
+            # literals are nested inside ColT as we have tuples of condition - values
+            # and if user wants to set some case value as column, explicit `C("col")`
+            # syntax must be used to distinguish from literals
             if isinstance(col, tuple):
-                return tuple(get_col(x) for x in col)
+                return tuple(get_col(x, string_as_literal=True) for x in col)
             if isinstance(col, Func):
                 return col.get_column(signals_schema, table=table)
-            if isinstance(col, str):
+            if isinstance(col, str) and not string_as_literal:
                 column = Column(col, sql_type)
                 column.table = table
                 return column
             return col
 
         cols = [get_col(col) for col in self._db_cols]
-        kwargs = {k: get_col(v) for k, v in self.kwargs.items()}
+        kwargs = {k: get_col(v, string_as_literal=True) for k, v in self.kwargs.items()}
         func_col = self.inner(*cols, *self.args, **kwargs)
 
         if self.is_window:
