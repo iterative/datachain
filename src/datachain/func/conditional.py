@@ -173,18 +173,17 @@ def ifelse(
 
 def isnone(col: Union[str, Column]) -> Func:
     """
-    Returns True if column value or literal is None, otherwise False
+    Returns True if column value is None, otherwise False
     Args:
-        col (str | Column | literal): Column or literal to check if None.
+        col (str | Column): Column to check if it's None or not.
             If a string is provided, it is assumed to be the name of the column.
-            If a literal is provided, it is assumed to be a string literal.
 
     Returns:
         Func: A Func object that represents the conditional to check if column is None.
 
     Example:
         ```py
-        dc.mutate(test=isnone("value"))
+        dc.mutate(test=ifelse(isnone("col"), "NONE", "NOT_NONE"))
         ```
     """
     from datachain import C
