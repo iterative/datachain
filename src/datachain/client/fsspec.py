@@ -23,7 +23,7 @@ from botocore.exceptions import ClientError
 from dvc_objects.fs.system import reflink
 from fsspec.asyn import get_loop, sync
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 from datachain.cache import DataChainCache
 from datachain.client.fileslice import FileWrapper

@@ -33,6 +33,7 @@ from sqlalchemy.sql.elements import ColumnClause, ColumnElement
 from sqlalchemy.sql.expression import label
 from sqlalchemy.sql.schema import TableClause
 from sqlalchemy.sql.selectable import Select
+from tqdm.auto import tqdm
 
 from datachain.asyn import ASYNC_WORKERS, AsyncMapper, OrderedMapper
 from datachain.catalog.catalog import clone_catalog_with_cache
@@ -366,12 +367,16 @@ def get_download_callback(suffix: str = "", **kwargs) -> CombinedDownloadCallbac
 
 
 def get_processed_callback() -> Callback:
-    return TqdmCallback({"desc": "Processed", "unit": " rows", "leave": False})
+    return TqdmCallback(
+        {"desc": "Processed", "unit": " rows", "leave": False}, tqdm_cls=tqdm
+    )
 
 
 def get_generated_callback(is_generator: bool = False) -> Callback:
     if is_generator:
-        return TqdmCallback({"desc": "Generated", "unit": " rows", "leave": False})
+        return TqdmCallback(
+            {"desc": "Generated", "unit": " rows", "leave": False}, tqdm_cls=tqdm
+        )
     return DEFAULT_CALLBACK
 
 

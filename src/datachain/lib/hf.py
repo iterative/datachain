@@ -29,7 +29,7 @@ from io import BytesIO
 from typing import TYPE_CHECKING, Any, Union
 
 import PIL
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 from datachain.lib.arrow import arrow_type_mapper
 from datachain.lib.data_model import DataModel, DataType, dict_to_data_model

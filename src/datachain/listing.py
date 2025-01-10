@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Column
 from sqlalchemy.sql import func
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 from datachain.node import DirType, Node, NodeWithPath
 from datachain.sql.functions import path as pathfunc

@@ -5,7 +5,7 @@ from urllib.parse import parse_qs, urlsplit, urlunsplit
 
 from botocore.exceptions import NoCredentialsError
 from s3fs import S3FileSystem
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 from datachain.lib.file import File
 
