@@ -79,6 +79,15 @@ class DatabaseEngine(ABC, Serializable):
         conn: Optional[Any] = None,
     ) -> Iterator[tuple[Any, ...]]: ...
 
+    def get_table(self, name: str) -> "Table":
+        table = self.metadata.tables.get(name)
+        if table is None:
+            sa.Table(name, self.metadata, autoload_with=self.engine)
+            # ^^^ This table may not be correctly initialised on some dialects
+            # Grab it from metadata instead.
+            table = self.metadata.tables[name]
+        return table
+
     @abstractmethod
     def executemany(
         self, query, params, cursor: Optional[Any] = None

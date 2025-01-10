@@ -1,6 +1,7 @@
 import random
 import string
 from collections.abc import Sequence
+from enum import Enum
 from typing import TYPE_CHECKING, Optional, Union
 
 import sqlalchemy as sa
@@ -16,7 +17,22 @@ if TYPE_CHECKING:
 C = Column
 
 
-def compare(  # noqa: PLR0912, PLR0915, C901
+def get_status_col_name() -> str:
+    """Returns new unique status col name"""
+    return "diff_" + "".join(
+        random.choice(string.ascii_letters)  # noqa: S311
+        for _ in range(10)
+    )
+
+
+class CompareStatus(str, Enum):
+    ADDED = "A"
+    DELETED = "D"
+    MODIFIED = "M"
+    SAME = "S"
+
+
+def _compare(  # noqa: PLR0912, PLR0915, C901
     left: "DataChain",
     right: "DataChain",
     on: Union[str, Sequence[str]],
@@ -72,13 +88,10 @@ def compare(  # noqa: PLR0912, PLR0915, C901
             "At least one of added, deleted, modified, same flags must be set"
         )
 
-    # we still need status column for internal implementation even if not
-    # needed in output
     need_status_col = bool(status_col)
-    status_col = status_col or "diff_" + "".join(
-        random.choice(string.ascii_letters)  # noqa: S311
-        for _ in range(10)
-    )
+    # we still need status column for internal implementation even if not
+    # needed in the output
+    status_col = status_col or get_status_col_name()
 
     # calculate on and compare column names
     right_on = right_on or on
@@ -112,7 +125,7 @@ def compare(  # noqa: PLR0912, PLR0915, C901
                 for c in [f"{_rprefix(c, rc)}{rc}" for c, rc in zip(on, right_on)]
             ]
         )
-        diff_cond.append((added_cond, "A"))
+        diff_cond.append((added_cond, CompareStatus.ADDED))
     if modified and compare:
         modified_cond = sa.or_(
             *[
@@ -120,7 +133,7 @@ def compare(  # noqa: PLR0912, PLR0915, C901
                 for c, rc in zip(compare, right_compare)  # type: ignore[arg-type]
             ]
         )
-        diff_cond.append((modified_cond, "M"))
+        diff_cond.append((modified_cond, CompareStatus.MODIFIED))
     if same and compare:
         same_cond = sa.and_(
             *[
@@ -128,9 +141,11 @@ def compare(  # noqa: PLR0912, PLR0915, C901
                 for c, rc in zip(compare, right_compare)  # type: ignore[arg-type]
             ]
         )
-        diff_cond.append((same_cond, "S"))
+        diff_cond.append((same_cond, CompareStatus.SAME))
 
-    diff = sa.case(*diff_cond, else_=None if compare else "M").label(status_col)
+    diff = sa.case(*diff_cond, else_=None if compare else CompareStatus.MODIFIED).label(
+        status_col
+    )
     diff.type = String()
 
     left_right_merge = left.merge(
@@ -145,7 +160,7 @@ def compare(  # noqa: PLR0912, PLR0915, C901
         )
     )
 
-    diff_col = sa.literal("D").label(status_col)
+    diff_col = sa.literal(CompareStatus.DELETED).label(status_col)
     diff_col.type = String()
 
     right_left_merge = right.merge(
@@ -195,3 +210,92 @@ def compare(  # noqa: PLR0912, PLR0915, C901
         res = res.select_except(C(status_col))
 
     return left._evolve(query=res, signal_schema=schema)
+
+
+def compare_and_split(
+    left: "DataChain",
+    right: "DataChain",
+    on: Union[str, Sequence[str]],
+    right_on: Optional[Union[str, Sequence[str]]] = None,
+    compare: Optional[Union[str, Sequence[str]]] = None,
+    right_compare: Optional[Union[str, Sequence[str]]] = None,
+    added: bool = True,
+    deleted: bool = True,
+    modified: bool = True,
+    same: bool = False,
+) -> dict[str, "DataChain"]:
+    """Comparing two chains and returning multiple chains, one for each of `added`,
+    `deleted`, `modified` and `same` status. Result is returned in form of
+    dictionary where each item represents one of the statuses and key values
+    are `A`, `D`, `M`, `S` corresponding. Note that status column is not in the
+    resulting chains.
+
+    Parameters:
+        left: Chain to calculate diff on.
+        right: Chain to calculate diff from.
+        on: Column or list of columns to match on. If both chains have the
+            same columns then this column is enough for the match. Otherwise,
+            `right_on` parameter has to specify the columns for the other chain.
+            This value is used to find corresponding row in other dataset. If not
+            found there, row is considered as added (or removed if vice versa), and
+            if found then row can be either modified or same.
+        right_on: Optional column or list of columns
+            for the `other` to match.
+        compare: Column or list of columns to compare on. If both chains have
+            the same columns then this column is enough for the compare. Otherwise,
+            `right_compare` parameter has to specify the columns for the other
+            chain. This value is used to see if row is modified or same. If
+            not set, all columns will be used for comparison
+        right_compare: Optional column or list of columns
+                for the `other` to compare to.
+        added (bool): Whether to return chain containing only added rows.
+        deleted (bool): Whether to return chain containing only deleted rows.
+        modified (bool): Whether to return chain containing only modified rows.
+        same (bool): Whether to return chain containing only same rows.
+
+    Example:
+        ```py
+        chains = compare(
+            persons,
+            new_persons,
+            on=["id"],
+            right_on=["other_id"],
+            compare=["name"],
+            added=True,
+            deleted=True,
+            modified=True,
+            same=True,
+        )
+        ```
+    """
+    status_col = get_status_col_name()
+
+    res = _compare(
+        left,
+        right,
+        on,
+        right_on=right_on,
+        compare=compare,
+        right_compare=right_compare,
+        added=added,
+        deleted=deleted,
+        modified=modified,
+        same=same,
+        status_col=status_col,
+    )
+
+    chains = {}
+
+    def filter_by_status(compare_status) -> "DataChain":
+        return res.filter(C(status_col) == compare_status).select_except(status_col)
+
+    if added:
+        chains[CompareStatus.ADDED.value] = filter_by_status(CompareStatus.ADDED)
+    if deleted:
+        chains[CompareStatus.DELETED.value] = filter_by_status(CompareStatus.DELETED)
+    if modified:
+        chains[CompareStatus.MODIFIED.value] = filter_by_status(CompareStatus.MODIFIED)
+    if same:
+        chains[CompareStatus.SAME.value] = filter_by_status(CompareStatus.SAME)
+
+    return chains

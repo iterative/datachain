@@ -191,8 +191,7 @@ class AbstractWarehouse(ABC, Serializable):
         table_name = self.dataset_table_name(dataset.name, version)
         return self.schema.dataset_row_cls(
             table_name,
-            self.db.engine,
-            self.db.metadata,
+            self.db,
             dataset.get_schema(version),
             object_name=object_name,
         )

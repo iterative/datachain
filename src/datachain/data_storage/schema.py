@@ -16,7 +16,6 @@ from datachain.sql.functions import path as pathfunc
 from datachain.sql.types import Int, SQLType, UInt64
 
 if TYPE_CHECKING:
-    from sqlalchemy import Engine
     from sqlalchemy.engine.interfaces import Dialect
     from sqlalchemy.sql.base import (
         ColumnCollection,
@@ -24,6 +23,8 @@ if TYPE_CHECKING:
         ReadOnlyColumnCollection,
     )
     from sqlalchemy.sql.elements import ColumnElement
+
+    from datachain.data_storage.db_engine import DatabaseEngine
 
 
 DEFAULT_DELIMITER = "__"
@@ -150,14 +151,12 @@ class DataTable:
     def __init__(
         self,
         name: str,
-        engine: "Engine",
-        metadata: Optional["sa.MetaData"] = None,
+        engine: "DatabaseEngine",
         column_types: Optional[dict[str, SQLType]] = None,
         object_name: str = "file",
     ):
         self.name: str = name
         self.engine = engine
-        self.metadata: sa.MetaData = metadata if metadata is not None else sa.MetaData()
         self.column_types: dict[str, SQLType] = column_types or {}
         self.object_name = object_name
 
@@ -211,12 +210,7 @@ class DataTable:
         return sa.Table(name, metadata, *columns)
 
     def get_table(self) -> "sa.Table":
-        table = self.metadata.tables.get(self.name)
-        if table is None:
-            sa.Table(self.name, self.metadata, autoload_with=self.engine)
-            # ^^^ This table may not be correctly initialised on some dialects
-            # Grab it from metadata instead.
-            table = self.metadata.tables[self.name]
+        table = self.engine.get_table(self.name)
 
         column_types = self.column_types | {c.name: c.type for c in self.sys_columns()}
         # adjusting types for custom columns to be instances of SQLType if possible

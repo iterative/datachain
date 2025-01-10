@@ -186,6 +186,12 @@ class SQLiteDatabaseEngine(DatabaseEngine):
         self.db_file = db_file
         self.is_closed = False
 
+    def get_table(self, name: str) -> Table:
+        if self.is_closed:
+            # Reconnect in case of being closed previously.
+            self._reconnect()
+        return super().get_table(name)
+
     @retry_sqlite_locks
     def execute(
         self,
