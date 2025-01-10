@@ -1,7 +1,7 @@
-from typing import Union
+from typing import Optional, Union
 
+from sqlalchemy import ColumnElement
 from sqlalchemy import case as sql_case
-from sqlalchemy.sql.elements import BinaryExpression
 
 from datachain.lib.utils import DataChainParamsError
 from datachain.query.schema import Column
@@ -88,17 +88,18 @@ def least(*args: Union[ColT, float]) -> Func:
     )
 
 
-def case(*args: tuple, else_=None) -> Func:
+def case(
+    *args: tuple[Union[ColumnElement, Func], CaseT], else_: Optional[CaseT] = None
+) -> Func:
     """
     Returns the case function that produces case expression which has a list of
     conditions and corresponding results. Results can only be python primitives
     like string, numbes or booleans. Result type is inferred from condition results.
 
     Args:
-        args (tuple(BinaryExpression, value(str | int | float | complex | bool):
-            - Tuple of binary expression and values pair which corresponds to one
-            case condition - value
-        else_ (str | int | float | complex | bool): else value in case expression
+        args (tuple((ColumnElement, Func), (str | int | float | complex | bool, Func))):
+            - Tuple of condition and values pair
+        else_ (str | int | float | complex | bool, Func): else value in case expression
 
     Returns:
         Func: A Func object that represents the case function.
@@ -141,17 +142,21 @@ def case(*args: tuple, else_=None) -> Func:
     return Func("case", inner=sql_case, cols=args, kwargs=kwargs, result_type=type_)
 
 
-def ifelse(condition: BinaryExpression, if_val: CaseT, else_val: CaseT) -> Func:
+def ifelse(
+    condition: Union[ColumnElement, Func], if_val: CaseT, else_val: CaseT
+) -> Func:
     """
     Returns the ifelse function that produces if expression which has a condition
-    and values for true and false outcome. Results can only be python primitives
-    like string, numbes or booleans. Result type is inferred from the values.
+    and values for true and false outcome. Results can be one of python primitives
+    like string, numbes or booleans, but can also be nested functions.
+    Result type is inferred from the values.
 
     Args:
-        condition: BinaryExpression - condition which is evaluated
-        if_val: (str | int | float | complex | bool): value for true condition outcome
-        else_val: (str | int | float | complex | bool): value for false condition
-         outcome
+        condition: (ColumnElement, Func) - condition which is evaluated
+        if_val: (str | int | float | complex | bool, Func): value for true
+            condition outcome
+        else_val: (str | int | float | complex | bool, Func): value for false condition
+            outcome
 
     Returns:
         Func: A Func object that represents the ifelse function.
@@ -159,7 +164,7 @@ def ifelse(condition: BinaryExpression, if_val: CaseT, else_val: CaseT) -> Func:
     Example:
         ```py
         dc.mutate(
-            res=func.ifelse(C("num") > 0, "P", "N"),
+            res=func.ifelse(isnone("col"), "EMPTY", "NOT_EMPTY"),
         )
         ```
     """
