@@ -1,4 +1,5 @@
 import asyncio
+import os
 from typing import Any, Optional, cast
 from urllib.parse import parse_qs, urlsplit, urlunsplit
 
@@ -31,9 +32,11 @@ class ClientS3(Client):
         if "aws_token" in kwargs:
             kwargs.setdefault("token", kwargs.pop("aws_token"))
 
-        # caching bucket regions to use the right one in signed urls, otherwise
-        # it tries to randomly guess and creates wrong signature
-        kwargs.setdefault("cache_regions", True)
+        # remove this `if` when https://github.com/fsspec/s3fs/pull/929 lands
+        if not os.environ.get("AWS_REGION") and not os.environ.get("AWS_ENDPOINT_URL"):
+            # caching bucket regions to use the right one in signed urls, otherwise
+            # it tries to randomly guess and creates wrong signature
+            kwargs.setdefault("cache_regions", True)
 
         # We want to use newer v4 signature version since regions added after
         # 2014 are not going to support v2 which is the older one.
