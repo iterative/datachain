@@ -391,9 +391,9 @@ class BatchMapper(UDFBase):
             )
             result_objs = list(self.process_safe(udf_args))
             n_objs = len(result_objs)
-            assert (
-                n_objs == n_rows
-            ), f"{self.name} returns {n_objs} rows, but {n_rows} were expected"
+            assert n_objs == n_rows, (
+                f"{self.name} returns {n_objs} rows, but {n_rows} were expected"
+            )
             udf_outputs = (self._flatten_row(row) for row in result_objs)
             output = [
                 {"sys__id": row_id} | dict(zip(self.signal_names, signals))
