@@ -1934,8 +1934,7 @@ class DataChain:
         session: Optional[Session] = None,
         settings: Optional[dict] = None,
         column_types: Optional[dict[str, "Union[str, ArrowDataType]"]] = None,
-        newlines_in_values: bool = False
-        **kwargs,
+        newlines_in_values: bool = False**kwargs,
     ) -> "DataChain":
         """Generate chain from csv files.
 
@@ -2001,7 +2000,9 @@ class DataChain:
                 msg = f"error parsing csv - incompatible output type {type(output)}"
                 raise DatasetPrepareError(chain.name, msg)
 
-        parse_options = ParseOptions(delimiter=delimiter, newlines_in_values=newlines_in_values)
+        parse_options = ParseOptions(
+            delimiter=delimiter, newlines_in_values=newlines_in_values
+        )
         read_options = ReadOptions(column_names=column_names)
         convert_options = ConvertOptions(
             strings_can_be_null=True,
