@@ -1934,7 +1934,8 @@ class DataChain:
         session: Optional[Session] = None,
         settings: Optional[dict] = None,
         column_types: Optional[dict[str, "Union[str, ArrowDataType]"]] = None,
-        newlines_in_values: bool = False**kwargs,
+        newlines_in_values: bool = False,
+        **kwargs
     ) -> "DataChain":
         """Generate chain from csv files.
 
