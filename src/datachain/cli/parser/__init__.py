@@ -33,13 +33,13 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     parent_parser.add_argument(
         "--anon",
         action="store_true",
-        help="AWS anon (aka awscli's --no-sign-request)",
+        help="anon flag for remote storage (like awscli's --no-sign-request)",
     )
     parent_parser.add_argument(
         "-u", "--update", action="count", default=0, help="Update cache"
     )
     parent_parser.add_argument(
-        "-v", "--verbose", action="count", default=0, help="Verbose"
+        "-v", "--verbose", action="count", default=0, help="Be verbose"
     )
     parent_parser.add_argument(
         "-q", "--quiet", action="count", default=0, help="Be quiet"
@@ -73,7 +73,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         "--force",
         default=False,
         action="store_true",
-        help="Force creating outputs",
+        help="Force creating files even if they already exist",
     )
     parse_cp.add_argument(
         "-r",
@@ -122,16 +122,6 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         action="store_true",
         help="Do not copy files, just create a dataset",
     )
-    parse_clone.add_argument(
-        "--edatachain",
-        default=False,
-        action="store_true",
-        help="Create a .edatachain file",
-    )
-    parse_clone.add_argument(
-        "--edatachain-file",
-        help="Use a different filename for the resulting .edatachain file",
-    )
 
     add_studio_parser(subp, parent_parser)
     add_jobs_parser(subp, parent_parser)
@@ -179,16 +169,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         action="store_true",
         help="Copy actual files after pulling remote dataset into local DB",
     )
-    parse_pull.add_argument(
-        "--edatachain",
-        default=False,
-        action="store_true",
-        help="Create .edatachain file",
-    )
-    parse_pull.add_argument(
-        "--edatachain-file",
-        help="Use a different filename for the resulting .edatachain file",
-    )
+
     parse_pull.add_argument(
         "--local-name",
         action="store",

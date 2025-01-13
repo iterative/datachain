@@ -124,8 +124,6 @@ def handle_clone_command(args, catalog):
         recursive=bool(args.recursive),
         no_glob=args.no_glob,
         no_cp=args.no_cp,
-        edatachain=args.edatachain,
-        edatachain_file=args.edatachain_file,
     )
 
 
@@ -145,8 +143,6 @@ def handle_dataset_command(args, catalog):
             local_ds_version=args.local_version,
             cp=args.cp,
             force=bool(args.force),
-            edatachain=args.edatachain,
-            edatachain_file=args.edatachain_file,
         ),
         "edit": lambda: edit_dataset(
             catalog,
