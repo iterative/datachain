@@ -1,5 +1,6 @@
 import asyncio
 import os
+import sys
 from typing import TYPE_CHECKING, Optional
 
 from tabulate import tabulate
@@ -21,6 +22,13 @@ POST_LOGIN_MESSAGE = (
 
 
 def process_jobs_args(args: "Namespace"):
+    if args.cmd is None:
+        print(
+            f"Use 'datachain {args.command} --help' to see available options",
+            file=sys.stderr,
+        )
+        return 1
+
     if args.cmd == "run":
         return create_job(
             args.query_file,
@@ -42,6 +50,13 @@ def process_jobs_args(args: "Namespace"):
 
 
 def process_studio_cli_args(args: "Namespace"):
+    if args.cmd is None:
+        print(
+            f"Use 'datachain {args.command} --help' to see available options",
+            file=sys.stderr,
+        )
+        return 1
+
     if args.cmd == "login":
         return login(args)
     if args.cmd == "logout":

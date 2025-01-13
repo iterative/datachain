@@ -39,6 +39,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.command in ("internal-run-udf", "internal-run-udf-worker"):
         return handle_udf(args.command)
 
+    if args.command is None:
+        datachain_parser.print_help(sys.stderr)
+        return 1
+
     logger.addHandler(logging.StreamHandler())
     logging_level = get_logging_level(args)
     logger.setLevel(logging_level)
@@ -126,6 +130,13 @@ def handle_clone_command(args, catalog):
 
 
 def handle_dataset_command(args, catalog):
+    if args.datasets_cmd is None:
+        print(
+            f"Use 'datachain {args.command} --help' to see available options",
+            file=sys.stderr,
+        )
+        return 1
+
     dataset_commands = {
         "pull": lambda: catalog.pull_dataset(
             args.dataset,
@@ -187,6 +198,7 @@ def handle_dataset_command(args, catalog):
     handler = dataset_commands.get(args.datasets_cmd)
     if handler:
         return handler()
+
     raise Exception(f"Unexpected command {args.datasets_cmd}")
 
 

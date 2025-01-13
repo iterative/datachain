@@ -14,7 +14,6 @@ def add_studio_parser(subparsers, parent_parser) -> None:
     studio_subparser = studio_parser.add_subparsers(
         dest="cmd",
         help="Use `datachain studio CMD --help` to display command-specific help",
-        required=True,
     )
 
     studio_login_help = "Authenticate with Studio"

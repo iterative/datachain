@@ -62,7 +62,6 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         metavar="command",
         dest="command",
         help=f"Use `{parser.prog} command --help` for command-specific help",
-        required=True,
     )
     parse_cp = subp.add_parser(
         "cp", parents=[parent_parser], description="Copy data files from the cloud."
@@ -145,7 +144,6 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     )
     datasets_subparser = datasets_parser.add_subparsers(
         dest="datasets_cmd",
-        required=True,
         help="Use `datachain dataset CMD --help` to display command-specific help",
     )
 
@@ -250,30 +248,30 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         help="The team to edit a dataset. By default, it will use team from config",
     )
 
-    datasets_parser = datasets_subparser.add_parser(
+    datasets_ls_parser = datasets_subparser.add_parser(
         "ls", parents=[parent_parser], description="List datasets."
     )
-    datasets_parser.add_argument(
+    datasets_ls_parser.add_argument(
         "--studio",
         action="store_true",
         default=False,
         help="List the files in the Studio",
     )
-    datasets_parser.add_argument(
+    datasets_ls_parser.add_argument(
         "-L",
         "--local",
         action="store_true",
         default=False,
         help="List local files only",
     )
-    datasets_parser.add_argument(
+    datasets_ls_parser.add_argument(
         "-a",
         "--all",
         action="store_true",
         default=True,
         help="List all files including hidden files",
     )
-    datasets_parser.add_argument(
+    datasets_ls_parser.add_argument(
         "--team",
         action="store",
         default=None,
