@@ -1934,6 +1934,7 @@ class DataChain:
         session: Optional[Session] = None,
         settings: Optional[dict] = None,
         column_types: Optional[dict[str, "Union[str, ArrowDataType]"]] = None,
+        newlines_in_values: bool = False
         **kwargs,
     ) -> "DataChain":
         """Generate chain from csv files.
@@ -1955,6 +1956,7 @@ class DataChain:
             column_types : Dictionary of column names and their corresponding types.
                 It is passed to CSV reader and for each column specified type auto
                 inference is disabled.
+            newlines_in_values: Tells pareser that values in csv can span multiple lines.
 
         Example:
             Reading a csv file:
@@ -1999,7 +2001,7 @@ class DataChain:
                 msg = f"error parsing csv - incompatible output type {type(output)}"
                 raise DatasetPrepareError(chain.name, msg)
 
-        parse_options = ParseOptions(delimiter=delimiter)
+        parse_options = ParseOptions(delimiter=delimiter, newlines_in_values=newlines_in_values)
         read_options = ReadOptions(column_names=column_names)
         convert_options = ConvertOptions(
             strings_can_be_null=True,
