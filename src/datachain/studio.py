@@ -3,8 +3,6 @@ import os
 import sys
 from typing import TYPE_CHECKING, Optional
 
-from tabulate import tabulate
-
 from datachain.catalog.catalog import raise_remote_error
 from datachain.config import Config, ConfigLevel
 from datachain.dataset import QUERY_DATASET_PREFIX
@@ -63,13 +61,6 @@ def process_studio_cli_args(args: "Namespace"):
         return logout()
     if args.cmd == "token":
         return token()
-    if args.cmd == "dataset":
-        rows = [
-            {"Name": name, "Version": version}
-            for name, version in list_datasets(args.team)
-        ]
-        print(tabulate(rows, headers="keys"))
-        return 0
 
     if args.cmd == "team":
         return set_team(args)

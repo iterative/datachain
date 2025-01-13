@@ -100,22 +100,3 @@ def add_studio_parser(subparsers, parent_parser) -> None:
         description=studio_token_description,
         help=studio_token_help,
     )
-
-    studio_ls_dataset_help = "List available Studio datasets"
-    studio_ls_dataset_description = (
-        "List all datasets available in Studio, showing dataset names "
-        "and version counts."
-    )
-
-    ls_dataset_parser = studio_subparser.add_parser(
-        "dataset",
-        parents=[parent_parser],
-        description=studio_ls_dataset_description,
-        help=studio_ls_dataset_help,
-    )
-    ls_dataset_parser.add_argument(
-        "--team",
-        action="store",
-        default=None,
-        help="Team to list datasets for (default: from config)",
-    )
