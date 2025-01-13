@@ -77,6 +77,12 @@ hf = [
   "numba>=0.60.0",
   "datasets[audio,vision]>=2.21.0"
 ]
+video = [
+  "av<14",
+  "imageio[ffmpeg]",
+  "moviepy",
+  "opencv-python"
+]
 tests = [
   "datachain[torch,remote,vector,hf]",
   "pytest>=8,<9",

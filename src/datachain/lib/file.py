@@ -39,7 +39,7 @@ logger = logging.getLogger("datachain")
 # how to create file path when exporting
 ExportPlacement = Literal["filename", "etag", "fullpath", "checksum"]
 
-FileType = Literal["binary", "text", "image"]
+FileType = Literal["binary", "text", "image", "video", "video_clip", "video_frame"]
 
 
 class VFileError(DataChainError):
@@ -230,6 +230,10 @@ class File(DataModel):
         """Returns file contents as text."""
         with self.open(mode="r") as stream:
             return stream.read()
+
+    def stream(self) -> BytesIO:
+        """Returns file contents as BytesIO stream."""
+        return BytesIO(self.read())
 
     def save(self, destination: str):
         """Writes it's content to destination"""
@@ -454,6 +458,53 @@ class ImageFile(File):
         self.read().save(destination)
 
 
+class ImageMeta(DataModel):
+    """`DataModel` for image file meta information."""
+
+    width: int
+    height: int
+    format: str
+
+
+class VideoFile(File):
+    """`DataModel` for reading video files."""
+
+
+class VideoClip(VideoFile):
+    """`DataModel` for reading video clips."""
+
+    start_time: float
+    end_time: float
+
+
+class VideoFrame(VideoFile):
+    """`DataModel` for reading video frames."""
+
+    frame: int
+    timestamp: float
+
+
+class VideoMeta(DataModel):
+    """`DataModel` for video file meta information."""
+
+    width: int
+    height: int
+    fps: float
+    duration: float
+    frames_count: int
+    codec: str
+
+
+class VideoFrameMeta(DataModel):
+    """`DataModel` for video frame image meta information."""
+
+    frame: int
+    timestamp: float
+    width: int
+    height: int
+    format: str
+
+
 class ArrowRow(DataModel):
     """`DataModel` for reading row from Arrow-supported file."""
 
@@ -489,5 +540,11 @@ def get_file_type(type_: FileType = "binary") -> type[File]:
         file = TextFile
     elif type_ == "image":
         file = ImageFile  # type: ignore[assignment]
+    elif type_ == "video":
+        file = VideoFile
+    elif type_ == "video_clip":
+        file = VideoClip
+    elif type_ == "video_frame":
+        file = VideoFrame
 
     return file
