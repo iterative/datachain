@@ -355,7 +355,7 @@ def process_udf_outputs(
 
 def get_download_callback(suffix: str = "", **kwargs) -> CombinedDownloadCallback:
     return TqdmCombinedDownloadCallback(
-        {
+        tqdm_kwargs={
             "desc": "Download" + suffix,
             "unit": "B",
             "unit_scale": True,
@@ -363,6 +363,7 @@ def get_download_callback(suffix: str = "", **kwargs) -> CombinedDownloadCallbac
             "leave": False,
             **kwargs,
         },
+        tqdm_cls=tqdm,
     )
 
 
