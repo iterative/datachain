@@ -78,6 +78,8 @@ hf = [
   "datasets[audio,vision]>=2.21.0"
 ]
 video = [
+  # Use 'av<14' because of incompatibility with imageio
+  # See https://github.com/PyAV-Org/PyAV/discussions/1700
   "av<14",
   "imageio[ffmpeg]",
   "moviepy",
