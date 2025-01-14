@@ -2,7 +2,7 @@ import os.path
 import pathlib
 from typing import TYPE_CHECKING, Optional, Union
 
-from datachain.lib.file import VideoMeta
+from datachain.lib.file import Video
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -22,7 +22,7 @@ except ImportError as exc:
     ) from exc
 
 
-def video_meta(file: "VideoFile") -> VideoMeta:
+def video_meta(file: "VideoFile") -> Video:
     """
     Returns video file meta information.
 
@@ -30,7 +30,7 @@ def video_meta(file: "VideoFile") -> VideoMeta:
         file (VideoFile): VideoFile object.
 
     Returns:
-        VideoMeta: Video file meta information.
+        Video: Video file meta information.
     """
     props = iio.improps(file.stream(), plugin="pyav")
     frames_count, width, height, _ = props.shape
@@ -40,12 +40,12 @@ def video_meta(file: "VideoFile") -> VideoMeta:
     codec = meta["codec"]
     duration = meta["duration"]
 
-    return VideoMeta(
+    return Video(
         width=width,
         height=height,
         fps=fps,
         duration=duration,
-        frames_count=frames_count,
+        frames=frames_count,
         codec=codec,
     )
 
