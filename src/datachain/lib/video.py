@@ -263,7 +263,7 @@ def save_video_clips(
         clip = video.subclip(start, end)
 
         # Define the output file name
-        output_file = os.path.join(output_dir, f"{file_stem}_{i+1}.{file_ext}")
+        output_file = os.path.join(output_dir, f"{file_stem}_{i + 1}.{file_ext}")
 
         # Write the video segment to file
         clip.write_videofile(output_file, codec=codec, audio_codec=audio_codec)
