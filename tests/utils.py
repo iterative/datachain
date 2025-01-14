@@ -65,7 +65,7 @@ def uppercase_scheme(uri: str) -> str:
     Makes scheme (or protocol) of an url uppercased
     e.g s3://bucket_name -> S3://bucket_name
     """
-    return f'{uri.split(":")[0].upper()}:{":".join(uri.split(":")[1:])}'
+    return f"{uri.split(':')[0].upper()}:{':'.join(uri.split(':')[1:])}"
 
 
 def make_tar(tree) -> bytes:

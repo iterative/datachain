@@ -9,8 +9,6 @@ from dvc_objects.fs.local import LocalFileSystem
 from dvc_objects.fs.utils import remove
 from fsspec.callbacks import Callback, TqdmCallback
 
-from .progress import Tqdm
-
 if TYPE_CHECKING:
     from datachain.client import Client
     from datachain.lib.file import File
@@ -86,9 +84,11 @@ class DataChainCache:
         size = file.size
         if size < 0:
             size = await client.get_size(from_path, version_id=file.version)
+        from tqdm.auto import tqdm
+
         cb = callback or TqdmCallback(
             tqdm_kwargs={"desc": odb_fs.name(from_path), "bytes": True, "leave": False},
-            tqdm_cls=Tqdm,
+            tqdm_cls=tqdm,
             size=size,
         )
         try:

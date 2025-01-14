@@ -22,13 +22,13 @@ class Segment(DataModel):
 
     @staticmethod
     def from_list(points: list[list[float]], title: str = "") -> "Segment":
-        assert (
-            len(points) == 2
-        ), "Segment must be a list of 2 lists: x and y coordinates."
+        assert len(points) == 2, (
+            "Segment must be a list of 2 lists: x and y coordinates."
+        )
         points_x, points_y = points
-        assert len(points_x) == len(
-            points_y
-        ), "Segment x and y coordinates must have the same length."
+        assert len(points_x) == len(points_y), (
+            "Segment x and y coordinates must have the same length."
+        )
         assert all(
             isinstance(value, (int, float)) for value in [*points_x, *points_y]
         ), "Segment coordinates must be floats or integers."

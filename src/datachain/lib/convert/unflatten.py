@@ -35,8 +35,7 @@ def unflatten_to_json_pos(
 def _normalize(name: str) -> str:
     if DEFAULT_DELIMITER in name:
         raise RuntimeError(
-            f"variable '{name}' cannot be used "
-            f"because it contains {DEFAULT_DELIMITER}"
+            f"variable '{name}' cannot be used because it contains {DEFAULT_DELIMITER}"
         )
     return _to_snake_case(name)
 
