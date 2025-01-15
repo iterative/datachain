@@ -22,9 +22,9 @@ class BBox(DataModel):
     @staticmethod
     def from_list(coords: list[float], title: str = "") -> "BBox":
         assert len(coords) == 4, "Bounding box must be a list of 4 coordinates."
-        assert all(
-            isinstance(value, (int, float)) for value in coords
-        ), "Bounding box coordinates must be floats or integers."
+        assert all(isinstance(value, (int, float)) for value in coords), (
+            "Bounding box coordinates must be floats or integers."
+        )
         return BBox(
             title=title,
             coords=[round(c) for c in coords],
@@ -64,12 +64,12 @@ class OBBox(DataModel):
 
     @staticmethod
     def from_list(coords: list[float], title: str = "") -> "OBBox":
-        assert (
-            len(coords) == 8
-        ), "Oriented bounding box must be a list of 8 coordinates."
-        assert all(
-            isinstance(value, (int, float)) for value in coords
-        ), "Oriented bounding box coordinates must be floats or integers."
+        assert len(coords) == 8, (
+            "Oriented bounding box must be a list of 8 coordinates."
+        )
+        assert all(isinstance(value, (int, float)) for value in coords), (
+            "Oriented bounding box coordinates must be floats or integers."
+        )
         return OBBox(
             title=title,
             coords=[round(c) for c in coords],

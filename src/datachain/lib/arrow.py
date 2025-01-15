@@ -7,7 +7,7 @@ import orjson
 import pyarrow as pa
 from fsspec.core import split_protocol
 from pyarrow.dataset import CsvFileFormat, dataset
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 from datachain.lib.data_model import dict_to_data_model
 from datachain.lib.file import ArrowRow, File
