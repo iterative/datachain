@@ -1,8 +1,7 @@
 import asyncio
 import os
+import sys
 from typing import TYPE_CHECKING, Optional
-
-from tabulate import tabulate
 
 from datachain.catalog.catalog import raise_remote_error
 from datachain.config import Config, ConfigLevel
@@ -21,6 +20,13 @@ POST_LOGIN_MESSAGE = (
 
 
 def process_jobs_args(args: "Namespace"):
+    if args.cmd is None:
+        print(
+            f"Use 'datachain {args.command} --help' to see available options",
+            file=sys.stderr,
+        )
+        return 1
+
     if args.cmd == "run":
         return create_job(
             args.query_file,
@@ -42,19 +48,19 @@ def process_jobs_args(args: "Namespace"):
 
 
 def process_studio_cli_args(args: "Namespace"):
+    if args.cmd is None:
+        print(
+            f"Use 'datachain {args.command} --help' to see available options",
+            file=sys.stderr,
+        )
+        return 1
+
     if args.cmd == "login":
         return login(args)
     if args.cmd == "logout":
         return logout()
     if args.cmd == "token":
         return token()
-    if args.cmd == "dataset":
-        rows = [
-            {"Name": name, "Version": version}
-            for name, version in list_datasets(args.team)
-        ]
-        print(tabulate(rows, headers="keys"))
-        return 0
 
     if args.cmd == "team":
         return set_team(args)
