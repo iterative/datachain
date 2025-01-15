@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 from datachain.cli.utils import determine_flavors
 from datachain.config import Config
 from datachain.error import DatasetNotFoundError
+from datachain.studio import list_datasets as list_datasets_studio
 
 
 def list_datasets(
@@ -20,14 +21,12 @@ def list_datasets(
     all: bool = True,
     team: Optional[str] = None,
 ):
-    from datachain.studio import list_datasets
-
     token = Config().read().get("studio", {}).get("token")
     all, local, studio = determine_flavors(studio, local, all, token)
 
     local_datasets = set(list_datasets_local(catalog)) if all or local else set()
     studio_datasets = (
-        set(list_datasets(team=team)) if (all or studio) and token else set()
+        set(list_datasets_studio(team=team)) if (all or studio) and token else set()
     )
 
     rows = [
