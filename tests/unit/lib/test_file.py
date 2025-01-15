@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
@@ -379,3 +380,18 @@ def test_get_local_path(tmp_path, catalog):
     assert file.get_local_path() is None
     file.ensure_cached()
     assert file.get_local_path() is not None
+
+
+@pytest.mark.parametrize("use_cache", (True, False))
+def test_export_with_symlink(tmp_path, catalog, use_cache):
+    path = tmp_path / "myfile.txt"
+    path.write_text("some text")
+
+    file = File(path=path.name, source=tmp_path.as_uri())
+    file._set_stream(catalog, use_cache)
+
+    file.export(tmp_path / "dir", link_type="symlink", use_cache=use_cache)
+    assert (tmp_path / "dir" / "myfile.txt").is_symlink()
+
+    dst = Path(file.get_local_path()) if use_cache else path
+    assert (tmp_path / "dir" / "myfile.txt").resolve() == dst
