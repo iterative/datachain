@@ -113,14 +113,14 @@ def parse_listing_uri(uri: str, cache, client_config) -> tuple[Optional[str], st
     telemetry.log_param("client", client.PREFIX)
 
     if not uri.endswith("/") and _isfile(client, uri):
-        return None, f'{storage_uri}/{path.lstrip("/")}', path
+        return None, f"{storage_uri}/{path.lstrip('/')}", path
     if uses_glob(path):
         lst_uri_path = posixpath.dirname(path)
     else:
-        storage_uri, path = Client.parse_url(f'{uri.rstrip("/")}/')
+        storage_uri, path = Client.parse_url(f"{uri.rstrip('/')}/")
         lst_uri_path = path
 
-    lst_uri = f'{storage_uri}/{lst_uri_path.lstrip("/")}'
+    lst_uri = f"{storage_uri}/{lst_uri_path.lstrip('/')}"
     ds_name = (
         f"{LISTING_PREFIX}{storage_uri}/{posixpath.join(lst_uri_path, '').lstrip('/')}"
     )
@@ -180,7 +180,7 @@ def get_listing(
     # for local file system we need to fix listing path / prefix
     # if we are reusing existing listing
     if isinstance(client, FileClient) and listing and listing.name != ds_name:
-        list_path = f'{ds_name.strip("/").removeprefix(listing.name)}/{list_path}'
+        list_path = f"{ds_name.strip('/').removeprefix(listing.name)}/{list_path}"
 
     ds_name = listing.name if listing else ds_name
 

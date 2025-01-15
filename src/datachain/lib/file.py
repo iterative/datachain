@@ -76,18 +76,18 @@ class TarVFile(VFile):
     def open(cls, file: "File", location: list[dict]):
         """Stream file from tar archive based on location in archive."""
         if len(location) > 1:
-            VFileError(file, "multiple 'location's are not supported yet")
+            raise VFileError(file, "multiple 'location's are not supported yet")
 
         loc = location[0]
 
         if (offset := loc.get("offset", None)) is None:
-            VFileError(file, "'offset' is not specified")
+            raise VFileError(file, "'offset' is not specified")
 
         if (size := loc.get("size", None)) is None:
-            VFileError(file, "'size' is not specified")
+            raise VFileError(file, "'size' is not specified")
 
         if (parent := loc.get("parent", None)) is None:
-            VFileError(file, "'parent' is not specified")
+            raise VFileError(file, "'parent' is not specified")
 
         tar_file = File(**parent)
         tar_file._set_stream(file._catalog)

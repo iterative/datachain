@@ -22,9 +22,9 @@ class Pose(DataModel):
     def from_list(points: list[list[float]]) -> "Pose":
         assert len(points) == 2, "Pose must be a list of 2 lists: x and y coordinates."
         points_x, points_y = points
-        assert (
-            len(points_x) == len(points_y) == 17
-        ), "Pose x and y coordinates must have the same length of 17."
+        assert len(points_x) == len(points_y) == 17, (
+            "Pose x and y coordinates must have the same length of 17."
+        )
         assert all(
             isinstance(value, (int, float)) for value in [*points_x, *points_y]
         ), "Pose coordinates must be floats or integers."
@@ -61,13 +61,13 @@ class Pose3D(DataModel):
 
     @staticmethod
     def from_list(points: list[list[float]]) -> "Pose3D":
-        assert (
-            len(points) == 3
-        ), "Pose3D must be a list of 3 lists: x, y coordinates and visible."
+        assert len(points) == 3, (
+            "Pose3D must be a list of 3 lists: x, y coordinates and visible."
+        )
         points_x, points_y, points_v = points
-        assert (
-            len(points_x) == len(points_y) == len(points_v) == 17
-        ), "Pose3D x, y coordinates and visible must have the same length of 17."
+        assert len(points_x) == len(points_y) == len(points_v) == 17, (
+            "Pose3D x, y coordinates and visible must have the same length of 17."
+        )
         assert all(
             isinstance(value, (int, float))
             for value in [*points_x, *points_y, *points_v]

@@ -112,7 +112,7 @@ examples = [
   "pdfplumber==0.11.5",
   "huggingface_hub[hf_transfer]",
   "onnx==1.16.1",
-  "ultralytics==8.3.58"
+  "ultralytics==8.3.61"
 ]
 
 [project.urls]

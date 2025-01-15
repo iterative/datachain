@@ -21,7 +21,7 @@ from sqlalchemy.schema import CreateIndex, CreateTable, DropTable
 from sqlalchemy.sql import func
 from sqlalchemy.sql.expression import bindparam, cast
 from sqlalchemy.sql.selectable import Select
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 import datachain.sql.sqlite
 from datachain.data_storage import AbstractDBMetastore, AbstractWarehouse

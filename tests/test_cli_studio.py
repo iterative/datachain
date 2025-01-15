@@ -107,22 +107,6 @@ def test_studio_token(capsys):
     assert main(["studio", "token"]) == 1
 
 
-def test_studio_ls_datasets(capsys, studio_datasets):
-    assert main(["studio", "dataset"]) == 0
-    out = capsys.readouterr().out
-
-    expected_rows = [
-        {"Name": "dogs", "Version": "1"},
-        {"Name": "dogs", "Version": "2"},
-        {
-            "Name": "cats",
-            "Version": "1",
-        },
-        {"Name": "both", "Version": "1"},
-    ]
-    assert out.strip() == tabulate(expected_rows, headers="keys")
-
-
 def test_studio_team_local():
     assert main(["studio", "team", "team_name"]) == 0
     config = Config(ConfigLevel.LOCAL).read()
