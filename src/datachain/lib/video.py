@@ -33,19 +33,21 @@ def video_meta(file: "VideoFile") -> Video:
         Video: Video file meta information.
     """
     props = iio.improps(file.stream(), plugin="pyav")
-    frames_count, width, height, _ = props.shape
+    frames, width, height, _ = props.shape
 
     meta = iio.immeta(file.stream(), plugin="pyav")
-    fps = meta["fps"]
-    codec = meta["codec"]
-    duration = meta["duration"]
+    fps = meta.get("fps", 0)
+    duration = meta.get("duration", 0)
+    format = meta.get("video_format", "")
+    codec = meta.get("codec", "")
 
     return Video(
         width=width,
         height=height,
         fps=fps,
         duration=duration,
-        frames=frames_count,
+        frames=frames,
+        format=format,
         codec=codec,
     )
 

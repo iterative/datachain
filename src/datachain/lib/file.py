@@ -492,6 +492,7 @@ class Video(DataModel):
     fps: float = Field(default=0)
     duration: float = Field(default=0)
     frames: int = Field(default=0)
+    format: str = Field(default="")
     codec: str = Field(default="")
 
 
