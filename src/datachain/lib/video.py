@@ -16,7 +16,7 @@ try:
     from moviepy.video.io.VideoFileClip import VideoFileClip
 except ImportError as exc:
     raise ImportError(
-        "Missing dependencies for processing video:\n"
+        "Missing dependencies for processing video.\n"
         "To install run:\n\n"
         "  pip install 'datachain[video]'\n"
     ) from exc
