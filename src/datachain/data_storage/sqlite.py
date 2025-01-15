@@ -40,7 +40,6 @@ if TYPE_CHECKING:
     from sqlalchemy.schema import SchemaItem
     from sqlalchemy.sql._typing import _FromClauseArgument, _OnClauseArgument
     from sqlalchemy.sql.elements import ColumnElement
-    from sqlalchemy.sql.selectable import Join
     from sqlalchemy.types import TypeEngine
 
     from datachain.lib.file import File
@@ -654,16 +653,42 @@ class SQLiteWarehouse(AbstractWarehouse):
         right: "_FromClauseArgument",
         onclause: "_OnClauseArgument",
         inner: bool = True,
-    ) -> "Join":
+        full: bool = False,
+        columns=None,
+    ) -> "Select":
         """
         Join two tables together.
         """
-        return sqlalchemy.join(
-            left,
-            right,
-            onclause,
-            isouter=not inner,
+        if not full:
+            join_query = sqlalchemy.join(
+                left,
+                right,
+                onclause,
+                isouter=not inner,
+            )
+            return sqlalchemy.select(*columns).select_from(join_query)
+
+        left_right_join = sqlalchemy.select(*columns).select_from(
+            sqlalchemy.join(left, right, onclause, isouter=True)
         )
+        right_left_join = sqlalchemy.select(*columns).select_from(
+            sqlalchemy.join(right, left, onclause, isouter=True)
+        )
+
+        # TODO add other conditions from onclause and prepare logic for _and
+        """
+        print("onclause is")
+        print(onclause)
+        print(type(onclause))
+        print(onclause.left)
+        print(type(onclause.left))
+        """
+        right_left_join = right_left_join.where(
+            getattr(left.c, onclause.left.name) == None  # type: ignore[union-attr] # noqa: E711
+        )
+
+        union = sqlalchemy.union(left_right_join, right_left_join).subquery()
+        return sqlalchemy.select(*union.c).select_from(union)
 
     def create_pre_udf_table(self, query: "Select") -> "Table":
         """

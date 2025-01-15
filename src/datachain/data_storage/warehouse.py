@@ -31,7 +31,7 @@ if TYPE_CHECKING:
         _FromClauseArgument,
         _OnClauseArgument,
     )
-    from sqlalchemy.sql.selectable import Join, Select
+    from sqlalchemy.sql.selectable import Select
     from sqlalchemy.types import TypeEngine
 
     from datachain.data_storage import schema
@@ -873,7 +873,7 @@ class AbstractWarehouse(ABC, Serializable):
         right: "_FromClauseArgument",
         onclause: "_OnClauseArgument",
         inner: bool = True,
-    ) -> "Join":
+    ) -> "Select":
         """
         Join two tables together.
         """
