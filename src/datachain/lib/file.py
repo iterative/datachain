@@ -1,3 +1,4 @@
+import errno
 import hashlib
 import io
 import json
@@ -76,18 +77,18 @@ class TarVFile(VFile):
     def open(cls, file: "File", location: list[dict]):
         """Stream file from tar archive based on location in archive."""
         if len(location) > 1:
-            VFileError(file, "multiple 'location's are not supported yet")
+            raise VFileError(file, "multiple 'location's are not supported yet")
 
         loc = location[0]
 
         if (offset := loc.get("offset", None)) is None:
-            VFileError(file, "'offset' is not specified")
+            raise VFileError(file, "'offset' is not specified")
 
         if (size := loc.get("size", None)) is None:
-            VFileError(file, "'size' is not specified")
+            raise VFileError(file, "'size' is not specified")
 
         if (parent := loc.get("parent", None)) is None:
-            VFileError(file, "'parent' is not specified")
+            raise VFileError(file, "'parent' is not specified")
 
         tar_file = File(**parent)
         tar_file._set_stream(file._catalog)
@@ -236,11 +237,26 @@ class File(DataModel):
         with open(destination, mode="wb") as f:
             f.write(self.read())
 
+    def _symlink_to(self, destination: str):
+        if self.location:
+            raise OSError(errno.ENOTSUP, "Symlinking virtual file is not supported")
+
+        if self._caching_enabled:
+            self.ensure_cached()
+            source = self.get_local_path()
+            assert source, "File was not cached"
+        elif self.source.startswith("file://"):
+            source = self.get_path()
+        else:
+            raise OSError(errno.EXDEV, "can't link across filesystems")
+        return os.symlink(source, destination)
+
     def export(
         self,
         output: str,
         placement: ExportPlacement = "fullpath",
         use_cache: bool = True,
+        link_type: Literal["copy", "symlink"] = "copy",
     ) -> None:
         """Export file to new location."""
         if use_cache:
@@ -248,6 +264,13 @@ class File(DataModel):
         dst = self.get_destination_path(output, placement)
         dst_dir = os.path.dirname(dst)
         os.makedirs(dst_dir, exist_ok=True)
+
+        if link_type == "symlink":
+            try:
+                return self._symlink_to(dst)
+            except OSError as exc:
+                if exc.errno not in (errno.ENOTSUP, errno.EXDEV, errno.ENOSYS):
+                    raise
 
         self.save(dst)
 
