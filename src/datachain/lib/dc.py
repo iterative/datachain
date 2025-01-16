@@ -1943,7 +1943,7 @@ class DataChain:
         session: Optional[Session] = None,
         settings: Optional[dict] = None,
         column_types: Optional[dict[str, "Union[str, ArrowDataType]"]] = None,
-        parse_options_config: Optional[dict[str, "Union[str, bool]"]] = None,
+        parse_options: Optional[dict[str, "Union[str, bool]"]] = None,
         **kwargs,
     ) -> "DataChain":
         """Generate chain from csv files.
