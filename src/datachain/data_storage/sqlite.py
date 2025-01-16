@@ -19,6 +19,7 @@ from sqlalchemy import MetaData, Table, UniqueConstraint, exists, select
 from sqlalchemy.dialects import sqlite
 from sqlalchemy.schema import CreateIndex, CreateTable, DropTable
 from sqlalchemy.sql import func
+from sqlalchemy.sql.elements import BinaryExpression, BooleanClauseList
 from sqlalchemy.sql.expression import bindparam, cast
 from sqlalchemy.sql.selectable import Select
 from tqdm import tqdm
@@ -675,17 +676,22 @@ class SQLiteWarehouse(AbstractWarehouse):
             sqlalchemy.join(right, left, onclause, isouter=True)
         )
 
-        # TODO add other conditions from onclause and prepare logic for _and
-        """
-        print("onclause is")
-        print(onclause)
-        print(type(onclause))
-        print(onclause.left)
-        print(type(onclause.left))
-        """
-        right_left_join = right_left_join.where(
-            getattr(left.c, onclause.left.name) == None  # type: ignore[union-attr] # noqa: E711
-        )
+        def add_left_rows_filter(exp: BinaryExpression):
+            """
+            Adds filter to right_left_join to remove unmatched left table rows by
+            getting column names that need to be NULL from BinaryExpressions in onclause
+            """
+            return right_left_join.where(
+                getattr(left.c, exp.left.name) == None  # type: ignore[union-attr] # noqa: E711
+            )
+
+        if isinstance(onclause, BinaryExpression):
+            right_left_join = add_left_rows_filter(onclause)
+
+        if isinstance(onclause, BooleanClauseList):
+            for c in onclause.get_children():
+                if isinstance(c, BinaryExpression):
+                    right_left_join = add_left_rows_filter(c)
 
         union = sqlalchemy.union(left_right_join, right_left_join).subquery()
         return sqlalchemy.select(*union.c).select_from(union)

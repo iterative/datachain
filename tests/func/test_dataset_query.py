@@ -749,8 +749,9 @@ def test_full_outer_join_no_common_rows(cloud_test_catalog, dogs_dataset, cats_d
     [("s3", True)],
     indirect=True,
 )
+@pytest.mark.parametrize("multiple_predicates", [True, False])
 def test_full_outer_join_common_rows(
-    cloud_test_catalog, dogs_cats_dataset, cats_dataset
+    cloud_test_catalog, dogs_cats_dataset, cats_dataset, multiple_predicates
 ):
     catalog = cloud_test_catalog.catalog
     string_default = String.default_value(catalog.warehouse.db.dialect)
@@ -758,9 +759,17 @@ def test_full_outer_join_common_rows(
     dogs_cats = DatasetQuery(name=dogs_cats_dataset.name, version=1, catalog=catalog)
     cats = DatasetQuery(name=cats_dataset.name, version=1, catalog=catalog)
 
+    if multiple_predicates:
+        predicates = sqlalchemy.and_(
+            dogs_cats.c("file__source") == cats.c("file__source"),
+            dogs_cats.c("file__path") == cats.c("file__path"),
+        )
+    else:
+        predicates = dogs_cats.c("file__path") == cats.c("file__path")
+
     res = dogs_cats.join(
         cats,
-        dogs_cats.c("file__path") == cats.c("file__path"),
+        predicates,
         full=True,
     ).to_db_records()
 
