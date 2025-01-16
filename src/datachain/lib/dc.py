@@ -1957,7 +1957,7 @@ class DataChain:
             column_types : Dictionary of column names and their corresponding types.
                 It is passed to CSV reader and for each column specified type auto
                 inference is disabled.
-            parse_options_config: Tells the CSV parser how to process lines.
+            parse_options: Tells the CSV parser how to process lines.
                 See https://arrow.apache.org/docs/python/generated/pyarrow.csv.ParseOptions.html
 
         Example:
@@ -1976,8 +1976,8 @@ class DataChain:
         from pyarrow.dataset import CsvFileFormat
         from pyarrow.lib import type_for_alias
 
-        if parse_options_config is None:
-            parse_options_config = {
+        if parse_options is None:
+            parse_options = {
                 "quote_char": "",
                 "double_quote": True,
                 "escape_char": False,
@@ -1985,8 +1985,8 @@ class DataChain:
                 "ignore_empty_lines": True,
             }
 
-        if delimiter and parse_options_config:
-            parse_options_config["delimiter"] = delimiter
+        if delimiter and parse_options:
+            parse_options["delimiter"] = delimiter
 
         if column_types:
             column_types = {
@@ -2015,7 +2015,7 @@ class DataChain:
                 msg = f"error parsing csv - incompatible output type {type(output)}"
                 raise DatasetPrepareError(chain.name, msg)
 
-        parse_options = ParseOptions(**parse_options_config)
+        parse_options = ParseOptions(**parse_options)
         read_options = ReadOptions(column_names=column_names)
         convert_options = ConvertOptions(
             strings_can_be_null=True,
