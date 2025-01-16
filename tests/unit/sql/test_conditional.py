@@ -86,6 +86,19 @@ def test_case(warehouse, val, expected):
     assert result == ((expected,),)
 
 
+@pytest.mark.parametrize(
+    "val,expected",
+    [
+        (1, "A"),
+        (2, None),
+    ],
+)
+def test_case_without_else(warehouse, val, expected):
+    query = select(func.case(*[(val < 2, "A")]))
+    result = tuple(warehouse.db.execute(query))
+    assert result == ((expected,),)
+
+
 def test_case_missing_statements(warehouse):
     with pytest.raises(DataChainParamsError) as exc_info:
         select(func.case(*[], else_="D"))
@@ -97,7 +110,7 @@ def test_case_not_same_result_types(warehouse):
     with pytest.raises(DataChainParamsError) as exc_info:
         select(func.case(*[(val > 1, "A"), (2 < val < 4, 5)], else_="D"))
     assert str(exc_info.value) == (
-        "Statement values must be of the same type, got <class 'str'> amd <class 'int'>"
+        "Statement values must be of the same type, got <class 'str'> and <class 'int'>"
     )
 
 
