@@ -38,7 +38,7 @@ class FileClient(Client):
     def get_uri(cls, name: str) -> "StorageURI":
         from datachain.dataset import StorageURI
 
-        return StorageURI(f'{cls.PREFIX}/{name.removeprefix("/")}')
+        return StorageURI(f"{cls.PREFIX}/{name.removeprefix('/')}")
 
     @classmethod
     def ls_buckets(cls, **kwargs):

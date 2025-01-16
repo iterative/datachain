@@ -1331,20 +1331,28 @@ class DataChain:
 
         Parameters:
             right_ds: Chain to join with.
-            on: Predicate or list of Predicates to join on. If both chains have the
-                same predicates then this predicate is enough for the join. Otherwise,
-                `right_on` parameter has to specify the predicates for the other chain.
-            right_on: Optional predicate or list of Predicates
-                    for the `right_ds` to join.
+            on: Predicate ("column.name", C("column.name"), or Func) or list of
+                Predicates to join on. If both chains have the same predicates then
+                this predicate is enough for the join. Otherwise, `right_on` parameter
+                has to specify the predicates for the other chain.
+            right_on: Optional predicate or list of Predicates for the `right_ds`
+                to join.
             inner (bool): Whether to run inner join or outer join.
             full (bool): Whether to run full outer join.
-            rname (str): name prefix for conflicting signal names.
+            rname (str): Name prefix for conflicting signal names.
 
-        Example:
+        Examples:
             ```py
             meta = meta_emd.merge(meta_pq, on=(C.name, C.emd__index),
                                   right_on=(C.name, C.pq__index))
             ```
+
+            ```py
+            imgs.merge(captions,
+                       on=func.path.file_stem(imgs.c("file.path")),
+                       right_on=func.path.file_stem(captions.c("file.path"))
+            ```
+        )
         """
         if on is None:
             raise DatasetMergeError(["None"], None, "'on' must be specified")
