@@ -34,7 +34,7 @@ def test_studio_login_token_check_failed(mocker):
         "dvc_studio_client.auth.get_access_token",
         side_effect=AuthorizationExpiredError,
     )
-    assert main(["studio", "login"]) == 1
+    assert main(["auth", "login"]) == 1
 
 
 def test_studio_login_success(mocker):
@@ -43,7 +43,7 @@ def test_studio_login_success(mocker):
         return_value=("token_name", "isat_access_token"),
     )
 
-    assert main(["studio", "login"]) == 0
+    assert main(["auth", "login"]) == 0
 
     config = Config().read()
     assert config["studio"]["token"] == "isat_access_token"  # noqa: S105 # nosec B105
@@ -59,7 +59,7 @@ def test_studio_login_arguments(mocker):
     assert (
         main(
             [
-                "studio",
+                "auth",
                 "login",
                 "--name",
                 "token_name",
@@ -87,34 +87,34 @@ def test_studio_logout():
     with Config(ConfigLevel.GLOBAL).edit() as conf:
         conf["studio"] = {"token": "isat_access_token"}
 
-    assert main(["studio", "logout"]) == 0
+    assert main(["auth", "logout"]) == 0
     config = Config(ConfigLevel.GLOBAL).read()
     assert "token" not in config["studio"]
 
-    assert main(["studio", "logout"]) == 1
+    assert main(["auth", "logout"]) == 1
 
 
 def test_studio_token(capsys):
     with Config(ConfigLevel.GLOBAL).edit() as conf:
         conf["studio"] = {"token": "isat_access_token"}
 
-    assert main(["studio", "token"]) == 0
+    assert main(["auth", "token"]) == 0
     assert capsys.readouterr().out == "isat_access_token\n"
 
     with Config(ConfigLevel.GLOBAL).edit() as conf:
         del conf["studio"]["token"]
 
-    assert main(["studio", "token"]) == 1
+    assert main(["auth", "token"]) == 1
 
 
 def test_studio_team_local():
-    assert main(["studio", "team", "team_name"]) == 0
+    assert main(["auth", "team", "team_name"]) == 0
     config = Config(ConfigLevel.LOCAL).read()
     assert config["studio"]["team"] == "team_name"
 
 
 def test_studio_team_global():
-    assert main(["studio", "team", "team_name", "--global"]) == 0
+    assert main(["auth", "team", "team_name", "--global"]) == 0
     config = Config(ConfigLevel.GLOBAL).read()
     assert config["studio"]["team"] == "team_name"
 

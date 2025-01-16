@@ -1,31 +1,31 @@
-def add_studio_parser(subparsers, parent_parser) -> None:
-    studio_help = "Manage Studio authentication"
-    studio_description = (
+def add_auth_parser(subparsers, parent_parser) -> None:
+    auth_help = "Manage Studio authentication"
+    auth_description = (
         "Manage authentication and settings for Studio. "
         "Configure tokens for sharing datasets and using Studio features."
     )
 
-    studio_parser = subparsers.add_parser(
-        "studio",
+    auth_parser = subparsers.add_parser(
+        "auth",
         parents=[parent_parser],
-        description=studio_description,
-        help=studio_help,
+        description=auth_description,
+        help=auth_help,
     )
-    studio_subparser = studio_parser.add_subparsers(
+    auth_subparser = auth_parser.add_subparsers(
         dest="cmd",
-        help="Use `datachain studio CMD --help` to display command-specific help",
+        help="Use `datachain auth CMD --help` to display command-specific help",
     )
 
-    studio_login_help = "Authenticate with Studio"
-    studio_login_description = (
+    auth_login_help = "Authenticate with Studio"
+    auth_login_description = (
         "Authenticate with Studio using default scopes. "
         "A random name will be assigned as the token name if not specified."
     )
-    login_parser = studio_subparser.add_parser(
+    login_parser = auth_subparser.add_parser(
         "login",
         parents=[parent_parser],
-        description=studio_login_description,
-        help=studio_login_help,
+        description=auth_login_description,
+        help=auth_login_help,
     )
 
     login_parser.add_argument(
@@ -58,26 +58,26 @@ def add_studio_parser(subparsers, parent_parser) -> None:
         help="Use code-based authentication without browser",
     )
 
-    studio_logout_help = "Log out from Studio"
-    studio_logout_description = (
+    auth_logout_help = "Log out from Studio"
+    auth_logout_description = (
         "Remove the Studio authentication token from global config."
     )
 
-    studio_subparser.add_parser(
+    auth_subparser.add_parser(
         "logout",
         parents=[parent_parser],
-        description=studio_logout_description,
-        help=studio_logout_help,
+        description=auth_logout_description,
+        help=auth_logout_help,
     )
 
-    studio_team_help = "Set default team for Studio operations"
-    studio_team_description = "Set the default team for Studio operations."
+    auth_team_help = "Set default team for Studio operations"
+    auth_team_description = "Set the default team for Studio operations."
 
-    team_parser = studio_subparser.add_parser(
+    team_parser = auth_subparser.add_parser(
         "team",
         parents=[parent_parser],
-        description=studio_team_description,
-        help=studio_team_help,
+        description=auth_team_description,
+        help=auth_team_help,
     )
     team_parser.add_argument(
         "team_name",
@@ -91,12 +91,12 @@ def add_studio_parser(subparsers, parent_parser) -> None:
         help="Set team globally for all projects",
     )
 
-    studio_token_help = "View Studio authentication token"  # noqa: S105
-    studio_token_description = "Display the current authentication token for Studio."  # noqa: S105
+    auth_token_help = "View Studio authentication token"  # noqa: S105
+    auth_token_description = "Display the current authentication token for Studio."  # noqa: S105
 
-    studio_subparser.add_parser(
+    auth_subparser.add_parser(
         "token",
         parents=[parent_parser],
-        description=studio_token_description,
-        help=studio_token_help,
+        description=auth_token_description,
+        help=auth_token_help,
     )

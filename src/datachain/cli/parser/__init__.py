@@ -7,7 +7,7 @@ import shtab
 from datachain.cli.utils import BooleanOptionalAction, KeyValueArgs
 
 from .job import add_jobs_parser
-from .studio import add_studio_parser
+from .studio import add_auth_parser
 from .utils import FIND_COLUMNS, add_show_args, add_sources_arg, find_columns_type
 
 
@@ -123,7 +123,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         help="Do not copy files, just create a dataset",
     )
 
-    add_studio_parser(subp, parent_parser)
+    add_auth_parser(subp, parent_parser)
     add_jobs_parser(subp, parent_parser)
 
     datasets_parser = subp.add_parser(

@@ -47,7 +47,7 @@ def process_jobs_args(args: "Namespace"):
     raise DataChainError(f"Unknown command '{args.cmd}'.")
 
 
-def process_studio_cli_args(args: "Namespace"):
+def process_auth_cli_args(args: "Namespace"):
     if args.cmd is None:
         print(
             f"Use 'datachain {args.command} --help' to see available options",
@@ -95,7 +95,7 @@ def login(args: "Namespace"):
         raise DataChainError(
             "Token already exists. "
             "To login with a different token, "
-            "logout using `datachain studio logout`."
+            "logout using `datachain auth logout`."
         )
 
     open_browser = not args.no_open
@@ -121,12 +121,12 @@ def logout():
         token = conf.get("studio", {}).get("token")
         if not token:
             raise DataChainError(
-                "Not logged in to Studio. Log in with 'datachain studio login'."
+                "Not logged in to Studio. Log in with 'datachain auth login'."
             )
 
         del conf["studio"]["token"]
 
-    print("Logged out from Studio. (you can log back in with 'datachain studio login')")
+    print("Logged out from Studio. (you can log back in with 'datachain auth login')")
 
 
 def token():
@@ -134,7 +134,7 @@ def token():
     token = config.get("token")
     if not token:
         raise DataChainError(
-            "Not logged in to Studio. Log in with 'datachain studio login'."
+            "Not logged in to Studio. Log in with 'datachain auth login'."
         )
 
     print(token)
@@ -299,7 +299,7 @@ def cancel_job(job_id: str, team_name: Optional[str]):
     token = Config().read().get("studio", {}).get("token")
     if not token:
         raise DataChainError(
-            "Not logged in to Studio. Log in with 'datachain studio login'."
+            "Not logged in to Studio. Log in with 'datachain auth login'."
         )
 
     client = StudioClient(team=team_name)
@@ -314,7 +314,7 @@ def show_job_logs(job_id: str, team_name: Optional[str]):
     token = Config().read().get("studio", {}).get("token")
     if not token:
         raise DataChainError(
-            "Not logged in to Studio. Log in with 'datachain studio login'."
+            "Not logged in to Studio. Log in with 'datachain auth login'."
         )
 
     client = StudioClient(team=team_name)

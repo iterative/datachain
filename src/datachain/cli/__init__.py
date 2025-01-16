@@ -73,7 +73,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
 def handle_command(args, catalog, client_config) -> int:
     """Handle the different CLI commands."""
-    from datachain.studio import process_jobs_args, process_studio_cli_args
+    from datachain.studio import process_auth_cli_args, process_jobs_args
 
     command_handlers = {
         "cp": lambda: handle_cp_command(args, catalog),
@@ -89,7 +89,7 @@ def handle_command(args, catalog, client_config) -> int:
         "query": lambda: handle_query_command(args, catalog),
         "clear-cache": lambda: clear_cache(catalog),
         "gc": lambda: garbage_collect(catalog),
-        "studio": lambda: process_studio_cli_args(args),
+        "auth": lambda: process_auth_cli_args(args),
         "job": lambda: process_jobs_args(args),
     }
 
