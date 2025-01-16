@@ -16,6 +16,7 @@ from datachain.lib.convert.flatten import flatten
 from datachain.lib.data_model import DataValue
 from datachain.lib.file import File
 from datachain.lib.utils import AbstractUDF, DataChainError, DataChainParamsError
+from datachain.progress import CombinedDownloadCallback
 from datachain.query.batch import (
     Batch,
     BatchingStrategy,
@@ -301,20 +302,42 @@ async def _prefetch_input(
     return row
 
 
+def _remove_prefetched(row: T) -> None:
+    for obj in row:
+        if isinstance(obj, File):
+            catalog = obj._catalog
+            assert catalog is not None
+            try:
+                catalog.cache.remove(obj)
+            except Exception as e:  # noqa: BLE001
+                print(f"Failed to remove prefetched item {obj.name!r}: {e!s}")
+
+
 def _prefetch_inputs(
     prepared_inputs: "Iterable[T]",
     prefetch: int = 0,
     download_cb: Optional["Callback"] = None,
-    after_prefetch: "Callable[[], None]" = noop,
+    after_prefetch: Optional[Callable[[], None]] = None,
+    remove_prefetched: bool = False,
 ) -> "abc.Generator[T, None, None]":
-    if prefetch > 0:
-        f = partial(
-            _prefetch_input,
-            download_cb=download_cb,
-            after_prefetch=after_prefetch,
-        )
-        prepared_inputs = AsyncMapper(f, prepared_inputs, workers=prefetch).iterate()  # type: ignore[assignment]
-    yield from prepared_inputs
+    if not prefetch:
+        yield from prepared_inputs
+        return
+
+    if after_prefetch is None:
+        after_prefetch = noop
+        if isinstance(download_cb, CombinedDownloadCallback):
+            after_prefetch = download_cb.increment_file_count
+
+    f = partial(_prefetch_input, download_cb=download_cb, after_prefetch=after_prefetch)
+    mapper = AsyncMapper(f, prepared_inputs, workers=prefetch)
+    with closing(mapper.iterate()) as row_iter:
+        for row in row_iter:
+            try:
+                yield row  # type: ignore[misc]
+            finally:
+                if remove_prefetched:
+                    _remove_prefetched(row)
 
 
 def _get_cache(
@@ -351,7 +374,13 @@ class Mapper(UDFBase):
                     )
 
         prepared_inputs = _prepare_rows(udf_inputs)
-        prepared_inputs = _prefetch_inputs(prepared_inputs, self.prefetch)
+        prepared_inputs = _prefetch_inputs(
+            prepared_inputs,
+            self.prefetch,
+            download_cb=download_cb,
+            remove_prefetched=bool(self.prefetch) and not cache,
+        )
+
         with closing(prepared_inputs):
             for id_, *udf_args in prepared_inputs:
                 result_objs = self.process_safe(udf_args)
@@ -429,15 +458,22 @@ class Generator(UDFBase):
                         row, udf_fields, catalog, cache, download_cb
                     )
 
+        def _process_row(row):
+            with safe_closing(self.process_safe(row)) as result_objs:
+                for result_obj in result_objs:
+                    udf_output = self._flatten_row(result_obj)
+                    yield dict(zip(self.signal_names, udf_output))
+
         prepared_inputs = _prepare_rows(udf_inputs)
-        prepared_inputs = _prefetch_inputs(prepared_inputs, self.prefetch)
+        prepared_inputs = _prefetch_inputs(
+            prepared_inputs,
+            self.prefetch,
+            download_cb=download_cb,
+            remove_prefetched=bool(self.prefetch) and not cache,
+        )
         with closing(prepared_inputs):
-            for row in prepared_inputs:
-                result_objs = self.process_safe(row)
-                udf_outputs = (self._flatten_row(row) for row in result_objs)
-                output = (dict(zip(self.signal_names, row)) for row in udf_outputs)
-                processed_cb.relative_update(1)
-                yield output
+            for row in processed_cb.wrap(prepared_inputs):
+                yield _process_row(row)
 
         self.teardown()
 
