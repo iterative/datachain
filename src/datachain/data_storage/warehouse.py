@@ -14,7 +14,7 @@ import sqlalchemy as sa
 from sqlalchemy import Table, case, select
 from sqlalchemy.sql import func
 from sqlalchemy.sql.expression import true
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 from datachain.client import Client
 from datachain.data_storage.schema import convert_rows_custom_column_types
