@@ -28,7 +28,7 @@ import requests
 import sqlalchemy as sa
 import yaml
 from sqlalchemy import Column
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 from datachain.cache import DataChainCache
 from datachain.client import Client

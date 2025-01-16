@@ -86,13 +86,14 @@ Python code:
 
 .. code:: py
 
+    import os
     from mistralai import Mistral
     from datachain import File, DataChain, Column
 
     PROMPT = "Was this dialog successful? Answer in a single word: Success or Failure."
 
     def eval_dialogue(file: File) -> bool:
-         client = Mistral()
+         client = Mistral(api_key = os.environ["MISTRAL_API_KEY"])
          response = client.chat.complete(
              model="open-mixtral-8x22b",
              messages=[{"role": "system", "content": PROMPT},

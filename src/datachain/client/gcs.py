@@ -7,7 +7,7 @@ from typing import Any, Optional, cast
 
 from dateutil.parser import isoparse
 from gcsfs import GCSFileSystem
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 from datachain.lib.file import File
 
