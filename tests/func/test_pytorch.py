@@ -86,11 +86,16 @@ def test_to_pytorch(fake_dataset):
 
 @pytest.mark.parametrize("use_cache", (True, False))
 @pytest.mark.parametrize("prefetch", (0, 2))
-def test_prefetch(mocker, catalog, fake_dataset, use_cache, prefetch):
+@pytest.mark.parametrize("remove_prefetched", (True, False))
+def test_prefetch(
+    mocker, catalog, fake_dataset, use_cache, prefetch, remove_prefetched
+):
     catalog.cache.clear()
 
     dataset = fake_dataset.limit(10)
-    ds = dataset.settings(cache=use_cache, prefetch=prefetch).to_pytorch()
+    ds = dataset.settings(cache=use_cache, prefetch=prefetch).to_pytorch(
+        remove_prefetched=remove_prefetched
+    )
 
     iter_with_prefetch = ds._iter_with_prefetch
     cache = ds._cache
@@ -101,8 +106,16 @@ def test_prefetch(mocker, catalog, fake_dataset, use_cache, prefetch):
         return cache.contains(file)
 
     def check_prefetched():
+        seen = []
         for row in iter_with_prefetch():
+            # prefetched files should persist if `cache` is enabled, or
+            # `remove_prefetched` is not set. Otherwise, the old prefetched
+            # files should be removed.
+            for f in seen:
+                assert is_prefetched(f) == (cache and not remove_prefetched)
+
             files = [f for f in row if isinstance(f, File)]
+            seen.extend(files)
             assert files
             files_not_in_cache = [f for f in files if not is_prefetched(f)]
             if prefetch:

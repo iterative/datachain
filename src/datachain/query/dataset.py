@@ -336,15 +336,16 @@ def process_udf_outputs(
     for udf_output in udf_results:
         if not udf_output:
             continue
-        for row in udf_output:
-            cb.relative_update()
-            rows.append(adjust_outputs(warehouse, row, udf_col_types))
-            if len(rows) >= batch_size or (
-                len(rows) % 10 == 0 and psutil.virtual_memory().percent > 80
-            ):
-                for row_chunk in batched(rows, batch_size):
-                    warehouse.insert_rows(udf_table, row_chunk)
-                rows.clear()
+        with safe_closing(udf_output):
+            for row in udf_output:
+                cb.relative_update()
+                rows.append(adjust_outputs(warehouse, row, udf_col_types))
+                if len(rows) >= batch_size or (
+                    len(rows) % 10 == 0 and psutil.virtual_memory().percent > 80
+                ):
+                    for row_chunk in batched(rows, batch_size):
+                        warehouse.insert_rows(udf_table, row_chunk)
+                    rows.clear()
 
     if rows:
         for row_chunk in batched(rows, batch_size):
