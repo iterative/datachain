@@ -33,7 +33,7 @@ class ReferenceFileSystem(fsspec.implementations.reference.ReferenceFileSystem):
         # reads the whole file in-memory.
         (uri,) = self.references[path]
         protocol, _ = split_protocol(uri)
-        return self.fss[protocol]._open(uri, mode, *args, **kwargs)
+        return self.fss[protocol].open(uri, mode, *args, **kwargs)
 
 
 class ArrowGenerator(Generator):
