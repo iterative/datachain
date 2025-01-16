@@ -458,6 +458,12 @@ class Generator(UDFBase):
                         row, udf_fields, catalog, cache, download_cb
                     )
 
+        def _process_row(row):
+            with safe_closing(self.process_safe(row)) as result_objs:
+                for result_obj in result_objs:
+                    udf_output = self._flatten_row(result_obj)
+                    yield dict(zip(self.signal_names, udf_output))
+
         prepared_inputs = _prepare_rows(udf_inputs)
         prepared_inputs = _prefetch_inputs(
             prepared_inputs,
@@ -466,12 +472,8 @@ class Generator(UDFBase):
             remove_prefetched=bool(self.prefetch) and not cache,
         )
         with closing(prepared_inputs):
-            for row in prepared_inputs:
-                result_objs = self.process_safe(row)
-                udf_outputs = (self._flatten_row(row) for row in result_objs)
-                output = (dict(zip(self.signal_names, row)) for row in udf_outputs)
-                processed_cb.relative_update(1)
-                yield output
+            for row in processed_cb.wrap(prepared_inputs):
+                yield _process_row(row)
 
         self.teardown()
 
