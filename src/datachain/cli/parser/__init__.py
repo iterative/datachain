@@ -26,6 +26,13 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
 
     parent_parser = ArgumentParser(add_help=False)
     parent_parser.add_argument(
+        "-v", "--verbose", action="count", default=0, help="Be verbose"
+    )
+    parent_parser.add_argument(
+        "-q", "--quiet", action="count", default=0, help="Be quiet"
+    )
+
+    parent_parser.add_argument(
         "--anon",
         action="store_true",
         help="Use anonymous access to storage",
@@ -37,12 +44,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         default=0,
         help="Update cached list of files for the sources",
     )
-    parent_parser.add_argument(
-        "-v", "--verbose", action="count", default=0, help="Be verbose"
-    )
-    parent_parser.add_argument(
-        "-q", "--quiet", action="count", default=0, help="Be quiet"
-    )
+
     parent_parser.add_argument(
         "--debug-sql",
         action="store_true",
