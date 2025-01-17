@@ -28,7 +28,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     parent_parser.add_argument(
         "--anon",
         action="store_true",
-        help="anon flag for remote storage (like awscli's --no-sign-request)",
+        help="Use anonymous access to storage",
     )
     parent_parser.add_argument(
         "-u", "--update", action="count", default=0, help="Update cache"
