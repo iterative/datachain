@@ -31,7 +31,11 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         help="Use anonymous access to storage",
     )
     parent_parser.add_argument(
-        "-u", "--update", action="count", default=0, help="Update cache"
+        "-u",
+        "--update",
+        action="count",
+        default=0,
+        help="Update cached list of files for the sources",
     )
     parent_parser.add_argument(
         "-v", "--verbose", action="count", default=0, help="Be verbose"
