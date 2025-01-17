@@ -81,16 +81,24 @@ def test_merge_objects(test_session):
     assert j == len(team) - 1
 
 
-def test_merge_objects_full_join(test_session):
+@pytest.mark.parametrize("multiple_predicates", [True, False])
+def test_merge_objects_full_join(test_session, multiple_predicates):
     ch1 = DataChain.from_values(emp=employees, session=test_session)
     ch2 = DataChain.from_values(team=team, session=test_session)
-    ch = ch1.merge(ch2, "emp.person.name", "team.player", full=True)
+    if multiple_predicates:
+        ch = ch1.merge(
+            ch2,
+            ["emp.person.name", "emp.person.name"],
+            ["team.player", "team.player"],
+            full=True,
+        )
+    else:
+        ch = ch1.merge(ch2, "emp.person.name", "team.player", full=True)
 
     str_default = String.default_value(test_session.catalog.warehouse.db.dialect)
     int_default = Int.default_value(test_session.catalog.warehouse.db.dialect)
 
     i = 0
-    j = 0
     for items in ch.order_by("emp.person.name", "team.player").collect():
         assert len(items) == 2
 
@@ -110,15 +118,13 @@ def test_merge_objects_full_join(test_session):
             assert pd.isnull(player.height)
             continue
 
-        assert player.player == team[j].player
-        assert player.sport == team[j].sport
-        assert math.isclose(player.weight, team[j].weight, rel_tol=1e-7)
-        assert math.isclose(player.height, team[j].height, rel_tol=1e-7)
-        j += 1
+        assert player.player == team[i].player
+        assert player.sport == team[i].sport
+        assert math.isclose(player.weight, team[i].weight, rel_tol=1e-7)
+        assert math.isclose(player.height, team[i].height, rel_tol=1e-7)
         i += 1
 
-    assert i == len(employees) - 1
-    assert j == len(team) - 1
+    assert i == len(employees) - 1 == len(team) - 1
 
 
 def test_merge_similar_objects(test_session):
