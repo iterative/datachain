@@ -1,3 +1,4 @@
+import functools
 import math
 import os
 import pickle
@@ -234,17 +235,28 @@ def test_map_file(cloud_test_catalog, use_cache, prefetch):
         assert head == catalog.cache.tmp_dir
         assert tail.startswith("prefetch-")
 
-    def new_signal(file: File) -> str:
-        assert is_prefetched(file) == (prefetch > 0)
-        verify_cache_used(file)
+    def with_checks(func, seen=[]):  # noqa: B006
+        @functools.wraps(func)
+        def wrapped(file, *args, **kwargs):
+            # previously prefetched files should be removed if `cache` is disabled.
+            for f in seen:
+                assert f._catalog.cache.contains(f) == use_cache
+            seen.append(file)
 
+            assert is_prefetched(file) == (prefetch > 0)
+            verify_cache_used(file)
+            return func(file, *args, **kwargs)
+
+        return wrapped
+
+    def new_signal(file: File) -> str:
         with file.open() as f:
             return file.name + " -> " + f.read().decode("utf-8")
 
     dc = (
         DataChain.from_storage(ctc.src_uri, session=ctc.session)
         .settings(cache=use_cache, prefetch=prefetch)
-        .map(signal=new_signal)
+        .map(signal=with_checks(new_signal))
         .save()
     )
 
@@ -1307,17 +1319,28 @@ def test_gen_file(cloud_test_catalog, use_cache, prefetch):
         assert head == catalog.cache.tmp_dir
         assert tail.startswith("prefetch-")
 
-    def new_signal(file: File) -> list[str]:
-        assert is_prefetched(file) == (prefetch > 0)
-        verify_cache_used(file)
+    def with_checks(func, seen=[]):  # noqa: B006
+        @functools.wraps(func)
+        def wrapped(file, *args, **kwargs):
+            # previously prefetched files should be removed if `cache` is disabled.
+            for f in seen:
+                assert f._catalog.cache.contains(f) == use_cache
+            seen.append(file)
 
+            assert is_prefetched(file) == (prefetch > 0)
+            verify_cache_used(file)
+            return func(file, *args, **kwargs)
+
+        return wrapped
+
+    def new_signal(file: File) -> list[str]:
         with file.open("rb") as f:
             return [file.name, f.read().decode("utf-8")]
 
     dc = (
         DataChain.from_storage(ctc.src_uri, session=ctc.session)
         .settings(cache=use_cache, prefetch=prefetch)
-        .gen(signal=new_signal, output=str)
+        .gen(signal=with_checks(new_signal), output=str)
         .save()
     )
     expected = {

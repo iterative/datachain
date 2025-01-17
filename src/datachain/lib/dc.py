@@ -1277,7 +1277,12 @@ class DataChain:
                 yield ret[0] if len(cols) == 1 else tuple(ret)
 
     def to_pytorch(
-        self, transform=None, tokenizer=None, tokenizer_kwargs=None, num_samples=0
+        self,
+        transform=None,
+        tokenizer=None,
+        tokenizer_kwargs=None,
+        num_samples=0,
+        remove_prefetched: bool = False,
     ):
         """Convert to pytorch dataset format.
 
@@ -1287,6 +1292,7 @@ class DataChain:
             tokenizer_kwargs (dict): Additional kwargs to pass when calling tokenizer.
             num_samples (int): Number of random samples to draw for each epoch.
                 This argument is ignored if `num_samples=0` (the default).
+            remove_prefetched (bool): Whether to remove prefetched files after reading.
 
         Example:
             ```py
@@ -1313,6 +1319,7 @@ class DataChain:
             tokenizer_kwargs=tokenizer_kwargs,
             num_samples=num_samples,
             dc_settings=chain._settings,
+            remove_prefetched=remove_prefetched,
         )
 
     def remove_file_signals(self) -> "Self":  # noqa: D102
