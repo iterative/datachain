@@ -736,6 +736,7 @@ def test_ifelse_mutate(dc, if_val, else_val, type_):
 
 
 @pytest.mark.parametrize("col", ["val", C("val")])
+@skip_if_not_sqlite
 def test_isnone_mutate(col):
     dc = DataChain.from_values(
         num=list(range(1, 6)),
