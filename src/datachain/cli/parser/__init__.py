@@ -26,11 +26,6 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
 
     parent_parser = ArgumentParser(add_help=False)
     parent_parser.add_argument(
-        "--aws-endpoint-url",
-        type=str,
-        help="AWS endpoint URL",
-    )
-    parent_parser.add_argument(
         "--anon",
         action="store_true",
         help="anon flag for remote storage (like awscli's --no-sign-request)",

@@ -48,7 +48,6 @@ def main(argv: Optional[list[str]] = None) -> int:
     logger.setLevel(logging_level)
 
     client_config = {
-        "aws_endpoint_url": args.aws_endpoint_url,
         "anon": args.anon,
     }
 
