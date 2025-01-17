@@ -68,7 +68,9 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         "cp", parents=[parent_parser], description="Copy data files from the cloud."
     )
     add_sources_arg(parse_cp).complete = shtab.DIR  # type: ignore[attr-defined]
-    parse_cp.add_argument("output", type=str, help="Output")
+    parse_cp.add_argument(
+        "output", type=str, help="Path to a directory or file to put data to"
+    )
     parse_cp.add_argument(
         "-f",
         "--force",
@@ -95,7 +97,9 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         "clone", parents=[parent_parser], description="Copy data files from the cloud."
     )
     add_sources_arg(parse_clone).complete = shtab.DIR  # type: ignore[attr-defined]
-    parse_clone.add_argument("output", type=str, help="Output")
+    parse_clone.add_argument(
+        "output", type=str, help="Path to a directory or file to put data to"
+    )
     parse_clone.add_argument(
         "-f",
         "--force",
