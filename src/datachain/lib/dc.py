@@ -11,6 +11,7 @@ from typing import (
     BinaryIO,
     Callable,
     ClassVar,
+    Literal,
     Optional,
     TypeVar,
     Union,
@@ -1276,7 +1277,12 @@ class DataChain:
                 yield ret[0] if len(cols) == 1 else tuple(ret)
 
     def to_pytorch(
-        self, transform=None, tokenizer=None, tokenizer_kwargs=None, num_samples=0
+        self,
+        transform=None,
+        tokenizer=None,
+        tokenizer_kwargs=None,
+        num_samples=0,
+        remove_prefetched: bool = False,
     ):
         """Convert to pytorch dataset format.
 
@@ -1286,6 +1292,7 @@ class DataChain:
             tokenizer_kwargs (dict): Additional kwargs to pass when calling tokenizer.
             num_samples (int): Number of random samples to draw for each epoch.
                 This argument is ignored if `num_samples=0` (the default).
+            remove_prefetched (bool): Whether to remove prefetched files after reading.
 
         Example:
             ```py
@@ -1312,6 +1319,7 @@ class DataChain:
             tokenizer_kwargs=tokenizer_kwargs,
             num_samples=num_samples,
             dc_settings=chain._settings,
+            remove_prefetched=remove_prefetched,
         )
 
     def remove_file_signals(self) -> "Self":  # noqa: D102
@@ -2417,11 +2425,22 @@ class DataChain:
     def export_files(
         self,
         output: str,
-        signal="file",
+        signal: str = "file",
         placement: FileExportPlacement = "fullpath",
         use_cache: bool = True,
+        link_type: Literal["copy", "symlink"] = "copy",
     ) -> None:
-        """Method that exports all files from chain to some folder."""
+        """Export files from a specified signal to a directory.
+
+        Args:
+            output: Path to the target directory for exporting files.
+            signal: Name of the signal to export files from.
+            placement: The method to use for naming exported files.
+                The possible values are: "filename", "etag", "fullpath", and "checksum".
+            use_cache: If `True`, cache the files before exporting.
+            link_type: Method to use for exporting files.
+                Falls back to `'copy'` if symlinking fails.
+        """
         if placement == "filename" and (
             self._query.distinct(pathfunc.name(C(f"{signal}__path"))).count()
             != self._query.count()
@@ -2429,7 +2448,7 @@ class DataChain:
             raise ValueError("Files with the same name found")
 
         for file in self.collect(signal):
-            file.export(output, placement, use_cache)  # type: ignore[union-attr]
+            file.export(output, placement, use_cache, link_type=link_type)  # type: ignore[union-attr]
 
     def shuffle(self) -> "Self":
         """Shuffle the rows of the chain deterministically."""

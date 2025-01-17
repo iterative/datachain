@@ -50,6 +50,7 @@ class PytorchDataset(IterableDataset):
         tokenizer_kwargs: Optional[dict[str, Any]] = None,
         num_samples: int = 0,
         dc_settings: Optional[Settings] = None,
+        remove_prefetched: bool = False,
     ):
         """
         Pytorch IterableDataset that streams DataChain datasets.
@@ -84,6 +85,7 @@ class PytorchDataset(IterableDataset):
 
         self._cache = catalog.cache
         self._prefetch_cache: Optional[Cache] = None
+        self._remove_prefetched = remove_prefetched
         if prefetch and not self.cache:
             tmp_dir = catalog.cache.tmp_dir
             assert tmp_dir
@@ -147,7 +149,7 @@ class PytorchDataset(IterableDataset):
             rows,
             self.prefetch,
             download_cb=download_cb,
-            after_prefetch=download_cb.increment_file_count,
+            remove_prefetched=self._remove_prefetched,
         )
 
         with download_cb, closing(rows):
