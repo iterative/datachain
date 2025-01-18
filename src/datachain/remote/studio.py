@@ -75,7 +75,7 @@ class StudioClient:
 
         if not token:
             raise DataChainError(
-                "Studio token is not set. Use `datachain studio login` "
+                "Studio token is not set. Use `datachain auth login` "
                 "or environment variable `DVC_STUDIO_TOKEN` to set it."
             )
 
@@ -105,7 +105,7 @@ class StudioClient:
         if not team:
             raise DataChainError(
                 "Studio team is not set. "
-                "Use `datachain studio team <team_name>` "
+                "Use `datachain auth team <team_name>` "
                 "or environment variable `DVC_STUDIO_TEAM` to set it."
                 "You can also set it in the config file as team under studio."
             )

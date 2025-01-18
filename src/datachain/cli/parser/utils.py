@@ -30,7 +30,7 @@ def add_sources_arg(parser: ArgumentParser, nargs: Union[str, int] = "+") -> Act
         "sources",
         type=str,
         nargs=nargs,
-        help="Data sources - paths to cloud storage directories",
+        help="Data sources - paths to source storage directories or files",
     )
 
 

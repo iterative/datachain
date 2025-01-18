@@ -6,7 +6,7 @@ def add_jobs_parser(subparsers, parent_parser) -> None:
     )
     jobs_subparser = jobs_parser.add_subparsers(
         dest="cmd",
-        help="Use `datachain studio CMD --help` to display command-specific help",
+        help="Use `datachain auth CMD --help` to display command-specific help",
     )
 
     studio_run_help = "Run a job in Studio"
