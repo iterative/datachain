@@ -52,7 +52,7 @@ def python_to_sql(typ):  # noqa: PLR0911
 
     args = get_args(typ)
     if inspect.isclass(orig) and (issubclass(list, orig) or issubclass(tuple, orig)):
-        if args is None or len(args) != 1:
+        if args is None:
             raise TypeError(f"Cannot resolve type '{typ}' for flattening features")
 
         args0 = args[0]
