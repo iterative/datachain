@@ -7,7 +7,7 @@ import shtab
 from datachain.cli.utils import BooleanOptionalAction, KeyValueArgs
 
 from .job import add_jobs_parser
-from .studio import add_studio_parser
+from .studio import add_auth_parser
 from .utils import FIND_COLUMNS, add_show_args, add_sources_arg, find_columns_type
 
 
@@ -26,24 +26,25 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
 
     parent_parser = ArgumentParser(add_help=False)
     parent_parser.add_argument(
-        "--aws-endpoint-url",
-        type=str,
-        help="AWS endpoint URL",
-    )
-    parent_parser.add_argument(
-        "--anon",
-        action="store_true",
-        help="anon flag for remote storage (like awscli's --no-sign-request)",
-    )
-    parent_parser.add_argument(
-        "-u", "--update", action="count", default=0, help="Update cache"
-    )
-    parent_parser.add_argument(
         "-v", "--verbose", action="count", default=0, help="Be verbose"
     )
     parent_parser.add_argument(
         "-q", "--quiet", action="count", default=0, help="Be quiet"
     )
+
+    parent_parser.add_argument(
+        "--anon",
+        action="store_true",
+        help="Use anonymous access to storage",
+    )
+    parent_parser.add_argument(
+        "-u",
+        "--update",
+        action="count",
+        default=0,
+        help="Update cached list of files for the sources",
+    )
+
     parent_parser.add_argument(
         "--debug-sql",
         action="store_true",
@@ -67,7 +68,9 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         "cp", parents=[parent_parser], description="Copy data files from the cloud."
     )
     add_sources_arg(parse_cp).complete = shtab.DIR  # type: ignore[attr-defined]
-    parse_cp.add_argument("output", type=str, help="Output")
+    parse_cp.add_argument(
+        "output", type=str, help="Path to a directory or file to put data to"
+    )
     parse_cp.add_argument(
         "-f",
         "--force",
@@ -94,7 +97,9 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         "clone", parents=[parent_parser], description="Copy data files from the cloud."
     )
     add_sources_arg(parse_clone).complete = shtab.DIR  # type: ignore[attr-defined]
-    parse_clone.add_argument("output", type=str, help="Output")
+    parse_clone.add_argument(
+        "output", type=str, help="Path to a directory or file to put data to"
+    )
     parse_clone.add_argument(
         "-f",
         "--force",
@@ -123,7 +128,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         help="Do not copy files, just create a dataset",
     )
 
-    add_studio_parser(subp, parent_parser)
+    add_auth_parser(subp, parent_parser)
     add_jobs_parser(subp, parent_parser)
 
     datasets_parser = subp.add_parser(
