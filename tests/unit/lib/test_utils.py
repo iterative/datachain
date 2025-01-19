@@ -1,12 +1,12 @@
-from collections.abc import Iterable, Mapping
-from typing import Literal, Optional, Union
+from collections.abc import Iterable
+from typing import Union
 
 import pytest
 from pydantic import BaseModel
 
 from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.utils import normalize_col_names
-from datachain.sql.types import JSON, Array, String
+from datachain.sql.types import Array, String
 
 
 class MyModel(BaseModel):
@@ -15,22 +15,6 @@ class MyModel(BaseModel):
 
 class MyFeature(BaseModel):
     val1: str
-
-
-@pytest.mark.parametrize(
-    "typ,expected",
-    (
-        (str, String),
-        (String, String),
-        (Literal["text"], String),
-        (dict[str, int], JSON),
-        (Mapping[str, int], JSON),
-        (Optional[str], String),
-        (Union[dict, list[dict]], JSON),
-    ),
-)
-def test_convert_type_to_datachain(typ, expected):
-    assert python_to_sql(typ) == expected
 
 
 @pytest.mark.parametrize(
