@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.utils import normalize_col_names
-from datachain.sql.types import JSON, Array, String
+from datachain.sql.types import JSON, Array, Float, String
 
 
 class MyModel(BaseModel):
@@ -31,6 +31,20 @@ class MyFeature(BaseModel):
 )
 def test_convert_type_to_datachain(typ, expected):
     assert python_to_sql(typ) == expected
+
+
+def test_list_of_tuples_matching_types():
+    assert (
+        python_to_sql(list[tuple[float, float]]).to_dict()
+        == Array(Array(Float)).to_dict()
+    )
+
+
+def test_list_of_tuples_not_matching_types():
+    assert (
+        python_to_sql(list[tuple[float, String]]).to_dict()
+        == Array(Array(JSON)).to_dict()
+    )
 
 
 @pytest.mark.parametrize(

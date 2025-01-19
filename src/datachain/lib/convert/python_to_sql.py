@@ -59,8 +59,17 @@ def python_to_sql(typ):  # noqa: PLR0911
         if ModelStore.is_pydantic(args0):
             return Array(JSON())
 
-        next_type = python_to_sql(args0)
-        return Array(next_type)
+        first_type = python_to_sql(args0)
+        for next_arg in args[1:]:
+            next_type = None
+            try:
+                next_type = python_to_sql(next_arg)
+            except:
+                pass
+            if next_type != first_type:
+                return Array(JSON())
+
+        return Array(first_type)
 
     if orig is Annotated:
         # Ignoring annotations
