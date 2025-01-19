@@ -59,17 +59,8 @@ def python_to_sql(typ):  # noqa: PLR0911
         if ModelStore.is_pydantic(args0):
             return Array(JSON())
 
-        first_type = python_to_sql(args0)
-        for next_arg in args[1:]:
-            next_type = None
-            try:
-                next_type = python_to_sql(next_arg)
-            except:
-                pass
-            if next_type != first_type:
-                return Array(JSON())
-
-        return Array(first_type)
+        list_type = list_of_args_to_type(args)
+        return Array(list_type)
 
     if orig is Annotated:
         # Ignoring annotations
@@ -89,6 +80,18 @@ def python_to_sql(typ):  # noqa: PLR0911
             return JSON
 
     raise TypeError(f"Cannot recognize type {typ}")
+
+
+def list_of_args_to_type(args) -> SQLType:
+    first_type = python_to_sql(args[0])
+    for next_arg in args[1:]:
+        try:
+            next_type = python_to_sql(next_arg)
+            if next_type != first_type:
+                return JSON()
+        except TypeError:
+            return JSON()
+    return first_type
 
 
 def _is_json_inside_union(orig, args) -> bool:

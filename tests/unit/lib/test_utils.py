@@ -40,6 +40,13 @@ def test_list_of_tuples_matching_types():
     )
 
 
+def test_list_of_tuples_object():
+    assert (
+        python_to_sql(list[tuple[float, MyModel]]).to_dict()
+        == Array(Array(JSON)).to_dict()
+    )
+
+
 def test_list_of_tuples_not_matching_types():
     assert (
         python_to_sql(list[tuple[float, String]]).to_dict()
