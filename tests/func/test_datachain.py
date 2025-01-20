@@ -1,4 +1,5 @@
 import functools
+import json
 import math
 import os
 import pickle
@@ -1697,6 +1698,47 @@ def test_to_from_parquet_partitioned_remote(cloud_test_catalog_upload):
     dc_from = DataChain.from_parquet(path, session=ctc.session)
     df1 = dc_from.select("first_name", "age", "city").to_pandas()
     df1 = df1.sort_values("first_name").reset_index(drop=True)
+    assert df_equal(df1, df)
+
+
+# These deprecation warnings occur in the datamodel-code-generator package.
+@pytest.mark.filterwarnings("ignore::pydantic.warnings.PydanticDeprecatedSince20")
+def test_to_from_json(tmp_dir, test_session):
+    df = pd.DataFrame(DF_DATA)
+    dc_to = DataChain.from_pandas(df, session=test_session)
+    path = tmp_dir / "test.json"
+    dc_to.order_by("first_name", "age").to_json(path)
+
+    with open(path) as f:
+        values = json.load(f)
+    assert values == [
+        {"first_name": n, "age": a, "city": c}
+        for n, a, c in zip(DF_DATA["first_name"], DF_DATA["age"], DF_DATA["city"])
+    ]
+
+    dc_from = DataChain.from_json(path.as_uri(), session=test_session)
+    df1 = dc_from.select("json.first_name", "json.age", "json.city").to_pandas()
+    df1 = df1["json"]
+    assert df_equal(df1, df)
+
+
+# These deprecation warnings occur in the datamodel-code-generator package.
+@pytest.mark.filterwarnings("ignore::pydantic.warnings.PydanticDeprecatedSince20")
+def test_from_json_jmespath(tmp_dir, test_session):
+    df = pd.DataFrame(DF_DATA)
+    values = [
+        {"first_name": n, "age": a, "city": c}
+        for n, a, c in zip(DF_DATA["first_name"], DF_DATA["age"], DF_DATA["city"])
+    ]
+    path = tmp_dir / "test.json"
+    with open(path, "w") as f:
+        json.dump({"author": "Test User", "version": 5, "values": values}, f)
+
+    dc_from = DataChain.from_json(
+        path.as_uri(), jmespath="values", session=test_session
+    )
+    df1 = dc_from.select("values.first_name", "values.age", "values.city").to_pandas()
+    df1 = df1["values"]
     assert df_equal(df1, df)
 
 
