@@ -555,6 +555,23 @@ def test_mutate_existing_column(test_session):
     assert list(ds.order_by("ids").collect()) == [(2,), (3,), (4,)]
 
 
+@pytest.mark.parametrize("processes", [False, 2, True])
+@pytest.mark.xdist_group(name="tmpfile")
+def test_parallel(processes, test_session_tmpfile):
+    prefix = "t & "
+    vals = ["a", "b", "c", "d", "e", "f", "g", "h", "i"]
+
+    res = list(
+        DataChain.from_values(key=vals, session=test_session_tmpfile)
+        .settings(parallel=processes)
+        .map(res=lambda key: prefix + key)
+        .order_by("res")
+        .collect("res")
+    )
+
+    assert res == [prefix + v for v in vals]
+
+
 @pytest.mark.parametrize(
     "cloud_type,version_aware",
     [("s3", True)],
@@ -611,6 +628,36 @@ def test_udf_parallel(cloud_test_catalog_tmpfile):
         count += 1
         assert len(r[0]) == r[1]
     assert count == 7
+
+
+@pytest.mark.xdist_group(name="tmpfile")
+def test_udf_parallel_boostrap(test_session_tmpfile):
+    vals = ["a", "b", "c", "d", "e", "f"]
+
+    class MyMapper(Mapper):
+        DEFAULT_VALUE = 84
+        BOOTSTRAP_VALUE = 1452
+        TEARDOWN_VALUE = 98763
+
+        def __init__(self):
+            super().__init__()
+            self.value = MyMapper.DEFAULT_VALUE
+            self._had_teardown = False
+
+        def process(self, *args) -> int:
+            return self.value
+
+        def setup(self):
+            self.value = MyMapper.BOOTSTRAP_VALUE
+
+        def teardown(self):
+            self.value = MyMapper.TEARDOWN_VALUE
+
+    chain = DataChain.from_values(key=vals, session=test_session_tmpfile)
+
+    res = list(chain.settings(parallel=4).map(res=MyMapper()).collect("res"))
+
+    assert res == [MyMapper.BOOTSTRAP_VALUE] * len(vals)
 
 
 @pytest.mark.parametrize(

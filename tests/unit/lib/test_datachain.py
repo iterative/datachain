@@ -1735,23 +1735,6 @@ def test_to_from_parquet_two_top_level_features(tmp_dir, test_session, chunk_siz
         assert nested == features_nested[n]
 
 
-@pytest.mark.parametrize("processes", [False, 2, True])
-@pytest.mark.xdist_group(name="tmpfile")
-def test_parallel(processes, test_session_tmpfile):
-    prefix = "t & "
-    vals = ["a", "b", "c", "d", "e", "f", "g", "h", "i"]
-
-    res = list(
-        DataChain.from_values(key=vals, session=test_session_tmpfile)
-        .settings(parallel=processes)
-        .map(res=lambda key: prefix + key)
-        .order_by("res")
-        .collect("res")
-    )
-
-    assert res == [prefix + v for v in vals]
-
-
 @skip_if_not_sqlite
 def test_parallel_in_memory():
     prefix = "t & "
