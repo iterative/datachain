@@ -3,15 +3,11 @@ from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
-import pytz
 from fsspec.implementations.local import LocalFileSystem
 from PIL import Image
 
-from datachain import DataChain
 from datachain.catalog import Catalog
-from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.lib.file import File, ImageFile, TextFile, resolve
-from datachain.utils import TIME_ZERO
 
 
 def create_file(source: str):
@@ -237,13 +233,6 @@ def test_get_path_local(catalog):
     assert file.get_path().replace("\\", "/").strip("/") == "dir/file"
 
 
-@pytest.mark.parametrize("cloud_type", ["s3"], indirect=True)
-def test_get_path_cloud(cloud_test_catalog):
-    file = File(path="dir/file", source="s3://")
-    file._catalog = cloud_test_catalog.catalog
-    assert file.get_path().strip("/") == "s3:///dir/file"
-
-
 def test_get_fs(catalog):
     file = File(path="dir/file", source="file:///")
     file._catalog = catalog
@@ -301,37 +290,6 @@ def test_read_text(tmp_path, catalog):
     file = File(path=file_name, source=f"file://{tmp_path}")
     file._set_stream(catalog, True)
     assert file.read_text() == data
-
-
-def test_resolve_file(cloud_test_catalog):
-    ctc = cloud_test_catalog
-
-    is_sqlite = isinstance(cloud_test_catalog.catalog.warehouse, SQLiteWarehouse)
-
-    dc = DataChain.from_storage(ctc.src_uri, session=ctc.session)
-    for orig_file in dc.collect("file"):
-        file = File(
-            source=orig_file.source,
-            path=orig_file.path,
-        )
-        file._catalog = ctc.catalog
-        resolved_file = file.resolve()
-        if not is_sqlite:
-            resolved_file.last_modified = resolved_file.last_modified.replace(
-                microsecond=0, tzinfo=pytz.UTC
-            )
-        assert orig_file == resolved_file
-
-
-def test_resolve_file_no_exist(cloud_test_catalog):
-    ctc = cloud_test_catalog
-
-    non_existent_file = File(source=ctc.src_uri, path="non_existent_file.txt")
-    non_existent_file._catalog = ctc.catalog
-    resolved_non_existent = non_existent_file.resolve()
-    assert resolved_non_existent.size == 0
-    assert resolved_non_existent.etag == ""
-    assert resolved_non_existent.last_modified == TIME_ZERO
 
 
 def test_resolve_unsupported_protocol():
