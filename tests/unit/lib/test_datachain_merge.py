@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import func
 
 from datachain.lib.dc import C, DataChain, DatasetMergeError
-from datachain.sql.types import String
+from datachain.sql.types import Int, String
 from tests.utils import skip_if_not_sqlite
 
 
