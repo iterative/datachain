@@ -1952,6 +1952,7 @@ class DataChain:
         session: Optional[Session] = None,
         settings: Optional[dict] = None,
         column_types: Optional[dict[str, "Union[str, ArrowDataType]"]] = None,
+        parse_options: Optional[dict[str, "Union[str, bool]"]] = None,
         **kwargs,
     ) -> "DataChain":
         """Generate chain from csv files.
@@ -1960,6 +1961,7 @@ class DataChain:
             path : Storage URI with directory. URI must start with storage prefix such
                 as `s3://`, `gs://`, `az://` or "file:///".
             delimiter : Character for delimiting columns.
+                Leaving for backwards compatibility.
             header : Whether the files include a header row.
             output : Dictionary or feature class defining column names and their
                 corresponding types. List of column names is also accepted, in which
@@ -1973,6 +1975,8 @@ class DataChain:
             column_types : Dictionary of column names and their corresponding types.
                 It is passed to CSV reader and for each column specified type auto
                 inference is disabled.
+            parse_options: Tells the CSV parser how to process lines.
+                See https://arrow.apache.org/docs/python/generated/pyarrow.csv.ParseOptions.html
 
         Example:
             Reading a csv file:
@@ -1989,6 +1993,18 @@ class DataChain:
         from pyarrow.csv import ConvertOptions, ParseOptions, ReadOptions
         from pyarrow.dataset import CsvFileFormat
         from pyarrow.lib import type_for_alias
+
+        if parse_options is None:
+            parse_options = {
+                "quote_char": "",
+                "double_quote": True,
+                "escape_char": False,
+                "newlines_in_values": False,
+                "ignore_empty_lines": True,
+            }
+
+        if delimiter and parse_options:
+            parse_options["delimiter"] = delimiter
 
         if column_types:
             column_types = {
@@ -2017,7 +2033,7 @@ class DataChain:
                 msg = f"error parsing csv - incompatible output type {type(output)}"
                 raise DatasetPrepareError(chain.name, msg)
 
-        parse_options = ParseOptions(delimiter=delimiter)
+        parse_options = ParseOptions(**parse_options)
         read_options = ReadOptions(column_names=column_names)
         convert_options = ConvertOptions(
             strings_can_be_null=True,
