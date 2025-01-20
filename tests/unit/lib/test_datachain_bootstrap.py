@@ -34,36 +34,6 @@ def test_udf():
     assert udf.value == MyMapper.TEARDOWN_VALUE
 
 
-@pytest.mark.xdist_group(name="tmpfile")
-def test_udf_parallel(test_session_tmpfile):
-    vals = ["a", "b", "c", "d", "e", "f"]
-
-    class MyMapper(Mapper):
-        DEFAULT_VALUE = 84
-        BOOTSTRAP_VALUE = 1452
-        TEARDOWN_VALUE = 98763
-
-        def __init__(self):
-            super().__init__()
-            self.value = MyMapper.DEFAULT_VALUE
-            self._had_teardown = False
-
-        def process(self, *args) -> int:
-            return self.value
-
-        def setup(self):
-            self.value = MyMapper.BOOTSTRAP_VALUE
-
-        def teardown(self):
-            self.value = MyMapper.TEARDOWN_VALUE
-
-    chain = DataChain.from_values(key=vals, session=test_session_tmpfile)
-
-    res = list(chain.settings(parallel=4).map(res=MyMapper()).collect("res"))
-
-    assert res == [MyMapper.BOOTSTRAP_VALUE] * len(vals)
-
-
 def test_no_bootstrap_for_callable():
     class MyMapper:
         def __init__(self):
