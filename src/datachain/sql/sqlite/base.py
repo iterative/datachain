@@ -4,6 +4,7 @@ import sqlite3
 import warnings
 from collections.abc import Iterable
 from datetime import MAXYEAR, MINYEAR, datetime, timezone
+from functools import cache
 from types import MappingProxyType
 from typing import Callable, Optional
 
@@ -526,24 +527,44 @@ def compile_collect(element, compiler, **kwargs):
     return compiler.process(func.json_group_array(*element.clauses.clauses), **kwargs)
 
 
-def load_usearch_extension(conn: sqlite3.Connection) -> bool:
+@cache
+def usearch_sqlite_path() -> Optional[str]:
     try:
-        # usearch is part of the vector optional dependencies
-        # we use the extension's cosine and euclidean distance functions
-        from usearch import sqlite_path
+        import usearch
+    except ImportError:
+        return None
 
-        conn.enable_load_extension(True)
+    with warnings.catch_warnings():
+        # usearch binary is not available for Windows, see: https://github.com/unum-cloud/usearch/issues/427.
+        # and, sometimes fail to download the binary in other platforms
+        # triggering UserWarning.
 
-        with warnings.catch_warnings():
-            # usearch binary is not available for Windows, see: https://github.com/unum-cloud/usearch/issues/427.
-            # and, sometimes fail to download the binary in other platforms
-            # triggering UserWarning.
+        warnings.filterwarnings("ignore", category=UserWarning, module="usearch")
 
-            warnings.filterwarnings("ignore", category=UserWarning, module="usearch")
-            conn.load_extension(sqlite_path())
+        try:
+            return usearch.sqlite_path()
+        except FileNotFoundError:
+            return None
 
-        conn.enable_load_extension(False)
-        return True
 
-    except Exception:  # noqa: BLE001
+def load_usearch_extension(conn: sqlite3.Connection) -> bool:
+    # usearch is part of the vector optional dependencies
+    # we use the extension's cosine and euclidean distance functions
+    ext_path = usearch_sqlite_path()
+    if ext_path is None:
         return False
+
+    try:
+        conn.enable_load_extension(True)
+    except AttributeError:
+        # sqlite3 module is not built with loadable extension support by default.
+        return False
+
+    try:
+        conn.load_extension(ext_path)
+    except sqlite3.OperationalError:
+        return False
+    else:
+        return True
+    finally:
+        conn.enable_load_extension(False)
