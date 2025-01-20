@@ -19,6 +19,7 @@ from sqlalchemy import MetaData, Table, UniqueConstraint, exists, select
 from sqlalchemy.dialects import sqlite
 from sqlalchemy.schema import CreateIndex, CreateTable, DropTable
 from sqlalchemy.sql import func
+from sqlalchemy.sql.elements import BinaryExpression, BooleanClauseList
 from sqlalchemy.sql.expression import bindparam, cast
 from sqlalchemy.sql.selectable import Select
 from tqdm.auto import tqdm
@@ -40,7 +41,6 @@ if TYPE_CHECKING:
     from sqlalchemy.schema import SchemaItem
     from sqlalchemy.sql._typing import _FromClauseArgument, _OnClauseArgument
     from sqlalchemy.sql.elements import ColumnElement
-    from sqlalchemy.sql.selectable import Join
     from sqlalchemy.types import TypeEngine
 
     from datachain.lib.file import File
@@ -654,16 +654,47 @@ class SQLiteWarehouse(AbstractWarehouse):
         right: "_FromClauseArgument",
         onclause: "_OnClauseArgument",
         inner: bool = True,
-    ) -> "Join":
+        full: bool = False,
+        columns=None,
+    ) -> "Select":
         """
         Join two tables together.
         """
-        return sqlalchemy.join(
-            left,
-            right,
-            onclause,
-            isouter=not inner,
+        if not full:
+            join_query = sqlalchemy.join(
+                left,
+                right,
+                onclause,
+                isouter=not inner,
+            )
+            return sqlalchemy.select(*columns).select_from(join_query)
+
+        left_right_join = sqlalchemy.select(*columns).select_from(
+            sqlalchemy.join(left, right, onclause, isouter=True)
         )
+        right_left_join = sqlalchemy.select(*columns).select_from(
+            sqlalchemy.join(right, left, onclause, isouter=True)
+        )
+
+        def add_left_rows_filter(exp: BinaryExpression):
+            """
+            Adds filter to right_left_join to remove unmatched left table rows by
+            getting column names that need to be NULL from BinaryExpressions in onclause
+            """
+            return right_left_join.where(
+                getattr(left.c, exp.left.name) == None  # type: ignore[union-attr] # noqa: E711
+            )
+
+        if isinstance(onclause, BinaryExpression):
+            right_left_join = add_left_rows_filter(onclause)
+
+        if isinstance(onclause, BooleanClauseList):
+            for c in onclause.get_children():
+                if isinstance(c, BinaryExpression):
+                    right_left_join = add_left_rows_filter(c)
+
+        union = sqlalchemy.union(left_right_join, right_left_join).subquery()
+        return sqlalchemy.select(*union.c).select_from(union)
 
     def create_pre_udf_table(self, query: "Select") -> "Table":
         """
