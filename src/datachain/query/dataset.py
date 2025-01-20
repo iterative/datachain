@@ -875,6 +875,7 @@ class SQLJoin(Step):
     query2: "DatasetQuery"
     predicates: Union[JoinPredicateType, tuple[JoinPredicateType, ...]]
     inner: bool
+    full: bool
     rname: str
 
     def get_query(self, dq: "DatasetQuery", temp_tables: list[str]) -> sa.Subquery:
@@ -977,14 +978,14 @@ class SQLJoin(Step):
         self.validate_expression(join_expression, q1, q2)
 
         def q(*columns):
-            join_query = self.catalog.warehouse.join(
+            return self.catalog.warehouse.join(
                 q1,
                 q2,
                 join_expression,
                 inner=self.inner,
+                full=self.full,
+                columns=columns,
             )
-            return sqlalchemy.select(*columns).select_from(join_query)
-            # return sqlalchemy.select(*subquery.c).select_from(subquery)
 
         return step_result(
             q,
@@ -1489,6 +1490,7 @@ class DatasetQuery:
         dataset_query: "DatasetQuery",
         predicates: Union[JoinPredicateType, Sequence[JoinPredicateType]],
         inner=False,
+        full=False,
         rname="{name}_right",
     ) -> "Self":
         left = self.clone(new_table=False)
@@ -1504,7 +1506,9 @@ class DatasetQuery:
             if isinstance(predicates, (str, ColumnClause, ColumnElement))
             else tuple(predicates)
         )
-        new_query.steps = [SQLJoin(self.catalog, left, right, predicates, inner, rname)]
+        new_query.steps = [
+            SQLJoin(self.catalog, left, right, predicates, inner, full, rname)
+        ]
         return new_query
 
     @detach
