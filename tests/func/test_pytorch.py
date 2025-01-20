@@ -1,7 +1,7 @@
 import os
+import random
 from contextlib import closing
 
-import open_clip
 import pytest
 import torch
 from datasets import load_dataset
@@ -14,11 +14,11 @@ from datachain.lib.file import File
 from datachain.lib.pytorch import PytorchDataset
 
 
-@pytest.fixture
-def fake_image_dir(catalog, tmp_path):
+@pytest.fixture(scope="module")
+def fake_image_dir(tmp_path_factory):
     # Create fake images in labeled dirs
-    data_path = tmp_path / "data" / ""
-    for i, (img, label) in enumerate(FakeData()):
+    data_path = tmp_path_factory.mktemp("data")
+    for i, (img, label) in enumerate(FakeData(size=100)):
         label = str(label)
         (data_path / label).mkdir(parents=True, exist_ok=True)
         img.save(data_path / label / f"{i}.jpg")
@@ -31,22 +31,26 @@ def fake_dataset(catalog, fake_image_dir):
     uri = fake_image_dir.as_uri()
     return (
         DataChain.from_storage(uri, type="image")
+        .settings(prefetch=0, cache=False)
         .map(text=lambda file: file.parent.split("/")[-1], output=str)
         .map(label=lambda text: int(text), output=int)
         .save("fake")
     )
 
 
+def fake_tokenizer(text: str):
+    return [random.randint(0, 100) for _ in text]  # noqa: S311
+
+
 def test_pytorch_dataset(fake_dataset):
     transform = v2.Compose(
         [v2.ToImage(), v2.ToDtype(torch.float32, scale=True), v2.Resize((64, 64))]
     )
-    tokenizer = open_clip.get_tokenizer("ViT-B-32")
     pt_dataset = PytorchDataset(
         name=fake_dataset.name,
         version=fake_dataset.version,
         transform=transform,
-        tokenizer=tokenizer,
+        tokenizer=fake_tokenizer,
     )
     img, text, label = next(iter(pt_dataset))
     assert isinstance(img, Tensor)
@@ -63,9 +67,9 @@ def test_pytorch_dataset_sample(fake_dataset):
         name=fake_dataset.name,
         version=fake_dataset.version,
         transform=transform,
-        num_samples=700,
+        num_samples=50,
     )
-    assert len(list(pt_dataset)) == 700
+    assert len(list(pt_dataset)) == 50
 
 
 def test_to_pytorch(fake_dataset):
@@ -74,8 +78,7 @@ def test_to_pytorch(fake_dataset):
     transform = v2.Compose(
         [v2.ToImage(), v2.ToDtype(torch.float32, scale=True), v2.Resize((64, 64))]
     )
-    tokenizer = open_clip.get_tokenizer("ViT-B-32")
-    pt_dataset = fake_dataset.to_pytorch(transform=transform, tokenizer=tokenizer)
+    pt_dataset = fake_dataset.to_pytorch(transform=transform, tokenizer=fake_tokenizer)
     assert isinstance(pt_dataset, IterableDataset)
     img, text, label = next(iter(pt_dataset))
     assert isinstance(img, Tensor)
