@@ -43,6 +43,7 @@ team = [
     TeamMember(player="Alice", sport="volleyball", weight=120.3, height=5.5),
     TeamMember(player="Charlie", sport="football", weight=200.0, height=6.0),
     TeamMember(player="David", sport="football", weight=158.7, height=5.7),
+    TeamMember(player="John", sport="basketball", weight=250.3, height=7.0),
 ]
 
 
@@ -77,7 +78,53 @@ def test_merge_objects(test_session):
             assert pd.isnull(player.height)
 
     assert i == len(employees)
-    assert j == len(team)
+    assert j == len(team) - 1
+
+
+@pytest.mark.parametrize("multiple_predicates", [True, False])
+def test_merge_objects_full_join(test_session, multiple_predicates):
+    ch1 = DataChain.from_values(emp=employees, session=test_session)
+    ch2 = DataChain.from_values(team=team, session=test_session)
+    if multiple_predicates:
+        ch = ch1.merge(
+            ch2,
+            ["emp.person.name", "emp.person.name"],
+            ["team.player", "team.player"],
+            full=True,
+        )
+    else:
+        ch = ch1.merge(ch2, "emp.person.name", "team.player", full=True)
+
+    str_default = String.default_value(test_session.catalog.warehouse.db.dialect)
+    int_default = Int.default_value(test_session.catalog.warehouse.db.dialect)
+
+    i = 0
+    for items in ch.order_by("emp.person.name", "team.player").collect():
+        assert len(items) == 2
+
+        empl, player = items
+        assert isinstance(empl, Employee)
+        assert isinstance(player, TeamMember)
+
+        if player.player == "John":
+            assert empl.person.name == str_default
+            assert empl.person.age == int_default
+            continue
+
+        if empl.person.name == "Bob":
+            assert player.player == str_default
+            assert player.sport == str_default
+            assert pd.isnull(player.weight)
+            assert pd.isnull(player.height)
+            continue
+
+        assert player.player == team[i].player
+        assert player.sport == team[i].sport
+        assert math.isclose(player.weight, team[i].weight, rel_tol=1e-7)
+        assert math.isclose(player.height, team[i].height, rel_tol=1e-7)
+        i += 1
+
+    assert i == len(employees) - 1 == len(team) - 1
 
 
 def test_merge_similar_objects(test_session):

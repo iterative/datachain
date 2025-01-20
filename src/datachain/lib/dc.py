@@ -1332,6 +1332,7 @@ class DataChain:
         on: Union[MergeColType, Sequence[MergeColType]],
         right_on: Optional[Union[MergeColType, Sequence[MergeColType]]] = None,
         inner=False,
+        full=False,
         rname="right_",
     ) -> "Self":
         """Merge two chains based on the specified criteria.
@@ -1345,6 +1346,7 @@ class DataChain:
             right_on: Optional predicate or list of Predicates for the `right_ds`
                 to join.
             inner (bool): Whether to run inner join or outer join.
+            full (bool): Whether to run full outer join.
             rname (str): Name prefix for conflicting signal names.
 
         Examples:
@@ -1419,7 +1421,7 @@ class DataChain:
             )
 
         query = self._query.join(
-            right_ds._query, sqlalchemy.and_(*ops), inner, rname + "{name}"
+            right_ds._query, sqlalchemy.and_(*ops), inner, full, rname + "{name}"
         )
         query.feature_schema = None
         ds = self._evolve(query=query)
