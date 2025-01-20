@@ -17,7 +17,7 @@ from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
 
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
-from PIL import Image
+from PIL import Image as PilImage
 from pydantic import Field, field_validator
 
 from datachain.client.fileslice import FileSlice
@@ -40,7 +40,7 @@ logger = logging.getLogger("datachain")
 # how to create file path when exporting
 ExportPlacement = Literal["filename", "etag", "fullpath", "checksum"]
 
-FileType = Literal["binary", "text", "image"]
+FileType = Literal["binary", "text", "image", "video"]
 
 
 class VFileError(DataChainError):
@@ -231,6 +231,10 @@ class File(DataModel):
         """Returns file contents as text."""
         with self.open(mode="r") as stream:
             return stream.read()
+
+    def stream(self) -> BytesIO:
+        """Returns file contents as BytesIO stream."""
+        return BytesIO(self.read())
 
     def save(self, destination: str):
         """Writes it's content to destination"""
@@ -470,11 +474,59 @@ class ImageFile(File):
     def read(self):
         """Returns `PIL.Image.Image` object."""
         fobj = super().read()
-        return Image.open(BytesIO(fobj))
+        return PilImage.open(BytesIO(fobj))
 
     def save(self, destination: str):
         """Writes it's content to destination"""
         self.read().save(destination)
+
+
+class Image(DataModel):
+    """`DataModel` for image file meta information."""
+
+    width: int = Field(default=0)
+    height: int = Field(default=0)
+    format: str = Field(default="")
+
+
+class VideoFile(File):
+    """`DataModel` for reading video files."""
+
+
+class VideoClip(VideoFile):
+    """`DataModel` for reading video clips."""
+
+    start: float = Field(default=0)
+    end: float = Field(default=0)
+
+
+class VideoFrame(VideoFile):
+    """`DataModel` for reading video frames."""
+
+    frame: int = Field(default=0)
+    timestamp: float = Field(default=0)
+
+
+class Video(DataModel):
+    """`DataModel` for video file meta information."""
+
+    width: int = Field(default=0)
+    height: int = Field(default=0)
+    fps: float = Field(default=0)
+    duration: float = Field(default=0)
+    frames: int = Field(default=0)
+    format: str = Field(default="")
+    codec: str = Field(default="")
+
+
+class Frame(DataModel):
+    """`DataModel` for video frame image meta information."""
+
+    frame: int = Field(default=0)
+    timestamp: float = Field(default=0)
+    width: int = Field(default=0)
+    height: int = Field(default=0)
+    format: str = Field(default="")
 
 
 class ArrowRow(DataModel):
@@ -512,5 +564,7 @@ def get_file_type(type_: FileType = "binary") -> type[File]:
         file = TextFile
     elif type_ == "image":
         file = ImageFile  # type: ignore[assignment]
+    elif type_ == "video":
+        file = VideoFile
 
     return file
