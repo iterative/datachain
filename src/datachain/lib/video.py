@@ -221,7 +221,7 @@ def save_video_clip(
         codec (str): Video codec for encoding (default: 'libx264').
         audio_codec (str): Audio codec for encoding (default: 'aac').
     """
-    video = VideoFileClip(file.stream())
+    video = VideoFileClip(file.get_local_path())
 
     if start_time < 0 or end_time > video.duration or start_time >= end_time:
         raise ValueError(f"Invalid time range: ({start_time}, {end_time}).")

@@ -82,7 +82,7 @@ video = [
   # See https://github.com/PyAV-Org/PyAV/discussions/1700
   "av<14",
   "imageio[ffmpeg]",
-  "moviepy",
+  "moviepy<2",
   "opencv-python"
 ]
 tests = [
