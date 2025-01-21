@@ -112,7 +112,11 @@ jobs:
         run: echo 'DISABLE_REMOTES_ARG=--disable-remotes=azure,gs' >> $env:GITHUB_ENV
 
       - name: Run tests
-        run: nox -s tests-${{ matrix.pyv }} -- $DISABLE_REMOTES_ARG
+        run: nox -s tests-${{ matrix.pyv }} -- -m "not e2e and not examples" $DISABLE_REMOTES_ARG
+        shell: bash
+
+      - name: Run E2E tests
+        run: nox -s tests-${{ matrix.pyv }} -- -m "e2e" $DISABLE_REMOTES_ARG
         shell: bash
 
       - name: Upload coverage report
