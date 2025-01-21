@@ -1933,7 +1933,7 @@ class DataChain:
     def from_csv(
         cls,
         path,
-        delimiter: str = ",",
+        delimiter: Optional[str] = None,
         header: bool = True,
         output: OutputType = None,
         object_name: str = "",
@@ -1943,7 +1943,7 @@ class DataChain:
         session: Optional[Session] = None,
         settings: Optional[dict] = None,
         column_types: Optional[dict[str, "Union[str, ArrowDataType]"]] = None,
-        parse_options: Optional[dict[str, "Union[str, bool]"]] = None,
+        parse_options: Optional[dict[str, "Union[str, Union[bool, Callable]]"]] = None,
         **kwargs,
     ) -> "DataChain":
         """Generate chain from csv files.
@@ -1951,8 +1951,8 @@ class DataChain:
         Parameters:
             path : Storage URI with directory. URI must start with storage prefix such
                 as `s3://`, `gs://`, `az://` or "file:///".
-            delimiter : Character for delimiting columns.
-                Leaving for backwards compatibility.
+            delimiter : Character for delimiting columns. Takes precedence if also
+                specified in `parse_options`. Defaults to ",".
             header : Whether the files include a header row.
             output : Dictionary or feature class defining column names and their
                 corresponding types. List of column names is also accepted, in which
@@ -1966,7 +1966,7 @@ class DataChain:
             column_types : Dictionary of column names and their corresponding types.
                 It is passed to CSV reader and for each column specified type auto
                 inference is disabled.
-            parse_options: Tells the CSV parser how to process lines.
+            parse_options: Tells the parser how to process lines.
                 See https://arrow.apache.org/docs/python/generated/pyarrow.csv.ParseOptions.html
 
         Example:
@@ -1985,16 +1985,10 @@ class DataChain:
         from pyarrow.dataset import CsvFileFormat
         from pyarrow.lib import type_for_alias
 
-        if parse_options is None:
-            parse_options = {
-                "quote_char": "",
-                "double_quote": True,
-                "escape_char": False,
-                "newlines_in_values": False,
-                "ignore_empty_lines": True,
-            }
-
-        if delimiter and parse_options:
+        parse_options = parse_options or {}
+        if "delimiter" not in parse_options:
+            parse_options["delimiter"] = ","
+        if delimiter:
             parse_options["delimiter"] = delimiter
 
         if column_types:
