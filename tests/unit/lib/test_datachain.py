@@ -1332,6 +1332,34 @@ def test_from_csv_column_types(tmp_dir, test_session):
     assert df1["age"].dtype == pd.StringDtype
 
 
+def test_from_csv_parse_options(tmp_dir, test_session):
+    def skip_comment(row):
+        if row.text.startswith("# "):
+            return "skip"
+        return "error"
+
+    s = (
+        "animals;n_legs;entry\n"
+        "Flamingo;2;2022-03-01\n"
+        "# Comment here:\n"
+        "Horse;4;2022-03-02\n"
+        "Brittle stars;5;2022-03-03\n"
+        "Centipede;100;2022-03-04"
+    )
+
+    path = tmp_dir / "test.csv"
+    path.write_text(s)
+
+    dc = DataChain.from_csv(
+        path.as_uri(),
+        session=test_session,
+        parse_options={"invalid_row_handler": skip_comment, "delimiter": ";"},
+    )
+
+    df = dc.select("animals", "n_legs", "entry").to_pandas()
+    assert set(df["animals"]) == {"Horse", "Centipede", "Brittle stars", "Flamingo"}
+
+
 def test_to_csv_features(tmp_dir, test_session):
     dc_to = DataChain.from_values(
         f1=features, num=range(len(features)), session=test_session
