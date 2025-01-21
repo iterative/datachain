@@ -1,12 +1,13 @@
 import posixpath
 import uuid
+from datetime import datetime, timezone
 from unittest.mock import ANY
 
 import pytest
 import sqlalchemy as sa
 
 from datachain.data_storage.schema import DataTable
-from datachain.dataset import DatasetDependencyType, DatasetStatus
+from datachain.dataset import DatasetDependency, DatasetDependencyType, DatasetStatus
 from datachain.error import (
     DatasetInvalidVersionError,
     DatasetNotFoundError,
@@ -878,3 +879,27 @@ def test_dataset_storage_dependencies(cloud_test_catalog, cloud_type, indirect):
             "dependencies": [],
         }
     ]
+
+
+@pytest.mark.parametrize(
+    "dep_name,dep_type,expected",
+    [
+        ("dogs_dataset", DatasetDependencyType.DATASET, "dogs_dataset"),
+        (
+            "s3://dogs_dataset/dogs",
+            DatasetDependencyType.STORAGE,
+            "lst__s3://dogs_dataset/dogs/",
+        ),
+    ],
+)
+def test_dataset_dependency_dataset_name(dep_name, dep_type, expected):
+    dep = DatasetDependency(
+        id=1,
+        name=dep_name,
+        version="1",
+        type=dep_type,
+        created_at=datetime.now(timezone.utc),
+        dependencies=[],
+    )
+
+    assert dep.dataset_name == expected

@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import datetime
 
 import pytest
 from sqlalchemy import Column, DateTime
@@ -7,7 +7,7 @@ from sqlalchemy.dialects.sqlite import dialect as sqlite_dialect
 from sqlalchemy.schema import CreateTable
 
 from datachain.data_storage.schema import DataTable
-from datachain.dataset import DatasetDependency, DatasetDependencyType, DatasetVersion
+from datachain.dataset import DatasetVersion
 from datachain.sql.types import (
     JSON,
     Array,
@@ -83,30 +83,6 @@ def test_schema_serialization(dataset_record):
             "item_type": {"type": "Array", "item_type": {"type": "Float64"}},
         }
     }
-
-
-@pytest.mark.parametrize(
-    "dep_name,dep_type,expected",
-    [
-        ("dogs_dataset", DatasetDependencyType.DATASET, "dogs_dataset"),
-        (
-            "s3://dogs_dataset/dogs",
-            DatasetDependencyType.STORAGE,
-            "lst__s3://dogs_dataset/dogs/",
-        ),
-    ],
-)
-def test_dataset_dependency_dataset_name(dep_name, dep_type, expected):
-    dep = DatasetDependency(
-        id=1,
-        name=dep_name,
-        version="1",
-        type=dep_type,
-        created_at=datetime.now(timezone.utc),
-        dependencies=[],
-    )
-
-    assert dep.dataset_name == expected
 
 
 @pytest.mark.parametrize(
