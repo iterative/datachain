@@ -30,7 +30,7 @@ import yaml
 from sqlalchemy import Column
 from tqdm.auto import tqdm
 
-from datachain.cache import DataChainCache
+from datachain.cache import Cache
 from datachain.client import Client
 from datachain.dataset import (
     DATASET_PREFIX,
@@ -536,7 +536,7 @@ def find_column_to_str(  # noqa: PLR0911
     return ""
 
 
-def clone_catalog_with_cache(catalog: "Catalog", cache: "DataChainCache") -> "Catalog":
+def clone_catalog_with_cache(catalog: "Catalog", cache: "Cache") -> "Catalog":
     clone = catalog.copy()
     clone.cache = cache
     return clone
@@ -559,7 +559,7 @@ class Catalog:
         datachain_dir.init()
         self.metastore = metastore
         self._warehouse = warehouse
-        self.cache = DataChainCache(datachain_dir.cache, datachain_dir.tmp)
+        self.cache = Cache(datachain_dir.cache, datachain_dir.tmp)
         self.client_config = client_config if client_config is not None else {}
         self._init_params = {
             "cache_dir": cache_dir,
