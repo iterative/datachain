@@ -100,18 +100,22 @@ def noop(_: str):
 
 
 def _process_stream(stream: "IO[bytes]", callback: Callable[[str], None]) -> None:
-    buffer = b""
-    while byt := stream.read(1):  # Read one byte at a time
-        buffer += byt
+    try:
+        buffer = b""
+        while byt := stream.read(1):  # Read one byte at a time
+            buffer += byt
 
-        if byt in (b"\n", b"\r"):  # Check for newline or carriage return
+            if byt in (b"\n", b"\r"):  # Check for newline or carriage return
+                line = buffer.decode("utf-8")
+                callback(line)
+                buffer = b""  # Clear buffer for next line
+
+        if buffer:  # Handle any remaining data in the buffer
             line = buffer.decode("utf-8")
             callback(line)
-            buffer = b""  # Clear buffer for next line
-
-    if buffer:  # Handle any remaining data in the buffer
-        line = buffer.decode("utf-8")
-        callback(line)
+    except Exception:  # noqa: BLE001
+        logger.error("Error processing stream")
+        logger.error(traceback.format_exc())
 
 
 class DatasetRowsFetcher(NodesThreadPool):
