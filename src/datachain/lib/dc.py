@@ -1942,7 +1942,7 @@ class DataChain:
     def from_csv(
         cls,
         path,
-        delimiter: str = ",",
+        delimiter: Optional[str] = None,
         header: bool = True,
         output: OutputType = None,
         object_name: str = "",
@@ -1952,6 +1952,7 @@ class DataChain:
         session: Optional[Session] = None,
         settings: Optional[dict] = None,
         column_types: Optional[dict[str, "Union[str, ArrowDataType]"]] = None,
+        parse_options: Optional[dict[str, "Union[str, Union[bool, Callable]]"]] = None,
         **kwargs,
     ) -> "DataChain":
         """Generate chain from csv files.
@@ -1959,7 +1960,8 @@ class DataChain:
         Parameters:
             path : Storage URI with directory. URI must start with storage prefix such
                 as `s3://`, `gs://`, `az://` or "file:///".
-            delimiter : Character for delimiting columns.
+            delimiter : Character for delimiting columns. Takes precedence if also
+                specified in `parse_options`. Defaults to ",".
             header : Whether the files include a header row.
             output : Dictionary or feature class defining column names and their
                 corresponding types. List of column names is also accepted, in which
@@ -1973,6 +1975,8 @@ class DataChain:
             column_types : Dictionary of column names and their corresponding types.
                 It is passed to CSV reader and for each column specified type auto
                 inference is disabled.
+            parse_options: Tells the parser how to process lines.
+                See https://arrow.apache.org/docs/python/generated/pyarrow.csv.ParseOptions.html
 
         Example:
             Reading a csv file:
@@ -1989,6 +1993,12 @@ class DataChain:
         from pyarrow.csv import ConvertOptions, ParseOptions, ReadOptions
         from pyarrow.dataset import CsvFileFormat
         from pyarrow.lib import type_for_alias
+
+        parse_options = parse_options or {}
+        if "delimiter" not in parse_options:
+            parse_options["delimiter"] = ","
+        if delimiter:
+            parse_options["delimiter"] = delimiter
 
         if column_types:
             column_types = {
@@ -2017,7 +2027,7 @@ class DataChain:
                 msg = f"error parsing csv - incompatible output type {type(output)}"
                 raise DatasetPrepareError(chain.name, msg)
 
-        parse_options = ParseOptions(delimiter=delimiter)
+        parse_options = ParseOptions(**parse_options)
         read_options = ReadOptions(column_names=column_names)
         convert_options = ConvertOptions(
             strings_can_be_null=True,
