@@ -3,7 +3,7 @@ name: Tests
 on:
   push:
     branches: [main]
-  pull_request_target:
+  pull_request:
   workflow_dispatch:
 
 env:
@@ -14,15 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  authorize:
-    environment: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'external' || 'internal' }}
-    runs-on: ubuntu-latest
-    steps:
-      - run: true
-
   lint:
-    needs: authorize
-
     runs-on: ubuntu-latest
     steps:
       - name: Check out the repository
@@ -62,8 +54,6 @@ jobs:
         run: nox -s lint
 
   datachain:
-    needs: authorize
-
     timeout-minutes: 40
     runs-on: ${{ matrix.os }}
     strategy:
@@ -133,8 +123,6 @@ jobs:
         run: nox -s docs
 
   examples:
-    needs: authorize
-
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     strategy:
