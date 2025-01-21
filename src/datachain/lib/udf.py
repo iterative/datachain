@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
     from typing_extensions import Self
 
-    from datachain.cache import DataChainCache as Cache
+    from datachain.cache import Cache
     from datachain.catalog import Catalog
     from datachain.lib.signal_schema import SignalSchema
     from datachain.lib.udf_signature import UdfSignature

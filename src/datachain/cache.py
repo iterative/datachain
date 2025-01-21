@@ -22,15 +22,15 @@ def try_scandir(path):
         pass
 
 
-def get_temp_cache(tmp_dir: str, prefix: Optional[str] = None) -> "DataChainCache":
+def get_temp_cache(tmp_dir: str, prefix: Optional[str] = None) -> "Cache":
     cache_dir = mkdtemp(prefix=prefix, dir=tmp_dir)
-    return DataChainCache(cache_dir, tmp_dir=tmp_dir)
+    return Cache(cache_dir, tmp_dir=tmp_dir)
 
 
 @contextmanager
 def temporary_cache(
     tmp_dir: str, prefix: Optional[str] = None, delete: bool = True
-) -> Iterator["DataChainCache"]:
+) -> Iterator["Cache"]:
     cache = get_temp_cache(tmp_dir, prefix=prefix)
     try:
         yield cache
@@ -39,7 +39,7 @@ def temporary_cache(
             cache.destroy()
 
 
-class DataChainCache:
+class Cache:
     def __init__(self, cache_dir: str, tmp_dir: str):
         self.odb = LocalHashFileDB(
             LocalFileSystem(),
