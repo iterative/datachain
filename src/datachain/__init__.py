@@ -1,3 +1,4 @@
+from datachain import logger
 from datachain.lib.data_model import DataModel, DataType, is_chain_type
 from datachain.lib.dc import C, Column, DataChain, Sys
 from datachain.lib.file import (
@@ -13,6 +14,8 @@ from datachain.lib.udf import Aggregator, Generator, Mapper
 from datachain.lib.utils import AbstractUDF, DataChainError
 from datachain.query import metrics, param
 from datachain.query.session import Session
+
+logger.setup_logging()
 
 __all__ = [
     "AbstractUDF",
