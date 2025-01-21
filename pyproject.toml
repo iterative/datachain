@@ -56,7 +56,7 @@ dependencies = [
 docs = [
   "mkdocs>=1.5.2",
   "mkdocs-gen-files>=0.5.0",
-  "mkdocs-material==9.5.22",
+  "mkdocs-material==9.5.50",
   "mkdocs-section-index>=0.3.6",
   "mkdocstrings-python>=1.6.3",
   "mkdocs-literate-nav>=0.6.1"
@@ -111,7 +111,7 @@ examples = [
   "pdfplumber==0.11.5",
   "huggingface_hub[hf_transfer]",
   "onnx==1.16.1",
-  "ultralytics==8.3.61",
+  "ultralytics==8.3.64",
   "open_clip_torch"
 ]
 

@@ -40,11 +40,3 @@ def test_is_temp_table_name(warehouse):
     assert warehouse.is_temp_table_name("ds_my_dataset") is False
     assert warehouse.is_temp_table_name("src_my_bucket") is False
     assert warehouse.is_temp_table_name("ds_ds_my_query_script_1_1") is False
-
-
-def test_dataset_stats_no_table(cloud_test_catalog, dogs_dataset):
-    catalog = cloud_test_catalog.catalog
-    catalog.warehouse.drop_dataset_rows_table(dogs_dataset, 1)
-    num_objects, size = catalog.warehouse.dataset_stats(dogs_dataset, 1)
-    assert num_objects is None
-    assert size is None

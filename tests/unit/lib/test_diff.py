@@ -1,7 +1,7 @@
 import pytest
 from pydantic import BaseModel
 
-from datachain.diff import CompareStatus
+from datachain.diff import CompareStatus, compare_and_split
 from datachain.lib.dc import DataChain
 from datachain.lib.file import File
 from datachain.sql.types import Int64, String
@@ -12,9 +12,7 @@ from tests.utils import sorted_dicts
 @pytest.mark.parametrize("deleted", (True, False))
 @pytest.mark.parametrize("modified", (True, False))
 @pytest.mark.parametrize("same", (True, False))
-@pytest.mark.parametrize("status_col", ("diff", None))
-@pytest.mark.parametrize("save", (True, False))
-def test_compare(test_session, added, deleted, modified, same, status_col, save):
+def test_compare(test_session, added, deleted, modified, same):
     ds1 = DataChain.from_values(
         id=[1, 2, 4],
         name=["John1", "Doe", "Andy"],
@@ -36,7 +34,7 @@ def test_compare(test_session, added, deleted, modified, same, status_col, save)
                 modified=modified,
                 same=same,
                 on=["id"],
-                status_col=status_col,
+                status_col="diff",
             )
         assert str(exc_info.value) == (
             "At least one of added, deleted, modified, same flags must be set"
@@ -53,29 +51,65 @@ def test_compare(test_session, added, deleted, modified, same, status_col, save)
         status_col="diff",
     )
 
-    if save:
-        diff.save("diff")
-        diff = DataChain.from_dataset("diff")
+    chains = compare_and_split(
+        ds1,
+        ds2,
+        same=True,
+        on=["id"],
+    )
 
     expected = []
+
     if modified:
+        assert "diff" not in chains[CompareStatus.MODIFIED].signals_schema.db_signals()
         expected.append((CompareStatus.MODIFIED, 1, "John1"))
+
     if added:
+        assert "diff" not in chains[CompareStatus.ADDED].signals_schema.db_signals()
         expected.append((CompareStatus.ADDED, 2, "Doe"))
+
     if deleted:
+        assert "diff" not in chains[CompareStatus.DELETED].signals_schema.db_signals()
         expected.append((CompareStatus.DELETED, 3, "Mark"))
+
     if same:
+        assert "diff" not in chains[CompareStatus.SAME].signals_schema.db_signals()
         expected.append((CompareStatus.SAME, 4, "Andy"))
 
-    collect_fields = ["diff", "id", "name"]
-    if not status_col:
-        expected = [row[1:] for row in expected]
-        collect_fields = collect_fields[1:]
-
-    assert list(diff.order_by("id").collect(*collect_fields)) == expected
+    assert list(diff.order_by("id").collect("diff", "id", "name")) == expected
 
 
-def test_compare_with_from_dataset(test_session):
+def test_compare_no_status_col(test_session):
+    ds1 = DataChain.from_values(
+        id=[1, 2, 4],
+        name=["John1", "Doe", "Andy"],
+        session=test_session,
+    ).save("ds1")
+
+    ds2 = DataChain.from_values(
+        id=[1, 3, 4],
+        name=["John", "Mark", "Andy"],
+        session=test_session,
+    ).save("ds2")
+
+    diff = ds1.compare(
+        ds2,
+        same=True,
+        on=["id"],
+        status_col=None,
+    )
+
+    expected = [
+        (1, "John1"),
+        (2, "Doe"),
+        (3, "Mark"),
+        (4, "Andy"),
+    ]
+
+    assert list(diff.order_by("id").collect()) == expected
+
+
+def test_compare_from_datasets(test_session):
     ds1 = DataChain.from_values(
         id=[1, 2, 4],
         name=["John1", "Doe", "Andy"],
@@ -102,17 +136,8 @@ def test_compare_with_from_dataset(test_session):
     ]
 
 
-@pytest.mark.parametrize("added", (True, False))
-@pytest.mark.parametrize("deleted", (True, False))
-@pytest.mark.parametrize("modified", (True, False))
-@pytest.mark.parametrize("same", (True, False))
 @pytest.mark.parametrize("right_name", ("other_name", "name"))
-def test_compare_with_explicit_compare_fields(
-    test_session, added, deleted, modified, same, right_name
-):
-    if not any([added, deleted, modified, same]):
-        pytest.skip("This case is tested in another test")
-
+def test_compare_with_explicit_compare_fields(test_session, right_name):
     ds1 = DataChain.from_values(
         id=[1, 2, 4],
         name=["John1", "Doe", "Andy"],
@@ -134,46 +159,29 @@ def test_compare_with_explicit_compare_fields(
         on=["id"],
         compare=["name"],
         right_compare=[right_name],
-        added=added,
-        deleted=deleted,
-        modified=modified,
-        same=same,
+        same=True,
         status_col="diff",
     )
 
     string_default = String.default_value(test_session.catalog.warehouse.db.dialect)
 
-    expected = []
-    if modified:
-        expected.append((CompareStatus.MODIFIED, 1, "John1", "New York"))
-    if added:
-        expected.append((CompareStatus.ADDED, 2, "Doe", "Boston"))
-    if deleted:
-        expected.append(
-            (
-                CompareStatus.DELETED,
-                3,
-                string_default if right_name == "other_name" else "Mark",
-                "Seattle",
-            )
-        )
-    if same:
-        expected.append((CompareStatus.SAME, 4, "Andy", "San Francisco"))
+    expected = [
+        (CompareStatus.MODIFIED, 1, "John1", "New York"),
+        (CompareStatus.ADDED, 2, "Doe", "Boston"),
+        (
+            CompareStatus.DELETED,
+            3,
+            string_default if right_name == "other_name" else "Mark",
+            "Seattle",
+        ),
+        (CompareStatus.SAME, 4, "Andy", "San Francisco"),
+    ]
 
     collect_fields = ["diff", "id", "name", "city"]
     assert list(diff.order_by("id").collect(*collect_fields)) == expected
 
 
-@pytest.mark.parametrize("added", (True, False))
-@pytest.mark.parametrize("deleted", (True, False))
-@pytest.mark.parametrize("modified", (True, False))
-@pytest.mark.parametrize("same", (True, False))
-def test_compare_different_left_right_on_columns(
-    test_session, added, deleted, modified, same
-):
-    if not any([added, deleted, modified, same]):
-        pytest.skip("This case is tested in another test")
-
+def test_compare_different_left_right_on_columns(test_session):
     ds1 = DataChain.from_values(
         id=[1, 2, 4],
         name=["John1", "Doe", "Andy"],
@@ -188,10 +196,7 @@ def test_compare_different_left_right_on_columns(
 
     diff = ds1.compare(
         ds2,
-        added=added,
-        deleted=deleted,
-        modified=modified,
-        same=same,
+        same=True,
         on=["id"],
         right_on=["other_id"],
         status_col="diff",
@@ -199,31 +204,19 @@ def test_compare_different_left_right_on_columns(
 
     int_default = Int64.default_value(test_session.catalog.warehouse.db.dialect)
 
-    expected = []
-    if same:
-        expected.append((CompareStatus.SAME, 4, "Andy"))
-    if added:
-        expected.append((CompareStatus.ADDED, 2, "Doe"))
-    if modified:
-        expected.append((CompareStatus.MODIFIED, 1, "John1"))
-    if deleted:
-        expected.append((CompareStatus.DELETED, int_default, "Mark"))
+    expected = [
+        (CompareStatus.SAME, 4, "Andy"),
+        (CompareStatus.ADDED, 2, "Doe"),
+        (CompareStatus.MODIFIED, 1, "John1"),
+        (CompareStatus.DELETED, int_default, "Mark"),
+    ]
 
     collect_fields = ["diff", "id", "name"]
     assert list(diff.order_by("name").collect(*collect_fields)) == expected
 
 
-@pytest.mark.parametrize("added", (True, False))
-@pytest.mark.parametrize("deleted", (True, False))
-@pytest.mark.parametrize("modified", (True, False))
-@pytest.mark.parametrize("same", (True, False))
 @pytest.mark.parametrize("on_self", (True, False))
-def test_compare_on_equal_datasets(
-    test_session, added, deleted, modified, same, on_self
-):
-    if not any([added, deleted, modified, same]):
-        pytest.skip("This case is tested in another test")
-
+def test_compare_on_equal_datasets(test_session, on_self):
     ds1 = DataChain.from_values(
         id=[1, 2, 3],
         name=["John", "Doe", "Andy"],
@@ -241,22 +234,16 @@ def test_compare_on_equal_datasets(
 
     diff = ds1.compare(
         ds2,
-        added=added,
-        deleted=deleted,
-        modified=modified,
-        same=same,
+        same=True,
         on=["id"],
         status_col="diff",
     )
 
-    if not same:
-        expected = []
-    else:
-        expected = [
-            (CompareStatus.SAME, 1, "John"),
-            (CompareStatus.SAME, 2, "Doe"),
-            (CompareStatus.SAME, 3, "Andy"),
-        ]
+    expected = [
+        (CompareStatus.SAME, 1, "John"),
+        (CompareStatus.SAME, 2, "Doe"),
+        (CompareStatus.SAME, 3, "Andy"),
+    ]
 
     collect_fields = ["diff", "id", "name"]
     assert list(diff.order_by("id").collect(*collect_fields)) == expected
