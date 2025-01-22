@@ -4,7 +4,6 @@ from pydantic import BaseModel
 from datachain.diff import CompareStatus, compare_and_split
 from datachain.lib.dc import DataChain
 from datachain.lib.file import File
-from datachain.sql.types import Int64, String
 from tests.utils import sorted_dicts
 
 
@@ -163,15 +162,13 @@ def test_compare_with_explicit_compare_fields(test_session, right_name):
         status_col="diff",
     )
 
-    string_default = String.default_value(test_session.catalog.warehouse.db.dialect)
-
     expected = [
         (CompareStatus.MODIFIED, 1, "John1", "New York"),
         (CompareStatus.ADDED, 2, "Doe", "Boston"),
         (
             CompareStatus.DELETED,
             3,
-            string_default if right_name == "other_name" else "Mark",
+            None if right_name == "other_name" else "Mark",
             "Seattle",
         ),
         (CompareStatus.SAME, 4, "Andy", "San Francisco"),
@@ -202,13 +199,11 @@ def test_compare_different_left_right_on_columns(test_session):
         status_col="diff",
     )
 
-    int_default = Int64.default_value(test_session.catalog.warehouse.db.dialect)
-
     expected = [
         (CompareStatus.SAME, 4, "Andy"),
         (CompareStatus.ADDED, 2, "Doe"),
         (CompareStatus.MODIFIED, 1, "John1"),
-        (CompareStatus.DELETED, int_default, "Mark"),
+        (CompareStatus.DELETED, None, "Mark"),
     ]
 
     collect_fields = ["diff", "id", "name"]
@@ -316,8 +311,6 @@ def test_compare_additional_column_on_left(test_session):
         session=test_session,
     ).save("ds2")
 
-    string_default = String.default_value(test_session.catalog.warehouse.db.dialect)
-
     diff = ds1.compare(ds2, same=True, on=["id"], status_col="diff")
 
     assert sorted_dicts(diff.to_records(), "id") == sorted_dicts(
@@ -328,7 +321,7 @@ def test_compare_additional_column_on_left(test_session):
                 "diff": CompareStatus.DELETED,
                 "id": 3,
                 "name": "Mark",
-                "city": string_default,
+                "city": None,
             },
             {"diff": CompareStatus.MODIFIED, "id": 4, "name": "Andy", "city": "Tokyo"},
         ],

@@ -1054,17 +1054,13 @@ def test_parse_nested_json(tmp_dir, test_session):
     # E.g. nAmE -> name, l--as@t -> l_as_t, etc
     df1 = dc.select("na_me", "age", "city").to_pandas()
 
-    # In CH we replace None with '' for peforance reasons,
-    # have to handle it here
-    string_default = String.default_value(test_session.catalog.warehouse.db.dialect)
-
     assert sorted(df1["na_me"]["first_select"].to_list()) == sorted(
         d["first-SELECT"] for d in df["nA-mE"].to_list()
     )
     assert sorted(
         df1["na_me"]["l_as_t"].to_list(), key=lambda x: (x is None, x)
     ) == sorted(
-        [d.get("l--as@t", string_default) for d in df["nA-mE"].to_list()],
+        [d.get("l--as@t", None) for d in df["nA-mE"].to_list()],
         key=lambda x: (x is None, x),
     )
 
@@ -1306,6 +1302,7 @@ def test_from_csv_null_collect(tmp_dir, test_session):
     for i, row in enumerate(dc.collect()):
         # None value in numeric column will get converted to nan.
         if not height[i]:
+            print(row[1].height)
             assert math.isnan(row[1].height)
         else:
             assert row[1].height == height[i]
@@ -1422,10 +1419,6 @@ def test_explode(tmp_dir, test_session, column_type, object_name, model_name):
     object_name = object_name or "content_expl"
     model_name = model_name or "ContentExplodedModel"
 
-    # In CH we have (atm at least) None converted to ''
-    # for performance reasons, so we need to handle this case
-    string_default = String.default_value(test_session.catalog.warehouse.db.dialect)
-
     assert set(
         dc.collect(
             f"{object_name}.na_me.first_select",
@@ -1435,7 +1428,7 @@ def test_explode(tmp_dir, test_session, column_type, object_name, model_name):
     ) == {
         ("Alice", 25, "New York"),
         ("Bob", 30, "Los Angeles"),
-        ("Charlie", 35, string_default),
+        ("Charlie", 35, None),
         ("David", 40, "Houston"),
         ("Eva", 45, "Phoenix"),
         ("Ivan", 41, "San Francisco"),

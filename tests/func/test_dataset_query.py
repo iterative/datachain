@@ -743,10 +743,9 @@ def test_join_with_binary_expression(
             ("dogs/others/dog4", "dogs/others/dog4"),
         ]
     else:
-        string_default = String.default_value(catalog.warehouse.db.dialect)
         expected = [
-            ("cats/cat1", string_default),
-            ("cats/cat2", string_default),
+            ("cats/cat1", None),
+            ("cats/cat2", None),
             ("dogs/dog1", "dogs/dog1"),
             ("dogs/dog2", "dogs/dog2"),
             ("dogs/dog3", "dogs/dog3"),
@@ -793,10 +792,9 @@ def test_join_with_combination_binary_expression_and_column_predicates(
             ("dogs/others/dog4", "dogs/others/dog4"),
         ]
     else:
-        string_default = String.default_value(catalog.warehouse.db.dialect)
         expected = [
-            ("cats/cat1", string_default),
-            ("cats/cat2", string_default),
+            ("cats/cat1", None),
+            ("cats/cat2", None),
             ("dogs/dog1", "dogs/dog1"),
             ("dogs/dog2", "dogs/dog2"),
             ("dogs/dog3", "dogs/dog3"),
@@ -918,10 +916,9 @@ def test_join_with_using_functions_in_expression(
             ("dogs/others/dog4", "dogs/others/dog4"),
         ]
     else:
-        string_default = String.default_value(catalog.warehouse.db.dialect)
         expected = [
-            ("cats/cat1", string_default),
-            ("cats/cat2", string_default),
+            ("cats/cat1", None),
+            ("cats/cat2", None),
             ("dogs/dog1", "dogs/dog1"),
             ("dogs/dog2", "dogs/dog2"),
             ("dogs/dog3", "dogs/dog3"),
