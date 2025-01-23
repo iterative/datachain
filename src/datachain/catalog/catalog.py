@@ -26,7 +26,6 @@ from uuid import uuid4
 
 import requests
 import sqlalchemy as sa
-import yaml
 from sqlalchemy import Column
 from tqdm.auto import tqdm
 
@@ -57,7 +56,7 @@ from datachain.node import DirType, Node, NodeWithPath
 from datachain.nodes_thread_pool import NodesThreadPool
 from datachain.remote.studio import StudioClient
 from datachain.sql.types import DateTime, SQLType
-from datachain.utils import DataChainDir, datachain_paths_join
+from datachain.utils import DataChainDir
 
 from .datasource import DataSource
 
@@ -73,7 +72,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger("datachain")
 
 DEFAULT_DATASET_DIR = "dataset"
-DATASET_FILE_SUFFIX = ".edatachain"
 
 TTL_INT = 4 * 60 * 60
 
@@ -247,7 +245,6 @@ class NodeGroup:
     # The source path within the bucket
     # (not including the bucket name or s3:// prefix)
     source_path: str = ""
-    is_edatachain: bool = False
     dataset_name: Optional[str] = None
     dataset_version: Optional[int] = None
     instantiated_nodes: Optional[list[NodeWithPath]] = None
@@ -272,55 +269,11 @@ class NodeGroup:
             self.client.fetch_nodes(self.iternodes(recursive), shared_progress_bar=pbar)
 
 
-def check_output_dataset_file(
-    output: str,
-    force: bool = False,
-    dataset_filename: Optional[str] = None,
-    skip_check_edatachain: bool = False,
-) -> str:
-    """
-    Checks the dataset filename for existence or if it should be force-overwritten.
-    """
-    dataset_file = (
-        dataset_filename if dataset_filename else output + DATASET_FILE_SUFFIX
-    )
-    if not skip_check_edatachain and os.path.exists(dataset_file):
-        if force:
-            os.remove(dataset_file)
-        else:
-            raise RuntimeError(f"Output dataset file already exists: {dataset_file}")
-    return dataset_file
-
-
-def parse_edatachain_file(filename: str) -> list[dict[str, Any]]:
-    with open(filename, encoding="utf-8") as f:
-        contents = yaml.safe_load(f)
-
-    if not isinstance(contents, list):
-        contents = [contents]
-
-    for entry in contents:
-        if not isinstance(entry, dict):
-            raise TypeError(
-                "Failed parsing EDataChain file, "
-                "each data source entry must be a dictionary"
-            )
-        if "data-source" not in entry or "files" not in entry:
-            raise ValueError(
-                "Failed parsing EDataChain file, "
-                "each data source entry must contain the "
-                '"data-source" and "files" keys'
-            )
-
-    return contents
-
-
 def prepare_output_for_cp(
     node_groups: list[NodeGroup],
     output: str,
     force: bool = False,
-    edatachain_only: bool = False,
-    no_edatachain_file: bool = False,
+    no_cp: bool = False,
 ) -> tuple[bool, Optional[str]]:
     total_node_count = 0
     for node_group in node_groups:
@@ -333,7 +286,7 @@ def prepare_output_for_cp(
     always_copy_dir_contents = False
     copy_to_filename = None
 
-    if edatachain_only:
+    if no_cp:
         return always_copy_dir_contents, copy_to_filename
 
     if not os.path.isdir(output):
@@ -358,10 +311,6 @@ def prepare_output_for_cp(
                 copy_to_filename = output
         else:
             raise FileNotFoundError(f"Is not a directory: {output}")
-
-    if copy_to_filename and not no_edatachain_file:
-        raise RuntimeError("File to file cp not supported with .edatachain files!")
-
     return always_copy_dir_contents, copy_to_filename
 
 
@@ -465,8 +414,6 @@ def instantiate_node_groups(
                 copy_to_filename,
                 recursive,
                 copy_dir_contents,
-                source_path,
-                node_group.is_edatachain,
                 node_group.is_dataset,
             )
             if not virtual_only:
@@ -482,24 +429,6 @@ def instantiate_node_groups(
 
     if instantiate_progress_bar:
         instantiate_progress_bar.close()
-
-
-def compute_metafile_data(node_groups) -> list[dict[str, Any]]:
-    metafile_data = []
-    for node_group in node_groups:
-        if not node_group.sources:
-            continue
-        listing: Listing = node_group.listing
-        metafile_group = {"data-source": {"uri": listing.uri}, "files": []}
-        for node in node_group.instantiated_nodes:
-            if not node.n.is_dir:
-                metafile_group["files"].append(  # type: ignore [attr-defined]
-                    node.get_metafile_data()
-                )
-        if metafile_group["files"]:
-            metafile_data.append(metafile_group)
-
-    return metafile_data
 
 
 def find_column_to_str(  # noqa: PLR0911
@@ -703,22 +632,8 @@ class Catalog:
         enlisted_sources: list[tuple[bool, bool, Any]] = []
         client_config = client_config or self.client_config
         for src in sources:  # Opt: parallel
-            if src.endswith(DATASET_FILE_SUFFIX) and os.path.isfile(src):
-                # TODO: Also allow using EDataChain files from cloud locations?
-                edatachain_data = parse_edatachain_file(src)
-                indexed_sources = []
-                for ds in edatachain_data:
-                    listing, _, source_path = self.enlist_source(
-                        ds["data-source"]["uri"],
-                        update,
-                        client_config=client_config,
-                    )
-                    paths = datachain_paths_join(
-                        source_path, (f["name"] for f in ds["files"])
-                    )
-                    indexed_sources.append((listing, source_path, paths))
-                enlisted_sources.append((True, False, indexed_sources))
-            elif src.startswith("ds://"):
+            listing: Optional[Listing]
+            if src.startswith("ds://"):
                 ds_name, ds_version = parse_dataset_uri(src)
                 dataset = self.get_dataset(ds_name)
                 if not ds_version:
@@ -796,7 +711,6 @@ class Catalog:
                             listing.client,
                             dsrc,
                             source_path,
-                            is_edatachain=True,
                         )
                     )
             else:
@@ -1360,8 +1274,6 @@ class Catalog:
         local_ds_version: Optional[int] = None,
         cp: bool = False,
         force: bool = False,
-        edatachain: bool = False,
-        edatachain_file: Optional[str] = None,
         *,
         client_config=None,
     ) -> None:
@@ -1373,8 +1285,6 @@ class Catalog:
                 [ds_uri],
                 output,
                 force=force,
-                no_edatachain_file=not edatachain,
-                edatachain_file=edatachain_file,
                 client_config=client_config,
             )
             print(f"Dataset {ds_uri} instantiated locally to {output}")
@@ -1541,8 +1451,6 @@ class Catalog:
         recursive: bool = False,
         no_glob: bool = False,
         no_cp: bool = False,
-        edatachain: bool = False,
-        edatachain_file: Optional[str] = None,
         *,
         client_config=None,
     ) -> None:
@@ -1551,9 +1459,8 @@ class Catalog:
         them into the dataset folder.
         It also adds those files to a dataset in database, which is
         created if doesn't exist yet
-        Optionally, it creates a .edatachain file
         """
-        if not no_cp or edatachain:
+        if not no_cp:
             self.cp(
                 sources,
                 output,
@@ -1561,9 +1468,7 @@ class Catalog:
                 update=update,
                 recursive=recursive,
                 no_glob=no_glob,
-                edatachain_only=no_cp,
-                no_edatachain_file=not edatachain,
-                edatachain_file=edatachain_file,
+                no_cp=no_cp,
                 client_config=client_config,
             )
         else:
@@ -1626,17 +1531,14 @@ class Catalog:
         force: bool = False,
         update: bool = False,
         recursive: bool = False,
-        edatachain_file: Optional[str] = None,
-        edatachain_only: bool = False,
-        no_edatachain_file: bool = False,
+        no_cp: bool = False,
         no_glob: bool = False,
         *,
-        client_config=None,
-    ) -> list[dict[str, Any]]:
+        client_config: Optional["dict"] = None,
+    ) -> None:
         """
         This function copies files from cloud sources to local destination directory
         If cloud source is not indexed, or has expired index, it runs indexing
-        It also creates .edatachain file by default, if not specified differently
         """
         client_config = client_config or self.client_config
         node_groups = self.enlist_sources_grouped(
@@ -1647,17 +1549,11 @@ class Catalog:
         )
 
         always_copy_dir_contents, copy_to_filename = prepare_output_for_cp(
-            node_groups, output, force, edatachain_only, no_edatachain_file
+            node_groups, output, force, no_cp
         )
-        dataset_file = check_output_dataset_file(
-            output, force, edatachain_file, no_edatachain_file
-        )
-
         total_size, total_files = collect_nodes_for_cp(node_groups, recursive)
-
-        if total_files == 0:
-            # Nothing selected to cp
-            return []
+        if not total_files:
+            return
 
         desc_max_len = max(len(output) + 16, 19)
         bar_format = (
@@ -1667,7 +1563,7 @@ class Catalog:
             "[{elapsed}<{remaining}, {rate_fmt:>8}]"
         )
 
-        if not edatachain_only:
+        if not no_cp:
             with get_download_bar(bar_format, total_size) as pbar:
                 for node_group in node_groups:
                     node_group.download(recursive=recursive, pbar=pbar)
@@ -1679,21 +1575,10 @@ class Catalog:
             total_files,
             force,
             recursive,
-            edatachain_only,
+            no_cp,
             always_copy_dir_contents,
             copy_to_filename,
         )
-        if no_edatachain_file:
-            return []
-
-        metafile_data = compute_metafile_data(node_groups)
-        if metafile_data:
-            # Don't write the metafile if nothing was copied
-            print(f"Creating '{dataset_file}'")
-            with open(dataset_file, "w", encoding="utf-8") as fd:
-                yaml.dump(metafile_data, fd, sort_keys=False)
-
-        return metafile_data
 
     def du(
         self,
