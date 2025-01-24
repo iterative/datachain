@@ -110,7 +110,7 @@ def test_from_storage_reindex_expired(tmp_dir, test_session):
     os.mkdir(tmp_dir)
     uri = tmp_dir.as_uri()
 
-    lst_ds_name = parse_listing_uri(uri, catalog.cache, catalog.client_config)[0]
+    lst_ds_name = parse_listing_uri(uri, catalog.client_config)[0]
 
     pd.DataFrame({"name": ["Alice", "Bob"]}).to_parquet(tmp_dir / "test1.parquet")
     assert DataChain.from_storage(uri, session=test_session).count() == 1
@@ -138,7 +138,7 @@ def test_from_storage_partials(cloud_test_catalog):
     catalog = session.catalog
 
     def _list_dataset_name(uri: str) -> str:
-        name = parse_listing_uri(uri, catalog.cache, catalog.client_config)[0]
+        name = parse_listing_uri(uri, catalog.client_config)[0]
         assert name
         return name
 
@@ -182,7 +182,7 @@ def test_from_storage_partials_with_update(cloud_test_catalog):
     catalog = session.catalog
 
     def _list_dataset_name(uri: str) -> str:
-        name = parse_listing_uri(uri, catalog.cache, catalog.client_config)[0]
+        name = parse_listing_uri(uri, catalog.client_config)[0]
         assert name
         return name
 

@@ -103,17 +103,12 @@ def _isfile(client: "Client", path: str) -> bool:
         return False
 
 
-def parse_listing_uri(uri: str, cache, client_config) -> tuple[Optional[str], str, str]:
+def parse_listing_uri(uri: str, client_config) -> tuple[str, str, str]:
     """
     Parsing uri and returns listing dataset name, listing uri and listing path
     """
     client_config = client_config or {}
-    client = Client.get_client(uri, cache, **client_config)
     storage_uri, path = Client.parse_url(uri)
-    telemetry.log_param("client", client.PREFIX)
-
-    if not uri.endswith("/") and _isfile(client, uri):
-        return None, f"{storage_uri}/{path.lstrip('/')}", path
     if uses_glob(path):
         lst_uri_path = posixpath.dirname(path)
     else:
@@ -157,13 +152,15 @@ def get_listing(
     client_config = catalog.client_config
 
     client = Client.get_client(uri, cache, **client_config)
-    ds_name, list_uri, list_path = parse_listing_uri(uri, cache, client_config)
+    telemetry.log_param("client", client.PREFIX)
+
+    # we don't want to use cached dataset (e.g. for a single file listing)
+    if not uri.endswith("/") and _isfile(client, uri):
+        storage_uri, path = Client.parse_url(uri)
+        return None, f"{storage_uri}/{path.lstrip('/')}", path, False
+
+    ds_name, list_uri, list_path = parse_listing_uri(uri, client_config)
     listing = None
-
-    # if we don't want to use cached dataset (e.g. for a single file listing)
-    if not ds_name:
-        return None, list_uri, list_path, False
-
     listings = [
         ls for ls in catalog.listings() if not ls.is_expired and ls.contains(ds_name)
     ]

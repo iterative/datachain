@@ -862,7 +862,7 @@ def test_dataset_storage_dependencies(cloud_test_catalog, cloud_type, indirect):
     ds_name = "some_ds"
     DataChain.from_storage(uri, session=session).save(ds_name)
 
-    lst_ds_name, _, _ = parse_listing_uri(uri, catalog.cache, catalog.client_config)
+    lst_ds_name, _, _ = parse_listing_uri(uri, catalog.client_config)
     lst_dataset = catalog.metastore.get_dataset(lst_ds_name)
 
     assert [
