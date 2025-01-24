@@ -91,6 +91,10 @@ def _isfile(client: "Client", path: str) -> bool:
     Returns True if uri points to a file
     """
     try:
+        if "://" in path:
+            scheme, path = path.split("://", 1)
+            path = f"{scheme.lower()}://{path}"
+
         info = client.fs.info(path)
         name = info.get("name")
         # case for special simulated directories on some clouds
