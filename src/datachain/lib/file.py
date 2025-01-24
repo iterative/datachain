@@ -199,9 +199,7 @@ class File(DataModel):
 
             catalog = get_catalog()
 
-        parts = path.split("/")
-        parent = "/".join(parts[:-1])
-        name = parts[-1]
+        parent, name = posixpath.split(path)
 
         client = catalog.get_client(parent)
         file = client.upload(name, data)
