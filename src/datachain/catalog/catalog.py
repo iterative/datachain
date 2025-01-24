@@ -4,6 +4,7 @@ import logging
 import os
 import os.path
 import posixpath
+import signal
 import subprocess
 import sys
 import time
@@ -95,6 +96,46 @@ def raise_remote_error(error_message: str) -> NoReturn:
 
 def noop(_: str):
     pass
+
+
+class TerminationSignal(RuntimeError):  # noqa: N818
+    def __init__(self, signal):
+        self.signal = signal
+        super().__init__("Received termination signal", signal)
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.signal})"
+
+
+if sys.platform == "win32":
+    SIGINT = signal.CTRL_C_EVENT
+else:
+    SIGINT = signal.SIGINT
+
+
+def shutdown_process(
+    proc: subprocess.Popen,
+    interrupt_timeout: Optional[int] = None,
+    terminate_timeout: Optional[int] = None,
+) -> None:
+    """Shut down the process gracefully with SIGINT -> SIGTERM -> SIGKILL."""
+
+    logger.info("sending interrupt signal to the process %s", proc.pid)
+    proc.send_signal(SIGINT)
+
+    logger.info("waiting for the process %s to finish", proc.pid)
+    try:
+        proc.wait(interrupt_timeout)
+    except subprocess.TimeoutExpired:
+        logger.info(
+            "timed out waiting, sending terminate signal to the process %s", proc.pid
+        )
+        proc.terminate()
+        try:
+            proc.wait(terminate_timeout)
+        except subprocess.TimeoutExpired:
+            logger.info("timed out waiting, killing the process %s", proc.pid)
+            proc.kill()
 
 
 def _process_stream(stream: "IO[bytes]", callback: Callable[[str], None]) -> None:
@@ -1493,6 +1534,8 @@ class Catalog:
         output_hook: Callable[[str], None] = noop,
         params: Optional[dict[str, str]] = None,
         job_id: Optional[str] = None,
+        interrupt_timeout: Optional[int] = None,
+        terminate_timeout: Optional[int] = None,
     ) -> None:
         cmd = [python_executable, "-c", query_script]
         env = dict(env or os.environ)
@@ -1506,13 +1549,45 @@ class Catalog:
         if capture_output:
             popen_kwargs = {"stdout": subprocess.PIPE, "stderr": subprocess.STDOUT}
 
-        with subprocess.Popen(cmd, env=env, **popen_kwargs) as proc:  # noqa: S603
-            if capture_output:
-                args = (proc.stdout, output_hook)
-                thread = Thread(target=_process_stream, args=args, daemon=True)
-                thread.start()
-                thread.join()  # wait for the reader thread
+        def raise_termination_signal(sig: int, _: Any) -> NoReturn:
+            raise TerminationSignal(sig)
 
+        with subprocess.Popen(cmd, env=env, **popen_kwargs) as proc:  # noqa: S603
+            orig_sigint_handler = signal.getsignal(signal.SIGINT)
+            # ignore SIGINT in the main process
+            signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+            orig_sigterm_handler = signal.getsignal(signal.SIGTERM)
+            signal.signal(signal.SIGTERM, raise_termination_signal)
+
+            logger.info("Starting process %s", proc.pid)
+            thread: Optional[Thread] = None
+            try:
+                if capture_output:
+                    args = (proc.stdout, output_hook)
+                    thread = Thread(target=_process_stream, args=args, daemon=True)
+                    thread.start()
+
+                proc.wait()
+            except TerminationSignal as exc:
+                signal.signal(signal.SIGTERM, orig_sigterm_handler)
+                signal.signal(signal.SIGINT, orig_sigint_handler)
+                logging.info("Shutting down process %s, received %r", proc.pid, exc)
+                # Rather than forwarding the signal to the child, we try to shut it down
+                # gracefully. This is because we consider the script to be interactive
+                # and special, so we give it time to cleanup before exiting.
+                shutdown_process(proc, interrupt_timeout, terminate_timeout)
+                if proc.returncode:
+                    raise QueryScriptCancelError(
+                        "Query script was canceled by user", return_code=proc.returncode
+                    ) from exc
+            finally:
+                signal.signal(signal.SIGTERM, orig_sigterm_handler)
+                signal.signal(signal.SIGINT, orig_sigint_handler)
+                if thread:
+                    thread.join()  # wait for the reader thread
+
+        logging.info("Process %s exited with return code %s", proc.pid, proc.returncode)
         if proc.returncode == QUERY_SCRIPT_CANCELED_EXIT_CODE:
             raise QueryScriptCancelError(
                 "Query script was canceled by user",
