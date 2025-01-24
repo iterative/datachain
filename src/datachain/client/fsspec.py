@@ -3,6 +3,7 @@ import functools
 import logging
 import multiprocessing
 import os
+import posixpath
 import re
 import sys
 from abc import ABC, abstractmethod
@@ -391,7 +392,7 @@ class Client(ABC):
     def upload(self, path: str, data: bytes) -> "File":
         full_path = self.get_full_path(path)
 
-        parent = "/".join(full_path.split("/")[:-1])
+        parent = posixpath.dirname(full_path)
         self.fs.makedirs(parent, exist_ok=True)
 
         self.fs.pipe_file(full_path, data)
