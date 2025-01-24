@@ -2,7 +2,6 @@ import glob
 import os
 from collections.abc import Iterable, Iterator
 from functools import cached_property
-from itertools import zip_longest
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Column
@@ -101,11 +100,8 @@ class Listing:
         copy_to_filename: Optional[str],
         recursive=False,
         copy_dir_contents=False,
-        relative_path=None,
-        from_edatachain=False,
         from_dataset=False,
     ) -> list[NodeWithPath]:
-        rel_path_elements = relative_path.split("/") if relative_path else []
         all_nodes: list[NodeWithPath] = []
         for src in sources:
             node = src.node
@@ -119,15 +115,7 @@ class Listing:
                 )
             else:
                 node_path = []
-                if from_edatachain:
-                    for rpe, npe in zip_longest(
-                        rel_path_elements, node.path.split("/")
-                    ):
-                        if rpe == npe:
-                            continue
-                        if npe:
-                            node_path.append(npe)
-                elif copy_to_filename:
+                if copy_to_filename:
                     node_path = [os.path.basename(copy_to_filename)]
                 elif from_dataset:
                     node_path = [

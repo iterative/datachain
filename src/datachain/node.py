@@ -84,18 +84,6 @@ class Node:
         fd.write(f"  size: {self.size}\n")
         return size
 
-    def get_metafile_data(self, path: str):
-        data: dict[str, Any] = {
-            "name": path,
-            "etag": self.etag,
-        }
-        version = self.version
-        if version:
-            data["version"] = version
-        data["last_modified"] = time_to_str(self.last_modified)
-        data["size"] = self.size
-        return data
-
     @property
     def full_path(self) -> str:
         if self.is_dir and self.path:
@@ -180,9 +168,6 @@ class NodeWithPath:
 
     def append_to_file(self, fd):
         return self.n.append_to_file(fd, "/".join(self.path))
-
-    def get_metafile_data(self):
-        return self.n.get_metafile_data("/".join(self.path))
 
     @property
     def full_path(self) -> str:
