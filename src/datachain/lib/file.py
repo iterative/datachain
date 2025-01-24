@@ -191,6 +191,22 @@ class File(DataModel):
         self._caching_enabled: bool = False
 
     @classmethod
+    def upload(
+        cls, path: str, data: bytes, catalog: Optional["Catalog"] = None
+    ) -> "File":
+        if catalog is None:
+            from datachain.catalog.loader import get_catalog
+
+            catalog = get_catalog()
+
+        parent, name = posixpath.split(path)
+
+        client = catalog.get_client(parent)
+        file = client.upload(name, data)
+        file._set_stream(catalog)
+        return file
+
+    @classmethod
     def _from_row(cls, row: "RowDict") -> "Self":
         return cls(**{key: row[key] for key in cls._datachain_column_types})
 

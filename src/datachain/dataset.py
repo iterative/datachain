@@ -91,7 +91,7 @@ class DatasetDependency:
         if self.type == DatasetDependencyType.DATASET:
             return self.name
 
-        list_dataset_name, _, _ = parse_listing_uri(self.name.strip("/"), None, {})
+        list_dataset_name, _, _ = parse_listing_uri(self.name.strip("/"), {})
         assert list_dataset_name
         return list_dataset_name
 

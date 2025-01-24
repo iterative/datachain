@@ -106,7 +106,7 @@ jobs:
         shell: bash
 
       - name: Run E2E tests
-        run: nox -s tests-${{ matrix.pyv }} -- -m "e2e" $DISABLE_REMOTES_ARG
+        run: nox -s tests-${{ matrix.pyv }} -- -m "e2e" --cov-append $DISABLE_REMOTES_ARG
         shell: bash
 
       - name: Upload coverage report

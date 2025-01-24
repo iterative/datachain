@@ -107,9 +107,6 @@ def handle_cp_command(args, catalog):
         force=bool(args.force),
         update=bool(args.update),
         recursive=bool(args.recursive),
-        edatachain_file=None,
-        edatachain_only=False,
-        no_edatachain_file=True,
         no_glob=args.no_glob,
     )
 
