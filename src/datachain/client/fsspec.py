@@ -390,6 +390,10 @@ class Client(ABC):
 
     def upload(self, path: str, data: bytes) -> "File":
         full_path = self.get_full_path(path)
+
+        parent = "/".join(full_path.split("/")[:-1])
+        self.fs.makedirs(parent, exist_ok=True)
+
         self.fs.pipe_file(full_path, data)
         file_info = self.fs.info(full_path)
         return self.info_to_file(file_info, path)
