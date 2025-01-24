@@ -2092,6 +2092,22 @@ def test_from_values_array_of_floats(test_session):
     assert list(chain.order_by("emd").collect("emd")) == embeddings
 
 
+def test_from_values_array_of_ints_with_nones(test_session):
+    ids = [1, 2]
+    embeddings = [[1, None], [4, 5]]
+    chain = DataChain.from_values(emd=embeddings, ids=ids, session=test_session)
+
+    assert list(chain.order_by("ids").collect("emd")) == embeddings
+
+
+def test_from_values_with_nones(test_session):
+    ids = [1, 2, 3, 4]
+    embeddings = [100, None, 300, None]
+    chain = DataChain.from_values(emd=embeddings, ids=ids, session=test_session)
+
+    assert list(chain.order_by("ids").collect("emd")) == [100, None, 300, None]
+
+
 def test_custom_model_with_nested_lists(test_session):
     ds_name = "nested"
 
