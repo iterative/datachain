@@ -4,11 +4,9 @@ from urllib.parse import urlparse
 
 import pytest
 import requests
-import yaml
 from fsspec.implementations.local import LocalFileSystem
 
 from datachain import DataChain, File
-from datachain.catalog import parse_edatachain_file
 from datachain.cli import garbage_collect
 from datachain.error import DatasetNotFoundError
 from datachain.lib.listing import parse_listing_uri
@@ -17,9 +15,7 @@ from tests.utils import DEFAULT_TREE, skip_if_not_sqlite, tree_from_path
 
 
 def listing_stats(uri, catalog):
-    list_dataset_name, _, _ = parse_listing_uri(
-        uri, catalog.cache, catalog.client_config
-    )
+    list_dataset_name, _, _ = parse_listing_uri(uri, catalog.client_config)
     dataset = catalog.get_dataset(list_dataset_name)
     return catalog.dataset_stats(dataset.name, dataset.latest_version)
 
@@ -154,50 +150,12 @@ def test_cp_root(cloud_test_catalog, recursive, star, dir_exists, cloud_type):
 
     if not star and not recursive:
         # The root directory is skipped, so nothing is copied
-        assert tree_from_path(dest) == {}
-        return
-
-    assert (dest / "description").read_text() == "Cats and Dogs"
-
-    # Testing DataChain File Contents
-    assert dest.with_suffix(".edatachain").is_file()
-    edatachain_contents = yaml.safe_load(dest.with_suffix(".edatachain").read_text())
-    assert len(edatachain_contents) == 1
-    data = edatachain_contents[0]
-    assert data["data-source"]["uri"] == src_uri.rstrip("/") + "/"
-    expected_file_count = 7 if recursive else 1
-    assert len(data["files"]) == expected_file_count
-    files_by_name = {f["name"]: f for f in data["files"]}
-
-    # Directories should never be saved
-    assert "cats" not in files_by_name
-    assert "dogs" not in files_by_name
-    assert "others" not in files_by_name
-    assert "dogs/others" not in files_by_name
-
-    # Description is always copied (if anything is copied)
-    prefix = "" if star or (recursive and not dir_exists) else "/"
-    assert files_by_name[f"{prefix}description"]["size"] == 13
-
-    if recursive:
-        assert tree_from_path(dest) == DEFAULT_TREE
-        assert files_by_name[f"{prefix}cats/cat1"]["size"] == 4
-        assert files_by_name[f"{prefix}cats/cat2"]["size"] == 4
-        assert files_by_name[f"{prefix}dogs/dog1"]["size"] == 4
-        assert files_by_name[f"{prefix}dogs/dog2"]["size"] == 3
-        assert files_by_name[f"{prefix}dogs/dog3"]["size"] == 4
-        assert files_by_name[f"{prefix}dogs/others/dog4"]["size"] == 4
-        return
-
-    assert (dest / "cats").exists() is False
-    assert (dest / "dogs").exists() is False
-    for prefix in ["/", ""]:
-        assert f"{prefix}cats/cat1" not in files_by_name
-        assert f"{prefix}cats/cat2" not in files_by_name
-        assert f"{prefix}dogs/dog1" not in files_by_name
-        assert f"{prefix}dogs/dog2" not in files_by_name
-        assert f"{prefix}dogs/dog3" not in files_by_name
-        assert f"{prefix}dogs/others/dog4" not in files_by_name
+        expected = {}
+    elif recursive:
+        expected = DEFAULT_TREE
+    else:
+        expected = {"description": "Cats and Dogs"}
+    assert tree_from_path(dest) == expected
 
 
 @pytest.mark.parametrize(
@@ -271,48 +229,15 @@ def test_cp_subdir(cloud_test_catalog, recursive, star, slash, dir_exists):
 
     if not star and not recursive:
         # Directories are skipped, so nothing is copied
-        assert tree_from_path(dest) == {}
-        return
-
-    # Testing DataChain File Contents
-    assert dest.with_suffix(".edatachain").is_file()
-    edatachain_contents = yaml.safe_load(dest.with_suffix(".edatachain").read_text())
-    assert len(edatachain_contents) == 1
-    data = edatachain_contents[0]
-    assert data["data-source"]["uri"] == src_uri.rstrip("/") + "/"
-    expected_file_count = 4 if recursive else 3
-    assert len(data["files"]) == expected_file_count
-    files_by_name = {f["name"]: f for f in data["files"]}
-
-    # Directories should never be saved
-    assert "others" not in files_by_name
-    assert "dogs/others" not in files_by_name
-
-    if not dir_exists:
-        assert (dest / "dog1").read_text() == "woof"
-        assert (dest / "dog2").read_text() == "arf"
-        assert (dest / "dog3").read_text() == "bark"
-        assert (dest / "dogs").exists() is False
-        assert files_by_name["dog1"]["size"] == 4
-        assert files_by_name["dog2"]["size"] == 3
-        assert files_by_name["dog3"]["size"] == 4
-        if recursive:
-            assert (dest / "others" / "dog4").read_text() == "ruff"
-            assert files_by_name["others/dog4"]["size"] == 4
-        else:
-            assert (dest / "others").exists() is False
-            assert "others/dog4" not in files_by_name
-        return
-
-    assert tree_from_path(dest / "dogs") == DEFAULT_TREE["dogs"]
-    assert (dest / "dog1").exists() is False
-    assert (dest / "dog2").exists() is False
-    assert (dest / "dog3").exists() is False
-    assert (dest / "others").exists() is False
-    assert files_by_name["dogs/dog1"]["size"] == 4
-    assert files_by_name["dogs/dog2"]["size"] == 3
-    assert files_by_name["dogs/dog3"]["size"] == 4
-    assert files_by_name["dogs/others/dog4"]["size"] == 4
+        expected = {}
+    elif not dir_exists:
+        expected = DEFAULT_TREE["dogs"]
+        if not recursive:
+            expected = expected.copy()
+            expected.pop("others")
+    else:
+        expected = {"dogs": DEFAULT_TREE["dogs"]}
+    assert tree_from_path(dest) == expected
 
 
 @pytest.mark.parametrize(
@@ -326,7 +251,7 @@ def test_cp_subdir(cloud_test_catalog, recursive, star, slash, dir_exists):
         (False, False, True),
     ),
 )
-def test_cp_multi_subdir(cloud_test_catalog, recursive, star, slash, cloud_type):  # noqa: PLR0915
+def test_cp_multi_subdir(cloud_test_catalog, recursive, star, slash, cloud_type):
     if recursive and not star and not slash:
         pytest.skip("Fix in https://github.com/iterative/datachain/issues/535")
 
@@ -358,65 +283,14 @@ def test_cp_multi_subdir(cloud_test_catalog, recursive, star, slash, cloud_type)
 
     if not star and not recursive:
         # Directories are skipped, so nothing is copied
-        assert tree_from_path(dest) == {}
-        return
-
-    # Testing DataChain File Contents
-    assert dest.with_suffix(".edatachain").is_file()
-    edatachain_contents = yaml.safe_load(dest.with_suffix(".edatachain").read_text())
-    assert len(edatachain_contents) == 2
-    data_cats = edatachain_contents[0]
-    data_dogs = edatachain_contents[1]
-    assert data_cats["data-source"]["uri"] == sources[0].rstrip("/") + "/"
-    assert data_dogs["data-source"]["uri"] == sources[1].rstrip("/") + "/"
-    assert len(data_cats["files"]) == 2
-    assert len(data_dogs["files"]) == 4 if recursive else 3
-    cat_files_by_name = {f["name"]: f for f in data_cats["files"]}
-    dog_files_by_name = {f["name"]: f for f in data_dogs["files"]}
-
-    # Directories should never be saved
-    assert "others" not in dog_files_by_name
-    assert "dogs/others" not in dog_files_by_name
-
-    if star or slash:
-        assert (dest / "cat1").read_text() == "meow"
-        assert (dest / "cat2").read_text() == "mrow"
-        assert (dest / "dog1").read_text() == "woof"
-        assert (dest / "dog2").read_text() == "arf"
-        assert (dest / "dog3").read_text() == "bark"
-        assert (dest / "cats").exists() is False
-        assert (dest / "dogs").exists() is False
-        assert cat_files_by_name["cat1"]["size"] == 4
-        assert cat_files_by_name["cat2"]["size"] == 4
-        assert dog_files_by_name["dog1"]["size"] == 4
-        assert dog_files_by_name["dog2"]["size"] == 3
-        assert dog_files_by_name["dog3"]["size"] == 4
-        if recursive:
-            assert (dest / "others" / "dog4").read_text() == "ruff"
-            assert dog_files_by_name["others/dog4"]["size"] == 4
-        else:
-            assert (dest / "others").exists() is False
-            assert "others/dog4" not in dog_files_by_name
-        return
-
-    assert (dest / "cats" / "cat1").read_text() == "meow"
-    assert (dest / "cats" / "cat2").read_text() == "mrow"
-    assert (dest / "dogs" / "dog1").read_text() == "woof"
-    assert (dest / "dogs" / "dog2").read_text() == "arf"
-    assert (dest / "dogs" / "dog3").read_text() == "bark"
-    assert (dest / "dogs" / "others" / "dog4").read_text() == "ruff"
-    assert (dest / "cat1").exists() is False
-    assert (dest / "cat2").exists() is False
-    assert (dest / "dog1").exists() is False
-    assert (dest / "dog2").exists() is False
-    assert (dest / "dog3").exists() is False
-    assert (dest / "others").exists() is False
-    assert cat_files_by_name["cats/cat1"]["size"] == 4
-    assert cat_files_by_name["cats/cat2"]["size"] == 4
-    assert dog_files_by_name["dogs/dog1"]["size"] == 4
-    assert dog_files_by_name["dogs/dog2"]["size"] == 3
-    assert dog_files_by_name["dogs/dog3"]["size"] == 4
-    assert dog_files_by_name["dogs/others/dog4"]["size"] == 4
+        expected = {}
+    elif star or slash:
+        expected = DEFAULT_TREE["dogs"] | DEFAULT_TREE["cats"]
+        if not recursive:
+            expected = {k: v for k, v in expected.items() if not isinstance(v, dict)}
+    else:
+        expected = DEFAULT_TREE
+    assert tree_from_path(dest) == expected
 
 
 def test_cp_double_subdir(cloud_test_catalog):
@@ -428,23 +302,7 @@ def test_cp_double_subdir(cloud_test_catalog):
 
     catalog.cp([src_path], str(dest), recursive=True)
 
-    # Testing DataChain File Contents
-    assert dest.with_suffix(".edatachain").is_file()
-    edatachain_contents = yaml.safe_load(dest.with_suffix(".edatachain").read_text())
-    assert len(edatachain_contents) == 1
-    data = edatachain_contents[0]
-    assert data["data-source"]["uri"] == src_path.rstrip("/") + "/"
-    assert len(data["files"]) == 1
-    files_by_name = {f["name"]: f for f in data["files"]}
-
-    # Directories should never be saved
-    assert "others" not in files_by_name
-    assert "dogs/others" not in files_by_name
-
-    assert (dest / "dogs").exists() is False
-    assert (dest / "others").exists() is False
-    assert (dest / "dog4").read_text() == "ruff"
-    assert files_by_name["dog4"]["size"] == 4
+    assert tree_from_path(dest) == {"dog4": "ruff"}
 
 
 @pytest.mark.parametrize("no_glob", (True, False))
@@ -455,9 +313,7 @@ def test_cp_single_file(cloud_test_catalog, no_glob):
     src_path = f"{cloud_test_catalog.src_uri}/dogs/dog1"
     dest.mkdir()
 
-    catalog.cp(
-        [src_path], str(dest / "local_dog"), no_edatachain_file=True, no_glob=no_glob
-    )
+    catalog.cp([src_path], str(dest / "local_dog"), no_glob=no_glob)
 
     assert tree_from_path(dest) == {"local_dog": "woof"}
 
@@ -470,13 +326,13 @@ def test_cp_file_storage_mutation(cloud_test_catalog):
 
     dest = working_dir / "data1"
     dest.mkdir()
-    catalog.cp([src_path], str(dest / "local"), no_edatachain_file=True)
+    catalog.cp([src_path], str(dest / "local"))
     assert tree_from_path(dest) == {"local": "original"}
 
     (cloud_test_catalog.src / "bar-file").write_text("modified")
     dest = working_dir / "data2"
     dest.mkdir()
-    catalog.cp([src_path], str(dest / "local"), no_edatachain_file=True)
+    catalog.cp([src_path], str(dest / "local"))
     assert tree_from_path(dest) == {"local": "modified"}
 
     # For a file we access it directly, we don't take the entry from listing
@@ -484,13 +340,13 @@ def test_cp_file_storage_mutation(cloud_test_catalog):
     catalog.cache.clear()
     dest = working_dir / "data3"
     dest.mkdir()
-    catalog.cp([src_path], str(dest / "local"), no_edatachain_file=True)
+    catalog.cp([src_path], str(dest / "local"))
     assert tree_from_path(dest) == {"local": "modified"}
 
     catalog.index([src_path], update=True)
     dest = working_dir / "data4"
     dest.mkdir()
-    catalog.cp([src_path], str(dest / "local"), no_edatachain_file=True)
+    catalog.cp([src_path], str(dest / "local"))
     assert tree_from_path(dest) == {"local": "modified"}
 
 
@@ -502,13 +358,13 @@ def test_cp_dir_storage_mutation(cloud_test_catalog, version_aware):
 
     dest = working_dir / "data1"
     dest.mkdir()
-    catalog.cp([src_path], str(dest / "local"), no_edatachain_file=True, recursive=True)
+    catalog.cp([src_path], str(dest / "local"), recursive=True)
     assert tree_from_path(dest) == {"local": {"foo-file": "original"}}
 
     (cloud_test_catalog.src / "foo-file").write_text("modified")
     dest = working_dir / "data2"
     dest.mkdir()
-    catalog.cp([src_path], str(dest / "local"), no_edatachain_file=True, recursive=True)
+    catalog.cp([src_path], str(dest / "local"), recursive=True)
     assert tree_from_path(dest) == {"local": {"foo-file": "original"}}
 
     # For a dir we access files through listing
@@ -520,207 +376,18 @@ def test_cp_dir_storage_mutation(cloud_test_catalog, version_aware):
     dest = working_dir / "data3"
     dest.mkdir()
     if version_aware:
-        catalog.cp(
-            [src_path], str(dest / "local"), no_edatachain_file=True, recursive=True
-        )
+        catalog.cp([src_path], str(dest / "local"), recursive=True)
         assert tree_from_path(dest) == {"local": {"foo-file": "original"}}
     else:
         with pytest.raises(FileNotFoundError):
-            catalog.cp(
-                [src_path], str(dest / "local"), no_edatachain_file=True, recursive=True
-            )
+            catalog.cp([src_path], str(dest / "local"), recursive=True)
             assert tree_from_path(dest) == {"local": {}}
 
     catalog.index([src_path], update=True)
     dest = working_dir / "data4"
     dest.mkdir()
-    catalog.cp([src_path], str(dest / "local"), no_edatachain_file=True, recursive=True)
+    catalog.cp([src_path], str(dest / "local"), recursive=True)
     assert tree_from_path(dest) == {"local": {"foo-file": "modified"}}
-
-
-def test_cp_edatachain_file_options(cloud_test_catalog):
-    working_dir = cloud_test_catalog.working_dir
-    catalog = cloud_test_catalog.catalog
-    dest = working_dir / "data"
-    src_path = f"{cloud_test_catalog.src_uri}/dogs/*"
-    edatachain_file = working_dir / "custom_name.edatachain"
-
-    catalog.cp(
-        [src_path],
-        str(dest),
-        recursive=False,
-        edatachain_only=True,
-        edatachain_file=str(edatachain_file),
-    )
-
-    assert (dest / "dog1").exists() is False
-    assert (dest / "dog2").exists() is False
-    assert (dest / "dog3").exists() is False
-    assert (dest / "dogs").exists() is False
-    assert (dest / "others").exists() is False
-    assert dest.with_suffix(".edatachain").exists() is False
-
-    # Testing DataChain File Contents
-    assert edatachain_file.is_file()
-    edatachain_contents = yaml.safe_load(edatachain_file.read_text())
-    assert len(edatachain_contents) == 1
-    data = edatachain_contents[0]
-    assert data["data-source"]["uri"] == f"{cloud_test_catalog.src_uri}/dogs/"
-    expected_file_count = 3
-    assert len(data["files"]) == expected_file_count
-    files_by_name = {f["name"]: f for f in data["files"]}
-
-    assert parse_edatachain_file(str(edatachain_file)) == edatachain_contents
-
-    # Directories should never be saved
-    assert "others" not in files_by_name
-    assert "dogs/others" not in files_by_name
-
-    assert files_by_name["dog1"]["size"] == 4
-    assert files_by_name["dog2"]["size"] == 3
-    assert files_by_name["dog3"]["size"] == 4
-    assert "others/dog4" not in files_by_name
-
-    with pytest.raises(FileNotFoundError):
-        # Should fail, as * will not be expanded
-        catalog.cp(
-            [src_path],
-            str(dest),
-            recursive=False,
-            edatachain_only=True,
-            edatachain_file=str(edatachain_file),
-            no_glob=True,
-        )
-
-    # Should succeed, as the DataChain file exists check will be skipped
-    edatachain_only_data = catalog.cp(
-        [src_path],
-        str(dest),
-        recursive=False,
-        edatachain_only=True,
-        edatachain_file=str(edatachain_file),
-        force=True,
-    )
-
-    # Check the returned DataChain data contents
-    assert len(edatachain_only_data) == len(edatachain_contents)
-    edatachain_only_source = edatachain_only_data[0]
-    assert data["data-source"]["uri"] == f"{cloud_test_catalog.src_uri}/dogs/"
-    assert edatachain_only_source["files"] == data["files"]
-
-
-def test_cp_edatachain_file_sources(cloud_test_catalog):  # noqa: PLR0915
-    pytest.skip("Fix in https://github.com/iterative/datachain/issues/535")
-    sources = [
-        f"{cloud_test_catalog.src_uri}/cats/",
-        f"{cloud_test_catalog.src_uri}/dogs/*",
-    ]
-    working_dir = cloud_test_catalog.working_dir
-    catalog = cloud_test_catalog.catalog
-
-    dest = working_dir / "data"
-
-    edatachain_files = [
-        working_dir / "custom_cats.edatachain",
-        working_dir / "custom_dogs.edatachain",
-    ]
-
-    catalog.cp(
-        sources[:1],
-        str(dest),
-        recursive=True,
-        edatachain_only=True,
-        edatachain_file=str(edatachain_files[0]),
-    )
-
-    catalog.cp(
-        sources[1:],
-        str(dest),
-        recursive=True,
-        edatachain_only=True,
-        edatachain_file=str(edatachain_files[1]),
-    )
-
-    # Files should not be copied yet
-    assert (dest / "cat1").exists() is False
-    assert (dest / "cat2").exists() is False
-    assert (dest / "cats").exists() is False
-    assert (dest / "dog1").exists() is False
-    assert (dest / "dog2").exists() is False
-    assert (dest / "dog3").exists() is False
-    assert (dest / "dogs").exists() is False
-    assert (dest / "others").exists() is False
-
-    # Testing DataChain File Contents
-    edatachain_data = []
-    for dqf in edatachain_files:
-        assert dqf.is_file()
-        edatachain_contents = yaml.safe_load(dqf.read_text())
-        assert len(edatachain_contents) == 1
-        edatachain_data.extend(edatachain_contents)
-
-    assert len(edatachain_data) == 2
-    data_cats1 = edatachain_data[0]
-    data_dogs1 = edatachain_data[1]
-    assert data_cats1["data-source"]["uri"] == sources[0]
-    assert data_dogs1["data-source"]["uri"] == sources[1].rstrip("*")
-    assert len(data_cats1["files"]) == 2
-    assert len(data_dogs1["files"]) == 4
-    cat_files_by_name1 = {f["name"]: f for f in data_cats1["files"]}
-    dog_files_by_name1 = {f["name"]: f for f in data_dogs1["files"]}
-
-    # Directories should never be saved
-    assert "others" not in dog_files_by_name1
-    assert "dogs/others" not in dog_files_by_name1
-
-    assert cat_files_by_name1["cat1"]["size"] == 4
-    assert cat_files_by_name1["cat2"]["size"] == 4
-    assert dog_files_by_name1["dog1"]["size"] == 4
-    assert dog_files_by_name1["dog2"]["size"] == 3
-    assert dog_files_by_name1["dog3"]["size"] == 4
-    assert dog_files_by_name1["others/dog4"]["size"] == 4
-
-    assert not dest.exists()
-
-    with pytest.raises(FileNotFoundError):
-        catalog.cp([str(dqf) for dqf in edatachain_files], str(dest), recursive=True)
-
-    dest.mkdir()
-
-    # Copy using these DataChain files as sources
-    catalog.cp([str(dqf) for dqf in edatachain_files], str(dest), recursive=True)
-
-    # Files should now be copied
-    assert (dest / "cat1").read_text() == "meow"
-    assert (dest / "cat2").read_text() == "mrow"
-    assert (dest / "dog1").read_text() == "woof"
-    assert (dest / "dog2").read_text() == "arf"
-    assert (dest / "dog3").read_text() == "bark"
-    assert (dest / "others" / "dog4").read_text() == "ruff"
-
-    # Testing DataChain File Contents
-    assert dest.with_suffix(".edatachain").is_file()
-    edatachain_contents = yaml.safe_load(dest.with_suffix(".edatachain").read_text())
-    assert len(edatachain_contents) == 2
-    data_cats2 = edatachain_contents[0]
-    data_dogs2 = edatachain_contents[1]
-    assert data_cats2["data-source"]["uri"] == sources[0]
-    assert data_dogs2["data-source"]["uri"] == sources[1].rstrip("*")
-    assert len(data_cats2["files"]) == 2
-    assert len(data_dogs2["files"]) == 4
-    cat_files_by_name2 = {f["name"]: f for f in data_cats2["files"]}
-    dog_files_by_name2 = {f["name"]: f for f in data_dogs2["files"]}
-
-    # Directories should never be saved
-    assert "others" not in dog_files_by_name2
-    assert "dogs/others" not in dog_files_by_name2
-
-    assert cat_files_by_name2["cat1"]["size"] == 4
-    assert cat_files_by_name2["cat2"]["size"] == 4
-    assert dog_files_by_name2["dog1"]["size"] == 4
-    assert dog_files_by_name2["dog2"]["size"] == 3
-    assert dog_files_by_name2["dog3"]["size"] == 4
-    assert dog_files_by_name2["others/dog4"]["size"] == 4
 
 
 @pytest.mark.parametrize("cloud_type, version_aware", [("file", False)], indirect=True)

@@ -25,7 +25,7 @@ from fsspec.asyn import get_loop, sync
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 from tqdm.auto import tqdm
 
-from datachain.cache import DataChainCache
+from datachain.cache import Cache
 from datachain.client.fileslice import FileWrapper
 from datachain.error import ClientError as DataChainClientError
 from datachain.nodes_fetcher import NodesFetcher
@@ -74,9 +74,7 @@ class Client(ABC):
     PREFIX: ClassVar[str]
     protocol: ClassVar[str]
 
-    def __init__(
-        self, name: str, fs_kwargs: dict[str, Any], cache: DataChainCache
-    ) -> None:
+    def __init__(self, name: str, fs_kwargs: dict[str, Any], cache: Cache) -> None:
         self.name = name
         self.fs_kwargs = fs_kwargs
         self._fs: Optional[AbstractFileSystem] = None
@@ -122,7 +120,7 @@ class Client(ABC):
         return cls.get_uri(storage_name), rel_path
 
     @staticmethod
-    def get_client(source: str, cache: DataChainCache, **kwargs) -> "Client":
+    def get_client(source: str, cache: Cache, **kwargs) -> "Client":
         cls = Client.get_implementation(source)
         storage_url, _ = cls.split_url(source)
         if os.name == "nt":
@@ -145,7 +143,7 @@ class Client(ABC):
     def from_name(
         cls,
         name: str,
-        cache: DataChainCache,
+        cache: Cache,
         kwargs: dict[str, Any],
     ) -> "Client":
         return cls(name, kwargs, cache)
@@ -154,7 +152,7 @@ class Client(ABC):
     def from_source(
         cls,
         uri: "StorageURI",
-        cache: DataChainCache,
+        cache: Cache,
         **kwargs,
     ) -> "Client":
         return cls(cls.FS_CLASS._strip_protocol(uri), kwargs, cache)
@@ -392,6 +390,10 @@ class Client(ABC):
 
     def upload(self, path: str, data: bytes) -> "File":
         full_path = self.get_full_path(path)
+
+        parent = "/".join(full_path.split("/")[:-1])
+        self.fs.makedirs(parent, exist_ok=True)
+
         self.fs.pipe_file(full_path, data)
         file_info = self.fs.info(full_path)
         return self.info_to_file(file_info, path)

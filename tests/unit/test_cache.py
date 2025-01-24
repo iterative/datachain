@@ -2,13 +2,13 @@ import os
 
 import pytest
 
-from datachain.cache import DataChainCache, get_temp_cache, temporary_cache
+from datachain.cache import Cache, get_temp_cache, temporary_cache
 from datachain.lib.file import File
 
 
 @pytest.fixture
 def cache(tmp_path):
-    return DataChainCache(str(tmp_path / "cache"), str(tmp_path / "tmp"))
+    return Cache(str(tmp_path / "cache"), str(tmp_path / "tmp"))
 
 
 def test_simple(cache):
@@ -57,7 +57,7 @@ def test_remove(cache):
     assert not cache.contains(uid)
 
 
-def test_destroy(cache: DataChainCache):
+def test_destroy(cache: Cache):
     file = File(source="s3://foo", path="data/bar", etag="xyz", size=3, location=None)
     cache.store_data(file, b"foo")
     assert cache.contains(file)
@@ -69,7 +69,7 @@ def test_destroy(cache: DataChainCache):
 def test_get_temp_cache(tmp_path):
     temp = get_temp_cache(tmp_path, prefix="test-")
     assert os.path.isdir(temp.cache_dir)
-    assert isinstance(temp, DataChainCache)
+    assert isinstance(temp, Cache)
     head, tail = os.path.split(temp.cache_dir)
     assert head == str(tmp_path)
     assert tail.startswith("test-")

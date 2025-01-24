@@ -3,7 +3,7 @@ import os
 
 import pytest
 
-from datachain.cache import DataChainCache
+from datachain.cache import Cache
 from datachain.lib.file import File
 from datachain.lib.pytorch import PytorchDataset
 from datachain.lib.settings import Settings
@@ -30,7 +30,7 @@ def test_cache(catalog, cache, prefetch):
 
 @pytest.mark.parametrize("cache", [True, False])
 def test_close(mocker, catalog, cache):
-    spy = mocker.spy(DataChainCache, "destroy")
+    spy = mocker.spy(Cache, "destroy")
     ds = PytorchDataset(
         "fake", 1, catalog, dc_settings=Settings(cache=cache, prefetch=10)
     )
@@ -74,7 +74,7 @@ def test_prefetched_files_are_removed_after_yield(tmp_dir, mocker, catalog, cach
 
 @pytest.mark.parametrize("cache", [True, False])
 def test_prefetch_cache_gets_destroyed_on_gc(mocker, catalog, cache):
-    spy = mocker.patch.object(DataChainCache, "destroy")
+    spy = mocker.patch.object(Cache, "destroy")
     ds = PytorchDataset(
         "fake", 1, catalog, dc_settings=Settings(cache=cache, prefetch=10)
     )
