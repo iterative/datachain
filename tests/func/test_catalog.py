@@ -15,9 +15,7 @@ from tests.utils import DEFAULT_TREE, skip_if_not_sqlite, tree_from_path
 
 
 def listing_stats(uri, catalog):
-    list_dataset_name, _, _ = parse_listing_uri(
-        uri, catalog.cache, catalog.client_config
-    )
+    list_dataset_name, _, _ = parse_listing_uri(uri, catalog.client_config)
     dataset = catalog.get_dataset(list_dataset_name)
     return catalog.dataset_stats(dataset.name, dataset.latest_version)
 
