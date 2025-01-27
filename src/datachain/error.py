@@ -1,3 +1,15 @@
+import botocore.errorfactory
+import botocore.exceptions
+import gcsfs.retry
+
+REMOTE_ERRORS = (
+    gcsfs.retry.HttpError,  # GCS
+    OSError,  # GCS
+    botocore.exceptions.BotoCoreError,  # S3
+    ValueError,  # Azure
+)
+
+
 class DataChainError(RuntimeError):
     pass
 

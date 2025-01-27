@@ -1,3 +1,4 @@
+import os
 import posixpath
 from collections.abc import Iterator
 from typing import TYPE_CHECKING, Callable, Optional, TypeVar
@@ -7,6 +8,7 @@ from sqlalchemy.sql.expression import true
 
 from datachain.asyn import iter_over_async
 from datachain.client import Client
+from datachain.error import REMOTE_ERRORS, ClientError
 from datachain.lib.file import File
 from datachain.query.schema import Column
 from datachain.sql.functions import path as pathfunc
@@ -90,6 +92,15 @@ def _isfile(client: "Client", path: str) -> bool:
     Returns True if uri points to a file
     """
     try:
+        if "://" in path:
+            # This makes sure that the uppercase scheme is converted to lowercase
+            scheme, path = path.split("://", 1)
+            path = f"{scheme.lower()}://{path}"
+
+        if os.name == "nt" and "*" in path:
+            # On Windows, the glob pattern "*" is not supported
+            return False
+
         info = client.fs.info(path)
         name = info.get("name")
         # case for special simulated directories on some clouds
@@ -99,8 +110,13 @@ def _isfile(client: "Client", path: str) -> bool:
             return False
 
         return info["type"] == "file"
-    except:  # noqa: E722
+    except FileNotFoundError:
         return False
+    except REMOTE_ERRORS as e:
+        raise ClientError(
+            message=str(e),
+            error_code=getattr(e, "code", None),
+        ) from e
 
 
 def parse_listing_uri(uri: str, client_config) -> tuple[str, str, str]:
