@@ -65,6 +65,24 @@ def test_length(warehouse):
     assert result == ((4, 5, 2),)
 
 
+def test_contains(warehouse):
+    query = select(
+        func.contains(["abc", "def", "g", "hi"], "abc").label("contains1"),
+        func.contains(["abc", "def", "g", "hi"], "cdf").label("contains2"),
+        func.contains([3.0, 5.0, 1.0, 6.0, 1.0], 1.0).label("contains3"),
+        func.contains([[1, None, 3], [4, 5, 6]], [1, None, 3]).label("contains4"),
+        # Not supported yet by CH, need to add it later + some Pydantic model as
+        # an input:
+        # func.contains(
+        #     [{"c": 1, "a": True}, {"b": False}], {"a": True, "c": 1}
+        # ).label("contains5"),
+        func.contains([1, None, 3], None).label("contains6"),
+        func.contains([1, True, 3], True).label("contains7"),
+    )
+    result = tuple(warehouse.db.execute(query))
+    assert result == ((1, 0, 1, 1, 1, 1),)
+
+
 def test_length_on_split(warehouse):
     query = select(
         func.array.length(func.string.split(func.literal("abc/def/g/hi"), "/")),

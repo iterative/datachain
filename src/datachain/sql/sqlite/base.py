@@ -87,6 +87,7 @@ def setup():
     compiles(sql_path.file_stem, "sqlite")(compile_path_file_stem)
     compiles(sql_path.file_ext, "sqlite")(compile_path_file_ext)
     compiles(array.length, "sqlite")(compile_array_length)
+    compiles(array.contains, "sqlite")(compile_array_contains)
     compiles(string.length, "sqlite")(compile_string_length)
     compiles(string.split, "sqlite")(compile_string_split)
     compiles(string.regexp_replace, "sqlite")(compile_string_regexp_replace)
@@ -269,12 +270,15 @@ def register_user_defined_sql_functions() -> None:
 
     _registered_function_creators["string_functions"] = create_string_functions
 
-    has_json_extension = functions_exist(["json_array_length"])
+    has_json_extension = functions_exist(["json_array_length", "json_array_contains"])
     if not has_json_extension:
 
         def create_json_functions(conn):
             conn.create_function(
                 "json_array_length", 1, py_json_array_length, deterministic=True
+            )
+            conn.create_function(
+                "json_array_contains", 3, py_json_array_contains, deterministic=True
             )
 
         _registered_function_creators["json_functions"] = create_json_functions
@@ -428,8 +432,20 @@ def py_json_array_length(arr):
     return len(orjson.loads(arr))
 
 
+def py_json_array_contains(arr, value, is_json):
+    if is_json:
+        value = orjson.loads(value)
+    return value in orjson.loads(arr)
+
+
 def compile_array_length(element, compiler, **kwargs):
     return compiler.process(func.json_array_length(*element.clauses.clauses), **kwargs)
+
+
+def compile_array_contains(element, compiler, **kwargs):
+    return compiler.process(
+        func.json_array_contains(*element.clauses.clauses), **kwargs
+    )
 
 
 def compile_string_length(element, compiler, **kwargs):
