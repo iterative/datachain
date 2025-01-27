@@ -16,7 +16,7 @@ def add_auth_parser(subparsers, parent_parser) -> None:
     auth_login_help = "Authenticate with Studio"
     auth_login_description = (
         "Authenticate with Studio using default scopes. "
-        "A random name will be assigned as the token name if not specified."
+        "A random name will be assigned if the token name is not specified."
     )
     login_parser = auth_subparser.add_parser(
         "login",
