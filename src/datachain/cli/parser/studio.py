@@ -1,9 +1,6 @@
 def add_auth_parser(subparsers, parent_parser) -> None:
     auth_help = "Manage Studio authentication"
-    auth_description = (
-        "Manage authentication and settings for Studio. "
-        "Configure tokens for sharing datasets and using Studio features."
-    )
+    auth_description = "Manage authentication and settings for Studio. "
 
     auth_parser = subparsers.add_parser(
         "auth",
