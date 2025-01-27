@@ -276,9 +276,8 @@ class SQLiteDatabaseEngine(DatabaseEngine):
         )
         return bool(next(self.execute(query))[0])
 
-    def create_table(self, table: "Table", if_not_exists: bool = True) -> "Table":
+    def create_table(self, table: "Table", if_not_exists: bool = True) -> None:
         self.execute(CreateTable(table, if_not_exists=if_not_exists))
-        return table
 
     def drop_table(self, table: "Table", if_exists: bool = False) -> None:
         self.execute(DropTable(table, if_exists=if_exists))

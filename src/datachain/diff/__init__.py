@@ -172,7 +172,6 @@ def _compare(  # noqa: PLR0912, PLR0915, C901
     )
 
     def _default_val(chain: "DataChain", col: str):
-        print(chain._query.column_types)
         col_type = chain._query.column_types[col]  # type: ignore[index]
         val = sa.literal(col_type.default_value(dialect)).label(col)
         val.type = col_type()

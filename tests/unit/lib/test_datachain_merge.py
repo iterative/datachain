@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import func
 
 from datachain.lib.dc import C, DataChain, DatasetMergeError
+from datachain.sql.types import Int, String
 from tests.utils import skip_if_not_sqlite
 
 
@@ -51,6 +52,8 @@ def test_merge_objects(test_session):
     ch2 = DataChain.from_values(team=team, session=test_session)
     ch = ch1.merge(ch2, "emp.person.name", "team.player")
 
+    str_default = String.default_value(test_session.catalog.warehouse.db.dialect)
+
     i = 0
     j = 0
     for items in ch.order_by("emp.person.name", "team.player").collect():
@@ -69,8 +72,8 @@ def test_merge_objects(test_session):
             assert math.isclose(player.height, team[j].height, rel_tol=1e-7)
             j += 1
         else:
-            assert player.player is None
-            assert player.sport is None
+            assert player.player == str_default
+            assert player.sport == str_default
             assert pd.isnull(player.weight)
             assert pd.isnull(player.height)
 
@@ -92,6 +95,9 @@ def test_merge_objects_full_join(test_session, multiple_predicates):
     else:
         ch = ch1.merge(ch2, "emp.person.name", "team.player", full=True)
 
+    str_default = String.default_value(test_session.catalog.warehouse.db.dialect)
+    int_default = Int.default_value(test_session.catalog.warehouse.db.dialect)
+
     i = 0
     for items in ch.order_by("emp.person.name", "team.player").collect():
         assert len(items) == 2
@@ -101,13 +107,13 @@ def test_merge_objects_full_join(test_session, multiple_predicates):
         assert isinstance(player, TeamMember)
 
         if player.player == "John":
-            assert empl.person.name is None
-            assert empl.person.age is None
+            assert empl.person.name == str_default
+            assert empl.person.age == int_default
             continue
 
         if empl.person.name == "Bob":
-            assert player.player is None
-            assert player.sport is None
+            assert player.player == str_default
+            assert player.sport == str_default
             assert pd.isnull(player.weight)
             assert pd.isnull(player.height)
             continue
