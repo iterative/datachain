@@ -1,3 +1,4 @@
+import os
 import posixpath
 from collections.abc import Iterator
 from typing import TYPE_CHECKING, Callable, Optional, TypeVar
@@ -92,8 +93,13 @@ def _isfile(client: "Client", path: str) -> bool:
     """
     try:
         if "://" in path:
+            # This makes sure that the uppercase scheme is converted to lowercase
             scheme, path = path.split("://", 1)
             path = f"{scheme.lower()}://{path}"
+
+        if os.name == "nt" and "*" in path:
+            # On Windows, the glob pattern "*" is not supported
+            return False
 
         info = client.fs.info(path)
         name = info.get("name")
