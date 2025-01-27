@@ -1,3 +1,4 @@
+import logging
 import os
 import posixpath
 from collections.abc import Iterator
@@ -23,6 +24,10 @@ LISTING_TTL = 4 * 60 * 60  # cached listing lasts 4 hours
 LISTING_PREFIX = "lst__"  # listing datasets start with this name
 
 D = TypeVar("D", bound="DataChain")
+
+# Disable warnings for remote errors in clients
+logging.getLogger("aiobotocore.credentials").setLevel(logging.CRITICAL)
+logging.getLogger("gcsfs").setLevel(logging.CRITICAL)
 
 
 def list_bucket(uri: str, cache, client_config=None) -> Callable:
