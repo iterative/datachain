@@ -1,4 +1,5 @@
 from huggingface_hub import InferenceClient
+from requests import HTTPError
 
 from datachain import C, DataChain, DataModel
 
@@ -20,15 +21,20 @@ def eval_dialog(
     user_input: str,
     bot_response: str,
 ) -> DialogEval:
-    completion = client.chat_completion(
-        messages=[
-            {
-                "role": "user",
-                "content": f"{PROMPT}\n\nUser: {user_input}\nBot: {bot_response}",
-            },
-        ],
-        response_format={"type": "json", "value": DialogEval.model_json_schema()},
-    )
+    try:
+        completion = client.chat_completion(
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"{PROMPT}\n\nUser: {user_input}\nBot: {bot_response}",
+                },
+            ],
+            response_format={"type": "json", "value": DialogEval.model_json_schema()},
+        )
+    except HTTPError:
+        return DialogEval(
+            result="Error", reason="Error while interacting with the Hugging Face API."
+        )
 
     message = completion.choices[0].message
     try:
