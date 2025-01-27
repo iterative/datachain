@@ -34,6 +34,24 @@ def add_sources_arg(parser: ArgumentParser, nargs: Union[str, int] = "+") -> Act
     )
 
 
+def add_anon_arg(parser: ArgumentParser) -> None:
+    parser.add_argument(
+        "--anon",
+        action="store_true",
+        help="Use anonymous access to storage",
+    )
+
+
+def add_update_arg(parser: ArgumentParser) -> None:
+    parser.add_argument(
+        "-u",
+        "--update",
+        action="count",
+        default=0,
+        help="Update cached list of files for the sources",
+    )
+
+
 def add_show_args(parser: ArgumentParser) -> None:
     parser.add_argument(
         "--limit",

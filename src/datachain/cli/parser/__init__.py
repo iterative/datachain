@@ -8,7 +8,14 @@ from datachain.cli.utils import BooleanOptionalAction, KeyValueArgs
 
 from .job import add_jobs_parser
 from .studio import add_auth_parser
-from .utils import FIND_COLUMNS, add_show_args, add_sources_arg, find_columns_type
+from .utils import (
+    FIND_COLUMNS,
+    add_anon_arg,
+    add_show_args,
+    add_sources_arg,
+    add_update_arg,
+    find_columns_type,
+)
 
 
 def get_parser() -> ArgumentParser:  # noqa: PLR0915
@@ -30,19 +37,6 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     )
     parent_parser.add_argument(
         "-q", "--quiet", action="count", default=0, help="Be quiet"
-    )
-
-    parent_parser.add_argument(
-        "--anon",
-        action="store_true",
-        help="Use anonymous access to storage",
-    )
-    parent_parser.add_argument(
-        "-u",
-        "--update",
-        action="count",
-        default=0,
-        help="Update cached list of files for the sources",
     )
 
     parent_parser.add_argument(
@@ -92,6 +86,8 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         action="store_true",
         help="Do not expand globs (such as * or ?)",
     )
+    add_anon_arg(parse_cp)
+    add_update_arg(parse_cp)
 
     parse_clone = subp.add_parser(
         "clone", parents=[parent_parser], description="Copy data files from the cloud."
@@ -127,6 +123,8 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         action="store_true",
         help="Do not copy files, just create a dataset",
     )
+    add_anon_arg(parse_clone)
+    add_update_arg(parse_clone)
 
     add_auth_parser(subp, parent_parser)
     add_jobs_parser(subp, parent_parser)
@@ -137,6 +135,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         parents=[parent_parser],
         description="Commands for managing datasets.",
     )
+    add_anon_arg(datasets_parser)
     datasets_subparser = datasets_parser.add_subparsers(
         dest="datasets_cmd",
         help="Use `datachain dataset CMD --help` to display command-specific help",
@@ -336,6 +335,8 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     parse_ls = subp.add_parser(
         "ls", parents=[parent_parser], description="List storage contents."
     )
+    add_anon_arg(parse_ls)
+    add_update_arg(parse_ls)
     add_sources_arg(parse_ls, nargs="*")
     parse_ls.add_argument(
         "-l",
@@ -375,6 +376,8 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         "du", parents=[parent_parser], description="Display space usage."
     )
     add_sources_arg(parse_du)
+    add_anon_arg(parse_du)
+    add_update_arg(parse_du)
     parse_du.add_argument(
         "-b",
         "--bytes",
@@ -404,6 +407,8 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     parse_find = subp.add_parser(
         "find", parents=[parent_parser], description="Search in a directory hierarchy."
     )
+    add_anon_arg(parse_find)
+    add_update_arg(parse_find)
     add_sources_arg(parse_find)
     parse_find.add_argument(
         "--name",
@@ -457,6 +462,8 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     parse_index = subp.add_parser(
         "index", parents=[parent_parser], description="Index storage location."
     )
+    add_anon_arg(parse_index)
+    add_update_arg(parse_index)
     add_sources_arg(parse_index)
 
     show_parser = subp.add_parser(
@@ -480,6 +487,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         parents=[parent_parser],
         description="Create a new dataset with a query script.",
     )
+    add_anon_arg(query_parser)
     query_parser.add_argument(
         "script", metavar="<script.py>", type=str, help="Filepath for script"
     )
@@ -504,14 +512,17 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         help="Query parameters",
     )
 
-    subp.add_parser(
+    parse_clear_cache = subp.add_parser(
         "clear-cache",
         parents=[parent_parser],
         description="Clear the local file cache.",
     )
-    subp.add_parser(
+    add_anon_arg(parse_clear_cache)
+
+    parse_gc = subp.add_parser(
         "gc", parents=[parent_parser], description="Garbage collect temporary tables."
     )
+    add_anon_arg(parse_gc)
 
     subp.add_parser("internal-run-udf", parents=[parent_parser])
     subp.add_parser("internal-run-udf-worker", parents=[parent_parser])
