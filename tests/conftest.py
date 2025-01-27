@@ -366,7 +366,7 @@ def make_cloud_server(src_path, cloud_type, tree):
         client_config = {"aws_endpoint_url": endpoint_url}
     elif cloud_type in ("gs", "gcs"):
         endpoint_url = fs._endpoint
-        client_config = {"endpoint_url": endpoint_url}
+        client_config = {"endpoint_url": endpoint_url, "anon": True}
     elif cloud_type == "azure":
         client_config = fs.storage_options.copy()
     elif cloud_type == "file":
