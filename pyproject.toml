@@ -81,8 +81,8 @@ video = [
   # Use 'av<14' because of incompatibility with imageio
   # See https://github.com/PyAV-Org/PyAV/discussions/1700
   "av<14",
+  "ffmpeg-python",
   "imageio[ffmpeg]",
-  "moviepy<2",
   "opencv-python"
 ]
 tests = [
