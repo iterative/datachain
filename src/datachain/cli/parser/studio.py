@@ -1,9 +1,8 @@
 def add_auth_parser(subparsers, parent_parser) -> None:
+    from dvc_studio_client.auth import AVAILABLE_SCOPES
+
     auth_help = "Manage Studio authentication"
-    auth_description = (
-        "Manage authentication and settings for Studio. "
-        "Configure tokens for sharing datasets and using Studio features."
-    )
+    auth_description = "Manage authentication and settings for Studio. "
 
     auth_parser = subparsers.add_parser(
         "auth",
@@ -19,8 +18,10 @@ def add_auth_parser(subparsers, parent_parser) -> None:
     auth_login_help = "Authenticate with Studio"
     auth_login_description = (
         "Authenticate with Studio using default scopes. "
-        "A random name will be assigned as the token name if not specified."
+        "A random name will be assigned if the token name is not specified."
     )
+
+    allowed_scopes = ", ".join(AVAILABLE_SCOPES)
     login_parser = auth_subparser.add_parser(
         "login",
         parents=[parent_parser],
@@ -40,7 +41,7 @@ def add_auth_parser(subparsers, parent_parser) -> None:
         "--scopes",
         action="store",
         default=None,
-        help="Authentication token scopes",
+        help=f"Authentication token scopes. Allowed scopes: {allowed_scopes}",
     )
 
     login_parser.add_argument(

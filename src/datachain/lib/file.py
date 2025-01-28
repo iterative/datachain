@@ -193,11 +193,11 @@ class File(DataModel):
 
     @classmethod
     def upload(
-        cls, path: str, data: bytes, catalog: Optional["Catalog"] = None
+        cls, data: bytes, path: str, catalog: Optional["Catalog"] = None
     ) -> "File":
         parent, name = posixpath.split(path)
         catalog, client = get_client_from_path(parent, catalog=catalog)
-        file = client.upload(name, data)
+        file = client.upload(data, name)
         file._set_stream(catalog)
         return file
 

@@ -47,9 +47,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     logging_level = get_logging_level(args)
     logger.setLevel(logging_level)
 
-    client_config = {
-        "anon": args.anon,
-    }
+    client_config = (
+        {
+            "anon": args.anon,
+        }
+        if getattr(args, "anon", False)
+        else {}
+    )
 
     if args.debug_sql:
         # This also sets this environment variable for any subprocesses

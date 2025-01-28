@@ -55,7 +55,7 @@ def test_upload(cloud_test_catalog):
 
     img_bytes = b"bytes"
 
-    f = File.upload(f"{source}/{filename}", img_bytes, catalog)
+    f = File.upload(img_bytes, f"{source}/{filename}", catalog)
 
     assert f.path == filename
     assert f.source == source

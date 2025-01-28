@@ -425,6 +425,12 @@ def test_lt_mutate(dc):
     assert list(res) == [0, 0, 0, 0, 0]
 
 
+@pytest.mark.parametrize("value", [1, 0.5, "a", True])
+def test_mutate_with_literal(dc, value):
+    res = dc.mutate(test=value).collect("test")
+    assert list(res) == [value] * 5
+
+
 def test_le():
     rnd1, rnd2 = rand(), rand()
 
