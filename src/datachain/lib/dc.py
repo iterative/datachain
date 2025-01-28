@@ -1133,7 +1133,7 @@ class DataChain:
         primitives = (bool, str, int, float)
 
         for col_name, expr in kwargs.items():
-            if not isinstance(expr, primitives + (Column, Func)) and isinstance(
+            if not isinstance(expr, (*primitives, Column, Func)) and isinstance(
                 expr.type, NullType
             ):
                 raise DataChainColumnError(
@@ -1152,7 +1152,9 @@ class DataChain:
                 mutated[name] = value.get_column(schema)
             elif isinstance(value, primitives):
                 # adding simple python constant primitives like str, int, float, bool
-                mutated[name] = literal(value)  # type: ignore[assignment]
+                val = literal(value)
+                val.type = python_to_sql(type(value))()
+                mutated[name] = val  # type: ignore[assignment]
             else:
                 # adding new signal
                 mutated[name] = value
