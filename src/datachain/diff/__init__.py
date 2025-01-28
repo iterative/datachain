@@ -79,30 +79,37 @@ def _comparev2(
 
 
     """
+    rname = "right_"
 
-    from datachain.func import _case, _isnon
+    from datachain.func import case, isnone, ifelse
 
-    l = dc1.mutate(ldiff=1)
-    r = dc2.mutate(rdiff=1)
+    l = left.mutate(ldiff=1)
+    l.show()
+    print("--------")
+    r = right.mutate(rdiff=1)
 
     # diff_cond.append((unchanged_cond, "U"))
     # diff = sa.case(*diff_cond, else_=None if compare else "M").label(status_col)
     dc_diff = (
-        l.outer_join(r, on="id", rname=f"r_{name}")
-        # .mutate(d1=_case(_isnon(ldiff), "A", "D"))
-        # .mutate(d2=_case(_isnon(rdiff), "A", "D"))
-        # .mutate(diff=_case(d1 != d2, "A", "D"))
+        l.merge(r, on="id", rname=rname, full=True)
         .mutate(
-            diff=_case(
-                (_isnon(ldiff), "D"),
-                (_isnon(rdiff), "A"),
-                (C("name") != C("rname"), "M"),
-                # (_or(C("name") != C("rname")), "M"),
+            diff=case(
+                (isnone("ldiff"), "D"),
+                (isnone("rdiff"), "A"),
+                (C("name") != C("right_name"), "M"),
                 else_="U",
             )
         )
-        .select_except("d1", "d2", "ldiff", "rdiff")
+        .select_except("ldiff", "rdiff")
+        # .mutate(new_id=ifelse(C("diff") == "D", C("right_id"), C("id")))
+        .mutate(id=ifelse(C("diff") == "D", C("right_id"), C("id")))
+        .mutate(name=ifelse(C("diff") == "D", C("right_name"), C("name")))
+        .select("id", "name", "diff")
+        # .mutate(id=C("new_id"))
+        # .mutate(name=C("new_name"))
     )
+    dc_diff.show()
+
 
 def _compare(  # noqa: PLR0912, PLR0915, C901
     left: "DataChain",
