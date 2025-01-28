@@ -1134,8 +1134,7 @@ class DataChain:
 
         for col_name, expr in kwargs.items():
             if (
-                not isinstance(expr, primitives)
-                and not isinstance(expr, (Column, Func))
+                not isinstance(expr, primitives + (Column, Func))
                 and isinstance(expr.type, NullType)
             ):
                 raise DataChainColumnError(
