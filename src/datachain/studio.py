@@ -282,7 +282,7 @@ def upload_files(client: StudioClient, files: list[str]) -> list[str]:
         file_name = os.path.basename(file)
         with open(file, "rb") as f:
             file_content = f.read()
-        response = client.upload_file(file_name, file_content)
+        response = client.upload_file(file_content, file_name)
         if not response.ok:
             raise_remote_error(response.message)
 

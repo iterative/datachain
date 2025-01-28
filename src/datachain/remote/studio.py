@@ -375,7 +375,7 @@ class StudioClient:
             method="GET",
         )
 
-    def upload_file(self, file_name: str, content: bytes) -> Response[FileUploadData]:
+    def upload_file(self, content: bytes, file_name: str) -> Response[FileUploadData]:
         data = {
             "file_content": base64.b64encode(content).decode("utf-8"),
             "file_name": file_name,
