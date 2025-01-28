@@ -6,7 +6,10 @@ from uuid import uuid4
 
 import pytest
 
-from datachain.catalog.catalog import QUERY_SCRIPT_CANCELED_EXIT_CODE
+from datachain.catalog.catalog import (
+    QUERY_SCRIPT_CANCELED_EXIT_CODE,
+    TerminationSignal,
+)
 from datachain.error import QueryScriptCancelError, QueryScriptRunError
 
 
@@ -63,3 +66,15 @@ def test_non_zero_exitcode(catalog, mock_popen):
         catalog.query("pass")
     assert e.value.return_code == 1
     assert "Query script exited with error code 1" in str(e.value)
+
+
+def test_shutdown_process_on_sigterm(mocker, catalog, mock_popen):
+    mock_popen.returncode = -2
+    mock_popen.wait.side_effect = [TerminationSignal(15)]
+    m = mocker.patch("datachain.catalog.catalog.shutdown_process", return_value=-2)
+
+    with pytest.raises(QueryScriptCancelError) as e:
+        catalog.query("pass", interrupt_timeout=0.1, terminate_timeout=0.2)
+    assert e.value.return_code == -2
+    assert "Query script was canceled by user" in str(e.value)
+    m.assert_called_once_with(mock_popen, 0.1, 0.2)
