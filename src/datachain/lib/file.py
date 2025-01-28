@@ -195,30 +195,20 @@ class File(DataModel):
     def upload(
         cls, path: str, data: bytes, catalog: Optional["Catalog"] = None
     ) -> "File":
-        if catalog is None:
-            from datachain.catalog.loader import get_catalog
-
-            catalog = get_catalog()
-
         parent, name = posixpath.split(path)
-
-        client = catalog.get_client(parent)
+        catalog, client = get_client_from_path(parent, catalog=catalog)
         file = client.upload(name, data)
         file._set_stream(catalog)
         return file
 
     @classmethod
     def from_local_path(cls, path: str, catalog: Optional["Catalog"] = None) -> "File":
-        if catalog is None:
-            from datachain.catalog.loader import get_catalog
-
-            catalog = get_catalog()
-
         parent, name = posixpath.split(path)
-        client = catalog.get_client(parent)
-
+        catalog, client = get_client_from_path(parent, catalog=catalog)
         file_info = client.fs.info(path)
-        return client.info_to_file(file_info, name)
+        file = client.info_to_file(file_info, name)
+        file._set_stream(catalog)
+        return file
 
     @classmethod
     def _from_row(cls, row: "RowDict") -> "Self":
@@ -261,10 +251,6 @@ class File(DataModel):
         """Returns file contents as text."""
         with self.open(mode="r") as stream:
             return stream.read()
-
-    def stream(self) -> BytesIO:
-        """Returns file contents as BytesIO stream."""
-        return BytesIO(self.read())
 
     def save(self, destination: str):
         """Writes it's content to destination"""
@@ -760,3 +746,14 @@ def get_file_type(type_: FileType = "binary") -> type[File]:
         file = VideoFile
 
     return file
+
+
+def get_client_from_path(
+    path: str, catalog: Optional["Catalog"] = None
+) -> tuple["Catalog", "Client"]:
+    if catalog is None:
+        from datachain.catalog.loader import get_catalog
+
+        catalog = get_catalog()
+
+    return catalog, catalog.get_client(path)

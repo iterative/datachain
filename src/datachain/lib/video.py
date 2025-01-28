@@ -103,7 +103,7 @@ def video_frame_np(file: "File", frame: int) -> "ndarray":
     if frame < 0:
         raise ValueError("frame must be a non-negative integer.")
 
-    return iio.imread(file.stream(), index=frame, plugin="pyav")
+    return iio.imread(file.open(), index=frame, plugin="pyav")  # type: ignore[arg-type]
 
 
 def video_frame(file: "File", frame: int, format: str = "jpg") -> bytes:
@@ -187,7 +187,7 @@ def video_frames_np(
     frame_shift = start_frame % step
 
     # Iterate over video frames and yield only those within the specified range and step
-    for frame, img in enumerate(iio.imiter(file.stream(), plugin="pyav")):
+    for frame, img in enumerate(iio.imiter(file.open(), plugin="pyav")):  # type: ignore[arg-type]
         if frame < start_frame:
             continue
         if (frame - frame_shift) % step != 0:
