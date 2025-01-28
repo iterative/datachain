@@ -120,6 +120,9 @@ def case(
         if isinstance(val, Func):
             # nested functions
             return val.result_type
+        if isinstance(val, Column):
+            # at this point, we cannot know what is the type of a column
+            return None
         return type(val)
 
     if not args:
@@ -129,13 +132,16 @@ def case(
 
     for arg in args:
         arg_type = _get_type(arg[1])
+        if arg_type is None:
+            # we couldn't figure out the type of case value
+            continue
         if type_ and arg_type != type_:
             raise DataChainParamsError(
                 f"Statement values must be of the same type, got {type_} and {arg_type}"
             )
         type_ = arg_type
 
-    if type_ not in supported_types:
+    if type_ is not None and type_ not in supported_types:
         raise DataChainParamsError(
             f"Only python literals ({supported_types}) are supported for values"
         )
