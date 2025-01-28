@@ -192,7 +192,7 @@ class File(DataModel):
 
     @classmethod
     def upload(
-        cls, path: str, data: bytes, catalog: Optional["Catalog"] = None
+        cls, data: bytes, path: str, catalog: Optional["Catalog"] = None
     ) -> "File":
         if catalog is None:
             from datachain.catalog.loader import get_catalog
@@ -202,7 +202,7 @@ class File(DataModel):
         parent, name = posixpath.split(path)
 
         client = catalog.get_client(parent)
-        file = client.upload(name, data)
+        file = client.upload(data, name)
         file._set_stream(catalog)
         return file
 

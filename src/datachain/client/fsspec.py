@@ -389,7 +389,7 @@ class Client(ABC):
             self.fs.open(self.get_full_path(file.path, file.version)), cb
         )  # type: ignore[return-value]
 
-    def upload(self, path: str, data: bytes) -> "File":
+    def upload(self, data: bytes, path: str) -> "File":
         full_path = self.get_full_path(path)
 
         parent = posixpath.dirname(full_path)
