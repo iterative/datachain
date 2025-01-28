@@ -425,18 +425,10 @@ def test_lt_mutate(dc):
     assert list(res) == [0, 0, 0, 0, 0]
 
 
-def test_mutate_with_literal(dc):
-    res = dc.mutate(test=1).collect("test")
-    assert list(res) == [1, 1, 1, 1, 1]
-
-    res = dc.mutate(test=0.5).collect("test")
-    assert list(res) == [0.5, 0.5, 0.5, 0.5, 0.5]
-
-    res = dc.mutate(test="a").collect("test")
-    assert list(res) == ["a", "a", "a", "a", "a"]
-
-    res = dc.mutate(test=True).collect("test")
-    assert list(res) == [True, True, True, True, True]
+@pytest.mark.parametrize("value", [1, 0.5, "a", True])
+def test_mutate_with_literal(dc, value):
+    res = dc.mutate(test=value).collect("test")
+    assert list(res) == [value] * 5
 
 
 def test_le():
