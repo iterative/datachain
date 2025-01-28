@@ -117,7 +117,7 @@ def shutdown_process(
     proc: subprocess.Popen,
     interrupt_timeout: Optional[int] = None,
     terminate_timeout: Optional[int] = None,
-) -> None:
+) -> int:
     """Shut down the process gracefully with SIGINT -> SIGTERM -> SIGKILL."""
 
     logger.info("sending interrupt signal to the process %s", proc.pid)
@@ -125,17 +125,18 @@ def shutdown_process(
 
     logger.info("waiting for the process %s to finish", proc.pid)
     try:
-        proc.wait(interrupt_timeout)
+        return proc.wait(interrupt_timeout)
     except subprocess.TimeoutExpired:
         logger.info(
             "timed out waiting, sending terminate signal to the process %s", proc.pid
         )
         proc.terminate()
         try:
-            proc.wait(terminate_timeout)
+            return proc.wait(terminate_timeout)
         except subprocess.TimeoutExpired:
             logger.info("timed out waiting, killing the process %s", proc.pid)
             proc.kill()
+            return proc.wait()
 
 
 def _process_stream(stream: "IO[bytes]", callback: Callable[[str], None]) -> None:
@@ -1552,16 +1553,19 @@ class Catalog:
         def raise_termination_signal(sig: int, _: Any) -> NoReturn:
             raise TerminationSignal(sig)
 
+        thread: Optional[Thread] = None
         with subprocess.Popen(cmd, env=env, **popen_kwargs) as proc:  # noqa: S603
+            logger.info("Starting process %s", proc.pid)
+
             orig_sigint_handler = signal.getsignal(signal.SIGINT)
-            # ignore SIGINT in the main process
+            # ignore SIGINT in the main process.
+            # In the terminal, SIGINTs are received by all the processes in
+            # the foreground process group, so the script will receive the signal too.
+            # (If we forward the signal to the child, it will receive it twice.)
             signal.signal(signal.SIGINT, signal.SIG_IGN)
 
             orig_sigterm_handler = signal.getsignal(signal.SIGTERM)
             signal.signal(signal.SIGTERM, raise_termination_signal)
-
-            logger.info("Starting process %s", proc.pid)
-            thread: Optional[Thread] = None
             try:
                 if capture_output:
                     args = (proc.stdout, output_hook)
