@@ -1133,9 +1133,8 @@ class DataChain:
         primitives = (bool, str, int, float)
 
         for col_name, expr in kwargs.items():
-            if (
-                not isinstance(expr, primitives + (Column, Func))
-                and isinstance(expr.type, NullType)
+            if not isinstance(expr, primitives + (Column, Func)) and isinstance(
+                expr.type, NullType
             ):
                 raise DataChainColumnError(
                     col_name, f"Cannot infer type with expression {expr}"
