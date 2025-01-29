@@ -1554,42 +1554,46 @@ class Catalog:
             raise TerminationSignal(sig)
 
         thread: Optional[Thread] = None
-        with subprocess.Popen(cmd, env=env, **popen_kwargs) as proc:  # noqa: S603
-            logger.info("Starting process %s", proc.pid)
+        orig_sigterm_handler = signal.getsignal(signal.SIGTERM)
+        orig_sigint_handler = signal.getsignal(signal.SIGINT)
+        signal.signal(signal.SIGTERM, raise_termination_signal)
+        try:
+            with subprocess.Popen(cmd, env=env, **popen_kwargs) as proc:  # noqa: S603
+                try:
+                    # ignore SIGINT in the main process.
+                    # In the terminal, SIGINTs are received by all the processes in
+                    # the foreground process group, so the script will
+                    # receive the signal too.
+                    # (If we forward the signal to the child, it will receive it twice.)
+                    signal.signal(signal.SIGINT, signal.SIG_IGN)
+                    logger.info("Starting process %s", proc.pid)
+                    if capture_output:
+                        args = (proc.stdout, output_hook)
+                        thread = Thread(target=_process_stream, args=args, daemon=True)
+                        thread.start()
 
-            orig_sigint_handler = signal.getsignal(signal.SIGINT)
-            # ignore SIGINT in the main process.
-            # In the terminal, SIGINTs are received by all the processes in
-            # the foreground process group, so the script will receive the signal too.
-            # (If we forward the signal to the child, it will receive it twice.)
-            signal.signal(signal.SIGINT, signal.SIG_IGN)
+                    proc.wait()
+                except (TerminationSignal, KeyboardInterrupt) as exc:
+                    # SIGINT is ignored, but in case it ever happens, let's handle it
+                    signal.signal(signal.SIGTERM, orig_sigterm_handler)
+                    signal.signal(signal.SIGINT, orig_sigint_handler)
 
-            orig_sigterm_handler = signal.getsignal(signal.SIGTERM)
-            signal.signal(signal.SIGTERM, raise_termination_signal)
-            try:
-                if capture_output:
-                    args = (proc.stdout, output_hook)
-                    thread = Thread(target=_process_stream, args=args, daemon=True)
-                    thread.start()
-
-                proc.wait()
-            except TerminationSignal as exc:
-                signal.signal(signal.SIGTERM, orig_sigterm_handler)
-                signal.signal(signal.SIGINT, orig_sigint_handler)
-                logging.info("Shutting down process %s, received %r", proc.pid, exc)
-                # Rather than forwarding the signal to the child, we try to shut it down
-                # gracefully. This is because we consider the script to be interactive
-                # and special, so we give it time to cleanup before exiting.
-                shutdown_process(proc, interrupt_timeout, terminate_timeout)
-                if proc.returncode:
-                    raise QueryScriptCancelError(
-                        "Query script was canceled by user", return_code=proc.returncode
-                    ) from exc
-            finally:
-                signal.signal(signal.SIGTERM, orig_sigterm_handler)
-                signal.signal(signal.SIGINT, orig_sigint_handler)
-                if thread:
-                    thread.join()  # wait for the reader thread
+                    logging.info("Shutting down process %s, received %r", proc.pid, exc)
+                    # Rather than forwarding the signal to the child, we try to shut it
+                    # down gracefully. This is because we consider the script to be
+                    # interactive and special, so we give it time to cleanup before
+                    # exiting.
+                    shutdown_process(proc, interrupt_timeout, terminate_timeout)
+                    if proc.returncode:
+                        raise QueryScriptCancelError(
+                            "Query script was canceled by user",
+                            return_code=proc.returncode,
+                        ) from exc
+        finally:
+            signal.signal(signal.SIGTERM, orig_sigterm_handler)
+            signal.signal(signal.SIGINT, orig_sigint_handler)
+            if thread:
+                thread.join()  # wait for the reader thread
 
         logging.info("Process %s exited with return code %s", proc.pid, proc.returncode)
         if proc.returncode == QUERY_SCRIPT_CANCELED_EXIT_CODE:
