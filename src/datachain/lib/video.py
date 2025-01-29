@@ -8,6 +8,8 @@ if TYPE_CHECKING:
 
     from numpy import ndarray
 
+    from datachain.lib.file import VideoFile
+
 try:
     import ffmpeg
     import imageio.v3 as iio
@@ -19,7 +21,7 @@ except ImportError as exc:
     ) from exc
 
 
-def _video_probe(file: "File") -> tuple[dict, dict, float]:
+def _video_probe(file: "VideoFile") -> tuple[dict, dict, float]:
     """Probes video file for video stream, video format and fps."""
     try:
         probe = ffmpeg.probe(file.get_local_path())
@@ -52,18 +54,12 @@ def _video_probe(file: "File") -> tuple[dict, dict, float]:
     return video_stream, video_format, fps
 
 
-def _video_fps(file: "File") -> float:
-    """Returns video file frames per second."""
-    _, _, fps = _video_probe(file)
-    return fps
-
-
-def video_info(file: "File") -> "Video":
+def video_info(file: "VideoFile") -> "Video":
     """
     Returns video file information.
 
     Args:
-        file (File): File object.
+        file (VideoFile): Video file object.
 
     Returns:
         Video: Video file information.
@@ -89,12 +85,12 @@ def video_info(file: "File") -> "Video":
     )
 
 
-def video_frame_np(file: "File", frame: int) -> "ndarray":
+def video_frame_np(file: "VideoFile", frame: int) -> "ndarray":
     """
     Reads video frame from a file.
 
     Args:
-        file (File): File object.
+        file (VideoFile): Video file object.
         frame (int): Frame number to read.
 
     Returns:
@@ -103,15 +99,16 @@ def video_frame_np(file: "File", frame: int) -> "ndarray":
     if frame < 0:
         raise ValueError("frame must be a non-negative integer.")
 
-    return iio.imread(file.open(), index=frame, plugin="pyav")  # type: ignore[arg-type]
+    with file.open() as f:
+        return iio.imread(f, index=frame, plugin="pyav")  # type: ignore[arg-type]
 
 
-def video_frame(file: "File", frame: int, format: str = "jpg") -> bytes:
+def video_frame(file: "VideoFile", frame: int, format: str = "jpg") -> bytes:
     """
     Reads video frame from a file and returns as image bytes.
 
     Args:
-        file (File): File object.
+        file (VideoFile): Video file object.
         frame (int): Frame number to read.
         format (str): Image format (default: 'jpg').
 
@@ -123,39 +120,42 @@ def video_frame(file: "File", frame: int, format: str = "jpg") -> bytes:
 
 
 def save_video_frame(
-    file: "File",
+    file: "VideoFile",
     frame: int,
     output_file: str,
+    format: Optional[str] = None,
 ) -> "VideoFrame":
     """
     Saves video frame as an image file.
 
     Args:
-        file (File): File object.
+        file (VideoFile): Video file object.
         frame (int): Frame number to read.
         output_file (str): Output file path.
+        format (str): Image format (default: use output file extension).
 
     Returns:
         VideoFrame: Video frame model.
     """
     _, _, fps = _video_probe(file)
 
-    ext = os.path.splitext(output_file)[1]
+    if format is None:
+        format = os.path.splitext(output_file)[1][1:]
 
-    img = video_frame_np(file, frame)
-    iio.imwrite(output_file, img, extension=f".{ext}")
+    img = video_frame(file, frame, format=format)
+    uploaded_file = File.upload(img, output_file)
 
-    frame_file = File.from_local_path(output_file)
-    return VideoFrame(
-        **frame_file.model_dump(),
+    frame_file = VideoFrame(
+        **uploaded_file.model_dump(),
         frame=frame,
         timestamp=float(frame) / fps,
-        orig=file,
     )
+    frame_file._set_stream(uploaded_file._catalog)
+    return frame_file
 
 
 def video_frames_np(
-    file: "File",
+    file: "VideoFile",
     start_frame: int = 0,
     end_frame: Optional[int] = None,
     step: int = 1,
@@ -164,7 +164,7 @@ def video_frames_np(
     Reads video frames from a file.
 
     Args:
-        file (File): File object.
+        file (VideoFile): Video file object.
         start_frame (int): Frame number to start reading from (default: 0).
         end_frame (int): Frame number to stop reading at (default: None).
         step (int): Step size for reading frames (default: 1).
@@ -187,18 +187,19 @@ def video_frames_np(
     frame_shift = start_frame % step
 
     # Iterate over video frames and yield only those within the specified range and step
-    for frame, img in enumerate(iio.imiter(file.open(), plugin="pyav")):  # type: ignore[arg-type]
-        if frame < start_frame:
-            continue
-        if (frame - frame_shift) % step != 0:
-            continue
-        if end_frame is not None and frame > end_frame:
-            break
-        yield img
+    with file.open() as f:
+        for frame, img in enumerate(iio.imiter(f.read(), plugin="pyav")):  # type: ignore[arg-type]
+            if frame < start_frame:
+                continue
+            if (frame - frame_shift) % step != 0:
+                continue
+            if end_frame is not None and frame > end_frame:
+                break
+            yield img
 
 
 def video_frames(
-    file: "File",
+    file: "VideoFile",
     start_frame: int = 0,
     end_frame: Optional[int] = None,
     step: int = 1,
@@ -208,7 +209,7 @@ def video_frames(
     Reads video frames from a file and returns as bytes.
 
     Args:
-        file (File): File object.
+        file (VideoFile): Video file object.
         start_frame (int): Frame number to start reading from (default: 0).
         end_frame (int): Frame number to stop reading at (default: None).
         step (int): Step size for reading frames (default: 1).
@@ -222,7 +223,7 @@ def video_frames(
 
 
 def save_video_frames(
-    file: "File",
+    file: "VideoFile",
     output_dir: str,
     start_frame: int = 0,
     end_frame: Optional[int] = None,
@@ -233,7 +234,7 @@ def save_video_frames(
     Saves video frames as image files.
 
     Args:
-        file (File): File object.
+        file (VideoFile): Video file object.
         output_dir (str): Output directory path.
         start_frame (int): Frame number to start reading from (default: 0).
         end_frame (int): Frame number to stop reading at (default: None).
@@ -250,19 +251,20 @@ def save_video_frames(
         frame = start_frame + i * step
         output_file = os.path.join(output_dir, f"{file_stem}_{frame:06d}.{format}")
 
-        iio.imwrite(output_file, img, extension=f".{format}")
+        raw = iio.imwrite("<bytes>", img, extension=f".{format}")
+        uploaded_file = File.upload(raw, output_file)
 
-        frame_file = File.from_local_path(output_file)
-        yield VideoFrame(
-            **frame_file.model_dump(),
+        frame_file = VideoFrame(
+            **uploaded_file.model_dump(),
             frame=frame,
-            timestamp=frame / fps,
-            orig=file,
+            timestamp=float(frame) / fps,
         )
+        frame_file._set_stream(uploaded_file._catalog)
+        yield frame_file
 
 
 def save_video_fragment(
-    file: "File",
+    file: "VideoFile",
     start_time: float,
     end_time: float,
     output_file: str,
@@ -271,7 +273,7 @@ def save_video_fragment(
     Saves video interval as a new video file.
 
     Args:
-        file (File): File object.
+        file (VideoFile): Video file object.
         start_time (float): Start time in seconds.
         end_time (float): End time in seconds.
         output_file (str): Output file path.
@@ -288,17 +290,20 @@ def save_video_fragment(
         .run(quiet=True)
     )
 
-    clip_file = File.from_local_path(output_file)
-    return VideoFragment(
-        **clip_file.model_dump(),
+    with open(output_file, "rb") as f:
+        uploaded_file = File.upload(f.read(), output_file)
+
+    fragment = VideoFragment(
+        **uploaded_file.model_dump(),
         start=start_time,
         end=end_time,
-        orig=file,
     )
+    fragment._set_stream(uploaded_file._catalog)
+    return fragment
 
 
 def save_video_fragments(
-    file: "File",
+    file: "VideoFile",
     intervals: list[tuple[float, float]],
     output_dir: str,
 ) -> "Iterator[VideoFragment]":
@@ -306,7 +311,7 @@ def save_video_fragments(
     Saves video intervals as new video files.
 
     Args:
-        file (File): File object.
+        file (VideoFile): Video file object.
         intervals (list[tuple[float, float]]): List of start and end times in seconds.
         output_dir (str): Output directory path.
 

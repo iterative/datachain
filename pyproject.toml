@@ -86,7 +86,7 @@ video = [
   "opencv-python"
 ]
 tests = [
-  "datachain[torch,remote,vector,hf]",
+  "datachain[torch,remote,vector,hf,video]",
   "pytest>=8,<9",
   "pytest-sugar>=0.9.6",
   "pytest-cov>=4.1.0",

@@ -194,19 +194,18 @@ class File(DataModel):
     @classmethod
     def upload(
         cls, data: bytes, path: str, catalog: Optional["Catalog"] = None
-    ) -> "File":
-        parent, name = posixpath.split(path)
-        catalog, client = get_client_from_path(parent, catalog=catalog)
-        file = client.upload(data, name)
-        file._set_stream(catalog)
-        return file
+    ) -> "Self":
+        if catalog is None:
+            from datachain.catalog.loader import get_catalog
 
-    @classmethod
-    def from_local_path(cls, path: str, catalog: Optional["Catalog"] = None) -> "File":
+            catalog = get_catalog()
+
         parent, name = posixpath.split(path)
-        catalog, client = get_client_from_path(parent, catalog=catalog)
-        file_info = client.fs.info(path)
-        file = client.info_to_file(file_info, name)
+
+        client = catalog.get_client(parent)
+        file = client.upload(data, name)
+        if not isinstance(file, cls):
+            file = cls(**file.model_dump())
         file._set_stream(catalog)
         return file
 
@@ -543,20 +542,26 @@ class VideoFile(File):
 
         return video_frame(self, frame, format)
 
-    def save_frame(self, frame: int, output_file: str) -> "VideoFrame":
+    def save_frame(
+        self,
+        frame: int,
+        output_file: str,
+        format: Optional[str] = None,
+    ) -> "VideoFrame":
         """
         Saves video frame as an image file.
 
         Args:
             frame (int): Frame number to read.
             output_file (str): Output file path.
+            format (str): Image format (default: use output file extension).
 
         Returns:
             VideoFrame: Video frame model.
         """
         from .video import save_video_frame
 
-        return save_video_frame(self, frame, output_file)
+        return save_video_frame(self, frame, output_file, format=format)
 
     def get_frames_np(
         self,
@@ -577,7 +582,7 @@ class VideoFile(File):
         """
         from .video import video_frames_np
 
-        return video_frames_np(self, start_frame, end_frame, step)
+        yield from video_frames_np(self, start_frame, end_frame, step)
 
     def get_frames(
         self,
@@ -600,7 +605,7 @@ class VideoFile(File):
         """
         from .video import video_frames
 
-        return video_frames(self, start_frame, end_frame, step, format)
+        yield from video_frames(self, start_frame, end_frame, step, format)
 
     def save_frames(
         self,
@@ -625,7 +630,9 @@ class VideoFile(File):
         """
         from .video import save_video_frames
 
-        return save_video_frames(self, output_dir, start_frame, end_frame, step, format)
+        yield from save_video_frames(
+            self, output_dir, start_frame, end_frame, step, format
+        )
 
     def save_fragment(
         self,
@@ -666,7 +673,7 @@ class VideoFile(File):
         """
         from .video import save_video_fragments
 
-        return save_video_fragments(self, intervals, output_dir)
+        yield from save_video_fragments(self, intervals, output_dir)
 
 
 class VideoFragment(VideoFile):
@@ -674,15 +681,13 @@ class VideoFragment(VideoFile):
 
     start: float = Field(default=-1.0)
     end: float = Field(default=-1.0)
-    orig: File
 
 
-class VideoFrame(VideoFile):
+class VideoFrame(ImageFile):
     """`DataModel` for reading video frames."""
 
     frame: int = Field(default=-1)
     timestamp: float = Field(default=-1.0)
-    orig: File
 
 
 class Video(DataModel):
@@ -695,16 +700,6 @@ class Video(DataModel):
     frames: int = Field(default=-1)
     format: str = Field(default="")
     codec: str = Field(default="")
-
-
-class Frame(DataModel):
-    """`DataModel` for video frame image meta information."""
-
-    frame: int = Field(default=-1)
-    timestamp: float = Field(default=-1.0)
-    width: int = Field(default=-1)
-    height: int = Field(default=-1)
-    format: str = Field(default="")
 
 
 class ArrowRow(DataModel):
@@ -746,14 +741,3 @@ def get_file_type(type_: FileType = "binary") -> type[File]:
         file = VideoFile
 
     return file
-
-
-def get_client_from_path(
-    path: str, catalog: Optional["Catalog"] = None
-) -> tuple["Catalog", "Client"]:
-    if catalog is None:
-        from datachain.catalog.loader import get_catalog
-
-        catalog = get_catalog()
-
-    return catalog, catalog.get_client(path)
