@@ -12,7 +12,7 @@ from tests.utils import sorted_dicts
 @pytest.mark.parametrize("deleted", (True, False))
 @pytest.mark.parametrize("modified", (True, False))
 @pytest.mark.parametrize("same", (True, False))
-def test_compare(test_session, added, deleted, modified, same):
+def test_ccompare(test_session, added, deleted, modified, same):
     ds1 = DataChain.from_values(
         id=[1, 2, 4],
         name=["John1", "Doe", "Andy"],
@@ -62,19 +62,19 @@ def test_compare(test_session, added, deleted, modified, same):
 
     if modified:
         assert "diff" not in chains[CompareStatus.MODIFIED].signals_schema.db_signals()
-        expected.append((CompareStatus.MODIFIED, 1, "John1"))
+        expected.append((CompareStatus.MODIFIED.value, 1, "John1"))
 
     if added:
         assert "diff" not in chains[CompareStatus.ADDED].signals_schema.db_signals()
-        expected.append((CompareStatus.ADDED, 2, "Doe"))
+        expected.append((CompareStatus.ADDED.value, 2, "Doe"))
 
     if deleted:
         assert "diff" not in chains[CompareStatus.DELETED].signals_schema.db_signals()
-        expected.append((CompareStatus.DELETED, 3, "Mark"))
+        expected.append((CompareStatus.DELETED.value, 3, "Mark"))
 
     if same:
         assert "diff" not in chains[CompareStatus.SAME].signals_schema.db_signals()
-        expected.append((CompareStatus.SAME, 4, "Andy"))
+        expected.append((CompareStatus.SAME.value, 4, "Andy"))
 
     assert list(diff.order_by("id").collect("diff", "id", "name")) == expected
 

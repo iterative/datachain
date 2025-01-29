@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Optional, Union
 
 import sqlalchemy as sa
 
+from datachain.func import case, ifelse, isnone
 from datachain.lib.signal_schema import SignalSchema
 from datachain.query.schema import Column
 from datachain.sql.types import String
@@ -45,70 +46,125 @@ def _comparev2(
     same: bool = True,
     status_col: Optional[str] = None,
 ):
-    """
-    P1
-        id  |   name    | ldiff
-        -----------------------
-        1       John1      1
-        2       Doe        1
-        4       Andy       1
-
-    P2
-        id  |   name    | rdiff
-        -----------------------
-        1       John       1
-        3       Mark       1
-        4       Andy       1
-
-    OUTER_JOIN:  join = l.outer_join(r, on ="id")
-        id | name | r_id | r_name |  ldiff  | rdiff |
-        ---------------------------------------------
-        1    John1   1       John      1        1
-        2    Doe                       1
-                     3       Mark               1
-        4    Andy    4       Andy      1        1
-
-    MUTATE:  mutate = join.mutate()
-        id | name | r_id | r_name |  ldiff  | rdiff | d1 | d2 | diff |
-        ---------------------------------------------------------------
-        1    John1   1       John      1        1
-        2    Doe                       1
-                     3       Mark               1
-        4    Andy    4       Andy      1        1
-
-
-
-    """
     rname = "right_"
 
-    from datachain.func import case, isnone, ifelse
+    def _to_list(obj: Union[str, Sequence[str]]) -> list[str]:
+        return [obj] if isinstance(obj, str) else list(obj)
 
-    l = left.mutate(ldiff=1)
-    l.show()
-    print("--------")
-    r = right.mutate(rdiff=1)
+    if not any([added, deleted, modified, same]):
+        raise ValueError(
+            "At least one of added, deleted, modified, same flags must be set"
+        )
 
-    # diff_cond.append((unchanged_cond, "U"))
-    # diff = sa.case(*diff_cond, else_=None if compare else "M").label(status_col)
+    if on is None:
+        raise ValueError("'on' must be specified")
+
+    # all left and right columns
+    cols = left.signals_schema.clone_without_sys_signals().db_signals()
+    right_cols = right.signals_schema.clone_without_sys_signals().db_signals()
+
+    # getting correct on and right_on column names
+    on = _to_list(on)
+    if right_on:
+        right_on = _to_list(right_on)
+        if len(on) != len(right_on):
+            raise ValueError("'on' and 'right_on' must be have the same length")
+    right_on = right_on or on
+    on = left.signals_schema.resolve(*on).db_signals()  # type: ignore[assignment]
+    right_on = right.signals_schema.resolve(*right_on).db_signals()  # type: ignore[assignment]
+
+    # getting correct compare and right_compare column names if they are defined
+    if compare:
+        compare = _to_list(compare)
+
+    if right_compare:
+        if not compare:
+            raise ValueError("'compare' must be defined if 'right_compare' is defined")
+
+        right_compare = _to_list(right_compare)
+        if len(compare) != len(right_compare):
+            raise ValueError(
+                "'compare' and 'right_compare' must be have the same length"
+            )
+
+    if compare:
+        right_compare = right_compare or compare
+        compare = left.signals_schema.resolve(*compare).db_signals()  # type: ignore[assignment]
+        right_compare = right.signals_schema.resolve(*right_compare).db_signals()  # type: ignore[assignment]
+    elif not compare and len(cols) != len(right_cols):
+        pass
+        # here we will mark all rows that are not added or deleted as modified since
+        # there was no explicit list of compare columns provided (meaning we need
+        # to check all columns to determine if row is modified or same), but
+        # the number of columns on left and right is not the same (one of the chains
+        # have additional column)
+        # TODO add this case as well
+        # compare = None
+        # right_compare = None
+    else:
+        # we are checking all columns as explicit compare is not defined
+        compare = [c for c in cols if c in right_cols and c not in on]  # type: ignore[misc, assignment]
+        right_compare = compare
+
+    # get diff column names
+    need_status_col = bool(status_col)
+    diff_col = status_col or get_status_col_name()
+    ldiff_col = get_status_col_name()
+    rdiff_col = get_status_col_name()
+
+    # adding helper diff columns, which will be removed after
+    l = left.mutate(**{ldiff_col: 1})
+    r = right.mutate(**{rdiff_col: 1})
+
+    modified_cond = sa.and_(
+        *[C(c) != C(f"{rname}{rc}") for c, rc in zip(compare, right_compare)]
+    )
+    print(modified_cond)
+
     dc_diff = (
         l.merge(r, on="id", rname=rname, full=True)
         .mutate(
-            diff=case(
-                (isnone("ldiff"), "D"),
-                (isnone("rdiff"), "A"),
-                (C("name") != C("right_name"), "M"),
-                else_="U",
-            )
+            **{
+                diff_col: case(
+                    (isnone(ldiff_col), CompareStatus.DELETED),
+                    (isnone(rdiff_col), CompareStatus.ADDED),
+                    (modified_cond, CompareStatus.MODIFIED),
+                    else_=CompareStatus.SAME,
+                )
+            }
         )
-        .select_except("ldiff", "rdiff")
-        # .mutate(new_id=ifelse(C("diff") == "D", C("right_id"), C("id")))
-        .mutate(id=ifelse(C("diff") == "D", C("right_id"), C("id")))
-        .mutate(name=ifelse(C("diff") == "D", C("right_name"), C("name")))
-        .select("id", "name", "diff")
-        # .mutate(id=C("new_id"))
-        # .mutate(name=C("new_name"))
+        # .select_except("ldiff", "rdiff")
+        .select_except(ldiff_col, rdiff_col)
+        # .mutate(id=ifelse(C("diff") == "D", C("right_id"), C("id")))
+        # .mutate(name=ifelse(C("diff") == "D", C("right_name"), C("name")))
+        # .select("id", "name", "diff")
     )
+
+    # taking correct column values (if row is deleted, we need to take value from
+    # right_<name>)
+    dc_diff = dc_diff.mutate(
+        **{
+            f"{c}": ifelse(C(diff_col) == CompareStatus.DELETED, C(f"{rname}{c}"), C(c))
+            for c in [c for c in cols if c in right_cols]
+        }
+    )
+    if not added:
+        dc_diff = dc_diff.filter(C(diff_col) != CompareStatus.ADDED)
+    if not modified:
+        dc_diff = dc_diff.filter(C(diff_col) != CompareStatus.MODIFIED)
+    if not same:
+        dc_diff = dc_diff.filter(C(diff_col) != CompareStatus.SAME)
+    if not deleted:
+        dc_diff = dc_diff.filter(C(diff_col) != CompareStatus.DELETED)
+
+    if need_status_col:
+        cols.append(diff_col)
+
+    dc_diff = dc_diff.select(*cols)
+
+    print("================= SHOWING dc_diff =======================")
     dc_diff.show()
+    return dc_diff
 
 
 def _compare(  # noqa: PLR0912, PLR0915, C901

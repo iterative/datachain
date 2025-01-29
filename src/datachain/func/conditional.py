@@ -120,12 +120,16 @@ def case(
     supported_types = [int, float, complex, str, bool]
 
     def _get_type(val):
+        from enum import Enum
+
         if isinstance(val, Func):
             # nested functions
             return val.result_type
         if isinstance(val, Column):
             # at this point we cannot know what is the type of a column
             return None
+        if isinstance(val, Enum):
+            return type(val.value)
         return type(val)
 
     if not args:
