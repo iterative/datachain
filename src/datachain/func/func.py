@@ -434,7 +434,7 @@ def get_db_col_type(signals_schema: "SignalSchema", col: ColT) -> "DataType":
         return sql_to_python(col)
 
     return signals_schema.get_column_type(
-        col.name if isinstance(col, ColumnElement) else col
+        col.name if isinstance(col, ColumnElement) else col  # type: ignore[arg-type]
     )
 
 
