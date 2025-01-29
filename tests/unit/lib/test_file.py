@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -338,6 +339,7 @@ def test_get_local_path(tmp_path, catalog):
     assert file.get_local_path() is None
     file.ensure_cached()
     assert file.get_local_path() is not None
+    assert os.path.exists(file.get_local_path())
 
 
 @pytest.mark.parametrize("use_cache", (True, False))
