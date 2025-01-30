@@ -565,16 +565,16 @@ class VideoFile(File):
 
     def get_frames_np(
         self,
-        start_frame: int = 0,
-        end_frame: Optional[int] = None,
+        start: int = 0,
+        end: Optional[int] = None,
         step: int = 1,
     ) -> "Iterator[ndarray]":
         """
         Reads video frames from a file.
 
         Args:
-            start_frame (int): Frame number to start reading from (default: 0).
-            end_frame (int): Frame number to stop reading at (default: None).
+            start (int): Frame number to start reading from (default: 0).
+            end (int): Frame number to stop reading at (default: None).
             step (int): Step size for reading frames (default: 1).
 
         Returns:
@@ -582,12 +582,12 @@ class VideoFile(File):
         """
         from .video import video_frames_np
 
-        yield from video_frames_np(self, start_frame, end_frame, step)
+        yield from video_frames_np(self, start, end, step)
 
     def get_frames(
         self,
-        start_frame: int = 0,
-        end_frame: Optional[int] = None,
+        start: int = 0,
+        end: Optional[int] = None,
         step: int = 1,
         format: str = "jpg",
     ) -> "Iterator[bytes]":
@@ -595,8 +595,8 @@ class VideoFile(File):
         Reads video frames from a file and returns as bytes.
 
         Args:
-            start_frame (int): Frame number to start reading from (default: 0).
-            end_frame (int): Frame number to stop reading at (default: None).
+            start (int): Frame number to start reading from (default: 0).
+            end (int): Frame number to stop reading at (default: None).
             step (int): Step size for reading frames (default: 1).
             format (str): Image format (default: 'jpg').
 
@@ -605,13 +605,13 @@ class VideoFile(File):
         """
         from .video import video_frames
 
-        yield from video_frames(self, start_frame, end_frame, step, format)
+        yield from video_frames(self, start, end, step, format)
 
     def save_frames(
         self,
         output_dir: str,
-        start_frame: int = 0,
-        end_frame: Optional[int] = None,
+        start: int = 0,
+        end: Optional[int] = None,
         step: int = 1,
         format: str = "jpg",
     ) -> "Iterator[VideoFrame]":
@@ -620,8 +620,8 @@ class VideoFile(File):
 
         Args:
             output_dir (str): Output directory path.
-            start_frame (int): Frame number to start reading from (default: 0).
-            end_frame (int): Frame number to stop reading at (default: None).
+            start (int): Frame number to start reading from (default: 0).
+            end (int): Frame number to stop reading at (default: None).
             step (int): Step size for reading frames (default: 1).
             format (str): Image format (default: 'jpg').
 
@@ -630,22 +630,20 @@ class VideoFile(File):
         """
         from .video import save_video_frames
 
-        yield from save_video_frames(
-            self, output_dir, start_frame, end_frame, step, format
-        )
+        yield from save_video_frames(self, output_dir, start, end, step, format)
 
     def save_fragment(
         self,
-        start_time: float,
-        end_time: float,
+        start: float,
+        end: float,
         output_file: str,
     ) -> "VideoFragment":
         """
         Saves video interval as a new video file.
 
         Args:
-            start_time (float): Start time in seconds.
-            end_time (float): End time in seconds.
+            start (float): Start time in seconds.
+            end (float): End time in seconds.
             output_file (str): Output file path.
 
         Returns:
@@ -653,7 +651,7 @@ class VideoFile(File):
         """
         from .video import save_video_fragment
 
-        return save_video_fragment(self, start_time, end_time, output_file)
+        return save_video_fragment(self, start, end, output_file)
 
     def save_fragments(
         self,
