@@ -1,4 +1,5 @@
-import os.path
+import posixpath
+from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Optional
 
 from datachain.lib.file import File, FileError, Video, VideoFragment, VideoFrame
@@ -140,7 +141,7 @@ def save_video_frame(
     _, _, fps = _video_probe(file)
 
     if format is None:
-        format = os.path.splitext(output_file)[1][1:]
+        format = PurePosixPath(output_file).suffix.strip(".")
 
     img = video_frame(file, frame, format=format)
     uploaded_file = File.upload(img, output_file)
@@ -249,7 +250,7 @@ def save_video_frames(
 
     for i, img in enumerate(video_frames_np(file, start_frame, end_frame, step)):
         frame = start_frame + i * step
-        output_file = os.path.join(output_dir, f"{file_stem}_{frame:06d}.{format}")
+        output_file = posixpath.join(output_dir, f"{file_stem}_{frame:06d}.{format}")
 
         raw = iio.imwrite("<bytes>", img, extension=f".{format}")
         uploaded_file = File.upload(raw, output_file)
@@ -327,7 +328,7 @@ def save_video_fragments(
             continue
 
         # Define the output file name
-        output_file = os.path.join(output_dir, f"{file_stem}_{i + 1}.{file_ext}")
+        output_file = posixpath.join(output_dir, f"{file_stem}_{i + 1}.{file_ext}")
 
         # Write the video fragment to file and yield it
         yield save_video_fragment(file, start, end, output_file)
