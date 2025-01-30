@@ -1,5 +1,6 @@
 import io
 import os
+import posixpath
 
 import pytest
 from numpy import ndarray
@@ -76,16 +77,16 @@ def test_get_frame(video_file, format, img_format, header):
 def test_save_frame_ext(tmp_path, video_file, use_format):
     filename = "frame" if use_format else "frame.jpg"
     format = "jpg" if use_format else None
+    output_file = posixpath.join(tmp_path, filename)
 
-    with tmp_path.joinpath(filename) as output_file:
-        frame_file = video_file.save_frame(3, str(output_file), format=format)
-        assert frame_file.frame == 3
-        assert frame_file.timestamp == 3 / 30
+    frame_file = video_file.save_frame(3, str(output_file), format=format)
+    assert frame_file.frame == 3
+    assert frame_file.timestamp == 3 / 30
 
-        frame_file.ensure_cached()
-        img = Image.open(frame_file.get_local_path())
-        assert img.format == "JPEG"
-        assert img.size == (640, 360)
+    frame_file.ensure_cached()
+    img = Image.open(frame_file.get_local_path())
+    assert img.format == "JPEG"
+    assert img.size == (640, 360)
 
 
 def test_get_frames_np(video_file):
@@ -131,21 +132,21 @@ def test_save_frames(tmp_path, video_file):
 
 
 def test_save_fragment(tmp_path, video_file):
-    with tmp_path.joinpath("fragment.mp4") as output_file:
-        fragment = video_file.save_fragment(2.5, 5, str(output_file))
-        assert fragment.start == 2.5
-        assert fragment.end == 5
+    output_file = posixpath.join(tmp_path, "fragment.mp4")
+    fragment = video_file.save_fragment(2.5, 5, str(output_file))
+    assert fragment.start == 2.5
+    assert fragment.end == 5
 
-        fragment.ensure_cached()
-        assert fragment.get_info().model_dump() == {
-            "width": 640,
-            "height": 360,
-            "fps": 30.0,
-            "duration": 2.5,
-            "frames": 75,
-            "format": "mov,mp4,m4a,3gp,3g2,mj2",
-            "codec": "h264",
-        }
+    fragment.ensure_cached()
+    assert fragment.get_info().model_dump() == {
+        "width": 640,
+        "height": 360,
+        "fps": 30.0,
+        "duration": 2.5,
+        "frames": 75,
+        "format": "mov,mp4,m4a,3gp,3g2,mj2",
+        "codec": "h264",
+    }
 
 
 def test_save_fragment_error(video_file):
