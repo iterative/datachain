@@ -347,16 +347,6 @@ class StudioClient:
             method="GET",
         )
 
-    def dataset_stats(self, name: str, version: int) -> Response[DatasetStatsData]:
-        response = self._send_request(
-            "datachain/datasets/stats",
-            {"dataset_name": name, "dataset_version": version},
-            method="GET",
-        )
-        if response.ok:
-            response.data = DatasetStats(**response.data)
-        return response
-
     def export_dataset_table(
         self, name: str, version: int
     ) -> Response[DatasetExportSignedUrls]:
