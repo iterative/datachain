@@ -3,8 +3,6 @@ from typing import TYPE_CHECKING, Optional
 
 from tabulate import tabulate
 
-from datachain import utils
-
 if TYPE_CHECKING:
     from datachain.catalog import Catalog
 
@@ -109,20 +107,3 @@ def edit_dataset(
 
     if (all or studio) and token:
         edit_studio_dataset(team, name, new_name, description, labels)
-
-
-def dataset_stats(
-    catalog: "Catalog",
-    name: str,
-    version: int,
-    show_bytes=False,
-    si=False,
-):
-    stats = catalog.dataset_stats(name, version)
-
-    if stats:
-        print(f"Number of objects: {stats.num_objects}")
-        if show_bytes:
-            print(f"Total objects size: {stats.size}")
-        else:
-            print(f"Total objects size: {utils.sizeof_fmt(stats.size, si=si): >7}")

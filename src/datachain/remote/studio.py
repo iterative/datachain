@@ -16,14 +16,12 @@ from urllib.parse import urlparse, urlunparse
 import websockets
 
 from datachain.config import Config
-from datachain.dataset import DatasetStats
 from datachain.error import DataChainError
 from datachain.utils import STUDIO_URL, retry_with_backoff
 
 T = TypeVar("T")
 LsData = Optional[list[dict[str, Any]]]
 DatasetInfoData = Optional[dict[str, Any]]
-DatasetStatsData = Optional[DatasetStats]
 DatasetRowsData = Optional[Iterable[dict[str, Any]]]
 DatasetJobVersionsData = Optional[dict[str, Any]]
 DatasetExportStatus = Optional[dict[str, Any]]

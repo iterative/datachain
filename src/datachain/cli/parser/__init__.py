@@ -307,31 +307,6 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         help="The team to delete a dataset. By default, it will use team from config",
     )
 
-    dataset_stats_parser = datasets_subparser.add_parser(
-        "stats", parents=[parent_parser], description="Show basic dataset statistics."
-    )
-    dataset_stats_parser.add_argument("name", type=str, help="Dataset name")
-    dataset_stats_parser.add_argument(
-        "--version",
-        action="store",
-        default=None,
-        type=int,
-        help="Dataset version",
-    )
-    dataset_stats_parser.add_argument(
-        "-b",
-        "--bytes",
-        default=False,
-        action="store_true",
-        help="Display size in bytes instead of human-readable size",
-    )
-    dataset_stats_parser.add_argument(
-        "--si",
-        default=False,
-        action="store_true",
-        help="Display size using powers of 1000 not 1024",
-    )
-
     parse_ls = subp.add_parser(
         "ls", parents=[parent_parser], description="List storage contents."
     )
