@@ -1,3 +1,5 @@
+import logging
+import os
 import posixpath
 from collections.abc import Iterator
 from typing import TYPE_CHECKING, Callable, Optional, TypeVar
@@ -7,6 +9,7 @@ from sqlalchemy.sql.expression import true
 
 from datachain.asyn import iter_over_async
 from datachain.client import Client
+from datachain.error import REMOTE_ERRORS, ClientError
 from datachain.lib.file import File
 from datachain.query.schema import Column
 from datachain.sql.functions import path as pathfunc
@@ -21,6 +24,10 @@ LISTING_TTL = 4 * 60 * 60  # cached listing lasts 4 hours
 LISTING_PREFIX = "lst__"  # listing datasets start with this name
 
 D = TypeVar("D", bound="DataChain")
+
+# Disable warnings for remote errors in clients
+logging.getLogger("aiobotocore.credentials").setLevel(logging.CRITICAL)
+logging.getLogger("gcsfs").setLevel(logging.CRITICAL)
 
 
 def list_bucket(uri: str, cache, client_config=None) -> Callable:
@@ -90,6 +97,15 @@ def _isfile(client: "Client", path: str) -> bool:
     Returns True if uri points to a file
     """
     try:
+        if "://" in path:
+            # This makes sure that the uppercase scheme is converted to lowercase
+            scheme, path = path.split("://", 1)
+            path = f"{scheme.lower()}://{path}"
+
+        if os.name == "nt" and "*" in path:
+            # On Windows, the glob pattern "*" is not supported
+            return False
+
         info = client.fs.info(path)
         name = info.get("name")
         # case for special simulated directories on some clouds
@@ -99,21 +115,21 @@ def _isfile(client: "Client", path: str) -> bool:
             return False
 
         return info["type"] == "file"
-    except:  # noqa: E722
+    except FileNotFoundError:
         return False
+    except REMOTE_ERRORS as e:
+        raise ClientError(
+            message=str(e),
+            error_code=getattr(e, "code", None),
+        ) from e
 
 
-def parse_listing_uri(uri: str, cache, client_config) -> tuple[Optional[str], str, str]:
+def parse_listing_uri(uri: str, client_config) -> tuple[str, str, str]:
     """
     Parsing uri and returns listing dataset name, listing uri and listing path
     """
     client_config = client_config or {}
-    client = Client.get_client(uri, cache, **client_config)
     storage_uri, path = Client.parse_url(uri)
-    telemetry.log_param("client", client.PREFIX)
-
-    if not uri.endswith("/") and _isfile(client, uri):
-        return None, f"{storage_uri}/{path.lstrip('/')}", path
     if uses_glob(path):
         lst_uri_path = posixpath.dirname(path)
     else:
@@ -157,13 +173,15 @@ def get_listing(
     client_config = catalog.client_config
 
     client = Client.get_client(uri, cache, **client_config)
-    ds_name, list_uri, list_path = parse_listing_uri(uri, cache, client_config)
+    telemetry.log_param("client", client.PREFIX)
+
+    # we don't want to use cached dataset (e.g. for a single file listing)
+    if not uri.endswith("/") and _isfile(client, uri):
+        storage_uri, path = Client.parse_url(uri)
+        return None, f"{storage_uri}/{path.lstrip('/')}", path, False
+
+    ds_name, list_uri, list_path = parse_listing_uri(uri, client_config)
     listing = None
-
-    # if we don't want to use cached dataset (e.g. for a single file listing)
-    if not ds_name:
-        return None, list_uri, list_path, False
-
     listings = [
         ls for ls in catalog.listings() if not ls.is_expired and ls.contains(ds_name)
     ]

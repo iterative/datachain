@@ -43,3 +43,23 @@ def test_resolve_file_no_exist(cloud_test_catalog):
     assert resolved_non_existent.size == 0
     assert resolved_non_existent.etag == ""
     assert resolved_non_existent.last_modified == TIME_ZERO
+
+
+def test_upload(cloud_test_catalog):
+    ctc = cloud_test_catalog
+
+    src_uri = ctc.src_uri
+    filename = "image_1.jpg"
+    source = f"{src_uri}/upload-test-images"
+    catalog = ctc.catalog
+
+    img_bytes = b"bytes"
+
+    f = File.upload(img_bytes, f"{source}/{filename}", catalog)
+
+    assert f.path == filename
+    assert f.source == source
+    assert f.read() == img_bytes
+
+    client = catalog.get_client(src_uri)
+    client.fs.rm(source, recursive=True)

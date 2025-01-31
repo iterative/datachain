@@ -200,7 +200,7 @@ class DataTable:
         columns: Sequence["sa.Column"] = (),
         metadata: Optional["sa.MetaData"] = None,
     ):
-        # copy columns, since re-using the same objects from another table
+        # copy columns, since reusing the same objects from another table
         # may raise an error
         columns = cls.sys_columns() + [cls.copy_column(c) for c in columns]
         columns = dedup_columns(columns)

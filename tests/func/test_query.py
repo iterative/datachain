@@ -1,12 +1,19 @@
+import os.path
+import signal
 import sys
+from multiprocessing.pool import ExceptionWithTraceback  # type: ignore[attr-defined]
 from textwrap import dedent
 
 import cloudpickle
+import multiprocess
 import pytest
 
+from datachain.catalog import Catalog
 from datachain.cli import query
 from datachain.data_storage import AbstractDBMetastore, JobQueryType, JobStatus
+from datachain.error import QueryScriptCancelError
 from datachain.job import Job
+from tests.utils import wait_for_condition
 
 
 @pytest.fixture
@@ -102,3 +109,75 @@ def test_query_cli(cloud_test_catalog_tmpfile, tmp_path, catalog_info_filepath, 
     assert job.params == {"url": src_uri}
     assert job.metrics == {"count": 7}
     assert job.python_version == f"{sys.version_info.major}.{sys.version_info.minor}"
+
+
+if sys.platform == "win32":
+    SIGKILL = signal.SIGTERM
+else:
+    SIGKILL = signal.SIGKILL
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows does not have SIGTERM")
+@pytest.mark.parametrize(
+    "setup,expected_return_code",
+    [
+        ("", -signal.SIGINT),
+        ("signal.signal(signal.SIGINT, signal.SIG_IGN)", -signal.SIGTERM),
+        (
+            """\
+signal.signal(signal.SIGINT, signal.SIG_IGN)
+signal.signal(signal.SIGTERM, signal.SIG_IGN)
+""",
+            -SIGKILL,
+        ),
+    ],
+)
+def test_shutdown_on_sigterm(tmp_dir, request, catalog, setup, expected_return_code):
+    query = f"""\
+import os, pathlib, signal, sys, time
+
+pathlib.Path("ready").touch(exist_ok=False)
+{setup}
+time.sleep(10)
+"""
+
+    def apply(f, args, kwargs):
+        return f(*args, **kwargs)
+
+    def func(ms_params, wh_params, init_params, q):
+        catalog = Catalog(apply(*ms_params), apply(*wh_params), **init_params)
+        try:
+            catalog.query(query, interrupt_timeout=0.5, terminate_timeout=0.5)
+        except Exception as e:  # noqa: BLE001
+            q.put(ExceptionWithTraceback(e, e.__traceback__))
+        else:
+            q.put(None)
+
+    mp_ctx = multiprocess.get_context("spawn")
+    q = mp_ctx.Queue()
+    p = mp_ctx.Process(
+        target=func,
+        args=(
+            catalog.metastore.clone_params(),
+            catalog.warehouse.clone_params(),
+            catalog.get_init_params(),
+            q,
+        ),
+    )
+    p.start()
+    request.addfinalizer(p.kill)
+
+    def is_ready():
+        assert p.is_alive(), "Process is dead"
+        return os.path.exists("ready")
+
+    # make sure the process is running before we send the signal
+    wait_for_condition(is_ready, "script to start", timeout=5)
+
+    os.kill(p.pid, signal.SIGTERM)
+    p.join(timeout=3)  # might take as long as 1 second to complete shutdown_process
+    assert not p.exitcode
+
+    e = q.get_nowait()
+    assert isinstance(e, QueryScriptCancelError)
+    assert e.return_code == expected_return_code

@@ -23,7 +23,7 @@ from datachain.query.dataset import get_download_callback
 if TYPE_CHECKING:
     from torchvision.transforms.v2 import Transform
 
-    from datachain.cache import DataChainCache as Cache
+    from datachain.cache import Cache
 
 
 logger = logging.getLogger("datachain")

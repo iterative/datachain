@@ -347,16 +347,6 @@ class StudioClient:
             method="GET",
         )
 
-    def dataset_stats(self, name: str, version: int) -> Response[DatasetStatsData]:
-        response = self._send_request(
-            "datachain/datasets/stats",
-            {"dataset_name": name, "dataset_version": version},
-            method="GET",
-        )
-        if response.ok:
-            response.data = DatasetStats(**response.data)
-        return response
-
     def export_dataset_table(
         self, name: str, version: int
     ) -> Response[DatasetExportSignedUrls]:
@@ -375,7 +365,7 @@ class StudioClient:
             method="GET",
         )
 
-    def upload_file(self, file_name: str, content: bytes) -> Response[FileUploadData]:
+    def upload_file(self, content: bytes, file_name: str) -> Response[FileUploadData]:
         data = {
             "file_content": base64.b64encode(content).decode("utf-8"),
             "file_name": file_name,

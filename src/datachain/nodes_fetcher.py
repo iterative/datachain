@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from datachain.nodes_thread_pool import NodesThreadPool
 
 if TYPE_CHECKING:
-    from datachain.cache import DataChainCache
+    from datachain.cache import Cache
     from datachain.client.fsspec import Client
     from datachain.node import Node
 
@@ -13,7 +13,7 @@ logger = logging.getLogger("datachain")
 
 
 class NodesFetcher(NodesThreadPool):
-    def __init__(self, client: "Client", max_threads: int, cache: "DataChainCache"):
+    def __init__(self, client: "Client", max_threads: int, cache: "Cache"):
         super().__init__(max_threads)
         self.client = client
         self.cache = cache

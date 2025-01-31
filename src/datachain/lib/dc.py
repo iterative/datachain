@@ -25,6 +25,7 @@ from sqlalchemy.sql.functions import GenericFunction
 from sqlalchemy.sql.sqltypes import NullType
 
 from datachain.dataset import DatasetRecord
+from datachain.func import literal
 from datachain.func.base import Function
 from datachain.func.func import Func
 from datachain.lib.convert.python_to_sql import python_to_sql
@@ -1129,8 +1130,12 @@ class DataChain:
         )
         ```
         """
+        primitives = (bool, str, int, float)
+
         for col_name, expr in kwargs.items():
-            if not isinstance(expr, (Column, Func)) and isinstance(expr.type, NullType):
+            if not isinstance(expr, (*primitives, Column, Func)) and isinstance(
+                expr.type, NullType
+            ):
                 raise DataChainColumnError(
                     col_name, f"Cannot infer type with expression {expr}"
                 )
@@ -1145,6 +1150,11 @@ class DataChain:
             elif isinstance(value, Func):
                 # adding new signal
                 mutated[name] = value.get_column(schema)
+            elif isinstance(value, primitives):
+                # adding simple python constant primitives like str, int, float, bool
+                val = literal(value)
+                val.type = python_to_sql(type(value))()
+                mutated[name] = val  # type: ignore[assignment]
             else:
                 # adding new signal
                 mutated[name] = value
