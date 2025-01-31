@@ -671,6 +671,23 @@ def test_case_mutate(dc, val, else_, type_):
     assert res.schema["test"] == type_
 
 
+def test_case_mutate_column_as_value(dc):
+    res = dc.mutate(test=case((C("num") < 3, C("val")), else_="cc"))
+    assert list(res.order_by("num").collect("test")) == ["x", "xx", "cc", "cc", "cc"]
+
+
+def test_case_mutate_column_as_value_in_else(dc):
+    res = dc.mutate(test=case((C("num") < 3, C("val")), else_=C("val")))
+    assert list(res.order_by("num").collect("test")) == [
+        "x",
+        "xx",
+        "xxx",
+        "xxxx",
+        "xxxxx",
+    ]
+    assert res.schema["test"] is str
+
+
 @pytest.mark.parametrize(
     "val,else_,type_",
     [
@@ -738,6 +755,19 @@ def test_ifelse_mutate(dc, if_val, else_val, type_):
     assert list(res.order_by("test").collect("test")) == sorted(
         [if_val, else_val, else_val, else_val, else_val]
     )
+    assert res.schema["test"] == type_
+
+
+@pytest.mark.parametrize(
+    "if_val,else_val,type_,result",
+    [
+        [C("num"), 0, int, [0, 0, 0, 1, 2]],
+        ["a", C("val"), str, ["a", "a", "xxx", "xxxx", "xxxxx"]],
+    ],
+)
+def test_ifelse_mutate_with_columns_as_values(dc, if_val, else_val, type_, result):
+    res = dc.mutate(test=ifelse(C("num") < 3, if_val, else_val))
+    assert list(res.order_by("test").collect("test")) == result
     assert res.schema["test"] == type_
 
 

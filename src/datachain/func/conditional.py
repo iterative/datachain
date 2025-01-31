@@ -9,7 +9,7 @@ from datachain.sql.functions import conditional
 
 from .func import ColT, Func
 
-CaseT = Union[int, float, complex, bool, str, Func]
+CaseT = Union[int, float, complex, bool, str, Func, ColumnElement]
 
 
 def greatest(*args: Union[ColT, float]) -> Func:
@@ -94,12 +94,15 @@ def case(
     """
     Returns the case function that produces case expression which has a list of
     conditions and corresponding results. Results can be python primitives like string,
-    numbers or booleans but can also be other nested function (including case function).
+    numbers or booleans but can also be other nested functions (including case function)
+    or columns.
     Result type is inferred from condition results.
 
     Args:
-        args (tuple((ColumnElement, Func), (str | int | float | complex | bool, Func))):
-            Tuple of condition and values pair.
+        args (tuple(
+                (ColumnElement, Func),
+                (str | int | float | complex | bool, Func, ColumnElement)
+            )): Tuple of condition and values pair.
         else_ (str | int | float | complex | bool, Func): optional else value in case
             expression. If omitted, and no case conditions are satisfied, the result
             will be None (NULL in DB).
@@ -120,6 +123,9 @@ def case(
         if isinstance(val, Func):
             # nested functions
             return val.result_type
+        if isinstance(val, Column):
+            # at this point we cannot know what is the type of a column
+            return None
         return type(val)
 
     if not args:
@@ -129,13 +135,16 @@ def case(
 
     for arg in args:
         arg_type = _get_type(arg[1])
+        if arg_type is None:
+            # we couldn't figure out the type of case value
+            continue
         if type_ and arg_type != type_:
             raise DataChainParamsError(
                 f"Statement values must be of the same type, got {type_} and {arg_type}"
             )
         type_ = arg_type
 
-    if type_ not in supported_types:
+    if type_ is not None and type_ not in supported_types:
         raise DataChainParamsError(
             f"Only python literals ({supported_types}) are supported for values"
         )
@@ -151,15 +160,15 @@ def ifelse(
     """
     Returns the ifelse function that produces if expression which has a condition
     and values for true and false outcome. Results can be one of python primitives
-    like string, numbers or booleans, but can also be nested functions.
+    like string, numbers or booleans, but can also be nested functions or columns.
     Result type is inferred from the values.
 
     Args:
         condition (ColumnElement, Func):  Condition which is evaluated.
-        if_val (str | int | float | complex | bool, Func): Value for true
+        if_val (str | int | float | complex | bool, Func, ColumnElement): Value for true
             condition outcome.
-        else_val (str | int | float | complex | bool, Func): Value for false condition
-            outcome.
+        else_val (str | int | float | complex | bool, Func, ColumnElement): Value for
+            false condition outcome.
 
     Returns:
         Func: A Func object that represents the ifelse function.
