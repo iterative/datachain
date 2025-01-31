@@ -307,7 +307,7 @@ class StudioClient:
             "datachain/datasets",
             {
                 "dataset_name": name,
-                "version": version,
+                "dataset_version": version,
                 "force": force,
             },
             method="DELETE",
