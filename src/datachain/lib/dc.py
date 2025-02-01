@@ -1577,9 +1577,9 @@ class DataChain:
             )
             ```
         """
-        from datachain.diff import _comparev2
+        from datachain.diff import _compare
 
-        return _comparev2(
+        return _compare(
             self,
             other,
             on,

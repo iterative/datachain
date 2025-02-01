@@ -1,3 +1,5 @@
+from datetime import timezone
+
 import pytest
 from pydantic import BaseModel
 
@@ -8,11 +10,15 @@ from datachain.sql.types import Int64, String
 from tests.utils import sorted_dicts
 
 
+def _as_utc(d):
+    return d.replace(tzinfo=timezone.utc)
+
+
 @pytest.mark.parametrize("added", (True, False))
 @pytest.mark.parametrize("deleted", (True, False))
 @pytest.mark.parametrize("modified", (True, False))
 @pytest.mark.parametrize("same", (True, False))
-def test_ccompare(test_session, added, deleted, modified, same):
+def test_compare(test_session, added, deleted, modified, same):
     ds1 = DataChain.from_values(
         id=[1, 2, 4],
         name=["John1", "Doe", "Andy"],
@@ -62,19 +68,19 @@ def test_ccompare(test_session, added, deleted, modified, same):
 
     if modified:
         assert "diff" not in chains[CompareStatus.MODIFIED].signals_schema.db_signals()
-        expected.append((CompareStatus.MODIFIED.value, 1, "John1"))
+        expected.append((CompareStatus.MODIFIED, 1, "John1"))
 
     if added:
         assert "diff" not in chains[CompareStatus.ADDED].signals_schema.db_signals()
-        expected.append((CompareStatus.ADDED.value, 2, "Doe"))
+        expected.append((CompareStatus.ADDED, 2, "Doe"))
 
     if deleted:
         assert "diff" not in chains[CompareStatus.DELETED].signals_schema.db_signals()
-        expected.append((CompareStatus.DELETED.value, 3, "Mark"))
+        expected.append((CompareStatus.DELETED, 3, "Mark"))
 
     if same:
         assert "diff" not in chains[CompareStatus.SAME].signals_schema.db_signals()
-        expected.append((CompareStatus.SAME.value, 4, "Andy"))
+        expected.append((CompareStatus.SAME, 4, "Andy"))
 
     assert list(diff.order_by("id").collect("diff", "id", "name")) == expected
 
@@ -402,7 +408,7 @@ def test_compare_right_compare_wrong_length(test_session):
         ds1.compare(ds2, on=["id"], compare=["name"], right_compare=["name", "city"])
 
     assert str(exc_info.value) == (
-        "'compare' and 'right_compare' must be have the same length"
+        "'compare' and 'right_compare' must have the same length"
     )
 
 
@@ -443,7 +449,11 @@ def test_diff(test_session, status_col):
         expected = [row[1:] for row in expected]
         collect_fields = collect_fields[1:]
 
-    assert list(diff.order_by("file.source").collect(*collect_fields)) == expected
+    res = list(diff.order_by("file.source").collect(*collect_fields))
+    for r in res:
+        r[-2].last_modified = _as_utc(r[-2].last_modified)
+
+    assert res == expected
 
 
 @pytest.mark.parametrize("status_col", ("diff", None))
@@ -486,6 +496,7 @@ def test_diff_nested(test_session, status_col):
         expected = [row[1:] for row in expected]
         collect_fields = collect_fields[1:]
 
-    assert (
-        list(diff.order_by("nested.file.source").collect(*collect_fields)) == expected
-    )
+    res = list(diff.order_by("nested.file.source").collect(*collect_fields))
+    for r in res:
+        r[-2].file.last_modified = _as_utc(r[-2].file.last_modified)
+    assert res == expected
