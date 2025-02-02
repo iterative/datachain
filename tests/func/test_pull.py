@@ -155,14 +155,6 @@ def remote_dataset_info(requests_mock, remote_dataset):
 
 
 @pytest.fixture
-def remote_dataset_stats(requests_mock):
-    requests_mock.get(
-        f"{STUDIO_URL}/api/datachain/datasets/stats",
-        json={"num_objects": 5, "size": 1000},
-    )
-
-
-@pytest.fixture
 def dataset_export(requests_mock, remote_dataset_chunk_url):
     requests_mock.get(
         f"{STUDIO_URL}/api/datachain/datasets/export", json=[remote_dataset_chunk_url]
@@ -194,7 +186,6 @@ def test_pull_dataset_success(
     mocker,
     cloud_test_catalog,
     remote_dataset_info,
-    remote_dataset_stats,
     dataset_export,
     dataset_export_status,
     dataset_export_data_chunk,
@@ -323,32 +314,12 @@ def test_pull_dataset_not_found_in_remote(
 
 
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
-@skip_if_not_sqlite
-def test_pull_dataset_error_on_fetching_stats(
-    requests_mock,
-    cloud_test_catalog,
-    remote_dataset_info,
-):
-    requests_mock.get(
-        f"{STUDIO_URL}/api/datachain/datasets/stats",
-        status_code=400,
-        json={"message": "Internal error"},
-    )
-    catalog = cloud_test_catalog.catalog
-
-    with pytest.raises(DataChainError) as exc_info:
-        catalog.pull_dataset("ds://dogs@v1")
-    assert str(exc_info.value) == "Error from server: Internal error"
-
-
-@pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
 @pytest.mark.parametrize("export_status", ["failed", "removed"])
 @skip_if_not_sqlite
 def test_pull_dataset_exporting_dataset_failed_in_remote(
     requests_mock,
     cloud_test_catalog,
     remote_dataset_info,
-    remote_dataset_stats,
     dataset_export,
     export_status,
 ):
@@ -372,7 +343,6 @@ def test_pull_dataset_empty_parquet(
     requests_mock,
     cloud_test_catalog,
     remote_dataset_info,
-    remote_dataset_stats,
     dataset_export,
     dataset_export_status,
     remote_dataset_chunk_url,
@@ -389,7 +359,6 @@ def test_pull_dataset_empty_parquet(
 def test_pull_dataset_already_exists_locally(
     cloud_test_catalog,
     remote_dataset_info,
-    remote_dataset_stats,
     dataset_export,
     dataset_export_status,
     dataset_export_data_chunk,
@@ -416,7 +385,6 @@ def test_pull_dataset_already_exists_locally(
 def test_pull_dataset_local_name_already_exists(
     cloud_test_catalog,
     remote_dataset_info,
-    remote_dataset_stats,
     dataset_export,
     dataset_export_status,
     dataset_export_data_chunk,

@@ -99,10 +99,8 @@ def case(
     Result type is inferred from condition results.
 
     Args:
-        args (tuple(
-                (ColumnElement, Func),
-                (str | int | float | complex | bool, Func, ColumnElement)
-            )): Tuple of condition and values pair.
+        args tuple((ColumnElement | Func),(str | int | float | complex | bool, Func, ColumnElement)):
+            Tuple of condition and values pair.
         else_ (str | int | float | complex | bool, Func): optional else value in case
             expression. If omitted, and no case conditions are satisfied, the result
             will be None (NULL in DB).
@@ -116,7 +114,7 @@ def case(
             res=func.case((C("num") > 0, "P"), (C("num") < 0, "N"), else_="Z"),
         )
         ```
-    """
+    """  # noqa: E501
     supported_types = [int, float, complex, str, bool]
 
     def _get_type(val):

@@ -38,7 +38,6 @@ from datachain.dataset import (
     DatasetDependency,
     DatasetListRecord,
     DatasetRecord,
-    DatasetStats,
     DatasetStatus,
     StorageURI,
     create_dataset_uri,
@@ -1235,17 +1234,6 @@ class Catalog:
         dataset = self.get_dataset(name)
         return self.warehouse.dataset_table_export_file_names(dataset, version)
 
-    def dataset_stats(self, name: str, version: Optional[int]) -> DatasetStats:
-        """
-        Returns tuple with dataset stats: total number of rows and total dataset size.
-        """
-        dataset = self.get_dataset(name)
-        dataset_version = dataset.get_version(version or dataset.latest_version)
-        return DatasetStats(
-            num_objects=dataset_version.num_objects,
-            size=dataset_version.size,
-        )
-
     def remove_dataset(
         self,
         name: str,
@@ -1391,19 +1379,12 @@ class Catalog:
         except DatasetNotFoundError:
             pass
 
-        stats_response = studio_client.dataset_stats(
-            remote_ds_name, remote_ds_version.version
-        )
-        if not stats_response.ok:
-            raise_remote_error(stats_response.message)
-        ds_stats = stats_response.data
-
         dataset_save_progress_bar = tqdm(
             desc=f"Saving dataset {remote_ds_uri} locally: ",
             unit=" rows",
             unit_scale=True,
             unit_divisor=1000,
-            total=ds_stats.num_objects,  # type: ignore [union-attr]
+            total=remote_ds_version.num_objects,  # type: ignore [union-attr]
             leave=False,
         )
 

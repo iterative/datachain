@@ -845,9 +845,9 @@ def test_row_random(cloud_test_catalog):
 
 def test_dataset_stats_registered_ds(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
-    stats = catalog.dataset_stats(dogs_dataset.name, 1)
-    assert stats.num_objects == 4
-    assert stats.size == 15
+    dataset = catalog.get_dataset(dogs_dataset.name).get_version(1)
+    assert dataset.num_objects == 4
+    assert dataset.size == 15
     rows_count = catalog.warehouse.dataset_rows_count(dogs_dataset, 1)
     assert rows_count == 4
 
