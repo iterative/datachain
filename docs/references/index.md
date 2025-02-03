@@ -12,3 +12,4 @@ DataChain's API is organized into several modules:
 - [UDF](./udf.md) - User-defined functions and transformations
 - [Functions](./func.md) - Built-in functions for data manipulation and analysis
 - [Torch](./torch.md) - PyTorch data loading utilities
+- [Toolkit](./toolkit.md) - Functions for common DS/ML operations
