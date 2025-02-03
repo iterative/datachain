@@ -1,12 +1,12 @@
 import io
 import os
-import posixpath
 
 import pytest
 from numpy import ndarray
 from PIL import Image
 
-from datachain.lib.file import FileError, VideoFile
+from datachain import VideoFragment, VideoFrame
+from datachain.lib.file import FileError, ImageFile, VideoFile
 
 
 @pytest.fixture(autouse=True)
@@ -44,15 +44,21 @@ def test_get_info_error():
         file.get_info()
 
 
+def test_get_frame(video_file):
+    frame = video_file.get_frame(37)
+    assert isinstance(frame, VideoFrame)
+    assert frame.frame == 37
+
+
+def test_get_frame_error(video_file):
+    with pytest.raises(ValueError):
+        video_file.get_frame(-1)
+
+
 def test_get_frame_np(video_file):
-    frame = video_file.get_frame_np(0)
+    frame = video_file.get_frame(0).get_np()
     assert isinstance(frame, ndarray)
     assert frame.shape == (360, 640, 3)
-
-
-def test_get_frame_np_error(video_file):
-    with pytest.raises(ValueError):
-        video_file.get_frame_np(-1)
 
 
 @pytest.mark.parametrize(
@@ -63,8 +69,8 @@ def test_get_frame_np_error(video_file):
         ("gif", "GIF", [b"GIF87a", b"GIF89a"]),
     ],
 )
-def test_get_frame(video_file, format, img_format, header):
-    frame = video_file.get_frame(0, format=format)
+def test_get_frame_bytes(video_file, format, img_format, header):
+    frame = video_file.get_frame(0).read_bytes(format)
     assert isinstance(frame, bytes)
     assert any(frame.startswith(h) for h in header)
 
@@ -74,14 +80,13 @@ def test_get_frame(video_file, format, img_format, header):
 
 
 @pytest.mark.parametrize("use_format", [True, False])
-def test_save_frame_ext(tmp_path, video_file, use_format):
-    filename = "frame" if use_format else "frame.jpg"
-    format = "jpg" if use_format else None
-    output_file = posixpath.join(tmp_path, filename)
-
-    frame_file = video_file.save_frame(3, str(output_file), format=format)
-    assert frame_file.frame == 3
-    assert frame_file.timestamp == 3 / 30
+def test_save_frame(tmp_path, video_file, use_format):
+    frame = video_file.get_frame(3)
+    if use_format:
+        frame_file = frame.save(str(tmp_path), format="jpg")
+    else:
+        frame_file = frame.save(str(tmp_path))
+    assert isinstance(frame_file, ImageFile)
 
     frame_file.ensure_cached()
     img = Image.open(frame_file.get_local_path())
@@ -89,11 +94,16 @@ def test_save_frame_ext(tmp_path, video_file, use_format):
     assert img.size == (640, 360)
 
 
-def test_get_frames_np(video_file):
-    frames = list(video_file.get_frames_np(10, 200, 5))
-    assert len(frames) == 39
-    assert all(isinstance(frame, ndarray) for frame in frames)
-    assert all(frame.shape == (360, 640, 3) for frame in frames)
+def test_get_frames(video_file):
+    frames = list(video_file.get_frames(10, 200, 5))
+    assert len(frames) == 38
+    assert all(isinstance(frame, VideoFrame) for frame in frames)
+
+
+def test_get_all_frames(video_file):
+    frames = list(video_file.get_frames())
+    assert len(frames) == 300
+    assert all(isinstance(frame, VideoFrame) for frame in frames)
 
 
 @pytest.mark.parametrize(
@@ -105,37 +115,55 @@ def test_get_frames_np(video_file):
         (0, 1, -1),
     ],
 )
-def test_get_frames_np_error(video_file, start_frame, end_frame, step):
+def test_get_frames_error(video_file, start_frame, end_frame, step):
     with pytest.raises(ValueError):
-        list(video_file.get_frames_np(start_frame, end_frame, step))
+        list(video_file.get_frames(start_frame, end_frame, step))
 
 
-def test_get_frames(video_file):
-    frames = list(video_file.get_frames(10, 200, 5, format="jpg"))
-    assert len(frames) == 39
-    assert all(isinstance(frame, bytes) for frame in frames)
-    assert all(Image.open(io.BytesIO(frame)).format == "JPEG" for frame in frames)
+def test_get_frames_bytes(video_file):
+    frames = list(video_file.get_frames(10, 200, 5))
+    frame_bytes = [frame.read_bytes("jpg") for frame in frames]
+    assert len(frame_bytes) == 38
+    assert all(isinstance(frame, bytes) for frame in frame_bytes)
+    assert all(Image.open(io.BytesIO(frame)).format == "JPEG" for frame in frame_bytes)
 
 
 def test_save_frames(tmp_path, video_file):
-    frame_files = list(video_file.save_frames(str(tmp_path), 10, 200, 5, format="jpg"))
-    assert len(frame_files) == 39
+    frames = list(video_file.get_frames(10, 200, 5))
+    frame_files = [frame.save(str(tmp_path), format="jpg") for frame in frames]
+    assert len(frame_files) == 38
 
-    for i, frame_file in enumerate(frame_files):
-        assert frame_file.frame == 10 + 5 * i
-        assert frame_file.timestamp == (10 + 5 * i) / 30
-
+    for frame_file in frame_files:
         frame_file.ensure_cached()
         img = Image.open(frame_file.get_local_path())
         assert img.format == "JPEG"
         assert img.size == (640, 360)
 
 
-def test_save_fragment(tmp_path, video_file):
-    output_file = posixpath.join(tmp_path, "fragment.mp4")
-    fragment = video_file.save_fragment(2.5, 5, str(output_file))
+def test_get_fragment(video_file):
+    fragment = video_file.get_fragment(2.5, 5)
+    assert isinstance(fragment, VideoFragment)
     assert fragment.start == 2.5
     assert fragment.end == 5
+
+
+@pytest.mark.parametrize(
+    "start,end",
+    [
+        (-1, -1),
+        (-1, 2.5),
+        (5, -1),
+        (5, 2.5),
+        (5, 5),
+    ],
+)
+def test_save_fragment_error(video_file, start, end):
+    with pytest.raises(ValueError):
+        video_file.get_fragment(start, end)
+
+
+def test_save_fragment(tmp_path, video_file):
+    fragment = video_file.get_fragment(2.5, 5).save(str(tmp_path))
 
     fragment.ensure_cached()
     assert fragment.get_info().model_dump() == {
@@ -149,21 +177,14 @@ def test_save_fragment(tmp_path, video_file):
     }
 
 
-def test_save_fragment_error(video_file):
-    with pytest.raises(ValueError):
-        video_file.save_fragment(5, 2.5, "fragment.mp4")
-
-
 def test_save_fragments(tmp_path, video_file):
     intervals = [(1, 2), (3, 4), (5, 6)]
 
-    fragments = list(video_file.save_fragments(intervals, str(tmp_path)))
-    assert len(fragments) == 3
+    fragments = list(video_file.get_fragments(intervals))
+    fragment_files = [fragment.save(str(tmp_path)) for fragment in fragments]
+    assert len(fragment_files) == 3
 
-    for i, fragment in enumerate(fragments):
-        assert fragment.start == 1 + 2 * i
-        assert fragment.end == 2 + 2 * i
-
+    for fragment in fragment_files:
         fragment.ensure_cached()
         assert fragment.get_info().model_dump() == {
             "width": 640,
@@ -174,8 +195,3 @@ def test_save_fragments(tmp_path, video_file):
             "format": "mov,mp4,m4a,3gp,3g2,mj2",
             "codec": "h264",
         }
-
-
-def test_save_fragments_error(video_file):
-    fragments = list(video_file.save_fragments([(2, 1)], "fragments"))
-    assert len(fragments) == 0
