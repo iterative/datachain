@@ -1,5 +1,4 @@
 from .datasets import (
-    dataset_stats,
     edit_dataset,
     list_datasets,
     list_datasets_local,
@@ -15,7 +14,6 @@ from .show import show
 __all__ = [
     "clear_cache",
     "completion",
-    "dataset_stats",
     "du",
     "edit_dataset",
     "garbage_collect",

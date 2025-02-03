@@ -20,7 +20,7 @@ from sqlalchemy import Column
 from datachain import DataModel, func
 from datachain.catalog.catalog import QUERY_SCRIPT_CANCELED_EXIT_CODE
 from datachain.data_storage.sqlite import SQLiteWarehouse
-from datachain.dataset import DatasetDependencyType, DatasetStats
+from datachain.dataset import DatasetDependencyType
 from datachain.func import path as pathfunc
 from datachain.lib.dc import C, DataChain
 from datachain.lib.file import File, ImageFile
@@ -515,8 +515,9 @@ def test_from_storage_dataset_stats(tmp_dir, test_session):
     dc = DataChain.from_storage(tmp_dir.as_uri(), session=test_session).save(
         "test-data"
     )
-    stats = test_session.catalog.dataset_stats(dc.name, dc.version)
-    assert stats == DatasetStats(num_objects=4, size=20)
+    version = test_session.catalog.get_dataset(dc.name).get_version(dc.version)
+    assert version.num_objects == 4
+    assert version.size == 20
 
 
 def test_from_storage_check_rows(tmp_dir, test_session):

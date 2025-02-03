@@ -2,13 +2,12 @@ from collections.abc import Sequence
 from itertools import islice
 from typing import TYPE_CHECKING, Any, Optional
 
-import fsspec.implementations.reference
 import orjson
 import pyarrow as pa
-from fsspec.core import split_protocol
 from pyarrow.dataset import CsvFileFormat, dataset
 from tqdm.auto import tqdm
 
+from datachain.fs.reference import ReferenceFileSystem
 from datachain.lib.data_model import dict_to_data_model
 from datachain.lib.file import ArrowRow, File
 from datachain.lib.model_store import ModelStore
@@ -25,15 +24,6 @@ if TYPE_CHECKING:
 
 
 DATACHAIN_SIGNAL_SCHEMA_PARQUET_KEY = b"DataChain SignalSchema"
-
-
-class ReferenceFileSystem(fsspec.implementations.reference.ReferenceFileSystem):
-    def _open(self, path, mode="rb", *args, **kwargs):
-        # overriding because `fsspec`'s `ReferenceFileSystem._open`
-        # reads the whole file in-memory.
-        (uri,) = self.references[path]
-        protocol, _ = split_protocol(uri)
-        return self.fss[protocol].open(uri, mode, *args, **kwargs)
 
 
 class ArrowGenerator(Generator):

@@ -11,7 +11,6 @@ from datachain.telemetry import telemetry
 from .commands import (
     clear_cache,
     completion,
-    dataset_stats,
     du,
     edit_dataset,
     garbage_collect,
@@ -181,13 +180,6 @@ def handle_dataset_command(args, catalog):
             local=args.local,
             all=args.all,
             team=args.team,
-        ),
-        "stats": lambda: dataset_stats(
-            catalog,
-            args.name,
-            args.version,
-            show_bytes=args.bytes,
-            si=args.si,
         ),
     }
 

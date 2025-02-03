@@ -9,7 +9,7 @@ def num_chars_udf(file):
     return ([],)
 
 
-dc = DataChain.from_storage("gs://datachain-demo/dogs-and-cats/")
+dc = DataChain.from_storage("gs://datachain-demo/dogs-and-cats/", anon=True)
 dc.map(num_chars_udf, params=["file"], output={"num_chars": list[str]}).select(
     "file.path", "num_chars"
 ).show(5)
@@ -32,6 +32,12 @@ dc.map(num_chars_udf, params=["file"], output={"num_chars": list[str]}).select(
     .show(5)
 )
 
+parts = string.split(path.name(C("file.path")), ".")
+chain = dc.mutate(
+    isdog=array.contains(parts, "dog"),
+    iscat=array.contains(parts, "cat"),
+)
+chain.select("file.path", "isdog", "iscat").show(5)
 
 chain = dc.mutate(
     a=array.length(string.split("file.path", "/")),
@@ -78,6 +84,15 @@ Processed: 400 rows [00:00, 16364.66 rows/s]
 2   dogs-and-cats/cat.10.jpg   cat.10   jpg
 3  dogs-and-cats/cat.10.json   cat.10  json
 4  dogs-and-cats/cat.100.jpg  cat.100   jpg
+
+[Limited by 5 rows]
+                        file isdog iscat
+                        path
+0    dogs-and-cats/cat.1.jpg     0     1
+1   dogs-and-cats/cat.1.json     0     1
+2   dogs-and-cats/cat.10.jpg     0     1
+3  dogs-and-cats/cat.10.json     0     1
+4  dogs-and-cats/cat.100.jpg     0     1
 
 [Limited by 5 rows]
 Processed: 400 rows [00:00, 16496.93 rows/s]

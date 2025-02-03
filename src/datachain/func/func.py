@@ -424,10 +424,9 @@ class Func(Function):
 
 def get_db_col_type(signals_schema: "SignalSchema", col: ColT) -> "DataType":
     if isinstance(col, tuple):
-        raise DataChainParamsError(
-            "Cannot get type from tuple, please provide type hint to the function"
-        )
-
+        # we can only get tuple from case statement where the first tuple item
+        # is condition, and second one is value which type is important
+        col = col[1]
     if isinstance(col, Func):
         return col.get_result_type(signals_schema)
 
@@ -435,7 +434,7 @@ def get_db_col_type(signals_schema: "SignalSchema", col: ColT) -> "DataType":
         return sql_to_python(col)
 
     return signals_schema.get_column_type(
-        col.name if isinstance(col, ColumnElement) else col
+        col.name if isinstance(col, ColumnElement) else col  # type: ignore[arg-type]
     )
 
 
