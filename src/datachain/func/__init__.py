@@ -15,7 +15,7 @@ from .aggregate import (
     row_number,
     sum,
 )
-from .array import cosine_distance, euclidean_distance, length, sip_hash_64
+from .array import contains, cosine_distance, euclidean_distance, length, sip_hash_64
 from .conditional import case, greatest, ifelse, isnone, least
 from .numeric import bit_and, bit_hamming_distance, bit_or, bit_xor, int_hash_64
 from .random import rand
@@ -34,6 +34,7 @@ __all__ = [
     "case",
     "collect",
     "concat",
+    "contains",
     "cosine_distance",
     "count",
     "dense_rank",

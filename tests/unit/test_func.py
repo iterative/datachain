@@ -11,6 +11,7 @@ from datachain.func import (
     isnone,
     literal,
 )
+from datachain.func.array import contains
 from datachain.func.random import rand
 from datachain.func.string import length as strlen
 from datachain.lib.signal_schema import SignalSchema
@@ -797,3 +798,27 @@ def test_isnone_with_ifelse_mutate(col):
     res = dc.mutate(test=ifelse(isnone(col), "NONE", "NOT_NONE"))
     assert list(res.order_by("num").collect("test")) == ["NOT_NONE"] * 3 + ["NONE"] * 2
     assert res.schema["test"] is str
+
+
+def test_array_contains():
+    dc = DataChain.from_values(
+        arr=[list(range(1, i)) * i for i in range(2, 7)],
+        val=list(range(2, 7)),
+    )
+
+    assert list(dc.mutate(res=contains("arr", 3)).order_by("val").collect("res")) == [
+        0,
+        0,
+        1,
+        1,
+        1,
+    ]
+    assert list(
+        dc.mutate(res=contains(C("arr"), 3)).order_by("val").collect("res")
+    ) == [0, 0, 1, 1, 1]
+    assert list(
+        dc.mutate(res=contains(C("arr"), 10)).order_by("val").collect("res")
+    ) == [0, 0, 0, 0, 0]
+    assert list(
+        dc.mutate(res=contains(C("arr"), None)).order_by("val").collect("res")
+    ) == [0, 0, 0, 0, 0]
