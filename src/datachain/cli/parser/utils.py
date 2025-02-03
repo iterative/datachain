@@ -18,7 +18,10 @@ class CustomHelpFormatter(HelpFormatter):
 
 class CustomArgumentParser(ArgumentParser):
     def error(self, message):
-        message = message.replace(" 'internal-run-udf', 'internal-run-udf-worker',", "")
+        internal_commands = ["internal-run-udf", "internal-run-udf-worker"]
+
+        hidden_portion = "".join(f"'{cmd}', " for cmd in internal_commands)
+        message = message.replace(hidden_portion, "")
         super().error(message)
 
 
