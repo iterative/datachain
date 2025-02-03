@@ -1,3 +1,6 @@
+from datachain.cli.parser.utils import CustomHelpFormatter
+
+
 def add_auth_parser(subparsers, parent_parser) -> None:
     from dvc_studio_client.auth import AVAILABLE_SCOPES
 
@@ -9,6 +12,7 @@ def add_auth_parser(subparsers, parent_parser) -> None:
         parents=[parent_parser],
         description=auth_description,
         help=auth_help,
+        formatter_class=CustomHelpFormatter,
     )
     auth_subparser = auth_parser.add_subparsers(
         dest="cmd",
@@ -27,6 +31,7 @@ def add_auth_parser(subparsers, parent_parser) -> None:
         parents=[parent_parser],
         description=auth_login_description,
         help=auth_login_help,
+        formatter_class=CustomHelpFormatter,
     )
 
     login_parser.add_argument(
@@ -69,6 +74,7 @@ def add_auth_parser(subparsers, parent_parser) -> None:
         parents=[parent_parser],
         description=auth_logout_description,
         help=auth_logout_help,
+        formatter_class=CustomHelpFormatter,
     )
 
     auth_team_help = "Set default team for Studio operations"
@@ -79,6 +85,7 @@ def add_auth_parser(subparsers, parent_parser) -> None:
         parents=[parent_parser],
         description=auth_team_description,
         help=auth_team_help,
+        formatter_class=CustomHelpFormatter,
     )
     team_parser.add_argument(
         "team_name",
@@ -100,4 +107,5 @@ def add_auth_parser(subparsers, parent_parser) -> None:
         parents=[parent_parser],
         description=auth_token_description,
         help=auth_token_help,
+        formatter_class=CustomHelpFormatter,
     )

@@ -1,5 +1,5 @@
 import logging
-from argparse import ArgumentParser, ArgumentTypeError
+from argparse import ArgumentTypeError
 
 import pytest
 
@@ -7,6 +7,7 @@ from datachain.cli import (
     get_logging_level,
     get_parser,
 )
+from datachain.cli.parser.utils import CustomArgumentParser as ArgumentParser
 from datachain.cli.parser.utils import find_columns_type
 from datachain.cli.utils import CommaSeparatedArgs, KeyValueArgs
 

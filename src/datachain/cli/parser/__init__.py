@@ -1,5 +1,4 @@
 import argparse
-from argparse import ArgumentParser
 from importlib.metadata import PackageNotFoundError, version
 
 import shtab
@@ -10,11 +9,15 @@ from .job import add_jobs_parser
 from .studio import add_auth_parser
 from .utils import (
     FIND_COLUMNS,
+    CustomHelpFormatter,
     add_anon_arg,
     add_show_args,
     add_sources_arg,
     add_update_arg,
     find_columns_type,
+)
+from .utils import (
+    CustomArgumentParser as ArgumentParser,
 )
 
 
@@ -28,10 +31,11 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     parser = ArgumentParser(
         description="DataChain: Wrangle unstructured AI data at scale.",
         prog="datachain",
+        formatter_class=CustomHelpFormatter,
     )
     parser.add_argument("-V", "--version", action="version", version=__version__)
 
-    parent_parser = ArgumentParser(add_help=False)
+    parent_parser = ArgumentParser(add_help=False, formatter_class=CustomHelpFormatter)
     parent_parser.add_argument(
         "-v", "--verbose", action="count", default=0, help="Be verbose"
     )
@@ -59,7 +63,10 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         help=f"Use `{parser.prog} command --help` for command-specific help",
     )
     parse_cp = subp.add_parser(
-        "cp", parents=[parent_parser], description="Copy data files from the cloud."
+        "cp",
+        parents=[parent_parser],
+        description="Copy data files from the cloud.",
+        formatter_class=CustomHelpFormatter,
     )
     add_sources_arg(parse_cp).complete = shtab.DIR  # type: ignore[attr-defined]
     parse_cp.add_argument(
@@ -90,7 +97,10 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     add_update_arg(parse_cp)
 
     parse_clone = subp.add_parser(
-        "clone", parents=[parent_parser], description="Copy data files from the cloud."
+        "clone",
+        parents=[parent_parser],
+        description="Copy data files from the cloud.",
+        formatter_class=CustomHelpFormatter,
     )
     add_sources_arg(parse_clone).complete = shtab.DIR  # type: ignore[attr-defined]
     parse_clone.add_argument(
@@ -134,6 +144,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         aliases=["ds"],
         parents=[parent_parser],
         description="Commands for managing datasets.",
+        formatter_class=CustomHelpFormatter,
     )
     add_anon_arg(datasets_parser)
     datasets_subparser = datasets_parser.add_subparsers(
@@ -145,6 +156,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         "pull",
         parents=[parent_parser],
         description="Pull specific dataset version from Studio.",
+        formatter_class=CustomHelpFormatter,
     )
     parse_pull.add_argument(
         "dataset",
@@ -188,7 +200,10 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     )
 
     parse_edit_dataset = datasets_subparser.add_parser(
-        "edit", parents=[parent_parser], description="Edit dataset metadata."
+        "edit",
+        parents=[parent_parser],
+        description="Edit dataset metadata.",
+        formatter_class=CustomHelpFormatter,
     )
     parse_edit_dataset.add_argument("name", type=str, help="Dataset name")
     parse_edit_dataset.add_argument(
@@ -234,7 +249,10 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     )
 
     datasets_ls_parser = datasets_subparser.add_parser(
-        "ls", parents=[parent_parser], description="List datasets."
+        "ls",
+        parents=[parent_parser],
+        description="List datasets.",
+        formatter_class=CustomHelpFormatter,
     )
     datasets_ls_parser.add_argument(
         "--studio",
@@ -264,7 +282,11 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     )
 
     rm_dataset_parser = datasets_subparser.add_parser(
-        "rm", parents=[parent_parser], description="Remove dataset.", aliases=["remove"]
+        "rm",
+        parents=[parent_parser],
+        description="Remove dataset.",
+        aliases=["remove"],
+        formatter_class=CustomHelpFormatter,
     )
     rm_dataset_parser.add_argument("name", type=str, help="Dataset name")
     rm_dataset_parser.add_argument(
@@ -308,7 +330,10 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     )
 
     parse_ls = subp.add_parser(
-        "ls", parents=[parent_parser], description="List storage contents."
+        "ls",
+        parents=[parent_parser],
+        description="List storage contents.",
+        formatter_class=CustomHelpFormatter,
     )
     add_anon_arg(parse_ls)
     add_update_arg(parse_ls)
@@ -348,7 +373,10 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     )
 
     parse_du = subp.add_parser(
-        "du", parents=[parent_parser], description="Display space usage."
+        "du",
+        parents=[parent_parser],
+        description="Display space usage.",
+        formatter_class=CustomHelpFormatter,
     )
     add_sources_arg(parse_du)
     add_anon_arg(parse_du)
@@ -380,7 +408,10 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     )
 
     parse_find = subp.add_parser(
-        "find", parents=[parent_parser], description="Search in a directory hierarchy."
+        "find",
+        parents=[parent_parser],
+        description="Search in a directory hierarchy.",
+        formatter_class=CustomHelpFormatter,
     )
     add_anon_arg(parse_find)
     add_update_arg(parse_find)
@@ -435,7 +466,10 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     )
 
     parse_index = subp.add_parser(
-        "index", parents=[parent_parser], description="Index storage location."
+        "index",
+        parents=[parent_parser],
+        description="Index storage location.",
+        formatter_class=CustomHelpFormatter,
     )
     add_anon_arg(parse_index)
     add_update_arg(parse_index)
@@ -445,6 +479,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         "show",
         parents=[parent_parser],
         description="Create a new dataset with a query script.",
+        formatter_class=CustomHelpFormatter,
     )
     show_parser.add_argument("name", type=str, help="Dataset name")
     show_parser.add_argument(
@@ -461,6 +496,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         "query",
         parents=[parent_parser],
         description="Create a new dataset with a query script.",
+        formatter_class=CustomHelpFormatter,
     )
     add_anon_arg(query_parser)
     query_parser.add_argument(
@@ -491,11 +527,15 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         "clear-cache",
         parents=[parent_parser],
         description="Clear the local file cache.",
+        formatter_class=CustomHelpFormatter,
     )
     add_anon_arg(parse_clear_cache)
 
     parse_gc = subp.add_parser(
-        "gc", parents=[parent_parser], description="Garbage collect temporary tables."
+        "gc",
+        parents=[parent_parser],
+        description="Garbage collect temporary tables.",
+        formatter_class=CustomHelpFormatter,
     )
     add_anon_arg(parse_gc)
 
@@ -510,6 +550,7 @@ def add_completion_parser(subparsers, parents):
         "completion",
         parents=parents,
         description="Output shell completion script.",
+        formatter_class=CustomHelpFormatter,
     )
     parser.add_argument(
         "-s",
