@@ -29,7 +29,7 @@ def process_jobs_args(args: "Namespace"):
 
     if args.cmd == "run":
         return create_job(
-            args.query_file,
+            args.file,
             args.team,
             args.env_file,
             args.env,
@@ -41,9 +41,9 @@ def process_jobs_args(args: "Namespace"):
         )
 
     if args.cmd == "cancel":
-        return cancel_job(args.job_id, args.team)
+        return cancel_job(args.id, args.team)
     if args.cmd == "logs":
-        return show_job_logs(args.job_id, args.team)
+        return show_job_logs(args.id, args.team)
     raise DataChainError(f"Unknown command '{args.cmd}'.")
 
 

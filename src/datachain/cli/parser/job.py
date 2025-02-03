@@ -28,7 +28,7 @@ def add_jobs_parser(subparsers, parent_parser) -> None:
     )
 
     studio_run_parser.add_argument(
-        "query_file",
+        "file",
         action="store",
         help="Query file to run",
     )
@@ -90,7 +90,7 @@ def add_jobs_parser(subparsers, parent_parser) -> None:
     )
 
     studio_cancel_parser.add_argument(
-        "job_id",
+        "id",
         action="store",
         help="Job ID to cancel",
     )
@@ -113,7 +113,7 @@ def add_jobs_parser(subparsers, parent_parser) -> None:
     )
 
     studio_log_parser.add_argument(
-        "job_id",
+        "id",
         action="store",
         help="Job ID to show logs for",
     )
