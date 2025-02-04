@@ -10,6 +10,7 @@ from datachain.func import (
     int_hash_64,
     isnone,
     literal,
+    or_,
 )
 from datachain.func.array import contains
 from datachain.func.random import rand
@@ -304,6 +305,18 @@ def test_or_mutate(dc):
 
     res = dc.mutate(test=strlen("val") | strlen("val")).order_by("num").collect("test")
     assert list(res) == [1, 2, 3, 4, 5]
+
+
+@skip_if_not_sqlite
+def test_or_func_mutate(dc):
+    res = dc.mutate(test=ifelse(or_(C("num") < 3, C("num") > 4), "Match", "Not Match"))
+    assert list(res.order_by("num").collect("test")) == [
+        "Match",
+        "Match",
+        "Not Match",
+        "Not Match",
+        "Match",
+    ]
 
 
 def test_xor():

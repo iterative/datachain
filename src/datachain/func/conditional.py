@@ -2,6 +2,7 @@ from typing import Optional, Union
 
 from sqlalchemy import ColumnElement
 from sqlalchemy import case as sql_case
+from sqlalchemy import or_ as sql_or
 
 from datachain.lib.utils import DataChainParamsError
 from datachain.query.schema import Column
@@ -204,3 +205,32 @@ def isnone(col: Union[str, Column]) -> Func:
         col = C(col)
 
     return case((col.is_(None) if col is not None else True, True), else_=False)
+
+
+def or_(*args: Union[ColumnElement, Func]) -> Func:
+    """
+    Returns the function that produces conjunction of expressions joined by OR
+    logical operator.
+
+    Args:
+        args (ColumnElement | Func): The expressions for OR statement.
+
+    Returns:
+        Func: A Func object that represents the or function.
+
+    Example:
+        ```py
+        dc.mutate(
+            test=ifelse(or_(isnone("name"), C("name") == ''), "Empty", "Not Empty")
+        )
+        ```
+    """
+    cols, func_args = [], []
+
+    for arg in args:
+        if isinstance(arg, (str, Func)):
+            cols.append(arg)
+        else:
+            func_args.append(arg)
+
+    return Func("or", inner=sql_or, cols=cols, args=func_args, result_type=bool)
