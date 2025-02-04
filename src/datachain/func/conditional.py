@@ -210,7 +210,7 @@ def isnone(col: Union[str, Column]) -> Func:
 def or_(*args: Union[ColumnElement, Func]) -> Func:
     """
     Returns the function that produces conjunction of expressions joined by OR
-    logical operator
+    logical operator.
 
     Args:
         args (ColumnElement | Func): The expressions for OR statement.
@@ -221,7 +221,7 @@ def or_(*args: Union[ColumnElement, Func]) -> Func:
     Example:
         ```py
         dc.mutate(
-            test=ifelse(or_(isnone("num"), C("num") == 0), "Empty", "Not Empty")
+            test=ifelse(or_(isnone("name"), C("name") == ''), "Empty", "Not Empty")
         )
         ```
     """
