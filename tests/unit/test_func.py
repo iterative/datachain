@@ -11,6 +11,7 @@ from datachain.func import (
     isnone,
     literal,
 )
+from datachain.func.array import contains
 from datachain.func.random import rand
 from datachain.func.string import length as strlen
 from datachain.lib.signal_schema import SignalSchema
@@ -425,6 +426,12 @@ def test_lt_mutate(dc):
     assert list(res) == [0, 0, 0, 0, 0]
 
 
+@pytest.mark.parametrize("value", [1, 0.5, "a", True])
+def test_mutate_with_literal(dc, value):
+    res = dc.mutate(test=value).collect("test")
+    assert list(res) == [value] * 5
+
+
 def test_le():
     rnd1, rnd2 = rand(), rand()
 
@@ -665,6 +672,23 @@ def test_case_mutate(dc, val, else_, type_):
     assert res.schema["test"] == type_
 
 
+def test_case_mutate_column_as_value(dc):
+    res = dc.mutate(test=case((C("num") < 3, C("val")), else_="cc"))
+    assert list(res.order_by("num").collect("test")) == ["x", "xx", "cc", "cc", "cc"]
+
+
+def test_case_mutate_column_as_value_in_else(dc):
+    res = dc.mutate(test=case((C("num") < 3, C("val")), else_=C("val")))
+    assert list(res.order_by("num").collect("test")) == [
+        "x",
+        "xx",
+        "xxx",
+        "xxxx",
+        "xxxxx",
+    ]
+    assert res.schema["test"] is str
+
+
 @pytest.mark.parametrize(
     "val,else_,type_",
     [
@@ -735,6 +759,19 @@ def test_ifelse_mutate(dc, if_val, else_val, type_):
     assert res.schema["test"] == type_
 
 
+@pytest.mark.parametrize(
+    "if_val,else_val,type_,result",
+    [
+        [C("num"), 0, int, [0, 0, 0, 1, 2]],
+        ["a", C("val"), str, ["a", "a", "xxx", "xxxx", "xxxxx"]],
+    ],
+)
+def test_ifelse_mutate_with_columns_as_values(dc, if_val, else_val, type_, result):
+    res = dc.mutate(test=ifelse(C("num") < 3, if_val, else_val))
+    assert list(res.order_by("test").collect("test")) == result
+    assert res.schema["test"] == type_
+
+
 @pytest.mark.parametrize("col", ["val", C("val")])
 @skip_if_not_sqlite
 def test_isnone_mutate(col):
@@ -761,3 +798,27 @@ def test_isnone_with_ifelse_mutate(col):
     res = dc.mutate(test=ifelse(isnone(col), "NONE", "NOT_NONE"))
     assert list(res.order_by("num").collect("test")) == ["NOT_NONE"] * 3 + ["NONE"] * 2
     assert res.schema["test"] is str
+
+
+def test_array_contains():
+    dc = DataChain.from_values(
+        arr=[list(range(1, i)) * i for i in range(2, 7)],
+        val=list(range(2, 7)),
+    )
+
+    assert list(dc.mutate(res=contains("arr", 3)).order_by("val").collect("res")) == [
+        0,
+        0,
+        1,
+        1,
+        1,
+    ]
+    assert list(
+        dc.mutate(res=contains(C("arr"), 3)).order_by("val").collect("res")
+    ) == [0, 0, 1, 1, 1]
+    assert list(
+        dc.mutate(res=contains(C("arr"), 10)).order_by("val").collect("res")
+    ) == [0, 0, 0, 0, 0]
+    assert list(
+        dc.mutate(res=contains(C("arr"), None)).order_by("val").collect("res")
+    ) == [0, 0, 0, 0, 0]

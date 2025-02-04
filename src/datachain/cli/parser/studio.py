@@ -1,15 +1,18 @@
+from datachain.cli.parser.utils import CustomHelpFormatter
+
+
 def add_auth_parser(subparsers, parent_parser) -> None:
+    from dvc_studio_client.auth import AVAILABLE_SCOPES
+
     auth_help = "Manage Studio authentication"
-    auth_description = (
-        "Manage authentication and settings for Studio. "
-        "Configure tokens for sharing datasets and using Studio features."
-    )
+    auth_description = "Manage authentication and settings for Studio. "
 
     auth_parser = subparsers.add_parser(
         "auth",
         parents=[parent_parser],
         description=auth_description,
         help=auth_help,
+        formatter_class=CustomHelpFormatter,
     )
     auth_subparser = auth_parser.add_subparsers(
         dest="cmd",
@@ -19,13 +22,16 @@ def add_auth_parser(subparsers, parent_parser) -> None:
     auth_login_help = "Authenticate with Studio"
     auth_login_description = (
         "Authenticate with Studio using default scopes. "
-        "A random name will be assigned as the token name if not specified."
+        "A random name will be assigned if the token name is not specified."
     )
+
+    allowed_scopes = ", ".join(AVAILABLE_SCOPES)
     login_parser = auth_subparser.add_parser(
         "login",
         parents=[parent_parser],
         description=auth_login_description,
         help=auth_login_help,
+        formatter_class=CustomHelpFormatter,
     )
 
     login_parser.add_argument(
@@ -40,7 +46,7 @@ def add_auth_parser(subparsers, parent_parser) -> None:
         "--scopes",
         action="store",
         default=None,
-        help="Authentication token scopes",
+        help=f"Authentication token scopes. Allowed scopes: {allowed_scopes}",
     )
 
     login_parser.add_argument(
@@ -68,6 +74,7 @@ def add_auth_parser(subparsers, parent_parser) -> None:
         parents=[parent_parser],
         description=auth_logout_description,
         help=auth_logout_help,
+        formatter_class=CustomHelpFormatter,
     )
 
     auth_team_help = "Set default team for Studio operations"
@@ -78,6 +85,7 @@ def add_auth_parser(subparsers, parent_parser) -> None:
         parents=[parent_parser],
         description=auth_team_description,
         help=auth_team_help,
+        formatter_class=CustomHelpFormatter,
     )
     team_parser.add_argument(
         "team_name",
@@ -99,4 +107,5 @@ def add_auth_parser(subparsers, parent_parser) -> None:
         parents=[parent_parser],
         description=auth_token_description,
         help=auth_token_help,
+        formatter_class=CustomHelpFormatter,
     )

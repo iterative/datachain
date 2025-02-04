@@ -17,7 +17,8 @@ from tests.utils import DEFAULT_TREE, skip_if_not_sqlite, tree_from_path
 def listing_stats(uri, catalog):
     list_dataset_name, _, _ = parse_listing_uri(uri, catalog.client_config)
     dataset = catalog.get_dataset(list_dataset_name)
-    return catalog.dataset_stats(dataset.name, dataset.latest_version)
+    dataset_version = dataset.get_version(dataset.latest_version)
+    return dataset_version.num_objects, dataset_version.size
 
 
 @pytest.fixture
@@ -582,23 +583,23 @@ def test_listing_stats(cloud_test_catalog):
         listing_stats(src_uri, catalog)
 
     catalog.enlist_source(src_uri)
-    stats = listing_stats(src_uri, catalog)
-    assert stats.num_objects == 7
-    assert stats.size == 36
+    num_objects, size = listing_stats(src_uri, catalog)
+    assert num_objects == 7
+    assert size == 36
 
     catalog.enlist_source(f"{src_uri}/dogs/", update=True)
-    stats = listing_stats(src_uri, catalog)
-    assert stats.num_objects == 7
-    assert stats.size == 36
+    num_objects, size = listing_stats(src_uri, catalog)
+    assert num_objects == 7
+    assert size == 36
 
-    stats = listing_stats(f"{src_uri}/dogs/", catalog)
-    assert stats.num_objects == 4
-    assert stats.size == 15
+    num_objects, size = listing_stats(f"{src_uri}/dogs/", catalog)
+    assert num_objects == 4
+    assert size == 15
 
     catalog.enlist_source(f"{src_uri}/dogs/")
-    stats = listing_stats(src_uri, catalog)
-    assert stats.num_objects == 7
-    assert stats.size == 36
+    num_objects, size = listing_stats(src_uri, catalog)
+    assert num_objects == 7
+    assert size == 36
 
 
 @pytest.mark.parametrize("cloud_type", ["s3", "azure", "gs"], indirect=True)
@@ -608,15 +609,15 @@ def test_enlist_source_handles_slash(cloud_test_catalog):
     src_path = f"{src_uri}/dogs"
 
     catalog.enlist_source(src_path)
-    stats = listing_stats(src_path, catalog)
-    assert stats.num_objects == len(DEFAULT_TREE["dogs"])
-    assert stats.size == 15
+    num_objects, size = listing_stats(src_path, catalog)
+    assert num_objects == len(DEFAULT_TREE["dogs"])
+    assert size == 15
 
     src_path = f"{src_uri}/dogs"
     catalog.enlist_source(src_path, update=True)
-    stats = listing_stats(src_path, catalog)
-    assert stats.num_objects == len(DEFAULT_TREE["dogs"])
-    assert stats.size == 15
+    num_objects, size = listing_stats(src_path, catalog)
+    assert num_objects == len(DEFAULT_TREE["dogs"])
+    assert size == 15
 
 
 @pytest.mark.parametrize("cloud_type", ["s3", "azure", "gs"], indirect=True)
@@ -626,10 +627,10 @@ def test_enlist_source_handles_glob(cloud_test_catalog):
     src_path = f"{src_uri}/dogs/*.jpg"
 
     catalog.enlist_source(src_path)
-    stats = listing_stats(src_path, catalog)
+    num_objects, size = listing_stats(src_path, catalog)
 
-    assert stats.num_objects == len(DEFAULT_TREE["dogs"])
-    assert stats.size == 15
+    assert num_objects == len(DEFAULT_TREE["dogs"])
+    assert size == 15
 
 
 @pytest.mark.parametrize("cloud_type", ["s3", "azure", "gs"], indirect=True)

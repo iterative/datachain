@@ -160,7 +160,7 @@ def test_from_features_basic_in_memory():
     assert set(ds.schema.values()) == {File}
 
 
-def test_from_ffeatures(test_session):
+def test_from_features(test_session):
     ds = DataChain.from_records(DataChain.DEFAULT_FILE_RECORD, session=test_session)
     ds = ds.gen(
         lambda prm: list(zip([File(path="")] * len(features), features)),
@@ -381,8 +381,7 @@ def test_from_features_simple_types_in_memory():
 
 
 def test_from_features_more_simple_types(test_session):
-    ds_name = "my_ds_type"
-    DataChain.from_values(
+    ds = DataChain.from_values(
         t1=features,
         num=range(len(features)),
         bb=[True, True, False],
@@ -394,9 +393,8 @@ def test_from_features_more_simple_types(test_session):
         ],
         f=[3.14, 2.72, 1.62],
         session=test_session,
-    ).save(ds_name)
+    )
 
-    ds = DataChain.from_dataset(name=ds_name)
     assert ds.schema.keys() == {
         "t1",
         "num",
@@ -2109,8 +2107,6 @@ def test_from_values_with_nones(test_session):
 
 
 def test_custom_model_with_nested_lists(test_session):
-    ds_name = "nested"
-
     class Trace(BaseModel):
         x: float
         y: float
@@ -2122,7 +2118,7 @@ def test_custom_model_with_nested_lists(test_session):
 
     DataModel.register(Nested)
 
-    DataChain.from_values(
+    ds = DataChain.from_values(
         nested=[
             Nested(
                 values=[[0.5, 0.5], [0.5, 0.5]],
@@ -2132,9 +2128,9 @@ def test_custom_model_with_nested_lists(test_session):
         ],
         nums=[1],
         session=test_session,
-    ).save(ds_name)
+    )
 
-    assert list(DataChain.from_dataset(name=ds_name).collect("nested")) == [
+    assert list(ds.collect("nested")) == [
         Nested(
             values=[[0.5, 0.5], [0.5, 0.5]],
             traces_single=[{"x": 0.5, "y": 0.5}, {"x": 0.5, "y": 0.5}],
@@ -2214,9 +2210,6 @@ def test_rename_non_object_column_name_with_mutate(test_session):
     assert ds.signals_schema.values == {"my_ids": int}
     assert list(ds.order_by("my_ids").collect("my_ids")) == [1, 2, 3]
 
-    ds.save("mutated")
-
-    ds = DataChain.from_dataset(name="mutated", session=test_session)
     assert ds.signals_schema.values.get("my_ids") is int
     assert "ids" not in ds.signals_schema.values
     assert list(ds.order_by("my_ids").collect("my_ids")) == [1, 2, 3]
@@ -2254,6 +2247,7 @@ def test_rename_object_name_with_mutate(test_session):
     assert list(ds.order_by("my_file.path").collect("my_file.path")) == ["a", "b", "c"]
     assert ds.signals_schema.values == {"my_file": File, "ids": int}
 
+    # check that persist after saving
     ds.save("mutated")
 
     ds = DataChain.from_dataset(name="mutated", session=test_session)
@@ -2437,7 +2431,6 @@ def test_group_by_int(test_session):
             collect=func.collect("col2"),
             partition_by="col1",
         )
-        .save("my-ds")
     )
 
     assert ds.signals_schema.serialize() == {
@@ -2512,7 +2505,6 @@ def test_group_by_float(test_session):
             collect=func.collect("col2"),
             partition_by="col1",
         )
-        .save("my-ds")
     )
 
     assert ds.signals_schema.serialize() == {
@@ -2587,7 +2579,6 @@ def test_group_by_str(test_session):
             collect=func.collect("col2"),
             partition_by="col1",
         )
-        .save("my-ds")
     )
 
     assert ds.signals_schema.serialize() == {
@@ -2662,7 +2653,6 @@ def test_group_by_multiple_partition_by(test_session):
             collect=func.collect("col3"),
             partition_by=("col1", "col2"),
         )
-        .save("my-ds")
     )
 
     assert ds.signals_schema.serialize() == {
@@ -2753,7 +2743,6 @@ def test_group_by_no_partition_by(test_session):
             value=func.any_value("col3"),
             collect=func.collect("col3"),
         )
-        .save("my-ds")
     )
 
     assert ds.signals_schema.serialize() == {
@@ -2810,17 +2799,13 @@ def test_group_by_error(test_session):
 def test_group_by_case(test_session):
     from datachain import func
 
-    ds = (
-        DataChain.from_values(
-            col1=[1.0, 0.0, 3.2, 0.1, 5.9, -1.0],
-            col2=[0.0, 6.1, -0.05, 3.7, 0.1, -3.0],
-            session=test_session,
-        )
-        .group_by(
-            col1=func.sum(func.case((C("col1") > 0.1, 1), else_=0)),
-            col2=func.sum(func.case((C("col2") < 0.0, 1), else_=0)),
-        )
-        .save("my-ds")
+    ds = DataChain.from_values(
+        col1=[1.0, 0.0, 3.2, 0.1, 5.9, -1.0],
+        col2=[0.0, 6.1, -0.05, 3.7, 0.1, -3.0],
+        session=test_session,
+    ).group_by(
+        col1=func.sum(func.case((C("col1") > 0.1, 1), else_=0)),
+        col2=func.sum(func.case((C("col2") < 0.0, 1), else_=0)),
     )
 
     assert ds.signals_schema.serialize() == {
@@ -2841,19 +2826,15 @@ def test_window_functions(test_session, desc):
 
     window = func.window(partition_by="col1", order_by="col2", desc=desc)
 
-    ds = (
-        DataChain.from_values(
-            col1=["a", "a", "b", "b", "b", "c"],
-            col2=[1, 2, 3, 4, 5, 6],
-            session=test_session,
-        )
-        .mutate(
-            row_number=func.row_number().over(window),
-            rank=func.rank().over(window),
-            dense_rank=func.dense_rank().over(window),
-            first=func.first("col2").over(window),
-        )
-        .save("my-ds")
+    ds = DataChain.from_values(
+        col1=["a", "a", "b", "b", "b", "c"],
+        col2=[1, 2, 3, 4, 5, 6],
+        session=test_session,
+    ).mutate(
+        row_number=func.row_number().over(window),
+        rank=func.rank().over(window),
+        dense_rank=func.dense_rank().over(window),
+        first=func.first("col2").over(window),
     )
 
     assert ds.signals_schema.serialize() == {

@@ -16,13 +16,13 @@ def test_compare(test_session, added, deleted, modified, same):
         id=[1, 2, 4],
         name=["John1", "Doe", "Andy"],
         session=test_session,
-    ).save("ds1")
+    )
 
     ds2 = DataChain.from_values(
         id=[1, 3, 4],
         name=["John", "Mark", "Andy"],
         session=test_session,
-    ).save("ds2")
+    )
 
     if not any([added, deleted, modified, same]):
         with pytest.raises(ValueError) as exc_info:
@@ -83,13 +83,13 @@ def test_compare_no_status_col(test_session):
         id=[1, 2, 4],
         name=["John1", "Doe", "Andy"],
         session=test_session,
-    ).save("ds1")
+    )
 
     ds2 = DataChain.from_values(
         id=[1, 3, 4],
         name=["John", "Mark", "Andy"],
         session=test_session,
-    ).save("ds2")
+    )
 
     diff = ds1.compare(
         ds2,
@@ -216,7 +216,7 @@ def test_compare_on_equal_datasets(test_session, on_self):
         id=[1, 2, 3],
         name=["John", "Doe", "Andy"],
         session=test_session,
-    ).save("ds1")
+    )
 
     if on_self:
         ds2 = ds1
@@ -225,7 +225,7 @@ def test_compare_on_equal_datasets(test_session, on_self):
             id=[1, 2, 3],
             name=["John", "Doe", "Andy"],
             session=test_session,
-        ).save("ds2")
+        )
 
     diff = ds1.compare(
         ds2,
@@ -250,13 +250,13 @@ def test_compare_multiple_columns(test_session):
         name=["John", "Doe", "Andy"],
         city=["London", "New York", "Tokyo"],
         session=test_session,
-    ).save("ds1")
+    )
     ds2 = DataChain.from_values(
         id=[1, 3, 4],
         name=["John", "Mark", "Andy"],
         city=["Paris", "Berlin", "Tokyo"],
         session=test_session,
-    ).save("ds2")
+    )
 
     diff = ds1.compare(ds2, same=True, on=["id"], status_col="diff")
 
@@ -277,13 +277,13 @@ def test_compare_multiple_match_columns(test_session):
         name=["John", "Doe", "Andy"],
         city=["London", "New York", "Tokyo"],
         session=test_session,
-    ).save("ds1")
+    )
     ds2 = DataChain.from_values(
         id=[1, 3, 4],
         name=["John", "John", "Andy"],
         city=["Paris", "Berlin", "Tokyo"],
         session=test_session,
-    ).save("ds2")
+    )
 
     diff = ds1.compare(ds2, same=True, on=["id", "name"], status_col="diff")
 
@@ -334,13 +334,13 @@ def test_compare_additional_column_on_right(test_session):
         id=[1, 2, 4],
         name=["John", "Doe", "Andy"],
         session=test_session,
-    ).save("ds1")
+    )
     ds2 = DataChain.from_values(
         id=[1, 3, 4],
         name=["John", "Mark", "Andy"],
         city=["London", "New York", "Tokyo"],
         session=test_session,
-    ).save("ds2")
+    )
 
     diff = ds1.compare(ds2, same=True, on=["id"], status_col="diff")
 
@@ -356,8 +356,8 @@ def test_compare_additional_column_on_right(test_session):
 
 
 def test_compare_missing_on(test_session):
-    ds1 = DataChain.from_values(id=[1, 2, 4], session=test_session).save("ds1")
-    ds2 = DataChain.from_values(id=[1, 2, 4], session=test_session).save("ds2")
+    ds1 = DataChain.from_values(id=[1, 2, 4], session=test_session)
+    ds2 = DataChain.from_values(id=[1, 2, 4], session=test_session)
 
     with pytest.raises(ValueError) as exc_info:
         ds1.compare(ds2, on=None)
@@ -366,8 +366,8 @@ def test_compare_missing_on(test_session):
 
 
 def test_compare_right_on_wrong_length(test_session):
-    ds1 = DataChain.from_values(id=[1, 2, 4], session=test_session).save("ds1")
-    ds2 = DataChain.from_values(id=[1, 2, 4], session=test_session).save("ds2")
+    ds1 = DataChain.from_values(id=[1, 2, 4], session=test_session)
+    ds2 = DataChain.from_values(id=[1, 2, 4], session=test_session)
 
     with pytest.raises(ValueError) as exc_info:
         ds1.compare(ds2, on=["id"], right_on=["id", "name"])
@@ -376,8 +376,8 @@ def test_compare_right_on_wrong_length(test_session):
 
 
 def test_compare_right_compare_defined_but_not_compare(test_session):
-    ds1 = DataChain.from_values(id=[1, 2, 4], session=test_session).save("ds1")
-    ds2 = DataChain.from_values(id=[1, 2, 4], session=test_session).save("ds2")
+    ds1 = DataChain.from_values(id=[1, 2, 4], session=test_session)
+    ds2 = DataChain.from_values(id=[1, 2, 4], session=test_session)
 
     with pytest.raises(ValueError) as exc_info:
         ds1.compare(ds2, on=["id"], right_compare=["name"])
@@ -388,8 +388,8 @@ def test_compare_right_compare_defined_but_not_compare(test_session):
 
 
 def test_compare_right_compare_wrong_length(test_session):
-    ds1 = DataChain.from_values(id=[1, 2, 4], session=test_session).save("ds1")
-    ds2 = DataChain.from_values(id=[1, 2, 4], session=test_session).save("ds2")
+    ds1 = DataChain.from_values(id=[1, 2, 4], session=test_session)
+    ds2 = DataChain.from_values(id=[1, 2, 4], session=test_session)
 
     with pytest.raises(ValueError) as exc_info:
         ds1.compare(ds2, on=["id"], compare=["name"], right_compare=["name", "city"])

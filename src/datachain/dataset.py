@@ -150,12 +150,6 @@ class DatasetDependency:
         return hash(f"{self.type}_{self.name}_{self.version}")
 
 
-@dataclass
-class DatasetStats:
-    num_objects: Optional[int]  # None if table is missing
-    size: Optional[int]  # in bytes None if table is missing or empty
-
-
 class DatasetStatus:
     CREATED = 1
     PENDING = 2

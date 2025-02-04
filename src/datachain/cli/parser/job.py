@@ -1,8 +1,15 @@
+from datachain.cli.parser.utils import CustomHelpFormatter
+
+
 def add_jobs_parser(subparsers, parent_parser) -> None:
     jobs_help = "Manage jobs in Studio"
     jobs_description = "Commands to manage job execution in Studio."
     jobs_parser = subparsers.add_parser(
-        "job", parents=[parent_parser], description=jobs_description, help=jobs_help
+        "job",
+        parents=[parent_parser],
+        description=jobs_description,
+        help=jobs_help,
+        formatter_class=CustomHelpFormatter,
     )
     jobs_subparser = jobs_parser.add_subparsers(
         dest="cmd",
@@ -17,10 +24,11 @@ def add_jobs_parser(subparsers, parent_parser) -> None:
         parents=[parent_parser],
         description=studio_run_description,
         help=studio_run_help,
+        formatter_class=CustomHelpFormatter,
     )
 
     studio_run_parser.add_argument(
-        "query_file",
+        "file",
         action="store",
         help="Query file to run",
     )
@@ -78,10 +86,11 @@ def add_jobs_parser(subparsers, parent_parser) -> None:
         parents=[parent_parser],
         description=studio_cancel_description,
         help=studio_cancel_help,
+        formatter_class=CustomHelpFormatter,
     )
 
     studio_cancel_parser.add_argument(
-        "job_id",
+        "id",
         action="store",
         help="Job ID to cancel",
     )
@@ -100,10 +109,11 @@ def add_jobs_parser(subparsers, parent_parser) -> None:
         parents=[parent_parser],
         description=studio_log_description,
         help=studio_log_help,
+        formatter_class=CustomHelpFormatter,
     )
 
     studio_log_parser.add_argument(
-        "job_id",
+        "id",
         action="store",
         help="Job ID to show logs for",
     )

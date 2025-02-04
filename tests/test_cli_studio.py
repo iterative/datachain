@@ -294,7 +294,7 @@ def test_studio_rm_dataset(capsys, mocker):
         assert last_request.json() == {
             "dataset_name": "name",
             "team_name": "team_name",
-            "version": 1,
+            "dataset_version": 1,
             "force": True,
         }
 
