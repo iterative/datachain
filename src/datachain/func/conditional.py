@@ -89,7 +89,7 @@ def least(*args: Union[ColT, float]) -> Func:
 
 
 def case(
-    *args: tuple[Union[ColumnElement, Func], CaseT], else_: Optional[CaseT] = None
+    *args: tuple[Union[ColumnElement, Func, bool], CaseT], else_: Optional[CaseT] = None
 ) -> Func:
     """
     Returns the case function that produces case expression which has a list of
@@ -99,7 +99,7 @@ def case(
     Result type is inferred from condition results.
 
     Args:
-        args tuple((ColumnElement | Func),(str | int | float | complex | bool, Func, ColumnElement)):
+        args tuple((ColumnElement | Func | bool),(str | int | float | complex | bool, Func, ColumnElement)):
             Tuple of condition and values pair.
         else_ (str | int | float | complex | bool, Func): optional else value in case
             expression. If omitted, and no case conditions are satisfied, the result

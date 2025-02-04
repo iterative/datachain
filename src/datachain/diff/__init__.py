@@ -109,7 +109,7 @@ def _compare(  # noqa: C901
     right = right.mutate(**{rdiff_col: 1})
 
     if not compare:
-        modified_cond = sa.true()
+        modified_cond = True
     else:
         modified_cond = sa.or_(  # type: ignore[assignment]
             *[
