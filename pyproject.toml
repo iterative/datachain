@@ -61,7 +61,8 @@ docs = [
   "mkdocs-material==9.5.22",
   "mkdocs-section-index>=0.3.6",
   "mkdocstrings-python>=1.6.3",
-  "mkdocs-literate-nav>=0.6.1"
+  "mkdocs-literate-nav>=0.6.1",
+  "eval-type-backport"
 ]
 torch = [
   "torch>=2.1.0",

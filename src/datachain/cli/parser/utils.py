@@ -1,9 +1,28 @@
-from argparse import Action, ArgumentParser, ArgumentTypeError
+from argparse import Action, ArgumentParser, ArgumentTypeError, HelpFormatter
 from typing import Union
 
 from datachain.cli.utils import CommaSeparatedArgs
 
 FIND_COLUMNS = ["du", "name", "path", "size", "type"]
+
+
+class CustomHelpFormatter(HelpFormatter):
+    def add_arguments(self, actions):
+        # Sort arguments to move --help and --version to the end
+        normal_actions = [
+            a for a in actions if a.dest not in ("help", "verbose", "quiet")
+        ]
+        special_actions = [a for a in actions if a.dest in ("help", "verbose", "quiet")]
+        super().add_arguments(normal_actions + special_actions)
+
+
+class CustomArgumentParser(ArgumentParser):
+    def error(self, message):
+        internal_commands = ["internal-run-udf", "internal-run-udf-worker"]
+
+        hidden_portion = "".join(f"'{cmd}', " for cmd in internal_commands)
+        message = message.replace(hidden_portion, "")
+        super().error(message)
 
 
 def find_columns_type(
