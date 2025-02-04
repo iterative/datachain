@@ -66,8 +66,11 @@ def video_info(file: VideoFile) -> Video:
     width = int(video_stream.get("width", 0))
     height = int(video_stream.get("height", 0))
     duration = float(video_format.get("duration", 0))
-    start_time = float(video_format.get("start_time", 0))
-    frames = round((duration - start_time) * fps)
+    if "nb_frames" in video_stream:
+        frames = int(video_stream.get("nb_frames", 0))
+    else:
+        start_time = float(video_format.get("start_time", 0))
+        frames = int((duration - start_time) * fps)
     format_name = video_format.get("format_name", "")
     codec_name = video_stream.get("codec_name", "")
 
