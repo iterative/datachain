@@ -16,7 +16,7 @@ from .aggregate import (
     sum,
 )
 from .array import contains, cosine_distance, euclidean_distance, length, sip_hash_64
-from .conditional import case, greatest, ifelse, isnone, least
+from .conditional import case, greatest, ifelse, isnone, least, or_
 from .numeric import bit_and, bit_hamming_distance, bit_or, bit_xor, int_hash_64
 from .random import rand
 from .string import byte_hamming_distance
@@ -49,6 +49,7 @@ __all__ = [
     "literal",
     "max",
     "min",
+    "or_",
     "path",
     "rand",
     "random",
