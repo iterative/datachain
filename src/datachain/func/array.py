@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-from typing import Union
+from typing import Any, Union
 
 from datachain.sql.functions import array
 
@@ -138,6 +138,44 @@ def length(arg: Union[str, Sequence, Func]) -> Func:
         args = [arg]
 
     return Func("length", inner=array.length, cols=cols, args=args, result_type=int)
+
+
+def contains(arr: Union[str, Sequence, Func], elem: Any) -> Func:
+    """
+    Checks whether the `arr` array has the `elem` element.
+
+    Args:
+        arr (str | Sequence | Func): Array to check for the element.
+            If a string is provided, it is assumed to be the name of the array column.
+            If a sequence is provided, it is assumed to be an array of values.
+            If a Func is provided, it is assumed to be a function returning an array.
+        elem (Any): Element to check for in the array.
+
+    Returns:
+        Func: A Func object that represents the contains function. Result of the
+            function will be 1 if the element is present in the array, and 0 otherwise.
+
+    Example:
+        ```py
+        dc.mutate(
+            contains1=func.array.contains("signal.values", 3),
+            contains2=func.array.contains([1, 2, 3, 4, 5], 7),
+        )
+        ```
+    """
+
+    def inner(arg):
+        is_json = type(elem) in [list, dict]
+        return array.contains(arg, elem, is_json)
+
+    if isinstance(arr, (str, Func)):
+        cols = [arr]
+        args = None
+    else:
+        cols = None
+        args = [arr]
+
+    return Func("contains", inner=inner, cols=cols, args=args, result_type=int)
 
 
 def sip_hash_64(arg: Union[str, Sequence]) -> Func:

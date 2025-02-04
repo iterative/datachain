@@ -74,6 +74,7 @@ nav:
           - UDF: references/udf.md
           - Torch: references/torch.md
           - Functions: references/func.md
+          - Toolkit: references/toolkit.md
       - 🤝 Contributing: contributing.md
 
   - DataChain Website ↗: https://datachain.ai" target="_blank"
