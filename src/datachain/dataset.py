@@ -628,6 +628,9 @@ class DatasetListRecord:
         self.versions.sort(key=lambda v: v.version)
         return self
 
+    def latest_version(self) -> DatasetListVersion:
+        return max(self.versions, key=lambda v: v.version)
+
     @property
     def is_bucket_listing(self) -> bool:
         """

@@ -9,7 +9,7 @@ import tabulate
 
 def _tabulated_datasets(name, version):
     row = [
-        {"Name": name, "Version": version},
+        {"Name": name, "Latest Version": f"v{version}"},
     ]
     return tabulate.tabulate(row, headers="keys")
 
