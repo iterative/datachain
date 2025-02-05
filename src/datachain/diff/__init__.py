@@ -4,9 +4,7 @@ from collections.abc import Sequence
 from enum import Enum
 from typing import TYPE_CHECKING, Optional, Union
 
-import sqlalchemy as sa
-
-from datachain.func import case, ifelse, isnone
+from datachain.func import case, ifelse, isnone, or_
 from datachain.lib.signal_schema import SignalSchema
 from datachain.query.schema import Column
 
@@ -44,7 +42,7 @@ def _compare(  # noqa: C901
     modified: bool = True,
     same: bool = True,
     status_col: Optional[str] = None,
-):
+) -> "DataChain":
     """Comparing two chains by identifying rows that are added, deleted, modified
     or same"""
     rname = "right_"
@@ -111,7 +109,7 @@ def _compare(  # noqa: C901
     if not compare:
         modified_cond = True
     else:
-        modified_cond = sa.or_(  # type: ignore[assignment]
+        modified_cond = or_(  # type: ignore[assignment]
             *[
                 C(c) != (C(f"{rname}{rc}") if c == rc else C(rc))
                 for c, rc in zip(compare, right_compare)  # type: ignore[arg-type]
