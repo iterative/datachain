@@ -90,7 +90,7 @@ def least(*args: Union[ColT, float]) -> Func:
 
 
 def case(
-    *args: tuple[Union[ColumnElement, Func], CaseT], else_: Optional[CaseT] = None
+    *args: tuple[Union[ColumnElement, Func, bool], CaseT], else_: Optional[CaseT] = None
 ) -> Func:
     """
     Returns the case function that produces case expression which has a list of
@@ -100,7 +100,7 @@ def case(
     Result type is inferred from condition results.
 
     Args:
-        args tuple((ColumnElement | Func),(str | int | float | complex | bool, Func, ColumnElement)):
+        args tuple((ColumnElement | Func | bool),(str | int | float | complex | bool, Func, ColumnElement)):
             Tuple of condition and values pair.
         else_ (str | int | float | complex | bool, Func): optional else value in case
             expression. If omitted, and no case conditions are satisfied, the result
@@ -119,12 +119,16 @@ def case(
     supported_types = [int, float, complex, str, bool]
 
     def _get_type(val):
+        from enum import Enum
+
         if isinstance(val, Func):
             # nested functions
             return val.result_type
         if isinstance(val, Column):
             # at this point we cannot know what is the type of a column
             return None
+        if isinstance(val, Enum):
+            return type(val.value)
         return type(val)
 
     if not args:
