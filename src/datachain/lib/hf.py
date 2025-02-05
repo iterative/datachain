@@ -20,7 +20,7 @@ try:
 
 except ImportError as exc:
     raise ImportError(
-        "Missing dependencies for huggingface datasets:\n"
+        "Missing dependencies for huggingface datasets.\n"
         "To install run:\n\n"
         "  pip install 'datachain[hf]'\n"
     ) from exc
