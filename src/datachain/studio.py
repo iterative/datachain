@@ -140,11 +140,18 @@ def token():
     print(token)
 
 
-def list_datasets(team: Optional[str] = None):
+def list_datasets(team: Optional[str] = None, dataset_name: Optional[str] = None):
+    if dataset_name:
+        yield from list_dataset_versions(team, dataset_name)
+        return
+
     client = StudioClient(team=team)
+
     response = client.ls_datasets()
+
     if not response.ok:
         raise_remote_error(response.message)
+
     if not response.data:
         return
 
@@ -156,6 +163,22 @@ def list_datasets(team: Optional[str] = None):
         for v in d.get("versions", []):
             version = v.get("version")
             yield (name, version)
+
+
+def list_dataset_versions(team: Optional[str] = None, dataset_name: str = ""):
+    client = StudioClient(team=team)
+
+    response = client.dataset_info(dataset_name)
+
+    if not response.ok:
+        raise_remote_error(response.message)
+
+    if not response.data:
+        return
+
+    for v in response.data.get("versions", []):
+        version = v.get("version")
+        yield (dataset_name, version)
 
 
 def edit_studio_dataset(
