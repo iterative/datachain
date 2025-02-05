@@ -37,22 +37,17 @@ def video_info(file: VideoFile) -> Video:
     """
     try:
         probe = ffmpeg.probe(file.get_local_path())
-    except ffmpeg.Error as exc:
-        raise FileError(file, f"unable to probe video file: {exc.stderr}") from exc
-    except Exception as exc:
-        raise FileError(file, f"unable to probe video file: {exc}") from exc
-
-    if not probe:
-        raise FileError(file, "unable to probe video file")
+    except Exception:  # noqa: BLE001
+        probe = {}
 
     all_streams = probe.get("streams")
     video_format = probe.get("format")
     if not all_streams or not video_format:
-        raise FileError(file, "unable to probe video file")
+        raise FileError(file, "unable to extract metadata from video file")
 
     video_streams = [s for s in all_streams if s["codec_type"] == "video"]
     if len(video_streams) == 0:
-        raise FileError(file, "no video streams found in video file")
+        raise FileError(file, "unable to extract metadata from video file")
 
     video_stream = video_streams[0]
 
