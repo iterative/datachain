@@ -1659,6 +1659,7 @@ def test_window_signals_random(cloud_test_catalog):
     assert len(all_dogs) == 2
 
 
+@pytest.mark.xdist_group(name="upload")
 def test_to_from_csv_remote(cloud_test_catalog_upload):
     ctc = cloud_test_catalog_upload
     path = f"{ctc.src_uri}/test.csv"
@@ -1672,6 +1673,7 @@ def test_to_from_csv_remote(cloud_test_catalog_upload):
     assert df_equal(df1, df)
 
 
+@pytest.mark.xdist_group(name="upload")
 @pytest.mark.parametrize("chunk_size", (1000, 2))
 @pytest.mark.parametrize("kwargs", ({}, {"compression": "gzip"}))
 def test_to_from_parquet_remote(cloud_test_catalog_upload, chunk_size, kwargs):
@@ -1688,6 +1690,7 @@ def test_to_from_parquet_remote(cloud_test_catalog_upload, chunk_size, kwargs):
     assert df_equal(df1, df)
 
 
+@pytest.mark.xdist_group(name="upload")
 def test_to_from_parquet_partitioned_remote(cloud_test_catalog_upload):
     ctc = cloud_test_catalog_upload
     path = f"{ctc.src_uri}/parquets"
@@ -1743,6 +1746,7 @@ def test_from_json_jmespath(tmp_dir, test_session):
     assert df_equal(df1, df)
 
 
+@pytest.mark.xdist_group(name="upload")
 # These deprecation warnings occur in the datamodel-code-generator package.
 @pytest.mark.filterwarnings("ignore::pydantic.warnings.PydanticDeprecatedSince20")
 def test_to_from_json_remote(cloud_test_catalog_upload):
@@ -1759,6 +1763,7 @@ def test_to_from_json_remote(cloud_test_catalog_upload):
     assert df_equal(df1, df)
 
 
+@pytest.mark.xdist_group(name="upload")
 # These deprecation warnings occur in the datamodel-code-generator package.
 @pytest.mark.filterwarnings("ignore::pydantic.warnings.PydanticDeprecatedSince20")
 def test_to_from_jsonl_remote(cloud_test_catalog_upload):
