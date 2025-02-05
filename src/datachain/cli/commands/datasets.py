@@ -33,13 +33,20 @@ def list_datasets(
     all: bool = True,
     team: Optional[str] = None,
     latest_only: bool = True,
+    dataset_name: Optional[str] = None,
 ):
     token = Config().read().get("studio", {}).get("token")
     all, local, studio = determine_flavors(studio, local, all, token)
+    if dataset_name:
+        latest_only = False
 
-    local_datasets = set(list_datasets_local(catalog)) if all or local else set()
+    local_datasets = (
+        set(list_datasets_local(catalog, dataset_name)) if all or local else set()
+    )
     studio_datasets = (
-        set(list_datasets_studio(team=team)) if (all or studio) and token else set()
+        set(list_datasets_studio(team=team, dataset_name=dataset_name))
+        if (all or studio) and token
+        else set()
     )
 
     # Group the datasets for both local and studio sources.
@@ -89,10 +96,20 @@ def list_datasets(
     print(tabulate(rows, headers="keys"))
 
 
-def list_datasets_local(catalog: "Catalog"):
+def list_datasets_local(catalog: "Catalog", dataset_name: Optional[str] = None):
+    if dataset_name:
+        yield from list_datasets_local_versions(catalog, dataset_name)
+        return
+
     for d in catalog.ls_datasets():
         for v in d.versions:
             yield (d.name, v.version)
+
+
+def list_datasets_local_versions(catalog: "Catalog", dataset_name: str):
+    ds = catalog.get_dataset(dataset_name)
+    for v in ds.versions:
+        yield (dataset_name, v.version)
 
 
 def _datasets_tabulate_row(name, both, local_version, studio_version):
