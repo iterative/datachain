@@ -17,7 +17,7 @@ from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
 
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
-from PIL import Image
+from PIL import Image as PilImage
 from pydantic import Field, field_validator
 
 from datachain.client.fileslice import FileSlice
@@ -27,6 +27,7 @@ from datachain.sql.types import JSON, Boolean, DateTime, Int, String
 from datachain.utils import TIME_ZERO
 
 if TYPE_CHECKING:
+    from numpy import ndarray
     from typing_extensions import Self
 
     from datachain.catalog import Catalog
@@ -40,7 +41,7 @@ logger = logging.getLogger("datachain")
 # how to create file path when exporting
 ExportPlacement = Literal["filename", "etag", "fullpath", "checksum"]
 
-FileType = Literal["binary", "text", "image"]
+FileType = Literal["binary", "text", "image", "video"]
 
 
 class VFileError(DataChainError):
@@ -193,7 +194,7 @@ class File(DataModel):
     @classmethod
     def upload(
         cls, data: bytes, path: str, catalog: Optional["Catalog"] = None
-    ) -> "File":
+    ) -> "Self":
         if catalog is None:
             from datachain.catalog.loader import get_catalog
 
@@ -203,6 +204,8 @@ class File(DataModel):
 
         client = catalog.get_client(parent)
         file = client.upload(data, name)
+        if not isinstance(file, cls):
+            file = cls(**file.model_dump())
         file._set_stream(catalog)
         return file
 
@@ -486,11 +489,289 @@ class ImageFile(File):
     def read(self):
         """Returns `PIL.Image.Image` object."""
         fobj = super().read()
-        return Image.open(BytesIO(fobj))
+        return PilImage.open(BytesIO(fobj))
 
     def save(self, destination: str):
         """Writes it's content to destination"""
         self.read().save(destination)
+
+
+class Image(DataModel):
+    """
+    A data model representing metadata for an image file.
+
+    Attributes:
+        width (int): The width of the image in pixels. Defaults to -1 if unknown.
+        height (int): The height of the image in pixels. Defaults to -1 if unknown.
+        format (str): The format of the image file (e.g., 'jpg', 'png').
+                      Defaults to an empty string.
+    """
+
+    width: int = Field(default=-1)
+    height: int = Field(default=-1)
+    format: str = Field(default="")
+
+
+class VideoFile(File):
+    """
+    A data model for handling video files.
+
+    This model inherits from the `File` model and provides additional functionality
+    for reading video files, extracting video frames, and splitting videos into
+    fragments.
+    """
+
+    def get_info(self) -> "Video":
+        """
+        Retrieves metadata and information about the video file.
+
+        Returns:
+            Video: A Model containing video metadata such as duration,
+                   resolution, frame rate, and codec details.
+        """
+        from .video import video_info
+
+        return video_info(self)
+
+    def get_frame(self, frame: int) -> "VideoFrame":
+        """
+        Returns a specific video frame by its frame number.
+
+        Args:
+            frame (int): The frame number to read.
+
+        Returns:
+            VideoFrame: Video frame model.
+        """
+        if frame < 0:
+            raise ValueError("frame must be a non-negative integer")
+
+        frame_file = VideoFrame(**self.model_dump(), frame=frame)
+        frame_file._set_stream(self._catalog)
+        return frame_file
+
+    def get_frames(
+        self,
+        start: int = 0,
+        end: Optional[int] = None,
+        step: int = 1,
+    ) -> "Iterator[VideoFrame]":
+        """
+        Returns video frames from the specified range in the video.
+
+        Args:
+            start (int, optional): The starting frame number (default: 0).
+            end (int, optional): The ending frame number (exclusive). If None,
+                                 frames are read until the end of the video
+                                 (default: None).
+            step (int, optional): The interval between frames to read (default: 1).
+
+        Returns:
+            Iterator[VideoFrame]: An iterator yielding video frames.
+
+        Note:
+            If end is not specified, number of frames will be taken from the video file,
+            this means video file needs to be downloaded.
+        """
+        if start < 0:
+            raise ValueError("start_frame must be a non-negative integer.")
+        if step < 1:
+            raise ValueError("step must be a positive integer.")
+
+        if end is None:
+            end = self.get_info().frames
+
+        if end < 0:
+            raise ValueError("end_frame must be a non-negative integer.")
+        if start > end:
+            raise ValueError("start_frame must be less than or equal to end_frame.")
+
+        for frame in range(start, end, step):
+            yield self.get_frame(frame)
+
+    def get_fragment(self, start: float, end: float) -> "VideoFragment":
+        """
+        Returns a video fragment from the specified time range.
+
+        Args:
+            start (float): The start time of the fragment in seconds.
+            end (float): The end time of the fragment in seconds.
+
+        Returns:
+            VideoFragment: A Model representing the video fragment.
+        """
+        if start < 0 or end < 0 or start >= end:
+            raise ValueError(f"Invalid time range: ({start:.3f}, {end:.3f})")
+
+        fragment_file = VideoFragment(**self.model_dump(), start=start, end=end)
+        fragment_file._set_stream(self._catalog)
+        return fragment_file
+
+    def get_fragments(
+        self,
+        duration: float,
+        start: float = 0,
+        end: Optional[float] = None,
+    ) -> "Iterator[VideoFragment]":
+        """
+        Splits the video into multiple fragments of a specified duration.
+
+        Args:
+            duration (float): The duration of each video fragment in seconds.
+            start (float, optional): The starting time in seconds (default: 0).
+            end (float, optional): The ending time in seconds. If None, the entire
+                                   remaining video is processed (default: None).
+
+        Returns:
+            Iterator[VideoFragment]: An iterator yielding video fragments.
+
+        Note:
+            If end is not specified, number of frames will be taken from the video file,
+            this means video file needs to be downloaded.
+        """
+        if duration <= 0:
+            raise ValueError("duration must be a positive float")
+        if start < 0:
+            raise ValueError("start must be a non-negative float")
+
+        if end is None:
+            end = self.get_info().duration
+
+        if end < 0:
+            raise ValueError("end must be a non-negative float")
+        if start >= end:
+            raise ValueError("start must be less than end")
+
+        while start < end:
+            yield self.get_fragment(start, min(start + duration, end))
+            start += duration
+
+
+class VideoFrame(VideoFile):
+    """
+    A data model for representing a video frame.
+
+    This model inherits from the `VideoFile` model and adds a `frame` attribute,
+    which represents a specific frame within a video file. It allows access
+    to individual frames and provides functionality for reading and saving
+    video frames as image files.
+
+    Attributes:
+        frame (int): The frame number referencing a specific frame in the video file.
+    """
+
+    frame: int = Field(default=-1)
+
+    def get_np(self) -> "ndarray":
+        """
+        Returns a video frame from the video file as a NumPy array.
+
+        Returns:
+            ndarray: A NumPy array representing the video frame,
+                     in the shape (height, width, channels).
+        """
+        from .video import video_frame_np
+
+        return video_frame_np(self)
+
+    def read_bytes(self, format: str = "jpg") -> bytes:
+        """
+        Returns a video frame from the video file as image bytes.
+
+        Args:
+            format (str, optional): The desired image format (e.g., 'jpg', 'png').
+                                    Defaults to 'jpg'.
+
+        Returns:
+            bytes: The encoded video frame as image bytes.
+        """
+        from .video import video_frame_bytes
+
+        return video_frame_bytes(self, format)
+
+    def save(self, output: str, format: str = "jpg") -> "ImageFile":
+        """
+        Saves the current video frame as an image file.
+
+        If `output` is a remote path, the image file will be uploaded to remote storage.
+
+        Args:
+            output (str): The destination path, which can be a local file path
+                          or a remote URL.
+            format (str, optional): The image format (e.g., 'jpg', 'png').
+                                    Defaults to 'jpg'.
+
+        Returns:
+            ImageFile: A Model representing the saved image file.
+        """
+        from .video import save_video_frame
+
+        return save_video_frame(self, output, format)
+
+
+class VideoFragment(VideoFile):
+    """
+    A data model for representing a video fragment.
+
+    This model inherits from the `VideoFile` model and adds `start`
+    and `end` attributes, which represent a specific fragment within a video file.
+    It allows access to individual fragments and provides functionality for reading
+    and saving video fragments as separate video files.
+
+    Attributes:
+        start (float): The starting time of the video fragment in seconds.
+        end (float): The ending time of the video fragment in seconds.
+    """
+
+    start: float = Field(default=-1.0)
+    end: float = Field(default=-1.0)
+
+    def save(self, output: str, format: Optional[str] = None) -> "VideoFile":
+        """
+        Saves the video fragment as a new video file.
+
+        If `output` is a remote path, the video file will be uploaded to remote storage.
+
+        Args:
+            output (str): The destination path, which can be a local file path
+                          or a remote URL.
+            format (str, optional): The output video format (e.g., 'mp4', 'avi').
+                                    If None, the format is inferred from the
+                                    file extension.
+
+        Returns:
+            VideoFile: A Model representing the saved video file.
+        """
+        from .video import save_video_fragment
+
+        return save_video_fragment(self, output, format)
+
+
+class Video(DataModel):
+    """
+    A data model representing metadata for a video file.
+
+    Attributes:
+        width (int): The width of the video in pixels. Defaults to -1 if unknown.
+        height (int): The height of the video in pixels. Defaults to -1 if unknown.
+        fps (float): The frame rate of the video (frames per second).
+                     Defaults to -1.0 if unknown.
+        duration (float): The total duration of the video in seconds.
+                          Defaults to -1.0 if unknown.
+        frames (int): The total number of frames in the video.
+                      Defaults to -1 if unknown.
+        format (str): The format of the video file (e.g., 'mp4', 'avi').
+                      Defaults to an empty string.
+        codec (str): The codec used for encoding the video. Defaults to an empty string.
+    """
+
+    width: int = Field(default=-1)
+    height: int = Field(default=-1)
+    fps: float = Field(default=-1.0)
+    duration: float = Field(default=-1.0)
+    frames: int = Field(default=-1)
+    format: str = Field(default="")
+    codec: str = Field(default="")
 
 
 class ArrowRow(DataModel):
@@ -528,5 +809,7 @@ def get_file_type(type_: FileType = "binary") -> type[File]:
         file = TextFile
     elif type_ == "image":
         file = ImageFile  # type: ignore[assignment]
+    elif type_ == "video":
+        file = VideoFile
 
     return file

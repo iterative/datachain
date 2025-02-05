@@ -4,9 +4,14 @@ from datachain.lib.file import (
     ArrowRow,
     File,
     FileError,
+    Image,
     ImageFile,
     TarVFile,
     TextFile,
+    Video,
+    VideoFile,
+    VideoFragment,
+    VideoFrame,
 )
 from datachain.lib.model_store import ModelStore
 from datachain.lib.udf import Aggregator, Generator, Mapper
@@ -27,6 +32,7 @@ __all__ = [
     "File",
     "FileError",
     "Generator",
+    "Image",
     "ImageFile",
     "Mapper",
     "ModelStore",
@@ -34,6 +40,10 @@ __all__ = [
     "Sys",
     "TarVFile",
     "TextFile",
+    "Video",
+    "VideoFile",
+    "VideoFragment",
+    "VideoFrame",
     "is_chain_type",
     "metrics",
     "param",

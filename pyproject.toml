@@ -80,8 +80,16 @@ hf = [
   "numba>=0.60.0",
   "datasets[audio,vision]>=2.21.0"
 ]
+video = [
+  # Use 'av<14' because of incompatibility with imageio
+  # See https://github.com/PyAV-Org/PyAV/discussions/1700
+  "av<14",
+  "ffmpeg-python",
+  "imageio[ffmpeg]",
+  "opencv-python"
+]
 tests = [
-  "datachain[torch,remote,vector,hf]",
+  "datachain[torch,remote,vector,hf,video]",
   "pytest>=8,<9",
   "pytest-sugar>=0.9.6",
   "pytest-cov>=4.1.0",
