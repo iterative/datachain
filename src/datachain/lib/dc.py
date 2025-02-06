@@ -481,6 +481,7 @@ class DataChain:
         version: Optional[int] = None,
         session: Optional[Session] = None,
         settings: Optional[dict] = None,
+        studio: bool = True,
     ) -> "Self":
         """Get data from a saved Dataset. It returns the chain itself.
 
@@ -498,6 +499,7 @@ class DataChain:
             version=version,
             session=session,
             indexing_column_types=File._datachain_column_types,
+            studio=studio,
         )
         telemetry.send_event_once("class", "datachain_init", name=name, version=version)
         if settings:
