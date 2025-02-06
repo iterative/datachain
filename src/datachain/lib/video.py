@@ -5,14 +5,7 @@ from typing import Optional
 
 from numpy import ndarray
 
-from datachain.lib.file import (
-    FileError,
-    ImageFile,
-    Video,
-    VideoFile,
-    VideoFragment,
-    VideoFrame,
-)
+from datachain.lib.file import FileError, ImageFile, Video, VideoFile
 
 try:
     import ffmpeg
@@ -80,40 +73,77 @@ def video_info(file: VideoFile) -> Video:
     )
 
 
-def video_frame_np(file: VideoFrame) -> ndarray:
+def video_frame_np(video: VideoFile, frame: int) -> ndarray:
     """
     Reads video frame from a file and returns as numpy array.
 
     Args:
-        file (VideoFrame): VideoFrame file object.
+        video (VideoFile): Video file object.
+        frame (int): Frame index.
 
     Returns:
         ndarray: Video frame.
     """
-    if file.frame < 0:
+    if frame < 0:
         raise ValueError("frame must be a non-negative integer")
 
-    with file.open() as f:
-        return iio.imread(f, index=file.frame, plugin="pyav")  # type: ignore[arg-type]
+    with video.open() as f:
+        return iio.imread(f, index=frame, plugin="pyav")  # type: ignore[arg-type]
 
 
-def video_frame_bytes(file: VideoFrame, format: str = "jpg") -> bytes:
+def validate_frame_range(
+    video: VideoFile,
+    start: int = 0,
+    end: Optional[int] = None,
+    step: int = 1,
+) -> tuple[int, int, int]:
+    """
+    Validates frame range for a video file.
+
+    Args:
+        video (VideoFile): Video file object.
+        start (int): Start frame index (default: 0).
+        end (int, optional): End frame index (default: None).
+        step (int): Step between frames (default: 1).
+
+    Returns:
+        tuple[int, int, int]: Start frame index, end frame index, and step.
+    """
+    if start < 0:
+        raise ValueError("start_frame must be a non-negative integer.")
+    if step < 1:
+        raise ValueError("step must be a positive integer.")
+
+    if end is None:
+        end = video_info(video).frames
+
+    if end < 0:
+        raise ValueError("end_frame must be a non-negative integer.")
+    if start > end:
+        raise ValueError("start_frame must be less than or equal to end_frame.")
+
+    return start, end, step
+
+
+def video_frame_bytes(video: VideoFile, frame: int, format: str = "jpg") -> bytes:
     """
     Reads video frame from a file and returns as image bytes.
 
     Args:
-        file (VideoFrame): VideoFrame file object.
+        video (VideoFile): Video file object.
+        frame (int): Frame index.
         format (str): Image format (default: 'jpg').
 
     Returns:
         bytes: Video frame image as bytes.
     """
-    img = video_frame_np(file)
+    img = video_frame_np(video, frame)
     return iio.imwrite("<bytes>", img, extension=f".{format}")
 
 
 def save_video_frame(
-    file: VideoFrame,
+    video: VideoFile,
+    frame: int,
     output: str,
     format: str = "jpg",
 ) -> ImageFile:
@@ -122,22 +152,25 @@ def save_video_frame(
     the image file will be uploaded to the remote storage.
 
     Args:
-        file (VideoFrame): VideoFrame file object.
+        video (VideoFile): Video file object.
+        frame (int): Frame index.
         output (str): Output path, can be a local path or a remote path.
         format (str): Image format (default: 'jpg').
 
     Returns:
         ImageFile: Image file model.
     """
-    img = video_frame_bytes(file, format=format)
+    img = video_frame_bytes(video, frame, format=format)
     output_file = posixpath.join(
-        output, f"{file.get_file_stem()}_{file.frame:04d}.{format}"
+        output, f"{video.get_file_stem()}_{frame:04d}.{format}"
     )
     return ImageFile.upload(img, output_file)
 
 
 def save_video_fragment(
-    file: VideoFragment,
+    video: VideoFile,
+    start: float,
+    end: float,
     output: str,
     format: Optional[str] = None,
 ) -> VideoFile:
@@ -146,33 +179,37 @@ def save_video_fragment(
     the video file will be uploaded to the remote storage.
 
     Args:
-        file (VideoFragment): VideoFragment file object.
+        video (VideoFile): Video file object.
+        start (float): Start time in seconds.
+        end (float): End time in seconds.
         output (str): Output path, can be a local path or a remote path.
-        format (Optional[str]): Output format (default: None). If not provided,
+        format (str, optional): Output format (default: None). If not provided,
                                 the format will be inferred from the video fragment
                                 file extension.
 
     Returns:
         VideoFile: Video fragment model.
     """
-    if file.start < 0 or file.end < 0 or file.start >= file.end:
-        raise ValueError(f"Invalid time range: ({file.start:.3f}, {file.end:.3f})")
+    if start < 0 or end < 0 or start >= end:
+        raise ValueError(f"Invalid time range: ({start:.3f}, {end:.3f})")
 
     if format is None:
-        format = file.get_file_ext()
+        format = video.get_file_ext()
 
-    start_ms = int(file.start * 1000)
-    end_ms = int(file.end * 1000)
+    start_ms = int(start * 1000)
+    end_ms = int(end * 1000)
     output_file = posixpath.join(
-        output, f"{file.get_file_stem()}_{start_ms:06d}_{end_ms:06d}.{format}"
+        output, f"{video.get_file_stem()}_{start_ms:06d}_{end_ms:06d}.{format}"
     )
 
     temp_dir = tempfile.mkdtemp()
     try:
         output_file_tmp = posixpath.join(temp_dir, posixpath.basename(output_file))
-        ffmpeg.input(file.get_local_path(), ss=file.start, to=file.end).output(
-            output_file_tmp
-        ).run(quiet=True)
+        ffmpeg.input(
+            video.get_local_path(),
+            ss=start,
+            to=end,
+        ).output(output_file_tmp).run(quiet=True)
 
         with open(output_file_tmp, "rb") as f:
             return VideoFile.upload(f.read(), output_file)

@@ -7,6 +7,7 @@ from PIL import Image
 
 from datachain import VideoFragment, VideoFrame
 from datachain.lib.file import FileError, ImageFile, VideoFile
+from datachain.lib.video import save_video_fragment, video_frame_np
 
 
 @pytest.fixture(autouse=True)
@@ -61,6 +62,11 @@ def test_get_frame_np(video_file):
     assert frame.shape == (360, 640, 3)
 
 
+def test_get_frame_np_error(video_file):
+    with pytest.raises(ValueError):
+        video_frame_np(video_file, -1)
+
+
 @pytest.mark.parametrize(
     "format,img_format,header",
     [
@@ -107,25 +113,17 @@ def test_get_all_frames(video_file):
 
 
 @pytest.mark.parametrize(
-    "start_frame,end_frame,step",
+    "start,end,step",
     [
-        (-1, None, None),
-        (0, -1, None),
-        (1, 0, None),
+        (-1, None, 1),
+        (0, -1, 1),
+        (1, 0, 1),
         (0, 1, -1),
     ],
 )
-def test_get_frames_error(video_file, start_frame, end_frame, step):
+def test_get_frames_error(video_file, start, end, step):
     with pytest.raises(ValueError):
-        list(video_file.get_frames(start_frame, end_frame, step))
-
-
-def test_get_frames_bytes(video_file):
-    frames = list(video_file.get_frames(10, 200, 5))
-    frame_bytes = [frame.read_bytes("jpg") for frame in frames]
-    assert len(frame_bytes) == 38
-    assert all(isinstance(frame, bytes) for frame in frame_bytes)
-    assert all(Image.open(io.BytesIO(frame)).format == "JPEG" for frame in frame_bytes)
+        list(video_file.get_frames(start, end, step))
 
 
 def test_save_frames(tmp_path, video_file):
@@ -145,6 +143,29 @@ def test_get_fragment(video_file):
     assert isinstance(fragment, VideoFragment)
     assert fragment.start == 2.5
     assert fragment.end == 5
+
+
+def test_get_fragments(video_file):
+    fragments = list(video_file.get_fragments(duration=1.5))
+    for i, fragment in enumerate(fragments):
+        assert isinstance(fragment, VideoFragment)
+        assert fragment.start == i * 1.5
+        duration = 1.5 if i < 6 else 1.0
+        assert fragment.end == fragment.start + duration
+
+
+@pytest.mark.parametrize(
+    "duration,start,end",
+    [
+        (-1, 0, 10),
+        (1, -1, 10),
+        (1, 0, -1),
+        (1, 2, 1),
+    ],
+)
+def test_get_fragments_error(video_file, duration, start, end):
+    with pytest.raises(ValueError):
+        list(video_file.get_fragments(duration=duration, start=start, end=end))
 
 
 @pytest.mark.parametrize(
@@ -177,12 +198,23 @@ def test_save_fragment(tmp_path, video_file):
     }
 
 
-def test_save_fragments(tmp_path, video_file):
-    intervals = [(1, 2), (3, 4), (5, 6)]
+@pytest.mark.parametrize(
+    "start,end",
+    [
+        (-1, 2),
+        (1, -1),
+        (2, 1),
+    ],
+)
+def test_save_video_fragment_error(video_file, start, end):
+    with pytest.raises(ValueError):
+        save_video_fragment(video_file, start, end, ".")
 
-    fragments = list(video_file.get_fragments(intervals))
+
+def test_save_fragments(tmp_path, video_file):
+    fragments = list(video_file.get_fragments(duration=1))
     fragment_files = [fragment.save(str(tmp_path)) for fragment in fragments]
-    assert len(fragment_files) == 3
+    assert len(fragment_files) == 10
 
     for fragment in fragment_files:
         fragment.ensure_cached()
