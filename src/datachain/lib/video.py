@@ -28,10 +28,16 @@ def video_info(file: VideoFile) -> Video:
     Returns:
         Video: Video file information.
     """
+    if not (file_path := file.get_local_path()):
+        file.ensure_cached()
+        file_path = file.get_local_path()
+        if not file_path:
+            raise FileError(file, "unable to download video file")
+
     try:
-        probe = ffmpeg.probe(file.get_local_path())
-    except Exception:  # noqa: BLE001
-        probe = {}
+        probe = ffmpeg.probe(file_path)
+    except Exception as exc:
+        raise FileError(file, "unable to extract metadata from video file") from exc
 
     all_streams = probe.get("streams")
     video_format = probe.get("format")
