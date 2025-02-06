@@ -136,7 +136,9 @@ def test_shutdown_on_sigterm(tmp_dir, request, catalog, setup, expected_return_c
     query = f"""\
 import os, pathlib, signal, sys, time
 
-pathlib.Path("ready").touch(exist_ok=False)
+# assume monkeypatch.chdir has no effect in multiprocess spawn
+path = os.path.join("{tmp_dir}", "ready")
+pathlib.Path(path).touch(exist_ok=False)
 {setup}
 time.sleep(10)
 """
