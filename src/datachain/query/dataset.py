@@ -37,13 +37,18 @@ from tqdm.auto import tqdm
 
 from datachain.asyn import ASYNC_WORKERS, AsyncMapper, OrderedMapper
 from datachain.catalog.catalog import clone_catalog_with_cache
+from datachain.config import Config
 from datachain.data_storage.schema import (
     PARTITION_COLUMN_ID,
     partition_col_names,
     partition_columns,
 )
-from datachain.dataset import DatasetStatus, RowDict
-from datachain.error import DatasetNotFoundError, QueryScriptCancelError
+from datachain.dataset import DATASET_PREFIX, DatasetStatus, RowDict
+from datachain.error import (
+    DatasetNotFoundError,
+    DatasetVersionNotFoundError,
+    QueryScriptCancelError,
+)
 from datachain.func.base import Function
 from datachain.lib.udf import UDFAdapter, _get_cache
 from datachain.progress import CombinedDownloadCallback, TqdmCombinedDownloadCallback
@@ -1081,6 +1086,7 @@ class DatasetQuery:
         session: Optional[Session] = None,
         indexing_column_types: Optional[dict[str, Any]] = None,
         in_memory: bool = False,
+        studio: bool = True,
     ) -> None:
         self.session = Session.get(session, catalog=catalog, in_memory=in_memory)
         self.catalog = catalog or self.session.catalog
@@ -1097,9 +1103,26 @@ class DatasetQuery:
         self.column_types: Optional[dict[str, Any]] = None
 
         self.name = name
-        ds = self.catalog.get_dataset(name)
-        self.version = version or ds.latest_version
-        self.feature_schema = ds.get_version(self.version).feature_schema
+        try:
+            ds = self.catalog.get_dataset(name)
+            self.version = version or ds.latest_version
+            self.feature_schema = ds.get_version(self.version).feature_schema
+
+        except (DatasetNotFoundError, DatasetVersionNotFoundError):
+            if not studio:
+                raise
+
+            token = os.environ.get("DVC_STUDIO_TOKEN") or Config().read().get(
+                "studio", {}
+            ).get("token")
+            if not token:
+                raise
+
+            # Pull only if studio token is set and studio flag is True.
+            ds = self.pull_dataset(name, version)
+            self.version = version or ds.latest_version
+            self.feature_schema = ds.get_version(self.version).feature_schema
+
         self.column_types = copy(ds.schema)
         if "sys__id" in self.column_types:
             self.column_types.pop("sys__id")
@@ -1111,6 +1134,21 @@ class DatasetQuery:
 
     def __or__(self, other):
         return self.union(other)
+
+    def pull_dataset(self, name: str, version: Optional[int] = None) -> "DatasetRecord":
+        print("Dataset not found in local catalog, trying to get from studio")
+
+        remote_ds_uri = f"{DATASET_PREFIX}{name}"
+        if version:
+            remote_ds_uri += f"@v{version}"
+
+        self.catalog.pull_dataset(
+            remote_ds_uri=remote_ds_uri,
+            local_ds_name=name,
+            local_ds_version=version,
+        )
+
+        return self.catalog.get_dataset(name)
 
     @staticmethod
     def get_table() -> "TableClause":
