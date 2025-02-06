@@ -117,6 +117,7 @@ else:
     SIGKILL = signal.SIGKILL
 
 
+@pytest.mark.xdist_group(name="tmpfile")
 @pytest.mark.skipif(sys.platform == "win32", reason="Windows does not have SIGTERM")
 @pytest.mark.parametrize(
     "setup,expected_return_code",
