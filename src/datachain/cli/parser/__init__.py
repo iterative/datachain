@@ -255,7 +255,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         formatter_class=CustomHelpFormatter,
     )
     datasets_ls_parser.add_argument(
-        "dataset_name", action="store", help="Name of the dataset to list", nargs="?"
+        "name", action="store", help="Name of the dataset to list", nargs="?"
     )
     datasets_ls_parser.add_argument(
         "--versions",

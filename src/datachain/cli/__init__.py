@@ -161,7 +161,7 @@ def handle_dataset_command(args, catalog):
             all=args.all,
             team=args.team,
             latest_only=not args.versions,
-            dataset_name=args.dataset_name,
+            name=args.name,
         ),
         "rm": lambda: rm_dataset(
             catalog,
