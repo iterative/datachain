@@ -2,6 +2,7 @@ from typing import Optional, Union
 
 from sqlalchemy import ColumnElement
 from sqlalchemy import case as sql_case
+from sqlalchemy import or_ as sql_or
 
 from datachain.lib.utils import DataChainParamsError
 from datachain.query.schema import Column
@@ -89,7 +90,7 @@ def least(*args: Union[ColT, float]) -> Func:
 
 
 def case(
-    *args: tuple[Union[ColumnElement, Func], CaseT], else_: Optional[CaseT] = None
+    *args: tuple[Union[ColumnElement, Func, bool], CaseT], else_: Optional[CaseT] = None
 ) -> Func:
     """
     Returns the case function that produces case expression which has a list of
@@ -99,7 +100,7 @@ def case(
     Result type is inferred from condition results.
 
     Args:
-        args tuple((ColumnElement | Func),(str | int | float | complex | bool, Func, ColumnElement)):
+        args tuple((ColumnElement | Func | bool),(str | int | float | complex | bool, Func, ColumnElement)):
             Tuple of condition and values pair.
         else_ (str | int | float | complex | bool, Func): optional else value in case
             expression. If omitted, and no case conditions are satisfied, the result
@@ -118,12 +119,16 @@ def case(
     supported_types = [int, float, complex, str, bool]
 
     def _get_type(val):
+        from enum import Enum
+
         if isinstance(val, Func):
             # nested functions
             return val.result_type
         if isinstance(val, Column):
             # at this point we cannot know what is the type of a column
             return None
+        if isinstance(val, Enum):
+            return type(val.value)
         return type(val)
 
     if not args:
@@ -204,3 +209,32 @@ def isnone(col: Union[str, Column]) -> Func:
         col = C(col)
 
     return case((col.is_(None) if col is not None else True, True), else_=False)
+
+
+def or_(*args: Union[ColumnElement, Func]) -> Func:
+    """
+    Returns the function that produces conjunction of expressions joined by OR
+    logical operator.
+
+    Args:
+        args (ColumnElement | Func): The expressions for OR statement.
+
+    Returns:
+        Func: A Func object that represents the or function.
+
+    Example:
+        ```py
+        dc.mutate(
+            test=ifelse(or_(isnone("name"), C("name") == ''), "Empty", "Not Empty")
+        )
+        ```
+    """
+    cols, func_args = [], []
+
+    for arg in args:
+        if isinstance(arg, (str, Func)):
+            cols.append(arg)
+        else:
+            func_args.append(arg)
+
+    return Func("or", inner=sql_or, cols=cols, args=func_args, result_type=bool)

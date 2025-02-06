@@ -1,3 +1,5 @@
+from datetime import timezone
+
 import pytest
 from pydantic import BaseModel
 
@@ -6,6 +8,10 @@ from datachain.lib.dc import DataChain
 from datachain.lib.file import File
 from datachain.sql.types import Int64, String
 from tests.utils import sorted_dicts
+
+
+def _as_utc(d):
+    return d.replace(tzinfo=timezone.utc)
 
 
 @pytest.mark.parametrize("added", (True, False))
@@ -402,7 +408,7 @@ def test_compare_right_compare_wrong_length(test_session):
         ds1.compare(ds2, on=["id"], compare=["name"], right_compare=["name", "city"])
 
     assert str(exc_info.value) == (
-        "'compare' and 'right_compare' must be have the same length"
+        "'compare' and 'right_compare' must have the same length"
     )
 
 
@@ -443,7 +449,11 @@ def test_diff(test_session, status_col):
         expected = [row[1:] for row in expected]
         collect_fields = collect_fields[1:]
 
-    assert list(diff.order_by("file.source").collect(*collect_fields)) == expected
+    res = list(diff.order_by("file.source").collect(*collect_fields))
+    for r in res:
+        r[-2].last_modified = _as_utc(r[-2].last_modified)
+
+    assert res == expected
 
 
 @pytest.mark.parametrize("status_col", ("diff", None))
@@ -486,6 +496,7 @@ def test_diff_nested(test_session, status_col):
         expected = [row[1:] for row in expected]
         collect_fields = collect_fields[1:]
 
-    assert (
-        list(diff.order_by("nested.file.source").collect(*collect_fields)) == expected
-    )
+    res = list(diff.order_by("nested.file.source").collect(*collect_fields))
+    for r in res:
+        r[-2].file.last_modified = _as_utc(r[-2].file.last_modified)
+    assert res == expected

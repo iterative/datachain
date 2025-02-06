@@ -129,30 +129,37 @@ def test_studio_datasets(capsys, studio_datasets, mocker):
         side_effect=list_datasets_local,
     )
     local_rows = [
-        {"Name": "both", "Version": "1"},
-        {"Name": "local", "Version": "1"},
+        {"Name": "both", "Latest Version": "v1"},
+        {"Name": "local", "Latest Version": "v1"},
     ]
     local_output = tabulate(local_rows, headers="keys")
 
     studio_rows = [
-        {"Name": "both", "Version": "1"},
+        {"Name": "both", "Latest Version": "v1"},
         {
             "Name": "cats",
-            "Version": "1",
+            "Latest Version": "v1",
         },
-        {"Name": "dogs", "Version": "1"},
-        {"Name": "dogs", "Version": "2"},
+        {"Name": "dogs", "Latest Version": "v2"},
     ]
     studio_output = tabulate(studio_rows, headers="keys")
 
     both_rows = [
-        {"Name": "both", "Version": "1", "Studio": "\u2714", "Local": "\u2714"},
-        {"Name": "cats", "Version": "1", "Studio": "\u2714", "Local": "\u2716"},
-        {"Name": "dogs", "Version": "1", "Studio": "\u2714", "Local": "\u2716"},
-        {"Name": "dogs", "Version": "2", "Studio": "\u2714", "Local": "\u2716"},
-        {"Name": "local", "Version": "1", "Studio": "\u2716", "Local": "\u2714"},
+        {"Name": "both", "Studio": "v1", "Local": "v1"},
+        {"Name": "cats", "Studio": "v1", "Local": "\u2716"},
+        {"Name": "dogs", "Studio": "v2", "Local": "\u2716"},
+        {"Name": "local", "Studio": "\u2716", "Local": "v1"},
     ]
     both_output = tabulate(both_rows, headers="keys")
+
+    both_rows_versions = [
+        {"Name": "both", "Studio": "v1", "Local": "v1"},
+        {"Name": "cats", "Studio": "v1", "Local": "\u2716"},
+        {"Name": "dogs", "Studio": "v1", "Local": "\u2716"},
+        {"Name": "dogs", "Studio": "v2", "Local": "\u2716"},
+        {"Name": "local", "Studio": "\u2716", "Local": "v1"},
+    ]
+    both_output_versions = tabulate(both_rows_versions, headers="keys")
 
     assert main(["dataset", "ls", "--local"]) == 0
     out = capsys.readouterr().out
@@ -173,6 +180,10 @@ def test_studio_datasets(capsys, studio_datasets, mocker):
     assert main(["dataset", "ls"]) == 0
     out = capsys.readouterr().out
     assert sorted(out.splitlines()) == sorted(both_output.splitlines())
+
+    assert main(["dataset", "ls", "--versions"]) == 0
+    out = capsys.readouterr().out
+    assert sorted(out.splitlines()) == sorted(both_output_versions.splitlines())
 
 
 def test_studio_edit_dataset(capsys, mocker):
