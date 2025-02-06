@@ -1209,6 +1209,8 @@ class Catalog:
         **kwargs,
     ) -> str:
         client_config = client_config or self.client_config
+        if client_config.get("anon"):
+            content_disposition = None
         client = Client.get_client(source, self.cache, **client_config)
         return client.url(
             path,
