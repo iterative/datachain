@@ -120,7 +120,7 @@ def test_studio_team_global():
 
 
 def test_studio_datasets(capsys, studio_datasets, mocker):
-    def list_datasets_local(_):
+    def list_datasets_local(_, __):
         yield "local", 1
         yield "both", 1
 
@@ -161,6 +161,12 @@ def test_studio_datasets(capsys, studio_datasets, mocker):
     ]
     both_output_versions = tabulate(both_rows_versions, headers="keys")
 
+    dogs_rows = [
+        {"Name": "dogs", "Latest Version": "v1"},
+        {"Name": "dogs", "Latest Version": "v2"},
+    ]
+    dogs_output = tabulate(dogs_rows, headers="keys")
+
     assert main(["dataset", "ls", "--local"]) == 0
     out = capsys.readouterr().out
     assert sorted(out.splitlines()) == sorted(local_output.splitlines())
@@ -184,6 +190,10 @@ def test_studio_datasets(capsys, studio_datasets, mocker):
     assert main(["dataset", "ls", "--versions"]) == 0
     out = capsys.readouterr().out
     assert sorted(out.splitlines()) == sorted(both_output_versions.splitlines())
+
+    assert main(["dataset", "ls", "dogs", "--studio"]) == 0
+    out = capsys.readouterr().out
+    assert sorted(out.splitlines()) == sorted(dogs_output.splitlines())
 
 
 def test_studio_edit_dataset(capsys, mocker):
