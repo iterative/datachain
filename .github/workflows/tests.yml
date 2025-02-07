@@ -78,6 +78,9 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
+      - name: Set up FFmpeg
+        uses: AnimMouse/setup-ffmpeg@v1
+
       - name: Set up Python ${{ matrix.pyv }}
         uses: actions/setup-python@v5
         with:

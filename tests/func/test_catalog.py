@@ -720,3 +720,47 @@ def test_signed_url_versioned(cloud_test_catalog, gcs_fake_credentials):
 
         content = requests.get(signed_url, timeout=10).text
         assert content == expected
+
+
+@pytest.mark.parametrize(
+    "cloud_type, version_aware",
+    (["s3", False], ["azure", False], ["gs", False]),
+    indirect=True,
+)
+def test_signed_url_with_content_disposition(
+    cloud_test_catalog, cloud_type, gcs_fake_credentials
+):
+    import urllib.parse
+
+    content_disposition = "attachment; filename=test-signed-file"
+    quoted_content_disposition = urllib.parse.quote(content_disposition)
+
+    signed_url = cloud_test_catalog.catalog.signed_url(
+        cloud_test_catalog.src_uri,
+        "test-signed-file",
+        content_disposition=content_disposition,
+    )
+    param = "rscd" if cloud_type == "azure" else "response-content-disposition"
+    expected_value = (
+        quoted_content_disposition.replace("%20", "+")
+        if cloud_type == "gs"
+        else quoted_content_disposition
+    )
+    assert f"{param}={expected_value}" in signed_url
+
+
+@pytest.mark.parametrize(
+    "cloud_type, version_aware",
+    (["s3", False], ["azure", False], ["gs", False]),
+    indirect=True,
+)
+def test_signed_url_with_anon_client(cloud_test_catalog, cloud_type):
+    catalog = cloud_test_catalog.catalog
+    catalog.client_config["anon"] = True
+    signed_url = catalog.signed_url(
+        cloud_test_catalog.src_uri,
+        "test-signed-file",
+        content_disposition="attachment; filename=test-signed-file",
+    )
+    param = "rscd" if cloud_type == "azure" else "response-content-disposition"
+    assert param not in signed_url
