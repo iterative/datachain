@@ -33,13 +33,18 @@ def list_datasets(
     all: bool = True,
     team: Optional[str] = None,
     latest_only: bool = True,
+    name: Optional[str] = None,
 ):
     token = Config().read().get("studio", {}).get("token")
     all, local, studio = determine_flavors(studio, local, all, token)
+    if name:
+        latest_only = False
 
-    local_datasets = set(list_datasets_local(catalog)) if all or local else set()
+    local_datasets = set(list_datasets_local(catalog, name)) if all or local else set()
     studio_datasets = (
-        set(list_datasets_studio(team=team)) if (all or studio) and token else set()
+        set(list_datasets_studio(team=team, name=name))
+        if (all or studio) and token
+        else set()
     )
 
     # Group the datasets for both local and studio sources.
@@ -52,23 +57,23 @@ def list_datasets(
     datasets = []
     if latest_only:
         # For each dataset name, get the latest version from each source (if available).
-        for name in all_dataset_names:
-            datasets.append((name, (local_grouped.get(name), studio_grouped.get(name))))
+        for n in all_dataset_names:
+            datasets.append((n, (local_grouped.get(n), studio_grouped.get(n))))
     else:
         # For each dataset name, merge all versions from both sources.
-        for name in all_dataset_names:
-            local_versions = local_grouped.get(name, [])
-            studio_versions = studio_grouped.get(name, [])
+        for n in all_dataset_names:
+            local_versions = local_grouped.get(n, [])
+            studio_versions = studio_grouped.get(n, [])
 
             # If neither source has any versions, record it as (None, None).
             if not local_versions and not studio_versions:
-                datasets.append((name, (None, None)))
+                datasets.append((n, (None, None)))
             else:
                 # For each unique version from either source, record its presence.
                 for version in sorted(set(local_versions) | set(studio_versions)):
                     datasets.append(
                         (
-                            name,
+                            n,
                             (
                                 version if version in local_versions else None,
                                 version if version in studio_versions else None,
@@ -78,21 +83,31 @@ def list_datasets(
 
     rows = [
         _datasets_tabulate_row(
-            name=name,
+            name=n,
             both=(all or (local and studio)) and token,
             local_version=local_version,
             studio_version=studio_version,
         )
-        for name, (local_version, studio_version) in datasets
+        for n, (local_version, studio_version) in datasets
     ]
 
     print(tabulate(rows, headers="keys"))
 
 
-def list_datasets_local(catalog: "Catalog"):
+def list_datasets_local(catalog: "Catalog", name: Optional[str] = None):
+    if name:
+        yield from list_datasets_local_versions(catalog, name)
+        return
+
     for d in catalog.ls_datasets():
         for v in d.versions:
             yield (d.name, v.version)
+
+
+def list_datasets_local_versions(catalog: "Catalog", name: str):
+    ds = catalog.get_dataset(name)
+    for v in ds.versions:
+        yield (name, v.version)
 
 
 def _datasets_tabulate_row(name, both, local_version, studio_version):
