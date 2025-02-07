@@ -37,7 +37,6 @@ from tqdm.auto import tqdm
 
 from datachain.asyn import ASYNC_WORKERS, AsyncMapper, OrderedMapper
 from datachain.catalog.catalog import clone_catalog_with_cache
-from datachain.config import Config
 from datachain.data_storage.schema import (
     PARTITION_COLUMN_ID,
     partition_col_names,
@@ -54,6 +53,7 @@ from datachain.lib.udf import UDFAdapter, _get_cache
 from datachain.progress import CombinedDownloadCallback, TqdmCombinedDownloadCallback
 from datachain.query.schema import C, UDFParamSpec, normalize_param
 from datachain.query.session import Session
+from datachain.remote.studio import is_token_set
 from datachain.sql.functions.random import rand
 from datachain.utils import (
     batched,
@@ -1112,10 +1112,7 @@ class DatasetQuery:
             if not studio:
                 raise
 
-            token = os.environ.get("DVC_STUDIO_TOKEN") or Config().read().get(
-                "studio", {}
-            ).get("token")
-            if not token:
+            if not is_token_set():
                 raise
 
             # Pull only if studio token is set and studio flag is True.
