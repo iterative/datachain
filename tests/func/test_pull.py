@@ -332,7 +332,7 @@ def test_pull_dataset_exporting_dataset_failed_in_remote(
 
     with pytest.raises(DataChainError) as exc_info:
         catalog.pull_dataset("ds://dogs@v1")
-    assert str(exc_info.value) == (f"Dataset export {export_status} in Studio")
+    assert str(exc_info.value) == f"Dataset export {export_status} in Studio"
 
 
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
