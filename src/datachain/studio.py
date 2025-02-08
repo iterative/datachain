@@ -3,7 +3,6 @@ import os
 import sys
 from typing import TYPE_CHECKING, Optional
 
-from datachain.catalog.catalog import raise_remote_error
 from datachain.config import Config, ConfigLevel
 from datachain.dataset import QUERY_DATASET_PREFIX
 from datachain.error import DataChainError
@@ -150,7 +149,7 @@ def list_datasets(team: Optional[str] = None, name: Optional[str] = None):
     response = client.ls_datasets()
 
     if not response.ok:
-        raise_remote_error(response.message)
+        raise DataChainError(response.message)
 
     if not response.data:
         return
@@ -171,7 +170,7 @@ def list_dataset_versions(team: Optional[str] = None, name: str = ""):
     response = client.dataset_info(name)
 
     if not response.ok:
-        raise_remote_error(response.message)
+        raise DataChainError(response.message)
 
     if not response.data:
         return
@@ -191,7 +190,7 @@ def edit_studio_dataset(
     client = StudioClient(team=team_name)
     response = client.edit_dataset(name, new_name, description, labels)
     if not response.ok:
-        raise_remote_error(response.message)
+        raise DataChainError(response.message)
 
     print(f"Dataset '{name}' updated in Studio")
 
@@ -205,7 +204,7 @@ def remove_studio_dataset(
     client = StudioClient(team=team_name)
     response = client.rm_dataset(name, version, force)
     if not response.ok:
-        raise_remote_error(response.message)
+        raise DataChainError(response.message)
 
     print(f"Dataset '{name}' removed from Studio")
 
@@ -235,7 +234,7 @@ def show_logs_from_client(client, job_id):
 
     response = client.dataset_job_versions(job_id)
     if not response.ok:
-        raise_remote_error(response.message)
+        raise DataChainError(response.message)
 
     response_data = response.data
     if response_data:
@@ -286,7 +285,7 @@ def create_job(
         requirements=requirements,
     )
     if not response.ok:
-        raise_remote_error(response.message)
+        raise DataChainError(response.message)
 
     if not response.data:
         raise DataChainError("Failed to create job")
@@ -307,7 +306,7 @@ def upload_files(client: StudioClient, files: list[str]) -> list[str]:
             file_content = f.read()
         response = client.upload_file(file_content, file_name)
         if not response.ok:
-            raise_remote_error(response.message)
+            raise DataChainError(response.message)
 
         if not response.data:
             raise DataChainError(f"Failed to upload file {file_name}")
@@ -328,7 +327,7 @@ def cancel_job(job_id: str, team_name: Optional[str]):
     client = StudioClient(team=team_name)
     response = client.cancel_job(job_id)
     if not response.ok:
-        raise_remote_error(response.message)
+        raise DataChainError(response.message)
 
     print(f"Job {job_id} canceled")
 
