@@ -14,6 +14,7 @@ from typing import (
 from urllib.parse import urlparse, urlunparse
 
 import websockets
+from requests.exceptions import HTTPError, Timeout
 
 from datachain.config import Config
 from datachain.error import DataChainError
@@ -104,8 +105,8 @@ class StudioClient:
             raise DataChainError(
                 "Studio team is not set. "
                 "Use `datachain auth team <team_name>` "
-                "or environment variable `DVC_STUDIO_TEAM` to set it."
-                "You can also set it in the config file as team under studio."
+                "or environment variable `DVC_STUDIO_TEAM` to set it. "
+                "You can also set `studio.team` in the config file."
             )
 
         return team
@@ -158,15 +159,14 @@ class StudioClient:
             message = content.get("message", "")
         return Response(response_data, ok, message)
 
-    @retry_with_backoff(retries=5)
+    @retry_with_backoff(retries=3, errors=(HTTPError, Timeout))
     def _send_request(
         self, route: str, data: dict[str, Any], method: Optional[str] = "POST"
     ) -> Response[Any]:
         """
         Function that communicate Studio API.
         It will raise an exception, and try to retry, if 5xx status code is
-        returned, or if ConnectionError or Timeout exceptions are thrown from
-        requests lib
+        returned, or if Timeout exceptions is thrown from the requests lib
         """
         import requests
 
@@ -188,7 +188,7 @@ class StudioClient:
         )
         try:
             response.raise_for_status()
-        except requests.exceptions.HTTPError:
+        except HTTPError:
             if _is_server_error(response.status_code):
                 # going to retry
                 raise

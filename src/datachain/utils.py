@@ -1,6 +1,7 @@
 import glob
 import io
 import json
+import logging
 import os
 import os.path as osp
 import random
@@ -24,6 +25,9 @@ from pydantic import BaseModel
 if TYPE_CHECKING:
     import pandas as pd
     from typing_extensions import Self
+
+
+logger = logging.getLogger("datachain")
 
 NUL = b"\0"
 TIME_ZERO = datetime.fromtimestamp(0, tz=timezone.utc)
@@ -271,18 +275,24 @@ def flatten(items):
             yield item
 
 
-def retry_with_backoff(retries=5, backoff_sec=1):
+def retry_with_backoff(retries=5, backoff_sec=1, errors=(Exception,)):
     def retry(f):
         def wrapper(*args, **kwargs):
             num_tried = 0
             while True:
                 try:
                     return f(*args, **kwargs)
-                except Exception:
+                except errors:
                     if num_tried == retries:
                         raise
                     sleep = (
                         backoff_sec * 2** num_tried + random.uniform(0, 1)  # noqa: S311
+                    )
+                    logger.exception(
+                        "Error in %s, retrying in %ds, attempt %d",
+                        f.__name__,
+                        sleep,
+                        num_tried,
                     )
                     time.sleep(sleep)
                     num_tried += 1
