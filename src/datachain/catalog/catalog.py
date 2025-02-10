@@ -1097,6 +1097,31 @@ class Catalog:
     def get_dataset(self, name: str) -> DatasetRecord:
         return self.metastore.get_dataset(name)
 
+    def get_dataset_with_remote_fallback(
+        self, name: str, version: Optional[int] = None
+    ) -> DatasetRecord:
+        try:
+            ds = self.get_dataset(name)
+            if version and not ds.has_version(version):
+                raise DatasetVersionNotFoundError(
+                    f"Dataset {name} does not have version {version}"
+                )
+            return ds
+
+        except (DatasetNotFoundError, DatasetVersionNotFoundError):
+            print("Dataset not found in local catalog, trying to get from studio")
+
+            remote_ds_uri = f"{DATASET_PREFIX}{name}"
+            if version:
+                remote_ds_uri += f"@v{version}"
+
+            self.pull_dataset(
+                remote_ds_uri=remote_ds_uri,
+                local_ds_name=name,
+                local_ds_version=version,
+            )
+            return self.get_dataset(name)
+
     def get_dataset_with_version_uuid(self, uuid: str) -> DatasetRecord:
         """Returns dataset that contains version with specific uuid"""
         for dataset in self.ls_datasets():

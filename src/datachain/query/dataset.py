@@ -45,7 +45,6 @@ from datachain.data_storage.schema import (
 from datachain.dataset import DATASET_PREFIX, DatasetStatus, RowDict
 from datachain.error import (
     DatasetNotFoundError,
-    DatasetVersionNotFoundError,
     QueryScriptCancelError,
 )
 from datachain.func.base import Function
@@ -1086,7 +1085,7 @@ class DatasetQuery:
         session: Optional[Session] = None,
         indexing_column_types: Optional[dict[str, Any]] = None,
         in_memory: bool = False,
-        studio: bool = True,
+        fallback_to_remote: bool = True,
     ) -> None:
         self.session = Session.get(session, catalog=catalog, in_memory=in_memory)
         self.catalog = catalog or self.session.catalog
@@ -1103,23 +1102,14 @@ class DatasetQuery:
         self.column_types: Optional[dict[str, Any]] = None
 
         self.name = name
-        try:
+
+        if fallback_to_remote and is_token_set():
+            ds = self.catalog.get_dataset_with_remote_fallback(name, version)
+        else:
             ds = self.catalog.get_dataset(name)
-            self.version = version or ds.latest_version
-            self.feature_schema = ds.get_version(self.version).feature_schema
 
-        except (DatasetNotFoundError, DatasetVersionNotFoundError):
-            if not studio:
-                raise
-
-            if not is_token_set():
-                raise
-
-            # Pull only if studio token is set and studio flag is True.
-            ds = self.pull_dataset(name, version)
-            self.version = version or ds.latest_version
-            self.feature_schema = ds.get_version(self.version).feature_schema
-
+        self.version = version or ds.latest_version
+        self.feature_schema = ds.get_version(self.version).feature_schema
         self.column_types = copy(ds.schema)
         if "sys__id" in self.column_types:
             self.column_types.pop("sys__id")

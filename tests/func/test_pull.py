@@ -295,7 +295,7 @@ def test_datachain_from_dataset_pull(
         ds = DataChain.from_dataset(
             name="dogs",
             version=1,
-            studio=True,
+            fallback_to_remote=True,
         )
 
     assert ds.dataset.name == "dogs"
