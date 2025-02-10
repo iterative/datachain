@@ -86,21 +86,6 @@ class FileClient(Client):
         use_symlinks = kwargs.pop("use_symlinks", False)
         return cls(name, kwargs, cache, use_symlinks=use_symlinks)
 
-    @classmethod
-    def from_source(
-        cls,
-        uri: str,
-        cache: "Cache",
-        use_symlinks: bool = False,
-        **kwargs,
-    ) -> "FileClient":
-        return cls(
-            LocalFileSystem._strip_protocol(uri),
-            kwargs,
-            cache,
-            use_symlinks=use_symlinks,
-        )
-
     async def get_current_etag(self, file: "File") -> str:
         info = self.fs.info(self.get_full_path(file.path))
         return self.info_to_file(info, "").etag

@@ -39,7 +39,6 @@ from datachain.dataset import (
     DatasetListRecord,
     DatasetRecord,
     DatasetStatus,
-    StorageURI,
     create_dataset_uri,
     parse_dataset_uri,
 )
@@ -570,8 +569,7 @@ class Catalog:
         Return the client corresponding to the given source `uri`.
         """
         config = config or self.client_config
-        cls = Client.get_implementation(uri)
-        return cls.from_source(StorageURI(uri), self.cache, **config)
+        return Client.get_client(uri, self.cache, **config)
 
     def enlist_source(
         self,
