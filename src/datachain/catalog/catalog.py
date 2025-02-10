@@ -89,10 +89,6 @@ PULL_DATASET_SLEEP_INTERVAL = 0.1  # sleep time while waiting for chunk to be av
 PULL_DATASET_CHECK_STATUS_INTERVAL = 20  # interval to check export status in Studio
 
 
-def raise_remote_error(error_message: str) -> NoReturn:
-    raise DataChainError(f"Error from server: {error_message}")
-
-
 def noop(_: str):
     pass
 
@@ -211,14 +207,14 @@ class DatasetRowsFetcher(NodesThreadPool):
             self.remote_ds_name, self.remote_ds_version
         )
         if not export_status_response.ok:
-            raise_remote_error(export_status_response.message)
+            raise DataChainError(export_status_response.message)
 
         export_status = export_status_response.data["status"]  # type: ignore [index]
 
         if export_status == "failed":
-            raise_remote_error("Dataset export failed in Studio")
+            raise DataChainError("Dataset export failed in Studio")
         if export_status == "removed":
-            raise_remote_error("Dataset export removed in Studio")
+            raise DataChainError("Dataset export removed in Studio")
 
         self.last_status_check = time.time()
 
@@ -1113,7 +1109,7 @@ class Catalog:
 
         info_response = studio_client.dataset_info(name)
         if not info_response.ok:
-            raise_remote_error(info_response.message)
+            raise DataChainError(info_response.message)
 
         dataset_info = info_response.data
         assert isinstance(dataset_info, dict)
@@ -1409,7 +1405,7 @@ class Catalog:
             remote_ds_name, remote_ds_version.version
         )
         if not export_response.ok:
-            raise_remote_error(export_response.message)
+            raise DataChainError(export_response.message)
 
         signed_urls = export_response.data
 
