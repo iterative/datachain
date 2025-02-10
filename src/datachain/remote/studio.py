@@ -39,6 +39,13 @@ def _is_server_error(status_code: int) -> bool:
     return str(status_code).startswith("5")
 
 
+def is_token_set() -> bool:
+    return (
+        bool(os.environ.get("DVC_STUDIO_TOKEN"))
+        or Config().read().get("studio", {}).get("token") is not None
+    )
+
+
 def _parse_dates(obj: dict, date_fields: list[str]):
     """
     Function that converts string ISO dates to datetime.datetime instances in object

@@ -42,13 +42,17 @@ from datachain.data_storage.schema import (
     partition_col_names,
     partition_columns,
 )
-from datachain.dataset import DatasetStatus, RowDict
-from datachain.error import DatasetNotFoundError, QueryScriptCancelError
+from datachain.dataset import DATASET_PREFIX, DatasetStatus, RowDict
+from datachain.error import (
+    DatasetNotFoundError,
+    QueryScriptCancelError,
+)
 from datachain.func.base import Function
 from datachain.lib.udf import UDFAdapter, _get_cache
 from datachain.progress import CombinedDownloadCallback, TqdmCombinedDownloadCallback
 from datachain.query.schema import C, UDFParamSpec, normalize_param
 from datachain.query.session import Session
+from datachain.remote.studio import is_token_set
 from datachain.sql.functions.random import rand
 from datachain.utils import (
     batched,
@@ -1081,6 +1085,7 @@ class DatasetQuery:
         session: Optional[Session] = None,
         indexing_column_types: Optional[dict[str, Any]] = None,
         in_memory: bool = False,
+        fallback_to_remote: bool = True,
     ) -> None:
         self.session = Session.get(session, catalog=catalog, in_memory=in_memory)
         self.catalog = catalog or self.session.catalog
@@ -1097,7 +1102,12 @@ class DatasetQuery:
         self.column_types: Optional[dict[str, Any]] = None
 
         self.name = name
-        ds = self.catalog.get_dataset(name)
+
+        if fallback_to_remote and is_token_set():
+            ds = self.catalog.get_dataset_with_remote_fallback(name, version)
+        else:
+            ds = self.catalog.get_dataset(name)
+
         self.version = version or ds.latest_version
         self.feature_schema = ds.get_version(self.version).feature_schema
         self.column_types = copy(ds.schema)
@@ -1111,6 +1121,21 @@ class DatasetQuery:
 
     def __or__(self, other):
         return self.union(other)
+
+    def pull_dataset(self, name: str, version: Optional[int] = None) -> "DatasetRecord":
+        print("Dataset not found in local catalog, trying to get from studio")
+
+        remote_ds_uri = f"{DATASET_PREFIX}{name}"
+        if version:
+            remote_ds_uri += f"@v{version}"
+
+        self.catalog.pull_dataset(
+            remote_ds_uri=remote_ds_uri,
+            local_ds_name=name,
+            local_ds_version=version,
+        )
+
+        return self.catalog.get_dataset(name)
 
     @staticmethod
     def get_table() -> "TableClause":
