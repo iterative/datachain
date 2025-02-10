@@ -3,6 +3,7 @@ from sqlalchemy import Label
 
 from datachain import C, DataChain
 from datachain.func import (
+    and_,
     bit_hamming_distance,
     byte_hamming_distance,
     case,
@@ -316,6 +317,18 @@ def test_or_func_mutate(dc):
         "Not Match",
         "Not Match",
         "Match",
+    ]
+
+
+@skip_if_not_sqlite
+def test_and_func_mutate(dc):
+    res = dc.mutate(test=ifelse(and_(C("num") > 1, C("num") < 4), "Match", "Not Match"))
+    assert list(res.order_by("num").collect("test")) == [
+        "Not Match",
+        "Match",
+        "Match",
+        "Not Match",
+        "Not Match",
     ]
 
 

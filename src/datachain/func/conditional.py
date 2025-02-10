@@ -1,6 +1,7 @@
 from typing import Optional, Union
 
 from sqlalchemy import ColumnElement
+from sqlalchemy import and_ as sql_and
 from sqlalchemy import case as sql_case
 from sqlalchemy import or_ as sql_or
 
@@ -238,3 +239,32 @@ def or_(*args: Union[ColumnElement, Func]) -> Func:
             func_args.append(arg)
 
     return Func("or", inner=sql_or, cols=cols, args=func_args, result_type=bool)
+
+
+def and_(*args: Union[ColumnElement, Func]) -> Func:
+    """
+    Returns the function that produces conjunction of expressions joined by AND
+    logical operator.
+
+    Args:
+        args (ColumnElement | Func): The expressions for AND statement.
+
+    Returns:
+        Func: A Func object that represents the and function.
+
+    Example:
+        ```py
+        dc.mutate(
+            test=ifelse(and_(isnone("name"), isnone("surname")), "Empty", "Not Empty")
+        )
+        ```
+    """
+    cols, func_args = [], []
+
+    for arg in args:
+        if isinstance(arg, (str, Func)):
+            cols.append(arg)
+        else:
+            func_args.append(arg)
+
+    return Func("and", inner=sql_and, cols=cols, args=func_args, result_type=bool)
