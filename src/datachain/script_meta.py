@@ -12,6 +12,40 @@ class ScriptMetaParsingError(Exception):
 
 @dataclass
 class ScriptMeta:
+    """
+    Class that is parsing inline script metadata to get some basic information for
+    running datachain script like python version, depdnencies, files etc.
+    Inline script metadata must follow the format described in https://packaging.python.org/en/latest/specifications/inline-script-metadata/#inline-script-metadata.
+    Example of script with inline metadata:
+        # /// script
+        # requires-python = ">=3.12"
+        #
+        # dependencies = [
+        #   "pandas < 2.1.0",
+        #   "numpy == 1.26.4"
+        # ]
+        #
+        # [tools.datachain.workers]
+        # num_workers = 3
+        #
+        # [tools.datachain.files]
+        # image1 = "s3://ldb-public/image1.jpg"
+        # file1 = "s3://ldb-public/file.pdf"
+        #
+        # [tools.datachain.params]
+        # min_length_sec = 1
+        # cache = false
+        #
+        # ///
+
+        import sys
+        import pandas as pd
+
+        print(f"Python version: {sys.version_info}")
+        print(f"Pandas version: {pd.__version__}")
+
+    """
+
     python_version: Optional[str]
     dependencies: list[str]
     files: dict[str, str]
@@ -40,6 +74,7 @@ class ScriptMeta:
 
     @staticmethod
     def read_inline_meta(script: str) -> dict | None:
+        """Converts inline script metadata to dict with all found data"""
         regex = (
             r"(?m)^# /// (?P<type>[a-zA-Z0-9-]+)$\s(?P<content>(^#(| .*)$\s)+)^# ///$"
         )
@@ -59,6 +94,11 @@ class ScriptMeta:
 
     @staticmethod
     def parse(script: str) -> Optional["ScriptMeta"]:
+        """
+        Method that is parsing inline script metadata from datachain script and
+        instantiating ScriptMeta class with found data. If no inline metadata is
+        found, it returns None
+        """
         try:
             meta = ScriptMeta.read_inline_meta(script)
             if not meta:
