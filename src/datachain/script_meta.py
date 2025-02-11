@@ -14,7 +14,7 @@ class ScriptMetaParsingError(Exception):
 class ScriptMeta:
     """
     Class that is parsing inline script metadata to get some basic information for
-    running datachain script like python version, depdnencies, files etc.
+    running datachain script like python version, dependencies, files etc.
     Inline script metadata must follow the format described in https://packaging.python.org/en/latest/specifications/inline-script-metadata/#inline-script-metadata.
     Example of script with inline metadata:
         # /// script
@@ -103,12 +103,13 @@ class ScriptMeta:
             meta = ScriptMeta.read_inline_meta(script)
             if not meta:
                 return None
+            custom = meta.get("tools", {}).get("datachain", {})
             return ScriptMeta(
-                python_version=meta["requires-python"],
-                dependencies=meta["dependencies"],
-                num_workers=meta["tools"]["datachain"]["workers"]["num_workers"],
-                files=meta["tools"]["datachain"]["files"],
-                params=meta["tools"]["datachain"]["params"],
+                python_version=meta.get("requires-python"),
+                dependencies=meta.get("dependencies"),
+                num_workers=custom.get("workers", {}).get("num_workers"),
+                files=custom.get("files"),
+                params=custom.get("params"),
             )
         except Exception as e:
             raise ScriptMetaParsingError(f"Error when parsing script meta: {e}") from e
