@@ -484,10 +484,15 @@ class DataChain:
         fallback_to_remote: bool = True,
     ) -> "Self":
         """Get data from a saved Dataset. It returns the chain itself.
+        If dataset or version is not found locally, it will try to pull it from Studio.
 
         Parameters:
             name : dataset name
             version : dataset version
+            session : Session to use for the chain.
+            settings : Settings to use for the chain.
+            fallback_to_remote : Try to pull dataset from Studio if not found locally.
+                Default is True.
 
         Example:
             ```py
