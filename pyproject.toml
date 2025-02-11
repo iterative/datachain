@@ -47,7 +47,7 @@ dependencies = [
   "msgpack>=1.0.4,<2",
   "psutil",
   "huggingface_hub",
-  "iterative-telemetry>=0.0.9",
+  "iterative-telemetry>=0.0.10",
   "platformdirs",
   "dvc-studio-client>=0.21,<1",
   "tabulate",
