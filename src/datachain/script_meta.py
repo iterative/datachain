@@ -73,7 +73,7 @@ class ScriptMeta:
         return self.files.get(name)
 
     @staticmethod
-    def read_inline_meta(script: str) -> dict | None:
+    def read_inline_meta(script: str) -> Optional[dict]:
         """Converts inline script metadata to dict with all found data"""
         regex = (
             r"(?m)^# /// (?P<type>[a-zA-Z0-9-]+)$\s(?P<content>(^#(| .*)$\s)+)^# ///$"
