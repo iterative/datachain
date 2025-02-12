@@ -1,4 +1,4 @@
-# DataType
+# Data Types
 
 Data types supported by `DataChain` must be of type
 [`DataType`](#datachain.lib.data_model.DataType). `DataType` includes most Python types
