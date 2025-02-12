@@ -32,6 +32,12 @@ def bench(session: nox.Session) -> None:
 @nox.session(python=["3.9", "3.10", "3.11", "3.12", "pypy3.9", "pypy3.10"])
 def tests(session: nox.Session) -> None:
     session.install(".[tests]")
+    env = {"COVERAGE_FILE": f".coverage.{session.python}"}
+    if session.python == "3.12":
+        # improve performance of tests in Python 3.12 when used with coverage
+        # https://github.com/nedbat/coveragepy/issues/1665
+        # https://github.com/python/cpython/issues/107674
+        env["COVERAGE_CORE"] = "sysmon"
     session.run(
         "pytest",
         "--cov",
@@ -41,7 +47,7 @@ def tests(session: nox.Session) -> None:
         "--numprocesses=logical",
         "--dist=loadgroup",
         *session.posargs,
-        env={"COVERAGE_FILE": f".coverage.{session.python}"},
+        env=env,
     )
 
 
