@@ -47,7 +47,7 @@ annotated = images_id.merge(meta, on="id", right_on="meta.id")
 
 likely_cats = annotated.filter((Column("meta.inference.confidence") > 0.93) \
                                & (Column("meta.inference.class_") == "cat"))
-likely_cats.export_files("high-confidence-cats/", signal="file")
+likely_cats.to_storage("high-confidence-cats/", signal="file")
 ```
 
 ## Data curation with a local AI model
@@ -85,7 +85,7 @@ chain = (
 )
 
 positive_chain = chain.filter(Column("is_positive") == True)
-positive_chain.export_files("./output")
+positive_chain.to_storage("./output")
 
 print(f"{positive_chain.count()} files were exported")
 ```
