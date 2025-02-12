@@ -3,6 +3,7 @@ from typing import Union
 import numpy as np
 import torch
 from PIL import Image
+from ultralytics.data.utils import polygon2mask
 from ultralytics.engine.results import Results
 
 from datachain.model.ultralytics.bbox import YoloBBox, YoloBBoxes
@@ -13,6 +14,7 @@ YoloSignal = Union[YoloBBox, YoloBBoxes, YoloPose, YoloPoses, YoloSegment, YoloS
 
 
 def _signal_to_results(img: np.ndarray, signal: YoloSignal) -> Results:
+    """Convert a YOLO signal to Ultralytics Results."""
     # Convert RGB to BGR
     if img.ndim == 3 and img.shape[2] == 3:
         bgr_array = img[:, :, ::-1]
@@ -73,7 +75,14 @@ def _signal_to_results(img: np.ndarray, signal: YoloSignal) -> Results:
         boxes_list.append(
             torch.tensor([[*signal.box.coords, signal.confidence, signal.cls]])
         )
-        masks_list.append(torch.tensor([list(zip(signal.segment.x, signal.segment.y))]))
+        masks_list.append(
+            torch.tensor(
+                polygon2mask(
+                    img.shape[:2],
+                    [np.asarray(list(zip(signal.segment.x, signal.segment.y)))],
+                )
+            )
+        )
     elif isinstance(signal, YoloSegments):
         for i, _ in enumerate(signal.cls):
             names[signal.cls[i]] = signal.name[i]
@@ -83,12 +92,21 @@ def _signal_to_results(img: np.ndarray, signal: YoloSignal) -> Results:
                 )
             )
             masks_list.append(
-                torch.tensor([list(zip(signal.segment[i].x, signal.segment[i].y))])
+                torch.tensor(
+                    polygon2mask(
+                        img.shape[:2],
+                        [
+                            np.asarray(
+                                list(zip(signal.segment[i].x, signal.segment[i].y))
+                            )
+                        ],
+                    )
+                )
             )
 
     boxes = torch.cat(boxes_list, dim=0) if len(boxes_list) > 0 else None
     keypoints = torch.cat(keypoints_list, dim=0) if len(keypoints_list) > 0 else None
-    masks = torch.cat(masks_list, dim=0) if len(masks_list) > 0 else None
+    masks = torch.stack(masks_list) if len(masks_list) > 0 else None
 
     return Results(
         bgr_array,
