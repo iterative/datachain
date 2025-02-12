@@ -122,7 +122,21 @@ class VFileRegistry:
 
 
 class File(DataModel):
-    """`DataModel` for reading binary files."""
+    """
+    `DataModel` for reading binary files.
+
+    Attributes:
+        source (str): The source of the file (e.g., 's3://bucket-name/').
+        path (str): The path to the file (e.g., 'path/to/file.txt').
+        size (int): The size of the file in bytes. Defaults to 0.
+        version (str): The version of the file. Defaults to an empty string.
+        etag (str): The ETag of the file. Defaults to an empty string.
+        is_latest (bool): Whether the file is the latest version. Defaults to `True`.
+        last_modified (datetime): The last modified timestamp of the file.
+            Defaults to Unix epoch (`1970-01-01T00:00:00`).
+        location (dict | list[dict], optional): The location of the file.
+            Defaults to `None`.
+    """
 
     source: str = Field(default="")
     path: str
