@@ -181,7 +181,7 @@ class DatasetVersion:
 
     @classmethod
     def parse(  # noqa: PLR0913
-        cls: type[V],
+        cls,
         id: int,
         uuid: str,
         dataset_id: int,
@@ -288,7 +288,7 @@ class DatasetListVersion:
 
     @classmethod
     def parse(
-        cls: type[LV],
+        cls,
         id: int,
         uuid: str,
         dataset_id: int,
@@ -352,7 +352,7 @@ class DatasetRecord:
 
     @classmethod
     def parse(  # noqa: PLR0913
-        cls: type[T],
+        cls,
         id: int,
         name: str,
         description: Optional[str],
@@ -567,7 +567,7 @@ class DatasetListRecord:
 
     @classmethod
     def parse(  # noqa: PLR0913
-        cls: type[LT],
+        cls,
         id: int,
         name: str,
         description: Optional[str],
