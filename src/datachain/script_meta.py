@@ -76,7 +76,8 @@ class ScriptMeta:
     def read_inline_meta(script: str) -> Optional[dict]:
         """Converts inline script metadata to dict with all found data"""
         regex = (
-            r"(?m)^# /// (?P<type>[a-zA-Z0-9-]+)$\s(?P<content>(^#(| .*)$\s)+)^# ///$"
+            r"(?m)^# \/\/\/ (?P<type>[a-zA-Z0-9-]+)[ \t]*$[\r\n|\r|\n]"
+            "(?P<content>(?:^#(?:| .*)$[\r\n|\r|\n])+)^# \\/\\/\\/[ \t]*$"
         )
         name = "script"
         matches = list(
