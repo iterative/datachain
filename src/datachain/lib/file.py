@@ -17,6 +17,7 @@ from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
 
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
+from fsspec.utils import stringify_path
 from PIL import Image as PilImage
 from pydantic import Field, field_validator
 
@@ -270,9 +271,9 @@ class File(DataModel):
 
     def save(self, destination: str):
         """Writes it's content to destination"""
-
-        client: Client = self._catalog.get_client(destination)
-        client.upload(self.read(), destination)
+        destination = stringify_path(destination)
+        client: Client = self._catalog.get_client(str(destination))
+        client.upload(self.read(), str(destination))
 
     def _symlink_to(self, destination: str):
         if self.location:
@@ -499,6 +500,7 @@ class TextFile(File):
 
     def save(self, destination: str):
         """Writes it's content to destination"""
+        destination = stringify_path(destination)
 
         client: Client = self._catalog.get_client(destination)
         with client.fs.open(destination, mode="w") as f:
@@ -515,6 +517,8 @@ class ImageFile(File):
 
     def save(self, destination: str):
         """Writes it's content to destination"""
+        destination = stringify_path(destination)
+
         client: Client = self._catalog.get_client(destination)
         with client.fs.open(destination, mode="wb") as f:
             self.read().save(f)
