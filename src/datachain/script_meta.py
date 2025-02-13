@@ -2,7 +2,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Optional
 
-import tomllib
+import tomli
 
 
 class ScriptMetaParsingError(Exception):
@@ -90,7 +90,7 @@ class ScriptMeta:
                 line[2:] if line.startswith("# ") else line[1:]
                 for line in matches[0].group("content").splitlines(keepends=True)
             )
-            return tomllib.loads(content)
+            return tomli.loads(content)
         return None
 
     @staticmethod
