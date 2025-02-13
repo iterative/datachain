@@ -2451,6 +2451,7 @@ class DataChain:
         placement: FileExportPlacement = "fullpath",
         use_cache: bool = True,
         link_type: Literal["copy", "symlink"] = "copy",
+        prefetch: Optional[int] = None,
     ) -> None:
         """Export files from a specified signal to a directory.
 
@@ -2462,6 +2463,9 @@ class DataChain:
             use_cache: If `True`, cache the files before exporting.
             link_type: Method to use for exporting files.
                 Falls back to `'copy'` if symlinking fails.
+            prefetch: number of workers to use for downloading files in advance.
+                      This is enabled by default and uses 2 workers.
+                      To disable prefetching, set it to 0.
         """
         if placement == "filename" and (
             self._query.distinct(pathfunc.name(C(f"{signal}__path"))).count()
@@ -2469,8 +2473,12 @@ class DataChain:
         ):
             raise ValueError("Files with the same name found")
 
-        for file in self.collect(signal):
-            file.export(output, placement, use_cache, link_type=link_type)  # type: ignore[union-attr]
+        self.settings(cache=use_cache, prefetch=prefetch).map(
+            res=lambda file: file.export(
+                output, placement, use_cache, link_type=link_type
+            ),
+            params=[signal],
+        ).exec()
 
     def shuffle(self) -> "Self":
         """Shuffle the rows of the chain deterministically."""

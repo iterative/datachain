@@ -291,21 +291,34 @@ def test_read_file(cloud_test_catalog, use_cache):
 @pytest.mark.parametrize("use_map", [True, False])
 @pytest.mark.parametrize("use_cache", [True, False])
 @pytest.mark.parametrize("file_type", ["", "binary", "text"])
+@pytest.mark.parametrize("prefetch", [0, 2])
 @pytest.mark.parametrize("cloud_type", ["file"], indirect=True)
 def test_export_files(
-    tmp_dir, cloud_test_catalog, test_session, placement, use_map, use_cache, file_type
+    tmp_dir,
+    cloud_test_catalog,
+    test_session,
+    placement,
+    use_map,
+    use_cache,
+    file_type,
+    prefetch,
 ):
     ctc = cloud_test_catalog
     df = DataChain.from_storage(ctc.src_uri, type=file_type, session=test_session)
     if use_map:
-        df.export_files(tmp_dir / "output", placement=placement, use_cache=use_cache)
+        df.export_files(
+            tmp_dir / "output",
+            placement=placement,
+            use_cache=use_cache,
+            prefetch=prefetch,
+        )
         df.map(
             res=lambda file: file.export(
                 tmp_dir / "output", placement=placement, use_cache=use_cache
             )
         ).exec()
     else:
-        df.export_files(tmp_dir / "output", placement=placement)
+        df.export_files(tmp_dir / "output", placement=placement, prefetch=prefetch)
 
     expected = {
         "description": "Cats and Dogs",
