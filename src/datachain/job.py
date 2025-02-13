@@ -25,7 +25,7 @@ class Job:
 
     @classmethod
     def parse(
-        cls: type[J],
+        cls,
         id: Union[str, uuid.UUID],
         name: str,
         status: int,
