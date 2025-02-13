@@ -47,7 +47,7 @@ dependencies = [
   "msgpack>=1.0.4,<2",
   "psutil",
   "huggingface_hub",
-  "iterative-telemetry>=0.0.9",
+  "iterative-telemetry>=0.0.10",
   "platformdirs",
   "dvc-studio-client>=0.21,<1",
   "tabulate",
@@ -106,7 +106,7 @@ tests = [
 ]
 dev = [
   "datachain[docs,tests]",
-  "mypy==1.14.1",
+  "mypy==1.15.0",
   "types-python-dateutil",
   "types-pytz",
   "types-PyYAML",
@@ -118,7 +118,7 @@ examples = [
   "defusedxml",
   "accelerate",
   "huggingface_hub[hf_transfer]",
-  "ultralytics==8.3.70",
+  "ultralytics==8.3.74",
   "open_clip_torch"
 ]
 
