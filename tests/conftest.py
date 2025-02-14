@@ -472,9 +472,9 @@ def cloud_server_credentials(cloud_server, monkeypatch):
 
 def get_cloud_test_catalog(cloud_server, tmp_path, metastore, warehouse):
     cache_dir = tmp_path / ".datachain" / "cache"
-    cache_dir.mkdir(parents=True)
+    cache_dir.mkdir(parents=True, exist_ok=True)
     tmpfile_dir = tmp_path / ".datachain" / "tmp"
-    tmpfile_dir.mkdir()
+    tmpfile_dir.mkdir(exist_ok=True)
 
     catalog = Catalog(
         metastore=metastore,
