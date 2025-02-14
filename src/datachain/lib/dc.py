@@ -498,6 +498,32 @@ class DataChain:
             ```py
             chain = DataChain.from_dataset("my_cats")
             ```
+
+            ```py
+            chain = DataChain.from_dataset("my_cats", fallback_to_remote=False)
+            ```
+
+            ```py
+            chain = DataChain.from_dataset("my_cats", version=1)
+            ```
+
+            ```py
+            session = Session.get(client_config={"aws_endpoint_url": "<minio-url>"})
+            settings = {
+                "cache": True,
+                "parallel": 4,
+                "workers": 4,
+                "min_task_size": 1000,
+                "prefetch": 10,
+            }
+            chain = DataChain.from_dataset(
+                name="my_cats",
+                version=1,
+                session=session,
+                settings=settings,
+                fallback_to_remote=True,
+            )
+            ```
         """
         query = DatasetQuery(
             name=name,
