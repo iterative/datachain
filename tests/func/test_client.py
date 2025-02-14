@@ -22,9 +22,9 @@ _non_null_text = st.text(
 @pytest.fixture
 def client(cloud_server, cloud_server_credentials):
     uri = cloud_server.src_uri
-    return Client.get_implementation(uri).from_source(
-        uri, cache=None, **cloud_server.client_config
-    )
+    cls = Client.get_implementation(uri)
+    storage_url, _ = cls.split_url(uri)
+    return cls.from_name(storage_url, cache=None, **cloud_server.client_config)
 
 
 def normalize_entries(entries):

@@ -150,15 +150,6 @@ class Client(ABC):
         return cls(name, kwargs, cache)
 
     @classmethod
-    def from_source(
-        cls,
-        uri: "StorageURI",
-        cache: Cache,
-        **kwargs,
-    ) -> "Client":
-        return cls(cls.FS_CLASS._strip_protocol(uri), kwargs, cache)
-
-    @classmethod
     def ls_buckets(cls, **kwargs) -> Iterator[Bucket]:
         from datachain.dataset import StorageURI
 
