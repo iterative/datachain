@@ -1,16 +1,23 @@
+import pytest
+
 from datachain import Session
 from datachain.lib.dc import DataChain
 from tests.conftest import get_cloud_test_catalog, make_cloud_server
 
 
 def test_cross_cloud_transfer(
+    request,
     tmp_upath_factory,
     tree,
     tmp_path,
     metastore,
     warehouse,
 ):
-    # Setup cloud storage paths and servers
+    disabled_remotes = request.config.getoption("--disable-remotes") or []
+
+    if any(remote in disabled_remotes for remote in ["azure", "gs", "all"]):
+        pytest.skip("Skipping all tests for azure, gs or all remotes")
+
     azure_path = tmp_upath_factory.mktemp("azure", version_aware=False)
     azure_server = make_cloud_server(azure_path, "azure", tree)
 
