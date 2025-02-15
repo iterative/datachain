@@ -1085,7 +1085,7 @@ class DatasetQuery:
         session: Optional[Session] = None,
         indexing_column_types: Optional[dict[str, Any]] = None,
         in_memory: bool = False,
-        fallback_to_remote: bool = True,
+        fallback_to_studio: bool = True,
     ) -> None:
         self.session = Session.get(session, catalog=catalog, in_memory=in_memory)
         self.catalog = catalog or self.session.catalog
@@ -1103,7 +1103,7 @@ class DatasetQuery:
 
         self.name = name
 
-        if fallback_to_remote and is_token_set():
+        if fallback_to_studio and is_token_set():
             ds = self.catalog.get_dataset_with_remote_fallback(name, version)
         else:
             ds = self.catalog.get_dataset(name)
