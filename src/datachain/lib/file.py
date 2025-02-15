@@ -214,10 +214,13 @@ class File(DataModel):
 
             catalog = get_catalog()
 
-        parent, name = posixpath.split(path)
+        from datachain.client.fsspec import Client
 
-        client = catalog.get_client(parent)
-        file = client.upload(data, name)
+        client_cls = Client.get_implementation(path)
+        source, rel_path = client_cls.split_url(path)
+
+        client = catalog.get_client(client_cls.get_uri(source))
+        file = client.upload(data, rel_path)
         if not isinstance(file, cls):
             file = cls(**file.model_dump())
         file._set_stream(catalog)
