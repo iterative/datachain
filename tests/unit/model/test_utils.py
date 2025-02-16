@@ -1,132 +1,76 @@
 import pytest
+from numpy.testing import assert_array_almost_equal
 
-from datachain.model.utils import (
-    normalize_coords,
-    validate_bbox,
-    validate_bbox_normalized,
-    validate_img_size,
-)
+from datachain.model.utils import convert_bbox
 
-
-@pytest.mark.parametrize(
-    "img_size",
-    [
-        [100, 100],
-        (100, 100),
-    ],
-)
-def test_validate_img_size(img_size):
-    assert validate_img_size(img_size) == img_size
-
-
-@pytest.mark.parametrize(
-    "img_size",
-    [
-        None,
-        12,
-        "12",
-        [],
-        [1],
-        [1, 2, 3],
-        [1, "2"],
-        [0, 2],
-        [1, 0],
-        [10.0, 10.0],
-    ],
-)
-def test_validate_img_size_errors(img_size):
-    with pytest.raises(AssertionError):
-        validate_img_size(img_size)
-
-
-@pytest.mark.parametrize(
-    "bbox",
-    [
-        (10, 10, 90, 90),
-        [10, 10, 90, 90],
-    ],
-)
-def test_validate_bbox(bbox):
-    assert validate_bbox(bbox) == bbox
+# Test data: list of bounding boxes in different formats.
+# These meant to be the same bounding boxes assuming image size is (100, 100).
+# Formats are:
+# - albumentations: [x_min, y_min, x_max, y_max], normalized coordinates
+# - coco: [x_min, y_min, width, height], pixel coordinates
+# - voc: [x_min, y_min, x_max, y_max], pixel coordinates
+# - yolo: [x_center, y_center, width, height], normalized coordinates
+BOXES = [
+    {
+        "albumentations": [0.0, 0.0, 0.0, 0.0],
+        "coco": [0, 0, 0, 0],
+        "voc": [0, 0, 0, 0],
+        "yolo": [0.0, 0.0, 0.0, 0.0],
+    },
+    {
+        "albumentations": [0.5, 0.5, 0.5, 0.5],
+        "coco": [50, 50, 0, 0],
+        "voc": [50, 50, 50, 50],
+        "yolo": [0.5, 0.5, 0.0, 0.0],
+    },
+    {
+        "albumentations": [1.0, 1.0, 1.0, 1.0],
+        "coco": [100, 100, 0, 0],
+        "voc": [100, 100, 100, 100],
+        "yolo": [1.0, 1.0, 0.0, 0.0],
+    },
+    {
+        "albumentations": [0.0, 0.0, 1.0, 1.0],
+        "coco": [0, 0, 100, 100],
+        "voc": [0, 0, 100, 100],
+        "yolo": [0.5, 0.5, 1.0, 1.0],
+    },
+    {
+        "albumentations": [0.1, 0.2, 0.9, 0.8],
+        "coco": [10, 20, 80, 60],
+        "voc": [10, 20, 90, 80],
+        "yolo": [0.5, 0.5, 0.8, 0.6],
+    },
+]
 
 
 @pytest.mark.parametrize(
-    "bbox",
+    "source,target,coords,result",
     [
-        None,
-        12,
-        "12",
-        [],
-        [0, 1, 2],
-        [0, 1, 2, 3, 4],
-        [0, 1, 2, "3"],
-        [0, -1, 2, 3],
+        (source, target, coords, result)
+        for box in BOXES
+        for source, coords in box.items()
+        for target, result in box.items()
     ],
 )
-def test_validate_bbox_errors(bbox):
-    with pytest.raises(AssertionError):
-        validate_bbox(bbox)
+def test_convert_bbox(source, target, coords, result):
+    assert_array_almost_equal(
+        convert_bbox(coords, (100, 100), source, target),
+        result,
+        decimal=3,
+    )
 
 
 @pytest.mark.parametrize(
-    "bbox",
+    "source,target",
     [
-        (0.1, 0.1, 0.9, 0.9),
-        [0.1, 0.1, 0.9, 0.9],
+        ("unknown", "coco"),
+        ("albumentations", "unknown"),
+        ("coco", "unknown"),
+        ("voc", "unknown"),
+        ("yolo", "unknown"),
     ],
 )
-def test_validate_bbox_normalized(bbox):
-    assert validate_bbox_normalized(bbox, (100, 100)) == [10, 10, 90, 90]
-
-
-@pytest.mark.parametrize(
-    "bbox",
-    [
-        None,
-        0.2,
-        "0.2",
-        [],
-        [0.0, 0.1, 0.2],
-        [0.0, 0.1, 0.2, 0.3, 0.4],
-        [0.0, 0.1, 0.2, "0.3"],
-        [0.0, 1.0, 2.0, 3.0],
-    ],
-)
-def test_validate_bbox_normalized_errors(bbox):
-    with pytest.raises(AssertionError):
-        validate_bbox_normalized(bbox, (100, 100))
-
-
-@pytest.mark.parametrize(
-    "coords",
-    [
-        (10, 10, 90, 90),
-        [10, 10, 90, 90],
-    ],
-)
-def test_normalize_coords(coords):
-    assert normalize_coords(coords, (100, 100)) == [0.1, 0.1, 0.9, 0.9]
-
-
-@pytest.mark.parametrize(
-    "coords",
-    [
-        None,
-        10,
-        "10",
-        [10, 10, 90],
-        [10, 10, 90, 90, 90],
-        [10.0, 10.0, 90.0, 90.0],
-        [200, 10, 90, 90],
-        [10, 200, 90, 90],
-        [10, 10, 200, 90],
-        [10, 10, 90, 200],
-        [-10, 10, 90, 90],
-        [10, -10, 90, 90],
-        [10, 10, -10, 90],
-        [10, 10, 90, -10],
-    ],
-)
-def test_normalize_coords_errors(coords):
-    with pytest.raises(AssertionError):
-        normalize_coords(coords, (100, 100))
+def test_convert_bbox_error_source_target(source, target):
+    with pytest.raises(ValueError):
+        convert_bbox([0, 0, 0, 0], (100, 100), source, target)
