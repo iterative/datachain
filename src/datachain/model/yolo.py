@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from ultralytics.engine.results import Results
 
 
-class Yolo(DataModel):
+class YoloBox(DataModel):
     """
     A class representing objects bounding boxes detected by a YOLO model.
 
@@ -52,28 +52,28 @@ class Yolo(DataModel):
     orig_shape: list[int] = Field(default=[])
 
     @staticmethod
-    def from_yolo_results(results: list["Results"]) -> "Yolo":
+    def from_yolo_results(results: list["Results"]) -> "YoloBox":
         """
         Create a YOLO bounding boxes from the YOLO results.
 
         Example:
             ```python
             from ultralytics import YOLO
-            from datachain.model.bbox import Yolo
+            from datachain.model.bbox import YoloBox
 
             model = YOLO("yolo11n.pt")
             results = model("image.jpg", verbose=False)
-            boxes = Yolo.from_yolo_results(results)
+            boxes = YoloBox.from_yolo_results(results)
             ```
 
         Args:
             results: YOLO results from the model.
 
         Returns:
-            Yolo: A YOLO bounding boxes data model.
+            YoloBox: A YOLO bounding boxes data model.
         """
         if not (summary := results[0].summary(normalize=False)):
-            return Yolo()
+            return YoloBox()
 
         cls, name, confidence, box = [], [], [], []
         for res in summary:
@@ -82,7 +82,7 @@ class Yolo(DataModel):
             confidence.append(res.get("confidence", -1))
             box.append(_get_box_from_yolo_result(res))
 
-        return Yolo(
+        return YoloBox(
             cls=cls,
             name=name,
             confidence=confidence,
@@ -254,11 +254,12 @@ class YoloObb(DataModel):
         )
 
 
-class YoloSeg(Yolo):
+class YoloSeg(YoloBox):
     """
     A class representing objects segmentation detected by a YOLO model.
 
-    This class extends the `Yolo` class to include the segments of the detected objects.
+    This class extends the `YoloBox` class to include the segments
+    of the detected objects.
 
     Instance segmentation goes a step further than object detection and involves
     identifying individual objects in an image and segmenting them
@@ -346,11 +347,12 @@ class YoloPoseBodyPart:
     right_ankle = 16
 
 
-class YoloPose(Yolo):
+class YoloPose(YoloBox):
     """
     A class representing human pose keypoints detected by a YOLO model.
 
-    This class extends the `Yolo` class to include the segments of the detected objects.
+    This class extends the `YoloBox` class to include the segments
+    of the detected objects.
 
     Pose estimation is a task that involves identifying the location of specific points
     in an image, usually referred to as keypoints.

@@ -1,7 +1,7 @@
 from numpy.testing import assert_array_almost_equal
 
 from datachain.model.yolo import (
-    Yolo,
+    YoloBox,
     YoloCls,
     YoloObb,
     YoloPose,
@@ -10,8 +10,8 @@ from datachain.model.yolo import (
 )
 
 
-def test_yolo():
-    model = Yolo(
+def test_yolo_box():
+    model = YoloBox(
         cls=[1, 2],
         name=["person", "chair"],
         confidence=[0.8, 0.5],

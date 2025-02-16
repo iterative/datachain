@@ -8,7 +8,7 @@ from PIL import Image
 from ultralytics.engine.results import Results
 
 from datachain.model.yolo import (
-    Yolo,
+    YoloBox,
     YoloCls,
     YoloObb,
     YoloPose,
@@ -39,7 +39,7 @@ def running_img_masks() -> torch.Tensor:
     return torch.tensor([mask0_np.astype(np.float32), mask1_np.astype(np.float32)])
 
 
-def test_yolo_from_results_empty(running_img):
+def test_yolo_box_from_results_empty(running_img):
     result = Results(
         orig_img=running_img,
         path="running.jpeg",
@@ -47,7 +47,7 @@ def test_yolo_from_results_empty(running_img):
         boxes=torch.empty((0, 6)),
     )
 
-    model = Yolo.from_yolo_results([result])
+    model = YoloBox.from_yolo_results([result])
     assert model.model_dump() == {
         "cls": [],
         "name": [],
@@ -57,7 +57,7 @@ def test_yolo_from_results_empty(running_img):
     }
 
 
-def test_yolo_from_results(running_img):
+def test_yolo_box_from_results(running_img):
     result = Results(
         orig_img=running_img,
         path="running.jpeg",
@@ -70,7 +70,7 @@ def test_yolo_from_results(running_img):
         ),
     )
 
-    model = Yolo.from_yolo_results([result])
+    model = YoloBox.from_yolo_results([result])
     assert model.img_size == (200, 300)
 
     model_json = model.model_dump()

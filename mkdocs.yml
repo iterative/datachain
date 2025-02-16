@@ -80,6 +80,7 @@ nav:
               - BBox: references/data-types/bbox.md
               - Pose: references/data-types/pose.md
               - Segment: references/data-types/segment.md
+              - Yolo: references/data-types/yolo.md
           - UDF: references/udf.md
           - Torch: references/torch.md
           - Functions: references/func.md
