@@ -143,3 +143,6 @@ cython_debug/
 
 # pt files produced by ultralytics examples
 *.pt
+
+# OS X
+.DS_Store
