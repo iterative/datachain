@@ -481,17 +481,48 @@ class DataChain:
         version: Optional[int] = None,
         session: Optional[Session] = None,
         settings: Optional[dict] = None,
-        fallback_to_remote: bool = True,
+        fallback_to_studio: bool = True,
     ) -> "Self":
         """Get data from a saved Dataset. It returns the chain itself.
+        If dataset or version is not found locally, it will try to pull it from Studio.
 
         Parameters:
             name : dataset name
             version : dataset version
+            session : Session to use for the chain.
+            settings : Settings to use for the chain.
+            fallback_to_studio : Try to pull dataset from Studio if not found locally.
+                Default is True.
 
         Example:
             ```py
             chain = DataChain.from_dataset("my_cats")
+            ```
+
+            ```py
+            chain = DataChain.from_dataset("my_cats", fallback_to_studio=False)
+            ```
+
+            ```py
+            chain = DataChain.from_dataset("my_cats", version=1)
+            ```
+
+            ```py
+            session = Session.get(client_config={"aws_endpoint_url": "<minio-url>"})
+            settings = {
+                "cache": True,
+                "parallel": 4,
+                "workers": 4,
+                "min_task_size": 1000,
+                "prefetch": 10,
+            }
+            chain = DataChain.from_dataset(
+                name="my_cats",
+                version=1,
+                session=session,
+                settings=settings,
+                fallback_to_studio=True,
+            )
             ```
         """
         query = DatasetQuery(
@@ -499,7 +530,7 @@ class DataChain:
             version=version,
             session=session,
             indexing_column_types=File._datachain_column_types,
-            fallback_to_remote=fallback_to_remote,
+            fallback_to_studio=fallback_to_studio,
         )
         telemetry.send_event_once("class", "datachain_init", name=name, version=version)
         if settings:
