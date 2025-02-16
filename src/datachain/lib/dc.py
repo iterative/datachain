@@ -2444,7 +2444,7 @@ class DataChain:
         self._setup = self._setup | kwargs
         return self
 
-    def export_files(
+    def to_storage(
         self,
         output: str,
         signal: str = "file",
