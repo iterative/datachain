@@ -1,3 +1,4 @@
+import pytest
 from numpy.testing import assert_array_almost_equal
 
 from datachain.model import BBox, OBBox
@@ -9,6 +10,34 @@ def test_bbox():
         "title": "Object",
         "coords": [10.0, 20.0, 90.0, 80.0],
     }
+
+
+@pytest.mark.parametrize(
+    "coords,result",
+    [
+        ((10, 20, 90, 80), [10.0, 20.0, 90.0, 80.0]),
+        ([10, 20, 90, 80], [10.0, 20.0, 90.0, 80.0]),
+        ([0.1, 0.2, 0.9, 0.8], [0.1, 0.2, 0.9, 0.8]),
+    ],
+)
+def test_bbox_from_list(coords, result):
+    bbox = BBox.from_list(coords)
+    assert bbox.model_dump() == {"title": "", "coords": result}
+
+
+@pytest.mark.parametrize(
+    "coords",
+    [
+        None,
+        [],
+        [10, 20, 90],
+        [10, 20, 90, 80, 100],
+        [10, 20, "90", 80],
+    ],
+)
+def test_bbox_from_list_error(coords):
+    with pytest.raises(ValueError):
+        BBox.from_list(coords)
 
 
 def test_bbox_convert():

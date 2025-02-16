@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from warnings import warn
 
 from pydantic import Field
 
@@ -20,6 +21,29 @@ class BBox(DataModel):
 
     title: str = Field(default="")
     coords: list[float] = Field(default=[])
+
+    @staticmethod
+    def from_list(coords: Sequence[float], title: str = "") -> "BBox":
+        """
+        Create a bounding box from a list of coordinates.
+
+        Args:
+            coords (list[float]): The bounding box coordinates.
+            title (str): The title of the bounding box.
+
+        Returns:
+            BBox: The bounding box instance.
+        """
+        warn(
+            "This method is deprecated. Use `BBox(title, coords)` instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        if not isinstance(coords, (list, tuple)) or len(coords) != 4:
+            raise ValueError("Bounding box must be a list of 4 coordinates.")
+        if not all(isinstance(value, (int, float)) for value in coords):
+            raise ValueError("Bounding box coordinates must be floats or integers.")
+        return BBox(title=title, coords=list(map(float, coords)))
 
     def convert(
         self,
