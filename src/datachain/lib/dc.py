@@ -1001,7 +1001,7 @@ class DataChain:
     def select(self, *args: str, _sys: bool = True) -> "Self":
         """Select only a specified set of signals."""
         new_schema = self.signals_schema.resolve(*args)
-        if _sys:
+        if self._sys and _sys:
             new_schema = SignalSchema({"sys": Sys}) | new_schema
         columns = new_schema.db_signals()
         return self._evolve(

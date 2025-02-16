@@ -770,6 +770,25 @@ def test_collect_nested_feature(test_session):
         assert nested == features_nested[n]
 
 
+def test_select_no_sys_id(test_session):
+    from datachain import func
+
+    dc = (
+        DataChain.from_values(
+            name=["a", "a", "b", "b", "b", "c"],
+            val=[1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .group_by(cnt=func.count(), partition_by="name")
+        .select("name", "cnt")
+    )
+
+    assert dc.to_records() == [
+        {"name": "a", "cnt": 2},
+        {"name": "b", "cnt": 3},
+        {"name": "c", "cnt": 1},
+    ]
+
+
 def test_select_feature(test_session):
     dc = DataChain.from_values(my_n=features_nested, session=test_session)
     dc_ordered = dc.order_by("my_n.fr.nnn", "my_n.fr.count")
