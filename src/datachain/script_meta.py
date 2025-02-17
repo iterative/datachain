@@ -2,7 +2,12 @@ import re
 from dataclasses import dataclass
 from typing import Any, Optional
 
-import tomli
+try:
+    import tomllib
+except ModuleNotFoundError:
+    # tomllib is in standard library from python 3.11 so for earlier versions
+    # we need tomli
+    import tomli as tomllib  # type: ignore[no-redef]
 
 
 class ScriptMetaParsingError(Exception):
@@ -90,7 +95,7 @@ class ScriptMeta:
                 line[2:] if line.startswith("# ") else line[1:]
                 for line in matches[0].group("content").splitlines(keepends=True)
             )
-            return tomli.loads(content)
+            return tomllib.loads(content)
         return None
 
     @staticmethod

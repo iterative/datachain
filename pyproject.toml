@@ -52,7 +52,7 @@ dependencies = [
   "dvc-studio-client>=0.21,<1",
   "tabulate",
   "websockets",
-  "tomli"
+  "tomli ; python_version < 3.11"
 ]
 
 [project.optional-dependencies]
