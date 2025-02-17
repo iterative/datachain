@@ -71,8 +71,8 @@ class FileExporter(NodesThreadPool):
     def do_task(self, file):
         file.export(
             self.output, self.placement, self.use_cache, link_type=self.link_type
-        )  # type: ignore[union-attr]
-        self.increase_counter(1)  # type: ignore [arg-type]
+        )
+        self.increase_counter(1)
 
 
 class VFileError(DataChainError):
