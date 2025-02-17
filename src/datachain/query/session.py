@@ -158,8 +158,8 @@ class Session:
 
         if client_config and session.catalog.client_config != client_config:
             session = Session(
-                name="session_" + uuid4().hex[:4],
-                catalog=catalog,
+                "session" + uuid4().hex[:4],
+                catalog,
                 client_config=client_config,
                 in_memory=in_memory,
             )
