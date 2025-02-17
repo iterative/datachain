@@ -448,7 +448,8 @@ class DataChain:
         """
         file_type = get_file_type(type)
 
-        client_config = {"anon": True} if anon else client_config
+        if anon:
+            client_config = (client_config or {}) | {"anon": True}
         session = Session.get(session, client_config=client_config, in_memory=in_memory)
         cache = session.catalog.cache
         client_config = session.catalog.client_config
