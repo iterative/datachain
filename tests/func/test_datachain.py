@@ -310,7 +310,7 @@ def test_to_storage(
             tmp_dir / "output",
             placement=placement,
             use_cache=use_cache,
-            prefetch=prefetch,
+            parallel=prefetch,
         )
         df.map(
             res=lambda file: file.export(
@@ -318,7 +318,7 @@ def test_to_storage(
             )
         ).exec()
     else:
-        df.to_storage(tmp_dir / "output", placement=placement, prefetch=prefetch)
+        df.to_storage(tmp_dir / "output", placement=placement, parallel=prefetch)
 
     expected = {
         "description": "Cats and Dogs",

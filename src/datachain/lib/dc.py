@@ -68,6 +68,54 @@ UDFObjT = TypeVar("UDFObjT", bound=UDFBase)
 
 DEFAULT_PARQUET_CHUNK_SIZE = 100_000
 
+from datachain.nodes_thread_pool import NodesThreadPool
+from tqdm import tqdm
+
+
+class FileExporter(NodesThreadPool):
+    def __init__(
+        self,
+        output: str,
+        placement: FileExportPlacement,
+        use_cache: bool,
+        link_type: Literal["copy", "symlink"],
+        num_files: int,
+        max_threads: int = 1,
+    ):
+        super().__init__(max_threads)
+        '''
+        self.progress_bar = tqdm(
+            desc=f"Exporting files to {output}: ",
+            unit=" files",
+            unit_scale=True,
+            unit_divisor=1000,
+            total=num_files,  # type: ignore [union-attr]
+            leave=False,
+        )
+        '''
+        self.output = output
+        self.placement = placement
+        self.use_cache = use_cache
+        self.link_type = link_type
+
+    def done_task(self, done):
+        for task in done:
+            task.result()
+
+    def do_task(self, file):
+        file.export(
+            self.output, self.placement, self.use_cache, link_type=self.link_type
+        )  # type: ignore[union-attr]
+        '''
+        for file in files:
+            file.export(
+                self.output, self.placement, self.use_cache, link_type=self.link_type
+            )  # type: ignore[union-attr]
+        '''
+        # self.increase_counter(1)  # type: ignore [arg-type]
+        # sometimes progress bar doesn't get updated so manually updating it
+        # self.update_progress_bar(self.progress_bar)
+
 
 def resolve_columns(
     method: "Callable[Concatenate[D, P], D]",
@@ -2482,9 +2530,10 @@ class DataChain:
         placement: FileExportPlacement = "fullpath",
         use_cache: bool = True,
         link_type: Literal["copy", "symlink"] = "copy",
-        prefetch: Optional[int] = None,
+        parallel: Optional[int] = None,
     ) -> None:
-        """Export files from a specified signal to a directory.
+        """Export files from a specified signal to a directory. Files can be
+        exported to a local or cloud directory.
 
         Args:
             output: Path to the target directory for exporting files.
@@ -2497,6 +2546,9 @@ class DataChain:
             prefetch: number of workers to use for downloading files in advance.
                       This is enabled by default and uses 2 workers.
                       To disable prefetching, set it to 0.
+            parallel : number of workers for exporting in parallel.
+                By default it uses 2 workers.
+                To disable parallel exporting, set it to 0.
 
         Example:
             Cross cloud transfer
@@ -2511,12 +2563,39 @@ class DataChain:
         ):
             raise ValueError("Files with the same name found")
 
-        self.settings(cache=use_cache, prefetch=prefetch).map(
+        progress_bar = tqdm(
+            desc=f"Exporting files to {output}: ",
+            unit=" files",
+            unit_scale=True,
+            unit_divisor=10,
+            total=self.count(),  # type: ignore [union-attr]
+            leave=False,
+        )
+        file_exporter = FileExporter(
+            output,
+            placement,
+            use_cache,
+            link_type,
+            self.count(),
+        )
+        try:
+            file_exporter.run(
+                self.collect(signal), progress_bar
+            )
+        except:
+            print("Error while exporting files")
+            raise
+        '''
+        if parallel == 0:
+            for file in self.collect(signal):
+                file.export(output, placement, use_cache, link_type=link_type)  # type: ignore[union-attr]
+        self.settings(cache=use_cache, prefetch=parallel).map(
             res=lambda file: file.export(
                 output, placement, use_cache, link_type=link_type
             ),
             params=[signal],
         ).exec()
+        '''
 
     def shuffle(self) -> "Self":
         """Shuffle the rows of the chain deterministically."""
