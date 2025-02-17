@@ -61,5 +61,8 @@ def test_cross_cloud_transfer(
 
     finally:
         # Cleanup
-        azure_client.fs.rm(source_dir, recursive=True)
-        gcloud_client.fs.rm(dest_dir, recursive=True)
+        try:
+            azure_client.fs.rm(source_dir, recursive=True)
+            gcloud_client.fs.rm(dest_dir, recursive=True)
+        except FileNotFoundError:
+            pass
