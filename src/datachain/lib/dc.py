@@ -2444,7 +2444,7 @@ class DataChain:
         self._setup = self._setup | kwargs
         return self
 
-    def export_files(
+    def to_storage(
         self,
         output: str,
         signal: str = "file",
@@ -2462,6 +2462,13 @@ class DataChain:
             use_cache: If `True`, cache the files before exporting.
             link_type: Method to use for exporting files.
                 Falls back to `'copy'` if symlinking fails.
+
+        Example:
+            Cross cloud transfer
+            ```py
+            ds = DataChain.from_storage("s3://mybucket")
+            ds.to_storage("gs://mybucket", placement="filename")
+            ```
         """
         if placement == "filename" and (
             self._query.distinct(pathfunc.name(C(f"{signal}__path"))).count()
