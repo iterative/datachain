@@ -291,7 +291,7 @@ def test_read_file(cloud_test_catalog, use_cache):
 @pytest.mark.parametrize("use_map", [True, False])
 @pytest.mark.parametrize("use_cache", [True, False])
 @pytest.mark.parametrize("file_type", ["", "binary", "text"])
-@pytest.mark.parametrize("prefetch", [0, 2])
+@pytest.mark.parametrize("num_workers", [0, 2])
 @pytest.mark.parametrize("cloud_type", ["file"], indirect=True)
 def test_to_storage(
     tmp_dir,
@@ -301,7 +301,7 @@ def test_to_storage(
     use_map,
     use_cache,
     file_type,
-    prefetch,
+    num_workers,
 ):
     ctc = cloud_test_catalog
     df = DataChain.from_storage(ctc.src_uri, type=file_type, session=test_session)
@@ -310,7 +310,7 @@ def test_to_storage(
             tmp_dir / "output",
             placement=placement,
             use_cache=use_cache,
-            parallel=prefetch,
+            num_workers=num_workers,
         )
         df.map(
             res=lambda file: file.export(
@@ -318,7 +318,7 @@ def test_to_storage(
             )
         ).exec()
     else:
-        df.to_storage(tmp_dir / "output", placement=placement, parallel=prefetch)
+        df.to_storage(tmp_dir / "output", placement=placement, num_workers=num_workers)
 
     expected = {
         "description": "Cats and Dogs",
