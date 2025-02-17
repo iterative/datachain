@@ -139,21 +139,33 @@ class Session:
 
         # Access the active (most recent) context from the stack
         if cls.SESSION_CONTEXTS:
-            return cls.SESSION_CONTEXTS[-1]
+            session = cls.SESSION_CONTEXTS[-1]
 
-        if cls.GLOBAL_SESSION_CTX is None:
+        elif cls.GLOBAL_SESSION_CTX is None:
             cls.GLOBAL_SESSION_CTX = Session(
                 cls.GLOBAL_SESSION_NAME,
                 catalog,
                 client_config=client_config,
                 in_memory=in_memory,
             )
+            session = cls.GLOBAL_SESSION_CTX
 
             atexit.register(cls._global_cleanup)
             cls.ORIGINAL_EXCEPT_HOOK = sys.excepthook
             sys.excepthook = cls.except_hook
+        else:
+            session = cls.GLOBAL_SESSION_CTX
 
-        return cls.GLOBAL_SESSION_CTX
+        if client_config and session.catalog.client_config != client_config:
+            session = Session(
+                name="session_" + uuid4().hex[:4],
+                catalog=catalog,
+                client_config=client_config,
+                in_memory=in_memory,
+            )
+            session.__enter__()
+
+        return session
 
     @staticmethod
     def except_hook(exc_type, exc_value, exc_traceback):
