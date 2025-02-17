@@ -50,16 +50,18 @@ def test_upload(cloud_test_catalog):
 
     src_uri = ctc.src_uri
     filename = "image_1.jpg"
-    source = f"{src_uri}/upload-test-images"
+    dest = f"{src_uri}/upload-test-images"
     catalog = ctc.catalog
 
     img_bytes = b"bytes"
 
-    f = File.upload(img_bytes, f"{source}/{filename}", catalog)
-
-    assert f.path == filename
-    assert f.source == source
-    assert f.read() == img_bytes
+    f = File.upload(img_bytes, f"{dest}/{filename}", catalog)
 
     client = catalog.get_client(src_uri)
-    client.fs.rm(source, recursive=True)
+    source, rel_path = client.split_url(f"{dest}/{filename}")
+
+    assert f.path == rel_path
+    assert f.source == client.get_uri(source)
+    assert f.read() == img_bytes
+
+    client.fs.rm(dest, recursive=True)
