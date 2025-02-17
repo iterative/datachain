@@ -51,7 +51,7 @@ def test_cross_cloud_transfer(
 
         # Perform cross-cloud transfer
         combined_config = azure_server.client_config | gcloud_server.client_config
-        with Session("testSession", client_config=combined_config, in_memory=True):
+        with Session("testSession", client_config=combined_config):
             datachain = DataChain.from_storage(source_dir)
             datachain.to_storage(dest_dir, placement="filename")
 
