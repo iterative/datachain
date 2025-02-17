@@ -17,6 +17,7 @@ from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
 
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
+from fsspec.utils import stringify_path
 from PIL import Image as PilImage
 from pydantic import Field, field_validator
 
@@ -122,7 +123,21 @@ class VFileRegistry:
 
 
 class File(DataModel):
-    """`DataModel` for reading binary files."""
+    """
+    `DataModel` for reading binary files.
+
+    Attributes:
+        source (str): The source of the file (e.g., 's3://bucket-name/').
+        path (str): The path to the file (e.g., 'path/to/file.txt').
+        size (int): The size of the file in bytes. Defaults to 0.
+        version (str): The version of the file. Defaults to an empty string.
+        etag (str): The ETag of the file. Defaults to an empty string.
+        is_latest (bool): Whether the file is the latest version. Defaults to `True`.
+        last_modified (datetime): The last modified timestamp of the file.
+            Defaults to Unix epoch (`1970-01-01T00:00:00`).
+        location (dict | list[dict], optional): The location of the file.
+            Defaults to `None`.
+    """
 
     source: str = Field(default="")
     path: str
@@ -200,10 +215,13 @@ class File(DataModel):
 
             catalog = get_catalog()
 
-        parent, name = posixpath.split(path)
+        from datachain.client.fsspec import Client
 
-        client = catalog.get_client(parent)
-        file = client.upload(data, name)
+        client_cls = Client.get_implementation(path)
+        source, rel_path = client_cls.split_url(path)
+
+        client = catalog.get_client(client_cls.get_uri(source))
+        file = client.upload(data, rel_path)
         if not isinstance(file, cls):
             file = cls(**file.model_dump())
         file._set_stream(catalog)
@@ -253,8 +271,9 @@ class File(DataModel):
 
     def save(self, destination: str):
         """Writes it's content to destination"""
-        with open(destination, mode="wb") as f:
-            f.write(self.read())
+        destination = stringify_path(destination)
+        client: Client = self._catalog.get_client(str(destination))
+        client.upload(self.read(), str(destination))
 
     def _symlink_to(self, destination: str):
         if self.location:
@@ -268,6 +287,7 @@ class File(DataModel):
             source = self.get_path()
         else:
             raise OSError(errno.EXDEV, "can't link across filesystems")
+
         return os.symlink(source, destination)
 
     def export(
@@ -282,7 +302,8 @@ class File(DataModel):
             self._caching_enabled = use_cache
         dst = self.get_destination_path(output, placement)
         dst_dir = os.path.dirname(dst)
-        os.makedirs(dst_dir, exist_ok=True)
+        client: Client = self._catalog.get_client(dst_dir)
+        client.fs.makedirs(dst_dir, exist_ok=True)
 
         if link_type == "symlink":
             try:
@@ -479,7 +500,10 @@ class TextFile(File):
 
     def save(self, destination: str):
         """Writes it's content to destination"""
-        with open(destination, mode="w") as f:
+        destination = stringify_path(destination)
+
+        client: Client = self._catalog.get_client(destination)
+        with client.fs.open(destination, mode="w") as f:
             f.write(self.read_text())
 
 
@@ -493,7 +517,11 @@ class ImageFile(File):
 
     def save(self, destination: str):
         """Writes it's content to destination"""
-        self.read().save(destination)
+        destination = stringify_path(destination)
+
+        client: Client = self._catalog.get_client(destination)
+        with client.fs.open(destination, mode="wb") as f:
+            self.read().save(f)
 
 
 class Image(DataModel):
