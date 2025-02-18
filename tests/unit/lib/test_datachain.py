@@ -779,6 +779,7 @@ def test_select_no_sys_id(test_session):
             val=[1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
         )
         .group_by(cnt=func.count(), partition_by="name")
+        .order_by("name")
         .select("name", "cnt")
     )
 
