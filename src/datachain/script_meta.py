@@ -41,6 +41,14 @@ class ScriptMeta:
         # min_length_sec = 1
         # cache = false
         #
+        # [tools.datachain.inputs]
+        # threshold = 0.5
+        # start_ds_name = "ds://start"
+        #
+        # [tools.datachain.outputs]
+        # result_dataset = "ds://res"
+        # result_dir = "/temp"
+        #
         # ///
 
         import sys
@@ -55,6 +63,8 @@ class ScriptMeta:
     dependencies: list[str]
     attachments: dict[str, str]
     params: dict[str, Any]
+    inputs: dict[str, Any]
+    outputs: dict[str, Any]
     num_workers: Optional[int] = None
 
     def __init__(
@@ -63,16 +73,26 @@ class ScriptMeta:
         dependencies: Optional[list[str]] = None,
         attachments: Optional[dict[str, str]] = None,
         params: Optional[dict[str, Any]] = None,
+        inputs: Optional[dict[str, Any]] = None,
+        outputs: Optional[dict[str, Any]] = None,
         num_workers: Optional[int] = None,
     ):
         self.python_version = python_version
         self.dependencies = dependencies or []
         self.attachments = attachments or {}
         self.params = params or {}
+        self.inputs = inputs or {}
+        self.outputs = outputs or {}
         self.num_workers = num_workers
 
     def get_param(self, name: str) -> Any:
         return self.params.get(name)
+
+    def get_input(self, name: str) -> Any:
+        return self.inputs.get(name)
+
+    def get_output(self, name: str) -> Any:
+        return self.outputs.get(name)
 
     def get_attachment(self, name: str) -> Any:
         return self.attachments.get(name)
@@ -116,6 +136,8 @@ class ScriptMeta:
                 num_workers=custom.get("workers", {}).get("num_workers"),
                 attachments=custom.get("attachments"),
                 params=custom.get("params"),
+                inputs=custom.get("inputs"),
+                outputs=custom.get("outputs"),
             )
         except Exception as e:
             raise ScriptMetaParsingError(f"Error when parsing script meta: {e}") from e
