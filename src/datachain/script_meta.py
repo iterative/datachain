@@ -98,7 +98,7 @@ class ScriptMeta:
         return self.attachments.get(name, default)
 
     @staticmethod
-    def read_inline_meta(script: str) -> Optional[dict]:
+    def read(script: str) -> Optional[dict]:
         """Converts inline script metadata to dict with all found data"""
         regex = (
             r"(?m)^# \/\/\/ (?P<type>[a-zA-Z0-9-]+)[ \t]*$[\r\n|\r|\n]"
@@ -126,7 +126,7 @@ class ScriptMeta:
         found, it returns None
         """
         try:
-            meta = ScriptMeta.read_inline_meta(script)
+            meta = ScriptMeta.read(script)
             if not meta:
                 return None
             custom = meta.get("tools", {}).get("datachain", {})
