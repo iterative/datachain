@@ -411,6 +411,7 @@ class DataChain:
         object_name: str = "file",
         update: bool = False,
         anon: bool = False,
+        client_config: Optional[dict] = None,
     ) -> "Self":
         """Get data from a storage as a list of file with all file attributes.
         It returns the chain itself as usual.
@@ -423,15 +424,32 @@ class DataChain:
             object_name : Created object column name.
             update : force storage reindexing. Default is False.
             anon : If True, we will treat cloud bucket as public one
+            client_config : Optional client configuration for the storage client.
 
         Example:
+            Simple call from s3
             ```py
             chain = DataChain.from_storage("s3://my-bucket/my-dir")
+            ```
+
+            With AWS S3-compatible storage
+            ```py
+            chain = DataChain.from_storage(
+                "s3://my-bucket/my-dir",
+                client_config = {"aws_endpoint_url": "<minio-endpoint-url>"}
+            )
+            ```
+
+            Pass existing session
+            ```py
+            session = Session.get()
+            chain = DataChain.from_storage("s3://my-bucket/my-dir", session=session)
             ```
         """
         file_type = get_file_type(type)
 
-        client_config = {"anon": True} if anon else None
+        if anon:
+            client_config = (client_config or {}) | {"anon": True}
         session = Session.get(session, client_config=client_config, in_memory=in_memory)
         cache = session.catalog.cache
         client_config = session.catalog.client_config

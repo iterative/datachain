@@ -64,6 +64,16 @@ def test_catalog_anon(tmp_dir, catalog, anon):
     assert chain.session.catalog.client_config.get("anon", False) is anon
 
 
+def test_from_storage_client_config(tmp_dir, catalog):
+    dc = DataChain.from_storage(tmp_dir.as_uri())
+    assert dc.session.catalog.client_config == {}  # Default client config is set.
+
+    dc = DataChain.from_storage(tmp_dir.as_uri(), client_config={"anon": True})
+    assert dc.session.catalog.client_config == {
+        "anon": True
+    }  # New client config is set.
+
+
 def test_from_storage(cloud_test_catalog):
     ctc = cloud_test_catalog
     dc = DataChain.from_storage(ctc.src_uri, session=ctc.session)
