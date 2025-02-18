@@ -17,6 +17,7 @@ from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
 
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
+from fsspec.utils import stringify_path
 from PIL import Image as PilImage
 from pydantic import Field, field_validator
 
@@ -270,8 +271,9 @@ class File(DataModel):
 
     def save(self, destination: str):
         """Writes it's content to destination"""
-        with open(destination, mode="wb") as f:
-            f.write(self.read())
+        destination = stringify_path(destination)
+        client: Client = self._catalog.get_client(str(destination))
+        client.upload(self.read(), str(destination))
 
     def _symlink_to(self, destination: str):
         if self.location:
@@ -285,6 +287,7 @@ class File(DataModel):
             source = self.get_path()
         else:
             raise OSError(errno.EXDEV, "can't link across filesystems")
+
         return os.symlink(source, destination)
 
     def export(
@@ -299,7 +302,8 @@ class File(DataModel):
             self._caching_enabled = use_cache
         dst = self.get_destination_path(output, placement)
         dst_dir = os.path.dirname(dst)
-        os.makedirs(dst_dir, exist_ok=True)
+        client: Client = self._catalog.get_client(dst_dir)
+        client.fs.makedirs(dst_dir, exist_ok=True)
 
         if link_type == "symlink":
             try:
@@ -496,7 +500,10 @@ class TextFile(File):
 
     def save(self, destination: str):
         """Writes it's content to destination"""
-        with open(destination, mode="w") as f:
+        destination = stringify_path(destination)
+
+        client: Client = self._catalog.get_client(destination)
+        with client.fs.open(destination, mode="w") as f:
             f.write(self.read_text())
 
 
@@ -510,7 +517,11 @@ class ImageFile(File):
 
     def save(self, destination: str):
         """Writes it's content to destination"""
-        self.read().save(destination)
+        destination = stringify_path(destination)
+
+        client: Client = self._catalog.get_client(destination)
+        with client.fs.open(destination, mode="wb") as f:
+            self.read().save(f)
 
 
 class Image(DataModel):

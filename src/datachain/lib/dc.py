@@ -411,6 +411,7 @@ class DataChain:
         object_name: str = "file",
         update: bool = False,
         anon: bool = False,
+        client_config: Optional[dict] = None,
     ) -> "Self":
         """Get data from a storage as a list of file with all file attributes.
         It returns the chain itself as usual.
@@ -423,15 +424,32 @@ class DataChain:
             object_name : Created object column name.
             update : force storage reindexing. Default is False.
             anon : If True, we will treat cloud bucket as public one
+            client_config : Optional client configuration for the storage client.
 
         Example:
+            Simple call from s3
             ```py
             chain = DataChain.from_storage("s3://my-bucket/my-dir")
+            ```
+
+            With AWS S3-compatible storage
+            ```py
+            chain = DataChain.from_storage(
+                "s3://my-bucket/my-dir",
+                client_config = {"aws_endpoint_url": "<minio-endpoint-url>"}
+            )
+            ```
+
+            Pass existing session
+            ```py
+            session = Session.get()
+            chain = DataChain.from_storage("s3://my-bucket/my-dir", session=session)
             ```
         """
         file_type = get_file_type(type)
 
-        client_config = {"anon": True} if anon else None
+        if anon:
+            client_config = (client_config or {}) | {"anon": True}
         session = Session.get(session, client_config=client_config, in_memory=in_memory)
         cache = session.catalog.cache
         client_config = session.catalog.client_config
@@ -481,17 +499,48 @@ class DataChain:
         version: Optional[int] = None,
         session: Optional[Session] = None,
         settings: Optional[dict] = None,
-        fallback_to_remote: bool = True,
+        fallback_to_studio: bool = True,
     ) -> "Self":
         """Get data from a saved Dataset. It returns the chain itself.
+        If dataset or version is not found locally, it will try to pull it from Studio.
 
         Parameters:
             name : dataset name
             version : dataset version
+            session : Session to use for the chain.
+            settings : Settings to use for the chain.
+            fallback_to_studio : Try to pull dataset from Studio if not found locally.
+                Default is True.
 
         Example:
             ```py
             chain = DataChain.from_dataset("my_cats")
+            ```
+
+            ```py
+            chain = DataChain.from_dataset("my_cats", fallback_to_studio=False)
+            ```
+
+            ```py
+            chain = DataChain.from_dataset("my_cats", version=1)
+            ```
+
+            ```py
+            session = Session.get(client_config={"aws_endpoint_url": "<minio-url>"})
+            settings = {
+                "cache": True,
+                "parallel": 4,
+                "workers": 4,
+                "min_task_size": 1000,
+                "prefetch": 10,
+            }
+            chain = DataChain.from_dataset(
+                name="my_cats",
+                version=1,
+                session=session,
+                settings=settings,
+                fallback_to_studio=True,
+            )
             ```
         """
         query = DatasetQuery(
@@ -499,7 +548,7 @@ class DataChain:
             version=version,
             session=session,
             indexing_column_types=File._datachain_column_types,
-            fallback_to_remote=fallback_to_remote,
+            fallback_to_studio=fallback_to_studio,
         )
         telemetry.send_event_once("class", "datachain_init", name=name, version=version)
         if settings:
@@ -2450,7 +2499,7 @@ class DataChain:
         self._setup = self._setup | kwargs
         return self
 
-    def export_files(
+    def to_storage(
         self,
         output: str,
         signal: str = "file",
@@ -2468,6 +2517,13 @@ class DataChain:
             use_cache: If `True`, cache the files before exporting.
             link_type: Method to use for exporting files.
                 Falls back to `'copy'` if symlinking fails.
+
+        Example:
+            Cross cloud transfer
+            ```py
+            ds = DataChain.from_storage("s3://mybucket")
+            ds.to_storage("gs://mybucket", placement="filename")
+            ```
         """
         if placement == "filename" and (
             self._query.distinct(pathfunc.name(C(f"{signal}__path"))).count()
