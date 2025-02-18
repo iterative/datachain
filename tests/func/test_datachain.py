@@ -1493,9 +1493,7 @@ def test_datachain_save_with_job(test_session, catalog, datachain_job_id):
     assert result_job_id == datachain_job_id
 
 
-@pytest.mark.parametrize("partition_by", ["file_info.path", "file_info__path"])
-@pytest.mark.parametrize("signal_name", ["file.size", "file__size"])
-def test_group_by_signals(cloud_test_catalog, partition_by, signal_name):
+def test_group_by_signals(cloud_test_catalog):
     from datachain import func
 
     session = cloud_test_catalog.session
@@ -1519,15 +1517,32 @@ def test_group_by_signals(cloud_test_catalog, partition_by, signal_name):
         .map(file_info, params=["file"], output={"file_info": FileInfo})
         .group_by(
             cnt=func.count(),
-            sum=func.sum(signal_name),
-            value=func.any_value(signal_name),
-            partition_by=partition_by,
+            sum=func.sum("file.size"),
+            value=func.any_value("file.size"),
+            partition_by="file_info.path",
         )
         .save("my-ds")
     )
 
     assert ds.signals_schema.serialize() == {
-        "file_info__path": "str",
+        "_custom_types": {
+            "FileInfoPartial_v1@v1": {
+                "bases": [
+                    (
+                        "FileInfoPartial_v1",
+                        "datachain.lib.signal_schema",
+                        "FileInfoPartial_v1@v1",
+                    ),
+                    ("DataModel", "datachain.lib.data_model", "DataModel@v1"),
+                    ("BaseModel", "pydantic.main", None),
+                    ("object", "builtins", None),
+                ],
+                "fields": {"path": "str"},
+                "name": "FileInfoPartial_v1@v1",
+                "schema_version": 2,
+            }
+        },
+        "file_info": "FileInfoPartial_v1@v1",
         "cnt": "int",
         "sum": "int",
         "value": "int",
