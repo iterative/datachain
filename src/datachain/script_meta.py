@@ -19,7 +19,7 @@ class ScriptMetaParsingError(Exception):
 class ScriptMeta:
     """
     Class that is parsing inline script metadata to get some basic information for
-    running datachain script like python version, dependencies, files etc.
+    running datachain script like python version, dependencies, attachments etc.
     Inline script metadata must follow the format described in https://packaging.python.org/en/latest/specifications/inline-script-metadata/#inline-script-metadata.
     Example of script with inline metadata:
         # /// script
@@ -33,7 +33,7 @@ class ScriptMeta:
         # [tools.datachain.workers]
         # num_workers = 3
         #
-        # [tools.datachain.files]
+        # [tools.datachain.attachments]
         # image1 = "s3://ldb-public/image1.jpg"
         # file1 = "s3://ldb-public/file.pdf"
         #
@@ -53,7 +53,7 @@ class ScriptMeta:
 
     python_version: Optional[str]
     dependencies: list[str]
-    files: dict[str, str]
+    attachments: dict[str, str]
     params: dict[str, Any]
     num_workers: Optional[int] = None
 
@@ -61,21 +61,21 @@ class ScriptMeta:
         self,
         python_version: Optional[str] = None,
         dependencies: Optional[list[str]] = None,
-        files: Optional[dict[str, str]] = None,
+        attachments: Optional[dict[str, str]] = None,
         params: Optional[dict[str, Any]] = None,
         num_workers: Optional[int] = None,
     ):
         self.python_version = python_version
         self.dependencies = dependencies or []
-        self.files = files or {}
+        self.attachments = attachments or {}
         self.params = params or {}
         self.num_workers = num_workers
 
     def get_param(self, name: str) -> Any:
         return self.params.get(name)
 
-    def get_file(self, name: str) -> Any:
-        return self.files.get(name)
+    def get_attachment(self, name: str) -> Any:
+        return self.attachments.get(name)
 
     @staticmethod
     def read_inline_meta(script: str) -> Optional[dict]:
@@ -114,7 +114,7 @@ class ScriptMeta:
                 python_version=meta.get("requires-python"),
                 dependencies=meta.get("dependencies"),
                 num_workers=custom.get("workers", {}).get("num_workers"),
-                files=custom.get("files"),
+                attachments=custom.get("attachments"),
                 params=custom.get("params"),
             )
         except Exception as e:

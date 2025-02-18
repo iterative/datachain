@@ -16,7 +16,7 @@ def test_parsing_all_fields():
 # [tools.datachain.workers]
 # num_workers = 3
 #
-# [tools.datachain.files]
+# [tools.datachain.attachments]
 # image1 = "s3://ldb-public/image1.jpg"
 # file1 = "s3://ldb-public/file.pdf"
 #
@@ -34,7 +34,7 @@ print(f"Pandas version: {pd.__version__}")
     assert ScriptMeta.parse(script) == ScriptMeta(
         python_version=">=3.12",
         dependencies=["pandas < 2.1.0", "numpy == 1.26.4"],
-        files={
+        attachments={
             "image1": "s3://ldb-public/image1.jpg",
             "file1": "s3://ldb-public/file.pdf",
         },
@@ -81,7 +81,11 @@ print(f"Python version: {sys.version_info}")
 print(f"Pandas version: {pd.__version__}")
 """
     assert ScriptMeta.parse(script) == ScriptMeta(
-        python_version=">=3.12", dependencies=[], files={}, params={}, num_workers=None
+        python_version=">=3.12",
+        dependencies=[],
+        attachments={},
+        params={},
+        num_workers=None,
     )
 
 
