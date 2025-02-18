@@ -1,6 +1,6 @@
 import pytest
 
-from datachain.script_meta import ScriptMeta, ScriptMetaParsingError
+from datachain.script_meta import ScriptConfig, ScriptConfigParsingError
 
 
 def test_parsing_all_fields():
@@ -39,8 +39,8 @@ import pandas as pd
 print(f"Python version: {sys.version_info}")
 print(f"Pandas version: {pd.__version__}")
 """
-    sm = ScriptMeta.parse(script)
-    assert sm == ScriptMeta(
+    sm = ScriptConfig.parse(script)
+    assert sm == ScriptConfig(
         python_version=">=3.12",
         dependencies=["pandas < 2.1.0", "numpy == 1.26.4"],
         attachments={
@@ -64,7 +64,7 @@ print(f"Python version: {sys.version_info}")
 print(f"Pandas version: {pd.__version__}")
 """
 
-    assert ScriptMeta.parse(script) is None
+    assert ScriptConfig.parse(script) is None
 
 
 def test_parsing_empty():
@@ -78,7 +78,7 @@ print(f"Python version: {sys.version_info}")
 print(f"Pandas version: {pd.__version__}")
 """
 
-    assert ScriptMeta.parse(script) is None
+    assert ScriptConfig.parse(script) is None
 
 
 def test_parsing_only_python_version():
@@ -92,7 +92,7 @@ import pandas as pd
 print(f"Python version: {sys.version_info}")
 print(f"Pandas version: {pd.__version__}")
 """
-    assert ScriptMeta.parse(script) == ScriptMeta(
+    assert ScriptConfig.parse(script) == ScriptConfig(
         python_version=">=3.12",
         dependencies=[],
         attachments={},
@@ -112,8 +112,8 @@ import pandas as pd
 print(f"Python version: {sys.version_info}")
 print(f"Pandas version: {pd.__version__}")
 """
-    with pytest.raises(ScriptMetaParsingError) as excinfo:
-        ScriptMeta.parse(script)
+    with pytest.raises(ScriptConfigParsingError) as excinfo:
+        ScriptConfig.parse(script)
     assert str(excinfo.value) == (
         "Error when parsing script meta: Invalid value (at line 1, column 17)"
     )

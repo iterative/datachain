@@ -10,13 +10,13 @@ except ModuleNotFoundError:
     import tomli as tomllib  # type: ignore[no-redef]
 
 
-class ScriptMetaParsingError(Exception):
+class ScriptConfigParsingError(Exception):
     def __init__(self, message):
         super().__init__(message)
 
 
 @dataclass
-class ScriptMeta:
+class ScriptConfig:
     """
     Class that is parsing inline script metadata to get some basic information for
     running datachain script like python version, dependencies, attachments etc.
@@ -119,18 +119,18 @@ class ScriptMeta:
         return None
 
     @staticmethod
-    def parse(script: str) -> Optional["ScriptMeta"]:
+    def parse(script: str) -> Optional["ScriptConfig"]:
         """
         Method that is parsing inline script metadata from datachain script and
-        instantiating ScriptMeta class with found data. If no inline metadata is
+        instantiating ScriptConfig class with found data. If no inline metadata is
         found, it returns None
         """
         try:
-            meta = ScriptMeta.read(script)
+            meta = ScriptConfig.read(script)
             if not meta:
                 return None
             custom = meta.get("tools", {}).get("datachain", {})
-            return ScriptMeta(
+            return ScriptConfig(
                 python_version=meta.get("requires-python"),
                 dependencies=meta.get("dependencies"),
                 num_workers=custom.get("workers", {}).get("num_workers"),
@@ -140,4 +140,6 @@ class ScriptMeta:
                 outputs=custom.get("outputs"),
             )
         except Exception as e:
-            raise ScriptMetaParsingError(f"Error when parsing script meta: {e}") from e
+            raise ScriptConfigParsingError(
+                f"Error when parsing script meta: {e}"
+            ) from e
