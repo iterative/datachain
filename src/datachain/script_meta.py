@@ -85,17 +85,17 @@ class ScriptMeta:
         self.outputs = outputs or {}
         self.num_workers = num_workers
 
-    def get_param(self, name: str) -> Any:
-        return self.params.get(name)
+    def get_param(self, name: str, default: Any) -> Any:
+        return self.params.get(name, default)
 
-    def get_input(self, name: str) -> Any:
-        return self.inputs.get(name)
+    def get_input(self, name: str, default: Any) -> Any:
+        return self.inputs.get(name, default)
 
-    def get_output(self, name: str) -> Any:
-        return self.outputs.get(name)
+    def get_output(self, name: str, default: Any) -> Any:
+        return self.outputs.get(name, default)
 
-    def get_attachment(self, name: str) -> Any:
-        return self.attachments.get(name)
+    def get_attachment(self, name: str, default: Any) -> Any:
+        return self.attachments.get(name, default)
 
     @staticmethod
     def read_inline_meta(script: str) -> Optional[dict]:

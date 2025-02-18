@@ -39,7 +39,8 @@ import pandas as pd
 print(f"Python version: {sys.version_info}")
 print(f"Pandas version: {pd.__version__}")
 """
-    assert ScriptMeta.parse(script) == ScriptMeta(
+    sm = ScriptMeta.parse(script)
+    assert sm == ScriptMeta(
         python_version=">=3.12",
         dependencies=["pandas < 2.1.0", "numpy == 1.26.4"],
         attachments={
@@ -51,6 +52,7 @@ print(f"Pandas version: {pd.__version__}")
         outputs={"result_dataset": "ds://res", "result_dir": "/temp"},
         num_workers=3,
     )
+    assert sm.get_param("non_existing", "default") == "default"
 
 
 def test_parsing_no_metadata():
