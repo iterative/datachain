@@ -1788,3 +1788,44 @@ def test_datachain_functional_after_exceptions(test_session):
     for _ in range(4):
         with pytest.raises(Exception, match="Test Error!"):
             dc.map(res=func).exec()
+
+
+def test_incremental_update(test_session, tmp_dir, tmp_path):
+    ds_name = "incremental_ds"
+    images = [
+        {"name": "img1.jpg", "data": Image.new(mode="RGB", size=(64, 64))},
+        {"name": "img2.jpg", "data": Image.new(mode="RGB", size=(128, 128))},
+    ]
+
+    for img in images:
+        img["data"].save(tmp_path / img["name"])
+
+    DataChain.from_values(
+        file=[
+            ImageFile(path=img["name"], source=f"file://{tmp_path}") for img in images
+        ],
+        session=test_session,
+    ).save(ds_name, incremental=True)
+
+    new_images = [
+        {"name": "img3.jpg", "data": Image.new(mode="RGB", size=(64, 64))},
+        {"name": "img4.jpg", "data": Image.new(mode="RGB", size=(128, 128))},
+    ]
+    for img in new_images:
+        img["data"].save(tmp_path / img["name"])
+
+    images += new_images
+
+    DataChain.from_values(
+        file=[
+            ImageFile(path=img["name"], source=f"file://{tmp_path}") for img in images
+        ],
+        session=test_session,
+    ).save(ds_name, incremental=True)
+
+    for im in dc.collect("file"):
+        print(im.path)
+
+    assert 1 == 2
+
+
