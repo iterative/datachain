@@ -1790,57 +1790,60 @@ def test_datachain_functional_after_exceptions(test_session):
             dc.map(res=func).exec()
 
 
-def test_incremental_update(test_session, tmp_dir, tmp_path):
+def test_incremental_update_from_dataset(test_session, tmp_dir, tmp_path):
     starting_ds_name = "starting_ds"
     ds_name = "incremental_ds"
+
     images = [
         {"name": "img1.jpg", "data": Image.new(mode="RGB", size=(64, 64))},
         {"name": "img2.jpg", "data": Image.new(mode="RGB", size=(128, 128))},
-    ]
-
-    for img in images:
-        img["data"].save(tmp_path / img["name"])
-
-    DataChain.from_values(
-        file=[
-            ImageFile(path=img["name"], source=f"file://{tmp_path}") for img in images
-        ],
-        session=test_session,
-    ).save(starting_ds_name)
-
-    DataChain.from_dataset(
-        starting_ds_name, session=test_session,
-    ).save(ds_name, incremental=True)
-
-    new_images = [
         {"name": "img3.jpg", "data": Image.new(mode="RGB", size=(64, 64))},
         {"name": "img4.jpg", "data": Image.new(mode="RGB", size=(128, 128))},
     ]
-    for img in new_images:
-        img["data"].save(tmp_path / img["name"])
 
-    images += new_images
-    DataChain.from_values(
-        file=[
-            ImageFile(path=img["name"], source=f"file://{tmp_path}") for img in images
-        ],
-        session=test_session,
-    ).save(starting_ds_name)
+    def create_image_dataset(ds_name, images):
+        DataChain.from_values(
+            file=[
+                ImageFile(path=img["name"], source=f"file://{tmp_path}")
+                for img in images
+            ],
+            session=test_session,
+        ).save(ds_name)
 
+    # first version of starting dataset
+    create_image_dataset(starting_ds_name, images[:2])
+
+    # first version of incremental dataset
     DataChain.from_dataset(
-        starting_ds_name, session=test_session,
+        starting_ds_name,
+        session=test_session,
     ).save(ds_name, incremental=True)
 
-    dc = DataChain.from_dataset(ds_name)
+    # second version of starting dataset
+    create_image_dataset(starting_ds_name, images[2:])
 
-    print("Images in version 1 are")
-    for im in DataChain.from_dataset(ds_name, version=1).collect("file"):
-        print(im.path)
+    # second version of incremental dataset
+    DataChain.from_dataset(
+        starting_ds_name,
+        session=test_session,
+    ).save(ds_name, incremental=True)
 
-    print("Images in version 2 are")
-    for im in DataChain.from_dataset(ds_name, version=2).collect("file"):
-        print(im.path)
+    assert list(
+        DataChain.from_dataset(ds_name, version=1)
+        .order_by("file.path")
+        .collect("file.path")
+    ) == [
+        "img1.jpg",
+        "img2.jpg",
+    ]
 
-    assert 1 == 2
-
-
+    assert list(
+        DataChain.from_dataset(ds_name, version=2)
+        .order_by("file.path")
+        .collect("file.path")
+    ) == [
+        "img1.jpg",
+        "img2.jpg",
+        "img3.jpg",
+        "img4.jpg",
+    ]
