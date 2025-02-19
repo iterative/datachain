@@ -2521,9 +2521,6 @@ class DataChain:
             use_cache: If `True`, cache the files before exporting.
             link_type: Method to use for exporting files.
                 Falls back to `'copy'` if symlinking fails.
-            prefetch: number of workers to use for downloading files in advance.
-                      This is enabled by default and uses 2 workers.
-                      To disable prefetching, set it to 0.
             num_workers : number of workers to use for exporting files.
                 By default it uses 5 workers.
 
