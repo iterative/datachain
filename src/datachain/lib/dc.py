@@ -2542,7 +2542,7 @@ class DataChain:
             unit=" files",
             unit_scale=True,
             unit_divisor=10,
-            total=self.count(),  # type: ignore [union-attr]
+            total=self.count(),
             leave=False,
         )
         file_exporter = FileExporter(
