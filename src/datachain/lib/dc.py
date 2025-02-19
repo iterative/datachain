@@ -777,6 +777,8 @@ class DataChain:
             try:
                 incremental_ds = self.session.catalog.get_dataset(name)
                 latest_version = incremental_ds.latest_version
+                print(f"Starting ds is {self._query.starting_step.dataset_name}")
+                print(f"Starting ds version is {self._query.starting_step.dataset_version}")
                 diff = (
                     DataChain.from_dataset(
                         self._query.starting_step.dataset_name,
@@ -797,7 +799,7 @@ class DataChain:
                     )
                 )
             except DatasetNotFoundError:
-                # dataset still doesn't exists so we continue with normal cration
+                # dataset doesn't exist yet so we can continue with normal cration
                 pass
 
         return self._evolve(

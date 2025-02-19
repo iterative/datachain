@@ -1791,6 +1791,7 @@ def test_datachain_functional_after_exceptions(test_session):
 
 
 def test_incremental_update(test_session, tmp_dir, tmp_path):
+    starting_ds_name = "starting_ds"
     ds_name = "incremental_ds"
     images = [
         {"name": "img1.jpg", "data": Image.new(mode="RGB", size=(64, 64))},
@@ -1805,6 +1806,10 @@ def test_incremental_update(test_session, tmp_dir, tmp_path):
             ImageFile(path=img["name"], source=f"file://{tmp_path}") for img in images
         ],
         session=test_session,
+    ).save(starting_ds_name)
+
+    DataChain.from_dataset(
+        starting_ds_name, session=test_session,
     ).save(ds_name, incremental=True)
 
     new_images = [
@@ -1815,15 +1820,25 @@ def test_incremental_update(test_session, tmp_dir, tmp_path):
         img["data"].save(tmp_path / img["name"])
 
     images += new_images
-
     DataChain.from_values(
         file=[
             ImageFile(path=img["name"], source=f"file://{tmp_path}") for img in images
         ],
         session=test_session,
+    ).save(starting_ds_name)
+
+    DataChain.from_dataset(
+        starting_ds_name, session=test_session,
     ).save(ds_name, incremental=True)
 
-    for im in dc.collect("file"):
+    dc = DataChain.from_dataset(ds_name)
+
+    print("Images in version 1 are")
+    for im in DataChain.from_dataset(ds_name, version=1).collect("file"):
+        print(im.path)
+
+    print("Images in version 2 are")
+    for im in DataChain.from_dataset(ds_name, version=2).collect("file"):
         print(im.path)
 
     assert 1 == 2
