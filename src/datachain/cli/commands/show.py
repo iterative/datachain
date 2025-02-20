@@ -1,6 +1,8 @@
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Optional
 
+from datachain.lib.signal_schema import SignalSchema
+
 if TYPE_CHECKING:
     from datachain.catalog import Catalog
 
@@ -22,6 +24,7 @@ def show(
 
     dataset = catalog.get_dataset(name)
     dataset_version = dataset.get_version(version or dataset.latest_version)
+    hidden_fields = SignalSchema.get_hidden_fields(dataset_version.feature_schema)
 
     query = (
         DatasetQuery(name=name, version=version, catalog=catalog)
@@ -30,7 +33,8 @@ def show(
         .offset(offset)
     )
     records = query.to_db_records()
-    show_records(records, collapse_columns=not no_collapse)
+    show_records(records, collapse_columns=not no_collapse, hidden_fields=hidden_fields)
+
     if schema and dataset_version.feature_schema:
         print("\nSchema:")
         session = Session.get(catalog=catalog)
