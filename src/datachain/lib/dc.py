@@ -23,6 +23,7 @@ import sqlalchemy
 from pydantic import BaseModel
 from sqlalchemy.sql.functions import GenericFunction
 from sqlalchemy.sql.sqltypes import NullType
+from tqdm import tqdm
 
 from datachain.dataset import DatasetRecord
 from datachain.func import literal
@@ -32,7 +33,14 @@ from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import DataModel, DataType, DataValue, dict_to_data_model
 from datachain.lib.dataset_info import DatasetInfo
-from datachain.lib.file import ArrowRow, File, FileType, get_file_type
+from datachain.lib.file import (
+    EXPORT_FILES_MAX_THREADS,
+    ArrowRow,
+    File,
+    FileExporter,
+    FileType,
+    get_file_type,
+)
 from datachain.lib.file import ExportPlacement as FileExportPlacement
 from datachain.lib.listing import get_file_info, get_listing, list_bucket, ls
 from datachain.lib.listing_info import ListingInfo
@@ -2500,8 +2508,10 @@ class DataChain:
         placement: FileExportPlacement = "fullpath",
         use_cache: bool = True,
         link_type: Literal["copy", "symlink"] = "copy",
+        num_workers: Optional[int] = EXPORT_FILES_MAX_THREADS,
     ) -> None:
-        """Export files from a specified signal to a directory.
+        """Export files from a specified signal to a directory. Files can be
+        exported to a local or cloud directory.
 
         Args:
             output: Path to the target directory for exporting files.
@@ -2511,6 +2521,8 @@ class DataChain:
             use_cache: If `True`, cache the files before exporting.
             link_type: Method to use for exporting files.
                 Falls back to `'copy'` if symlinking fails.
+            num_workers : number of workers to use for exporting files.
+                By default it uses 5 workers.
 
         Example:
             Cross cloud transfer
@@ -2525,8 +2537,22 @@ class DataChain:
         ):
             raise ValueError("Files with the same name found")
 
-        for file in self.collect(signal):
-            file.export(output, placement, use_cache, link_type=link_type)  # type: ignore[union-attr]
+        progress_bar = tqdm(
+            desc=f"Exporting files to {output}: ",
+            unit=" files",
+            unit_scale=True,
+            unit_divisor=10,
+            total=self.count(),
+            leave=False,
+        )
+        file_exporter = FileExporter(
+            output,
+            placement,
+            use_cache,
+            link_type,
+            max_threads=num_workers or 1,
+        )
+        file_exporter.run(self.collect(signal), progress_bar)
 
     def shuffle(self) -> "Self":
         """Shuffle the rows of the chain deterministically."""
