@@ -135,7 +135,9 @@ class ScriptConfig:
                 dependencies=meta.get("dependencies"),
                 num_workers=custom.get("workers", {}).get("num_workers"),
                 attachments=custom.get("attachments"),
-                params=custom.get("params"),
+                params={k: str(v) for k, v in custom.get("params").items()}
+                if custom.get("params")
+                else None,
                 inputs=custom.get("inputs"),
                 outputs=custom.get("outputs"),
             )

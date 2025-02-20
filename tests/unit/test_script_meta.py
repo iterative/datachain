@@ -47,7 +47,7 @@ print(f"Pandas version: {pd.__version__}")
             "image1": "s3://ldb-public/image1.jpg",
             "file1": "s3://ldb-public/file.pdf",
         },
-        params={"min_length_sec": 1, "cache": False},
+        params={"min_length_sec": "1", "cache": "False"},
         inputs={"threshold": 0.5, "start_ds_name": "ds://start"},
         outputs={"result_dataset": "ds://res", "result_dir": "/temp"},
         num_workers=3,
