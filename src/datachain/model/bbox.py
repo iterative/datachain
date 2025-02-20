@@ -1,102 +1,84 @@
+from collections.abc import Sequence
+from warnings import warn
+
 from pydantic import Field
 
 from datachain.lib.data_model import DataModel
+from datachain.model.utils import BBoxType, convert_bbox
 
 
 class BBox(DataModel):
     """
     A data model for representing bounding box.
 
+    Use `datachain.model.Yolo` or for YOLO-specific bounding boxes.
+    This model is intended for general bounding box representations or other formats.
+
     Attributes:
         title (str): The title of the bounding box.
-        coords (list[int]): The coordinates of the bounding box.
-
-    The bounding box is defined by two points:
-        - (x1, y1): The top-left corner of the box.
-        - (x2, y2): The bottom-right corner of the box.
+        coords (list[float]): The coordinates of the bounding box.
     """
 
     title: str = Field(default="")
-    coords: list[int] = Field(default=[])
+    coords: list[float] = Field(default=[])
 
     @staticmethod
-    def from_list(coords: list[float], title: str = "") -> "BBox":
-        assert len(coords) == 4, "Bounding box must be a list of 4 coordinates."
-        assert all(isinstance(value, (int, float)) for value in coords), (
-            "Bounding box coordinates must be floats or integers."
-        )
-        return BBox(
-            title=title,
-            coords=[round(c) for c in coords],
-        )
+    def from_list(coords: Sequence[float], title: str = "") -> "BBox":
+        """
+        Create a bounding box from a list of coordinates.
 
-    @staticmethod
-    def from_dict(coords: dict[str, float], title: str = "") -> "BBox":
-        assert isinstance(coords, dict) and set(coords) == {
-            "x1",
-            "y1",
-            "x2",
-            "y2",
-        }, "Bounding box must be a dictionary with keys 'x1', 'y1', 'x2' and 'y2'."
-        return BBox.from_list(
-            [coords["x1"], coords["y1"], coords["x2"], coords["y2"]],
-            title=title,
+        Args:
+            coords (list[float]): The bounding box coordinates.
+            title (str): The title of the bounding box.
+
+        Returns:
+            BBox: The bounding box instance.
+        """
+        warn(
+            "This method is deprecated. Use `BBox(title, coords)` instead.",
+            DeprecationWarning,
+            stacklevel=2,
         )
+        if not isinstance(coords, (list, tuple)) or len(coords) != 4:
+            raise ValueError("Bounding box must be a list of 4 coordinates.")
+        if not all(isinstance(value, (int, float)) for value in coords):
+            raise ValueError("Bounding box coordinates must be floats or integers.")
+        return BBox(title=title, coords=list(map(float, coords)))
+
+    def convert(
+        self,
+        img_size: Sequence[int],
+        source: BBoxType,
+        target: BBoxType,
+    ) -> list[float]:
+        """
+        Convert the bounding box coordinates between different formats.
+
+        Supported formats: "albumentations", "coco", "voc", "yolo".
+
+        Args:
+            img_size (Sequence[int]): The reference image size (width, height).
+            source (str): The source bounding box format.
+            target (str): The target bounding box format.
+
+        Returns:
+            list[float]: The bounding box coordinates in the target format.
+        """
+        return convert_bbox(self.coords, img_size, source, target)
 
 
 class OBBox(DataModel):
     """
     A data model for representing oriented bounding boxes.
 
+    Use `datachain.model.YoloObb` for YOLO-specific oriented bounding boxes.
+    This model is intended for general oriented bounding box representations
+    or other formats.
+
     Attributes:
         title (str): The title of the oriented bounding box.
-        coords (list[int]): The coordinates of the oriented bounding box.
-
-    The oriented bounding box is defined by four points:
-        - (x1, y1): The first corner of the box.
-        - (x2, y2): The second corner of the box.
-        - (x3, y3): The third corner of the box.
-        - (x4, y4): The fourth corner of the box.
+        coords (list[float]): The coordinates of the oriented bounding box.
     """
 
     title: str = Field(default="")
-    coords: list[int] = Field(default=[])
-
-    @staticmethod
-    def from_list(coords: list[float], title: str = "") -> "OBBox":
-        assert len(coords) == 8, (
-            "Oriented bounding box must be a list of 8 coordinates."
-        )
-        assert all(isinstance(value, (int, float)) for value in coords), (
-            "Oriented bounding box coordinates must be floats or integers."
-        )
-        return OBBox(
-            title=title,
-            coords=[round(c) for c in coords],
-        )
-
-    @staticmethod
-    def from_dict(coords: dict[str, float], title: str = "") -> "OBBox":
-        assert isinstance(coords, dict) and set(coords) == {
-            "x1",
-            "y1",
-            "x2",
-            "y2",
-            "x3",
-            "y3",
-            "x4",
-            "y4",
-        }, "Oriented bounding box must be a dictionary with coordinates."
-        return OBBox.from_list(
-            [
-                coords["x1"],
-                coords["y1"],
-                coords["x2"],
-                coords["y2"],
-                coords["x3"],
-                coords["y3"],
-                coords["x4"],
-                coords["y4"],
-            ],
-            title=title,
-        )
+    coords: list[float] = Field(default=[])

@@ -17,6 +17,7 @@ DataChain's API is organized into several modules:
     - [BBox](./data-types/bbox.md) - Bounding box data type
     - [Pose](./data-types/pose.md) - Pose data type
     - [Segment](./data-types/segment.md) - Segment data type
+    - [Yolo](./data-types/yolo.md) - YOLO (Ultralytics) models
 - [UDF](./udf.md) - User-defined functions and transformations
 - [Functions](./func.md) - Built-in functions for data manipulation and analysis
 - [Torch](./torch.md) - PyTorch data loading utilities
