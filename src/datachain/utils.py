@@ -362,6 +362,7 @@ def show_records(
     records: Optional[list[dict]],
     collapse_columns: bool = False,
     system_columns: bool = False,
+    hidden_fields: Optional[list[str]] = None,
 ) -> None:
     import pandas as pd
 
@@ -369,6 +370,8 @@ def show_records(
         return
 
     df = pd.DataFrame.from_records(records)
+    if hidden_fields:
+        df = df.drop(columns=hidden_fields, errors="ignore")
     return show_df(df, collapse_columns=collapse_columns, system_columns=system_columns)
 
 
