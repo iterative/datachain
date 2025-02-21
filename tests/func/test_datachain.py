@@ -1810,23 +1810,20 @@ def test_incremental_update_from_dataset(test_session, tmp_dir, tmp_path):
             session=test_session,
         ).save(ds_name)
 
+    def create_incremental_dataset(ds_name):
+        DataChain.from_dataset(
+            starting_ds_name,
+            session=test_session,
+        ).save(ds_name, incremental=True)
+
     # first version of starting dataset
     create_image_dataset(starting_ds_name, images[:2])
-
     # first version of incremental dataset
-    DataChain.from_dataset(
-        starting_ds_name,
-        session=test_session,
-    ).save(ds_name, incremental=True)
-
+    create_incremental_dataset(ds_name)
     # second version of starting dataset
     create_image_dataset(starting_ds_name, images[2:])
-
     # second version of incremental dataset
-    DataChain.from_dataset(
-        starting_ds_name,
-        session=test_session,
-    ).save(ds_name, incremental=True)
+    create_incremental_dataset(ds_name)
 
     assert list(
         DataChain.from_dataset(ds_name, version=1)
@@ -1851,45 +1848,54 @@ def test_incremental_update_from_dataset(test_session, tmp_dir, tmp_path):
 
 def test_incremental_update_from_storage(test_session, tmp_dir, tmp_path):
     ds_name = "incremental_ds"
-    images = [
-        {"name": "img1.jpg", "data": Image.new(mode="RGB", size=(64, 64))},
-        {"name": "img2.jpg", "data": Image.new(mode="RGB", size=(128, 128))},
-        {"name": "img3.jpg", "data": Image.new(mode="RGB", size=(64, 64))},
-        {"name": "img4.jpg", "data": Image.new(mode="RGB", size=(128, 128))},
-    ]
     path = tmp_dir.as_uri()
     tmp_dir = tmp_dir / "images"
     os.mkdir(tmp_dir)
 
-    # save only 2 images
-    for img in images[:2]:
+    images = [
+        {
+            "name": f"img{i}.{'jpg' if i % 2 == 0 else 'png'}",
+            "data": Image.new(mode="RGB", size=((i + 1) * 10, (i + 1) * 10)),
+        }
+        for i in range(20)
+    ]
+
+    # save only half of the images for now
+    for img in images[:10]:
         img["data"].save(tmp_dir / img["name"])
 
-    # first version of incremental dataset
-    DataChain.from_storage(
-        path,
-        update=True,
-        session=test_session,
-    ).save(ds_name, incremental=True)
+    def create_incremental_dataset():
+        def my_embedding(file: File) -> list[float]:
+            return [0.5, 0.5]
 
-    # save other 2 images as well
-    for img in images[2:]:
+        (
+            DataChain.from_storage(path, update=True, session=test_session)
+            .filter(C("file.path").glob("*.jpg"))
+            .map(emb=my_embedding)
+            .mutate(dist=func.cosine_distance("emb", (0.1, 0.2)))
+            .filter(C("file.size") % 10 < 5)
+            .save(ds_name, incremental=True)
+        )
+
+    # first version of incremental dataset
+    create_incremental_dataset()
+
+    # save other half of images as well
+    for img in images[10:]:
         img["data"].save(tmp_dir / img["name"])
 
     # second version of incremental dataset
-    DataChain.from_storage(
-        path,
-        update=True,
-        session=test_session,
-    ).save(ds_name, incremental=True)
+    create_incremental_dataset()
 
     assert list(
         DataChain.from_dataset(ds_name, version=1)
         .order_by("file.path")
         .collect("file.path")
     ) == [
-        "images/img1.jpg",
+        "images/img0.jpg",
         "images/img2.jpg",
+        "images/img4.jpg",
+        "images/img8.jpg",
     ]
 
     assert list(
@@ -1897,8 +1903,12 @@ def test_incremental_update_from_storage(test_session, tmp_dir, tmp_path):
         .order_by("file.path")
         .collect("file.path")
     ) == [
-        "images/img1.jpg",
+        "images/img0.jpg",
+        "images/img10.jpg",
+        "images/img12.jpg",
+        "images/img16.jpg",
+        "images/img18.jpg",
         "images/img2.jpg",
-        "images/img3.jpg",
         "images/img4.jpg",
+        "images/img8.jpg",
     ]

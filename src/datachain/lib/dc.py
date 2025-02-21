@@ -25,6 +25,7 @@ from sqlalchemy.sql.functions import GenericFunction
 from sqlalchemy.sql.sqltypes import NullType
 
 from datachain.dataset import DatasetRecord
+from datachain.error import DatasetNotFoundError
 from datachain.func import literal
 from datachain.func.base import Function
 from datachain.func.func import Func
@@ -411,7 +412,7 @@ class DataChain:
         object_name: str = "file",
         update: bool = False,
         anon: bool = False,
-        incremental: bool = False
+        incremental: bool = False,
     ) -> "Self":
         """Get data from a storage as a list of file with all file attributes.
         It returns the chain itself as usual.
@@ -748,58 +749,36 @@ class DataChain:
             name : dataset name. Empty name saves to a temporary dataset that will be
                 removed after process ends. Temp dataset are useful for optimization.
             version : version of a dataset. Default - the last version that exist.
-            incremental : wheather this is an incremental dataset or not.
+            incremental : whether this is an incremental dataset or not.
         """
         schema = self.signals_schema.clone_without_sys_signals().serialize()
         if incremental and name:
-            """
-             DataChain
-                .from_storage("s3://bkt/dir1/")
-                .filter(C("file.path").glob("*.jpg"))
-                .map(emb=my_embedding)
-                .save("incremental_ds")
-
-            ->
-             DataChain
-                .from_storage("s3://bkt/dir1/")
-                .diff(
-                    DataChain.from_dataset("incremental_ds", version=3),
-                    on="file", # this should be get from ds feature schema
+            try:
+                latest_version = self.session.catalog.get_dataset(name).latest_version
+                source_ds_name = self._query.starting_step.dataset_name
+                source_ds_version = self._query.starting_step.dataset_version
+                diff = DataChain.from_dataset(
+                    source_ds_name, version=source_ds_version
+                ).diff(
+                    DataChain.from_dataset(name, version=latest_version),
+                    on="file",  # TODO this should be taken from ds feature schema
                     added=True,
                     modified=True,
                 )
-                .filter(C("file.path").glob("*.jpg"))
-                .map(emb=my_embedding)
-                .save("incremental_ds")
-
-            """
-            from datachain.error import DatasetNotFoundError
-            try:
-                incremental_ds = self.session.catalog.get_dataset(name)
-                latest_version = incremental_ds.latest_version
-                print(f"Starting ds is {self._query.starting_step.dataset_name}")
-                print(f"Starting ds version is {self._query.starting_step.dataset_version}")
-                diff = (
-                    DataChain.from_dataset(
-                        self._query.starting_step.dataset_name,
-                        version=self._query.starting_step.dataset_version
-                    )
-                    .diff(
-                        DataChain.from_dataset(name, version=latest_version),
-                        on="file", # this should be get from ds feature schema
-                        added=True,
-                        modified=True,
-                    )
-                )
+                # we append all the steps from original chain to diff dataset,
+                # e.g filters, mappers, mutates etc.
                 diff._query.steps += self._query.steps
+
+                # merging diff and latest version of our dataset chains
                 diff = diff.union(DataChain.from_dataset(name, latest_version))
+
                 return self._evolve(
                     query=diff._query.save(
                         name=name, version=version, feature_schema=schema, **kwargs
                     )
                 )
             except DatasetNotFoundError:
-                # dataset doesn't exist yet so we can continue with normal cration
+                # dataset doesn't exist yet so we can continue with normal flow
                 pass
 
         return self._evolve(
