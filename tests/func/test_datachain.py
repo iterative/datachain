@@ -1847,3 +1847,58 @@ def test_incremental_update_from_dataset(test_session, tmp_dir, tmp_path):
         "img3.jpg",
         "img4.jpg",
     ]
+
+
+def test_incremental_update_from_storage(test_session, tmp_dir, tmp_path):
+    ds_name = "incremental_ds"
+    images = [
+        {"name": "img1.jpg", "data": Image.new(mode="RGB", size=(64, 64))},
+        {"name": "img2.jpg", "data": Image.new(mode="RGB", size=(128, 128))},
+        {"name": "img3.jpg", "data": Image.new(mode="RGB", size=(64, 64))},
+        {"name": "img4.jpg", "data": Image.new(mode="RGB", size=(128, 128))},
+    ]
+    path = tmp_dir.as_uri()
+    tmp_dir = tmp_dir / "images"
+    os.mkdir(tmp_dir)
+
+    # save only 2 images
+    for img in images[:2]:
+        img["data"].save(tmp_dir / img["name"])
+
+    # first version of incremental dataset
+    DataChain.from_storage(
+        path,
+        update=True,
+        session=test_session,
+    ).save(ds_name, incremental=True)
+
+    # save other 2 images as well
+    for img in images[2:]:
+        img["data"].save(tmp_dir / img["name"])
+
+    # second version of incremental dataset
+    DataChain.from_storage(
+        path,
+        update=True,
+        session=test_session,
+    ).save(ds_name, incremental=True)
+
+    assert list(
+        DataChain.from_dataset(ds_name, version=1)
+        .order_by("file.path")
+        .collect("file.path")
+    ) == [
+        "images/img1.jpg",
+        "images/img2.jpg",
+    ]
+
+    assert list(
+        DataChain.from_dataset(ds_name, version=2)
+        .order_by("file.path")
+        .collect("file.path")
+    ) == [
+        "images/img1.jpg",
+        "images/img2.jpg",
+        "images/img3.jpg",
+        "images/img4.jpg",
+    ]
