@@ -2508,7 +2508,7 @@ class DataChain:
         placement: FileExportPlacement = "fullpath",
         use_cache: bool = True,
         link_type: Literal["copy", "symlink"] = "copy",
-        num_workers: Optional[int] = EXPORT_FILES_MAX_THREADS,
+        num_threads: Optional[int] = EXPORT_FILES_MAX_THREADS,
     ) -> None:
         """Export files from a specified signal to a directory. Files can be
         exported to a local or cloud directory.
@@ -2521,8 +2521,8 @@ class DataChain:
             use_cache: If `True`, cache the files before exporting.
             link_type: Method to use for exporting files.
                 Falls back to `'copy'` if symlinking fails.
-            num_workers : number of workers to use for exporting files.
-                By default it uses 5 workers.
+            num_threads : number of threads to use for exporting files.
+                By default it uses 5 threads.
 
         Example:
             Cross cloud transfer
@@ -2550,7 +2550,7 @@ class DataChain:
             placement,
             use_cache,
             link_type,
-            max_threads=num_workers or 1,
+            max_threads=num_threads or 1,
         )
         file_exporter.run(self.collect(signal), progress_bar)
 
