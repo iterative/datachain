@@ -1878,20 +1878,36 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
         def my_embedding(file: File) -> list[float]:
             return [0.5, 0.5]
 
+        def get_index(file: File) -> int:
+            r = r".+\/img(\d+)\.jpg"
+            return int(re.search(r, file.path).group(1))  # type: ignore[union-attr]
+
         (
             DataChain.from_storage(path, update=True, session=test_session)
             .filter(C("file.path").glob("*.jpg"))
             .map(emb=my_embedding)
             .mutate(dist=func.cosine_distance("emb", (0.1, 0.2)))
-            .filter(C("file.size") % 10 < 5)
+            .map(index=get_index)
+            .filter(C("index") > 3)
             .save(ds_name, delta=True)
         )
 
     # first version of delta dataset
     create_delta_dataset()
 
-    # save other half of images as well
-    for img in images[10:]:
+    # remember old etags for later comparison to prove modified images are also taken
+    # into consideration on delta update
+    etags = {
+        r[0]: r[1].etag
+        for r in DataChain.from_dataset(ds_name, version=1).collect("index", "file")
+    }
+
+    # remove last couple of images to simulate modification since we will re-create it
+    for img in images[5:10]:
+        os.remove(tmp_dir / img["name"])
+
+    # save other half of images and the ones that are removed above
+    for img in images[5:]:
         img["data"].save(tmp_dir / img["name"])
 
     # second version of delta dataset
@@ -1902,9 +1918,8 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
         .order_by("file.path")
         .collect("file.path")
     ) == [
-        "images/img0.jpg",
-        "images/img2.jpg",
         "images/img4.jpg",
+        "images/img6.jpg",
         "images/img8.jpg",
     ]
 
@@ -1913,12 +1928,24 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
         .order_by("file.path")
         .collect("file.path")
     ) == [
-        "images/img0.jpg",
         "images/img10.jpg",
         "images/img12.jpg",
+        "images/img14.jpg",
         "images/img16.jpg",
         "images/img18.jpg",
-        "images/img2.jpg",
         "images/img4.jpg",
+        "images/img6.jpg",
+        "images/img6.jpg",
+        "images/img8.jpg",
         "images/img8.jpg",
     ]
+
+    # check that we have both old and new version of those that are modified
+    rows = list(
+        DataChain.from_dataset(ds_name, version=2)
+        .filter(C("index") == 6)
+        .order_by("file.path", "file.etag")
+        .collect("file")
+    )
+    assert rows[0].etag == etags[6]
+    assert rows[1].etag > etags[6]  # new etag is bigger as it's the value of mtime
