@@ -2506,7 +2506,6 @@ class DataChain:
         output: str,
         signal: str = "file",
         placement: FileExportPlacement = "fullpath",
-        use_cache: bool = True,
         link_type: Literal["copy", "symlink"] = "copy",
         num_threads: Optional[int] = EXPORT_FILES_MAX_THREADS,
     ) -> None:
@@ -2518,7 +2517,6 @@ class DataChain:
             signal: Name of the signal to export files from.
             placement: The method to use for naming exported files.
                 The possible values are: "filename", "etag", "fullpath", and "checksum".
-            use_cache: If `True`, cache the files before exporting.
             link_type: Method to use for exporting files.
                 Falls back to `'copy'` if symlinking fails.
             num_threads : number of threads to use for exporting files.
@@ -2548,7 +2546,7 @@ class DataChain:
         file_exporter = FileExporter(
             output,
             placement,
-            use_cache,
+            self._settings.cache if self._settings else False,
             link_type,
             max_threads=num_threads or 1,
         )

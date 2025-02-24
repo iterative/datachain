@@ -316,19 +316,18 @@ def test_to_storage(
     ctc = cloud_test_catalog
     df = DataChain.from_storage(ctc.src_uri, type=file_type, session=test_session)
     if use_map:
-        df.to_storage(
+        df.settings(cache=use_cache).to_storage(
             tmp_dir / "output",
             placement=placement,
-            use_cache=use_cache,
             num_threads=num_threads,
         )
-        df.map(
-            res=lambda file: file.export(
-                tmp_dir / "output", placement=placement, use_cache=use_cache
-            )
+        df.settings(cache=use_cache).map(
+            res=lambda file: file.export(tmp_dir / "output", placement=placement)
         ).exec()
     else:
-        df.to_storage(tmp_dir / "output", placement=placement, num_threads=num_threads)
+        df.settings(cache=use_cache).to_storage(
+            tmp_dir / "output", placement=placement, num_threads=num_threads
+        )
 
     expected = {
         "description": "Cats and Dogs",
@@ -359,12 +358,12 @@ def test_export_images_files(test_session, tmp_dir, tmp_path, use_cache):
     for img in images:
         img["data"].save(tmp_path / img["name"])
 
-    DataChain.from_values(
+    DataChain.settings(cache=use_cache).from_values(
         file=[
             ImageFile(path=img["name"], source=f"file://{tmp_path}") for img in images
         ],
         session=test_session,
-    ).to_storage(tmp_dir / "output", placement="filename", use_cache=use_cache)
+    ).to_storage(tmp_dir / "output", placement="filename")
 
     for img in images:
         exported_img = Image.open(tmp_dir / "output" / img["name"])
