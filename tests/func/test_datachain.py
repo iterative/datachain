@@ -1800,9 +1800,9 @@ def test_datachain_functional_after_exceptions(test_session):
             dc.map(res=func).exec()
 
 
-def test_incremental_update_from_dataset(test_session, tmp_dir, tmp_path):
+def test_delta_update_from_dataset(test_session, tmp_dir, tmp_path):
     starting_ds_name = "starting_ds"
-    ds_name = "incremental_ds"
+    ds_name = "delta_ds"
 
     images = [
         {"name": "img1.jpg", "data": Image.new(mode="RGB", size=(64, 64))},
@@ -1820,20 +1820,20 @@ def test_incremental_update_from_dataset(test_session, tmp_dir, tmp_path):
             session=test_session,
         ).save(ds_name)
 
-    def create_incremental_dataset(ds_name):
+    def create_delta_dataset(ds_name):
         DataChain.from_dataset(
             starting_ds_name,
             session=test_session,
-        ).save(ds_name, incremental=True)
+        ).save(ds_name, delta=True)
 
     # first version of starting dataset
     create_image_dataset(starting_ds_name, images[:2])
-    # first version of incremental dataset
-    create_incremental_dataset(ds_name)
+    # first version of delta dataset
+    create_delta_dataset(ds_name)
     # second version of starting dataset
     create_image_dataset(starting_ds_name, images[2:])
-    # second version of incremental dataset
-    create_incremental_dataset(ds_name)
+    # second version of delta dataset
+    create_delta_dataset(ds_name)
 
     assert list(
         DataChain.from_dataset(ds_name, version=1)
@@ -1856,8 +1856,8 @@ def test_incremental_update_from_dataset(test_session, tmp_dir, tmp_path):
     ]
 
 
-def test_incremental_update_from_storage(test_session, tmp_dir, tmp_path):
-    ds_name = "incremental_ds"
+def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
+    ds_name = "delta_ds"
     path = tmp_dir.as_uri()
     tmp_dir = tmp_dir / "images"
     os.mkdir(tmp_dir)
@@ -1874,7 +1874,7 @@ def test_incremental_update_from_storage(test_session, tmp_dir, tmp_path):
     for img in images[:10]:
         img["data"].save(tmp_dir / img["name"])
 
-    def create_incremental_dataset():
+    def create_delta_dataset():
         def my_embedding(file: File) -> list[float]:
             return [0.5, 0.5]
 
@@ -1884,18 +1884,18 @@ def test_incremental_update_from_storage(test_session, tmp_dir, tmp_path):
             .map(emb=my_embedding)
             .mutate(dist=func.cosine_distance("emb", (0.1, 0.2)))
             .filter(C("file.size") % 10 < 5)
-            .save(ds_name, incremental=True)
+            .save(ds_name, delta=True)
         )
 
-    # first version of incremental dataset
-    create_incremental_dataset()
+    # first version of delta dataset
+    create_delta_dataset()
 
     # save other half of images as well
     for img in images[10:]:
         img["data"].save(tmp_dir / img["name"])
 
-    # second version of incremental dataset
-    create_incremental_dataset()
+    # second version of delta dataset
+    create_delta_dataset()
 
     assert list(
         DataChain.from_dataset(ds_name, version=1)

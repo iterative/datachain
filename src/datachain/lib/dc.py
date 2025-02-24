@@ -412,7 +412,6 @@ class DataChain:
         object_name: str = "file",
         update: bool = False,
         anon: bool = False,
-        incremental: bool = False,
         client_config: Optional[dict] = None,
     ) -> "Self":
         """Get data from a storage as a list of file with all file attributes.
@@ -758,7 +757,7 @@ class DataChain:
         self,
         name: Optional[str] = None,
         version: Optional[int] = None,
-        incremental: Optional[bool] = False,
+        delta: Optional[bool] = False,
         **kwargs,
     ) -> "Self":
         """Save to a Dataset. It returns the chain itself.
@@ -767,10 +766,10 @@ class DataChain:
             name : dataset name. Empty name saves to a temporary dataset that will be
                 removed after process ends. Temp dataset are useful for optimization.
             version : version of a dataset. Default - the last version that exist.
-            incremental : whether this is an incremental dataset or not.
+            delta : whether this is an delta dataset or not.
         """
         schema = self.signals_schema.clone_without_sys_signals().serialize()
-        if incremental and name:
+        if delta and name:
             try:
                 latest_version = self.session.catalog.get_dataset(name).latest_version
                 source_ds_name = self._query.starting_step.dataset_name
