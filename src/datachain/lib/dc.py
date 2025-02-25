@@ -766,7 +766,11 @@ class DataChain:
             name : dataset name. Empty name saves to a temporary dataset that will be
                 removed after process ends. Temp dataset are useful for optimization.
             version : version of a dataset. Default - the last version that exist.
-            delta : whether this is an delta dataset or not.
+            delta : If True, we optimize on creation of the new dataset versions
+                by calculating diff between source and the last version and applying
+                all needed modifications (mappers, filters etc.) only on that diff.
+                At the end, we merge modified diff with last version of dataset to
+                create new version.
         """
         schema = self.signals_schema.clone_without_sys_signals().serialize()
         if delta and name:
