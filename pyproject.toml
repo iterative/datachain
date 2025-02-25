@@ -51,7 +51,8 @@ dependencies = [
   "platformdirs",
   "dvc-studio-client>=0.21,<1",
   "tabulate",
-  "websockets"
+  "websockets",
+  "tomli;python_version<'3.11'"
 ]
 
 [project.optional-dependencies]
@@ -118,7 +119,7 @@ examples = [
   "defusedxml",
   "accelerate",
   "huggingface_hub[hf_transfer]",
-  "ultralytics==8.3.74",
+  "ultralytics==8.3.78",
   "open_clip_torch"
 ]
 
