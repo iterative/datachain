@@ -1949,3 +1949,53 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
     )
     assert rows[0].etag == etags[6]
     assert rows[1].etag > etags[6]  # new etag is bigger as it's the value of mtime
+
+
+def test_delta_update_no_diff(test_session, tmp_dir, tmp_path):
+    ds_name = "delta_ds"
+    path = tmp_dir.as_uri()
+    tmp_dir = tmp_dir / "images"
+    os.mkdir(tmp_dir)
+
+    images = [
+        {"name": f"img{i}.jpg", "data": Image.new(mode="RGB", size=(64, 128))}
+        for i in range(10)
+    ]
+
+    for img in images:
+        img["data"].save(tmp_dir / img["name"])
+
+    def create_delta_dataset():
+        def get_index(file: File) -> int:
+            r = r".+\/img(\d+)\.jpg"
+            return int(re.search(r, file.path).group(1))  # type: ignore[union-attr]
+
+        (
+            DataChain.from_storage(path, update=True, session=test_session)
+            .filter(C("file.path").glob("*.jpg"))
+            .map(index=get_index)
+            .filter(C("index") > 5)
+            .save(ds_name, delta=True)
+        )
+
+    create_delta_dataset()
+    create_delta_dataset()
+
+    assert (
+        list(
+            DataChain.from_dataset(ds_name, version=1)
+            .order_by("file.path")
+            .collect("file.path")
+        )
+        == list(
+            DataChain.from_dataset(ds_name, version=2)
+            .order_by("file.path")
+            .collect("file.path")
+        )
+        == [
+            "images/img6.jpg",
+            "images/img7.jpg",
+            "images/img8.jpg",
+            "images/img9.jpg",
+        ]
+    )
