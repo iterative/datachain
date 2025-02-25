@@ -992,3 +992,8 @@ def test_column_types(column_type, signal_type):
 
     assert len(signals) == 1
     assert signals["val"] is signal_type
+
+
+def test_get_file_signal():
+    assert SignalSchema({"name": str, "f": File}).get_file_signal() == "f"
+    assert SignalSchema({"name": str}).get_file_signal() is None
