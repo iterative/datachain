@@ -25,7 +25,7 @@ from sqlalchemy.sql.functions import GenericFunction
 from sqlalchemy.sql.sqltypes import NullType
 
 from datachain.dataset import DatasetRecord
-from datachain.error import DatasetNotFoundError
+from datachain.delta import delta_update
 from datachain.func import literal
 from datachain.func.base import Function
 from datachain.func.func import Func
@@ -770,34 +770,13 @@ class DataChain:
         """
         schema = self.signals_schema.clone_without_sys_signals().serialize()
         if delta and name:
-            try:
-                latest_version = self.session.catalog.get_dataset(name).latest_version
-                source_ds_name = self._query.starting_step.dataset_name
-                source_ds_version = self._query.starting_step.dataset_version
-                diff = DataChain.from_dataset(
-                    source_ds_name, version=source_ds_version
-                ).diff(
-                    DataChain.from_dataset(name, version=latest_version),
-                    on="file",  # TODO this should be taken from ds feature schema
-                    added=True,
-                    modified=True,
-                )
-                # we append all the steps from original chain to diff dataset,
-                # e.g filters, mappers, mutates etc.
-                diff._query.steps += self._query.steps
-
-                # merging diff and latest version of our dataset chains
-                diff = diff.union(DataChain.from_dataset(name, latest_version))
-
+            delta_ds = delta_update(self, name)
+            if delta_ds:
                 return self._evolve(
-                    query=diff._query.save(
+                    query=delta_ds._query.save(
                         name=name, version=version, feature_schema=schema, **kwargs
                     )
                 )
-            except DatasetNotFoundError:
-                # dataset doesn't exist yet so we can continue with normal flow
-                pass
-
         return self._evolve(
             query=self._query.save(
                 name=name, version=version, feature_schema=schema, **kwargs

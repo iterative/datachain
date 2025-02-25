@@ -1999,3 +1999,19 @@ def test_delta_update_no_diff(test_session, tmp_dir, tmp_path):
             "images/img9.jpg",
         ]
     )
+
+
+def test_delta_update_no_file_signals(test_session):
+    starting_ds_name = "starting_ds"
+
+    DataChain.from_values(num=[10, 20], session=test_session).save(starting_ds_name)
+
+    with pytest.raises(ValueError) as excinfo:
+        DataChain.from_dataset(
+            starting_ds_name,
+            session=test_session,
+        ).save("delta_ds", delta=True)
+
+    assert (
+        str(excinfo.value) == "Datasets without file signals cannot have delta updates"
+    )
