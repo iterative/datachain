@@ -146,6 +146,7 @@ def test_feature_schema_serialize_optional():
                 ("BaseModel", "pydantic.main", None),
                 ("object", "builtins", None),
             ],
+            "hidden_fields": [],
         }
     }
 
@@ -174,6 +175,7 @@ def test_feature_schema_serialize_list():
                 ("BaseModel", "pydantic.main", None),
                 ("object", "builtins", None),
             ],
+            "hidden_fields": [],
         }
     }
 
@@ -202,6 +204,7 @@ def test_feature_schema_serialize_list_old():
                 ("BaseModel", "pydantic.main", None),
                 ("object", "builtins", None),
             ],
+            "hidden_fields": [],
         }
     }
 
@@ -235,6 +238,7 @@ def test_feature_schema_serialize_nested_types():
                 ("BaseModel", "pydantic.main", None),
                 ("object", "builtins", None),
             ],
+            "hidden_fields": [],
         },
         "MyType2@v1": {
             "schema_version": 2,
@@ -246,6 +250,7 @@ def test_feature_schema_serialize_nested_types():
                 ("BaseModel", "pydantic.main", None),
                 ("object", "builtins", None),
             ],
+            "hidden_fields": [],
         },
     }
 
@@ -276,6 +281,7 @@ def test_feature_schema_serialize_nested_duplicate_types():
                 ("BaseModel", "pydantic.main", None),
                 ("object", "builtins", None),
             ],
+            "hidden_fields": [],
         },
         "MyType2@v1": {
             "schema_version": 2,
@@ -287,6 +293,7 @@ def test_feature_schema_serialize_nested_duplicate_types():
                 ("BaseModel", "pydantic.main", None),
                 ("object", "builtins", None),
             ],
+            "hidden_fields": [],
         },
     }
 
@@ -315,6 +322,7 @@ def test_feature_schema_serialize_complex():
                 ("BaseModel", "pydantic.main", None),
                 ("object", "builtins", None),
             ],
+            "hidden_fields": [],
         },
         "MyType2@v1": {
             "schema_version": 2,
@@ -326,6 +334,7 @@ def test_feature_schema_serialize_complex():
                 ("BaseModel", "pydantic.main", None),
                 ("object", "builtins", None),
             ],
+            "hidden_fields": [],
         },
         "MyTypeComplex@v1": {
             "schema_version": 2,
@@ -345,6 +354,7 @@ def test_feature_schema_serialize_complex():
                 ("BaseModel", "pydantic.main", None),
                 ("object", "builtins", None),
             ],
+            "hidden_fields": [],
         },
     }
 
@@ -373,6 +383,7 @@ def test_feature_schema_serialize_complex_old():
                 ("BaseModel", "pydantic.main", None),
                 ("object", "builtins", None),
             ],
+            "hidden_fields": [],
         },
         "MyType2@v1": {
             "schema_version": 2,
@@ -384,6 +395,7 @@ def test_feature_schema_serialize_complex_old():
                 ("BaseModel", "pydantic.main", None),
                 ("object", "builtins", None),
             ],
+            "hidden_fields": [],
         },
         "MyTypeComplexOld@v1": {
             "schema_version": 2,
@@ -403,6 +415,7 @@ def test_feature_schema_serialize_complex_old():
                 ("BaseModel", "pydantic.main", None),
                 ("object", "builtins", None),
             ],
+            "hidden_fields": [],
         },
     }
 
