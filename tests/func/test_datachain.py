@@ -1557,6 +1557,59 @@ def test_group_by_signals(cloud_test_catalog):
     )
 
 
+def test_group_by_known_signals(cloud_test_catalog):
+    from datachain import func
+    from datachain.model import BBox
+
+    session = cloud_test_catalog.session
+    src_uri = cloud_test_catalog.src_uri
+
+    def process(file: File) -> BBox:
+        return BBox(title=file.path.split("/")[0], coords=[10, 20, 80, 90])
+
+    ds = (
+        DataChain.from_storage(src_uri, session=session)
+        .map(box=process)
+        .group_by(
+            cnt=func.count(),
+            value=func.any_value("box.coords"),
+            partition_by="box.title",
+        )
+        .save("my-ds")
+    )
+
+    assert ds.signals_schema.serialize() == {
+        "_custom_types": {
+            "BBoxPartial_v1@v1": {
+                "bases": [
+                    (
+                        "BBoxPartial_v1",
+                        "datachain.lib.signal_schema",
+                        "BBoxPartial_v1@v1",
+                    ),
+                    ("DataModel", "datachain.lib.data_model", "DataModel@v1"),
+                    ("BaseModel", "pydantic.main", None),
+                    ("object", "builtins", None),
+                ],
+                "fields": {"title": "str"},
+                "name": "BBoxPartial_v1@v1",
+                "schema_version": 2,
+            }
+        },
+        "box": "BBoxPartial_v1@v1",
+        "cnt": "int",
+        "value": "list[int]",
+    }
+    assert sorted_dicts(ds.to_records(), "box__title") == sorted_dicts(
+        [
+            {"box__title": "cats", "cnt": 2, "value": [10, 20, 80, 90]},
+            {"box__title": "description", "cnt": 1, "value": [10, 20, 80, 90]},
+            {"box__title": "dogs", "cnt": 4, "value": [10, 20, 80, 90]},
+        ],
+        "box__title",
+    )
+
+
 def test_group_by_func(cloud_test_catalog):
     from datachain import func
 

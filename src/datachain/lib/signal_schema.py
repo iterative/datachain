@@ -180,6 +180,16 @@ class SignalSchema:
         return SignalSchema(signals)
 
     @staticmethod
+    def _get_bases(fr: type) -> list[tuple[str, str, Optional[str]]]:
+        bases: list[tuple[str, str, Optional[str]]] = []
+        for base in fr.__mro__:
+            model_store_name = (
+                ModelStore.get_name(base) if issubclass(base, DataModel) else None
+            )
+            bases.append((base.__name__, base.__module__, model_store_name))
+        return bases
+
+    @staticmethod
     def _serialize_custom_model(
         version_name: str, fr: type[BaseModel], custom_types: dict[str, Any]
     ) -> str:
@@ -196,12 +206,7 @@ class SignalSchema:
             assert field_type
             fields[field_name] = SignalSchema._serialize_type(field_type, custom_types)
 
-        bases: list[tuple[str, str, Optional[str]]] = []
-        for type_ in fr.__mro__:
-            model_store_name = (
-                ModelStore.get_name(type_) if issubclass(type_, DataModel) else None
-            )
-            bases.append((type_.__name__, type_.__module__, model_store_name))
+        bases = SignalSchema._get_bases(fr)
 
         ct = CustomType(schema_version=2, name=version_name, fields=fields, bases=bases)
         custom_types[version_name] = ct.model_dump()
@@ -784,37 +789,31 @@ class SignalSchema:
         serialized = self.serialize()
         custom_types = serialized.get("_custom_types", {})
 
-        schema: dict[str, Any] = {"_custom_types": {}}
+        schema: dict[str, Any] = {}
+        schema_custom_types: dict[str, CustomType] = {}
+
+        data_model_bases: Optional[list[tuple[str, str, Optional[str]]]] = None
 
         for column in columns:
             parent_type_origin, parent_type_partial = "", ""
             for i, signal in enumerate(column.split(".")):
-                # We are expecting for the first part of the column name (signal name)
-                # to be in the schema, other parts should be in the custom types.
                 if i == 0:
                     if signal not in serialized:
                         raise SignalSchemaError(
                             f"Column {column} not found in the schema"
                         )
 
-                    # Keep the first part of the column name (first signal name)
-                    # as it will be used to store the partial type in the schema.
                     parent_type_origin = serialized[signal]
-                    parent_type_partial = type_name_to_partial(parent_type_origin)
+                    parent_type_partial = _type_name_to_partial(parent_type_origin)
 
-                    # Store the first signal name in the schema
                     schema[signal] = parent_type_partial
                     continue
 
-                # Process the rest of the column name (signal names),
-                # which should be in the custom types.
                 if parent_type_origin not in custom_types:
                     raise SignalSchemaError(
                         f"Custom type {parent_type_origin} not found in the schema"
                     )
 
-                # Get the custom type for the parent signal and check if the signal
-                # is in the custom type fields.
                 custom_type = custom_types[parent_type_origin]
                 signal_type = custom_type["fields"].get(signal)
                 if not signal_type:
@@ -822,47 +821,41 @@ class SignalSchema:
                         f"Field {signal} not found in custom type {parent_type_origin}"
                     )
 
-                partial_type = type_name_to_partial(signal_type)
+                partial_type = _type_name_to_partial(signal_type)
 
-                if parent_type_partial in schema["_custom_types"]:
-                    # If the parent type is already in the schema, just add the signal
-                    # to the custom types.
-                    schema["_custom_types"][parent_type_partial]["fields"][signal] = (
+                if parent_type_partial in schema_custom_types:
+                    schema_custom_types[parent_type_partial].fields[signal] = (
                         partial_type
                     )
                 else:
-                    # If the parent type is not in the schema, add it
-                    # to the custom types with the signal.
-                    schema["_custom_types"][parent_type_partial] = {
-                        "schema_version": 2,
-                        "name": parent_type_partial,
-                        "fields": {signal: partial_type},
-                        "bases": [
-                            (get_type_name(partial_type), "__main__", partial_type),
-                            ("DataModel", "datachain.lib.data_model", "DataModel@v1"),
-                            ("BaseModel", "pydantic.main", None),
-                            ("object", "builtins", None),
+                    if data_model_bases is None:
+                        data_model_bases = SignalSchema._get_bases(DataModel)
+
+                    partial_type_name, _ = ModelStore.parse_name_version(partial_type)
+                    schema_custom_types[parent_type_partial] = CustomType(
+                        schema_version=2,
+                        name=partial_type_name,
+                        fields={signal: partial_type},
+                        bases=[
+                            (partial_type_name, "__main__", partial_type),
+                            *data_model_bases,
                         ],
-                    }
+                    )
 
                 parent_type_origin, parent_type_partial = signal_type, partial_type
 
-        if not schema["_custom_types"]:
-            del schema["_custom_types"]
+        if schema_custom_types:
+            schema["_custom_types"] = {
+                type_name: ct.model_dump()
+                for type_name, ct in schema_custom_types.items()
+            }
 
         return SignalSchema.deserialize(schema)
 
 
-def type_name_to_partial(type_: str) -> str:
+def _type_name_to_partial(type_name: str) -> str:
     """Convert a type name to a partial type name with the same version."""
-    if "@" in type_:
-        type_name, version = type_.split("@")
-        type_ = f"{type_name}Partial@{version}"
-    return type_
-
-
-def get_type_name(type_: str) -> str:
-    """Get the type name without a version from a type string."""
-    if "@" in type_:
-        return type_.split("@")[0]
-    return type_
+    if "@" not in type_name:
+        return type_name
+    model_name, version = ModelStore.parse_name_version(type_name)
+    return f"{model_name}Partial@v{version}"

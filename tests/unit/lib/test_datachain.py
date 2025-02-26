@@ -770,7 +770,7 @@ def test_collect_nested_feature(test_session):
         assert nested == features_nested[n]
 
 
-def test_select_no_sys_id(test_session):
+def test_select_from_dataset_without_sys_columns(test_session):
     from datachain import func
 
     dc = (
