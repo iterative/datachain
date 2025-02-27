@@ -332,8 +332,7 @@ class File(DataModel):
         link_type: Literal["copy", "symlink"] = "copy",
     ) -> None:
         """Export file to new location."""
-        if use_cache:
-            self._caching_enabled = use_cache
+        self._caching_enabled = use_cache
         dst = self.get_destination_path(output, placement)
         dst_dir = os.path.dirname(dst)
         client: Client = self._catalog.get_client(dst_dir)
