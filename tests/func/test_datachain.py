@@ -358,6 +358,27 @@ def test_export_images_files(test_session, tmp_dir, tmp_path, use_cache):
         assert images_equal(img["data"], exported_img)
 
 
+def test_to_storage_relative_path(test_session, tmp_path):
+    images = [
+        {"name": "img1.jpg", "data": Image.new(mode="RGB", size=(64, 64))},
+        {"name": "img2.jpg", "data": Image.new(mode="RGB", size=(128, 128))},
+    ]
+
+    for img in images:
+        img["data"].save(tmp_path / img["name"])
+
+    DataChain.from_values(
+        file=[
+            ImageFile(path=img["name"], source=f"file://{tmp_path}") for img in images
+        ],
+        session=test_session,
+    ).to_storage("output", placement="filename")
+
+    for img in images:
+        exported_img = Image.open(Path("output") / img["name"])
+        assert images_equal(img["data"], exported_img)
+
+
 def test_to_storage_files_filename_placement_not_unique_files(tmp_dir, test_session):
     data = b"some\x00data\x00is\x48\x65\x6c\x57\x6f\x72\x6c\x64\xff\xffheRe"
     bucket_name = "mybucket"
