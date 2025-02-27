@@ -1225,7 +1225,7 @@ class DataChain:
     def collect_flatten(self) -> Iterator[tuple[Any, ...]]: ...
 
     @overload
-    def collect_flatten(self, *, exclude_hidden: bool) -> Iterator[tuple[Any, ...]]: ...
+    def collect_flatten(self, *, include_hidden: bool) -> Iterator[tuple[Any, ...]]: ...
 
     @overload
     def collect_flatten(
@@ -1237,20 +1237,20 @@ class DataChain:
         self,
         *,
         row_factory: Callable[[list[str], tuple[Any, ...]], _T],
-        exclude_hidden: bool,
+        include_hidden: bool,
     ) -> Iterator[_T]: ...
 
-    def collect_flatten(self, *, row_factory=None, exclude_hidden: bool = False):
+    def collect_flatten(self, *, row_factory=None, include_hidden: bool = True):
         """Yields flattened rows of values as a tuple.
 
         Args:
             row_factory : A callable to convert row to a custom format.
                           It should accept two arguments: a list of column names and
                           a tuple of row values.
-            exclude_hidden: Whether to exclude hidden signals from the schema.
+            include_hidden: Whether to include hidden signals from the schema.
         """
         db_signals = self._effective_signals_schema.db_signals(
-            exclude_hidden=exclude_hidden
+            include_hidden=include_hidden
         )
         with self._query.ordered_select(*db_signals).as_iterable() as rows:
             if row_factory:
@@ -1293,17 +1293,17 @@ class DataChain:
         self,
         *,
         row_factory: Callable[[list[str], tuple[Any, ...]], _T],
-        exclude_hidden: bool,
+        include_hidden: bool,
     ) -> list[_T]: ...
 
     @overload
-    def results(self, *, exclude_hidden: bool) -> list[tuple[Any, ...]]: ...
+    def results(self, *, include_hidden: bool) -> list[tuple[Any, ...]]: ...
 
-    def results(self, *, row_factory=None, exclude_hidden=False):  # noqa: D102
+    def results(self, *, row_factory=None, include_hidden=True):  # noqa: D102
         if row_factory is None:
-            return list(self.collect_flatten(exclude_hidden=exclude_hidden))
+            return list(self.collect_flatten(include_hidden=include_hidden))
         return list(
-            self.collect_flatten(row_factory=row_factory, exclude_hidden=exclude_hidden)
+            self.collect_flatten(row_factory=row_factory, include_hidden=include_hidden)
         )
 
     def to_records(self) -> list[dict[str, Any]]:
@@ -1814,24 +1814,24 @@ class DataChain:
             **fr_map,
         )
 
-    def to_pandas(self, flatten=False, exclude_hidden=False) -> "pd.DataFrame":
+    def to_pandas(self, flatten=False, include_hidden=True) -> "pd.DataFrame":
         """Return a pandas DataFrame from the chain.
 
         Parameters:
             flatten : Whether to use a multiindex or flatten column names.
-            exclude_hidden : Whether to exclude hidden columns.
+            include_hidden : Whether to include hidden columns.
         """
         import pandas as pd
 
         headers, max_length = self._effective_signals_schema.get_headers_with_length(
-            exclude_hidden=exclude_hidden
+            include_hidden=include_hidden
         )
         if flatten or max_length < 2:
             columns = [".".join(filter(None, header)) for header in headers]
         else:
             columns = pd.MultiIndex.from_tuples(map(tuple, headers))
 
-        results = self.results(exclude_hidden=exclude_hidden)
+        results = self.results(include_hidden=include_hidden)
         return pd.DataFrame.from_records(results, columns=columns)
 
     def show(
@@ -1840,7 +1840,7 @@ class DataChain:
         flatten=False,
         transpose=False,
         truncate=True,
-        exclude_hidden=True,
+        include_hidden=False,
     ) -> None:
         """Show a preview of the chain results.
 
@@ -1849,12 +1849,12 @@ class DataChain:
             flatten : Whether to use a multiindex or flatten column names.
             transpose : Whether to transpose rows and columns.
             truncate : Whether or not to truncate the contents of columns.
-            exclude_hidden : Whether to exclude hidden columns.
+            include_hidden : Whether to include hidden columns.
         """
         import pandas as pd
 
         dc = self.limit(limit) if limit > 0 else self  # type: ignore[misc]
-        df = dc.to_pandas(flatten, exclude_hidden=exclude_hidden)
+        df = dc.to_pandas(flatten, include_hidden=include_hidden)
 
         if df.empty:
             print("Empty result")

@@ -518,7 +518,7 @@ class SignalSchema:
         raise SignalResolvingError([col_name], "is not found")
 
     def db_signals(
-        self, name: Optional[str] = None, as_columns=False, exclude_hidden: bool = False
+        self, name: Optional[str] = None, as_columns=False, include_hidden: bool = True
     ) -> Union[list[str], list[Column]]:
         """
         Returns DB columns as strings or Column objects with proper types
@@ -529,7 +529,7 @@ class SignalSchema:
             if not as_columns
             else Column(DEFAULT_DELIMITER.join(path), python_to_sql(_type))
             for path, _type, has_subtree, _ in self.get_flat_tree(
-                exclude_hidden=exclude_hidden
+                include_hidden=include_hidden
             )
             if not has_subtree
         ]
@@ -666,18 +666,18 @@ class SignalSchema:
         }
 
     def get_flat_tree(
-        self, exclude_hidden: bool = False
+        self, include_hidden: bool = True
     ) -> Iterator[tuple[list[str], DataType, bool, int]]:
-        yield from self._get_flat_tree(self.tree, [], 0, exclude_hidden)
+        yield from self._get_flat_tree(self.tree, [], 0, include_hidden)
 
     def _get_flat_tree(
-        self, tree: dict, prefix: list[str], depth: int, exclude_hidden: bool
+        self, tree: dict, prefix: list[str], depth: int, include_hidden: bool
     ) -> Iterator[tuple[list[str], DataType, bool, int]]:
         for name, (type_, substree) in tree.items():
             suffix = name.split(".")
             new_prefix = prefix + suffix
             hidden_fields = getattr(type_, "_hidden_fields", None)
-            if exclude_hidden and hidden_fields and substree:
+            if hidden_fields and substree and not include_hidden:
                 substree = {
                     field: info
                     for field, info in substree.items()
@@ -688,7 +688,7 @@ class SignalSchema:
             yield new_prefix, type_, has_subtree, depth
             if substree is not None:
                 yield from self._get_flat_tree(
-                    substree, new_prefix, depth + 1, exclude_hidden
+                    substree, new_prefix, depth + 1, include_hidden
                 )
 
     def print_tree(self, indent: int = 4, start_at: int = 0):
@@ -702,11 +702,11 @@ class SignalSchema:
                     sub_schema = SignalSchema({"* list of": args[0]})
                     sub_schema.print_tree(indent=indent, start_at=total_indent + indent)
 
-    def get_headers_with_length(self, exclude_hidden: bool = False):
+    def get_headers_with_length(self, include_hidden: bool = True):
         paths = [
             path
             for path, _, has_subtree, _ in self.get_flat_tree(
-                exclude_hidden=exclude_hidden
+                include_hidden=include_hidden
             )
             if not has_subtree
         ]
