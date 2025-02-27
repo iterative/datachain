@@ -275,7 +275,7 @@ class File(DataModel):
         client: Client = self._catalog.get_client(destination)
 
         if client.PREFIX == "file://" and not destination.startswith(client.PREFIX):
-            destination = f"{client.PREFIX}{destination}"
+            destination = client.PREFIX + os.path.abspath(destination)
 
         client.upload(self.read(), destination)
 
