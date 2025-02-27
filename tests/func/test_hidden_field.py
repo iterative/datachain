@@ -47,5 +47,5 @@ def test_datachain_save(test_session):
     version = test_session.catalog.get_dataset(ds.name).get_version(1)
     feature_schema = version.feature_schema
 
-    hidden_fields = SignalSchema.get_hidden_fields(feature_schema)
+    hidden_fields = SignalSchema.get_flatten_hidden_fields(feature_schema)
     assert hidden_fields == ["outer__hide_outer", "outer__inner_object__hide_inner"]

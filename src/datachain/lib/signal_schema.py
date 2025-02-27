@@ -393,7 +393,7 @@ class SignalSchema:
         return SignalSchema(signals)
 
     @staticmethod
-    def get_hidden_fields(schema):
+    def get_flatten_hidden_fields(schema):
         custom_types = schema.get("_custom_types", {})
         if not custom_types:
             return []
