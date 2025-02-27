@@ -16,6 +16,7 @@ def show(
     columns: Sequence[str] = (),
     no_collapse: bool = False,
     schema: bool = False,
+    include_hidden: bool = False,
 ) -> None:
     from datachain import Session
     from datachain.lib.dc import DataChain
@@ -24,9 +25,13 @@ def show(
 
     dataset = catalog.get_dataset(name)
     dataset_version = dataset.get_version(version or dataset.latest_version)
-    hidden_fields = SignalSchema.get_flatten_hidden_fields(
-        dataset_version.feature_schema
-    )
+
+    if include_hidden:
+        hidden_fields = []
+    else:
+        hidden_fields = SignalSchema.get_flatten_hidden_fields(
+            dataset_version.feature_schema
+        )
 
     query = (
         DatasetQuery(name=name, version=version, catalog=catalog)

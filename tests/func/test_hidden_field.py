@@ -38,6 +38,25 @@ def test_datachain_show(capsys, test_session):
     assert output_lines == expected_lines
 
 
+def test_datachain_show_include_hidden(capsys, test_session):
+    inner = InnerClass(inner_value=1.1, hide_inner=1.2)
+    outer = OuterClass(outer_value=1.3, hide_outer=1.4, inner_object=inner)
+
+    expected = """
+        outer      outer        outer        outer nums
+  outer_value hide_outer inner_object inner_object
+                          inner_value   hide_inner
+0         1.3        1.4          1.1          1.2    1
+"""
+    DataChain.from_values(outer=[outer], nums=[1]).show(include_hidden=True)
+
+    captured = capsys.readouterr()
+    output_lines = [line.strip() for line in captured.out.strip().split("\n")]
+    expected_lines = [line.strip() for line in expected.strip().split("\n")]
+
+    assert output_lines == expected_lines
+
+
 def test_datachain_save(test_session):
     inner = InnerClass(inner_value=1.1, hide_inner=1.2)
     outer = OuterClass(outer_value=1.3, hide_outer=1.4, inner_object=inner)
