@@ -17,6 +17,7 @@ from typing import (
     Union,
     overload,
 )
+from urllib.parse import urlparse
 
 import orjson
 import sqlalchemy
@@ -24,6 +25,7 @@ from pydantic import BaseModel
 from sqlalchemy.sql.functions import GenericFunction
 from sqlalchemy.sql.sqltypes import NullType
 
+from datachain.client.fsspec import _is_win_local_path
 from datachain.dataset import DatasetRecord
 from datachain.func import literal
 from datachain.func.base import Function
@@ -2524,6 +2526,11 @@ class DataChain:
             != self._query.count()
         ):
             raise ValueError("Files with the same name found")
+
+        protocol = urlparse(str(output)).scheme
+
+        if not protocol or _is_win_local_path(output):
+            output = f"file://{output}"
 
         for file in self.collect(signal):
             file.export(output, placement, use_cache, link_type=link_type)  # type: ignore[union-attr]
