@@ -1254,7 +1254,7 @@ class DataChain:
         )
         with self._query.ordered_select(*db_signals).as_iterable() as rows:
             if row_factory:
-                rows = (row_factory(db_signals, r) for r in rows)  # type: ignore[assignment]
+                rows = (row_factory(db_signals, r) for r in rows)
             yield from rows
 
     def to_columnar_data_with_names(
