@@ -302,8 +302,12 @@ class File(DataModel):
     def save(self, destination: str):
         """Writes it's content to destination"""
         destination = stringify_path(destination)
-        client: Client = self._catalog.get_client(str(destination))
-        client.upload(self.read(), str(destination))
+        client: Client = self._catalog.get_client(destination)
+
+        if client.PREFIX == "file://" and not destination.startswith(client.PREFIX):
+            destination = Path(destination).absolute().as_uri()
+
+        client.upload(self.read(), destination)
 
     def _symlink_to(self, destination: str):
         if self.location:
