@@ -1578,7 +1578,7 @@ class Catalog:
                     signal.signal(signal.SIGTERM, orig_sigterm_handler)
                     signal.signal(signal.SIGINT, orig_sigint_handler)
 
-                    logging.info("Shutting down process %s, received %r", proc.pid, exc)
+                    logger.info("Shutting down process %s, received %r", proc.pid, exc)
                     # Rather than forwarding the signal to the child, we try to shut it
                     # down gracefully. This is because we consider the script to be
                     # interactive and special, so we give it time to cleanup before
