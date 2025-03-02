@@ -392,20 +392,34 @@ class SignalSchema:
 
         return SignalSchema(signals)
 
-    def get_flattened_hidden_fields(self):
+    @staticmethod
+    def get_flatten_hidden_fields(schema):
+        custom_types = schema.get("_custom_types", {})
+        if not custom_types:
+            return []
+
+        hidden_by_types = {
+            name: schema.get("hidden_fields", [])
+            for name, schema in custom_types.items()
+        }
+
         hidden_fields = []
 
-        def traverse(prefix, tree):
-            for field, (field_type, subtree) in tree.items():
+        def traverse(prefix, schema_info):
+            for field, field_type in schema_info.items():
                 if field == "_custom_types":
                     continue
 
-                if fields := getattr(field_type, "_hidden_fields", None):
-                    hidden_fields.extend(f"{prefix}{field}__{f}" for f in fields)
-                if subtree:
-                    traverse(prefix + field + DEFAULT_DELIMITER, subtree)
+                if field_type in custom_types:
+                    hidden_fields.extend(
+                        f"{prefix}{field}__{f}" for f in hidden_by_types[field_type]
+                    )
+                    traverse(
+                        prefix + field + "__",
+                        custom_types[field_type].get("fields", {}),
+                    )
 
-        traverse("", self.tree)
+        traverse("", schema)
 
         return hidden_fields
 
