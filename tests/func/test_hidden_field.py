@@ -57,7 +57,7 @@ def test_datachain_show_include_hidden(capsys, test_session):
     assert output_lines == expected_lines
 
 
-def test_datachain_save(test_session):
+def test_datachain_save_hidden_fields(test_session):
     inner = InnerClass(inner_value=1.1, hide_inner=1.2)
     outer = OuterClass(outer_value=1.3, hide_outer=1.4, inner_object=inner)
 
@@ -66,5 +66,6 @@ def test_datachain_save(test_session):
     version = test_session.catalog.get_dataset(ds.name).get_version(1)
     feature_schema = version.feature_schema
 
-    hidden_fields = SignalSchema.get_flatten_hidden_fields(feature_schema)
+    schema = SignalSchema.deserialize(feature_schema)
+    hidden_fields = schema.get_flattened_hidden_fields()
     assert hidden_fields == ["outer__hide_outer", "outer__inner_object__hide_inner"]
