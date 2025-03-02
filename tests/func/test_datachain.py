@@ -358,12 +358,12 @@ def test_export_images_files(test_session, tmp_dir, tmp_path, use_cache):
     for img in images:
         img["data"].save(tmp_path / img["name"])
 
-    DataChain.settings(cache=use_cache).from_values(
+    DataChain.from_values(
         file=[
             ImageFile(path=img["name"], source=f"file://{tmp_path}") for img in images
         ],
         session=test_session,
-    ).to_storage(tmp_dir / "output", placement="filename")
+    ).settings(cache=use_cache).to_storage(tmp_dir / "output", placement="filename")
 
     for img in images:
         exported_img = Image.open(tmp_dir / "output" / img["name"])
