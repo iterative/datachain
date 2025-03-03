@@ -1,3 +1,4 @@
+import decimal
 import logging
 import re
 import sqlite3
@@ -75,6 +76,8 @@ def setup():
     sqlite3.enable_callback_tracebacks(True)
     sqlite3.register_adapter(datetime, adapt_datetime)
     sqlite3.register_converter("datetime", convert_datetime)
+    sqlite3.register_adapter(decimal.Decimal, str)
+    sqlite3.register_converter("decimal", lambda s: decimal.Decimal(s.decode("ascii")))
 
     register_type_converters()
     register_backend_types("sqlite", SQLiteTypeConverter())

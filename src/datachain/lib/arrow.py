@@ -199,6 +199,8 @@ def arrow_type_mapper(col_type: pa.DataType, column: str = "") -> type:  # noqa:
         return float
     if pa.types.is_integer(col_type):
         return int
+    if pa.types.is_decimal(col_type):
+        return float
     if pa.types.is_boolean(col_type):
         return bool
     if pa.types.is_date(col_type):

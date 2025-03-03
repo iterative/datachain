@@ -56,10 +56,11 @@ from datachain.query.dataset import DatasetQuery, PartitionByType
 from datachain.query.schema import DEFAULT_DELIMITER, Column, ColumnMeta
 from datachain.sql.functions import path as pathfunc
 from datachain.telemetry import telemetry
-from datachain.utils import batched_it, inside_notebook, row_to_nested_dict
+from datachain.utils import batched_it, inside_notebook, is_ipython, row_to_nested_dict
 
 if TYPE_CHECKING:
     import pandas as pd
+    import pyiceberg.table
     from pyarrow import DataType as ArrowDataType
     from typing_extensions import Concatenate, ParamSpec, Self
 
@@ -1896,7 +1897,7 @@ class DataChain:
             options.extend(["display.max_colwidth", None])
 
         with pd.option_context(*options):
-            if inside_notebook():
+            if inside_notebook() or is_ipython():
                 from IPython.display import display
 
                 display(df)
@@ -1959,6 +1960,50 @@ class DataChain:
             split=list(ds_dict.keys()), session=session, settings=settings
         )
         return chain.gen(HFGenerator(dataset, model, *args, **kwargs), output=output)
+
+    @classmethod
+    def from_iceberg(
+        cls,
+        source: Union[str, "pyiceberg.table.Table"],
+        *,
+        storage_options: Optional[dict[str, Any]] = None,
+        nrows: Optional[int] = None,
+        session: Optional["Session"] = None,
+    ) -> "Self":
+        """Create a datachain from an [`PyIceberg Table`][pyiceberg.table.Table] table.
+
+        Args:
+            source: A [`PyIceberg table`][pyiceberg.table.Table], or a direct path
+                to the metadata.
+            storage_options: Extra options for the storage backends supported by
+                `pyiceberg`. For cloud storages, this may include configurations for
+                authentication etc.
+                For more info, see [here](https://py.iceberg.apache.org/configuration).
+            nrows: Number of rows to read from the table.
+            session: Session to use for the chain.
+
+        Example:
+            ```py
+            dc = DataChain.from_iceberg("s3://mybucket/mytable/metadata.json")
+            dc.show()
+            ```
+        """
+        from pyiceberg.io.pyarrow import schema_to_pyarrow
+        from pyiceberg.table import StaticTable
+
+        from datachain.lib.arrow import schema_to_output
+
+        if isinstance(source, str):
+            source = StaticTable.from_metadata(
+                metadata_location=source, properties=storage_options or {}
+            )
+
+        arrow_schema = schema_to_pyarrow(source.schema())
+        output, _ = schema_to_output(arrow_schema)
+
+        scan = source.scan(limit=nrows)
+        records = scan.to_arrow().to_pylist()
+        return cls.from_records(records, session=session, schema=output)
 
     def parse_tabular(
         self,

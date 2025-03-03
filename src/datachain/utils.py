@@ -395,6 +395,14 @@ def inside_colab() -> bool:
     return True
 
 
+def is_ipython() -> bool:
+    try:
+        get_ipython()  # type: ignore[name-defined] # noqa: F821
+    except NameError:
+        return False
+    return True
+
+
 def inside_notebook() -> bool:
     if inside_colab():
         return True
