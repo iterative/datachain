@@ -23,6 +23,7 @@ import sqlalchemy
 from pydantic import BaseModel
 from sqlalchemy.sql.functions import GenericFunction
 from sqlalchemy.sql.sqltypes import NullType
+from tqdm import tqdm
 
 from datachain.dataset import DatasetRecord
 from datachain.func import literal
@@ -32,7 +33,14 @@ from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import DataModel, DataType, DataValue, dict_to_data_model
 from datachain.lib.dataset_info import DatasetInfo
-from datachain.lib.file import ArrowRow, File, FileType, get_file_type
+from datachain.lib.file import (
+    EXPORT_FILES_MAX_THREADS,
+    ArrowRow,
+    File,
+    FileExporter,
+    FileType,
+    get_file_type,
+)
 from datachain.lib.file import ExportPlacement as FileExportPlacement
 from datachain.lib.listing import get_file_info, get_listing, list_bucket, ls
 from datachain.lib.listing_info import ListingInfo
@@ -411,6 +419,7 @@ class DataChain:
         object_name: str = "file",
         update: bool = False,
         anon: bool = False,
+        client_config: Optional[dict] = None,
     ) -> "Self":
         """Get data from a storage as a list of file with all file attributes.
         It returns the chain itself as usual.
@@ -423,15 +432,32 @@ class DataChain:
             object_name : Created object column name.
             update : force storage reindexing. Default is False.
             anon : If True, we will treat cloud bucket as public one
+            client_config : Optional client configuration for the storage client.
 
         Example:
+            Simple call from s3
             ```py
             chain = DataChain.from_storage("s3://my-bucket/my-dir")
+            ```
+
+            With AWS S3-compatible storage
+            ```py
+            chain = DataChain.from_storage(
+                "s3://my-bucket/my-dir",
+                client_config = {"aws_endpoint_url": "<minio-endpoint-url>"}
+            )
+            ```
+
+            Pass existing session
+            ```py
+            session = Session.get()
+            chain = DataChain.from_storage("s3://my-bucket/my-dir", session=session)
             ```
         """
         file_type = get_file_type(type)
 
-        client_config = {"anon": True} if anon else None
+        if anon:
+            client_config = (client_config or {}) | {"anon": True}
         session = Session.get(session, client_config=client_config, in_memory=in_memory)
         cache = session.catalog.cache
         client_config = session.catalog.client_config
@@ -481,16 +507,48 @@ class DataChain:
         version: Optional[int] = None,
         session: Optional[Session] = None,
         settings: Optional[dict] = None,
+        fallback_to_studio: bool = True,
     ) -> "Self":
         """Get data from a saved Dataset. It returns the chain itself.
+        If dataset or version is not found locally, it will try to pull it from Studio.
 
         Parameters:
             name : dataset name
             version : dataset version
+            session : Session to use for the chain.
+            settings : Settings to use for the chain.
+            fallback_to_studio : Try to pull dataset from Studio if not found locally.
+                Default is True.
 
         Example:
             ```py
             chain = DataChain.from_dataset("my_cats")
+            ```
+
+            ```py
+            chain = DataChain.from_dataset("my_cats", fallback_to_studio=False)
+            ```
+
+            ```py
+            chain = DataChain.from_dataset("my_cats", version=1)
+            ```
+
+            ```py
+            session = Session.get(client_config={"aws_endpoint_url": "<minio-url>"})
+            settings = {
+                "cache": True,
+                "parallel": 4,
+                "workers": 4,
+                "min_task_size": 1000,
+                "prefetch": 10,
+            }
+            chain = DataChain.from_dataset(
+                name="my_cats",
+                version=1,
+                session=session,
+                settings=settings,
+                fallback_to_studio=True,
+            )
             ```
         """
         query = DatasetQuery(
@@ -498,6 +556,7 @@ class DataChain:
             version=version,
             session=session,
             indexing_column_types=File._datachain_column_types,
+            fallback_to_studio=fallback_to_studio,
         )
         telemetry.send_event_once("class", "datachain_init", name=name, version=version)
         if settings:
@@ -2442,24 +2501,33 @@ class DataChain:
         self._setup = self._setup | kwargs
         return self
 
-    def export_files(
+    def to_storage(
         self,
         output: str,
         signal: str = "file",
         placement: FileExportPlacement = "fullpath",
-        use_cache: bool = True,
         link_type: Literal["copy", "symlink"] = "copy",
+        num_threads: Optional[int] = EXPORT_FILES_MAX_THREADS,
     ) -> None:
-        """Export files from a specified signal to a directory.
+        """Export files from a specified signal to a directory. Files can be
+        exported to a local or cloud directory.
 
         Args:
             output: Path to the target directory for exporting files.
             signal: Name of the signal to export files from.
             placement: The method to use for naming exported files.
                 The possible values are: "filename", "etag", "fullpath", and "checksum".
-            use_cache: If `True`, cache the files before exporting.
             link_type: Method to use for exporting files.
                 Falls back to `'copy'` if symlinking fails.
+            num_threads : number of threads to use for exporting files.
+                By default it uses 5 threads.
+
+        Example:
+            Cross cloud transfer
+            ```py
+            ds = DataChain.from_storage("s3://mybucket")
+            ds.to_storage("gs://mybucket", placement="filename")
+            ```
         """
         if placement == "filename" and (
             self._query.distinct(pathfunc.name(C(f"{signal}__path"))).count()
@@ -2467,8 +2535,22 @@ class DataChain:
         ):
             raise ValueError("Files with the same name found")
 
-        for file in self.collect(signal):
-            file.export(output, placement, use_cache, link_type=link_type)  # type: ignore[union-attr]
+        progress_bar = tqdm(
+            desc=f"Exporting files to {output}: ",
+            unit=" files",
+            unit_scale=True,
+            unit_divisor=10,
+            total=self.count(),
+            leave=False,
+        )
+        file_exporter = FileExporter(
+            output,
+            placement,
+            self._settings.cache if self._settings else False,
+            link_type,
+            max_threads=num_threads or 1,
+        )
+        file_exporter.run(self.collect(signal), progress_bar)
 
     def shuffle(self) -> "Self":
         """Shuffle the rows of the chain deterministically."""

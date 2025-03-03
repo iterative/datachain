@@ -472,9 +472,9 @@ def cloud_server_credentials(cloud_server, monkeypatch):
 
 def get_cloud_test_catalog(cloud_server, tmp_path, metastore, warehouse):
     cache_dir = tmp_path / ".datachain" / "cache"
-    cache_dir.mkdir(parents=True)
+    cache_dir.mkdir(parents=True, exist_ok=True)
     tmpfile_dir = tmp_path / ".datachain" / "tmp"
-    tmpfile_dir.mkdir()
+    tmpfile_dir.mkdir(exist_ok=True)
 
     catalog = Catalog(
         metastore=metastore,
@@ -631,12 +631,14 @@ def studio_datasets(requests_mock):
     with Config(ConfigLevel.GLOBAL).edit() as conf:
         conf["studio"] = {"token": "isat_access_token", "team": "team_name"}
 
+    dogs_dataset = {
+        "id": 1,
+        "name": "dogs",
+        "versions": [{"version": 1}, {"version": 2}],
+    }
+
     datasets = [
-        {
-            "id": 1,
-            "name": "dogs",
-            "versions": [{"version": 1}, {"version": 2}],
-        },
+        dogs_dataset,
         {
             "id": 2,
             "name": "cats",
@@ -650,6 +652,10 @@ def studio_datasets(requests_mock):
     ]
 
     requests_mock.get(f"{STUDIO_URL}/api/datachain/datasets", json=datasets)
+    requests_mock.get(
+        f"{STUDIO_URL}/api/datachain/datasets/info?dataset_name=dogs&team_name=team_name",
+        json=dogs_dataset,
+    )
 
 
 @pytest.fixture

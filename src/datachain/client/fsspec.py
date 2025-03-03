@@ -390,7 +390,7 @@ class Client(ABC):
         )  # type: ignore[return-value]
 
     def upload(self, data: bytes, path: str) -> "File":
-        full_path = self.get_full_path(path)
+        full_path = path if path.startswith(self.PREFIX) else self.get_full_path(path)
 
         parent = posixpath.dirname(full_path)
         self.fs.makedirs(parent, exist_ok=True)

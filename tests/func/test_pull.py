@@ -10,6 +10,8 @@ from datachain.client.fsspec import Client
 from datachain.config import Config, ConfigLevel
 from datachain.dataset import DatasetStatus
 from datachain.error import DataChainError, DatasetNotFoundError
+from datachain.lib.dc import DataChain
+from datachain.query.session import Session
 from datachain.utils import STUDIO_URL, JSONSerialize
 from tests.data import ENTRIES
 from tests.utils import assert_row_names, skip_if_not_sqlite, tree_from_path
@@ -269,6 +271,44 @@ def test_pull_dataset_success(
 
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
 @skip_if_not_sqlite
+def test_datachain_from_dataset_pull(
+    mocker,
+    cloud_test_catalog,
+    remote_dataset_info,
+    dataset_export,
+    dataset_export_status,
+    dataset_export_data_chunk,
+):
+    # Check if the datachain pull from studio if datachain is not available.
+    mocker.patch(
+        "datachain.catalog.catalog.DatasetRowsFetcher.should_check_for_status",
+        return_value=True,
+    )
+
+    catalog = cloud_test_catalog.catalog
+
+    # Makes sure dataset is not available locally at first
+    with pytest.raises(DatasetNotFoundError):
+        catalog.get_dataset("dogs")
+
+    with Session("testSession", catalog=catalog):
+        ds = DataChain.from_dataset(
+            name="dogs",
+            version=1,
+            fallback_to_studio=True,
+        )
+
+    assert ds.dataset.name == "dogs"
+    assert ds.dataset.latest_version == 1
+    assert ds.dataset.status == DatasetStatus.COMPLETE
+
+    # Check that dataset is available locally after pulling
+    dataset = catalog.get_dataset("dogs")
+    assert dataset.name == "dogs"
+
+
+@pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
+@skip_if_not_sqlite
 def test_pull_dataset_wrong_dataset_uri_format(
     requests_mock,
     cloud_test_catalog,
@@ -310,7 +350,7 @@ def test_pull_dataset_not_found_in_remote(
 
     with pytest.raises(DataChainError) as exc_info:
         catalog.pull_dataset("ds://dogs@v1")
-    assert str(exc_info.value) == "Error from server: Dataset not found"
+    assert str(exc_info.value) == "Dataset not found"
 
 
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
@@ -332,9 +372,7 @@ def test_pull_dataset_exporting_dataset_failed_in_remote(
 
     with pytest.raises(DataChainError) as exc_info:
         catalog.pull_dataset("ds://dogs@v1")
-    assert str(exc_info.value) == (
-        f"Error from server: Dataset export {export_status} in Studio"
-    )
+    assert str(exc_info.value) == f"Dataset export {export_status} in Studio"
 
 
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)

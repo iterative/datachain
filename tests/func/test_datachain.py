@@ -64,6 +64,16 @@ def test_catalog_anon(tmp_dir, catalog, anon):
     assert chain.session.catalog.client_config.get("anon", False) is anon
 
 
+def test_from_storage_client_config(tmp_dir, catalog):
+    dc = DataChain.from_storage(tmp_dir.as_uri())
+    assert dc.session.catalog.client_config == {}  # Default client config is set.
+
+    dc = DataChain.from_storage(tmp_dir.as_uri(), client_config={"anon": True})
+    assert dc.session.catalog.client_config == {
+        "anon": True
+    }  # New client config is set.
+
+
 def test_from_storage(cloud_test_catalog):
     ctc = cloud_test_catalog
     dc = DataChain.from_storage(ctc.src_uri, session=ctc.session)
@@ -291,21 +301,33 @@ def test_read_file(cloud_test_catalog, use_cache):
 @pytest.mark.parametrize("use_map", [True, False])
 @pytest.mark.parametrize("use_cache", [True, False])
 @pytest.mark.parametrize("file_type", ["", "binary", "text"])
+@pytest.mark.parametrize("num_threads", [0, 2])
 @pytest.mark.parametrize("cloud_type", ["file"], indirect=True)
-def test_export_files(
-    tmp_dir, cloud_test_catalog, test_session, placement, use_map, use_cache, file_type
+def test_to_storage(
+    tmp_dir,
+    cloud_test_catalog,
+    test_session,
+    placement,
+    use_map,
+    use_cache,
+    file_type,
+    num_threads,
 ):
     ctc = cloud_test_catalog
     df = DataChain.from_storage(ctc.src_uri, type=file_type, session=test_session)
     if use_map:
-        df.export_files(tmp_dir / "output", placement=placement, use_cache=use_cache)
-        df.map(
-            res=lambda file: file.export(
-                tmp_dir / "output", placement=placement, use_cache=use_cache
-            )
+        df.settings(cache=use_cache).to_storage(
+            tmp_dir / "output",
+            placement=placement,
+            num_threads=num_threads,
+        )
+        df.settings(cache=use_cache).map(
+            res=lambda file: file.export(tmp_dir / "output", placement=placement)
         ).exec()
     else:
-        df.export_files(tmp_dir / "output", placement=placement)
+        df.settings(cache=use_cache).to_storage(
+            tmp_dir / "output", placement=placement, num_threads=num_threads
+        )
 
     expected = {
         "description": "Cats and Dogs",
@@ -341,14 +363,35 @@ def test_export_images_files(test_session, tmp_dir, tmp_path, use_cache):
             ImageFile(path=img["name"], source=f"file://{tmp_path}") for img in images
         ],
         session=test_session,
-    ).export_files(tmp_dir / "output", placement="filename", use_cache=use_cache)
+    ).settings(cache=use_cache).to_storage(tmp_dir / "output", placement="filename")
 
     for img in images:
         exported_img = Image.open(tmp_dir / "output" / img["name"])
         assert images_equal(img["data"], exported_img)
 
 
-def test_export_files_filename_placement_not_unique_files(tmp_dir, test_session):
+def test_to_storage_relative_path(test_session, tmp_path):
+    images = [
+        {"name": "img1.jpg", "data": Image.new(mode="RGB", size=(64, 64))},
+        {"name": "img2.jpg", "data": Image.new(mode="RGB", size=(128, 128))},
+    ]
+
+    for img in images:
+        img["data"].save(tmp_path / img["name"])
+
+    DataChain.from_values(
+        file=[
+            ImageFile(path=img["name"], source=f"file://{tmp_path}") for img in images
+        ],
+        session=test_session,
+    ).to_storage("output", placement="filename")
+
+    for img in images:
+        exported_img = Image.open(Path("output") / img["name"])
+        assert images_equal(img["data"], exported_img)
+
+
+def test_to_storage_files_filename_placement_not_unique_files(tmp_dir, test_session):
     data = b"some\x00data\x00is\x48\x65\x6c\x57\x6f\x72\x6c\x64\xff\xffheRe"
     bucket_name = "mybucket"
     files = ["dir1/a.json", "dir1/dir2/a.json"]
@@ -364,7 +407,7 @@ def test_export_files_filename_placement_not_unique_files(tmp_dir, test_session)
 
     df = DataChain.from_storage((tmp_dir / bucket_name).as_uri(), session=test_session)
     with pytest.raises(ValueError):
-        df.export_files(tmp_dir / "output", placement="filename")
+        df.to_storage(tmp_dir / "output", placement="filename")
 
 
 def test_show(capsys, test_session):

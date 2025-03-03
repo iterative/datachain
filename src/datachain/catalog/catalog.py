@@ -89,10 +89,6 @@ PULL_DATASET_SLEEP_INTERVAL = 0.1  # sleep time while waiting for chunk to be av
 PULL_DATASET_CHECK_STATUS_INTERVAL = 20  # interval to check export status in Studio
 
 
-def raise_remote_error(error_message: str) -> NoReturn:
-    raise DataChainError(f"Error from server: {error_message}")
-
-
 def noop(_: str):
     pass
 
@@ -211,14 +207,14 @@ class DatasetRowsFetcher(NodesThreadPool):
             self.remote_ds_name, self.remote_ds_version
         )
         if not export_status_response.ok:
-            raise_remote_error(export_status_response.message)
+            raise DataChainError(export_status_response.message)
 
         export_status = export_status_response.data["status"]  # type: ignore [index]
 
         if export_status == "failed":
-            raise_remote_error("Dataset export failed in Studio")
+            raise DataChainError("Dataset export failed in Studio")
         if export_status == "removed":
-            raise_remote_error("Dataset export removed in Studio")
+            raise DataChainError("Dataset export removed in Studio")
 
         self.last_status_check = time.time()
 
@@ -1101,6 +1097,31 @@ class Catalog:
     def get_dataset(self, name: str) -> DatasetRecord:
         return self.metastore.get_dataset(name)
 
+    def get_dataset_with_remote_fallback(
+        self, name: str, version: Optional[int] = None
+    ) -> DatasetRecord:
+        try:
+            ds = self.get_dataset(name)
+            if version and not ds.has_version(version):
+                raise DatasetVersionNotFoundError(
+                    f"Dataset {name} does not have version {version}"
+                )
+            return ds
+
+        except (DatasetNotFoundError, DatasetVersionNotFoundError):
+            print("Dataset not found in local catalog, trying to get from studio")
+
+            remote_ds_uri = f"{DATASET_PREFIX}{name}"
+            if version:
+                remote_ds_uri += f"@v{version}"
+
+            self.pull_dataset(
+                remote_ds_uri=remote_ds_uri,
+                local_ds_name=name,
+                local_ds_version=version,
+            )
+            return self.get_dataset(name)
+
     def get_dataset_with_version_uuid(self, uuid: str) -> DatasetRecord:
         """Returns dataset that contains version with specific uuid"""
         for dataset in self.ls_datasets():
@@ -1113,7 +1134,7 @@ class Catalog:
 
         info_response = studio_client.dataset_info(name)
         if not info_response.ok:
-            raise_remote_error(info_response.message)
+            raise DataChainError(info_response.message)
 
         dataset_info = info_response.data
         assert isinstance(dataset_info, dict)
@@ -1209,6 +1230,8 @@ class Catalog:
         **kwargs,
     ) -> str:
         client_config = client_config or self.client_config
+        if client_config.get("anon"):
+            content_disposition = None
         client = Client.get_client(source, self.cache, **client_config)
         return client.url(
             path,
@@ -1407,7 +1430,7 @@ class Catalog:
             remote_ds_name, remote_ds_version.version
         )
         if not export_response.ok:
-            raise_remote_error(export_response.message)
+            raise DataChainError(export_response.message)
 
         signed_urls = export_response.data
 

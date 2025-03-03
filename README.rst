@@ -68,7 +68,7 @@ high confidence scores.
 
     likely_cats = annotated.filter((Column("meta.inference.confidence") > 0.93) \
                                    & (Column("meta.inference.class_") == "cat"))
-    likely_cats.export_files("high-confidence-cats/", signal="file")
+    likely_cats.to_storage("high-confidence-cats/", signal="file")
 
 
 Example: LLM based text-file evaluation
@@ -109,7 +109,7 @@ Python code:
     )
 
     successful_chain = chain.filter(Column("is_success") == True)
-    successful_chain.export_files("./output_mistral")
+    successful_chain.to_storage("./output_mistral")
 
     print(f"{successful_chain.count()} files were exported")
 

@@ -154,3 +154,35 @@ def test_isnone(warehouse, val, expected):
     query = select(isnone(val))
     result = tuple(warehouse.db.execute(query))
     assert result == ((expected,),)
+
+
+@pytest.mark.parametrize(
+    "val1,val2,expected",
+    [
+        [None, func.literal("a"), True],
+        [None, None, True],
+        [func.literal("a"), func.literal("a"), False],
+    ],
+)
+def test_or(warehouse, val1, val2, expected):
+    from datachain.func.conditional import isnone, or_
+
+    query = select(or_(isnone(val1), isnone(val2)))
+    result = tuple(warehouse.db.execute(query))
+    assert result == ((expected,),)
+
+
+@pytest.mark.parametrize(
+    "val1,val2,expected",
+    [
+        [None, func.literal("a"), False],
+        [None, None, True],
+        [func.literal("a"), func.literal("a"), False],
+    ],
+)
+def test_and(warehouse, val1, val2, expected):
+    from datachain.func.conditional import and_, isnone
+
+    query = select(and_(isnone(val1), isnone(val2)))
+    result = tuple(warehouse.db.execute(query))
+    assert result == ((expected,),)
