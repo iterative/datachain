@@ -301,21 +301,33 @@ def test_read_file(cloud_test_catalog, use_cache):
 @pytest.mark.parametrize("use_map", [True, False])
 @pytest.mark.parametrize("use_cache", [True, False])
 @pytest.mark.parametrize("file_type", ["", "binary", "text"])
+@pytest.mark.parametrize("num_threads", [0, 2])
 @pytest.mark.parametrize("cloud_type", ["file"], indirect=True)
 def test_to_storage(
-    tmp_dir, cloud_test_catalog, test_session, placement, use_map, use_cache, file_type
+    tmp_dir,
+    cloud_test_catalog,
+    test_session,
+    placement,
+    use_map,
+    use_cache,
+    file_type,
+    num_threads,
 ):
     ctc = cloud_test_catalog
     df = DataChain.from_storage(ctc.src_uri, type=file_type, session=test_session)
     if use_map:
-        df.to_storage(tmp_dir / "output", placement=placement, use_cache=use_cache)
-        df.map(
-            res=lambda file: file.export(
-                tmp_dir / "output", placement=placement, use_cache=use_cache
-            )
+        df.settings(cache=use_cache).to_storage(
+            tmp_dir / "output",
+            placement=placement,
+            num_threads=num_threads,
+        )
+        df.settings(cache=use_cache).map(
+            res=lambda file: file.export(tmp_dir / "output", placement=placement)
         ).exec()
     else:
-        df.to_storage(tmp_dir / "output", placement=placement)
+        df.settings(cache=use_cache).to_storage(
+            tmp_dir / "output", placement=placement, num_threads=num_threads
+        )
 
     expected = {
         "description": "Cats and Dogs",
@@ -351,7 +363,7 @@ def test_export_images_files(test_session, tmp_dir, tmp_path, use_cache):
             ImageFile(path=img["name"], source=f"file://{tmp_path}") for img in images
         ],
         session=test_session,
-    ).to_storage(tmp_dir / "output", placement="filename", use_cache=use_cache)
+    ).settings(cache=use_cache).to_storage(tmp_dir / "output", placement="filename")
 
     for img in images:
         exported_img = Image.open(tmp_dir / "output" / img["name"])
