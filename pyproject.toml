@@ -119,7 +119,7 @@ examples = [
   "defusedxml",
   "accelerate",
   "huggingface_hub[hf_transfer]",
-  "ultralytics==8.3.78",
+  "ultralytics==8.3.82",
   "open_clip_torch"
 ]
 
