@@ -1093,7 +1093,7 @@ class DataChain:
         partition_by_columns: list[Column] = []
         signal_columns: list[Column] = []
         schema_fields: dict[str, DataType] = {}
-        keep_columns = set()
+        keep_columns: list[str] = []
 
         # validate partition_by columns and add them to the schema
         for col in partition_by:
@@ -1101,7 +1101,8 @@ class DataChain:
                 col_db_name = ColumnMeta.to_db_name(col)
                 col_type = self.signals_schema.get_column_type(col_db_name)
                 column = Column(col_db_name, python_to_sql(col_type))
-                keep_columns.add(col)
+                if col not in keep_columns:
+                    keep_columns.append(col)
             elif isinstance(col, Function):
                 column = col.get_column(self.signals_schema)
                 col_db_name = column.name
