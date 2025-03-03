@@ -24,6 +24,7 @@ from pydantic import Field, field_validator
 from datachain.client.fileslice import FileSlice
 from datachain.lib.data_model import DataModel
 from datachain.lib.utils import DataChainError
+from datachain.nodes_thread_pool import NodesThreadPool
 from datachain.sql.types import JSON, Boolean, DateTime, Int, String
 from datachain.utils import TIME_ZERO
 
@@ -43,6 +44,35 @@ logger = logging.getLogger("datachain")
 ExportPlacement = Literal["filename", "etag", "fullpath", "checksum"]
 
 FileType = Literal["binary", "text", "image", "video"]
+EXPORT_FILES_MAX_THREADS = 5
+
+
+class FileExporter(NodesThreadPool):
+    """Class that does file exporting concurrently with thread pool"""
+
+    def __init__(
+        self,
+        output: str,
+        placement: ExportPlacement,
+        use_cache: bool,
+        link_type: Literal["copy", "symlink"],
+        max_threads: int = EXPORT_FILES_MAX_THREADS,
+    ):
+        super().__init__(max_threads)
+        self.output = output
+        self.placement = placement
+        self.use_cache = use_cache
+        self.link_type = link_type
+
+    def done_task(self, done):
+        for task in done:
+            task.result()
+
+    def do_task(self, file):
+        file.export(
+            self.output, self.placement, self.use_cache, link_type=self.link_type
+        )
+        self.increase_counter(1)
 
 
 class VFileError(DataChainError):
@@ -302,8 +332,7 @@ class File(DataModel):
         link_type: Literal["copy", "symlink"] = "copy",
     ) -> None:
         """Export file to new location."""
-        if use_cache:
-            self._caching_enabled = use_cache
+        self._caching_enabled = use_cache
         dst = self.get_destination_path(output, placement)
         dst_dir = os.path.dirname(dst)
         client: Client = self._catalog.get_client(dst_dir)
