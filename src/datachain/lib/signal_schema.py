@@ -91,6 +91,7 @@ class CustomType(BaseModel):
     name: str
     fields: dict[str, str]
     bases: list[tuple[str, str, Optional[str]]]
+    hidden_fields: Optional[list[str]] = None
 
     @classmethod
     def deserialize(cls, data: dict[str, Any], type_name: str) -> "CustomType":
@@ -102,6 +103,7 @@ class CustomType(BaseModel):
                 "name": type_name,
                 "fields": data,
                 "bases": [],
+                "hidden_fields": [],
             }
 
         return cls(**data)
@@ -208,7 +210,13 @@ class SignalSchema:
 
         bases = SignalSchema._get_bases(fr)
 
-        ct = CustomType(schema_version=2, name=version_name, fields=fields, bases=bases)
+        ct = CustomType(
+            schema_version=2,
+            name=version_name,
+            fields=fields,
+            bases=bases,
+            hidden_fields=getattr(fr, "_hidden_fields", []),
+        )
         custom_types[version_name] = ct.model_dump()
 
         return version_name
@@ -389,6 +397,37 @@ class SignalSchema:
 
         return SignalSchema(signals)
 
+    @staticmethod
+    def get_flatten_hidden_fields(schema):
+        custom_types = schema.get("_custom_types", {})
+        if not custom_types:
+            return []
+
+        hidden_by_types = {
+            name: schema.get("hidden_fields", [])
+            for name, schema in custom_types.items()
+        }
+
+        hidden_fields = []
+
+        def traverse(prefix, schema_info):
+            for field, field_type in schema_info.items():
+                if field == "_custom_types":
+                    continue
+
+                if field_type in custom_types:
+                    hidden_fields.extend(
+                        f"{prefix}{field}__{f}" for f in hidden_by_types[field_type]
+                    )
+                    traverse(
+                        prefix + field + "__",
+                        custom_types[field_type].get("fields", {}),
+                    )
+
+        traverse("", schema)
+
+        return hidden_fields
+
     def to_udf_spec(self) -> dict[str, type]:
         res = {}
         for path, type_, has_subtree, _ in self.get_flat_tree():
@@ -484,7 +523,7 @@ class SignalSchema:
         raise SignalResolvingError([col_name], "is not found")
 
     def db_signals(
-        self, name: Optional[str] = None, as_columns=False
+        self, name: Optional[str] = None, as_columns=False, include_hidden: bool = True
     ) -> Union[list[str], list[Column]]:
         """
         Returns DB columns as strings or Column objects with proper types
@@ -494,7 +533,9 @@ class SignalSchema:
             DEFAULT_DELIMITER.join(path)
             if not as_columns
             else Column(DEFAULT_DELIMITER.join(path), python_to_sql(_type))
-            for path, _type, has_subtree, _ in self.get_flat_tree()
+            for path, _type, has_subtree, _ in self.get_flat_tree(
+                include_hidden=include_hidden
+            )
             if not has_subtree
         ]
 
@@ -629,19 +670,31 @@ class SignalSchema:
             for name, val in values.items()
         }
 
-    def get_flat_tree(self) -> Iterator[tuple[list[str], DataType, bool, int]]:
-        yield from self._get_flat_tree(self.tree, [], 0)
+    def get_flat_tree(
+        self, include_hidden: bool = True
+    ) -> Iterator[tuple[list[str], DataType, bool, int]]:
+        yield from self._get_flat_tree(self.tree, [], 0, include_hidden)
 
     def _get_flat_tree(
-        self, tree: dict, prefix: list[str], depth: int
+        self, tree: dict, prefix: list[str], depth: int, include_hidden: bool
     ) -> Iterator[tuple[list[str], DataType, bool, int]]:
         for name, (type_, substree) in tree.items():
             suffix = name.split(".")
             new_prefix = prefix + suffix
+            hidden_fields = getattr(type_, "_hidden_fields", None)
+            if hidden_fields and substree and not include_hidden:
+                substree = {
+                    field: info
+                    for field, info in substree.items()
+                    if field not in hidden_fields
+                }
+
             has_subtree = substree is not None
             yield new_prefix, type_, has_subtree, depth
             if substree is not None:
-                yield from self._get_flat_tree(substree, new_prefix, depth + 1)
+                yield from self._get_flat_tree(
+                    substree, new_prefix, depth + 1, include_hidden
+                )
 
     def print_tree(self, indent: int = 4, start_at: int = 0):
         for path, type_, _, depth in self.get_flat_tree():
@@ -654,9 +707,13 @@ class SignalSchema:
                     sub_schema = SignalSchema({"* list of": args[0]})
                     sub_schema.print_tree(indent=indent, start_at=total_indent + indent)
 
-    def get_headers_with_length(self):
+    def get_headers_with_length(self, include_hidden: bool = True):
         paths = [
-            path for path, _, has_subtree, _ in self.get_flat_tree() if not has_subtree
+            path
+            for path, _, has_subtree, _ in self.get_flat_tree(
+                include_hidden=include_hidden
+            )
+            if not has_subtree
         ]
         max_length = max([len(path) for path in paths], default=0)
         return [

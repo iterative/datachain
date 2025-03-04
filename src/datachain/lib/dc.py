@@ -23,6 +23,7 @@ import sqlalchemy
 from pydantic import BaseModel
 from sqlalchemy.sql.functions import GenericFunction
 from sqlalchemy.sql.sqltypes import NullType
+from tqdm import tqdm
 
 from datachain.dataset import DatasetRecord
 from datachain.func import literal
@@ -32,7 +33,14 @@ from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import DataModel, DataType, DataValue, dict_to_data_model
 from datachain.lib.dataset_info import DatasetInfo
-from datachain.lib.file import ArrowRow, File, FileType, get_file_type
+from datachain.lib.file import (
+    EXPORT_FILES_MAX_THREADS,
+    ArrowRow,
+    File,
+    FileExporter,
+    FileType,
+    get_file_type,
+)
 from datachain.lib.file import ExportPlacement as FileExportPlacement
 from datachain.lib.listing import get_file_info, get_listing, list_bucket, ls
 from datachain.lib.listing_info import ListingInfo
@@ -64,7 +72,6 @@ C = Column
 _T = TypeVar("_T")
 D = TypeVar("D", bound="DataChain")
 UDFObjT = TypeVar("UDFObjT", bound=UDFBase)
-
 
 DEFAULT_PARQUET_CHUNK_SIZE = 100_000
 
@@ -1233,22 +1240,36 @@ class DataChain:
     def collect_flatten(self) -> Iterator[tuple[Any, ...]]: ...
 
     @overload
+    def collect_flatten(self, *, include_hidden: bool) -> Iterator[tuple[Any, ...]]: ...
+
+    @overload
     def collect_flatten(
         self, *, row_factory: Callable[[list[str], tuple[Any, ...]], _T]
     ) -> Iterator[_T]: ...
 
-    def collect_flatten(self, *, row_factory=None):
+    @overload
+    def collect_flatten(
+        self,
+        *,
+        row_factory: Callable[[list[str], tuple[Any, ...]], _T],
+        include_hidden: bool,
+    ) -> Iterator[_T]: ...
+
+    def collect_flatten(self, *, row_factory=None, include_hidden: bool = True):
         """Yields flattened rows of values as a tuple.
 
         Args:
             row_factory : A callable to convert row to a custom format.
                           It should accept two arguments: a list of column names and
                           a tuple of row values.
+            include_hidden: Whether to include hidden signals from the schema.
         """
-        db_signals = self._effective_signals_schema.db_signals()
+        db_signals = self._effective_signals_schema.db_signals(
+            include_hidden=include_hidden
+        )
         with self._query.ordered_select(*db_signals).as_iterable() as rows:
             if row_factory:
-                rows = (row_factory(db_signals, r) for r in rows)
+                rows = (row_factory(db_signals, r) for r in rows)  # type: ignore[assignment]
             yield from rows
 
     def to_columnar_data_with_names(
@@ -1282,10 +1303,23 @@ class DataChain:
         self, *, row_factory: Callable[[list[str], tuple[Any, ...]], _T]
     ) -> list[_T]: ...
 
-    def results(self, *, row_factory=None):  # noqa: D102
+    @overload
+    def results(
+        self,
+        *,
+        row_factory: Callable[[list[str], tuple[Any, ...]], _T],
+        include_hidden: bool,
+    ) -> list[_T]: ...
+
+    @overload
+    def results(self, *, include_hidden: bool) -> list[tuple[Any, ...]]: ...
+
+    def results(self, *, row_factory=None, include_hidden=True):  # noqa: D102
         if row_factory is None:
-            return list(self.collect_flatten())
-        return list(self.collect_flatten(row_factory=row_factory))
+            return list(self.collect_flatten(include_hidden=include_hidden))
+        return list(
+            self.collect_flatten(row_factory=row_factory, include_hidden=include_hidden)
+        )
 
     def to_records(self) -> list[dict[str, Any]]:
         """Convert every row to a dictionary."""
@@ -1795,21 +1829,25 @@ class DataChain:
             **fr_map,
         )
 
-    def to_pandas(self, flatten=False) -> "pd.DataFrame":
+    def to_pandas(self, flatten=False, include_hidden=True) -> "pd.DataFrame":
         """Return a pandas DataFrame from the chain.
 
         Parameters:
             flatten : Whether to use a multiindex or flatten column names.
+            include_hidden : Whether to include hidden columns.
         """
         import pandas as pd
 
-        headers, max_length = self._effective_signals_schema.get_headers_with_length()
+        headers, max_length = self._effective_signals_schema.get_headers_with_length(
+            include_hidden=include_hidden
+        )
         if flatten or max_length < 2:
             columns = [".".join(filter(None, header)) for header in headers]
         else:
             columns = pd.MultiIndex.from_tuples(map(tuple, headers))
 
-        return pd.DataFrame.from_records(self.results(), columns=columns)
+        results = self.results(include_hidden=include_hidden)
+        return pd.DataFrame.from_records(results, columns=columns)
 
     def show(
         self,
@@ -1817,6 +1855,7 @@ class DataChain:
         flatten=False,
         transpose=False,
         truncate=True,
+        include_hidden=False,
     ) -> None:
         """Show a preview of the chain results.
 
@@ -1825,11 +1864,12 @@ class DataChain:
             flatten : Whether to use a multiindex or flatten column names.
             transpose : Whether to transpose rows and columns.
             truncate : Whether or not to truncate the contents of columns.
+            include_hidden : Whether to include hidden columns.
         """
         import pandas as pd
 
         dc = self.limit(limit) if limit > 0 else self  # type: ignore[misc]
-        df = dc.to_pandas(flatten)
+        df = dc.to_pandas(flatten, include_hidden=include_hidden)
 
         if df.empty:
             print("Empty result")
@@ -2505,19 +2545,21 @@ class DataChain:
         output: str,
         signal: str = "file",
         placement: FileExportPlacement = "fullpath",
-        use_cache: bool = True,
         link_type: Literal["copy", "symlink"] = "copy",
+        num_threads: Optional[int] = EXPORT_FILES_MAX_THREADS,
     ) -> None:
-        """Export files from a specified signal to a directory.
+        """Export files from a specified signal to a directory. Files can be
+        exported to a local or cloud directory.
 
         Args:
             output: Path to the target directory for exporting files.
             signal: Name of the signal to export files from.
             placement: The method to use for naming exported files.
                 The possible values are: "filename", "etag", "fullpath", and "checksum".
-            use_cache: If `True`, cache the files before exporting.
             link_type: Method to use for exporting files.
                 Falls back to `'copy'` if symlinking fails.
+            num_threads : number of threads to use for exporting files.
+                By default it uses 5 threads.
 
         Example:
             Cross cloud transfer
@@ -2532,8 +2574,22 @@ class DataChain:
         ):
             raise ValueError("Files with the same name found")
 
-        for file in self.collect(signal):
-            file.export(output, placement, use_cache, link_type=link_type)  # type: ignore[union-attr]
+        progress_bar = tqdm(
+            desc=f"Exporting files to {output}: ",
+            unit=" files",
+            unit_scale=True,
+            unit_divisor=10,
+            total=self.count(),
+            leave=False,
+        )
+        file_exporter = FileExporter(
+            output,
+            placement,
+            self._settings.cache if self._settings else False,
+            link_type,
+            max_threads=num_threads or 1,
+        )
+        file_exporter.run(self.collect(signal), progress_bar)
 
     def shuffle(self) -> "Self":
         """Shuffle the rows of the chain deterministically."""
