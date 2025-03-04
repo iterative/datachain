@@ -79,14 +79,15 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
       - name: Set up FFmpeg
-        if: runner.os != 'macOS' || runner.arch != 'ARM64'
-        uses: FedericoCarboni/setup-ffmpeg@v3.1
-        with:
-          ffmpeg-version: release
-          github-token: ${{ github.server_url == 'https://github.com' && github.token || '' }}
-      - name: Set up FFmpeg
-        if: runner.os == 'macOS' && runner.arch == 'ARM64'
+        uses: AnimMouse/setup-ffmpeg@v1
+        id: ffmpeg-install
+        continue-on-error: true
+
+      # https://github.com/AnimMouse/setup-ffmpeg/issues/5
+      - if: steps.ffmpeg-install.conclusion == 'failure' && runner.os == 'macOS'
         run: brew install ffmpeg
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
 
       - name: Set up Python ${{ matrix.pyv }}
         uses: actions/setup-python@v5
