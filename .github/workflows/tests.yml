@@ -60,16 +60,16 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest-8-cores]
-        pyv: ['3.9', '3.10', '3.11', '3.12']
+        pyv: ['3.9', '3.10', '3.11', '3.12', '3.13']
         include:
           - os: macos-latest
             pyv: '3.9'
           - os: macos-latest
-            pyv: '3.12'
+            pyv: '3.13'
           - os: windows-latest
             pyv: '3.9'
           - os: windows-latest
-            pyv: '3.12'
+            pyv: '3.13'
 
     steps:
       - name: Check out the repository
@@ -80,6 +80,14 @@ jobs:
 
       - name: Set up FFmpeg
         uses: AnimMouse/setup-ffmpeg@v1
+        id: ffmpeg-install
+        continue-on-error: ${{ runner.os == 'macOS' }}
+
+      # https://github.com/AnimMouse/setup-ffmpeg/issues/5
+      - if: steps.ffmpeg-install.outcome == 'failure' && runner.os == 'macOS'
+        run: brew install ffmpeg
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
 
       - name: Set up Python ${{ matrix.pyv }}
         uses: actions/setup-python@v5
@@ -132,14 +140,14 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        pyv: ['3.9', '3.12']
+        pyv: ['3.9', '3.13']
         group: ['get_started', 'computer_vision', 'llm_and_nlp', 'multimodal']
         exclude:
           - {os: ubuntu-latest, pyv: '3.9', group: 'multimodal'}
-          - {os: ubuntu-latest, pyv: '3.12', group: 'multimodal'}
+          - {os: ubuntu-latest, pyv: '3.13', group: 'multimodal'}
         include:
           - {os: ubuntu-latest-4-cores, pyv: "3.9", group: multimodal}
-          - {os: ubuntu-latest-4-cores, pyv: "3.12", group: multimodal}
+          - {os: ubuntu-latest-4-cores, pyv: "3.13", group: multimodal}
 
     steps:
       - uses: actions/checkout@v4
@@ -163,7 +171,7 @@ jobs:
 
       # HF runs against actual API - thus run it only once
       - name: Set hf token
-        if: matrix.os == 'ubuntu-latest' && matrix.pyv == '3.12'
+        if: matrix.os == 'ubuntu-latest' && matrix.pyv == '3.13'
         run: echo 'HF_TOKEN=${{ secrets.HF_TOKEN }}' >> "$GITHUB_ENV"
 
       - name: Run examples

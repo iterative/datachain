@@ -215,6 +215,7 @@ def handle_show_command(args, catalog):
         columns=args.columns,
         no_collapse=args.no_collapse,
         schema=args.schema,
+        include_hidden=args.hidden,
     )
 
 
