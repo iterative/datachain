@@ -79,10 +79,14 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
       - name: Set up FFmpeg
+        if: runner.os != 'macOS' || runner.arch != 'ARM64'
         uses: FedericoCarboni/setup-ffmpeg@v3
         with:
           ffmpeg-version: release
           github-token: ${{ github.server_url == 'https://github.com' && github.token || '' }}
+      - name: Set up FFmpeg
+        if: runner.os == 'macOS' && runner.arch == 'ARM64'
+        run: brew install ffmpeg
 
       - name: Set up Python ${{ matrix.pyv }}
         uses: actions/setup-python@v5
