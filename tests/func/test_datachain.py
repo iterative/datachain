@@ -1526,9 +1526,7 @@ def test_datachain_save_with_job(test_session, catalog, datachain_job_id):
     assert result_job_id == datachain_job_id
 
 
-@pytest.mark.parametrize("partition_by", ["file_info.path", "file_info__path"])
-@pytest.mark.parametrize("signal_name", ["file.size", "file__size"])
-def test_group_by_signals(cloud_test_catalog, partition_by, signal_name):
+def test_group_by_signals(cloud_test_catalog):
     from datachain import func
 
     session = cloud_test_catalog.session
@@ -1552,15 +1550,33 @@ def test_group_by_signals(cloud_test_catalog, partition_by, signal_name):
         .map(file_info, params=["file"], output={"file_info": FileInfo})
         .group_by(
             cnt=func.count(),
-            sum=func.sum(signal_name),
-            value=func.any_value(signal_name),
-            partition_by=partition_by,
+            sum=func.sum("file.size"),
+            value=func.any_value("file.size"),
+            partition_by="file_info.path",
         )
         .save("my-ds")
     )
 
     assert ds.signals_schema.serialize() == {
-        "file_info__path": "str",
+        "_custom_types": {
+            "FileInfoPartial1@v1": {
+                "bases": [
+                    (
+                        "FileInfoPartial1",
+                        "datachain.lib.signal_schema",
+                        "FileInfoPartial1@v1",
+                    ),
+                    ("DataModel", "datachain.lib.data_model", "DataModel@v1"),
+                    ("BaseModel", "pydantic.main", None),
+                    ("object", "builtins", None),
+                ],
+                "fields": {"path": "str"},
+                "hidden_fields": [],
+                "name": "FileInfoPartial1@v1",
+                "schema_version": 2,
+            }
+        },
+        "file_info": "FileInfoPartial1@v1",
         "cnt": "int",
         "sum": "int",
         "value": "int",
@@ -1572,6 +1588,253 @@ def test_group_by_signals(cloud_test_catalog, partition_by, signal_name):
             {"file_info__path": "dogs", "cnt": 4, "sum": 15, "value": ANY_VALUE(3, 4)},
         ],
         "file_info__path",
+    )
+
+
+def test_group_by_signals_same_model(cloud_test_catalog):
+    from datachain import func
+
+    session = cloud_test_catalog.session
+    src_uri = cloud_test_catalog.src_uri
+
+    class FileInfo(DataModel):
+        path: str = ""
+        name: str = ""
+
+    def file_info(file: File) -> FileInfo:
+        full_path = file.source.rstrip("/") + "/" + file.path
+        rel_path = posixpath.relpath(full_path, src_uri)
+        path_parts = rel_path.split("/", 1)
+        return FileInfo(
+            path=path_parts[0] if len(path_parts) > 1 else "",
+            name=path_parts[1] if len(path_parts) > 1 else path_parts[0],
+        )
+
+    ds = (
+        DataChain.from_storage(src_uri, session=session)
+        .map(f1=file_info)
+        .map(f2=file_info)
+        .group_by(
+            cnt=func.count(),
+            sum=func.sum("file.size"),
+            partition_by=("f1.name", "f2.path"),
+        )
+        .save("my-ds")
+    )
+
+    assert ds.signals_schema.serialize() == {
+        "_custom_types": {
+            "FileInfoPartial1@v1": {
+                "bases": [
+                    (
+                        "FileInfoPartial1",
+                        "datachain.lib.signal_schema",
+                        "FileInfoPartial1@v1",
+                    ),
+                    ("DataModel", "datachain.lib.data_model", "DataModel@v1"),
+                    ("BaseModel", "pydantic.main", None),
+                    ("object", "builtins", None),
+                ],
+                "fields": {"name": "str"},
+                "hidden_fields": [],
+                "name": "FileInfoPartial1@v1",
+                "schema_version": 2,
+            },
+            "FileInfoPartial2@v1": {
+                "bases": [
+                    (
+                        "FileInfoPartial2",
+                        "datachain.lib.signal_schema",
+                        "FileInfoPartial2@v1",
+                    ),
+                    ("DataModel", "datachain.lib.data_model", "DataModel@v1"),
+                    ("BaseModel", "pydantic.main", None),
+                    ("object", "builtins", None),
+                ],
+                "fields": {"path": "str"},
+                "hidden_fields": [],
+                "name": "FileInfoPartial2@v1",
+                "schema_version": 2,
+            },
+        },
+        "f1": "FileInfoPartial1@v1",
+        "f2": "FileInfoPartial2@v1",
+        "cnt": "int",
+        "sum": "int",
+    }
+    assert sorted_dicts(ds.to_records(), "f1__name", "f2__path") == sorted_dicts(
+        [
+            {"f1__name": "cat1", "f2__path": "cats", "cnt": 1, "sum": 4},
+            {"f1__name": "cat2", "f2__path": "cats", "cnt": 1, "sum": 4},
+            {"f1__name": "description", "f2__path": "", "cnt": 1, "sum": 13},
+            {"f1__name": "dog1", "f2__path": "dogs", "cnt": 1, "sum": 4},
+            {"f1__name": "dog2", "f2__path": "dogs", "cnt": 1, "sum": 3},
+            {"f1__name": "dog3", "f2__path": "dogs", "cnt": 1, "sum": 4},
+            {"f1__name": "others/dog4", "f2__path": "dogs", "cnt": 1, "sum": 4},
+        ],
+        "f1__name",
+        "f2__path",
+    )
+
+
+def test_group_by_signals_nested(cloud_test_catalog):
+    from datachain import func
+
+    session = cloud_test_catalog.session
+    src_uri = cloud_test_catalog.src_uri
+
+    class FileName(DataModel):
+        name: str = ""
+
+    class FileInfo(DataModel):
+        path: str = ""
+        name: FileName
+
+    def file_info(file: File) -> FileInfo:
+        full_path = file.source.rstrip("/") + "/" + file.path
+        rel_path = posixpath.relpath(full_path, src_uri)
+        path_parts = rel_path.split("/", 1)
+        return FileInfo(
+            path=path_parts[0] if len(path_parts) > 1 else "",
+            name=FileName(
+                name=path_parts[1] if len(path_parts) > 1 else path_parts[0],
+            ),
+        )
+
+    ds = (
+        DataChain.from_storage(src_uri, session=session)
+        .map(f1=file_info)
+        .map(f2=file_info)
+        .group_by(
+            cnt=func.count(),
+            sum=func.sum("file.size"),
+            partition_by=("f1.name.name", "f2.path"),
+        )
+        .save("my-ds")
+    )
+
+    assert ds.signals_schema.serialize() == {
+        "_custom_types": {
+            "FileInfoPartial1@v1": {
+                "bases": [
+                    (
+                        "FileInfoPartial1",
+                        "datachain.lib.signal_schema",
+                        "FileInfoPartial1@v1",
+                    ),
+                    ("DataModel", "datachain.lib.data_model", "DataModel@v1"),
+                    ("BaseModel", "pydantic.main", None),
+                    ("object", "builtins", None),
+                ],
+                "fields": {"name": "FileNamePartial1@v1"},
+                "hidden_fields": [],
+                "name": "FileInfoPartial1@v1",
+                "schema_version": 2,
+            },
+            "FileInfoPartial2@v1": {
+                "bases": [
+                    (
+                        "FileInfoPartial2",
+                        "datachain.lib.signal_schema",
+                        "FileInfoPartial2@v1",
+                    ),
+                    ("DataModel", "datachain.lib.data_model", "DataModel@v1"),
+                    ("BaseModel", "pydantic.main", None),
+                    ("object", "builtins", None),
+                ],
+                "fields": {"path": "str"},
+                "hidden_fields": [],
+                "name": "FileInfoPartial2@v1",
+                "schema_version": 2,
+            },
+            "FileNamePartial1@v1": {
+                "bases": [
+                    (
+                        "FileNamePartial1",
+                        "datachain.lib.signal_schema",
+                        "FileNamePartial1@v1",
+                    ),
+                    ("DataModel", "datachain.lib.data_model", "DataModel@v1"),
+                    ("BaseModel", "pydantic.main", None),
+                    ("object", "builtins", None),
+                ],
+                "fields": {"name": "str"},
+                "hidden_fields": [],
+                "name": "FileNamePartial1@v1",
+                "schema_version": 2,
+            },
+        },
+        "f1": "FileInfoPartial1@v1",
+        "f2": "FileInfoPartial2@v1",
+        "cnt": "int",
+        "sum": "int",
+    }
+    assert sorted_dicts(ds.to_records(), "f1__name__name", "f2__path") == sorted_dicts(
+        [
+            {"f1__name__name": "cat1", "f2__path": "cats", "cnt": 1, "sum": 4},
+            {"f1__name__name": "cat2", "f2__path": "cats", "cnt": 1, "sum": 4},
+            {"f1__name__name": "description", "f2__path": "", "cnt": 1, "sum": 13},
+            {"f1__name__name": "dog1", "f2__path": "dogs", "cnt": 1, "sum": 4},
+            {"f1__name__name": "dog2", "f2__path": "dogs", "cnt": 1, "sum": 3},
+            {"f1__name__name": "dog3", "f2__path": "dogs", "cnt": 1, "sum": 4},
+            {"f1__name__name": "others/dog4", "f2__path": "dogs", "cnt": 1, "sum": 4},
+        ],
+        "f1__name__name",
+        "f2__path",
+    )
+
+
+def test_group_by_known_signals(cloud_test_catalog):
+    from datachain import func
+    from datachain.model import BBox
+
+    session = cloud_test_catalog.session
+    src_uri = cloud_test_catalog.src_uri
+
+    def process(file: File) -> BBox:
+        return BBox(title=file.path.split("/")[0], coords=[10, 20, 80, 90])
+
+    ds = (
+        DataChain.from_storage(src_uri, session=session)
+        .map(box=process)
+        .group_by(
+            cnt=func.count(),
+            value=func.any_value("box.coords"),
+            partition_by="box.title",
+        )
+        .save("my-ds")
+    )
+
+    assert ds.signals_schema.serialize() == {
+        "_custom_types": {
+            "BBoxPartial1@v1": {
+                "bases": [
+                    (
+                        "BBoxPartial1",
+                        "datachain.lib.signal_schema",
+                        "BBoxPartial1@v1",
+                    ),
+                    ("DataModel", "datachain.lib.data_model", "DataModel@v1"),
+                    ("BaseModel", "pydantic.main", None),
+                    ("object", "builtins", None),
+                ],
+                "fields": {"title": "str"},
+                "hidden_fields": [],
+                "name": "BBoxPartial1@v1",
+                "schema_version": 2,
+            }
+        },
+        "box": "BBoxPartial1@v1",
+        "cnt": "int",
+        "value": "list[int]",
+    }
+    assert sorted_dicts(ds.to_records(), "box__title") == sorted_dicts(
+        [
+            {"box__title": "cats", "cnt": 2, "value": [10, 20, 80, 90]},
+            {"box__title": "description", "cnt": 1, "value": [10, 20, 80, 90]},
+            {"box__title": "dogs", "cnt": 4, "value": [10, 20, 80, 90]},
+        ],
+        "box__title",
     )
 
 

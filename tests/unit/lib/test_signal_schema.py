@@ -1005,3 +1005,130 @@ def test_column_types(column_type, signal_type):
 
     assert len(signals) == 1
     assert signals["val"] is signal_type
+
+
+def test_to_partial():
+    schema = SignalSchema({"name": str, "age": float, "f": File})
+    partial = schema.to_partial("name", "f.path")
+    assert partial.serialize() == {
+        "_custom_types": {
+            "FilePartial1@v1": {
+                "bases": [
+                    ("FilePartial1", "datachain.lib.signal_schema", "FilePartial1@v1"),
+                    ("DataModel", "datachain.lib.data_model", "DataModel@v1"),
+                    ("BaseModel", "pydantic.main", None),
+                    ("object", "builtins", None),
+                ],
+                "fields": {
+                    "path": "str",
+                },
+                "hidden_fields": [],
+                "name": "FilePartial1@v1",
+                "schema_version": 2,
+            },
+        },
+        "name": "str",
+        "f": "FilePartial1@v1",
+    }
+
+
+def test_to_partial_duplicate():
+    schema = SignalSchema({"name": str, "age": float, "f1": File, "f2": File})
+    partial = schema.to_partial("age", "f1.path", "f2.source")
+    assert partial.serialize() == {
+        "_custom_types": {
+            "FilePartial1@v1": {
+                "bases": [
+                    ("FilePartial1", "datachain.lib.signal_schema", "FilePartial1@v1"),
+                    ("DataModel", "datachain.lib.data_model", "DataModel@v1"),
+                    ("BaseModel", "pydantic.main", None),
+                    ("object", "builtins", None),
+                ],
+                "fields": {
+                    "path": "str",
+                },
+                "hidden_fields": [],
+                "name": "FilePartial1@v1",
+                "schema_version": 2,
+            },
+            "FilePartial2@v1": {
+                "bases": [
+                    ("FilePartial2", "datachain.lib.signal_schema", "FilePartial2@v1"),
+                    ("DataModel", "datachain.lib.data_model", "DataModel@v1"),
+                    ("BaseModel", "pydantic.main", None),
+                    ("object", "builtins", None),
+                ],
+                "fields": {
+                    "source": "str",
+                },
+                "hidden_fields": [],
+                "name": "FilePartial2@v1",
+                "schema_version": 2,
+            },
+        },
+        "age": "float",
+        "f1": "FilePartial1@v1",
+        "f2": "FilePartial2@v1",
+    }
+
+
+def test_to_partial_nested():
+    class Custom(DataModel):
+        foo: str
+        file: File
+
+    schema = SignalSchema({"name": str, "age": float, "f": File, "custom": Custom})
+    partial = schema.to_partial("name", "f.path", "custom.file.source")
+    assert partial.serialize() == {
+        "_custom_types": {
+            "FilePartial1@v1": {
+                "bases": [
+                    ("FilePartial1", "datachain.lib.signal_schema", "FilePartial1@v1"),
+                    ("DataModel", "datachain.lib.data_model", "DataModel@v1"),
+                    ("BaseModel", "pydantic.main", None),
+                    ("object", "builtins", None),
+                ],
+                "fields": {
+                    "path": "str",
+                },
+                "hidden_fields": [],
+                "name": "FilePartial1@v1",
+                "schema_version": 2,
+            },
+            "FilePartial2@v1": {
+                "bases": [
+                    ("FilePartial2", "datachain.lib.signal_schema", "FilePartial2@v1"),
+                    ("DataModel", "datachain.lib.data_model", "DataModel@v1"),
+                    ("BaseModel", "pydantic.main", None),
+                    ("object", "builtins", None),
+                ],
+                "fields": {
+                    "source": "str",
+                },
+                "hidden_fields": [],
+                "name": "FilePartial2@v1",
+                "schema_version": 2,
+            },
+            "CustomPartial1@v1": {
+                "bases": [
+                    (
+                        "CustomPartial1",
+                        "datachain.lib.signal_schema",
+                        "CustomPartial1@v1",
+                    ),
+                    ("DataModel", "datachain.lib.data_model", "DataModel@v1"),
+                    ("BaseModel", "pydantic.main", None),
+                    ("object", "builtins", None),
+                ],
+                "fields": {
+                    "file": "FilePartial2@v1",
+                },
+                "hidden_fields": [],
+                "name": "CustomPartial1@v1",
+                "schema_version": 2,
+            },
+        },
+        "name": "str",
+        "f": "FilePartial1@v1",
+        "custom": "CustomPartial1@v1",
+    }
