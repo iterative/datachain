@@ -1,4 +1,7 @@
 """Automation using nox."""
+# /// script
+# dependencies = ["nox"]
+# ///
 
 import glob
 import os
@@ -96,3 +99,7 @@ def examples(session: nox.Session) -> None:
         "examples",
         *session.posargs,
     )
+
+
+if __name__ == "__main__":
+    nox.main()
