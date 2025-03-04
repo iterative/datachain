@@ -80,7 +80,7 @@ jobs:
 
       - name: Set up FFmpeg
         if: runner.os != 'macOS' || runner.arch != 'ARM64'
-        uses: FedericoCarboni/setup-ffmpeg@v3
+        uses: FedericoCarboni/setup-ffmpeg@v3.1
         with:
           ffmpeg-version: release
           github-token: ${{ github.server_url == 'https://github.com' && github.token || '' }}
