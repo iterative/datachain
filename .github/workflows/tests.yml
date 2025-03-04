@@ -80,6 +80,14 @@ jobs:
 
       - name: Set up FFmpeg
         uses: AnimMouse/setup-ffmpeg@v1
+        id: ffmpeg-install
+        continue-on-error: ${{ runner.os == 'macOS' }}
+
+      # https://github.com/AnimMouse/setup-ffmpeg/issues/5
+      - if: steps.ffmpeg-install.outcome == 'failure' && runner.os == 'macOS'
+        run: brew install ffmpeg
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
 
       - name: Set up Python ${{ matrix.pyv }}
         uses: actions/setup-python@v5
