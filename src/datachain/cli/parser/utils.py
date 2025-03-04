@@ -98,3 +98,9 @@ def add_show_args(parser: ArgumentParser) -> None:
         default=False,
         help="Do not collapse the columns",
     )
+    parser.add_argument(
+        "--hidden",
+        action="store_true",
+        default=False,
+        help="Show hidden fields",
+    )
