@@ -81,7 +81,7 @@ jobs:
       - name: Set up FFmpeg
         uses: AnimMouse/setup-ffmpeg@v1
         id: ffmpeg-install
-        continue-on-error: true
+        continue-on-error: ${{ runner.os == 'macOS' }}
 
       # https://github.com/AnimMouse/setup-ffmpeg/issues/5
       - if: steps.ffmpeg-install.outcome == 'failure' && runner.os == 'macOS'
