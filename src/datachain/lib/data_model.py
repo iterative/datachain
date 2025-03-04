@@ -26,6 +26,7 @@ class DataModel(BaseModel):
     """Pydantic model wrapper that registers model with `DataChain`."""
 
     _version: ClassVar[int] = 1
+    _hidden_fields: ClassVar[list[str]] = []
 
     @classmethod
     def __pydantic_init_subclass__(cls):
@@ -40,6 +41,11 @@ class DataModel(BaseModel):
             models = [models]
         for val in models:
             ModelStore.register(val)
+
+    @classmethod
+    def hidden_fields(cls) -> list[str]:
+        """Returns a list of fields that should be hidden from the user."""
+        return cls._hidden_fields
 
 
 def is_chain_type(t: type) -> bool:
