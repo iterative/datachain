@@ -79,7 +79,10 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
       - name: Set up FFmpeg
-        uses: AnimMouse/setup-ffmpeg@v1
+        uses: FedericoCarboni/setup-ffmpeg@v3
+        with:
+          ffmpeg-version: release
+          github-token: ${{ github.server_url == 'https://github.com' && github.token || '' }}
 
       - name: Set up Python ${{ matrix.pyv }}
         uses: actions/setup-python@v5
