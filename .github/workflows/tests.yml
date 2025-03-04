@@ -171,7 +171,7 @@ jobs:
 
       # HF runs against actual API - thus run it only once
       - name: Set hf token
-        if: matrix.os == 'ubuntu-latest' && matrix.pyv == '3.12'
+        if: matrix.os == 'ubuntu-latest' && matrix.pyv == '3.13'
         run: echo 'HF_TOKEN=${{ secrets.HF_TOKEN }}' >> "$GITHUB_ENV"
 
       - name: Run examples
