@@ -4,7 +4,6 @@
 # ///
 
 import glob
-import os
 
 import nox
 
@@ -72,20 +71,6 @@ def build(session: nox.Session) -> None:
     session.run("uv", "build")
     dists = glob.glob("dist/*")
     session.run("twine", "check", *dists, silent=True)
-
-
-@nox.session
-def dev(session: nox.Session) -> None:
-    """Sets up a python development environment for the project."""
-    args = session.posargs or ("venv",)
-    venv_dir = os.fsdecode(os.path.abspath(args[0]))
-
-    session.log(f"Setting up virtual environment in {venv_dir}")
-    session.install("virtualenv")
-    session.run("virtualenv", venv_dir, silent=True)
-
-    python = os.path.join(venv_dir, "bin/python")
-    session.run(python, "-m", "pip", "install", "-e", ".[dev]", external=True)
 
 
 @nox.session(python=python_versions)
