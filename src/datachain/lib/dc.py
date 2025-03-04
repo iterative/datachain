@@ -74,7 +74,6 @@ _T = TypeVar("_T")
 D = TypeVar("D", bound="DataChain")
 UDFObjT = TypeVar("UDFObjT", bound=UDFBase)
 
-
 DEFAULT_PARQUET_CHUNK_SIZE = 100_000
 
 
@@ -1252,22 +1251,36 @@ class DataChain:
     def collect_flatten(self) -> Iterator[tuple[Any, ...]]: ...
 
     @overload
+    def collect_flatten(self, *, include_hidden: bool) -> Iterator[tuple[Any, ...]]: ...
+
+    @overload
     def collect_flatten(
         self, *, row_factory: Callable[[list[str], tuple[Any, ...]], _T]
     ) -> Iterator[_T]: ...
 
-    def collect_flatten(self, *, row_factory=None):
+    @overload
+    def collect_flatten(
+        self,
+        *,
+        row_factory: Callable[[list[str], tuple[Any, ...]], _T],
+        include_hidden: bool,
+    ) -> Iterator[_T]: ...
+
+    def collect_flatten(self, *, row_factory=None, include_hidden: bool = True):
         """Yields flattened rows of values as a tuple.
 
         Args:
             row_factory : A callable to convert row to a custom format.
                           It should accept two arguments: a list of column names and
                           a tuple of row values.
+            include_hidden: Whether to include hidden signals from the schema.
         """
-        db_signals = self._effective_signals_schema.db_signals()
+        db_signals = self._effective_signals_schema.db_signals(
+            include_hidden=include_hidden
+        )
         with self._query.ordered_select(*db_signals).as_iterable() as rows:
             if row_factory:
-                rows = (row_factory(db_signals, r) for r in rows)
+                rows = (row_factory(db_signals, r) for r in rows)  # type: ignore[assignment]
             yield from rows
 
     def to_columnar_data_with_names(
@@ -1301,10 +1314,23 @@ class DataChain:
         self, *, row_factory: Callable[[list[str], tuple[Any, ...]], _T]
     ) -> list[_T]: ...
 
-    def results(self, *, row_factory=None):  # noqa: D102
+    @overload
+    def results(
+        self,
+        *,
+        row_factory: Callable[[list[str], tuple[Any, ...]], _T],
+        include_hidden: bool,
+    ) -> list[_T]: ...
+
+    @overload
+    def results(self, *, include_hidden: bool) -> list[tuple[Any, ...]]: ...
+
+    def results(self, *, row_factory=None, include_hidden=True):  # noqa: D102
         if row_factory is None:
-            return list(self.collect_flatten())
-        return list(self.collect_flatten(row_factory=row_factory))
+            return list(self.collect_flatten(include_hidden=include_hidden))
+        return list(
+            self.collect_flatten(row_factory=row_factory, include_hidden=include_hidden)
+        )
 
     def to_records(self) -> list[dict[str, Any]]:
         """Convert every row to a dictionary."""
@@ -1814,21 +1840,25 @@ class DataChain:
             **fr_map,
         )
 
-    def to_pandas(self, flatten=False) -> "pd.DataFrame":
+    def to_pandas(self, flatten=False, include_hidden=True) -> "pd.DataFrame":
         """Return a pandas DataFrame from the chain.
 
         Parameters:
             flatten : Whether to use a multiindex or flatten column names.
+            include_hidden : Whether to include hidden columns.
         """
         import pandas as pd
 
-        headers, max_length = self._effective_signals_schema.get_headers_with_length()
+        headers, max_length = self._effective_signals_schema.get_headers_with_length(
+            include_hidden=include_hidden
+        )
         if flatten or max_length < 2:
             columns = [".".join(filter(None, header)) for header in headers]
         else:
             columns = pd.MultiIndex.from_tuples(map(tuple, headers))
 
-        return pd.DataFrame.from_records(self.results(), columns=columns)
+        results = self.results(include_hidden=include_hidden)
+        return pd.DataFrame.from_records(results, columns=columns)
 
     def show(
         self,
@@ -1836,6 +1866,7 @@ class DataChain:
         flatten=False,
         transpose=False,
         truncate=True,
+        include_hidden=False,
     ) -> None:
         """Show a preview of the chain results.
 
@@ -1844,11 +1875,12 @@ class DataChain:
             flatten : Whether to use a multiindex or flatten column names.
             transpose : Whether to transpose rows and columns.
             truncate : Whether or not to truncate the contents of columns.
+            include_hidden : Whether to include hidden columns.
         """
         import pandas as pd
 
         dc = self.limit(limit) if limit > 0 else self  # type: ignore[misc]
-        df = dc.to_pandas(flatten)
+        df = dc.to_pandas(flatten, include_hidden=include_hidden)
 
         if df.empty:
             print("Empty result")

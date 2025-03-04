@@ -1,4 +1,7 @@
 """Automation using nox."""
+# /// script
+# dependencies = ["nox"]
+# ///
 
 import glob
 import os
@@ -8,6 +11,9 @@ import nox
 nox.options.default_venv_backend = "uv|virtualenv"
 nox.options.reuse_existing_virtualenvs = True
 nox.options.sessions = "lint", "tests"
+
+project = nox.project.load_toml()
+python_versions = nox.project.python_versions(project)
 locations = "src", "tests"
 
 
@@ -29,12 +35,12 @@ def bench(session: nox.Session) -> None:
     )
 
 
-@nox.session(python=["3.9", "3.10", "3.11", "3.12", "pypy3.9", "pypy3.10"])
+@nox.session(python=python_versions)
 def tests(session: nox.Session) -> None:
     session.install(".[tests]")
     env = {"COVERAGE_FILE": f".coverage.{session.python}"}
-    if session.python == "3.12":
-        # improve performance of tests in Python 3.12 when used with coverage
+    if session.python in ("3.12", "3.13"):
+        # improve performance of tests in Python>=3.12 when used with coverage
         # https://github.com/nedbat/coveragepy/issues/1665
         # https://github.com/python/cpython/issues/107674
         env["COVERAGE_CORE"] = "sysmon"
@@ -82,7 +88,7 @@ def dev(session: nox.Session) -> None:
     session.run(python, "-m", "pip", "install", "-e", ".[dev]", external=True)
 
 
-@nox.session(python=["3.9", "3.10", "3.11", "3.12", "pypy3.9", "pypy3.10"])
+@nox.session(python=python_versions)
 def examples(session: nox.Session) -> None:
     session.install(".[examples]")
     session.run(
@@ -93,3 +99,7 @@ def examples(session: nox.Session) -> None:
         "examples",
         *session.posargs,
     )
+
+
+if __name__ == "__main__":
+    nox.main()
