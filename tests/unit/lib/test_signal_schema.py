@@ -1022,6 +1022,7 @@ def test_to_partial():
                 "fields": {
                     "path": "str",
                 },
+                "hidden_fields": [],
                 "name": "FilePartial1@v1",
                 "schema_version": 2,
             },
@@ -1046,6 +1047,7 @@ def test_to_partial_duplicate():
                 "fields": {
                     "path": "str",
                 },
+                "hidden_fields": [],
                 "name": "FilePartial1@v1",
                 "schema_version": 2,
             },
@@ -1059,6 +1061,7 @@ def test_to_partial_duplicate():
                 "fields": {
                     "source": "str",
                 },
+                "hidden_fields": [],
                 "name": "FilePartial2@v1",
                 "schema_version": 2,
             },
@@ -1088,6 +1091,7 @@ def test_to_partial_nested():
                 "fields": {
                     "path": "str",
                 },
+                "hidden_fields": [],
                 "name": "FilePartial1@v1",
                 "schema_version": 2,
             },
@@ -1101,6 +1105,7 @@ def test_to_partial_nested():
                 "fields": {
                     "source": "str",
                 },
+                "hidden_fields": [],
                 "name": "FilePartial2@v1",
                 "schema_version": 2,
             },
@@ -1118,6 +1123,7 @@ def test_to_partial_nested():
                 "fields": {
                     "file": "FilePartial2@v1",
                 },
+                "hidden_fields": [],
                 "name": "CustomPartial1@v1",
                 "schema_version": 2,
             },
