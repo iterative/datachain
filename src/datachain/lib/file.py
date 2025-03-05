@@ -57,12 +57,14 @@ class FileExporter(NodesThreadPool):
         use_cache: bool,
         link_type: Literal["copy", "symlink"],
         max_threads: int = EXPORT_FILES_MAX_THREADS,
+        client_config: Optional[dict] = None,
     ):
         super().__init__(max_threads)
         self.output = output
         self.placement = placement
         self.use_cache = use_cache
         self.link_type = link_type
+        self.client_config = client_config
 
     def done_task(self, done):
         for task in done:
@@ -70,7 +72,11 @@ class FileExporter(NodesThreadPool):
 
     def do_task(self, file):
         file.export(
-            self.output, self.placement, self.use_cache, link_type=self.link_type
+            self.output,
+            self.placement,
+            self.use_cache,
+            link_type=self.link_type,
+            client_config=self.client_config,
         )
         self.increase_counter(1)
 
@@ -300,10 +306,10 @@ class File(DataModel):
         with self.open(mode="r") as stream:
             return stream.read()
 
-    def save(self, destination: str):
+    def save(self, destination: str, client_config: Optional[dict] = None):
         """Writes it's content to destination"""
         destination = stringify_path(destination)
-        client: Client = self._catalog.get_client(destination)
+        client: Client = self._catalog.get_client(destination, **(client_config or {}))
 
         if client.PREFIX == "file://" and not destination.startswith(client.PREFIX):
             destination = Path(destination).absolute().as_uri()
@@ -331,12 +337,13 @@ class File(DataModel):
         placement: ExportPlacement = "fullpath",
         use_cache: bool = True,
         link_type: Literal["copy", "symlink"] = "copy",
+        client_config: Optional[dict] = None,
     ) -> None:
         """Export file to new location."""
         self._caching_enabled = use_cache
         dst = self.get_destination_path(output, placement)
         dst_dir = os.path.dirname(dst)
-        client: Client = self._catalog.get_client(dst_dir)
+        client: Client = self._catalog.get_client(dst_dir, **(client_config or {}))
         client.fs.makedirs(dst_dir, exist_ok=True)
 
         if link_type == "symlink":
@@ -346,7 +353,7 @@ class File(DataModel):
                 if exc.errno not in (errno.ENOTSUP, errno.EXDEV, errno.ENOSYS):
                     raise
 
-        self.save(dst)
+        self.save(dst, client_config=client_config)
 
     def _set_stream(
         self,
@@ -532,11 +539,11 @@ class TextFile(File):
         with self.open() as stream:
             return stream.read()
 
-    def save(self, destination: str):
+    def save(self, destination: str, client_config: Optional[dict] = None):
         """Writes it's content to destination"""
         destination = stringify_path(destination)
 
-        client: Client = self._catalog.get_client(destination)
+        client: Client = self._catalog.get_client(destination, **(client_config or {}))
         with client.fs.open(destination, mode="w") as f:
             f.write(self.read_text())
 
@@ -549,11 +556,11 @@ class ImageFile(File):
         fobj = super().read()
         return PilImage.open(BytesIO(fobj))
 
-    def save(self, destination: str):
+    def save(self, destination: str, client_config: Optional[dict] = None):
         """Writes it's content to destination"""
         destination = stringify_path(destination)
 
-        client: Client = self._catalog.get_client(destination)
+        client: Client = self._catalog.get_client(destination, **(client_config or {}))
         with client.fs.open(destination, mode="wb") as f:
             self.read().save(f)
 

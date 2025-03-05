@@ -2547,6 +2547,8 @@ class DataChain:
         placement: FileExportPlacement = "fullpath",
         link_type: Literal["copy", "symlink"] = "copy",
         num_threads: Optional[int] = EXPORT_FILES_MAX_THREADS,
+        anon: bool = False,
+        client_config: Optional[dict] = None,
     ) -> None:
         """Export files from a specified signal to a directory. Files can be
         exported to a local or cloud directory.
@@ -2560,6 +2562,8 @@ class DataChain:
                 Falls back to `'copy'` if symlinking fails.
             num_threads : number of threads to use for exporting files.
                 By default it uses 5 threads.
+            anon: If true, we will treat cloud bucket as public one
+            client_config: Optional configuration for the destination storage client
 
         Example:
             Cross cloud transfer
@@ -2573,6 +2577,9 @@ class DataChain:
             != self._query.count()
         ):
             raise ValueError("Files with the same name found")
+
+        if anon:
+            client_config = (client_config or {}) | {"anon": True}
 
         progress_bar = tqdm(
             desc=f"Exporting files to {output}: ",
@@ -2588,6 +2595,7 @@ class DataChain:
             self._settings.cache if self._settings else False,
             link_type,
             max_threads=num_threads or 1,
+            client_config=client_config,
         )
         file_exporter.run(self.collect(signal), progress_bar)
 
