@@ -770,6 +770,26 @@ def test_collect_nested_feature(test_session):
         assert nested == features_nested[n]
 
 
+def test_select_from_dataset_without_sys_columns(test_session):
+    from datachain import func
+
+    dc = (
+        DataChain.from_values(
+            name=["a", "a", "b", "b", "b", "c"],
+            val=[1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .group_by(cnt=func.count(), partition_by="name")
+        .order_by("name")
+        .select("name", "cnt")
+    )
+
+    assert dc.to_records() == [
+        {"name": "a", "cnt": 2},
+        {"name": "b", "cnt": 3},
+        {"name": "c", "cnt": 1},
+    ]
+
+
 def test_select_feature(test_session):
     dc = DataChain.from_values(my_n=features_nested, session=test_session)
     dc_ordered = dc.order_by("my_n.fr.nnn", "my_n.fr.count")
@@ -2752,6 +2772,66 @@ def test_group_by_no_partition_by(test_session):
             "concat": "123456",
             "value": 1.0,
             "collect": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        },
+    ]
+
+
+def test_group_by_schema(test_session):
+    from datachain import func
+
+    class Signal(DataModel):
+        name: str
+        value: float
+
+    class Parent(DataModel):
+        signal: Signal
+
+    def multiplier(name: str, val: float) -> Signal:
+        return Signal(name=name, value=val * 2)
+
+    def to_parent(signal: Signal) -> Parent:
+        return Parent(signal=signal)
+
+    dc = (
+        DataChain.from_values(
+            name=["a", "a", "b", "b", "b", "c"],
+            val=[1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .map(signal=multiplier)
+        .map(parent=to_parent)
+        .order_by("signal.name")
+        .group_by(
+            cnt=func.count(),
+            sum=func.sum("signal.value"),
+            partition_by=["signal.name", "parent.signal.name"],
+        )
+        .select("signal.name", "parent.signal.name", "cnt", "sum")
+    )
+
+    assert dc.signals_schema.serialize() == {
+        "signal.name": "str",
+        "parent.signal.name": "str",
+        "cnt": "int",
+        "sum": "float",
+    }
+    assert dc.to_records() == [
+        {
+            "signal__name": "a",
+            "parent__signal__name": "a",
+            "cnt": 2,
+            "sum": 6.0,
+        },
+        {
+            "signal__name": "b",
+            "parent__signal__name": "b",
+            "cnt": 3,
+            "sum": 24.0,
+        },
+        {
+            "signal__name": "c",
+            "parent__signal__name": "c",
+            "cnt": 1,
+            "sum": 12.0,
         },
     ]
 

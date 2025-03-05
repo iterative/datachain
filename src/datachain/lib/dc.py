@@ -1075,7 +1075,7 @@ class DataChain:
     def select(self, *args: str, _sys: bool = True) -> "Self":
         """Select only a specified set of signals."""
         new_schema = self.signals_schema.resolve(*args)
-        if _sys:
+        if self._sys and _sys:
             new_schema = SignalSchema({"sys": Sys}) | new_schema
         columns = new_schema.db_signals()
         return self._evolve(
@@ -1118,6 +1118,7 @@ class DataChain:
         partition_by_columns: list[Column] = []
         signal_columns: list[Column] = []
         schema_fields: dict[str, DataType] = {}
+        keep_columns: list[str] = []
 
         # validate partition_by columns and add them to the schema
         for col in partition_by:
@@ -1125,10 +1126,13 @@ class DataChain:
                 col_db_name = ColumnMeta.to_db_name(col)
                 col_type = self.signals_schema.get_column_type(col_db_name)
                 column = Column(col_db_name, python_to_sql(col_type))
+                if col not in keep_columns:
+                    keep_columns.append(col)
             elif isinstance(col, Function):
                 column = col.get_column(self.signals_schema)
                 col_db_name = column.name
                 col_type = column.type.python_type
+                schema_fields[col_db_name] = col_type
             else:
                 raise DataChainColumnError(
                     col,
@@ -1138,7 +1142,6 @@ class DataChain:
                     ),
                 )
             partition_by_columns.append(column)
-            schema_fields[col_db_name] = col_type
 
         # validate signal columns and add them to the schema
         if not kwargs:
@@ -1153,9 +1156,13 @@ class DataChain:
             signal_columns.append(column)
             schema_fields[col_name] = func.get_result_type(self.signals_schema)
 
+        signal_schema = SignalSchema(schema_fields)
+        if keep_columns:
+            signal_schema |= self.signals_schema.to_partial(*keep_columns)
+
         return self._evolve(
             query=self._query.group_by(signal_columns, partition_by_columns),
-            signal_schema=SignalSchema(schema_fields),
+            signal_schema=signal_schema,
         )
 
     def mutate(self, **kwargs) -> "Self":

@@ -83,11 +83,8 @@ hf = [
   "datasets[audio,vision]>=2.21.0"
 ]
 video = [
-  # Use 'av<14' because of incompatibility with imageio
-  # See https://github.com/PyAV-Org/PyAV/discussions/1700
-  "av<14",
   "ffmpeg-python",
-  "imageio[ffmpeg]",
+  "imageio[ffmpeg,pyav]>=2.37.0",
   "opencv-python"
 ]
 tests = [
@@ -120,7 +117,7 @@ examples = [
   "defusedxml",
   "accelerate",
   "huggingface_hub[hf_transfer]",
-  "ultralytics==8.3.78",
+  "ultralytics==8.3.82",
   "open_clip_torch"
 ]
 
