@@ -5,7 +5,6 @@ import re
 import sys
 from collections.abc import Iterable, Iterator, Sequence
 from functools import wraps
-from itertools import chain
 from typing import (
     TYPE_CHECKING,
     Any,
