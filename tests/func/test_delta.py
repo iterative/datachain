@@ -144,20 +144,20 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
         "images/img18.jpg",
         "images/img4.jpg",
         "images/img6.jpg",
-        "images/img6.jpg",
-        "images/img8.jpg",
         "images/img8.jpg",
     ]
 
-    # check that we have both old and new version of those that are modified
-    rows = list(
-        DataChain.from_dataset(ds_name, version=2)
-        .filter(C("index") == 6)
-        .order_by("file.path", "file.etag")
-        .collect("file")
+    # check that we have newest versions for modified rows since etags are mtime
+    # and modified rows etags should be bigger than the old ones
+    assert (
+        next(
+            DataChain.from_dataset(ds_name, version=2)
+            .filter(C("index") == 6)
+            .order_by("file.path", "file.etag")
+            .collect("file.etag")
+        )
+        > etags[6]
     )
-    assert rows[0].etag == etags[6]
-    assert rows[1].etag > etags[6]  # new etag is bigger as it's the value of mtime
 
 
 def test_delta_update_no_diff(test_session, tmp_dir, tmp_path):

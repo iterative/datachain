@@ -36,4 +36,8 @@ def delta_update(dc: "DataChain", name: str) -> Optional["DataChain"]:
     diff._query.steps += dc._query.steps
 
     # merging diff and the latest version of our dataset
-    return diff.union(DataChain.from_dataset(name, latest_version))
+    return (
+        DataChain.from_dataset(name, latest_version)
+        .diff(diff, added=True, modified=False)
+        .union(diff)
+    )
