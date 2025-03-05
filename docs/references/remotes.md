@@ -119,7 +119,7 @@ DataChain uses [s3fs](https://s3fs.readthedocs.io/en/latest/) to interact with A
 
     Aiobotocore `AioSession` object to be used for all connections.
     This session will be used inplace of creating a new session inside S3FileSystem.
-    
+
     For example: `aiobotocore.session.AioSession(profile='test_user')`
 
 - `max_concurrency`: `int` (default: `1`)
@@ -164,7 +164,7 @@ DataChain uses [gcsfs](https://gcsfs.readthedocs.io/en/latest/) to interact with
     read/write as well as modifying metadata, e.g., access control.
 
 - `token`: `None`, `dict` or `string` (default: `None`)
-    
+
     The token to use for authentication. If `None`, the default is used. If
     a string, it is interpreted as a path to a token file. If a dict, it is
     interpreted as a token dictionary, such as that provided by Google Cloud
@@ -342,5 +342,5 @@ DataChain uses [huggingface_hub](https://pypi.org/project/huggingface-hub/) to i
     To disable authentication, pass `False`.
 
 - `endpoint`: `str` (default: `None`)
-    
+
     Endpoint of the Hub. Defaults to `https://huggingface.co`.
