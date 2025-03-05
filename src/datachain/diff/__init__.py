@@ -137,6 +137,7 @@ def _compare(  # noqa: C901
                 for c in [c for c in cols if c in right_cols]
             }
         )
+        .settings(sys=True)
         .select_except(ldiff_col, rdiff_col)
     )
 
