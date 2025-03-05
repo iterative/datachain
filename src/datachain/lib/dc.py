@@ -3,8 +3,9 @@ import os
 import os.path
 import re
 import sys
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from functools import wraps
+from itertools import chain
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -2002,7 +2003,18 @@ class DataChain:
         output, _ = schema_to_output(arrow_schema)
 
         scan = source.scan(limit=nrows)
-        records = scan.to_arrow().to_pylist()
+        batch_reader = scan.to_arrow_batch_reader()
+
+        def iter_records() -> Iterator[dict[str, Any]]:
+            while True:
+                try:
+                    batch = batch_reader.read_next_batch()
+                except StopIteration:
+                    return
+                else:
+                    yield from batch.to_pylist()
+
+        records = iter_records()
         return cls.from_records(records, session=session, schema=output)
 
     def parse_tabular(
@@ -2471,7 +2483,7 @@ class DataChain:
     @classmethod
     def from_records(
         cls,
-        to_insert: Optional[Union[dict, list[dict]]],
+        to_insert: Optional[Union[dict, Iterable[dict]]],
         session: Optional[Session] = None,
         settings: Optional[dict] = None,
         in_memory: bool = False,

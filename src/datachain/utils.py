@@ -397,7 +397,7 @@ def inside_colab() -> bool:
 
 def is_ipython() -> bool:
     try:
-        get_ipython()  # type: ignore[name-defined] # noqa: F821
+        get_ipython()  # type: ignore[name-defined]
     except NameError:
         return False
     return True
