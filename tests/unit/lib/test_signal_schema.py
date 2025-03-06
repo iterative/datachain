@@ -1137,3 +1137,9 @@ def test_to_partial_nested():
 def test_get_file_signal():
     assert SignalSchema({"name": str, "f": File}).get_file_signal() == "f"
     assert SignalSchema({"name": str}).get_file_signal() is None
+
+
+def test_append():
+    s1 = SignalSchema({"name": str, "f": File})
+    s2 = SignalSchema({"name": str, "f": File, "age": int})
+    assert s1.append(s2).values == {"name": str, "f": File, "age": int}

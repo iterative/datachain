@@ -33,7 +33,7 @@ def delta_update(dc: "DataChain", name: str) -> Optional["DataChain"]:
     # we append all the steps from the original chain to diff,
     # e.g filters, mappers, generators etc. With this we make sure we add all
     # needed modifications to diff part as well
-    diff._query.steps += dc._query.steps
+    diff = diff.append_steps(dc)
 
     # merging diff and the latest version of our dataset
     return (

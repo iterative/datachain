@@ -334,6 +334,15 @@ class DataChain:
         """Make a copy of the chain in a new table."""
         return self._evolve(query=self._query.clone(new_table=True))
 
+    def append_steps(self, chain: "DataChain") -> "Self":
+        """Returns cloned chain with appended steps from other chain.
+        Steps are all those modification methods applied like filters, mappers etc.
+        """
+        dc = self.clone()
+        dc._query.steps += chain._query.steps
+        dc.signals_schema = dc.signals_schema.append(chain.signals_schema)
+        return dc
+
     def _evolve(
         self,
         *,

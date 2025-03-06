@@ -646,6 +646,13 @@ class SignalSchema:
 
         return SignalSchema(self.values | schema_right)
 
+    def append(self, right: "SignalSchema") -> "SignalSchema":
+        missing_schema = {
+            key: right.values[key]
+            for key in [k for k in right.values if k not in self.values]
+        }
+        return SignalSchema(self.values | missing_schema)
+
     def get_signals(self, target_type: type[DataModel]) -> Iterator[str]:
         for path, type_, has_subtree, _ in self.get_flat_tree():
             if has_subtree and issubclass(type_, target_type):
