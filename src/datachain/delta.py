@@ -27,17 +27,21 @@ def delta_update(dc: "DataChain", name: str) -> Optional["DataChain"]:
 
     source_ds_name = dc._query.starting_step.dataset_name
     source_ds_version = dc._query.starting_step.dataset_version
-    diff = DataChain.from_dataset(source_ds_name, version=source_ds_version).diff(
-        DataChain.from_dataset(name, version=latest_version), on=file_signal
-    )
-    # we append all the steps from the original chain to diff,
-    # e.g filters, mappers, generators etc. With this we make sure we add all
-    # needed modifications to diff part as well
-    diff = diff.append_steps(dc)
 
-    # merging diff and the latest version of our dataset
+    diff = (
+        DataChain.from_dataset(source_ds_name, version=source_ds_version)
+        .diff(
+            DataChain.from_dataset(name, version=latest_version),
+            on=file_signal,
+            sys=True,
+        )
+        # We append all the steps from the original chain to diff, e.g filters, mappers.
+        .append_steps(dc)
+    )
+
+    # merging diff and the latest version of dataset
     return (
         DataChain.from_dataset(name, latest_version)
-        .diff(diff, added=True, modified=False)
+        .diff(diff, added=True, modified=False, sys=True)
         .union(diff)
     )
