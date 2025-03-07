@@ -18,6 +18,7 @@ from .aggregate import (
 from .array import contains, cosine_distance, euclidean_distance, length, sip_hash_64
 from .conditional import and_, case, greatest, ifelse, isnone, least, or_
 from .numeric import bit_and, bit_hamming_distance, bit_or, bit_xor, int_hash_64
+from .path import file_ext, file_stem, name, parent
 from .random import rand
 from .string import byte_hamming_distance
 from .window import window
@@ -40,6 +41,8 @@ __all__ = [
     "count",
     "dense_rank",
     "euclidean_distance",
+    "file_ext",
+    "file_stem",
     "first",
     "greatest",
     "ifelse",
@@ -50,7 +53,9 @@ __all__ = [
     "literal",
     "max",
     "min",
+    "name",
     "or_",
+    "parent",
     "path",
     "rand",
     "random",
