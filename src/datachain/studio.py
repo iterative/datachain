@@ -57,7 +57,7 @@ def process_auth_cli_args(args: "Namespace"):
     if args.cmd == "login":
         return login(args)
     if args.cmd == "logout":
-        return logout()
+        return logout(args.local)
     if args.cmd == "token":
         return token()
 
@@ -110,13 +110,15 @@ def login(args: "Namespace"):
     except StudioAuthError as exc:
         raise DataChainError(f"Failed to authenticate with Studio: {exc}") from exc
 
-    config_path = save_config(hostname, access_token)
+    level = ConfigLevel.LOCAL if args.local else ConfigLevel.GLOBAL
+    config_path = save_config(hostname, access_token, level=level)
     print(f"Authentication complete. Saved token to {config_path}.")
     return 0
 
 
-def logout():
-    with Config(ConfigLevel.GLOBAL).edit() as conf:
+def logout(local: bool = False):
+    level = ConfigLevel.LOCAL if local else ConfigLevel.GLOBAL
+    with Config(level).edit() as conf:
         token = conf.get("studio", {}).get("token")
         if not token:
             raise DataChainError(
@@ -209,8 +211,8 @@ def remove_studio_dataset(
     print(f"Dataset '{name}' removed from Studio")
 
 
-def save_config(hostname, token):
-    config = Config(ConfigLevel.GLOBAL)
+def save_config(hostname, token, level=ConfigLevel.GLOBAL):
+    config = Config(level)
     with config.edit() as conf:
         studio_conf = conf.get("studio", {})
         studio_conf["url"] = hostname

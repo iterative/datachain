@@ -63,18 +63,30 @@ def add_auth_parser(subparsers, parent_parser) -> None:
         default=False,
         help="Use code-based authentication without browser",
     )
+    login_parser.add_argument(
+        "--local",
+        action="store_true",
+        default=False,
+        help="Save the token in the local project config",
+    )
 
     auth_logout_help = "Log out from Studio"
     auth_logout_description = (
         "Remove the Studio authentication token from global config."
     )
 
-    auth_subparser.add_parser(
+    logout_parser = auth_subparser.add_parser(
         "logout",
         parents=[parent_parser],
         description=auth_logout_description,
         help=auth_logout_help,
         formatter_class=CustomHelpFormatter,
+    )
+    logout_parser.add_argument(
+        "--local",
+        action="store_true",
+        default=False,
+        help="Remove the token from the local project config",
     )
 
     auth_team_help = "Set default team for Studio operations"
