@@ -370,6 +370,24 @@ def test_export_images_files(test_session, tmp_dir, tmp_path, use_cache):
         assert images_equal(img["data"], exported_img)
 
 
+def test_from_storage_path_object(test_session, tmp_dir, tmp_path):
+    images = [
+        {"name": "img1.jpg", "data": Image.new(mode="RGB", size=(64, 64))},
+        {"name": "img2.jpg", "data": Image.new(mode="RGB", size=(128, 128))},
+    ]
+
+    for img in images:
+        img["data"].save(tmp_path / img["name"])
+
+    DataChain.from_storage(tmp_path).to_storage(
+        tmp_dir / "output", placement="filename"
+    )
+
+    for img in images:
+        exported_img = Image.open(tmp_dir / "output" / img["name"])
+        assert images_equal(img["data"], exported_img)
+
+
 def test_to_storage_relative_path(test_session, tmp_path):
     images = [
         {"name": "img1.jpg", "data": Image.new(mode="RGB", size=(64, 64))},
@@ -2041,9 +2059,7 @@ def test_from_json_jmespath(tmp_dir, test_session):
     with open(path, "w") as f:
         json.dump({"author": "Test User", "version": 5, "values": values}, f)
 
-    dc_from = DataChain.from_json(
-        path.as_uri(), jmespath="values", session=test_session
-    )
+    dc_from = DataChain.from_json(path, jmespath="values", session=test_session)
     df1 = dc_from.select("values.first_name", "values.age", "values.city").to_pandas()
     df1 = df1["values"]
     assert df_equal(df1, df)

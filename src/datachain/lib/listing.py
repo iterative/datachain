@@ -2,7 +2,7 @@ import logging
 import os
 import posixpath
 from collections.abc import Iterator
-from typing import TYPE_CHECKING, Callable, Optional, TypeVar
+from typing import TYPE_CHECKING, Callable, Optional, TypeVar, Union
 
 from fsspec.asyn import get_loop
 from sqlalchemy.sql.expression import true
@@ -157,7 +157,7 @@ def listing_uri_from_name(dataset_name: str) -> str:
 
 
 def get_listing(
-    uri: str, session: "Session", update: bool = False
+    uri: Union[str, os.PathLike[str]], session: "Session", update: bool = False
 ) -> tuple[Optional[str], str, str, bool]:
     """Returns correct listing dataset name that must be used for saving listing
     operation. It takes into account existing listings and reusability of those.
@@ -174,6 +174,8 @@ def get_listing(
 
     client = Client.get_client(uri, cache, **client_config)
     telemetry.log_param("client", client.PREFIX)
+    if not isinstance(uri, str):
+        uri = str(uri)
 
     # we don't want to use cached dataset (e.g. for a single file listing)
     if not uri.endswith("/") and _isfile(client, uri):

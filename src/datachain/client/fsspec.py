@@ -17,6 +17,7 @@ from typing import (
     ClassVar,
     NamedTuple,
     Optional,
+    Union,
 )
 from urllib.parse import urlparse
 
@@ -83,16 +84,16 @@ class Client(ABC):
         self.uri = self.get_uri(self.name)
 
     @staticmethod
-    def get_implementation(url: str) -> type["Client"]:
+    def get_implementation(url: Union[str, os.PathLike[str]]) -> type["Client"]:
         from .azure import AzureClient
         from .gcs import GCSClient
         from .hf import HfClient
         from .local import FileClient
         from .s3 import ClientS3
 
-        protocol = urlparse(url).scheme
+        protocol = urlparse(str(url)).scheme
 
-        if not protocol or _is_win_local_path(url):
+        if not protocol or _is_win_local_path(str(url)):
             return FileClient
 
         protocol = protocol.lower()
@@ -121,9 +122,11 @@ class Client(ABC):
         return cls.get_uri(storage_name), rel_path
 
     @staticmethod
-    def get_client(source: str, cache: Cache, **kwargs) -> "Client":
+    def get_client(
+        source: Union[str, os.PathLike[str]], cache: Cache, **kwargs
+    ) -> "Client":
         cls = Client.get_implementation(source)
-        storage_url, _ = cls.split_url(source)
+        storage_url, _ = cls.split_url(str(source))
         if os.name == "nt":
             storage_url = storage_url.removeprefix("/")
 
