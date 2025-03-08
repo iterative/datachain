@@ -156,6 +156,7 @@ plugins:
             - https://arrow.apache.org/docs/objects.inv
             - https://docs.sqlalchemy.org/objects.inv
             - https://docs.pydantic.dev/latest/objects.inv
+            - https://py.iceberg.apache.org/objects.inv
 
 watch:
   - src/datachain
