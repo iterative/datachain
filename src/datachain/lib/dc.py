@@ -408,7 +408,7 @@ class DataChain:
     @classmethod
     def from_storage(
         cls,
-        uri,
+        uri: Union[str, os.PathLike[str]],
         *,
         type: FileType = "binary",
         session: Optional[Session] = None,
@@ -573,7 +573,7 @@ class DataChain:
     @classmethod
     def from_json(
         cls,
-        path,
+        path: Union[str, os.PathLike[str]],
         type: FileType = "text",
         spec: Optional[DataType] = None,
         schema_from: Optional[str] = "auto",
@@ -610,7 +610,7 @@ class DataChain:
             ```
         """
         if schema_from == "auto":
-            schema_from = path
+            schema_from = str(path)
 
         def jmespath_to_name(s: str):
             name_end = re.search(r"\W", s).start() if re.search(r"\W", s) else len(s)  # type: ignore[union-attr]
@@ -2542,7 +2542,7 @@ class DataChain:
 
     def to_storage(
         self,
-        output: str,
+        output: Union[str, os.PathLike[str]],
         signal: str = "file",
         placement: FileExportPlacement = "fullpath",
         link_type: Literal["copy", "symlink"] = "copy",
