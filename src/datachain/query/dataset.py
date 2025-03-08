@@ -153,13 +153,6 @@ def step_result(
     )
 
 
-class StartingStep(ABC):
-    """An initial query processing step, referencing a data source."""
-
-    @abstractmethod
-    def apply(self) -> "StepResult": ...
-
-
 @frozen
 class Step(ABC):
     """A query processing step (filtering, mutation, etc.)"""
@@ -172,12 +165,14 @@ class Step(ABC):
 
 
 @frozen
-class QueryStep(StartingStep):
+class QueryStep:
+    """A query that returns all rows from specific dataset version"""
+
     catalog: "Catalog"
     dataset_name: str
     dataset_version: int
 
-    def apply(self):
+    def apply(self) -> "StepResult":
         def q(*columns):
             return sqlalchemy.select(*columns)
 
@@ -1095,7 +1090,7 @@ class DatasetQuery:
         self.temp_table_names: list[str] = []
         self.dependencies: set[DatasetDependencyType] = set()
         self.table = self.get_table()
-        self.starting_step: StartingStep
+        self.starting_step: QueryStep
         self.name: Optional[str] = None
         self.version: Optional[int] = None
         self.feature_schema: Optional[dict] = None
