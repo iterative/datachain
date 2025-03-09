@@ -170,7 +170,7 @@ def save_video_frame(
     output_file = posixpath.join(
         output, f"{video.get_file_stem()}_{frame:04d}.{format}"
     )
-    return ImageFile.upload(img, output_file)
+    return ImageFile.upload(img, output_file, catalog=video._catalog)
 
 
 def save_video_fragment(
@@ -218,6 +218,6 @@ def save_video_fragment(
         ).output(output_file_tmp).run(quiet=True)
 
         with open(output_file_tmp, "rb") as f:
-            return VideoFile.upload(f.read(), output_file)
+            return VideoFile.upload(f.read(), output_file, catalog=video._catalog)
     finally:
         shutil.rmtree(temp_dir)
