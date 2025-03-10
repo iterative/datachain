@@ -1,7 +1,9 @@
 import os
 import posixpath
-from typing import Any, cast
+from typing import Any
 
+from fsspec import AbstractFileSystem
+from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
 from huggingface_hub import HfFileSystem
 
 from datachain.lib.file import File
@@ -10,16 +12,16 @@ from .fsspec import Client
 
 
 class HfClient(Client):
-    FS_CLASS = HfFileSystem
+    FS_CLASS = AsyncFileSystemWrapper.wrap_class(HfFileSystem)
     PREFIX = "hf://"
     protocol = "hf"
 
     @classmethod
-    def create_fs(cls, **kwargs) -> HfFileSystem:
+    def create_fs(cls, **kwargs) -> AbstractFileSystem:
         if os.environ.get("HF_TOKEN"):
             kwargs["token"] = os.environ["HF_TOKEN"]
 
-        return cast(HfFileSystem, super().create_fs(**kwargs))
+        return super().create_fs(**kwargs)
 
     def info_to_file(self, v: dict[str, Any], path: str) -> File:
         return File(
@@ -32,7 +34,7 @@ class HfClient(Client):
         )
 
     async def ls_dir(self, path):
-        return self.fs.ls(path, detail=True)
+        return await self.fs._ls(path, detail=True)
 
     def rel_path(self, path):
         return posixpath.relpath(path, self.name)
