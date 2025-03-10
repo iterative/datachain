@@ -42,6 +42,7 @@ def _compare(  # noqa: C901
     modified: bool = True,
     same: bool = True,
     status_col: Optional[str] = None,
+    sys: Optional[bool] = False,
 ) -> "DataChain":
     """Comparing two chains by identifying rows that are added, deleted, modified
     or same"""
@@ -139,6 +140,10 @@ def _compare(  # noqa: C901
         )
         .select_except(ldiff_col, rdiff_col)
     )
+
+    if sys:
+        # making sure we have sys signals in final diff chain
+        dc_diff = dc_diff.settings(sys=True)
 
     if not added:
         dc_diff = dc_diff.filter(C(diff_col) != CompareStatus.ADDED)

@@ -26,6 +26,7 @@ from sqlalchemy.sql.sqltypes import NullType
 from tqdm import tqdm
 
 from datachain.dataset import DatasetRecord
+from datachain.delta import delta_update
 from datachain.func import literal
 from datachain.func.base import Function
 from datachain.func.func import Func
@@ -332,6 +333,15 @@ class DataChain:
     def clone(self) -> "Self":
         """Make a copy of the chain in a new table."""
         return self._evolve(query=self._query.clone(new_table=True))
+
+    def append_steps(self, chain: "DataChain") -> "Self":
+        """Returns cloned chain with appended steps from other chain.
+        Steps are all those modification methods applied like filters, mappers etc.
+        """
+        dc = self.clone()
+        dc._query.steps += chain._query.steps.copy()
+        dc.signals_schema = dc.signals_schema.append(chain.signals_schema)
+        return dc
 
     def _evolve(
         self,
@@ -760,7 +770,11 @@ class DataChain:
         )
 
     def save(  # type: ignore[override]
-        self, name: Optional[str] = None, version: Optional[int] = None, **kwargs
+        self,
+        name: Optional[str] = None,
+        version: Optional[int] = None,
+        delta: Optional[bool] = False,
+        **kwargs,
     ) -> "Self":
         """Save to a Dataset. It returns the chain itself.
 
@@ -768,8 +782,21 @@ class DataChain:
             name : dataset name. Empty name saves to a temporary dataset that will be
                 removed after process ends. Temp dataset are useful for optimization.
             version : version of a dataset. Default - the last version that exist.
+            delta : If True, we optimize on creation of the new dataset versions
+                by calculating diff between source and the last version and applying
+                all needed modifications (mappers, filters etc.) only on that diff.
+                At the end, we merge modified diff with last version of dataset to
+                create new version.
         """
         schema = self.signals_schema.clone_without_sys_signals().serialize()
+        if delta and name:
+            delta_ds = delta_update(self, name)
+            if delta_ds:
+                return self._evolve(
+                    query=delta_ds._query.save(
+                        name=name, version=version, feature_schema=schema, **kwargs
+                    )
+                )
         return self._evolve(
             query=self._query.save(
                 name=name, version=version, feature_schema=schema, **kwargs
@@ -1621,6 +1648,7 @@ class DataChain:
         modified: bool = True,
         same: bool = False,
         status_col: Optional[str] = None,
+        sys: Optional[bool] = False,
     ) -> "DataChain":
         """Comparing two chains by identifying rows that are added, deleted, modified
         or same. Result is the new chain that has additional column with possible
@@ -1653,6 +1681,7 @@ class DataChain:
             same (bool): Whether to return unchanged rows in resulting chain.
             status_col (str): Name of the new column that is created in resulting chain
                 representing diff status.
+            sys (bool): Whether to have sys columns in returned diff chain or not.
 
         Example:
             ```py
@@ -1683,6 +1712,7 @@ class DataChain:
             modified=modified,
             same=same,
             status_col=status_col,
+            sys=sys,
         )
 
     def diff(
@@ -1695,6 +1725,7 @@ class DataChain:
         deleted: bool = False,
         same: bool = False,
         status_col: Optional[str] = None,
+        sys: Optional[bool] = False,
     ) -> "DataChain":
         """Similar to `.compare()`, which is more generic method to calculate difference
         between two chains. Unlike `.compare()`, this method works only on those chains
@@ -1717,6 +1748,7 @@ class DataChain:
             same (bool): Whether to return unchanged rows in resulting chain.
             status_col (str): Optional name of the new column that is created in
                 resulting chain representing diff status.
+            sys (bool): Whether to have sys columns in returned diff chain or not.
 
         Example:
             ```py
@@ -1756,6 +1788,7 @@ class DataChain:
             modified=modified,
             same=same,
             status_col=status_col,
+            sys=sys,
         )
 
     @classmethod
