@@ -52,7 +52,7 @@ class FileExporter(NodesThreadPool):
 
     def __init__(
         self,
-        output: str,
+        output: Union[str, os.PathLike[str]],
         placement: ExportPlacement,
         use_cache: bool,
         link_type: Literal["copy", "symlink"],
@@ -333,7 +333,7 @@ class File(DataModel):
 
     def export(
         self,
-        output: str,
+        output: Union[str, os.PathLike[str]],
         placement: ExportPlacement = "fullpath",
         use_cache: bool = True,
         link_type: Literal["copy", "symlink"] = "copy",
@@ -430,7 +430,9 @@ class File(DataModel):
             path = url2pathname(path)
         return path
 
-    def get_destination_path(self, output: str, placement: ExportPlacement) -> str:
+    def get_destination_path(
+        self, output: Union[str, os.PathLike[str]], placement: ExportPlacement
+    ) -> str:
         """
         Returns full destination path of a file for exporting to some output
         based on export placement
