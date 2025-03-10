@@ -756,7 +756,7 @@ class DataChain:
             team: Team name.
 
         Returns:
-            Iterator[DatasetInfo]: Iterator of DatasetInfo objects.
+            Iterator[DatasetListRecord]: Iterator of DatasetInfo objects.
         """
         from datachain.remote.studio import StudioClient
 
