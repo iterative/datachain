@@ -631,10 +631,36 @@ def studio_datasets(requests_mock):
     with Config(ConfigLevel.GLOBAL).edit() as conf:
         conf["studio"] = {"token": "isat_access_token", "team": "team_name"}
 
+    common_version_info = {
+        "status": 1,
+        "created_at": "2024-02-23T10:42:31.842944+00:00",
+        "finished_at": "2024-02-23T10:42:31.842944+00:00",
+        "error_message": "",
+        "error_stack": "",
+        "num_objects": 6,
+        "size": 100,
+    }
     dogs_dataset = {
         "id": 1,
         "name": "dogs",
-        "versions": [{"version": 1}, {"version": 2}],
+        "description": "dogs dataset",
+        "labels": ["dogs", "dataset"],
+        "versions": [
+            {
+                "version": 1,
+                "id": 1,
+                "uuid": "dab73bdf-ceb3-4af3-8e01-1d44eb41acf9",
+                "dataset_id": 1,
+                **common_version_info,
+            },
+            {
+                "version": 2,
+                "id": 2,
+                "uuid": "dab73bdf-ceb3-4af3-8e01-1d44eb41acf8",
+                "dataset_id": 1,
+                **common_version_info,
+            },
+        ],
     }
 
     datasets = [
@@ -642,12 +668,32 @@ def studio_datasets(requests_mock):
         {
             "id": 2,
             "name": "cats",
-            "versions": [{"version": 1}],
+            "description": "cats dataset",
+            "labels": ["cats", "dataset"],
+            "versions": [
+                {
+                    "version": 1,
+                    "id": 3,
+                    "uuid": "dab73bdf-ceb3-4af3-8e01-1d44eb41acf7",
+                    "dataset_id": 2,
+                    **common_version_info,
+                },
+            ],
         },
         {
             "id": 3,
             "name": "both",
-            "versions": [{"version": 1}],
+            "description": "both dataset",
+            "labels": ["both", "dataset"],
+            "versions": [
+                {
+                    "version": 1,
+                    "id": 4,
+                    "uuid": "dab73bdf-ceb3-4af3-8e01-1d44eb41acf6",
+                    "dataset_id": 3,
+                    **common_version_info,
+                },
+            ],
         },
     ]
 

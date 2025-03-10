@@ -240,6 +240,27 @@ def test_datasets(test_session):
     assert datasets[0].num_objects == 6
 
 
+def test_datasets_studio(studio_datasets, test_session):
+    DataChain.from_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save(
+        "fibonacci"
+    )
+    ds = DataChain.datasets(studio=True, session=test_session)
+    # Local datasets are included in the list
+    datasets = [d for d in ds.collect("dataset") if d.name == "fibonacci"]
+    assert len(datasets) == 1
+    assert datasets[0].num_objects == 6
+
+    # Studio datasets are included in the list
+    datasets = [d for d in ds.collect("dataset") if d.name == "cats"]
+    assert len(datasets) == 1
+    assert datasets[0].num_objects == 6
+
+    # Exclude studio datasets
+    ds = DataChain.datasets(studio=False, session=test_session)
+    datasets = [d for d in ds.collect("dataset") if d.name == "cats"]
+    assert len(datasets) == 0
+
+
 @skip_if_not_sqlite
 def test_datasets_in_memory():
     ds = DataChain.datasets(in_memory=True)
