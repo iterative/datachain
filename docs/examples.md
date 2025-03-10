@@ -13,7 +13,7 @@ title: Examples
     For example, let us consider the New Yorker Cartoon caption contest dataset, where cartoons are matched against the potential titles. Let us imagine we want to augment this dataset with synthetic scene descriptions coming from an AI model. The below code takes images from the cloud, and applies PaliGemma model to caption the first five of them and put the results in the column “scene”:
 
     ```python
-    from datachain.lib.dc import Column, DataChain, File # (1)!
+    from datachain import Column, DataChain, File # (1)!
     from transformers import AutoProcessor, PaliGemmaForConditionalGeneration # (2)!
 
     images = DataChain.from_storage("gs://datachain-demo/newyorker_caption_contest/images", type="image")
@@ -80,12 +80,10 @@ In the below example, we are calling a Mixtral 8x22b model to judge the “servi
 # $ export MISTRAL_API_KEY='your key'
 
 import os
-from datachain.lib.feature import Feature
-from datachain.lib.dc import Column, DataChain
+from datachain import Column, DataChain, DataModel, Feature
 from mistralai.client import MistralClient
 from mistralai.models.chat_completion import ChatMessage
 from mistralai.models.chat_completion import ChatCompletionResponse as MistralModel
-from datachain.lib.data_model import DataModel
 
 prompt = "Was this dialog successful? Describe the 'result' as 'Yes' or 'No' in a short JSON"
 api_key = os.environ["MISTRAL_API_KEY"]
@@ -189,7 +187,7 @@ DataChain library understands common annotation formats (JSON, CSV, webdataset a
 Here is an example of reading a simple CSV file where schema is heuristically derived from the header:
 
 ```python
-from datachain.lib.dc import DataChain
+from datachain import DataChain
 
 uri="gs://datachain-demo/chatbot-csv/"
 csv_dataset = DataChain.from_csv(uri)
@@ -234,7 +232,7 @@ However, Datachain can easily parse the entire COCO structure via several readin
 
 ```python
 
-from datachain.lib.dc import Column, DataChain
+from datachain import Column, DataChain
 
 images_uri="gs://datachain-demo/coco2017/images/val/"
 captions_uri="gs://datachain-demo/coco2017/annotations/captions_val2017.json"
