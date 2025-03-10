@@ -212,7 +212,7 @@ class Client(ABC):
 
     async def get_current_etag(self, file: "File") -> str:
         kwargs = {}
-        if self.fs.version_aware:
+        if getattr(self.fs, "version_aware", False):
             kwargs["version_id"] = file.version
         info = await self.fs._info(
             self.get_full_path(file.path, file.version), **kwargs
