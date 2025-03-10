@@ -302,6 +302,7 @@ class DatasetListVersion:
         size: Optional[int],
         query_script: str = "",
         job_id: Optional[str] = None,
+        **kwargs,
     ):
         return cls(
             id,

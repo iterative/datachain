@@ -4,6 +4,7 @@ import os.path
 import re
 import sys
 from collections.abc import Iterator, Sequence
+from datetime import datetime
 from functools import wraps
 from typing import (
     TYPE_CHECKING,
@@ -25,7 +26,9 @@ from sqlalchemy.sql.functions import GenericFunction
 from sqlalchemy.sql.sqltypes import NullType
 from tqdm import tqdm
 
-from datachain.dataset import DatasetRecord
+from datachain.config import Config
+from datachain.dataset import DatasetListRecord, DatasetListVersion, DatasetRecord
+from datachain.error import DataChainError
 from datachain.func import literal
 from datachain.func.base import Function
 from datachain.func.func import Func
@@ -701,6 +704,8 @@ class DataChain:
         in_memory: bool = False,
         object_name: str = "dataset",
         include_listing: bool = False,
+        studio: bool = True,
+        team: Optional[str] = None,
     ) -> "DataChain":
         """Generate chain with list of registered datasets.
 
@@ -723,6 +728,15 @@ class DataChain:
             )
         ]
 
+        if studio:
+            # Add datasets from Studio
+            token = Config().read().get("studio", {}).get("token")
+            if token:
+                for d in cls.studio_datasets(team=team):
+                    datasets.extend(
+                        [DatasetInfo.from_models(d, v, None) for v in d.versions]
+                    )
+
         return cls.from_values(
             session=session,
             settings=settings,
@@ -730,6 +744,44 @@ class DataChain:
             output={object_name: DatasetInfo},
             **{object_name: datasets},  # type: ignore[arg-type]
         )
+
+    @classmethod
+    def studio_datasets(
+        cls,
+        team: Optional[str] = None,
+    ) -> Iterator[DatasetListRecord]:
+        """Get datasets from Studio.
+
+        Parameters:
+            team: Team name.
+
+        Returns:
+            Iterator[DatasetInfo]: Iterator of DatasetInfo objects.
+        """
+        from datachain.remote.studio import StudioClient
+
+        client = StudioClient(team=team)
+
+        response = client.ls_datasets()
+
+        if not response.ok:
+            raise DataChainError(response.message)
+
+        if not response.data:
+            return
+
+        for d in response.data:
+            dataset = DatasetListRecord(
+                id=d.get("id"),  # type: ignore[arg-type]
+                name=d.get("name"),  # type: ignore[arg-type]
+                description=d.get("description"),  # type: ignore[arg-type]
+                labels=d.get("labels"),  # type: ignore[arg-type]
+                created_at=datetime.fromisoformat(d.get("created_at"))  # type: ignore[arg-type]
+                if d.get("created_at")
+                else None,
+                versions=[DatasetListVersion.parse(**v) for v in d.get("versions", [])],
+            )
+            yield dataset
 
     @classmethod
     def listings(
