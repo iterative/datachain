@@ -138,7 +138,7 @@ chain = (
 )
 
 successful_chain = chain.filter(Column("is_success") == True)
-successful_chain.export_files("./output_mistral")
+successful_chain.to_storage("./output_mistral")
 
 print(f"{successful_chain.count()} files were exported")
 ```
