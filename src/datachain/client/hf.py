@@ -10,9 +10,13 @@ from datachain.lib.file import File
 
 from .fsspec import Client
 
+AsyncHfFileSystem = AsyncFileSystemWrapper.wrap_class(HfFileSystem)
+# AsyncFileSystemWrapper does not set class properties, so we need to set them back.
+AsyncHfFileSystem.protocol = HfFileSystem.protocol
+
 
 class HfClient(Client):
-    FS_CLASS = AsyncFileSystemWrapper.wrap_class(HfFileSystem)
+    FS_CLASS = AsyncHfFileSystem
     PREFIX = "hf://"
     protocol = "hf"
 
