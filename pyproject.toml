@@ -80,7 +80,8 @@ vector = [
 ]
 hf = [
   "numba>=0.60.0",
-  "datasets[audio,vision]>=2.21.0"
+  "datasets[audio,vision]>=2.21.0",
+  "fsspec>=2024.12.0"
 ]
 video = [
   "ffmpeg-python",
