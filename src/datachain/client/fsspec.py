@@ -336,7 +336,9 @@ class Client(ABC):
         return not (key.startswith("/") or key.endswith("/") or "//" in key)
 
     async def ls_dir(self, path):
-        return await self.fs._ls(path, detail=True, versions=True)
+        if getattr(self.fs, "version_aware", False):
+            kwargs = {"versions": True}
+        return await self.fs._ls(path, detail=True, **kwargs)
 
     def rel_path(self, path: str) -> str:
         return self.fs.split_path(path)[1]
