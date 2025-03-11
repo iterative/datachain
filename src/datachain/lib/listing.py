@@ -1,3 +1,4 @@
+import glob
 import logging
 import os
 import posixpath
@@ -97,10 +98,6 @@ def _isfile(client: "Client", path: str) -> bool:
     Returns True if uri points to a file
     """
     try:
-        if os.name == "nt" and "*" in path:
-            # On Windows, the glob pattern "*" is not supported
-            return False
-
         info = client.fs.info(path)
         name = info.get("name")
         # case for special simulated directories on some clouds
@@ -173,7 +170,7 @@ def get_listing(
         uri = str(uri)
 
     # we don't want to use cached dataset (e.g. for a single file listing)
-    if not uri.endswith("/") and _isfile(client, uri):
+    if not glob.has_magic(uri) and not uri.endswith("/") and _isfile(client, uri):
         storage_uri, path = Client.parse_url(uri)
         return None, f"{storage_uri}/{path.lstrip('/')}", path, False
 
