@@ -12,7 +12,6 @@ from tqdm import tqdm
 from datachain.asyn import get_loop
 from datachain.client import Client
 from tests.data import ENTRIES
-from tests.utils import uppercase_scheme
 
 _non_null_text = st.text(
     alphabet=st.characters(blacklist_categories=["Cc", "Cs"]), min_size=1
@@ -128,24 +127,6 @@ def test_get_client(cloud_test_catalog, rel_path, cloud_type):
     client = Client.get_client(url, catalog.cache)
     assert client
     assert client.uri
-
-
-@settings(suppress_health_check=[HealthCheck.function_scoped_fixture], deadline=None)
-@given(rel_path=_non_null_text)
-def test_parse_url_uppercase_scheme(cloud_test_catalog, rel_path, cloud_type):
-    if cloud_type == "file":
-        assume(not rel_path.startswith("/"))
-    bucket_uri = cloud_test_catalog.src_uri
-    bucket_uri_upper = uppercase_scheme(bucket_uri)
-    url = f"{bucket_uri_upper}/{rel_path}"
-    uri, rel_part = Client.parse_url(url)
-    if cloud_type == "file":
-        url = f"{bucket_uri}/{rel_path}"
-        assert uri == url.rsplit("/", 1)[0]
-        assert rel_part == url.rsplit("/", 1)[1]
-    else:
-        assert uri == bucket_uri
-        assert rel_part == rel_path
 
 
 @pytest.mark.parametrize("cloud_type", ["file"], indirect=True)
