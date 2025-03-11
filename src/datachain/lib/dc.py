@@ -215,7 +215,7 @@ class DataChain:
         from mistralai.client import MistralClient
         from mistralai.models.chat_completion import ChatMessage
 
-        from datachain.dc import DataChain, Column
+        from datachain import DataChain, Column
 
         PROMPT = (
             "Was this bot dialog successful? "
