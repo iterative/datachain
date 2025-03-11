@@ -95,8 +95,6 @@ class Client(ABC):
 
         if not protocol or _is_win_local_path(str(url)):
             return FileClient
-
-        protocol = protocol.lower()
         if protocol == ClientS3.protocol:
             return ClientS3
         if protocol == GCSClient.protocol:

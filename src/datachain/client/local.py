@@ -67,10 +67,7 @@ class FileClient(Client):
     @classmethod
     def split_url(cls, url: str) -> tuple[str, str]:
         parsed = urlparse(url)
-        if parsed.scheme == "file":
-            scheme, rest = url.split(":", 1)
-            url = f"{scheme.lower()}:{rest}"
-        else:
+        if parsed.scheme != "file":
             url = cls.path_to_uri(url)
 
         fill_path = url[len(cls.PREFIX) :]
