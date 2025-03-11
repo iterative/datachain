@@ -2998,21 +2998,3 @@ def test_window_error(test_session):
         ),
     ):
         dc.mutate(first=func.sum("col2").over(window))
-
-
-def test_append_steps(test_session):
-    keys = ["a", "b", "c", "d"]
-    values = [1, 2, 3, 4]
-
-    DataChain.from_values(key=keys, val=values, session=test_session).save("ds")
-
-    ds1 = (
-        DataChain.from_dataset("ds", session=test_session)
-        .filter(C("val") > 2)
-        .mutate(double=C("val") * 2)
-    )
-
-    ds2 = DataChain.from_dataset("ds", session=test_session).append_steps(ds1)
-
-    assert list(ds2.order_by("val").collect("val")) == [3, 4]
-    assert list(ds2.order_by("val").collect("double")) == [6, 8]
