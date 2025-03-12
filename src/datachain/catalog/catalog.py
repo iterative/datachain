@@ -1751,3 +1751,41 @@ class Catalog:
             client_config=client_config or self.client_config,
             only_index=True,
         )
+
+    def studio_dataset_versions(
+        self, team: Optional[str] = None, include_listing=False
+    ) -> Iterator[tuple[DatasetListRecord, "DatasetListVersion", Optional["Job"]]]:
+        """Get Studio versions from Studio.
+
+        Parameters:
+            team: Team name.
+            include_listing: Whether to include listing datasets.
+        """
+        from datachain.remote.studio import StudioClient
+
+        client = StudioClient(team=team)
+
+        response = client.ls_datasets()
+
+        if not response.ok:
+            raise DataChainError(response.message)
+
+        if not response.data:
+            return
+
+        datasets = [DatasetListRecord.from_dict(d) for d in response.data]
+
+        # preselect dataset versions jobs from db to avoid multiple queries
+        jobs_ids: set[str] = {
+            v.job_id for ds in datasets for v in ds.versions if v.job_id
+        }
+        jobs: dict[str, Job] = {}
+        if jobs_ids:
+            jobs = {j.id: j for j in self.metastore.list_jobs_by_ids(list(jobs_ids))}
+
+        for d in datasets:
+            yield from (
+                (d, v, jobs.get(str(v.job_id)) if v.job_id else None)
+                for v in d.versions
+                if not d.is_bucket_listing or include_listing
+            )

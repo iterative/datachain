@@ -649,6 +649,20 @@ class DatasetListRecord:
     def has_version_with_uuid(self, uuid: str) -> bool:
         return any(v.uuid == uuid for v in self.versions)
 
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> "DatasetListRecord":
+        versions = [DatasetListVersion.parse(**v) for v in d.get("versions", [])]
+        return cls(
+            id=d.get("id"),  # type: ignore[arg-type]
+            name=d.get("name"),  # type: ignore[arg-type]
+            description=d.get("description"),
+            labels=d.get("labels", []),
+            versions=versions,
+            created_at=datetime.fromisoformat(d.get("created_at"))  # type: ignore[arg-type]
+            if d.get("created_at")
+            else None,
+        )
+
 
 class RowDict(dict):
     pass
