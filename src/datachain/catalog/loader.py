@@ -1,18 +1,12 @@
 import os
 from importlib import import_module
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
-from datachain.catalog import Catalog
-from datachain.data_storage import (
-    AbstractMetastore,
-    AbstractWarehouse,
-)
-from datachain.data_storage.serializer import deserialize
-from datachain.data_storage.sqlite import (
-    SQLiteMetastore,
-    SQLiteWarehouse,
-)
 from datachain.utils import get_envs_by_prefix
+
+if TYPE_CHECKING:
+    from datachain.catalog import Catalog
+    from datachain.data_storage import AbstractMetastore, AbstractWarehouse
 
 METASTORE_SERIALIZED = "DATACHAIN__METASTORE"
 METASTORE_IMPORT_PATH = "DATACHAIN_METASTORE"
@@ -27,6 +21,9 @@ IN_MEMORY_ERROR_MESSAGE = "In-memory is only supported on SQLite"
 
 
 def get_metastore(in_memory: bool = False) -> "AbstractMetastore":
+    from datachain.data_storage import AbstractMetastore
+    from datachain.data_storage.serializer import deserialize
+
     metastore_serialized = os.environ.get(METASTORE_SERIALIZED)
     if metastore_serialized:
         metastore_obj = deserialize(metastore_serialized)
@@ -45,6 +42,8 @@ def get_metastore(in_memory: bool = False) -> "AbstractMetastore":
     }
 
     if not metastore_import_path:
+        from datachain.data_storage.sqlite import SQLiteMetastore
+
         metastore_args["in_memory"] = in_memory
         return SQLiteMetastore(**metastore_args)
     if in_memory:
@@ -62,6 +61,9 @@ def get_metastore(in_memory: bool = False) -> "AbstractMetastore":
 
 
 def get_warehouse(in_memory: bool = False) -> "AbstractWarehouse":
+    from datachain.data_storage import AbstractWarehouse
+    from datachain.data_storage.serializer import deserialize
+
     warehouse_serialized = os.environ.get(WAREHOUSE_SERIALIZED)
     if warehouse_serialized:
         warehouse_obj = deserialize(warehouse_serialized)
@@ -80,6 +82,8 @@ def get_warehouse(in_memory: bool = False) -> "AbstractWarehouse":
     }
 
     if not warehouse_import_path:
+        from datachain.data_storage.sqlite import SQLiteWarehouse
+
         warehouse_args["in_memory"] = in_memory
         return SQLiteWarehouse(**warehouse_args)
     if in_memory:
@@ -121,7 +125,7 @@ def get_distributed_class(**kwargs):
 
 def get_catalog(
     client_config: Optional[dict[str, Any]] = None, in_memory: bool = False
-) -> Catalog:
+) -> "Catalog":
     """
     Function that creates Catalog instance with appropriate metastore
     and warehouse classes. Metastore class can be provided with env variable
@@ -133,6 +137,8 @@ def get_catalog(
     and name of variable after, e.g. if it accepts team_id as kwargs
     we can provide DATACHAIN_METASTORE_ARG_TEAM_ID=12345 env variable.
     """
+    from datachain.catalog import Catalog
+
     return Catalog(
         metastore=get_metastore(in_memory=in_memory),
         warehouse=get_warehouse(in_memory=in_memory),

@@ -22,7 +22,6 @@ import orjson
 import sqlalchemy
 from pydantic import BaseModel
 from sqlalchemy.sql.functions import GenericFunction
-from sqlalchemy.sql.sqltypes import NullType
 from tqdm import tqdm
 
 from datachain.dataset import DatasetRecord
@@ -55,7 +54,6 @@ from datachain.query import Session
 from datachain.query.dataset import DatasetQuery, PartitionByType
 from datachain.query.schema import DEFAULT_DELIMITER, Column, ColumnMeta
 from datachain.sql.functions import path as pathfunc
-from datachain.telemetry import telemetry
 from datachain.utils import batched_it, inside_notebook, row_to_nested_dict
 
 if TYPE_CHECKING:
@@ -550,6 +548,8 @@ class DataChain:
             )
             ```
         """
+        from datachain.telemetry import telemetry
+
         query = DatasetQuery(
             name=name,
             version=version,
@@ -1195,6 +1195,8 @@ class DataChain:
         )
         ```
         """
+        from sqlalchemy.sql.sqltypes import NullType
+
         primitives = (bool, str, int, float)
 
         for col_name, expr in kwargs.items():

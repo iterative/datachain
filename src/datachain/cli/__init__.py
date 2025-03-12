@@ -6,7 +6,6 @@ from multiprocessing import freeze_support
 from typing import Optional
 
 from datachain.cli.utils import get_logging_level
-from datachain.telemetry import telemetry
 
 from .commands import (
     clear_cache,
@@ -70,6 +69,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         error, return_code = handle_general_exception(exc, args, logging_level)
         return return_code
     finally:
+        from datachain.telemetry import telemetry
+
         telemetry.send_cli_call(args.command, error=error)
 
 

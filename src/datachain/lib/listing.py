@@ -3,18 +3,19 @@ import logging
 import os
 import posixpath
 from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Callable, Optional, TypeVar, Union
 
 from fsspec.asyn import get_loop
 from sqlalchemy.sql.expression import true
 
+import datachain.fs.utils as fsutils
 from datachain.asyn import iter_over_async
 from datachain.client import Client
-from datachain.error import REMOTE_ERRORS, ClientError
+from datachain.error import ClientError
 from datachain.lib.file import File
 from datachain.query.schema import Column
 from datachain.sql.functions import path as pathfunc
-from datachain.telemetry import telemetry
 from datachain.utils import uses_glob
 
 if TYPE_CHECKING:
@@ -93,29 +94,6 @@ def ls(
     return dc.filter(pathfunc.parent(_file_c("path")) == path.lstrip("/").rstrip("/*"))
 
 
-def _isfile(client: "Client", path: str) -> bool:
-    """
-    Returns True if uri points to a file
-    """
-    try:
-        info = client.fs.info(path)
-        name = info.get("name")
-        # case for special simulated directories on some clouds
-        # e.g. Google creates a zero byte file with the same name as the
-        # directory with a trailing slash at the end
-        if not name or name.endswith("/"):
-            return False
-
-        return info["type"] == "file"
-    except FileNotFoundError:
-        return False
-    except REMOTE_ERRORS as e:
-        raise ClientError(
-            message=str(e),
-            error_code=getattr(e, "code", None),
-        ) from e
-
-
 def parse_listing_uri(uri: str, client_config) -> tuple[str, str, str]:
     """
     Parsing uri and returns listing dataset name, listing uri and listing path
@@ -148,6 +126,14 @@ def listing_uri_from_name(dataset_name: str) -> str:
     return dataset_name.removeprefix(LISTING_PREFIX)
 
 
+@contextmanager
+def _reraise_as_client_error() -> Iterator[None]:
+    try:
+        yield
+    except Exception as e:
+        raise ClientError(message=str(e), error_code=getattr(e, "code", None)) from e
+
+
 def get_listing(
     uri: Union[str, os.PathLike[str]], session: "Session", update: bool = False
 ) -> tuple[Optional[str], str, str, bool]:
@@ -159,6 +145,7 @@ def get_listing(
     be used to find rows based on uri.
     """
     from datachain.client.local import FileClient
+    from datachain.telemetry import telemetry
 
     catalog = session.catalog
     cache = catalog.cache
@@ -167,12 +154,13 @@ def get_listing(
     client = Client.get_client(uri, cache, **client_config)
     telemetry.log_param("client", client.PREFIX)
     if not isinstance(uri, str):
-        uri = str(uri)
+        uri = os.fspath(uri)
 
     # we don't want to use cached dataset (e.g. for a single file listing)
-    if not glob.has_magic(uri) and not uri.endswith("/") and _isfile(client, uri):
-        storage_uri, path = Client.parse_url(uri)
-        return None, f"{storage_uri}/{path.lstrip('/')}", path, False
+    isfile = _reraise_as_client_error()(fsutils.isfile)
+    if not glob.has_magic(uri) and not uri.endswith("/") and isfile(client.fs, uri):
+        _, path = Client.parse_url(uri)
+        return None, uri, path, False
 
     ds_name, list_uri, list_path = parse_listing_uri(uri, client_config)
     listing = None
