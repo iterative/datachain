@@ -23,7 +23,7 @@ class YoloBBox(DataModel):
     cls: int = Field(default=-1)
     name: str = Field(default="")
     confidence: float = Field(default=0)
-    box: BBox
+    box: BBox = Field(default=BBox())
 
     @staticmethod
     def from_result(result: "Results") -> "YoloBBox":
@@ -55,10 +55,10 @@ class YoloBBoxes(DataModel):
         box: A list of bounding boxes of the detected objects
     """
 
-    cls: list[int]
-    name: list[str]
-    confidence: list[float]
-    box: list[BBox]
+    cls: list[int] = Field(default=[])
+    name: list[str] = Field(default=[])
+    confidence: list[float] = Field(default=[])
+    box: list[BBox] = Field(default=[])
 
     @staticmethod
     def from_results(results: list["Results"]) -> "YoloBBoxes":
@@ -124,10 +124,10 @@ class YoloOBBoxes(DataModel):
         box: A list of oriented bounding boxes of the detected objects.
     """
 
-    cls: list[int]
-    name: list[str]
-    confidence: list[float]
-    box: list[OBBox]
+    cls: list[int] = Field(default=[])
+    name: list[str] = Field(default=[])
+    confidence: list[float] = Field(default=[])
+    box: list[OBBox] = Field(default=[])
 
     @staticmethod
     def from_results(results: list["Results"]) -> "YoloOBBoxes":

@@ -243,6 +243,30 @@ class File(DataModel):
         self._catalog = None
         self._caching_enabled: bool = False
 
+    def as_text_file(self) -> "TextFile":
+        """Convert the file to a `TextFile` object."""
+        if isinstance(self, TextFile):
+            return self
+        file = TextFile(**self.model_dump())
+        file._set_stream(self._catalog, caching_enabled=self._caching_enabled)
+        return file
+
+    def as_image_file(self) -> "ImageFile":
+        """Convert the file to a `ImageFile` object."""
+        if isinstance(self, ImageFile):
+            return self
+        file = ImageFile(**self.model_dump())
+        file._set_stream(self._catalog, caching_enabled=self._caching_enabled)
+        return file
+
+    def as_video_file(self) -> "VideoFile":
+        """Convert the file to a `VideoFile` object."""
+        if isinstance(self, VideoFile):
+            return self
+        file = VideoFile(**self.model_dump())
+        file._set_stream(self._catalog, caching_enabled=self._caching_enabled)
+        return file
+
     @classmethod
     def upload(
         cls, data: bytes, path: str, catalog: Optional["Catalog"] = None
@@ -547,6 +571,17 @@ class TextFile(File):
 
 class ImageFile(File):
     """`DataModel` for reading image files."""
+
+    def get_info(self) -> "Image":
+        """
+        Retrieves metadata and information about the image file.
+
+        Returns:
+            Image: A Model containing image metadata such as width, height and format.
+        """
+        from .image import image_info
+
+        return image_info(self)
 
     def read(self):
         """Returns `PIL.Image.Image` object."""

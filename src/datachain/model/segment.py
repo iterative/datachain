@@ -1,3 +1,5 @@
+from collections.abc import Sequence
+
 from pydantic import Field
 
 from datachain.lib.data_model import DataModel
@@ -21,27 +23,29 @@ class Segment(DataModel):
     y: list[int] = Field(default=[])
 
     @staticmethod
-    def from_list(points: list[list[float]], title: str = "") -> "Segment":
-        assert len(points) == 2, (
-            "Segment must be a list of 2 lists: x and y coordinates."
-        )
+    def from_list(points: Sequence[Sequence[float]], title: str = "") -> "Segment":
+        if not isinstance(points, (list, tuple)):
+            raise TypeError("Segment must be a list of coordinates.")
+        if len(points) != 2:
+            raise ValueError("Segment must be a list of 2 lists: x and y coordinates.")
         points_x, points_y = points
-        assert len(points_x) == len(points_y), (
-            "Segment x and y coordinates must have the same length."
-        )
-        assert all(
-            isinstance(value, (int, float)) for value in [*points_x, *points_y]
-        ), "Segment coordinates must be floats or integers."
+        if not isinstance(points_x, (list, tuple)) or not isinstance(
+            points_y, (list, tuple)
+        ):
+            raise TypeError("Segment x and y coordinates must be lists.")
+        if len(points_x) != len(points_y):
+            raise ValueError("Segment x and y coordinates must have the same length.")
+        if not all(isinstance(value, (int, float)) for value in [*points_x, *points_y]):
+            raise ValueError("Segment coordinates must be floats or integers.")
         return Segment(
             title=title,
-            x=[round(coord) for coord in points_x],
-            y=[round(coord) for coord in points_y],
+            x=list(map(round, points_x)),
+            y=list(map(round, points_y)),
         )
 
     @staticmethod
-    def from_dict(points: dict[str, list[float]], title: str = "") -> "Segment":
-        assert isinstance(points, dict) and set(points) == {
-            "x",
-            "y",
-        }, "Segment must be a dict with keys 'x' and 'y'."
-        return Segment.from_list([points["x"], points["y"]], title=title)
+    def from_dict(points: dict[str, Sequence[float]], title: str = "") -> "Segment":
+        keys = ("x", "y")
+        if not isinstance(points, dict) or set(points) != set(keys):
+            raise ValueError("Segment must be a dictionary with coordinates.")
+        return Segment.from_list([points[k] for k in keys], title=title)

@@ -1,17 +1,44 @@
 from typing import Callable, Optional, Union
 
 import torch
-from PIL import Image
+from PIL import Image as PILImage
+
+from datachain.lib.file import File, FileError, Image, ImageFile
+
+
+def image_info(file: Union[File, ImageFile]) -> Image:
+    """
+    Returns image file information.
+
+    Args:
+        file (ImageFile): Image file object.
+
+    Returns:
+        Image: Image file information.
+    """
+    file = file.as_image_file()
+
+    try:
+        with file.open() as stream:
+            img = PILImage.open(stream)
+    except Exception as exc:
+        raise FileError(file, "unable to open image file") from exc
+
+    return Image(
+        width=img.width,
+        height=img.height,
+        format=img.format or "",
+    )
 
 
 def convert_image(
-    img: Image.Image,
+    img: PILImage.Image,
     mode: str = "RGB",
     size: Optional[tuple[int, int]] = None,
     transform: Optional[Callable] = None,
     encoder: Optional[Callable] = None,
     device: Optional[Union[str, torch.device]] = None,
-) -> Union[Image.Image, torch.Tensor]:
+) -> Union[PILImage.Image, torch.Tensor]:
     """
     Resize, transform, and otherwise convert an image.
 
@@ -47,13 +74,13 @@ def convert_image(
 
 
 def convert_images(
-    images: Union[Image.Image, list[Image.Image]],
+    images: Union[PILImage.Image, list[PILImage.Image]],
     mode: str = "RGB",
     size: Optional[tuple[int, int]] = None,
     transform: Optional[Callable] = None,
     encoder: Optional[Callable] = None,
     device: Optional[Union[str, torch.device]] = None,
-) -> Union[list[Image.Image], torch.Tensor]:
+) -> Union[list[PILImage.Image], torch.Tensor]:
     """
     Resize, transform, and otherwise convert one or more images.
 
@@ -65,7 +92,7 @@ def convert_images(
         encoder (Callable): Encode image using model.
         device (str or torch.device): Device to use.
     """
-    if isinstance(images, Image.Image):
+    if isinstance(images, PILImage.Image):
         images = [images]
 
     converted = [

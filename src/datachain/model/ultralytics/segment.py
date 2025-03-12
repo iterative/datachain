@@ -25,8 +25,8 @@ class YoloSegment(DataModel):
     cls: int = Field(default=-1)
     name: str = Field(default="")
     confidence: float = Field(default=0)
-    box: BBox
-    segment: Segment
+    box: BBox = Field(default=BBox())
+    segment: Segment = Field(default=Segment())
 
     @staticmethod
     def from_result(result: "Results") -> "YoloSegment":
@@ -65,11 +65,11 @@ class YoloSegments(DataModel):
         segment (list[Segments]): The segments of the segments.
     """
 
-    cls: list[int]
-    name: list[str]
-    confidence: list[float]
-    box: list[BBox]
-    segment: list[Segment]
+    cls: list[int] = Field(default=[])
+    name: list[str] = Field(default=[])
+    confidence: list[float] = Field(default=[])
+    box: list[BBox] = Field(default=[])
+    segment: list[Segment] = Field(default=[])
 
     @staticmethod
     def from_results(results: list["Results"]) -> "YoloSegments":
