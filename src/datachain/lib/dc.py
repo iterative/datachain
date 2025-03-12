@@ -25,7 +25,6 @@ from sqlalchemy.sql.functions import GenericFunction
 from sqlalchemy.sql.sqltypes import NullType
 from tqdm import tqdm
 
-from datachain.config import Config
 from datachain.dataset import DatasetRecord
 from datachain.func import literal
 from datachain.func.base import Function
@@ -702,10 +701,21 @@ class DataChain:
         in_memory: bool = False,
         object_name: str = "dataset",
         include_listing: bool = False,
-        studio: bool = True,
-        team: Optional[str] = None,
+        studio: bool = False,
     ) -> "DataChain":
         """Generate chain with list of registered datasets.
+
+        Args:
+            session: Optional session instance. If not provided, uses default session.
+            settings: Optional dictionary of settings to configure the chain.
+            in_memory: If True, creates an in-memory session. Defaults to False.
+            object_name: Name of the output object in the chain. Defaults to "dataset".
+            include_listing: If True, includes listing datasets. Defaults to False.
+            studio: If True, returns datasets from Studio only,
+                otherwise returns all datasets locally.
+
+        Returns:
+            DataChain: A new DataChain instance containing dataset information.
 
         Example:
             ```py
@@ -719,22 +729,20 @@ class DataChain:
         session = Session.get(session, in_memory=in_memory)
         catalog = session.catalog
 
-        datasets = [
-            DatasetInfo.from_models(d, v, j)
-            for d, v, j in catalog.list_datasets_versions(
-                include_listing=include_listing
-            )
-        ]
-
-        if studio and Config().read().get("studio", {}).get("token"):
-            datasets.extend(
-                [
-                    DatasetInfo.from_models(d, v, j)
-                    for d, v, j in catalog.studio_dataset_versions(
-                        team=team, include_listing=include_listing
-                    )
-                ]
-            )
+        if studio:
+            datasets = [
+                DatasetInfo.from_models(d, v, j)
+                for d, v, j in catalog.studio_dataset_versions(
+                    include_listing=include_listing
+                )
+            ]
+        else:
+            datasets = [
+                DatasetInfo.from_models(d, v, j)
+                for d, v, j in catalog.list_datasets_versions(
+                    include_listing=include_listing
+                )
+            ]
 
         return cls.from_values(
             session=session,

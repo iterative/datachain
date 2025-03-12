@@ -245,10 +245,9 @@ def test_datasets_studio(studio_datasets, test_session):
         "fibonacci"
     )
     ds = DataChain.datasets(studio=True, session=test_session)
-    # Local datasets are included in the list
+    # Local datasets are not included in the list
     datasets = [d for d in ds.collect("dataset") if d.name == "fibonacci"]
-    assert len(datasets) == 1
-    assert datasets[0].num_objects == 6
+    assert len(datasets) == 0
 
     # Studio datasets are included in the list
     datasets = [d for d in ds.collect("dataset") if d.name == "cats"]

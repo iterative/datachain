@@ -1753,17 +1753,16 @@ class Catalog:
         )
 
     def studio_dataset_versions(
-        self, team: Optional[str] = None, include_listing=False
+        self, include_listing=False
     ) -> Iterator[tuple[DatasetListRecord, "DatasetListVersion", Optional["Job"]]]:
         """Get Studio versions from Studio.
 
         Parameters:
-            team: Team name.
             include_listing: Whether to include listing datasets.
         """
         from datachain.remote.studio import StudioClient
 
-        client = StudioClient(team=team)
+        client = StudioClient()
 
         response = client.ls_datasets()
 
