@@ -8,10 +8,6 @@ from datachain.data_storage import (
     AbstractWarehouse,
 )
 from datachain.data_storage.serializer import deserialize
-from datachain.data_storage.sqlite import (
-    SQLiteMetastore,
-    SQLiteWarehouse,
-)
 from datachain.utils import get_envs_by_prefix
 
 METASTORE_SERIALIZED = "DATACHAIN__METASTORE"
@@ -45,6 +41,8 @@ def get_metastore(in_memory: bool = False) -> "AbstractMetastore":
     }
 
     if not metastore_import_path:
+        from datachain.data_storage.sqlite import SQLiteMetastore
+
         metastore_args["in_memory"] = in_memory
         return SQLiteMetastore(**metastore_args)
     if in_memory:
@@ -80,6 +78,8 @@ def get_warehouse(in_memory: bool = False) -> "AbstractWarehouse":
     }
 
     if not warehouse_import_path:
+        from datachain.data_storage.sqlite import SQLiteWarehouse
+
         warehouse_args["in_memory"] = in_memory
         return SQLiteWarehouse(**warehouse_args)
     if in_memory:
