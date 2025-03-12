@@ -39,13 +39,6 @@ if TYPE_CHECKING:
     from datachain.data_storage.schema import DataTable
     from datachain.lib.file import File
 
-try:
-    import numpy as np
-
-    numpy_imported = True
-except ImportError:
-    numpy_imported = False
-
 
 logger = logging.getLogger("datachain")
 
@@ -96,7 +89,9 @@ class AbstractWarehouse(ABC, Serializable):
         If value is a list or some other iterable, it tries to convert sub elements
         as well
         """
-        if numpy_imported and isinstance(val, (np.ndarray, np.generic)):
+        import numpy as np
+
+        if isinstance(val, (np.ndarray, np.generic)):
             val = val.tolist()
 
         # Optimization: Precompute all the column type variables.
