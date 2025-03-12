@@ -95,8 +95,6 @@ class Client(ABC):
 
         if not protocol or _is_win_local_path(str(url)):
             return FileClient
-
-        protocol = protocol.lower()
         if protocol == ClientS3.protocol:
             return ClientS3
         if protocol == GCSClient.protocol:
@@ -212,7 +210,7 @@ class Client(ABC):
 
     async def get_current_etag(self, file: "File") -> str:
         kwargs = {}
-        if self.fs.version_aware:
+        if getattr(self.fs, "version_aware", False):
             kwargs["version_id"] = file.version
         info = await self.fs._info(
             self.get_full_path(file.path, file.version), **kwargs
@@ -336,7 +334,9 @@ class Client(ABC):
         return not (key.startswith("/") or key.endswith("/") or "//" in key)
 
     async def ls_dir(self, path):
-        return await self.fs._ls(path, detail=True, versions=True)
+        if getattr(self.fs, "version_aware", False):
+            kwargs = {"versions": True}
+        return await self.fs._ls(path, detail=True, **kwargs)
 
     def rel_path(self, path: str) -> str:
         return self.fs.split_path(path)[1]

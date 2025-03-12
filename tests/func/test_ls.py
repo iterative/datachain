@@ -12,7 +12,6 @@ from datachain.cli import ls
 from datachain.config import Config, ConfigLevel
 from datachain.lib.dc import DataChain
 from datachain.lib.listing import LISTING_PREFIX
-from tests.utils import uppercase_scheme
 
 
 @pytest.fixture
@@ -69,14 +68,6 @@ dog4
 
 def test_ls_sources(cloud_test_catalog, cloud_type, capsys):
     src = cloud_test_catalog.src_uri
-    ls([src], catalog=cloud_test_catalog.catalog)
-    ls([f"{src}/dogs/*"], catalog=cloud_test_catalog.catalog)
-    captured = capsys.readouterr()
-    assert same_lines(captured.out, ls_sources_output(src))
-
-
-def test_ls_sources_scheme_uppercased(cloud_test_catalog, cloud_type, capsys):
-    src = uppercase_scheme(cloud_test_catalog.src_uri)
     ls([src], catalog=cloud_test_catalog.catalog)
     ls([f"{src}/dogs/*"], catalog=cloud_test_catalog.catalog)
     captured = capsys.readouterr()
