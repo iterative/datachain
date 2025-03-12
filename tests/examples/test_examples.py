@@ -2,6 +2,7 @@ import glob
 import os
 import subprocess
 import sys
+import tempfile
 from typing import Optional
 
 import pytest
@@ -24,25 +25,27 @@ computer_vision_examples = sorted(
 
 
 def smoke_test(example: str, env: Optional[dict] = None):
-    try:
-        completed_process = subprocess.run(  # noqa: S603
-            [sys.executable, example],
-            env={**os.environ, **(env or {})},
-            capture_output=True,
-            cwd=os.path.abspath(os.path.join(__file__, "..", "..", "..")),
-            check=True,
-        )
-    except subprocess.CalledProcessError as e:
-        print(f"Example failed: {example}")
-        print()
-        print()
-        print("stdout:")
-        print(e.stdout.decode("utf-8"))
-        print()
-        print()
-        print("stderr:")
-        print(e.stderr.decode("utf-8"))
-        pytest.fail("subprocess returned a non-zero exit code")
+    example_file = os.path.abspath(os.path.join(__file__, "..", "..", "..", example))
+    with tempfile.TemporaryDirectory() as tmpdir:
+        try:
+            completed_process = subprocess.run(  # noqa: S603
+                [sys.executable, example_file],
+                env={**os.environ, **(env or {})},
+                capture_output=True,
+                cwd=tmpdir,  # os.path.abspath(os.path.join(__file__, "..", "..", "..")),
+                check=True,
+            )
+        except subprocess.CalledProcessError as e:
+            print(f"Example failed: {example}")
+            print()
+            print()
+            print("stdout:")
+            print(e.stdout.decode("utf-8"))
+            print()
+            print()
+            print("stderr:")
+            print(e.stderr.decode("utf-8"))
+            pytest.fail("subprocess returned a non-zero exit code")
 
     example_has_some_output = bool(completed_process.stdout or completed_process.stderr)
     assert example_has_some_output
