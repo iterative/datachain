@@ -202,6 +202,10 @@ class BBox(DataModel):
         )
 
     @staticmethod
+    def from_list(coords: Sequence[float], title: str = "") -> "BBox":
+        return BBox.from_voc(coords, title=title)
+
+    @staticmethod
     def from_dict(coords: dict[str, float], title: str = "") -> "BBox":
         keys = ("x1", "y1", "x2", "y2")
         if not isinstance(coords, dict) or set(coords) != set(keys):
