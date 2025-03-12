@@ -1648,7 +1648,6 @@ class DataChain:
         modified: bool = True,
         same: bool = False,
         status_col: Optional[str] = None,
-        sys: Optional[bool] = False,
     ) -> "DataChain":
         """Comparing two chains by identifying rows that are added, deleted, modified
         or same. Result is the new chain that has additional column with possible
@@ -1681,7 +1680,6 @@ class DataChain:
             same (bool): Whether to return unchanged rows in resulting chain.
             status_col (str): Name of the new column that is created in resulting chain
                 representing diff status.
-            sys (bool): Whether to have sys columns in returned diff chain or not.
 
         Example:
             ```py
@@ -1712,7 +1710,6 @@ class DataChain:
             modified=modified,
             same=same,
             status_col=status_col,
-            sys=sys,
         )
 
     def diff(
@@ -1725,7 +1722,6 @@ class DataChain:
         deleted: bool = False,
         same: bool = False,
         status_col: Optional[str] = None,
-        sys: Optional[bool] = False,
     ) -> "DataChain":
         """Similar to `.compare()`, which is more generic method to calculate difference
         between two chains. Unlike `.compare()`, this method works only on those chains
@@ -1748,7 +1744,6 @@ class DataChain:
             same (bool): Whether to return unchanged rows in resulting chain.
             status_col (str): Optional name of the new column that is created in
                 resulting chain representing diff status.
-            sys (bool): Whether to have sys columns in returned diff chain or not.
 
         Example:
             ```py
@@ -1788,7 +1783,6 @@ class DataChain:
             modified=modified,
             same=same,
             status_col=status_col,
-            sys=sys,
         )
 
     @classmethod

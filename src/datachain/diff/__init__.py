@@ -30,7 +30,7 @@ class CompareStatus(str, Enum):
     SAME = "S"
 
 
-def _compare(  # noqa: C901
+def _compare(  # noqa: C901, PLR0912
     left: "DataChain",
     right: "DataChain",
     on: Union[str, Sequence[str]],
@@ -42,7 +42,6 @@ def _compare(  # noqa: C901
     modified: bool = True,
     same: bool = True,
     status_col: Optional[str] = None,
-    sys: Optional[bool] = False,
 ) -> "DataChain":
     """Comparing two chains by identifying rows that are added, deleted, modified
     or same"""
@@ -141,10 +140,6 @@ def _compare(  # noqa: C901
         .select_except(ldiff_col, rdiff_col)
     )
 
-    if sys:
-        # making sure we have sys signals in final diff chain
-        dc_diff = dc_diff.settings(sys=True)
-
     if not added:
         dc_diff = dc_diff.filter(C(diff_col) != CompareStatus.ADDED)
     if not modified:
@@ -157,7 +152,11 @@ def _compare(  # noqa: C901
     if status_col:
         cols.append(diff_col)  # type: ignore[arg-type]
 
-    dc_diff = dc_diff.select(*cols)
+    if not dc_diff._sys:
+        # TODO workaround when sys signal is not available in diff
+        dc_diff = dc_diff.settings(sys=True).select(*cols).settings(sys=False)
+    else:
+        dc_diff = dc_diff.select(*cols)
 
     # final schema is schema from the left chain with status column added if needed
     dc_diff.signals_schema = (

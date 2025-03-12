@@ -41,7 +41,6 @@ def delta_update(dc: "DataChain", name: str) -> Optional["DataChain"]:
     diff = DataChain.from_dataset(source_ds_name, version=source_ds_version).diff(
         DataChain.from_dataset(name, version=latest_version),
         on=file_signal,
-        sys=True,
     )
 
     # We append all the steps from the original chain to diff, e.g filters, mappers.
@@ -50,6 +49,6 @@ def delta_update(dc: "DataChain", name: str) -> Optional["DataChain"]:
     # merging diff and the latest version of dataset
     return (
         DataChain.from_dataset(name, latest_version)
-        .diff(diff, added=True, modified=False, sys=True)
+        .diff(diff, added=True, modified=False)
         .union(diff)
     )
