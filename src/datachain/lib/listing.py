@@ -16,7 +16,6 @@ from datachain.error import ClientError
 from datachain.lib.file import File
 from datachain.query.schema import Column
 from datachain.sql.functions import path as pathfunc
-from datachain.telemetry import telemetry
 from datachain.utils import uses_glob
 
 if TYPE_CHECKING:
@@ -146,6 +145,7 @@ def get_listing(
     be used to find rows based on uri.
     """
     from datachain.client.local import FileClient
+    from datachain.telemetry import telemetry
 
     catalog = session.catalog
     cache = catalog.cache

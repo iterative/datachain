@@ -25,7 +25,6 @@ from typing import (
 )
 from uuid import uuid4
 
-import requests
 import sqlalchemy as sa
 from sqlalchemy import Column
 from tqdm.auto import tqdm
@@ -54,7 +53,6 @@ from datachain.error import (
 from datachain.lib.listing import get_listing
 from datachain.node import DirType, Node, NodeWithPath
 from datachain.nodes_thread_pool import NodesThreadPool
-from datachain.remote.studio import StudioClient
 from datachain.sql.types import DateTime, SQLType
 from datachain.utils import DataChainDir
 
@@ -162,6 +160,8 @@ class DatasetRowsFetcher(NodesThreadPool):
         max_threads: int = PULL_DATASET_MAX_THREADS,
         progress_bar=None,
     ):
+        from datachain.remote.studio import StudioClient
+
         super().__init__(max_threads)
         self._check_dependencies()
         self.metastore = metastore
@@ -234,6 +234,8 @@ class DatasetRowsFetcher(NodesThreadPool):
         return df.drop("sys__id", axis=1)
 
     def get_parquet_content(self, url: str):
+        import requests
+
         while True:
             if self.should_check_for_status():
                 self.check_for_status()
@@ -1130,6 +1132,8 @@ class Catalog:
         raise DatasetNotFoundError(f"Dataset with version uuid {uuid} not found.")
 
     def get_remote_dataset(self, name: str) -> DatasetRecord:
+        from datachain.remote.studio import StudioClient
+
         studio_client = StudioClient()
 
         info_response = studio_client.dataset_info(name)
@@ -1344,6 +1348,8 @@ class Catalog:
 
         if cp and not output:
             raise ValueError("Please provide output directory for instantiation")
+
+        from datachain.remote.studio import StudioClient
 
         studio_client = StudioClient()
 

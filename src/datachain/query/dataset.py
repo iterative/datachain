@@ -22,7 +22,6 @@ from typing import (
 )
 
 import attrs
-import psutil
 import sqlalchemy
 import sqlalchemy as sa
 from attrs import frozen
@@ -52,7 +51,6 @@ from datachain.lib.udf import UDFAdapter, _get_cache
 from datachain.progress import CombinedDownloadCallback, TqdmCombinedDownloadCallback
 from datachain.query.schema import C, UDFParamSpec, normalize_param
 from datachain.query.session import Session
-from datachain.remote.studio import is_token_set
 from datachain.sql.functions.random import rand
 from datachain.utils import (
     batched,
@@ -333,6 +331,8 @@ def process_udf_outputs(
     batch_size: int = INSERT_BATCH_SIZE,
     cb: Callback = DEFAULT_CALLBACK,
 ) -> None:
+    import psutil
+
     rows: list[UDFResult] = []
     # Optimization: Compute row types once, rather than for every row.
     udf_col_types = get_udf_col_types(warehouse, udf)
@@ -1087,6 +1087,8 @@ class DatasetQuery:
         in_memory: bool = False,
         fallback_to_studio: bool = True,
     ) -> None:
+        from datachain.remote.studio import is_token_set
+
         self.session = Session.get(session, catalog=catalog, in_memory=in_memory)
         self.catalog = catalog or self.session.catalog
         self.steps: list[Step] = []

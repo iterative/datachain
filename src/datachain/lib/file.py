@@ -18,7 +18,6 @@ from urllib.request import url2pathname
 
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 from fsspec.utils import stringify_path
-from PIL import Image as PilImage
 from pydantic import Field, field_validator
 
 from datachain.client.fileslice import FileSlice
@@ -550,6 +549,8 @@ class ImageFile(File):
 
     def read(self):
         """Returns `PIL.Image.Image` object."""
+        from PIL import Image as PilImage
+
         fobj = super().read()
         return PilImage.open(BytesIO(fobj))
 
