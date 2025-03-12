@@ -13,7 +13,6 @@ def process_poses(yolo: YOLO, file: File) -> YoloPoses:
     DataChain.from_storage("gs://datachain-demo/openimages-v6-test-jsonpairs/")
     .filter(C("file.path").glob("*.jpg"))
     .limit(20)
-    .settings(parallel=4, prefetch=4)
     .setup(yolo=lambda: YOLO("yolo11n-pose.pt"))
     .map(poses=process_poses)
     .show()
