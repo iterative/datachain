@@ -25,7 +25,6 @@ from typing import (
 )
 from uuid import uuid4
 
-import requests
 import sqlalchemy as sa
 from sqlalchemy import Column
 from tqdm.auto import tqdm
@@ -54,7 +53,6 @@ from datachain.error import (
 from datachain.lib.listing import get_listing
 from datachain.node import DirType, Node, NodeWithPath
 from datachain.nodes_thread_pool import NodesThreadPool
-from datachain.remote.studio import StudioClient
 from datachain.sql.types import DateTime, SQLType
 from datachain.utils import DataChainDir
 
@@ -162,6 +160,8 @@ class DatasetRowsFetcher(NodesThreadPool):
         max_threads: int = PULL_DATASET_MAX_THREADS,
         progress_bar=None,
     ):
+        from datachain.remote.studio import StudioClient
+
         super().__init__(max_threads)
         self._check_dependencies()
         self.metastore = metastore
@@ -234,6 +234,8 @@ class DatasetRowsFetcher(NodesThreadPool):
         return df.drop("sys__id", axis=1)
 
     def get_parquet_content(self, url: str):
+        import requests
+
         while True:
             if self.should_check_for_status():
                 self.check_for_status()
@@ -1130,6 +1132,8 @@ class Catalog:
         raise DatasetNotFoundError(f"Dataset with version uuid {uuid} not found.")
 
     def get_remote_dataset(self, name: str) -> DatasetRecord:
+        from datachain.remote.studio import StudioClient
+
         studio_client = StudioClient()
 
         info_response = studio_client.dataset_info(name)
@@ -1164,8 +1168,27 @@ class Catalog:
 
         return direct_dependencies
 
-    def ls_datasets(self, include_listing: bool = False) -> Iterator[DatasetListRecord]:
-        datasets = self.metastore.list_datasets()
+    def ls_datasets(
+        self, include_listing: bool = False, studio: bool = False
+    ) -> Iterator[DatasetListRecord]:
+        from datachain.remote.studio import StudioClient
+
+        if studio:
+            client = StudioClient()
+            response = client.ls_datasets()
+            if not response.ok:
+                raise DataChainError(response.message)
+            if not response.data:
+                return
+
+            datasets: Iterator[DatasetListRecord] = (
+                DatasetListRecord.from_dict(d)
+                for d in response.data
+                if not d.get("name", "").startswith(QUERY_DATASET_PREFIX)
+            )
+        else:
+            datasets = self.metastore.list_datasets()
+
         for d in datasets:
             if not d.is_bucket_listing or include_listing:
                 yield d
@@ -1173,9 +1196,12 @@ class Catalog:
     def list_datasets_versions(
         self,
         include_listing: bool = False,
+        studio: bool = False,
     ) -> Iterator[tuple[DatasetListRecord, "DatasetListVersion", Optional["Job"]]]:
         """Iterate over all dataset versions with related jobs."""
-        datasets = list(self.ls_datasets(include_listing=include_listing))
+        datasets = list(
+            self.ls_datasets(include_listing=include_listing, studio=studio)
+        )
 
         # preselect dataset versions jobs from db to avoid multiple queries
         jobs_ids: set[str] = {
@@ -1344,6 +1370,8 @@ class Catalog:
 
         if cp and not output:
             raise ValueError("Please provide output directory for instantiation")
+
+        from datachain.remote.studio import StudioClient
 
         studio_client = StudioClient()
 

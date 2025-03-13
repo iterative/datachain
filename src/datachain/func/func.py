@@ -3,7 +3,6 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 from sqlalchemy import BindParameter, Case, ColumnElement, Integer, cast, desc
-from sqlalchemy.ext.hybrid import Comparator
 from sqlalchemy.sql import func as sa_func
 
 from datachain.lib.convert.python_to_sql import python_to_sql
@@ -75,6 +74,8 @@ class Func(Function):
 
     @property
     def _db_cols(self) -> Sequence[ColT]:
+        from sqlalchemy.ext.hybrid import Comparator
+
         return (
             [
                 col

@@ -22,7 +22,6 @@ import orjson
 import sqlalchemy
 from pydantic import BaseModel
 from sqlalchemy.sql.functions import GenericFunction
-from sqlalchemy.sql.sqltypes import NullType
 from tqdm import tqdm
 
 from datachain.dataset import DatasetRecord
@@ -56,7 +55,6 @@ from datachain.query import Session
 from datachain.query.dataset import DatasetQuery, PartitionByType
 from datachain.query.schema import DEFAULT_DELIMITER, Column, ColumnMeta
 from datachain.sql.functions import path as pathfunc
-from datachain.telemetry import telemetry
 from datachain.utils import batched_it, inside_notebook, row_to_nested_dict
 
 if TYPE_CHECKING:
@@ -216,7 +214,7 @@ class DataChain:
         from mistralai.client import MistralClient
         from mistralai.models.chat_completion import ChatMessage
 
-        from datachain.dc import DataChain, Column
+        from datachain import DataChain, Column
 
         PROMPT = (
             "Was this bot dialog successful? "
@@ -551,6 +549,8 @@ class DataChain:
             )
             ```
         """
+        from datachain.telemetry import telemetry
+
         query = DatasetQuery(
             name=name,
             version=version,
@@ -702,8 +702,21 @@ class DataChain:
         in_memory: bool = False,
         object_name: str = "dataset",
         include_listing: bool = False,
+        studio: bool = False,
     ) -> "DataChain":
         """Generate chain with list of registered datasets.
+
+        Args:
+            session: Optional session instance. If not provided, uses default session.
+            settings: Optional dictionary of settings to configure the chain.
+            in_memory: If True, creates an in-memory session. Defaults to False.
+            object_name: Name of the output object in the chain. Defaults to "dataset".
+            include_listing: If True, includes listing datasets. Defaults to False.
+            studio: If True, returns datasets from Studio only,
+                otherwise returns all local datasets. Defaults to False.
+
+        Returns:
+            DataChain: A new DataChain instance containing dataset information.
 
         Example:
             ```py
@@ -720,7 +733,7 @@ class DataChain:
         datasets = [
             DatasetInfo.from_models(d, v, j)
             for d, v, j in catalog.list_datasets_versions(
-                include_listing=include_listing
+                include_listing=include_listing, studio=studio
             )
         ]
 
@@ -1222,6 +1235,8 @@ class DataChain:
         )
         ```
         """
+        from sqlalchemy.sql.sqltypes import NullType
+
         primitives = (bool, str, int, float)
 
         for col_name, expr in kwargs.items():

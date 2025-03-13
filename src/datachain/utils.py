@@ -6,7 +6,6 @@ import os
 import os.path as osp
 import random
 import re
-import stat
 import sys
 import time
 from collections.abc import Iterable, Iterator, Sequence
@@ -193,14 +192,6 @@ def suffix_to_number(num_str: str) -> int:
         raise ValueError(f"Invalid number/suffix for: {num_str}") from None
 
 
-def force_create_dir(name):
-    if not os.path.exists(name):
-        os.mkdir(name)
-    elif not os.path.isdir(name):
-        os.remove(name)
-        os.mkdir(name)
-
-
 def datachain_paths_join(source_path: str, file_paths: Iterable[str]) -> Iterable[str]:
     source_parts = source_path.rstrip("/").split("/")
     if glob.has_magic(source_parts[-1]):
@@ -208,13 +199,6 @@ def datachain_paths_join(source_path: str, file_paths: Iterable[str]) -> Iterabl
         source_parts.pop()
     source_stripped = "/".join(source_parts)
     return (f"{source_stripped}/{path.lstrip('/')}" for path in file_paths)
-
-
-# From: https://docs.python.org/3/library/shutil.html#rmtree-example
-def remove_readonly(func, path, _):
-    "Clear the readonly bit and reattempt the removal"
-    os.chmod(path, stat.S_IWRITE)
-    func(path)
 
 
 def sql_escape_like(search: str, escape: str = "\\") -> str:
