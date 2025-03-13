@@ -1168,8 +1168,27 @@ class Catalog:
 
         return direct_dependencies
 
-    def ls_datasets(self, include_listing: bool = False) -> Iterator[DatasetListRecord]:
-        datasets = self.metastore.list_datasets()
+    def ls_datasets(
+        self, include_listing: bool = False, studio: bool = False
+    ) -> Iterator[DatasetListRecord]:
+        from datachain.remote.studio import StudioClient
+
+        if studio:
+            client = StudioClient()
+            response = client.ls_datasets()
+            if not response.ok:
+                raise DataChainError(response.message)
+            if not response.data:
+                return
+
+            datasets: Iterator[DatasetListRecord] = (
+                DatasetListRecord.from_dict(d)
+                for d in response.data
+                if not d.get("name", "").startswith(QUERY_DATASET_PREFIX)
+            )
+        else:
+            datasets = self.metastore.list_datasets()
+
         for d in datasets:
             if not d.is_bucket_listing or include_listing:
                 yield d
@@ -1177,9 +1196,12 @@ class Catalog:
     def list_datasets_versions(
         self,
         include_listing: bool = False,
+        studio: bool = False,
     ) -> Iterator[tuple[DatasetListRecord, "DatasetListVersion", Optional["Job"]]]:
         """Iterate over all dataset versions with related jobs."""
-        datasets = list(self.ls_datasets(include_listing=include_listing))
+        datasets = list(
+            self.ls_datasets(include_listing=include_listing, studio=studio)
+        )
 
         # preselect dataset versions jobs from db to avoid multiple queries
         jobs_ids: set[str] = {

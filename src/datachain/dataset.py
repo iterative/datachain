@@ -302,6 +302,7 @@ class DatasetListVersion:
         size: Optional[int],
         query_script: str = "",
         job_id: Optional[str] = None,
+        **kwargs,
     ):
         return cls(
             id,
@@ -647,6 +648,13 @@ class DatasetListRecord:
 
     def has_version_with_uuid(self, uuid: str) -> bool:
         return any(v.uuid == uuid for v in self.versions)
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> "DatasetListRecord":
+        versions = [DatasetListVersion.parse(**v) for v in d.get("versions", [])]
+        kwargs = {f.name: d[f.name] for f in fields(cls) if f.name in d}
+        kwargs["versions"] = versions
+        return cls(**kwargs)
 
 
 class RowDict(dict):
