@@ -712,7 +712,7 @@ class DataChain:
             object_name: Name of the output object in the chain. Defaults to "dataset".
             include_listing: If True, includes listing datasets. Defaults to False.
             studio: If True, returns datasets from Studio only,
-                otherwise returns all datasets locally.
+                otherwise returns all local datasets. Defaults to False.
 
         Returns:
             DataChain: A new DataChain instance containing dataset information.
@@ -729,20 +729,12 @@ class DataChain:
         session = Session.get(session, in_memory=in_memory)
         catalog = session.catalog
 
-        if studio:
-            datasets = [
-                DatasetInfo.from_models(d, v, j)
-                for d, v, j in catalog.studio_dataset_versions(
-                    include_listing=include_listing
-                )
-            ]
-        else:
-            datasets = [
-                DatasetInfo.from_models(d, v, j)
-                for d, v, j in catalog.list_datasets_versions(
-                    include_listing=include_listing
-                )
-            ]
+        datasets = [
+            DatasetInfo.from_models(d, v, j)
+            for d, v, j in catalog.list_datasets_versions(
+                include_listing=include_listing, studio=studio
+            )
+        ]
 
         return cls.from_values(
             session=session,

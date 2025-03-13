@@ -652,16 +652,9 @@ class DatasetListRecord:
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "DatasetListRecord":
         versions = [DatasetListVersion.parse(**v) for v in d.get("versions", [])]
-        return cls(
-            id=d.get("id"),  # type: ignore[arg-type]
-            name=d.get("name"),  # type: ignore[arg-type]
-            description=d.get("description"),
-            labels=d.get("labels", []),
-            versions=versions,
-            created_at=datetime.fromisoformat(d.get("created_at"))  # type: ignore[arg-type]
-            if d.get("created_at")
-            else None,
-        )
+        kwargs = {f.name: d[f.name] for f in fields(cls) if f.name in d}
+        kwargs["versions"] = versions
+        return cls(**kwargs)
 
 
 class RowDict(dict):
