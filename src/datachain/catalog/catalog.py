@@ -1167,6 +1167,8 @@ class Catalog:
     def ls_datasets(
         self, include_listing: bool = False, studio: bool = False
     ) -> Iterator[DatasetListRecord]:
+        from datachain.remote.studio import StudioClient
+
         if studio:
             client = StudioClient()
             response = client.ls_datasets()
