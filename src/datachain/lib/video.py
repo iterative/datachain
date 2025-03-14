@@ -1,11 +1,11 @@
 import posixpath
 import shutil
 import tempfile
-from typing import Optional
+from typing import Optional, Union
 
 from numpy import ndarray
 
-from datachain.lib.file import FileError, ImageFile, Video, VideoFile
+from datachain.lib.file import File, FileError, ImageFile, Video, VideoFile
 
 try:
     import ffmpeg
@@ -18,7 +18,7 @@ except ImportError as exc:
     ) from exc
 
 
-def video_info(file: VideoFile) -> Video:
+def video_info(file: Union[File, VideoFile]) -> Video:
     """
     Returns video file information.
 
@@ -28,6 +28,8 @@ def video_info(file: VideoFile) -> Video:
     Returns:
         Video: Video file information.
     """
+    file = file.as_video_file()
+
     if not (file_path := file.get_local_path()):
         file.ensure_cached()
         file_path = file.get_local_path()
