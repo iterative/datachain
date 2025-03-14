@@ -25,6 +25,11 @@ def test_image_file(image_file):
     assert not isinstance(image_file.read(), PILImage.Image)
     assert isinstance(image_file.as_image_file().read(), PILImage.Image)
 
+    with open(os.path.join(os.path.dirname(__file__), "data", "lena.jpg"), "rb") as f:
+        content = f.read()
+        assert image_file.read_bytes() == content
+        assert image_file.as_image_file().read_bytes() == content
+
 
 @pytest.mark.parametrize("format", [None, "JPEG", "PNG"])
 def test_image_save(tmp_path, image_file, format):

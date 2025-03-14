@@ -315,19 +315,19 @@ class File(DataModel):
             ) as f:
                 yield io.TextIOWrapper(f) if mode == "r" else f
 
-    def read(self, length: int = -1):
-        """Returns file contents."""
+    def read_bytes(self, length: int = -1):
+        """Returns file contents as bytes."""
         with self.open() as stream:
             return stream.read(length)
-
-    def read_bytes(self):
-        """Returns file contents as bytes."""
-        return self.read()
 
     def read_text(self):
         """Returns file contents as text."""
         with self.open(mode="r") as stream:
             return stream.read()
+
+    def read(self, length: int = -1):
+        """Returns file contents."""
+        return self.read_bytes(length)
 
     def save(self, destination: str, client_config: Optional[dict] = None):
         """Writes it's content to destination"""
@@ -588,10 +588,6 @@ class ImageFile(File):
 
         fobj = super().read()
         return PilImage.open(BytesIO(fobj))
-
-    def read_bytes(self):
-        """Returns file contents as bytes."""
-        return super().read()
 
     def save(  # type: ignore[override]
         self,
