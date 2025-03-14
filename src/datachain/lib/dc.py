@@ -701,8 +701,21 @@ class DataChain:
         in_memory: bool = False,
         object_name: str = "dataset",
         include_listing: bool = False,
+        studio: bool = False,
     ) -> "DataChain":
         """Generate chain with list of registered datasets.
+
+        Args:
+            session: Optional session instance. If not provided, uses default session.
+            settings: Optional dictionary of settings to configure the chain.
+            in_memory: If True, creates an in-memory session. Defaults to False.
+            object_name: Name of the output object in the chain. Defaults to "dataset".
+            include_listing: If True, includes listing datasets. Defaults to False.
+            studio: If True, returns datasets from Studio only,
+                otherwise returns all local datasets. Defaults to False.
+
+        Returns:
+            DataChain: A new DataChain instance containing dataset information.
 
         Example:
             ```py
@@ -719,7 +732,7 @@ class DataChain:
         datasets = [
             DatasetInfo.from_models(d, v, j)
             for d, v, j in catalog.list_datasets_versions(
-                include_listing=include_listing
+                include_listing=include_listing, studio=studio
             )
         ]
 

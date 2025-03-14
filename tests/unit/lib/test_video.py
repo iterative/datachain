@@ -1,5 +1,6 @@
 import io
 import os
+import shutil
 
 import pytest
 from numpy import ndarray
@@ -8,6 +9,10 @@ from PIL import Image
 from datachain import VideoFragment, VideoFrame
 from datachain.lib.file import FileError, ImageFile, VideoFile
 from datachain.lib.video import save_video_fragment, video_frame_np
+
+requires_ffmpeg = pytest.mark.skipif(
+    not shutil.which("ffmpeg"), reason="ffmpeg not installed"
+)
 
 
 @pytest.fixture(autouse=True)
@@ -22,6 +27,7 @@ def video_file(catalog) -> VideoFile:
     return file
 
 
+@requires_ffmpeg
 def test_get_info(video_file):
     info = video_file.get_info()
     assert info.model_dump() == {
@@ -106,6 +112,7 @@ def test_get_frames(video_file):
     assert all(isinstance(frame, VideoFrame) for frame in frames)
 
 
+@requires_ffmpeg
 def test_get_all_frames(video_file):
     frames = list(video_file.get_frames())
     assert len(frames) == 300
@@ -145,6 +152,7 @@ def test_get_fragment(video_file):
     assert fragment.end == 5
 
 
+@requires_ffmpeg
 def test_get_fragments(video_file):
     fragments = list(video_file.get_fragments(duration=1.5))
     for i, fragment in enumerate(fragments):
@@ -183,6 +191,7 @@ def test_save_fragment_error(video_file, start, end):
         video_file.get_fragment(start, end)
 
 
+@requires_ffmpeg
 def test_save_fragment(tmp_path, video_file):
     fragment = video_file.get_fragment(2.5, 5).save(str(tmp_path))
 
@@ -211,6 +220,7 @@ def test_save_video_fragment_error(video_file, start, end):
         save_video_fragment(video_file, start, end, ".")
 
 
+@requires_ffmpeg
 def test_save_fragments(tmp_path, video_file):
     fragments = list(video_file.get_fragments(duration=1))
     fragment_files = [fragment.save(str(tmp_path)) for fragment in fragments]
