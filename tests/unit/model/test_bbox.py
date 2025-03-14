@@ -163,6 +163,18 @@ def test_bbox_pose_inside(pose, expected):
     assert bbox.pose_inside(pose) == expected
 
 
+@pytest.mark.parametrize(
+    "coords",
+    [
+        [10, 20, 90, 80],
+        (10, 20, 90, 80),
+        [10.1, 19.9, 90.4, 80.0],
+    ],
+)
+def test_bbox_from_list(coords):
+    assert BBox.from_list(coords).model_dump() == BBox.from_voc(coords).model_dump()
+
+
 def test_bbox_from_dict():
     bbox = BBox.from_dict({"x1": 10, "y1": 20, "x2": 90, "y2": 80}, title="Object")
     assert bbox.model_dump() == {
