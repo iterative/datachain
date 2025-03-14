@@ -1,7 +1,7 @@
 import inspect
 from collections.abc import Generator, Iterator, Sequence
 from dataclasses import dataclass
-from typing import Callable, Union, get_args, get_origin
+from typing import Callable, Optional, Union, get_args, get_origin
 
 from datachain.lib.data_model import DataType, DataTypeNames, is_chain_type
 from datachain.lib.signal_schema import SignalSchema
@@ -18,7 +18,7 @@ class UdfSignatureError(DataChainParamsError):
 @dataclass
 class UdfSignature:
     func: Union[Callable, UDFBase]
-    params: Sequence[str]
+    params: dict[str, Optional[type]]
     output_schema: SignalSchema
 
     DEFAULT_RETURN_TYPE = str
@@ -58,15 +58,18 @@ class UdfSignature:
         if not isinstance(udf_func, UDFBase) and not callable(udf_func):
             raise UdfSignatureError(chain, f"UDF '{udf_func}' is not callable")
 
-        func_params_map_sign, func_outs_sign, is_iterator = (
-            UdfSignature._func_signature(chain, udf_func)
+        func_params_map_sign, func_outs_sign, is_iterator = cls._func_signature(
+            chain, udf_func
         )
+
+        udf_params: dict[str, Optional[type]] = {}
         if params:
-            udf_params = [params] if isinstance(params, str) else params
-        elif not func_params_map_sign:
-            udf_params = []
-        else:
-            udf_params = list(func_params_map_sign.keys())
+            udf_params = (
+                {params: None} if isinstance(params, str) else dict.fromkeys(params)
+            )
+        elif func_params_map_sign:
+            udf_params = dict(func_params_map_sign)
+
         if output:
             udf_output_map = UdfSignature._validate_output(
                 chain, signal_name, func, func_outs_sign, output
