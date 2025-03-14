@@ -21,7 +21,6 @@ from typing import (
 )
 from urllib.parse import urlparse
 
-from botocore.exceptions import ClientError
 from dvc_objects.fs.system import reflink
 from fsspec.asyn import get_loop, sync
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
@@ -29,7 +28,6 @@ from tqdm.auto import tqdm
 
 from datachain.cache import Cache
 from datachain.client.fileslice import FileWrapper
-from datachain.error import ClientError as DataChainClientError
 from datachain.nodes_fetcher import NodesFetcher
 from datachain.nodes_thread_pool import NodeChunk
 
@@ -287,11 +285,6 @@ class Client(ABC):
                     worker.cancel()
             if excs:
                 raise excs[0]
-        except ClientError as exc:
-            raise DataChainClientError(
-                exc.response.get("Error", {}).get("Message") or exc,
-                exc.response.get("Error", {}).get("Code"),
-            ) from exc
         finally:
             # This ensures the progress bar is closed before any exceptions are raised
             progress_bar.close()
