@@ -589,13 +589,22 @@ class ImageFile(File):
         fobj = super().read()
         return PilImage.open(BytesIO(fobj))
 
-    def save(self, destination: str, client_config: Optional[dict] = None):
+    def read_bytes(self):
+        """Returns file contents as bytes."""
+        return super().read()
+
+    def save(  # type: ignore[override]
+        self,
+        destination: str,
+        format: Optional[str] = None,
+        client_config: Optional[dict] = None,
+    ):
         """Writes it's content to destination"""
         destination = stringify_path(destination)
 
         client: Client = self._catalog.get_client(destination, **(client_config or {}))
         with client.fs.open(destination, mode="wb") as f:
-            self.read().save(f)
+            self.read().save(f, format=format)
 
 
 class Image(DataModel):

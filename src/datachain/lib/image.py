@@ -16,11 +16,8 @@ def image_info(file: Union[File, ImageFile]) -> Image:
     Returns:
         Image: Image file information.
     """
-    file = file.as_image_file()
-
     try:
-        with file.open() as stream:
-            img = PILImage.open(stream)
+        img = file.as_image_file().read()
     except Exception as exc:
         raise FileError(file, "unable to open image file") from exc
 
