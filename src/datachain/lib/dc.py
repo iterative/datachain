@@ -799,7 +799,7 @@ class DataChain:
                 File `source` and `path` for matching, and File `version` and `etag`
                 for checking if the record is changed.
                 Note that this takes in account only added and changed records in
-                source while deleted recordsare not removed in the new dataset version.
+                source while deleted records are not removed in the new dataset version.
         """
         schema = self.signals_schema.clone_without_sys_signals().serialize()
         if delta and name:
