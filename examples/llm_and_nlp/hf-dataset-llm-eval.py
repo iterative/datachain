@@ -21,7 +21,7 @@ class DialogEval(DataModel):
 def eval_dialog(
     client: InferenceClient,
     user_input: Optional[str],
-    bot_response: str,
+    bot_response: Optional[str],
 ) -> DialogEval:
     try:
         completion = client.chat_completion(
