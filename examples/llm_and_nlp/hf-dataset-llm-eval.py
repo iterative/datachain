@@ -1,3 +1,5 @@
+from typing import Optional
+
 from huggingface_hub import InferenceClient
 from requests import HTTPError
 
@@ -18,7 +20,7 @@ class DialogEval(DataModel):
 # DataChain is using types for inputs, results to automatically infer schema.
 def eval_dialog(
     client: InferenceClient,
-    user_input: str,
+    user_input: Optional[str],
     bot_response: str,
 ) -> DialogEval:
     try:
