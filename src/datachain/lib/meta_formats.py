@@ -10,7 +10,7 @@ import jmespath as jsp
 from pydantic import BaseModel, ConfigDict, Field, ValidationError  # noqa: F401
 
 from datachain.lib.data_model import DataModel  # noqa: F401
-from datachain.lib.file import File
+from datachain.lib.file import TextFile
 
 
 class UserModel(BaseModel):
@@ -130,7 +130,7 @@ def read_meta(  # noqa: C901
     #
 
     def parse_data(
-        file: File,
+        file: TextFile,
         data_model=spec,
         format=format,
         jmespath=jmespath,

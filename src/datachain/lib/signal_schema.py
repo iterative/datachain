@@ -465,7 +465,7 @@ class SignalSchema:
 
     def slice(
         self,
-        params: Union[Sequence[str], dict[str, Optional[type]]],
+        params: Union[Sequence[str], dict[str, Optional[DataType]]],
         setup: Optional[dict[str, Callable]] = None,
     ) -> "SignalSchema":
         """
@@ -474,22 +474,19 @@ class SignalSchema:
         setup = setup or {}
         setup_no_types = dict.fromkeys(setup.keys(), str)
         union = SignalSchema(self.values | setup_no_types)
-        # Slice combined schema by keys
-        schema = {}
 
-        if isinstance(params, dict):
-            for param, param_type in params.items():
-                schema[param] = (
-                    param_type
-                    if param_type is not None
-                    else union._find_in_tree(param.split("."))
-                )
-        else:
-            for param in params:
-                try:
-                    schema[param] = union._find_in_tree(param.split("."))
-                except SignalResolvingError:
-                    pass
+        # Slice combined schema by keys
+        schema: dict[str, DataType] = {}
+
+        for param in params:
+            if isinstance(params, dict) and params[param] is not None:
+                schema[param] = params[param]  # type: ignore[assignment]
+                continue
+            try:
+                schema[param] = union._find_in_tree(param.split("."))
+            except SignalResolvingError:
+                pass
+
         return SignalSchema(schema, setup)
 
     def row_to_features(

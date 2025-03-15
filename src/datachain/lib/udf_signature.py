@@ -62,13 +62,18 @@ class UdfSignature:
             chain, udf_func
         )
 
-        udf_params: dict[str, Optional[type]] = {}
+        udf_params: dict[str, Optional[DataType]] = {}
         if params:
             udf_params = (
                 {params: None} if isinstance(params, str) else dict.fromkeys(params)
             )
         elif func_params_map_sign:
-            udf_params = dict(func_params_map_sign)
+            udf_params = {
+                param: (
+                    param_type if param_type is not inspect.Parameter.empty else None
+                )
+                for param, param_type in func_params_map_sign.items()
+            }
 
         if output:
             udf_output_map = UdfSignature._validate_output(

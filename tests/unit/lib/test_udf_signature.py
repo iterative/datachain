@@ -35,7 +35,7 @@ def test_basic():
     sign = get_sign(s1=func_str)
 
     assert sign.func == func_str
-    assert sign.params == ["p1"]
+    assert sign.params == {"p1": None}
     assert sign.output_schema.values == {"s1": str}
 
 
@@ -56,7 +56,7 @@ def test_signature_overwrite():
     sign = get_sign(s1=func_str, output={"my_sign": int}, params="some_prm")
 
     assert sign.func == func_str
-    assert sign.params == ["some_prm"]
+    assert sign.params == {"some_prm": None}
     assert sign.output_schema.values == {"my_sign": int}
 
 
@@ -70,7 +70,7 @@ def test_output_as_value():
     sign = get_sign(s1=func_str, output="my_sign")
 
     assert sign.func == func_str
-    assert sign.params == ["p1"]
+    assert sign.params == {"p1": None}
     assert sign.output_schema.values == {"my_sign": str}
 
 
@@ -78,7 +78,7 @@ def test_output_as_list():
     sign = get_sign(s1=func_str, output=["my_sign"])
 
     assert sign.func == func_str
-    assert sign.params == ["p1"]
+    assert sign.params == {"p1": None}
     assert sign.output_schema.values == {"my_sign": str}
 
 
@@ -116,7 +116,7 @@ def test_no_params():
 
 def test_func_with_args():
     sign = get_sign(func_args, params=["prm1", "prm2"], output={"res": int})
-    assert sign.params == ["prm1", "prm2"]
+    assert sign.params == {"prm1": None, "prm2": None}
 
 
 def test_output_type_error():
@@ -165,7 +165,7 @@ def test_udf_class():
     sign = get_sign(s1=MyTest())
 
     assert sign.output_schema.values == {"s1": int}
-    assert sign.params == ["file", "p2"]
+    assert sign.params == {"file": None, "p2": None}
 
 
 def test_udf_flatten_value():
