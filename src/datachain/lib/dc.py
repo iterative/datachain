@@ -952,7 +952,9 @@ class DataChain:
             chain.save("new_dataset")
             ```
         """
-        udf_obj = self._udf_to_obj(Aggregator, func, params, output, signal_map)
+        udf_obj = self._udf_to_obj(
+            Aggregator, func, params, output, signal_map, is_batch=True
+        )
         return self._evolve(
             query=self._query.generate(
                 udf_obj.to_udf_wrapper(),
@@ -988,7 +990,9 @@ class DataChain:
             chain.save("new_dataset")
             ```
         """
-        udf_obj = self._udf_to_obj(BatchMapper, func, params, output, signal_map)
+        udf_obj = self._udf_to_obj(
+            BatchMapper, func, params, output, signal_map, is_batch=True
+        )
         return self._evolve(
             query=self._query.add_signals(
                 udf_obj.to_udf_wrapper(batch),
@@ -1003,7 +1007,8 @@ class DataChain:
         func: Optional[Union[Callable, UDFObjT]],
         params: Union[None, str, Sequence[str]],
         output: OutputType,
-        signal_map,
+        signal_map: dict[str, Callable],
+        is_batch: bool = False,
     ) -> UDFObjT:
         is_generator = target_class.is_output_batched
         name = self.name or ""
@@ -1015,7 +1020,9 @@ class DataChain:
         if self._sys:
             signals_schema = SignalSchema({"sys": Sys}) | signals_schema
 
-        params_schema = signals_schema.slice(sign.params, self._setup)
+        params_schema = signals_schema.slice(
+            sign.params, self._setup, is_batch=is_batch
+        )
 
         return target_class._create(sign, params_schema)
 

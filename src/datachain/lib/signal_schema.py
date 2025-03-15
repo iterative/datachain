@@ -465,8 +465,9 @@ class SignalSchema:
 
     def slice(
         self,
-        params: Union[Sequence[str], dict[str, Optional[DataType]]],
+        params: dict[str, Union[DataType, Any]],
         setup: Optional[dict[str, Callable]] = None,
+        is_batch: bool = False,
     ) -> "SignalSchema":
         """
         Returns new schema that combines current schema and setup signals.
@@ -478,14 +479,43 @@ class SignalSchema:
         # Slice combined schema by keys
         schema: dict[str, DataType] = {}
 
-        for param in params:
-            if isinstance(params, dict) and params[param] is not None:
-                schema[param] = params[param]  # type: ignore[assignment]
-                continue
+        for param, param_type in params.items():
             try:
-                schema[param] = union._find_in_tree(param.split("."))
+                schema_type = union._find_in_tree(param.split("."))
             except SignalResolvingError:
-                pass
+                continue
+
+            if param_type is Any:
+                schema[param] = schema_type
+                continue
+
+            if is_batch:
+                if param_type is list:
+                    schema[param] = schema_type
+                    continue
+
+                if get_origin(param_type) is not list:
+                    raise SignalResolvingError(param.split("."), "is not a list")
+
+                param_type = get_args(param_type)[0]
+
+            if param_type == schema_type:
+                schema[param] = schema_type
+                continue
+
+            if param_type == schema_type or (
+                isclass(param_type)
+                and isclass(schema_type)
+                and issubclass(param_type, File)
+                and issubclass(schema_type, File)
+            ):
+                schema[param] = schema_type
+                continue
+
+            raise SignalResolvingError(
+                param.split("."),
+                f"types mismatch: {param_type} != {schema_type}",
+            )
 
         return SignalSchema(schema, setup)
 

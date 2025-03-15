@@ -943,7 +943,7 @@ def test_setup_not_callable():
 
 def test_slice():
     schema = {"name": str, "age": float, "address": str}
-    keys = ["age", "name"]
+    keys = {"age": Any, "name": Any}
     sliced = SignalSchema(schema).slice(keys)
     assert list(sliced.values.items()) == [("age", float), ("name", str)]
 
@@ -953,7 +953,7 @@ def test_slice_nested():
         "name": str,
         "feature": MyType1,
     }
-    keys = ["feature.aa"]
+    keys = {"feature.aa": Any}
     sliced = SignalSchema(schema).slice(keys)
     assert list(sliced.values.items()) == [("feature.aa", int)]
 

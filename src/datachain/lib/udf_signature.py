@@ -1,7 +1,7 @@
 import inspect
 from collections.abc import Generator, Iterator, Sequence
 from dataclasses import dataclass
-from typing import Callable, Optional, Union, get_args, get_origin
+from typing import Any, Callable, Union, get_args, get_origin
 
 from datachain.lib.data_model import DataType, DataTypeNames, is_chain_type
 from datachain.lib.signal_schema import SignalSchema
@@ -18,7 +18,7 @@ class UdfSignatureError(DataChainParamsError):
 @dataclass
 class UdfSignature:
     func: Union[Callable, UDFBase]
-    params: dict[str, Optional[type]]
+    params: dict[str, Union[DataType, Any]]
     output_schema: SignalSchema
 
     DEFAULT_RETURN_TYPE = str
@@ -62,15 +62,15 @@ class UdfSignature:
             chain, udf_func
         )
 
-        udf_params: dict[str, Optional[DataType]] = {}
+        udf_params: dict[str, Union[DataType, Any]] = {}
         if params:
             udf_params = (
-                {params: None} if isinstance(params, str) else dict.fromkeys(params)
+                {params: Any} if isinstance(params, str) else dict.fromkeys(params, Any)
             )
         elif func_params_map_sign:
             udf_params = {
                 param: (
-                    param_type if param_type is not inspect.Parameter.empty else None
+                    param_type if param_type is not inspect.Parameter.empty else Any
                 )
                 for param, param_type in func_params_map_sign.items()
             }
