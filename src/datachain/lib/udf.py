@@ -159,6 +159,7 @@ class UDFBase(AbstractUDF):
         ```
     """
 
+    is_input_batched = False
     is_output_batched = False
     prefetch: int = 0
 
@@ -395,6 +396,7 @@ class Mapper(UDFBase):
 class BatchMapper(UDFBase):
     """Inherit from this class to pass to `DataChain.batch_map()`."""
 
+    is_input_batched = True
     is_output_batched = True
 
     def run(
@@ -481,6 +483,7 @@ class Generator(UDFBase):
 class Aggregator(UDFBase):
     """Inherit from this class to pass to `DataChain.agg()`."""
 
+    is_input_batched = True
     is_output_batched = True
 
     def run(
