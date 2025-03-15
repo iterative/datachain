@@ -472,16 +472,16 @@ class SignalSchema:
         """
         Returns new schema that combines current schema and setup signals.
         """
-        setup = setup or {}
-        setup_no_types = dict.fromkeys(setup.keys(), str)
-        union = SignalSchema(self.values | setup_no_types)
-
-        # Slice combined schema by keys
+        setup_params = setup.keys() if setup else []
         schema: dict[str, DataType] = {}
 
         for param, param_type in params.items():
+            if param in setup_params:
+                schema[param] = str
+                continue
+
             try:
-                schema_type = union._find_in_tree(param.split("."))
+                schema_type = self._find_in_tree(param.split("."))
             except SignalResolvingError:
                 continue
 
