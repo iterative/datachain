@@ -489,19 +489,23 @@ class SignalSchema:
                 schema[param] = schema_type
                 continue
 
+            schema_origin = get_origin(schema_type)
+            param_origin = get_origin(param_type)
+
+            if schema_origin is Union and type(None) in get_args(schema_type):
+                schema_type = get_args(schema_type)[0]
+                if param_origin is Union and type(None) in get_args(param_type):
+                    param_type = get_args(param_type)[0]
+
             if is_batch:
                 if param_type is list:
                     schema[param] = schema_type
                     continue
 
-                if get_origin(param_type) is not list:
+                if param_origin is not list:
                     raise SignalResolvingError(param.split("."), "is not a list")
 
                 param_type = get_args(param_type)[0]
-
-            if param_type == schema_type:
-                schema[param] = schema_type
-                continue
 
             if param_type == schema_type or (
                 isclass(param_type)

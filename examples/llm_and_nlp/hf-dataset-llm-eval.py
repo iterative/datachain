@@ -20,8 +20,8 @@ class DialogEval(DataModel):
 # DataChain is using types for inputs, results to automatically infer schema.
 def eval_dialog(
     client: InferenceClient,
-    user_input: Optional[str],
-    bot_response: Optional[str],
+    user_input: str,
+    bot_response: str,
 ) -> DialogEval:
     try:
         completion = client.chat_completion(
