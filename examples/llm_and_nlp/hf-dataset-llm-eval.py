@@ -1,5 +1,3 @@
-from typing import Optional
-
 from huggingface_hub import InferenceClient
 from requests import HTTPError
 
