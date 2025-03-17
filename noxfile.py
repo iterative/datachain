@@ -56,6 +56,20 @@ def tests(session: nox.Session) -> None:
     )
 
 
+@nox.session(python=python_versions)
+def e2e(session: nox.Session) -> None:
+    session.install(".[tests]")
+    session.run(
+        "pytest",
+        "--durations=0",
+        "--numprocesses=logical",
+        "--dist=loadgroup",
+        "-m",
+        "e2e",
+        *session.posargs,
+    )
+
+
 @nox.session
 def lint(session: nox.Session) -> None:
     session.install("pre-commit")
