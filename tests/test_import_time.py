@@ -52,7 +52,7 @@ def _import_time_chain(test_session):
     )
 
 
-# disable coverage for this test to avoid unpredictable results
+# disable coverage for this test to minimize import time overhead
 @pytest.mark.no_cover
 @pytest.mark.skipif(sys.platform == "win32", reason="not reliable on Windows")
 def test_import_time(catalog, test_session):
