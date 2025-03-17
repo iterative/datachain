@@ -153,7 +153,7 @@ def test_from_storage_partials(cloud_test_catalog):
         return name
 
     dogs_uri = f"{src_uri}/dogs"
-    DataChain.from_storage(dogs_uri, session=session)
+    DataChain.from_storage(dogs_uri, session=session).exec()
     assert _get_listing_datasets(session) == [
         f"{_list_dataset_name(dogs_uri)}@v1",
     ]
@@ -163,7 +163,7 @@ def test_from_storage_partials(cloud_test_catalog):
         f"{_list_dataset_name(dogs_uri)}@v1",
     ]
 
-    DataChain.from_storage(src_uri, session=session)
+    DataChain.from_storage(src_uri, session=session).exec()
     assert _get_listing_datasets(session) == sorted(
         [
             f"{_list_dataset_name(dogs_uri)}@v1",
@@ -171,7 +171,7 @@ def test_from_storage_partials(cloud_test_catalog):
         ]
     )
 
-    DataChain.from_storage(f"{src_uri}/cats", session=session)
+    DataChain.from_storage(f"{src_uri}/cats", session=session).exec()
     assert _get_listing_datasets(session) == sorted(
         [
             f"{_list_dataset_name(dogs_uri)}@v1",
@@ -197,14 +197,14 @@ def test_from_storage_partials_with_update(cloud_test_catalog):
         return name
 
     uri = f"{src_uri}/cats"
-    DataChain.from_storage(uri, session=session)
+    DataChain.from_storage(uri, session=session).exec()
     assert _get_listing_datasets(session) == sorted(
         [
             f"{_list_dataset_name(uri)}@v1",
         ]
     )
 
-    DataChain.from_storage(uri, session=session, update=True)
+    DataChain.from_storage(uri, session=session, update=True).exec()
     assert _get_listing_datasets(session) == sorted(
         [
             f"{_list_dataset_name(uri)}@v1",
@@ -1070,7 +1070,7 @@ def test_avoid_recalculation_after_save(cloud_test_catalog):
 
     assert ds2._query.steps == []
     assert ds2._query.dependencies == set()
-    assert isinstance(ds2._query.starting_step, QueryStep)
+    assert isinstance(ds2._query.query_step, QueryStep)
     ds2.save("ds2")
     assert calls == 1  # UDF should be called only once
 

@@ -293,7 +293,7 @@ def test_listings(test_session, tmp_dir):
     df.to_parquet(tmp_dir / "df.parquet")
 
     uri = tmp_dir.as_uri()
-    DataChain.from_storage(uri, session=test_session)
+    DataChain.from_storage(uri, session=test_session).exec()
 
     # check that listing is not returned as normal dataset
     assert not any(
@@ -325,13 +325,13 @@ def test_listings_reindex(test_session, tmp_dir):
 
     uri = tmp_dir.as_uri()
 
-    DataChain.from_storage(uri, session=test_session)
+    DataChain.from_storage(uri, session=test_session).exec()
     assert len(list(DataChain.listings(session=test_session).collect("listing"))) == 1
 
-    DataChain.from_storage(uri, session=test_session)
+    DataChain.from_storage(uri, session=test_session).exec()
     assert len(list(DataChain.listings(session=test_session).collect("listing"))) == 1
 
-    DataChain.from_storage(uri, session=test_session, update=True)
+    DataChain.from_storage(uri, session=test_session, update=True).exec()
     listings = list(DataChain.listings(session=test_session).collect("listing"))
     assert len(listings) == 2
     listings.sort(key=lambda lst: lst.version)

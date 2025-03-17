@@ -32,7 +32,7 @@ def test_ls_no_args(cloud_test_catalog, cloud_type, capsys):
     catalog = session.catalog
     src = cloud_test_catalog.src_uri
 
-    DataChain.from_storage(src, session=session).collect()
+    DataChain.from_storage(src, session=session).exec()
     ls([], catalog=catalog)
     captured = capsys.readouterr()
     assert captured.out == f"{src}/@v1\n"
