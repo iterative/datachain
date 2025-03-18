@@ -138,6 +138,20 @@ def test_read_text_data(tmp_path, catalog: Catalog):
     assert file.read() == data
 
 
+def test_read_file_as_text(tmp_path, catalog: Catalog):
+    file_name = "myfile"
+    data = "this is a TexT data..."
+
+    file_path = tmp_path / file_name
+    with open(file_path, "w") as fd:
+        fd.write(data)
+
+    file = File(path=file_name, source=f"file://{tmp_path}")
+    file._set_stream(catalog, True)
+    assert file.as_text_file().read() == data
+    assert file.as_text_file().as_text_file().read() == data
+
+
 def test_save_binary_data(tmp_path, catalog: Catalog):
     file1_name = "myfile1"
     file2_name = "myfile2"

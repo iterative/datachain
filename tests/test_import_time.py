@@ -35,7 +35,12 @@ def _import_time_chain(test_session):
     out = proc.stderr.replace(b"import time:", b"").strip()
     Path("import_time.csv").write_bytes(out)
 
-    dc = DataChain.from_csv("import_time.csv", session=test_session, delimiter="|")
+    try:
+        dc = DataChain.from_csv("import_time.csv", session=test_session, delimiter="|")
+    except Exception:
+        logger.error("Failed to parse output: %r", proc.stderr)
+        raise
+
     dc = dc.save("import_time")
     # TODO: use `mutate` instead of `map`
     return (
@@ -47,6 +52,8 @@ def _import_time_chain(test_session):
     )
 
 
+# disable coverage for this test to minimize import time overhead
+@pytest.mark.no_cover
 @pytest.mark.skipif(sys.platform == "win32", reason="not reliable on Windows")
 def test_import_time(catalog, test_session):
     """
@@ -67,7 +74,7 @@ def test_import_time(catalog, test_session):
 
     dc, min_import_time = min(import_timings, key=lambda x: x[1])
     # If there is a regression, uncomment the following to find the culprit:
-    # dc.show(limit=30)
+    # dc.show(limit=40)
     for module in lazy_modules:
         assert not list(dc.filter(C("import").startswith(module)).collect()), (
             f"found {module} at import time"

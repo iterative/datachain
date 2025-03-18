@@ -1,11 +1,3 @@
-import os
-
-os.environ["YOLO_VERBOSE"] = "false"
-
-
-from io import BytesIO
-
-from PIL import Image
 from ultralytics import YOLO
 
 from datachain import C, DataChain, File
@@ -13,7 +5,7 @@ from datachain.model.ultralytics import YoloPoses
 
 
 def process_poses(yolo: YOLO, file: File) -> YoloPoses:
-    results = yolo(Image.open(BytesIO(file.read())))
+    results = yolo(file.as_image_file().read(), verbose=False)
     return YoloPoses.from_results(results)
 
 

@@ -1,11 +1,3 @@
-import os
-
-os.environ["YOLO_VERBOSE"] = "false"
-
-
-from io import BytesIO
-
-from PIL import Image
 from ultralytics import YOLO
 
 from datachain import C, DataChain, File
@@ -13,7 +5,7 @@ from datachain.model.ultralytics import YoloBBoxes
 
 
 def process_bboxes(yolo: YOLO, file: File) -> YoloBBoxes:
-    results = yolo(Image.open(BytesIO(file.read())))
+    results = yolo(file.as_image_file().read(), verbose=False)
     return YoloBBoxes.from_results(results)
 
 

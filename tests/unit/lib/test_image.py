@@ -3,10 +3,7 @@ from torch import Tensor
 from torchvision.transforms import ToTensor
 
 from datachain.lib.file import ImageFile
-from datachain.lib.image import (
-    convert_image,
-    convert_images,
-)
+from datachain.lib.image import convert_image, convert_images
 
 IMAGE = Image.new(mode="RGB", size=(64, 64))
 
