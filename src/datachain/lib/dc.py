@@ -629,7 +629,8 @@ class DataChain:
                 model_name=model_name,
                 jmespath=jmespath,
                 nrows=nrows,
-            )
+            ),
+            "params": {"file": File},
         }
         # disable prefetch if nrows is set
         settings = {"prefetch": 0} if nrows else {}

@@ -154,9 +154,9 @@ class SignalSchema:
             if not callable(func):
                 raise SetupError(key, "value must be function or callable class")
 
-    def _init_setup_values(self):
+    def _init_setup_values(self) -> None:
         if self.setup_values is not None:
-            return self.setup_values
+            return
 
         res = {}
         for key, func in self.setup_func.items():
@@ -398,7 +398,7 @@ class SignalSchema:
         return SignalSchema(signals)
 
     @staticmethod
-    def get_flatten_hidden_fields(schema):
+    def get_flatten_hidden_fields(schema: dict):
         custom_types = schema.get("_custom_types", {})
         if not custom_types:
             return []
@@ -476,14 +476,12 @@ class SignalSchema:
         schema: dict[str, DataType] = {}
 
         for param, param_type in params.items():
+            # This is special case for setup params, they are always treated as strings
             if param in setup_params:
                 schema[param] = str
                 continue
 
-            try:
-                schema_type = self._find_in_tree(param.split("."))
-            except SignalResolvingError:
-                continue
+            schema_type = self._find_in_tree(param.split("."))
 
             if param_type is Any:
                 schema[param] = schema_type
