@@ -290,9 +290,9 @@ def adapt_datetime(val: datetime) -> str:
             val = val.astimezone(timezone.utc)
         except (OverflowError, ValueError, OSError):
             if val.year == MAXYEAR:
-                val = datetime.max
+                val = datetime.max.replace(tzinfo=timezone.utc)
             elif val.year == MINYEAR:
-                val = datetime.min
+                val = datetime.min.replace(tzinfo=timezone.utc)
             else:
                 raise
     return val.replace(tzinfo=None).isoformat(" ")
