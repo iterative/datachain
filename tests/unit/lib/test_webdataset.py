@@ -39,7 +39,7 @@ class MockTar:
 
 
 def test_webdataset_basic():
-    tar_file = File(name="nnn.tar")
+    tar_file = File(path="nnn.tar")
     tar = MockTar(
         [
             MockTarInfo("01.jpg"),
@@ -76,7 +76,7 @@ def test_webdataset_basic():
 
 
 def test_webdataset_empty():
-    stream = File(name="nnn.tar")
+    stream = File(path="nnn.tar")
     tar = MockTar([])
 
     groups = list(get_tar_groups(stream, tar, ["jpg"], WDSLaion))
@@ -85,7 +85,7 @@ def test_webdataset_empty():
 
 
 def test_webdataset_missing_core_files():
-    stream = File(name="nnn.tar")
+    stream = File(path="nnn.tar")
     tar = MockTar(
         [
             MockTarInfo("01.txt"),
@@ -100,7 +100,7 @@ def test_webdataset_missing_core_files():
 
 
 def test_webdataset_single_file_per_group():
-    stream = File(name="nnn.tar")
+    stream = File(path="nnn.tar")
     tar = MockTar(
         [
             MockTarInfo("01.jpg"),
@@ -115,7 +115,7 @@ def test_webdataset_single_file_per_group():
 
 
 def test_webdataset_multiple_core_extensions():
-    stream = File(name="nnn.tar")
+    stream = File(path="nnn.tar")
     tar = MockTar(
         [
             MockTarInfo("01.png"),
@@ -130,7 +130,7 @@ def test_webdataset_multiple_core_extensions():
 
 
 def test_webdataset_core_file_duplication():
-    stream = File(name="nnn.tar")
+    stream = File(path="nnn.tar")
     tar = MockTar(
         [
             MockTarInfo("01.png"),
@@ -145,7 +145,7 @@ def test_webdataset_core_file_duplication():
 
 
 def test_webdataset_unknown_file_type():
-    stream = File(name="nnn.tar")
+    stream = File(path="nnn.tar")
     tar = MockTar([MockTarInfo("01.QQQQ")])
 
     with pytest.raises(UnknownFileExtensionError):

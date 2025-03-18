@@ -1,9 +1,13 @@
 """
-To install dependencies:
+To install the required dependencies:
 
-  pip install open_clip_torch
+  pip install datachain[examples]
 
 """
+
+import os
+
+os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 
 import open_clip
 
@@ -31,7 +35,7 @@ if __name__ == "__main__":
     # Run in chain
     (
         DataChain.from_storage("gs://datachain-demo/dogs-and-cats/", type="image")
-        .filter(C("file.name").glob("*cat*.jpg"))
+        .filter(C("file.path").glob("*cat*.jpg"))
         .settings(parallel=2)
         .limit(5)
         .map(

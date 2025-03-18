@@ -1,13 +1,18 @@
 """Automation using nox."""
+# /// script
+# dependencies = ["nox"]
+# ///
 
 import glob
-import os
 
 import nox
 
 nox.options.default_venv_backend = "uv|virtualenv"
 nox.options.reuse_existing_virtualenvs = True
 nox.options.sessions = "lint", "tests"
+
+project = nox.project.load_toml()
+python_versions = nox.project.python_versions(project)
 locations = "src", "tests"
 
 
@@ -22,17 +27,22 @@ def bench(session: nox.Session) -> None:
     session.install(".[tests]")
     session.run(
         "pytest",
-        "-m",
-        "benchmark",
+        "--benchmark-only",
         "--benchmark-group-by",
         "func",
         *session.posargs,
     )
 
 
-@nox.session(python=["3.9", "3.10", "3.11", "3.12", "pypy3.9", "pypy3.10"])
+@nox.session(python=python_versions)
 def tests(session: nox.Session) -> None:
     session.install(".[tests]")
+    env = {"COVERAGE_FILE": f".coverage.{session.python}"}
+    if session.python in ("3.12", "3.13"):
+        # improve performance of tests in Python>=3.12 when used with coverage
+        # https://github.com/nedbat/coveragepy/issues/1665
+        # https://github.com/python/cpython/issues/107674
+        env["COVERAGE_CORE"] = "sysmon"
     session.run(
         "pytest",
         "--cov",
@@ -40,8 +50,23 @@ def tests(session: nox.Session) -> None:
         "--cov-report=xml",
         "--durations=10",
         "--numprocesses=logical",
+        "--dist=loadgroup",
         *session.posargs,
-        env={"COVERAGE_FILE": f".coverage.{session.python}"},
+        env=env,
+    )
+
+
+@nox.session(python=python_versions)
+def e2e(session: nox.Session) -> None:
+    session.install(".[tests]")
+    session.run(
+        "pytest",
+        "--durations=0",
+        "--numprocesses=logical",
+        "--dist=loadgroup",
+        "-m",
+        "e2e",
+        *session.posargs,
     )
 
 
@@ -56,21 +81,24 @@ def lint(session: nox.Session) -> None:
 
 @nox.session
 def build(session: nox.Session) -> None:
-    session.install("build", "twine", "uv")
-    session.run("python", "-m", "build", "--installer", "uv")
+    session.install("twine", "uv")
+    session.run("uv", "build")
     dists = glob.glob("dist/*")
     session.run("twine", "check", *dists, silent=True)
 
 
-@nox.session
-def dev(session: nox.Session) -> None:
-    """Sets up a python development environment for the project."""
-    args = session.posargs or ("venv",)
-    venv_dir = os.fsdecode(os.path.abspath(args[0]))
+@nox.session(python=python_versions)
+def examples(session: nox.Session) -> None:
+    session.install(".[examples]")
+    session.run(
+        "pytest",
+        "--durations=0",
+        "tests/examples",
+        "-m",
+        "examples",
+        *session.posargs,
+    )
 
-    session.log(f"Setting up virtual environment in {venv_dir}")
-    session.install("virtualenv")
-    session.run("virtualenv", venv_dir, silent=True)
 
-    python = os.path.join(venv_dir, "bin/python")
-    session.run(python, "-m", "pip", "install", "-e", ".[dev]", external=True)
+if __name__ == "__main__":
+    nox.main()

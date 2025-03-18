@@ -1,5 +1,5 @@
-site_name: DataChain
-site_url: https://datachain.dvc.ai
+site_name: 'DataChain'
+site_url: https://docs.datachain.ai
 site_description: Wrangle unstructured AI data at scale
 
 repo_url: "https://github.com/iterative/datachain"
@@ -15,8 +15,9 @@ validation:
 
 theme:
   name: material
-  logo: assets/datachain.png
-  favicon: assets/datachain.png
+  custom_dir: docs/overrides
+  logo: assets/datachain.svg
+  favicon: assets/datachain.svg
   icon:
     repo: fontawesome/brands/github
   features:
@@ -26,7 +27,6 @@ theme:
     - navigation.tabs
     - navigation.path
     - navigation.top
-    - navigation.prune
     - navigation.footer
     - toc.follow
     - content.action.edit
@@ -36,7 +36,6 @@ theme:
     - content.tooltips
     - search.highlight
     - search.suggest
-    - navigation.sections
 
   palette:
     # Palette toggle for automatic mode
@@ -55,22 +54,41 @@ theme:
     # Palette toggle for dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: black
-      accent: lime
+      primary: teal
+      accent: teal
       toggle:
         icon: material/weather-night
         name: Switch to system preference
 
 nav:
-  - Home: index.md
-  - API reference:
-      - references/index.md
-      - references/datachain.md
-      - references/datatype.md
-      - references/file.md
-      - references/udf.md
-      - references/torch.md
-      - references/sql.md
+  - Home:
+      - 🔗 Welcome to DataChain: index.md
+      - 🏃🏼‍♂️ Quick Start: quick-start.md
+      - 🎯 Examples: examples.md
+      - 📚 Tutorials: tutorials.md
+      - 🐍 API Reference:
+          - Overview: references/index.md
+          - DataChain: references/datachain.md
+          - Data Types:
+              - Overview: references/data-types/index.md
+              - File: references/data-types/file.md
+              - TextFile: references/data-types/textfile.md
+              - ImageFile: references/data-types/imagefile.md
+              - VideoFile: references/data-types/videofile.md
+              - TarVFile: references/data-types/tarvfile.md
+              - ArrowRow: references/data-types/arrowrow.md
+              - BBox: references/data-types/bbox.md
+              - Pose: references/data-types/pose.md
+              - Segment: references/data-types/segment.md
+          - UDF: references/udf.md
+          - Torch: references/torch.md
+          - Functions: references/func.md
+          - Toolkit: references/toolkit.md
+      - 📡 Interacting with remote storage: references/remotes.md
+      - 🤝 Contributing: contributing.md
+
+  - DataChain Website ↗: https://datachain.ai" target="_blank"
+  - Studio ↗: https://studio.datachain.ai" target="_blank"
 
 markdown_extensions:
   - abbr
@@ -96,7 +114,11 @@ markdown_extensions:
   - pymdownx.tilde
   - tables
   - toc:
-      permalink: true
+      permalink: ''
+
+# Custom permalink style: https://github.com/squidfunk/mkdocs-material/discussions/3535
+extra_css:
+  - css/github-permalink-style.css
 
 extra:
   social:
@@ -125,6 +147,7 @@ plugins:
             show_root_heading: true
             show_signature_annotations: true
             show_symbol_type_heading: true
+            show_symbol_type_toc: true
             signature_crossrefs: true
           import:
             - https://docs.python.org/3/objects.inv

@@ -2,9 +2,18 @@ import posixpath
 
 import pytest
 
-from datachain.catalog import Catalog
 from datachain.catalog.catalog import DataSource
-from datachain.node import DirType, Entry
+from datachain.client import Client
+from datachain.lib.dc import DataChain
+from datachain.lib.file import File
+from datachain.lib.listing import (
+    LISTING_PREFIX,
+    get_listing,
+    is_listing_dataset,
+    listing_uri_from_name,
+)
+from datachain.listing import Listing
+from datachain.node import DirType
 from tests.utils import skip_if_not_sqlite
 
 TREE = {
@@ -24,18 +33,49 @@ def _tree_to_entries(tree: dict, path=""):
             yield from _tree_to_entries(v, dir_path)
         else:
             for fname in v:
-                yield Entry.from_file(path, fname)
+                yield File(path=posixpath.join(path, fname))
 
 
 @pytest.fixture
-def listing(id_generator, metastore, warehouse):
-    catalog = Catalog(
-        id_generator=id_generator, metastore=metastore, warehouse=warehouse
+def listing(test_session):
+    catalog = test_session.catalog
+    dataset_name, _, _, _ = get_listing("file:///whatever", test_session)
+    DataChain.from_values(file=list(_tree_to_entries(TREE))).save(
+        dataset_name, listing=True
     )
-    lst, _ = catalog.enlist_source("s3://whatever", 1234, skip_indexing=True)
-    lst.insert_entries(_tree_to_entries(TREE))
-    lst.insert_entries_done()
-    return lst
+
+    return Listing(
+        catalog.metastore.clone(),
+        catalog.warehouse.clone(),
+        Client.get_client("file:///whatever", catalog.cache, **catalog.client_config),
+        dataset_name=dataset_name,
+        object_name="file",
+    )
+
+
+def test_get_listing_returns_exact_math_on_update(test_session):
+    # Context: https://github.com/iterative/datachain/pull/726
+    # On update it should be returning the exact match (not a "bigger" one)
+    dataset_name_dir1, _, _, exists = get_listing("file:///whatever/dir1", test_session)
+    DataChain.from_values(file=list(_tree_to_entries(TREE["dir1"]))).save(
+        dataset_name_dir1, listing=True
+    )
+    assert dataset_name_dir1 == f"{LISTING_PREFIX}file:///whatever/dir1/"
+    assert not exists
+
+    dataset_name, _, _, exists = get_listing("file:///whatever", test_session)
+    DataChain.from_values(file=list(_tree_to_entries(TREE))).save(
+        dataset_name, listing=True
+    )
+    assert dataset_name == f"{LISTING_PREFIX}file:///whatever/"
+    assert not exists
+
+    dataset_name_dir1, _, _, exists = get_listing(
+        "file:///whatever/dir1", test_session, update=True
+    )
+    assert dataset_name_dir1 == f"{LISTING_PREFIX}file:///whatever/dir1/"
+    # On update it is always false (there was no reason to complicate it for now)
+    assert not exists
 
 
 def test_resolve_path_in_root(listing):
@@ -99,8 +139,8 @@ def test_subname_expansion(listing):
     _match_filenames(nodes, ["dir1", "dir2"])
 
 
+@skip_if_not_sqlite
 def test_multilevel_expansion(listing):
-    skip_if_not_sqlite()
     nodes = listing.expand_path("dir[1,2]/d*")
     _match_filenames(nodes, ["dataset.csv", "diagram.png", "d2"])
 
@@ -114,13 +154,13 @@ def test_expand_root(listing):
 
 def test_list_dir(listing):
     dir1 = listing.resolve_path("dir1/")
-    names = listing.ls_path(dir1, ["name"])
-    assert {n[0] for n in names} == {"d2", "dataset.csv"}
+    names = listing.ls_path(dir1, ["path"])
+    assert {n[0] for n in names} == {"dir1/d2", "dir1/dataset.csv"}
 
 
 def test_list_file(listing):
     file = listing.resolve_path("dir1/dataset.csv")
-    src = DataSource(listing, file)
+    src = DataSource(listing, listing.client, file)
     results = list(src.ls(["sys__id", "name", "dir_type"]))
     assert {r[1] for r in results} == {"dataset.csv"}
     assert results[0][0] == file.sys__id
@@ -138,3 +178,22 @@ def test_subtree(listing):
 def test_subdirs(listing):
     dirs = list(listing.get_dirs_by_parent_path(""))
     _match_filenames(dirs, ["dir1", "dir2"])
+
+
+@pytest.mark.parametrize(
+    "name,is_listing",
+    [
+        ("lst__s3://my-bucket", True),
+        ("lst__file:///my-folder/dir1", True),
+        ("s3://my-bucket", False),
+        ("my-dataset", False),
+    ],
+)
+def test_is_listing_dataset(name, is_listing):
+    assert is_listing_dataset(name) is is_listing
+
+
+def test_listing_uri_from_name():
+    assert listing_uri_from_name("lst__s3://my-bucket") == "s3://my-bucket"
+    with pytest.raises(ValueError):
+        listing_uri_from_name("s3://my-bucket")

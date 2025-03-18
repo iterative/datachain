@@ -1,2 +1,7 @@
-def test_version(bench_datachain):
-    bench_datachain("--help", rounds=100)
+import shutil
+import subprocess
+
+
+def test_version(benchmark):
+    bin = shutil.which("datachain")
+    benchmark(subprocess.check_call, [bin, "--help"])

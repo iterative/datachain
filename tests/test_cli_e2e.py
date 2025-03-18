@@ -4,6 +4,15 @@ import subprocess
 from textwrap import dedent
 
 import pytest
+import tabulate
+
+
+def _tabulated_datasets(name, version):
+    row = [
+        {"Name": name, "Latest Version": f"v{version}"},
+    ]
+    return tabulate.tabulate(row, headers="keys")
+
 
 MNT_FILE_TREE = {
     "01375.png": 324,
@@ -138,27 +147,27 @@ E2E_STEPS = (
         },
     },
     {
-        "command": ("datachain", "ls-datasets"),
-        "expected": "mnt (v1)\n",
+        "command": ("datachain", "dataset", "ls"),
+        "expected": _tabulated_datasets("mnt", 1),
     },
     {
-        "command": ("datachain", "ls-datasets"),
-        "expected": "mnt (v1)\n",
+        "command": ("datachain", "dataset", "ls"),
+        "expected": _tabulated_datasets("mnt", 1),
     },
     {
-        "command": ("datachain", "edit-dataset", "mnt", "--new-name", "mnt-new"),
+        "command": ("datachain", "dataset", "edit", "mnt", "--new-name", "mnt-new"),
         "expected": "",
     },
     {
-        "command": ("datachain", "ls-datasets"),
-        "expected": "mnt-new (v1)\n",
+        "command": ("datachain", "dataset", "ls"),
+        "expected": _tabulated_datasets("mnt-new", 1),
     },
     {
-        "command": ("datachain", "rm-dataset", "mnt-new", "--version", "1"),
+        "command": ("datachain", "dataset", "rm", "mnt-new", "--version", "1"),
         "expected": "",
     },
     {
-        "command": ("datachain", "ls-datasets"),
+        "command": ("datachain", "dataset", "ls"),
         "expected": "",
     },
     {
@@ -180,7 +189,7 @@ def verify_files(files, base=""):
             assert os.path.getsize(full_name) == value
 
 
-def run_step(step):
+def run_step(step, catalog):
     """Run an end-to-end test step with a command and expected output."""
     result = subprocess.run(  # noqa: S603
         step["command"],
@@ -188,13 +197,18 @@ def run_step(step):
         capture_output=True,
         check=True,
         encoding="utf-8",
+        env={
+            **os.environ,
+            "DATACHAIN__METASTORE": catalog.metastore.serialize(),
+            "DATACHAIN__WAREHOUSE": catalog.warehouse.serialize(),
+        },
     )
     if step.get("sort_expected_lines"):
         assert sorted(result.stdout.split("\n")) == sorted(
             step["expected"].lstrip("\n").split("\n")
         )
     else:
-        assert result.stdout == step["expected"].lstrip("\n")
+        assert result.stdout.strip("\n") == step["expected"].strip("\n")
     if step.get("listing"):
         assert "Listing" in result.stderr
     else:
@@ -213,7 +227,8 @@ def run_step(step):
 
 
 @pytest.mark.e2e
-def test_cli_e2e(tmp_dir, catalog):
+@pytest.mark.xdist_group(name="tmpfile")
+def test_cli_e2e(tmp_dir, catalog_tmpfile):
     """End-to-end CLI Test"""
     for step in E2E_STEPS:
-        run_step(step)
+        run_step(step, catalog_tmpfile)

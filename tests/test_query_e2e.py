@@ -4,10 +4,10 @@ import signal
 import subprocess
 import sys
 import textwrap
-from io import TextIOWrapper
+import threading
 from textwrap import dedent
 from threading import Thread
-from typing import Callable
+from typing import IO
 
 import pytest
 
@@ -16,7 +16,7 @@ tests_dir = os.path.dirname(os.path.abspath(__file__))
 python_exc = sys.executable or "python3"
 
 
-E2E_STEP_TIMEOUT_SEC = 30
+E2E_STEP_TIMEOUT_SEC = 90
 
 
 E2E_STEPS = (
@@ -44,11 +44,11 @@ E2E_STEPS = (
         ),
         "expected_in": dedent(
             """
-            cat.1.jpg
-            cat.10.jpg
-            cat.100.jpg
-            cat.1000.jpg
-            cat.1001.jpg
+            dogs-and-cats/cat.1.jpg
+            dogs-and-cats/cat.10.jpg
+            dogs-and-cats/cat.100.jpg
+            dogs-and-cats/cat.1000.jpg
+            dogs-and-cats/cat.1001.jpg
             """
         ),
     },
@@ -59,11 +59,11 @@ E2E_STEPS = (
         ),
         "expected_in": dedent(
             """
-            cat.1.jpg
-            cat.10.jpg
-            cat.100.jpg
-            cat.1000.jpg
-            cat.1001.jpg
+            dogs-and-cats/cat.1.jpg
+            dogs-and-cats/cat.10.jpg
+            dogs-and-cats/cat.100.jpg
+            dogs-and-cats/cat.1000.jpg
+            dogs-and-cats/cat.1001.jpg
             """
         ),
     },
@@ -75,11 +75,11 @@ E2E_STEPS = (
         ),
         "expected_in": dedent(
             """
-            cat.1.jpg
-            cat.10.jpg
-            cat.100.jpg
-            cat.1000.jpg
-            cat.1001.jpg
+            dogs-and-cats/cat.1.jpg
+            dogs-and-cats/cat.10.jpg
+            dogs-and-cats/cat.100.jpg
+            dogs-and-cats/cat.1000.jpg
+            dogs-and-cats/cat.1001.jpg
             """
         ),
     },
@@ -88,17 +88,17 @@ E2E_STEPS = (
             "datachain",
             "query",
             os.path.join(tests_dir, "scripts", "feature_class.py"),
-            "--columns",
-            "file.name,emd.value",
         ),
         "expected_rows": dedent(
             """
-            file__name    emd__value
-            1     cat.1.jpg  512.0
-            2    cat.10.jpg  512.0
-            3   cat.100.jpg  512.0
-            4  cat.1000.jpg  512.0
-            5  cat.1001.jpg  512.0
+                               file.path  emd.value
+            0     dogs-and-cats/cat.1.jpg       512.0
+            1    dogs-and-cats/cat.10.jpg       512.0
+            2   dogs-and-cats/cat.100.jpg       512.0
+            3  dogs-and-cats/cat.1000.jpg       512.0
+            4  dogs-and-cats/cat.1001.jpg       512.0
+
+            [Limited by 5 rows]
             """
         ),
     },
@@ -109,7 +109,7 @@ E2E_STEPS = (
         ),
         "interrupt_after": "UDF Processing Started",
         "expected_in_stderr": "KeyboardInterrupt",
-        "expected_not_in_stderr": "semaphore",
+        "expected_not_in_stderr": "Warning",
     },
     {
         "command": ("datachain", "gc"),
@@ -118,54 +118,44 @@ E2E_STEPS = (
 )
 
 
-def watch_process_thread(
-    stream: TextIOWrapper, output_lines: list[str], watch_value: str, callback: Callable
-) -> None:
-    """
-    Watches either the stdout or stderr stream from a given process,
-    reads the output into output_lines, and watches for the given watch_value,
-    then calls callback once found.
-    """
-    while (line := stream.readline()) != "":
-        line = line.strip()
-        output_lines.append(line)
-        if watch_value in line:
-            callback()
-
-
 def communicate_and_interrupt_process(
     process: subprocess.Popen, interrupt_after: str
 ) -> tuple[str, str]:
-    def interrupt_step() -> None:
-        if sys.platform == "win32":
-            # Windows has a different mechanism of sending a Ctrl-C event.
-            process.send_signal(signal.CTRL_C_EVENT)
-        else:
-            process.send_signal(signal.SIGINT)
+    if sys.platform == "win32":
+        # Windows has a different mechanism of sending a Ctrl-C event.
+        interrupt_signal = signal.CTRL_C_EVENT
+    else:
+        interrupt_signal = signal.SIGINT
 
     stdout_lines: list[str] = []
     stderr_lines: list[str] = []
-    watch_threads = (
-        Thread(
-            target=watch_process_thread,
-            name="Test-Query-E2E-Interrupt-stdout",
-            daemon=True,
-            args=[process.stdout, stdout_lines, interrupt_after, interrupt_step],
-        ),
-        Thread(
-            target=watch_process_thread,
-            name="Test-Query-E2E-Interrupt-stderr",
-            daemon=True,
-            args=[process.stderr, stderr_lines, interrupt_after, interrupt_step],
-        ),
-    )
-    for t in watch_threads:
-        t.start()
+    lock = threading.Lock()
+    interrupted = False
+
+    def interrupt_step(stream: IO[str], output_lines: list[str]) -> None:
+        nonlocal interrupted
+        for line in iter(stream.readline, ""):
+            output_lines.append(line)
+            if not interrupted and interrupt_after in line:
+                with lock:
+                    if not interrupted:
+                        process.send_signal(interrupt_signal)
+                        interrupted = True
+
+    watch_threads = []
+    for args in (process.stdout, stdout_lines), (process.stderr, stderr_lines):
+        th = Thread(target=interrupt_step, name=f"E2E-Interrupt-{args[0]}", args=args)
+        watch_threads.append(th)
+        th.start()
+
     process.wait(timeout=E2E_STEP_TIMEOUT_SEC)
+
+    for th in watch_threads:
+        th.join()
     return "\n".join(stdout_lines), "\n".join(stderr_lines)
 
 
-def run_step(step):  # noqa: PLR0912
+def run_step(step, catalog):  # noqa: PLR0912
     """Run an end-to-end query test step with a command and expected output."""
     command = step["command"]
     # Note that a process.returncode of -2 is the same as the shell returncode of 130
@@ -191,6 +181,11 @@ def run_step(step):  # noqa: PLR0912
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             encoding="utf-8",
+            env={
+                **os.environ,
+                "DATACHAIN__METASTORE": catalog.metastore.serialize(),
+                "DATACHAIN__WAREHOUSE": catalog.warehouse.serialize(),
+            },
             **popen_args,
         )
         interrupt_after = step.get("interrupt_after")
@@ -242,10 +237,11 @@ def run_step(step):  # noqa: PLR0912
 
 
 @pytest.mark.e2e
-def test_query_e2e(tmp_dir, catalog):
+@pytest.mark.xdist_group(name="tmpfile")
+def test_query_e2e(tmp_dir, catalog_tmpfile):
     """End-to-end CLI Query Test"""
     for step in E2E_STEPS:
-        run_step(step)
+        run_step(step, catalog_tmpfile)
 
 
 def _comparable_row(output: str) -> str:

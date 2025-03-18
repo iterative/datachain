@@ -2,18 +2,18 @@ import os
 import posixpath
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 from urllib.parse import urlparse
 
 from fsspec.implementations.local import LocalFileSystem
 
-from datachain.node import Entry
-from datachain.storage import StorageURI
+from datachain.lib.file import File
 
 from .fsspec import Client
 
 if TYPE_CHECKING:
-    from datachain.data_storage import AbstractMetastore
+    from datachain.cache import Cache
+    from datachain.dataset import StorageURI
 
 
 class FileClient(Client):
@@ -22,7 +22,11 @@ class FileClient(Client):
     protocol = "file"
 
     def __init__(
-        self, name: str, fs_kwargs: dict[str, Any], cache, use_symlinks: bool = False
+        self,
+        name: str,
+        fs_kwargs: dict[str, Any],
+        cache: "Cache",
+        use_symlinks: bool = False,
     ) -> None:
         super().__init__(name, fs_kwargs, cache)
         self.use_symlinks = use_symlinks
@@ -31,26 +35,10 @@ class FileClient(Client):
         raise TypeError("Signed urls are not implemented for local file system")
 
     @classmethod
-    def get_uri(cls, name) -> StorageURI:
-        """
-        This returns root of FS as uri, e.g
-            Linux & Mac : file:///
-            Windows: file:///C:/
-        """
-        return StorageURI(Path(name).as_uri())
+    def get_uri(cls, name: str) -> "StorageURI":
+        from datachain.dataset import StorageURI
 
-    @staticmethod
-    def root_dir() -> str:
-        """
-        Returns file system root path.
-        Linux &  MacOS: /
-        Windows: C:/
-        """
-        return Path.cwd().anchor.replace(os.sep, posixpath.sep)
-
-    @staticmethod
-    def root_path() -> Path:
-        return Path(FileClient.root_dir())
+        return StorageURI(f"{cls.PREFIX}/{name.removeprefix('/')}")
 
     @classmethod
     def ls_buckets(cls, **kwargs):
@@ -78,28 +66,20 @@ class FileClient(Client):
 
     @classmethod
     def split_url(cls, url: str) -> tuple[str, str]:
-        """
-        Splits url into two components:
-            1. root of the FS which will later on become the name of the storage
-            2. path which will later on become partial path
-        Note that URL needs to be have file:/// protocol.
-        Examples:
-            file:///tmp/dir -> / + tmp/dir
-            file:///c:/windows/files -> c:/ + windows/files
-        """
         parsed = urlparse(url)
-        if parsed.scheme == "file":
-            scheme, rest = url.split(":", 1)
-            uri = f"{scheme.lower()}:{rest}"
-        else:
-            uri = cls.path_to_uri(url)
+        if parsed.scheme != "file":
+            url = cls.path_to_uri(url)
 
-        return cls.root_dir(), uri.removeprefix(cls.root_path().as_uri())
+        fill_path = url[len(cls.PREFIX) :]
+        path_split = fill_path.rsplit("/", 1)
+        bucket = path_split[0]
+        if os.name == "nt":
+            bucket = bucket.removeprefix("/")
+        path = path_split[1] if len(path_split) > 1 else ""
+        return bucket, path
 
     @classmethod
-    def from_name(
-        cls, name: str, metastore: "AbstractMetastore", cache, kwargs
-    ) -> "FileClient":
+    def from_name(cls, name: str, cache: "Cache", kwargs) -> "FileClient":
         use_symlinks = kwargs.pop("use_symlinks", False)
         return cls(name, kwargs, cache, use_symlinks=use_symlinks)
 
@@ -107,7 +87,7 @@ class FileClient(Client):
     def from_source(
         cls,
         uri: str,
-        cache,
+        cache: "Cache",
         use_symlinks: bool = False,
         **kwargs,
     ) -> "FileClient":
@@ -118,14 +98,14 @@ class FileClient(Client):
             use_symlinks=use_symlinks,
         )
 
-    async def get_current_etag(self, uid) -> str:
-        info = self.fs.info(self.get_full_path(uid.path))
-        return self.convert_info(info, "").etag
+    async def get_current_etag(self, file: "File") -> str:
+        info = self.fs.info(self.get_full_path(file.path))
+        return self.info_to_file(info, "").etag
 
-    async def get_size(self, path: str) -> int:
+    async def get_size(self, path: str, version_id: Optional[str] = None) -> int:
         return self.fs.size(path)
 
-    async def get_file(self, lpath, rpath, callback):
+    async def get_file(self, lpath, rpath, callback, version_id: Optional[str] = None):
         return self.fs.get_file(lpath, rpath, callback=callback)
 
     async def ls_dir(self, path):
@@ -134,21 +114,20 @@ class FileClient(Client):
     def rel_path(self, path):
         return posixpath.relpath(path, self.name)
 
-    def get_full_path(self, rel_path):
+    def get_full_path(self, rel_path, version_id: Optional[str] = None):
         full_path = Path(self.name, rel_path).as_posix()
         if rel_path.endswith("/") or not rel_path:
             full_path += "/"
         return full_path
 
-    def convert_info(self, v: dict[str, Any], parent: str) -> Entry:
-        name = posixpath.basename(v["name"])
-        return Entry.from_file(
-            parent=parent,
-            name=name,
+    def info_to_file(self, v: dict[str, Any], path: str) -> File:
+        return File(
+            source=self.uri,
+            path=path,
+            size=v.get("size", ""),
             etag=v["mtime"].hex(),
             is_latest=True,
             last_modified=datetime.fromtimestamp(v["mtime"], timezone.utc),
-            size=v.get("size", ""),
         )
 
     def fetch_nodes(

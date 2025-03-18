@@ -4,21 +4,19 @@ from datachain.node import DirType, NodeWithPath
 
 
 class DataSource:
-    def __init__(self, listing, node, as_container=False):
+    def __init__(self, listing, client, node, as_container=False):
         self.listing = listing
+        self.client = client
         self.node = node
         self.as_container = (
             as_container  # Indicates whether a .tar file is handled as a container
         )
 
-    def get_full_path(self):
-        return self.get_node_full_path(self.node)
-
     def get_node_full_path(self, node):
-        return self.listing.client.get_full_path(node.full_path)
+        return self.client.get_full_path(node.full_path)
 
     def get_node_full_path_from_path(self, full_path):
-        return self.listing.client.get_full_path(full_path)
+        return self.client.get_full_path(full_path)
 
     def is_single_object(self):
         return self.node.dir_type == DirType.FILE or (

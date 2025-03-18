@@ -1,10 +1,10 @@
-import posixpath
-from typing import Any
+from typing import Any, Optional
+from urllib.parse import parse_qs, urlsplit, urlunsplit
 
 from adlfs import AzureBlobFileSystem
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
-from datachain.node import Entry
+from datachain.lib.file import File
 
 from .fsspec import DELIMITER, Client, ResultQueue
 
@@ -14,16 +14,11 @@ class AzureClient(Client):
     PREFIX = "az://"
     protocol = "az"
 
-    def convert_info(self, v: dict[str, Any], parent: str) -> Entry:
+    def info_to_file(self, v: dict[str, Any], path: str) -> File:
         version_id = v.get("version_id")
-        name = v.get("name", "").split(DELIMITER)[-1]
-        if version_id:
-            version_suffix = f"?versionid={version_id}"
-            if name.endswith(version_suffix):
-                name = name[: -len(version_suffix)]
-        return Entry.from_file(
-            parent=parent,
-            name=name,
+        return File(
+            source=self.uri,
+            path=path,
             etag=v.get("etag", "").strip('"'),
             version=version_id or "",
             is_latest=version_id is None or bool(v.get("is_current_version")),
@@ -31,13 +26,27 @@ class AzureClient(Client):
             size=v.get("size", ""),
         )
 
+    def url(self, path: str, expires: int = 3600, **kwargs) -> str:
+        """
+        Generate a signed URL for the given path.
+        """
+        version_id = kwargs.pop("version_id", None)
+        content_disposition = kwargs.pop("content_disposition", None)
+        result = self.fs.sign(
+            self.get_full_path(path, version_id),
+            expiration=expires,
+            content_disposition=content_disposition,
+            **kwargs,
+        )
+        return result + (f"&versionid={version_id}" if version_id else "")
+
     async def _fetch_flat(self, start_prefix: str, result_queue: ResultQueue) -> None:
         prefix = start_prefix
         if prefix:
             prefix = prefix.lstrip(DELIMITER) + DELIMITER
         found = False
         try:
-            with tqdm(desc=f"Listing {self.uri}", unit=" objects") as pbar:
+            with tqdm(desc=f"Listing {self.uri}", unit=" objects", leave=False) as pbar:
                 async with self.fs.service_client.get_container_client(
                     container=self.name
                 ) as container_client:
@@ -50,9 +59,9 @@ class AzureClient(Client):
                             if not self._is_valid_key(b["name"]):
                                 continue
                             info = (await self.fs._details([b]))[0]
-                            full_path = info["name"]
-                            parent = posixpath.dirname(self.rel_path(full_path))
-                            entries.append(self.convert_info(info, parent))
+                            entries.append(
+                                self.info_to_file(info, self.rel_path(info["name"]))
+                            )
                         if entries:
                             await result_queue.put(entries)
                             pbar.update(len(entries))
@@ -62,5 +71,14 @@ class AzureClient(Client):
                         )
         finally:
             result_queue.put_nowait(None)
+
+    @classmethod
+    def version_path(cls, path: str, version_id: Optional[str]) -> str:
+        parts = list(urlsplit(path))
+        query = parse_qs(parts[3])
+        if "versionid" in query:
+            raise ValueError("path already includes a version query")
+        parts[3] = f"versionid={version_id}" if version_id else ""
+        return urlunsplit(parts)
 
     _fetch_default = _fetch_flat

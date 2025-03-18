@@ -1,5 +1,3 @@
-# pip install Pillow
-
 import base64
 import os
 
@@ -78,7 +76,7 @@ if __name__ == "__main__":
             SOURCE,
             anon=True,
         )
-        .filter(C("file.name").glob("cat*.jpg"))
+        .filter(C("file.path").glob("*cat*.jpg"))
         .limit(10)
         .map(
             lambda file: describe_image(
@@ -90,6 +88,6 @@ if __name__ == "__main__":
             params=["file"],
             output={"description": str, "error": str},
         )
-        .select("file.source", "file.parent", "file.name", "description", "error")
+        .select("file.source", "file.path", "description", "error")
         .show()
     )

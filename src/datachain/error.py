@@ -10,11 +10,11 @@ class DatasetNotFoundError(NotFoundError):
     pass
 
 
-class DatasetInvalidVersionError(Exception):
+class DatasetVersionNotFoundError(NotFoundError):
     pass
 
 
-class StorageNotFoundError(NotFoundError):
+class DatasetInvalidVersionError(Exception):
     pass
 
 
@@ -32,18 +32,12 @@ class QueryScriptRunError(Exception):
     Attributes:
         message      Explanation of the error
         return_code  Code returned by the subprocess
-        output       STDOUT + STDERR output of the subprocess
     """
 
-    def __init__(self, message: str, return_code: int = 0, output: str = ""):
+    def __init__(self, message: str, return_code: int = 0):
         self.message = message
         self.return_code = return_code
-        self.output = output
-        super().__init__(self.message)
-
-
-class QueryScriptDatasetNotFound(QueryScriptRunError):  # noqa: N818
-    pass
+        super().__init__(message)
 
 
 class QueryScriptCancelError(QueryScriptRunError):

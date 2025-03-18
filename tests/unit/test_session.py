@@ -4,7 +4,8 @@ import pytest
 import sqlalchemy as sa
 
 from datachain.error import DatasetNotFoundError
-from datachain.query import DatasetQuery, Session
+from datachain.query.dataset import DatasetQuery
+from datachain.query.session import Session
 from datachain.sql.types import String
 
 
@@ -39,6 +40,11 @@ def test_global_session_naming(catalog):
     global_prefix = f"{Session.DATASET_PREFIX}{Session.GLOBAL_SESSION_NAME}"
     pattern = rf"^{global_prefix}_{session_uuid}_{table_uuid}$"
     assert re.match(pattern, ds_tmp.name) is not None
+
+
+def test_session_empty_name():
+    name = Session("").name
+    assert name.startswith(Session.GLOBAL_SESSION_NAME + "_")
 
 
 def test_ephemeral_dataset_lifecycle(catalog):

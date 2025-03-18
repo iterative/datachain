@@ -1,10 +1,11 @@
 from collections.abc import Sequence
 from datetime import datetime
-from typing import ClassVar, Union, get_args, get_origin
+from typing import ClassVar, Optional, Union, get_args, get_origin
 
-from pydantic import BaseModel
+from pydantic import AliasChoices, BaseModel, Field, create_model
 
 from datachain.lib.model_store import ModelStore
+from datachain.lib.utils import normalize_col_names
 
 StandardType = Union[
     type[int],
@@ -18,12 +19,14 @@ StandardType = Union[
 ]
 DataType = Union[type[BaseModel], StandardType]
 DataTypeNames = "BaseModel, int, str, float, bool, list, dict, bytes, datetime"
+DataValue = Union[BaseModel, int, str, float, bool, list, dict, bytes, datetime]
 
 
 class DataModel(BaseModel):
     """Pydantic model wrapper that registers model with `DataChain`."""
 
     _version: ClassVar[int] = 1
+    _hidden_fields: ClassVar[list[str]] = []
 
     @classmethod
     def __pydantic_init_subclass__(cls):
@@ -38,6 +41,11 @@ class DataModel(BaseModel):
             models = [models]
         for val in models:
             ModelStore.register(val)
+
+    @classmethod
+    def hidden_fields(cls) -> list[str]:
+        """Returns a list of fields that should be hidden from the user."""
+        return cls._hidden_fields
 
 
 def is_chain_type(t: type) -> bool:
@@ -56,3 +64,35 @@ def is_chain_type(t: type) -> bool:
         return is_chain_type(args[0])
 
     return False
+
+
+def dict_to_data_model(
+    name: str,
+    data_dict: dict[str, DataType],
+    original_names: Optional[list[str]] = None,
+) -> type[BaseModel]:
+    if not original_names:
+        # Gets a map of a normalized_name -> original_name
+        columns = normalize_col_names(list(data_dict))
+        data_dict = dict(zip(columns.keys(), data_dict.values()))
+        original_names = list(columns.values())
+
+    fields = {
+        name: (
+            anno,
+            Field(
+                validation_alias=AliasChoices(name, original_names[idx] or name),
+                default=None,
+            ),
+        )
+        for idx, (name, anno) in enumerate(data_dict.items())
+    }
+
+    class _DataModelStrict(BaseModel, extra="forbid"):
+        pass
+
+    return create_model(
+        name,
+        __base__=_DataModelStrict,
+        **fields,
+    )  # type: ignore[call-overload]

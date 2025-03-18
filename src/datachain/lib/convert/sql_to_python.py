@@ -1,23 +1,14 @@
-from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import ARRAY, JSON, Boolean, DateTime, Float, Integer, String
-
-from datachain.data_storage.sqlite import Column
-
-SQL_TO_PYTHON = {
-    String: str,
-    Integer: int,
-    Float: float,
-    Boolean: bool,
-    DateTime: datetime,
-    ARRAY: list,
-    JSON: dict,
-}
+from sqlalchemy import ColumnElement
 
 
-def sql_to_python(args_map: dict[str, Column]) -> dict[str, Any]:
-    return {
-        k: SQL_TO_PYTHON.get(type(v.type), str)  # type: ignore[union-attr]
-        for k, v in args_map.items()
-    }
+def sql_to_python(sql_exp: ColumnElement) -> Any:
+    try:
+        type_ = sql_exp.type.python_type
+        if type_ == Decimal:
+            type_ = float
+    except NotImplementedError:
+        type_ = str
+    return type_

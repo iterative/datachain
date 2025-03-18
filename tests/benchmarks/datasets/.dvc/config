@@ -1,0 +1,4 @@
+[core]
+    remote = bench_gs
+['remote "bench_gs"']
+    url = gs://datachain-bench

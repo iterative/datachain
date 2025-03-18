@@ -1,15 +1,13 @@
 import functools
-import json
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
 from fnmatch import fnmatch
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 import attrs
 import sqlalchemy as sa
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 
-from datachain.sql.types import JSON, Boolean, DateTime, Int, Int64, SQLType, String
+from datachain.lib.file import File
 
 if TYPE_CHECKING:
     from datachain.catalog import Catalog
@@ -17,6 +15,17 @@ if TYPE_CHECKING:
 
 
 DEFAULT_DELIMITER = "__"
+
+
+def file_signals(row, signal_name="file"):
+    # TODO this is workaround until we decide what to do with these classes
+    prefix = f"{signal_name}{DEFAULT_DELIMITER}"
+    return {
+        c_name.removeprefix(prefix): c_value
+        for c_name, c_value in row.items()
+        if c_name.startswith(prefix)
+        and DEFAULT_DELIMITER not in c_name.removeprefix(prefix)
+    }
 
 
 class ColumnMeta(type):
@@ -44,6 +53,10 @@ class Column(sa.ColumnClause, metaclass=ColumnMeta):
     def glob(self, glob_str):
         """Search for matches using glob pattern matching."""
         return self.op("GLOB")(glob_str)
+
+    def regexp(self, regexp_str):
+        """Search for matches using regexp pattern matching."""
+        return self.op("REGEXP")(regexp_str)
 
 
 class UDFParameter(ABC):
@@ -82,11 +95,11 @@ class Object(UDFParameter):
         cb: Callback = DEFAULT_CALLBACK,
         **kwargs,
     ) -> Any:
-        client = catalog.get_client(row["source"])
-        uid = catalog._get_row_uid(row)
+        file = File._from_row(file_signals(row))
+        client = catalog.get_client(file.source)
         if cache:
-            client.download(uid, callback=cb)
-        with client.open_object(uid, use_cache=cache, cb=cb) as f:
+            client.download(file, callback=cb)
+        with client.open_object(file, use_cache=cache, cb=cb) as f:
             return self.reader(f)
 
     async def get_value_async(
@@ -99,12 +112,12 @@ class Object(UDFParameter):
         cb: Callback = DEFAULT_CALLBACK,
         **kwargs,
     ) -> Any:
-        client = catalog.get_client(row["source"])
-        uid = catalog._get_row_uid(row)
+        file = File._from_row(file_signals(row))
+        client = catalog.get_client(file.source)
         if cache:
-            await client._download(uid, callback=cb)
+            await client._download(file, callback=cb)
         obj = await mapper.to_thread(
-            functools.partial(client.open_object, uid, use_cache=cache, cb=cb)
+            functools.partial(client.open_object, file, use_cache=cache, cb=cb)
         )
         with obj:
             return await mapper.to_thread(self.reader, obj)
@@ -125,11 +138,11 @@ class Stream(UDFParameter):
         cb: Callback = DEFAULT_CALLBACK,
         **kwargs,
     ) -> Any:
-        client = catalog.get_client(row["source"])
-        uid = catalog._get_row_uid(row)
+        file = File._from_row(file_signals(row))
+        client = catalog.get_client(file.source)
         if cache:
-            client.download(uid, callback=cb)
-        return client.open_object(uid, use_cache=cache, cb=cb)
+            client.download(file, callback=cb)
+        return client.open_object(file, use_cache=cache, cb=cb)
 
     async def get_value_async(
         self,
@@ -141,12 +154,12 @@ class Stream(UDFParameter):
         cb: Callback = DEFAULT_CALLBACK,
         **kwargs,
     ) -> Any:
-        client = catalog.get_client(row["source"])
-        uid = catalog._get_row_uid(row)
+        file = File._from_row(file_signals(row))
+        client = catalog.get_client(file.source)
         if cache:
-            await client._download(uid, callback=cb)
+            await client._download(file, callback=cb)
         return await mapper.to_thread(
-            functools.partial(client.open_object, uid, use_cache=cache, cb=cb)
+            functools.partial(client.open_object, file, use_cache=cache, cb=cb)
         )
 
 
@@ -174,10 +187,10 @@ class LocalFilename(UDFParameter):
             # If the glob pattern is specified and the row filename
             # does not match it, then return None
             return None
-        client = catalog.get_client(row["source"])
-        uid = catalog._get_row_uid(row)
-        client.download(uid, callback=cb)
-        return client.cache.get_path(uid)
+        file = File._from_row(file_signals(row))
+        client = catalog.get_client(file.source)
+        client.download(file, callback=cb)
+        return client.cache.get_path(file)
 
     async def get_value_async(
         self,
@@ -193,10 +206,10 @@ class LocalFilename(UDFParameter):
             # If the glob pattern is specified and the row filename
             # does not match it, then return None
             return None
-        client = catalog.get_client(row["source"])
-        uid = catalog._get_row_uid(row)
-        await client._download(uid, callback=cb)
-        return client.cache.get_path(uid)
+        file = File._from_row(file_signals(row))
+        client = catalog.get_client(file.source)
+        await client._download(file, callback=cb)
+        return client.cache.get_path(file)
 
 
 UDFParamSpec = Union[str, Column, UDFParameter]
@@ -210,82 +223,6 @@ def normalize_param(param: UDFParamSpec) -> UDFParameter:
     if isinstance(param, UDFParameter):
         return param
     raise TypeError(f"Invalid UDF parameter: {param}")
-
-
-class DatasetRow:
-    schema: ClassVar[dict[str, type[SQLType]]] = {
-        "source": String,
-        "parent": String,
-        "name": String,
-        "size": Int64,
-        "location": JSON,
-        "vtype": String,
-        "dir_type": Int,
-        "owner_name": String,
-        "owner_id": String,
-        "is_latest": Boolean,
-        "last_modified": DateTime,
-        "version": String,
-        "etag": String,
-    }
-
-    @staticmethod
-    def create(
-        name: str,
-        source: str = "",
-        parent: str = "",
-        size: int = 0,
-        location: Optional[dict[str, Any]] = None,
-        vtype: str = "",
-        dir_type: int = 0,
-        owner_name: str = "",
-        owner_id: str = "",
-        is_latest: bool = True,
-        last_modified: Optional[datetime] = None,
-        version: str = "",
-        etag: str = "",
-    ) -> tuple[
-        str,
-        str,
-        str,
-        int,
-        Optional[str],
-        str,
-        int,
-        str,
-        str,
-        bool,
-        datetime,
-        str,
-        str,
-        int,
-    ]:
-        if location:
-            location = json.dumps([location])  # type: ignore [assignment]
-
-        last_modified = last_modified or datetime.now(timezone.utc)
-
-        return (  # type: ignore [return-value]
-            source,
-            parent,
-            name,
-            size,
-            location,
-            vtype,
-            dir_type,
-            owner_name,
-            owner_id,
-            is_latest,
-            last_modified,
-            version,
-            etag,
-        )
-
-    @staticmethod
-    def extend(**columns):
-        cols = {**DatasetRow.schema}
-        cols.update(columns)
-        return cols
 
 
 C = Column

@@ -1,7 +1,10 @@
 import logging
+import re
 import sqlite3
+import warnings
 from collections.abc import Iterable
 from datetime import MAXYEAR, MINYEAR, datetime, timezone
+from functools import cache
 from types import MappingProxyType
 from typing import Callable, Optional
 
@@ -13,7 +16,14 @@ from sqlalchemy.sql.elements import literal
 from sqlalchemy.sql.expression import case
 from sqlalchemy.sql.functions import func
 
-from datachain.sql.functions import array, conditional, random, string
+from datachain.sql.functions import (
+    aggregate,
+    array,
+    conditional,
+    numeric,
+    random,
+    string,
+)
 from datachain.sql.functions import path as sql_path
 from datachain.sql.selectable import Values, base_values_compiler
 from datachain.sql.sqlite.types import (
@@ -22,8 +32,10 @@ from datachain.sql.sqlite.types import (
     register_type_converters,
 )
 from datachain.sql.types import (
+    DBDefaults,
     TypeDefaults,
     register_backend_types,
+    register_db_defaults,
     register_type_defaults,
     register_type_read_converters,
 )
@@ -42,6 +54,8 @@ setup_is_complete: bool = False
 slash = literal("/")
 empty_str = literal("")
 dot = literal(".")
+
+MAX_INT64 = 2**64 - 1
 
 
 def setup():
@@ -66,18 +80,34 @@ def setup():
     register_backend_types("sqlite", SQLiteTypeConverter())
     register_type_read_converters("sqlite", SQLiteTypeReadConverter())
     register_type_defaults("sqlite", TypeDefaults())
+    register_db_defaults("sqlite", DBDefaults())
 
     compiles(sql_path.parent, "sqlite")(compile_path_parent)
     compiles(sql_path.name, "sqlite")(compile_path_name)
     compiles(sql_path.file_stem, "sqlite")(compile_path_file_stem)
     compiles(sql_path.file_ext, "sqlite")(compile_path_file_ext)
     compiles(array.length, "sqlite")(compile_array_length)
+    compiles(array.contains, "sqlite")(compile_array_contains)
     compiles(string.length, "sqlite")(compile_string_length)
     compiles(string.split, "sqlite")(compile_string_split)
+    compiles(string.regexp_replace, "sqlite")(compile_string_regexp_replace)
+    compiles(string.replace, "sqlite")(compile_string_replace)
+    compiles(string.byte_hamming_distance, "sqlite")(compile_byte_hamming_distance)
     compiles(conditional.greatest, "sqlite")(compile_greatest)
     compiles(conditional.least, "sqlite")(compile_least)
     compiles(Values, "sqlite")(compile_values)
     compiles(random.rand, "sqlite")(compile_rand)
+    compiles(aggregate.avg, "sqlite")(compile_avg)
+    compiles(aggregate.group_concat, "sqlite")(compile_group_concat)
+    compiles(aggregate.any_value, "sqlite")(compile_any_value)
+    compiles(aggregate.collect, "sqlite")(compile_collect)
+    compiles(numeric.bit_and, "sqlite")(compile_bitwise_and)
+    compiles(numeric.bit_or, "sqlite")(compile_bitwise_or)
+    compiles(numeric.bit_xor, "sqlite")(compile_bitwise_xor)
+    compiles(numeric.bit_rshift, "sqlite")(compile_bitwise_rshift)
+    compiles(numeric.bit_lshift, "sqlite")(compile_bitwise_lshift)
+    compiles(numeric.int_hash_64, "sqlite")(compile_int_hash_64)
+    compiles(numeric.bit_hamming_distance, "sqlite")(compile_bit_hamming_distance)
 
     if load_usearch_extension(sqlite3.connect(":memory:")):
         compiles(array.cosine_distance, "sqlite")(compile_cosine_distance_ext)
@@ -152,6 +182,39 @@ def sqlite_string_split(string: str, sep: str, maxsplit: int = -1) -> str:
     return orjson.dumps(string.split(sep, maxsplit)).decode("utf-8")
 
 
+def sqlite_int_hash_64(x: int) -> int:
+    """IntHash64 implementation from ClickHouse."""
+    x ^= 0x4CF2D2BAAE6DA887
+    x ^= x >> 33
+    x = (x * 0xFF51AFD7ED558CCD) & MAX_INT64
+    x ^= x >> 33
+    x = (x * 0xC4CEB9FE1A85EC53) & MAX_INT64
+    x ^= x >> 33
+    # SQLite does not support unsigned 64-bit integers,
+    # so we need to convert to signed 64-bit
+    return x if x < 1 << 63 else (x & MAX_INT64) - (1 << 64)
+
+
+def sqlite_bit_hamming_distance(a: int, b: int) -> int:
+    """Calculate the Hamming distance between two integers."""
+    diff = (a & MAX_INT64) ^ (b & MAX_INT64)
+    if hasattr(diff, "bit_count"):
+        return diff.bit_count()
+    return bin(diff).count("1")
+
+
+def sqlite_byte_hamming_distance(a: str, b: str) -> int:
+    """Calculate the Hamming distance between two strings."""
+    diff = 0
+    if len(a) < len(b):
+        diff = len(b) - len(a)
+        b = b[: len(a)]
+    elif len(b) < len(a):
+        diff = len(a) - len(b)
+        a = a[: len(b)]
+    return diff + sum(c1 != c2 for c1, c2 in zip(a, b))
+
+
 def register_user_defined_sql_functions() -> None:
     # Register optional functions if we have the necessary dependencies
     # and otherwise register functions that will raise an exception with
@@ -174,18 +237,48 @@ def register_user_defined_sql_functions() -> None:
 
     _registered_function_creators["vector_functions"] = create_vector_functions
 
+    def create_numeric_functions(conn):
+        conn.create_function("divide", 2, lambda a, b: a / b, deterministic=True)
+        conn.create_function("bitwise_and", 2, lambda a, b: a & b, deterministic=True)
+        conn.create_function("bitwise_or", 2, lambda a, b: a | b, deterministic=True)
+        conn.create_function("bitwise_xor", 2, lambda a, b: a ^ b, deterministic=True)
+        conn.create_function(
+            "bitwise_rshift", 2, lambda a, b: a >> b, deterministic=True
+        )
+        conn.create_function(
+            "bitwise_lshift", 2, lambda a, b: a << b, deterministic=True
+        )
+        conn.create_function("int_hash_64", 1, sqlite_int_hash_64, deterministic=True)
+        conn.create_function(
+            "bit_hamming_distance", 2, sqlite_bit_hamming_distance, deterministic=True
+        )
+
+    _registered_function_creators["numeric_functions"] = create_numeric_functions
+
+    def sqlite_regexp_replace(string: str, pattern: str, replacement: str) -> str:
+        return re.sub(pattern, replacement, string)
+
     def create_string_functions(conn):
         conn.create_function("split", 2, sqlite_string_split, deterministic=True)
         conn.create_function("split", 3, sqlite_string_split, deterministic=True)
+        conn.create_function(
+            "regexp_replace", 3, sqlite_regexp_replace, deterministic=True
+        )
+        conn.create_function(
+            "byte_hamming_distance", 2, sqlite_byte_hamming_distance, deterministic=True
+        )
 
     _registered_function_creators["string_functions"] = create_string_functions
 
-    has_json_extension = functions_exist(["json_array_length"])
+    has_json_extension = functions_exist(["json_array_length", "json_array_contains"])
     if not has_json_extension:
 
         def create_json_functions(conn):
             conn.create_function(
                 "json_array_length", 1, py_json_array_length, deterministic=True
+            )
+            conn.create_function(
+                "json_array_contains", 3, py_json_array_contains, deterministic=True
             )
 
         _registered_function_creators["json_functions"] = create_json_functions
@@ -197,9 +290,9 @@ def adapt_datetime(val: datetime) -> str:
             val = val.astimezone(timezone.utc)
         except (OverflowError, ValueError, OSError):
             if val.year == MAXYEAR:
-                val = datetime.max
+                val = datetime.max.replace(tzinfo=timezone.utc)
             elif val.year == MINYEAR:
-                val = datetime.min
+                val = datetime.min.replace(tzinfo=timezone.utc)
             else:
                 raise
     return val.replace(tzinfo=None).isoformat(" ")
@@ -217,18 +310,44 @@ def path_name(path):
     return func.ltrim(func.substr(path, func.length(path_parent(path)) + 1), slash)
 
 
-def path_file_ext_length(path):
-    name = path_name(path)
+def name_file_ext_length(name):
     expr = func.length(name) - func.length(
         func.rtrim(name, func.replace(name, dot, empty_str))
     )
     return case((func.instr(name, dot) == 0, 0), else_=expr)
 
 
+def path_file_ext_length(path):
+    name = path_name(path)
+    return name_file_ext_length(name)
+
+
 def path_file_stem(path):
-    return func.rtrim(
-        func.substr(path, 1, func.length(path) - path_file_ext_length(path)), dot
+    path_length = func.length(path)
+    parent_length = func.length(path_parent(path))
+
+    name_expr = func.rtrim(
+        func.substr(
+            path,
+            1,
+            path_length - name_file_ext_length(path),
+        ),
+        dot,
     )
+
+    full_path_expr = func.ltrim(
+        func.rtrim(
+            func.substr(
+                path,
+                parent_length + 1,
+                path_length - parent_length - path_file_ext_length(path),
+            ),
+            dot,
+        ),
+        slash,
+    )
+
+    return case((func.instr(path, slash) == 0, name_expr), else_=full_path_expr)
 
 
 def path_file_ext(path):
@@ -273,12 +392,60 @@ def compile_euclidean_distance(element, compiler, **kwargs):
     return f"euclidean_distance({compiler.process(element.clauses, **kwargs)})"
 
 
+def compile_bitwise_and(element, compiler, **kwargs):
+    return compiler.process(func.bitwise_and(*element.clauses.clauses), **kwargs)
+
+
+def compile_bitwise_or(element, compiler, **kwargs):
+    return compiler.process(func.bitwise_or(*element.clauses.clauses), **kwargs)
+
+
+def compile_bitwise_xor(element, compiler, **kwargs):
+    return compiler.process(func.bitwise_xor(*element.clauses.clauses), **kwargs)
+
+
+def compile_bitwise_rshift(element, compiler, **kwargs):
+    return compiler.process(func.bitwise_rshift(*element.clauses.clauses), **kwargs)
+
+
+def compile_bitwise_lshift(element, compiler, **kwargs):
+    return compiler.process(func.bitwise_lshift(*element.clauses.clauses), **kwargs)
+
+
+def compile_int_hash_64(element, compiler, **kwargs):
+    return compiler.process(func.int_hash_64(*element.clauses.clauses), **kwargs)
+
+
+def compile_bit_hamming_distance(element, compiler, **kwargs):
+    return compiler.process(
+        func.bit_hamming_distance(*element.clauses.clauses), **kwargs
+    )
+
+
+def compile_byte_hamming_distance(element, compiler, **kwargs):
+    return compiler.process(
+        func.byte_hamming_distance(*element.clauses.clauses), **kwargs
+    )
+
+
 def py_json_array_length(arr):
     return len(orjson.loads(arr))
 
 
+def py_json_array_contains(arr, value, is_json):
+    if is_json:
+        value = orjson.loads(value)
+    return value in orjson.loads(arr)
+
+
 def compile_array_length(element, compiler, **kwargs):
     return compiler.process(func.json_array_length(*element.clauses.clauses), **kwargs)
+
+
+def compile_array_contains(element, compiler, **kwargs):
+    return compiler.process(
+        func.json_array_contains(*element.clauses.clauses), **kwargs
+    )
 
 
 def compile_string_length(element, compiler, **kwargs):
@@ -287,6 +454,14 @@ def compile_string_length(element, compiler, **kwargs):
 
 def compile_string_split(element, compiler, **kwargs):
     return compiler.process(func.split(*element.clauses.clauses), **kwargs)
+
+
+def compile_string_regexp_replace(element, compiler, **kwargs):
+    return f"regexp_replace({compiler.process(element.clauses, **kwargs)})"
+
+
+def compile_string_replace(element, compiler, **kwargs):
+    return compiler.process(func.replace(*element.clauses.clauses), **kwargs)
 
 
 def compile_greatest(element, compiler, **kwargs):
@@ -349,16 +524,63 @@ def compile_rand(element, compiler, **kwargs):
     return compiler.process(func.random(), **kwargs)
 
 
-def load_usearch_extension(conn) -> bool:
+def compile_avg(element, compiler, **kwargs):
+    return compiler.process(func.avg(*element.clauses.clauses), **kwargs)
+
+
+def compile_group_concat(element, compiler, **kwargs):
+    return compiler.process(func.aggregate_strings(*element.clauses.clauses), **kwargs)
+
+
+def compile_any_value(element, compiler, **kwargs):
+    # use bare column to return any value from the group,
+    # this is documented behavior for sqlite,
+    # see https://www.sqlite.org/lang_select.html#bare_columns_in_an_aggregate_query
+    return compiler.process(*element.clauses.clauses, **kwargs)
+
+
+def compile_collect(element, compiler, **kwargs):
+    return compiler.process(func.json_group_array(*element.clauses.clauses), **kwargs)
+
+
+@cache
+def usearch_sqlite_path() -> Optional[str]:
     try:
-        # usearch is part of the vector optional dependencies
-        # we use the extension's cosine and euclidean distance functions
-        from usearch import sqlite_path
+        import usearch
+    except ImportError:
+        return None
 
-        conn.enable_load_extension(True)
-        conn.load_extension(sqlite_path())
-        conn.enable_load_extension(False)
-        return True
+    with warnings.catch_warnings():
+        # usearch binary is not available for Windows, see: https://github.com/unum-cloud/usearch/issues/427.
+        # and, sometimes fail to download the binary in other platforms
+        # triggering UserWarning.
 
-    except Exception:  # noqa: BLE001
+        warnings.filterwarnings("ignore", category=UserWarning, module="usearch")
+
+        try:
+            return usearch.sqlite_path()
+        except FileNotFoundError:
+            return None
+
+
+def load_usearch_extension(conn: sqlite3.Connection) -> bool:
+    # usearch is part of the vector optional dependencies
+    # we use the extension's cosine and euclidean distance functions
+    ext_path = usearch_sqlite_path()
+    if ext_path is None:
         return False
+
+    try:
+        conn.enable_load_extension(True)
+    except AttributeError:
+        # sqlite3 module is not built with loadable extension support by default.
+        return False
+
+    try:
+        conn.load_extension(ext_path)
+    except sqlite3.OperationalError:
+        return False
+    else:
+        return True
+    finally:
+        conn.enable_load_extension(False)

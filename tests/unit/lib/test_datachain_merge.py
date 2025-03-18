@@ -1,12 +1,14 @@
 import math
 from typing import Optional
 
+import pandas as pd
 import pytest
 from pydantic import BaseModel
+from sqlalchemy import func
 
-from datachain.lib.dc import DataChain, DatasetMergeError
-from datachain.lib.signal_schema import SignalResolvingError
-from datachain.sql.types import Float, String
+from datachain.lib.dc import C, DataChain, DatasetMergeError
+from datachain.sql.types import Int, String
+from tests.utils import skip_if_not_sqlite
 
 
 class User(BaseModel):
@@ -41,20 +43,20 @@ team = [
     TeamMember(player="Alice", sport="volleyball", weight=120.3, height=5.5),
     TeamMember(player="Charlie", sport="football", weight=200.0, height=6.0),
     TeamMember(player="David", sport="football", weight=158.7, height=5.7),
+    TeamMember(player="John", sport="basketball", weight=250.3, height=7.0),
 ]
 
 
-def test_merge_objects(catalog):
-    ch1 = DataChain.from_values(emp=employees)
-    ch2 = DataChain.from_values(team=team)
+def test_merge_objects(test_session):
+    ch1 = DataChain.from_values(emp=employees, session=test_session)
+    ch2 = DataChain.from_values(team=team, session=test_session)
     ch = ch1.merge(ch2, "emp.person.name", "team.player")
 
-    str_default = String.default_value(catalog.warehouse.db.dialect)
-    float_default = Float.default_value(catalog.warehouse.db.dialect)
+    str_default = String.default_value(test_session.catalog.warehouse.db.dialect)
 
     i = 0
     j = 0
-    for items in ch.collect():
+    for items in ch.order_by("emp.person.name", "team.player").collect():
         assert len(items) == 2
 
         empl, player = items
@@ -72,22 +74,68 @@ def test_merge_objects(catalog):
         else:
             assert player.player == str_default
             assert player.sport == str_default
-            assert player.weight == float_default
-            assert player.height == float_default
+            assert pd.isnull(player.weight)
+            assert pd.isnull(player.height)
 
     assert i == len(employees)
-    assert j == len(team)
+    assert j == len(team) - 1
 
 
-def test_merge_similar_objects(catalog):
+@pytest.mark.parametrize("multiple_predicates", [True, False])
+def test_merge_objects_full_join(test_session, multiple_predicates):
+    ch1 = DataChain.from_values(emp=employees, session=test_session)
+    ch2 = DataChain.from_values(team=team, session=test_session)
+    if multiple_predicates:
+        ch = ch1.merge(
+            ch2,
+            ["emp.person.name", "emp.person.name"],
+            ["team.player", "team.player"],
+            full=True,
+        )
+    else:
+        ch = ch1.merge(ch2, "emp.person.name", "team.player", full=True)
+
+    str_default = String.default_value(test_session.catalog.warehouse.db.dialect)
+    int_default = Int.default_value(test_session.catalog.warehouse.db.dialect)
+
+    i = 0
+    for items in ch.order_by("emp.person.name", "team.player").collect():
+        assert len(items) == 2
+
+        empl, player = items
+        assert isinstance(empl, Employee)
+        assert isinstance(player, TeamMember)
+
+        if player.player == "John":
+            assert empl.person.name == str_default
+            assert empl.person.age == int_default
+            continue
+
+        if empl.person.name == "Bob":
+            assert player.player == str_default
+            assert player.sport == str_default
+            assert pd.isnull(player.weight)
+            assert pd.isnull(player.height)
+            continue
+
+        assert player.player == team[i].player
+        assert player.sport == team[i].sport
+        assert math.isclose(player.weight, team[i].weight, rel_tol=1e-7)
+        assert math.isclose(player.height, team[i].height, rel_tol=1e-7)
+        i += 1
+
+    assert i == len(employees) - 1 == len(team) - 1
+
+
+def test_merge_similar_objects(test_session):
     new_employees = [
         Employee(id=152, person=User(name="Bob", age=27)),
         Employee(id=201, person=User(name="Karl", age=18)),
         Employee(id=154, person=User(name="David", age=29)),
     ]
 
-    ch1 = DataChain.from_values(emp=employees)
-    ch2 = DataChain.from_values(emp=new_employees)
+    ch1 = DataChain.from_values(emp=employees, session=test_session)
+    ch2 = DataChain.from_values(emp=new_employees, session=test_session)
 
     rname = "qq"
     ch = ch1.merge(ch2, "emp.person.name", rname=rname)
@@ -102,17 +150,52 @@ def test_merge_similar_objects(catalog):
     assert len(list(ch_inner.collect())) == 2
 
 
-def test_merge_values(catalog):
+@skip_if_not_sqlite
+def test_merge_similar_objects_in_memory():
+    # Skip if not on SQLite, as in_memory databases are only supported on SQLite
+    new_employees = [
+        Employee(id=152, person=User(name="Bob", age=27)),
+        Employee(id=201, person=User(name="Karl", age=18)),
+        Employee(id=154, person=User(name="David", age=29)),
+    ]
+
+    ch1 = DataChain.from_values(emp=employees, in_memory=True)
+    # This should use the same session as above (in_memory=True automatically)
+    ch2 = DataChain.from_values(emp=new_employees)
+    assert ch1.session.catalog.in_memory is True
+    assert ch1.session.catalog.metastore.db.db_file == ":memory:"
+    assert ch1.session.catalog.warehouse.db.db_file == ":memory:"
+    assert ch2.session.catalog.in_memory is True
+    assert ch2.session.catalog.metastore.db.db_file == ":memory:"
+    assert ch2.session.catalog.warehouse.db.db_file == ":memory:"
+
+    rname = "qq"
+    ch = ch1.merge(ch2, "emp.person.name", rname=rname)
+    assert ch.session.catalog.in_memory is True
+    assert ch.session.catalog.metastore.db.db_file == ":memory:"
+    assert ch.session.catalog.warehouse.db.db_file == ":memory:"
+
+    assert list(ch.signals_schema.values.keys()) == ["sys", "emp", rname + "emp"]
+
+    empl = list(ch.collect())
+    assert len(empl) == 4
+    assert len(empl[0]) == 2
+
+    ch_inner = ch1.merge(ch2, "emp.person.name", rname=rname, inner=True)
+    assert len(list(ch_inner.collect())) == 2
+
+
+def test_merge_values(test_session):
     order_ids = [11, 22, 33, 44]
     order_descr = ["water", "water", "paper", "water"]
 
     delivery_ids = [11, 44]
     delivery_time = [24.0, 16.5]
 
-    float_default = Float.default_value(catalog.warehouse.db.dialect)
-
-    ch1 = DataChain.from_values(id=order_ids, descr=order_descr)
-    ch2 = DataChain.from_values(id=delivery_ids, time=delivery_time)
+    ch1 = DataChain.from_values(id=order_ids, descr=order_descr, session=test_session)
+    ch2 = DataChain.from_values(
+        id=delivery_ids, time=delivery_time, session=test_session
+    )
 
     ch = ch1.merge(ch2, "id")
 
@@ -135,7 +218,7 @@ def test_merge_values(catalog):
         assert name == order_descr[i]
         i += 1
 
-        if time != float_default:
+        if pd.notnull(time):
             assert id == delivery_ids[j]
             assert time == delivery_time[j]
             j += 1
@@ -144,7 +227,7 @@ def test_merge_values(catalog):
     assert j == len(delivery_ids)
 
 
-def test_merge_multi_conditions(catalog):
+def test_merge_multi_conditions(test_session):
     order_ids = [11, 22, 33, 44]
     order_name = ["water", "water", "paper", "water"]
     order_descr = ["still water", "still water", "white paper", "sparkling water"]
@@ -153,12 +236,14 @@ def test_merge_multi_conditions(catalog):
     delivery_name = ["water", "unknown"]
     delivery_time = [24.0, 16.5]
 
-    ch1 = DataChain.from_values(id=order_ids, name=order_name, descr=order_descr)
+    ch1 = DataChain.from_values(
+        id=order_ids, name=order_name, descr=order_descr, session=test_session
+    )
     ch2 = DataChain.from_values(
-        id=delivery_ids, d_name=delivery_name, time=delivery_time
+        id=delivery_ids, d_name=delivery_name, time=delivery_time, session=test_session
     )
 
-    ch = ch1.merge(ch2, ("id", "name"), ("id", "d_name"))
+    ch = ch1.merge(ch2, ("id", "name"), ("id", C("d_name")))
 
     res = list(ch.collect())
 
@@ -171,15 +256,27 @@ def test_merge_multi_conditions(catalog):
     assert success_ids == {11}
 
 
-def test_merge_errors(catalog):
-    ch1 = DataChain.from_values(emp=employees)
-    ch2 = DataChain.from_values(team=team)
+def test_merge_errors(test_session):
+    ch1 = DataChain.from_values(emp=employees, session=test_session)
+    ch2 = DataChain.from_values(team=team, session=test_session)
 
-    with pytest.raises(SignalResolvingError):
+    with pytest.raises(DatasetMergeError):
         ch1.merge(ch2, "unknown")
 
+    with pytest.raises(DatasetMergeError):
+        ch1.merge(ch2, ["emp.person.name"], "unknown")
+
+    with pytest.raises(DatasetMergeError):
+        ch1.merge(ch2, ["emp.person.name"], ["unknown"])
+
+    with pytest.raises(DatasetMergeError):
+        ch1.merge(
+            ch2, ("emp.person.age", func.substr(["emp.person.name"], 2)), "unknown"
+        )
+
     ch1.merge(ch2, ["emp.person.name"], ["team.sport"])
     ch1.merge(ch2, ["emp.person.name"], ["team.sport"])
+
     with pytest.raises(DatasetMergeError):
         ch1.merge(ch2, ["emp.person.name"], ["team.player", "team.sport"])
 
@@ -190,15 +287,57 @@ def test_merge_errors(catalog):
         ch1.merge(ch2, "emp.person.name", True)
 
 
-def test_merge_with_itself(catalog):
-    ch = DataChain.from_values(emp=employees)
+def test_merge_with_itself(test_session):
+    ch = DataChain.from_values(emp=employees, session=test_session)
     merged = ch.merge(ch, "emp.id")
 
     count = 0
-    for left, right in merged.collect():
+    for left, right in merged.order_by("emp.id").collect():
         assert isinstance(left, Employee)
         assert isinstance(right, Employee)
         assert left == right == employees[count]
         count += 1
 
     assert count == len(employees)
+
+
+def test_merge_with_itself_column(test_session):
+    ch = DataChain.from_values(emp=employees, session=test_session)
+    merged = ch.merge(ch, C("emp.id"))
+
+    count = 0
+    for left, right in merged.order_by("emp.id").collect():
+        assert isinstance(left, Employee)
+        assert isinstance(right, Employee)
+        assert left == right == employees[count]
+        count += 1
+
+    assert count == len(employees)
+
+
+def test_merge_on_expression(test_session):
+    def _get_expr(dc):
+        c = dc.c("team.sport")
+        return func.substr(c, func.length(c) - 3)
+
+    dc = DataChain.from_values(team=team, session=test_session)
+    right_dc = dc.clone()
+
+    # cross join on "ball" from sport
+    merged = dc.merge(right_dc, on=_get_expr(dc), right_on=_get_expr(right_dc))
+
+    cross_team = [
+        (left_member, right_member) for left_member in team for right_member in team
+    ]
+
+    merged.show()
+    count = 0
+    for left, right_dc in merged.order_by("team.player", "right_team.player").collect():
+        assert isinstance(left, TeamMember)
+        assert isinstance(right_dc, TeamMember)
+        left_member, right_member = cross_team[count]
+        assert left == left_member
+        assert right_dc == right_member
+        count += 1
+
+    assert count == len(team) * len(team)

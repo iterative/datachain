@@ -1,21 +1,26 @@
 import asyncio
-from collections.abc import Awaitable, Coroutine, Iterable
-from concurrent.futures import ThreadPoolExecutor
-from heapq import heappop, heappush
-from typing import (
-    Any,
-    Callable,
-    Generic,
-    Optional,
-    TypeVar,
+import threading
+from collections.abc import (
+    AsyncIterable,
+    Awaitable,
+    Coroutine,
+    Generator,
+    Iterable,
+    Iterator,
 )
+from concurrent.futures import ThreadPoolExecutor, wait
+from heapq import heappop, heappush
+from typing import Any, Callable, Generic, Optional, TypeVar
 
 from fsspec.asyn import get_loop
+
+from datachain.utils import safe_closing
 
 ASYNC_WORKERS = 20
 
 InputT = TypeVar("InputT", contravariant=True)  # noqa: PLC0105
 ResultT = TypeVar("ResultT", covariant=True)  # noqa: PLC0105
+T = TypeVar("T")
 
 
 class AsyncMapper(Generic[InputT, ResultT]):
@@ -52,6 +57,8 @@ class AsyncMapper(Generic[InputT, ResultT]):
         self.loop = get_loop() if loop is None else loop
         self.pool = ThreadPoolExecutor(workers)
         self._tasks: set[asyncio.Task] = set()
+        self._shutdown_producer = threading.Event()
+        self._producer_is_shutdown = threading.Event()
 
     def start_task(self, coro: Coroutine) -> asyncio.Task:
         task = self.loop.create_task(coro)
@@ -59,9 +66,36 @@ class AsyncMapper(Generic[InputT, ResultT]):
         task.add_done_callback(self._tasks.discard)
         return task
 
+    def _produce(self) -> None:
+        try:
+            with safe_closing(self.iterable):
+                for item in self.iterable:
+                    if self._shutdown_producer.is_set():
+                        return
+                    coro = self.work_queue.put(item)
+                    fut = asyncio.run_coroutine_threadsafe(coro, self.loop)
+                    fut.result()  # wait until the item is in the queue
+        finally:
+            self._producer_is_shutdown.set()
+
     async def produce(self) -> None:
-        for item in self.iterable:
-            await self.work_queue.put(item)
+        await self.to_thread(self._produce)
+
+    def shutdown_producer(self) -> None:
+        """
+        Signal the producer to stop and drain any remaining items from the work_queue.
+
+        This method sets an internal event, `_shutdown_producer`, which tells the
+        producer that it should stop adding items to the queue. To ensure that the
+        producer notices this signal promptly, we also attempt to drain any items
+        currently in the queue, clearing it so that the event can be checked without
+        delay.
+        """
+        self._shutdown_producer.set()
+        q = self.work_queue
+        while not q.empty():
+            q.get_nowait()
+            q.task_done()
 
     async def worker(self) -> None:
         while (item := await self.work_queue.get()) is not None:
@@ -137,7 +171,7 @@ class AsyncMapper(Generic[InputT, ResultT]):
             self.result_queue.get_nowait()
         await self.result_queue.put(None)
 
-    def iterate(self, timeout=None) -> Iterable[ResultT]:
+    def iterate(self, timeout=None) -> Generator[ResultT, None, None]:
         init = asyncio.run_coroutine_threadsafe(self.init(), self.loop)
         init.result(timeout=1)
         async_run = asyncio.run_coroutine_threadsafe(self.run(), self.loop)
@@ -150,8 +184,11 @@ class AsyncMapper(Generic[InputT, ResultT]):
             if exc := async_run.exception():
                 raise exc
         finally:
+            self.shutdown_producer()
             if not async_run.done():
                 async_run.cancel()
+                wait([async_run])
+            self._producer_is_shutdown.wait()
 
     def __iter__(self):
         return self.iterate()
@@ -224,3 +261,23 @@ class OrderedMapper(AsyncMapper[InputT, ResultT]):
     async def _break_iteration(self) -> None:
         self.heap = []
         self._push_result(self._next_yield, None)
+
+
+def iter_over_async(ait: AsyncIterable[T], loop) -> Iterator[T]:
+    """Wrap an asynchronous iterator into a synchronous one"""
+    ait = ait.__aiter__()
+
+    # helper async fn that just gets the next element from the async iterator
+    async def get_next():
+        try:
+            obj = await ait.__anext__()
+            return False, obj
+        except StopAsyncIteration:
+            return True, None
+
+    # actual sync iterator
+    while True:
+        done, obj = asyncio.run_coroutine_threadsafe(get_next(), loop).result()
+        if done:
+            break
+        yield obj

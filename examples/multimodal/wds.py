@@ -1,42 +1,44 @@
-from datachain import C, DataChain
+import os
+
+from datachain import DataChain
+from datachain.func import path
 from datachain.lib.webdataset import process_webdataset
 from datachain.lib.webdataset_laion import WDSLaion, process_laion_meta
 
-wds = (
-    DataChain.from_storage("gs://datachain-demo/datacomp-small/shards")
-    .filter(C("file.name").glob("00000000.tar"))
+IMAGE_TARS = os.getenv(
+    "IMAGE_TARS", "gs://datachain-demo/datacomp-small/shards/000000[0-5]*.tar"
+)
+PARQUET_METADATA = os.getenv(
+    "PARQUET_METADATA", "gs://datachain-demo/datacomp-small/metadata/0020f*.parquet"
+)
+NPZ_METADATA = os.getenv(
+    "NPZ_METADATA", "gs://datachain-demo/datacomp-small/metadata/0020f*.npz"
+)
+
+wds_images = (
+    DataChain.from_storage(IMAGE_TARS, type="image")
     .settings(cache=True)
     .gen(laion=process_webdataset(spec=WDSLaion), params="file")
-    .save()  # materialize chain to avoid downloading data multiple times
 )
 
-meta_pq = (
-    DataChain.from_parquet("gs://datachain-demo/datacomp-small/metadata/0020f*.parquet")
-    .filter(
-        C("uid").in_(values[0] for values in wds.select("laion.json.uid").collect())
-    )
-    .map(stem=lambda file: file.get_file_stem(), params=["source.file"], output=str)
-    .save()
+wds_with_pq = (
+    DataChain.from_parquet(PARQUET_METADATA)
+    .settings(cache=True)
+    .merge(wds_images, on="uid", right_on="laion.json.uid", inner=True)
 )
 
-meta_emd = (
-    DataChain.from_storage("gs://datachain-demo/datacomp-small/metadata/0020f*.npz")
+wds_npz = (
+    DataChain.from_storage(NPZ_METADATA)
+    .settings(cache=True)
     .gen(emd=process_laion_meta)
-    .filter(
-        C("emd.index").in_(
-            values[0] for values in meta_pq.select("source.index").collect()
-        )
-    )
-    .map(stem=lambda file: file.get_file_stem(), params=["emd.file"], output=str)
 )
 
 
-meta = meta_emd.merge(
-    meta_pq,
-    on=["stem", "emd.index"],
-    right_on=["stem", "source.index"],
-)
+res = wds_npz.merge(
+    wds_with_pq,
+    on=[path.file_stem(wds_npz.c("emd.file.path")), "emd.index"],
+    right_on=[path.file_stem(wds_with_pq.c("source.file.path")), "source.index"],
+    inner=True,
+).save("wds")
 
-res = wds.merge(meta, on="laion.json.uid", right_on="uid")
-
-res.show(3)
+res.show(5)

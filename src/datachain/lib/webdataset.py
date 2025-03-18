@@ -1,6 +1,6 @@
-import hashlib
 import json
 import tarfile
+import warnings
 from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import (
@@ -16,8 +16,21 @@ from typing import (
 from pydantic import Field
 
 from datachain.lib.data_model import DataModel
-from datachain.lib.file import File, TarVFile
+from datachain.lib.file import File
+from datachain.lib.tar import build_tar_member
 from datachain.lib.utils import DataChainError
+
+# The `json` method of the Pydantic `BaseModel` class has been deprecated
+# and will be removed in Pydantic v3. For more details, see:
+# https://github.com/pydantic/pydantic/issues/10033
+# Until then, we can ignore the warning.
+warnings.filterwarnings(
+    "ignore",
+    category=UserWarning,
+    message=(
+        'Field name "json" in "WDSAllFile" shadows an attribute in parent "WDSBasic"'
+    ),
+)
 
 
 class WDSError(DataChainError):
@@ -119,7 +132,7 @@ class Builder:
         return self._tar.extractfile(item).read().decode(self._encoding)
 
     def add(self, file: tarfile.TarInfo):
-        fstream = File(name=file.name)
+        fstream = File(path=file.name)
         ext = fstream.get_file_ext()
         stem = fstream.get_file_stem()
 
@@ -163,34 +176,10 @@ class Builder:
                 self._tar_stream, self._core_extensions, self.state.stem
             )
 
-        file = self.build_file_record()
+        file = build_tar_member(self._tar_stream, self.state.core_file)
         wds = self._wds_class(**self.state.data | {"file": file})
         self.state = BuilderState()
         return wds
-
-    def build_file_record(self):
-        new_parent = self._tar_stream.get_full_name()
-        core_file = self.state.core_file
-        etag_string = "-".join(
-            [self._tar_stream.etag, core_file.name, str(core_file.mtime)]
-        )
-        etag = hashlib.md5(etag_string.encode(), usedforsecurity=False).hexdigest()
-        return File(
-            name=core_file.name,
-            source=self._tar_stream.source,
-            parent=new_parent,
-            version=self._tar_stream.version,
-            size=core_file.size,
-            etag=etag,
-            location=[
-                {
-                    "vtype": TarVFile.get_vtype(),
-                    "parent": self._tar_stream.model_dump_custom(),
-                    "size": core_file.size,
-                    "offset": core_file.offset_data,
-                }
-            ],
-        )
 
     def _get_type(self, ext):
         field = self._wds_class.model_fields.get(ext, None)
@@ -203,39 +192,6 @@ class Builder:
             anno = args[0]
 
         return anno
-
-
-class TarStream(File):
-    @staticmethod
-    def to_text(data):
-        return data.decode("utf-8")
-
-    _DATA_CONVERTERS: ClassVar[dict[type, Any]] = {
-        str: lambda data: TarStream.to_text(data),
-        int: lambda data: int(TarStream.to_text(data)),
-        float: lambda data: float(TarStream.to_text(data)),
-        bytes: lambda data: data,
-        dict: lambda data: json.loads(TarStream.to_text(data)),
-    }
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self._tar = None
-
-    def open(self):
-        self._tar = tarfile.open(fileobj=super().open())
-        return self
-
-    def getmembers(self) -> list[tarfile.TarInfo]:
-        return self._tar.getmembers()
-
-    def read_member(self, member: tarfile.TarInfo, type):
-        fd = self._tar.extractfile(member)
-        data = fd.read()
-        converter = self._DATA_CONVERTERS.get(type, None)
-        if not converter:
-            raise ValueError("")
-        return converter(data)
 
 
 def get_tar_groups(stream, tar, core_extensions, spec, encoding="utf-8"):

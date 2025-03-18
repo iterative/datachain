@@ -1,16 +1,15 @@
 import asyncio
 import json
 import os
-import posixpath
 from collections.abc import Iterable
 from datetime import datetime
 from typing import Any, Optional, cast
 
 from dateutil.parser import isoparse
 from gcsfs import GCSFileSystem
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
-from datachain.node import Entry
+from datachain.lib.file import File
 
 from .fsspec import DELIMITER, Client, ResultQueue
 
@@ -31,7 +30,25 @@ class GCSClient(Client):
         if kwargs.pop("anon", False):
             kwargs["token"] = "anon"  # noqa: S105
 
-        return cast(GCSFileSystem, super().create_fs(**kwargs))
+        return cast("GCSFileSystem", super().create_fs(**kwargs))
+
+    def url(self, path: str, expires: int = 3600, **kwargs) -> str:
+        """
+        Generate a signed URL for the given path.
+        If the client is anonymous, a public URL is returned instead
+        (see https://cloud.google.com/storage/docs/access-public-data#api-link).
+        """
+        version_id = kwargs.pop("version_id", None)
+        content_disposition = kwargs.pop("content_disposition", None)
+        if self.fs.storage_options.get("token") == "anon":
+            query = f"?generation={version_id}" if version_id else ""
+            return f"https://storage.googleapis.com/{self.name}/{path}{query}"
+        return self.fs.sign(
+            self.get_full_path(path, version_id),
+            expiration=expires,
+            response_disposition=content_disposition,
+            **kwargs,
+        )
 
     @staticmethod
     def parse_timestamp(timestamp: str) -> datetime:
@@ -70,7 +87,7 @@ class GCSClient(Client):
         self, page_queue: PageQueue, result_queue: ResultQueue
     ) -> bool:
         found = False
-        with tqdm(desc=f"Listing {self.uri}", unit=" objects") as pbar:
+        with tqdm(desc=f"Listing {self.uri}", unit=" objects", leave=False) as pbar:
             while (page := await page_queue.get()) is not None:
                 if page:
                     found = True
@@ -108,25 +125,21 @@ class GCSClient(Client):
         finally:
             await page_queue.put(None)
 
-    def _entry_from_dict(self, d: dict[str, Any]) -> Entry:
+    def _entry_from_dict(self, d: dict[str, Any]) -> File:
         info = self.fs._process_object(self.name, d)
-        full_path = info["name"]
-        subprefix = self.rel_path(full_path)
-        parent = posixpath.dirname(subprefix)
-        return self.convert_info(info, parent)
+        return self.info_to_file(info, self.rel_path(info["name"]))
 
-    def convert_info(self, v: dict[str, Any], parent: str) -> Entry:
-        name = v.get("name", "").split(DELIMITER)[-1]
-        if "generation" in v:
-            gen = f"#{v['generation']}"
-            if name.endswith(gen):
-                name = name[: -len(gen)]
-        return Entry.from_file(
-            parent=parent,
-            name=name,
+    def info_to_file(self, v: dict[str, Any], path: str) -> File:
+        return File(
+            source=self.uri,
+            path=path,
             etag=v.get("etag", ""),
             version=v.get("generation", ""),
             is_latest=not v.get("timeDeleted"),
             last_modified=self.parse_timestamp(v["updated"]),
             size=v.get("size", ""),
         )
+
+    @classmethod
+    def version_path(cls, path: str, version_id: Optional[str]) -> str:
+        return f"{path}#{version_id}" if version_id else path

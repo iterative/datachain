@@ -31,12 +31,23 @@ def adapt_array(arr):
     return orjson.dumps(arr).decode("utf-8")
 
 
+def adapt_dict(dct):
+    return orjson.dumps(dct).decode("utf-8")
+
+
 def convert_array(arr):
     return orjson.loads(arr)
 
 
 def adapt_np_array(arr):
-    return orjson.dumps(arr, option=orjson.OPT_SERIALIZE_NUMPY).decode("utf-8")
+    def _json_serialize(obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return obj
+
+    return orjson.dumps(
+        arr, option=orjson.OPT_SERIALIZE_NUMPY, default=_json_serialize
+    ).decode("utf-8")
 
 
 def adapt_np_generic(val):
@@ -45,6 +56,7 @@ def adapt_np_generic(val):
 
 def register_type_converters():
     sqlite3.register_adapter(list, adapt_array)
+    sqlite3.register_adapter(dict, adapt_dict)
     sqlite3.register_converter("ARRAY", convert_array)
     if numpy_imported:
         sqlite3.register_adapter(np.ndarray, adapt_np_array)

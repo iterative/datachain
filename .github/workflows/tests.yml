@@ -17,23 +17,26 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-
       - name: Check out the repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
       - name: Set up Python 3.9
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
-          cache: 'pip'
 
-      - name: Upgrade nox and uv
-        run: |
-          python -m pip install --upgrade 'nox[uv]'
-          nox --version
-          uv --version
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-suffix: lint
+          cache-dependency-glob: pyproject.toml
+
+      - name: Install nox
+        run: uv pip install nox --system
 
       - name: Cache mypy
         uses: actions/cache@v4
@@ -51,40 +54,47 @@ jobs:
         run: nox -s lint
 
   datachain:
-    timeout-minutes: 25
+    timeout-minutes: 40
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest-8-cores]
-        pyv: ['3.9', '3.10', '3.11', '3.12']
+        pyv: ['3.9', '3.10', '3.11', '3.12', '3.13']
         include:
           - os: macos-latest
             pyv: '3.9'
           - os: macos-latest
-            pyv: '3.12'
-          - os: windows-latest-8-cores
+            pyv: '3.13'
+          - os: windows-latest
             pyv: '3.9'
-          - os: windows-latest-8-cores
-            pyv: '3.12'
+          - os: windows-latest
+            pyv: '3.13'
 
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
+
+      - name: Set up FFmpeg
+        uses: AnimMouse/setup-ffmpeg@v1
 
       - name: Set up Python ${{ matrix.pyv }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.pyv }}
-          cache: 'pip'
 
-      - name: Upgrade nox and uv
-        run: |
-          python -m pip install --upgrade 'nox[uv]'
-          nox --version
-          uv --version
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-suffix: tests-${{ matrix.pyv }}
+          cache-dependency-glob: pyproject.toml
+
+      - name: Install nox
+        run: uv pip install nox --system
 
       - name: Skip flaky azure, gs remotes on macOS
         if: runner.os == 'macOS'
@@ -95,11 +105,15 @@ jobs:
         run: echo 'DISABLE_REMOTES_ARG=--disable-remotes=azure,gs' >> $env:GITHUB_ENV
 
       - name: Run tests
-        run: nox -s tests-${{ matrix.pyv }} -- $DISABLE_REMOTES_ARG
+        run: nox -s tests-${{ matrix.pyv }} -- -m "not e2e and not examples" $DISABLE_REMOTES_ARG
+        shell: bash
+
+      - name: Run E2E tests
+        run: nox -s e2e-${{ matrix.pyv }}
         shell: bash
 
       - name: Upload coverage report
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.xml
@@ -111,72 +125,57 @@ jobs:
       - name: Build docs
         run: nox -s docs
 
-
-  studio:
-    if: '!github.event.pull_request.head.repo.fork'
-    runs-on: ubuntu-latest-16-cores
+  examples:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     strategy:
+      fail-fast: false
       matrix:
-        pyv: ['3.12']
-        group: [1, 2, 3, 4, 5, 6]
-    services:
-      postgres:
-        image: postgres:16.3
-        ports:
-          - 5432:5432
-        env:
-          POSTGRES_USER: test
-          POSTGRES_DB: database
-          POSTGRES_HOST_AUTH_METHOD: trust
-      clickhouse:
-        image: clickhouse/clickhouse-server:24
-        ports:
-          - 8123:8123
-          - 9010:9000
-        env:
-          CLICKHOUSE_DB: studio_local_db
-          CLICKHOUSE_USER: studio_local
-          CLICKHOUSE_PASSWORD: ch123456789!
-          CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
-      redis:
-        image: redis:7.2.5
-        ports:
-          - 6379:6379
+        os: [ubuntu-latest, windows-latest]
+        pyv: ['3.9', '3.13']
+        group: ['get_started', 'computer_vision', 'multimodal']
+        exclude:
+          - {os: ubuntu-latest, pyv: '3.9', group: 'multimodal'}
+          - {os: ubuntu-latest, pyv: '3.13', group: 'multimodal'}
+        include:
+          # HF runs against actual API - thus run it only once
+          - {os: ubuntu-latest, pyv: "3.13", group: llm_and_nlp}
+          - {os: ubuntu-latest-4-cores, pyv: "3.9", group: multimodal}
+          - {os: ubuntu-latest-4-cores, pyv: "3.13", group: multimodal}
+
     steps:
-
-      - name: Check out Studio
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-          repository: iterative/studio
-          ref: develop
-          token: ${{ secrets.ITERATIVE_STUDIO_READ_ACCESS_TOKEN }}
-
-      - name: Check out repository
-        uses: actions/checkout@v4
-        with:
-          path: './backend/datachain'
-          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
       - name: Set up Python ${{ matrix.pyv }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.pyv }}
-          cache: 'pip'
 
-      - name: Install uv
-        run: |
-          python -m pip install --upgrade uv
-          uv --version
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-suffix: examples-${{ matrix.pyv }}
+          cache-dependency-glob: pyproject.toml
 
-      - name: Install dependencies
-        run: uv pip install --system ./backend/datachain_server[tests] ./backend/datachain[tests]
+      - name: Install nox
+        run: uv pip install nox --system
 
-      - name: Run tests
-        # Generate `.test_durations` file with `pytest --store-durations --durations-path ../.github/.test_durations ...`
-        run: >
-          pytest
-          --config-file=pyproject.toml -rs
-          --splits=6 --group=${{ matrix.group }} --durations-path=../../.github/.test_durations
-          tests ../datachain/tests
-        working-directory: backend/datachain_server
+      - name: Set hf token
+        if: matrix.group == 'llm_and_nlp'
+        run: echo 'HF_TOKEN=${{ secrets.HF_TOKEN }}' >> "$GITHUB_ENV"
+
+      - name: Run examples
+        run: nox -s examples -p ${{ matrix.pyv }} -- -m "${{ matrix.group }}"
+
+  check:
+    if: always()
+    needs: [lint, datachain, examples]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: re-actors/alls-green@release/v1
+        with:
+          allowed-failures: examples
+          jobs: ${{ toJSON(needs) }}

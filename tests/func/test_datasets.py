@@ -1,31 +1,28 @@
+import posixpath
 import uuid
-from json import dumps
 from unittest.mock import ANY
 
 import pytest
 import sqlalchemy as sa
-from dateutil.parser import isoparse
 
-from datachain.catalog.catalog import DATASET_INTERNAL_ERROR_MESSAGE
-from datachain.data_storage.sqlite import SQLiteWarehouse
+from datachain.data_storage.schema import DataTable
 from datachain.dataset import DatasetDependencyType, DatasetStatus
-from datachain.error import DatasetInvalidVersionError, DatasetNotFoundError
-from datachain.query import DatasetQuery, udf
-from datachain.query.schema import DatasetRow
-from datachain.sql.types import (
-    JSON,
-    Array,
-    Binary,
-    Boolean,
-    Float,
-    Float32,
-    Float64,
-    Int,
-    Int32,
-    Int64,
-    String,
+from datachain.error import (
+    DatasetInvalidVersionError,
+    DatasetNotFoundError,
+    DatasetVersionNotFoundError,
 )
+from datachain.lib.dc import DataChain
+from datachain.lib.file import File
+from datachain.lib.listing import parse_listing_uri
+from datachain.query.dataset import DatasetQuery
+from datachain.sql.types import Float32, Int, Int64
 from tests.utils import assert_row_names, dataset_dependency_asdict
+
+FILE_SCHEMA = {
+    f"file__{name}": _type if _type != Int else Int64
+    for name, _type in File._datachain_column_types.items()
+}
 
 
 def add_column(engine, table_name, column, catalog):
@@ -55,11 +52,11 @@ def test_create_dataset_no_version_specified(cloud_test_catalog, create_rows):
     dataset_version = dataset.get_version(1)
 
     assert dataset.name == name
-    assert dataset.query_script == "script"
     assert dataset_version.query_script == "script"
     assert dataset.schema["similarity"] == Float32
     assert dataset_version.schema["similarity"] == Float32
     assert dataset_version.status == DatasetStatus.PENDING
+    assert dataset_version.uuid
     assert dataset.status == DatasetStatus.CREATED  # dataset status is deprecated
     if create_rows:
         assert dataset_version.num_objects == 0
@@ -85,11 +82,11 @@ def test_create_dataset_with_explicit_version(cloud_test_catalog, create_rows):
     dataset_version = dataset.get_version(1)
 
     assert dataset.name == name
-    assert dataset.query_script == "script"
     assert dataset_version.query_script == "script"
     assert dataset.schema["similarity"] == Float32
     assert dataset_version.schema["similarity"] == Float32
     assert dataset_version.status == DatasetStatus.PENDING
+    assert dataset_version.uuid
     assert dataset.status == DatasetStatus.CREATED
     if create_rows:
         assert dataset_version.num_objects == 0
@@ -183,10 +180,48 @@ def test_create_dataset_from_sources(listed_bucket, cloud_test_catalog):
     assert dataset_version.error_stack == ""
     assert dataset_version.script_output == ""
     assert dataset_version.sources == f"{src_uri}/dogs/*"
+    assert dataset_version.uuid
 
     dr = catalog.warehouse.schema.dataset_row_cls
     sys_schema = {c.name: type(c.type) for c in dr.sys_columns()}
-    default_dataset_schema = DatasetRow.schema | sys_schema
+    default_dataset_schema = FILE_SCHEMA | sys_schema
+    assert dataset.schema == default_dataset_schema
+    assert dataset.query_script == ""
+
+    assert dataset_version.schema == default_dataset_schema
+    assert dataset_version.query_script == ""
+    assert dataset_version.num_objects
+    assert dataset_version.preview
+
+
+def test_create_dataset_from_sources_dataset(cloud_test_catalog, dogs_dataset):
+    dataset_name = uuid.uuid4().hex
+    catalog = cloud_test_catalog.catalog
+
+    dataset = catalog.create_dataset_from_sources(
+        dataset_name, [f"ds://{dogs_dataset.name}"], recursive=True
+    )
+
+    dataset_version = dataset.get_version(dataset.latest_version)
+
+    assert dataset.name == dataset_name
+    assert dataset.description is None
+    assert dataset.versions_values == [1]
+    assert dataset.labels == []
+    assert dataset.status == DatasetStatus.COMPLETE
+
+    assert dataset_version.status == DatasetStatus.COMPLETE
+    assert dataset_version.created_at
+    assert dataset_version.finished_at
+    assert dataset_version.error_message == ""
+    assert dataset_version.error_stack == ""
+    assert dataset_version.script_output == ""
+    assert dataset_version.sources == f"ds://{dogs_dataset.name}"
+    assert dataset_version.uuid
+
+    dr = catalog.warehouse.schema.dataset_row_cls
+    sys_schema = {c.name: type(c.type) for c in dr.sys_columns()}
+    default_dataset_schema = FILE_SCHEMA | sys_schema
     assert dataset.schema == default_dataset_schema
     assert dataset.query_script == ""
 
@@ -212,8 +247,8 @@ def test_create_dataset_from_sources_failed(listed_bucket, cloud_test_catalog, m
     catalog = cloud_test_catalog.catalog
     # Mocks are automatically undone at the end of a test.
     mocker.patch.object(
-        catalog.warehouse.__class__,
-        "create_dataset_rows_table",
+        catalog.__class__,
+        "listings",
         side_effect=RuntimeError("Error"),
     )
     with pytest.raises(RuntimeError):
@@ -221,27 +256,8 @@ def test_create_dataset_from_sources_failed(listed_bucket, cloud_test_catalog, m
             dataset_name, [f"{src_uri}/dogs/*"], recursive=True
         )
 
-    dataset = catalog.get_dataset(dataset_name)
-    dataset_version = dataset.get_version(dataset.latest_version)
-
-    assert dataset.name == dataset_name
-    assert dataset.status == DatasetStatus.FAILED
-    assert dataset.versions_values == [1]
-    assert dataset.created_at
-    assert dataset.finished_at
-    assert dataset.error_message == DATASET_INTERNAL_ERROR_MESSAGE
-    assert dataset.error_stack
-    assert dataset.query_script == ""
-
-    assert dataset_version.status == DatasetStatus.FAILED
-    assert dataset_version.created_at
-    assert dataset_version.finished_at
-    assert dataset_version.error_message == DATASET_INTERNAL_ERROR_MESSAGE
-    assert dataset_version.error_stack
-    assert dataset_version.sources == f"{src_uri}/dogs/*"
-    assert dataset_version.num_objects is None
-    assert dataset_version.size is None
-    assert dataset_version.preview is None
+    with pytest.raises(DatasetNotFoundError):
+        catalog.get_dataset(dataset_name)
 
 
 def test_create_dataset_whole_bucket(listed_bucket, cloud_test_catalog):
@@ -268,7 +284,6 @@ def test_create_dataset_whole_bucket(listed_bucket, cloud_test_catalog):
     }
 
     assert_row_names(catalog, ds1, ds1.latest_version, expected_rows)
-
     assert_row_names(catalog, ds2, ds2.latest_version, expected_rows)
 
 
@@ -443,7 +458,7 @@ def test_registering_dataset_invalid_source_version(
 ):
     catalog = cloud_test_catalog.catalog
 
-    with pytest.raises(ValueError) as exc_info:
+    with pytest.raises(DatasetVersionNotFoundError) as exc_info:
         catalog.register_dataset(
             dogs_dataset,
             5,
@@ -595,7 +610,10 @@ def test_edit_dataset_remove_labels_and_description(cloud_test_catalog, dogs_dat
 def test_ls_dataset_rows(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
 
-    assert {r["name"] for r in catalog.ls_dataset_rows(dogs_dataset.name, 1)} == {
+    assert {
+        posixpath.basename(r["file__path"])
+        for r in catalog.ls_dataset_rows(dogs_dataset.name, 1)
+    } == {
         "dog1",
         "dog2",
         "dog3",
@@ -615,7 +633,7 @@ def test_ls_dataset_rows_with_limit_offset(cloud_test_catalog, dogs_dataset):
     )
 
     assert {
-        r["name"]
+        r["file__path"]
         for r in catalog.ls_dataset_rows(
             dogs_dataset.name,
             1,
@@ -623,33 +641,14 @@ def test_ls_dataset_rows_with_limit_offset(cloud_test_catalog, dogs_dataset):
             limit=1,
         )
     } == {
-        all_rows[2]["name"],
+        all_rows[2]["file__path"],
     }
 
 
-def test_ls_dataset_rows_with_custom_columns(cloud_test_catalog, dogs_dataset):
+def test_ls_dataset_rows_with_custom_columns(cloud_test_catalog):
     catalog = cloud_test_catalog.catalog
     int_example = 25
 
-    @udf(
-        (),
-        {
-            "int_col": Int,
-            "int_col_32": Int32,
-            "int_col_64": Int64,
-            "float_col": Float,
-            "float_col_32": Float32,
-            "float_col_64": Float64,
-            "array_col": Array(Float),
-            "array_col_nested": Array(Array(Float)),
-            "array_col_32": Array(Float32),
-            "array_col_64": Array(Float64),
-            "string_col": String,
-            "bool_col": Boolean,
-            "json_col": JSON,
-            "binary_col": Binary,
-        },
-    )
     def test_types():
         return (
             5,
@@ -664,13 +663,34 @@ def test_ls_dataset_rows_with_custom_columns(cloud_test_catalog, dogs_dataset):
             [0.5],
             "s",
             True,
-            dumps({"a": 1}),
+            {"a": 1},
             int_example.to_bytes(2, "big"),
         )
 
     (
-        DatasetQuery(name=dogs_dataset.name, catalog=catalog)
-        .add_signals(test_types)
+        DataChain.from_storage(
+            cloud_test_catalog.src_uri, session=cloud_test_catalog.session
+        )
+        .map(
+            test_types,
+            params=[],
+            output={
+                "int_col": int,
+                "int_col_32": int,
+                "int_col_64": int,
+                "float_col": float,
+                "float_col_32": float,
+                "float_col_64": float,
+                "array_col": list[float],
+                "array_col_nested": list[list[float]],
+                "array_col_32": list[float],
+                "array_col_64": list[float],
+                "string_col": str,
+                "bool_col": bool,
+                "json_col": dict,
+                "binary_col": bytes,
+            },
+        )
         .save("dogs_custom_columns")
     )
 
@@ -687,7 +707,7 @@ def test_ls_dataset_rows_with_custom_columns(cloud_test_catalog, dogs_dataset):
         assert r["array_col_64"] == [0.5]
         assert r["string_col"] == "s"
         assert r["bool_col"]
-        assert r["json_col"] == dumps({"a": 1})
+        assert r["json_col"] == {"a": 1}
         assert r["binary_col"] == int_example.to_bytes(2, "big")
 
 
@@ -695,25 +715,6 @@ def test_dataset_preview_custom_columns(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
     int_example = 25
 
-    @udf(
-        (),
-        {
-            "int_col": Int,
-            "int_col_32": Int32,
-            "int_col_64": Int64,
-            "float_col": Float,
-            "float_col_32": Float32,
-            "float_col_64": Float64,
-            "array_col": Array(Float),
-            "array_col_nested": Array(Array(Float)),
-            "array_col_32": Array(Float32),
-            "array_col_64": Array(Float64),
-            "string_col": String,
-            "bool_col": Boolean,
-            "json_col": JSON,
-            "binary_col": Binary,
-        },
-    )
     def test_types():
         return (
             5,
@@ -728,13 +729,34 @@ def test_dataset_preview_custom_columns(cloud_test_catalog, dogs_dataset):
             [0.5],
             "s",
             True,
-            dumps({"a": 1}),
+            {"a": 1},
             int_example.to_bytes(2, "big"),
         )
 
     (
-        DatasetQuery(name=dogs_dataset.name, catalog=catalog)
-        .add_signals(test_types)
+        DataChain.from_storage(
+            cloud_test_catalog.src_uri, session=cloud_test_catalog.session
+        )
+        .map(
+            test_types,
+            params=[],
+            output={
+                "int_col": int,
+                "int_col_32": int,
+                "int_col_64": int,
+                "float_col": float,
+                "float_col_32": float,
+                "float_col_64": float,
+                "array_col": list[float],
+                "array_col_nested": list[list[float]],
+                "array_col_32": list[float],
+                "array_col_64": list[float],
+                "string_col": str,
+                "bool_col": bool,
+                "json_col": dict,
+                "binary_col": bytes,
+            },
+        )
         .save("dogs_custom_columns")
     )
 
@@ -751,8 +773,41 @@ def test_dataset_preview_custom_columns(cloud_test_catalog, dogs_dataset):
         assert r["array_col_64"] == [0.5]
         assert r["string_col"] == "s"
         assert r["bool_col"]
-        assert r["json_col"] == '{"a": 1}'
+        assert r["json_col"] == {"a": 1}
         assert r["binary_col"] == [0, 25]
+
+
+def test_dataset_preview_order(test_session):
+    ids = list(range(10000))
+    order = ids[::-1]
+    catalog = test_session.catalog
+    dataset_name = "test"
+
+    DataChain.from_values(id=ids, order=order, session=test_session).order_by(
+        "order"
+    ).save(dataset_name)
+
+    preview_values = []
+
+    for r in catalog.get_dataset(dataset_name).get_version(1).preview:
+        id = ids.pop()
+        o = order.pop()
+        entry = (id, o)
+        preview_values.append((id, o))
+        assert (r["id"], r["order"]) == entry
+
+    DataChain.from_dataset(dataset_name, session=test_session).save(dataset_name)
+
+    for r in catalog.get_dataset(dataset_name).get_version(2).preview:
+        assert (r["id"], r["order"]) == preview_values.pop(0)
+
+    DataChain.from_dataset(dataset_name, 2, session=test_session).order_by("id").save(
+        dataset_name
+    )
+
+    for r in catalog.get_dataset(dataset_name).get_version(3).preview:
+        assert r["id"] == ids.pop(0)
+        assert r["order"] == order.pop(0)
 
 
 def test_dataset_preview_last_modified(cloud_test_catalog, dogs_dataset):
@@ -761,128 +816,7 @@ def test_dataset_preview_last_modified(cloud_test_catalog, dogs_dataset):
     DatasetQuery(name=dogs_dataset.name, catalog=catalog).save("dogs_custom_columns")
 
     for r in catalog.get_dataset("dogs_custom_columns").get_version(1).preview:
-        assert isinstance(r.get("last_modified"), str)
-
-
-def test_merge_datasets(cloud_test_catalog, dogs_dataset, cats_dataset):
-    catalog = cloud_test_catalog.catalog
-    catalog.merge_datasets(
-        cats_dataset,
-        dogs_dataset,
-        1,
-        dst_version=2,
-    )
-
-    dogs_dataset = catalog.get_dataset(dogs_dataset.name)
-    assert dogs_dataset.versions_values == [1, 2]
-
-    assert {r["name"] for r in catalog.ls_dataset_rows(dogs_dataset.name, 2)} == {
-        "dog1",
-        "dog2",
-        "dog3",
-        "dog4",
-        "cat1",
-        "cat2",
-    }
-
-    cats_dep = catalog.get_dataset_dependencies(cats_dataset.name, 1)
-    dogs_old_dep = catalog.get_dataset_dependencies(dogs_dataset.name, 1)
-    dogs_new_dep = catalog.get_dataset_dependencies(dogs_dataset.name, 2)
-
-    assert set(dogs_new_dep) == set(cats_dep + dogs_old_dep)
-
-
-def test_merge_datasets_invalid_version(cloud_test_catalog, dogs_dataset, cats_dataset):
-    catalog = cloud_test_catalog.catalog
-    with pytest.raises(DatasetInvalidVersionError) as exc_info:
-        catalog.merge_datasets(
-            cats_dataset,
-            dogs_dataset,
-            1,
-            dst_version=1,
-        )
-    assert str(exc_info.value) == "Version 1 must be higher than the current latest one"
-
-
-def test_merge_datasets_existing_pending_version(
-    cloud_test_catalog, dogs_dataset, cats_dataset
-):
-    catalog = cloud_test_catalog.catalog
-
-    # adding custom column
-    @udf(
-        (),
-        {"similarity": Float32},
-    )
-    def test_types():
-        return (0.5,)
-
-    (
-        DatasetQuery(name=cats_dataset.name, catalog=catalog)
-        .add_signals(test_types)
-        .save("cats_custom_column")
-    )
-
-    cats_custom_column = catalog.get_dataset("cats_custom_column")
-    columns = tuple(sa.Column(name, typ) for name, typ in dogs_dataset.schema.items())
-    dogs_dataset = catalog.create_new_dataset_version(
-        dogs_dataset,
-        2,
-        columns=columns,
-        create_rows_table=False,
-    )
-
-    catalog.merge_datasets(
-        cats_custom_column,
-        dogs_dataset,
-        1,
-        dst_version=2,
-    )
-
-    dogs_dataset = catalog.get_dataset(dogs_dataset.name)
-    assert dogs_dataset.versions_values == [1, 2]
-
-    assert (
-        dogs_dataset.get_version(2).schema == cats_custom_column.get_version(1).schema
-    )
-
-    assert "similarity" in dogs_dataset.get_version(2).schema
-
-    assert {r["name"] for r in catalog.ls_dataset_rows(dogs_dataset.name, 2)} == {
-        "cat1",
-        "cat2",
-    }
-
-    cats_dep = catalog.get_dataset_dependencies(cats_custom_column.name, 1)
-    dogs_dep = catalog.get_dataset_dependencies(dogs_dataset.name, 2)
-
-    assert set(dogs_dep) == set(cats_dep)
-
-
-def test_merge_datasets_size(cloud_test_catalog, dogs_dataset, cats_dataset):
-    catalog = cloud_test_catalog.catalog
-    catalog.merge_datasets(
-        cats_dataset,
-        dogs_dataset,
-        1,
-        dst_version=2,
-    )
-
-    dogs_dataset = catalog.get_dataset(dogs_dataset.name)
-    assert dogs_dataset.versions_values == [1, 2]
-
-    dogs_version_1 = dogs_dataset.get_version(1)
-    dogs_version_2 = dogs_dataset.get_version(2)
-    cats_version_1 = cats_dataset.get_version(1)
-
-    assert dogs_version_2.size
-    assert dogs_version_2.size == dogs_version_1.size + cats_version_1.size
-
-    assert dogs_version_2.num_objects
-    assert (
-        dogs_version_2.num_objects
-        == dogs_version_1.num_objects + cats_version_1.num_objects
-    )
+        assert isinstance(r.get("file__last_modified"), str)
 
 
 @pytest.mark.parametrize("tree", [{str(i): str(i) for i in range(50)}], indirect=True)
@@ -891,17 +825,13 @@ def test_row_random(cloud_test_catalog):
     # of accidental failure is < 1e-10
     ctc = cloud_test_catalog
     catalog = ctc.catalog
-    catalog.index([ctc.src_uri])
     catalog.create_dataset_from_sources("test", [ctc.src_uri])
     random_values = [row["sys__rand"] for row in catalog.ls_dataset_rows("test", 1)]
 
     # Random values are unique
     assert len(set(random_values)) == len(random_values)
 
-    if isinstance(catalog.warehouse, SQLiteWarehouse):
-        RAND_MAX = 2**63  # noqa: N806
-    else:
-        RAND_MAX = 2**64  # noqa: N806
+    RAND_MAX = DataTable.MAX_RANDOM  # noqa: N806
 
     # Values are drawn uniformly from range(2**63)
     assert 0 <= min(random_values) < 0.4 * RAND_MAX
@@ -915,32 +845,36 @@ def test_row_random(cloud_test_catalog):
 
 def test_dataset_stats_registered_ds(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
-    stats = catalog.dataset_stats(dogs_dataset.name, 1)
-    assert stats.num_objects == 4
-    assert stats.size == 15
+    dataset = catalog.get_dataset(dogs_dataset.name).get_version(1)
+    assert dataset.num_objects == 4
+    assert dataset.size == 15
     rows_count = catalog.warehouse.dataset_rows_count(dogs_dataset, 1)
     assert rows_count == 4
 
 
 @pytest.mark.parametrize("indirect", [True, False])
-def test_dataset_dependencies_registered(
-    listed_bucket, cloud_test_catalog, dogs_dataset, indirect
-):
-    catalog = cloud_test_catalog.catalog
-    storage = catalog.get_storage(cloud_test_catalog.storage_uri)
+def test_dataset_storage_dependencies(cloud_test_catalog, cloud_type, indirect):
+    ctc = cloud_test_catalog
+    session = ctc.session
+    catalog = session.catalog
+    uri = cloud_test_catalog.src_uri
+
+    ds_name = "some_ds"
+    DataChain.from_storage(uri, session=session).save(ds_name)
+
+    lst_ds_name, _, _ = parse_listing_uri(uri, catalog.client_config)
+    lst_dataset = catalog.metastore.get_dataset(lst_ds_name)
 
     assert [
         dataset_dependency_asdict(d)
-        for d in catalog.get_dataset_dependencies(
-            dogs_dataset.name, 1, indirect=indirect
-        )
+        for d in catalog.get_dataset_dependencies(ds_name, 1, indirect=indirect)
     ] == [
         {
             "id": ANY,
             "type": DatasetDependencyType.STORAGE,
-            "name": storage.uri,
-            "version": storage.timestamp_str,
-            "created_at": isoparse(storage.timestamp_str),
+            "name": uri,
+            "version": "1",
+            "created_at": lst_dataset.get_version(1).created_at,
             "dependencies": [],
         }
     ]

@@ -1,12 +1,13 @@
 import asyncio
-import posixpath
-from typing import Any, cast
+import os
+from typing import Any, Optional, cast
+from urllib.parse import parse_qs, urlsplit, urlunsplit
 
 from botocore.exceptions import NoCredentialsError
 from s3fs import S3FileSystem
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
-from datachain.node import Entry
+from datachain.lib.file import File
 
 from .fsspec import DELIMITER, Client, ResultQueue
 
@@ -31,14 +32,19 @@ class ClientS3(Client):
         if "aws_token" in kwargs:
             kwargs.setdefault("token", kwargs.pop("aws_token"))
 
-        # caching bucket regions to use the right one in signed urls, otherwise
-        # it tries to randomly guess and creates wrong signature
-        kwargs.setdefault("cache_regions", True)
-
         # We want to use newer v4 signature version since regions added after
         # 2014 are not going to support v2 which is the older one.
         # All regions support v4.
         kwargs.setdefault("config_kwargs", {}).setdefault("signature_version", "s3v4")
+
+        if "region_name" in kwargs:
+            kwargs["config_kwargs"].setdefault("region_name", kwargs.pop("region_name"))
+
+        # remove this `if` when https://github.com/fsspec/s3fs/pull/929 lands
+        if not os.environ.get("AWS_REGION") and not os.environ.get("AWS_ENDPOINT_URL"):
+            # caching bucket regions to use the right one in signed urls, otherwise
+            # it tries to randomly guess and creates wrong signature
+            kwargs.setdefault("cache_regions", True)
 
         if not kwargs.get("anon"):
             try:
@@ -49,7 +55,22 @@ class ClientS3(Client):
             except NotImplementedError:
                 pass
 
-        return cast(S3FileSystem, super().create_fs(**kwargs))
+        return cast("S3FileSystem", super().create_fs(**kwargs))
+
+    def url(self, path: str, expires: int = 3600, **kwargs) -> str:
+        """
+        Generate a signed URL for the given path.
+        """
+        version_id = kwargs.pop("version_id", None)
+        content_disposition = kwargs.pop("content_disposition", None)
+        if content_disposition:
+            kwargs["ResponseContentDisposition"] = content_disposition
+
+        return self.fs.sign(
+            self.get_full_path(path, version_id),
+            expiration=expires,
+            **kwargs,
+        )
 
     async def _fetch_flat(self, start_prefix: str, result_queue: ResultQueue) -> None:
         async def get_pages(it, page_queue):
@@ -61,7 +82,7 @@ class ClientS3(Client):
 
         async def process_pages(page_queue, result_queue):
             found = False
-            with tqdm(desc=f"Listing {self.uri}", unit=" objects") as pbar:
+            with tqdm(desc=f"Listing {self.uri}", unit=" objects", leave=False) as pbar:
                 while (res := await page_queue.get()) is not None:
                     if res:
                         found = True
@@ -111,26 +132,32 @@ class ClientS3(Client):
     ) -> None:
         await self._fetch_flat(start_prefix, result_queue)
 
-    def _entry_from_boto(self, v, bucket, versions=False):
-        parent, name = posixpath.split(v["Key"])
-        return Entry.from_file(
-            parent=parent,
-            name=name,
+    def _entry_from_boto(self, v, bucket, versions=False) -> File:
+        return File(
+            source=self.uri,
+            path=v["Key"],
             etag=v.get("ETag", "").strip('"'),
             version=ClientS3.clean_s3_version(v.get("VersionId", "")),
             is_latest=v.get("IsLatest", True),
             last_modified=v.get("LastModified", ""),
             size=v["Size"],
-            owner_name=v.get("Owner", {}).get("DisplayName", ""),
-            owner_id=v.get("Owner", {}).get("ID", ""),
         )
+
+    @classmethod
+    def version_path(cls, path: str, version_id: Optional[str]) -> str:
+        parts = list(urlsplit(path))
+        query = parse_qs(parts[3])
+        if "versionId" in query:
+            raise ValueError("path already includes a version query")
+        parts[3] = f"versionId={version_id}" if version_id else ""
+        return urlunsplit(parts)
 
     async def _fetch_dir(
         self,
         prefix,
         pbar,
-        result_queue,
-    ):
+        result_queue: ResultQueue,
+    ) -> set[str]:
         if prefix:
             prefix = prefix.lstrip(DELIMITER) + DELIMITER
         files = []
@@ -145,7 +172,7 @@ class ClientS3(Client):
             if info["type"] == "directory":
                 subdirs.add(subprefix)
             else:
-                files.append(self.convert_info(info, prefix.rstrip("/")))
+                files.append(self.info_to_file(info, subprefix))
                 pbar.update()
             found = True
         if not found:
@@ -156,18 +183,16 @@ class ClientS3(Client):
         return subdirs
 
     @staticmethod
-    def clean_s3_version(ver):
-        return ver if ver != "null" else ""
+    def clean_s3_version(ver: Optional[str]) -> str:
+        return ver if (ver is not None and ver != "null") else ""
 
-    def convert_info(self, v: dict[str, Any], parent: str) -> Entry:
-        return Entry.from_file(
-            parent=parent,
-            name=v.get("Key", "").split(DELIMITER)[-1],
-            etag=v.get("ETag", "").strip('"'),
+    def info_to_file(self, v: dict[str, Any], path: str) -> File:
+        return File(
+            source=self.uri,
+            path=path,
+            size=v["size"],
             version=ClientS3.clean_s3_version(v.get("VersionId", "")),
+            etag=v.get("ETag", "").strip('"'),
             is_latest=v.get("IsLatest", True),
             last_modified=v.get("LastModified", ""),
-            size=v["size"],
-            owner_name=v.get("Owner", {}).get("DisplayName", ""),
-            owner_id=v.get("Owner", {}).get("ID", ""),
         )

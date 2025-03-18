@@ -12,12 +12,15 @@ for sqlite we can use `sqlite.register_converter`
 ( https://docs.python.org/3/library/sqlite3.html#sqlite3.register_converter )
 """
 
-import json
 from datetime import datetime
 from types import MappingProxyType
 from typing import Any, Union
 
+import orjson
+import sqlalchemy as sa
 from sqlalchemy import TypeDecorator, types
+
+from datachain.lib.data_model import StandardType
 
 _registry: dict[str, "TypeConverter"] = {}
 registry = MappingProxyType(_registry)
@@ -27,6 +30,9 @@ read_converter_registry = MappingProxyType(_read_converter_registry)
 
 _type_defaults_registry: dict[str, "TypeDefaults"] = {}
 type_defaults_registry = MappingProxyType(_type_defaults_registry)
+
+_db_defaults_registry: dict[str, "DBDefaults"] = {}
+db_defaults_registry = MappingProxyType(_db_defaults_registry)
 
 NullType = types.NullType
 
@@ -41,6 +47,10 @@ def register_type_read_converters(dialect_name: str, trc: "TypeReadConverter"):
 
 def register_type_defaults(dialect_name: str, td: "TypeDefaults"):
     _type_defaults_registry[dialect_name] = td
+
+
+def register_db_defaults(dialect_name: str, dbd: "DBDefaults"):
+    _db_defaults_registry[dialect_name] = dbd
 
 
 def converter(dialect) -> "TypeConverter":
@@ -71,9 +81,21 @@ def type_defaults(dialect) -> "TypeDefaults":
         raise ValueError(f"No type defaults registered for dialect: {name!r}") from None
 
 
+def db_defaults(dialect) -> "DBDefaults":
+    name = dialect.name
+    try:
+        return db_defaults_registry[name]
+    except KeyError:
+        raise ValueError(f"No DB defaults registered for dialect: {name!r}") from None
+
+
 class SQLType(TypeDecorator):
     impl: type[types.TypeEngine[Any]] = types.TypeEngine
     cache_ok = True
+
+    @property
+    def python_type(self) -> StandardType:
+        raise NotImplementedError
 
     def to_dict(self) -> dict[str, Any]:
         return {"type": self.__class__.__name__}
@@ -87,7 +109,7 @@ class String(SQLType):
     impl = types.String
 
     @property
-    def python_type(self):
+    def python_type(self) -> StandardType:
         return str
 
     def load_dialect_impl(self, dialect):
@@ -97,6 +119,10 @@ class String(SQLType):
     def default_value(dialect):
         return type_defaults(dialect).string()
 
+    @staticmethod
+    def db_default_value(dialect):
+        return db_defaults(dialect).string()
+
     def on_read_convert(self, value, dialect):
         return read_converter(dialect).string(value)
 
@@ -105,7 +131,7 @@ class Boolean(SQLType):
     impl = types.Boolean
 
     @property
-    def python_type(self):
+    def python_type(self) -> StandardType:
         return bool
 
     def load_dialect_impl(self, dialect):
@@ -115,6 +141,10 @@ class Boolean(SQLType):
     def default_value(dialect):
         return type_defaults(dialect).boolean()
 
+    @staticmethod
+    def db_default_value(dialect):
+        return db_defaults(dialect).boolean()
+
     def on_read_convert(self, value, dialect):
         return read_converter(dialect).boolean(value)
 
@@ -123,7 +153,7 @@ class Int(SQLType):
     impl = types.INTEGER
 
     @property
-    def python_type(self):
+    def python_type(self) -> StandardType:
         return int
 
     def load_dialect_impl(self, dialect):
@@ -132,6 +162,10 @@ class Int(SQLType):
     @staticmethod
     def default_value(dialect):
         return type_defaults(dialect).int()
+
+    @staticmethod
+    def db_default_value(dialect):
+        return db_defaults(dialect).int()
 
     def on_read_convert(self, value, dialect):
         return read_converter(dialect).int(value)
@@ -145,8 +179,28 @@ class Int32(Int):
     def default_value(dialect):
         return type_defaults(dialect).int32()
 
+    @staticmethod
+    def db_default_value(dialect):
+        return db_defaults(dialect).int32()
+
     def on_read_convert(self, value, dialect):
         return read_converter(dialect).int32(value)
+
+
+class UInt32(Int):
+    def load_dialect_impl(self, dialect):
+        return converter(dialect).uint32()
+
+    @staticmethod
+    def default_value(dialect):
+        return type_defaults(dialect).uint32()
+
+    @staticmethod
+    def db_default_value(dialect):
+        return db_defaults(dialect).uint32()
+
+    def on_read_convert(self, value, dialect):
+        return read_converter(dialect).uint32(value)
 
 
 class Int64(Int):
@@ -156,6 +210,10 @@ class Int64(Int):
     @staticmethod
     def default_value(dialect):
         return type_defaults(dialect).int64()
+
+    @staticmethod
+    def db_default_value(dialect):
+        return db_defaults(dialect).int64()
 
     def on_read_convert(self, value, dialect):
         return read_converter(dialect).int64(value)
@@ -169,15 +227,19 @@ class UInt64(Int):
     def default_value(dialect):
         return type_defaults(dialect).uint64()
 
+    @staticmethod
+    def db_default_value(dialect):
+        return db_defaults(dialect).uint64()
+
     def on_read_convert(self, value, dialect):
         return read_converter(dialect).uint64(value)
 
 
 class Float(SQLType):
-    impl = types.INTEGER
+    impl = types.FLOAT
 
     @property
-    def python_type(self):
+    def python_type(self) -> StandardType:
         return float
 
     def load_dialect_impl(self, dialect):
@@ -186,6 +248,10 @@ class Float(SQLType):
     @staticmethod
     def default_value(dialect):
         return type_defaults(dialect).float()
+
+    @staticmethod
+    def db_default_value(dialect):
+        return db_defaults(dialect).float()
 
     def on_read_convert(self, value, dialect):
         return read_converter(dialect).float(value)
@@ -199,6 +265,10 @@ class Float32(Float):
     def default_value(dialect):
         return type_defaults(dialect).float32()
 
+    @staticmethod
+    def db_default_value(dialect):
+        return db_defaults(dialect).float32()
+
     def on_read_convert(self, value, dialect):
         return read_converter(dialect).float32(value)
 
@@ -211,6 +281,10 @@ class Float64(Float):
     def default_value(dialect):
         return type_defaults(dialect).float64()
 
+    @staticmethod
+    def db_default_value(dialect):
+        return db_defaults(dialect).float64()
+
     def on_read_convert(self, value, dialect):
         return read_converter(dialect).float64(value)
 
@@ -219,7 +293,7 @@ class Array(SQLType):
     impl = types.ARRAY
 
     @property
-    def python_type(self):
+    def python_type(self) -> StandardType:
         return list
 
     def load_dialect_impl(self, dialect):
@@ -247,10 +321,14 @@ class Array(SQLType):
     def default_value(dialect):
         return type_defaults(dialect).array()
 
+    @staticmethod
+    def db_default_value(dialect):
+        return db_defaults(dialect).array()
+
     def on_read_convert(self, value, dialect):
         r = read_converter(dialect).array(value, self.item_type, dialect)
         if isinstance(self.item_type, JSON):
-            r = [json.loads(item) if isinstance(item, str) else item for item in r]
+            r = [orjson.loads(item) if isinstance(item, str) else item for item in r]
         return r
 
 
@@ -258,7 +336,7 @@ class JSON(SQLType):
     impl = types.JSON
 
     @property
-    def python_type(self):
+    def python_type(self) -> StandardType:
         return dict
 
     def load_dialect_impl(self, dialect):
@@ -268,6 +346,10 @@ class JSON(SQLType):
     def default_value(dialect):
         return type_defaults(dialect).json()
 
+    @staticmethod
+    def db_default_value(dialect):
+        return db_defaults(dialect).json()
+
     def on_read_convert(self, value, dialect):
         return read_converter(dialect).json(value)
 
@@ -276,7 +358,7 @@ class DateTime(SQLType):
     impl = types.DATETIME
 
     @property
-    def python_type(self):
+    def python_type(self) -> StandardType:
         return datetime
 
     def load_dialect_impl(self, dialect):
@@ -286,6 +368,10 @@ class DateTime(SQLType):
     def default_value(dialect):
         return type_defaults(dialect).datetime()
 
+    @staticmethod
+    def db_default_value(dialect):
+        return db_defaults(dialect).datetime()
+
     def on_read_convert(self, value, dialect):
         return read_converter(dialect).datetime(value)
 
@@ -294,7 +380,7 @@ class Binary(SQLType):
     impl = types.BINARY
 
     @property
-    def python_type(self):
+    def python_type(self) -> StandardType:
         return bytes
 
     def load_dialect_impl(self, dialect):
@@ -303,6 +389,10 @@ class Binary(SQLType):
     @staticmethod
     def default_value(dialect):
         return type_defaults(dialect).binary()
+
+    @staticmethod
+    def db_default_value(dialect):
+        return db_defaults(dialect).binary()
 
     def on_read_convert(self, value, dialect):
         return read_converter(dialect).binary(value)
@@ -321,6 +411,9 @@ class TypeReadConverter:
     def int32(self, value):
         return value
 
+    def uint32(self, value):
+        return value
+
     def int64(self, value):
         return value
 
@@ -328,13 +421,17 @@ class TypeReadConverter:
         return value
 
     def float(self, value):
+        if value is None:
+            return float("nan")
+        if isinstance(value, str) and value.lower() == "nan":
+            return float("nan")
         return value
 
     def float32(self, value):
-        return value
+        return self.float(value)
 
     def float64(self, value):
-        return value
+        return self.float(value)
 
     def array(self, value, item_type, dialect):
         if value is None or item_type is None:
@@ -342,15 +439,18 @@ class TypeReadConverter:
         return [item_type.on_read_convert(x, dialect) for x in value]
 
     def json(self, value):
+        if isinstance(value, str):
+            if value == "":
+                return {}
+            return orjson.loads(value)
         return value
 
     def datetime(self, value):
         return value
 
-    def uuid(self, value):
-        return value
-
     def binary(self, value):
+        if isinstance(value, str):
+            return value.encode()
         return value
 
 
@@ -365,6 +465,9 @@ class TypeConverter:
         return types.Integer()
 
     def int32(self):
+        return self.int()
+
+    def uint32(self):
         return self.int()
 
     def int64(self):
@@ -408,6 +511,9 @@ class TypeDefaults:
     def int32(self):
         return None
 
+    def uint32(self):
+        return None
+
     def int64(self):
         return None
 
@@ -415,13 +521,13 @@ class TypeDefaults:
         return None
 
     def float(self):
-        return None
+        return float("nan")
 
     def float32(self):
-        return None
+        return self.float()
 
     def float64(self):
-        return None
+        return self.float()
 
     def array(self):
         return None
@@ -432,11 +538,52 @@ class TypeDefaults:
     def datetime(self):
         return None
 
-    def uuid(self):
-        return None
-
     def binary(self):
         return None
+
+
+class DBDefaults:
+    def string(self):
+        return sa.text("''")
+
+    def boolean(self):
+        return sa.text("False")
+
+    def int(self):
+        return sa.text("0")
+
+    def int32(self):
+        return self.int()
+
+    def uint32(self):
+        return self.int()
+
+    def int64(self):
+        return self.int()
+
+    def uint64(self):
+        return self.int()
+
+    def float(self):
+        return sa.text("NaN")
+
+    def float32(self):
+        return self.float()
+
+    def float64(self):
+        return self.float()
+
+    def array(self):
+        return sa.text("'[]'")
+
+    def json(self):
+        return sa.text("'{}'")
+
+    def datetime(self):
+        return sa.text("'1970-01-01 00:00:00'")
+
+    def binary(self):
+        return sa.text("''")
 
 
 TYPES = [
@@ -444,6 +591,7 @@ TYPES = [
     Boolean,
     Int,
     Int32,
+    UInt32,
     Int64,
     UInt64,
     Float,

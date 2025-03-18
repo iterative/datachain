@@ -20,7 +20,7 @@ class NodeChunk:
     def next_downloadable(self):
         node = next(self.nodes, None)
         while node and (
-            not node.is_downloadable or self.cache.contains(node.as_uid(self.storage))
+            not node.is_downloadable or self.cache.contains(node.to_file(self.storage))
         ):
             node = next(self.nodes, None)
         return node
@@ -57,6 +57,9 @@ class NodesThreadPool(ABC):
         self._max_threads = max_threads
         self._thread_counter = 0
         self._thread_lock = threading.Lock()
+        self.tasks = set()
+        self.canceled = False
+        self.th_pool = None
 
     def run(
         self,
@@ -64,36 +67,54 @@ class NodesThreadPool(ABC):
         progress_bar=None,
     ):
         results = []
-        with concurrent.futures.ThreadPoolExecutor(self._max_threads) as th_pool:
-            tasks = set()
+        self.th_pool = concurrent.futures.ThreadPoolExecutor(self._max_threads)
+        try:
             self._thread_counter = 0
             for chunk in chunk_gen:
-                while len(tasks) >= self._max_threads:
+                if self.canceled:
+                    break
+                while len(self.tasks) >= self._max_threads:
                     done, _ = concurrent.futures.wait(
-                        tasks, timeout=1, return_when="FIRST_COMPLETED"
+                        self.tasks, timeout=1, return_when="FIRST_COMPLETED"
                     )
                     self.done_task(done)
 
-                    tasks = tasks - done
+                    self.tasks = self.tasks - done
                     self.update_progress_bar(progress_bar)
 
-                tasks.add(th_pool.submit(self.do_task, chunk))
+                self.tasks.add(self.th_pool.submit(self.do_task, chunk))
                 self.update_progress_bar(progress_bar)
 
-            while tasks:
+            while self.tasks:
+                if self.canceled:
+                    break
                 done, _ = concurrent.futures.wait(
-                    tasks, timeout=1, return_when="FIRST_COMPLETED"
+                    self.tasks, timeout=1, return_when="FIRST_COMPLETED"
                 )
                 task_results = self.done_task(done)
                 if task_results:
                     results.extend(task_results)
 
-                tasks = tasks - done
+                self.tasks = self.tasks - done
                 self.update_progress_bar(progress_bar)
-
-            th_pool.shutdown()
+        except:
+            self.cancel_all()
+            raise
+        else:
+            self.th_pool.shutdown()
 
         return results
+
+    def cancel_all(self):
+        self.cancel = True
+        # Canceling tasks just in case any of them is scheduled to run.
+        # Note that running tasks cannot be canceled, instead we will wait for
+        # them to finish when shutting down thread loop executor by calling
+        # shutdown() method.
+        for task in self.tasks:
+            task.cancel()
+        if self.th_pool:
+            self.th_pool.shutdown()  # this will wait for running tasks to finish
 
     def update_progress_bar(self, progress_bar):
         if progress_bar is not None:

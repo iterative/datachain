@@ -1,14 +1,17 @@
 import asyncio
 import functools
+import itertools
+import threading
 from collections import Counter
 from contextlib import contextmanager
+from queue import Queue
 
 import pytest
 from fsspec.asyn import sync
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
-from datachain.asyn import AsyncMapper, OrderedMapper, get_loop
+from datachain.asyn import AsyncMapper, OrderedMapper, get_loop, iter_over_async
 
 
 async def fake_io(i):
@@ -112,6 +115,68 @@ def test_mapper_exception_while_processing(create_mapper, loop):
 
 
 @pytest.mark.parametrize("create_mapper", [AsyncMapper, OrderedMapper])
+def test_mapper_deadlock(create_mapper):
+    queue = Queue()
+    inputs = range(50)
+
+    def as_iter(queue):
+        while (item := queue.get()) is not None:
+            yield item
+
+    async def process(x):
+        return x
+
+    mapper = create_mapper(process, as_iter(queue), workers=10, loop=get_loop())
+    it = mapper.iterate(timeout=4)
+    for i in inputs:
+        queue.put(i)
+
+    # Check that we can get as many objects out as we put in, without deadlock
+    result = []
+    for _ in range(len(inputs)):
+        result.append(next(it))
+    if mapper.order_preserving:
+        assert result == list(inputs)
+    else:
+        assert set(result) == set(inputs)
+
+    # Check that iteration terminates cleanly
+    queue.put(None)
+    assert list(it) == []
+
+
+@pytest.mark.parametrize("create_mapper", [AsyncMapper, OrderedMapper])
+@pytest.mark.parametrize("stop_at", [10, None])
+def test_mapper_closes_iterable(create_mapper, stop_at):
+    """Test that the iterable is closed when the `.iterate()` is closed or exhausted."""
+
+    async def process(x):
+        return x
+
+    iterable_closed = False
+    start_thread = None
+    close_thread = None
+
+    def gen():
+        nonlocal iterable_closed, start_thread, close_thread
+        start_thread = threading.get_ident()
+        try:
+            yield from range(50)
+        finally:
+            iterable_closed = True
+            close_thread = threading.get_ident()
+
+    mapper = create_mapper(process, gen(), workers=10, loop=get_loop())
+    it = mapper.iterate()
+    list(itertools.islice(it, stop_at))
+    if stop_at is not None:
+        it.close()
+    assert iterable_closed
+    assert start_thread == close_thread
+    assert start_thread != threading.get_ident()
+
+
+@pytest.mark.parametrize("create_mapper", [AsyncMapper, OrderedMapper])
 @settings(deadline=None)
 @given(
     inputs=st.lists(st.integers(min_value=0, max_value=100), max_size=20),
@@ -161,3 +226,31 @@ def test_mapper_exception_hypothesis(inputs, workers, create_mapper):
                 list(mapper.iterate(timeout=4))
         finally:
             join_all_tasks(loop)
+
+
+def test_iter_over_async():
+    async def gen():
+        yield 1
+        yield 2
+
+    res = iter_over_async(gen(), get_loop())
+    assert list(res) == [1, 2]
+
+
+def test_iter_over_async_exception():
+    async def gen():
+        yield 1
+        raise Exception("Some error")
+
+    with pytest.raises(Exception) as excinfo:
+        list(iter_over_async(gen(), get_loop()))
+    assert str(excinfo.value) == "Some error"
+
+
+def test_iter_over_async_empty():
+    async def gen():
+        for i in []:
+            yield i
+
+    res = iter_over_async(gen(), get_loop())
+    assert list(res) == []

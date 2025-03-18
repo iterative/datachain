@@ -1,5 +1,6 @@
+import inspect
 import logging
-from typing import ClassVar, Optional
+from typing import Any, ClassVar, Optional
 
 from pydantic import BaseModel
 
@@ -68,8 +69,12 @@ class ModelStore:
             del cls.store[fr.__name__][version]
 
     @staticmethod
-    def is_pydantic(val):
-        return not hasattr(val, "__origin__") and issubclass(val, BaseModel)
+    def is_pydantic(val: Any) -> bool:
+        return (
+            not hasattr(val, "__origin__")
+            and inspect.isclass(val)
+            and issubclass(val, BaseModel)
+        )
 
     @staticmethod
     def to_pydantic(val) -> Optional[type[BaseModel]]:

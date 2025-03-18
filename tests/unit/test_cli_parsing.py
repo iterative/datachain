@@ -1,29 +1,15 @@
 import logging
-from argparse import ArgumentParser, ArgumentTypeError
+from argparse import ArgumentTypeError
 
 import pytest
 
 from datachain.cli import (
-    TTL_HUMAN,
-    TTL_INT,
-    find_columns_type,
     get_logging_level,
     get_parser,
-    human_time_type,
 )
-from datachain.cli_utils import CommaSeparatedArgs, KeyValueArgs
-
-
-def test_human_time_type():
-    assert human_time_type(TTL_HUMAN) == TTL_INT
-    assert human_time_type("1h") == 60 * 60
-    assert human_time_type("30s") == 30
-    assert human_time_type("2w") == 2 * 7 * 24 * 60 * 60
-
-    assert human_time_type("", can_be_none=True) is None
-
-    with pytest.raises(ArgumentTypeError):
-        human_time_type("bogus")
+from datachain.cli.parser.utils import CustomArgumentParser as ArgumentParser
+from datachain.cli.parser.utils import find_columns_type
+from datachain.cli.utils import CommaSeparatedArgs, KeyValueArgs
 
 
 def test_find_columns_type():
@@ -39,9 +25,8 @@ def test_find_columns_type():
 def test_cli_parser():
     parser = get_parser()
 
-    args = parser.parse_args(("ls", "s3://example-bucket/", "--ttl", "1d"))
+    args = parser.parse_args(("ls", "s3://example-bucket/"))
 
-    assert args.ttl == 24 * 60 * 60
     assert args.sources == ["s3://example-bucket/"]
 
     assert args.quiet == 0

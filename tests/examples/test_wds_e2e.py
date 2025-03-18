@@ -6,7 +6,6 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from datachain.client.local import FileClient
 from datachain.lib.dc import DataChain
 from datachain.lib.file import File
 from datachain.lib.webdataset import process_webdataset
@@ -69,10 +68,10 @@ def webdataset_metadata(tmp_path):
     return metadata_path
 
 
-def test_wds(catalog, webdataset_tars):
-    res = DataChain.from_storage(Path(webdataset_tars).as_uri()).gen(
-        laion=process_webdataset(spec=WDSLaion), params="file"
-    )
+def test_wds(test_session, webdataset_tars):
+    res = DataChain.from_storage(
+        Path(webdataset_tars).as_uri(), session=test_session
+    ).gen(laion=process_webdataset(spec=WDSLaion), params="file")
 
     num_rows = 0
     for laion_wds in res.collect("laion"):
@@ -86,7 +85,7 @@ def test_wds(catalog, webdataset_tars):
 
         assert laion_wds.txt == data["caption"]
         assert laion_wds.file.location
-        assert laion_wds.file.source == FileClient.root_path().as_uri()
+        assert laion_wds.file.source == Path(webdataset_tars).as_uri()
         assert laion_wds.file.parent
         assert laion_wds.file.name == f"{idx}.jpg"
         assert laion_wds.file.location
@@ -95,10 +94,12 @@ def test_wds(catalog, webdataset_tars):
     assert num_rows == len(WDS_TAR_SHARDS)
 
 
-def test_wds_merge_with_parquet_meta(catalog, webdataset_tars, webdataset_metadata):
-    wds = DataChain.from_storage(Path(webdataset_tars).as_uri()).gen(
-        laion=process_webdataset(spec=WDSLaion), params="file"
-    )
+def test_wds_merge_with_parquet_meta(
+    test_session, webdataset_tars, webdataset_metadata
+):
+    wds = DataChain.from_storage(
+        Path(webdataset_tars).as_uri(), session=test_session
+    ).gen(laion=process_webdataset(spec=WDSLaion), params="file")
 
     meta = DataChain.from_parquet(Path(webdataset_metadata).as_uri())
 
