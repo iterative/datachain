@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from inspect import isclass
 from typing import (  # noqa: UP035
+    IO,
     TYPE_CHECKING,
     Annotated,
     Any,
@@ -696,16 +697,20 @@ class SignalSchema:
                     substree, new_prefix, depth + 1, include_hidden
                 )
 
-    def print_tree(self, indent: int = 4, start_at: int = 0):
+    def print_tree(self, indent: int = 2, start_at: int = 0, file: Optional[IO] = None):
         for path, type_, _, depth in self.get_flat_tree():
             total_indent = start_at + depth * indent
-            print(" " * total_indent, f"{path[-1]}:", SignalSchema._type_to_str(type_))
+            col_name = " " * total_indent + path[-1]
+            col_type = SignalSchema._type_to_str(type_)
+            print(col_name, col_type, sep=": ", file=file)
 
             if get_origin(type_) is list:
                 args = get_args(type_)
                 if len(args) > 0 and ModelStore.is_pydantic(args[0]):
                     sub_schema = SignalSchema({"* list of": args[0]})
-                    sub_schema.print_tree(indent=indent, start_at=total_indent + indent)
+                    sub_schema.print_tree(
+                        indent=indent, start_at=total_indent + indent, file=file
+                    )
 
     def get_headers_with_length(self, include_hidden: bool = True):
         paths = [
