@@ -1025,8 +1025,8 @@ def test_setup_error():
         (
             {"file": File},
             [
-                "file__version",
                 "file__source",
+                "file__version",
                 "file__etag",
                 "file__is_latest",
                 "file__last_modified",

@@ -194,8 +194,8 @@ class File(DataModel):
         "location": JSON,
     }
     _hidden_fields: ClassVar[list[str]] = [
-        "version",
         "source",
+        "version",
         "etag",
         "is_latest",
         "last_modified",
