@@ -22,13 +22,9 @@ def openimage_detect(args):
         detections = json.load(stream_json).get("detections", [])
 
     for i, detect in enumerate(detections):
-        bbox = model.BBox.from_list(
-            [
-                detect["XMin"] * img.width,
-                detect["XMax"] * img.width,
-                detect["YMin"] * img.height,
-                detect["YMax"] * img.height,
-            ]
+        bbox = model.BBox.from_albumentations(
+            [detect[k] for k in ("XMin", "YMin", "XMax", "YMax")],
+            img_size=(img.width, img.height),
         )
 
         fstream = File(

@@ -15,7 +15,7 @@ def test_udf():
             self.value = MyMapper.DEFAULT_VALUE
             self._had_teardown = False
 
-        def process(self, *args) -> int:
+        def process(self, key) -> int:
             return self.value
 
         def setup(self):
@@ -40,7 +40,7 @@ def test_no_bootstrap_for_callable():
             self._had_bootstrap = False
             self._had_teardown = False
 
-        def __call__(self, *args):
+        def __call__(self, key):
             return None
 
         def bootstrap(self):

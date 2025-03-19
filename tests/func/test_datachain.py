@@ -722,7 +722,7 @@ def test_udf_parallel_boostrap(test_session_tmpfile):
             self.value = MyMapper.DEFAULT_VALUE
             self._had_teardown = False
 
-        def process(self, *args) -> int:
+        def process(self, key) -> int:
             return self.value
 
         def setup(self):

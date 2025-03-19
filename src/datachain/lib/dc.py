@@ -629,7 +629,8 @@ class DataChain:
                 model_name=model_name,
                 jmespath=jmespath,
                 nrows=nrows,
-            )
+            ),
+            "params": {"file": File},
         }
         # disable prefetch if nrows is set
         settings = {"prefetch": 0} if nrows else {}
@@ -1015,8 +1016,9 @@ class DataChain:
         func: Optional[Union[Callable, UDFObjT]],
         params: Union[None, str, Sequence[str]],
         output: OutputType,
-        signal_map,
+        signal_map: dict[str, Callable],
     ) -> UDFObjT:
+        is_batch = target_class.is_input_batched
         is_generator = target_class.is_output_batched
         name = self.name or ""
 
@@ -1027,7 +1029,9 @@ class DataChain:
         if self._sys:
             signals_schema = SignalSchema({"sys": Sys}) | signals_schema
 
-        params_schema = signals_schema.slice(sign.params, self._setup)
+        params_schema = signals_schema.slice(
+            sign.params, self._setup, is_batch=is_batch
+        )
 
         return target_class._create(sign, params_schema)
 

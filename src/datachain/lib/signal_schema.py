@@ -154,9 +154,9 @@ class SignalSchema:
             if not callable(func):
                 raise SetupError(key, "value must be function or callable class")
 
-    def _init_setup_values(self):
+    def _init_setup_values(self) -> None:
         if self.setup_values is not None:
-            return self.setup_values
+            return
 
         res = {}
         for key, func in self.setup_func.items():
@@ -398,7 +398,7 @@ class SignalSchema:
         return SignalSchema(signals)
 
     @staticmethod
-    def get_flatten_hidden_fields(schema):
+    def get_flatten_hidden_fields(schema: dict):
         custom_types = schema.get("_custom_types", {})
         if not custom_types:
             return []
@@ -464,19 +464,61 @@ class SignalSchema:
         return False
 
     def slice(
-        self, keys: Sequence[str], setup: Optional[dict[str, Callable]] = None
+        self,
+        params: dict[str, Union[DataType, Any]],
+        setup: Optional[dict[str, Callable]] = None,
+        is_batch: bool = False,
     ) -> "SignalSchema":
-        # Make new schema that combines current schema and setup signals
-        setup = setup or {}
-        setup_no_types = dict.fromkeys(setup.keys(), str)
-        union = SignalSchema(self.values | setup_no_types)
-        # Slice combined schema by keys
-        schema = {}
-        for k in keys:
-            try:
-                schema[k] = union._find_in_tree(k.split("."))
-            except SignalResolvingError:
-                pass
+        """
+        Returns new schema that combines current schema and setup signals.
+        """
+        setup_params = setup.keys() if setup else []
+        schema: dict[str, DataType] = {}
+
+        for param, param_type in params.items():
+            # This is special case for setup params, they are always treated as strings
+            if param in setup_params:
+                schema[param] = str
+                continue
+
+            schema_type = self._find_in_tree(param.split("."))
+
+            if param_type is Any:
+                schema[param] = schema_type
+                continue
+
+            schema_origin = get_origin(schema_type)
+            param_origin = get_origin(param_type)
+
+            if schema_origin is Union and type(None) in get_args(schema_type):
+                schema_type = get_args(schema_type)[0]
+                if param_origin is Union and type(None) in get_args(param_type):
+                    param_type = get_args(param_type)[0]
+
+            if is_batch:
+                if param_type is list:
+                    schema[param] = schema_type
+                    continue
+
+                if param_origin is not list:
+                    raise SignalResolvingError(param.split("."), "is not a list")
+
+                param_type = get_args(param_type)[0]
+
+            if param_type == schema_type or (
+                isclass(param_type)
+                and isclass(schema_type)
+                and issubclass(param_type, File)
+                and issubclass(schema_type, File)
+            ):
+                schema[param] = schema_type
+                continue
+
+            raise SignalResolvingError(
+                param.split("."),
+                f"types mismatch: {param_type} != {schema_type}",
+            )
+
         return SignalSchema(schema, setup)
 
     def row_to_features(

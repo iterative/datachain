@@ -102,7 +102,8 @@ tests = [
   "hypothesis",
   "aiotools>=1.7.0",
   "requests-mock",
-  "scipy"
+  "scipy",
+  "ultralytics"
 ]
 dev = [
   "datachain[docs,tests]",
@@ -118,7 +119,7 @@ examples = [
   "defusedxml",
   "accelerate",
   "huggingface_hub[hf_transfer]",
-  "ultralytics==8.3.87",
+  "ultralytics",
   "open_clip_torch"
 ]
 

@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-from typing import Callable, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 import pytest
 from pydantic import BaseModel
@@ -31,11 +31,15 @@ def func_args(*args):
     return 12345
 
 
+def func_typed(p1: int) -> int:
+    return p1 * 2
+
+
 def test_basic():
     sign = get_sign(s1=func_str)
 
     assert sign.func == func_str
-    assert sign.params == ["p1"]
+    assert sign.params == {"p1": Any}
     assert sign.output_schema.values == {"s1": str}
 
 
@@ -56,7 +60,7 @@ def test_signature_overwrite():
     sign = get_sign(s1=func_str, output={"my_sign": int}, params="some_prm")
 
     assert sign.func == func_str
-    assert sign.params == ["some_prm"]
+    assert sign.params == {"some_prm": Any}
     assert sign.output_schema.values == {"my_sign": int}
 
 
@@ -70,7 +74,7 @@ def test_output_as_value():
     sign = get_sign(s1=func_str, output="my_sign")
 
     assert sign.func == func_str
-    assert sign.params == ["p1"]
+    assert sign.params == {"p1": Any}
     assert sign.output_schema.values == {"my_sign": str}
 
 
@@ -78,7 +82,7 @@ def test_output_as_list():
     sign = get_sign(s1=func_str, output=["my_sign"])
 
     assert sign.func == func_str
-    assert sign.params == ["p1"]
+    assert sign.params == {"p1": Any}
     assert sign.output_schema.values == {"my_sign": str}
 
 
@@ -116,7 +120,7 @@ def test_no_params():
 
 def test_func_with_args():
     sign = get_sign(func_args, params=["prm1", "prm2"], output={"res": int})
-    assert sign.params == ["prm1", "prm2"]
+    assert sign.params == {"prm1": Any, "prm2": Any}
 
 
 def test_output_type_error():
@@ -165,7 +169,7 @@ def test_udf_class():
     sign = get_sign(s1=MyTest())
 
     assert sign.output_schema.values == {"s1": int}
-    assert sign.params == ["file", "p2"]
+    assert sign.params == {"file": Any, "p2": Any}
 
 
 def test_udf_flatten_value():
@@ -190,3 +194,9 @@ def test_udf_flatten_feature():
     sign = get_sign(r1=MyTest())
 
     assert sign.output_schema.values == {"r1": MyData}
+
+
+def test_udf_typed_param():
+    sign = get_sign(s1=func_typed)
+    assert sign.params == {"p1": int}
+    assert sign.output_schema.values == {"s1": int}

@@ -1,6 +1,7 @@
 import math
 
 import pytest
+from numpy.testing import assert_array_almost_equal
 
 from datachain import func
 from datachain.sql import select
@@ -14,7 +15,8 @@ def test_cosine_distance(warehouse):
         func.cosine_distance([0.0, 10.0], [1.0, 0.0]).label("cos4"),
     )
     result = tuple(warehouse.db.execute(query))
-    assert result == ((0.0, 0.0, 1.0, 1.0),)
+    assert len(result) == 1
+    assert_array_almost_equal(result[0], (0.0, 0.0, 1.0, 1.0), decimal=6)
 
 
 def test_euclidean_distance(warehouse):
@@ -25,7 +27,10 @@ def test_euclidean_distance(warehouse):
         func.euclidean_distance([1.0, 1.0, 1.0], [2.0, 2.0, 2.0]).label("eu4"),
     )
     result = tuple(warehouse.db.execute(query))
-    assert result == ((0.0, 0.0, math.sqrt(2), math.sqrt(3)),)
+    assert len(result) == 1
+    assert_array_almost_equal(
+        result[0], (0.0, 0.0, math.sqrt(2), math.sqrt(3)), decimal=6
+    )
 
 
 @pytest.mark.parametrize(

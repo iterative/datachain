@@ -1612,7 +1612,7 @@ class Catalog:
             except TerminationSignal as exc:
                 signal.signal(signal.SIGTERM, orig_sigterm_handler)
                 signal.signal(signal.SIGINT, orig_sigint_handler)
-                logging.info("Shutting down process %s, received %r", proc.pid, exc)
+                logger.info("Shutting down process %s, received %r", proc.pid, exc)
                 # Rather than forwarding the signal to the child, we try to shut it down
                 # gracefully. This is because we consider the script to be interactive
                 # and special, so we give it time to cleanup before exiting.
@@ -1627,7 +1627,7 @@ class Catalog:
                 if thread:
                     thread.join()  # wait for the reader thread
 
-        logging.info("Process %s exited with return code %s", proc.pid, proc.returncode)
+        logger.info("Process %s exited with return code %s", proc.pid, proc.returncode)
         if proc.returncode == QUERY_SCRIPT_CANCELED_EXIT_CODE:
             raise QueryScriptCancelError(
                 "Query script was canceled by user",

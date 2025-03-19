@@ -47,8 +47,8 @@ class YoloPose(DataModel):
     cls: int = Field(default=-1)
     name: str = Field(default="")
     confidence: float = Field(default=0)
-    box: BBox
-    pose: Pose3D
+    box: BBox = Field(default=BBox())
+    pose: Pose3D = Field(default=Pose3D())
 
     @staticmethod
     def from_result(result: "Results") -> "YoloPose":
@@ -87,11 +87,11 @@ class YoloPoses(DataModel):
         pose: The 3D pose keypoints of the poses.
     """
 
-    cls: list[int]
-    name: list[str]
-    confidence: list[float]
-    box: list[BBox]
-    pose: list[Pose3D]
+    cls: list[int] = Field(default=[])
+    name: list[str] = Field(default=[])
+    confidence: list[float] = Field(default=[])
+    box: list[BBox] = Field(default=[])
+    pose: list[Pose3D] = Field(default=[])
 
     @staticmethod
     def from_results(results: list["Results"]) -> "YoloPoses":

@@ -4,7 +4,7 @@ from typing import Any, Dict, Final, List, Literal, Optional, Union  # noqa: UP0
 
 import pytest
 
-from datachain import Column, DataModel
+from datachain import Column, DataModel, Sys, func
 from datachain.lib.convert.flatten import flatten
 from datachain.lib.file import File, TextFile
 from datachain.lib.model_store import ModelStore
@@ -434,15 +434,12 @@ def test_serialize_from_column_error():
 
 
 def test_to_udf_spec():
-    signals = SignalSchema.deserialize(
-        {
-            "age": "float",
-            "address": "str",
-            "f": "File@v1",
-        }
+    schema = SignalSchema(
+        {"age": float, "address": str, "f": File, "init": str},
+        {"init": lambda: 37},
     )
 
-    spec = SignalSchema.to_udf_spec(signals)
+    spec = schema.to_udf_spec()
 
     assert len(spec) == 2 + len(File.model_fields)
 
@@ -459,14 +456,8 @@ def test_to_udf_spec():
     assert spec["f__size"] == Int64
 
 
-def test_select():
-    schema = SignalSchema.deserialize(
-        {
-            "age": "float",
-            "address": "str",
-            "f": "MyType1@v1",
-        }
-    )
+def test_resolve():
+    schema = SignalSchema({"age": float, "address": str, "f": MyType1})
 
     new = schema.resolve("age", "f.aa", "f.bb")
     assert isinstance(new, SignalSchema)
@@ -477,6 +468,59 @@ def test_select():
     assert signals["age"] is float
     assert signals["f.aa"] is int
     assert signals["f.bb"] is str
+
+
+def test_resolve_error():
+    schema = SignalSchema({"age": float, "address": str, "f": MyType1})
+
+    with pytest.raises(SignalResolvingError):
+        schema.resolve("age", "f.aa", "f.bb", "f.cc")
+
+    with pytest.raises(SignalResolvingError):
+        schema.resolve("age", "f.aa", "f.bb", 37)
+
+
+def test_clone_without_file_signals():
+    schema = SignalSchema({**File.model_fields, "name": str, "age": float})
+
+    new = schema.clone_without_file_signals()
+    assert isinstance(new, SignalSchema)
+
+    signals = new.values
+    assert len(signals) == 2
+    assert {"name", "age"} == signals.keys()
+    assert signals["name"] is str
+    assert signals["age"] is float
+
+
+def test_clone_without_sys_signals():
+    schema = SignalSchema({"sys": Sys, "name": str, "age": float})
+
+    new = schema.clone_without_sys_signals()
+    assert isinstance(new, SignalSchema)
+
+    signals = new.values
+    assert len(signals) == 2
+    assert {"name", "age"} == signals.keys()
+    assert signals["name"] is str
+    assert signals["age"] is float
+
+
+def test_merge():
+    schema = SignalSchema({"name": str, "age": float})
+    another_schema = SignalSchema({"age": int, "address": str, "f": MyType1})
+
+    new = schema.merge(another_schema, "s2_")
+    assert isinstance(new, SignalSchema)
+
+    signals = new.values
+    assert len(signals) == 5
+    assert {"name", "age", "s2_age", "address", "f"} == signals.keys()
+    assert signals["name"] is str
+    assert signals["age"] is float
+    assert signals["s2_age"] is int
+    assert signals["address"] is str
+    assert signals["f"] is MyType1
 
 
 def test_select_custom_type_backward_compatibility():
@@ -528,6 +572,29 @@ def test_select_custom_type():
     assert signals["age"] is float
     assert signals["f.aa"] is int
     assert signals["f.bb"] is str
+
+
+def test_select_except_signals():
+    schema = SignalSchema({"age": float, "address": str, "f": MyType1})
+
+    new = schema.select_except_signals("address")
+    assert isinstance(new, SignalSchema)
+
+    signals = new.values
+    assert len(signals) == 2
+    assert {"age", "f"} == signals.keys()
+    assert signals["age"] is float
+    assert signals["f"] is MyType1
+
+
+def test_select_except_signals_error():
+    schema = SignalSchema({"age": float, "address": str, "f": MyType1})
+
+    with pytest.raises(SignalResolvingError):
+        schema.select_except_signals("address", "f.aa")
+
+    with pytest.raises(SignalResolvingError):
+        schema.select_except_signals("address", 37)
 
 
 def test_deserialize_restores_known_base_type():
@@ -910,15 +977,15 @@ def test_db_signals_as_columns():
 
 
 def test_row_to_objs():
-    spec = {"name": str, "age": float, "fr": MyType2}
+    spec = {"name": str, "age": float, "fr": MyType2, "foo": Optional[int]}
     schema = SignalSchema(spec)
 
     val = MyType2(name="Fred", deep=MyType1(aa=129, bb="qwe"))
-    row = ("myname", 12.5, *flatten(val))
+    row = ("myname", 12.5, *flatten(val), None)
 
     res = schema.row_to_objs(row)
 
-    assert res == ["myname", 12.5, val]
+    assert res == ["myname", 12.5, val, None]
 
 
 def test_row_to_objs_setup():
@@ -930,22 +997,122 @@ def test_row_to_objs_setup():
     val = MyType2(name="Fred", deep=MyType1(aa=129, bb="qwe"))
     row = ("myname", 12.5, *flatten(val))
 
+    # run twice to check that setup_values are cached
+    assert schema.setup_values is None
+    schema.row_to_objs(row)
+    assert schema.setup_values is not None
     res = schema.row_to_objs(row)
+    assert schema.setup_values is not None
+
     assert res == ["myname", 12.5, setup_value, val]
 
 
 def test_setup_not_callable():
-    spec = {"name": str, "age": float, "init_val": int, "fr": MyType2}
-    setup_dict = {"init_val": "asdfd"}
     with pytest.raises(SetupError):
-        SignalSchema(spec, setup_dict)
+        SignalSchema({"name": str}, {"init_val": "asdfd"})
+
+
+def test_setup_error():
+    schema = SignalSchema({"name": str, "value": int}, {"init": lambda: 1 / 0})
+    with pytest.raises(SetupError):
+        schema.row_to_objs(("myname", 37))
+
+
+@pytest.mark.parametrize(
+    "schema,hidden_fields",
+    [
+        ({"name": str, "value": int}, []),
+        ({"file": File}, ["file__version", "file__source"]),
+    ],
+)
+def test_get_flatten_hidden_fields(schema, hidden_fields):
+    schema_serialized = SignalSchema(schema).serialize()
+    assert SignalSchema.get_flatten_hidden_fields(schema_serialized) == hidden_fields
+
+
+@pytest.mark.parametrize(
+    "schema,result",
+    [
+        ({"name": str, "value": int}, False),
+        ({"name": str, "age": float, "f": File}, True),
+    ],
+)
+def test_contains_file(schema, result):
+    assert SignalSchema(schema).contains_file() is result
 
 
 def test_slice():
     schema = {"name": str, "age": float, "address": str}
-    keys = ["age", "name"]
-    sliced = SignalSchema(schema).slice(keys)
-    assert list(sliced.values.items()) == [("age", float), ("name", str)]
+    setup_values = {"init": lambda: 37}
+    keys = {"age": Any, "name": Any, "init": Any}
+    sliced = SignalSchema(schema).slice(keys, setup_values)
+    assert list(sliced.values.items()) == [("age", float), ("name", str), ("init", str)]
+
+
+@pytest.mark.parametrize(
+    "schema,keys,is_batch,result",
+    [
+        (
+            {"name": str, "age": float, "address": str},
+            {"name": Any, "age": float},
+            False,
+            [("name", str), ("age", float)],
+        ),
+        (
+            {"name": Optional[str], "age": float, "address": str},
+            {"name": Any, "age": Any},
+            False,
+            [("name", Optional[str]), ("age", float)],
+        ),
+        (
+            {"name": Optional[str], "age": float, "address": str},
+            {"name": str, "age": Any},
+            False,
+            [("name", str), ("age", float)],
+        ),
+        (
+            {"name": Optional[str], "age": float, "address": str},
+            {"name": Optional[str], "age": Any},
+            False,
+            [("name", str), ("age", float)],
+        ),
+        (
+            {"name": str, "age": float, "address": str},
+            {"name": list[str], "age": Any},
+            True,
+            [("name", str), ("age", float)],
+        ),
+        (
+            {"name": str, "age": float, "address": str},
+            {"name": list, "age": Any},
+            True,
+            [("name", str), ("age", float)],
+        ),
+    ],
+)
+def test_slice_typed(schema, keys, is_batch, result):
+    sliced = SignalSchema(schema).slice(keys, is_batch=is_batch)
+    assert list(sliced.values.items()) == result
+
+
+def test_slice_error():
+    schema = {"name": str, "age": float, "address": str}
+    keys = {"age": Any, "name": Any, "init": Any}
+    with pytest.raises(SignalResolvingError):
+        SignalSchema(schema).slice(keys)
+
+
+@pytest.mark.parametrize(
+    "keys,is_batch",
+    [
+        ({"name": str, "age": str}, False),
+        ({"name": dict, "age": str}, True),
+    ],
+)
+def test_slice_typed_error(keys, is_batch):
+    schema = {"name": str, "age": float, "address": str}
+    with pytest.raises(SignalResolvingError):
+        SignalSchema(schema).slice(keys, is_batch=is_batch)
 
 
 def test_slice_nested():
@@ -953,7 +1120,7 @@ def test_slice_nested():
         "name": str,
         "feature": MyType1,
     }
-    keys = ["feature.aa"]
+    keys = {"feature.aa": Any}
     sliced = SignalSchema(schema).slice(keys)
     assert list(sliced.values.items()) == [("feature.aa", int)]
 
@@ -979,6 +1146,12 @@ def test_mutate_change_type():
     schema = SignalSchema({"name": str, "age": float, "f": File})
     schema = schema.mutate({"age": int, "f": TextFile})
     assert schema.values == {"name": str, "age": int, "f": TextFile}
+
+
+def test_mutate_func():
+    schema = SignalSchema({"name": str, "age": float, "f": File})
+    schema = schema.mutate({"age": func.sum("age")})
+    assert schema.values == {"name": str, "age": float, "f": File}
 
 
 @pytest.mark.parametrize(
