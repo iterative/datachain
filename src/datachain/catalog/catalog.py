@@ -777,6 +777,8 @@ class Catalog:
         validate_version: Optional[bool] = True,
         listing: Optional[bool] = False,
         uuid: Optional[str] = None,
+        description: Optional[str] = None,
+        labels: Optional[list[str]] = None,
     ) -> "DatasetRecord":
         """
         Creates new dataset of a specific version.
@@ -803,6 +805,8 @@ class Catalog:
                 query_script=query_script,
                 schema=schema,
                 ignore_if_exists=True,
+                description=description,
+                labels=labels,
             )
 
         version = version or default_version

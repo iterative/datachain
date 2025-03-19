@@ -447,6 +447,21 @@ def test_show(capsys, test_session):
         assert f"{i} {first_name[i]}" in normalized_output
 
 
+def test_save(test_session):
+    chain = DataChain.from_values(key=["a", "b", "c"])
+    chain.save(
+        name="new_name",
+        version=1,
+        description="new description",
+        labels=["new_label", "old_label"],
+    )
+
+    ds = test_session.catalog.get_dataset("new_name")
+    assert ds.name == "new_name"
+    assert ds.description == "new description"
+    assert ds.labels == ["new_label", "old_label"]
+
+
 def test_show_nested_empty(capsys, test_session):
     files = [File(size=s, path=p) for p, s in zip(list("abcde"), range(5))]
     DataChain.from_values(file=files, session=test_session).limit(0).show()
