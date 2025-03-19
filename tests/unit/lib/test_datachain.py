@@ -79,6 +79,55 @@ def sort_files(files):
     return sorted(files, key=lambda f: (f.path, f.size))
 
 
+def test_repr(test_session):
+    dc = DataChain.from_values(
+        sign1=features_nested, col1=["a", "b", "c"], session=test_session
+    )
+    assert (
+        repr(dc)
+        == """\
+sign1: MyNested
+  label: str
+  fr: MyFr
+    nnn: str
+    count: int
+col1: str
+"""
+    )
+
+    # datachain without any columns
+    assert repr(dc.select_except("col1", "sign1")) == "Empty DataChain"
+
+    dc = dc.map(col2=lambda col1: col1 * 2)
+    assert (
+        repr(dc)
+        == """\
+sign1: MyNested
+  label: str
+  fr: MyFr
+    nnn: str
+    count: int
+col1: str
+col2: str
+"""
+    )
+
+    dc = dc.mutate(countplusone=dc.column("sign1.fr.count") + 1)
+    assert (
+        repr(dc)
+        == """\
+sign1: MyNested
+  label: str
+  fr: MyFr
+    nnn: str
+    count: int
+col1: str
+col2: str
+countplusone: int
+"""
+    )
+
+
 def test_pandas_conversion(test_session):
     df = pd.DataFrame(DF_DATA)
     df1 = DataChain.from_pandas(df, session=test_session)

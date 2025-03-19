@@ -6,6 +6,7 @@ import sys
 from collections.abc import Iterator, Sequence
 from functools import wraps
 from typing import (
+    IO,
     TYPE_CHECKING,
     Any,
     BinaryIO,
@@ -270,6 +271,18 @@ class DataChain:
         self._setup: dict = setup or {}
         self._sys = _sys
 
+    def __repr__(self) -> str:
+        """Return a string representation of the chain."""
+        classname = self.__class__.__name__
+        if not self._effective_signals_schema.values:
+            return f"Empty {classname}"
+
+        import io
+
+        file = io.StringIO()
+        self.print_schema(file=file)
+        return file.getvalue()
+
     @property
     def schema(self) -> dict[str, DataType]:
         """Get schema of the chain."""
@@ -323,9 +336,9 @@ class DataChain:
         """Return `self.union(other)`."""
         return self.union(other)
 
-    def print_schema(self) -> None:
+    def print_schema(self, file: Optional[IO] = None) -> None:
         """Print schema of the chain."""
-        self._effective_signals_schema.print_tree()
+        self._effective_signals_schema.print_tree(file=file)
 
     def clone(self) -> "Self":
         """Make a copy of the chain in a new table."""
@@ -633,7 +646,8 @@ class DataChain:
                 model_name=model_name,
                 jmespath=jmespath,
                 nrows=nrows,
-            )
+            ),
+            "params": {"file": File},
         }
         # disable prefetch if nrows is set
         settings = {"prefetch": 0} if nrows else {}
@@ -1007,8 +1021,9 @@ class DataChain:
         func: Optional[Union[Callable, UDFObjT]],
         params: Union[None, str, Sequence[str]],
         output: OutputType,
-        signal_map,
+        signal_map: dict[str, Callable],
     ) -> UDFObjT:
+        is_batch = target_class.is_input_batched
         is_generator = target_class.is_output_batched
         name = self.name or ""
 
@@ -1019,7 +1034,9 @@ class DataChain:
         if self._sys:
             signals_schema = SignalSchema({"sys": Sys}) | signals_schema
 
-        params_schema = signals_schema.slice(sign.params, self._setup)
+        params_schema = signals_schema.slice(
+            sign.params, self._setup, is_batch=is_batch
+        )
 
         return target_class._create(sign, params_schema)
 

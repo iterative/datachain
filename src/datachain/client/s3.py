@@ -55,7 +55,7 @@ class ClientS3(Client):
             except NotImplementedError:
                 pass
 
-        return cast(S3FileSystem, super().create_fs(**kwargs))
+        return cast("S3FileSystem", super().create_fs(**kwargs))
 
     def url(self, path: str, expires: int = 3600, **kwargs) -> str:
         """

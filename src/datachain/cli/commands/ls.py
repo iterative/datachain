@@ -38,11 +38,12 @@ def ls_local(
 ):
     from datachain import DataChain
 
-    if catalog is None:
-        from datachain.catalog import get_catalog
-
-        catalog = get_catalog(client_config=client_config)
     if sources:
+        if catalog is None:
+            from datachain.catalog import get_catalog
+
+            catalog = get_catalog(client_config=client_config)
+
         actual_sources = list(ls_urls(sources, catalog=catalog, long=long, **kwargs))
         if len(actual_sources) == 1:
             for _, entries in actual_sources:
@@ -61,8 +62,9 @@ def ls_local(
                 for entry in entries:
                     print(format_ls_entry(entry))
     else:
-        chain = DataChain.listings()
-        for ls in chain.collect("listing"):
+        # Collect results in a list here to prevent interference from `tqdm` and `print`
+        listing = list(DataChain.listings().collect("listing"))
+        for ls in listing:
             print(format_ls_entry(f"{ls.uri}@v{ls.version}"))  # type: ignore[union-attr]
 
 
