@@ -6,6 +6,7 @@ import sys
 from collections.abc import Iterator, Sequence
 from functools import wraps
 from typing import (
+    IO,
     TYPE_CHECKING,
     Any,
     BinaryIO,
@@ -270,6 +271,18 @@ class DataChain:
         self._setup: dict = setup or {}
         self._sys = _sys
 
+    def __repr__(self) -> str:
+        """Return a string representation of the chain."""
+        classname = self.__class__.__name__
+        if not self._effective_signals_schema.values:
+            return f"Empty {classname}"
+
+        import io
+
+        file = io.StringIO()
+        self.print_schema(file=file)
+        return file.getvalue()
+
     @property
     def schema(self) -> dict[str, DataType]:
         """Get schema of the chain."""
@@ -323,9 +336,9 @@ class DataChain:
         """Return `self.union(other)`."""
         return self.union(other)
 
-    def print_schema(self) -> None:
+    def print_schema(self, file: Optional[IO] = None) -> None:
         """Print schema of the chain."""
-        self._effective_signals_schema.print_tree()
+        self._effective_signals_schema.print_tree(file=file)
 
     def clone(self) -> "Self":
         """Make a copy of the chain in a new table."""
