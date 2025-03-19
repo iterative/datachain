@@ -63,6 +63,7 @@ from tests.utils import (
     dataset_dependency_asdict,
     make_index,
     text_embedding,
+)
 from datachain.error import (
     DatasetInvalidVersionError,
     DatasetNotFoundError,
