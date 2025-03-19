@@ -193,7 +193,14 @@ class File(DataModel):
         "last_modified": DateTime,
         "location": JSON,
     }
-    _hidden_fields: ClassVar[list[str]] = ["version", "source"]
+    _hidden_fields: ClassVar[list[str]] = [
+        "version",
+        "source",
+        "etag",
+        "is_latest",
+        "last_modified",
+        "location",
+    ]
 
     _unique_id_keys: ClassVar[list[str]] = [
         "source",

@@ -1022,7 +1022,17 @@ def test_setup_error():
     "schema,hidden_fields",
     [
         ({"name": str, "value": int}, []),
-        ({"file": File}, ["file__version", "file__source"]),
+        (
+            {"file": File},
+            [
+                "file__version",
+                "file__source",
+                "file__etag",
+                "file__is_latest",
+                "file__last_modified",
+                "file__location",
+            ],
+        ),
     ],
 )
 def test_get_flatten_hidden_fields(schema, hidden_fields):
