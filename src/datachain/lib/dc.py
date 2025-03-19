@@ -773,7 +773,12 @@ class DataChain:
         )
 
     def save(  # type: ignore[override]
-        self, name: Optional[str] = None, version: Optional[int] = None, **kwargs
+        self,
+        name: Optional[str] = None,
+        version: Optional[int] = None,
+        description: Optional[str] = None,
+        labels: Optional[list[str]] = None,
+        **kwargs,
     ) -> "Self":
         """Save to a Dataset. It returns the chain itself.
 
@@ -781,11 +786,18 @@ class DataChain:
             name : dataset name. Empty name saves to a temporary dataset that will be
                 removed after process ends. Temp dataset are useful for optimization.
             version : version of a dataset. Default - the last version that exist.
+            description : description of a dataset.
+            labels : labels of a dataset.
         """
         schema = self.signals_schema.clone_without_sys_signals().serialize()
         return self._evolve(
             query=self._query.save(
-                name=name, version=version, feature_schema=schema, **kwargs
+                name=name,
+                version=version,
+                description=description,
+                labels=labels,
+                feature_schema=schema,
+                **kwargs,
             )
         )
 

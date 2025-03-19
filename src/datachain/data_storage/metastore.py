@@ -119,6 +119,8 @@ class AbstractMetastore(ABC, Serializable):
         query_script: str = "",
         schema: Optional[dict[str, Any]] = None,
         ignore_if_exists: bool = False,
+        description: Optional[str] = None,
+        labels: Optional[list[str]] = None,
     ) -> DatasetRecord:
         """Creates new dataset."""
 
@@ -518,6 +520,8 @@ class AbstractDBMetastore(AbstractMetastore):
         query_script: str = "",
         schema: Optional[dict[str, Any]] = None,
         ignore_if_exists: bool = False,
+        description: Optional[str] = None,
+        labels: Optional[list[str]] = None,
         **kwargs,  # TODO registered = True / False
     ) -> DatasetRecord:
         """Creates new dataset."""
@@ -533,6 +537,8 @@ class AbstractDBMetastore(AbstractMetastore):
             sources="\n".join(sources) if sources else "",
             query_script=query_script,
             schema=json.dumps(schema or {}),
+            description=description,
+            labels=json.dumps(labels or []),
         )
         if ignore_if_exists and hasattr(query, "on_conflict_do_nothing"):
             # SQLite and PostgreSQL both support 'on_conflict_do_nothing',

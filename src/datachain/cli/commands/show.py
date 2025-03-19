@@ -40,6 +40,13 @@ def show(
         .offset(offset)
     )
     records = query.to_db_records()
+    print("Name: ", name)
+    if dataset.description:
+        print("Description: ", dataset.description)
+    if dataset.labels:
+        print("Labels: ", ",".join(dataset.labels))
+    print("\n")
+
     show_records(records, collapse_columns=not no_collapse, hidden_fields=hidden_fields)
 
     if schema and dataset_version.feature_schema:
