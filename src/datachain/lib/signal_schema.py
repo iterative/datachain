@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from inspect import isclass
 from typing import (  # noqa: UP035
+    IO,
     TYPE_CHECKING,
     Annotated,
     Any,
@@ -154,9 +155,9 @@ class SignalSchema:
             if not callable(func):
                 raise SetupError(key, "value must be function or callable class")
 
-    def _init_setup_values(self):
+    def _init_setup_values(self) -> None:
         if self.setup_values is not None:
-            return self.setup_values
+            return
 
         res = {}
         for key, func in self.setup_func.items():
@@ -398,7 +399,7 @@ class SignalSchema:
         return SignalSchema(signals)
 
     @staticmethod
-    def get_flatten_hidden_fields(schema):
+    def get_flatten_hidden_fields(schema: dict):
         custom_types = schema.get("_custom_types", {})
         if not custom_types:
             return []
@@ -463,19 +464,61 @@ class SignalSchema:
         return None
 
     def slice(
-        self, keys: Sequence[str], setup: Optional[dict[str, Callable]] = None
+        self,
+        params: dict[str, Union[DataType, Any]],
+        setup: Optional[dict[str, Callable]] = None,
+        is_batch: bool = False,
     ) -> "SignalSchema":
-        # Make new schema that combines current schema and setup signals
-        setup = setup or {}
-        setup_no_types = dict.fromkeys(setup.keys(), str)
-        union = SignalSchema(self.values | setup_no_types)
-        # Slice combined schema by keys
-        schema = {}
-        for k in keys:
-            try:
-                schema[k] = union._find_in_tree(k.split("."))
-            except SignalResolvingError:
-                pass
+        """
+        Returns new schema that combines current schema and setup signals.
+        """
+        setup_params = setup.keys() if setup else []
+        schema: dict[str, DataType] = {}
+
+        for param, param_type in params.items():
+            # This is special case for setup params, they are always treated as strings
+            if param in setup_params:
+                schema[param] = str
+                continue
+
+            schema_type = self._find_in_tree(param.split("."))
+
+            if param_type is Any:
+                schema[param] = schema_type
+                continue
+
+            schema_origin = get_origin(schema_type)
+            param_origin = get_origin(param_type)
+
+            if schema_origin is Union and type(None) in get_args(schema_type):
+                schema_type = get_args(schema_type)[0]
+                if param_origin is Union and type(None) in get_args(param_type):
+                    param_type = get_args(param_type)[0]
+
+            if is_batch:
+                if param_type is list:
+                    schema[param] = schema_type
+                    continue
+
+                if param_origin is not list:
+                    raise SignalResolvingError(param.split("."), "is not a list")
+
+                param_type = get_args(param_type)[0]
+
+            if param_type == schema_type or (
+                isclass(param_type)
+                and isclass(schema_type)
+                and issubclass(param_type, File)
+                and issubclass(schema_type, File)
+            ):
+                schema[param] = schema_type
+                continue
+
+            raise SignalResolvingError(
+                param.split("."),
+                f"types mismatch: {param_type} != {schema_type}",
+            )
+
         return SignalSchema(schema, setup)
 
     def row_to_features(
@@ -702,16 +745,20 @@ class SignalSchema:
                     substree, new_prefix, depth + 1, include_hidden
                 )
 
-    def print_tree(self, indent: int = 4, start_at: int = 0):
+    def print_tree(self, indent: int = 2, start_at: int = 0, file: Optional[IO] = None):
         for path, type_, _, depth in self.get_flat_tree():
             total_indent = start_at + depth * indent
-            print(" " * total_indent, f"{path[-1]}:", SignalSchema._type_to_str(type_))
+            col_name = " " * total_indent + path[-1]
+            col_type = SignalSchema._type_to_str(type_)
+            print(col_name, col_type, sep=": ", file=file)
 
             if get_origin(type_) is list:
                 args = get_args(type_)
                 if len(args) > 0 and ModelStore.is_pydantic(args[0]):
                     sub_schema = SignalSchema({"* list of": args[0]})
-                    sub_schema.print_tree(indent=indent, start_at=total_indent + indent)
+                    sub_schema.print_tree(
+                        indent=indent, start_at=total_indent + indent, file=file
+                    )
 
     def get_headers_with_length(self, include_hidden: bool = True):
         paths = [
