@@ -1091,7 +1091,7 @@ class DatasetQuery:
         self.temp_table_names: list[str] = []
         self.dependencies: set[DatasetDependencyType] = set()
         self.table = self.get_table()
-        self.query_step: Optional[QueryStep] = None
+        self.starting_step: Optional[QueryStep] = None
         self.name: Optional[str] = None
         self.version: Optional[int] = None
         self.feature_schema: Optional[dict] = None
@@ -1111,17 +1111,17 @@ class DatasetQuery:
             # this point
             self.list_ds_name = name
         elif fallback_to_studio and is_token_set():
-            self._set_query_step(
+            self._set_starting_step(
                 self.catalog.get_dataset_with_remote_fallback(name, version)
             )
         else:
-            self._set_query_step(self.catalog.get_dataset(name))
+            self._set_starting_step(self.catalog.get_dataset(name))
 
-    def _set_query_step(self, ds: "DatasetRecord") -> None:
+    def _set_starting_step(self, ds: "DatasetRecord") -> None:
         if not self.version:
             self.version = ds.latest_version
 
-        self.query_step = QueryStep(self.catalog, ds.name, self.version)
+        self.starting_step = QueryStep(self.catalog, ds.name, self.version)
 
         # at this point we know our starting dataset so setting up schemas
         self.feature_schema = ds.get_version(self.version).feature_schema
@@ -1208,7 +1208,7 @@ class DatasetQuery:
 
         if self.list_ds_name:
             # at this point we know what is our starting listing dataset name
-            self._set_query_step(self.catalog.get_dataset(self.list_ds_name))  # type: ignore [arg-type]
+            self._set_starting_step(self.catalog.get_dataset(self.list_ds_name))  # type: ignore [arg-type]
         query = self.clone()
 
         index = os.getenv("DATACHAIN_QUERY_CHUNK_INDEX", self._chunk_index)
@@ -1227,8 +1227,8 @@ class DatasetQuery:
             query = query.filter(C.sys__rand % total == index)
             query.steps = query.steps[-1:] + query.steps[:-1]
 
-        assert query.query_step
-        result = query.query_step.apply()
+        assert query.starting_step
+        result = query.starting_step.apply()
         self.dependencies.update(result.dependencies)
 
         for step in query.steps:

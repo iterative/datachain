@@ -1070,7 +1070,7 @@ def test_avoid_recalculation_after_save(cloud_test_catalog):
 
     assert ds2._query.steps == []
     assert ds2._query.dependencies == set()
-    assert isinstance(ds2._query.query_step, QueryStep)
+    assert isinstance(ds2._query.starting_step, QueryStep)
     ds2.save("ds2")
     assert calls == 1  # UDF should be called only once
 
