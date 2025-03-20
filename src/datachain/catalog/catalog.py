@@ -795,6 +795,19 @@ class Catalog:
         try:
             dataset = self.get_dataset(name)
             default_version = dataset.next_version
+
+            if (description or labels) and (
+                dataset.description != description or dataset.labels != labels
+            ):
+                description = description or dataset.description
+                labels = labels or dataset.labels
+
+                self.update_dataset(
+                    dataset,
+                    description=description,
+                    labels=labels,
+                )
+
         except DatasetNotFoundError:
             schema = {
                 c.name: c.type.to_dict() for c in columns if isinstance(c.type, SQLType)

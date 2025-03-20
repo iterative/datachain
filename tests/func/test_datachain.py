@@ -461,6 +461,16 @@ def test_save(test_session):
     assert ds.description == "new description"
     assert ds.labels == ["new_label", "old_label"]
 
+    chain.save(
+        name="new_name",
+        description="updated description",
+        labels=["new_label", "old_label", "new_label2"],
+    )
+    ds = test_session.catalog.get_dataset("new_name")
+    assert ds.name == "new_name"
+    assert ds.description == "updated description"
+    assert ds.labels == ["new_label", "old_label", "new_label2"]
+
 
 def test_show_nested_empty(capsys, test_session):
     files = [File(size=s, path=p) for p, s in zip(list("abcde"), range(5))]
