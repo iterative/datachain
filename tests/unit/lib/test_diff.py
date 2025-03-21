@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from datachain.diff import CompareStatus, compare_and_split
 from datachain.lib.dc import DataChain
 from datachain.lib.file import File
-from datachain.sql.types import String
+from datachain.sql.types import Int, String
 from tests.utils import sorted_dicts
 
 
@@ -17,6 +17,11 @@ def _as_utc(d):
 @pytest.fixture
 def str_default(test_session):
     return String.default_value(test_session.catalog.warehouse.db.dialect)
+
+
+@pytest.fixture
+def int_default(test_session):
+    return Int.default_value(test_session.catalog.warehouse.db.dialect)
 
 
 @pytest.mark.parametrize("added", (True, False))
@@ -418,7 +423,7 @@ def test_compare_right_compare_wrong_length(test_session):
 
 @pytest.mark.parametrize("status_col", ("diff", None))
 @pytest.mark.parametrize("right_on", ("file2", None))
-def test_ddiff(test_session, status_col, right_on, str_default):
+def test_diff(test_session, str_default, int_default, status_col, right_on):
     fs1 = File(source="s1", path="p1", version="2", etag="e2")
     fs1_updated = File(source="s1", path="p1", version="1", etag="e1")
     fs2 = File(source="s2", path="p2", version="1", etag="e1")
@@ -452,7 +457,7 @@ def test_ddiff(test_session, status_col, right_on, str_default):
     expected = [
         (CompareStatus.MODIFIED, "s1", "p1", "1", "e1", 1),
         (CompareStatus.ADDED, "s2", "p2", "1", "e1", 2),
-        (CompareStatus.DELETED, "s3", "p3", str_default, str_default, str_default),
+        (CompareStatus.DELETED, "s3", "p3", str_default, str_default, int_default),
         (CompareStatus.SAME, "s4", "p4", "1", "e1", 4),
     ]
 
@@ -472,7 +477,7 @@ def test_ddiff(test_session, status_col, right_on, str_default):
 
 
 @pytest.mark.parametrize("status_col", ("diff", None))
-def test_diff_nested(test_session, str_default, status_col):
+def test_diff_nested(test_session, str_default, int_default, status_col):
     class Nested(BaseModel):
         file: File
 
@@ -509,7 +514,7 @@ def test_diff_nested(test_session, str_default, status_col):
     expected = [
         (CompareStatus.MODIFIED, "s1", "p1", "1", "e1", 1),
         (CompareStatus.ADDED, "s2", "p2", "1", "e1", 2),
-        (CompareStatus.DELETED, "s3", "p3", str_default, str_default, str_default),
+        (CompareStatus.DELETED, "s3", "p3", str_default, str_default, int_default),
         (CompareStatus.SAME, "s4", "p4", "1", "e1", 4),
     ]
 
