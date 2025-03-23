@@ -9,12 +9,12 @@ from pydantic import BaseModel
 from datachain.query.schema import DEFAULT_DELIMITER
 
 
-def unflatten_to_json(model: type[BaseModel], row: Sequence[Any], pos=0) -> dict:
+def unflatten_to_json(model: type[BaseModel], row: Sequence[Any], pos: int = 0) -> dict:
     return unflatten_to_json_pos(model, row, pos)[0]
 
 
 def unflatten_to_json_pos(
-    model: type[BaseModel], row: Sequence[Any], pos=0
+    model: type[BaseModel], row: Sequence[Any], pos: int = 0
 ) -> tuple[dict, int]:
     res = {}
     for name, f_info in model.model_fields.items():
@@ -35,8 +35,7 @@ def unflatten_to_json_pos(
 def _normalize(name: str) -> str:
     if DEFAULT_DELIMITER in name:
         raise RuntimeError(
-            f"variable '{name}' cannot be used "
-            f"because it contains {DEFAULT_DELIMITER}"
+            f"variable '{name}' cannot be used because it contains {DEFAULT_DELIMITER}"
         )
     return _to_snake_case(name)
 

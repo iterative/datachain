@@ -3,6 +3,7 @@ import os.path
 import uuid
 from collections.abc import Generator
 from pathlib import PosixPath
+from typing import NamedTuple
 
 import attrs
 import pytest
@@ -11,25 +12,82 @@ from pytest import MonkeyPatch, TempPathFactory
 from upath.implementations.cloud import CloudPath
 
 from datachain.catalog import Catalog
-from datachain.catalog.loader import get_id_generator, get_metastore, get_warehouse
-from datachain.cli_utils import CommaSeparatedArgs
-from datachain.client.local import FileClient
+from datachain.catalog.loader import get_metastore, get_warehouse
+from datachain.cli.utils import CommaSeparatedArgs
+from datachain.config import Config, ConfigLevel
 from datachain.data_storage.sqlite import (
     SQLiteDatabaseEngine,
-    SQLiteIDGenerator,
     SQLiteMetastore,
     SQLiteWarehouse,
 )
 from datachain.dataset import DatasetRecord
+from datachain.lib.dc import DataChain, Sys
 from datachain.query.session import Session
-from datachain.utils import DataChainDir
+from datachain.utils import (
+    ENV_DATACHAIN_GLOBAL_CONFIG_DIR,
+    ENV_DATACHAIN_SYSTEM_CONFIG_DIR,
+    STUDIO_URL,
+    DataChainDir,
+)
 
-from .utils import DEFAULT_TREE, get_simple_ds_query, instantiate_tree
+from .utils import DEFAULT_TREE, instantiate_tree
 
 DEFAULT_DATACHAIN_BIN = "datachain"
 DEFAULT_DATACHAIN_GIT_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 collect_ignore = ["setup.py"]
+
+
+@pytest.fixture(scope="session", autouse=True)
+def add_test_env():
+    os.environ["DATACHAIN_TEST"] = "true"
+
+
+@pytest.fixture(autouse=True)
+def global_config_dir(monkeypatch, tmp_path_factory):
+    global_dir = str(tmp_path_factory.mktemp("studio-login-global"))
+    monkeypatch.setenv(ENV_DATACHAIN_GLOBAL_CONFIG_DIR, global_dir)
+    yield global_dir
+
+
+@pytest.fixture(autouse=True)
+def system_config_dir(monkeypatch, tmp_path_factory):
+    system_dir = str(tmp_path_factory.mktemp("studio-login-system"))
+    monkeypatch.setenv(ENV_DATACHAIN_SYSTEM_CONFIG_DIR, system_dir)
+    yield system_dir
+
+
+@pytest.fixture(autouse=True)
+def virtual_memory(mocker):
+    class VirtualMemory(NamedTuple):
+        total: int
+        available: int
+        percent: int
+        used: int
+        free: int
+
+    return mocker.patch(
+        "psutil.virtual_memory",
+        return_value=VirtualMemory(
+            total=1073741824,
+            available=5368709120,
+            # prevent dumping of smaller batches to db in process_udf_outputs
+            # we want to avoid this due to tests running concurrently (xdist)
+            percent=50,
+            used=5368709120,
+            free=5368709120,
+        ),
+    )
+
+
+@pytest.fixture(autouse=True)
+def per_thread_im_mem_db(mocker, worker_id):
+    if worker_id == "master":
+        return
+    mocker.patch(
+        "datachain.data_storage.sqlite._get_in_memory_uri",
+        return_value=f"file:in-mem-db-{worker_id}?mode=memory&cache=shared",
+    )
 
 
 @pytest.fixture(scope="session")
@@ -65,7 +123,11 @@ def clean_environment(
 
 @pytest.fixture
 def sqlite_db():
-    return SQLiteDatabaseEngine.from_db_file(":memory:")
+    if os.environ.get("DATACHAIN_METASTORE") or os.environ.get("DATACHAIN_WAREHOUSE"):
+        pytest.skip("This test only runs on SQLite")
+    with SQLiteDatabaseEngine.from_db_file(":memory:") as db:
+        yield db
+        cleanup_sqlite_db(db, [])
 
 
 def cleanup_sqlite_db(
@@ -92,66 +154,47 @@ def cleanup_sqlite_db(
 
 
 @pytest.fixture
-def id_generator():
-    if os.environ.get("DATACHAIN_ID_GENERATOR"):
-        _id_generator = get_id_generator()
-        yield _id_generator
-
-        _id_generator.cleanup_for_tests()
-    else:
-        db = SQLiteDatabaseEngine.from_db_file(":memory:")
-        _id_generator = SQLiteIDGenerator(db)
-        yield _id_generator
-
-        _id_generator.cleanup_for_tests()
-
-        # Close the connection so that the SQLite file is no longer open, to avoid
-        # pytest throwing: OSError: [Errno 24] Too many open files
-        _id_generator.db.close()
-
-
-@pytest.fixture
-def metastore(id_generator):
+def metastore():
     if os.environ.get("DATACHAIN_METASTORE"):
-        _metastore = get_metastore(id_generator)
+        _metastore = get_metastore()
         yield _metastore
 
         _metastore.cleanup_for_tests()
     else:
-        _metastore = SQLiteMetastore(id_generator, db_file=":memory:")
+        _metastore = SQLiteMetastore(db_file=":memory:")
         yield _metastore
 
         cleanup_sqlite_db(_metastore.db.clone(), _metastore.default_table_names)
-        Session.cleanup_for_tests()
 
-        # Close the connection so that the SQLite file is no longer open, to avoid
-        # pytest throwing: OSError: [Errno 24] Too many open files
-        _metastore.db.close()
+    # Close the connection so that the SQLite file is no longer open, to avoid
+    # pytest throwing: OSError: [Errno 24] Too many open files
+    # Or, for other implementations, prevent "too many clients" errors.
+    _metastore.close_on_exit()
 
 
 def check_temp_tables_cleaned_up(original_warehouse):
     """Ensure that temporary tables are cleaned up."""
-    warehouse = original_warehouse.clone()
-    assert [
-        t
-        for t in sqlalchemy.inspect(warehouse.db.engine).get_table_names()
-        if t.startswith(
-            (warehouse.UDF_TABLE_NAME_PREFIX, warehouse.TMP_TABLE_NAME_PREFIX)
-        )
-    ] == []
+    with original_warehouse.clone() as warehouse:
+        assert [
+            t
+            for t in sqlalchemy.inspect(warehouse.db.engine).get_table_names()
+            if t.startswith(
+                (warehouse.UDF_TABLE_NAME_PREFIX, warehouse.TMP_TABLE_NAME_PREFIX)
+            )
+        ] == []
 
 
 @pytest.fixture
-def warehouse(id_generator, metastore):
+def warehouse(metastore):
     if os.environ.get("DATACHAIN_WAREHOUSE"):
-        _warehouse = get_warehouse(id_generator)
+        _warehouse = get_warehouse()
         yield _warehouse
         try:
             check_temp_tables_cleaned_up(_warehouse)
         finally:
             _warehouse.cleanup_for_tests()
     else:
-        _warehouse = SQLiteWarehouse(id_generator, db_file=":memory:")
+        _warehouse = SQLiteWarehouse(db_file=":memory:")
         yield _warehouse
         try:
             check_temp_tables_cleaned_up(_warehouse)
@@ -164,59 +207,46 @@ def warehouse(id_generator, metastore):
 
 
 @pytest.fixture
-def catalog(id_generator, metastore, warehouse):
-    return Catalog(id_generator=id_generator, metastore=metastore, warehouse=warehouse)
+def catalog(metastore, warehouse):
+    return Catalog(metastore=metastore, warehouse=warehouse)
 
 
 @pytest.fixture
-def id_generator_tmpfile(tmp_path):
-    if os.environ.get("DATACHAIN_ID_GENERATOR"):
-        _id_generator = get_id_generator()
-        yield _id_generator
-
-        _id_generator.cleanup_for_tests()
-    else:
-        db = SQLiteDatabaseEngine.from_db_file(tmp_path / "test.db")
-        _id_generator = SQLiteIDGenerator(db)
-        yield _id_generator
-
-        _id_generator.cleanup_for_tests()
-
-        # Close the connection so that the SQLite file is no longer open, to avoid
-        # pytest throwing: OSError: [Errno 24] Too many open files
-        _id_generator.db.close()
+def test_session(catalog):
+    with Session("TestSession", catalog=catalog) as session:
+        yield session
 
 
 @pytest.fixture
-def metastore_tmpfile(tmp_path, id_generator_tmpfile):
+def metastore_tmpfile(tmp_path):
     if os.environ.get("DATACHAIN_METASTORE"):
-        _metastore = get_metastore(id_generator_tmpfile)
+        _metastore = get_metastore()
         yield _metastore
 
         _metastore.cleanup_for_tests()
     else:
-        _metastore = SQLiteMetastore(id_generator_tmpfile, db_file=tmp_path / "test.db")
+        _metastore = SQLiteMetastore(db_file=tmp_path / "test.db")
         yield _metastore
 
         cleanup_sqlite_db(_metastore.db.clone(), _metastore.default_table_names)
-        Session.cleanup_for_tests()
 
-        # Close the connection so that the SQLite file is no longer open, to avoid
-        # pytest throwing: OSError: [Errno 24] Too many open files
-        _metastore.db.close()
+    # Close the connection so that the SQLite file is no longer open, to avoid
+    # pytest throwing: OSError: [Errno 24] Too many open files
+    # Or, for other implementations, prevent "too many clients" errors.
+    _metastore.close_on_exit()
 
 
 @pytest.fixture
-def warehouse_tmpfile(tmp_path, id_generator_tmpfile, metastore_tmpfile):
+def warehouse_tmpfile(tmp_path, metastore_tmpfile):
     if os.environ.get("DATACHAIN_WAREHOUSE"):
-        _warehouse = get_warehouse(id_generator_tmpfile)
+        _warehouse = get_warehouse()
         yield _warehouse
         try:
             check_temp_tables_cleaned_up(_warehouse)
         finally:
             _warehouse.cleanup_for_tests()
     else:
-        _warehouse = SQLiteWarehouse(id_generator_tmpfile, db_file=tmp_path / "test.db")
+        _warehouse = SQLiteWarehouse(db_file=tmp_path / "test.db")
         yield _warehouse
         try:
             check_temp_tables_cleaned_up(_warehouse)
@@ -228,6 +258,20 @@ def warehouse_tmpfile(tmp_path, id_generator_tmpfile, metastore_tmpfile):
             # Close the connection so that the SQLite file is no longer open, to avoid
             # pytest throwing: OSError: [Errno 24] Too many open files
             _warehouse.db.close()
+
+
+@pytest.fixture
+def catalog_tmpfile(metastore_tmpfile, warehouse_tmpfile):
+    # For testing parallel and distributed processing, as these cannot use
+    # in-memory databases.
+    return Catalog(metastore=metastore_tmpfile, warehouse=warehouse_tmpfile)
+
+
+@pytest.fixture
+def test_session_tmpfile(catalog_tmpfile):
+    # For testing parallel and distributed processing, as these cannot use
+    # in-memory databases.
+    return Session("TestSession", catalog=catalog_tmpfile)
 
 
 @pytest.fixture
@@ -349,21 +393,12 @@ class CloudTestCatalog:
         return self.server.src_uri
 
     @property
-    def storage_uri(self):
-        if self.server.kind == "file":
-            return FileClient.root_path().as_uri()
-        return self.server.src_uri
-
-    @property
-    def partial_path(self):
-        if self.server.kind == "file":
-            _, rel_path = FileClient.split_url(self.src_uri)
-            return rel_path
-        return ""
-
-    @property
     def client_config(self):
         return self.server.client_config
+
+    @property
+    def session(self) -> Session:
+        return Session("CTCSession", catalog=self.catalog)
 
 
 cloud_types = ["s3", "gs", "azure"]
@@ -418,6 +453,7 @@ def cloud_server(request, tmp_upath_factory, cloud_type, version_aware, tree):
 def datachain_job_id(monkeypatch):
     job_id = uuid.uuid4().hex
     monkeypatch.setenv("DATACHAIN_JOB_ID", job_id)
+    return job_id
 
 
 @pytest.fixture
@@ -434,14 +470,13 @@ def cloud_server_credentials(cloud_server, monkeypatch):
         monkeypatch.setenv("AWS_DEFAULT_REGION", cfg.get("region_name"))
 
 
-def get_cloud_test_catalog(cloud_server, tmp_path, id_generator, metastore, warehouse):
+def get_cloud_test_catalog(cloud_server, tmp_path, metastore, warehouse):
     cache_dir = tmp_path / ".datachain" / "cache"
-    cache_dir.mkdir(parents=True)
+    cache_dir.mkdir(parents=True, exist_ok=True)
     tmpfile_dir = tmp_path / ".datachain" / "tmp"
-    tmpfile_dir.mkdir()
+    tmpfile_dir.mkdir(exist_ok=True)
 
     catalog = Catalog(
-        id_generator=id_generator,
         metastore=metastore,
         warehouse=warehouse,
         cache_dir=str(cache_dir),
@@ -456,13 +491,30 @@ def cloud_test_catalog(
     cloud_server,
     cloud_server_credentials,
     tmp_path,
-    id_generator,
     metastore,
     warehouse,
 ):
-    return get_cloud_test_catalog(
-        cloud_server, tmp_path, id_generator, metastore, warehouse
-    )
+    return get_cloud_test_catalog(cloud_server, tmp_path, metastore, warehouse)
+
+
+@pytest.fixture
+def cloud_test_catalog_upload(cloud_test_catalog):
+    """This returns a version of the cloud_test_catalog that is suitable for uploading
+    files, and will perform the necessary cleanup of any uploaded files."""
+    from datachain.client.fsspec import Client
+
+    src = cloud_test_catalog.src_uri
+    client = Client.get_implementation(src)
+    fsspec_fs = client.create_fs(**cloud_test_catalog.client_config)
+    original_paths = set(fsspec_fs.ls(src))
+
+    yield cloud_test_catalog
+
+    # Cleanup any written files
+    new_paths = set(fsspec_fs.ls(src))
+    cleanup_paths = new_paths - original_paths
+    for p in cleanup_paths:
+        fsspec_fs.rm(p, recursive=True)
 
 
 @pytest.fixture
@@ -470,14 +522,12 @@ def cloud_test_catalog_tmpfile(
     cloud_server,
     cloud_server_credentials,
     tmp_path,
-    id_generator_tmpfile,
     metastore_tmpfile,
     warehouse_tmpfile,
 ):
     return get_cloud_test_catalog(
         cloud_server,
         tmp_path,
-        id_generator_tmpfile,
         metastore_tmpfile,
         warehouse_tmpfile,
     )
@@ -485,7 +535,19 @@ def cloud_test_catalog_tmpfile(
 
 @pytest.fixture
 def listed_bucket(cloud_test_catalog):
-    list(cloud_test_catalog.catalog.ls([cloud_test_catalog.src_uri], fields=["name"]))
+    ctc = cloud_test_catalog
+    DataChain.from_storage(ctc.src_uri, session=ctc.session).exec()
+
+
+@pytest.fixture
+def animal_dataset(listed_bucket, cloud_test_catalog):
+    name = uuid.uuid4().hex
+    catalog = cloud_test_catalog.catalog
+    src_uri = cloud_test_catalog.src_uri
+    dataset = catalog.create_dataset_from_sources(name, [src_uri], recursive=True)
+    return catalog.update_dataset(
+        dataset, {"description": "animal dataset", "labels": ["cats", "dogs"]}
+    )
 
 
 @pytest.fixture
@@ -515,13 +577,6 @@ def cats_dataset(listed_bucket, cloud_test_catalog):
 
 
 @pytest.fixture
-def simple_ds_query(cloud_test_catalog):
-    return get_simple_ds_query(
-        path=cloud_test_catalog.src_uri, catalog=cloud_test_catalog.catalog
-    )
-
-
-@pytest.fixture
 def dataset_record():
     return DatasetRecord(
         id=1,
@@ -529,7 +584,6 @@ def dataset_record():
         description="",
         labels=[],
         versions=[],
-        shadow=False,
         status=1,
         schema={},
         feature_schema={},
@@ -545,14 +599,11 @@ def dataset_rows():
             "location": "",
             "source": "s3://my-bucket",
             "dir_type": 0,
-            "vtype": "",
             "parent": "input/text_emd_1m",
             "version": "7e589b7d-382c-49a5-931f-2b999c930c5e",
             "is_latest": True,
             "name": f"dql_1m_meta_text_emd.parquet_3_{i}_0.snappy.parquet",
             "etag": f"72b35c8e9b8eed1636c91eb94241c2f8-{i}",
-            "owner_id": "owner",
-            "owner_name": "aws-iterative-sandbox",
             "last_modified": "2024-02-23T10:42:31.842944+00:00",
             "size": 49807360,
             "sys__rand": 12123123123,
@@ -573,3 +624,123 @@ def dataset_rows():
         }
         for i in range(19)
     ]
+
+
+@pytest.fixture
+def studio_datasets(requests_mock):
+    with Config(ConfigLevel.GLOBAL).edit() as conf:
+        conf["studio"] = {"token": "isat_access_token", "team": "team_name"}
+
+    common_version_info = {
+        "status": 1,
+        "created_at": "2024-02-23T10:42:31.842944+00:00",
+        "finished_at": "2024-02-23T10:42:31.842944+00:00",
+        "error_message": "",
+        "error_stack": "",
+        "num_objects": 6,
+        "size": 100,
+    }
+    dogs_dataset = {
+        "id": 1,
+        "name": "dogs",
+        "description": "dogs dataset",
+        "labels": ["dogs", "dataset"],
+        "versions": [
+            {
+                "version": 1,
+                "id": 1,
+                "uuid": "dab73bdf-ceb3-4af3-8e01-1d44eb41acf9",
+                "dataset_id": 1,
+                **common_version_info,
+            },
+            {
+                "version": 2,
+                "id": 2,
+                "uuid": "dab73bdf-ceb3-4af3-8e01-1d44eb41acf8",
+                "dataset_id": 1,
+                **common_version_info,
+            },
+        ],
+    }
+
+    datasets = [
+        dogs_dataset,
+        {
+            "id": 2,
+            "name": "cats",
+            "description": "cats dataset",
+            "labels": ["cats", "dataset"],
+            "versions": [
+                {
+                    "version": 1,
+                    "id": 3,
+                    "uuid": "dab73bdf-ceb3-4af3-8e01-1d44eb41acf7",
+                    "dataset_id": 2,
+                    **common_version_info,
+                },
+            ],
+        },
+        {
+            "id": 3,
+            "name": "both",
+            "description": "both dataset",
+            "labels": ["both", "dataset"],
+            "versions": [
+                {
+                    "version": 1,
+                    "id": 4,
+                    "uuid": "dab73bdf-ceb3-4af3-8e01-1d44eb41acf6",
+                    "dataset_id": 3,
+                    **common_version_info,
+                },
+            ],
+        },
+    ]
+
+    requests_mock.get(f"{STUDIO_URL}/api/datachain/datasets", json=datasets)
+    requests_mock.get(
+        f"{STUDIO_URL}/api/datachain/datasets/info?dataset_name=dogs&team_name=team_name",
+        json=dogs_dataset,
+    )
+
+
+@pytest.fixture
+def not_random_ds(test_session):
+    # `sys__rand` column is carefully crafted to ensure that `train_test_split` func
+    # will always return columns in the `sys__id` order if no seed is provided.
+    return DataChain.from_records(
+        [
+            {"sys__id": 1, "sys__rand": 8025184816406567794, "fib": 0},
+            {"sys__id": 2, "sys__rand": 8264763963075908010, "fib": 1},
+            {"sys__id": 3, "sys__rand": 338514328625642097, "fib": 1},
+            {"sys__id": 4, "sys__rand": 508807229144041274, "fib": 2},
+            {"sys__id": 5, "sys__rand": 8730460072520445744, "fib": 3},
+            {"sys__id": 6, "sys__rand": 154987448000528066, "fib": 5},
+            {"sys__id": 7, "sys__rand": 6310705427500864020, "fib": 8},
+            {"sys__id": 8, "sys__rand": 2154127460471345108, "fib": 13},
+            {"sys__id": 9, "sys__rand": 2584481985215516118, "fib": 21},
+            {"sys__id": 10, "sys__rand": 5771949255753972681, "fib": 34},
+        ],
+        session=test_session,
+        schema={"sys": Sys, "fib": int},
+    )
+
+
+@pytest.fixture
+def pseudo_random_ds(test_session):
+    return DataChain.from_records(
+        [
+            {"sys__id": 1, "sys__rand": 2406827533654413759, "fib": 0},
+            {"sys__id": 2, "sys__rand": 743035223448130834, "fib": 1},
+            {"sys__id": 3, "sys__rand": 8572034894545971037, "fib": 1},
+            {"sys__id": 4, "sys__rand": 3413911135601125438, "fib": 2},
+            {"sys__id": 5, "sys__rand": 8036488725627198326, "fib": 3},
+            {"sys__id": 6, "sys__rand": 2020789040280779494, "fib": 5},
+            {"sys__id": 7, "sys__rand": 8478782014085172114, "fib": 8},
+            {"sys__id": 8, "sys__rand": 1374262678671783922, "fib": 13},
+            {"sys__id": 9, "sys__rand": 7728884931956308771, "fib": 21},
+            {"sys__id": 10, "sys__rand": 5591681088079559562, "fib": 34},
+        ],
+        session=test_session,
+        schema={"sys": Sys, "fib": int},
+    )

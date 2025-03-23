@@ -14,6 +14,7 @@ classifiers = [
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Development Status :: 2 - Pre-Alpha"
 ]
 requires-python = ">=3.9"
@@ -22,13 +23,14 @@ dependencies = [
   "pyyaml",
   "tomlkit",
   "tqdm",
-  "numpy",
-  'numpy>=1,<2; sys_platform == "win32"',
+  "numpy>=1,<3",
   "pandas>=2.0.0",
+  "packaging",
   "pyarrow",
   "typing-extensions",
   "python-dateutil>=2",
   "attrs>=21.3.0",
+  "fsspec>=2024.2.0",
   "s3fs>=2024.2.0",
   "gcsfs>=2024.2.0",
   "adlfs>=2024.2.0",
@@ -37,23 +39,32 @@ dependencies = [
   "shtab>=1.3.4,<2",
   "sqlalchemy>=2",
   "multiprocess==0.70.16",
-  "dill==0.3.8",
   "cloudpickle",
   "orjson>=3.10.5",
   "pydantic>=2,<3",
   "jmespath>=1.0",
   "datamodel-code-generator>=0.25",
-  "Pillow>=10.0.0,<11"
+  "Pillow>=10.0.0,<12",
+  "msgpack>=1.0.4,<2",
+  "psutil",
+  "huggingface_hub",
+  "iterative-telemetry>=0.0.10",
+  "platformdirs",
+  "dvc-studio-client>=0.21,<1",
+  "tabulate",
+  "websockets",
+  "tomli;python_version<'3.11'"
 ]
 
 [project.optional-dependencies]
 docs = [
   "mkdocs>=1.5.2",
   "mkdocs-gen-files>=0.5.0",
-  "mkdocs-material>=9.3.1",
+  "mkdocs-material==9.5.22",
   "mkdocs-section-index>=0.3.6",
   "mkdocstrings-python>=1.6.3",
-  "mkdocs-literate-nav>=0.6.1"
+  "mkdocs-literate-nav>=0.6.1",
+  "eval-type-backport"
 ]
 torch = [
   "torch>=2.1.0",
@@ -62,36 +73,54 @@ torch = [
 ]
 remote = [
   "lz4",
-  "msgpack>=1.0.4,<2",
   "requests>=2.22.0"
 ]
 vector = [
   "usearch"
 ]
+hf = [
+  "numba>=0.60.0",
+  "datasets[audio,vision]>=2.21.0",
+  "fsspec>=2024.12.0"
+]
+video = [
+  "ffmpeg-python",
+  "imageio[ffmpeg,pyav]>=2.37.0",
+  "opencv-python"
+]
 tests = [
-  "datachain[torch,remote,vector]",
+  "datachain[torch,remote,vector,hf,video]",
   "pytest>=8,<9",
   "pytest-sugar>=0.9.6",
   "pytest-cov>=4.1.0",
   "pytest-mock>=3.12.0",
-  "pytest-servers[all]>=0.5.5",
+  "pytest-servers[all]>=0.5.9",
   "pytest-benchmark[histogram]",
-  "pytest-asyncio>=0.23.2",
   "pytest-xdist>=3.3.1",
   "virtualenv",
   "dulwich",
   "hypothesis",
-  "open_clip_torch",
   "aiotools>=1.7.0",
-  "requests-mock"
+  "requests-mock",
+  "scipy",
+  "ultralytics"
 ]
 dev = [
   "datachain[docs,tests]",
-  "mypy==1.10.1",
+  "mypy==1.15.0",
   "types-python-dateutil",
   "types-pytz",
   "types-PyYAML",
-  "types-requests"
+  "types-requests",
+  "types-tabulate"
+]
+examples = [
+  "datachain[tests]",
+  "defusedxml",
+  "accelerate",
+  "huggingface_hub[hf_transfer]",
+  "ultralytics",
+  "open_clip_torch"
 ]
 
 [project.urls]
@@ -110,18 +139,25 @@ namespaces = false
 [tool.setuptools_scm]
 
 [tool.pytest.ini_options]
-addopts = "-rfEs -m 'not benchmark'"
+addopts = "-rfEs -m 'not examples' --benchmark-skip"
 markers = [
-  "benchmark: benchmarks.",
-  "e2e: End-to-end tests"
+  "e2e: End-to-end tests",
+  "examples: All examples",
+  "computer_vision: Computer vision examples",
+  "get_started: Get started examples",
+  "llm_and_nlp: LLM and NLP examples",
+  "multimodal: Multimodal examples"
 ]
-asyncio_mode = "auto"
 filterwarnings = [
   "error::pandas.errors.PerformanceWarning",
   "error::pydantic.warnings.PydanticDeprecatedSince20",
   "error::pytest_mock.PytestMockWarning",
   "error::pytest.PytestCollectionWarning",
   "error::sqlalchemy.exc.SADeprecationWarning",
+  "ignore::DeprecationWarning:timm.*",
+  "ignore::DeprecationWarning:botocore.auth",
+  "ignore::DeprecationWarning:datasets.utils._dill",
+  "ignore::DeprecationWarning:librosa.core.intervals",
   "ignore:Field name .* shadows an attribute in parent:UserWarning"  # datachain.lib.feature
 ]
 
@@ -182,12 +218,14 @@ ignore = [
   "SIM108",  # if-else-block-instead-of-if-exp
   "SIM117",  # multiple-with-statements
   "PERF203",  # perflint - try-except-in-loop, irrelevant for Python>=3.11
+  "PERF401",
   "D100",  # undocumented-public-module
   "D205"  # one-blank-line-after-class
 ]
 select = [
   "B",  # flake8-bugbear
   "C4",  # flake8-comprehensions
+  "C420",  # unnecessary-dict-comprehension-for-iterable
   "C90",  # mccabe
   "W",  # pycodestyle - Warning
   "E",  # pycodestyle - Error
@@ -226,11 +264,10 @@ select = [
   "NPY",  # numpy
   "TRY004",  # type-check-without-type-error
   "TRY201",  # verbose-raise
-  "TRY302",  # useless-try-except
+  "TRY203",  # useless-try-except
   "TRY401",  # verbose-log-message
   "RUF022",  # unsorted-dunder-all
   "RUF023",  # unsorted-dunder-slots
-  "RUF025",  # unnecessary-dict-comprehension-for-iterable
   "RUF027",  # missing-f-string-syntax
   "RUF030",  # assert-with-print-message
   "RUF101",  # redirected-noqa

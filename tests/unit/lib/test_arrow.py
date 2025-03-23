@@ -3,17 +3,24 @@ from typing import Optional
 
 import pandas as pd
 import pyarrow as pa
+import pyarrow.parquet as pq
 import pytest
+from datasets import Dataset
 
 from datachain.lib.arrow import (
     ArrowGenerator,
-    _arrow_type_mapper,
+    arrow_type_mapper,
+    infer_schema,
     schema_to_output,
 )
-from datachain.lib.file import File, IndexedFile
+from datachain.lib.data_model import dict_to_data_model
+from datachain.lib.dc import DataChain
+from datachain.lib.file import ArrowRow, File
+from datachain.lib.hf import HFClassLabel
 
 
-def test_arrow_generator(tmp_path, catalog):
+@pytest.mark.parametrize("cache", [True, False])
+def test_arrow_generator(tmp_path, catalog, cache):
     ids = [12345, 67890, 34, 0xF0123]
     texts = ["28", "22", "we", "hello world"]
     df = pd.DataFrame({"id": ids, "text": texts})
@@ -21,36 +28,20 @@ def test_arrow_generator(tmp_path, catalog):
     name = "111.parquet"
     pq_path = tmp_path / name
     df.to_parquet(pq_path)
-    stream = File(name=name, parent=tmp_path.as_posix(), source="file:///")
-    stream._set_stream(catalog, caching_enabled=False)
+    stream = File(path=pq_path.as_posix(), source="file://")
+    stream._set_stream(catalog, caching_enabled=cache)
 
     func = ArrowGenerator()
     objs = list(func.process(stream))
 
     assert len(objs) == len(ids)
-    for index, (o, id, text) in enumerate(zip(objs, ids, texts)):
-        assert isinstance(o[0], IndexedFile)
-        assert isinstance(o[0].file, File)
-        assert o[0].index == index
+    for o, id, text in zip(objs, ids, texts):
+        assert isinstance(o[0], ArrowRow)
+        file_vals = o[0].read()
+        assert file_vals["id"] == id
+        assert file_vals["text"] == text
         assert o[1] == id
         assert o[2] == text
-
-
-def test_arrow_generator_nrows(tmp_path, catalog):
-    ids = [12345, 67890, 34, 0xF0123]
-    texts = ["28", "22", "we", "hello world"]
-    df = pd.DataFrame({"id": ids, "text": texts})
-
-    name = "111.parquet"
-    pq_path = tmp_path / name
-    df.to_parquet(pq_path)
-    stream = File(name=name, parent=tmp_path.as_posix(), source="file:///")
-    stream._set_stream(catalog, caching_enabled=False)
-
-    func = ArrowGenerator(nrows=2)
-    objs = list(func.process(stream))
-
-    assert len(objs) == 2
 
 
 def test_arrow_generator_no_source(tmp_path, catalog):
@@ -61,7 +52,7 @@ def test_arrow_generator_no_source(tmp_path, catalog):
     name = "111.parquet"
     pq_path = tmp_path / name
     df.to_parquet(pq_path)
-    stream = File(name=name, parent=tmp_path.as_posix(), source="file:///")
+    stream = File(path=pq_path.as_posix(), source="file://")
     stream._set_stream(catalog, caching_enabled=False)
 
     func = ArrowGenerator(source=False)
@@ -70,6 +61,77 @@ def test_arrow_generator_no_source(tmp_path, catalog):
     for o, id, text in zip(objs, ids, texts):
         assert o[0] == id
         assert o[1] == text
+
+
+def test_arrow_generator_output_schema(tmp_path, catalog):
+    ids = [12345, 67890, 34, 0xF0123]
+    texts = ["28", "22", "we", "hello world"]
+    dicts = [{"a": 1, "b": 2}, {"a": 3, "b": 4}, {"a": 5, "b": 6}, {"a": 7, "b": 8}]
+    df = pd.DataFrame({"id": ids, "text": texts, "dict": dicts})
+    table = pa.Table.from_pandas(df)
+
+    name = "111.parquet"
+    pq_path = tmp_path / name
+    pq.write_table(table, pq_path)
+    stream = File(path=pq_path.as_posix(), source="file://")
+    stream._set_stream(catalog, caching_enabled=False)
+
+    output, original_names = schema_to_output(table.schema)
+    output_schema = dict_to_data_model("", output, original_names)
+    func = ArrowGenerator(output_schema=output_schema)
+    objs = list(func.process(stream))
+
+    assert len(objs) == len(ids)
+    for o, id, text, dict in zip(objs, ids, texts, dicts):
+        assert isinstance(o[0], ArrowRow)
+        assert o[1].id == id
+        assert o[1].text == text
+        assert o[1].dict.a == dict["a"]
+        assert o[1].dict.b == dict["b"]
+
+
+def test_arrow_generator_hf(tmp_path, catalog):
+    ds = Dataset.from_dict({"pokemon": ["bulbasaur", "squirtle"]})
+    ds = ds.class_encode_column("pokemon")
+
+    name = "111.parquet"
+    pq_path = tmp_path / name
+    ds.to_parquet(pq_path)
+    stream = File(path=pq_path.as_posix(), source="file:///")
+    stream._set_stream(catalog, caching_enabled=False)
+
+    output, original_names = schema_to_output(ds._data.schema, ["col"])
+
+    output_schema = dict_to_data_model("", output, original_names)
+    func = ArrowGenerator(output_schema=output_schema)
+    for obj in func.process(stream):
+        assert isinstance(obj[1].col, HFClassLabel)
+
+
+@pytest.mark.parametrize("cache", [True, False])
+def test_arrow_generator_partitioned(tmp_path, catalog, cache):
+    pq_path = tmp_path / "parquets"
+    pylist = [
+        {"first_name": "Alice", "age": 25, "city": "New York"},
+        {"first_name": "Bob", "age": 30, "city": "Los Angeles"},
+        {"first_name": "Charlie", "age": 35, "city": "Chicago"},
+    ]
+    table = pa.Table.from_pylist(pylist)
+    pq.write_to_dataset(table, pq_path, partition_cols=["first_name"])
+
+    output, original_names = schema_to_output(table.schema)
+    output_schema = dict_to_data_model("", output, original_names)
+    func = ArrowGenerator(
+        table.schema, output_schema=output_schema, partitioning="hive"
+    )
+
+    for path in pq_path.rglob("*.parquet"):
+        stream = File(path=path.as_posix(), source="file://")
+        stream._set_stream(catalog, caching_enabled=cache)
+
+        (o,) = list(func.process(stream))
+        assert isinstance(o[0], ArrowRow)
+        assert dict(o[1]) in pylist
 
 
 @pytest.mark.parametrize(
@@ -89,14 +151,21 @@ def test_arrow_generator_no_source(tmp_path, catalog):
         (pa.date32(), datetime),
         (pa.string(), str),
         (pa.large_string(), str),
-        (pa.struct({"x": pa.int32(), "y": pa.string()}), dict),
         (pa.map_(pa.string(), pa.int32()), dict),
         (pa.dictionary(pa.int64(), pa.string()), str),
         (pa.list_(pa.string()), list[str]),
     ),
 )
 def test_arrow_type_mapper(col_type, expected):
-    assert _arrow_type_mapper(col_type) == expected
+    assert arrow_type_mapper(col_type) == expected
+
+
+def test_arrow_type_mapper_struct():
+    col_type = pa.struct({"x": pa.int32(), "y": pa.string()})
+    fields = arrow_type_mapper(col_type).model_fields
+    assert list(fields.keys()) == ["x", "y"]
+    dtypes = [field.annotation for field in fields.values()]
+    assert dtypes == [Optional[int], Optional[str]]
 
 
 def test_arrow_type_error():
@@ -105,7 +174,7 @@ def test_arrow_type_error():
         mode=pa.lib.UnionMode_DENSE,
     )
     with pytest.raises(TypeError):
-        _arrow_type_mapper(col_type)
+        arrow_type_mapper(col_type)
 
 
 def test_schema_to_output():
@@ -116,7 +185,11 @@ def test_schema_to_output():
             ("strict_int", pa.int32(), False),
         ]
     )
-    assert schema_to_output(schema) == {
+
+    output, original_names = schema_to_output(schema)
+
+    assert original_names == ["some_int", "some_string", "strict_int"]
+    assert output == {
         "some_int": Optional[int],
         "some_string": Optional[str],
         "strict_int": int,
@@ -130,13 +203,34 @@ def test_parquet_convert_column_names():
             ("dot.notation.col", pa.int32()),
             ("with-dashes", pa.int32()),
             ("with spaces", pa.int32()),
+            ("with-multiple--dashes", pa.int32()),
+            ("with__underscores", pa.int32()),
+            ("__leading__underscores", pa.int32()),
+            ("trailing__underscores__", pa.int32()),
         ]
     )
-    assert list(schema_to_output(schema)) == [
+
+    output, original_names = schema_to_output(schema)
+
+    assert original_names == [
+        "UpperCaseCol",
+        "dot.notation.col",
+        "with-dashes",
+        "with spaces",
+        "with-multiple--dashes",
+        "with__underscores",
+        "__leading__underscores",
+        "trailing__underscores__",
+    ]
+    assert list(output) == [
         "uppercasecol",
-        "dotnotationcol",
-        "withdashes",
-        "withspaces",
+        "dot_notation_col",
+        "with_dashes",
+        "with_spaces",
+        "with_multiple_dashes",
+        "with_underscores",
+        "leading_underscores",
+        "trailing_underscores",
     ]
 
 
@@ -147,13 +241,21 @@ def test_parquet_missing_column_names():
             ("", pa.int32()),
         ]
     )
-    assert list(schema_to_output(schema)) == ["c0", "c1"]
+
+    output, original_names = schema_to_output(schema)
+
+    assert original_names == ["", ""]
+    assert list(output) == ["c0", "c1"]
 
 
 def test_parquet_override_column_names():
     schema = pa.schema([("some_int", pa.int32()), ("some_string", pa.string())])
     col_names = ["n1", "n2"]
-    assert schema_to_output(schema, col_names) == {
+
+    output, original_names = schema_to_output(schema, col_names)
+
+    assert original_names == ["n1", "n2"]
+    assert output == {
         "n1": Optional[int],
         "n2": Optional[str],
     }
@@ -164,3 +266,10 @@ def test_parquet_override_column_names_invalid():
     col_names = ["n1", "n2", "n3"]
     with pytest.raises(ValueError):
         schema_to_output(schema, col_names)
+
+
+def test_infer_schema_no_files(test_session):
+    schema = {"file": File, "my_col": int}
+    dc = DataChain.from_records([], schema=schema, session=test_session, in_memory=True)
+    with pytest.raises(ValueError):
+        infer_schema(dc)

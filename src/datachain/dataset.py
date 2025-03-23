@@ -2,29 +2,35 @@ import builtins
 import json
 from dataclasses import dataclass, fields
 from datetime import datetime
+from functools import cached_property
 from typing import (
-    TYPE_CHECKING,
     Any,
+    NewType,
     Optional,
     TypeVar,
     Union,
 )
 from urllib.parse import urlparse
 
-from dateutil.parser import isoparse
-
-from datachain.client import Client
+from datachain.error import DatasetVersionNotFoundError
 from datachain.sql.types import NAME_TYPES_MAPPING, SQLType
 
-if TYPE_CHECKING:
-    from datachain.storage import StorageURI
-
 T = TypeVar("T", bound="DatasetRecord")
+LT = TypeVar("LT", bound="DatasetListRecord")
 V = TypeVar("V", bound="DatasetVersion")
+LV = TypeVar("LV", bound="DatasetListVersion")
 DD = TypeVar("DD", bound="DatasetDependency")
 
 DATASET_PREFIX = "ds://"
 QUERY_DATASET_PREFIX = "ds_query_"
+LISTING_PREFIX = "lst__"
+
+
+# StorageURI represents a normalised URI to a valid storage location (full bucket or
+# absolute local path).
+# Valid examples: s3://foo, file:///var/data
+# Invalid examples: s3://foo/, s3://foo/bar, file://~
+StorageURI = NewType("StorageURI", str)
 
 
 def parse_dataset_uri(uri: str) -> tuple[str, Optional[int]]:
@@ -72,10 +78,22 @@ class DatasetDependencyType:
 class DatasetDependency:
     id: int
     type: str
-    name: str  # when the type is STORAGE, this is actually StorageURI
-    version: str  # string until we'll have proper bucket listing versions
+    name: str
+    version: str  # TODO change to int
     created_at: datetime
     dependencies: list[Optional["DatasetDependency"]]
+
+    @property
+    def dataset_name(self) -> str:
+        """Returns clean dependency dataset name"""
+        from datachain.lib.listing import parse_listing_uri
+
+        if self.type == DatasetDependencyType.DATASET:
+            return self.name
+
+        list_dataset_name, _, _ = parse_listing_uri(self.name.strip("/"), {})
+        assert list_dataset_name
+        return list_dataset_name
 
     @classmethod
     def parse(
@@ -83,41 +101,36 @@ class DatasetDependency:
         id: int,
         dataset_id: Optional[int],
         dataset_version_id: Optional[int],
-        bucket_id: Optional[int],
-        bucket_version: Optional[str],
         dataset_name: Optional[str],
-        dataset_created_at: Optional[datetime],
         dataset_version: Optional[int],
         dataset_version_created_at: Optional[datetime],
-        bucket_uri: Optional["StorageURI"],
     ) -> Optional["DatasetDependency"]:
-        if dataset_id:
-            assert dataset_name is not None
-            return cls(
-                id,
-                DatasetDependencyType.DATASET,
-                dataset_name,
-                (
-                    str(dataset_version)  # type: ignore[arg-type]
-                    if dataset_version
-                    else None
-                ),
-                dataset_version_created_at or dataset_created_at,  # type: ignore[arg-type]
-                [],
-            )
-        if bucket_uri:
-            return cls(
-                id,
-                DatasetDependencyType.STORAGE,
-                bucket_uri,
-                bucket_version,  # type: ignore[arg-type]
-                isoparse(bucket_version),  # type: ignore[arg-type]
-                [],
-            )
-        # dependency has been removed
-        # TODO we should introduce flags for removed datasets, instead of
-        # removing them from tables so that we can still have references
-        return None
+        from datachain.client import Client
+        from datachain.lib.listing import is_listing_dataset, listing_uri_from_name
+
+        if not dataset_id:
+            return None
+
+        assert dataset_name is not None
+        dependency_type = DatasetDependencyType.DATASET
+        dependency_name = dataset_name
+
+        if is_listing_dataset(dataset_name):
+            dependency_type = DatasetDependencyType.STORAGE  # type: ignore[arg-type]
+            dependency_name, _ = Client.parse_url(listing_uri_from_name(dataset_name))
+
+        return cls(
+            id,
+            dependency_type,
+            dependency_name,
+            (
+                str(dataset_version)  # type: ignore[arg-type]
+                if dataset_version
+                else None
+            ),
+            dataset_version_created_at,  # type: ignore[arg-type]
+            [],
+        )
 
     @property
     def is_dataset(self) -> bool:
@@ -137,12 +150,6 @@ class DatasetDependency:
         return hash(f"{self.type}_{self.name}_{self.version}")
 
 
-@dataclass
-class DatasetStats:
-    num_objects: Optional[int]  # None if table is missing
-    size: Optional[int]  # in bytes None if table is missing or empty
-
-
 class DatasetStatus:
     CREATED = 1
     PENDING = 2
@@ -154,6 +161,7 @@ class DatasetStatus:
 @dataclass
 class DatasetVersion:
     id: int
+    uuid: str
     dataset_id: int
     version: int
     status: int
@@ -166,16 +174,16 @@ class DatasetVersion:
     schema: dict[str, Union[SQLType, type[SQLType]]]
     num_objects: Optional[int]
     size: Optional[int]
-    preview: Optional[list[dict]]
+    _preview_data: Optional[Union[str, list[dict]]]
     sources: str = ""
     query_script: str = ""
     job_id: Optional[str] = None
-    is_job_result: bool = False
 
     @classmethod
     def parse(  # noqa: PLR0913
-        cls: type[V],
+        cls,
         id: int,
+        uuid: str,
         dataset_id: int,
         version: int,
         status: int,
@@ -187,15 +195,15 @@ class DatasetVersion:
         script_output: str,
         num_objects: Optional[int],
         size: Optional[int],
-        preview: Optional[str],
+        preview: Optional[Union[str, list[dict]]],
         schema: dict[str, Union[SQLType, type[SQLType]]],
         sources: str = "",
         query_script: str = "",
         job_id: Optional[str] = None,
-        is_job_result: bool = False,
     ):
         return cls(
             id,
+            uuid,
             dataset_id,
             version,
             status,
@@ -208,11 +216,10 @@ class DatasetVersion:
             schema,
             num_objects,
             size,
-            json.loads(preview) if preview else None,
+            preview,
             sources,
             query_script,
             job_id,
-            is_job_result,
         )
 
     def __eq__(self, other):
@@ -249,10 +256,72 @@ class DatasetVersion:
             for c_name, c_type in self.schema.items()
         }
 
+    @cached_property
+    def preview(self) -> Optional[list[dict]]:
+        if isinstance(self._preview_data, str):
+            return json.loads(self._preview_data)
+        return self._preview_data if self._preview_data else None
+
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "DatasetVersion":
         kwargs = {f.name: d[f.name] for f in fields(cls) if f.name in d}
+        if not hasattr(kwargs, "_preview_data"):
+            kwargs["_preview_data"] = d.get("preview")
         return cls(**kwargs)
+
+
+@dataclass
+class DatasetListVersion:
+    id: int
+    uuid: str
+    dataset_id: int
+    version: int
+    status: int
+    created_at: datetime
+    finished_at: Optional[datetime]
+    error_message: str
+    error_stack: str
+    num_objects: Optional[int]
+    size: Optional[int]
+    query_script: str = ""
+    job_id: Optional[str] = None
+
+    @classmethod
+    def parse(
+        cls,
+        id: int,
+        uuid: str,
+        dataset_id: int,
+        version: int,
+        status: int,
+        created_at: datetime,
+        finished_at: Optional[datetime],
+        error_message: str,
+        error_stack: str,
+        num_objects: Optional[int],
+        size: Optional[int],
+        query_script: str = "",
+        job_id: Optional[str] = None,
+        **kwargs,
+    ):
+        return cls(
+            id,
+            uuid,
+            dataset_id,
+            version,
+            status,
+            created_at,
+            finished_at,
+            error_message,
+            error_stack,
+            num_objects,
+            size,
+            query_script,
+            job_id,
+        )
+
+    def __hash__(self):
+        return hash(f"{self.dataset_id}_{self.version}")
 
 
 @dataclass
@@ -261,7 +330,6 @@ class DatasetRecord:
     name: str
     description: Optional[str]
     labels: list[str]
-    shadow: bool
     schema: dict[str, Union[SQLType, type[SQLType]]]
     feature_schema: dict
     versions: list[DatasetVersion]
@@ -285,12 +353,11 @@ class DatasetRecord:
 
     @classmethod
     def parse(  # noqa: PLR0913
-        cls: type[T],
+        cls,
         id: int,
         name: str,
         description: Optional[str],
         labels: str,
-        shadow: int,
         status: int,
         feature_schema: Optional[str],
         created_at: datetime,
@@ -302,6 +369,7 @@ class DatasetRecord:
         query_script: str,
         schema: str,
         version_id: int,
+        version_uuid: str,
         version_dataset_id: int,
         version: int,
         version_status: int,
@@ -318,7 +386,6 @@ class DatasetRecord:
         version_query_script: Optional[str],
         version_schema: str,
         version_job_id: Optional[str] = None,
-        version_is_job_result: bool = False,
     ) -> "DatasetRecord":
         labels_lst: list[str] = json.loads(labels) if labels else []
         schema_dct: dict[str, Any] = json.loads(schema) if schema else {}
@@ -328,6 +395,7 @@ class DatasetRecord:
 
         dataset_version = DatasetVersion.parse(
             version_id,
+            version_uuid,
             version_dataset_id,
             version,
             version_status,
@@ -344,7 +412,6 @@ class DatasetRecord:
             version_sources,  # type: ignore[arg-type]
             version_query_script,  # type: ignore[arg-type]
             version_job_id,
-            version_is_job_result,
         )
 
         return cls(
@@ -352,7 +419,6 @@ class DatasetRecord:
             name,
             description,
             labels_lst,
-            bool(shadow),
             cls.parse_schema(schema_dct),  # type: ignore[arg-type]
             json.loads(feature_schema) if feature_schema else {},
             [dataset_version],
@@ -409,12 +475,26 @@ class DatasetRecord:
 
     def get_version(self, version: int) -> DatasetVersion:
         if not self.has_version(version):
-            raise ValueError(f"Dataset {self.name} does not have version {version}")
+            raise DatasetVersionNotFoundError(
+                f"Dataset {self.name} does not have version {version}"
+            )
         return next(
             v
             for v in self.versions  # type: ignore [union-attr]
             if v.version == version
         )
+
+    def get_version_by_uuid(self, uuid: str) -> DatasetVersion:
+        try:
+            return next(
+                v
+                for v in self.versions  # type: ignore [union-attr]
+                if v.uuid == uuid
+            )
+        except StopIteration:
+            raise DatasetVersionNotFoundError(
+                f"Dataset {self.name} does not have version with uuid {uuid}"
+            ) from None
 
     def remove_version(self, version: int) -> None:
         if not self.versions or not self.has_version(version):
@@ -427,7 +507,9 @@ class DatasetRecord:
         Get identifier in the form my-dataset@v3
         """
         if not self.has_version(version):
-            raise ValueError(f"Dataset {self.name} doesn't have a version {version}")
+            raise DatasetVersionNotFoundError(
+                f"Dataset {self.name} doesn't have a version {version}"
+            )
         return f"{self.name}@v{version}"
 
     def uri(self, version: int) -> str:
@@ -436,14 +518,6 @@ class DatasetRecord:
         """
         identifier = self.identifier(version)
         return f"{DATASET_PREFIX}{identifier}"
-
-    @property
-    def is_bucket_listing(self) -> bool:
-        """
-        For bucket listing we implicitly create underlying dataset to hold data. This
-        method is checking if this is one of those datasets.
-        """
-        return Client.is_data_source_uri(self.name)
 
     @property
     def versions_values(self) -> list[int]:
@@ -481,6 +555,106 @@ class DatasetRecord:
         versions = [DatasetVersion.from_dict(v) for v in d.pop("versions", [])]
         kwargs = {f.name: d[f.name] for f in fields(cls) if f.name in d}
         return cls(**kwargs, versions=versions)
+
+
+@dataclass
+class DatasetListRecord:
+    id: int
+    name: str
+    description: Optional[str]
+    labels: list[str]
+    versions: list[DatasetListVersion]
+    created_at: Optional[datetime] = None
+
+    @classmethod
+    def parse(  # noqa: PLR0913
+        cls,
+        id: int,
+        name: str,
+        description: Optional[str],
+        labels: str,
+        created_at: datetime,
+        version_id: int,
+        version_uuid: str,
+        version_dataset_id: int,
+        version: int,
+        version_status: int,
+        version_created_at: datetime,
+        version_finished_at: Optional[datetime],
+        version_error_message: str,
+        version_error_stack: str,
+        version_num_objects: Optional[int],
+        version_size: Optional[int],
+        version_query_script: Optional[str],
+        version_job_id: Optional[str] = None,
+    ) -> "DatasetListRecord":
+        labels_lst: list[str] = json.loads(labels) if labels else []
+
+        dataset_version = DatasetListVersion.parse(
+            version_id,
+            version_uuid,
+            version_dataset_id,
+            version,
+            version_status,
+            version_created_at,
+            version_finished_at,
+            version_error_message,
+            version_error_stack,
+            version_num_objects,
+            version_size,
+            version_query_script,  # type: ignore[arg-type]
+            version_job_id,
+        )
+
+        return cls(
+            id,
+            name,
+            description,
+            labels_lst,
+            [dataset_version],
+            created_at,
+        )
+
+    def merge_versions(self, other: "DatasetListRecord") -> "DatasetListRecord":
+        """Merge versions from another dataset"""
+        if other.id != self.id:
+            raise RuntimeError("Cannot merge versions of datasets with different ids")
+        if not other.versions:
+            # nothing to merge
+            return self
+        if not self.versions:
+            self.versions = []
+
+        self.versions = list(set(self.versions + other.versions))
+        self.versions.sort(key=lambda v: v.version)
+        return self
+
+    def latest_version(self) -> DatasetListVersion:
+        return max(self.versions, key=lambda v: v.version)
+
+    @property
+    def is_bucket_listing(self) -> bool:
+        """
+        For bucket listing we implicitly create underlying dataset to hold data. This
+        method is checking if this is one of those datasets.
+        """
+        from datachain.client import Client
+
+        # TODO refactor and maybe remove method in
+        # https://github.com/iterative/datachain/issues/318
+        return Client.is_data_source_uri(self.name) or self.name.startswith(
+            LISTING_PREFIX
+        )
+
+    def has_version_with_uuid(self, uuid: str) -> bool:
+        return any(v.uuid == uuid for v in self.versions)
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> "DatasetListRecord":
+        versions = [DatasetListVersion.parse(**v) for v in d.get("versions", [])]
+        kwargs = {f.name: d[f.name] for f in fields(cls) if f.name in d}
+        kwargs["versions"] = versions
+        return cls(**kwargs)
 
 
 class RowDict(dict):

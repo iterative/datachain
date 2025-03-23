@@ -1,11 +1,8 @@
 import contextlib
-import datetime
 import inspect
-import json
 import logging
 import os
 import random
-import re
 import string
 import subprocess
 import sys
@@ -13,6 +10,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Generator, Iterable, Iterator, Sequence
 from copy import copy
 from functools import wraps
+from secrets import token_hex
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -34,34 +32,33 @@ from sqlalchemy.sql.elements import ColumnClause, ColumnElement
 from sqlalchemy.sql.expression import label
 from sqlalchemy.sql.schema import TableClause
 from sqlalchemy.sql.selectable import Select
+from tqdm.auto import tqdm
 
 from datachain.asyn import ASYNC_WORKERS, AsyncMapper, OrderedMapper
-from datachain.catalog import (
-    QUERY_SCRIPT_CANCELED_EXIT_CODE,
-    QUERY_SCRIPT_INVALID_LAST_STATEMENT_EXIT_CODE,
-    get_catalog,
-)
+from datachain.catalog.catalog import clone_catalog_with_cache
 from datachain.data_storage.schema import (
     PARTITION_COLUMN_ID,
     partition_col_names,
     partition_columns,
 )
-from datachain.dataset import DatasetStatus, RowDict
-from datachain.error import DatasetNotFoundError, QueryScriptCancelError
-from datachain.progress import CombinedDownloadCallback
-from datachain.sql.functions import rand
-from datachain.storage import Storage, StorageURI
+from datachain.dataset import DATASET_PREFIX, DatasetStatus, RowDict
+from datachain.error import (
+    DatasetNotFoundError,
+    QueryScriptCancelError,
+)
+from datachain.func.base import Function
+from datachain.lib.udf import UDFAdapter, _get_cache
+from datachain.progress import CombinedDownloadCallback, TqdmCombinedDownloadCallback
+from datachain.query.schema import C, UDFParamSpec, normalize_param
+from datachain.query.session import Session
+from datachain.sql.functions.random import rand
 from datachain.utils import (
     batched,
     determine_processes,
     filtered_cloudpickle_dumps,
     get_datachain_executable,
+    safe_closing,
 )
-
-from .metrics import metrics
-from .schema import C, UDFParamSpec, normalize_param
-from .session import Session
-from .udf import UDFBase, UDFClassWrapper, UDFFactory, UDFType
 
 if TYPE_CHECKING:
     from sqlalchemy.sql.elements import ClauseElement
@@ -72,19 +69,19 @@ if TYPE_CHECKING:
     from datachain.catalog import Catalog
     from datachain.data_storage import AbstractWarehouse
     from datachain.dataset import DatasetRecord
-
-    from .udf import UDFResult
+    from datachain.lib.udf import UDFAdapter, UDFResult
+    from datachain.query.udf import UdfInfo
 
     P = ParamSpec("P")
 
 
 INSERT_BATCH_SIZE = 10000
 
-PartitionByType = Union[ColumnElement, Sequence[ColumnElement]]
+PartitionByType = Union[
+    Function, ColumnElement, Sequence[Union[Function, ColumnElement]]
+]
 JoinPredicateType = Union[str, ColumnClause, ColumnElement]
-# dependency can be either dataset_name + dataset_version tuple or just storage uri
-# depending what type of dependency we are adding
-DatasetDependencyType = Union[tuple[str, int], StorageURI]
+DatasetDependencyType = tuple[str, int]
 
 logger = logging.getLogger("datachain")
 
@@ -125,7 +122,10 @@ class QueryGenerator:
     func: QueryGeneratorFunc
     columns: tuple[ColumnElement, ...]
 
-    def exclude(self, column_names) -> Select:
+    def only(self, column_names: Sequence[str]) -> Select:
+        return self.func(*(c for c in self.columns if c.name in column_names))
+
+    def exclude(self, column_names: Sequence[str]) -> Select:
         return self.func(*(c for c in self.columns if c.name not in column_names))
 
     def select(self, column_names=None) -> Select:
@@ -180,48 +180,11 @@ class QueryStep(StartingStep):
             return sqlalchemy.select(*columns)
 
         dataset = self.catalog.get_dataset(self.dataset_name)
-        table = self.catalog.warehouse.dataset_rows(dataset, self.dataset_version)
+        dr = self.catalog.warehouse.dataset_rows(dataset, self.dataset_version)
 
         return step_result(
-            q, table.c, dependencies=[(self.dataset_name, self.dataset_version)]
+            q, dr.columns, dependencies=[(self.dataset_name, self.dataset_version)]
         )
-
-
-@frozen
-class IndexingStep(StartingStep):
-    path: str
-    catalog: "Catalog"
-    kwargs: dict[str, Any]
-    recursive: Optional[bool] = True
-
-    def apply(self):
-        self.catalog.index([self.path], **self.kwargs)
-        uri, path = self.parse_path()
-        _partial_id, partial_path = self.catalog.metastore.get_valid_partial_id(
-            uri, path
-        )
-        dataset = self.catalog.get_dataset(Storage.dataset_name(uri, partial_path))
-        dataset_rows = self.catalog.warehouse.dataset_rows(
-            dataset, dataset.latest_version
-        )
-
-        def q(*columns):
-            col_names = [c.name for c in columns]
-            return self.catalog.warehouse.nodes_dataset_query(
-                dataset_rows,
-                column_names=col_names,
-                path=path,
-                recursive=self.recursive,
-            )
-
-        storage = self.catalog.get_storage(uri)
-
-        return step_result(q, dataset_rows.c, dependencies=[storage.uri])
-
-    def parse_path(self):
-        client_config = self.kwargs.get("client_config") or {}
-        client, path = self.catalog.parse_url(self.path, **client_config)
-        return client.uri, path
 
 
 def generator_then_call(generator, func: Callable):
@@ -237,7 +200,7 @@ def generator_then_call(generator, func: Callable):
 class DatasetDiffOperation(Step):
     """
     Abstract class for operations that are calculation some kind of diff between
-    datasets queries like subtract, changed etc.
+    datasets queries like subtract etc.
     """
 
     dq: "DatasetQuery"
@@ -256,7 +219,7 @@ class DatasetDiffOperation(Step):
         Should return select query that calculates desired diff between dataset queries
         """
 
-    def apply(self, query_generator, temp_tables: list[str]):
+    def apply(self, query_generator, temp_tables: list[str]) -> "StepResult":
         source_query = query_generator.exclude(("sys__id",))
         target_query = self.dq.apply_steps().select()
         temp_tables.extend(self.dq.temp_table_names)
@@ -291,38 +254,24 @@ class DatasetDiffOperation(Step):
 
 @frozen
 class Subtract(DatasetDiffOperation):
-    on: Sequence[str]
+    on: Sequence[tuple[str, str]]
 
     def query(self, source_query: Select, target_query: Select) -> sa.Selectable:
         sq = source_query.alias("source_query")
         tq = target_query.alias("target_query")
         where_clause = sa.and_(
-            getattr(sq.c, col_name).is_not_distinct_from(getattr(tq.c, col_name))
-            for col_name in self.on
-        )  # type: ignore[arg-type]
+            *[
+                getattr(
+                    sq.c, col_name[0] if isinstance(col_name, tuple) else col_name
+                ).is_not_distinct_from(
+                    getattr(
+                        tq.c, col_name[1] if isinstance(col_name, tuple) else col_name
+                    )
+                )
+                for col_name in self.on
+            ]
+        )
         return sq.select().except_(sq.select().where(where_clause))
-
-
-@frozen
-class Changed(DatasetDiffOperation):
-    """
-    Calculates rows that are changed in a source query compared to target query
-    Changed means it has same source + parent + name but different last_modified
-    Example:
-        >>> ds = DatasetQuery(name="dogs_cats") # some older dataset with embeddings
-        >>> ds_updated = (
-                DatasetQuery("gs://dvcx-datalakes/dogs-and-cats")
-                .filter(C.size > 1000) # we can also filter out source query
-                .changed(ds)
-                .add_signals(calc_embeddings) # calculae embeddings only on changed rows
-                .union(ds) # union with old dataset that's missing updated rows
-                .save("dogs_cats_updated")
-            )
-
-    """
-
-    def query(self, source_query: Select, target_query: Select) -> Select:
-        return self.catalog.warehouse.changed_query(source_query, target_query)
 
 
 def adjust_outputs(
@@ -357,7 +306,7 @@ def adjust_outputs(
     return row
 
 
-def get_udf_col_types(warehouse: "AbstractWarehouse", udf: UDFBase) -> list[tuple]:
+def get_udf_col_types(warehouse: "AbstractWarehouse", udf: "UDFAdapter") -> list[tuple]:
     """Optimization: Precompute UDF column types so these don't have to be computed
     in the convert_type function for each row in a loop."""
     dialect = warehouse.db.dialect
@@ -378,10 +327,12 @@ def process_udf_outputs(
     warehouse: "AbstractWarehouse",
     udf_table: "Table",
     udf_results: Iterator[Iterable["UDFResult"]],
-    udf: UDFBase,
-    batch_size=INSERT_BATCH_SIZE,
+    udf: "UDFAdapter",
+    batch_size: int = INSERT_BATCH_SIZE,
     cb: Callback = DEFAULT_CALLBACK,
 ) -> None:
+    import psutil
+
     rows: list[UDFResult] = []
     # Optimization: Compute row types once, rather than for every row.
     udf_col_types = get_udf_col_types(warehouse, udf)
@@ -389,38 +340,55 @@ def process_udf_outputs(
     for udf_output in udf_results:
         if not udf_output:
             continue
-        for row in udf_output:
-            cb.relative_update()
-            rows.append(adjust_outputs(warehouse, row, udf_col_types))
-            if len(rows) >= batch_size:
-                for row_chunk in batched(rows, batch_size):
-                    warehouse.insert_rows(udf_table, row_chunk)
-                rows.clear()
+        with safe_closing(udf_output):
+            for row in udf_output:
+                cb.relative_update()
+                rows.append(adjust_outputs(warehouse, row, udf_col_types))
+                if len(rows) >= batch_size or (
+                    len(rows) % 10 == 0 and psutil.virtual_memory().percent > 80
+                ):
+                    for row_chunk in batched(rows, batch_size):
+                        warehouse.insert_rows(udf_table, row_chunk)
+                    rows.clear()
 
     if rows:
         for row_chunk in batched(rows, batch_size):
             warehouse.insert_rows(udf_table, row_chunk)
 
+    warehouse.insert_rows_done(udf_table)
 
-def get_download_callback() -> Callback:
-    return CombinedDownloadCallback(
-        {"desc": "Download", "unit": "B", "unit_scale": True, "unit_divisor": 1024}
+
+def get_download_callback(suffix: str = "", **kwargs) -> CombinedDownloadCallback:
+    return TqdmCombinedDownloadCallback(
+        tqdm_kwargs={
+            "desc": "Download" + suffix,
+            "unit": "B",
+            "unit_scale": True,
+            "unit_divisor": 1024,
+            "leave": False,
+            **kwargs,
+        },
+        tqdm_cls=tqdm,
     )
 
 
 def get_processed_callback() -> Callback:
-    return TqdmCallback({"desc": "Processed", "unit": " rows"})
+    return TqdmCallback(
+        {"desc": "Processed", "unit": " rows", "leave": False}, tqdm_cls=tqdm
+    )
 
 
 def get_generated_callback(is_generator: bool = False) -> Callback:
     if is_generator:
-        return TqdmCallback({"desc": "Generated", "unit": " rows"})
+        return TqdmCallback(
+            {"desc": "Generated", "unit": " rows", "leave": False}, tqdm_cls=tqdm
+        )
     return DEFAULT_CALLBACK
 
 
 @frozen
 class UDFStep(Step, ABC):
-    udf: UDFType
+    udf: "UDFAdapter"
     catalog: "Catalog"
     partition_by: Optional[PartitionByType] = None
     parallel: Optional[int] = None
@@ -447,8 +415,10 @@ class UDFStep(Step, ABC):
         """
 
     def populate_udf_table(self, udf_table: "Table", query: Select) -> None:
+        from datachain.catalog import QUERY_SCRIPT_CANCELED_EXIT_CODE
+
         use_partitioning = self.partition_by is not None
-        batching = self.udf.properties.get_batching(use_partitioning)
+        batching = self.udf.get_batching(use_partitioning)
         workers = self.workers
         if (
             not workers
@@ -461,101 +431,111 @@ class UDFStep(Step, ABC):
 
         processes = determine_processes(self.parallel)
 
-        try:
-            if workers:
-                from datachain.catalog.loader import get_distributed_class
+        udf_fields = [str(c.name) for c in query.selected_columns]
 
-                distributor = get_distributed_class(min_task_size=self.min_task_size)
-                distributor(
-                    self.udf,
-                    self.catalog,
-                    udf_table,
-                    query,
-                    workers,
-                    processes,
-                    is_generator=self.is_generator,
-                    use_partitioning=use_partitioning,
-                    cache=self.cache,
-                )
-            elif processes:
-                # Parallel processing (faster for more CPU-heavy UDFs)
-                udf_info = {
-                    "udf_data": filtered_cloudpickle_dumps(self.udf),
-                    "catalog_init": self.catalog.get_init_params(),
-                    "id_generator_clone_params": (
-                        self.catalog.id_generator.clone_params()
-                    ),
-                    "metastore_clone_params": self.catalog.metastore.clone_params(),
-                    "warehouse_clone_params": self.catalog.warehouse.clone_params(),
-                    "table": udf_table,
-                    "query": query,
-                    "batching": batching,
-                    "processes": processes,
-                    "is_generator": self.is_generator,
-                    "cache": self.cache,
-                }
+        prefetch = self.udf.prefetch
+        with _get_cache(self.catalog.cache, prefetch, use_cache=self.cache) as _cache:
+            catalog = clone_catalog_with_cache(self.catalog, _cache)
+            try:
+                if workers:
+                    if catalog.in_memory:
+                        raise RuntimeError(
+                            "In-memory databases cannot be used with "
+                            "distributed processing."
+                        )
 
-                # Run the UDFDispatcher in another process to avoid needing
-                # if __name__ == '__main__': in user scripts
-                exec_cmd = get_datachain_executable()
-                envs = dict(os.environ)
-                envs.update({"PYTHONPATH": os.getcwd()})
-                process_data = filtered_cloudpickle_dumps(udf_info)
-                result = subprocess.run(  # noqa: S603
-                    [*exec_cmd, "internal-run-udf"],
-                    input=process_data,
-                    check=False,
-                    env=envs,
-                )
-                if result.returncode != 0:
-                    raise RuntimeError("UDF Execution Failed!")
+                    from datachain.catalog.loader import get_distributed_class
 
-            else:
-                # Otherwise process single-threaded (faster for smaller UDFs)
-                # Optionally instantiate the UDF instance if a class is provided.
-                if isinstance(self.udf, UDFFactory):
-                    udf: UDFBase = self.udf()
+                    distributor = get_distributed_class(
+                        min_task_size=self.min_task_size
+                    )
+                    distributor(
+                        self.udf,
+                        catalog,
+                        udf_table,
+                        query,
+                        workers,
+                        processes,
+                        udf_fields=udf_fields,
+                        is_generator=self.is_generator,
+                        use_partitioning=use_partitioning,
+                        cache=self.cache,
+                    )
+                elif processes:
+                    # Parallel processing (faster for more CPU-heavy UDFs)
+                    if catalog.in_memory:
+                        raise RuntimeError(
+                            "In-memory databases cannot be used "
+                            "with parallel processing."
+                        )
+                    udf_info: UdfInfo = {
+                        "udf_data": filtered_cloudpickle_dumps(self.udf),
+                        "catalog_init": catalog.get_init_params(),
+                        "metastore_clone_params": catalog.metastore.clone_params(),
+                        "warehouse_clone_params": catalog.warehouse.clone_params(),
+                        "table": udf_table,
+                        "query": query,
+                        "udf_fields": udf_fields,
+                        "batching": batching,
+                        "processes": processes,
+                        "is_generator": self.is_generator,
+                        "cache": self.cache,
+                    }
+
+                    # Run the UDFDispatcher in another process to avoid needing
+                    # if __name__ == '__main__': in user scripts
+                    exec_cmd = get_datachain_executable()
+                    cmd = [*exec_cmd, "internal-run-udf"]
+                    envs = dict(os.environ)
+                    envs.update({"PYTHONPATH": os.getcwd()})
+                    process_data = filtered_cloudpickle_dumps(udf_info)
+
+                    with subprocess.Popen(  # noqa: S603
+                        cmd, env=envs, stdin=subprocess.PIPE
+                    ) as process:
+                        process.communicate(process_data)
+                        if retval := process.poll():
+                            raise RuntimeError(
+                                f"UDF Execution Failed! Exit code: {retval}"
+                            )
                 else:
-                    udf = self.udf
+                    # Otherwise process single-threaded (faster for smaller UDFs)
+                    warehouse = catalog.warehouse
 
-                warehouse = self.catalog.warehouse
-
-                with contextlib.closing(
-                    batching(warehouse.dataset_select_paginated, query)
-                ) as udf_inputs:
+                    udf_inputs = batching(warehouse.dataset_select_paginated, query)
                     download_cb = get_download_callback()
                     processed_cb = get_processed_callback()
                     generated_cb = get_generated_callback(self.is_generator)
+
                     try:
-                        udf_results = udf.run(
+                        udf_results = self.udf.run(
+                            udf_fields,
                             udf_inputs,
-                            self.catalog,
-                            self.is_generator,
+                            catalog,
                             self.cache,
                             download_cb,
                             processed_cb,
                         )
-                        process_udf_outputs(
-                            warehouse,
-                            udf_table,
-                            udf_results,
-                            udf,
-                            cb=generated_cb,
-                        )
+                        with safe_closing(udf_results):
+                            process_udf_outputs(
+                                warehouse,
+                                udf_table,
+                                udf_results,
+                                self.udf,
+                                cb=generated_cb,
+                            )
                     finally:
                         download_cb.close()
                         processed_cb.close()
                         generated_cb.close()
 
-                warehouse.insert_rows_done(udf_table)
-
-        except QueryScriptCancelError:
-            self.catalog.warehouse.close()
-            sys.exit(QUERY_SCRIPT_CANCELED_EXIT_CODE)
-        except (Exception, KeyboardInterrupt):
-            # Close any open database connections if an error is encountered
-            self.catalog.warehouse.close()
-            raise
+            except QueryScriptCancelError:
+                self.catalog.warehouse.close()
+                sys.exit(QUERY_SCRIPT_CANCELED_EXIT_CODE)
+            except (Exception, KeyboardInterrupt):
+                # Close any open database connections if an error is encountered
+                self.catalog.warehouse.close()
+                raise
 
     def create_partitions_table(self, query: Select) -> "Table":
         """
@@ -568,13 +548,17 @@ class UDFStep(Step, ABC):
         else:
             list_partition_by = [self.partition_by]
 
+        partition_by = [
+            p.get_column() if isinstance(p, Function) else p for p in list_partition_by
+        ]
+
         # create table with partitions
         tbl = self.catalog.warehouse.create_udf_table(partition_columns())
 
         # fill table with partitions
         cols = [
             query.selected_columns.sys__id,
-            f.dense_rank().over(order_by=list_partition_by).label(PARTITION_COLUMN_ID),
+            f.dense_rank().over(order_by=partition_by).label(PARTITION_COLUMN_ID),
         ]
         self.catalog.warehouse.db.execute(
             tbl.insert().from_select(cols, query.with_only_columns(*cols))
@@ -638,10 +622,6 @@ class UDFSignal(UDFStep):
             return query, []
         table = self.catalog.warehouse.create_pre_udf_table(query)
         q: Select = sqlalchemy.select(*table.c)
-        if query._order_by_clauses:
-            # we are adding ordering only if it's explicitly added by user in
-            # query part before adding signals
-            q = q.order_by(table.c.sys__id)
         return q, [table]
 
     def create_result_query(
@@ -654,6 +634,13 @@ class UDFSignal(UDFStep):
         signal_cols = [c for c in udf_table.c if c.name != "sys__id"]
         signal_name_cols = {c.name: c for c in signal_cols}
         cols = signal_cols
+
+        overlap = {c.name for c in original_cols} & {c.name for c in cols}
+        if overlap:
+            raise ValueError(
+                "Column already exists or added in the previous steps: "
+                + ", ".join(overlap)
+            )
 
         def q(*columns):
             cols1 = []
@@ -676,11 +663,6 @@ class UDFSignal(UDFStep):
                 )
             else:
                 res = sqlalchemy.select(*cols1).select_from(subq)
-
-            if query._order_by_clauses:
-                # if ordering is used in query part before adding signals, we
-                # will have it as order by id from select from pre-created udf table
-                res = res.order_by(subq.c.sys__id)
 
             if self.partition_by is not None:
                 subquery = res.subquery()
@@ -713,13 +695,6 @@ class RowGenerator(UDFStep):
     def create_result_query(
         self, udf_table, query: Select
     ) -> tuple[QueryGeneratorFunc, list["sqlalchemy.Column"]]:
-        if not query._order_by_clauses:
-            # if we are not selecting all rows in UDF, we need to ensure that
-            # we get the same rows as we got as inputs of UDF since selecting
-            # without ordering can be non deterministic in some databases
-            c = query.selected_columns
-            query = query.order_by(c.sys__id)
-
         udf_table_query = udf_table.select().subquery()
         udf_table_cols: list[sqlalchemy.Label[Any]] = [
             label(c.name, c) for c in udf_table_query.columns
@@ -747,6 +722,12 @@ class SQLClause(Step, ABC):
 
         return step_result(q, new_query.selected_columns)
 
+    def parse_cols(
+        self,
+        cols: Sequence[Union[Function, ColumnElement]],
+    ) -> tuple[ColumnElement, ...]:
+        return tuple(c.get_column() if isinstance(c, Function) else c for c in cols)
+
     @abstractmethod
     def apply_sql_clause(self, query):
         pass
@@ -754,12 +735,14 @@ class SQLClause(Step, ABC):
 
 @frozen
 class SQLSelect(SQLClause):
-    args: tuple[Union[str, ColumnElement], ...]
+    args: tuple[Union[Function, ColumnElement], ...]
 
     def apply_sql_clause(self, query) -> Select:
         subquery = query.subquery()
-
-        args = [subquery.c[str(c)] if isinstance(c, (str, C)) else c for c in self.args]
+        args = [
+            subquery.c[str(c)] if isinstance(c, (str, C)) else c
+            for c in self.parse_cols(self.args)
+        ]
         if not args:
             args = subquery.c
 
@@ -768,27 +751,35 @@ class SQLSelect(SQLClause):
 
 @frozen
 class SQLSelectExcept(SQLClause):
-    args: tuple[str, ...]
+    args: tuple[Union[Function, ColumnElement], ...]
 
     def apply_sql_clause(self, query: Select) -> Select:
         subquery = query.subquery()
-        names = set(self.args)
-        args = [c for c in subquery.c if c.name not in names]
+        args = [c for c in subquery.c if c.name not in set(self.parse_cols(self.args))]
         return sqlalchemy.select(*args).select_from(subquery)
 
 
 @frozen
 class SQLMutate(SQLClause):
-    args: tuple[ColumnElement, ...]
+    args: tuple[Union[Function, ColumnElement], ...]
 
     def apply_sql_clause(self, query: Select) -> Select:
         original_subquery = query.subquery()
+        args = [
+            original_subquery.c[str(c)] if isinstance(c, (str, C)) else c
+            for c in self.parse_cols(self.args)
+        ]
+        to_mutate = {c.name for c in args}
+
+        prefix = f"mutate{token_hex(8)}_"
+        cols = [
+            c.label(prefix + c.name) if c.name in to_mutate else c
+            for c in original_subquery.c
+        ]
         # this is needed for new column to be used in clauses
         # like ORDER BY, otherwise new column is not recognized
         subquery = (
-            sqlalchemy.select(*original_subquery.c, *self.args)
-            .select_from(original_subquery)
-            .subquery()
+            sqlalchemy.select(*cols, *args).select_from(original_subquery).subquery()
         )
 
         return sqlalchemy.select(*subquery.c).select_from(subquery)
@@ -796,21 +787,24 @@ class SQLMutate(SQLClause):
 
 @frozen
 class SQLFilter(SQLClause):
-    expressions: tuple[ColumnElement, ...]
+    expressions: tuple[Union[Function, ColumnElement], ...]
 
     def __and__(self, other):
-        return self.__class__(self.expressions + other)
+        expressions = self.parse_cols(self.expressions)
+        return self.__class__(expressions + other)
 
     def apply_sql_clause(self, query: Select) -> Select:
-        return query.filter(*self.expressions)
+        expressions = self.parse_cols(self.expressions)
+        return query.filter(*expressions)
 
 
 @frozen
 class SQLOrderBy(SQLClause):
-    args: tuple[ColumnElement, ...]
+    args: tuple[Union[Function, ColumnElement], ...]
 
     def apply_sql_clause(self, query: Select) -> Select:
-        return query.order_by(*self.args)
+        args = self.parse_cols(self.args)
+        return query.order_by(*args)
 
 
 @frozen
@@ -859,17 +853,14 @@ class SQLUnion(Step):
         temp_tables.extend(self.query1.temp_table_names)
         q2 = self.query2.apply_steps().select().subquery()
         temp_tables.extend(self.query2.temp_table_names)
-        columns1, columns2 = fill_columns(q1.columns, q2.columns)
+
+        columns1, columns2 = _order_columns(q1.columns, q2.columns)
 
         def q(*columns):
             names = {c.name for c in columns}
             col1 = [c for c in columns1 if c.name in names]
             col2 = [c for c in columns2 if c.name in names]
-            res = (
-                sqlalchemy.select(*col1)
-                .select_from(q1)
-                .union_all(sqlalchemy.select(*col2).select_from(q2))
-            )
+            res = sqlalchemy.select(*col1).union_all(sqlalchemy.select(*col2))
 
             subquery = res.subquery()
             return sqlalchemy.select(*subquery.c).select_from(subquery)
@@ -883,11 +874,36 @@ class SQLUnion(Step):
 
 @frozen
 class SQLJoin(Step):
+    catalog: "Catalog"
     query1: "DatasetQuery"
     query2: "DatasetQuery"
     predicates: Union[JoinPredicateType, tuple[JoinPredicateType, ...]]
     inner: bool
+    full: bool
     rname: str
+
+    def get_query(self, dq: "DatasetQuery", temp_tables: list[str]) -> sa.Subquery:
+        query = dq.apply_steps().select()
+        temp_tables.extend(dq.temp_table_names)
+
+        if not any(isinstance(step, (SQLJoin, SQLUnion)) for step in dq.steps):
+            return query.subquery(dq.table.name)
+
+        warehouse = self.catalog.warehouse
+
+        columns = [
+            c if isinstance(c, Column) else Column(c.name, c.type)
+            for c in query.subquery().columns
+        ]
+        temp_table = warehouse.create_dataset_rows_table(
+            warehouse.temp_table_name(),
+            columns=columns,
+        )
+        temp_tables.append(temp_table.name)
+
+        warehouse.copy_table(temp_table, query)
+
+        return temp_table.select().subquery(dq.table.name)
 
     def validate_expression(self, exp: "ClauseElement", q1, q2):
         """
@@ -921,10 +937,8 @@ class SQLJoin(Step):
     def apply(
         self, query_generator: QueryGenerator, temp_tables: list[str]
     ) -> StepResult:
-        q1 = self.query1.apply_steps().select().subquery(self.query1.table.name)
-        temp_tables.extend(self.query1.temp_table_names)
-        q2 = self.query2.apply_steps().select().subquery(self.query2.table.name)
-        temp_tables.extend(self.query2.temp_table_names)
+        q1 = self.get_query(self.query1, temp_tables)
+        q2 = self.get_query(self.query2, temp_tables)
 
         q1_columns = list(q1.c)
         q1_column_names = {c.name for c in q1_columns}
@@ -935,7 +949,12 @@ class SQLJoin(Step):
                 continue
 
             if c.name in q1_column_names:
-                c = c.label(self.rname.format(name=c.name))
+                new_name = self.rname.format(name=c.name)
+                new_name_idx = 0
+                while new_name in q1_column_names:
+                    new_name_idx += 1
+                    new_name = self.rname.format(name=f"{c.name}_{new_name_idx}")
+                c = c.label(new_name)
             q2_columns.append(c)
 
         res_columns = q1_columns + q2_columns
@@ -963,16 +982,14 @@ class SQLJoin(Step):
         self.validate_expression(join_expression, q1, q2)
 
         def q(*columns):
-            join_query = sqlalchemy.join(
+            return self.catalog.warehouse.join(
                 q1,
                 q2,
                 join_expression,
-                isouter=not self.inner,
+                inner=self.inner,
+                full=self.full,
+                columns=columns,
             )
-
-            res = sqlalchemy.select(*columns).select_from(join_query)
-            subquery = res.subquery()
-            return sqlalchemy.select(*subquery.c).select_from(subquery)
 
         return step_result(
             q,
@@ -982,43 +999,72 @@ class SQLJoin(Step):
 
 
 @frozen
-class GroupBy(Step):
-    """Group rows by a specific column."""
+class SQLGroupBy(SQLClause):
+    cols: Sequence[Union[str, Function, ColumnElement]]
+    group_by: Sequence[Union[str, Function, ColumnElement]]
 
-    cols: PartitionByType
+    def apply_sql_clause(self, query) -> Select:
+        if not self.cols:
+            raise ValueError("No columns to select")
 
-    def clone(self) -> "Self":
-        return self.__class__(self.cols)
+        subquery = query.subquery()
 
-    def apply(
-        self, query_generator: QueryGenerator, temp_tables: list[str]
-    ) -> StepResult:
-        query = query_generator.select()
-        grouped_query = query.group_by(*self.cols)
+        group_by = [
+            c.get_column() if isinstance(c, Function) else c for c in self.group_by
+        ]
 
-        def q(*columns):
-            return grouped_query.with_only_columns(*columns)
+        cols = [
+            c.get_column()
+            if isinstance(c, Function)
+            else subquery.c[str(c)]
+            if isinstance(c, (str, C))
+            else c
+            for c in (*group_by, *self.cols)
+        ]
 
-        return step_result(q, grouped_query.selected_columns)
+        return sqlalchemy.select(*cols).select_from(subquery).group_by(*group_by)
 
 
-def fill_columns(
-    *column_iterables: Iterable[ColumnElement],
+def _validate_columns(
+    left_columns: Iterable[ColumnElement], right_columns: Iterable[ColumnElement]
+) -> set[str]:
+    left_names = {c.name for c in left_columns}
+    right_names = {c.name for c in right_columns}
+
+    if left_names == right_names:
+        return left_names
+
+    missing_right = left_names - right_names
+    missing_left = right_names - left_names
+
+    def _prepare_msg_part(missing_columns: set[str], side: str) -> str:
+        return f"{', '.join(sorted(missing_columns))} only present in {side}"
+
+    msg_parts = [
+        _prepare_msg_part(missing_columns, found_side)
+        for missing_columns, found_side in zip(
+            [
+                missing_right,
+                missing_left,
+            ],
+            ["left", "right"],
+        )
+        if missing_columns
+    ]
+    msg = f"Cannot perform union. {'. '.join(msg_parts)}"
+
+    raise ValueError(msg)
+
+
+def _order_columns(
+    left_columns: Iterable[ColumnElement], right_columns: Iterable[ColumnElement]
 ) -> list[list[ColumnElement]]:
-    column_dicts = [{c.name: c for c in columns} for columns in column_iterables]
-    combined_columns = {n: c for col_dict in column_dicts for n, c in col_dict.items()}
+    column_order = _validate_columns(left_columns, right_columns)
+    column_dicts = [
+        {c.name: c for c in columns} for columns in [left_columns, right_columns]
+    ]
 
-    result: list[list[ColumnElement]] = [[] for _ in column_dicts]
-    for n in combined_columns:
-        col = next(col_dict[n] for col_dict in column_dicts if n in col_dict)
-        for col_dict, out in zip(column_dicts, result):
-            if n in col_dict:
-                out.append(col_dict[n])
-            else:
-                # Cast the NULL to ensure all columns are aware of their type
-                # Label it to ensure it's aware of its name
-                out.append(sqlalchemy.cast(sqlalchemy.null(), col.type).label(n))
-    return result
+    return [[d[n] for n in column_order] for d in column_dicts]
 
 
 @attrs.define
@@ -1033,26 +1079,19 @@ class ResultIter:
 class DatasetQuery:
     def __init__(
         self,
-        path: str = "",
-        name: str = "",
+        name: str,
         version: Optional[int] = None,
         catalog: Optional["Catalog"] = None,
-        client_config=None,
-        recursive: Optional[bool] = True,
         session: Optional[Session] = None,
-        anon: bool = False,
-        indexing_feature_schema: Optional[dict] = None,
         indexing_column_types: Optional[dict[str, Any]] = None,
-        update: Optional[bool] = False,
-    ):
-        if client_config is None:
-            client_config = {}
+        in_memory: bool = False,
+        fallback_to_studio: bool = True,
+    ) -> None:
+        from datachain.remote.studio import is_token_set
 
-        if anon:
-            client_config["anon"] = True
-
+        self.session = Session.get(session, catalog=catalog, in_memory=in_memory)
+        self.catalog = catalog or self.session.catalog
         self.steps: list[Step] = []
-        self.catalog = catalog or get_catalog(client_config=client_config)
         self._chunk_index: Optional[int] = None
         self._chunk_total: Optional[int] = None
         self.temp_table_names: list[str] = []
@@ -1063,34 +1102,42 @@ class DatasetQuery:
         self.version: Optional[int] = None
         self.feature_schema: Optional[dict] = None
         self.column_types: Optional[dict[str, Any]] = None
-        self.session = Session.get(session, catalog=catalog)
 
-        if path:
-            kwargs = {"update": True} if update else {}
-            self.starting_step = IndexingStep(path, self.catalog, kwargs, recursive)
-            self.feature_schema = indexing_feature_schema
-            self.column_types = indexing_column_types
-        elif name:
-            self.name = name
-            ds = self.catalog.get_dataset(name)
-            self.version = version or ds.latest_version
-            self.feature_schema = ds.get_version(self.version).feature_schema
-            self.column_types = copy(ds.schema)
-            if "sys__id" in self.column_types:
-                self.column_types.pop("sys__id")
-            self.starting_step = QueryStep(self.catalog, name, self.version)
+        self.name = name
+
+        if fallback_to_studio and is_token_set():
+            ds = self.catalog.get_dataset_with_remote_fallback(name, version)
         else:
-            raise ValueError("must provide path or name")
+            ds = self.catalog.get_dataset(name)
 
-    @staticmethod
-    def is_storage_path(path):
-        return bool(re.compile(r"^[a-zA-Z0-9]+://").match(path))
+        self.version = version or ds.latest_version
+        self.feature_schema = ds.get_version(self.version).feature_schema
+        self.column_types = copy(ds.schema)
+        if "sys__id" in self.column_types:
+            self.column_types.pop("sys__id")
+        self.starting_step = QueryStep(self.catalog, name, self.version)
+        self.dialect = self.catalog.warehouse.db.dialect
 
     def __iter__(self):
         return iter(self.db_results())
 
     def __or__(self, other):
         return self.union(other)
+
+    def pull_dataset(self, name: str, version: Optional[int] = None) -> "DatasetRecord":
+        print("Dataset not found in local catalog, trying to get from studio")
+
+        remote_ds_uri = f"{DATASET_PREFIX}{name}"
+        if version:
+            remote_ds_uri += f"@v{version}"
+
+        self.catalog.pull_dataset(
+            remote_ds_uri=remote_ds_uri,
+            local_ds_name=name,
+            local_ds_version=version,
+        )
+
+        return self.catalog.get_dataset(name)
 
     @staticmethod
     def get_table() -> "TableClause":
@@ -1104,6 +1151,8 @@ class DatasetQuery:
     def delete(
         name: str, version: Optional[int] = None, catalog: Optional["Catalog"] = None
     ) -> None:
+        from datachain.catalog import get_catalog
+
         catalog = catalog or get_catalog()
         version = version or catalog.get_dataset(name).latest_version
         catalog.remove_dataset(name, version)
@@ -1122,8 +1171,12 @@ class DatasetQuery:
         """
         return self.name is not None and self.version is not None
 
-    def c(self, name: Union[C, str]) -> "ColumnClause[Any]":
-        col = sqlalchemy.column(name) if isinstance(name, str) else name
+    def c(self, column: Union[C, str]) -> "ColumnClause[Any]":
+        col: sqlalchemy.ColumnClause = (
+            sqlalchemy.column(column)
+            if isinstance(column, str)
+            else sqlalchemy.column(column.name, column.type)
+        )
         col.table = self.table
         return col
 
@@ -1151,23 +1204,12 @@ class DatasetQuery:
             query.steps = query.steps[-1:] + query.steps[:-1]
 
         result = query.starting_step.apply()
-        group_by = None
         self.dependencies.update(result.dependencies)
 
         for step in query.steps:
-            if isinstance(step, GroupBy):
-                if group_by is not None:
-                    raise TypeError("only one group_by allowed")
-                group_by = step
-                continue
-
             result = step.apply(
                 result.query_generator, self.temp_table_names
             )  # a chain of steps linked by results
-            self.dependencies.update(result.dependencies)
-
-        if group_by:
-            result = group_by.apply(result.query_generator, self.temp_table_names)
             self.dependencies.update(result.dependencies)
 
         return result.query_generator
@@ -1200,12 +1242,10 @@ class DatasetQuery:
         # This is needed to always use a new connection with all metastore and warehouse
         # implementations, as errors may close or render unusable the existing
         # connections.
-        metastore = self.catalog.metastore.clone(use_new_connection=True)
-        metastore.cleanup_tables(self.temp_table_names)
-        metastore.close()
-        warehouse = self.catalog.warehouse.clone(use_new_connection=True)
-        warehouse.cleanup_tables(self.temp_table_names)
-        warehouse.close()
+        with self.catalog.metastore.clone(use_new_connection=True) as metastore:
+            metastore.cleanup_tables(self.temp_table_names)
+        with self.catalog.warehouse.clone(use_new_connection=True) as warehouse:
+            warehouse.cleanup_tables(self.temp_table_names)
         self.temp_table_names = []
 
     def db_results(self, row_factory=None, **kwargs):
@@ -1244,28 +1284,23 @@ class DatasetQuery:
         actual_params = [normalize_param(p) for p in params]
         try:
             query = self.apply_steps().select()
+            query_fields = [str(c.name) for c in query.selected_columns]
 
-            def row_iter() -> Generator[RowDict, None, None]:
+            def row_iter() -> Generator[Sequence, None, None]:
                 # warehouse isn't threadsafe, we need to clone() it
                 # in the thread that uses the results
-                warehouse = None
-                try:
-                    warehouse = self.catalog.warehouse.clone()
-                    gen = warehouse.dataset_select_paginated(
-                        query, limit=query._limit, order_by=query._order_by_clauses
-                    )
+                with self.catalog.warehouse.clone() as warehouse:
+                    gen = warehouse.dataset_select_paginated(query)
                     with contextlib.closing(gen) as rows:
                         yield from rows
-                finally:
-                    # clone doesn't necessarily create a new connection
-                    # we can't do `warehouse.close()` for now. It is a bad design
-                    # in clone / close interface that needs to be fixed.
-                    pass
 
-            async def get_params(row: RowDict) -> tuple:
+            async def get_params(row: Sequence) -> tuple:
+                row_dict = RowDict(zip(query_fields, row))
                 return tuple(
                     [
-                        await p.get_value_async(self.catalog, row, mapper, **kwargs)
+                        await p.get_value_async(
+                            self.catalog, row_dict, mapper, **kwargs
+                        )
                         for p in actual_params
                     ]
                 )
@@ -1321,6 +1356,27 @@ class DatasetQuery:
         named_args = [v.label(k) for k, v in kwargs.items()]
         query = self.clone()
         query.steps.append(SQLSelect((*args, *named_args)))
+        return query
+
+    @detach
+    def ordered_select(self, *args, **kwargs) -> "Self":
+        """
+        Select the given columns or expressions using a subquery whilst
+        maintaining query ordering (only applicable if last step was order_by).
+
+        If used with no arguments, this simply creates a subquery and
+        select all columns from it.
+
+        Example:
+            >>> ds.ordered_select(C.name, C.size * 10)
+            >>> ds.ordered_select(C.name, size10x=C.size * 10)
+        """
+        named_args = [v.label(k) for k, v in kwargs.items()]
+        query = self.clone()
+        order_by = query.last_step if query.is_ordered else None
+        query.steps.append(SQLSelect((*args, *named_args)))
+        if order_by:
+            query.steps.append(order_by)
         return query
 
     @detach
@@ -1383,10 +1439,14 @@ class DatasetQuery:
     @detach
     def limit(self, n: int) -> "Self":
         query = self.clone(new_table=False)
-        for step in query.steps:
-            if isinstance(step, SQLLimit) and step.n < n:
-                return query
-        query.steps.append(SQLLimit(n))
+        if (
+            query.steps
+            and (last_step := query.last_step)
+            and isinstance(last_step, SQLLimit)
+        ):
+            query.steps[-1] = SQLLimit(min(n, last_step.n))
+        else:
+            query.steps.append(SQLLimit(n))
         return query
 
     @detach
@@ -1434,9 +1494,13 @@ class DatasetQuery:
         return query.as_scalar()
 
     @detach
-    def group_by(self, *cols: ColumnElement) -> "Self":
+    def group_by(
+        self,
+        cols: Sequence[ColumnElement],
+        group_by: Sequence[ColumnElement],
+    ) -> "Self":
         query = self.clone()
-        query.steps.append(GroupBy(cols))
+        query.steps.append(SQLGroupBy(cols, group_by))
         return query
 
     @detach
@@ -1453,6 +1517,7 @@ class DatasetQuery:
         dataset_query: "DatasetQuery",
         predicates: Union[JoinPredicateType, Sequence[JoinPredicateType]],
         inner=False,
+        full=False,
         rname="{name}_right",
     ) -> "Self":
         left = self.clone(new_table=False)
@@ -1468,7 +1533,9 @@ class DatasetQuery:
             if isinstance(predicates, (str, ColumnClause, ColumnElement))
             else tuple(predicates)
         )
-        new_query.steps = [SQLJoin(left, right, predicates, inner, rname)]
+        new_query.steps = [
+            SQLJoin(self.catalog, left, right, predicates, inner, full, rname)
+        ]
         return new_query
 
     @detach
@@ -1489,7 +1556,7 @@ class DatasetQuery:
     @detach
     def add_signals(
         self,
-        udf: UDFType,
+        udf: "UDFAdapter",
         parallel: Optional[int] = None,
         workers: Union[bool, int] = False,
         min_task_size: Optional[int] = None,
@@ -1510,9 +1577,6 @@ class DatasetQuery:
         at least that minimum number of rows to each distributed worker, mostly useful
         if there are a very large number of small tasks to process.
         """
-        if isinstance(udf, UDFClassWrapper):  # type: ignore[unreachable]
-            # This is a bare decorated class, "instantiate" it now.
-            udf = udf()  # type: ignore[unreachable]
         query = self.clone()
         query.steps.append(
             UDFSignal(
@@ -1528,34 +1592,21 @@ class DatasetQuery:
         return query
 
     @detach
-    def subtract(self, dq: "DatasetQuery") -> "Self":
-        return self._subtract(dq, on=["source", "parent", "name"])
-
-    @detach
-    def _subtract(self, dq: "DatasetQuery", on: Sequence[str]) -> "Self":
+    def subtract(self, dq: "DatasetQuery", on: Sequence[tuple[str, str]]) -> "Self":
         query = self.clone()
         query.steps.append(Subtract(dq, self.catalog, on=on))
         return query
 
     @detach
-    def changed(self, dq: "DatasetQuery") -> "Self":
-        query = self.clone()
-        query.steps.append(Changed(dq, self.catalog))
-        return query
-
-    @detach
     def generate(
         self,
-        udf: UDFType,
+        udf: "UDFAdapter",
         parallel: Optional[int] = None,
         workers: Union[bool, int] = False,
         min_task_size: Optional[int] = None,
         partition_by: Optional[PartitionByType] = None,
         cache: bool = False,
     ) -> "Self":
-        if isinstance(udf, UDFClassWrapper):  # type: ignore[unreachable]
-            # This is a bare decorated class, "instantiate" it now.
-            udf = udf()  # type: ignore[unreachable]
         query = self.clone()
         steps = query.steps
         steps.append(
@@ -1573,24 +1624,13 @@ class DatasetQuery:
 
     def _add_dependencies(self, dataset: "DatasetRecord", version: int):
         for dependency in self.dependencies:
-            if isinstance(dependency, tuple):
-                # dataset dependency
-                ds_dependency_name, ds_dependency_version = dependency
-                self.catalog.metastore.add_dataset_dependency(
-                    dataset.name,
-                    version,
-                    ds_dependency_name,
-                    ds_dependency_version,
-                )
-            else:
-                # storage dependency - its name is a valid StorageURI
-                storage = self.catalog.get_storage(dependency)
-                self.catalog.metastore.add_storage_dependency(
-                    StorageURI(dataset.name),
-                    version,
-                    storage.uri,
-                    storage.timestamp_str,
-                )
+            ds_dependency_name, ds_dependency_version = dependency
+            self.catalog.metastore.add_dataset_dependency(
+                dataset.name,
+                version,
+                ds_dependency_name,
+                ds_dependency_version,
+            )
 
     def exec(self) -> "Self":
         """Execute the query."""
@@ -1606,6 +1646,8 @@ class DatasetQuery:
         name: Optional[str] = None,
         version: Optional[int] = None,
         feature_schema: Optional[dict] = None,
+        description: Optional[str] = None,
+        labels: Optional[list[str]] = None,
         **kwargs,
     ) -> "Self":
         """Save the query as a dataset."""
@@ -1638,24 +1680,20 @@ class DatasetQuery:
                 version=version,
                 feature_schema=feature_schema,
                 columns=columns,
+                description=description,
+                labels=labels,
                 **kwargs,
             )
             version = version or dataset.latest_version
 
+            self.session.add_dataset_version(
+                dataset=dataset, version=version, listing=kwargs.get("listing", False)
+            )
+
             dr = self.catalog.warehouse.dataset_rows(dataset)
 
-            # Exclude the id column and let the db create it to avoid unique
-            # constraint violations.
-            q = query.exclude(("sys__id",))
-            if q._order_by_clauses:
-                # ensuring we have id sorted by order by clause if it exists in a query
-                q = q.add_columns(
-                    f.row_number().over(order_by=q._order_by_clauses).label("sys__id")
-                )
+            self.catalog.warehouse.copy_table(dr.get_table(), query.select())
 
-            cols = tuple(c.name for c in q.selected_columns)
-            insert_q = sqlalchemy.insert(dr.get_table()).from_select(cols, q)
-            self.catalog.warehouse.db.execute(insert_q, **kwargs)
             self.catalog.metastore.update_dataset_status(
                 dataset, DatasetStatus.COMPLETE, version=version
             )
@@ -1666,110 +1704,10 @@ class DatasetQuery:
             self.cleanup()
         return self.__class__(name=name, version=version, catalog=self.catalog)
 
+    @property
+    def is_ordered(self) -> bool:
+        return isinstance(self.last_step, SQLOrderBy)
 
-def _get_output_fd_for_write() -> Union[str, int]:
-    handle = os.getenv("DATACHAIN_OUTPUT_FD")
-    if not handle:
-        return os.devnull
-
-    if os.name != "nt":
-        return int(handle)
-
-    import msvcrt
-
-    return msvcrt.open_osfhandle(int(handle), os.O_WRONLY)  # type: ignore[attr-defined]
-
-
-@attrs.define
-class ExecutionResult:
-    preview: list[dict] = attrs.field(factory=list)
-    dataset: Optional[tuple[str, int]] = None
-    metrics: dict[str, Any] = attrs.field(factory=dict)
-
-
-def _send_result(dataset_query: DatasetQuery) -> None:
-    class JSONSerialize(json.JSONEncoder):
-        def default(self, obj):
-            if isinstance(obj, (datetime.datetime, datetime.date)):
-                return obj.isoformat()
-            if isinstance(obj, bytes):
-                return list(obj[:1024])
-            return super().default(obj)
-
-    try:
-        preview_args: dict[str, Any] = json.loads(
-            os.getenv("DATACHAIN_QUERY_PREVIEW_ARGS", "")
-        )
-    except ValueError:
-        preview_args = {}
-
-    columns = preview_args.get("columns") or []
-
-    if type(dataset_query) is DatasetQuery:
-        preview_query = dataset_query.select(*columns)
-    else:
-        preview_query = dataset_query.select(*columns, _sys=False)
-
-    preview_query = preview_query.limit(preview_args.get("limit", 10)).offset(
-        preview_args.get("offset", 0)
-    )
-
-    dataset: Optional[tuple[str, int]] = None
-    if dataset_query.attached:
-        assert dataset_query.name, "Dataset name should be provided"
-        assert dataset_query.version, "Dataset version should be provided"
-        dataset = dataset_query.name, dataset_query.version
-
-    preview = preview_query.to_db_records()
-    result = ExecutionResult(preview, dataset, metrics)
-    data = attrs.asdict(result)
-
-    with open(_get_output_fd_for_write(), mode="w") as f:
-        json.dump(data, f, cls=JSONSerialize)
-
-
-def query_wrapper(dataset_query: DatasetQuery) -> DatasetQuery:
-    """
-    Wrapper function that wraps the last statement of user query script.
-    Last statement MUST be instance of DatasetQuery, otherwise script exits with
-    error code 10
-    """
-    if not isinstance(dataset_query, DatasetQuery):
-        sys.exit(QUERY_SCRIPT_INVALID_LAST_STATEMENT_EXIT_CODE)
-
-    catalog = dataset_query.catalog
-    save = bool(os.getenv("DATACHAIN_QUERY_SAVE"))
-    save_as = os.getenv("DATACHAIN_QUERY_SAVE_AS")
-
-    if save_as:
-        if dataset_query.attached:
-            dataset_name = dataset_query.name
-            version = dataset_query.version
-            assert dataset_name, "Dataset name should be provided in attached mode"
-            assert version, "Dataset version should be provided in attached mode"
-
-            dataset = catalog.get_dataset(dataset_name)
-
-            try:
-                target_dataset = catalog.get_dataset(save_as)
-            except DatasetNotFoundError:
-                target_dataset = None
-
-            if target_dataset:
-                dataset = catalog.register_dataset(dataset, version, target_dataset)
-            else:
-                dataset = catalog.register_new_dataset(dataset, version, save_as)
-
-            dataset_query = DatasetQuery(
-                name=dataset.name,
-                version=dataset.latest_version,
-                catalog=catalog,
-            )
-        else:
-            dataset_query = dataset_query.save(save_as)
-    elif save and not dataset_query.attached:
-        name = catalog.generate_query_dataset_name()
-        dataset_query = dataset_query.save(name)
-
-    _send_result(dataset_query)
-    return dataset_query
+    @property
+    def last_step(self) -> Optional[Step]:
+        return self.steps[-1] if self.steps else None

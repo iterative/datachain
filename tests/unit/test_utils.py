@@ -1,16 +1,17 @@
 import os
-from textwrap import dedent
 
 import pytest
 
 from datachain.utils import (
     datachain_paths_join,
     determine_processes,
-    import_object,
+    nested_dict_path_set,
     retry_with_backoff,
+    row_to_nested_dict,
     sizeof_fmt,
     sql_escape_like,
     suffix_to_number,
+    uses_glob,
 )
 
 DATACHAIN_TEST_PATHS = ["/file1", "file2", "/dir/file3", "dir/file4"]
@@ -114,29 +115,6 @@ def test_sql_escape_like(text, expected):
     assert sql_escape_like(text) == expected
 
 
-def test_import_object(tmp_path):
-    fname = tmp_path / "foo.py"
-    code = """\
-        def hello():
-            return "Hello!"
-    """
-    fname.write_text(dedent(code))
-    func = import_object(f"{fname}:hello")
-    assert func() == "Hello!"
-
-
-def test_import_object_relative(tmp_path, monkeypatch):
-    fname = tmp_path / "foo.py"
-    code = """\
-        def hello():
-            return "Hello!"
-    """
-    fname.write_text(dedent(code))
-    monkeypatch.chdir(tmp_path)
-    func = import_object("foo.py:hello")
-    assert func() == "Hello!"
-
-
 def test_retry_with_backoff():
     called = 0
     retries = 2
@@ -178,3 +156,64 @@ def test_determine_processes(parallel, settings, expected):
     if settings is not None:
         os.environ["DATACHAIN_SETTINGS_PARALLEL"] = settings
     assert determine_processes(parallel) == expected
+
+
+@pytest.mark.parametrize(
+    "path,expected",
+    (
+        ("/dogs", False),
+        ("/dogs/", False),
+        ("/dogs/*", True),
+        ("/home/user/bucket/animals/", False),
+        ("/home/user/bucket/animals/*", True),
+        ("", False),
+        ("*", True),
+    ),
+)
+def test_uses_glob(path, expected):
+    assert uses_glob(path) is expected
+
+
+@pytest.mark.parametrize(
+    "data,path,value,expected",
+    (
+        ({}, ["test"], True, {"test": True}),
+        ({"extra": False}, ["test"], True, {"extra": False, "test": True}),
+        (
+            {"extra": False},
+            ["test", "nested"],
+            True,
+            {"extra": False, "test": {"nested": True}},
+        ),
+        (
+            {"extra": False},
+            ["test", "nested", "deep"],
+            True,
+            {"extra": False, "test": {"nested": {"deep": True}}},
+        ),
+        (
+            {"extra": False, "test": {"test2": 5, "nested": {}}},
+            ["test", "nested", "deep"],
+            True,
+            {"extra": False, "test": {"test2": 5, "nested": {"deep": True}}},
+        ),
+    ),
+)
+def test_nested_dict_path_set(data, path, value, expected):
+    assert nested_dict_path_set(data, path, value) == expected
+
+
+@pytest.mark.parametrize(
+    "headers,row,expected",
+    (
+        ([["a"], ["b"]], (3, 7), {"a": 3, "b": 7}),
+        ([["a"], ["b", "c"]], (3, 7), {"a": 3, "b": {"c": 7}}),
+        (
+            [["a", "b"], ["a", "c"], ["d"], ["a", "e", "f"]],
+            (1, 5, "test", 11),
+            {"a": {"b": 1, "c": 5, "e": {"f": 11}}, "d": "test"},
+        ),
+    ),
+)
+def test_row_to_nested_dict(headers, row, expected):
+    assert row_to_nested_dict(headers, row) == expected

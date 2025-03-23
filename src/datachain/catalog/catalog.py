@@ -1,98 +1,75 @@
-import ast
-import glob
 import io
 import json
 import logging
-import math
 import os
 import os.path
 import posixpath
+import signal
 import subprocess
 import sys
-import tempfile
 import time
 import traceback
 from collections.abc import Iterable, Iterator, Mapping, Sequence
-from contextlib import contextmanager, nullcontext
 from copy import copy
 from dataclasses import dataclass
 from functools import cached_property, reduce
-from random import shuffle
 from threading import Thread
 from typing import (
     IO,
     TYPE_CHECKING,
     Any,
     Callable,
-    NamedTuple,
     NoReturn,
     Optional,
     Union,
 )
 from uuid import uuid4
 
-import requests
 import sqlalchemy as sa
-import yaml
 from sqlalchemy import Column
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
-from datachain.cache import DataChainCache, UniqueId
+from datachain.cache import Cache
 from datachain.client import Client
-from datachain.config import get_remote_config, read_config
 from datachain.dataset import (
     DATASET_PREFIX,
     QUERY_DATASET_PREFIX,
     DatasetDependency,
+    DatasetListRecord,
     DatasetRecord,
-    DatasetStats,
     DatasetStatus,
-    RowDict,
+    StorageURI,
     create_dataset_uri,
     parse_dataset_uri,
 )
 from datachain.error import (
-    ClientError,
     DataChainError,
     DatasetInvalidVersionError,
     DatasetNotFoundError,
-    PendingIndexingError,
+    DatasetVersionNotFoundError,
     QueryScriptCancelError,
-    QueryScriptCompileError,
-    QueryScriptDatasetNotFound,
     QueryScriptRunError,
 )
-from datachain.listing import Listing
+from datachain.lib.listing import get_listing
 from datachain.node import DirType, Node, NodeWithPath
 from datachain.nodes_thread_pool import NodesThreadPool
-from datachain.remote.studio import StudioClient
-from datachain.sql.types import JSON, Boolean, DateTime, Int, Int64, SQLType, String
-from datachain.storage import Storage, StorageStatus, StorageURI
-from datachain.utils import (
-    DataChainDir,
-    batched,
-    datachain_paths_join,
-    import_object,
-    parse_params_string,
-)
+from datachain.sql.types import DateTime, SQLType
+from datachain.utils import DataChainDir
 
 from .datasource import DataSource
-from .subclass import SubclassFinder
 
 if TYPE_CHECKING:
     from datachain.data_storage import (
-        AbstractIDGenerator,
         AbstractMetastore,
         AbstractWarehouse,
     )
-    from datachain.dataset import DatasetVersion
+    from datachain.dataset import DatasetListVersion
     from datachain.job import Job
+    from datachain.listing import Listing
 
 logger = logging.getLogger("datachain")
 
 DEFAULT_DATASET_DIR = "dataset"
-DATASET_FILE_SUFFIX = ".edatachain"
-FEATURE_CLASSES = ["DataModel"]
 
 TTL_INT = 4 * 60 * 60
 
@@ -104,48 +81,70 @@ QUERY_SCRIPT_INVALID_LAST_STATEMENT_EXIT_CODE = 10
 QUERY_SCRIPT_CANCELED_EXIT_CODE = 11
 
 # dataset pull
-PULL_DATASET_MAX_THREADS = 10
+PULL_DATASET_MAX_THREADS = 5
 PULL_DATASET_CHUNK_TIMEOUT = 3600
 PULL_DATASET_SLEEP_INTERVAL = 0.1  # sleep time while waiting for chunk to be available
 PULL_DATASET_CHECK_STATUS_INTERVAL = 20  # interval to check export status in Studio
-
-
-def _raise_remote_error(error_message: str) -> NoReturn:
-    raise DataChainError(f"Error from server: {error_message}")
 
 
 def noop(_: str):
     pass
 
 
-@contextmanager
-def print_and_capture(
-    stream: "IO[str]", callback: Callable[[str], None] = noop
-) -> "Iterator[list[str]]":
-    lines: list[str] = []
-    append = lines.append
+class TerminationSignal(RuntimeError):  # noqa: N818
+    def __init__(self, signal):
+        self.signal = signal
+        super().__init__("Received termination signal", signal)
 
-    def loop() -> None:
-        for line in iter(stream.readline, ""):
-            print(line, end="")
-            callback(line)
-            append(line)
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.signal})"
 
-    thread = Thread(target=loop, daemon=True)
-    thread.start()
 
+if sys.platform == "win32":
+    SIGINT = signal.CTRL_C_EVENT
+else:
+    SIGINT = signal.SIGINT
+
+
+def shutdown_process(
+    proc: subprocess.Popen,
+    interrupt_timeout: Optional[int] = None,
+    terminate_timeout: Optional[int] = None,
+) -> int:
+    """Shut down the process gracefully with SIGINT -> SIGTERM -> SIGKILL."""
+
+    logger.info("sending interrupt signal to the process %s", proc.pid)
+    proc.send_signal(SIGINT)
+
+    logger.info("waiting for the process %s to finish", proc.pid)
     try:
-        yield lines
-    finally:
-        thread.join()
+        return proc.wait(interrupt_timeout)
+    except subprocess.TimeoutExpired:
+        logger.info(
+            "timed out waiting, sending terminate signal to the process %s", proc.pid
+        )
+        proc.terminate()
+        try:
+            return proc.wait(terminate_timeout)
+        except subprocess.TimeoutExpired:
+            logger.info("timed out waiting, killing the process %s", proc.pid)
+            proc.kill()
+            return proc.wait()
 
 
-class QueryResult(NamedTuple):
-    dataset: Optional[DatasetRecord]
-    version: Optional[int]
-    output: str
-    preview: Optional[list[dict]]
-    metrics: dict[str, Any]
+def _process_stream(stream: "IO[bytes]", callback: Callable[[str], None]) -> None:
+    buffer = b""
+    while byt := stream.read(1):  # Read one byte at a time
+        buffer += byt
+
+        if byt in (b"\n", b"\r"):  # Check for newline or carriage return
+            line = buffer.decode("utf-8")
+            callback(line)
+            buffer = b""  # Clear buffer for next line
+
+    if buffer:  # Handle any remaining data in the buffer
+        line = buffer.decode("utf-8")
+        callback(line)
 
 
 class DatasetRowsFetcher(NodesThreadPool):
@@ -153,24 +152,28 @@ class DatasetRowsFetcher(NodesThreadPool):
         self,
         metastore: "AbstractMetastore",
         warehouse: "AbstractWarehouse",
-        remote_config: dict[str, Any],
-        dataset_name: str,
-        dataset_version: int,
+        remote_ds_name: str,
+        remote_ds_version: int,
+        local_ds_name: str,
+        local_ds_version: int,
         schema: dict[str, Union[SQLType, type[SQLType]]],
         max_threads: int = PULL_DATASET_MAX_THREADS,
+        progress_bar=None,
     ):
+        from datachain.remote.studio import StudioClient
+
         super().__init__(max_threads)
         self._check_dependencies()
         self.metastore = metastore
         self.warehouse = warehouse
-        self.dataset_name = dataset_name
-        self.dataset_version = dataset_version
+        self.remote_ds_name = remote_ds_name
+        self.remote_ds_version = remote_ds_version
+        self.local_ds_name = local_ds_name
+        self.local_ds_version = local_ds_version
         self.schema = schema
         self.last_status_check: Optional[float] = None
-
-        self.studio_client = StudioClient(
-            remote_config["url"], remote_config["username"], remote_config["token"]
-        )
+        self.studio_client = StudioClient()
+        self.progress_bar = progress_bar
 
     def done_task(self, done):
         for task in done:
@@ -201,17 +204,17 @@ class DatasetRowsFetcher(NodesThreadPool):
         Checks are done every PULL_DATASET_CHECK_STATUS_INTERVAL seconds
         """
         export_status_response = self.studio_client.dataset_export_status(
-            self.dataset_name, self.dataset_version
+            self.remote_ds_name, self.remote_ds_version
         )
         if not export_status_response.ok:
-            _raise_remote_error(export_status_response.message)
+            raise DataChainError(export_status_response.message)
 
         export_status = export_status_response.data["status"]  # type: ignore [index]
 
         if export_status == "failed":
-            _raise_remote_error("Dataset export failed in Studio")
+            raise DataChainError("Dataset export failed in Studio")
         if export_status == "removed":
-            _raise_remote_error("Dataset export removed in Studio")
+            raise DataChainError("Dataset export removed in Studio")
 
         self.last_status_check = time.time()
 
@@ -227,58 +230,60 @@ class DatasetRowsFetcher(NodesThreadPool):
         for c in [c for c, t in self.schema.items() if t == DateTime]:
             df[c] = pd.to_datetime(df[c], unit="s")
 
-        # strings are represented as binaries in parquet export so need to
-        # decode it back to strings
-        for c in [c for c, t in self.schema.items() if t == String]:
-            df[c] = df[c].str.decode("utf-8")
+        # id will be autogenerated in DB
+        return df.drop("sys__id", axis=1)
+
+    def get_parquet_content(self, url: str):
+        import requests
+
+        while True:
+            if self.should_check_for_status():
+                self.check_for_status()
+            r = requests.get(url, timeout=PULL_DATASET_CHUNK_TIMEOUT)
+            if r.status_code == 404:
+                time.sleep(PULL_DATASET_SLEEP_INTERVAL)
+                continue
+            r.raise_for_status()
+            return r.content
 
     def do_task(self, urls):
         import lz4.frame
         import pandas as pd
 
-        metastore = self.metastore.clone()  # metastore is not thread safe
-        warehouse = self.warehouse.clone()  # warehouse is not thread safe
-        dataset = metastore.get_dataset(self.dataset_name)
+        # metastore and warehouse are not thread safe
+        with self.metastore.clone() as metastore, self.warehouse.clone() as warehouse:
+            local_ds = metastore.get_dataset(self.local_ds_name)
 
-        urls = list(urls)
-        while urls:
+            urls = list(urls)
+
             for url in urls:
                 if self.should_check_for_status():
                     self.check_for_status()
 
-                r = requests.get(url, timeout=PULL_DATASET_CHUNK_TIMEOUT)
-                if r.status_code == 404:
-                    time.sleep(PULL_DATASET_SLEEP_INTERVAL)
-                    # moving to the next url
-                    continue
-
-                r.raise_for_status()
-
-                df = pd.read_parquet(io.BytesIO(lz4.frame.decompress(r.content)))
-
-                self.fix_columns(df)
-
-                # id will be autogenerated in DB
-                df = df.drop("sys__id", axis=1)
+                df = pd.read_parquet(
+                    io.BytesIO(lz4.frame.decompress(self.get_parquet_content(url)))
+                )
+                df = self.fix_columns(df)
 
                 inserted = warehouse.insert_dataset_rows(
-                    df, dataset, self.dataset_version
+                    df, local_ds, self.local_ds_version
                 )
                 self.increase_counter(inserted)  # type: ignore [arg-type]
-                urls.remove(url)
+                # sometimes progress bar doesn't get updated so manually updating it
+                self.update_progress_bar(self.progress_bar)
 
 
 @dataclass
 class NodeGroup:
     """Class for a group of nodes from the same source"""
 
-    listing: Listing
+    listing: Optional["Listing"]
+    client: "Client"
     sources: list[DataSource]
 
     # The source path within the bucket
     # (not including the bucket name or s3:// prefix)
     source_path: str = ""
-    is_edatachain: bool = False
     dataset_name: Optional[str] = None
     dataset_version: Optional[int] = None
     instantiated_nodes: Optional[list[NodeWithPath]] = None
@@ -300,60 +305,14 @@ class NodeGroup:
         Download this node group to cache.
         """
         if self.sources:
-            self.listing.client.fetch_nodes(
-                self.iternodes(recursive), shared_progress_bar=pbar
-            )
-
-
-def check_output_dataset_file(
-    output: str,
-    force: bool = False,
-    dataset_filename: Optional[str] = None,
-    skip_check_edatachain: bool = False,
-) -> str:
-    """
-    Checks the dataset filename for existence or if it should be force-overwritten.
-    """
-    dataset_file = (
-        dataset_filename if dataset_filename else output + DATASET_FILE_SUFFIX
-    )
-    if not skip_check_edatachain and os.path.exists(dataset_file):
-        if force:
-            os.remove(dataset_file)
-        else:
-            raise RuntimeError(f"Output dataset file already exists: {dataset_file}")
-    return dataset_file
-
-
-def parse_edatachain_file(filename: str) -> list[dict[str, Any]]:
-    with open(filename, encoding="utf-8") as f:
-        contents = yaml.safe_load(f)
-
-    if not isinstance(contents, list):
-        contents = [contents]
-
-    for entry in contents:
-        if not isinstance(entry, dict):
-            raise TypeError(
-                "Failed parsing EDataChain file, "
-                "each data source entry must be a dictionary"
-            )
-        if "data-source" not in entry or "files" not in entry:
-            raise ValueError(
-                "Failed parsing EDataChain file, "
-                "each data source entry must contain the "
-                '"data-source" and "files" keys'
-            )
-
-    return contents
+            self.client.fetch_nodes(self.iternodes(recursive), shared_progress_bar=pbar)
 
 
 def prepare_output_for_cp(
     node_groups: list[NodeGroup],
     output: str,
     force: bool = False,
-    edatachain_only: bool = False,
-    no_edatachain_file: bool = False,
+    no_cp: bool = False,
 ) -> tuple[bool, Optional[str]]:
     total_node_count = 0
     for node_group in node_groups:
@@ -366,7 +325,7 @@ def prepare_output_for_cp(
     always_copy_dir_contents = False
     copy_to_filename = None
 
-    if edatachain_only:
+    if no_cp:
         return always_copy_dir_contents, copy_to_filename
 
     if not os.path.isdir(output):
@@ -391,10 +350,6 @@ def prepare_output_for_cp(
                 copy_to_filename = output
         else:
             raise FileNotFoundError(f"Is not a directory: {output}")
-
-    if copy_to_filename and not no_edatachain_file:
-        raise RuntimeError("File to file cp not supported with .edatachain files!")
-
     return always_copy_dir_contents, copy_to_filename
 
 
@@ -407,7 +362,7 @@ def collect_nodes_for_cp(
 
     # Collect all sources to process
     for node_group in node_groups:
-        listing: Listing = node_group.listing
+        listing: Optional[Listing] = node_group.listing
         valid_sources: list[DataSource] = []
         for dsrc in node_group.sources:
             if dsrc.is_single_object():
@@ -415,6 +370,7 @@ def collect_nodes_for_cp(
                 total_files += 1
                 valid_sources.append(dsrc)
             else:
+                assert listing
                 node = dsrc.node
                 if not recursive:
                     print(f"{node.full_path} is a directory (not copied).")
@@ -437,6 +393,7 @@ def get_download_bar(bar_format: str, total_size: int):
         unit_scale=True,
         unit_divisor=1000,
         total=total_size,
+        leave=False,
     )
 
 
@@ -461,66 +418,56 @@ def instantiate_node_groups(
             unit_scale=True,
             unit_divisor=1000,
             total=total_files,
+            leave=False,
         )
     )
 
     output_dir = output
+    output_file = None
     if copy_to_filename:
         output_dir = os.path.dirname(output)
         if not output_dir:
             output_dir = "."
+        output_file = os.path.basename(output)
 
     # Instantiate these nodes
     for node_group in node_groups:
         if not node_group.sources:
             continue
-        listing: Listing = node_group.listing
+        listing: Optional[Listing] = node_group.listing
         source_path: str = node_group.source_path
 
         copy_dir_contents = always_copy_dir_contents or source_path.endswith("/")
-        instantiated_nodes = listing.collect_nodes_to_instantiate(
-            node_group.sources,
-            copy_to_filename,
-            recursive,
-            copy_dir_contents,
-            source_path,
-            node_group.is_edatachain,
-            node_group.is_dataset,
-        )
-        if not virtual_only:
-            listing.instantiate_nodes(
-                instantiated_nodes,
-                output_dir,
-                total_files,
-                force=force,
-                shared_progress_bar=instantiate_progress_bar,
+        if not listing:
+            source = node_group.sources[0]
+            client = source.client
+            node = NodeWithPath(source.node, [output_file or source.node.path])
+            instantiated_nodes = [node]
+            if not virtual_only:
+                node.instantiate(
+                    client, output_dir, instantiate_progress_bar, force=force
+                )
+        else:
+            instantiated_nodes = listing.collect_nodes_to_instantiate(
+                node_group.sources,
+                copy_to_filename,
+                recursive,
+                copy_dir_contents,
+                node_group.is_dataset,
             )
+            if not virtual_only:
+                listing.instantiate_nodes(
+                    instantiated_nodes,
+                    output_dir,
+                    total_files,
+                    force=force,
+                    shared_progress_bar=instantiate_progress_bar,
+                )
+
         node_group.instantiated_nodes = instantiated_nodes
+
     if instantiate_progress_bar:
         instantiate_progress_bar.close()
-
-
-def compute_metafile_data(node_groups) -> list[dict[str, Any]]:
-    metafile_data = []
-    for node_group in node_groups:
-        if not node_group.sources:
-            continue
-        listing: Listing = node_group.listing
-        source_path: str = node_group.source_path
-        if not node_group.is_dataset:
-            assert listing.storage
-            data_source = listing.storage.to_dict(source_path)
-        else:
-            data_source = {"uri": listing.metastore.uri}
-
-        metafile_group = {"data-source": data_source, "files": []}
-        for node in node_group.instantiated_nodes:
-            if not node.n.is_dir:
-                metafile_group["files"].append(node.get_metafile_data())
-        if metafile_group["files"]:
-            metafile_data.append(metafile_group)
-
-    return metafile_data
 
 
 def find_column_to_str(  # noqa: PLR0911
@@ -529,21 +476,14 @@ def find_column_to_str(  # noqa: PLR0911
     if column == "du":
         return str(
             src.listing.du(
-                {
-                    f: row[field_lookup[f]]
-                    for f in ["dir_type", "size", "parent", "name"]
-                }
+                {f: row[field_lookup[f]] for f in ["dir_type", "size", "path"]}
             )[0]
         )
     if column == "name":
-        return row[field_lookup["name"]] or ""
-    if column == "owner":
-        return row[field_lookup["owner_name"]] or ""
+        return posixpath.basename(row[field_lookup["path"]]) or ""
     if column == "path":
         is_dir = row[field_lookup["dir_type"]] == DirType.DIR
-        parent = row[field_lookup["parent"]]
-        name = row[field_lookup["name"]]
-        path = f"{parent}/{name}" if parent else name
+        path = row[field_lookup["path"]]
         if is_dir and path:
             full_path = path + "/"
         else:
@@ -564,16 +504,15 @@ def find_column_to_str(  # noqa: PLR0911
     return ""
 
 
-def form_module_source(source_ast):
-    module = ast.Module(body=source_ast, type_ignores=[])
-    module = ast.fix_missing_locations(module)
-    return ast.unparse(module)
+def clone_catalog_with_cache(catalog: "Catalog", cache: "Cache") -> "Catalog":
+    clone = catalog.copy()
+    clone.cache = cache
+    return clone
 
 
 class Catalog:
     def __init__(
         self,
-        id_generator: "AbstractIDGenerator",
         metastore: "AbstractMetastore",
         warehouse: "AbstractWarehouse",
         cache_dir=None,
@@ -582,19 +521,20 @@ class Catalog:
         warehouse_ready_callback: Optional[
             Callable[["AbstractWarehouse"], None]
         ] = None,
+        in_memory: bool = False,
     ):
         datachain_dir = DataChainDir(cache=cache_dir, tmp=tmp_dir)
         datachain_dir.init()
-        self.id_generator = id_generator
         self.metastore = metastore
         self._warehouse = warehouse
-        self.cache = DataChainCache(datachain_dir.cache, datachain_dir.tmp)
+        self.cache = Cache(datachain_dir.cache, datachain_dir.tmp)
         self.client_config = client_config if client_config is not None else {}
         self._init_params = {
             "cache_dir": cache_dir,
             "tmp_dir": tmp_dir,
         }
         self._warehouse_ready_callback = warehouse_ready_callback
+        self.in_memory = in_memory
 
     @cached_property
     def warehouse(self) -> "AbstractWarehouse":
@@ -602,6 +542,12 @@ class Catalog:
             self._warehouse_ready_callback(self._warehouse)
 
         return self._warehouse
+
+    @cached_property
+    def session(self):
+        from datachain.query.session import Session
+
+        return Session.get(catalog=self)
 
     def get_init_params(self) -> dict[str, Any]:
         return {
@@ -612,7 +558,6 @@ class Catalog:
     def copy(self, cache=True, db=True):
         result = copy(self)
         if not db:
-            result.id_generator = None
             result.metastore = None
             result._warehouse = None
             result.warehouse = None
@@ -622,247 +567,45 @@ class Catalog:
     def generate_query_dataset_name(cls) -> str:
         return f"{QUERY_DATASET_PREFIX}_{uuid4().hex}"
 
-    def attach_query_wrapper(self, code_ast):
-        if code_ast.body:
-            last_expr = code_ast.body[-1]
-            if isinstance(last_expr, ast.Expr):
-                new_expressions = [
-                    ast.Import(
-                        names=[ast.alias(name="datachain.query.dataset", asname=None)]
-                    ),
-                    ast.Expr(
-                        value=ast.Call(
-                            func=ast.Attribute(
-                                value=ast.Attribute(
-                                    value=ast.Attribute(
-                                        value=ast.Name(id="datachain", ctx=ast.Load()),
-                                        attr="query",
-                                        ctx=ast.Load(),
-                                    ),
-                                    attr="dataset",
-                                    ctx=ast.Load(),
-                                ),
-                                attr="query_wrapper",
-                                ctx=ast.Load(),
-                            ),
-                            args=[last_expr],
-                            keywords=[],
-                        )
-                    ),
-                ]
-                code_ast.body[-1:] = new_expressions
-            else:
-                raise Exception("Last line in a script was not an expression")
-        return code_ast
-
-    def compile_query_script(
-        self, script: str, feature_module_name: str
-    ) -> tuple[Union[str, None], str]:
-        code_ast = ast.parse(script)
-        code_ast = self.attach_query_wrapper(code_ast)
-        finder = SubclassFinder(FEATURE_CLASSES)
-        finder.visit(code_ast)
-
-        if not finder.feature_class:
-            main_module = form_module_source([*finder.imports, *finder.main_body])
-            return None, main_module
-
-        feature_import = ast.ImportFrom(
-            module=feature_module_name,
-            names=[ast.alias(name="*", asname=None)],
-            level=0,
-        )
-        feature_module = form_module_source([*finder.imports, *finder.feature_class])
-        main_module = form_module_source(
-            [*finder.imports, feature_import, *finder.main_body]
-        )
-
-        return feature_module, main_module
-
-    def parse_url(self, uri: str, **config: Any) -> tuple[Client, str]:
-        config = config or self.client_config
-        return Client.parse_url(uri, self.metastore, self.cache, **config)
-
-    def get_client(self, uri: StorageURI, **config: Any) -> Client:
+    def get_client(self, uri: str, **config: Any) -> Client:
         """
         Return the client corresponding to the given source `uri`.
         """
         config = config or self.client_config
         cls = Client.get_implementation(uri)
-        return cls.from_source(uri, self.cache, **config)
+        return cls.from_source(StorageURI(uri), self.cache, **config)
 
     def enlist_source(
         self,
         source: str,
-        ttl: int,
-        force_update=False,
-        skip_indexing=False,
+        update=False,
         client_config=None,
-    ) -> tuple[Listing, str]:
-        if force_update and skip_indexing:
-            raise ValueError(
-                "Both force_update and skip_indexing flags"
-                " cannot be True at the same time"
-            )
+        object_name="file",
+        skip_indexing=False,
+    ) -> tuple[Optional["Listing"], "Client", str]:
+        from datachain.lib.dc import DataChain
+        from datachain.listing import Listing
 
-        partial_id: Optional[int]
-        partial_path: Optional[str]
-
-        client_config = client_config or self.client_config
-        client, path = self.parse_url(source, **client_config)
-        stem = os.path.basename(os.path.normpath(path))
-        prefix = (
-            posixpath.dirname(path)
-            if glob.has_magic(stem) or client.fs.isfile(source)
-            else path
-        )
-        storage_dataset_name = Storage.dataset_name(
-            client.uri, posixpath.join(prefix, "")
-        )
-        source_metastore = self.metastore.clone(client.uri)
-        source_warehouse = self.warehouse.clone()
-
-        columns = [
-            Column("vtype", String),
-            Column("dir_type", Int),
-            Column("parent", String),
-            Column("name", String),
-            Column("etag", String),
-            Column("version", String),
-            Column("is_latest", Boolean),
-            Column("last_modified", DateTime(timezone=True)),
-            Column("size", Int64),
-            Column("owner_name", String),
-            Column("owner_id", String),
-            Column("location", JSON),
-            Column("source", String),
-        ]
-
-        if skip_indexing:
-            source_metastore.create_storage_if_not_registered(client.uri)
-            storage = source_metastore.get_storage(client.uri)
-            source_metastore.init_partial_id(client.uri)
-            partial_id = source_metastore.get_next_partial_id(client.uri)
-
-            source_metastore = self.metastore.clone(
-                uri=client.uri, partial_id=partial_id
-            )
-            source_metastore.init(client.uri)
-
-            source_warehouse = self.warehouse.clone()
-            dataset = self.create_dataset(
-                storage_dataset_name, columns=columns, listing=True
-            )
-
-            return (
-                Listing(storage, source_metastore, source_warehouse, client, dataset),
-                path,
-            )
-
-        (
-            storage,
-            need_index,
-            in_progress,
-            partial_id,
-            partial_path,
-        ) = source_metastore.register_storage_for_indexing(
-            client.uri, force_update, prefix
-        )
-        if in_progress:
-            raise PendingIndexingError(f"Pending indexing operation: uri={storage.uri}")
-
-        if not need_index:
-            assert partial_id is not None
-            assert partial_path is not None
-            source_metastore = self.metastore.clone(
-                uri=client.uri, partial_id=partial_id
-            )
-            source_warehouse = self.warehouse.clone()
-            dataset = self.get_dataset(Storage.dataset_name(client.uri, partial_path))
-            lst = Listing(storage, source_metastore, source_warehouse, client, dataset)
-            logger.debug(
-                "Using cached listing %s. Valid till: %s",
-                storage.uri,
-                storage.expires_to_local,
-            )
-            # Listing has to have correct version of data storage
-            # initialized with correct Storage
-
-            self.update_dataset_version_with_warehouse_info(
-                dataset,
-                dataset.latest_version,
-            )
-
-            return lst, path
-
-        source_metastore.init_partial_id(client.uri)
-        partial_id = source_metastore.get_next_partial_id(client.uri)
-
-        source_metastore.init(client.uri)
-        source_metastore = self.metastore.clone(uri=client.uri, partial_id=partial_id)
-
-        source_warehouse = self.warehouse.clone()
-
-        dataset = self.create_dataset(
-            storage_dataset_name, columns=columns, listing=True
+        DataChain.from_storage(
+            source, session=self.session, update=update, object_name=object_name
         )
 
-        lst = Listing(storage, source_metastore, source_warehouse, client, dataset)
+        list_ds_name, list_uri, list_path, _ = get_listing(
+            source, self.session, update=update
+        )
+        lst = None
+        client = Client.get_client(list_uri, self.cache, **self.client_config)
 
-        try:
-            lst.fetch(prefix)
-
-            source_metastore.mark_storage_indexed(
-                storage.uri,
-                StorageStatus.PARTIAL if prefix else StorageStatus.COMPLETE,
-                ttl,
-                prefix=prefix,
-                partial_id=partial_id,
-                dataset=dataset,
+        if list_ds_name:
+            lst = Listing(
+                self.metastore.clone(),
+                self.warehouse.clone(),
+                client,
+                dataset_name=list_ds_name,
+                object_name=object_name,
             )
 
-            self.update_dataset_version_with_warehouse_info(
-                dataset,
-                dataset.latest_version,
-            )
-
-        except ClientError as e:
-            # for handling cloud errors
-            error_message = INDEX_INTERNAL_ERROR_MESSAGE
-            if e.error_code in ["InvalidAccessKeyId", "SignatureDoesNotMatch"]:
-                error_message = "Invalid cloud credentials"
-
-            source_metastore.mark_storage_indexed(
-                storage.uri,
-                StorageStatus.FAILED,
-                ttl,
-                prefix=prefix,
-                error_message=error_message,
-                error_stack=traceback.format_exc(),
-                dataset=dataset,
-            )
-            self._remove_dataset_rows_and_warehouse_info(
-                dataset, dataset.latest_version
-            )
-            raise
-        except:
-            source_metastore.mark_storage_indexed(
-                storage.uri,
-                StorageStatus.FAILED,
-                ttl,
-                prefix=prefix,
-                error_message=INDEX_INTERNAL_ERROR_MESSAGE,
-                error_stack=traceback.format_exc(),
-                dataset=dataset,
-            )
-            self._remove_dataset_rows_and_warehouse_info(
-                dataset, dataset.latest_version
-            )
-            raise
-
-        lst.storage = storage
-
-        return lst, path
+        return lst, client, list_path
 
     def _remove_dataset_rows_and_warehouse_info(
         self, dataset: DatasetRecord, version: int, **kwargs
@@ -878,7 +621,6 @@ class Catalog:
     def enlist_sources(
         self,
         sources: list[str],
-        ttl: int,
         update: bool,
         skip_indexing=False,
         client_config=None,
@@ -886,14 +628,13 @@ class Catalog:
     ) -> Optional[list["DataSource"]]:
         enlisted_sources = []
         for src in sources:  # Opt: parallel
-            listing, file_path = self.enlist_source(
+            listing, client, file_path = self.enlist_source(
                 src,
-                ttl,
                 update,
-                skip_indexing=skip_indexing,
                 client_config=client_config or self.client_config,
+                skip_indexing=skip_indexing,
             )
-            enlisted_sources.append((listing, file_path))
+            enlisted_sources.append((listing, client, file_path))
 
         if only_index:
             # sometimes we don't really need listing result (e.g on indexing process)
@@ -901,46 +642,37 @@ class Catalog:
             return None
 
         dsrc_all: list[DataSource] = []
-        for listing, file_path in enlisted_sources:
-            nodes = listing.expand_path(file_path)
-            dir_only = file_path.endswith("/")
-            dsrc_all.extend(DataSource(listing, node, dir_only) for node in nodes)
+        for listing, client, file_path in enlisted_sources:
+            if not listing:
+                nodes = [Node.from_file(client.get_file_info(file_path))]
+                dir_only = False
+            else:
+                nodes = listing.expand_path(file_path)
+                dir_only = file_path.endswith("/")
+            dsrc_all.extend(
+                DataSource(listing, client, node, dir_only) for node in nodes
+            )
         return dsrc_all
 
     def enlist_sources_grouped(
         self,
         sources: list[str],
-        ttl: int,
         update: bool,
         no_glob: bool = False,
         client_config=None,
     ) -> list[NodeGroup]:
-        from datachain.query import DatasetQuery
+        from datachain.listing import Listing
+        from datachain.query.dataset import DatasetQuery
 
         def _row_to_node(d: dict[str, Any]) -> Node:
-            del d["source"]
-            return Node.from_dict(d)
+            del d["file__source"]
+            return Node.from_row(d)
 
         enlisted_sources: list[tuple[bool, bool, Any]] = []
         client_config = client_config or self.client_config
         for src in sources:  # Opt: parallel
-            if src.endswith(DATASET_FILE_SUFFIX) and os.path.isfile(src):
-                # TODO: Also allow using EDataChain files from cloud locations?
-                edatachain_data = parse_edatachain_file(src)
-                indexed_sources = []
-                for ds in edatachain_data:
-                    listing, source_path = self.enlist_source(
-                        ds["data-source"]["uri"],
-                        ttl,
-                        update,
-                        client_config=client_config,
-                    )
-                    paths = datachain_paths_join(
-                        source_path, (f["name"] for f in ds["files"])
-                    )
-                    indexed_sources.append((listing, source_path, paths))
-                enlisted_sources.append((True, False, indexed_sources))
-            elif src.startswith("ds://"):
+            listing: Optional[Listing]
+            if src.startswith("ds://"):
                 ds_name, ds_version = parse_dataset_uri(src)
                 dataset = self.get_dataset(ds_name)
                 if not ds_version:
@@ -953,15 +685,21 @@ class Catalog:
                 for source in dataset_sources:
                     client = self.get_client(source, **client_config)
                     uri = client.uri
-                    ms = self.metastore.clone(uri, None)
-                    st = self.warehouse.clone()
-                    listing = Listing(None, ms, st, client, None)
+                    dataset_name, _, _, _ = get_listing(uri, self.session)
+                    assert dataset_name
+                    listing = Listing(
+                        self.metastore.clone(),
+                        self.warehouse.clone(),
+                        client,
+                        dataset_name=dataset_name,
+                    )
                     rows = DatasetQuery(
                         name=dataset.name, version=ds_version, catalog=self
                     ).to_db_records()
                     indexed_sources.append(
                         (
                             listing,
+                            client,
                             source,
                             [_row_to_node(r) for r in rows],
                             ds_name,
@@ -971,25 +709,28 @@ class Catalog:
 
                 enlisted_sources.append((False, True, indexed_sources))
             else:
-                listing, source_path = self.enlist_source(
-                    src, ttl, update, client_config=client_config
+                listing, client, source_path = self.enlist_source(
+                    src, update, client_config=client_config
                 )
-                enlisted_sources.append((False, False, (listing, source_path)))
+                enlisted_sources.append((False, False, (listing, client, source_path)))
 
         node_groups = []
         for is_datachain, is_dataset, payload in enlisted_sources:  # Opt: parallel
             if is_dataset:
                 for (
                     listing,
+                    client,
                     source_path,
                     nodes,
                     dataset_name,
                     dataset_version,
                 ) in payload:
-                    dsrc = [DataSource(listing, node) for node in nodes]
+                    assert listing
+                    dsrc = [DataSource(listing, client, node) for node in nodes]
                     node_groups.append(
                         NodeGroup(
                             listing,
+                            client,
                             dsrc,
                             source_path,
                             dataset_name=dataset_name,
@@ -998,34 +739,31 @@ class Catalog:
                     )
             elif is_datachain:
                 for listing, source_path, paths in payload:
-                    dsrc = [DataSource(listing, listing.resolve_path(p)) for p in paths]
+                    assert listing
+                    dsrc = [
+                        DataSource(listing, listing.client, listing.resolve_path(p))
+                        for p in paths
+                    ]
                     node_groups.append(
-                        NodeGroup(listing, dsrc, source_path, is_edatachain=True)
+                        NodeGroup(
+                            listing,
+                            listing.client,
+                            dsrc,
+                            source_path,
+                        )
                     )
             else:
-                listing, source_path = payload
-                as_container = source_path.endswith("/")
-                dsrc = [
-                    DataSource(listing, n, as_container)
-                    for n in listing.expand_path(source_path, use_glob=not no_glob)
-                ]
-                node_groups.append(NodeGroup(listing, dsrc, source_path))
+                listing, client, source_path = payload
+                if not listing:
+                    nodes = [Node.from_file(client.get_file_info(source_path))]
+                    as_container = False
+                else:
+                    as_container = source_path.endswith("/")
+                    nodes = listing.expand_path(source_path, use_glob=not no_glob)
+                dsrc = [DataSource(listing, client, n, as_container) for n in nodes]
+                node_groups.append(NodeGroup(listing, client, dsrc, source_path))
 
         return node_groups
-
-    def unlist_source(self, uri: StorageURI) -> None:
-        self.metastore.clone(uri=uri).mark_storage_not_indexed(uri)
-
-    def storage_stats(self, uri: StorageURI) -> Optional[DatasetStats]:
-        """
-        Returns tuple with storage stats: total number of rows and total dataset size.
-        """
-        partial_path = self.metastore.get_last_partial_path(uri)
-        if partial_path is None:
-            return None
-        dataset = self.get_dataset(Storage.dataset_name(uri, partial_path))
-
-        return self.dataset_stats(dataset.name, dataset.latest_version)
 
     def create_dataset(
         self,
@@ -1038,6 +776,9 @@ class Catalog:
         create_rows: Optional[bool] = True,
         validate_version: Optional[bool] = True,
         listing: Optional[bool] = False,
+        uuid: Optional[str] = None,
+        description: Optional[str] = None,
+        labels: Optional[list[str]] = None,
     ) -> "DatasetRecord":
         """
         Creates new dataset of a specific version.
@@ -1054,6 +795,19 @@ class Catalog:
         try:
             dataset = self.get_dataset(name)
             default_version = dataset.next_version
+
+            if (description or labels) and (
+                dataset.description != description or dataset.labels != labels
+            ):
+                description = description or dataset.description
+                labels = labels or dataset.labels
+
+                self.update_dataset(
+                    dataset,
+                    description=description,
+                    labels=labels,
+                )
+
         except DatasetNotFoundError:
             schema = {
                 c.name: c.type.to_dict() for c in columns if isinstance(c.type, SQLType)
@@ -1064,6 +818,8 @@ class Catalog:
                 query_script=query_script,
                 schema=schema,
                 ignore_if_exists=True,
+                description=description,
+                labels=labels,
             )
 
         version = version or default_version
@@ -1085,6 +841,7 @@ class Catalog:
             query_script=query_script,
             create_rows_table=create_rows,
             columns=columns,
+            uuid=uuid,
         )
 
     def create_new_dataset_version(
@@ -1101,7 +858,7 @@ class Catalog:
         script_output="",
         create_rows_table=True,
         job_id: Optional[str] = None,
-        is_job_result: bool = False,
+        uuid: Optional[str] = None,
     ) -> DatasetRecord:
         """
         Creates dataset version if it doesn't exist.
@@ -1111,6 +868,7 @@ class Catalog:
         schema = {
             c.name: c.type.to_dict() for c in columns if isinstance(c.type, SQLType)
         }
+
         dataset = self.metastore.create_dataset_version(
             dataset,
             version,
@@ -1123,8 +881,8 @@ class Catalog:
             script_output=script_output,
             schema=schema,
             job_id=job_id,
-            is_job_result=is_job_result,
             ignore_if_exists=True,
+            uuid=uuid,
         )
 
         if create_rows_table:
@@ -1137,7 +895,7 @@ class Catalog:
     def update_dataset_version_with_warehouse_info(
         self, dataset: DatasetRecord, version: int, rows_dropped=False, **kwargs
     ) -> None:
-        from datachain.query import DatasetQuery
+        from datachain.query.dataset import DatasetQuery
 
         dataset_version = dataset.get_version(version)
 
@@ -1225,7 +983,6 @@ class Catalog:
         are cleaned up as soon as they are no longer needed.
         """
         self.warehouse.cleanup_tables(names)
-        self.id_generator.delete_uris(names)
 
     def create_dataset_from_sources(
         self,
@@ -1237,30 +994,25 @@ class Catalog:
         if not sources:
             raise ValueError("Sources needs to be non empty list")
 
-        from datachain.query import DatasetQuery
+        from datachain.lib.dc import DataChain
 
-        dataset_queries = []
+        chains = []
         for source in sources:
             if source.startswith(DATASET_PREFIX):
-                dq = DatasetQuery(
-                    name=source[len(DATASET_PREFIX) :],
-                    catalog=self,
-                    client_config=client_config,
+                dc = DataChain.from_dataset(
+                    source[len(DATASET_PREFIX) :], session=self.session
                 )
             else:
-                dq = DatasetQuery(
-                    path=source,
-                    catalog=self,
-                    client_config=client_config,
-                    recursive=recursive,
+                dc = DataChain.from_storage(
+                    source, session=self.session, recursive=recursive
                 )
 
-            dataset_queries.append(dq)
+            chains.append(dc)
 
         # create union of all dataset queries created from sources
-        dq = reduce(lambda ds1, ds2: ds1.union(ds2), dataset_queries)
+        dc = reduce(lambda dc1, dc2: dc1.union(dc2), chains)
         try:
-            dq.save(name)
+            dc.save(name)
         except Exception as e:  # noqa: BLE001
             try:
                 ds = self.get_dataset(name)
@@ -1290,19 +1042,6 @@ class Catalog:
 
         return self.get_dataset(name)
 
-    def register_new_dataset(
-        self,
-        source_dataset: DatasetRecord,
-        source_version: int,
-        target_name: str,
-    ) -> DatasetRecord:
-        target_dataset = self.metastore.create_dataset(
-            target_name,
-            query_script=source_dataset.query_script,
-            schema=source_dataset.serialized_schema,
-        )
-        return self.register_dataset(source_dataset, source_version, target_dataset, 1)
-
     def register_dataset(
         self,
         dataset: DatasetRecord,
@@ -1324,7 +1063,9 @@ class Catalog:
 
         dataset_version = dataset.get_version(version)
         if not dataset_version:
-            raise ValueError(f"Dataset {dataset.name} does not have version {version}")
+            raise DatasetVersionNotFoundError(
+                f"Dataset {dataset.name} does not have version {version}"
+            )
 
         if not dataset_version.is_final_status():
             raise ValueError("Cannot register dataset version in non final status")
@@ -1346,8 +1087,8 @@ class Catalog:
             size=dataset_version.size,
             preview=dataset_version.preview,
             job_id=dataset_version.job_id,
-            is_job_result=dataset_version.is_job_result,
         )
+
         # to avoid re-creating rows table, we are just renaming it for a new version
         # of target dataset
         self.warehouse.rename_dataset_table(
@@ -1375,17 +1116,46 @@ class Catalog:
     def get_dataset(self, name: str) -> DatasetRecord:
         return self.metastore.get_dataset(name)
 
-    def get_remote_dataset(self, name: str, *, remote_config=None) -> DatasetRecord:
-        remote_config = remote_config or get_remote_config(
-            read_config(DataChainDir.find().root), remote=""
-        )
-        studio_client = StudioClient(
-            remote_config["url"], remote_config["username"], remote_config["token"]
-        )
+    def get_dataset_with_remote_fallback(
+        self, name: str, version: Optional[int] = None
+    ) -> DatasetRecord:
+        try:
+            ds = self.get_dataset(name)
+            if version and not ds.has_version(version):
+                raise DatasetVersionNotFoundError(
+                    f"Dataset {name} does not have version {version}"
+                )
+            return ds
+
+        except (DatasetNotFoundError, DatasetVersionNotFoundError):
+            print("Dataset not found in local catalog, trying to get from studio")
+
+            remote_ds_uri = f"{DATASET_PREFIX}{name}"
+            if version:
+                remote_ds_uri += f"@v{version}"
+
+            self.pull_dataset(
+                remote_ds_uri=remote_ds_uri,
+                local_ds_name=name,
+                local_ds_version=version,
+            )
+            return self.get_dataset(name)
+
+    def get_dataset_with_version_uuid(self, uuid: str) -> DatasetRecord:
+        """Returns dataset that contains version with specific uuid"""
+        for dataset in self.ls_datasets():
+            if dataset.has_version_with_uuid(uuid):
+                return self.get_dataset(dataset.name)
+        raise DatasetNotFoundError(f"Dataset with version uuid {uuid} not found.")
+
+    def get_remote_dataset(self, name: str) -> DatasetRecord:
+        from datachain.remote.studio import StudioClient
+
+        studio_client = StudioClient()
 
         info_response = studio_client.dataset_info(name)
         if not info_response.ok:
-            _raise_remote_error(info_response.message)
+            raise DataChainError(info_response.message)
 
         dataset_info = info_response.data
         assert isinstance(dataset_info, dict)
@@ -1415,17 +1185,40 @@ class Catalog:
 
         return direct_dependencies
 
-    def ls_datasets(self) -> Iterator[DatasetRecord]:
-        datasets = self.metastore.list_datasets()
+    def ls_datasets(
+        self, include_listing: bool = False, studio: bool = False
+    ) -> Iterator[DatasetListRecord]:
+        from datachain.remote.studio import StudioClient
+
+        if studio:
+            client = StudioClient()
+            response = client.ls_datasets()
+            if not response.ok:
+                raise DataChainError(response.message)
+            if not response.data:
+                return
+
+            datasets: Iterator[DatasetListRecord] = (
+                DatasetListRecord.from_dict(d)
+                for d in response.data
+                if not d.get("name", "").startswith(QUERY_DATASET_PREFIX)
+            )
+        else:
+            datasets = self.metastore.list_datasets()
+
         for d in datasets:
-            if not d.is_bucket_listing:
+            if not d.is_bucket_listing or include_listing:
                 yield d
 
     def list_datasets_versions(
         self,
-    ) -> Iterator[tuple[DatasetRecord, "DatasetVersion", Optional["Job"]]]:
+        include_listing: bool = False,
+        studio: bool = False,
+    ) -> Iterator[tuple[DatasetListRecord, "DatasetListVersion", Optional["Job"]]]:
         """Iterate over all dataset versions with related jobs."""
-        datasets = list(self.ls_datasets())
+        datasets = list(
+            self.ls_datasets(include_listing=include_listing, studio=studio)
+        )
 
         # preselect dataset versions jobs from db to avoid multiple queries
         jobs_ids: set[str] = {
@@ -1437,13 +1230,28 @@ class Catalog:
 
         for d in datasets:
             yield from (
-                (d, v, jobs.get(v.job_id) if v.job_id else None) for v in d.versions
+                (d, v, jobs.get(str(v.job_id)) if v.job_id else None)
+                for v in d.versions
             )
+
+    def listings(self):
+        """
+        Returns list of ListingInfo objects which are representing specific
+        storage listing datasets
+        """
+        from datachain.lib.listing import is_listing_dataset
+        from datachain.lib.listing_info import ListingInfo
+
+        return [
+            ListingInfo.from_models(d, v, j)
+            for d, v, j in self.list_datasets_versions(include_listing=True)
+            if is_listing_dataset(d.name)
+        ]
 
     def ls_dataset_rows(
         self, name: str, version: int, offset=None, limit=None
     ) -> list[dict]:
-        from datachain.query import DatasetQuery
+        from datachain.query.dataset import DatasetQuery
 
         dataset = self.get_dataset(name)
 
@@ -1453,14 +1261,27 @@ class Catalog:
         if offset:
             q = q.offset(offset)
 
-        q = q.order_by("sys__id")
-
         return q.to_db_records()
 
-    def signed_url(self, source: str, path: str, client_config=None) -> str:
+    def signed_url(
+        self,
+        source: str,
+        path: str,
+        version_id: Optional[str] = None,
+        client_config=None,
+        content_disposition: Optional[str] = None,
+        **kwargs,
+    ) -> str:
         client_config = client_config or self.client_config
-        client, _ = self.parse_url(source, **client_config)
-        return client.url(path)
+        if client_config.get("anon"):
+            content_disposition = None
+        client = Client.get_client(source, self.cache, **client_config)
+        return client.url(
+            path,
+            version_id=version_id,
+            content_disposition=content_disposition,
+            **kwargs,
+        )
 
     def export_dataset_table(
         self,
@@ -1478,17 +1299,6 @@ class Catalog:
     def dataset_table_export_file_names(self, name: str, version: int) -> list[str]:
         dataset = self.get_dataset(name)
         return self.warehouse.dataset_table_export_file_names(dataset, version)
-
-    def dataset_stats(self, name: str, version: int) -> DatasetStats:
-        """
-        Returns tuple with dataset stats: total number of rows and total dataset size.
-        """
-        dataset = self.get_dataset(name)
-        dataset_version = dataset.get_version(version)
-        return DatasetStats(
-            num_objects=dataset_version.num_objects,
-            size=dataset_version.size,
-        )
 
     def remove_dataset(
         self,
@@ -1533,165 +1343,10 @@ class Catalog:
         dataset = self.get_dataset(name)
         return self.update_dataset(dataset, **update_data)
 
-    def merge_datasets(
-        self,
-        src: DatasetRecord,
-        dst: DatasetRecord,
-        src_version: int,
-        dst_version: Optional[int] = None,
-    ) -> DatasetRecord:
-        """
-        Merges records from source to destination dataset.
-        It will create new version
-        of a dataset with records merged from old version and the source, unless
-        existing version is specified for destination in which case it must
-        be in non final status as datasets are immutable
-        """
-        if (
-            dst_version
-            and not dst.is_valid_next_version(dst_version)
-            and dst.get_version(dst_version).is_final_status()
-        ):
-            raise DatasetInvalidVersionError(
-                f"Version {dst_version} must be higher than the current latest one"
-            )
-
-        src_dep = self.get_dataset_dependencies(src.name, src_version)
-        dst_dep = self.get_dataset_dependencies(
-            dst.name,
-            dst.latest_version,  # type: ignore[arg-type]
-        )
-
-        if dst.has_version(dst_version):  # type: ignore[arg-type]
-            # case where we don't create new version, but append to the existing one
-            self.warehouse.merge_dataset_rows(
-                src,
-                dst,
-                src_version,
-                dst_version=dst_version,  # type: ignore[arg-type]
-            )
-            merged_schema = src.serialized_schema | dst.serialized_schema
-            self.update_dataset(dst, schema=merged_schema)
-            self.update_dataset_version_with_warehouse_info(
-                dst,
-                dst_version,  # type: ignore[arg-type]
-                schema=merged_schema,
-            )
-            for dep in src_dep:
-                if dep and dep not in dst_dep:
-                    self.metastore.add_dependency(
-                        dep,
-                        dst.name,
-                        dst_version,  # type: ignore[arg-type]
-                    )
-        else:
-            # case where we create new version of merged results
-            src_dr = self.warehouse.dataset_rows(src, src_version)
-            dst_dr = self.warehouse.dataset_rows(dst)
-
-            merge_result_columns = list(
-                {
-                    c.name: c for c in list(src_dr.table.c) + list(dst_dr.table.c)
-                }.values()
-            )
-
-            dst_version = dst_version or dst.next_version
-            dst = self.create_new_dataset_version(
-                dst,
-                dst_version,
-                columns=merge_result_columns,
-            )
-            self.warehouse.merge_dataset_rows(
-                src,
-                dst,
-                src_version,
-                dst_version,
-            )
-            self.update_dataset_version_with_warehouse_info(dst, dst_version)
-            for dep in set(src_dep + dst_dep):
-                if dep:
-                    self.metastore.add_dependency(dep, dst.name, dst_version)
-
-        return dst
-
-    def get_file_signals(
-        self, dataset_name: str, dataset_version: int, row: RowDict
-    ) -> Optional[dict]:
-        """
-        Function that returns file signals from dataset row.
-        Note that signal names are without prefix, so if there was 'laion__file__source'
-        in original row, result will have just 'source'
-        Example output:
-            {
-                "source": "s3://ldb-public",
-                "parent": "animals/dogs",
-                "name": "dog.jpg",
-                ...
-            }
-        """
-        from datachain.lib.file import File
-        from datachain.lib.signal_schema import DEFAULT_DELIMITER, SignalSchema
-
-        version = self.get_dataset(dataset_name).get_version(dataset_version)
-
-        file_signals_values = {}
-
-        schema = SignalSchema.deserialize(version.feature_schema)
-        for file_signals in schema.get_signals(File):
-            prefix = file_signals.replace(".", DEFAULT_DELIMITER) + DEFAULT_DELIMITER
-            file_signals_values[file_signals] = {
-                c_name.removeprefix(prefix): c_value
-                for c_name, c_value in row.items()
-                if c_name.startswith(prefix)
-                and DEFAULT_DELIMITER not in c_name.removeprefix(prefix)
-            }
-
-        if not file_signals_values:
-            return None
-
-        # there can be multiple file signals in a schema, but taking the first
-        # one for now. In future we might add ability to choose from which one
-        # to open object
-        return next(iter(file_signals_values.values()))
-
-    def open_object(
-        self,
-        dataset_name: str,
-        dataset_version: int,
-        row: RowDict,
-        use_cache: bool = True,
-        **config: Any,
-    ):
-        file_signals = self.get_file_signals(dataset_name, dataset_version, row)
-        if not file_signals:
-            raise RuntimeError("Cannot open object without file signals")
-
-        config = config or self.client_config
-        client = self.get_client(file_signals["source"], **config)
-        return client.open_object(
-            self._get_row_uid(file_signals),  # type: ignore [arg-type]
-            use_cache=use_cache,
-        )
-
-    def _get_row_uid(self, row: RowDict) -> UniqueId:
-        return UniqueId(
-            row["source"],
-            row["parent"],
-            row["name"],
-            row["size"],
-            row["etag"],
-            row["version"],
-            row["is_latest"],
-            row["vtype"],
-            row["location"],
-            row["last_modified"],
-        )
-
     def ls(
         self,
         sources: list[str],
         fields: Iterable[str],
-        ttl=TTL_INT,
         update=False,
         skip_indexing=False,
         *,
@@ -1699,7 +1354,6 @@ class Catalog:
     ) -> Iterator[tuple[DataSource, Iterable[tuple]]]:
         data_sources = self.enlist_sources(
             sources,
-            ttl,
             update,
             skip_indexing=skip_indexing,
             client_config=client_config or self.client_config,
@@ -1708,167 +1362,176 @@ class Catalog:
         for source in data_sources:  # type: ignore [union-attr]
             yield source, source.ls(fields)
 
-    def ls_storage_uris(self) -> Iterator[str]:
-        yield from self.metastore.get_all_storage_uris()
-
-    def get_storage(self, uri: StorageURI) -> Storage:
-        return self.metastore.get_storage(uri)
-
-    def ls_storages(self) -> list[Storage]:
-        return self.metastore.list_storages()
-
-    def pull_dataset(
+    def pull_dataset(  # noqa: C901, PLR0915
         self,
-        dataset_uri: str,
+        remote_ds_uri: str,
         output: Optional[str] = None,
-        no_cp: bool = False,
+        local_ds_name: Optional[str] = None,
+        local_ds_version: Optional[int] = None,
+        cp: bool = False,
         force: bool = False,
-        edatachain: bool = False,
-        edatachain_file: Optional[str] = None,
         *,
         client_config=None,
-        remote_config=None,
     ) -> None:
-        # TODO add progress bar https://github.com/iterative/dvcx/issues/750
-        # TODO copy correct remote dates https://github.com/iterative/dvcx/issues/new
-        # TODO compare dataset stats on remote vs local pull to assert it's ok
-        def _instantiate_dataset():
-            if no_cp:
+        def _instantiate(ds_uri: str) -> None:
+            if not cp:
                 return
+            assert output
             self.cp(
-                [dataset_uri],
+                [ds_uri],
                 output,
                 force=force,
-                no_edatachain_file=not edatachain,
-                edatachain_file=edatachain_file,
                 client_config=client_config,
             )
-            print(f"Dataset {dataset_uri} instantiated locally to {output}")
+            print(f"Dataset {ds_uri} instantiated locally to {output}")
 
-        if not output and not no_cp:
+        if cp and not output:
             raise ValueError("Please provide output directory for instantiation")
 
-        client_config = client_config or self.client_config
-        remote_config = remote_config or get_remote_config(
-            read_config(DataChainDir.find().root), remote=""
-        )
+        from datachain.remote.studio import StudioClient
 
-        studio_client = StudioClient(
-            remote_config["url"], remote_config["username"], remote_config["token"]
-        )
+        studio_client = StudioClient()
 
         try:
-            remote_dataset_name, version = parse_dataset_uri(dataset_uri)
+            remote_ds_name, version = parse_dataset_uri(remote_ds_uri)
         except Exception as e:
             raise DataChainError("Error when parsing dataset uri") from e
 
-        dataset = None
-        try:
-            dataset = self.get_dataset(remote_dataset_name)
-        except DatasetNotFoundError:
-            # we will create new one if it doesn't exist
-            pass
-
-        remote_dataset = self.get_remote_dataset(
-            remote_dataset_name, remote_config=remote_config
-        )
-        # if version is not specified in uri, take the latest one
-        if not version:
-            version = remote_dataset.latest_version
-            print(f"Version not specified, pulling the latest one (v{version})")
-            # updating dataset uri with latest version
-            dataset_uri = create_dataset_uri(remote_dataset_name, version)
-
-        assert version
-
-        if dataset and dataset.has_version(version):
-            print(f"Local copy of dataset {dataset_uri} already present")
-            _instantiate_dataset()
-            return
+        remote_ds = self.get_remote_dataset(remote_ds_name)
 
         try:
-            remote_dataset_version = remote_dataset.get_version(version)
-        except (ValueError, StopIteration) as exc:
+            # if version is not specified in uri, take the latest one
+            if not version:
+                version = remote_ds.latest_version
+                print(f"Version not specified, pulling the latest one (v{version})")
+                # updating dataset uri with latest version
+                remote_ds_uri = create_dataset_uri(remote_ds_name, version)
+            remote_ds_version = remote_ds.get_version(version)
+        except (DatasetVersionNotFoundError, StopIteration) as exc:
             raise DataChainError(
-                f"Dataset {remote_dataset_name} doesn't have version {version}"
-                " on server"
+                f"Dataset {remote_ds_name} doesn't have version {version} on server"
             ) from exc
 
-        stats_response = studio_client.dataset_stats(remote_dataset_name, version)
-        if not stats_response.ok:
-            _raise_remote_error(stats_response.message)
-        dataset_stats = stats_response.data
+        local_ds_name = local_ds_name or remote_ds.name
+        local_ds_version = local_ds_version or remote_ds_version.version
+        local_ds_uri = create_dataset_uri(local_ds_name, local_ds_version)
+
+        try:
+            # try to find existing dataset with the same uuid to avoid pulling again
+            existing_ds = self.get_dataset_with_version_uuid(remote_ds_version.uuid)
+            existing_ds_version = existing_ds.get_version_by_uuid(
+                remote_ds_version.uuid
+            )
+            existing_ds_uri = create_dataset_uri(
+                existing_ds.name, existing_ds_version.version
+            )
+            if existing_ds_uri == remote_ds_uri:
+                print(f"Local copy of dataset {remote_ds_uri} already present")
+            else:
+                print(
+                    f"Local copy of dataset {remote_ds_uri} already present as"
+                    f" dataset {existing_ds_uri}"
+                )
+            _instantiate(existing_ds_uri)
+            return
+        except DatasetNotFoundError:
+            pass
+
+        try:
+            local_dataset = self.get_dataset(local_ds_name)
+            if local_dataset and local_dataset.has_version(local_ds_version):
+                raise DataChainError(
+                    f"Local dataset {local_ds_uri} already exists with different uuid,"
+                    " please choose different local dataset name or version"
+                )
+        except DatasetNotFoundError:
+            pass
 
         dataset_save_progress_bar = tqdm(
-            desc=f"Saving dataset {dataset_uri} locally: ",
+            desc=f"Saving dataset {remote_ds_uri} locally: ",
             unit=" rows",
             unit_scale=True,
             unit_divisor=1000,
-            total=dataset_stats.num_objects,  # type: ignore [union-attr]
+            total=remote_ds_version.num_objects,  # type: ignore [union-attr]
+            leave=False,
         )
 
-        schema = DatasetRecord.parse_schema(remote_dataset_version.schema)
+        schema = DatasetRecord.parse_schema(remote_ds_version.schema)
 
-        columns = tuple(
-            sa.Column(name, typ) for name, typ in schema.items() if name != "sys__id"
-        )
-        # creating new dataset (version) locally
-        dataset = self.create_dataset(
-            remote_dataset_name,
-            version,
-            query_script=remote_dataset_version.query_script,
+        local_ds = self.create_dataset(
+            local_ds_name,
+            local_ds_version,
+            query_script=remote_ds_version.query_script,
             create_rows=True,
-            columns=columns,
+            columns=tuple(sa.Column(n, t) for n, t in schema.items() if n != "sys__id"),
+            feature_schema=remote_ds_version.feature_schema,
             validate_version=False,
+            uuid=remote_ds_version.uuid,
         )
 
         # asking remote to export dataset rows table to s3 and to return signed
         # urls of exported parts, which are in parquet format
         export_response = studio_client.export_dataset_table(
-            remote_dataset_name, version
+            remote_ds_name, remote_ds_version.version
         )
         if not export_response.ok:
-            _raise_remote_error(export_response.message)
+            raise DataChainError(export_response.message)
 
         signed_urls = export_response.data
 
         if signed_urls:
-            shuffle(signed_urls)
+            with (
+                self.metastore.clone() as metastore,
+                self.warehouse.clone() as warehouse,
+            ):
 
-            rows_fetcher = DatasetRowsFetcher(
-                self.metastore.clone(),
-                self.warehouse.clone(),
-                remote_config,
-                dataset.name,
-                version,
-                schema,
-            )
-            try:
-                rows_fetcher.run(
-                    batched(
-                        signed_urls,
-                        math.ceil(len(signed_urls) / PULL_DATASET_MAX_THREADS),
-                    ),
-                    dataset_save_progress_bar,
+                def batch(urls):
+                    """
+                    Batching urls in a way that fetching is most efficient as
+                    urls with lower id will be created first. Because that, we
+                    are making sure all threads are pulling most recent urls
+                    from beginning
+                    """
+                    res = [[] for i in range(PULL_DATASET_MAX_THREADS)]
+                    current_worker = 0
+                    for url in signed_urls:
+                        res[current_worker].append(url)
+                        current_worker = (current_worker + 1) % PULL_DATASET_MAX_THREADS
+
+                    return res
+
+                rows_fetcher = DatasetRowsFetcher(
+                    metastore,
+                    warehouse,
+                    remote_ds_name,
+                    remote_ds_version.version,
+                    local_ds_name,
+                    local_ds_version,
+                    schema,
+                    progress_bar=dataset_save_progress_bar,
                 )
-            except:
-                self.remove_dataset(dataset.name, version)
-                raise
+                try:
+                    rows_fetcher.run(
+                        iter(batch(signed_urls)), dataset_save_progress_bar
+                    )
+                except:
+                    self.remove_dataset(local_ds_name, local_ds_version)
+                    raise
 
-        dataset = self.metastore.update_dataset_status(
-            dataset,
+        local_ds = self.metastore.update_dataset_status(
+            local_ds,
             DatasetStatus.COMPLETE,
-            version=version,
-            error_message=remote_dataset.error_message,
-            error_stack=remote_dataset.error_stack,
-            script_output=remote_dataset.error_stack,
+            version=local_ds_version,
+            error_message=remote_ds.error_message,
+            error_stack=remote_ds.error_stack,
+            script_output=remote_ds.error_stack,
         )
-        self.update_dataset_version_with_warehouse_info(dataset, version)
+        self.update_dataset_version_with_warehouse_info(local_ds, local_ds_version)
 
         dataset_save_progress_bar.close()
-        print(f"Dataset {dataset_uri} saved locally")
+        print(f"Dataset {remote_ds_uri} saved locally")
 
-        _instantiate_dataset()
+        _instantiate(local_ds_uri)
 
     def clone(
         self,
@@ -1879,9 +1542,6 @@ class Catalog:
         recursive: bool = False,
         no_glob: bool = False,
         no_cp: bool = False,
-        edatachain: bool = False,
-        edatachain_file: Optional[str] = None,
-        ttl: int = TTL_INT,
         *,
         client_config=None,
     ) -> None:
@@ -1890,9 +1550,8 @@ class Catalog:
         them into the dataset folder.
         It also adds those files to a dataset in database, which is
         created if doesn't exist yet
-        Optionally, it creates a .edatachain file
         """
-        if not no_cp or edatachain:
+        if not no_cp:
             self.cp(
                 sources,
                 output,
@@ -1900,10 +1559,7 @@ class Catalog:
                 update=update,
                 recursive=recursive,
                 no_glob=no_glob,
-                edatachain_only=no_cp,
-                no_edatachain_file=not edatachain,
-                edatachain_file=edatachain_file,
-                ttl=ttl,
+                no_cp=no_cp,
                 client_config=client_config,
             )
         else:
@@ -1911,7 +1567,6 @@ class Catalog:
             # it needs to be done here
             self.enlist_sources(
                 sources,
-                ttl,
                 update,
                 client_config=client_config or self.client_config,
             )
@@ -1920,255 +1575,82 @@ class Catalog:
             output, sources, client_config=client_config, recursive=recursive
         )
 
-    def apply_udf(
-        self,
-        udf_location: str,
-        source: str,
-        target_name: str,
-        parallel: Optional[int] = None,
-        params: Optional[str] = None,
-    ):
-        from datachain.query import DatasetQuery
-
-        if source.startswith(DATASET_PREFIX):
-            ds = DatasetQuery(name=source[len(DATASET_PREFIX) :], catalog=self)
-        else:
-            ds = DatasetQuery(path=source, catalog=self)
-        udf = import_object(udf_location)
-        if params:
-            args, kwargs = parse_params_string(params)
-            udf = udf(*args, **kwargs)
-        ds.add_signals(udf, parallel=parallel).save(target_name)
-
     def query(
         self,
         query_script: str,
-        envs: Optional[Mapping[str, str]] = None,
-        python_executable: Optional[str] = None,
-        save: bool = False,
-        save_as: Optional[str] = None,
-        preview_limit: int = 10,
-        preview_offset: int = 0,
-        preview_columns: Optional[list[str]] = None,
-        capture_output: bool = True,
+        env: Optional[Mapping[str, str]] = None,
+        python_executable: str = sys.executable,
+        capture_output: bool = False,
         output_hook: Callable[[str], None] = noop,
         params: Optional[dict[str, str]] = None,
         job_id: Optional[str] = None,
-    ) -> QueryResult:
-        """
-        Method to run custom user Python script to run a query and, as result,
-        creates new dataset from the results of a query.
-        Returns tuple of result dataset and script output.
-
-        Constraints on query script:
-            1. datachain.query.DatasetQuery should be used in order to create query
-            for a dataset
-            2. There should not be any .save() call on DatasetQuery since the idea
-            is to create only one dataset as the outcome of the script
-            3. Last statement must be an instance of DatasetQuery
-
-        If save is set to True, we are creating new dataset with results
-        from dataset query. If it's set to False, we will just print results
-        without saving anything
-
-        Example of query script:
-            from datachain.query import DatasetQuery, C
-            DatasetQuery('s3://ldb-public/remote/datasets/mnist-tiny/').filter(
-                C.size > 1000
-            )
-        """
-        from datachain.query.dataset import ExecutionResult
-
-        feature_file = tempfile.NamedTemporaryFile(
-            dir=os.getcwd(), suffix=".py", delete=False
-        )
-        _, feature_module = os.path.split(feature_file.name)
-
-        try:
-            lines, proc, response_text = self.run_query(
-                python_executable or sys.executable,
-                query_script,
-                envs,
-                feature_file,
-                capture_output,
-                feature_module,
-                output_hook,
-                params,
-                preview_columns,
-                preview_limit,
-                preview_offset,
-                save,
-                save_as,
-                job_id,
-            )
-        finally:
-            feature_file.close()
-            os.unlink(feature_file.name)
-
-        output = "".join(lines)
-
-        if proc.returncode:
-            if proc.returncode == QUERY_SCRIPT_CANCELED_EXIT_CODE:
-                raise QueryScriptCancelError(
-                    "Query script was canceled by user",
-                    return_code=proc.returncode,
-                    output=output,
-                )
-            if proc.returncode == QUERY_SCRIPT_INVALID_LAST_STATEMENT_EXIT_CODE:
-                raise QueryScriptRunError(
-                    "Last line in a script was not an instance of DataChain",
-                    return_code=proc.returncode,
-                    output=output,
-                )
-            raise QueryScriptRunError(
-                f"Query script exited with error code {proc.returncode}",
-                return_code=proc.returncode,
-                output=output,
-            )
-
-        try:
-            response = json.loads(response_text)
-        except ValueError:
-            response = {}
-        exec_result = ExecutionResult(**response)
-
-        dataset: Optional[DatasetRecord] = None
-        version: Optional[int] = None
-        if save or save_as:
-            dataset, version = self.save_result(
-                query_script, exec_result, output, version, job_id
-            )
-
-        return QueryResult(
-            dataset=dataset,
-            version=version,
-            output=output,
-            preview=exec_result.preview,
-            metrics=exec_result.metrics,
-        )
-
-    def run_query(
-        self,
-        python_executable: str,
-        query_script: str,
-        envs: Optional[Mapping[str, str]],
-        feature_file: IO[bytes],
-        capture_output: bool,
-        feature_module: str,
-        output_hook: Callable[[str], None],
-        params: Optional[dict[str, str]],
-        preview_columns: Optional[list[str]],
-        preview_limit: int,
-        preview_offset: int,
-        save: bool,
-        save_as: Optional[str],
-        job_id: Optional[str],
-    ) -> tuple[list[str], subprocess.Popen, str]:
-        try:
-            feature_code, query_script_compiled = self.compile_query_script(
-                query_script, feature_module[:-3]
-            )
-            if feature_code:
-                feature_file.write(feature_code.encode())
-                feature_file.flush()
-
-        except Exception as exc:
-            raise QueryScriptCompileError(
-                f"Query script failed to compile, reason: {exc}"
-            ) from exc
-        if save_as and save_as.startswith(QUERY_DATASET_PREFIX):
-            raise ValueError(
-                f"Cannot use {QUERY_DATASET_PREFIX} prefix for dataset name"
-            )
-        r, w = os.pipe()
-        if os.name == "nt":
-            import msvcrt
-
-            os.set_inheritable(w, True)
-
-            startupinfo = subprocess.STARTUPINFO()  # type: ignore[attr-defined]
-            handle = msvcrt.get_osfhandle(w)  # type: ignore[attr-defined]
-            startupinfo.lpAttributeList["handle_list"].append(handle)
-            kwargs: dict[str, Any] = {"startupinfo": startupinfo}
-        else:
-            handle = w
-            kwargs = {"pass_fds": [w]}
-        envs = dict(envs or os.environ)
-        if feature_code:
-            envs["DATACHAIN_FEATURE_CLASS_SOURCE"] = json.dumps(
-                {feature_module: feature_code}
-            )
-        envs.update(
+        interrupt_timeout: Optional[int] = None,
+        terminate_timeout: Optional[int] = None,
+    ) -> None:
+        cmd = [python_executable, "-c", query_script]
+        env = dict(env or os.environ)
+        env.update(
             {
                 "DATACHAIN_QUERY_PARAMS": json.dumps(params or {}),
-                "PYTHONPATH": os.getcwd(),  # For local imports
-                "DATACHAIN_QUERY_PREVIEW_ARGS": json.dumps(
-                    {
-                        "limit": preview_limit,
-                        "offset": preview_offset,
-                        "columns": preview_columns,
-                    }
-                ),
-                "DATACHAIN_QUERY_SAVE": "1" if save else "",
-                "DATACHAIN_QUERY_SAVE_AS": save_as or "",
-                "PYTHONUNBUFFERED": "1",
-                "DATACHAIN_OUTPUT_FD": str(handle),
                 "DATACHAIN_JOB_ID": job_id or "",
             },
         )
-        with subprocess.Popen(  # noqa: S603
-            [python_executable, "-c", query_script_compiled],
-            env=envs,
-            stdout=subprocess.PIPE if capture_output else None,
-            stderr=subprocess.STDOUT if capture_output else None,
-            bufsize=1,
-            text=True,
-            **kwargs,
-        ) as proc:
-            os.close(w)
+        popen_kwargs: dict[str, Any] = {}
+        if capture_output:
+            popen_kwargs = {"stdout": subprocess.PIPE, "stderr": subprocess.STDOUT}
 
-            out = proc.stdout
-            _lines: list[str] = []
-            ctx = print_and_capture(out, output_hook) if out else nullcontext(_lines)
+        def raise_termination_signal(sig: int, _: Any) -> NoReturn:
+            raise TerminationSignal(sig)
 
-            with ctx as lines, open(r) as f:
-                response_text = ""
-                while proc.poll() is None:
-                    response_text += f.readline()
-                    time.sleep(0.1)
-                response_text += f.readline()
-        return lines, proc, response_text
+        thread: Optional[Thread] = None
+        with subprocess.Popen(cmd, env=env, **popen_kwargs) as proc:  # noqa: S603
+            logger.info("Starting process %s", proc.pid)
 
-    def save_result(self, query_script, exec_result, output, version, job_id):
-        if not exec_result.dataset:
-            raise QueryScriptDatasetNotFound(
-                "No dataset found after running Query script",
-                output=output,
+            orig_sigint_handler = signal.getsignal(signal.SIGINT)
+            # ignore SIGINT in the main process.
+            # In the terminal, SIGINTs are received by all the processes in
+            # the foreground process group, so the script will receive the signal too.
+            # (If we forward the signal to the child, it will receive it twice.)
+            signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+            orig_sigterm_handler = signal.getsignal(signal.SIGTERM)
+            signal.signal(signal.SIGTERM, raise_termination_signal)
+            try:
+                if capture_output:
+                    args = (proc.stdout, output_hook)
+                    thread = Thread(target=_process_stream, args=args, daemon=True)
+                    thread.start()
+
+                proc.wait()
+            except TerminationSignal as exc:
+                signal.signal(signal.SIGTERM, orig_sigterm_handler)
+                signal.signal(signal.SIGINT, orig_sigint_handler)
+                logger.info("Shutting down process %s, received %r", proc.pid, exc)
+                # Rather than forwarding the signal to the child, we try to shut it down
+                # gracefully. This is because we consider the script to be interactive
+                # and special, so we give it time to cleanup before exiting.
+                shutdown_process(proc, interrupt_timeout, terminate_timeout)
+                if proc.returncode:
+                    raise QueryScriptCancelError(
+                        "Query script was canceled by user", return_code=proc.returncode
+                    ) from exc
+            finally:
+                signal.signal(signal.SIGTERM, orig_sigterm_handler)
+                signal.signal(signal.SIGINT, orig_sigint_handler)
+                if thread:
+                    thread.join()  # wait for the reader thread
+
+        logger.info("Process %s exited with return code %s", proc.pid, proc.returncode)
+        if proc.returncode == QUERY_SCRIPT_CANCELED_EXIT_CODE:
+            raise QueryScriptCancelError(
+                "Query script was canceled by user",
+                return_code=proc.returncode,
             )
-        name, version = exec_result.dataset
-        # finding returning dataset
-        try:
-            dataset = self.get_dataset(name)
-            dataset.get_version(version)
-        except (DatasetNotFoundError, ValueError) as e:
-            raise QueryScriptDatasetNotFound(
-                "No dataset found after running Query script",
-                output=output,
-            ) from e
-        dataset = self.update_dataset(
-            dataset,
-            script_output=output,
-            query_script=query_script,
-        )
-        self.update_dataset_version_with_warehouse_info(
-            dataset,
-            version,
-            script_output=output,
-            query_script=query_script,
-            job_id=job_id,
-            is_job_result=True,
-        )
-        return dataset, version
+        if proc.returncode:
+            raise QueryScriptRunError(
+                f"Query script exited with error code {proc.returncode}",
+                return_code=proc.returncode,
+            )
 
     def cp(
         self,
@@ -2177,40 +1659,29 @@ class Catalog:
         force: bool = False,
         update: bool = False,
         recursive: bool = False,
-        edatachain_file: Optional[str] = None,
-        edatachain_only: bool = False,
-        no_edatachain_file: bool = False,
+        no_cp: bool = False,
         no_glob: bool = False,
-        ttl: int = TTL_INT,
         *,
-        client_config=None,
-    ) -> list[dict[str, Any]]:
+        client_config: Optional["dict"] = None,
+    ) -> None:
         """
         This function copies files from cloud sources to local destination directory
         If cloud source is not indexed, or has expired index, it runs indexing
-        It also creates .edatachain file by default, if not specified differently
         """
         client_config = client_config or self.client_config
         node_groups = self.enlist_sources_grouped(
             sources,
-            ttl,
             update,
             no_glob,
             client_config=client_config,
         )
 
         always_copy_dir_contents, copy_to_filename = prepare_output_for_cp(
-            node_groups, output, force, edatachain_only, no_edatachain_file
+            node_groups, output, force, no_cp
         )
-        dataset_file = check_output_dataset_file(
-            output, force, edatachain_file, no_edatachain_file
-        )
-
         total_size, total_files = collect_nodes_for_cp(node_groups, recursive)
-
-        if total_files == 0:
-            # Nothing selected to cp
-            return []
+        if not total_files:
+            return
 
         desc_max_len = max(len(output) + 16, 19)
         bar_format = (
@@ -2220,7 +1691,7 @@ class Catalog:
             "[{elapsed}<{remaining}, {rate_fmt:>8}]"
         )
 
-        if not edatachain_only:
+        if not no_cp:
             with get_download_bar(bar_format, total_size) as pbar:
                 for node_group in node_groups:
                     node_group.download(recursive=recursive, pbar=pbar)
@@ -2232,34 +1703,21 @@ class Catalog:
             total_files,
             force,
             recursive,
-            edatachain_only,
+            no_cp,
             always_copy_dir_contents,
             copy_to_filename,
         )
-        if no_edatachain_file:
-            return []
-
-        metafile_data = compute_metafile_data(node_groups)
-        if metafile_data:
-            # Don't write the metafile if nothing was copied
-            print(f"Creating '{dataset_file}'")
-            with open(dataset_file, "w", encoding="utf-8") as fd:
-                yaml.dump(metafile_data, fd, sort_keys=False)
-
-        return metafile_data
 
     def du(
         self,
         sources,
         depth=0,
-        ttl=TTL_INT,
         update=False,
         *,
         client_config=None,
     ) -> Iterable[tuple[str, float]]:
         sources = self.enlist_sources(
             sources,
-            ttl,
             update,
             client_config=client_config or self.client_config,
         )
@@ -2280,7 +1738,6 @@ class Catalog:
     def find(
         self,
         sources,
-        ttl=TTL_INT,
         update=False,
         names=None,
         inames=None,
@@ -2294,7 +1751,6 @@ class Catalog:
     ) -> Iterator[str]:
         sources = self.enlist_sources(
             sources,
-            ttl,
             update,
             client_config=client_config or self.client_config,
         )
@@ -2305,16 +1761,12 @@ class Catalog:
             if column == "du":
                 field_set.add("dir_type")
                 field_set.add("size")
-                field_set.add("parent")
-                field_set.add("name")
+                field_set.add("path")
             elif column == "name":
-                field_set.add("name")
-            elif column == "owner":
-                field_set.add("owner_name")
+                field_set.add("path")
             elif column == "path":
                 field_set.add("dir_type")
-                field_set.add("parent")
-                field_set.add("name")
+                field_set.add("path")
             elif column == "size":
                 field_set.add("size")
             elif column == "type":
@@ -2334,37 +1786,13 @@ class Catalog:
     def index(
         self,
         sources,
-        ttl=TTL_INT,
         update=False,
         *,
         client_config=None,
     ) -> None:
-        root_sources = [
-            src for src in sources if Client.get_implementation(src).is_root_url(src)
-        ]
-        non_root_sources = [
-            src
-            for src in sources
-            if not Client.get_implementation(src).is_root_url(src)
-        ]
-
-        client_config = client_config or self.client_config
-
-        # for root sources (e.g s3://) we are just getting all buckets and
-        # saving them as storages, without further indexing in each bucket
-        for source in root_sources:
-            for bucket in Client.get_implementation(source).ls_buckets(**client_config):
-                client = self.get_client(bucket.uri, **client_config)
-                print(f"Registering storage {client.uri}")
-                self.metastore.create_storage_if_not_registered(client.uri)
-
         self.enlist_sources(
-            non_root_sources,
-            ttl,
+            sources,
             update,
-            client_config=client_config,
+            client_config=client_config or self.client_config,
             only_index=True,
         )
-
-    def find_stale_storages(self) -> None:
-        self.metastore.find_stale_storages()

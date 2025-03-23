@@ -26,5 +26,41 @@ class split(GenericFunction):  # noqa: N801
     inherit_cache = True
 
 
+class regexp_replace(GenericFunction):  # noqa: N801
+    """
+    Replaces substring that match a regular expression.
+    """
+
+    type = String()
+    package = "string"
+    name = "regexp_replace"
+    inherit_cache = True
+
+
+class replace(GenericFunction):  # noqa: N801
+    """
+    Replaces substring with another string.
+    """
+
+    type = String()
+    package = "string"
+    name = "replace"
+    inherit_cache = True
+
+
+class byte_hamming_distance(GenericFunction):  # noqa: N801
+    """
+    Returns the Hamming distance between two strings.
+    """
+
+    type = Int64()
+    package = "string"
+    name = "hamming_distance"
+    inherit_cache = True
+
+
 compiler_not_implemented(length)
 compiler_not_implemented(split)
+compiler_not_implemented(regexp_replace)
+compiler_not_implemented(replace)
+compiler_not_implemented(byte_hamming_distance)

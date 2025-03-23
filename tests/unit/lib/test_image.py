@@ -3,10 +3,7 @@ from torch import Tensor
 from torchvision.transforms import ToTensor
 
 from datachain.lib.file import ImageFile
-from datachain.lib.image import (
-    convert_image,
-    convert_images,
-)
+from datachain.lib.image import convert_image, convert_images
 
 IMAGE = Image.new(mode="RGB", size=(64, 64))
 
@@ -37,7 +34,7 @@ def test_image_file(tmp_path, catalog):
 
     IMAGE.save(file_path)
 
-    file = ImageFile(name=file_name, source=f"file://{tmp_path}")
+    file = ImageFile(path=file_name, source=f"file://{tmp_path}")
     file._set_stream(catalog, caching_enabled=False)
     assert isinstance(file.read(), Image.Image)
 

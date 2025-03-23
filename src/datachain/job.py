@@ -1,7 +1,8 @@
 import json
+import uuid
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Optional, TypeVar
+from typing import Any, Optional, TypeVar, Union
 
 J = TypeVar("J", bound="Job")
 
@@ -24,8 +25,8 @@ class Job:
 
     @classmethod
     def parse(
-        cls: type[J],
-        id: str,
+        cls,
+        id: Union[str, uuid.UUID],
         name: str,
         status: int,
         created_at: datetime,
@@ -40,7 +41,7 @@ class Job:
         metrics: str,
     ) -> "Job":
         return cls(
-            id,
+            str(id),
             name,
             status,
             created_at,

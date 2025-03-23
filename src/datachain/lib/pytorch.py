@@ -1,5 +1,8 @@
 import logging
-from collections.abc import Iterator
+import os
+import weakref
+from collections.abc import Generator, Iterable, Iterator
+from contextlib import closing
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from PIL import Image
@@ -8,13 +11,19 @@ from torch.distributed import get_rank, get_world_size
 from torch.utils.data import IterableDataset, get_worker_info
 from torchvision.transforms import v2
 
+from datachain import Session
+from datachain.cache import get_temp_cache
 from datachain.catalog import Catalog, get_catalog
 from datachain.lib.dc import DataChain
-from datachain.lib.file import File
+from datachain.lib.settings import Settings
 from datachain.lib.text import convert_text
+from datachain.progress import CombinedDownloadCallback
+from datachain.query.dataset import get_download_callback
 
 if TYPE_CHECKING:
     from torchvision.transforms.v2 import Transform
+
+    from datachain.cache import Cache
 
 
 logger = logging.getLogger("datachain")
@@ -29,6 +38,8 @@ def label_to_int(value: str, classes: list) -> int:
 
 
 class PytorchDataset(IterableDataset):
+    prefetch: int = 2
+
     def __init__(
         self,
         name: str,
@@ -38,6 +49,8 @@ class PytorchDataset(IterableDataset):
         tokenizer: Optional[Callable] = None,
         tokenizer_kwargs: Optional[dict[str, Any]] = None,
         num_samples: int = 0,
+        dc_settings: Optional[Settings] = None,
+        remove_prefetched: bool = False,
     ):
         """
         Pytorch IterableDataset that streams DataChain datasets.
@@ -65,62 +78,114 @@ class PytorchDataset(IterableDataset):
             catalog = get_catalog()
         self._init_catalog(catalog)
 
+        dc_settings = dc_settings or Settings()
+        self.cache = dc_settings.cache
+        if (prefetch := dc_settings.prefetch) is not None:
+            self.prefetch = prefetch
+
+        self._cache = catalog.cache
+        self._prefetch_cache: Optional[Cache] = None
+        self._remove_prefetched = remove_prefetched
+        if prefetch and not self.cache:
+            tmp_dir = catalog.cache.tmp_dir
+            assert tmp_dir
+            self._prefetch_cache = get_temp_cache(tmp_dir, prefix="prefetch-")
+            self._cache = self._prefetch_cache
+            weakref.finalize(self, self._prefetch_cache.destroy)
+
+    def close(self) -> None:
+        if self._prefetch_cache:
+            self._prefetch_cache.destroy()
+
     def _init_catalog(self, catalog: "Catalog"):
         # For compatibility with multiprocessing,
         # we can only store params in __init__(), as Catalog isn't picklable
         # see https://github.com/iterative/dvcx/issues/954
-        self._idgen_params = catalog.id_generator.clone_params()
         self._ms_params = catalog.metastore.clone_params()
         self._wh_params = catalog.warehouse.clone_params()
         self._catalog_params = catalog.get_init_params()
         self.catalog: Optional[Catalog] = None
 
     def _get_catalog(self) -> "Catalog":
-        idgen_cls, idgen_args, idgen_kwargs = self._idgen_params
-        idgen = idgen_cls(*idgen_args, **idgen_kwargs)
         ms_cls, ms_args, ms_kwargs = self._ms_params
         ms = ms_cls(*ms_args, **ms_kwargs)
         wh_cls, wh_args, wh_kwargs = self._wh_params
         wh = wh_cls(*wh_args, **wh_kwargs)
-        return Catalog(idgen, ms, wh, **self._catalog_params)
+        catalog = Catalog(ms, wh, **self._catalog_params)
+        catalog.cache = self._cache
+        return catalog
 
-    def __iter__(self) -> Iterator[Any]:
-        if self.catalog is None:
-            self.catalog = self._get_catalog()
-        total_rank, total_workers = self.get_rank_and_workers()
-        ds = DataChain(name=self.name, version=self.version, catalog=self.catalog)
+    def _row_iter(
+        self,
+        total_rank: int,
+        total_workers: int,
+    ) -> Generator[tuple[Any, ...], None, None]:
+        catalog = self._get_catalog()
+        session = Session("PyTorch", catalog=catalog)
+        ds = DataChain.from_dataset(
+            name=self.name, version=self.version, session=session
+        ).settings(cache=self.cache, prefetch=self.prefetch)
         ds = ds.remove_file_signals()
 
         if self.num_samples > 0:
             ds = ds.sample(self.num_samples)
         ds = ds.chunk(total_rank, total_workers)
-        for row_features in ds.collect():
-            row = []
-            for fr in row_features:
-                if isinstance(fr, File):
-                    row.append(fr.read())  # type: ignore[unreachable]
-                else:
-                    row.append(fr)
-            # Apply transforms
-            if self.transform:
-                try:
-                    if isinstance(self.transform, v2.Transform):
-                        row = self.transform(row)
-                    for i, val in enumerate(row):
-                        if isinstance(val, Image.Image):
-                            row[i] = self.transform(val)
-                except ValueError:
-                    logger.warning("Skipping transform due to unsupported data types.")
-                    self.transform = None
-            if self.tokenizer:
+        yield from ds.collect()
+
+    def _iter_with_prefetch(self) -> Generator[tuple[Any], None, None]:
+        from datachain.lib.udf import _prefetch_inputs
+
+        total_rank, total_workers = self.get_rank_and_workers()
+        download_cb = CombinedDownloadCallback()
+        if os.getenv("DATACHAIN_SHOW_PREFETCH_PROGRESS"):
+            download_cb = get_download_callback(
+                f"{total_rank}/{total_workers}",
+                position=total_rank,
+                leave=True,
+            )
+
+        rows = self._row_iter(total_rank, total_workers)
+        rows = _prefetch_inputs(
+            rows,
+            self.prefetch,
+            download_cb=download_cb,
+            remove_prefetched=self._remove_prefetched,
+        )
+
+        with download_cb, closing(rows):
+            yield from rows
+
+    def __iter__(self) -> Iterator[list[Any]]:
+        with closing(self._iter_with_prefetch()) as rows:
+            yield from map(self._process_row, rows)
+
+    def _process_row(self, row_features: Iterable[Any]) -> list[Any]:
+        row = []
+        for fr in row_features:
+            if hasattr(fr, "read"):
+                row.append(fr.read())  # type: ignore[unreachable]
+            else:
+                row.append(fr)
+        # Apply transforms
+        if self.transform:
+            try:
+                if isinstance(self.transform, v2.Transform):
+                    row = self.transform(row)
                 for i, val in enumerate(row):
-                    if isinstance(val, str) or (
-                        isinstance(val, list) and isinstance(val[0], str)
-                    ):
-                        row[i] = convert_text(
-                            val, self.tokenizer, self.tokenizer_kwargs
-                        ).squeeze(0)  # type: ignore[union-attr]
-            yield row
+                    if isinstance(val, Image.Image):
+                        row[i] = self.transform(val)
+            except ValueError:
+                logger.warning("Skipping transform due to unsupported data types.")
+                self.transform = None
+        if self.tokenizer:
+            for i, val in enumerate(row):
+                if isinstance(val, str) or (
+                    isinstance(val, list) and isinstance(val[0], str)
+                ):
+                    row[i] = convert_text(
+                        val, self.tokenizer, self.tokenizer_kwargs
+                    ).squeeze(0)  # type: ignore[union-attr]
+        return row
 
     @staticmethod
     def get_rank_and_workers() -> tuple[int, int]:

@@ -1,15 +1,15 @@
 import glob
 import os
 from collections.abc import Iterable, Iterator
-from itertools import zip_longest
+from functools import cached_property
 from typing import TYPE_CHECKING, Optional
 
-from fsspec.asyn import get_loop, sync
-from sqlalchemy import Column, case
+from sqlalchemy import Column
 from sqlalchemy.sql import func
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
-from datachain.node import DirType, Entry, Node, NodeWithPath
+from datachain.node import DirType, Node, NodeWithPath
+from datachain.sql.functions import path as pathfunc
 from datachain.utils import suffix_to_number
 
 if TYPE_CHECKING:
@@ -17,70 +17,65 @@ if TYPE_CHECKING:
     from datachain.client import Client
     from datachain.data_storage import AbstractMetastore, AbstractWarehouse
     from datachain.dataset import DatasetRecord
-    from datachain.storage import Storage
 
 
 class Listing:
     def __init__(
         self,
-        storage: Optional["Storage"],
         metastore: "AbstractMetastore",
         warehouse: "AbstractWarehouse",
         client: "Client",
-        dataset: Optional["DatasetRecord"],
+        dataset_name: Optional["str"] = None,
+        dataset_version: Optional[int] = None,
+        object_name: str = "file",
     ):
-        self.storage = storage
         self.metastore = metastore
         self.warehouse = warehouse
         self.client = client
-        self.dataset = dataset  # dataset representing bucket listing
+        self.dataset_name = dataset_name  # dataset representing bucket listing
+        self.dataset_version = dataset_version  # dataset representing bucket listing
+        self.object_name = object_name
 
     def clone(self) -> "Listing":
         return self.__class__(
-            self.storage,
             self.metastore.clone(),
             self.warehouse.clone(),
             self.client,
-            self.dataset,
+            self.dataset_name,
+            self.dataset_version,
+            self.object_name,
         )
 
-    @property
-    def id(self):
-        return self.storage.id
+    def __enter__(self) -> "Listing":
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        self.close()
+
+    def close(self) -> None:
+        self.warehouse.close()
 
     @property
+    def uri(self):
+        from datachain.lib.listing import listing_uri_from_name
+
+        assert self.dataset_name
+
+        return listing_uri_from_name(self.dataset_name)
+
+    @cached_property
+    def dataset(self) -> "DatasetRecord":
+        assert self.dataset_name
+        return self.metastore.get_dataset(self.dataset_name)
+
+    @cached_property
     def dataset_rows(self):
-        return self.warehouse.dataset_rows(self.dataset, self.dataset.latest_version)
-
-    def fetch(self, start_prefix="", method: str = "default") -> None:
-        sync(get_loop(), self._fetch, start_prefix, method)
-
-    async def _fetch(self, start_prefix: str, method: str) -> None:
-        self = self.clone()
-        if start_prefix:
-            start_prefix = start_prefix.rstrip("/")
-        try:
-            async for entries in self.client.scandir(start_prefix, method=method):
-                self.insert_entries(entries)
-                if len(entries) > 1:
-                    self.metastore.update_last_inserted_at()
-        finally:
-            self.insert_entries_done()
-
-    def insert_entry(self, entry: Entry) -> None:
-        self.warehouse.insert_rows(
-            self.dataset_rows.get_table(),
-            self.warehouse.prepare_entries(self.client.uri, [entry]),
+        dataset = self.dataset
+        return self.warehouse.dataset_rows(
+            dataset,
+            self.dataset_version or dataset.latest_version,
+            object_name=self.object_name,
         )
-
-    def insert_entries(self, entries: Iterable[Entry]) -> None:
-        self.warehouse.insert_rows(
-            self.dataset_rows.get_table(),
-            self.warehouse.prepare_entries(self.client.uri, entries),
-        )
-
-    def insert_entries_done(self) -> None:
-        self.warehouse.insert_rows_done(self.dataset_rows.get_table())
 
     def expand_path(self, path, use_glob=True) -> list[Node]:
         if use_glob and glob.has_magic(path):
@@ -91,7 +86,7 @@ class Listing:
         return self.warehouse.get_node_by_path(self.dataset_rows, path)
 
     def ls_path(self, node, fields):
-        if node.vtype == "tar" or node.dir_type == DirType.TAR_ARCHIVE:
+        if node.location or node.dir_type == DirType.TAR_ARCHIVE:
             return self.warehouse.select_node_fields_by_parent_path_tar(
                 self.dataset_rows, node.path, fields
             )
@@ -105,11 +100,8 @@ class Listing:
         copy_to_filename: Optional[str],
         recursive=False,
         copy_dir_contents=False,
-        relative_path=None,
-        from_edatachain=False,
         from_dataset=False,
     ) -> list[NodeWithPath]:
-        rel_path_elements = relative_path.split("/") if relative_path else []
         all_nodes: list[NodeWithPath] = []
         for src in sources:
             node = src.node
@@ -117,27 +109,18 @@ class Listing:
                 dir_path = []
                 if not copy_dir_contents:
                     dir_path.append(node.name)
-                subtree_nodes = src.find(sort=["parent", "name"])
+                subtree_nodes = src.find(sort=["path"])
                 all_nodes.extend(
                     NodeWithPath(n.n, path=dir_path + n.path) for n in subtree_nodes
                 )
             else:
                 node_path = []
-                if from_edatachain:
-                    for rpe, npe in zip_longest(
-                        rel_path_elements, node.path.split("/")
-                    ):
-                        if rpe == npe:
-                            continue
-                        if npe:
-                            node_path.append(npe)
-                elif copy_to_filename:
+                if copy_to_filename:
                     node_path = [os.path.basename(copy_to_filename)]
                 elif from_dataset:
                     node_path = [
                         src.listing.client.name,
-                        node.parent,
-                        node.name,
+                        node.path,
                     ]
                 else:
                     node_path = [node.name]
@@ -146,27 +129,24 @@ class Listing:
 
     def instantiate_nodes(
         self,
-        all_nodes,
+        all_nodes: Iterable[NodeWithPath],
         output,
         total_files=None,
         force=False,
         shared_progress_bar=None,
-    ):
+    ) -> None:
         progress_bar = shared_progress_bar or tqdm(
             desc=f"Instantiating '{output}'",
             unit=" files",
             unit_scale=True,
             unit_divisor=1000,
             total=total_files,
+            leave=False,
         )
 
         counter = 0
         for node in all_nodes:
-            dst = os.path.join(output, *node.path)
-            dst_dir = os.path.dirname(dst)
-            os.makedirs(dst_dir, exist_ok=True)
-            uid = node.n.as_uid(self.client.uri)
-            self.client.instantiate_object(uid, dst, progress_bar, force)
+            node.instantiate(self.client, output, progress_bar, force=force)
             counter += 1
             if counter > 1000:
                 progress_bar.update(counter)
@@ -189,32 +169,32 @@ class Listing:
         dr = self.dataset_rows
         conds = []
         if names:
-            f = Column("name").op("GLOB")
-            conds.extend(f(name) for name in names)
+            for name in names:
+                conds.append(
+                    pathfunc.name(Column(dr.col_name("path"))).op("GLOB")(name)
+                )
         if inames:
-            f = func.lower(Column("name")).op("GLOB")
-            conds.extend(f(iname.lower()) for iname in inames)
+            for iname in inames:
+                conds.append(
+                    func.lower(pathfunc.name(Column(dr.col_name("path")))).op("GLOB")(
+                        iname.lower()
+                    )
+                )
         if paths:
-            node_path = case(
-                (Column("parent") == "", Column("name")),
-                else_=Column("parent") + "/" + Column("name"),
-            )
-            f = node_path.op("GLOB")
-            conds.extend(f(path) for path in paths)
+            for path in paths:
+                conds.append(Column(dr.col_name("path")).op("GLOB")(path))
         if ipaths:
-            node_path = case(
-                (Column("parent") == "", Column("name")),
-                else_=Column("parent") + "/" + Column("name"),
-            )
-            f = func.lower(node_path).op("GLOB")
-            conds.extend(f(ipath.lower()) for ipath in ipaths)
+            for ipath in ipaths:
+                conds.append(
+                    func.lower(Column(dr.col_name("path"))).op("GLOB")(ipath.lower())
+                )
 
         if size is not None:
             size_limit = suffix_to_number(size)
             if size_limit >= 0:
-                conds.append(Column("size") >= size_limit)
+                conds.append(Column(dr.col_name("size")) >= size_limit)
             else:
-                conds.append(Column("size") <= -size_limit)
+                conds.append(Column(dr.col_name("size")) <= -size_limit)
 
         return self.warehouse.find(
             dr,
@@ -229,7 +209,7 @@ class Listing:
         return self.warehouse.size(self.dataset_rows, node, count_files)
 
     def subtree_files(self, node: Node, sort=None):
-        if node.dir_type == DirType.TAR_ARCHIVE or node.vtype != "":
+        if node.dir_type == DirType.TAR_ARCHIVE or node.location:
             include_subobjects = True
         else:
             include_subobjects = False

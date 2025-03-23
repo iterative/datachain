@@ -1,14 +1,17 @@
+import os
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Optional
 
 import attrs
 
-from datachain.cache import UniqueId
-from datachain.storage import StorageURI
+from datachain.dataset import StorageURI
+from datachain.lib.file import File
 from datachain.utils import TIME_ZERO, time_to_str
 
 if TYPE_CHECKING:
     from typing_extensions import Self
+
+    from datachain.client import Client
 
 
 class DirType:
@@ -47,24 +50,16 @@ class DirTypeGroup:
 @attrs.define
 class Node:
     sys__id: int = 0
-    sys__rand: int = -1
-    vtype: str = ""
-    dir_type: Optional[int] = None
-    parent: str = ""
-    name: str = ""
+    sys__rand: int = 0
+    path: str = ""
     etag: str = ""
     version: Optional[str] = None
     is_latest: bool = True
     last_modified: Optional[datetime] = None
     size: int = 0
-    owner_name: str = ""
-    owner_id: str = ""
     location: Optional[str] = None
-    source: StorageURI = StorageURI("")
-
-    @property
-    def path(self) -> str:
-        return f"{self.parent}/{self.name}" if self.parent else self.name
+    source: StorageURI = StorageURI("")  # noqa: RUF009
+    dir_type: int = DirType.FILE
 
     @property
     def is_dir(self) -> bool:
@@ -89,94 +84,77 @@ class Node:
         fd.write(f"  size: {self.size}\n")
         return size
 
-    def get_metafile_data(self, path: str):
-        data: dict[str, Any] = {
-            "name": path,
-            "etag": self.etag,
-        }
-        version = self.version
-        if version:
-            data["version"] = version
-        data["last_modified"] = time_to_str(self.last_modified)
-        data["size"] = self.size
-        return data
-
     @property
     def full_path(self) -> str:
         if self.is_dir and self.path:
             return self.path + "/"
         return self.path
 
-    def as_uid(self, storage: Optional[StorageURI] = None):
-        if storage is None:
-            storage = self.source
-        return UniqueId(
-            storage=storage,
-            parent=self.parent,
-            name=self.name,
+    def to_file(self, source: Optional[StorageURI] = None) -> File:
+        if source is None:
+            source = self.source
+        return File(
+            source=source,
+            path=self.path,
             size=self.size,
             version=self.version or "",
             etag=self.etag,
             is_latest=self.is_latest,
-            vtype=self.vtype,
             location=self.location,
             last_modified=self.last_modified or TIME_ZERO,
         )
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "Self":
-        kw = {f.name: d[f.name] for f in attrs.fields(cls) if f.name in d}
-        return cls(**kw)
+    def from_file(cls, f: File) -> "Self":
+        return cls(
+            source=StorageURI(f.source),
+            path=f.path,
+            etag=f.etag,
+            is_latest=f.is_latest,
+            size=f.size,
+            last_modified=f.last_modified,
+            version=f.version,
+            location=str(f.location) if f.location else None,
+            dir_type=DirType.FILE,
+        )
 
     @classmethod
-    def from_dir(cls, parent, name, **kwargs) -> "Node":
-        return cls(sys__id=-1, dir_type=DirType.DIR, parent=parent, name=name, **kwargs)
+    def from_row(cls, d: dict[str, Any], file_prefix: str = "file") -> "Self":
+        def _dval(field_name: str):
+            return d.get(f"{file_prefix}__{field_name}")
+
+        return cls(
+            sys__id=d["sys__id"],
+            sys__rand=d["sys__rand"],
+            source=_dval("source"),
+            path=_dval("path"),
+            etag=_dval("etag"),
+            is_latest=_dval("is_latest"),
+            size=_dval("size"),
+            last_modified=_dval("last_modified"),
+            version=_dval("version"),
+            location=_dval("location"),
+            dir_type=DirType.FILE,
+        )
+
+    @classmethod
+    def from_dir(cls, path, **kwargs) -> "Node":
+        return cls(sys__id=-1, dir_type=DirType.DIR, path=path, **kwargs)
 
     @classmethod
     def root(cls) -> "Node":
         return cls(sys__id=-1, dir_type=DirType.DIR)
 
-
-@attrs.define
-class Entry:
-    vtype: str = ""
-    dir_type: Optional[int] = None
-    parent: str = ""
-    name: str = ""
-    etag: str = ""
-    version: str = ""
-    is_latest: bool = True
-    last_modified: Optional[datetime] = None
-    size: int = 0
-    owner_name: str = ""
-    owner_id: str = ""
-    location: Optional[str] = None
+    @property
+    def name(self):
+        return self.path.rsplit("/", 1)[-1]
 
     @property
-    def is_dir(self) -> bool:
-        return self.dir_type == DirType.DIR
-
-    @classmethod
-    def from_dir(cls, parent: str, name: str, **kwargs) -> "Entry":
-        return cls(dir_type=DirType.DIR, parent=parent, name=name, **kwargs)
-
-    @classmethod
-    def from_file(cls, parent: str, name: str, **kwargs) -> "Entry":
-        return cls(dir_type=DirType.FILE, parent=parent, name=name, **kwargs)
-
-    @classmethod
-    def root(cls):
-        return cls(dir_type=DirType.DIR)
-
-    @property
-    def path(self) -> str:
-        return f"{self.parent}/{self.name}" if self.parent else self.name
-
-    @property
-    def full_path(self) -> str:
-        if self.is_dir and self.path:
-            return self.path + "/"
-        return self.path
+    def parent(self):
+        split = self.path.rsplit("/", 1)
+        if len(split) <= 1:
+            return ""
+        return split[0]
 
 
 def get_path(parent: str, name: str):
@@ -191,9 +169,6 @@ class NodeWithPath:
     def append_to_file(self, fd):
         return self.n.append_to_file(fd, "/".join(self.path))
 
-    def get_metafile_data(self):
-        return self.n.get_metafile_data("/".join(self.path))
-
     @property
     def full_path(self) -> str:
         path = "/".join(self.path)
@@ -201,13 +176,22 @@ class NodeWithPath:
             path += "/"
         return path
 
+    def instantiate(
+        self, client: "Client", output: str, progress_bar, *, force: bool = False
+    ):
+        dst = os.path.join(output, *self.path)
+        dst_dir = os.path.dirname(dst)
+        os.makedirs(dst_dir, exist_ok=True)
+        file = self.n.to_file(client.uri)
+        client.instantiate_object(file, dst, progress_bar, force)
+
 
 TIME_FMT = "%Y-%m-%d %H:%M"
 
 
-def long_line_str(name: str, timestamp: Optional[datetime], owner: str) -> str:
+def long_line_str(name: str, timestamp: Optional[datetime]) -> str:
     if timestamp is None:
         time = "-"
     else:
         time = timestamp.strftime(TIME_FMT)
-    return f"{owner: <19} {time: <19} {name}"
+    return f"{time: <19} {name}"

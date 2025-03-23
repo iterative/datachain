@@ -1,3 +1,4 @@
+import posixpath
 import re
 from datetime import datetime
 from struct import pack
@@ -6,11 +7,17 @@ from typing import Any
 
 import msgpack
 import pytest
-from sqlalchemy import select
 
 from datachain.cli import ls
-from datachain.client.local import FileClient
-from tests.utils import uppercase_scheme
+from datachain.config import Config, ConfigLevel
+from datachain.lib.dc import DataChain
+from datachain.lib.listing import LISTING_PREFIX
+
+
+@pytest.fixture
+def studio_config(global_config_dir):
+    with Config(ConfigLevel.GLOBAL).edit() as conf:
+        conf["studio"] = {"token": "isat_access_token", "team": "team_name"}
 
 
 def same_lines(lines1, lines2):
@@ -21,15 +28,14 @@ def same_lines(lines1, lines2):
 
 
 def test_ls_no_args(cloud_test_catalog, cloud_type, capsys):
+    session = cloud_test_catalog.session
+    catalog = session.catalog
     src = cloud_test_catalog.src_uri
-    catalog = cloud_test_catalog.catalog
-    catalog.index([src])
+
+    DataChain.from_storage(src, session=session).collect()
     ls([], catalog=catalog)
     captured = capsys.readouterr()
-    if cloud_type == "file":
-        assert captured.out == FileClient.root_path().as_uri() + "\n"
-    else:
-        assert captured.out == f"{src}\n"
+    assert captured.out == f"{src}/@v1\n"
 
 
 def test_ls_root(cloud_test_catalog, cloud_type, capsys):
@@ -45,78 +51,52 @@ def test_ls_root(cloud_test_catalog, cloud_type, capsys):
         assert src_name in buckets
 
 
-def ls_sources_output(src, cloud_type):
-    if cloud_type == "file":
-        root_uri = FileClient.root_path().as_uri()
-        prefix = src[len(root_uri) :]
-        return f"""\
-{prefix}:
-cats/
-description
-dogs/
-
-{prefix}/dogs:
-dog1
-dog2
-dog3
-
-{prefix}/dogs/others:
-dog4
-    """
-
+def ls_sources_output(src):
     return """\
 cats/
-dogs/
 description
-
-dogs/others:
-dog4
-
+dogs/
 dogs:
 dog1
 dog2
 dog3
+
+dogs/others:
+dog4
     """
 
 
 def test_ls_sources(cloud_test_catalog, cloud_type, capsys):
     src = cloud_test_catalog.src_uri
-    ls([src, f"{src}/dogs/*"], catalog=cloud_test_catalog.catalog)
+    ls([src], catalog=cloud_test_catalog.catalog)
+    ls([f"{src}/dogs/*"], catalog=cloud_test_catalog.catalog)
     captured = capsys.readouterr()
-    assert same_lines(captured.out, ls_sources_output(src, cloud_type))
-
-
-def test_ls_sources_scheme_uppercased(cloud_test_catalog, cloud_type, capsys):
-    src = uppercase_scheme(cloud_test_catalog.src_uri)
-    ls([src, f"{src}/dogs/*"], catalog=cloud_test_catalog.catalog)
-    captured = capsys.readouterr()
-    assert same_lines(captured.out, ls_sources_output(src, cloud_type))
+    assert same_lines(captured.out, ls_sources_output(src))
 
 
 def test_ls_not_found(cloud_test_catalog):
     src = cloud_test_catalog.src_uri
     with pytest.raises(FileNotFoundError):
-        ls([src, f"{src}/cats/bogus*"], catalog=cloud_test_catalog.catalog)
+        ls([f"{src}/cats/bogus*"], catalog=cloud_test_catalog.catalog)
 
 
-def test_ls_not_a_directory(cloud_test_catalog):
+# TODO return file test when https://github.com/iterative/datachain/issues/318 is done
+@pytest.mark.parametrize("cloud_type", ["s3", "gs", "azure"], indirect=True)
+def test_ls_not_a_directory(cloud_test_catalog, capsys):
     src = cloud_test_catalog.src_uri
     with pytest.raises(FileNotFoundError):
-        ls([src, f"{src}/description/"], catalog=cloud_test_catalog.catalog)
+        ls([f"{src}/description/"], catalog=cloud_test_catalog.catalog)
 
 
 def ls_glob_output(src, cloud_type):
     if cloud_type == "file":
-        root_uri = FileClient.root_path().as_uri()
-        prefix = src[len(root_uri) :]
-        return f"""\
-{prefix}/dogs/others:
-dog4
-
-{prefix}/dogs:
+        return """\
 dog1
 dog2
 dog3
+
+others:
+dog4
     """
 
     return """\
@@ -137,39 +117,28 @@ def test_ls_glob_sub(cloud_test_catalog, cloud_type, capsys):
     assert same_lines(captured.out, ls_glob_output(src, cloud_type))
 
 
-def get_partial_indexed_paths(metastore):
-    p = metastore._partials
-    return [
-        r[0] for r in metastore.db.execute(select(p.c.path_str).order_by(p.c.path_str))
-    ]
+def list_dataset_name(uri, path):
+    return f"{LISTING_PREFIX}{uri}/{posixpath.join(path, '').lstrip('/')}"
 
 
 def test_ls_partial_indexing(cloud_test_catalog, cloud_type, capsys):
-    metastore = cloud_test_catalog.catalog.metastore
+    catalog = cloud_test_catalog.catalog
     src = cloud_test_catalog.src_uri
-    if cloud_type == "file":
-        src_metastore = metastore.clone(FileClient.root_path().as_uri())
-        root_uri = FileClient.root_path().as_uri()
-        prefix = src[len(root_uri) :] + "/"
-    else:
-        src_metastore = metastore.clone(src)
-        prefix = ""
 
     ls([f"{src}/dogs/others/"], catalog=cloud_test_catalog.catalog)
     # These sleep calls are here to ensure that capsys can fully capture the output
     # and to avoid any flaky tests due to multithreading generating output out of order
     sleep(0.05)
     captured = capsys.readouterr()
-    assert get_partial_indexed_paths(src_metastore) == [f"{prefix}dogs/others/"]
     assert "Listing" in captured.err
     assert captured.out == "dog4\n"
 
     ls([f"{src}/cats/"], catalog=cloud_test_catalog.catalog)
     sleep(0.05)
     captured = capsys.readouterr()
-    assert get_partial_indexed_paths(src_metastore) == [
-        f"{prefix}cats/",
-        f"{prefix}dogs/others/",
+    assert sorted(ls.name for ls in catalog.listings()) == [
+        list_dataset_name(src, "cats/"),
+        list_dataset_name(src, "dogs/others/"),
     ]
     assert "Listing" in captured.err
     assert same_lines("cat1\ncat2\n", captured.out)
@@ -177,10 +146,10 @@ def test_ls_partial_indexing(cloud_test_catalog, cloud_type, capsys):
     ls([f"{src}/dogs/"], catalog=cloud_test_catalog.catalog)
     sleep(0.05)
     captured = capsys.readouterr()
-    assert get_partial_indexed_paths(src_metastore) == [
-        f"{prefix}cats/",
-        f"{prefix}dogs/",
-        f"{prefix}dogs/others/",
+    assert sorted(ls.name for ls in catalog.listings()) == [
+        list_dataset_name(src, "cats/"),
+        list_dataset_name(src, "dogs/"),
+        list_dataset_name(src, "dogs/others/"),
     ]
     assert "Listing" in captured.err
     assert same_lines("others/\ndog1\ndog2\ndog3\n", captured.out)
@@ -188,10 +157,10 @@ def test_ls_partial_indexing(cloud_test_catalog, cloud_type, capsys):
     ls([f"{src}/cats/"], catalog=cloud_test_catalog.catalog)
     sleep(0.05)
     captured = capsys.readouterr()
-    assert get_partial_indexed_paths(src_metastore) == [
-        f"{prefix}cats/",
-        f"{prefix}dogs/",
-        f"{prefix}dogs/others/",
+    assert sorted(ls.name for ls in catalog.listings()) == [
+        list_dataset_name(src, "cats/"),
+        list_dataset_name(src, "dogs/"),
+        list_dataset_name(src, "dogs/others/"),
     ]
     assert "Listing" not in captured.err
     assert same_lines("cat1\ncat2\n", captured.out)
@@ -199,11 +168,11 @@ def test_ls_partial_indexing(cloud_test_catalog, cloud_type, capsys):
     ls([f"{src}/"], catalog=cloud_test_catalog.catalog)
     sleep(0.05)
     captured = capsys.readouterr()
-    assert get_partial_indexed_paths(src_metastore) == [
-        f"{prefix}",
-        f"{prefix}cats/",
-        f"{prefix}dogs/",
-        f"{prefix}dogs/others/",
+    assert sorted(ls.name for ls in catalog.listings()) == [
+        list_dataset_name(src, ""),
+        list_dataset_name(src, "cats/"),
+        list_dataset_name(src, "dogs/"),
+        list_dataset_name(src, "dogs/others/"),
     ]
     assert "Listing" in captured.err
     assert same_lines("cats/\ndogs/\ndescription\n", captured.out)
@@ -215,7 +184,7 @@ class MockResponse:
         self.ok = ok
 
 
-def mock_post(url, data=None, json=None, **kwargs):
+def mock_post(method, url, data=None, json=None, **kwargs):
     source = json["source"]
     path = re.sub(r"\w+://[^/]+/?", "", source).rstrip("/")
     data = [
@@ -257,25 +226,15 @@ dog3
 """
 
 
-def test_ls_remote_sources(cloud_type, capsys, monkeypatch):
+def test_ls_remote_sources(cloud_type, capsys, monkeypatch, studio_config):
     src = f"{cloud_type}://bucket"
-    token = "35NmrvSlsGVxTYIglxSsBIQHRrMpi6irSSYcAL0flijOytCHc"  # noqa: S105
     with monkeypatch.context() as m:
-        m.setattr("requests.post", mock_post)
-        ls(
-            [src, f"{src}/dogs/others", f"{src}/dogs"],
-            config={
-                "type": "http",
-                "url": "http://localhost:8111/api/datachain",
-                "username": "datachain-team",
-                "token": f"isat_{token}",
-            },
-        )
+        m.setattr("requests.request", mock_post)
+        ls([src, f"{src}/dogs/others", f"{src}/dogs"], studio=True)
     captured = capsys.readouterr()
     assert captured.out == ls_remote_sources_output.format(src=src)
 
 
-owner_id = "a13a3ff923430363b098ce9c769e450724e74e646332b08ca6b3ac4f96dae083"
 REMOTE_DATA: dict[str, list[dict[str, Any]]] = {
     "": [
         {
@@ -287,8 +246,6 @@ REMOTE_DATA: dict[str, list[dict[str, Any]]] = {
             "is_latest": True,
             "last_modified": datetime(2023, 1, 17, 21, 39, 0, 88564),
             "size": 0,
-            "owner_name": "",
-            "owner_id": "",
             "path_str": "{src}/cats",
             "path": [],
         },
@@ -301,8 +258,6 @@ REMOTE_DATA: dict[str, list[dict[str, Any]]] = {
             "is_latest": True,
             "last_modified": datetime(2023, 1, 17, 21, 39, 0, 88567),
             "size": 0,
-            "owner_name": "",
-            "owner_id": "",
             "path_str": "{src}/dogs",
             "path": [],
         },
@@ -315,8 +270,6 @@ REMOTE_DATA: dict[str, list[dict[str, Any]]] = {
             "is_latest": True,
             "last_modified": datetime(2022, 2, 10, 3, 39, 9),
             "size": 350496,
-            "owner_name": "",
-            "owner_id": owner_id,
             "path_str": "{src}/description",
             "path": [],
         },
@@ -331,8 +284,6 @@ REMOTE_DATA: dict[str, list[dict[str, Any]]] = {
             "is_latest": True,
             "last_modified": datetime(2022, 6, 28, 22, 39, 1),
             "size": 32975,
-            "owner_name": "",
-            "owner_id": owner_id,
             "path_str": "{src}/dogs/others/dog4",
             "path": [],
         },
@@ -347,8 +298,6 @@ REMOTE_DATA: dict[str, list[dict[str, Any]]] = {
             "is_latest": True,
             "last_modified": datetime(2022, 6, 28, 22, 39, 1),
             "size": 101,
-            "owner_name": "",
-            "owner_id": owner_id,
             "path_str": "{src}/dogs/dog1",
             "path": [],
         },
@@ -361,8 +310,6 @@ REMOTE_DATA: dict[str, list[dict[str, Any]]] = {
             "is_latest": True,
             "last_modified": datetime(2022, 6, 28, 22, 39, 1),
             "size": 29759,
-            "owner_name": "",
-            "owner_id": owner_id,
             "path_str": "{src}/dogs/dog2",
             "path": [],
         },
@@ -375,8 +322,6 @@ REMOTE_DATA: dict[str, list[dict[str, Any]]] = {
             "is_latest": True,
             "last_modified": datetime(2022, 6, 28, 22, 39, 1),
             "size": 102,
-            "owner_name": "",
-            "owner_id": owner_id,
             "path_str": "{src}/dogs/dog3",
             "path": [],
         },

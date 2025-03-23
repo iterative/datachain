@@ -1,10 +1,11 @@
 import inspect
 from collections.abc import Generator, Iterator, Sequence
 from dataclasses import dataclass
-from typing import Callable, Optional, Union, get_args, get_origin
+from typing import Any, Callable, Union, get_args, get_origin
 
 from datachain.lib.data_model import DataType, DataTypeNames, is_chain_type
 from datachain.lib.signal_schema import SignalSchema
+from datachain.lib.udf import UDFBase
 from datachain.lib.utils import AbstractUDF, DataChainParamsError
 
 
@@ -16,8 +17,8 @@ class UdfSignatureError(DataChainParamsError):
 
 @dataclass
 class UdfSignature:
-    func: Callable
-    params: Sequence[str]
+    func: Union[Callable, UDFBase]
+    params: dict[str, Union[DataType, Any]]
     output_schema: SignalSchema
 
     DEFAULT_RETURN_TYPE = str
@@ -27,7 +28,7 @@ class UdfSignature:
         cls,
         chain: str,
         signal_map: dict[str, Callable],
-        func: Optional[Callable] = None,
+        func: Union[None, UDFBase, Callable] = None,
         params: Union[None, str, Sequence[str]] = None,
         output: Union[None, DataType, Sequence[str], dict[str, DataType]] = None,
         is_generator: bool = True,
@@ -39,6 +40,7 @@ class UdfSignature:
                 f"multiple signals '{keys}' are not supported in processors."
                 " Chain multiple processors instead.",
             )
+        udf_func: Union[UDFBase, Callable]
         if len(signal_map) == 1:
             if func is not None:
                 raise UdfSignatureError(
@@ -53,18 +55,26 @@ class UdfSignature:
             udf_func = func
             signal_name = None
 
-        if not callable(udf_func):
+        if not isinstance(udf_func, UDFBase) and not callable(udf_func):
             raise UdfSignatureError(chain, f"UDF '{udf_func}' is not callable")
 
-        func_params_map_sign, func_outs_sign, is_iterator = (
-            UdfSignature._func_signature(chain, udf_func)
+        func_params_map_sign, func_outs_sign, is_iterator = cls._func_signature(
+            chain, udf_func
         )
+
+        udf_params: dict[str, Union[DataType, Any]] = {}
         if params:
-            udf_params = [params] if isinstance(params, str) else params
-        elif not func_params_map_sign:
-            udf_params = []
-        else:
-            udf_params = list(func_params_map_sign.keys())
+            udf_params = (
+                {params: Any} if isinstance(params, str) else dict.fromkeys(params, Any)
+            )
+        elif func_params_map_sign:
+            udf_params = {
+                param: (
+                    param_type if param_type is not inspect.Parameter.empty else Any
+                )
+                for param, param_type in func_params_map_sign.items()
+            }
+
         if output:
             udf_output_map = UdfSignature._validate_output(
                 chain, signal_name, func, func_outs_sign, output
@@ -73,7 +83,7 @@ class UdfSignature:
             if not func_outs_sign:
                 raise UdfSignatureError(
                     chain,
-                    f"outputs are not defined in function '{udf_func.__name__}'"
+                    f"outputs are not defined in function '{udf_func}'"
                     " hints or 'output'",
                 )
 
@@ -154,7 +164,7 @@ class UdfSignature:
 
     @staticmethod
     def _func_signature(
-        chain: str, udf_func: Callable
+        chain: str, udf_func: Union[Callable, UDFBase]
     ) -> tuple[dict[str, type], Sequence[type], bool]:
         if isinstance(udf_func, AbstractUDF):
             func = udf_func.process  # type: ignore[unreachable]

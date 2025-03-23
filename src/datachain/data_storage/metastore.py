@@ -1,9 +1,7 @@
 import copy
-import hashlib
 import json
 import logging
 import os
-import posixpath
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from datetime import datetime, timezone
@@ -15,7 +13,6 @@ from uuid import uuid4
 from sqlalchemy import (
     JSON,
     BigInteger,
-    Boolean,
     Column,
     DateTime,
     ForeignKey,
@@ -25,32 +22,31 @@ from sqlalchemy import (
     UniqueConstraint,
     select,
 )
-from sqlalchemy.sql import func
 
 from datachain.data_storage import JobQueryType, JobStatus
 from datachain.data_storage.serializer import Serializable
 from datachain.dataset import (
     DatasetDependency,
+    DatasetListRecord,
+    DatasetListVersion,
     DatasetRecord,
     DatasetStatus,
     DatasetVersion,
+    StorageURI,
 )
 from datachain.error import (
     DatasetNotFoundError,
-    StorageNotFoundError,
     TableMissingError,
 )
 from datachain.job import Job
-from datachain.storage import Storage, StorageStatus, StorageURI
-from datachain.utils import JSONSerialize, is_expired
+from datachain.utils import JSONSerialize
 
 if TYPE_CHECKING:
     from sqlalchemy import Delete, Insert, Select, Update
     from sqlalchemy.schema import SchemaItem
 
-    from datachain.data_storage import AbstractIDGenerator, schema
+    from datachain.data_storage import schema
     from datachain.data_storage.db_engine import DatabaseEngine
-
 
 logger = logging.getLogger("datachain")
 
@@ -62,27 +58,31 @@ class AbstractMetastore(ABC, Serializable):
     """
 
     uri: StorageURI
-    partial_id: Optional[int]
 
     schema: "schema.Schema"
-    storage_class: type[Storage] = Storage
     dataset_class: type[DatasetRecord] = DatasetRecord
+    dataset_list_class: type[DatasetListRecord] = DatasetListRecord
+    dataset_list_version_class: type[DatasetListVersion] = DatasetListVersion
     dependency_class: type[DatasetDependency] = DatasetDependency
     job_class: type[Job] = Job
 
     def __init__(
         self,
-        uri: StorageURI = StorageURI(""),
-        partial_id: Optional[int] = None,
+        uri: Optional[StorageURI] = None,
     ):
-        self.uri = uri
-        self.partial_id: Optional[int] = partial_id
+        self.uri = uri or StorageURI("")
+
+    def __enter__(self) -> "AbstractMetastore":
+        """Returns self upon entering context manager."""
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        """Default behavior is to do nothing, as connections may be shared."""
 
     @abstractmethod
     def clone(
         self,
-        uri: StorageURI = StorageURI(""),
-        partial_id: Optional[int] = None,
+        uri: Optional[StorageURI] = None,
         use_new_connection: bool = False,
     ) -> "AbstractMetastore":
         """Clones AbstractMetastore implementation for some Storage input.
@@ -90,123 +90,20 @@ class AbstractMetastore(ABC, Serializable):
         New connections should only be used if needed due to errors with
         closed connections."""
 
-    @abstractmethod
-    def init(self, uri: StorageURI) -> None:
-        """Initialize partials table for given storage uri."""
-
     def close(self) -> None:
         """Closes any active database or HTTP connections."""
+
+    def close_on_exit(self) -> None:
+        """Closes any active database or HTTP connections, called on Session exit or
+        for test cleanup only, as some Metastore implementations may handle this
+        differently."""
+        self.close()
 
     def cleanup_tables(self, temp_table_names: list[str]) -> None:
         """Cleanup temp tables."""
 
     def cleanup_for_tests(self) -> None:
         """Cleanup for tests."""
-
-    #
-    # Storages
-    #
-
-    @abstractmethod
-    def create_storage_if_not_registered(self, uri: StorageURI) -> None:
-        """Saves new storage if it doesn't exist in database."""
-
-    @abstractmethod
-    def register_storage_for_indexing(
-        self,
-        uri: StorageURI,
-        force_update: bool = True,
-        prefix: str = "",
-    ) -> tuple[Storage, bool, bool, Optional[int], Optional[str]]:
-        """
-        Prepares storage for indexing operation.
-        This method should be called before index operation is started
-        It returns:
-            - storage, prepared for indexing
-            - boolean saying if indexing is needed
-            - boolean saying if indexing is currently pending (running)
-            - partial id
-            - partial path
-        """
-
-    @abstractmethod
-    def find_stale_storages(self) -> None:
-        """
-        Finds all pending storages for which the last inserted node has happened
-        before STALE_MINUTES_LIMIT minutes, and marks it as STALE.
-        """
-
-    @abstractmethod
-    def mark_storage_indexed(
-        self,
-        uri: StorageURI,
-        status: int,
-        ttl: int,
-        end_time: Optional[datetime] = None,
-        prefix: str = "",
-        partial_id: int = 0,
-        error_message: str = "",
-        error_stack: str = "",
-        dataset: Optional[DatasetRecord] = None,
-    ) -> None:
-        """
-        Marks storage as indexed.
-        This method should be called when index operation is finished.
-        """
-
-    @abstractmethod
-    def mark_storage_not_indexed(self, uri: StorageURI) -> None:
-        """
-        Mark storage as not indexed.
-        This method should be called when storage index is deleted.
-        """
-
-    @abstractmethod
-    def update_last_inserted_at(self, uri: Optional[StorageURI] = None) -> None:
-        """Updates last inserted datetime in bucket with current time."""
-
-    @abstractmethod
-    def get_all_storage_uris(self) -> Iterator[StorageURI]:
-        """Returns all storage uris."""
-
-    @abstractmethod
-    def get_storage(self, uri: StorageURI) -> Storage:
-        """
-        Gets storage representation from database.
-        E.g. if s3 is used as storage this would be s3 bucket data.
-        """
-
-    @abstractmethod
-    def list_storages(self) -> list[Storage]:
-        """Returns all storages."""
-
-    @abstractmethod
-    def mark_storage_pending(self, storage: Storage) -> Storage:
-        """Marks storage as pending."""
-
-    #
-    # Partial Indexes
-    #
-
-    @abstractmethod
-    def init_partial_id(self, uri: StorageURI) -> None:
-        """Initializes partial id for given storage."""
-
-    @abstractmethod
-    def get_next_partial_id(self, uri: StorageURI) -> int:
-        """Returns next partial id for given storage."""
-
-    @abstractmethod
-    def get_valid_partial_id(
-        self, uri: StorageURI, prefix: str, raise_exc: bool = True
-    ) -> tuple[Optional[int], Optional[str]]:
-        """
-        Returns valid partial id and it's path, if they exist, for a given storage.
-        """
-
-    @abstractmethod
-    def get_last_partial_path(self, uri: StorageURI) -> Optional[str]:
-        """Returns last partial path for given storage."""
 
     #
     # Datasets
@@ -222,6 +119,8 @@ class AbstractMetastore(ABC, Serializable):
         query_script: str = "",
         schema: Optional[dict[str, Any]] = None,
         ignore_if_exists: bool = False,
+        description: Optional[str] = None,
+        labels: Optional[list[str]] = None,
     ) -> DatasetRecord:
         """Creates new dataset."""
 
@@ -230,7 +129,7 @@ class AbstractMetastore(ABC, Serializable):
         self,
         dataset: DatasetRecord,
         version: int,
-        status: int = DatasetStatus.CREATED,
+        status: int,
         sources: str = "",
         feature_schema: Optional[dict] = None,
         query_script: str = "",
@@ -245,7 +144,7 @@ class AbstractMetastore(ABC, Serializable):
         size: Optional[int] = None,
         preview: Optional[list[dict]] = None,
         job_id: Optional[str] = None,
-        is_job_result: bool = False,
+        uuid: Optional[str] = None,
     ) -> DatasetRecord:
         """Creates new dataset version."""
 
@@ -273,11 +172,11 @@ class AbstractMetastore(ABC, Serializable):
         """
 
     @abstractmethod
-    def list_datasets(self) -> Iterator[DatasetRecord]:
+    def list_datasets(self) -> Iterator[DatasetListRecord]:
         """Lists all datasets."""
 
     @abstractmethod
-    def list_datasets_by_prefix(self, prefix: str) -> Iterator["DatasetRecord"]:
+    def list_datasets_by_prefix(self, prefix: str) -> Iterator["DatasetListRecord"]:
         """Lists all datasets which names start with prefix."""
 
     @abstractmethod
@@ -299,39 +198,6 @@ class AbstractMetastore(ABC, Serializable):
     #
     # Dataset dependencies
     #
-
-    def add_dependency(
-        self,
-        dependency: DatasetDependency,
-        source_dataset_name: str,
-        source_dataset_version: int,
-    ) -> None:
-        """Add dependency to dataset or storage."""
-        if dependency.is_dataset:
-            self.add_dataset_dependency(
-                source_dataset_name,
-                source_dataset_version,
-                dependency.name,
-                int(dependency.version),
-            )
-        else:
-            self.add_storage_dependency(
-                source_dataset_name,
-                source_dataset_version,
-                StorageURI(dependency.name),
-                dependency.version,
-            )
-
-    @abstractmethod
-    def add_storage_dependency(
-        self,
-        source_dataset_name: str,
-        source_dataset_version: int,
-        storage_uri: StorageURI,
-        storage_timestamp_str: Optional[str] = None,
-    ) -> None:
-        """Adds storage dependency to dataset."""
-
     @abstractmethod
     def add_dataset_dependency(
         self,
@@ -421,6 +287,11 @@ class AbstractMetastore(ABC, Serializable):
     ) -> None:
         """Set the status of the given job and dataset."""
 
+    @abstractmethod
+    def get_job_dataset_versions(self, job_id: str) -> list[tuple[str, int]]:
+        """Returns dataset names and versions for the job."""
+        raise NotImplementedError
+
 
 class AbstractDBMetastore(AbstractMetastore):
     """
@@ -430,28 +301,16 @@ class AbstractDBMetastore(AbstractMetastore):
     and has shared logic for all database systems currently in use.
     """
 
-    PARTIALS_TABLE_NAME_PREFIX = "prt_"
-    STORAGE_TABLE = "buckets"
     DATASET_TABLE = "datasets"
     DATASET_VERSION_TABLE = "datasets_versions"
     DATASET_DEPENDENCY_TABLE = "datasets_dependencies"
     JOBS_TABLE = "jobs"
 
-    id_generator: "AbstractIDGenerator"
     db: "DatabaseEngine"
 
-    def __init__(
-        self,
-        id_generator: "AbstractIDGenerator",
-        uri: StorageURI = StorageURI(""),
-        partial_id: Optional[int] = None,
-    ):
-        self.id_generator = id_generator
-        super().__init__(uri, partial_id)
-
-    @abstractmethod
-    def init(self, uri: StorageURI) -> None:
-        """Initialize partials table for given storage uri."""
+    def __init__(self, uri: Optional[StorageURI] = None):
+        uri = uri or StorageURI("")
+        super().__init__(uri)
 
     def close(self) -> None:
         """Closes any active database connections."""
@@ -459,22 +318,6 @@ class AbstractDBMetastore(AbstractMetastore):
 
     def cleanup_tables(self, temp_table_names: list[str]) -> None:
         """Cleanup temp tables."""
-        self.id_generator.delete_uris(temp_table_names)
-
-    @classmethod
-    def _buckets_columns(cls) -> list["SchemaItem"]:
-        """Buckets (storages) table columns."""
-        return [
-            Column("id", Integer, primary_key=True, nullable=False),
-            Column("uri", Text, nullable=False),
-            Column("timestamp", DateTime(timezone=True)),
-            Column("expires", DateTime(timezone=True)),
-            Column("started_inserting_at", DateTime(timezone=True)),
-            Column("last_inserted_at", DateTime(timezone=True)),
-            Column("status", Integer, nullable=False),
-            Column("error_message", Text, nullable=False, default=""),
-            Column("error_stack", Text, nullable=False, default=""),
-        ]
 
     @classmethod
     def _datasets_columns(cls) -> list["SchemaItem"]:
@@ -484,7 +327,6 @@ class AbstractDBMetastore(AbstractMetastore):
             Column("name", Text, nullable=False),
             Column("description", Text),
             Column("labels", JSON, nullable=True),
-            Column("shadow", Boolean, nullable=False),
             Column("status", Integer, nullable=False),
             Column("feature_schema", JSON, nullable=True),
             Column("created_at", DateTime(timezone=True)),
@@ -505,11 +347,20 @@ class AbstractDBMetastore(AbstractMetastore):
             if c.name  # type: ignore [attr-defined]
         ]
 
+    @cached_property
+    def _dataset_list_fields(self) -> list[str]:
+        return [
+            c.name  # type: ignore [attr-defined]
+            for c in self._datasets_columns()
+            if c.name in self.dataset_list_class.__dataclass_fields__  # type: ignore [attr-defined]
+        ]
+
     @classmethod
     def _datasets_versions_columns(cls) -> list["SchemaItem"]:
         """Datasets versions table columns."""
         return [
             Column("id", Integer, primary_key=True),
+            Column("uuid", Text, nullable=False, default=uuid4()),
             Column(
                 "dataset_id",
                 Integer,
@@ -517,8 +368,11 @@ class AbstractDBMetastore(AbstractMetastore):
                 nullable=False,
             ),
             Column("version", Integer, nullable=False),
-            # adding default for now until we fully remove shadow datasets
-            Column("status", Integer, nullable=False, default=DatasetStatus.COMPLETE),
+            Column(
+                "status",
+                Integer,
+                nullable=False,
+            ),
             Column("feature_schema", JSON, nullable=True),
             Column("created_at", DateTime(timezone=True)),
             Column("finished_at", DateTime(timezone=True)),
@@ -532,7 +386,6 @@ class AbstractDBMetastore(AbstractMetastore):
             Column("query_script", Text, nullable=False, default=""),
             Column("schema", JSON, nullable=True),
             Column("job_id", Text, nullable=True),
-            Column("is_job_result", Boolean, nullable=False, default=False),
             UniqueConstraint("dataset_id", "version"),
         ]
 
@@ -542,6 +395,15 @@ class AbstractDBMetastore(AbstractMetastore):
             c.name  # type: ignore [attr-defined]
             for c in self._datasets_versions_columns()
             if c.name  # type: ignore [attr-defined]
+        ]
+
+    @cached_property
+    def _dataset_list_version_fields(self) -> list[str]:
+        return [
+            c.name  # type: ignore [attr-defined]
+            for c in self._datasets_versions_columns()
+            if c.name  # type: ignore [attr-defined]
+            in self.dataset_list_version_class.__dataclass_fields__
         ]
 
     @classmethod
@@ -575,58 +437,11 @@ class AbstractDBMetastore(AbstractMetastore):
                 ForeignKey(f"{cls.DATASET_VERSION_TABLE}.id"),
                 nullable=True,
             ),
-            # TODO remove when https://github.com/iterative/dvcx/issues/1121 is done
-            # If we unify datasets and bucket listing then both bucket fields won't
-            # be needed
-            Column(
-                "bucket_id",
-                Integer,
-                ForeignKey(f"{cls.STORAGE_TABLE}.id"),
-                nullable=True,
-            ),
-            Column("bucket_version", Text, nullable=True),
         ]
-
-    @classmethod
-    def _storage_partial_columns(cls) -> list["SchemaItem"]:
-        """Storage partial table columns."""
-        return [
-            Column("path_str", Text, nullable=False),
-            # This is generated before insert and is not the SQLite rowid,
-            # so it is not the primary key.
-            Column("partial_id", Integer, nullable=False, index=True),
-            Column("timestamp", DateTime(timezone=True)),
-            Column("expires", DateTime(timezone=True)),
-        ]
-
-    def _get_storage_partial_table(self, name: str) -> Table:
-        table = self.db.metadata.tables.get(name)
-        if table is None:
-            table = Table(
-                name,
-                self.db.metadata,
-                *self._storage_partial_columns(),
-            )
-        return table
 
     #
     # Query Tables
     #
-
-    def _partials_table(self, uri: StorageURI) -> Table:
-        return self._get_storage_partial_table(self._partials_table_name(uri))
-
-    @cached_property
-    def _storages(self) -> Table:
-        return Table(self.STORAGE_TABLE, self.db.metadata, *self._buckets_columns())
-
-    @cached_property
-    def _partials(self) -> Table:
-        assert (
-            self._current_partials_table_name
-        ), "Partials can only be used if uri/current_partials_table_name is set"
-        return self._get_storage_partial_table(self._current_partials_table_name)
-
     @cached_property
     def _datasets(self) -> Table:
         return Table(self.DATASET_TABLE, self.db.metadata, *self._datasets_columns())
@@ -650,32 +465,6 @@ class AbstractDBMetastore(AbstractMetastore):
     #
     # Query Starters (These can be overridden by subclasses)
     #
-
-    @abstractmethod
-    def _storages_insert(self) -> "Insert": ...
-
-    def _storages_select(self, *columns) -> "Select":
-        if not columns:
-            return self._storages.select()
-        return select(*columns)
-
-    def _storages_update(self) -> "Update":
-        return self._storages.update()
-
-    def _storages_delete(self) -> "Delete":
-        return self._storages.delete()
-
-    @abstractmethod
-    def _partials_insert(self) -> "Insert": ...
-
-    def _partials_select(self, *columns) -> "Select":
-        if not columns:
-            return self._partials.select()
-        return select(*columns)
-
-    def _partials_update(self) -> "Update":
-        return self._partials.update()
-
     @abstractmethod
     def _datasets_insert(self) -> "Insert": ...
 
@@ -719,287 +508,6 @@ class AbstractDBMetastore(AbstractMetastore):
         return self._datasets_dependencies.delete()
 
     #
-    # Table Name Internal Functions
-    #
-
-    def _partials_table_name(self, uri: StorageURI) -> str:
-        sha = hashlib.sha256(uri.encode("utf-8")).hexdigest()[:12]
-        return f"{self.PARTIALS_TABLE_NAME_PREFIX}_{sha}"
-
-    @property
-    def _current_partials_table_name(self) -> Optional[str]:
-        if not self.uri:
-            return None
-        return self._partials_table_name(self.uri)
-
-    #
-    # Storages
-    #
-
-    def create_storage_if_not_registered(self, uri: StorageURI, conn=None) -> None:
-        """Saves new storage if it doesn't exist in database."""
-        query = self._storages_insert().values(
-            uri=uri,
-            status=StorageStatus.CREATED,
-            error_message="",
-            error_stack="",
-        )
-        if hasattr(query, "on_conflict_do_nothing"):
-            # SQLite and PostgreSQL both support 'on_conflict_do_nothing',
-            # but generic SQL does not
-            query = query.on_conflict_do_nothing()
-        self.db.execute(query, conn=conn)
-
-    def register_storage_for_indexing(
-        self,
-        uri: StorageURI,
-        force_update: bool = True,
-        prefix: str = "",
-    ) -> tuple[Storage, bool, bool, Optional[int], Optional[str]]:
-        """
-        Prepares storage for indexing operation.
-        This method should be called before index operation is started
-        It returns:
-            - storage, prepared for indexing
-            - boolean saying if indexing is needed
-            - boolean saying if indexing is currently pending (running)
-            - partial id
-            - partial path
-        """
-        # This ensures that all calls to the DB are in a single transaction
-        # and commit is automatically called once this function returns
-        with self.db.transaction() as conn:
-            # Create storage if it doesn't exist
-            self.create_storage_if_not_registered(uri, conn=conn)
-            storage = self.get_storage(uri, conn=conn)
-
-            if storage.status == StorageStatus.PENDING:
-                return storage, False, True, None, None
-
-            if storage.is_expired or storage.status == StorageStatus.STALE:
-                storage = self.mark_storage_pending(storage, conn=conn)
-                return storage, True, False, None, None
-
-            if (
-                storage.status in (StorageStatus.PARTIAL, StorageStatus.COMPLETE)
-                and not force_update
-            ):
-                partial_id, partial_path = self.get_valid_partial_id(
-                    uri, prefix, raise_exc=False
-                )
-                if partial_id is not None:
-                    return storage, False, False, partial_id, partial_path
-                return storage, True, False, None, None
-
-            storage = self.mark_storage_pending(storage, conn=conn)
-            return storage, True, False, None, None
-
-    def find_stale_storages(self) -> None:
-        """
-        Finds all pending storages for which the last inserted node has happened
-        before STALE_MINUTES_LIMIT minutes, and marks it as STALE.
-        """
-        s = self._storages
-        with self.db.transaction() as conn:
-            pending_storages = map(
-                self.storage_class._make,
-                self.db.execute(
-                    self._storages_select().where(s.c.status == StorageStatus.PENDING),
-                    conn=conn,
-                ),
-            )
-            for storage in pending_storages:
-                if storage.is_stale:
-                    print(f"Marking storage {storage.uri} as stale")
-                    self._mark_storage_stale(storage.id, conn=conn)
-
-    def mark_storage_indexed(
-        self,
-        uri: StorageURI,
-        status: int,
-        ttl: int,
-        end_time: Optional[datetime] = None,
-        prefix: str = "",
-        partial_id: int = 0,
-        error_message: str = "",
-        error_stack: str = "",
-        dataset: Optional[DatasetRecord] = None,
-    ) -> None:
-        """
-        Marks storage as indexed.
-        This method should be called when index operation is finished.
-        """
-        if status == StorageStatus.PARTIAL and not prefix:
-            raise AssertionError("Partial indexing requires a prefix")
-
-        if end_time is None:
-            end_time = datetime.now(timezone.utc)
-        expires = Storage.get_expiration_time(end_time, ttl)
-
-        s = self._storages
-        with self.db.transaction() as conn:
-            self.db.execute(
-                self._storages_update()
-                .where(s.c.uri == uri)
-                .values(  # type: ignore [attr-defined]
-                    timestamp=end_time,
-                    expires=expires,
-                    status=status,
-                    last_inserted_at=end_time,
-                    error_message=error_message,
-                    error_stack=error_stack,
-                ),
-                conn=conn,
-            )
-
-            if not self._current_partials_table_name:
-                # This only occurs in tests
-                return
-
-            if status in (StorageStatus.PARTIAL, StorageStatus.COMPLETE):
-                dir_prefix = posixpath.join(prefix, "")
-                self.db.execute(
-                    self._partials_insert().values(
-                        path_str=dir_prefix,
-                        timestamp=end_time,
-                        expires=expires,
-                        partial_id=partial_id,
-                    ),
-                    conn=conn,
-                )
-
-            # update underlying dataset status as well
-            if status == StorageStatus.FAILED and dataset:
-                self.update_dataset_status(
-                    dataset,
-                    DatasetStatus.FAILED,
-                    dataset.latest_version,
-                    error_message=error_message,
-                    error_stack=error_stack,
-                    conn=conn,
-                )
-
-            if status in (StorageStatus.PARTIAL, StorageStatus.COMPLETE) and dataset:
-                self.update_dataset_status(
-                    dataset, DatasetStatus.COMPLETE, dataset.latest_version, conn=conn
-                )
-
-    def update_last_inserted_at(self, uri: Optional[StorageURI] = None) -> None:
-        """Updates last inserted datetime in bucket with current time"""
-        uri = uri or self.uri
-        updates = {"last_inserted_at": datetime.now(timezone.utc)}
-        s = self._storages
-        self.db.execute(
-            self._storages_update().where(s.c.uri == uri).values(**updates)  # type: ignore [attr-defined]
-        )
-
-    def get_all_storage_uris(self) -> Iterator[StorageURI]:
-        """Returns all storage uris."""
-        s = self._storages
-        yield from (r[0] for r in self.db.execute(self._storages_select(s.c.uri)))
-
-    def get_storage(self, uri: StorageURI, conn=None) -> Storage:
-        """
-        Gets storage representation from database.
-        E.g. if s3 is used as storage this would be s3 bucket data
-        """
-        s = self._storages
-        result = next(
-            self.db.execute(self._storages_select().where(s.c.uri == uri), conn=conn),
-            None,
-        )
-        if not result:
-            raise StorageNotFoundError(f"Storage {uri} not found.")
-
-        return self.storage_class._make(result)
-
-    def list_storages(self) -> list[Storage]:
-        result = self.db.execute(self._storages_select())
-        if not result:
-            return []
-
-        return [self.storage_class._make(r) for r in result]
-
-    def mark_storage_pending(self, storage: Storage, conn=None) -> Storage:
-        # Update status to pending and dates
-        updates = {
-            "status": StorageStatus.PENDING,
-            "timestamp": None,
-            "expires": None,
-            "last_inserted_at": None,
-            "started_inserting_at": datetime.now(timezone.utc),
-        }
-        storage = storage._replace(**updates)  # type: ignore [arg-type]
-        s = self._storages
-        self.db.execute(
-            self._storages_update().where(s.c.uri == storage.uri).values(**updates),  # type: ignore [attr-defined]
-            conn=conn,
-        )
-        return storage
-
-    def _mark_storage_stale(self, storage_id: int, conn=None) -> None:
-        # Update status to pending and dates
-        updates = {"status": StorageStatus.STALE, "timestamp": None, "expires": None}
-        s = self._storages
-        self.db.execute(
-            self._storages.update().where(s.c.id == storage_id).values(**updates),  # type: ignore [attr-defined]
-            conn=conn,
-        )
-
-    #
-    # Partial Indexes
-    #
-
-    def init_partial_id(self, uri: StorageURI) -> None:
-        """Initializes partial id for given storage."""
-        if not uri:
-            raise ValueError("uri for get_next_partial_id() cannot be empty")
-        self.id_generator.init_id(f"partials:{uri}")
-
-    def get_next_partial_id(self, uri: StorageURI) -> int:
-        """Returns next partial id for given storage."""
-        if not uri:
-            raise ValueError("uri for get_next_partial_id() cannot be empty")
-        return self.id_generator.get_next_id(f"partials:{uri}")
-
-    def get_valid_partial_id(
-        self, uri: StorageURI, prefix: str, raise_exc: bool = True
-    ) -> tuple[Optional[int], Optional[str]]:
-        """
-        Returns valid partial id and it's path, if they exist, for a given storage.
-        """
-        # This SQL statement finds all entries that are
-        # prefixes of the given prefix, matching this or parent directories
-        # that are indexed.
-        dir_prefix = posixpath.join(prefix, "")
-        p = self._partials_table(uri)
-        expire_values = self.db.execute(
-            select(p.c.expires, p.c.partial_id, p.c.path_str)
-            .where(
-                p.c.path_str == func.substr(dir_prefix, 1, func.length(p.c.path_str))
-            )
-            .order_by(p.c.expires.desc())
-        )
-        for expires, partial_id, path_str in expire_values:
-            if not is_expired(expires):
-                return partial_id, path_str
-        if raise_exc:
-            raise RuntimeError(f"Unable to get valid partial_id: {uri=}, {prefix=}")
-        return None, None
-
-    def get_last_partial_path(self, uri: StorageURI) -> Optional[str]:
-        """Returns last partial path for given storage."""
-        p = self._partials_table(uri)
-        if not self.db.has_table(p.name):
-            raise StorageNotFoundError(f"Storage {uri} partials are not found.")
-        last_partial = self.db.execute(
-            select(p.c.path_str).order_by(p.c.timestamp.desc()).limit(1)
-        )
-        for (path_str,) in last_partial:
-            return path_str
-        return None
-
-    #
     # Datasets
     #
 
@@ -1012,13 +520,14 @@ class AbstractDBMetastore(AbstractMetastore):
         query_script: str = "",
         schema: Optional[dict[str, Any]] = None,
         ignore_if_exists: bool = False,
+        description: Optional[str] = None,
+        labels: Optional[list[str]] = None,
         **kwargs,  # TODO registered = True / False
     ) -> DatasetRecord:
         """Creates new dataset."""
         # TODO abstract this method and add registered = True based on kwargs
         query = self._datasets_insert().values(
             name=name,
-            shadow=False,
             status=status,
             feature_schema=json.dumps(feature_schema or {}),
             created_at=datetime.now(timezone.utc),
@@ -1028,6 +537,8 @@ class AbstractDBMetastore(AbstractMetastore):
             sources="\n".join(sources) if sources else "",
             query_script=query_script,
             schema=json.dumps(schema or {}),
+            description=description,
+            labels=json.dumps(labels or []),
         )
         if ignore_if_exists and hasattr(query, "on_conflict_do_nothing"):
             # SQLite and PostgreSQL both support 'on_conflict_do_nothing',
@@ -1041,7 +552,7 @@ class AbstractDBMetastore(AbstractMetastore):
         self,
         dataset: DatasetRecord,
         version: int,
-        status: int = DatasetStatus.CREATED,
+        status: int,
         sources: str = "",
         feature_schema: Optional[dict] = None,
         query_script: str = "",
@@ -1056,7 +567,7 @@ class AbstractDBMetastore(AbstractMetastore):
         size: Optional[int] = None,
         preview: Optional[list[dict]] = None,
         job_id: Optional[str] = None,
-        is_job_result: bool = False,
+        uuid: Optional[str] = None,
         conn=None,
     ) -> DatasetRecord:
         """Creates new dataset version."""
@@ -1067,8 +578,9 @@ class AbstractDBMetastore(AbstractMetastore):
 
         query = self._datasets_versions_insert().values(
             dataset_id=dataset.id,
+            uuid=uuid or str(uuid4()),
             version=version,
-            status=status,  # for now until we remove shadow datasets
+            status=status,
             feature_schema=json.dumps(feature_schema or {}),
             created_at=created_at or datetime.now(timezone.utc),
             finished_at=finished_at,
@@ -1082,7 +594,6 @@ class AbstractDBMetastore(AbstractMetastore):
             size=size,
             preview=json.dumps(preview or []),
             job_id=job_id or os.getenv("DATACHAIN_JOB_ID"),
-            is_job_result=is_job_result,
         )
         if ignore_if_exists and hasattr(query, "on_conflict_do_nothing"):
             # SQLite and PostgreSQL both support 'on_conflict_do_nothing',
@@ -1173,14 +684,25 @@ class AbstractDBMetastore(AbstractMetastore):
             return None
         return reduce(lambda ds, version: ds.merge_versions(version), versions)
 
-    def _parse_datasets(self, rows) -> Iterator["DatasetRecord"]:
+    def _parse_list_dataset(self, rows) -> Optional[DatasetListRecord]:
+        versions = [self.dataset_list_class.parse(*r) for r in rows]
+        if not versions:
+            return None
+        return reduce(lambda ds, version: ds.merge_versions(version), versions)
+
+    def _parse_dataset_list(self, rows) -> Iterator["DatasetListRecord"]:
         # grouping rows by dataset id
         for _, g in groupby(rows, lambda r: r[0]):
-            dataset = self._parse_dataset(list(g))
+            dataset = self._parse_list_dataset(list(g))
             if dataset:
                 yield dataset
 
-    def _base_dataset_query(self):
+    def _get_dataset_query(
+        self,
+        dataset_fields: list[str],
+        dataset_version_fields: list[str],
+        isouter: bool = True,
+    ):
         if not (
             self.db.has_table(self._datasets.name)
             and self.db.has_table(self._datasets_versions.name)
@@ -1189,23 +711,37 @@ class AbstractDBMetastore(AbstractMetastore):
 
         d = self._datasets
         dv = self._datasets_versions
+
         query = self._datasets_select(
-            *(getattr(d.c, f) for f in self._dataset_fields),
-            *(getattr(dv.c, f) for f in self._dataset_version_fields),
+            *(getattr(d.c, f) for f in dataset_fields),
+            *(getattr(dv.c, f) for f in dataset_version_fields),
         )
-        j = d.join(dv, d.c.id == dv.c.dataset_id, isouter=True)
+        j = d.join(dv, d.c.id == dv.c.dataset_id, isouter=isouter)
         return query.select_from(j)
 
-    def list_datasets(self) -> Iterator["DatasetRecord"]:
+    def _base_dataset_query(self):
+        return self._get_dataset_query(
+            self._dataset_fields, self._dataset_version_fields
+        )
+
+    def _base_list_datasets_query(self):
+        return self._get_dataset_query(
+            self._dataset_list_fields, self._dataset_list_version_fields, isouter=False
+        )
+
+    def list_datasets(self) -> Iterator["DatasetListRecord"]:
         """Lists all datasets."""
-        yield from self._parse_datasets(self.db.execute(self._base_dataset_query()))
+        query = self._base_list_datasets_query().order_by(
+            self._datasets.c.name, self._datasets_versions.c.version
+        )
+        yield from self._parse_dataset_list(self.db.execute(query))
 
     def list_datasets_by_prefix(
         self, prefix: str, conn=None
-    ) -> Iterator["DatasetRecord"]:
-        query = self._base_dataset_query()
+    ) -> Iterator["DatasetListRecord"]:
+        query = self._base_list_datasets_query()
         query = query.where(self._datasets.c.name.startswith(prefix))
-        yield from self._parse_datasets(self.db.execute(query))
+        yield from self._parse_dataset_list(self.db.execute(query))
 
     def get_dataset(self, name: str, conn=None) -> DatasetRecord:
         """Gets a single dataset by name"""
@@ -1282,32 +818,6 @@ class AbstractDBMetastore(AbstractMetastore):
     #
     # Dataset dependencies
     #
-
-    def _insert_dataset_dependency(self, data: dict[str, Any]) -> None:
-        """Method for inserting dependencies."""
-        self.db.execute(self._datasets_dependencies_insert().values(**data))
-
-    def add_storage_dependency(
-        self,
-        source_dataset_name: str,
-        source_dataset_version: int,
-        storage_uri: StorageURI,
-        storage_timestamp_str: Optional[str] = None,
-    ) -> None:
-        source_dataset = self.get_dataset(source_dataset_name)
-        storage = self.get_storage(storage_uri)
-
-        self._insert_dataset_dependency(
-            {
-                "source_dataset_id": source_dataset.id,
-                "source_dataset_version_id": (
-                    source_dataset.get_version(source_dataset_version).id
-                ),
-                "bucket_id": storage.id,
-                "bucket_version": storage_timestamp_str,
-            }
-        )
-
     def add_dataset_dependency(
         self,
         source_dataset_name: str,
@@ -1319,15 +829,15 @@ class AbstractDBMetastore(AbstractMetastore):
         source_dataset = self.get_dataset(source_dataset_name)
         dataset = self.get_dataset(dataset_name)
 
-        self._insert_dataset_dependency(
-            {
-                "source_dataset_id": source_dataset.id,
-                "source_dataset_version_id": (
+        self.db.execute(
+            self._datasets_dependencies_insert().values(
+                source_dataset_id=source_dataset.id,
+                source_dataset_version_id=(
                     source_dataset.get_version(source_dataset_version).id
                 ),
-                "dataset_id": dataset.id,
-                "dataset_version_id": dataset.get_version(dataset_version).id,
-            }
+                dataset_id=dataset.id,
+                dataset_version_id=dataset.get_version(dataset_version).id,
+            )
         )
 
     def update_dataset_dependency_source(
@@ -1371,7 +881,6 @@ class AbstractDBMetastore(AbstractMetastore):
         d = self._datasets
         dd = self._datasets_dependencies
         dv = self._datasets_versions
-        s = self._storages
 
         dataset_version = dataset.get_version(version)
 
@@ -1380,9 +889,9 @@ class AbstractDBMetastore(AbstractMetastore):
         query = (
             self._datasets_dependencies_select(*select_cols)
             .select_from(
-                dd.join(d, dd.c.dataset_id == d.c.id, isouter=True)
-                .join(s, dd.c.bucket_id == s.c.id, isouter=True)
-                .join(dv, dd.c.dataset_version_id == dv.c.id, isouter=True)
+                dd.join(d, dd.c.dataset_id == d.c.id, isouter=True).join(
+                    dv, dd.c.dataset_version_id == dv.c.id, isouter=True
+                )
             )
             .where(
                 (dd.c.source_dataset_id == dataset.id)
@@ -1490,7 +999,7 @@ class AbstractDBMetastore(AbstractMetastore):
         return self._jobs.update().where(*where)
 
     def _parse_job(self, rows) -> Job:
-        return Job.parse(*rows)
+        return self.job_class.parse(*rows)
 
     def _parse_jobs(self, rows) -> Iterator["Job"]:
         for _, g in groupby(rows, lambda r: r[0]):
@@ -1596,3 +1105,18 @@ class AbstractDBMetastore(AbstractMetastore):
                 .values(status=dataset_status)
             )
             self.db.execute(query, conn=conn)  # type: ignore[attr-defined]
+
+    def get_job_dataset_versions(self, job_id: str) -> list[tuple[str, int]]:
+        """Returns dataset names and versions for the job."""
+        dv = self._datasets_versions
+        ds = self._datasets
+
+        join_condition = dv.c.dataset_id == ds.c.id
+
+        query = (
+            self._datasets_versions_select(ds.c.name, dv.c.version)
+            .select_from(dv.join(ds, join_condition))
+            .where(dv.c.job_id == job_id)
+        )
+
+        return list(self.db.execute(query))

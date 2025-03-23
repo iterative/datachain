@@ -1,10 +1,15 @@
 import json
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Optional, Union
+from uuid import uuid4
 
 from pydantic import Field, field_validator
 
-from datachain.dataset import DatasetRecord, DatasetStatus, DatasetVersion
+from datachain.dataset import (
+    DatasetListRecord,
+    DatasetListVersion,
+    DatasetStatus,
+)
 from datachain.job import Job
 from datachain.lib.data_model import DataModel
 from datachain.utils import TIME_ZERO
@@ -15,14 +20,17 @@ if TYPE_CHECKING:
 
 class DatasetInfo(DataModel):
     name: str
+    uuid: str = Field(default=str(uuid4()))
     version: int = Field(default=1)
     status: int = Field(default=DatasetStatus.CREATED)
     created_at: datetime = Field(default=TIME_ZERO)
     finished_at: Optional[datetime] = Field(default=None)
     num_objects: Optional[int] = Field(default=None)
     size: Optional[int] = Field(default=None)
-    params: dict[str, str] = Field(default=dict)
-    metrics: dict[str, Any] = Field(default=dict)
+    params: dict[str, str] = Field(default={})
+    metrics: dict[str, Any] = Field(default={})
+    error_message: str = Field(default="")
+    error_stack: str = Field(default="")
 
     @staticmethod
     def _validate_dict(
@@ -53,11 +61,12 @@ class DatasetInfo(DataModel):
     @classmethod
     def from_models(
         cls,
-        dataset: DatasetRecord,
-        version: DatasetVersion,
+        dataset: DatasetListRecord,
+        version: DatasetListVersion,
         job: Optional[Job],
     ) -> "Self":
         return cls(
+            uuid=version.uuid,
             name=dataset.name,
             version=version.version,
             status=version.status,
@@ -67,4 +76,6 @@ class DatasetInfo(DataModel):
             size=version.size,
             params=job.params if job else {},
             metrics=job.metrics if job else {},
+            error_message=version.error_message,
+            error_stack=version.error_stack,
         )

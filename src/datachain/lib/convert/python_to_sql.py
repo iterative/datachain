@@ -52,15 +52,15 @@ def python_to_sql(typ):  # noqa: PLR0911
 
     args = get_args(typ)
     if inspect.isclass(orig) and (issubclass(list, orig) or issubclass(tuple, orig)):
-        if args is None or len(args) != 1:
+        if args is None:
             raise TypeError(f"Cannot resolve type '{typ}' for flattening features")
 
         args0 = args[0]
         if ModelStore.is_pydantic(args0):
             return Array(JSON())
 
-        next_type = python_to_sql(args0)
-        return Array(next_type)
+        list_type = list_of_args_to_type(args)
+        return Array(list_type)
 
     if orig is Annotated:
         # Ignoring annotations
@@ -73,10 +73,25 @@ def python_to_sql(typ):  # noqa: PLR0911
         if len(args) == 2 and (type(None) in args):
             return python_to_sql(args[0])
 
+        if _is_union_str_literal(orig, args):
+            return String
+
         if _is_json_inside_union(orig, args):
             return JSON
 
     raise TypeError(f"Cannot recognize type {typ}")
+
+
+def list_of_args_to_type(args) -> SQLType:
+    first_type = python_to_sql(args[0])
+    for next_arg in args[1:]:
+        try:
+            next_type = python_to_sql(next_arg)
+            if next_type != first_type:
+                return JSON()
+        except TypeError:
+            return JSON()
+    return first_type
 
 
 def _is_json_inside_union(orig, args) -> bool:
@@ -94,3 +109,9 @@ def _is_json_inside_union(orig, args) -> bool:
         if any(inspect.isclass(arg) and issubclass(arg, BaseModel) for arg in args):
             return True
     return False
+
+
+def _is_union_str_literal(orig, args) -> bool:
+    if orig != Union:
+        return False
+    return all(arg is str or get_origin(arg) in (Literal, LiteralEx) for arg in args)

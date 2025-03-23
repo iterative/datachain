@@ -1,31 +1,44 @@
 import glob
-import importlib.util
 import io
 import json
+import logging
 import os
 import os.path as osp
 import random
-import stat
+import re
 import sys
 import time
 from collections.abc import Iterable, Iterator, Sequence
+from contextlib import contextmanager
 from datetime import date, datetime, timezone
-from itertools import islice
+from itertools import chain, islice
 from typing import TYPE_CHECKING, Any, Optional, TypeVar, Union
 from uuid import UUID
 
 import cloudpickle
+import platformdirs
 from dateutil import tz
 from dateutil.parser import isoparse
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
     import pandas as pd
+    from typing_extensions import Self
+
+
+logger = logging.getLogger("datachain")
 
 NUL = b"\0"
 TIME_ZERO = datetime.fromtimestamp(0, tz=timezone.utc)
 
-T = TypeVar("T", bound="DataChainDir")
+APPNAME = "datachain"
+APPAUTHOR = "iterative"
+ENV_DATACHAIN_SYSTEM_CONFIG_DIR = "DATACHAIN_SYSTEM_CONFIG_DIR"
+ENV_DATACHAIN_GLOBAL_CONFIG_DIR = "DATACHAIN_GLOBAL_CONFIG_DIR"
+STUDIO_URL = "https://studio.datachain.ai"
+
+
+T = TypeVar("T")
 
 
 class DataChainDir:
@@ -33,6 +46,7 @@ class DataChainDir:
     CACHE = "cache"
     TMP = "tmp"
     DB = "db"
+    CONFIG = "config"
     ENV_VAR = "DATACHAIN_DIR"
     ENV_VAR_DATACHAIN_ROOT = "DATACHAIN_ROOT_DIR"
 
@@ -42,6 +56,7 @@ class DataChainDir:
         cache: Optional[str] = None,
         tmp: Optional[str] = None,
         db: Optional[str] = None,
+        config: Optional[str] = None,
     ) -> None:
         self.root = osp.abspath(root) if root is not None else self.default_root()
         self.cache = (
@@ -51,12 +66,24 @@ class DataChainDir:
             osp.abspath(tmp) if tmp is not None else osp.join(self.root, self.TMP)
         )
         self.db = osp.abspath(db) if db is not None else osp.join(self.root, self.DB)
+        self.config = (
+            osp.abspath(config)
+            if config is not None
+            else osp.join(self.root, self.CONFIG)
+        )
+        self.config = (
+            osp.abspath(config)
+            if config is not None
+            else osp.join(self.root, self.CONFIG)
+        )
 
     def init(self):
         os.makedirs(self.root, exist_ok=True)
         os.makedirs(self.cache, exist_ok=True)
         os.makedirs(self.tmp, exist_ok=True)
         os.makedirs(osp.split(self.db)[0], exist_ok=True)
+        os.makedirs(osp.split(self.config)[0], exist_ok=True)
+        os.makedirs(osp.split(self.config)[0], exist_ok=True)
 
     @classmethod
     def default_root(cls) -> str:
@@ -68,7 +95,7 @@ class DataChainDir:
         return osp.join(root_dir, cls.DEFAULT)
 
     @classmethod
-    def find(cls: type[T], create: bool = True) -> T:
+    def find(cls, create: bool = True) -> "Self":
         try:
             root = os.environ[cls.ENV_VAR]
         except KeyError:
@@ -80,6 +107,18 @@ class DataChainDir:
             else:
                 raise NotADirectoryError(root)
         return instance
+
+
+def system_config_dir():
+    return os.getenv(ENV_DATACHAIN_SYSTEM_CONFIG_DIR) or platformdirs.site_config_dir(
+        APPNAME, APPAUTHOR
+    )
+
+
+def global_config_dir():
+    return os.getenv(ENV_DATACHAIN_GLOBAL_CONFIG_DIR) or platformdirs.user_config_dir(
+        APPNAME, APPAUTHOR
+    )
 
 
 def human_time_to_int(time: str) -> Optional[int]:
@@ -153,14 +192,6 @@ def suffix_to_number(num_str: str) -> int:
         raise ValueError(f"Invalid number/suffix for: {num_str}") from None
 
 
-def force_create_dir(name):
-    if not os.path.exists(name):
-        os.mkdir(name)
-    elif not os.path.isdir(name):
-        os.remove(name)
-        os.mkdir(name)
-
-
 def datachain_paths_join(source_path: str, file_paths: Iterable[str]) -> Iterable[str]:
     source_parts = source_path.rstrip("/").split("/")
     if glob.has_magic(source_parts[-1]):
@@ -168,13 +199,6 @@ def datachain_paths_join(source_path: str, file_paths: Iterable[str]) -> Iterabl
         source_parts.pop()
     source_stripped = "/".join(source_parts)
     return (f"{source_stripped}/{path.lstrip('/')}" for path in file_paths)
-
-
-# From: https://docs.python.org/3/library/shutil.html#rmtree-example
-def remove_readonly(func, path, _):
-    "Clear the readonly bit and reattempt the removal"
-    os.chmod(path, stat.S_IWRITE)
-    func(path)
 
 
 def sql_escape_like(search: str, escape: str = "\\") -> str:
@@ -198,50 +222,11 @@ def get_envs_by_prefix(prefix: str) -> dict[str, str]:
     return variables
 
 
-def import_object(object_spec):
-    filename, identifier = object_spec.rsplit(":", 1)
-    filename = filename.strip()
-    identifier = identifier.strip()
-
-    if not identifier.isidentifier() or not filename.endswith(".py"):
-        raise ValueError(f"Invalid object spec: {object_spec}")
-
-    modname = os.path.abspath(filename)
-    if modname in sys.modules:
-        module = sys.modules[modname]
-    else:
-        # Use importlib to find and load the module from the given filename
-        spec = importlib.util.spec_from_file_location(modname, filename)
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[modname] = module
-        spec.loader.exec_module(module)
-
-    return getattr(module, identifier)
-
-
-def parse_params_string(params: str):
-    """
-    Parse a string containing UDF class constructor parameters in the form
-    `a, b, key=val` into *args and **kwargs.
-    """
-    args = []
-    kwargs = {}
-    for part in params.split():
-        if "=" in part:
-            key, val = part.split("=")
-            kwargs[key] = val
-        else:
-            args.append(part)
-    if any((args, kwargs)):
-        return args, kwargs
-    return None, None
-
-
 _T_co = TypeVar("_T_co", covariant=True)
 
 
 def batched(iterable: Iterable[_T_co], n: int) -> Iterator[tuple[_T_co, ...]]:
-    "Batch data into tuples of length n. The last batch may be shorter."
+    """Batch data into tuples of length n. The last batch may be shorter."""
     # Based on: https://docs.python.org/3/library/itertools.html#itertools-recipes
     # batched('ABCDEFG', 3) --> ABC DEF G
     if n < 1:
@@ -251,26 +236,47 @@ def batched(iterable: Iterable[_T_co], n: int) -> Iterator[tuple[_T_co, ...]]:
         yield batch
 
 
+def batched_it(iterable: Iterable[_T_co], n: int) -> Iterator[Iterator[_T_co]]:
+    """Batch data into iterators of length n. The last batch may be shorter."""
+    # batched('ABCDEFG', 3) --> ABC DEF G
+    if n < 1:
+        raise ValueError("Batch size must be at least one")
+    it = iter(iterable)
+    while True:
+        chunk_it = islice(it, n)
+        try:
+            first_el = next(chunk_it)
+        except StopIteration:
+            return
+        yield chain((first_el,), chunk_it)
+
+
 def flatten(items):
     for item in items:
-        if isinstance(item, list):
+        if isinstance(item, (list, tuple)):
             yield from item
         else:
             yield item
 
 
-def retry_with_backoff(retries=5, backoff_sec=1):
+def retry_with_backoff(retries=5, backoff_sec=1, errors=(Exception,)):
     def retry(f):
         def wrapper(*args, **kwargs):
             num_tried = 0
             while True:
                 try:
                     return f(*args, **kwargs)
-                except Exception:
+                except errors:
                     if num_tried == retries:
                         raise
                     sleep = (
                         backoff_sec * 2** num_tried + random.uniform(0, 1)  # noqa: S311
+                    )
+                    logger.exception(
+                        "Error in %s, retrying in %ds, attempt %d",
+                        f.__name__,
+                        sleep,
+                        num_tried,
                     )
                     time.sleep(sleep)
                     num_tried += 1
@@ -325,11 +331,8 @@ def show_df(
                 "etag",
                 "is_latest",
                 "last_modified",
-                "owner_id",
-                "owner_name",
                 "size",
                 "version",
-                "vtype",
             ],
             inplace=True,
             errors="ignore",
@@ -343,6 +346,7 @@ def show_records(
     records: Optional[list[dict]],
     collapse_columns: bool = False,
     system_columns: bool = False,
+    hidden_fields: Optional[list[str]] = None,
 ) -> None:
     import pandas as pd
 
@@ -350,6 +354,8 @@ def show_records(
         return
 
     df = pd.DataFrame.from_records(records)
+    if hidden_fields:
+        df = df.drop(columns=hidden_fields, errors="ignore")
     return show_df(df, collapse_columns=collapse_columns, system_columns=system_columns)
 
 
@@ -433,3 +439,51 @@ def get_datachain_executable() -> list[str]:
     if datachain_exec_path := os.getenv("DATACHAIN_EXEC_PATH"):
         return [datachain_exec_path]
     return [sys.executable, "-m", "datachain"]
+
+
+def uses_glob(path: str) -> bool:
+    """Checks if some URI path has glob syntax in it"""
+    return glob.has_magic(os.path.basename(os.path.normpath(path)))
+
+
+def env2bool(var, undefined=False):
+    """
+    undefined: return value if env var is unset
+    """
+    var = os.getenv(var, None)
+    if var is None:
+        return undefined
+    return bool(re.search("1|y|yes|true", var, flags=re.IGNORECASE))
+
+
+def nested_dict_path_set(
+    data: dict[str, Any], path: Sequence[str], value: Any
+) -> dict[str, Any]:
+    """Sets a value inside a nested dict based on the list of dict keys as a path,
+    and will create sub-dicts as needed to set the value."""
+    sub_data = data
+    for element in path[:-1]:
+        if element not in sub_data:
+            sub_data[element] = {}
+        sub_data = sub_data[element]
+    sub_data[path[len(path) - 1]] = value
+    return data
+
+
+def row_to_nested_dict(
+    headers: Iterable[Sequence[str]], row: Iterable[Any]
+) -> dict[str, Any]:
+    """Converts a row to a nested dict based on the provided headers."""
+    result: dict[str, Any] = {}
+    for h, v in zip(headers, row):
+        nested_dict_path_set(result, h, v)
+    return result
+
+
+@contextmanager
+def safe_closing(thing: T) -> Iterator[T]:
+    try:
+        yield thing
+    finally:
+        if hasattr(thing, "close"):
+            thing.close()

@@ -4,27 +4,26 @@ from datachain.lib.dc import DataChain, DatasetPrepareError
 from datachain.lib.udf import Mapper
 
 
-class MyMapper(Mapper):
-    DEFAULT_VALUE = 84
-    BOOTSTRAP_VALUE = 1452
-    TEARDOWN_VALUE = 98763
-
-    def __init__(self):
-        super().__init__()
-        self.value = MyMapper.DEFAULT_VALUE
-        self._had_teardown = False
-
-    def process(self, *args) -> int:
-        return self.value
-
-    def setup(self):
-        self.value = MyMapper.BOOTSTRAP_VALUE
-
-    def teardown(self):
-        self.value = MyMapper.TEARDOWN_VALUE
-
-
 def test_udf():
+    class MyMapper(Mapper):
+        DEFAULT_VALUE = 84
+        BOOTSTRAP_VALUE = 1452
+        TEARDOWN_VALUE = 98763
+
+        def __init__(self):
+            super().__init__()
+            self.value = MyMapper.DEFAULT_VALUE
+            self._had_teardown = False
+
+        def process(self, key) -> int:
+            return self.value
+
+        def setup(self):
+            self.value = MyMapper.BOOTSTRAP_VALUE
+
+        def teardown(self):
+            self.value = MyMapper.TEARDOWN_VALUE
+
     vals = ["a", "b", "c", "d", "e", "f"]
     chain = DataChain.from_values(key=vals)
 
@@ -35,23 +34,13 @@ def test_udf():
     assert udf.value == MyMapper.TEARDOWN_VALUE
 
 
-@pytest.mark.skip(reason="Skip until tests module will be importer for unit-tests")
-def test_udf_parallel():
-    vals = ["a", "b", "c", "d", "e", "f"]
-    chain = DataChain.from_values(key=vals)
-
-    res = list(chain.settings(parallel=4).map(res=MyMapper()).collect("res"))
-
-    assert res == [MyMapper.BOOTSTRAP_VALUE] * len(vals)
-
-
 def test_no_bootstrap_for_callable():
     class MyMapper:
         def __init__(self):
             self._had_bootstrap = False
             self._had_teardown = False
 
-        def __call__(self, *args):
+        def __call__(self, key):
             return None
 
         def bootstrap(self):
@@ -77,6 +66,7 @@ def test_bootstrap_in_chain(catalog):
         DataChain.from_values(val=prime)
         .setup(init_val=lambda: base)
         .map(x=lambda val, init_val: val + init_val, output=int)
+        .order_by("x")
         .collect("x")
     )
 

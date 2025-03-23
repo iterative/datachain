@@ -17,27 +17,26 @@ from typing import (
     ClassVar,
     NamedTuple,
     Optional,
+    Union,
 )
 from urllib.parse import urlparse
 
-from botocore.exceptions import ClientError
 from dvc_objects.fs.system import reflink
 from fsspec.asyn import get_loop, sync
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
-from datachain.cache import DataChainCache, UniqueId
-from datachain.client.fileslice import FileSlice, FileWrapper
-from datachain.error import ClientError as DataChainClientError
-from datachain.node import Entry
+from datachain.cache import Cache
+from datachain.client.fileslice import FileWrapper
 from datachain.nodes_fetcher import NodesFetcher
 from datachain.nodes_thread_pool import NodeChunk
-from datachain.storage import StorageURI
 
 if TYPE_CHECKING:
     from fsspec.spec import AbstractFileSystem
 
-    from datachain.data_storage import AbstractMetastore
+    from datachain.dataset import StorageURI
+    from datachain.lib.file import File
+
 
 logger = logging.getLogger("datachain")
 
@@ -46,7 +45,7 @@ DELIMITER = "/"  # Path delimiter.
 
 DATA_SOURCE_URI_PATTERN = re.compile(r"^[\w]+:\/\/.*$")
 
-ResultQueue = asyncio.Queue[Optional[Sequence[Entry]]]
+ResultQueue = asyncio.Queue[Optional[Sequence["File"]]]
 
 
 def _is_win_local_path(uri: str) -> bool:
@@ -65,7 +64,7 @@ def _is_win_local_path(uri: str) -> bool:
 
 class Bucket(NamedTuple):
     name: str
-    uri: StorageURI
+    uri: "StorageURI"
     created: Optional[datetime]
 
 
@@ -75,9 +74,7 @@ class Client(ABC):
     PREFIX: ClassVar[str]
     protocol: ClassVar[str]
 
-    def __init__(
-        self, name: str, fs_kwargs: dict[str, Any], cache: DataChainCache
-    ) -> None:
+    def __init__(self, name: str, fs_kwargs: dict[str, Any], cache: Cache) -> None:
         self.name = name
         self.fs_kwargs = fs_kwargs
         self._fs: Optional[AbstractFileSystem] = None
@@ -85,18 +82,17 @@ class Client(ABC):
         self.uri = self.get_uri(self.name)
 
     @staticmethod
-    def get_implementation(url: str) -> type["Client"]:
+    def get_implementation(url: Union[str, os.PathLike[str]]) -> type["Client"]:
         from .azure import AzureClient
         from .gcs import GCSClient
+        from .hf import HfClient
         from .local import FileClient
         from .s3 import ClientS3
 
-        protocol = urlparse(url).scheme
+        protocol = urlparse(str(url)).scheme
 
-        if not protocol or _is_win_local_path(url):
+        if not protocol or _is_win_local_path(str(url)):
             return FileClient
-
-        protocol = protocol.lower()
         if protocol == ClientS3.protocol:
             return ClientS3
         if protocol == GCSClient.protocol:
@@ -105,6 +101,8 @@ class Client(ABC):
             return AzureClient
         if protocol == FileClient.protocol:
             return FileClient
+        if protocol == HfClient.protocol:
+            return HfClient
 
         raise NotImplementedError(f"Unsupported protocol: {protocol}")
 
@@ -114,16 +112,21 @@ class Client(ABC):
         return DATA_SOURCE_URI_PATTERN.match(name) is not None
 
     @staticmethod
-    def parse_url(
-        source: str,
-        metastore: "AbstractMetastore",
-        cache: DataChainCache,
-        **kwargs,
-    ) -> tuple["Client", str]:
+    def parse_url(source: str) -> tuple["StorageURI", str]:
         cls = Client.get_implementation(source)
-        storage_url, rel_path = cls.split_url(source)
-        client = cls.from_name(storage_url, metastore, cache, kwargs)
-        return client, rel_path
+        storage_name, rel_path = cls.split_url(source)
+        return cls.get_uri(storage_name), rel_path
+
+    @staticmethod
+    def get_client(
+        source: Union[str, os.PathLike[str]], cache: Cache, **kwargs
+    ) -> "Client":
+        cls = Client.get_implementation(source)
+        storage_url, _ = cls.split_url(str(source))
+        if os.name == "nt":
+            storage_url = storage_url.removeprefix("/")
+
+        return cls.from_name(storage_url, cache, kwargs)
 
     @classmethod
     def create_fs(cls, **kwargs) -> "AbstractFileSystem":
@@ -133,11 +136,14 @@ class Client(ABC):
         return fs
 
     @classmethod
+    def version_path(cls, path: str, version_id: Optional[str]) -> str:
+        return path
+
+    @classmethod
     def from_name(
         cls,
         name: str,
-        metastore: "AbstractMetastore",
-        cache: DataChainCache,
+        cache: Cache,
         kwargs: dict[str, Any],
     ) -> "Client":
         return cls(name, kwargs, cache)
@@ -145,14 +151,16 @@ class Client(ABC):
     @classmethod
     def from_source(
         cls,
-        uri: StorageURI,
-        cache: DataChainCache,
+        uri: "StorageURI",
+        cache: Cache,
         **kwargs,
     ) -> "Client":
         return cls(cls.FS_CLASS._strip_protocol(uri), kwargs, cache)
 
     @classmethod
     def ls_buckets(cls, **kwargs) -> Iterator[Bucket]:
+        from datachain.dataset import StorageURI
+
         for entry in cls.create_fs(**kwargs).ls(cls.PREFIX, detail=True):
             name = entry["name"].rstrip("/")
             yield Bucket(
@@ -166,11 +174,19 @@ class Client(ABC):
         return url == cls.PREFIX
 
     @classmethod
-    def get_uri(cls, name) -> StorageURI:
+    def get_uri(cls, name: str) -> "StorageURI":
+        from datachain.dataset import StorageURI
+
         return StorageURI(f"{cls.PREFIX}{name}")
 
     @classmethod
     def split_url(cls, url: str) -> tuple[str, str]:
+        """
+        Splits the URL into two pieces:
+        1. bucket name without protocol (everything up until the first /)
+        2. path which is the rest of URL starting from bucket name
+        e.g s3://my-bucket/animals/dogs -> (my-bucket, animals/dogs)
+        """
         fill_path = url[len(cls.PREFIX) :]
         path_split = fill_path.split("/", 1)
         bucket = path_split[0]
@@ -184,21 +200,41 @@ class Client(ABC):
         return self._fs
 
     def url(self, path: str, expires: int = 3600, **kwargs) -> str:
-        return self.fs.sign(self.get_full_path(path), expiration=expires, **kwargs)
+        return self.fs.sign(
+            self.get_full_path(path, kwargs.pop("version_id", None)),
+            expiration=expires,
+            **kwargs,
+        )
 
-    async def get_current_etag(self, uid: UniqueId) -> str:
-        info = await self.fs._info(self.get_full_path(uid.path))
-        return self.convert_info(info, "").etag
+    async def get_current_etag(self, file: "File") -> str:
+        kwargs = {}
+        if getattr(self.fs, "version_aware", False):
+            kwargs["version_id"] = file.version
+        info = await self.fs._info(
+            self.get_full_path(file.path, file.version), **kwargs
+        )
+        return self.info_to_file(info, file.path).etag
 
-    async def get_size(self, path: str) -> int:
-        return await self.fs._size(path)
+    def get_file_info(self, path: str, version_id: Optional[str] = None) -> "File":
+        info = self.fs.info(self.get_full_path(path, version_id), version_id=version_id)
+        return self.info_to_file(info, path)
 
-    async def get_file(self, lpath, rpath, callback):
-        return await self.fs._get_file(lpath, rpath, callback=callback)
+    async def get_size(self, path: str, version_id: Optional[str] = None) -> int:
+        return await self.fs._size(
+            self.version_path(path, version_id), version_id=version_id
+        )
+
+    async def get_file(self, lpath, rpath, callback, version_id: Optional[str] = None):
+        return await self.fs._get_file(
+            self.version_path(lpath, version_id),
+            rpath,
+            callback=callback,
+            version_id=version_id,
+        )
 
     async def scandir(
         self, start_prefix: str, method: str = "default"
-    ) -> AsyncIterator[Sequence[Entry]]:
+    ) -> AsyncIterator[Sequence["File"]]:
         try:
             impl = getattr(self, f"_fetch_{method}")
         except AttributeError:
@@ -211,7 +247,7 @@ class Client(ABC):
         await main_task
 
     async def _fetch_nested(self, start_prefix: str, result_queue: ResultQueue) -> None:
-        progress_bar = tqdm(desc=f"Listing {self.uri}", unit=" objects")
+        progress_bar = tqdm(desc=f"Listing {self.uri}", unit=" objects", leave=False)
         loop = get_loop()
 
         queue: asyncio.Queue[str] = asyncio.Queue()
@@ -249,11 +285,6 @@ class Client(ABC):
                     worker.cancel()
             if excs:
                 raise excs[0]
-        except ClientError as exc:
-            raise DataChainClientError(
-                exc.response.get("Error", {}).get("Message") or exc,
-                exc.response.get("Error", {}).get("Code"),
-            ) from exc
         finally:
             # This ensures the progress bar is closed before any exceptions are raised
             progress_bar.close()
@@ -264,7 +295,9 @@ class Client(ABC):
     ) -> None:
         await self._fetch_nested(start_prefix, result_queue)
 
-    async def _fetch_dir(self, prefix, pbar, result_queue) -> set[str]:
+    async def _fetch_dir(
+        self, prefix: str, pbar, result_queue: ResultQueue
+    ) -> set[str]:
         path = f"{self.name}/{prefix}"
         infos = await self.ls_dir(path)
         files = []
@@ -277,7 +310,7 @@ class Client(ABC):
             if info["type"] == "directory":
                 subdirs.add(subprefix)
             else:
-                files.append(self.convert_info(info, prefix))
+                files.append(self.info_to_file(info, subprefix))
         if files:
             await result_queue.put(files)
         found_count = len(subdirs) + len(files)
@@ -294,16 +327,18 @@ class Client(ABC):
         return not (key.startswith("/") or key.endswith("/") or "//" in key)
 
     async def ls_dir(self, path):
-        return await self.fs._ls(path, detail=True, versions=True)
+        if getattr(self.fs, "version_aware", False):
+            kwargs = {"versions": True}
+        return await self.fs._ls(path, detail=True, **kwargs)
 
     def rel_path(self, path: str) -> str:
         return self.fs.split_path(path)[1]
 
-    def get_full_path(self, rel_path: str) -> str:
-        return f"{self.PREFIX}{self.name}/{rel_path}"
+    def get_full_path(self, rel_path: str, version_id: Optional[str] = None) -> str:
+        return self.version_path(f"{self.PREFIX}{self.name}/{rel_path}", version_id)
 
     @abstractmethod
-    def convert_info(self, v: dict[str, Any], parent: str) -> Entry: ...
+    def info_to_file(self, v: dict[str, Any], path: str) -> "File": ...
 
     def fetch_nodes(
         self,
@@ -316,7 +351,7 @@ class Client(ABC):
 
     def instantiate_object(
         self,
-        uid: UniqueId,
+        file: "File",
         dst: str,
         progress_bar: tqdm,
         force: bool = False,
@@ -327,10 +362,10 @@ class Client(ABC):
             else:
                 progress_bar.close()
                 raise FileExistsError(f"Path {dst} already exists")
-        self.do_instantiate_object(uid, dst)
+        self.do_instantiate_object(file, dst)
 
-    def do_instantiate_object(self, uid: "UniqueId", dst: str) -> None:
-        src = self.cache.get_path(uid)
+    def do_instantiate_object(self, file: "File", dst: str) -> None:
+        src = self.cache.get_path(file)
         assert src is not None
 
         try:
@@ -340,68 +375,45 @@ class Client(ABC):
             copy2(src, dst)
 
     def open_object(
-        self, uid: UniqueId, use_cache: bool = True, cb: Callback = DEFAULT_CALLBACK
+        self, file: "File", use_cache: bool = True, cb: Callback = DEFAULT_CALLBACK
     ) -> BinaryIO:
         """Open a file, including files in tar archives."""
-        location = uid.get_parsed_location()
-        if use_cache and (cache_path := self.cache.get_path(uid)):
-            return open(cache_path, mode="rb")  # noqa: SIM115
-        if location and location["vtype"] == "tar":
-            return self._open_tar(uid, use_cache=True)
-        return FileWrapper(self.fs.open(self.get_full_path(uid.path)), cb)  # type: ignore[return-value]
+        if use_cache and (cache_path := self.cache.get_path(file)):
+            return open(cache_path, mode="rb")
+        assert not file.location
+        return FileWrapper(
+            self.fs.open(self.get_full_path(file.path, file.version)), cb
+        )  # type: ignore[return-value]
 
-    def _open_tar(self, uid: UniqueId, use_cache: bool = True):
-        location = uid.get_parsed_location()
-        assert location
+    def upload(self, data: bytes, path: str) -> "File":
+        full_path = path if path.startswith(self.PREFIX) else self.get_full_path(path)
 
-        offset = location["offset"]
-        size = location["size"]
-        parent = location["parent"]
+        parent = posixpath.dirname(full_path)
+        self.fs.makedirs(parent, exist_ok=True)
 
-        parent_uid = UniqueId(
-            parent["source"],
-            parent["parent"],
-            parent["name"],
-            parent["etag"],
-            parent["size"],
-            parent["vtype"],
-            parent["location"],
-        )
-        f = self.open_object(parent_uid, use_cache=use_cache)
-        return FileSlice(f, offset, size, posixpath.basename(uid.path))
+        self.fs.pipe_file(full_path, data)
+        file_info = self.fs.info(full_path)
+        return self.info_to_file(file_info, path)
 
-    def download(self, uid: UniqueId, *, callback: Callback = DEFAULT_CALLBACK) -> None:
-        sync(get_loop(), functools.partial(self._download, uid, callback=callback))
+    def download(self, file: "File", *, callback: Callback = DEFAULT_CALLBACK) -> None:
+        sync(get_loop(), functools.partial(self._download, file, callback=callback))
 
-    async def _download(self, uid: UniqueId, *, callback: "Callback" = None) -> None:
-        if self.cache.contains(uid):
+    async def _download(self, file: "File", *, callback: "Callback" = None) -> None:
+        if self.cache.contains(file):
             # Already in cache, so there's nothing to do.
             return
-        await self._put_in_cache(uid, callback=callback)
+        await self._put_in_cache(file, callback=callback)
 
-    def put_in_cache(self, uid: UniqueId, *, callback: "Callback" = None) -> None:
-        sync(get_loop(), functools.partial(self._put_in_cache, uid, callback=callback))
+    def put_in_cache(self, file: "File", *, callback: "Callback" = None) -> None:
+        sync(get_loop(), functools.partial(self._put_in_cache, file, callback=callback))
 
-    async def _put_in_cache(
-        self, uid: UniqueId, *, callback: "Callback" = None
-    ) -> None:
-        location = uid.get_parsed_location()
-        if location and location["vtype"] == "tar":
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(
-                None, functools.partial(self._download_from_tar, uid, callback=callback)
-            )
-            return
-        if uid.etag:
-            etag = await self.get_current_etag(uid)
-            if uid.etag != etag:
+    async def _put_in_cache(self, file: "File", *, callback: "Callback" = None) -> None:
+        assert not file.location
+        if file.etag:
+            etag = await self.get_current_etag(file)
+            if file.etag != etag:
                 raise FileNotFoundError(
-                    f"Invalid etag for {uid.storage}/{uid.path}: "
-                    f"expected {uid.etag}, got {etag}"
+                    f"Invalid etag for {file.source}/{file.path}: "
+                    f"expected {file.etag}, got {etag}"
                 )
-        await self.cache.download(uid, self, callback=callback)
-
-    def _download_from_tar(self, uid, *, callback: "Callback" = None):
-        with self._open_tar(uid, use_cache=False) as f:
-            contents = f.read()
-        self.cache.store_data(uid, contents)
+        await self.cache.download(file, self, callback=callback)

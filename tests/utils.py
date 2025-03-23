@@ -2,6 +2,7 @@ import dataclasses
 import io
 import math
 import os
+import posixpath
 import tarfile
 from string import printable
 from tarfile import DIRTYPE, TarInfo
@@ -13,23 +14,9 @@ from PIL import Image
 
 from datachain.catalog.catalog import Catalog
 from datachain.dataset import DatasetDependency, DatasetRecord
-from datachain.query import C, DatasetQuery
-from datachain.query.builtins import index_tar
-from datachain.storage import StorageStatus
-
-
-def make_index(catalog, src: str, entries, ttl: int = 1234):
-    lst, _ = catalog.enlist_source(src, ttl, skip_indexing=True)
-    lst.insert_entries(entries)
-    lst.insert_entries_done()
-    lst.metastore.mark_storage_indexed(
-        src,
-        StorageStatus.COMPLETE,
-        ttl=ttl,
-        prefix="",
-        partial_id=lst.metastore.partial_id,
-    )
-
+from datachain.lib.dc import DataChain
+from datachain.lib.tar import process_tar
+from datachain.query import C
 
 DEFAULT_TREE: dict[str, Any] = {
     "description": "Cats and Dogs",
@@ -85,14 +72,6 @@ def tree_from_path(path, binary=False):
     return tree
 
 
-def uppercase_scheme(uri: str) -> str:
-    """
-    Makes scheme (or protocol) of an url uppercased
-    e.g s3://bucket_name -> S3://bucket_name
-    """
-    return f'{uri.split(":")[0].upper()}:{":".join(uri.split(":")[1:])}'
-
-
 def make_tar(tree) -> bytes:
     with io.BytesIO() as tmp:
         with tarfile.open(fileobj=tmp, mode="w") as archive:
@@ -120,29 +99,34 @@ def write_tar(tree, archive, curr_dir=""):
 TARRED_TREE: dict[str, Any] = {"animals.tar": make_tar(DEFAULT_TREE)}
 
 
-def create_tar_dataset(catalog, uri: str, ds_name: str) -> DatasetQuery:
+def create_tar_dataset_with_legacy_columns(
+    session, uri: str, ds_name: str
+) -> DataChain:
     """
     Create a dataset from a storage location containing tar archives and other files.
 
     The resulting dataset contains both the original files (as regular objects)
     and the tar members (as v-objects).
     """
-    ds1 = DatasetQuery(path=uri, catalog=catalog)
-    tar_entries = ds1.filter(C("name").glob("*.tar")).generate(index_tar)
-    return ds1.filter(~C("name").glob("*.tar")).union(tar_entries).save(ds_name)
+    dc = DataChain.from_storage(uri, session=session)
+    tar_entries = dc.filter(C("file.path").glob("*.tar")).gen(file=process_tar)
+    return (
+        dc.union(tar_entries)
+        .mutate(
+            path=C("file.path"),
+            source=C("file.source"),
+            location=C("file.location"),
+            version=C("file.version"),
+        )
+        .save(ds_name)
+    )
 
 
-def skip_if_not_sqlite():
-    if os.environ.get("DATACHAIN_METASTORE") or os.environ.get("DATACHAIN_WAREHOUSE"):
-        pytest.skip("This test is not supported on other data storages")
-
-
-WEBFORMAT_TREE: dict[str, Any] = {
-    "f1.raw": "raw data",
-    "f1.json": '{"similarity": 0.001, "md5": "deadbeef"}',
-    "f2.raw": "raw data",
-    "f2.json": '{"similarity": 0.005, "md5": "foobar"}',
-}
+skip_if_not_sqlite = pytest.mark.skipif(
+    os.environ.get("DATACHAIN_METASTORE") is not None
+    or os.environ.get("DATACHAIN_WAREHOUSE") is not None,
+    reason="This test is not supported on other data storages",
+)
 
 
 def text_embedding(text: str) -> list[float]:
@@ -162,74 +146,6 @@ def text_embedding(text: str) -> list[float]:
             pass
     # sqeeze values between 0 and 1 with an adjusted sigmoid function
     return [2.0 / (1.0 + math.e ** (-x)) - 1.0 for x in emb.values()]
-
-
-SIMPLE_DS_QUERY_RECORDS = [
-    {
-        "parent": "",
-        "name": "description",
-        "vtype": "",
-        "dir_type": 0,
-        "is_latest": 1,
-        "size": 13,
-    },
-    {
-        "parent": "cats",
-        "name": "cat1",
-        "vtype": "",
-        "dir_type": 0,
-        "is_latest": 1,
-        "size": 4,
-    },
-    {
-        "parent": "cats",
-        "name": "cat2",
-        "vtype": "",
-        "dir_type": 0,
-        "is_latest": 1,
-        "size": 4,
-    },
-    {
-        "parent": "dogs",
-        "name": "dog1",
-        "vtype": "",
-        "dir_type": 0,
-        "is_latest": 1,
-        "size": 4,
-    },
-    {
-        "parent": "dogs",
-        "name": "dog2",
-        "vtype": "",
-        "dir_type": 0,
-        "is_latest": 1,
-        "size": 3,
-    },
-    {
-        "parent": "dogs",
-        "name": "dog3",
-        "vtype": "",
-        "dir_type": 0,
-        "is_latest": 1,
-        "size": 4,
-    },
-    {
-        "parent": "dogs/others",
-        "name": "dog4",
-        "vtype": "",
-        "dir_type": 0,
-        "is_latest": 1,
-        "size": 4,
-    },
-]
-
-
-def get_simple_ds_query(path, catalog):
-    return (
-        DatasetQuery(path=path, catalog=catalog)
-        .select(C.parent, C.name, C.vtype, C.dir_type, C.is_latest, C.size)
-        .order_by(C.source, C.parent, C.name)
-    )
 
 
 def dataset_dependency_asdict(
@@ -276,13 +192,42 @@ def assert_row_names(
     preview = dataset.get_version(version).preview
     assert preview
 
-    assert (
-        {r["name"] for r in dataset_rows}
-        == {r.get("name") for r in preview}
-        == expected_names
-    )
+    assert {r["file__path"] for r in dataset_rows} == {
+        r.get("file__path") for r in preview
+    }
+    assert {posixpath.basename(r["file__path"]) for r in dataset_rows} == expected_names
 
 
 def images_equal(img1: Image.Image, img2: Image.Image):
     """Checks if two image objects have exactly the same data"""
     return list(img1.getdata()) == list(img2.getdata())
+
+
+def sorted_dicts(list_of_dicts, *keys):
+    return sorted(list_of_dicts, key=lambda x: tuple(x[k] for k in keys))
+
+
+class ANY_VALUE:  # noqa: N801
+    """A helper object that compares equal to any value from the list."""
+
+    def __init__(self, *args):
+        self.values = args
+
+    def __eq__(self, other) -> bool:
+        return other in self.values
+
+    def __ne__(self, other) -> bool:
+        return other not in self.values
+
+    def __repr__(self) -> str:
+        return f"<ANY_VALUE: {', '.join(repr(val) for val in self.values)}>"
+
+
+def sort_df(df):
+    """Sorts dataframe by all columns"""
+    return df.sort_values(by=df.columns.tolist()).reset_index(drop=True)
+
+
+def df_equal(df1, df2) -> bool:
+    """Helper function to check if two dataframes are equal regardless of ordering"""
+    return sort_df(df1).equals(sort_df(df2))

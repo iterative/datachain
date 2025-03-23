@@ -1,4 +1,10 @@
-# pip install defusedxml
+"""
+To install the required dependencies:
+
+  pip install datachain[examples]
+
+"""
+
 import json
 
 from PIL import (
@@ -63,14 +69,14 @@ if __name__ == "__main__":
     (
         DataChain.from_storage(source, type="image")
         .settings(parallel=-1)
-        .filter(C("file.name").glob("*.jpg"))
+        .filter(C("file.path").glob("*.jpg"))
         .limit(5000)
         .map(
             image_description,
             params=["file"],
             output={"xmp": dict, "exif": dict, "iptc": dict, "error": str},
         )
-        .select("file.name", "xmp", "exif", "iptc", "error")
+        .select("file.path", "xmp", "exif", "iptc", "error")
         .filter((C("xmp") != "{}") | (C("exif") != "{}") | (C("iptc") != "{}"))
         .show()
     )
