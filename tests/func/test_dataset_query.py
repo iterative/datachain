@@ -1,10 +1,6 @@
 import io
-import os
 import posixpath
-import signal
-import subprocess  # nosec B404
 import uuid
-from time import sleep
 from unittest.mock import ANY
 
 import pytest
@@ -20,52 +16,6 @@ from datachain.query import C, DatasetQuery, Object, Stream
 from datachain.sql.functions import path as pathfunc
 from datachain.sql.types import String
 from tests.utils import assert_row_names, dataset_dependency_asdict
-
-WORKER_COUNT = 1
-WORKER_SHUTDOWN_WAIT_SEC = 30
-
-
-@pytest.fixture()
-def run_datachain_worker():
-    if not os.environ.get("DATACHAIN_DISTRIBUTED"):
-        pytest.skip("Distributed tests are disabled")
-    workers = []
-    worker_cmd = [
-        "celery",
-        "-A",
-        "datachain_server.distributed",
-        "worker",
-        "--loglevel=INFO",
-        "-P",
-        "solo",
-        "-Q",
-        "datachain-worker",
-        "-n",
-        "datachain-worker-tests",
-    ]
-    workers.append(subprocess.Popen(worker_cmd, shell=False))  # noqa: S603
-    try:
-        from datachain_server.distributed import app
-
-        inspect = app.control.inspect()
-        attempts = 0
-        # Wait 10 seconds for the Celery worker(s) to be up
-        while not inspect.active() and attempts < 10:
-            sleep(1)
-            attempts += 1
-
-        if attempts == 10:
-            raise RuntimeError("Celery worker(s) did not start in time")
-
-        yield workers
-    finally:
-        for worker in workers:
-            os.kill(worker.pid, signal.SIGTERM)
-        for worker in workers:
-            try:
-                worker.wait(timeout=WORKER_SHUTDOWN_WAIT_SEC)
-            except subprocess.TimeoutExpired:
-                os.kill(worker.pid, signal.SIGKILL)
 
 
 def from_result_row(col_names, row):
