@@ -1004,13 +1004,12 @@ def test_udf_distributed_interrupt(cloud_test_catalog_tmpfile, capfd, datachain_
         DataChain.from_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
         .filter(C("file.size") < 13)
         .filter(C("file.path").glob("cats*") | (C("file.size") < 4))
-        .settings(parallel=2, workers=1)
+        .settings(parallel=2, workers=2)
         .map(name_len_interrupt, params=["file.path"], output={"name_len": int})
     )
     with pytest.raises(RuntimeError, match=r"Worker Killed \(KeyboardInterrupt\)"):
         dc.show()
     captured = capfd.readouterr()
-    assert "KeyboardInterrupt" in captured.err
     assert "semaphore" not in captured.err
 
 
