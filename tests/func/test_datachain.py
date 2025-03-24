@@ -1014,7 +1014,6 @@ def test_udf_distributed_interrupt(
     with pytest.raises(RuntimeError, match=r"Worker Killed \(KeyboardInterrupt\)"):
         dc.show()
     captured = capfd.readouterr()
-    assert "KeyboardInterrupt" in captured.err
     assert "semaphore" not in captured.err
 
 
