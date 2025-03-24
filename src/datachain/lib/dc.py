@@ -791,6 +791,8 @@ class DataChain:
         self,
         name: Optional[str] = None,
         version: Optional[int] = None,
+        description: Optional[str] = None,
+        labels: Optional[list[str]] = None,
         delta: Optional[bool] = False,
         **kwargs,
     ) -> "Self":
@@ -800,6 +802,8 @@ class DataChain:
             name : dataset name. Empty name saves to a temporary dataset that will be
                 removed after process ends. Temp dataset are useful for optimization.
             version : version of a dataset. Default - the last version that exist.
+            description : description of a dataset.
+            labels : labels of a dataset.
             delta : If True, we optimize on creation of the new dataset versions
                 by calculating diff between source and the last version of dataset
                 and applying all needed modifications (mappers, filters etc.) only
@@ -826,7 +830,12 @@ class DataChain:
                 )
         return self._evolve(
             query=self._query.save(
-                name=name, version=version, feature_schema=schema, **kwargs
+                name=name,
+                version=version,
+                description=description,
+                labels=labels,
+                feature_schema=schema,
+                **kwargs,
             )
         )
 

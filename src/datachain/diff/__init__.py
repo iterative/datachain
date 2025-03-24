@@ -74,6 +74,7 @@ def _compare(  # noqa: C901, PLR0912
     # all left and right columns
     cols = left.signals_schema.clone_without_sys_signals().db_signals()
     right_cols = right.signals_schema.clone_without_sys_signals().db_signals()
+    cols_select = list(left.signals_schema.clone_without_sys_signals().values.keys())
 
     # getting correct on and right_on column names
     on = left.signals_schema.resolve(*on).db_signals()  # type: ignore[assignment]
@@ -131,10 +132,12 @@ def _compare(  # noqa: C901, PLR0912
         # when the row is deleted, we need to take column values from the right chain
         .mutate(
             **{
-                f"{c}": ifelse(
-                    C(diff_col) == CompareStatus.DELETED, C(f"{rname}{c}"), C(c)
+                f"{l_on}": ifelse(
+                    C(diff_col) == CompareStatus.DELETED,
+                    C(f"{rname + l_on if on == right_on else r_on}"),
+                    C(l_on),
                 )
-                for c in [c for c in cols if c in right_cols]
+                for l_on, r_on in zip(on, right_on)  # type: ignore[arg-type]
             }
         )
         .select_except(ldiff_col, rdiff_col)
@@ -150,13 +153,13 @@ def _compare(  # noqa: C901, PLR0912
         dc_diff = dc_diff.filter(C(diff_col) != CompareStatus.DELETED)
 
     if status_col:
-        cols.append(diff_col)  # type: ignore[arg-type]
+        cols_select.append(diff_col)
 
     if not dc_diff._sys:
         # TODO workaround when sys signal is not available in diff
-        dc_diff = dc_diff.settings(sys=True).select(*cols).settings(sys=False)
+        dc_diff = dc_diff.settings(sys=True).select(*cols_select).settings(sys=False)
     else:
-        dc_diff = dc_diff.select(*cols)
+        dc_diff = dc_diff.select(*cols_select)
 
     # final schema is schema from the left chain with status column added if needed
     dc_diff.signals_schema = (
