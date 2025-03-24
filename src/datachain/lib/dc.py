@@ -505,7 +505,7 @@ class DataChain:
                     .settings(prefetch=0)
                     .gen(
                         list_bucket(list_uri, cache, client_config=client_config),
-                        output={f"{object_name}": File},
+                        output={f"{object_name}": file_type},
                     )
                     .save(list_ds_name, listing=True)
                 )

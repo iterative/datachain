@@ -1106,7 +1106,7 @@ class DatasetQuery:
         if version:
             self.version = version
 
-        if is_listing_dataset(self.name):
+        if is_listing_dataset(name):
             # not setting query step yet as listing dataset might not exist at
             # this point
             self.list_ds_name = name
