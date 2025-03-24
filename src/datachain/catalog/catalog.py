@@ -777,6 +777,8 @@ class Catalog:
         validate_version: Optional[bool] = True,
         listing: Optional[bool] = False,
         uuid: Optional[str] = None,
+        description: Optional[str] = None,
+        labels: Optional[list[str]] = None,
     ) -> "DatasetRecord":
         """
         Creates new dataset of a specific version.
@@ -793,6 +795,19 @@ class Catalog:
         try:
             dataset = self.get_dataset(name)
             default_version = dataset.next_version
+
+            if (description or labels) and (
+                dataset.description != description or dataset.labels != labels
+            ):
+                description = description or dataset.description
+                labels = labels or dataset.labels
+
+                self.update_dataset(
+                    dataset,
+                    description=description,
+                    labels=labels,
+                )
+
         except DatasetNotFoundError:
             schema = {
                 c.name: c.type.to_dict() for c in columns if isinstance(c.type, SQLType)
@@ -803,6 +818,8 @@ class Catalog:
                 query_script=query_script,
                 schema=schema,
                 ignore_if_exists=True,
+                description=description,
+                labels=labels,
             )
 
         version = version or default_version

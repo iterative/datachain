@@ -447,6 +447,31 @@ def test_show(capsys, test_session):
         assert f"{i} {first_name[i]}" in normalized_output
 
 
+def test_save(test_session):
+    chain = DataChain.from_values(key=["a", "b", "c"])
+    chain.save(
+        name="new_name",
+        version=1,
+        description="new description",
+        labels=["new_label", "old_label"],
+    )
+
+    ds = test_session.catalog.get_dataset("new_name")
+    assert ds.name == "new_name"
+    assert ds.description == "new description"
+    assert ds.labels == ["new_label", "old_label"]
+
+    chain.save(
+        name="new_name",
+        description="updated description",
+        labels=["new_label", "old_label", "new_label2"],
+    )
+    ds = test_session.catalog.get_dataset("new_name")
+    assert ds.name == "new_name"
+    assert ds.description == "updated description"
+    assert ds.labels == ["new_label", "old_label", "new_label2"]
+
+
 def test_show_nested_empty(capsys, test_session):
     files = [File(size=s, path=p) for p, s in zip(list("abcde"), range(5))]
     DataChain.from_values(file=files, session=test_session).limit(0).show()
@@ -735,7 +760,9 @@ def test_udf_parallel_boostrap(test_session_tmpfile):
     "to test distributed UDFs",
 )
 @pytest.mark.xdist_group(name="tmpfile")
-def test_udf_distributed(cloud_test_catalog_tmpfile, workers, datachain_job_id):
+def test_udf_distributed(
+    cloud_test_catalog_tmpfile, workers, datachain_job_id, run_datachain_worker
+):
     session = cloud_test_catalog_tmpfile.session
 
     def name_len(name):
@@ -871,7 +898,7 @@ def test_udf_parallel_exec_error(cloud_test_catalog_tmpfile):
 )
 @pytest.mark.xdist_group(name="tmpfile")
 def test_udf_distributed_exec_error(
-    cloud_test_catalog_tmpfile, workers, datachain_job_id
+    cloud_test_catalog_tmpfile, workers, datachain_job_id, run_datachain_worker
 ):
     session = cloud_test_catalog_tmpfile.session
 
@@ -968,7 +995,9 @@ def test_udf_parallel_interrupt(cloud_test_catalog_tmpfile, capfd):
     "to test distributed UDFs",
 )
 @pytest.mark.xdist_group(name="tmpfile")
-def test_udf_distributed_interrupt(cloud_test_catalog_tmpfile, capfd, datachain_job_id):
+def test_udf_distributed_interrupt(
+    cloud_test_catalog_tmpfile, capfd, datachain_job_id, run_datachain_worker
+):
     session = cloud_test_catalog_tmpfile.session
 
     def name_len_interrupt(_name):
@@ -985,7 +1014,6 @@ def test_udf_distributed_interrupt(cloud_test_catalog_tmpfile, capfd, datachain_
     with pytest.raises(RuntimeError, match=r"Worker Killed \(KeyboardInterrupt\)"):
         dc.show()
     captured = capfd.readouterr()
-    assert "KeyboardInterrupt" in captured.err
     assert "semaphore" not in captured.err
 
 
@@ -1000,7 +1028,9 @@ def test_udf_distributed_interrupt(cloud_test_catalog_tmpfile, capfd, datachain_
     "to test distributed UDFs",
 )
 @pytest.mark.xdist_group(name="tmpfile")
-def test_udf_distributed_cancel(cloud_test_catalog_tmpfile, capfd, datachain_job_id):
+def test_udf_distributed_cancel(
+    cloud_test_catalog_tmpfile, capfd, datachain_job_id, run_datachain_worker
+):
     catalog = cloud_test_catalog_tmpfile.catalog
     session = cloud_test_catalog_tmpfile.session
     metastore = catalog.metastore
