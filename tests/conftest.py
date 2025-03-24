@@ -38,8 +38,6 @@ from .utils import DEFAULT_TREE, instantiate_tree
 DEFAULT_DATACHAIN_BIN = "datachain"
 DEFAULT_DATACHAIN_GIT_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-WORKER_SHUTDOWN_WAIT_SEC = 30
-
 collect_ignore = ["setup.py"]
 
 
@@ -790,6 +788,6 @@ def run_datachain_worker():
             os.kill(worker.pid, signal.SIGTERM)
         for worker in workers:
             try:
-                worker.wait(timeout=WORKER_SHUTDOWN_WAIT_SEC)
+                worker.wait(timeout=30)  # seconds
             except subprocess.TimeoutExpired:
                 os.kill(worker.pid, signal.SIGKILL)
