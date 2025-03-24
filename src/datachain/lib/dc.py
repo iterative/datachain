@@ -26,7 +26,7 @@ from sqlalchemy.sql.functions import GenericFunction
 from tqdm import tqdm
 
 from datachain.dataset import DatasetRecord
-from datachain.delta import delta_update
+from datachain.delta import delta_update_alternative
 from datachain.func import literal
 from datachain.func.base import Function
 from datachain.func.func import Func
@@ -821,7 +821,7 @@ class DataChain:
         """
         schema = self.signals_schema.clone_without_sys_signals().serialize()
         if delta and name:
-            delta_ds = delta_update(self, name)
+            delta_ds = delta_update_alternative(self, name)
             if delta_ds:
                 return self._evolve(
                     query=delta_ds._query.save(

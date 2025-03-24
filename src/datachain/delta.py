@@ -52,3 +52,45 @@ def delta_update(dc: "DataChain", name: str) -> Optional["DataChain"]:
         .diff(diff, added=True, modified=False)
         .union(diff)
     )
+
+
+def delta_update_alternative(dc: "DataChain", name: str) -> Optional["DataChain"]:
+    from datachain.lib.dc import DataChain
+
+    catalog = dc.session.catalog
+    try:
+        latest_version = catalog.get_dataset(name).latest_version
+    except DatasetNotFoundError:
+        # first creation of delta update dataset
+        return None
+
+    dependencies = catalog.get_dataset_dependencies(name, latest_version)
+    if len(dependencies) > 1:
+        raise Exception("Cannot do delta with dataset that has multiple dependencies")
+
+    dep = dependencies[0]
+    if not dep:
+        # starting dataset (e.g listing) was removed so we are backing off to normal
+        # dataset creation, as it was created first time
+        return None
+
+    source_ds_name = dep.name
+    source_ds_version = int(dep.version)
+    source_ds_latest_version = catalog.get_dataset(source_ds_name).latest_version
+
+    source_dc = DataChain.from_dataset(source_ds_name, source_ds_version)
+    source_dc_latest = DataChain.from_dataset(source_ds_name, source_ds_latest_version)
+    file_signal = source_dc.signals_schema.get_file_signal()
+    if not file_signal:
+        raise ValueError("Datasets without file signals cannot have delta updates")
+
+    diff = source_dc_latest.diff(source_dc, on=file_signal)
+    # We append all the steps from the original chain to diff, e.g filters, mappers.
+    diff = _append_steps(diff, dc)
+
+    # merging diff and the latest version of dataset
+    return (
+        DataChain.from_dataset(name, latest_version)
+        .diff(diff, added=True, modified=False)
+        .union(diff)
+    )
