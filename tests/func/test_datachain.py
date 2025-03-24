@@ -760,7 +760,9 @@ def test_udf_parallel_boostrap(test_session_tmpfile):
     "to test distributed UDFs",
 )
 @pytest.mark.xdist_group(name="tmpfile")
-def test_udf_distributed(cloud_test_catalog_tmpfile, workers, datachain_job_id):
+def test_udf_distributed(
+    cloud_test_catalog_tmpfile, workers, datachain_job_id, run_datachain_worker
+):
     session = cloud_test_catalog_tmpfile.session
 
     def name_len(name):
@@ -896,7 +898,7 @@ def test_udf_parallel_exec_error(cloud_test_catalog_tmpfile):
 )
 @pytest.mark.xdist_group(name="tmpfile")
 def test_udf_distributed_exec_error(
-    cloud_test_catalog_tmpfile, workers, datachain_job_id
+    cloud_test_catalog_tmpfile, workers, datachain_job_id, run_datachain_worker
 ):
     session = cloud_test_catalog_tmpfile.session
 
@@ -993,7 +995,9 @@ def test_udf_parallel_interrupt(cloud_test_catalog_tmpfile, capfd):
     "to test distributed UDFs",
 )
 @pytest.mark.xdist_group(name="tmpfile")
-def test_udf_distributed_interrupt(cloud_test_catalog_tmpfile, capfd, datachain_job_id):
+def test_udf_distributed_interrupt(
+    cloud_test_catalog_tmpfile, capfd, datachain_job_id, run_datachain_worker
+):
     session = cloud_test_catalog_tmpfile.session
 
     def name_len_interrupt(_name):
@@ -1024,7 +1028,9 @@ def test_udf_distributed_interrupt(cloud_test_catalog_tmpfile, capfd, datachain_
     "to test distributed UDFs",
 )
 @pytest.mark.xdist_group(name="tmpfile")
-def test_udf_distributed_cancel(cloud_test_catalog_tmpfile, capfd, datachain_job_id):
+def test_udf_distributed_cancel(
+    cloud_test_catalog_tmpfile, capfd, datachain_job_id, run_datachain_worker
+):
     catalog = cloud_test_catalog_tmpfile.catalog
     session = cloud_test_catalog_tmpfile.session
     metastore = catalog.metastore
