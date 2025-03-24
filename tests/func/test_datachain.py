@@ -781,7 +781,7 @@ def test_udf_distributed(
     for r in dc.collect():
         count += 1
         assert len(r[0]) == r[1]
-    assert count == 7  # FIXME: update after merge
+    assert count == 225
 
 
 @pytest.mark.parametrize(
