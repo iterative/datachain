@@ -1,7 +1,8 @@
 from typing import Literal, Optional
 
+import datachain as dc
+from datachain import C
 from datachain.lib.data_model import DataModel
-from datachain.lib.dc import C, DataChain
 
 
 class NestedFeature(DataModel):
@@ -16,7 +17,7 @@ class Embedding(DataModel):
 
 ds_name = "feature_class"
 ds = (
-    DataChain.from_storage("gs://dvcx-datalakes/dogs-and-cats/")
+    dc.from_storage("gs://dvcx-datalakes/dogs-and-cats/")
     .filter(C("file.path").glob("*cat*.jpg"))  # type: ignore [attr-defined]
     .order_by("file.path")
     .limit(5)
