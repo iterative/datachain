@@ -12,9 +12,9 @@ from typing import Any, Callable, Optional
 import pytest
 from PIL import Image
 
+import datachain as dc
 from datachain.catalog.catalog import Catalog
 from datachain.dataset import DatasetDependency, DatasetRecord
-from datachain.lib.dc import DataChain
 from datachain.lib.tar import process_tar
 from datachain.query import C
 
@@ -101,17 +101,17 @@ TARRED_TREE: dict[str, Any] = {"animals.tar": make_tar(DEFAULT_TREE)}
 
 def create_tar_dataset_with_legacy_columns(
     session, uri: str, ds_name: str
-) -> DataChain:
+) -> dc.DataChain:
     """
     Create a dataset from a storage location containing tar archives and other files.
 
     The resulting dataset contains both the original files (as regular objects)
     and the tar members (as v-objects).
     """
-    dc = DataChain.from_storage(uri, session=session)
-    tar_entries = dc.filter(C("file.path").glob("*.tar")).gen(file=process_tar)
+    chain = dc.from_storage(uri, session=session)
+    tar_entries = chain.filter(C("file.path").glob("*.tar")).gen(file=process_tar)
     return (
-        dc.union(tar_entries)
+        chain.union(tar_entries)
         .mutate(
             path=C("file.path"),
             source=C("file.source"),

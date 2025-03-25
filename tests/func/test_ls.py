@@ -8,9 +8,9 @@ from typing import Any
 import msgpack
 import pytest
 
+import datachain as dc
 from datachain.cli import ls
 from datachain.config import Config, ConfigLevel
-from datachain.lib.dc import DataChain
 from datachain.lib.listing import LISTING_PREFIX
 
 
@@ -32,7 +32,7 @@ def test_ls_no_args(cloud_test_catalog, cloud_type, capsys):
     catalog = session.catalog
     src = cloud_test_catalog.src_uri
 
-    DataChain.from_storage(src, session=session).collect()
+    dc.from_storage(src, session=session).collect()
     ls([], catalog=catalog)
     captured = capsys.readouterr()
     assert captured.out == f"{src}/@v1\n"

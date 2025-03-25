@@ -39,8 +39,8 @@ def test_dir_expansion(cloud_test_catalog, version_aware, cloud_type):
         # we don't want to index things in parent directory
         src_uri += "/"
 
-    dc = create_tar_dataset_with_legacy_columns(session, ctc.src_uri, "dc")
-    dataset = catalog.get_dataset(dc.name)
+    chain = create_tar_dataset_with_legacy_columns(session, ctc.src_uri, "dc")
+    dataset = catalog.get_dataset(chain.name)
     with catalog.warehouse.clone() as warehouse:
         dr = warehouse.dataset_rows(dataset, object_name="file")
         de = dr.dir_expansion()

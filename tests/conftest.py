@@ -14,6 +14,7 @@ import sqlalchemy
 from pytest import MonkeyPatch, TempPathFactory
 from upath.implementations.cloud import CloudPath
 
+import datachain as dc
 from datachain.catalog import Catalog
 from datachain.catalog.loader import get_metastore, get_warehouse
 from datachain.cli.utils import CommaSeparatedArgs
@@ -24,7 +25,7 @@ from datachain.data_storage.sqlite import (
     SQLiteWarehouse,
 )
 from datachain.dataset import DatasetRecord
-from datachain.lib.dc import DataChain, Sys
+from datachain.lib.dc import Sys
 from datachain.query.session import Session
 from datachain.utils import (
     ENV_DATACHAIN_GLOBAL_CONFIG_DIR,
@@ -539,7 +540,7 @@ def cloud_test_catalog_tmpfile(
 @pytest.fixture
 def listed_bucket(cloud_test_catalog):
     ctc = cloud_test_catalog
-    DataChain.from_storage(ctc.src_uri, session=ctc.session).exec()
+    dc.from_storage(ctc.src_uri, session=ctc.session).exec()
 
 
 @pytest.fixture
@@ -711,7 +712,7 @@ def studio_datasets(requests_mock):
 def not_random_ds(test_session):
     # `sys__rand` column is carefully crafted to ensure that `train_test_split` func
     # will always return columns in the `sys__id` order if no seed is provided.
-    return DataChain.from_records(
+    return dc.from_records(
         [
             {"sys__id": 1, "sys__rand": 8025184816406567794, "fib": 0},
             {"sys__id": 2, "sys__rand": 8264763963075908010, "fib": 1},
@@ -731,7 +732,7 @@ def not_random_ds(test_session):
 
 @pytest.fixture
 def pseudo_random_ds(test_session):
-    return DataChain.from_records(
+    return dc.from_records(
         [
             {"sys__id": 1, "sys__rand": 2406827533654413759, "fib": 0},
             {"sys__id": 2, "sys__rand": 743035223448130834, "fib": 1},
