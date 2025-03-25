@@ -31,6 +31,7 @@ from datachain.lib.utils import DataChainError
 from datachain.query.dataset import QueryStep
 from tests.utils import (
     ANY_VALUE,
+    LARGE_TREE,
     NUM_TREE,
     TARRED_TREE,
     df_equal,
@@ -749,8 +750,8 @@ def test_udf_parallel_boostrap(test_session_tmpfile):
 
 
 @pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
+    "cloud_type,version_aware,tree",
+    [("s3", True, LARGE_TREE)],
     indirect=True,
 )
 @pytest.mark.parametrize("workers", (1, 2))
@@ -761,7 +762,7 @@ def test_udf_parallel_boostrap(test_session_tmpfile):
 )
 @pytest.mark.xdist_group(name="tmpfile")
 def test_udf_distributed(
-    cloud_test_catalog_tmpfile, workers, datachain_job_id, run_datachain_worker
+    cloud_test_catalog_tmpfile, workers, tree, datachain_job_id, run_datachain_worker
 ):
     session = cloud_test_catalog_tmpfile.session
 
@@ -780,7 +781,7 @@ def test_udf_distributed(
     for r in dc.collect():
         count += 1
         assert len(r[0]) == r[1]
-    assert count == 7
+    assert count == 225
 
 
 @pytest.mark.parametrize(
@@ -886,8 +887,8 @@ def test_udf_parallel_exec_error(cloud_test_catalog_tmpfile):
 
 
 @pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
+    "cloud_type,version_aware,tree",
+    [("s3", True, LARGE_TREE)],
     indirect=True,
 )
 @pytest.mark.parametrize("workers", (1, 2))
@@ -898,7 +899,7 @@ def test_udf_parallel_exec_error(cloud_test_catalog_tmpfile):
 )
 @pytest.mark.xdist_group(name="tmpfile")
 def test_udf_distributed_exec_error(
-    cloud_test_catalog_tmpfile, workers, datachain_job_id, run_datachain_worker
+    cloud_test_catalog_tmpfile, workers, datachain_job_id, tree, run_datachain_worker
 ):
     session = cloud_test_catalog_tmpfile.session
 
@@ -985,8 +986,8 @@ def test_udf_parallel_interrupt(cloud_test_catalog_tmpfile, capfd):
 
 
 @pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
+    "cloud_type,version_aware,tree",
+    [("s3", True, LARGE_TREE)],
     indirect=True,
 )
 @pytest.mark.skipif(
@@ -996,7 +997,7 @@ def test_udf_parallel_interrupt(cloud_test_catalog_tmpfile, capfd):
 )
 @pytest.mark.xdist_group(name="tmpfile")
 def test_udf_distributed_interrupt(
-    cloud_test_catalog_tmpfile, capfd, datachain_job_id, run_datachain_worker
+    cloud_test_catalog_tmpfile, capfd, datachain_job_id, tree, run_datachain_worker
 ):
     session = cloud_test_catalog_tmpfile.session
 
@@ -1018,8 +1019,8 @@ def test_udf_distributed_interrupt(
 
 
 @pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
+    "cloud_type,version_aware,tree",
+    [("s3", True, LARGE_TREE)],
     indirect=True,
 )
 @pytest.mark.skipif(
@@ -1029,7 +1030,7 @@ def test_udf_distributed_interrupt(
 )
 @pytest.mark.xdist_group(name="tmpfile")
 def test_udf_distributed_cancel(
-    cloud_test_catalog_tmpfile, capfd, datachain_job_id, run_datachain_worker
+    cloud_test_catalog_tmpfile, capfd, datachain_job_id, tree, run_datachain_worker
 ):
     catalog = cloud_test_catalog_tmpfile.catalog
     session = cloud_test_catalog_tmpfile.session

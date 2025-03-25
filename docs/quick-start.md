@@ -37,16 +37,16 @@ Example of downloading only _`high-confidence cat`_ inferred images
 using JSON metadata:
 
 ``` py
-from datachain import Column, DataChain
+import datachain as dc
 
-meta = DataChain.from_json("gs://datachain-demo/dogs-and-cats/*json", object_name="meta", anon=True)
-images = DataChain.from_storage("gs://datachain-demo/dogs-and-cats/*jpg", anon=True)
+meta = dc.from_json("gs://datachain-demo/dogs-and-cats/*json", object_name="meta", anon=True)
+images = dc.from_storage("gs://datachain-demo/dogs-and-cats/*jpg", anon=True)
 
 images_id = images.map(id=lambda file: file.path.split('.')[-2])
 annotated = images_id.merge(meta, on="id", right_on="meta.id")
 
-likely_cats = annotated.filter((Column("meta.inference.confidence") > 0.93) \
-                               & (Column("meta.inference.class_") == "cat"))
+likely_cats = annotated.filter((dc.Column("meta.inference.confidence") > 0.93) \
+                               & (dc.Column("meta.inference.class_") == "cat"))
 likely_cats.to_storage("high-confidence-cats/", signal="file")
 ```
 
@@ -67,7 +67,7 @@ sentiment detected are then copied to the local directory.
 
 ``` py
 from transformers import pipeline
-from datachain import DataChain, Column
+import datachain as dc
 
 classifier = pipeline("sentiment-analysis", device="cpu",
                 model="distilbert/distilbert-base-uncased-finetuned-sst-2-english")
@@ -77,7 +77,7 @@ def is_positive_dialogue_ending(file) -> bool:
     return classifier(dialogue_ending)[0]["label"] == "POSITIVE"
 
 chain = (
-   DataChain.from_storage("gs://datachain-demo/chatbot-KiT/",
+   dc.from_storage("gs://datachain-demo/chatbot-KiT/",
                           object_name="file", type="text", anon=True)
    .settings(parallel=8, cache=True)
    .map(is_positive=is_positive_dialogue_ending)
@@ -118,11 +118,11 @@ to 4 requests at the same time.
 ``` py
 import os
 from mistralai import Mistral
-from datachain import File, DataChain, Column
+import datachain as dc
 
 PROMPT = "Was this dialog successful? Answer in a single word: Success or Failure."
 
-def eval_dialogue(file: File) -> bool:
+def eval_dialogue(file: dc.File) -> bool:
      client = Mistral(api_key = os.environ["MISTRAL_API_KEY"])
      response = client.chat.complete(
          model="open-mixtral-8x22b",
@@ -132,12 +132,12 @@ def eval_dialogue(file: File) -> bool:
      return result.lower().startswith("success")
 
 chain = (
-   DataChain.from_storage("gs://datachain-demo/chatbot-KiT/", object_name="file", anon=True)
+   dc.from_storage("gs://datachain-demo/chatbot-KiT/", object_name="file", anon=True)
    .map(is_success=eval_dialogue)
    .save("mistral_files")
 )
 
-successful_chain = chain.filter(Column("is_success") == True)
+successful_chain = chain.filter(dc.Column("is_success") == True)
 successful_chain.to_storage("./output_mistral")
 
 print(f"{successful_chain.count()} files were exported")
@@ -165,11 +165,11 @@ serialize the entire LLM response to the internal DB:
 ``` py
 from mistralai import Mistral
 from mistralai.models import ChatCompletionResponse
-from datachain import File, DataChain, Column
+import datachain as dc
 
 PROMPT = "Was this dialog successful? Answer in a single word: Success or Failure."
 
-def eval_dialog(file: File) -> ChatCompletionResponse:
+def eval_dialog(file: dc.File) -> ChatCompletionResponse:
      client = MistralClient()
      return client.chat(
          model="open-mixtral-8x22b",
@@ -177,7 +177,7 @@ def eval_dialog(file: File) -> ChatCompletionResponse:
                    {"role": "user", "content": file.read()}])
 
 chain = (
-   DataChain.from_storage("gs://datachain-demo/chatbot-KiT/", object_name="file", anon=True)
+   dc.from_storage("gs://datachain-demo/chatbot-KiT/", object_name="file", anon=True)
    .settings(parallel=4, cache=True)
    .map(response=eval_dialog)
    .map(status=lambda response: response.choices[0].message.content.lower()[:7])
@@ -186,7 +186,7 @@ chain = (
 
 chain.select("file.name", "status", "response.usage").show(5)
 
-success_rate = chain.filter(Column("status") == "success").count() / chain.count()
+success_rate = chain.filter(dc.Column("status") == "success").count() / chain.count()
 print(f"{100*success_rate:.1f}% dialogs were successful")
 ```
 
@@ -215,7 +215,9 @@ can be accessed using `DataChain.from_dataset("dataset_name")`.
 Here is how to retrieve a saved dataset and iterate over the objects:
 
 ``` py
-chain = DataChain.from_dataset("response")
+import datachain as dc
+
+chain = dc.from_dataset("response")
 
 # Iterating one-by-one: support out-of-memory workflow
 for file, response in chain.limit(5).collect("file", "response"):
@@ -245,7 +247,8 @@ assuming the Mixtral call costs $2 per 1M input tokens and $6 per 1M
 output tokens:
 
 ``` py
-chain = DataChain.from_dataset("mistral_dataset")
+import datachain as dc
+chain = dc.from_dataset("mistral_dataset")
 
 cost = chain.sum("response.usage.prompt_tokens")*0.000002 \
            + chain.sum("response.usage.completion_tokens")*0.000006
@@ -268,12 +271,12 @@ file name suffix, the following code will do it:
 from torch.utils.data import DataLoader
 from transformers import CLIPProcessor
 
-from datachain import C, DataChain
+import datachain as dc
 
 processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
 chain = (
-    DataChain.from_storage("gs://datachain-demo/dogs-and-cats/", type="image", anon=True)
+    dc.from_storage("gs://datachain-demo/dogs-and-cats/", type="image", anon=True)
     .map(label=lambda name: name.split(".")[0], params=["file.name"])
     .select("file", "label").to_pytorch(
         transform=processor.image_processor,
