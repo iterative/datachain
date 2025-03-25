@@ -444,6 +444,11 @@ def test_show(capsys, test_session):
         assert f"{i} {first_name[i]}" in normalized_output
 
 
+def test_class_method_deprecated(capsys, test_session):
+    with pytest.warns(DeprecationWarning):
+        dc.DataChain.from_values(key=["a", "b", "c"], session=test_session)
+
+
 def test_save(test_session):
     chain = dc.from_values(key=["a", "b", "c"])
     chain.save(

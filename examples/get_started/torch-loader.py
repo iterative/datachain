@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import v2
 from tqdm import tqdm
 
-from datachain import C, DataChain
+import datachain as dc
 from datachain.torch import label_to_int
 
 STORAGE = "gs://datachain-demo/dogs-and-cats/"
@@ -55,9 +55,9 @@ class CNN(nn.Module):
 
 if __name__ == "__main__":
     ds = (
-        DataChain.from_storage(STORAGE, type="image")
+        dc.from_storage(STORAGE, type="image")
         .settings(prefetch=25)
-        .filter(C("file.path").glob("*.jpg"))
+        .filter(dc.C("file.path").glob("*.jpg"))
         .map(
             label=lambda path: label_to_int(basename(path)[:3], CLASSES),
             params=["file.path"],
