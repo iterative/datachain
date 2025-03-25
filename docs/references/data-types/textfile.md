@@ -2,12 +2,12 @@
 
 `TextFile` is inherited from [`File`](file.md) with additional methods for working with text files.
 
-`TextFile` is generated when a `DataChain` is created [from storage](../datachain.md#datachain.lib.dc.DataChain.from_storage), using `type="text"` param:
+`TextFile` is generated when a `DataChain` is created [from storage](../datachain.md#datachain.lib.dc.storage.from_storage), using `type="text"` param:
 
 ```python
-from datachain import DataChain
+import datachain as dc
 
-dc = DataChain.from_storage("s3://bucket-name/", type="text")
+chain = dc.from_storage("s3://bucket-name/", type="text")
 ```
 
 ::: datachain.lib.file.TextFile

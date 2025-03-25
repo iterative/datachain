@@ -13,10 +13,10 @@ title: Examples
     For example, let us consider the New Yorker Cartoon caption contest dataset, where cartoons are matched against the potential titles. Let us imagine we want to augment this dataset with synthetic scene descriptions coming from an AI model. The below code takes images from the cloud, and applies PaliGemma model to caption the first five of them and put the results in the column “scene”:
 
     ```python
-    from datachain import Column, DataChain, File # (1)!
+    import datachain as dc # (1)!
     from transformers import AutoProcessor, PaliGemmaForConditionalGeneration # (2)!
 
-    images = DataChain.from_storage("gs://datachain-demo/newyorker_caption_contest/images", type="image")
+    images = dc.from_storage("gs://datachain-demo/newyorker_caption_contest/images", type="image")
 
     model = PaliGemmaForConditionalGeneration.from_pretrained("google/paligemma-3b-mix-224")
     processor = AutoProcessor.from_pretrained("google/paligemma-3b-mix-224")
@@ -80,7 +80,7 @@ In the below example, we are calling a Mixtral 8x22b model to judge the “servi
 # $ export MISTRAL_API_KEY='your key'
 
 import os
-from datachain import Column, DataChain, DataModel, Feature
+import datachain as dc
 from mistralai.client import MistralClient
 from mistralai.models.chat_completion import ChatMessage
 from mistralai.models.chat_completion import ChatCompletionResponse as MistralModel
@@ -89,12 +89,12 @@ prompt = "Was this dialog successful? Describe the 'result' as 'Yes' or 'No' in 
 api_key = os.environ["MISTRAL_API_KEY"]
 
 ## register the data model ###
-DataModel.register(MistralModel)
+dc.DataModel.register(MistralModel)
 
 chain = (
-    DataChain
+    dc
     .from_storage("gs://datachain-demo/chatbot-KiT/", type="text")
-    .filter(Column("file.name").glob("*.txt"))
+    .filter(dc.Column("file.name").glob("*.txt"))
     .limit(5)
     .settings(parallel=4, cache=True)
     .map(
@@ -231,15 +231,14 @@ Note how complicated the setup is. Every image is references by the name, and th
 However, Datachain can easily parse the entire COCO structure via several reading and merging operators:
 
 ```python
-
-from datachain import Column, DataChain
+import datachain as dc
 
 images_uri="gs://datachain-demo/coco2017/images/val/"
 captions_uri="gs://datachain-demo/coco2017/annotations/captions_val2017.json"
 
-images = DataChain.from_storage(images_uri)
-meta = DataChain.from_json(captions_uri, jmespath = "images")
-captions = DataChain.from_json(captions_uri, jmespath = "annotations")
+images = dc.from_storage(images_uri)
+meta = dc.from_json(captions_uri, jmespath = "images")
+captions = dc.from_json(captions_uri, jmespath = "annotations")
 
 images_meta = images.merge(meta, on="file.name", right_on="images.file_name")
 captioned_images = images_meta.merge(captions, on="images.id", right_on="annotations.image_id")
@@ -248,7 +247,7 @@ captioned_images = images_meta.merge(captions, on="images.id", right_on="annotat
 The resulting dataset has image entries as files decorated with all the metadata and captions:
 
 ```python
-images_with_dogs = captioned_images.filter(Column("annotations.caption").glob("*dog*"))
+images_with_dogs = captioned_images.filter(dc.Column("annotations.caption").glob("*dog*"))
 images_with_dogs.select("annotations", "file.name").show()
 ```
 

@@ -2,7 +2,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel
 
-from datachain.lib.dc import C, DataChain
+import datachain as dc
 
 
 class NestedFeature(BaseModel):
@@ -17,8 +17,8 @@ class Embedding(BaseModel):
 
 ds_name = "feature_class"
 ds = (
-    DataChain.from_storage("gs://dvcx-datalakes/dogs-and-cats/")
-    .filter(C("file.path").glob("*cat*.jpg"))  # type: ignore [attr-defined]
+    dc.from_storage("gs://dvcx-datalakes/dogs-and-cats/")
+    .filter(dc.C("file.path").glob("*cat*.jpg"))  # type: ignore [attr-defined]
     .order_by("file.path")
     .limit(5)
     .settings(cache=True, parallel=2)
