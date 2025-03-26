@@ -151,7 +151,7 @@ dc.from_dataset("rating").limit(2).save("dialog-rating")
 Persistent datasets are immutable and automatically versioned. Here is how to access the dataset registry:
 
 ```python
-mydatasets = DataChain.datasets()
+mydatasets = dc.datasets()
 for ds in mydatasets.collect("dataset"):
     print(f"{ds.name}@v{ds.version}")
 

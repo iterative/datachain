@@ -316,7 +316,7 @@ def test_merge_with_itself_column(test_session):
 
 def test_merge_on_expression(test_session):
     def _get_expr(chain):
-        c = dc.C("team.sport")
+        c = chain.c("team.sport")
         return func.substr(c, func.length(c) - 3)
 
     chain = dc.from_values(team=team, session=test_session)
