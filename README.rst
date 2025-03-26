@@ -57,6 +57,7 @@ high confidence scores.
 
 
 .. code:: py
+
     import datachain as dc
 
     meta = dc.from_json("gs://datachain-demo/dogs-and-cats/*json", object_name="meta", anon=True)
