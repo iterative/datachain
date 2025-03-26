@@ -1096,9 +1096,8 @@ class DatasetQuery:
         self.version: Optional[int] = None
         self.feature_schema: Optional[dict] = None
         self.column_types: Optional[dict[str, Any]] = None
+        self.before_steps: list[Callable] = []
 
-        # for listing pre-step
-        self.list_fn: Optional[Callable] = None
         self.list_ds_name: Optional[str] = None
 
         self.name = name
@@ -1191,20 +1190,19 @@ class DatasetQuery:
         col.table = self.table
         return col
 
-    def set_listing_pre_step(self, list_fn: Callable) -> None:
+    def add_before_steps(self, fn: Callable) -> None:
         """
-        Setting custom listing function which will be run before applying all other
-        regular steps
+        Setting custom function to be run before applying steps
         """
-        self.list_fn = list_fn
+        self.before_steps.append(fn)
 
     def apply_steps(self) -> QueryGenerator:
         """
         Apply the steps in the query and return the resulting
         sqlalchemy.SelectBase.
         """
-        if self.list_fn:
-            self.list_fn()
+        for fn in self.before_steps:
+            fn()
 
         if self.list_ds_name:
             # at this point we know what is our starting listing dataset name

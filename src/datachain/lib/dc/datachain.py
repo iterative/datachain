@@ -1,10 +1,9 @@
 import copy
 import os
 import os.path
-import re
 import sys
+import warnings
 from collections.abc import Iterator, Sequence
-from functools import wraps
 from typing import (
     IO,
     TYPE_CHECKING,
@@ -22,7 +21,6 @@ from typing import (
 import orjson
 import sqlalchemy
 from pydantic import BaseModel
-from sqlalchemy.sql.functions import GenericFunction
 from tqdm import tqdm
 
 from datachain.dataset import DatasetRecord
@@ -30,22 +28,13 @@ from datachain.func import literal
 from datachain.func.base import Function
 from datachain.func.func import Func
 from datachain.lib.convert.python_to_sql import python_to_sql
-from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import DataModel, DataType, DataValue, dict_to_data_model
-from datachain.lib.dataset_info import DatasetInfo
 from datachain.lib.file import (
     EXPORT_FILES_MAX_THREADS,
     ArrowRow,
-    File,
     FileExporter,
-    FileType,
-    get_file_type,
 )
 from datachain.lib.file import ExportPlacement as FileExportPlacement
-from datachain.lib.listing import get_file_info, get_listing, list_bucket, ls
-from datachain.lib.listing_info import ListingInfo
-from datachain.lib.meta_formats import read_meta
-from datachain.lib.model_store import ModelStore
 from datachain.lib.settings import Settings
 from datachain.lib.signal_schema import SignalSchema
 from datachain.lib.udf import Aggregator, BatchMapper, Generator, Mapper, UDFBase
@@ -57,124 +46,29 @@ from datachain.query.schema import DEFAULT_DELIMITER, Column, ColumnMeta
 from datachain.sql.functions import path as pathfunc
 from datachain.utils import batched_it, inside_notebook, row_to_nested_dict
 
-if TYPE_CHECKING:
-    import pandas as pd
-    from pyarrow import DataType as ArrowDataType
-    from typing_extensions import Concatenate, ParamSpec, Self
-
-    from datachain.lib.hf import HFDatasetType
-
-    P = ParamSpec("P")
+from .utils import (
+    DatasetMergeError,
+    DatasetPrepareError,
+    MergeColType,
+    OutputType,
+    Sys,
+    _get_merge_error_str,
+    _validate_merge_on,
+    resolve_columns,
+)
 
 C = Column
 
 _T = TypeVar("_T")
-D = TypeVar("D", bound="DataChain")
 UDFObjT = TypeVar("UDFObjT", bound=UDFBase)
 
 DEFAULT_PARQUET_CHUNK_SIZE = 100_000
 
+if TYPE_CHECKING:
+    import pandas as pd
+    from typing_extensions import ParamSpec, Self
 
-def resolve_columns(
-    method: "Callable[Concatenate[D, P], D]",
-) -> "Callable[Concatenate[D, P], D]":
-    """Decorator that resolvs input column names to their actual DB names. This is
-    specially important for nested columns as user works with them by using dot
-    notation e.g (file.name) but are actually defined with default delimiter
-    in DB, e.g file__name.
-    If there are any sql functions in arguments, they will just be transferred as is
-    to a method.
-    """
-
-    @wraps(method)
-    def _inner(self: D, *args: "P.args", **kwargs: "P.kwargs") -> D:
-        resolved_args = self.signals_schema.resolve(
-            *[arg for arg in args if not isinstance(arg, GenericFunction)]  # type: ignore[arg-type]
-        ).db_signals()
-
-        for idx, arg in enumerate(args):
-            if isinstance(arg, GenericFunction):
-                resolved_args.insert(idx, arg)  # type: ignore[arg-type]
-
-        return method(self, *resolved_args, **kwargs)
-
-    return _inner
-
-
-class DatasetPrepareError(DataChainParamsError):  # noqa: D101
-    def __init__(self, name, msg, output=None):  # noqa: D107
-        name = f" '{name}'" if name else ""
-        output = f" output '{output}'" if output else ""
-        super().__init__(f"Dataset{name}{output} processing prepare error: {msg}")
-
-
-class DatasetFromValuesError(DataChainParamsError):  # noqa: D101
-    def __init__(self, name, msg):  # noqa: D107
-        name = f" '{name}'" if name else ""
-        super().__init__(f"Dataset{name} from values error: {msg}")
-
-
-MergeColType = Union[str, Function, sqlalchemy.ColumnElement]
-
-
-def _validate_merge_on(
-    on: Union[MergeColType, Sequence[MergeColType]],
-    ds: "DataChain",
-) -> Sequence[MergeColType]:
-    if isinstance(on, (str, sqlalchemy.ColumnElement)):
-        return [on]
-    if isinstance(on, Function):
-        return [on.get_column(table=ds._query.table)]
-    if isinstance(on, Sequence):
-        return [
-            c.get_column(table=ds._query.table) if isinstance(c, Function) else c
-            for c in on
-        ]
-
-
-def _get_merge_error_str(col: MergeColType) -> str:
-    if isinstance(col, str):
-        return col
-    if isinstance(col, Function):
-        return f"{col.name}()"
-    if isinstance(col, sqlalchemy.Column):
-        return col.name.replace(DEFAULT_DELIMITER, ".")
-    if isinstance(col, sqlalchemy.ColumnElement) and hasattr(col, "name"):
-        return f"{col.name} expression"
-    return str(col)
-
-
-class DatasetMergeError(DataChainParamsError):  # noqa: D101
-    def __init__(  # noqa: D107
-        self,
-        on: Union[MergeColType, Sequence[MergeColType]],
-        right_on: Optional[Union[MergeColType, Sequence[MergeColType]]],
-        msg: str,
-    ):
-        def _get_str(
-            on: Union[MergeColType, Sequence[MergeColType]],
-        ) -> str:
-            if not isinstance(on, Sequence):
-                return str(on)  # type: ignore[unreachable]
-            return ", ".join([_get_merge_error_str(col) for col in on])
-
-        on_str = _get_str(on)
-        right_on_str = (
-            ", right_on='" + _get_str(right_on) + "'"
-            if right_on and isinstance(right_on, Sequence)
-            else ""
-        )
-        super().__init__(f"Merge error on='{on_str}'{right_on_str}: {msg}")
-
-
-OutputType = Union[None, DataType, Sequence[str], dict[str, DataType]]
-
-
-class Sys(DataModel):
-    """Model for internal DataChain signals `id` and `rand`."""
-
-    id: int
-    rand: int
+    P = ParamSpec("P")
 
 
 class DataChain:
@@ -190,22 +84,22 @@ class DataChain:
     underlyind library `Pydantic`.
 
     See Also:
-        `DataChain.from_storage("s3://my-bucket/my-dir/")` - reading unstructured
+        `from_storage("s3://my-bucket/my-dir/")` - reading unstructured
             data files from storages such as S3, gs or Azure ADLS.
 
         `DataChain.save("name")` - saving to a dataset.
 
-        `DataChain.from_dataset("name")` - reading from a dataset.
+        `from_dataset("name")` - reading from a dataset.
 
-        `DataChain.from_values(fib=[1, 2, 3, 5, 8])` - generating from values.
+        `from_values(fib=[1, 2, 3, 5, 8])` - generating from values.
 
-        `DataChain.from_pandas(pd.DataFrame(...))` - generating from pandas.
+        `from_pandas(pd.DataFrame(...))` - generating from pandas.
 
-        `DataChain.from_json("file.json")` - generating from json.
+        `from_json("file.json")` - generating from json.
 
-        `DataChain.from_csv("file.csv")` - generating from csv.
+        `from_csv("file.csv")` - generating from csv.
 
-        `DataChain.from_parquet("file.parquet")` - generating from parquet.
+        `from_parquet("file.parquet")` - generating from parquet.
 
     Example:
         ```py
@@ -213,8 +107,7 @@ class DataChain:
 
         from mistralai.client import MistralClient
         from mistralai.models.chat_completion import ChatMessage
-
-        from datachain import DataChain, Column
+        import datachain as dc
 
         PROMPT = (
             "Was this bot dialog successful? "
@@ -225,7 +118,7 @@ class DataChain:
         api_key = os.environ["MISTRAL_API_KEY"]
 
         chain = (
-            DataChain.from_storage("gs://datachain-demo/chatbot-KiT/")
+            dc.from_storage("gs://datachain-demo/chatbot-KiT/")
             .limit(5)
             .settings(cache=True, parallel=5)
             .map(
@@ -408,250 +301,57 @@ class DataChain:
         self._settings = settings if settings else Settings()
         return self
 
-    def reset_schema(self, signals_schema: SignalSchema) -> "Self":  # noqa: D102
+    def reset_schema(self, signals_schema: SignalSchema) -> "Self":
         self.signals_schema = signals_schema
         return self
 
-    def add_schema(self, signals_schema: SignalSchema) -> "Self":  # noqa: D102
+    def add_schema(self, signals_schema: SignalSchema) -> "Self":
         self.signals_schema |= signals_schema
         return self
 
     @classmethod
     def from_storage(
         cls,
-        uri: Union[str, os.PathLike[str]],
-        *,
-        type: FileType = "binary",
-        session: Optional[Session] = None,
-        settings: Optional[dict] = None,
-        in_memory: bool = False,
-        recursive: Optional[bool] = True,
-        object_name: str = "file",
-        update: bool = False,
-        anon: bool = False,
-        client_config: Optional[dict] = None,
-    ) -> "Self":
-        """Get data from a storage as a list of file with all file attributes.
-        It returns the chain itself as usual.
+        *args,
+        **kwargs,
+    ) -> "DataChain":
+        from .storage import from_storage
 
-        Parameters:
-            uri : storage URI with directory. URI must start with storage prefix such
-                as `s3://`, `gs://`, `az://` or "file:///"
-            type : read file as "binary", "text", or "image" data. Default is "binary".
-            recursive : search recursively for the given path.
-            object_name : Created object column name.
-            update : force storage reindexing. Default is False.
-            anon : If True, we will treat cloud bucket as public one
-            client_config : Optional client configuration for the storage client.
-
-        Example:
-            Simple call from s3
-            ```py
-            chain = DataChain.from_storage("s3://my-bucket/my-dir")
-            ```
-
-            With AWS S3-compatible storage
-            ```py
-            chain = DataChain.from_storage(
-                "s3://my-bucket/my-dir",
-                client_config = {"aws_endpoint_url": "<minio-endpoint-url>"}
-            )
-            ```
-
-            Pass existing session
-            ```py
-            session = Session.get()
-            chain = DataChain.from_storage("s3://my-bucket/my-dir", session=session)
-            ```
-        """
-        file_type = get_file_type(type)
-
-        if anon:
-            client_config = (client_config or {}) | {"anon": True}
-        session = Session.get(session, client_config=client_config, in_memory=in_memory)
-        cache = session.catalog.cache
-        client_config = session.catalog.client_config
-
-        list_ds_name, list_uri, list_path, list_ds_exists = get_listing(
-            uri, session, update=update
+        warnings.warn(
+            "Class method `from_storage` is deprecated. "
+            "Use `from_storage` function instead from top_module.",
+            DeprecationWarning,
+            stacklevel=2,
         )
-
-        # ds_name is None if object is a file, we don't want to use cache
-        # or do listing in that case - just read that single object
-        if not list_ds_name:
-            dc = cls.from_values(
-                session=session,
-                settings=settings,
-                in_memory=in_memory,
-                file=[get_file_info(list_uri, cache, client_config=client_config)],
-            )
-            dc.signals_schema = dc.signals_schema.mutate({f"{object_name}": file_type})
-            return dc
-
-        dc = cls.from_dataset(list_ds_name, session=session, settings=settings)
-        dc.signals_schema = dc.signals_schema.mutate({f"{object_name}": file_type})
-
-        if update or not list_ds_exists:
-
-            def lst_fn():
-                # disable prefetch for listing, as it pre-downloads all files
-                (
-                    cls.from_records(
-                        DataChain.DEFAULT_FILE_RECORD,
-                        session=session,
-                        settings=settings,
-                        in_memory=in_memory,
-                    )
-                    .settings(prefetch=0)
-                    .gen(
-                        list_bucket(list_uri, cache, client_config=client_config),
-                        output={f"{object_name}": file_type},
-                    )
-                    .save(list_ds_name, listing=True)
-                )
-
-            dc._query.set_listing_pre_step(lst_fn)
-
-        return ls(dc, list_path, recursive=recursive, object_name=object_name)
+        return from_storage(*args, **kwargs)
 
     @classmethod
-    def from_dataset(
-        cls,
-        name: str,
-        version: Optional[int] = None,
-        session: Optional[Session] = None,
-        settings: Optional[dict] = None,
-        fallback_to_studio: bool = True,
-    ) -> "Self":
-        """Get data from a saved Dataset. It returns the chain itself.
-        If dataset or version is not found locally, it will try to pull it from Studio.
+    def from_dataset(cls, *args, **kwargs) -> "DataChain":
+        from .datasets import from_dataset
 
-        Parameters:
-            name : dataset name
-            version : dataset version
-            session : Session to use for the chain.
-            settings : Settings to use for the chain.
-            fallback_to_studio : Try to pull dataset from Studio if not found locally.
-                Default is True.
-
-        Example:
-            ```py
-            chain = DataChain.from_dataset("my_cats")
-            ```
-
-            ```py
-            chain = DataChain.from_dataset("my_cats", fallback_to_studio=False)
-            ```
-
-            ```py
-            chain = DataChain.from_dataset("my_cats", version=1)
-            ```
-
-            ```py
-            session = Session.get(client_config={"aws_endpoint_url": "<minio-url>"})
-            settings = {
-                "cache": True,
-                "parallel": 4,
-                "workers": 4,
-                "min_task_size": 1000,
-                "prefetch": 10,
-            }
-            chain = DataChain.from_dataset(
-                name="my_cats",
-                version=1,
-                session=session,
-                settings=settings,
-                fallback_to_studio=True,
-            )
-            ```
-        """
-        from datachain.telemetry import telemetry
-
-        query = DatasetQuery(
-            name=name,
-            version=version,
-            session=session,
-            indexing_column_types=File._datachain_column_types,
-            fallback_to_studio=fallback_to_studio,
+        warnings.warn(
+            "Class method `from_dataset` is deprecated. "
+            "Use `from_dataset` function instead from top_module.",
+            DeprecationWarning,
+            stacklevel=2,
         )
-        telemetry.send_event_once("class", "datachain_init", name=name, version=version)
-        if settings:
-            _settings = Settings(**settings)
-        else:
-            _settings = Settings()
-
-        signals_schema = SignalSchema({"sys": Sys})
-        if query.feature_schema:
-            signals_schema |= SignalSchema.deserialize(query.feature_schema)
-        else:
-            signals_schema |= SignalSchema.from_column_types(query.column_types or {})
-        return cls(query, _settings, signals_schema)
+        return from_dataset(*args, **kwargs)
 
     @classmethod
     def from_json(
         cls,
-        path: Union[str, os.PathLike[str]],
-        type: FileType = "text",
-        spec: Optional[DataType] = None,
-        schema_from: Optional[str] = "auto",
-        jmespath: Optional[str] = None,
-        object_name: Optional[str] = "",
-        model_name: Optional[str] = None,
-        format: Optional[str] = "json",
-        nrows=None,
+        *args,
         **kwargs,
     ) -> "DataChain":
-        """Get data from JSON. It returns the chain itself.
+        from .json import from_json
 
-        Parameters:
-            path : storage URI with directory. URI must start with storage prefix such
-                as `s3://`, `gs://`, `az://` or "file:///"
-            type : read file as "binary", "text", or "image" data. Default is "text".
-            spec : optional Data Model
-            schema_from : path to sample to infer spec (if schema not provided)
-            object_name : generated object column name
-            model_name : optional generated model name
-            format: "json", "jsonl"
-            jmespath : optional JMESPATH expression to reduce JSON
-            nrows : optional row limit for jsonl and JSON arrays
-
-        Example:
-            infer JSON schema from data, reduce using JMESPATH
-            ```py
-            chain = DataChain.from_json("gs://json", jmespath="key1.key2")
-            ```
-
-            infer JSON schema from a particular path
-            ```py
-            chain = DataChain.from_json("gs://json_ds", schema_from="gs://json/my.json")
-            ```
-        """
-        if schema_from == "auto":
-            schema_from = str(path)
-
-        def jmespath_to_name(s: str):
-            name_end = re.search(r"\W", s).start() if re.search(r"\W", s) else len(s)  # type: ignore[union-attr]
-            return s[:name_end]
-
-        if (not object_name) and jmespath:
-            object_name = jmespath_to_name(jmespath)
-        if not object_name:
-            object_name = format
-        chain = DataChain.from_storage(uri=path, type=type, **kwargs)
-        signal_dict = {
-            object_name: read_meta(
-                schema_from=schema_from,
-                format=format,
-                spec=spec,
-                model_name=model_name,
-                jmespath=jmespath,
-                nrows=nrows,
-            ),
-            "params": {"file": File},
-        }
-        # disable prefetch if nrows is set
-        settings = {"prefetch": 0} if nrows else {}
-        return chain.settings(**settings).gen(**signal_dict)  # type: ignore[misc, arg-type]
+        warnings.warn(
+            "Class method `from_json` is deprecated. "
+            "Use `from_json` function instead from top_module.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return from_json(*args, **kwargs)
 
     def explode(
         self,
@@ -714,81 +414,34 @@ class DataChain:
     @classmethod
     def datasets(
         cls,
-        session: Optional[Session] = None,
-        settings: Optional[dict] = None,
-        in_memory: bool = False,
-        object_name: str = "dataset",
-        include_listing: bool = False,
-        studio: bool = False,
+        *args,
+        **kwargs,
     ) -> "DataChain":
-        """Generate chain with list of registered datasets.
+        from .datasets import datasets
 
-        Args:
-            session: Optional session instance. If not provided, uses default session.
-            settings: Optional dictionary of settings to configure the chain.
-            in_memory: If True, creates an in-memory session. Defaults to False.
-            object_name: Name of the output object in the chain. Defaults to "dataset".
-            include_listing: If True, includes listing datasets. Defaults to False.
-            studio: If True, returns datasets from Studio only,
-                otherwise returns all local datasets. Defaults to False.
-
-        Returns:
-            DataChain: A new DataChain instance containing dataset information.
-
-        Example:
-            ```py
-            from datachain import DataChain
-
-            chain = DataChain.datasets()
-            for ds in chain.collect("dataset"):
-                print(f"{ds.name}@v{ds.version}")
-            ```
-        """
-        session = Session.get(session, in_memory=in_memory)
-        catalog = session.catalog
-
-        datasets = [
-            DatasetInfo.from_models(d, v, j)
-            for d, v, j in catalog.list_datasets_versions(
-                include_listing=include_listing, studio=studio
-            )
-        ]
-
-        return cls.from_values(
-            session=session,
-            settings=settings,
-            in_memory=in_memory,
-            output={object_name: DatasetInfo},
-            **{object_name: datasets},  # type: ignore[arg-type]
+        warnings.warn(
+            "Class method `datasets` is deprecated. "
+            "Use `datasets` function instead from top_module.",
+            DeprecationWarning,
+            stacklevel=2,
         )
+        return datasets(*args, **kwargs)
 
     @classmethod
     def listings(
         cls,
-        session: Optional[Session] = None,
-        in_memory: bool = False,
-        object_name: str = "listing",
+        *args,
         **kwargs,
     ) -> "DataChain":
-        """Generate chain with list of cached listings.
-        Listing is a special kind of dataset which has directory listing data of
-        some underlying storage (e.g S3 bucket).
+        from .listings import listings
 
-        Example:
-            ```py
-            from datachain import DataChain
-            DataChain.listings().show()
-            ```
-        """
-        session = Session.get(session, in_memory=in_memory)
-        catalog = kwargs.get("catalog") or session.catalog
-
-        return cls.from_values(
-            session=session,
-            in_memory=in_memory,
-            output={object_name: ListingInfo},
-            **{object_name: catalog.listings()},  # type: ignore[arg-type]
+        warnings.warn(
+            "Class method `listings` is deprecated. "
+            "Use `listings` function instead from top_module.",
+            DeprecationWarning,
+            stacklevel=2,
         )
+        return listings(*args, **kwargs)
 
     def save(  # type: ignore[override]
         self,
@@ -826,6 +479,7 @@ class DataChain:
 
         Example:
             ```py
+            import datachain as dc
             def parse_stem(chain):
                 return chain.map(
                     lambda file: file.get_file_stem()
@@ -833,7 +487,7 @@ class DataChain:
                 )
 
             chain = (
-                DataChain.from_storage("s3://my-bucket")
+                dc.from_storage("s3://my-bucket")
                 .apply(parse_stem)
                 .filter(C("stem").glob("*cat*"))
             )
@@ -1362,7 +1016,7 @@ class DataChain:
     @overload
     def results(self, *, include_hidden: bool) -> list[tuple[Any, ...]]: ...
 
-    def results(self, *, row_factory=None, include_hidden=True):  # noqa: D102
+    def results(self, *, row_factory=None, include_hidden=True):
         if row_factory is None:
             return list(self.collect_flatten(include_hidden=include_hidden))
         return list(
@@ -1472,7 +1126,7 @@ class DataChain:
             remove_prefetched=remove_prefetched,
         )
 
-    def remove_file_signals(self) -> "Self":  # noqa: D102
+    def remove_file_signals(self) -> "Self":
         schema = self.signals_schema.clone_without_file_signals()
         return self.select(*schema.values.keys())
 
@@ -1809,73 +1463,34 @@ class DataChain:
     @classmethod
     def from_values(
         cls,
-        ds_name: str = "",
-        session: Optional[Session] = None,
-        settings: Optional[dict] = None,
-        in_memory: bool = False,
-        output: OutputType = None,
-        object_name: str = "",
-        **fr_map,
-    ) -> "Self":
-        """Generate chain from list of values.
+        *args,
+        **kwargs,
+    ) -> "DataChain":
+        from .values import from_values
 
-        Example:
-            ```py
-            DataChain.from_values(fib=[1, 2, 3, 5, 8])
-            ```
-        """
-        tuple_type, output, tuples = values_to_tuples(ds_name, output, **fr_map)
-
-        def _func_fr() -> Iterator[tuple_type]:  # type: ignore[valid-type]
-            yield from tuples
-
-        chain = cls.from_records(
-            DataChain.DEFAULT_FILE_RECORD,
-            session=session,
-            settings=settings,
-            in_memory=in_memory,
+        warnings.warn(
+            "Class method `from_values` is deprecated. "
+            "Use `from_values` function instead from top_module.",
+            DeprecationWarning,
+            stacklevel=2,
         )
-        if object_name:
-            output = {object_name: dict_to_data_model(object_name, output)}  # type: ignore[arg-type]
-        return chain.gen(_func_fr, output=output)
+        return from_values(*args, **kwargs)
 
     @classmethod
-    def from_pandas(  # type: ignore[override]
+    def from_pandas(
         cls,
-        df: "pd.DataFrame",
-        name: str = "",
-        session: Optional[Session] = None,
-        settings: Optional[dict] = None,
-        in_memory: bool = False,
-        object_name: str = "",
+        *args,
+        **kwargs,
     ) -> "DataChain":
-        """Generate chain from pandas data-frame.
+        from .pandas import from_pandas
 
-        Example:
-            ```py
-            import pandas as pd
-
-            df = pd.DataFrame({"fib": [1, 2, 3, 5, 8]})
-            DataChain.from_pandas(df)
-            ```
-        """
-        fr_map = {col.lower(): df[col].tolist() for col in df.columns}
-
-        for column in fr_map:
-            if not column.isidentifier():
-                raise DatasetPrepareError(
-                    name,
-                    f"import from pandas error - '{column}' cannot be a column name",
-                )
-
-        return cls.from_values(
-            name,
-            session,
-            settings=settings,
-            object_name=object_name,
-            in_memory=in_memory,
-            **fr_map,
+        warnings.warn(
+            "Class method `from_pandas` is deprecated. "
+            "Use `from_pandas` function instead from top_module.",
+            DeprecationWarning,
+            stacklevel=2,
         )
+        return from_pandas(*args, **kwargs)
 
     def to_pandas(self, flatten=False, include_hidden=True) -> "pd.DataFrame":
         """Return a pandas DataFrame from the chain.
@@ -1957,56 +1572,18 @@ class DataChain:
     @classmethod
     def from_hf(
         cls,
-        dataset: Union[str, "HFDatasetType"],
         *args,
-        session: Optional[Session] = None,
-        settings: Optional[dict] = None,
-        object_name: str = "",
-        model_name: str = "",
         **kwargs,
     ) -> "DataChain":
-        """Generate chain from huggingface hub dataset.
+        from .hf import from_hf
 
-        Parameters:
-            dataset : Path or name of the dataset to read from Hugging Face Hub,
-                or an instance of `datasets.Dataset`-like object.
-            session : Session to use for the chain.
-            settings : Settings to use for the chain.
-            object_name : Generated object column name.
-            model_name : Generated model name.
-            kwargs : Parameters to pass to datasets.load_dataset.
-
-        Example:
-            Load from Hugging Face Hub:
-            ```py
-            DataChain.from_hf("beans", split="train")
-            ```
-
-            Generate chain from loaded dataset:
-            ```py
-            from datasets import load_dataset
-            ds = load_dataset("beans", split="train")
-            DataChain.from_hf(ds)
-            ```
-        """
-        from datachain.lib.hf import HFGenerator, get_output_schema, stream_splits
-
-        output: dict[str, DataType] = {}
-        ds_dict = stream_splits(dataset, *args, **kwargs)
-        if len(ds_dict) > 1:
-            output = {"split": str}
-
-        model_name = model_name or object_name or ""
-        hf_features = next(iter(ds_dict.values())).features
-        output = output | get_output_schema(hf_features)
-        model = dict_to_data_model(model_name, output)
-        if object_name:
-            output = {object_name: model}
-
-        chain = DataChain.from_values(
-            split=list(ds_dict.keys()), session=session, settings=settings
+        warnings.warn(
+            "Class method `from_hf` is deprecated. "
+            "Use `from_hf` function instead from top_module.",
+            DeprecationWarning,
+            stacklevel=2,
         )
-        return chain.gen(HFGenerator(dataset, model, *args, **kwargs), output=output)
+        return from_hf(*args, **kwargs)
 
     def parse_tabular(
         self,
@@ -2032,15 +1609,18 @@ class DataChain:
         Example:
             Reading a json lines file:
             ```py
-            dc = DataChain.from_storage("s3://mybucket/file.jsonl")
-            dc = dc.parse_tabular(format="json")
+            import datachain as dc
+            chain = dc.from_storage("s3://mybucket/file.jsonl")
+            chain = chain.parse_tabular(format="json")
             ```
 
             Reading a filtered list of files as a dataset:
             ```py
-            dc = DataChain.from_storage("s3://mybucket")
-            dc = dc.filter(C("file.name").glob("*.jsonl"))
-            dc = dc.parse_tabular(format="json")
+            import datachain as dc
+
+            chain = dc.from_storage("s3://mybucket")
+            chain = chain.filter(dc.C("file.name").glob("*.jsonl"))
+            chain = chain.parse_tabular(format="json")
             ```
         """
         from pyarrow.dataset import CsvFileFormat, JsonFileFormat
@@ -2097,161 +1677,34 @@ class DataChain:
     @classmethod
     def from_csv(
         cls,
-        path,
-        delimiter: Optional[str] = None,
-        header: bool = True,
-        output: OutputType = None,
-        object_name: str = "",
-        model_name: str = "",
-        source: bool = True,
-        nrows=None,
-        session: Optional[Session] = None,
-        settings: Optional[dict] = None,
-        column_types: Optional[dict[str, "Union[str, ArrowDataType]"]] = None,
-        parse_options: Optional[dict[str, "Union[str, Union[bool, Callable]]"]] = None,
+        *args,
         **kwargs,
     ) -> "DataChain":
-        """Generate chain from csv files.
+        from .csv import from_csv
 
-        Parameters:
-            path : Storage URI with directory. URI must start with storage prefix such
-                as `s3://`, `gs://`, `az://` or "file:///".
-            delimiter : Character for delimiting columns. Takes precedence if also
-                specified in `parse_options`. Defaults to ",".
-            header : Whether the files include a header row.
-            output : Dictionary or feature class defining column names and their
-                corresponding types. List of column names is also accepted, in which
-                case types will be inferred.
-            object_name : Created object column name.
-            model_name : Generated model name.
-            source : Whether to include info about the source file.
-            nrows : Optional row limit.
-            session : Session to use for the chain.
-            settings : Settings to use for the chain.
-            column_types : Dictionary of column names and their corresponding types.
-                It is passed to CSV reader and for each column specified type auto
-                inference is disabled.
-            parse_options: Tells the parser how to process lines.
-                See https://arrow.apache.org/docs/python/generated/pyarrow.csv.ParseOptions.html
-
-        Example:
-            Reading a csv file:
-            ```py
-            dc = DataChain.from_csv("s3://mybucket/file.csv")
-            ```
-
-            Reading csv files from a directory as a combined dataset:
-            ```py
-            dc = DataChain.from_csv("s3://mybucket/dir")
-            ```
-        """
-        from pandas.io.parsers.readers import STR_NA_VALUES
-        from pyarrow.csv import ConvertOptions, ParseOptions, ReadOptions
-        from pyarrow.dataset import CsvFileFormat
-        from pyarrow.lib import type_for_alias
-
-        parse_options = parse_options or {}
-        if "delimiter" not in parse_options:
-            parse_options["delimiter"] = ","
-        if delimiter:
-            parse_options["delimiter"] = delimiter
-
-        if column_types:
-            column_types = {
-                name: type_for_alias(typ) if isinstance(typ, str) else typ
-                for name, typ in column_types.items()
-            }
-        else:
-            column_types = {}
-
-        chain = DataChain.from_storage(
-            path, session=session, settings=settings, **kwargs
+        warnings.warn(
+            "Class method `from_csv` is deprecated. "
+            "Use `from_csv` function instead from top_module.",
+            DeprecationWarning,
+            stacklevel=2,
         )
-
-        column_names = None
-        if not header:
-            if not output:
-                msg = "error parsing csv - provide output if no header"
-                raise DatasetPrepareError(chain.name, msg)
-            if isinstance(output, Sequence):
-                column_names = output  # type: ignore[assignment]
-            elif isinstance(output, dict):
-                column_names = list(output.keys())
-            elif (fr := ModelStore.to_pydantic(output)) is not None:
-                column_names = list(fr.model_fields.keys())
-            else:
-                msg = f"error parsing csv - incompatible output type {type(output)}"
-                raise DatasetPrepareError(chain.name, msg)
-
-        parse_options = ParseOptions(**parse_options)
-        read_options = ReadOptions(column_names=column_names)
-        convert_options = ConvertOptions(
-            strings_can_be_null=True,
-            null_values=STR_NA_VALUES,
-            column_types=column_types,
-        )
-        format = CsvFileFormat(
-            parse_options=parse_options,
-            read_options=read_options,
-            convert_options=convert_options,
-        )
-        return chain.parse_tabular(
-            output=output,
-            object_name=object_name,
-            model_name=model_name,
-            source=source,
-            nrows=nrows,
-            format=format,
-        )
+        return from_csv(*args, **kwargs)
 
     @classmethod
     def from_parquet(
         cls,
-        path,
-        partitioning: Any = "hive",
-        output: Optional[dict[str, DataType]] = None,
-        object_name: str = "",
-        model_name: str = "",
-        source: bool = True,
-        session: Optional[Session] = None,
-        settings: Optional[dict] = None,
+        *args,
         **kwargs,
     ) -> "DataChain":
-        """Generate chain from parquet files.
+        from .parquet import from_parquet
 
-        Parameters:
-            path : Storage URI with directory. URI must start with storage prefix such
-                as `s3://`, `gs://`, `az://` or "file:///".
-            partitioning : Any pyarrow partitioning schema.
-            output : Dictionary defining column names and their corresponding types.
-            object_name : Created object column name.
-            model_name : Generated model name.
-            source : Whether to include info about the source file.
-            session : Session to use for the chain.
-            settings : Settings to use for the chain.
-
-        Example:
-            Reading a single file:
-            ```py
-            dc = DataChain.from_parquet("s3://mybucket/file.parquet")
-            ```
-
-            Reading a partitioned dataset from a directory:
-            ```py
-            dc = DataChain.from_parquet("s3://mybucket/dir")
-            ```
-        """
-        chain = DataChain.from_storage(
-            path, session=session, settings=settings, **kwargs
+        warnings.warn(
+            "Class method `from_parquet` is deprecated. "
+            "Use `from_parquet` function instead from top_module.",
+            DeprecationWarning,
+            stacklevel=2,
         )
-        return chain.parse_tabular(
-            output=output,
-            object_name=object_name,
-            model_name=model_name,
-            source=source,
-            format="parquet",
-            partitioning=partitioning,
-        )
+        return from_parquet(*args, **kwargs)
 
     def to_parquet(
         self,
@@ -2474,69 +1927,18 @@ class DataChain:
     @classmethod
     def from_records(
         cls,
-        to_insert: Optional[Union[dict, list[dict]]],
-        session: Optional[Session] = None,
-        settings: Optional[dict] = None,
-        in_memory: bool = False,
-        schema: Optional[dict[str, DataType]] = None,
-    ) -> "Self":
-        """Create a DataChain from the provided records. This method can be used for
-        programmatically generating a chain in contrast of reading data from storages
-        or other sources.
+        *args,
+        **kwargs,
+    ) -> "DataChain":
+        from .records import from_records
 
-        Parameters:
-            to_insert : records (or a single record) to insert. Each record is
-                        a dictionary of signals and theirs values.
-            schema : describes chain signals and their corresponding types
-
-        Example:
-            ```py
-            single_record = DataChain.from_records(DataChain.DEFAULT_FILE_RECORD)
-            ```
-        """
-        session = Session.get(session, in_memory=in_memory)
-        catalog = session.catalog
-
-        name = session.generate_temp_dataset_name()
-        signal_schema = None
-        columns: list[sqlalchemy.Column] = []
-
-        if schema:
-            signal_schema = SignalSchema(schema)
-            columns = [
-                sqlalchemy.Column(c.name, c.type)  # type: ignore[union-attr]
-                for c in signal_schema.db_signals(as_columns=True)  # type: ignore[assignment]
-            ]
-        else:
-            columns = [
-                sqlalchemy.Column(name, typ)
-                for name, typ in File._datachain_column_types.items()
-            ]
-
-        dsr = catalog.create_dataset(
-            name,
-            columns=columns,
-            feature_schema=(
-                signal_schema.clone_without_sys_signals().serialize()
-                if signal_schema
-                else None
-            ),
+        warnings.warn(
+            "Class method `from_records` is deprecated. "
+            "Use `from_records` function instead from top_module.",
+            DeprecationWarning,
+            stacklevel=2,
         )
-
-        session.add_dataset_version(dsr, dsr.latest_version)
-
-        if isinstance(to_insert, dict):
-            to_insert = [to_insert]
-        elif not to_insert:
-            to_insert = []
-
-        warehouse = catalog.warehouse
-        dr = warehouse.dataset_rows(dsr)
-        db = warehouse.db
-        insert_q = dr.get_table().insert()
-        for record in to_insert:
-            db.execute(insert_q.values(**record))
-        return cls.from_dataset(name=dsr.name, session=session, settings=settings)
+        return from_records(*args, **kwargs)
 
     def sum(self, fr: DataType):  # type: ignore[override]
         """Compute the sum of a column."""
@@ -2564,9 +1966,10 @@ class DataChain:
             ```py
             import anthropic
             from anthropic.types import Message
+            import datachain as dc
 
             (
-                DataChain.from_storage(DATA, type="text")
+                dc.from_storage(DATA, type="text")
                 .settings(parallel=4, cache=True)
                 .setup(client=lambda: anthropic.Anthropic(api_key=API_KEY))
                 .map(
@@ -2616,7 +2019,9 @@ class DataChain:
         Example:
             Cross cloud transfer
             ```py
-            ds = DataChain.from_storage("s3://mybucket")
+            import datachain as dc
+
+            ds = dc.from_storage("s3://mybucket")
             ds.to_storage("gs://mybucket", placement="filename")
             ```
         """
@@ -2732,7 +2137,9 @@ class DataChain:
 
         Example:
             ```py
-            chain = DataChain.from_storage(...)
+            import datachain as dc
+
+            chain = dc.from_storage(...)
             chunk_1 = query._chunk(0, 2)
             chunk_2 = query._chunk(1, 2)
             ```

@@ -2,9 +2,9 @@ import posixpath
 
 import pytest
 
+import datachain as dc
 from datachain.catalog.catalog import DataSource
 from datachain.client import Client
-from datachain.lib.dc import DataChain
 from datachain.lib.file import File
 from datachain.lib.listing import (
     LISTING_PREFIX,
@@ -40,9 +40,7 @@ def _tree_to_entries(tree: dict, path=""):
 def listing(test_session):
     catalog = test_session.catalog
     dataset_name, _, _, _ = get_listing("file:///whatever", test_session)
-    DataChain.from_values(file=list(_tree_to_entries(TREE))).save(
-        dataset_name, listing=True
-    )
+    dc.from_values(file=list(_tree_to_entries(TREE))).save(dataset_name, listing=True)
 
     return Listing(
         catalog.metastore.clone(),
@@ -57,16 +55,14 @@ def test_get_listing_returns_exact_math_on_update(test_session):
     # Context: https://github.com/iterative/datachain/pull/726
     # On update it should be returning the exact match (not a "bigger" one)
     dataset_name_dir1, _, _, exists = get_listing("file:///whatever/dir1", test_session)
-    DataChain.from_values(file=list(_tree_to_entries(TREE["dir1"]))).save(
+    dc.from_values(file=list(_tree_to_entries(TREE["dir1"]))).save(
         dataset_name_dir1, listing=True
     )
     assert dataset_name_dir1 == f"{LISTING_PREFIX}file:///whatever/dir1/"
     assert not exists
 
     dataset_name, _, _, exists = get_listing("file:///whatever", test_session)
-    DataChain.from_values(file=list(_tree_to_entries(TREE))).save(
-        dataset_name, listing=True
-    )
+    dc.from_values(file=list(_tree_to_entries(TREE))).save(dataset_name, listing=True)
     assert dataset_name == f"{LISTING_PREFIX}file:///whatever/"
     assert not exists
 

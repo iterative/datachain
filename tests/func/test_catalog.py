@@ -6,7 +6,7 @@ import pytest
 import requests
 from fsspec.implementations.local import LocalFileSystem
 
-from datachain import DataChain, File
+import datachain as dc
 from datachain.cli import garbage_collect
 from datachain.error import DatasetNotFoundError
 from datachain.lib.listing import parse_listing_uri
@@ -501,19 +501,19 @@ def test_dataset_stats(test_session):
     ids = [1, 2, 3]
     values = tuple(zip(["a", "b", "c"], [1, 2, 3]))
 
-    ds1 = DataChain.from_values(
+    ds1 = dc.from_values(
         ids=ids,
-        file=[File(path=name, size=size) for name, size in values],
+        file=[dc.File(path=name, size=size) for name, size in values],
         session=test_session,
     ).save()
     dataset_version1 = test_session.catalog.get_dataset(ds1.name).get_version(1)
     assert dataset_version1.num_objects == 3
     assert dataset_version1.size == 6
 
-    ds2 = DataChain.from_values(
+    ds2 = dc.from_values(
         ids=ids,
-        file1=[File(path=name, size=size) for name, size in values],
-        file2=[File(path=name, size=size * 2) for name, size in values],
+        file1=[dc.File(path=name, size=size) for name, size in values],
+        file2=[dc.File(path=name, size=size * 2) for name, size in values],
         session=test_session,
     ).save()
     dataset_version2 = test_session.catalog.get_dataset(ds2.name).get_version(1)
@@ -527,16 +527,16 @@ def test_ls_datasets_ordered(test_session):
 
     assert not list(test_session.catalog.ls_datasets())
 
-    dc = DataChain.from_values(
+    chain = dc.from_values(
         ids=ids,
-        file=[File(path=name, size=size) for name, size in values],
+        file=[dc.File(path=name, size=size) for name, size in values],
         session=test_session,
     )
-    dc.save("cats")
-    dc.save("dogs")
-    dc.save("cats")
-    dc.save("cats")
-    dc.save("cats")
+    chain.save("cats")
+    chain.save("dogs")
+    chain.save("cats")
+    chain.save("cats")
+    chain.save("cats")
     datasets = list(test_session.catalog.ls_datasets())
 
     assert [
@@ -557,9 +557,9 @@ def test_ls_datasets_no_json(test_session):
     ids = [1, 2, 3]
     values = tuple(zip(["a", "b", "c"], [1, 2, 3]))
 
-    DataChain.from_values(
+    dc.from_values(
         ids=ids,
-        file=[File(path=name, size=size) for name, size in values],
+        file=[dc.File(path=name, size=size) for name, size in values],
         session=test_session,
     ).save()
     datasets = test_session.catalog.ls_datasets()

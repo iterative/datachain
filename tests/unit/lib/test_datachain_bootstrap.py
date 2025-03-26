@@ -1,6 +1,7 @@
 import pytest
 
-from datachain.lib.dc import DataChain, DatasetPrepareError
+import datachain as dc
+from datachain.lib.dc import DatasetPrepareError
 from datachain.lib.udf import Mapper
 
 
@@ -25,7 +26,7 @@ def test_udf():
             self.value = MyMapper.TEARDOWN_VALUE
 
     vals = ["a", "b", "c", "d", "e", "f"]
-    chain = DataChain.from_values(key=vals)
+    chain = dc.from_values(key=vals)
 
     udf = MyMapper()
     res = list(chain.map(res=udf).collect("res"))
@@ -51,7 +52,7 @@ def test_no_bootstrap_for_callable():
 
     udf = MyMapper()
 
-    chain = DataChain.from_values(key=["a", "b", "c"])
+    chain = dc.from_values(key=["a", "b", "c"])
     list(chain.map(res=udf).collect())
 
     assert udf._had_bootstrap is False
@@ -63,7 +64,7 @@ def test_bootstrap_in_chain():
     prime = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29]
 
     res = list(
-        DataChain.from_values(val=prime)
+        dc.from_values(val=prime)
         .setup(init_val=lambda: base)
         .map(x=lambda val, init_val: val + init_val, output=int)
         .order_by("x")
@@ -76,7 +77,7 @@ def test_bootstrap_in_chain():
 def test_vars_duplication_error():
     with pytest.raises(DatasetPrepareError):
         (
-            DataChain.from_values(val=[2, 3, 5, 7, 11, 13, 17, 19, 23, 29])
+            dc.from_values(val=[2, 3, 5, 7, 11, 13, 17, 19, 23, 29])
             .setup(init_val=lambda: 11, connection=lambda: 123)
             .setup(init_val=lambda: 599)
         )

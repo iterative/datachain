@@ -1,5 +1,21 @@
 from datachain.lib.data_model import DataModel, DataType, is_chain_type
-from datachain.lib.dc import C, Column, DataChain, Sys
+from datachain.lib.dc import (
+    C,
+    Column,
+    DataChain,
+    Sys,
+    datasets,
+    from_csv,
+    from_dataset,
+    from_hf,
+    from_json,
+    from_pandas,
+    from_parquet,
+    from_records,
+    from_storage,
+    from_values,
+    listings,
+)
 from datachain.lib.file import (
     ArrowRow,
     File,
@@ -44,7 +60,18 @@ __all__ = [
     "VideoFile",
     "VideoFragment",
     "VideoFrame",
+    "datasets",
+    "from_csv",
+    "from_dataset",
+    "from_hf",
+    "from_json",
+    "from_pandas",
+    "from_parquet",
+    "from_records",
+    "from_storage",
+    "from_values",
     "is_chain_type",
+    "listings",
     "metrics",
     "param",
 ]

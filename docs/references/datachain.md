@@ -9,6 +9,28 @@ for examples of how to create a chain.
 
 ::: datachain.query.schema.Column
 
+::: datachain.lib.dc.csv.from_csv
+
+::: datachain.lib.dc.datasets.from_dataset
+
+::: datachain.lib.dc.datasets.datasets
+
+::: datachain.lib.dc.hf.from_hf
+
+::: datachain.lib.dc.json.from_json
+
+::: datachain.lib.dc.listings.listings
+
+::: datachain.lib.dc.pandas.from_pandas
+
+::: datachain.lib.dc.parquet.from_parquet
+
+::: datachain.lib.dc.records.from_records
+
+::: datachain.lib.dc.storage.from_storage
+
+::: datachain.lib.dc.values.from_values
+
 ::: datachain.lib.dc.DataChain
 
 ::: datachain.lib.utils.DataChainError

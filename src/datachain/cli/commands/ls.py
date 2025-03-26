@@ -36,7 +36,7 @@ def ls_local(
     client_config=None,
     **kwargs,
 ):
-    from datachain import DataChain
+    from datachain import listings
 
     if sources:
         if catalog is None:
@@ -63,7 +63,7 @@ def ls_local(
                     print(format_ls_entry(entry))
     else:
         # Collect results in a list here to prevent interference from `tqdm` and `print`
-        listing = list(DataChain.listings().collect("listing"))
+        listing = list(listings().collect("listing"))
         for ls in listing:
             print(format_ls_entry(f"{ls.uri}@v{ls.version}"))  # type: ignore[union-attr]
 

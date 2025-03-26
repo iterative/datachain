@@ -1,7 +1,7 @@
 import pytest
 
+import datachain as dc
 from datachain import Session
-from datachain.lib.dc import DataChain
 from tests.conftest import get_cloud_test_catalog, make_cloud_server
 
 
@@ -52,7 +52,7 @@ def test_cross_cloud_transfer(
         # Perform cross-cloud transfer
         combined_config = azure_server.client_config | gcloud_server.client_config
         with Session("testSession", client_config=combined_config):
-            datachain = DataChain.from_storage(source_dir)
+            datachain = dc.from_storage(source_dir)
             datachain.to_storage(dest_dir, placement="filename")
 
         # Verify transfer

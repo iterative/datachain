@@ -2,13 +2,13 @@
 
 `File` is a special [`DataModel`](index.md#datachain.lib.data_model.DataModel),
 which is automatically generated when a `DataChain` is created from files,
-such as in [`DataChain.from_storage`](../datachain.md#datachain.lib.dc.DataChain.from_storage):
+such as in [`dc.from_storage`](../datachain.md#datachain.lib.dc.storage.from_storage):
 
 ```python
-from datachain import DataChain
+import datachain as dc
 
-dc = DataChain.from_storage("gs://datachain-demo/dogs-and-cats")
-dc.print_schema()
+chain = dc.from_storage("gs://datachain-demo/dogs-and-cats")
+chain.print_schema()
 ```
 
 Output:
