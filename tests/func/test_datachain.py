@@ -152,7 +152,7 @@ def test_from_storage_partials(cloud_test_catalog):
         return name
 
     dogs_uri = f"{src_uri}/dogs"
-    dc.from_storage(dogs_uri, session=session)
+    dc.from_storage(dogs_uri, session=session).exec()
     assert _get_listing_datasets(session) == [
         f"{_list_dataset_name(dogs_uri)}@v1",
     ]
@@ -162,7 +162,7 @@ def test_from_storage_partials(cloud_test_catalog):
         f"{_list_dataset_name(dogs_uri)}@v1",
     ]
 
-    dc.from_storage(src_uri, session=session)
+    dc.from_storage(src_uri, session=session).exec()
     assert _get_listing_datasets(session) == sorted(
         [
             f"{_list_dataset_name(dogs_uri)}@v1",
@@ -170,7 +170,7 @@ def test_from_storage_partials(cloud_test_catalog):
         ]
     )
 
-    dc.from_storage(f"{src_uri}/cats", session=session)
+    dc.from_storage(f"{src_uri}/cats", session=session).exec()
     assert _get_listing_datasets(session) == sorted(
         [
             f"{_list_dataset_name(dogs_uri)}@v1",
@@ -196,14 +196,14 @@ def test_from_storage_partials_with_update(cloud_test_catalog):
         return name
 
     uri = f"{src_uri}/cats"
-    dc.from_storage(uri, session=session)
+    dc.from_storage(uri, session=session).exec()
     assert _get_listing_datasets(session) == sorted(
         [
             f"{_list_dataset_name(uri)}@v1",
         ]
     )
 
-    dc.from_storage(uri, session=session, update=True)
+    dc.from_storage(uri, session=session, update=True).exec()
     assert _get_listing_datasets(session) == sorted(
         [
             f"{_list_dataset_name(uri)}@v1",

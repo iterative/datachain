@@ -588,7 +588,7 @@ class Catalog:
 
         from_storage(
             source, session=self.session, update=update, object_name=object_name
-        )
+        ).exec()
 
         list_ds_name, list_uri, list_path, _ = get_listing(
             source, self.session, update=update
