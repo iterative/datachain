@@ -55,7 +55,7 @@ def from_hf(
     """
     from datachain.lib.hf import HFGenerator, get_output_schema, stream_splits
 
-    from .datachain import DataChain
+    from .values import from_values
 
     output: dict[str, DataType] = {}
     ds_dict = stream_splits(dataset, *args, **kwargs)
@@ -69,7 +69,5 @@ def from_hf(
     if object_name:
         output = {object_name: model}
 
-    chain = DataChain.from_values(
-        split=list(ds_dict.keys()), session=session, settings=settings
-    )
+    chain = from_values(split=list(ds_dict.keys()), session=session, settings=settings)
     return chain.gen(HFGenerator(dataset, model, *args, **kwargs), output=output)

@@ -7,6 +7,7 @@ import pyarrow.parquet as pq
 import pytest
 from datasets import Dataset
 
+import datachain as dc
 from datachain.lib.arrow import (
     ArrowGenerator,
     arrow_type_mapper,
@@ -14,7 +15,6 @@ from datachain.lib.arrow import (
     schema_to_output,
 )
 from datachain.lib.data_model import dict_to_data_model
-from datachain.lib.dc import DataChain
 from datachain.lib.file import ArrowRow, File
 from datachain.lib.hf import HFClassLabel
 
@@ -270,6 +270,6 @@ def test_parquet_override_column_names_invalid():
 
 def test_infer_schema_no_files(test_session):
     schema = {"file": File, "my_col": int}
-    dc = DataChain.from_records([], schema=schema, session=test_session, in_memory=True)
+    chain = dc.from_records([], schema=schema, session=test_session, in_memory=True)
     with pytest.raises(ValueError):
-        infer_schema(dc)
+        infer_schema(chain)
