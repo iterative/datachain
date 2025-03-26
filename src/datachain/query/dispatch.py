@@ -15,7 +15,7 @@ from sqlalchemy.sql import func
 
 from datachain.catalog import Catalog
 from datachain.catalog.catalog import clone_catalog_with_cache
-from datachain.catalog.loader import get_distributed_class
+from datachain.catalog.loader import get_udf_distributor_class
 from datachain.lib.udf import _get_cache
 from datachain.query.batch import RowsOutput, RowsOutputBatch
 from datachain.query.dataset import (
@@ -94,7 +94,7 @@ def udf_entrypoint() -> int:
 
 
 def udf_worker_entrypoint() -> int:
-    return get_distributed_class().run_worker()
+    return get_udf_distributor_class().run_worker()
 
 
 class UDFDispatcher:

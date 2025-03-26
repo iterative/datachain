@@ -419,6 +419,7 @@ class UDFStep(Step, ABC):
 
         use_partitioning = self.partition_by is not None
         batching = self.udf.get_batching(use_partitioning)
+
         workers = self.workers
         if (
             not workers
@@ -430,6 +431,18 @@ class UDFStep(Step, ABC):
             workers = True
 
         processes = determine_processes(self.parallel)
+
+        count_query = sqlalchemy.select(f.count()).select_from(query.subquery())
+        rows_total = next(self.catalog.warehouse.db.execute(count_query))[0]
+
+        if rows_total == 0:
+            return
+        if rows_total == 1:
+            # Single row optimization to avoid unnecessary processing
+            # this is useful then using `from_storage` function since it always (?)
+            # will be only one row with bucket URI to generate rows from
+            workers = False
+            processes = False
 
         udf_fields = [str(c.name) for c in query.selected_columns]
 
@@ -444,23 +457,23 @@ class UDFStep(Step, ABC):
                             "distributed processing."
                         )
 
-                    from datachain.catalog.loader import get_distributed_class
+                    from datachain.catalog.loader import get_udf_distributor_class
 
-                    distributor = get_distributed_class(
-                        min_task_size=self.min_task_size
-                    )
-                    distributor(
-                        self.udf,
-                        catalog,
-                        udf_table,
-                        query,
-                        workers,
-                        processes,
+                    udf_distributor_class = get_udf_distributor_class()
+                    udf_distributor = udf_distributor_class(
+                        catalog=catalog,
+                        table=udf_table,
+                        query=query,
+                        udf_data=filtered_cloudpickle_dumps(self.udf),
+                        batching=batching,
+                        workers=workers,
+                        processes=processes,
                         udf_fields=udf_fields,
+                        use_cache=self.cache,
                         is_generator=self.is_generator,
-                        use_partitioning=use_partitioning,
-                        cache=self.cache,
+                        min_task_size=self.min_task_size,
                     )
+                    udf_distributor()
                 elif processes:
                     # Parallel processing (faster for more CPU-heavy UDFs)
                     if catalog.in_memory:
@@ -468,6 +481,7 @@ class UDFStep(Step, ABC):
                             "In-memory databases cannot be used "
                             "with parallel processing."
                         )
+
                     udf_info: UdfInfo = {
                         "udf_data": filtered_cloudpickle_dumps(self.udf),
                         "catalog_init": catalog.get_init_params(),
