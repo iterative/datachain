@@ -1,12 +1,13 @@
 [build-system]
-requires = ["setuptools>=48", "setuptools_scm[toml]>=6.3.1"]
+requires = ["setuptools>=77", "setuptools_scm[toml]>=6.3.1"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "datachain"
 description = "Wrangle unstructured AI data at scale"
 readme = "README.rst"
-license = {text = "Apache-2.0"}
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 authors = [{name = "Dmitry Petrov", email = "support@dvc.org"}]
 classifiers = [
   "Programming Language :: Python :: 3",
