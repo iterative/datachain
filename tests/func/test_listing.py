@@ -1,6 +1,6 @@
 import pytest
 
-from datachain.lib.dc import DataChain
+import datachain as dc
 from datachain.lib.listing import list_bucket, parse_listing_uri
 from tests.data import ENTRIES
 
@@ -11,15 +11,15 @@ def test_listing_generator(cloud_test_catalog, cloud_type):
 
     uri = f"{ctc.src_uri}/cats"
 
-    dc = DataChain.from_records(DataChain.DEFAULT_FILE_RECORD).gen(
+    chain = dc.from_records(dc.DataChain.DEFAULT_FILE_RECORD).gen(
         file=list_bucket(uri, catalog.cache, client_config=catalog.client_config)
     )
-    assert dc.count() == 2
+    assert chain.count() == 2
 
     entries = sorted(
         [e for e in ENTRIES if e.path.startswith("cats/")], key=lambda e: e.path
     )
-    files = dc.order_by("file.path").collect("file")
+    files = chain.order_by("file.path").collect("file")
 
     for cat_file, cat_entry in zip(files, entries):
         assert cat_file.source == ctc.src_uri

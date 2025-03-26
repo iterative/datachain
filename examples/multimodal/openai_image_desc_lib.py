@@ -3,7 +3,7 @@ import os
 
 import requests
 
-from datachain import C, DataChain
+import datachain as dc
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 SOURCE = "gs://datachain-demo/dogs-and-cats/"
@@ -72,11 +72,11 @@ def describe_image(
 
 if __name__ == "__main__":
     (
-        DataChain.from_storage(
+        dc.from_storage(
             SOURCE,
             anon=True,
         )
-        .filter(C("file.path").glob("*cat*.jpg"))
+        .filter(dc.C("file.path").glob("*cat*.jpg"))
         .limit(10)
         .map(
             lambda file: describe_image(

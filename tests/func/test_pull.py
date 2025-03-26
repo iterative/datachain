@@ -6,11 +6,11 @@ import lz4.frame
 import pandas as pd
 import pytest
 
+import datachain as dc
 from datachain.client.fsspec import Client
 from datachain.config import Config, ConfigLevel
 from datachain.dataset import DatasetStatus
 from datachain.error import DataChainError, DatasetNotFoundError
-from datachain.lib.dc import DataChain
 from datachain.query.session import Session
 from datachain.utils import STUDIO_URL, JSONSerialize
 from tests.data import ENTRIES
@@ -292,7 +292,7 @@ def test_datachain_from_dataset_pull(
         catalog.get_dataset("dogs")
 
     with Session("testSession", catalog=catalog):
-        ds = DataChain.from_dataset(
+        ds = dc.from_dataset(
             name="dogs",
             version=1,
             fallback_to_studio=True,

@@ -210,7 +210,7 @@ name                  usage        usage             usage
 
 In the previous examples, datasets were saved in the embedded database
 (`SQLite` in folder `.datachain` of the working directory). These datasets were automatically versioned, and
-can be accessed using `DataChain.from_dataset("dataset_name")`.
+can be accessed using `dc.from_dataset("dataset_name")`.
 
 Here is how to retrieve a saved dataset and iterate over the objects:
 

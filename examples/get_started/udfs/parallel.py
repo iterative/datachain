@@ -9,7 +9,7 @@ The UDF specified in map will then be run in parallel across all these
 worker processes, no other code changes are needed.
 """
 
-from datachain import DataChain
+import datachain as dc
 
 
 # This is a simple single-threaded benchmark function to demonstrate the speedup
@@ -30,7 +30,7 @@ def path_len_benchmark(path):
 
 
 # Run in chain
-DataChain.from_storage(
+dc.from_storage(
     "gs://datachain-demo/dogs-and-cats/",
 ).settings(parallel=-1).map(
     path_len_benchmark,
