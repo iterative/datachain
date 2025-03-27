@@ -9,6 +9,7 @@ import uuid
 from collections.abc import Iterator
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
@@ -367,6 +368,89 @@ def test_export_images_files(test_session, tmp_dir, tmp_path, use_cache):
     for img in images:
         exported_img = Image.open(tmp_dir / "output" / img["name"])
         assert images_equal(img["data"], exported_img)
+
+
+@pytest.mark.parametrize("use_cache", [True, False])
+def test_from_storage_multiple_uris_files(test_session, tmp_dir, tmp_path, use_cache):
+    images = [
+        {"name": "img1.jpg", "data": Image.new(mode="RGB", size=(64, 64))},
+        {"name": "img2.jpg", "data": Image.new(mode="RGB", size=(128, 128))},
+    ]
+
+    for img in images:
+        img["data"].save(tmp_path / img["name"])
+
+    dc.from_storage(
+        [
+            f"file://{tmp_path}/img1.jpg",
+            f"file://{tmp_path}/img2.jpg",
+        ],
+        session=test_session,
+        anon=True,
+        update=True,
+    ).to_storage(tmp_dir / "output", placement="filename")
+
+    for img in images:
+        exported_img = Image.open(tmp_dir / "output" / img["name"])
+        assert images_equal(img["data"], exported_img)
+
+    chain = dc.from_storage(
+        [
+            f"file://{tmp_path}/img1.jpg",
+            f"file://{tmp_path}/img2.jpg",
+            f"file://{tmp_dir}/output/*",
+        ]
+    )
+    assert chain.count() == 4
+
+    chain = dc.from_storage([f"file://{tmp_dir}/output/*"])
+    assert chain.count() == 2
+
+
+@pytest.mark.parametrize(
+    "cloud_type",
+    ["s3", "azure", "gs"],
+    indirect=True,
+)
+def test_from_storage_multiple_uris_cache(cloud_test_catalog):
+    ctc = cloud_test_catalog
+    src_uri = ctc.src_uri
+    session = ctc.session
+
+    with pytest.raises(ValueError):
+        dc.from_storage([])  # No URIs provided
+
+    with patch(
+        "datachain.lib.dc.records.from_records", wraps=dc.from_records
+    ) as mock_from_records:
+        chain = dc.from_storage(
+            [
+                f"{src_uri}/cats",
+                f"{src_uri}/dogs",
+                f"{src_uri}/cats/cat*",
+                f"{src_uri}/dogs/dog*",
+            ],
+            session=session,
+            update=True,
+        )
+        assert chain.count() == 11
+
+        files = chain.collect("file")
+        assert {f.name for f in files} == {
+            "cat1",
+            "cat2",
+            "dog1",
+            "dog2",
+            "dog3",
+            "dog4",
+        }
+
+        # Verify from_records was called exactly twice
+        assert mock_from_records.call_count == 2
+
+        # Print the arguments of each call for debugging
+        for i, call_args in enumerate(mock_from_records.call_args_list):
+            print(f"Call {i + 1} arguments:", call_args)
 
 
 def test_from_storage_path_object(test_session, tmp_dir, tmp_path):
