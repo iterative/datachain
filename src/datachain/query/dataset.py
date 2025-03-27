@@ -446,10 +446,10 @@ class UDFStep(Step, ABC):
                         workers=workers,
                         processes=processes,
                         udf_fields=udf_fields,
+                        rows_total=rows_total,
                         use_cache=self.cache,
                         is_generator=self.is_generator,
                         min_task_size=self.min_task_size,
-                        rows_total=rows_total,
                     )
                     udf_distributor()
                 elif processes:

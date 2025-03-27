@@ -35,10 +35,10 @@ class AbstractUDFDistributor(ABC):
         workers: Union[bool, int],
         processes: Union[bool, int],
         udf_fields: list[str],
+        rows_total: int,
         use_cache: bool,
         is_generator: bool = False,
         min_task_size: Optional[Union[str, int]] = None,
-        rows_total: Optional[int] = None,
     ) -> None: ...
 
     @abstractmethod
