@@ -27,7 +27,7 @@ for examples of how to create a chain.
 
 ::: datachain.lib.dc.records.from_records
 
-::: datachain.lib.dc.storage.from_storage
+::: datachain.lib.dc.storage.read_storage
 
 ::: datachain.lib.dc.values.from_values
 

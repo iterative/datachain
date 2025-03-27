@@ -41,7 +41,7 @@ def openimage_detect(args):
 source = "gs://datachain-demo/openimages-v6-test-jsonpairs/"
 
 (
-    dc.from_storage(source)
+    dc.read_storage(source)
     .filter(dc.C("file.path").glob("*.jpg") | dc.C("file.path").glob("*.json"))
     .agg(
         openimage_detect,

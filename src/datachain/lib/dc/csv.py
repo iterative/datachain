@@ -72,7 +72,7 @@ def from_csv(
     from pyarrow.dataset import CsvFileFormat
     from pyarrow.lib import type_for_alias
 
-    from .storage import from_storage
+    from .storage import read_storage
 
     parse_options = parse_options or {}
     if "delimiter" not in parse_options:
@@ -88,7 +88,7 @@ def from_csv(
     else:
         column_types = {}
 
-    chain = from_storage(path, session=session, settings=settings, **kwargs)
+    chain = read_storage(path, session=session, settings=settings, **kwargs)
 
     column_names = None
     if not header:

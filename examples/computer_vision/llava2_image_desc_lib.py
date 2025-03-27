@@ -71,7 +71,7 @@ class LLaVADescribe(dc.Mapper):
 
 if __name__ == "__main__":
     (
-        dc.from_storage(source, type="image")
+        dc.read_storage(source, type="image")
         .filter(dc.C("file.path").glob("*/cat*.jpg"))
         .map(
             desc=LLaVADescribe(

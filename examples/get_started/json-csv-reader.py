@@ -47,7 +47,7 @@ def main():
     uri = "gs://datachain-demo/coco2017/annotations_captions/"
 
     # Print JSON schema in Pydantic format from main COCO annotation
-    chain = dc.from_storage(uri, anon="True").filter(dc.C("file.path").glob("*.json"))
+    chain = dc.read_storage(uri, anon="True").filter(dc.C("file.path").glob("*.json"))
     file = next(chain.limit(1).collect("file"))
     print(gen_datamodel_code(file, jmespath="@", model_name="Coco"))
 

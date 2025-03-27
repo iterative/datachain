@@ -145,7 +145,7 @@ class UDFBase(AbstractUDF):
                 return emb[0].tolist()
 
         (
-            dc.from_storage(
+            dc.read_storage(
                 "gs://datachain-demo/fashion-product-images/images", type="image"
             )
             .limit(5)

@@ -9,7 +9,7 @@ try:
     wds = dc.from_dataset(name=name)
 except datachain.error.DatasetNotFoundError:
     wds = (
-        dc.from_storage("gs://datachain-demo/datacomp-small/shards")
+        dc.read_storage("gs://datachain-demo/datacomp-small/shards")
         .filter(dc.C("file.path").glob("*/00000000.tar"))
         .settings(cache=True)
         .gen(laion=process_webdataset(spec=WDSLaion), params="file")

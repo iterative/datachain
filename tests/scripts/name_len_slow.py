@@ -32,7 +32,7 @@ def name_len(file):
 
 
 # Save as a new dataset.
-dc.from_storage(
+dc.read_storage(
     "gs://dvcx-datalakes/dogs-and-cats/",
     anon=True,
 ).filter(dc.C("file.path").glob("*cat*")).limit(3).settings(parallel=1).map(

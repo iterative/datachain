@@ -540,7 +540,7 @@ def cloud_test_catalog_tmpfile(
 @pytest.fixture
 def listed_bucket(cloud_test_catalog):
     ctc = cloud_test_catalog
-    dc.from_storage(ctc.src_uri, session=ctc.session).exec()
+    dc.read_storage(ctc.src_uri, session=ctc.session).exec()
 
 
 @pytest.fixture

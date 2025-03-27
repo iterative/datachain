@@ -61,7 +61,7 @@ def from_json(
         chain = dc.from_json("gs://json_ds", schema_from="gs://json/my.json")
         ```
     """
-    from .storage import from_storage
+    from .storage import read_storage
 
     if schema_from == "auto":
         schema_from = os.fspath(path)
@@ -74,7 +74,7 @@ def from_json(
         object_name = jmespath_to_name(jmespath)
     if not object_name:
         object_name = format
-    chain = from_storage(uri=path, type=type, **kwargs)
+    chain = read_storage(uri=path, type=type, **kwargs)
     signal_dict = {
         object_name: read_meta(
             schema_from=schema_from,

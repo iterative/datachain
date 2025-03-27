@@ -339,7 +339,7 @@ def test_listings(test_session, tmp_dir):
     df.to_parquet(tmp_dir / "df.parquet")
 
     uri = tmp_dir.as_uri()
-    dc.from_storage(uri, session=test_session).exec()
+    dc.read_storage(uri, session=test_session).exec()
 
     # check that listing is not returned as normal dataset
     assert not any(
@@ -370,13 +370,13 @@ def test_listings_reindex(test_session, tmp_dir):
 
     uri = tmp_dir.as_uri()
 
-    dc.from_storage(uri, session=test_session).exec()
+    dc.read_storage(uri, session=test_session).exec()
     assert len(list(dc.listings(session=test_session).collect("listing"))) == 1
 
-    dc.from_storage(uri, session=test_session).exec()
+    dc.read_storage(uri, session=test_session).exec()
     assert len(list(dc.listings(session=test_session).collect("listing"))) == 1
 
-    dc.from_storage(uri, session=test_session, update=True).exec()
+    dc.read_storage(uri, session=test_session, update=True).exec()
     listings = list(dc.listings(session=test_session).collect("listing"))
     assert len(listings) == 2
     listings.sort(key=lambda lst: lst.version)
@@ -395,8 +395,8 @@ def test_listings_reindex_subpath_local_file_system(test_session, tmp_dir):
     df.to_parquet(tmp_dir / "df2.parquet")
     df.to_parquet(subdir / "df3.parquet")
 
-    assert dc.from_storage(tmp_dir.as_uri(), session=test_session).count() == 3
-    assert dc.from_storage(subdir.as_uri(), session=test_session).count() == 1
+    assert dc.read_storage(tmp_dir.as_uri(), session=test_session).count() == 3
+    assert dc.read_storage(subdir.as_uri(), session=test_session).count() == 1
 
 
 def test_preserve_feature_schema(test_session):
@@ -1095,7 +1095,7 @@ def test_parse_tabular(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.parquet"
     df.to_parquet(path)
-    chain = dc.from_storage(path.as_uri(), session=test_session).parse_tabular()
+    chain = dc.read_storage(path.as_uri(), session=test_session).parse_tabular()
     df1 = chain.select("first_name", "age", "city").to_pandas()
 
     assert df_equal(df1, df)
@@ -1106,7 +1106,7 @@ def test_parse_tabular_in_memory(tmp_dir):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.parquet"
     df.to_parquet(path)
-    chain = dc.from_storage(path.as_uri(), in_memory=True).parse_tabular()
+    chain = dc.read_storage(path.as_uri(), in_memory=True).parse_tabular()
     assert chain.session.catalog.in_memory is True
     assert chain.session.catalog.metastore.db.db_file == ":memory:"
     assert chain.session.catalog.warehouse.db.db_file == ":memory:"
@@ -1119,7 +1119,7 @@ def test_parse_tabular_format(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.jsonl"
     path.write_text(df.to_json(orient="records", lines=True))
-    chain = dc.from_storage(path.as_uri(), session=test_session).parse_tabular(
+    chain = dc.read_storage(path.as_uri(), session=test_session).parse_tabular(
         format="json"
     )
     df1 = chain.select("first_name", "age", "city").to_pandas()
@@ -1130,7 +1130,7 @@ def test_parse_nested_json(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA_NESTED_NOT_NORMALIZED)
     path = tmp_dir / "test.jsonl"
     path.write_text(df.to_json(orient="records", lines=True))
-    chain = dc.from_storage(path.as_uri(), session=test_session).parse_tabular(
+    chain = dc.read_storage(path.as_uri(), session=test_session).parse_tabular(
         format="json"
     )
     # Field names are normalized, values are preserved
@@ -1157,7 +1157,7 @@ def test_parse_tabular_partitions(tmp_dir, test_session):
     path = tmp_dir / "test.parquet"
     df.to_parquet(path, partition_cols=["first_name"])
     chain = (
-        dc.from_storage(path.as_uri(), session=test_session)
+        dc.read_storage(path.as_uri(), session=test_session)
         .filter(C("file.path").glob("*first_name=Alice*"))
         .parse_tabular(partitioning="hive")
     )
@@ -1195,7 +1195,7 @@ def test_parse_tabular_unify_schema(tmp_dir, test_session):
         .reset_index(drop=True)
     )
     chain = (
-        dc.from_storage(tmp_dir.as_uri(), session=test_session)
+        dc.read_storage(tmp_dir.as_uri(), session=test_session)
         .filter(C("file.path").glob("*.parquet"))
         .parse_tabular()
     )
@@ -1213,7 +1213,7 @@ def test_parse_tabular_output_dict(tmp_dir, test_session):
     path = tmp_dir / "test.jsonl"
     path.write_text(df.to_json(orient="records", lines=True))
     output = {"fname": str, "age": int, "loc": str}
-    chain = dc.from_storage(path.as_uri(), session=test_session).parse_tabular(
+    chain = dc.read_storage(path.as_uri(), session=test_session).parse_tabular(
         format="json", output=output
     )
     df1 = chain.select("fname", "age", "loc").to_pandas()
@@ -1230,7 +1230,7 @@ def test_parse_tabular_output_feature(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.jsonl"
     path.write_text(df.to_json(orient="records", lines=True))
-    chain = dc.from_storage(path.as_uri(), session=test_session).parse_tabular(
+    chain = dc.read_storage(path.as_uri(), session=test_session).parse_tabular(
         format="json", output=Output
     )
     df1 = chain.select("fname", "age", "loc").to_pandas()
@@ -1243,7 +1243,7 @@ def test_parse_tabular_output_list(tmp_dir, test_session):
     path = tmp_dir / "test.jsonl"
     path.write_text(df.to_json(orient="records", lines=True))
     output = ["fname", "age", "loc"]
-    chain = dc.from_storage(path.as_uri(), session=test_session).parse_tabular(
+    chain = dc.read_storage(path.as_uri(), session=test_session).parse_tabular(
         format="json", output=output
     )
     df1 = chain.select("fname", "age", "loc").to_pandas()
@@ -1255,7 +1255,7 @@ def test_parse_tabular_nrows(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.parquet"
     df.to_json(path, orient="records", lines=True)
-    chain = dc.from_storage(path.as_uri(), session=test_session).parse_tabular(
+    chain = dc.read_storage(path.as_uri(), session=test_session).parse_tabular(
         nrows=2, format="json"
     )
     df1 = chain.select("first_name", "age", "city").to_pandas()
@@ -1268,7 +1268,7 @@ def test_parse_tabular_nrows_invalid(tmp_dir, test_session):
     path = tmp_dir / "test.parquet"
     df.to_parquet(path)
     with pytest.raises(DataChainParamsError):
-        dc.from_storage(path.as_uri(), session=test_session).parse_tabular(nrows=2)
+        dc.read_storage(path.as_uri(), session=test_session).parse_tabular(nrows=2)
 
 
 def test_from_csv(tmp_dir, test_session):
@@ -1483,7 +1483,7 @@ def test_explode(tmp_dir, test_session, column_type, object_name, model_name):
     df.to_json(path, orient="records", lines=True)
 
     chain = (
-        dc.from_storage(path.as_uri(), session=test_session)
+        dc.read_storage(path.as_uri(), session=test_session)
         .gen(
             content=lambda file: (ln for ln in file.read_text().split("\n") if ln),
             output=column_type,
@@ -1825,11 +1825,11 @@ def test_extend_features(test_session):
     assert res == sum(range(len(features)))
 
 
-def test_from_storage_object_name(tmp_dir, test_session):
+def test_read_storage_object_name(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.parquet"
     df.to_parquet(path)
-    chain = dc.from_storage(path.as_uri(), object_name="custom", session=test_session)
+    chain = dc.read_storage(path.as_uri(), object_name="custom", session=test_session)
     assert chain.schema["custom"] == File
 
 
@@ -1847,7 +1847,7 @@ def test_parse_tabular_object_name(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.parquet"
     df.to_parquet(path)
-    chain = dc.from_storage(path.as_uri(), session=test_session).parse_tabular(
+    chain = dc.read_storage(path.as_uri(), session=test_session).parse_tabular(
         object_name="tbl"
     )
     assert "tbl.first_name" in chain.to_pandas(flatten=True).columns

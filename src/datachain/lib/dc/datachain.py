@@ -84,7 +84,7 @@ class DataChain:
     underlyind library `Pydantic`.
 
     See Also:
-        `from_storage("s3://my-bucket/my-dir/")` - reading unstructured
+        `read_storage("s3://my-bucket/my-dir/")` - reading unstructured
             data files from storages such as S3, gs or Azure ADLS.
 
         `DataChain.save("name")` - saving to a dataset.
@@ -118,7 +118,7 @@ class DataChain:
         api_key = os.environ["MISTRAL_API_KEY"]
 
         chain = (
-            dc.from_storage("gs://datachain-demo/chatbot-KiT/")
+            dc.read_storage("gs://datachain-demo/chatbot-KiT/")
             .limit(5)
             .settings(cache=True, parallel=5)
             .map(
@@ -315,15 +315,15 @@ class DataChain:
         *args,
         **kwargs,
     ) -> "DataChain":
-        from .storage import from_storage
+        from .storage import read_storage
 
         warnings.warn(
-            "Class method `from_storage` is deprecated. "
-            "Use `from_storage` function instead from top_module.",
+            "Class method `read_storage` is deprecated. "
+            "Use `read_storage` function instead from top_module.",
             DeprecationWarning,
             stacklevel=2,
         )
-        return from_storage(*args, **kwargs)
+        return read_storage(*args, **kwargs)
 
     @classmethod
     def from_dataset(cls, *args, **kwargs) -> "DataChain":
@@ -487,7 +487,7 @@ class DataChain:
                 )
 
             chain = (
-                dc.from_storage("s3://my-bucket")
+                dc.read_storage("s3://my-bucket")
                 .apply(parse_stem)
                 .filter(C("stem").glob("*cat*"))
             )
@@ -1610,7 +1610,7 @@ class DataChain:
             Reading a json lines file:
             ```py
             import datachain as dc
-            chain = dc.from_storage("s3://mybucket/file.jsonl")
+            chain = dc.read_storage("s3://mybucket/file.jsonl")
             chain = chain.parse_tabular(format="json")
             ```
 
@@ -1618,7 +1618,7 @@ class DataChain:
             ```py
             import datachain as dc
 
-            chain = dc.from_storage("s3://mybucket")
+            chain = dc.read_storage("s3://mybucket")
             chain = chain.filter(dc.C("file.name").glob("*.jsonl"))
             chain = chain.parse_tabular(format="json")
             ```
@@ -1969,7 +1969,7 @@ class DataChain:
             import datachain as dc
 
             (
-                dc.from_storage(DATA, type="text")
+                dc.read_storage(DATA, type="text")
                 .settings(parallel=4, cache=True)
                 .setup(client=lambda: anthropic.Anthropic(api_key=API_KEY))
                 .map(
@@ -2021,7 +2021,7 @@ class DataChain:
             ```py
             import datachain as dc
 
-            ds = dc.from_storage("s3://mybucket")
+            ds = dc.read_storage("s3://mybucket")
             ds.to_storage("gs://mybucket", placement="filename")
             ```
         """
@@ -2139,7 +2139,7 @@ class DataChain:
             ```py
             import datachain as dc
 
-            chain = dc.from_storage(...)
+            chain = dc.read_storage(...)
             chunk_1 = query._chunk(0, 2)
             chunk_2 = query._chunk(1, 2)
             ```

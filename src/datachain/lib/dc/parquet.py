@@ -52,9 +52,9 @@ def from_parquet(
         dc.from_parquet("s3://mybucket/dir")
         ```
     """
-    from .storage import from_storage
+    from .storage import read_storage
 
-    chain = from_storage(path, session=session, settings=settings, **kwargs)
+    chain = read_storage(path, session=session, settings=settings, **kwargs)
     return chain.parse_tabular(
         output=output,
         object_name=object_name,

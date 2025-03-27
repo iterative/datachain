@@ -10,7 +10,7 @@ def process_poses(yolo: YOLO, file: dc.File) -> YoloPoses:
 
 
 (
-    dc.from_storage("gs://datachain-demo/openimages-v6-test-jsonpairs/")
+    dc.read_storage("gs://datachain-demo/openimages-v6-test-jsonpairs/")
     .filter(dc.C("file.path").glob("*.jpg"))
     .limit(20)
     .setup(yolo=lambda: YOLO("yolo11n-pose.pt"))

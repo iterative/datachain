@@ -39,7 +39,7 @@ class Rating(BaseModel):
 
 
 chain = (
-    dc.from_storage(DATA, type="text")
+    dc.read_storage(DATA, type="text")
     .filter(dc.Column("file.path").glob("*.txt"))
     .limit(5)
     .settings(parallel=4, cache=True)

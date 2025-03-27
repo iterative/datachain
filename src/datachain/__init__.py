@@ -12,9 +12,9 @@ from datachain.lib.dc import (
     from_pandas,
     from_parquet,
     from_records,
-    from_storage,
     from_values,
     listings,
+    read_storage,
 )
 from datachain.lib.file import (
     ArrowRow,
@@ -68,10 +68,10 @@ __all__ = [
     "from_pandas",
     "from_parquet",
     "from_records",
-    "from_storage",
     "from_values",
     "is_chain_type",
     "listings",
     "metrics",
     "param",
+    "read_storage",
 ]

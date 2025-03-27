@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from .datachain import DataChain
 
 
-def from_storage(
+def read_storage(
     uri: Union[str, os.PathLike[str], list[str], list[os.PathLike[str]]],
     *,
     type: FileType = "binary",
@@ -55,12 +55,12 @@ def from_storage(
         Simple call from s3:
         ```python
         import datachain as dc
-        chain = dc.from_storage("s3://my-bucket/my-dir")
+        chain = dc.read_storage("s3://my-bucket/my-dir")
         ```
 
         Multiple URIs:
         ```python
-        chain = dc.from_storage([
+        chain = dc.read_storage([
             "s3://bucket1/dir1",
             "s3://bucket2/dir2"
         ])
@@ -68,7 +68,7 @@ def from_storage(
 
         With AWS S3-compatible storage:
         ```python
-        chain = dc.from_storage(
+        chain = dc.read_storage(
             "s3://my-bucket/my-dir",
             client_config = {"aws_endpoint_url": "<minio-endpoint-url>"}
         )
@@ -77,7 +77,7 @@ def from_storage(
         Pass existing session
         ```py
         session = Session.get()
-        chain = dc.from_storage([
+        chain = dc.read_storage([
             "path/to/dir1",
             "path/to/dir2"
         ], session=session, recursive=True)

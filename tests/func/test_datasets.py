@@ -668,7 +668,7 @@ def test_ls_dataset_rows_with_custom_columns(cloud_test_catalog):
         )
 
     (
-        dc.from_storage(cloud_test_catalog.src_uri, session=cloud_test_catalog.session)
+        dc.read_storage(cloud_test_catalog.src_uri, session=cloud_test_catalog.session)
         .map(
             test_types,
             params=[],
@@ -732,7 +732,7 @@ def test_dataset_preview_custom_columns(cloud_test_catalog, dogs_dataset):
         )
 
     (
-        dc.from_storage(cloud_test_catalog.src_uri, session=cloud_test_catalog.session)
+        dc.read_storage(cloud_test_catalog.src_uri, session=cloud_test_catalog.session)
         .map(
             test_types,
             params=[],
@@ -856,7 +856,7 @@ def test_dataset_storage_dependencies(cloud_test_catalog, cloud_type, indirect):
     uri = cloud_test_catalog.src_uri
 
     ds_name = "some_ds"
-    dc.from_storage(uri, session=session).save(ds_name)
+    dc.read_storage(uri, session=session).save(ds_name)
 
     lst_ds_name, _, _ = parse_listing_uri(uri, catalog.client_config)
     lst_dataset = catalog.metastore.get_dataset(lst_ds_name)

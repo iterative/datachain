@@ -69,7 +69,7 @@ def webdataset_metadata(tmp_path):
 
 
 def test_wds(test_session, webdataset_tars):
-    res = dc.from_storage(Path(webdataset_tars).as_uri(), session=test_session).gen(
+    res = dc.read_storage(Path(webdataset_tars).as_uri(), session=test_session).gen(
         laion=process_webdataset(spec=WDSLaion), params="file"
     )
 
@@ -97,7 +97,7 @@ def test_wds(test_session, webdataset_tars):
 def test_wds_merge_with_parquet_meta(
     test_session, webdataset_tars, webdataset_metadata
 ):
-    wds = dc.from_storage(Path(webdataset_tars).as_uri(), session=test_session).gen(
+    wds = dc.read_storage(Path(webdataset_tars).as_uri(), session=test_session).gen(
         laion=process_webdataset(spec=WDSLaion), params="file"
     )
 
