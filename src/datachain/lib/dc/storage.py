@@ -88,7 +88,7 @@ def read_storage(
         avoiding redundant updates for URIs pointing to the same storage location.
     """
     from .datachain import DataChain
-    from .datasets import from_dataset
+    from .datasets import read_dataset
     from .records import from_records
     from .values import from_values
 
@@ -122,7 +122,7 @@ def read_storage(
             )
             continue
 
-        dc = from_dataset(list_ds_name, session=session, settings=settings)
+        dc = read_dataset(list_ds_name, session=session, settings=settings)
         dc.signals_schema = dc.signals_schema.mutate({f"{object_name}": file_type})
 
         if update or not list_ds_exists:

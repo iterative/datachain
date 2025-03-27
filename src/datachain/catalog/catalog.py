@@ -994,12 +994,12 @@ class Catalog:
         if not sources:
             raise ValueError("Sources needs to be non empty list")
 
-        from datachain import from_dataset, read_storage
+        from datachain import read_dataset, read_storage
 
         chains = []
         for source in sources:
             if source.startswith(DATASET_PREFIX):
-                dc = from_dataset(source[len(DATASET_PREFIX) :], session=self.session)
+                dc = read_dataset(source[len(DATASET_PREFIX) :], session=self.session)
             else:
                 dc = read_storage(source, session=self.session, recursive=recursive)
 

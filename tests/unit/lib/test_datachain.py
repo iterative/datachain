@@ -184,7 +184,7 @@ def test_from_features_basic(test_session):
 
     ds_name = "my_ds"
     ds.save(ds_name)
-    ds = dc.from_dataset(name=ds_name)
+    ds = dc.read_dataset(name=ds_name)
 
     assert isinstance(ds._query.feature_schema, dict)
     assert isinstance(ds.signals_schema, SignalSchema)
@@ -202,7 +202,7 @@ def test_from_features_basic_in_memory():
 
     ds_name = "my_ds"
     ds.save(ds_name)
-    ds = dc.from_dataset(name=ds_name)
+    ds = dc.read_dataset(name=ds_name)
 
     assert isinstance(ds._query.feature_schema, dict)
     assert isinstance(ds.signals_schema, SignalSchema)
@@ -227,7 +227,7 @@ def test_from_records_empty_chain_with_schema(test_session):
 
     ds_name = "my_ds"
     ds.save(ds_name)
-    ds = dc.from_dataset(name=ds_name)
+    ds = dc.read_dataset(name=ds_name)
 
     assert isinstance(ds._query.feature_schema, dict)
     assert isinstance(ds.signals_schema, SignalSchema)
@@ -248,7 +248,7 @@ def test_from_records_empty_chain_without_schema(test_session):
 
     ds_name = "my_ds"
     ds.save(ds_name)
-    ds = dc.from_dataset(name=ds_name)
+    ds = dc.read_dataset(name=ds_name)
 
     assert ds.schema.keys() == {
         "source",
@@ -409,7 +409,7 @@ def test_preserve_feature_schema(test_session):
 
     ds_name = "my_ds1"
     ds.save(ds_name)
-    ds = dc.from_dataset(name=ds_name)
+    ds = dc.read_dataset(name=ds_name)
 
     assert isinstance(ds._query.feature_schema, dict)
     assert isinstance(ds.signals_schema, SignalSchema)
@@ -833,7 +833,7 @@ def test_collect_nested_feature(test_session):
         assert nested == features_nested[n]
 
 
-def test_select_from_dataset_without_sys_columns(test_session):
+def test_select_read_hf_without_sys_columns(test_session):
     from datachain import func
 
     chain = (
@@ -938,7 +938,7 @@ def test_select_restore_from_saving(test_session):
     name = "test_test_select_save"
     chain.select("my_n.fr").save(name)
 
-    restored = dc.from_dataset(name)
+    restored = dc.read_dataset(name)
     n = 0
     restored_sorted = sorted(restored.collect(), key=lambda x: x[0].count)
     features_sorted = sorted(features, key=lambda x: x.count)
@@ -984,7 +984,7 @@ def test_select_distinct(test_session):
         assert np.allclose([emb[i] for emb in actual], [emp[i] for emp in expected])
 
 
-def test_from_dataset_name_version(test_session):
+def test_read_hf_name_version(test_session):
     name = "test-version"
     dc.from_values(
         first_name=["Alice", "Bob", "Charlie"],
@@ -997,7 +997,7 @@ def test_from_dataset_name_version(test_session):
         session=test_session,
     ).save(name)
 
-    chain = dc.from_dataset(name)
+    chain = dc.read_dataset(name)
     assert chain.name == name
     assert chain.version
 
@@ -2279,7 +2279,7 @@ def test_rename_object_column_name_with_mutate(test_session):
     # check that persist after saving
     ds.save("mutated")
 
-    ds = dc.from_dataset(name="mutated", session=test_session)
+    ds = dc.read_dataset(name="mutated", session=test_session)
     assert ds.signals_schema.values.get("file") is File
     assert ds.signals_schema.values.get("ids") is int
     assert ds.signals_schema.values.get("fname") is str
@@ -2300,7 +2300,7 @@ def test_rename_object_name_with_mutate(test_session):
     # check that persist after saving
     ds.save("mutated")
 
-    ds = dc.from_dataset(name="mutated", session=test_session)
+    ds = dc.read_dataset(name="mutated", session=test_session)
     assert ds.signals_schema.values.get("my_file") is File
     assert ds.signals_schema.values.get("ids") is int
     assert "file" not in ds.signals_schema.values
@@ -2378,7 +2378,7 @@ def test_mutate_with_saving(test_session):
     ds = dc.from_values(id=[1, 2], session=test_session)
     ds = ds.mutate(new=ds.column("id") / 2).save("mutated")
 
-    ds = dc.from_dataset(name="mutated", session=test_session)
+    ds = dc.read_dataset(name="mutated", session=test_session)
     assert ds.signals_schema.values["new"] is float
     assert list(ds.collect("new")) == [0.5, 1.0]
 

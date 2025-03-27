@@ -6,7 +6,7 @@ from datachain.lib.webdataset_laion import WDSLaion
 
 name = "wds"
 try:
-    wds = dc.from_dataset(name=name)
+    wds = dc.read_dataset(name=name)
 except datachain.error.DatasetNotFoundError:
     wds = (
         dc.read_storage("gs://datachain-demo/datacomp-small/shards")

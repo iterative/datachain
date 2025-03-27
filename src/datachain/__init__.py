@@ -5,7 +5,6 @@ from datachain.lib.dc import (
     DataChain,
     Sys,
     datasets,
-    from_dataset,
     from_json,
     from_pandas,
     from_parquet,
@@ -13,6 +12,7 @@ from datachain.lib.dc import (
     from_values,
     listings,
     read_csv,
+    read_dataset,
     read_hf,
     read_storage,
 )
@@ -61,7 +61,6 @@ __all__ = [
     "VideoFragment",
     "VideoFrame",
     "datasets",
-    "from_dataset",
     "from_json",
     "from_pandas",
     "from_parquet",
@@ -72,6 +71,7 @@ __all__ = [
     "metrics",
     "param",
     "read_csv",
+    "read_dataset",
     "read_hf",
     "read_storage",
 ]

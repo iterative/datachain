@@ -145,7 +145,7 @@ The cost of 5 calls to Mixtral 8x22b : $0.0142
 The “save” operation makes chain dataset persistent in the current (working) directory of the query. A hidden folder `.datachain/` holds the records. A persistent dataset can be accessed later to start a derivative chain:
 
 ```python
-dc.from_dataset("rating").limit(2).save("dialog-rating")
+dc.read_dataset("rating").limit(2).save("dialog-rating")
 ```
 
 Persistent datasets are immutable and automatically versioned. Here is how to access the dataset registry:
@@ -167,7 +167,7 @@ dialog-rating@v2
 By default, when a saved dataset is loaded, the latest version is fetched but another version can be requested:
 
 ```python
-ds = dc.from_dataset("dialog-rating", version = 1)
+ds = dc.read_dataset("dialog-rating", version=1)
 ```
 
 ### Chain execution, optimization and parallelism

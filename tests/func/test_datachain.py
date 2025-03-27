@@ -1235,7 +1235,7 @@ def test_row_number_with_order_by_name_len_desc_and_name_asc(cloud_test_catalog)
     ).order_by("name_len", descending=True).order_by("file.path").save(ds_name)
 
     assert list(
-        dc.from_dataset(name=ds_name, session=session).collect("sys.id", "file.path")
+        dc.read_dataset(name=ds_name, session=session).collect("sys.id", "file.path")
     ) == [
         (1, "description"),
         (2, "cats/cat1"),
@@ -1268,7 +1268,7 @@ def test_row_number_with_order_by_before_map(cloud_test_catalog):
     # we should preserve order in final result based on order by which was added
     # before add_signals
     assert list(
-        dc.from_dataset(name=ds_name, session=session).collect("sys.id", "file.path")
+        dc.read_dataset(name=ds_name, session=session).collect("sys.id", "file.path")
     ) == [
         (1, "cats/cat1"),
         (2, "cats/cat2"),
@@ -1469,7 +1469,7 @@ def test_gen_with_new_columns_numpy(cloud_test_catalog, dogs_dataset):
         },
     ).save("dogs_with_rows_and_signals")
 
-    chain = dc.from_dataset(name="dogs_with_rows_and_signals", session=session)
+    chain = dc.read_dataset(name="dogs_with_rows_and_signals", session=session)
     for r in chain.collect(
         "int_col_32",
         "int_col_64",

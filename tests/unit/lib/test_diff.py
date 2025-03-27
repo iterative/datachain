@@ -125,7 +125,7 @@ def test_compare_no_status_col(test_session, str_default):
     assert list(diff.order_by("id").collect()) == expected
 
 
-def test_compare_from_datasets(test_session, str_default):
+def test_compare_read_hfs(test_session, str_default):
     ds1 = dc.from_values(
         id=[1, 2, 4],
         name=["John1", "Doe", "Andy"],
@@ -139,8 +139,8 @@ def test_compare_from_datasets(test_session, str_default):
     ).save("ds2")
 
     # this adds sys columns to ds1 and ds2
-    ds1 = dc.from_dataset("ds1")
-    ds2 = dc.from_dataset("ds2")
+    ds1 = dc.read_dataset("ds1")
+    ds2 = dc.read_dataset("ds2")
 
     diff = ds1.compare(ds2, same=True, on=["id"], status_col="diff")
 

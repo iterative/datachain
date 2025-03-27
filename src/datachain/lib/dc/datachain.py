@@ -89,7 +89,7 @@ class DataChain:
 
         `DataChain.save("name")` - saving to a dataset.
 
-        `from_dataset("name")` - reading from a dataset.
+        `read_dataset("name")` - reading from a dataset.
 
         `from_values(fib=[1, 2, 3, 5, 8])` - generating from values.
 
@@ -327,15 +327,15 @@ class DataChain:
 
     @classmethod
     def from_dataset(cls, *args, **kwargs) -> "DataChain":
-        from .datasets import from_dataset
+        from .datasets import read_dataset
 
         warnings.warn(
-            "Class method `from_dataset` is deprecated. "
-            "Use `from_dataset` function instead from top_module.",
+            "Class method `read_dataset` is deprecated. "
+            "Use `read_dataset` function instead from top_module.",
             DeprecationWarning,
             stacklevel=2,
         )
-        return from_dataset(*args, **kwargs)
+        return read_dataset(*args, **kwargs)
 
     @classmethod
     def from_json(
@@ -727,7 +727,7 @@ class DataChain:
 
         Note:
             Order is not guaranteed when steps are added after an `order_by` statement.
-            I.e. when using `from_dataset` an `order_by` statement should be used if
+            I.e. when using `read_dataset` an `order_by` statement should be used if
             the order of the records in the chain is important.
             Using `order_by` directly before `limit`, `collect` and `collect_flatten`
             will give expected results.

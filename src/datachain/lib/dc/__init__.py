@@ -1,6 +1,6 @@
 from .csv import read_csv
 from .datachain import C, Column, DataChain
-from .datasets import datasets, from_dataset
+from .datasets import datasets, read_dataset
 from .hf import read_hf
 from .json import from_json
 from .listings import listings
@@ -19,7 +19,6 @@ __all__ = [
     "DatasetPrepareError",
     "Sys",
     "datasets",
-    "from_dataset",
     "from_json",
     "from_pandas",
     "from_parquet",
@@ -27,6 +26,7 @@ __all__ = [
     "from_values",
     "listings",
     "read_csv",
+    "read_dataset",
     "read_hf",
     "read_storage",
 ]

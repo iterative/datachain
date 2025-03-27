@@ -43,7 +43,7 @@ def from_records(
         single_record = dc.from_records(dc.DEFAULT_FILE_RECORD)
         ```
     """
-    from .datasets import from_dataset
+    from .datasets import read_dataset
 
     session = Session.get(session, in_memory=in_memory)
     catalog = session.catalog
@@ -87,4 +87,4 @@ def from_records(
     insert_q = dr.get_table().insert()
     for record in to_insert:
         db.execute(insert_q.values(**record))
-    return from_dataset(name=dsr.name, session=session, settings=settings)
+    return read_dataset(name=dsr.name, session=session, settings=settings)

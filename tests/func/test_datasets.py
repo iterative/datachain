@@ -792,12 +792,12 @@ def test_dataset_preview_order(test_session):
         preview_values.append((id, o))
         assert (r["id"], r["order"]) == entry
 
-    dc.from_dataset(dataset_name, session=test_session).save(dataset_name)
+    dc.read_dataset(dataset_name, session=test_session).save(dataset_name)
 
     for r in catalog.get_dataset(dataset_name).get_version(2).preview:
         assert (r["id"], r["order"]) == preview_values.pop(0)
 
-    dc.from_dataset(dataset_name, 2, session=test_session).order_by("id").save(
+    dc.read_dataset(dataset_name, 2, session=test_session).order_by("id").save(
         dataset_name
     )
 
