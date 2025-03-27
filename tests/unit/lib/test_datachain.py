@@ -2443,21 +2443,21 @@ def test_read_csv_nan_inf(tmp_dir, test_session):
     assert any(r for r in res if np.isneginf(r))
 
 
-def test_from_hf(test_session):
+def test_read_hf(test_session):
     ds = Dataset.from_dict(DF_DATA)
-    df = dc.from_hf(ds, session=test_session).to_pandas()
+    df = dc.read_hf(ds, session=test_session).to_pandas()
     assert df_equal(df, pd.DataFrame(DF_DATA))
 
 
-def test_from_hf_object_name(test_session):
+def test_read_hf_object_name(test_session):
     ds = Dataset.from_dict(DF_DATA)
-    df = dc.from_hf(ds, session=test_session, object_name="obj").to_pandas()
+    df = dc.read_hf(ds, session=test_session, object_name="obj").to_pandas()
     assert df_equal(df["obj"], pd.DataFrame(DF_DATA))
 
 
-def test_from_hf_invalid(test_session):
+def test_read_hf_invalid(test_session):
     with pytest.raises(FileNotFoundError):
-        dc.from_hf("invalid_dataset", session=test_session)
+        dc.read_hf("invalid_dataset", session=test_session)
 
 
 def test_group_by_int(test_session):

@@ -139,7 +139,7 @@ def test_prefetch(
 
 def test_hf_to_pytorch(catalog, fake_image_dir):
     hf_ds = load_dataset("imagefolder", data_dir=fake_image_dir)
-    chain = dc.from_hf(hf_ds)
+    chain = dc.read_hf(hf_ds)
     pt_ds = chain.order_by("label").to_pytorch()
     img, label = next(iter(pt_ds))
     assert isinstance(img, Tensor)

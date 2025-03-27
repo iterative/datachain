@@ -1575,15 +1575,15 @@ class DataChain:
         *args,
         **kwargs,
     ) -> "DataChain":
-        from .hf import from_hf
+        from .hf import read_hf
 
         warnings.warn(
-            "Class method `from_hf` is deprecated. "
-            "Use `from_hf` function instead from top_module.",
+            "Class method `read_hf` is deprecated. "
+            "Use `read_hf` function instead from top_module.",
             DeprecationWarning,
             stacklevel=2,
         )
-        return from_hf(*args, **kwargs)
+        return read_hf(*args, **kwargs)
 
     def parse_tabular(
         self,

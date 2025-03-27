@@ -15,7 +15,7 @@ for examples of how to create a chain.
 
 ::: datachain.lib.dc.datasets.datasets
 
-::: datachain.lib.dc.hf.from_hf
+::: datachain.lib.dc.hf.read_hf
 
 ::: datachain.lib.dc.json.from_json
 
