@@ -204,6 +204,10 @@ class AbstractWarehouse(ABC, Serializable):
         count_query = sa.select(func.count(1)).select_from(query.subquery())
         return next(self.db.execute(count_query))[0]
 
+    def table_rows_count(self, table) -> int:
+        count_query = sa.select(func.count(1)).select_from(table)
+        return next(self.db.execute(count_query))[0]
+
     def dataset_select_paginated(
         self,
         query,
