@@ -412,9 +412,7 @@ class UDFStep(Step, ABC):
     def populate_udf_table(self, udf_table: "Table", query: Select) -> None:
         from datachain.catalog import QUERY_SCRIPT_CANCELED_EXIT_CODE
 
-        count_query = sqlalchemy.select(f.count()).select_from(query.subquery())
-        rows_total = next(self.catalog.warehouse.db.execute(count_query))[0]
-
+        rows_total = self.catalog.warehouse.query_count(query)
         if rows_total == 0:
             return
 

@@ -199,6 +199,11 @@ class AbstractWarehouse(ABC, Serializable):
     # Query Execution
     #
 
+    def query_count(self, query: sa.sql.selectable.Select) -> int:
+        """Count the number of rows in a query."""
+        count_query = sa.select(func.count(1)).select_from(query.subquery())
+        return next(self.db.execute(count_query))[0]
+
     def dataset_select_paginated(
         self,
         query,

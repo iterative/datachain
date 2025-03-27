@@ -11,7 +11,6 @@ import multiprocess
 from cloudpickle import load, loads
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 from multiprocess import get_context
-from sqlalchemy.sql import func
 
 from datachain.catalog import Catalog
 from datachain.catalog.catalog import clone_catalog_with_cache
@@ -67,14 +66,11 @@ def udf_entrypoint() -> int:
     wh_cls, wh_args, wh_kwargs = udf_info["warehouse_clone_params"]
     warehouse: AbstractWarehouse = wh_cls(*wh_args, **wh_kwargs)
 
-    if udf_info["rows_total"] is None:
-        rows_total = next(
-            warehouse.db.execute(
-                query.with_only_columns(func.count(query.c.sys__id)).order_by(None)
-            )
-        )[0]
-    else:
-        rows_total = udf_info["rows_total"]
+    rows_total = (
+        warehouse.query_count(query)
+        if udf_info["rows_total"] is None
+        else udf_info["rows_total"]
+    )
 
     with contextlib.closing(
         batching(warehouse.dataset_select_paginated, query, ids_only=True)
