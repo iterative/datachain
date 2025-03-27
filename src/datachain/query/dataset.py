@@ -51,10 +51,12 @@ from datachain.lib.udf import UDFAdapter, _get_cache
 from datachain.progress import CombinedDownloadCallback, TqdmCombinedDownloadCallback
 from datachain.query.schema import C, UDFParamSpec, normalize_param
 from datachain.query.session import Session
+from datachain.query.udf import UdfInfo
 from datachain.sql.functions.random import rand
 from datachain.utils import (
     batched,
     determine_processes,
+    determine_workers,
     filtered_cloudpickle_dumps,
     get_datachain_executable,
     safe_closing,
@@ -70,7 +72,6 @@ if TYPE_CHECKING:
     from datachain.data_storage import AbstractWarehouse
     from datachain.dataset import DatasetRecord
     from datachain.lib.udf import UDFAdapter, UDFResult
-    from datachain.query.udf import UdfInfo
 
     P = ParamSpec("P")
 
@@ -417,33 +418,17 @@ class UDFStep(Step, ABC):
     def populate_udf_table(self, udf_table: "Table", query: Select) -> None:
         from datachain.catalog import QUERY_SCRIPT_CANCELED_EXIT_CODE
 
-        use_partitioning = self.partition_by is not None
-        batching = self.udf.get_batching(use_partitioning)
-
-        workers = self.workers
-        if (
-            not workers
-            and os.environ.get("DATACHAIN_DISTRIBUTED")
-            and os.environ.get("DATACHAIN_SETTINGS_WORKERS")
-        ):
-            # Enable distributed processing by default if the module is available,
-            # and a default number of workers is provided.
-            workers = True
-
-        processes = determine_processes(self.parallel)
-
         count_query = sqlalchemy.select(f.count()).select_from(query.subquery())
         rows_total = next(self.catalog.warehouse.db.execute(count_query))[0]
 
         if rows_total == 0:
             return
-        if rows_total == 1:
-            # Single row optimization to avoid unnecessary processing
-            # this is useful then using `from_storage` function since it always (?)
-            # will be only one row with bucket URI to generate rows from
-            workers = False
-            processes = False
 
+        workers = determine_workers(self.workers, rows_total=rows_total)
+        processes = determine_processes(self.parallel, rows_total=rows_total)
+
+        use_partitioning = self.partition_by is not None
+        batching = self.udf.get_batching(use_partitioning)
         udf_fields = [str(c.name) for c in query.selected_columns]
 
         prefetch = self.udf.prefetch
@@ -483,19 +468,20 @@ class UDFStep(Step, ABC):
                             "with parallel processing."
                         )
 
-                    udf_info: UdfInfo = {
-                        "udf_data": filtered_cloudpickle_dumps(self.udf),
-                        "catalog_init": catalog.get_init_params(),
-                        "metastore_clone_params": catalog.metastore.clone_params(),
-                        "warehouse_clone_params": catalog.warehouse.clone_params(),
-                        "table": udf_table,
-                        "query": query,
-                        "udf_fields": udf_fields,
-                        "batching": batching,
-                        "processes": processes,
-                        "is_generator": self.is_generator,
-                        "cache": self.cache,
-                    }
+                    udf_info = UdfInfo(
+                        udf_data=filtered_cloudpickle_dumps(self.udf),
+                        catalog_init=catalog.get_init_params(),
+                        metastore_clone_params=catalog.metastore.clone_params(),
+                        warehouse_clone_params=catalog.warehouse.clone_params(),
+                        table=udf_table,
+                        query=query,
+                        udf_fields=udf_fields,
+                        batching=batching,
+                        processes=processes,
+                        is_generator=self.is_generator,
+                        cache=self.cache,
+                        rows_total=rows_total,
+                    )
 
                     # Run the UDFDispatcher in another process to avoid needing
                     # if __name__ == '__main__': in user scripts

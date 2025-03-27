@@ -5,6 +5,7 @@ import pytest
 from datachain.utils import (
     datachain_paths_join,
     determine_processes,
+    determine_workers,
     nested_dict_path_set,
     retry_with_backoff,
     row_to_nested_dict,
@@ -141,21 +142,56 @@ def test_retry_with_backoff():
 
 
 @pytest.mark.parametrize(
-    "parallel,settings,expected",
+    "workers,rows_total,settings,expected",
     (
-        (None, None, False),
-        (None, "-1", True),
-        (None, "0", False),
-        (None, "5", 5),
-        (-1, "5", True),
-        (0, "5", False),
-        (10, "5", 10),
+        (None, None, None, False),
+        (None, None, "-1", False),
+        (None, None, "0", False),
+        (None, None, "5", 5),
+        (-1, None, "5", False),
+        (0, None, "5", False),
+        (10, None, "5", 10),
+        (True, None, None, True),
+        (True, None, "5", True),
+        (10, 0, None, False),
+        (10, 1, None, False),
+        (10, 2, None, 10),
+        (True, 0, None, False),
+        (True, 1, None, False),
+        (True, 2, None, True),
     ),
 )
-def test_determine_processes(parallel, settings, expected):
+def test_determine_workers(workers, rows_total, settings, expected):
+    if settings is not None:
+        os.environ["DATACHAIN_DISTRIBUTED"] = "some_defined_value"
+        os.environ["DATACHAIN_SETTINGS_WORKERS"] = settings
+    assert determine_workers(workers, rows_total=rows_total) == expected
+
+
+@pytest.mark.parametrize(
+    "parallel,rows_total,settings,expected",
+    (
+        (None, None, None, False),
+        (None, None, "-1", True),
+        (None, None, "0", False),
+        (None, None, "5", 5),
+        (-1, None, "5", True),
+        (0, None, "5", False),
+        (10, None, "5", 10),
+        (True, None, None, True),
+        (True, None, "5", True),
+        (10, 0, None, False),
+        (10, 1, None, False),
+        (10, 2, None, 10),
+        (True, 0, None, False),
+        (True, 1, None, False),
+        (True, 2, None, True),
+    ),
+)
+def test_determine_processes(parallel, rows_total, settings, expected):
     if settings is not None:
         os.environ["DATACHAIN_SETTINGS_PARALLEL"] = settings
-    assert determine_processes(parallel) == expected
+    assert determine_processes(parallel, rows_total=rows_total) == expected
 
 
 @pytest.mark.parametrize(

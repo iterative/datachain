@@ -67,11 +67,14 @@ def udf_entrypoint() -> int:
     wh_cls, wh_args, wh_kwargs = udf_info["warehouse_clone_params"]
     warehouse: AbstractWarehouse = wh_cls(*wh_args, **wh_kwargs)
 
-    total_rows = next(
-        warehouse.db.execute(
-            query.with_only_columns(func.count(query.c.sys__id)).order_by(None)
-        )
-    )[0]
+    if udf_info["rows_total"] is None:
+        rows_total = next(
+            warehouse.db.execute(
+                query.with_only_columns(func.count(query.c.sys__id)).order_by(None)
+            )
+        )[0]
+    else:
+        rows_total = udf_info["rows_total"]
 
     with contextlib.closing(
         batching(warehouse.dataset_select_paginated, query, ids_only=True)
@@ -81,7 +84,7 @@ def udf_entrypoint() -> int:
         try:
             dispatch.run_udf_parallel(
                 udf_inputs,
-                total_rows=total_rows,
+                rows_total=rows_total,
                 n_workers=n_workers,
                 processed_cb=processed_cb,
                 download_cb=download_cb,
@@ -164,14 +167,14 @@ class UDFDispatcher:
     def run_udf_parallel(  # noqa: C901, PLR0912
         self,
         input_rows: Iterable[RowsOutput],
-        total_rows: int,
+        rows_total: int,
         n_workers: Optional[int] = None,
         processed_cb: Callback = DEFAULT_CALLBACK,
         download_cb: Callback = DEFAULT_CALLBACK,
     ) -> None:
         n_workers = get_n_workers_from_arg(n_workers)
 
-        input_batch_size = total_rows // n_workers
+        input_batch_size = rows_total // n_workers
         if input_batch_size == 0:
             input_batch_size = 1
         elif input_batch_size > DEFAULT_BATCH_SIZE:

@@ -20,6 +20,7 @@ class UdfInfo(TypedDict):
     processes: Optional[int]
     is_generator: bool
     cache: bool
+    rows_total: Optional[int]
 
 
 class AbstractUDFDistributor(ABC):

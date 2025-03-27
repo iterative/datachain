@@ -286,15 +286,43 @@ def retry_with_backoff(retries=5, backoff_sec=1, errors=(Exception,)):
     return retry
 
 
-def determine_processes(parallel: Optional[Union[bool, int]]) -> Union[bool, int]:
+def determine_workers(
+    workers: Optional[Union[bool, int]] = None,
+    rows_total: Optional[int] = None,
+) -> Union[bool, int]:
+    """Determine the number of workers to use for distributed processing."""
+    if rows_total is not None and rows_total <= 1:
+        # Disable distributed processing if there is no rows or only one row.
+        return False
+    if (
+        workers is None
+        and os.environ.get("DATACHAIN_DISTRIBUTED")
+        and os.environ.get("DATACHAIN_SETTINGS_WORKERS")
+    ):
+        # Enable distributed processing by default if the module is available,
+        # and a default number of workers is provided.
+        workers = int(os.environ["DATACHAIN_SETTINGS_WORKERS"])
+    if workers is None or workers is False or workers <= 0:
+        return False
+    if workers is True:
+        return True
+    return workers
+
+
+def determine_processes(
+    parallel: Optional[Union[bool, int]] = None,
+    rows_total: Optional[int] = None,
+) -> Union[bool, int]:
+    """Determine the number of processes to use for parallel processing."""
+    if rows_total is not None and rows_total <= 1:
+        # Disable parallel processing if there is no rows or only one row.
+        return False
     if parallel is None and os.environ.get("DATACHAIN_SETTINGS_PARALLEL") is not None:
         parallel = int(os.environ["DATACHAIN_SETTINGS_PARALLEL"])
-    if parallel is None or parallel is False:
+    if parallel is None or parallel is False or parallel == 0:
         return False
     if parallel is True:
         return True
-    if parallel == 0:
-        return False
     if parallel < 0:
         return True
     return parallel
