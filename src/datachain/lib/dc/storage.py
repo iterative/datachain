@@ -6,7 +6,6 @@ from typing import (
 )
 
 from datachain.lib.file import (
-    File,
     FileType,
     get_file_type,
 )
@@ -95,24 +94,28 @@ def from_storage(
         dc.signals_schema = dc.signals_schema.mutate({f"{object_name}": file_type})
         return dc
 
-    if update or not list_ds_exists:
-        # disable prefetch for listing, as it pre-downloads all files
-        (
-            from_records(
-                DataChain.DEFAULT_FILE_RECORD,
-                session=session,
-                settings=settings,
-                in_memory=in_memory,
-            )
-            .settings(prefetch=0)
-            .gen(
-                list_bucket(list_uri, cache, client_config=client_config),
-                output={f"{object_name}": File},
-            )
-            .save(list_ds_name, listing=True)
-        )
-
     dc = from_dataset(list_ds_name, session=session, settings=settings)
     dc.signals_schema = dc.signals_schema.mutate({f"{object_name}": file_type})
+
+    if update or not list_ds_exists:
+
+        def lst_fn():
+            # disable prefetch for listing, as it pre-downloads all files
+            (
+                from_records(
+                    DataChain.DEFAULT_FILE_RECORD,
+                    session=session,
+                    settings=settings,
+                    in_memory=in_memory,
+                )
+                .settings(prefetch=0)
+                .gen(
+                    list_bucket(list_uri, cache, client_config=client_config),
+                    output={f"{object_name}": file_type},
+                )
+                .save(list_ds_name, listing=True)
+            )
+
+        dc._query.add_before_steps(lst_fn)
 
     return ls(dc, list_path, recursive=recursive, object_name=object_name)

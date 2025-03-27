@@ -583,12 +583,12 @@ class Catalog:
         object_name="file",
         skip_indexing=False,
     ) -> tuple[Optional["Listing"], "Client", str]:
-        from datachain.lib.dc import DataChain
+        from datachain import from_storage
         from datachain.listing import Listing
 
-        DataChain.from_storage(
+        from_storage(
             source, session=self.session, update=update, object_name=object_name
-        )
+        ).exec()
 
         list_ds_name, list_uri, list_path, _ = get_listing(
             source, self.session, update=update
@@ -994,18 +994,14 @@ class Catalog:
         if not sources:
             raise ValueError("Sources needs to be non empty list")
 
-        from datachain.lib.dc import DataChain
+        from datachain import from_dataset, from_storage
 
         chains = []
         for source in sources:
             if source.startswith(DATASET_PREFIX):
-                dc = DataChain.from_dataset(
-                    source[len(DATASET_PREFIX) :], session=self.session
-                )
+                dc = from_dataset(source[len(DATASET_PREFIX) :], session=self.session)
             else:
-                dc = DataChain.from_storage(
-                    source, session=self.session, recursive=recursive
-                )
+                dc = from_storage(source, session=self.session, recursive=recursive)
 
             chains.append(dc)
 

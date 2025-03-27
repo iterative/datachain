@@ -58,16 +58,16 @@ high confidence scores.
 
 .. code:: py
 
-    from datachain import Column, DataChain
+    import datachain as dc
 
-    meta = DataChain.from_json("gs://datachain-demo/dogs-and-cats/*json", object_name="meta", anon=True)
-    images = DataChain.from_storage("gs://datachain-demo/dogs-and-cats/*jpg", anon=True)
+    meta = dc.from_json("gs://datachain-demo/dogs-and-cats/*json", object_name="meta", anon=True)
+    images = dc.from_storage("gs://datachain-demo/dogs-and-cats/*jpg", anon=True)
 
     images_id = images.map(id=lambda file: file.path.split('.')[-2])
     annotated = images_id.merge(meta, on="id", right_on="meta.id")
 
-    likely_cats = annotated.filter((Column("meta.inference.confidence") > 0.93) \
-                                   & (Column("meta.inference.class_") == "cat"))
+    likely_cats = annotated.filter((dc.Column("meta.inference.confidence") > 0.93) \
+                                   & (dc.Column("meta.inference.class_") == "cat"))
     likely_cats.to_storage("high-confidence-cats/", signal="file")
 
 
@@ -88,11 +88,11 @@ Python code:
 
     import os
     from mistralai import Mistral
-    from datachain import File, DataChain, Column
+    import datachain as dc
 
     PROMPT = "Was this dialog successful? Answer in a single word: Success or Failure."
 
-    def eval_dialogue(file: File) -> bool:
+    def eval_dialogue(file: dc.File) -> bool:
          client = Mistral(api_key = os.environ["MISTRAL_API_KEY"])
          response = client.chat.complete(
              model="open-mixtral-8x22b",
@@ -102,13 +102,13 @@ Python code:
          return result.lower().startswith("success")
 
     chain = (
-       DataChain.from_storage("gs://datachain-demo/chatbot-KiT/", object_name="file", anon=True)
+       dc.from_storage("gs://datachain-demo/chatbot-KiT/", object_name="file", anon=True)
        .settings(parallel=4, cache=True)
        .map(is_success=eval_dialogue)
        .save("mistral_files")
     )
 
-    successful_chain = chain.filter(Column("is_success") == True)
+    successful_chain = chain.filter(dc.Column("is_success") == True)
     successful_chain.to_storage("./output_mistral")
 
     print(f"{successful_chain.count()} files were exported")

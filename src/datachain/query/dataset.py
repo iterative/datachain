@@ -47,6 +47,7 @@ from datachain.error import (
     QueryScriptCancelError,
 )
 from datachain.func.base import Function
+from datachain.lib.listing import is_listing_dataset
 from datachain.lib.udf import UDFAdapter, _get_cache
 from datachain.progress import CombinedDownloadCallback, TqdmCombinedDownloadCallback
 from datachain.query.schema import C, UDFParamSpec, normalize_param
@@ -1092,26 +1093,42 @@ class DatasetQuery:
         self.temp_table_names: list[str] = []
         self.dependencies: set[DatasetDependencyType] = set()
         self.table = self.get_table()
-        self.starting_step: QueryStep
+        self.starting_step: Optional[QueryStep] = None
         self.name: Optional[str] = None
         self.version: Optional[int] = None
         self.feature_schema: Optional[dict] = None
         self.column_types: Optional[dict[str, Any]] = None
+        self.before_steps: list[Callable] = []
+
+        self.list_ds_name: Optional[str] = None
 
         self.name = name
+        self.dialect = self.catalog.warehouse.db.dialect
+        if version:
+            self.version = version
 
-        if fallback_to_studio and is_token_set():
-            ds = self.catalog.get_dataset_with_remote_fallback(name, version)
+        if is_listing_dataset(name):
+            # not setting query step yet as listing dataset might not exist at
+            # this point
+            self.list_ds_name = name
+        elif fallback_to_studio and is_token_set():
+            self._set_starting_step(
+                self.catalog.get_dataset_with_remote_fallback(name, version)
+            )
         else:
-            ds = self.catalog.get_dataset(name)
+            self._set_starting_step(self.catalog.get_dataset(name))
 
-        self.version = version or ds.latest_version
+    def _set_starting_step(self, ds: "DatasetRecord") -> None:
+        if not self.version:
+            self.version = ds.latest_version
+
+        self.starting_step = QueryStep(self.catalog, ds.name, self.version)
+
+        # at this point we know our starting dataset so setting up schemas
         self.feature_schema = ds.get_version(self.version).feature_schema
         self.column_types = copy(ds.schema)
         if "sys__id" in self.column_types:
             self.column_types.pop("sys__id")
-        self.starting_step = QueryStep(self.catalog, name, self.version)
-        self.dialect = self.catalog.warehouse.db.dialect
 
     def __iter__(self):
         return iter(self.db_results())
@@ -1175,11 +1192,23 @@ class DatasetQuery:
         col.table = self.table
         return col
 
+    def add_before_steps(self, fn: Callable) -> None:
+        """
+        Setting custom function to be run before applying steps
+        """
+        self.before_steps.append(fn)
+
     def apply_steps(self) -> QueryGenerator:
         """
         Apply the steps in the query and return the resulting
         sqlalchemy.SelectBase.
         """
+        for fn in self.before_steps:
+            fn()
+
+        if self.list_ds_name:
+            # at this point we know what is our starting listing dataset name
+            self._set_starting_step(self.catalog.get_dataset(self.list_ds_name))  # type: ignore [arg-type]
         query = self.clone()
 
         index = os.getenv("DATACHAIN_QUERY_CHUNK_INDEX", self._chunk_index)
@@ -1198,6 +1227,7 @@ class DatasetQuery:
             query = query.filter(C.sys__rand % total == index)
             query.steps = query.steps[-1:] + query.steps[:-1]
 
+        assert query.starting_step
         result = query.starting_step.apply()
         self.dependencies.update(result.dependencies)
 

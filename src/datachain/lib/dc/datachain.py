@@ -1633,15 +1633,18 @@ class DataChain:
         Example:
             Reading a json lines file:
             ```py
-            dc = DataChain.from_storage("s3://mybucket/file.jsonl")
-            dc = dc.parse_tabular(format="json")
+            import datachain as dc
+            chain = dc.from_storage("s3://mybucket/file.jsonl")
+            chain = chain.parse_tabular(format="json")
             ```
 
             Reading a filtered list of files as a dataset:
             ```py
-            dc = DataChain.from_storage("s3://mybucket")
-            dc = dc.filter(C("file.name").glob("*.jsonl"))
-            dc = dc.parse_tabular(format="json")
+            import datachain as dc
+
+            chain = dc.from_storage("s3://mybucket")
+            chain = chain.filter(dc.C("file.name").glob("*.jsonl"))
+            chain = chain.parse_tabular(format="json")
             ```
         """
         from pyarrow.dataset import CsvFileFormat, JsonFileFormat
@@ -1987,9 +1990,10 @@ class DataChain:
             ```py
             import anthropic
             from anthropic.types import Message
+            import datachain as dc
 
             (
-                DataChain.from_storage(DATA, type="text")
+                dc.from_storage(DATA, type="text")
                 .settings(parallel=4, cache=True)
                 .setup(client=lambda: anthropic.Anthropic(api_key=API_KEY))
                 .map(
@@ -2039,7 +2043,9 @@ class DataChain:
         Example:
             Cross cloud transfer
             ```py
-            ds = DataChain.from_storage("s3://mybucket")
+            import datachain as dc
+
+            ds = dc.from_storage("s3://mybucket")
             ds.to_storage("gs://mybucket", placement="filename")
             ```
         """
@@ -2155,7 +2161,9 @@ class DataChain:
 
         Example:
             ```py
-            chain = DataChain.from_storage(...)
+            import datachain as dc
+
+            chain = dc.from_storage(...)
             chunk_1 = query._chunk(0, 2)
             chunk_2 = query._chunk(1, 2)
             ```

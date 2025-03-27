@@ -123,10 +123,10 @@ class UDFBase(AbstractUDF):
 
     Example:
         ```py
-        from datachain import C, DataChain, Mapper
+        import datachain as dc
         import open_clip
 
-        class ImageEncoder(Mapper):
+        class ImageEncoder(dc.Mapper):
             def __init__(self, model_name: str, pretrained: str):
                 self.model_name = model_name
                 self.pretrained = pretrained
@@ -145,7 +145,7 @@ class UDFBase(AbstractUDF):
                 return emb[0].tolist()
 
         (
-            DataChain.from_storage(
+            dc.from_storage(
                 "gs://datachain-demo/fashion-product-images/images", type="image"
             )
             .limit(5)
