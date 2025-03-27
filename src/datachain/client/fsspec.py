@@ -89,9 +89,9 @@ class Client(ABC):
         from .local import FileClient
         from .s3 import ClientS3
 
-        protocol = urlparse(str(url)).scheme
+        protocol = urlparse(os.fspath(url)).scheme
 
-        if not protocol or _is_win_local_path(str(url)):
+        if not protocol or _is_win_local_path(os.fspath(url)):
             return FileClient
         if protocol == ClientS3.protocol:
             return ClientS3
@@ -122,7 +122,7 @@ class Client(ABC):
         source: Union[str, os.PathLike[str]], cache: Cache, **kwargs
     ) -> "Client":
         cls = Client.get_implementation(source)
-        storage_url, _ = cls.split_url(str(source))
+        storage_url, _ = cls.split_url(os.fspath(source))
         if os.name == "nt":
             storage_url = storage_url.removeprefix("/")
 

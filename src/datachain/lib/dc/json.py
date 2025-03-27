@@ -64,7 +64,7 @@ def from_json(
     from .storage import from_storage
 
     if schema_from == "auto":
-        schema_from = str(path)
+        schema_from = os.fspath(path)
 
     def jmespath_to_name(s: str):
         name_end = re.search(r"\W", s).start() if re.search(r"\W", s) else len(s)  # type: ignore[union-attr]
