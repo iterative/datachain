@@ -1,5 +1,4 @@
 import os.path
-from collections.abc import Iterable
 from typing import (
     TYPE_CHECKING,
     Optional,
@@ -23,7 +22,7 @@ if TYPE_CHECKING:
 
 
 def from_storage(
-    uri: Union[str, os.PathLike[str], Iterable[str], Iterable[os.PathLike[str]]],
+    uri: Union[str, os.PathLike[str], list[str], list[os.PathLike[str]]],
     *,
     type: FileType = "binary",
     session: Optional[Session] = None,
@@ -101,7 +100,7 @@ def from_storage(
     cache = session.catalog.cache
     client_config = session.catalog.client_config
 
-    uris = uri if isinstance(uri, Iterable) else [uri]
+    uris = uri if isinstance(uri, (list, tuple)) else [uri]
 
     if not uris:
         raise ValueError("No URIs provided")
