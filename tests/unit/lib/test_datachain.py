@@ -4,7 +4,7 @@ import math
 import os
 import re
 from collections.abc import Generator, Iterator
-from unittest.mock import ANY
+from unittest.mock import ANY, patch
 
 import numpy as np
 import pandas as pd
@@ -26,6 +26,7 @@ from datachain.lib.signal_schema import (
     SignalResolvingTypeError,
     SignalSchema,
 )
+from datachain.lib.udf import UDFAdapter
 from datachain.lib.udf_signature import UdfSignatureError
 from datachain.lib.utils import DataChainColumnError, DataChainParamsError
 from datachain.sql.types import Float, Int64, String
@@ -268,6 +269,17 @@ def test_from_records_empty_chain_without_schema(test_session):
     assert sorted([c.name for c in dr.columns]) == sorted(
         ds.signals_schema.db_signals()
     )
+
+
+def test_empty_chain_skip_udf_run(test_session):
+    # Test that UDF is not called for empty chain
+    with patch.object(UDFAdapter, "run") as mock_udf_run:
+        (
+            dc.from_records([], schema={"val": int}, session=test_session)
+            .map(lambda val: val * 2, params="val", output={"val2": int})
+            .exec()
+        )
+        mock_udf_run.assert_not_called()
 
 
 def test_datasets(test_session):
