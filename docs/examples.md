@@ -189,8 +189,8 @@ Here is an example of reading a simple CSV file where schema is heuristically de
 ```python
 from datachain import DataChain
 
-uri="gs://datachain-demo/chatbot-csv/"
-csv_dataset = dc.from_csv(uri)
+uri = "gs://datachain-demo/chatbot-csv/"
+csv_dataset = dc.read_csv(uri)
 
 print(csv_dataset.to_pandas())
 ```

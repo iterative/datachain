@@ -97,7 +97,7 @@ class DataChain:
 
         `from_json("file.json")` - generating from json.
 
-        `from_csv("file.csv")` - generating from csv.
+        `read_csv("file.csv")` - generating from csv.
 
         `from_parquet("file.parquet")` - generating from parquet.
 
@@ -1680,15 +1680,15 @@ class DataChain:
         *args,
         **kwargs,
     ) -> "DataChain":
-        from .csv import from_csv
+        from .csv import read_csv
 
         warnings.warn(
-            "Class method `from_csv` is deprecated. "
-            "Use `from_csv` function instead from top_module.",
+            "Class method `read_csv` is deprecated. "
+            "Use `read_csv` function instead from top_module.",
             DeprecationWarning,
             stacklevel=2,
         )
-        return from_csv(*args, **kwargs)
+        return read_csv(*args, **kwargs)
 
     @classmethod
     def from_parquet(

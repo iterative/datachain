@@ -9,7 +9,7 @@ for examples of how to create a chain.
 
 ::: datachain.query.schema.Column
 
-::: datachain.lib.dc.csv.from_csv
+::: datachain.lib.dc.csv.read_csv
 
 ::: datachain.lib.dc.datasets.from_dataset
 

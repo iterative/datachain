@@ -2085,7 +2085,7 @@ def test_window_signals_random(cloud_test_catalog):
     assert len(all_dogs) == 2
 
 
-def test_to_from_csv_remote(cloud_test_catalog_upload):
+def test_to_read_csv_remote(cloud_test_catalog_upload):
     ctc = cloud_test_catalog_upload
     path = f"{ctc.src_uri}/test.csv"
 
@@ -2093,7 +2093,7 @@ def test_to_from_csv_remote(cloud_test_catalog_upload):
     dc_to = dc.from_pandas(df, session=ctc.session)
     dc_to.to_csv(path)
 
-    dc_from = dc.from_csv(path, session=ctc.session)
+    dc_from = dc.read_csv(path, session=ctc.session)
     df1 = dc_from.select("first_name", "age", "city").to_pandas()
     assert df_equal(df1, df)
 

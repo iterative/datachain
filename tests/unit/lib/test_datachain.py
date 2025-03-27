@@ -1271,59 +1271,59 @@ def test_parse_tabular_nrows_invalid(tmp_dir, test_session):
         dc.read_storage(path.as_uri(), session=test_session).parse_tabular(nrows=2)
 
 
-def test_from_csv(tmp_dir, test_session):
+def test_read_csv(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.csv"
     df.to_csv(path, index=False)
-    chain = dc.from_csv(path.as_uri(), session=test_session)
+    chain = dc.read_csv(path.as_uri(), session=test_session)
     df1 = chain.select("first_name", "age", "city").to_pandas()
     assert df_equal(df1, df)
 
 
-def test_to_from_csv(tmp_dir, test_session):
+def test_to_read_csv(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
     dc_to = dc.from_pandas(df, session=test_session)
     path = tmp_dir / "test.csv"
     dc_to.to_csv(path)
-    dc_from = dc.from_csv(path.as_uri(), session=test_session)
+    dc_from = dc.read_csv(path.as_uri(), session=test_session)
     df1 = dc_from.select("first_name", "age", "city").to_pandas()
     assert df_equal(df1, df)
 
 
 @skip_if_not_sqlite
-def test_from_csv_in_memory(tmp_dir):
+def test_read_csv_in_memory(tmp_dir):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.csv"
     df.to_csv(path, index=False)
-    chain = dc.from_csv(path.as_uri(), in_memory=True)
+    chain = dc.read_csv(path.as_uri(), in_memory=True)
     df1 = chain.select("first_name", "age", "city").to_pandas()
     assert df_equal(df1, df)
 
 
 @skip_if_not_sqlite
-def test_to_from_csv_in_memory(tmp_dir):
+def test_to_read_csv_in_memory(tmp_dir):
     df = pd.DataFrame(DF_DATA)
     dc_to = dc.from_pandas(df, in_memory=True)
     path = tmp_dir / "test.csv"
     dc_to.to_csv(path)
-    dc_from = dc.from_csv(path.as_uri(), in_memory=True)
+    dc_from = dc.read_csv(path.as_uri(), in_memory=True)
     df1 = dc_from.select("first_name", "age", "city").to_pandas()
     assert df_equal(df1, df)
 
 
-def test_from_csv_no_header_error(tmp_dir, test_session):
+def test_read_csv_no_header_error(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA.values()).transpose()
     path = tmp_dir / "test.csv"
     df.to_csv(path, header=False, index=False)
     with pytest.raises(DataChainParamsError):
-        dc.from_csv(path.as_uri(), header=False, session=test_session)
+        dc.read_csv(path.as_uri(), header=False, session=test_session)
 
 
-def test_from_csv_no_header_output_dict(tmp_dir, test_session):
+def test_read_csv_no_header_output_dict(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA.values()).transpose()
     path = tmp_dir / "test.csv"
     df.to_csv(path, header=False, index=False)
-    chain = dc.from_csv(
+    chain = dc.read_csv(
         path.as_uri(),
         header=False,
         output={"first_name": str, "age": int, "city": str},
@@ -1333,7 +1333,7 @@ def test_from_csv_no_header_output_dict(tmp_dir, test_session):
     assert (sort_df(df1).values != sort_df(df).values).sum() == 0
 
 
-def test_from_csv_no_header_output_feature(tmp_dir, test_session):
+def test_read_csv_no_header_output_feature(tmp_dir, test_session):
     class Output(BaseModel):
         first_name: str
         age: int
@@ -1342,18 +1342,18 @@ def test_from_csv_no_header_output_feature(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA.values()).transpose()
     path = tmp_dir / "test.csv"
     df.to_csv(path, header=False, index=False)
-    chain = dc.from_csv(
+    chain = dc.read_csv(
         path.as_uri(), header=False, output=Output, session=test_session
     )
     df1 = chain.select("first_name", "age", "city").to_pandas()
     assert (sort_df(df1).values != sort_df(df).values).sum() == 0
 
 
-def test_from_csv_no_header_output_list(tmp_dir, test_session):
+def test_read_csv_no_header_output_list(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA.values()).transpose()
     path = tmp_dir / "test.csv"
     df.to_csv(path, header=False, index=False)
-    chain = dc.from_csv(
+    chain = dc.read_csv(
         path.as_uri(),
         header=False,
         output=["first_name", "age", "city"],
@@ -1363,17 +1363,17 @@ def test_from_csv_no_header_output_list(tmp_dir, test_session):
     assert (sort_df(df1).values != sort_df(df).values).sum() == 0
 
 
-def test_from_csv_tab_delimited(tmp_dir, test_session):
+def test_read_csv_tab_delimited(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.csv"
     df.to_csv(path, sep="\t", index=False)
-    chain = dc.from_csv(path.as_uri(), delimiter="\t", session=test_session)
+    chain = dc.read_csv(path.as_uri(), delimiter="\t", session=test_session)
     df1 = chain.select("first_name", "age", "city").to_pandas()
     assert df_equal(df1, df)
 
 
 @skip_if_not_sqlite
-def test_from_csv_null_collect(tmp_dir, test_session):
+def test_read_csv_null_collect(tmp_dir, test_session):
     # Clickhouse requires setting type to Nullable(Type).
     # See https://github.com/xzkostyan/clickhouse-sqlalchemy/issues/189.
     df = pd.DataFrame(DF_DATA)
@@ -1383,7 +1383,7 @@ def test_from_csv_null_collect(tmp_dir, test_session):
     df["gender"] = gender
     path = tmp_dir / "test.csv"
     df.to_csv(path, index=False)
-    chain = dc.from_csv(path.as_uri(), object_name="csv", session=test_session)
+    chain = dc.read_csv(path.as_uri(), object_name="csv", session=test_session)
     for i, row in enumerate(chain.collect()):
         # None value in numeric column will get converted to nan.
         if not height[i]:
@@ -1393,27 +1393,27 @@ def test_from_csv_null_collect(tmp_dir, test_session):
         assert row[1].gender == gender[i]
 
 
-def test_from_csv_nrows(tmp_dir, test_session):
+def test_read_csv_nrows(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.csv"
     df.to_csv(path, index=False)
-    chain = dc.from_csv(path.as_uri(), nrows=2, session=test_session)
+    chain = dc.read_csv(path.as_uri(), nrows=2, session=test_session)
     df1 = chain.select("first_name", "age", "city").to_pandas()
     assert df_equal(df1, df[:2])
 
 
-def test_from_csv_column_types(tmp_dir, test_session):
+def test_read_csv_column_types(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.csv"
     df.to_csv(path, index=False)
-    chain = dc.from_csv(
+    chain = dc.read_csv(
         path.as_uri(), column_types={"age": "str"}, session=test_session
     )
     df1 = chain.select("first_name", "age", "city").to_pandas()
     assert df1["age"].dtype == pd.StringDtype
 
 
-def test_from_csv_parse_options(tmp_dir, test_session):
+def test_read_csv_parse_options(tmp_dir, test_session):
     def skip_comment(row):
         if row.text.startswith("# "):
             return "skip"
@@ -1431,7 +1431,7 @@ def test_from_csv_parse_options(tmp_dir, test_session):
     path = tmp_dir / "test.csv"
     path.write_text(s)
 
-    chain = dc.from_csv(
+    chain = dc.read_csv(
         path.as_uri(),
         session=test_session,
         parse_options={"invalid_row_handler": skip_comment, "delimiter": ";"},
@@ -2429,12 +2429,12 @@ def test_from_parquet_nan_inf(tmp_dir, test_session):
     assert any(r for r in res if np.isneginf(r))
 
 
-def test_from_csv_nan_inf(tmp_dir, test_session):
+def test_read_csv_nan_inf(tmp_dir, test_session):
     vals = [float("nan"), float("inf"), float("-inf")]
     df = pd.DataFrame({"vals": vals})
     path = tmp_dir / "test.csv"
     df.to_csv(path, index=False)
-    chain = dc.from_csv(path.as_uri(), session=test_session)
+    chain = dc.read_csv(path.as_uri(), session=test_session)
 
     res = list(chain.collect("vals"))
     assert len(res) == 3

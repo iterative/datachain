@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from .datachain import DataChain
 
 
-def from_csv(
+def read_csv(
     path,
     delimiter: Optional[str] = None,
     header: bool = True,
@@ -58,13 +58,13 @@ def from_csv(
         Reading a csv file:
         ```py
         import datachain as dc
-        chain = dc.from_csv("s3://mybucket/file.csv")
+        chain = dc.read_csv("s3://mybucket/file.csv")
         ```
 
         Reading csv files from a directory as a combined dataset:
         ```py
         import datachain as dc
-        chain = dc.from_csv("s3://mybucket/dir")
+        chain = dc.read_csv("s3://mybucket/dir")
         ```
     """
     from pandas.io.parsers.readers import STR_NA_VALUES
