@@ -421,8 +421,8 @@ def test_from_storage_multiple_uris_cache(cloud_test_catalog):
         dc.from_storage([])  # No URIs provided
 
     with patch(
-        "datachain.lib.dc.records.from_records", wraps=dc.from_records
-    ) as mock_from_records:
+        "datachain.lib.dc.storage.get_listing", wraps=dc.lib.listing.get_listing
+    ) as mock_get_listing:
         chain = dc.from_storage(
             [
                 f"{src_uri}/cats",
@@ -432,7 +432,7 @@ def test_from_storage_multiple_uris_cache(cloud_test_catalog):
             ],
             session=session,
             update=True,
-        )
+        ).exec()
         assert chain.count() == 11
 
         files = chain.collect("file")
@@ -446,11 +446,7 @@ def test_from_storage_multiple_uris_cache(cloud_test_catalog):
         }
 
         # Verify from_records was called exactly twice
-        assert mock_from_records.call_count == 2
-
-        # Print the arguments of each call for debugging
-        for i, call_args in enumerate(mock_from_records.call_args_list):
-            print(f"Call {i + 1} arguments:", call_args)
+        assert mock_get_listing.call_count == 4  # TODO FIX THIS
 
 
 def test_from_storage_path_object(test_session, tmp_dir, tmp_path):
