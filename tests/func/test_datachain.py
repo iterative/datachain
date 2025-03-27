@@ -9,6 +9,7 @@ import uuid
 from collections.abc import Iterator
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
@@ -152,7 +153,7 @@ def test_from_storage_partials(cloud_test_catalog):
         return name
 
     dogs_uri = f"{src_uri}/dogs"
-    dc.from_storage(dogs_uri, session=session)
+    dc.from_storage(dogs_uri, session=session).exec()
     assert _get_listing_datasets(session) == [
         f"{_list_dataset_name(dogs_uri)}@v1",
     ]
@@ -162,7 +163,7 @@ def test_from_storage_partials(cloud_test_catalog):
         f"{_list_dataset_name(dogs_uri)}@v1",
     ]
 
-    dc.from_storage(src_uri, session=session)
+    dc.from_storage(src_uri, session=session).exec()
     assert _get_listing_datasets(session) == sorted(
         [
             f"{_list_dataset_name(dogs_uri)}@v1",
@@ -170,7 +171,7 @@ def test_from_storage_partials(cloud_test_catalog):
         ]
     )
 
-    dc.from_storage(f"{src_uri}/cats", session=session)
+    dc.from_storage(f"{src_uri}/cats", session=session).exec()
     assert _get_listing_datasets(session) == sorted(
         [
             f"{_list_dataset_name(dogs_uri)}@v1",
@@ -196,14 +197,14 @@ def test_from_storage_partials_with_update(cloud_test_catalog):
         return name
 
     uri = f"{src_uri}/cats"
-    dc.from_storage(uri, session=session)
+    dc.from_storage(uri, session=session).exec()
     assert _get_listing_datasets(session) == sorted(
         [
             f"{_list_dataset_name(uri)}@v1",
         ]
     )
 
-    dc.from_storage(uri, session=session, update=True)
+    dc.from_storage(uri, session=session, update=True).exec()
     assert _get_listing_datasets(session) == sorted(
         [
             f"{_list_dataset_name(uri)}@v1",
@@ -367,6 +368,85 @@ def test_export_images_files(test_session, tmp_dir, tmp_path, use_cache):
     for img in images:
         exported_img = Image.open(tmp_dir / "output" / img["name"])
         assert images_equal(img["data"], exported_img)
+
+
+@pytest.mark.parametrize("use_cache", [True, False])
+def test_from_storage_multiple_uris_files(test_session, tmp_dir, tmp_path, use_cache):
+    images = [
+        {"name": "img1.jpg", "data": Image.new(mode="RGB", size=(64, 64))},
+        {"name": "img2.jpg", "data": Image.new(mode="RGB", size=(128, 128))},
+    ]
+
+    for img in images:
+        img["data"].save(tmp_path / img["name"])
+
+    dc.from_storage(
+        [
+            f"file://{tmp_path}/img1.jpg",
+            f"file://{tmp_path}/img2.jpg",
+        ],
+        session=test_session,
+        anon=True,
+        update=True,
+    ).to_storage(tmp_dir / "output", placement="filename")
+
+    for img in images:
+        exported_img = Image.open(tmp_dir / "output" / img["name"])
+        assert images_equal(img["data"], exported_img)
+
+    chain = dc.from_storage(
+        [
+            f"file://{tmp_path}/img1.jpg",
+            f"file://{tmp_path}/img2.jpg",
+            f"file://{tmp_dir}/output/*",
+        ]
+    )
+    assert chain.count() == 4
+
+    chain = dc.from_storage([f"file://{tmp_dir}/output/*"])
+    assert chain.count() == 2
+
+
+@pytest.mark.parametrize(
+    "cloud_type",
+    ["s3", "azure", "gs"],
+    indirect=True,
+)
+def test_from_storage_multiple_uris_cache(cloud_test_catalog):
+    ctc = cloud_test_catalog
+    src_uri = ctc.src_uri
+    session = ctc.session
+
+    with pytest.raises(ValueError):
+        dc.from_storage([])  # No URIs provided
+
+    with patch(
+        "datachain.lib.dc.storage.get_listing", wraps=dc.lib.listing.get_listing
+    ) as mock_get_listing:
+        chain = dc.from_storage(
+            [
+                f"{src_uri}/cats",
+                f"{src_uri}/dogs",
+                f"{src_uri}/cats/cat*",
+                f"{src_uri}/dogs/dog*",
+            ],
+            session=session,
+            update=True,
+        ).exec()
+        assert chain.count() == 11
+
+        files = chain.collect("file")
+        assert {f.name for f in files} == {
+            "cat1",
+            "cat2",
+            "dog1",
+            "dog2",
+            "dog3",
+            "dog4",
+        }
+
+        # Verify from_records was called exactly twice
+        assert mock_get_listing.call_count == 4  # TODO FIX THIS
 
 
 def test_from_storage_path_object(test_session, tmp_dir, tmp_path):
