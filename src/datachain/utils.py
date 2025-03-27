@@ -287,7 +287,7 @@ def retry_with_backoff(retries=5, backoff_sec=1, errors=(Exception,)):
 
 
 def determine_workers(
-    workers: Optional[Union[bool, int]] = None,
+    workers: Union[bool, int],
     rows_total: Optional[int] = None,
 ) -> Union[bool, int]:
     """Determine the number of workers to use for distributed processing."""
@@ -295,17 +295,15 @@ def determine_workers(
         # Disable distributed processing if there is no rows or only one row.
         return False
     if (
-        workers is None
+        workers is False
         and os.environ.get("DATACHAIN_DISTRIBUTED")
         and os.environ.get("DATACHAIN_SETTINGS_WORKERS")
     ):
         # Enable distributed processing by default if the module is available,
         # and a default number of workers is provided.
         workers = int(os.environ["DATACHAIN_SETTINGS_WORKERS"])
-    if workers is None or workers is False or workers <= 0:
+    if not workers or workers <= 0:
         return False
-    if workers is True:
-        return True
     return workers
 
 

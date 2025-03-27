@@ -144,10 +144,10 @@ def test_retry_with_backoff():
 @pytest.mark.parametrize(
     "workers,rows_total,settings,expected",
     (
-        (None, None, None, False),
-        (None, None, "-1", False),
-        (None, None, "0", False),
-        (None, None, "5", 5),
+        (False, None, None, False),
+        (False, None, "-1", False),
+        (False, None, "0", False),
+        (False, None, "5", 5),
         (-1, None, "5", False),
         (0, None, "5", False),
         (10, None, "5", 10),
