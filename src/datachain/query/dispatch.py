@@ -58,6 +58,7 @@ def udf_entrypoint() -> int:
     dispatch = UDFDispatcher(udf_info)
 
     query = udf_info["query"]
+    rows_total = udf_info["rows_total"]
     batching = udf_info["batching"]
     n_workers = udf_info["processes"]
     if n_workers is True:
@@ -65,12 +66,6 @@ def udf_entrypoint() -> int:
 
     wh_cls, wh_args, wh_kwargs = udf_info["warehouse_clone_params"]
     warehouse: AbstractWarehouse = wh_cls(*wh_args, **wh_kwargs)
-
-    rows_total = (
-        warehouse.query_count(query)
-        if udf_info["rows_total"] is None
-        else udf_info["rows_total"]
-    )
 
     with contextlib.closing(
         batching(warehouse.dataset_select_paginated, query, ids_only=True)
