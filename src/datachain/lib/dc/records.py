@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     P = ParamSpec("P")
 
 
-def from_records(
+def read_records(
     to_insert: Optional[Union[dict, list[dict]]],
     session: Optional[Session] = None,
     settings: Optional[dict] = None,
@@ -40,10 +40,10 @@ def from_records(
     Example:
         ```py
         import datachain as dc
-        single_record = dc.from_records(dc.DEFAULT_FILE_RECORD)
+        single_record = dc.read_records(dc.DEFAULT_FILE_RECORD)
         ```
     """
-    from .datasets import from_dataset
+    from .datasets import read_dataset
 
     session = Session.get(session, in_memory=in_memory)
     catalog = session.catalog
@@ -87,4 +87,4 @@ def from_records(
     insert_q = dr.get_table().insert()
     for record in to_insert:
         db.execute(insert_q.values(**record))
-    return from_dataset(name=dsr.name, session=session, settings=settings)
+    return read_dataset(name=dsr.name, session=session, settings=settings)

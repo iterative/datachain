@@ -55,7 +55,7 @@ class CNN(nn.Module):
 
 if __name__ == "__main__":
     ds = (
-        dc.from_storage(STORAGE, type="image")
+        dc.read_storage(STORAGE, type="image")
         .settings(prefetch=25)
         .filter(dc.C("file.path").glob("*.jpg"))
         .map(

@@ -1,17 +1,17 @@
 # Interacting with remote storage
 
-DataChain supports reading and writing data from different remote storages using methods like `dc.from_storage` and `dc.to_storage`. The supported storages includes: local file system, AWS S3 storage, Google Cloud Storage, Azure Blob Storage, Hugging Face and more.
+DataChain supports reading and writing data from different remote storages using methods like `dc.read_storage` and `dc.to_storage`. The supported storages includes: local file system, AWS S3 storage, Google Cloud Storage, Azure Blob Storage, Hugging Face and more.
 
 Example implementation for reading and writing data from/to different remote storages:
 
 ```python
 import datachain as dc
 
-dc = dc.from_storage("s3://bucket-name/path/to/data")
+dc = dc.read_storage("s3://bucket-name/path/to/data")
 dc.to_storage("gs://bucket-name/path/to/data")
 ```
 
-DataChain uses [fsspec](https://filesystem-spec.readthedocs.io/en/latest/) to interact with different remote storages. You can pass the following fsspec-supported URIs to `from_storage` and `to_storage` methods.
+DataChain uses [fsspec](https://filesystem-spec.readthedocs.io/en/latest/) to interact with different remote storages. You can pass the following fsspec-supported URIs to `read_storage` and `to_storage` methods.
 
 - Local file system: `file://path/to/data`
 - AWS S3 storage: `s3://bucket-name/path/to/data`
@@ -134,8 +134,9 @@ DataChain uses [s3fs](https://s3fs.readthedocs.io/en/latest/) to interact with A
 
 
 Example:
+
 ```python
-chain = dc.from_storage(
+chain = dc.read_storage(
     "s3://my-bucket/my-dir",
     client_config = {
 		"endpoint_url": "<minio-endpoint-url>",

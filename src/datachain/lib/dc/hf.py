@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     P = ParamSpec("P")
 
 
-def from_hf(
+def read_hf(
     dataset: Union[str, "HFDatasetType"],
     *args,
     session: Optional[Session] = None,
@@ -42,7 +42,7 @@ def from_hf(
         Load from Hugging Face Hub:
         ```py
         import datachain as dc
-        chain = dc.from_hf("beans", split="train")
+        chain = dc.read_hf("beans", split="train")
         ```
 
         Generate chain from loaded dataset:
@@ -50,12 +50,12 @@ def from_hf(
         from datasets import load_dataset
         ds = load_dataset("beans", split="train")
         import datachain as dc
-        chain = dc.from_hf(ds)
+        chain = dc.read_hf(ds)
         ```
     """
     from datachain.lib.hf import HFGenerator, get_output_schema, stream_splits
 
-    from .values import from_values
+    from .values import read_values
 
     output: dict[str, DataType] = {}
     ds_dict = stream_splits(dataset, *args, **kwargs)
@@ -69,5 +69,5 @@ def from_hf(
     if object_name:
         output = {object_name: model}
 
-    chain = from_values(split=list(ds_dict.keys()), session=session, settings=settings)
+    chain = read_values(split=list(ds_dict.keys()), session=session, settings=settings)
     return chain.gen(HFGenerator(dataset, model, *args, **kwargs), output=output)
