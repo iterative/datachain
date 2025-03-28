@@ -48,7 +48,7 @@ def eval_dialog(
 # Save to HF as Parquet. Dataset can be previewed here:
 # https://huggingface.co/datasets/dvcorg/test-datachain-llm-eval/viewer
 (
-    dc.from_csv("hf://datasets/infinite-dataset-hub/MobilePlanAssistant/data.csv")
+    dc.read_csv("hf://datasets/infinite-dataset-hub/MobilePlanAssistant/data.csv")
     .settings(parallel=10)
     .setup(client=lambda: InferenceClient("meta-llama/Llama-3.1-70B-Instruct"))
     .map(response=eval_dialog)
@@ -58,7 +58,7 @@ def eval_dialog(
 # Read it back to filter and show.
 # It restores the Pydantic model from Parquet under the hood.
 (
-    dc.from_parquet(
+    dc.read_parquet(
         "hf://datasets/dvcorg/test-datachain-llm-eval/data.parquet", source=False
     )
     .filter(dc.C("response.result") == "Failure")

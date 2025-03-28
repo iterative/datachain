@@ -18,7 +18,7 @@ def show(
     schema: bool = False,
     include_hidden: bool = False,
 ) -> None:
-    from datachain import Session, from_dataset
+    from datachain import Session, read_dataset
     from datachain.query.dataset import DatasetQuery
     from datachain.utils import show_records
 
@@ -51,5 +51,5 @@ def show(
     if schema and dataset_version.feature_schema:
         print("\nSchema:")
         session = Session.get(catalog=catalog)
-        dc = from_dataset(name=name, version=version, session=session)
+        dc = read_dataset(name=name, version=version, session=session)
         dc.print_schema()

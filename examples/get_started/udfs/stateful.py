@@ -34,7 +34,7 @@ class ImageEncoder(dc.Mapper):
 if __name__ == "__main__":
     # Run in chain
     (
-        dc.from_storage("gs://datachain-demo/dogs-and-cats/", type="image")
+        dc.read_storage("gs://datachain-demo/dogs-and-cats/", type="image")
         .filter(dc.C("file.path").glob("*cat*.jpg"))
         .settings(parallel=2)
         .limit(5)

@@ -22,6 +22,6 @@ def test_select_values(warehouse, query):
         select("letter", "int").select_from(values(DATA, ["letter", "float", "int"])),
     ],
 )
-def test_select_from_values(warehouse, query):
+def test_select_read_values(warehouse, query):
     result = list(warehouse.db.execute(query))
     assert result == [("a", 100), ("b", 200), ("c", 300), ("d", 400)]

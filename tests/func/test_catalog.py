@@ -501,7 +501,7 @@ def test_dataset_stats(test_session):
     ids = [1, 2, 3]
     values = tuple(zip(["a", "b", "c"], [1, 2, 3]))
 
-    ds1 = dc.from_values(
+    ds1 = dc.read_values(
         ids=ids,
         file=[dc.File(path=name, size=size) for name, size in values],
         session=test_session,
@@ -510,7 +510,7 @@ def test_dataset_stats(test_session):
     assert dataset_version1.num_objects == 3
     assert dataset_version1.size == 6
 
-    ds2 = dc.from_values(
+    ds2 = dc.read_values(
         ids=ids,
         file1=[dc.File(path=name, size=size) for name, size in values],
         file2=[dc.File(path=name, size=size * 2) for name, size in values],
@@ -527,7 +527,7 @@ def test_ls_datasets_ordered(test_session):
 
     assert not list(test_session.catalog.ls_datasets())
 
-    chain = dc.from_values(
+    chain = dc.read_values(
         ids=ids,
         file=[dc.File(path=name, size=size) for name, size in values],
         session=test_session,
@@ -557,7 +557,7 @@ def test_ls_datasets_no_json(test_session):
     ids = [1, 2, 3]
     values = tuple(zip(["a", "b", "c"], [1, 2, 3]))
 
-    dc.from_values(
+    dc.read_values(
         ids=ids,
         file=[dc.File(path=name, size=size) for name, size in values],
         session=test_session,

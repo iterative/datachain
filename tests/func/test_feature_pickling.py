@@ -84,7 +84,7 @@ def test_feature_udf_parallel(cloud_test_catalog_tmpfile):
     cloudpickle.register_pickle_by_value(tfp)
 
     chain = (
-        dc.from_storage(source, type="text", session=ctc.session)
+        dc.read_storage(source, type="text", session=ctc.session)
         .filter(dc.C("file.path").glob("*cat*"))
         .settings(parallel=2)
         .map(
@@ -132,7 +132,7 @@ def test_feature_udf_parallel_local(cloud_test_catalog_tmpfile):
     cloudpickle.register_pickle_by_value(tfp)
 
     chain = (
-        dc.from_storage(source, type="text", session=ctc.session)
+        dc.read_storage(source, type="text", session=ctc.session)
         .filter(dc.C("file.path").glob("*cat*"))
         .settings(parallel=2)
         .map(
@@ -189,7 +189,7 @@ def test_feature_udf_parallel_local_pydantic(cloud_test_catalog_tmpfile):
     cloudpickle.register_pickle_by_value(tfp)
 
     chain = (
-        dc.from_storage(source, type="text", session=ctc.session)
+        dc.read_storage(source, type="text", session=ctc.session)
         .filter(dc.C("file.path").glob("*cat*"))
         .settings(parallel=2)
         .map(
@@ -250,7 +250,7 @@ def test_feature_udf_parallel_local_pydantic_old(cloud_test_catalog_tmpfile):
     cloudpickle.register_pickle_by_value(tfp)
 
     chain = (
-        dc.from_storage(source, type="text", session=ctc.session)
+        dc.read_storage(source, type="text", session=ctc.session)
         .filter(dc.C("file.path").glob("*cat*"))
         .settings(parallel=2)
         .map(
@@ -322,7 +322,7 @@ def test_feature_udf_parallel_dynamic(cloud_test_catalog_tmpfile):
     cloudpickle.register_pickle_by_value(tfp)
 
     chain = (
-        dc.from_storage(source, type="text", session=session)
+        dc.read_storage(source, type="text", session=session)
         .filter(dc.C("file__path").glob("*cat*"))
         .settings(parallel=2)
         .map(

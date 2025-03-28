@@ -108,7 +108,7 @@ def create_tar_dataset_with_legacy_columns(
     The resulting dataset contains both the original files (as regular objects)
     and the tar members (as v-objects).
     """
-    chain = dc.from_storage(uri, session=session)
+    chain = dc.read_storage(uri, session=session)
     tar_entries = chain.filter(C("file.path").glob("*.tar")).gen(file=process_tar)
     return (
         chain.union(tar_entries)

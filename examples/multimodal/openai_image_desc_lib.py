@@ -72,7 +72,7 @@ def describe_image(
 
 if __name__ == "__main__":
     (
-        dc.from_storage(
+        dc.read_storage(
             SOURCE,
             anon=True,
         )

@@ -36,7 +36,7 @@ def _import_time_chain(test_session):
     Path("import_time.csv").write_bytes(out)
 
     try:
-        chain = dc.from_csv("import_time.csv", session=test_session, delimiter="|")
+        chain = dc.read_csv("import_time.csv", session=test_session, delimiter="|")
     except Exception:
         logger.error("Failed to parse output: %r", proc.stderr)
         raise
