@@ -123,6 +123,7 @@ def from_storage(
             continue
 
         dc = from_dataset(list_ds_name, session=session, settings=settings)
+        dc._query.update = update
         dc.signals_schema = dc.signals_schema.mutate({f"{object_name}": file_type})
 
         if update or not list_ds_exists:
@@ -144,7 +145,7 @@ def from_storage(
                     .save(ds_name, listing=True)
                 )
 
-            dc._query.add_before_steps(
+            dc._query.set_listing_fn(
                 lambda ds_name=list_ds_name, lst_uri=list_uri: lst_fn(ds_name, lst_uri)
             )
 

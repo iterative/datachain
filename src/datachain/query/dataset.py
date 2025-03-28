@@ -1080,6 +1080,7 @@ class DatasetQuery:
         indexing_column_types: Optional[dict[str, Any]] = None,
         in_memory: bool = False,
         fallback_to_studio: bool = True,
+        update: bool = False,
     ) -> None:
         from datachain.remote.studio import is_token_set
 
@@ -1097,6 +1098,8 @@ class DatasetQuery:
         self.feature_schema: Optional[dict] = None
         self.column_types: Optional[dict[str, Any]] = None
         self.before_steps: list[Callable] = []
+        self.listing_fn: Optional[Callable] = None
+        self.update = update
 
         self.list_ds_name: Optional[str] = None
 
@@ -1190,23 +1193,30 @@ class DatasetQuery:
         col.table = self.table
         return col
 
-    def add_before_steps(self, fn: Callable) -> None:
-        """
-        Setting custom function to be run before applying steps
-        """
-        self.before_steps.append(fn)
+    def set_listing_fn(self, fn: Callable) -> None:
+        """Setting listing function to be run if needed"""
+        self.listing_fn = fn
 
     def apply_steps(self) -> QueryGenerator:
         """
         Apply the steps in the query and return the resulting
         sqlalchemy.SelectBase.
         """
-        for fn in self.before_steps:
-            fn()
+        if self.list_ds_name and not self.starting_step:
+            listing_ds = None
+            try:
+                listing_ds = self.catalog.get_dataset(self.list_ds_name)
+            except DatasetNotFoundError:
+                pass
 
-        if self.list_ds_name:
+            if not listing_ds or self.update:
+                assert self.listing_fn
+                self.listing_fn()
+                listing_ds = self.catalog.get_dataset(self.list_ds_name)
+
             # at this point we know what is our starting listing dataset name
-            self._set_starting_step(self.catalog.get_dataset(self.list_ds_name))  # type: ignore [arg-type]
+            self._set_starting_step(listing_ds)  # type: ignore [arg-type]
+
         query = self.clone()
 
         index = os.getenv("DATACHAIN_QUERY_CHUNK_INDEX", self._chunk_index)
