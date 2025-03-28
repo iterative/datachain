@@ -11,7 +11,7 @@ for examples of how to create a chain.
 
 ::: datachain.lib.dc.csv.read_csv
 
-::: datachain.lib.dc.datasets.read_hf
+::: datachain.lib.dc.hf.read_hf
 
 ::: datachain.lib.dc.datasets.datasets
 
