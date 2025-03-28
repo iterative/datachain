@@ -47,7 +47,10 @@ from datachain.error import (
     QueryScriptCancelError,
 )
 from datachain.func.base import Function
-from datachain.lib.listing import is_listing_dataset
+from datachain.lib.listing import (
+    is_listing_dataset,
+    listing_dataset_expired,
+)
 from datachain.lib.udf import UDFAdapter, _get_cache
 from datachain.progress import CombinedDownloadCallback, TqdmCombinedDownloadCallback
 from datachain.query.schema import C, UDFParamSpec, normalize_param
@@ -1209,7 +1212,7 @@ class DatasetQuery:
             except DatasetNotFoundError:
                 pass
 
-            if not listing_ds or self.update:
+            if not listing_ds or self.update or listing_dataset_expired(listing_ds):
                 assert self.listing_fn
                 self.listing_fn()
                 listing_ds = self.catalog.get_dataset(self.list_ds_name)
