@@ -30,7 +30,7 @@ def fake_dataset(catalog, fake_image_dir):
     # Create dataset from images
     uri = fake_image_dir.as_uri()
     return (
-        dc.from_storage(uri, type="image")
+        dc.read_storage(uri, type="image")
         .settings(prefetch=0, cache=False)
         .map(text=lambda file: file.parent.split("/")[-1], output=str)
         .map(label=lambda text: int(text), output=int)
@@ -139,7 +139,7 @@ def test_prefetch(
 
 def test_hf_to_pytorch(catalog, fake_image_dir):
     hf_ds = load_dataset("imagefolder", data_dir=fake_image_dir)
-    chain = dc.from_hf(hf_ds)
+    chain = dc.read_hf(hf_ds)
     pt_ds = chain.order_by("label").to_pytorch()
     img, label = next(iter(pt_ds))
     assert isinstance(img, Tensor)

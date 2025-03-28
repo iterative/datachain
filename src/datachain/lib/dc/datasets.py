@@ -13,7 +13,7 @@ from datachain.query import Session
 from datachain.query.dataset import DatasetQuery
 
 from .utils import Sys
-from .values import from_values
+from .values import read_values
 
 if TYPE_CHECKING:
     from typing_extensions import ParamSpec
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     P = ParamSpec("P")
 
 
-def from_dataset(
+def read_dataset(
     name: str,
     version: Optional[int] = None,
     session: Optional[Session] = None,
@@ -44,15 +44,15 @@ def from_dataset(
     Example:
         ```py
         import datachain as dc
-        chain = dc.from_dataset("my_cats")
+        chain = dc.read_dataset("my_cats")
         ```
 
         ```py
-        chain = dc.from_dataset("my_cats", fallback_to_studio=False)
+        chain = dc.read_dataset("my_cats", fallback_to_studio=False)
         ```
 
         ```py
-        chain = dc.from_dataset("my_cats", version=1)
+        chain = dc.read_dataset("my_cats", version=1)
         ```
 
         ```py
@@ -64,7 +64,7 @@ def from_dataset(
             "min_task_size": 1000,
             "prefetch": 10,
         }
-        chain = dc.from_dataset(
+        chain = dc.read_dataset(
             name="my_cats",
             version=1,
             session=session,
@@ -140,7 +140,7 @@ def datasets(
         )
     ]
 
-    return from_values(
+    return read_values(
         session=session,
         settings=settings,
         in_memory=in_memory,

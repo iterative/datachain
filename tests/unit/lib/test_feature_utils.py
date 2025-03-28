@@ -29,7 +29,7 @@ def test_e2e(test_session):
     fib = [1, 1, 2, 3, 5, 8]
     values = ["odd" if num % 2 else "even" for num in fib]
 
-    chain = dc.from_values(fib=fib, odds=values, session=test_session)
+    chain = dc.read_values(fib=fib, odds=values, session=test_session)
 
     vals = list(chain.order_by("fib").collect())
     lst1 = [item[0] for item in vals]
@@ -51,7 +51,7 @@ def test_single_value():
 def test_single_e2e(test_session):
     fib = [1, 1, 2, 3, 5, 8]
 
-    chain = dc.from_values(fib=fib, session=test_session)
+    chain = dc.read_values(fib=fib, session=test_session)
 
     vals = list(chain.order_by("fib").collect())
     flattened = [item for sublist in vals for item in sublist]
@@ -61,17 +61,17 @@ def test_single_e2e(test_session):
 
 def test_not_array_value_error():
     with pytest.raises(ValuesToTupleError):
-        dc.from_values(value=True)
+        dc.read_values(value=True)
 
 
 def test_empty_value_list_error():
     with pytest.raises(ValuesToTupleError):
-        dc.from_values(value=[])
+        dc.read_values(value=[])
 
 
 def test_features_length_missmatch():
     with pytest.raises(ValuesToTupleError):
-        dc.from_values(value1=[1, 2, 3], value2=[1, 2, 3, 4, 5])
+        dc.read_values(value1=[1, 2, 3], value2=[1, 2, 3, 4, 5])
 
 
 def test_unknown_output_type():
@@ -81,22 +81,22 @@ def test_unknown_output_type():
             def __init__(self, val):
                 self.val = val
 
-        dc.from_values(value1=[UnknownFrType(1), UnknownFrType(23)])
+        dc.read_values(value1=[UnknownFrType(1), UnknownFrType(23)])
 
 
 def test_output_type_missmatch():
     with pytest.raises(ValuesToTupleError):
-        dc.from_values(value1=[1, 2, 3], output={"res": str})
+        dc.read_values(value1=[1, 2, 3], output={"res": str})
 
 
 def test_output_length_missmatch():
     with pytest.raises(ValuesToTupleError):
-        dc.from_values(value1=[1, 2, 3], output={"out1": int, "out2": int})
+        dc.read_values(value1=[1, 2, 3], output={"out1": int, "out2": int})
 
 
 def test_output_spec_wrong_type():
     with pytest.raises(ValuesToTupleError):
-        dc.from_values(value1=[1, 2, 3], output=123)
+        dc.read_values(value1=[1, 2, 3], output=123)
 
 
 def test_resolve_column():

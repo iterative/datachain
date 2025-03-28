@@ -9,7 +9,7 @@ def num_chars_udf(file):
     return ([],)
 
 
-chain = dc.from_storage("gs://datachain-demo/dogs-and-cats/", anon=True)
+chain = dc.read_storage("gs://datachain-demo/dogs-and-cats/", anon=True)
 chain.map(num_chars_udf, params=["file"], output={"num_chars": list[str]}).select(
     "file.path", "num_chars"
 ).show(5)

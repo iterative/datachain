@@ -4,7 +4,7 @@ from datachain.lib.webdataset_laion import process_laion_meta
 
 def test_datachain(tmp_dir, test_session, datasets, benchmark):
     def run_script(uri, **kwargs):
-        dc.from_storage(uri, session=test_session, **kwargs).gen(
+        dc.read_storage(uri, session=test_session, **kwargs).gen(
             emd=process_laion_meta
         ).settings(
             # Disable `prefetch` for `map()` because `process_laion_meta` repeatedly

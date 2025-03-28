@@ -10,7 +10,7 @@ def path_len(path):
 
 if __name__ == "__main__":
     # Run in chain
-    dc.from_storage(
+    dc.read_storage(
         uri="gs://datachain-demo/dogs-and-cats/",
     ).map(
         path_len,

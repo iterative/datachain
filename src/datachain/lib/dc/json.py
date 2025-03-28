@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     P = ParamSpec("P")
 
 
-def from_json(
+def read_json(
     path: Union[str, os.PathLike[str]],
     type: FileType = "text",
     spec: Optional[DataType] = None,
@@ -52,16 +52,16 @@ def from_json(
         infer JSON schema from data, reduce using JMESPATH
         ```py
         import datachain as dc
-        chain = dc.from_json("gs://json", jmespath="key1.key2")
+        chain = dc.read_json("gs://json", jmespath="key1.key2")
         ```
 
         infer JSON schema from a particular path
         ```py
         import datachain as dc
-        chain = dc.from_json("gs://json_ds", schema_from="gs://json/my.json")
+        chain = dc.read_json("gs://json_ds", schema_from="gs://json/my.json")
         ```
     """
-    from .storage import from_storage
+    from .storage import read_storage
 
     if schema_from == "auto":
         schema_from = os.fspath(path)
@@ -74,7 +74,7 @@ def from_json(
         object_name = jmespath_to_name(jmespath)
     if not object_name:
         object_name = format
-    chain = from_storage(uri=path, type=type, **kwargs)
+    chain = read_storage(uri=path, type=type, **kwargs)
     signal_dict = {
         object_name: read_meta(
             schema_from=schema_from,

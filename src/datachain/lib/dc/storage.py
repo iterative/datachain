@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from .datachain import DataChain
 
 
-def from_storage(
+def read_storage(
     uri: Union[str, os.PathLike[str], list[str], list[os.PathLike[str]]],
     *,
     type: FileType = "binary",
@@ -55,12 +55,12 @@ def from_storage(
         Simple call from s3:
         ```python
         import datachain as dc
-        chain = dc.from_storage("s3://my-bucket/my-dir")
+        chain = dc.read_storage("s3://my-bucket/my-dir")
         ```
 
         Multiple URIs:
         ```python
-        chain = dc.from_storage([
+        chain = dc.read_storage([
             "s3://bucket1/dir1",
             "s3://bucket2/dir2"
         ])
@@ -68,7 +68,7 @@ def from_storage(
 
         With AWS S3-compatible storage:
         ```python
-        chain = dc.from_storage(
+        chain = dc.read_storage(
             "s3://my-bucket/my-dir",
             client_config = {"aws_endpoint_url": "<minio-endpoint-url>"}
         )
@@ -77,7 +77,7 @@ def from_storage(
         Pass existing session
         ```py
         session = Session.get()
-        chain = dc.from_storage([
+        chain = dc.read_storage([
             "path/to/dir1",
             "path/to/dir2"
         ], session=session, recursive=True)
@@ -88,9 +88,9 @@ def from_storage(
         avoiding redundant updates for URIs pointing to the same storage location.
     """
     from .datachain import DataChain
-    from .datasets import from_dataset
-    from .records import from_records
-    from .values import from_values
+    from .datasets import read_dataset
+    from .records import read_records
+    from .values import read_values
 
     file_type = get_file_type(type)
 
@@ -122,7 +122,7 @@ def from_storage(
             )
             continue
 
-        dc = from_dataset(list_ds_name, session=session, settings=settings)
+        dc = read_dataset(list_ds_name, session=session, settings=settings)
         dc._query.update = update
         dc.signals_schema = dc.signals_schema.mutate({f"{object_name}": file_type})
 
@@ -131,7 +131,7 @@ def from_storage(
             def lst_fn(ds_name, lst_uri):
                 # disable prefetch for listing, as it pre-downloads all files
                 (
-                    from_records(
+                    read_records(
                         DataChain.DEFAULT_FILE_RECORD,
                         session=session,
                         settings=settings,
@@ -155,7 +155,7 @@ def from_storage(
         listed_ds_name.add(list_ds_name)
 
     if file_values:
-        file_chain = from_values(
+        file_chain = read_values(
             session=session,
             settings=settings,
             in_memory=in_memory,

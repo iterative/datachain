@@ -1,15 +1,15 @@
-from .csv import from_csv
+from .csv import read_csv
 from .datachain import C, Column, DataChain
-from .datasets import datasets, from_dataset
-from .hf import from_hf
-from .json import from_json
+from .datasets import datasets, read_dataset
+from .hf import read_hf
+from .json import read_json
 from .listings import listings
-from .pandas import from_pandas
-from .parquet import from_parquet
-from .records import from_records
-from .storage import from_storage
+from .pandas import read_pandas
+from .parquet import read_parquet
+from .records import read_records
+from .storage import read_storage
 from .utils import DatasetMergeError, DatasetPrepareError, Sys
-from .values import from_values
+from .values import read_values
 
 __all__ = [
     "C",
@@ -19,14 +19,14 @@ __all__ = [
     "DatasetPrepareError",
     "Sys",
     "datasets",
-    "from_csv",
-    "from_dataset",
-    "from_hf",
-    "from_json",
-    "from_pandas",
-    "from_parquet",
-    "from_records",
-    "from_storage",
-    "from_values",
     "listings",
+    "read_csv",
+    "read_dataset",
+    "read_hf",
+    "read_json",
+    "read_pandas",
+    "read_parquet",
+    "read_records",
+    "read_storage",
+    "read_values",
 ]

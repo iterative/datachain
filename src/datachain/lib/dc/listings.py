@@ -6,7 +6,7 @@ from typing import (
 from datachain.lib.listing_info import ListingInfo
 from datachain.query import Session
 
-from .values import from_values
+from .values import read_values
 
 if TYPE_CHECKING:
     from typing_extensions import ParamSpec
@@ -35,7 +35,7 @@ def listings(
     session = Session.get(session, in_memory=in_memory)
     catalog = kwargs.get("catalog") or session.catalog
 
-    return from_values(
+    return read_values(
         session=session,
         in_memory=in_memory,
         output={object_name: ListingInfo},

@@ -270,6 +270,6 @@ def test_parquet_override_column_names_invalid():
 
 def test_infer_schema_no_files(test_session):
     schema = {"file": File, "my_col": int}
-    chain = dc.from_records([], schema=schema, session=test_session, in_memory=True)
+    chain = dc.read_records([], schema=schema, session=test_session, in_memory=True)
     with pytest.raises(ValueError):
         infer_schema(chain)

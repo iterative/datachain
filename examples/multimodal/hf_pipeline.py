@@ -50,7 +50,7 @@ if __name__ == "__main__":
     print("** HuggingFace pipeline helper model zoo demo **")
     print("\nZero-shot object detection and classification:")
     (
-        dc.from_storage(
+        dc.read_storage(
             image_source,
             anon=True,
             type="image",
@@ -72,7 +72,7 @@ if __name__ == "__main__":
 
     print("\nNot-safe-for-work image detection:")
     (
-        dc.from_storage(
+        dc.read_storage(
             image_source,
             anon=True,
             type="image",
@@ -95,7 +95,7 @@ if __name__ == "__main__":
     try:
         subprocess.run(["ffmpeg", "-L"], check=True)  # noqa: S603, S607
         (
-            dc.from_storage(
+            dc.read_storage(
                 audio_source,
                 anon=True,
                 type="binary",
@@ -118,7 +118,7 @@ if __name__ == "__main__":
 
     print("\nLong text summarization:")
     (
-        dc.from_storage(
+        dc.read_storage(
             text_source,
             anon=True,
             type="text",

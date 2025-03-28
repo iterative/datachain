@@ -84,22 +84,22 @@ class DataChain:
     underlyind library `Pydantic`.
 
     See Also:
-        `from_storage("s3://my-bucket/my-dir/")` - reading unstructured
+        `read_storage("s3://my-bucket/my-dir/")` - reading unstructured
             data files from storages such as S3, gs or Azure ADLS.
 
         `DataChain.save("name")` - saving to a dataset.
 
-        `from_dataset("name")` - reading from a dataset.
+        `read_dataset("name")` - reading from a dataset.
 
-        `from_values(fib=[1, 2, 3, 5, 8])` - generating from values.
+        `read_values(fib=[1, 2, 3, 5, 8])` - generating from values.
 
-        `from_pandas(pd.DataFrame(...))` - generating from pandas.
+        `read_pandas(pd.DataFrame(...))` - generating from pandas.
 
-        `from_json("file.json")` - generating from json.
+        `read_json("file.json")` - generating from json.
 
-        `from_csv("file.csv")` - generating from csv.
+        `read_csv("file.csv")` - generating from csv.
 
-        `from_parquet("file.parquet")` - generating from parquet.
+        `read_parquet("file.parquet")` - generating from parquet.
 
     Example:
         ```py
@@ -118,7 +118,7 @@ class DataChain:
         api_key = os.environ["MISTRAL_API_KEY"]
 
         chain = (
-            dc.from_storage("gs://datachain-demo/chatbot-KiT/")
+            dc.read_storage("gs://datachain-demo/chatbot-KiT/")
             .limit(5)
             .settings(cache=True, parallel=5)
             .map(
@@ -315,27 +315,27 @@ class DataChain:
         *args,
         **kwargs,
     ) -> "DataChain":
-        from .storage import from_storage
+        from .storage import read_storage
 
         warnings.warn(
             "Class method `from_storage` is deprecated. "
-            "Use `from_storage` function instead from top_module.",
+            "Use `read_storage` function instead from top_module.",
             DeprecationWarning,
             stacklevel=2,
         )
-        return from_storage(*args, **kwargs)
+        return read_storage(*args, **kwargs)
 
     @classmethod
     def from_dataset(cls, *args, **kwargs) -> "DataChain":
-        from .datasets import from_dataset
+        from .datasets import read_dataset
 
         warnings.warn(
             "Class method `from_dataset` is deprecated. "
-            "Use `from_dataset` function instead from top_module.",
+            "Use `read_dataset` function instead from top_module.",
             DeprecationWarning,
             stacklevel=2,
         )
-        return from_dataset(*args, **kwargs)
+        return read_dataset(*args, **kwargs)
 
     @classmethod
     def from_json(
@@ -343,15 +343,15 @@ class DataChain:
         *args,
         **kwargs,
     ) -> "DataChain":
-        from .json import from_json
+        from .json import read_json
 
         warnings.warn(
             "Class method `from_json` is deprecated. "
-            "Use `from_json` function instead from top_module.",
+            "Use `read_json` function instead from top_module.",
             DeprecationWarning,
             stacklevel=2,
         )
-        return from_json(*args, **kwargs)
+        return read_json(*args, **kwargs)
 
     def explode(
         self,
@@ -487,7 +487,7 @@ class DataChain:
                 )
 
             chain = (
-                dc.from_storage("s3://my-bucket")
+                dc.read_storage("s3://my-bucket")
                 .apply(parse_stem)
                 .filter(C("stem").glob("*cat*"))
             )
@@ -727,7 +727,7 @@ class DataChain:
 
         Note:
             Order is not guaranteed when steps are added after an `order_by` statement.
-            I.e. when using `from_dataset` an `order_by` statement should be used if
+            I.e. when using `read_dataset` an `order_by` statement should be used if
             the order of the records in the chain is important.
             Using `order_by` directly before `limit`, `collect` and `collect_flatten`
             will give expected results.
@@ -1466,15 +1466,15 @@ class DataChain:
         *args,
         **kwargs,
     ) -> "DataChain":
-        from .values import from_values
+        from .values import read_values
 
         warnings.warn(
             "Class method `from_values` is deprecated. "
-            "Use `from_values` function instead from top_module.",
+            "Use `read_values` function instead from top_module.",
             DeprecationWarning,
             stacklevel=2,
         )
-        return from_values(*args, **kwargs)
+        return read_values(*args, **kwargs)
 
     @classmethod
     def from_pandas(
@@ -1482,15 +1482,15 @@ class DataChain:
         *args,
         **kwargs,
     ) -> "DataChain":
-        from .pandas import from_pandas
+        from .pandas import read_pandas
 
         warnings.warn(
             "Class method `from_pandas` is deprecated. "
-            "Use `from_pandas` function instead from top_module.",
+            "Use `read_pandas` function instead from top_module.",
             DeprecationWarning,
             stacklevel=2,
         )
-        return from_pandas(*args, **kwargs)
+        return read_pandas(*args, **kwargs)
 
     def to_pandas(self, flatten=False, include_hidden=True) -> "pd.DataFrame":
         """Return a pandas DataFrame from the chain.
@@ -1575,15 +1575,15 @@ class DataChain:
         *args,
         **kwargs,
     ) -> "DataChain":
-        from .hf import from_hf
+        from .hf import read_hf
 
         warnings.warn(
             "Class method `from_hf` is deprecated. "
-            "Use `from_hf` function instead from top_module.",
+            "Use `read_hf` function instead from top_module.",
             DeprecationWarning,
             stacklevel=2,
         )
-        return from_hf(*args, **kwargs)
+        return read_hf(*args, **kwargs)
 
     def parse_tabular(
         self,
@@ -1610,7 +1610,7 @@ class DataChain:
             Reading a json lines file:
             ```py
             import datachain as dc
-            chain = dc.from_storage("s3://mybucket/file.jsonl")
+            chain = dc.read_storage("s3://mybucket/file.jsonl")
             chain = chain.parse_tabular(format="json")
             ```
 
@@ -1618,7 +1618,7 @@ class DataChain:
             ```py
             import datachain as dc
 
-            chain = dc.from_storage("s3://mybucket")
+            chain = dc.read_storage("s3://mybucket")
             chain = chain.filter(dc.C("file.name").glob("*.jsonl"))
             chain = chain.parse_tabular(format="json")
             ```
@@ -1680,15 +1680,15 @@ class DataChain:
         *args,
         **kwargs,
     ) -> "DataChain":
-        from .csv import from_csv
+        from .csv import read_csv
 
         warnings.warn(
             "Class method `from_csv` is deprecated. "
-            "Use `from_csv` function instead from top_module.",
+            "Use `read_csv` function instead from top_module.",
             DeprecationWarning,
             stacklevel=2,
         )
-        return from_csv(*args, **kwargs)
+        return read_csv(*args, **kwargs)
 
     @classmethod
     def from_parquet(
@@ -1696,15 +1696,15 @@ class DataChain:
         *args,
         **kwargs,
     ) -> "DataChain":
-        from .parquet import from_parquet
+        from .parquet import read_parquet
 
         warnings.warn(
             "Class method `from_parquet` is deprecated. "
-            "Use `from_parquet` function instead from top_module.",
+            "Use `read_parquet` function instead from top_module.",
             DeprecationWarning,
             stacklevel=2,
         )
-        return from_parquet(*args, **kwargs)
+        return read_parquet(*args, **kwargs)
 
     def to_parquet(
         self,
@@ -1930,15 +1930,15 @@ class DataChain:
         *args,
         **kwargs,
     ) -> "DataChain":
-        from .records import from_records
+        from .records import read_records
 
         warnings.warn(
             "Class method `from_records` is deprecated. "
-            "Use `from_records` function instead from top_module.",
+            "Use `read_records` function instead from top_module.",
             DeprecationWarning,
             stacklevel=2,
         )
-        return from_records(*args, **kwargs)
+        return read_records(*args, **kwargs)
 
     def sum(self, fr: DataType):  # type: ignore[override]
         """Compute the sum of a column."""
@@ -1969,7 +1969,7 @@ class DataChain:
             import datachain as dc
 
             (
-                dc.from_storage(DATA, type="text")
+                dc.read_storage(DATA, type="text")
                 .settings(parallel=4, cache=True)
                 .setup(client=lambda: anthropic.Anthropic(api_key=API_KEY))
                 .map(
@@ -2021,7 +2021,7 @@ class DataChain:
             ```py
             import datachain as dc
 
-            ds = dc.from_storage("s3://mybucket")
+            ds = dc.read_storage("s3://mybucket")
             ds.to_storage("gs://mybucket", placement="filename")
             ```
         """
@@ -2139,7 +2139,7 @@ class DataChain:
             ```py
             import datachain as dc
 
-            chain = dc.from_storage(...)
+            chain = dc.read_storage(...)
             chunk_1 = query._chunk(0, 2)
             chunk_2 = query._chunk(1, 2)
             ```
