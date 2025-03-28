@@ -91,7 +91,7 @@ class DataChain:
 
         `read_dataset("name")` - reading from a dataset.
 
-        `from_values(fib=[1, 2, 3, 5, 8])` - generating from values.
+        `read_values(fib=[1, 2, 3, 5, 8])` - generating from values.
 
         `read_pandas(pd.DataFrame(...))` - generating from pandas.
 
@@ -1466,15 +1466,15 @@ class DataChain:
         *args,
         **kwargs,
     ) -> "DataChain":
-        from .values import from_values
+        from .values import read_values
 
         warnings.warn(
-            "Class method `from_values` is deprecated. "
-            "Use `from_values` function instead from top_module.",
+            "Class method `read_values` is deprecated. "
+            "Use `read_values` function instead from top_module.",
             DeprecationWarning,
             stacklevel=2,
         )
-        return from_values(*args, **kwargs)
+        return read_values(*args, **kwargs)
 
     @classmethod
     def from_pandas(

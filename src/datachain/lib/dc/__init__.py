@@ -9,7 +9,7 @@ from .parquet import read_parquet
 from .records import read_records
 from .storage import read_storage
 from .utils import DatasetMergeError, DatasetPrepareError, Sys
-from .values import from_values
+from .values import read_values
 
 __all__ = [
     "C",
@@ -19,7 +19,6 @@ __all__ = [
     "DatasetPrepareError",
     "Sys",
     "datasets",
-    "from_values",
     "listings",
     "read_csv",
     "read_dataset",
@@ -29,4 +28,5 @@ __all__ = [
     "read_parquet",
     "read_records",
     "read_storage",
+    "read_values",
 ]

@@ -29,7 +29,7 @@ def test_datachain_show(capsys, test_session):
                inner_value
 0         1.3          1.1    1
 """
-    dc.from_values(outer=[outer], nums=[1]).show()
+    dc.read_values(outer=[outer], nums=[1]).show()
 
     captured = capsys.readouterr()
     output_lines = [line.strip() for line in captured.out.strip().split("\n")]
@@ -48,7 +48,7 @@ def test_datachain_show_include_hidden(capsys, test_session):
                           inner_value   hide_inner
 0         1.3        1.4          1.1          1.2    1
 """
-    dc.from_values(outer=[outer], nums=[1]).show(include_hidden=True)
+    dc.read_values(outer=[outer], nums=[1]).show(include_hidden=True)
 
     captured = capsys.readouterr()
     output_lines = [line.strip() for line in captured.out.strip().split("\n")]
@@ -61,7 +61,7 @@ def test_datachain_save(test_session):
     inner = InnerClass(inner_value=1.1, hide_inner=1.2)
     outer = OuterClass(outer_value=1.3, hide_outer=1.4, inner_object=inner)
 
-    ds = dc.from_values(outer=[outer], nums=[1], session=test_session).save()
+    ds = dc.read_values(outer=[outer], nums=[1], session=test_session).save()
 
     version = test_session.catalog.get_dataset(ds.name).get_version(1)
     feature_schema = version.feature_schema

@@ -90,7 +90,7 @@ def read_storage(
     from .datachain import DataChain
     from .datasets import read_dataset
     from .records import read_records
-    from .values import from_values
+    from .values import read_values
 
     file_type = get_file_type(type)
 
@@ -154,7 +154,7 @@ def read_storage(
         listed_ds_name.add(list_ds_name)
 
     if file_values:
-        file_chain = from_values(
+        file_chain = read_values(
             session=session,
             settings=settings,
             in_memory=in_memory,

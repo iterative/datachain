@@ -13,7 +13,7 @@ from datachain.query import Session
 from datachain.query.dataset import DatasetQuery
 
 from .utils import Sys
-from .values import from_values
+from .values import read_values
 
 if TYPE_CHECKING:
     from typing_extensions import ParamSpec
@@ -140,7 +140,7 @@ def datasets(
         )
     ]
 
-    return from_values(
+    return read_values(
         session=session,
         settings=settings,
         in_memory=in_memory,

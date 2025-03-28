@@ -81,7 +81,7 @@ def sort_files(files):
 
 
 def test_repr(test_session):
-    chain = dc.from_values(
+    chain = dc.read_values(
         sign1=features_nested, col1=["a", "b", "c"], session=test_session
     )
     assert (
@@ -275,7 +275,7 @@ def test_datasets(test_session):
     datasets = [d for d in ds.collect("dataset") if d.name == "fibonacci"]
     assert len(datasets) == 0
 
-    dc.from_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save("fibonacci")
+    dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save("fibonacci")
 
     ds = dc.datasets(session=test_session)
     datasets = [d for d in ds.collect("dataset") if d.name == "fibonacci"]
@@ -289,7 +289,7 @@ def test_datasets(test_session):
 
 
 def test_datasets_studio(studio_datasets, test_session):
-    dc.from_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save("fibonacci")
+    dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save("fibonacci")
     ds = dc.datasets(studio=True, session=test_session)
     # Local datasets are not included in the list
     datasets = [d for d in ds.collect("dataset") if d.name == "fibonacci"]
@@ -315,7 +315,7 @@ def test_datasets_in_memory():
     datasets = [d for d in ds.collect("dataset") if d.name == "fibonacci"]
     assert len(datasets) == 0
 
-    dc.from_values(fib=[1, 1, 2, 3, 5, 8]).save("fibonacci")
+    dc.read_values(fib=[1, 1, 2, 3, 5, 8]).save("fibonacci")
 
     ds = dc.datasets()
     assert ds.session.catalog.in_memory is True
@@ -421,7 +421,7 @@ def test_from_features_simple_types(test_session):
     fib = [1, 1, 2, 3, 5, 8]
     values = ["odd" if num % 2 else "even" for num in fib]
 
-    ds = dc.from_values(fib=fib, odds=values, session=test_session)
+    ds = dc.read_values(fib=fib, odds=values, session=test_session)
 
     df = sort_df(ds.to_pandas())
     assert len(df) == len(fib)
@@ -434,7 +434,7 @@ def test_from_features_simple_types_in_memory():
     fib = [1, 1, 2, 3, 5, 8]
     values = ["odd" if num % 2 else "even" for num in fib]
 
-    ds = dc.from_values(fib=fib, odds=values, in_memory=True)
+    ds = dc.read_values(fib=fib, odds=values, in_memory=True)
     assert ds.session.catalog.in_memory is True
     assert ds.session.catalog.metastore.db.db_file == ":memory:"
     assert ds.session.catalog.warehouse.db.db_file == ":memory:"
@@ -446,7 +446,7 @@ def test_from_features_simple_types_in_memory():
 
 
 def test_from_features_more_simple_types(test_session):
-    ds = dc.from_values(
+    ds = dc.read_values(
         t1=features,
         num=range(len(features)),
         bb=[True, True, False],
@@ -483,7 +483,7 @@ def test_file_list(test_session):
     sizes = [1, 2, 3, 4, 5]
     files = [File(path=name, size=size) for name, size in zip(names, sizes)]
 
-    ds = dc.from_values(file=files, session=test_session)
+    ds = dc.read_values(file=files, session=test_session)
 
     assert sort_files(files) == [
         r[0] for r in ds.order_by("file.path", "file.size").collect()
@@ -496,7 +496,7 @@ def test_gen(test_session):
         sqrt: float
         my_name: str
 
-    ds = dc.from_values(t1=features, session=test_session)
+    ds = dc.read_values(t1=features, session=test_session)
     ds = ds.gen(
         x=lambda m_fr: [
             _TestFr(
@@ -524,7 +524,7 @@ def test_map(test_session):
         sqrt: float
         my_name: str
 
-    chain = dc.from_values(t1=features, session=test_session).map(
+    chain = dc.read_values(t1=features, session=test_session).map(
         x=lambda m_fr: _TestFr(
             sqrt=math.sqrt(m_fr.count),
             my_name=m_fr.nnn + "_suf",
@@ -546,7 +546,7 @@ def test_map(test_session):
 
 
 def test_map_existing_column_after_step(test_session):
-    chain = dc.from_values(t1=features, session=test_session).map(
+    chain = dc.read_values(t1=features, session=test_session).map(
         x=lambda _: "test",
         params="t1",
         output={"x": str},
@@ -566,7 +566,7 @@ def test_agg(test_session):
         cnt: int
         my_name: str
 
-    chain = dc.from_values(t1=features, session=test_session).agg(
+    chain = dc.read_values(t1=features, session=test_session).agg(
         x=lambda frs: [
             _TestFr(
                 f=File(path=""),
@@ -606,7 +606,7 @@ def test_agg_two_params(test_session):
     ]
 
     ds = (
-        dc.from_values(t1=features, t2=features2, session=test_session)
+        dc.read_values(t1=features, t2=features2, session=test_session)
         .order_by("t1.nnn", "t2.nnn")
         .agg(
             x=lambda frs1, frs2: [
@@ -633,7 +633,7 @@ def test_agg_simple_iiterator(test_session):
 
     keys = ["a", "b", "c"]
     values = [3, 1, 2]
-    ds = dc.from_values(key=keys, val=values, session=test_session).gen(res=func)
+    ds = dc.read_values(key=keys, val=values, session=test_session).gen(res=func)
 
     df = sort_df(ds.to_pandas())
     res = df["res_1"].tolist()
@@ -641,7 +641,7 @@ def test_agg_simple_iiterator(test_session):
 
 
 def test_agg_simple_iterator_error(test_session):
-    chain = dc.from_values(key=["a", "b", "c"], session=test_session)
+    chain = dc.read_values(key=["a", "b", "c"], session=test_session)
 
     with pytest.raises(UdfSignatureError):
 
@@ -680,7 +680,7 @@ def test_agg_tuple_result_iterator(test_session):
 
     keys = ["n1", "n2", "n1"]
     values = [1, 5, 9]
-    ds = dc.from_values(key=keys, val=values, session=test_session).agg(
+    ds = dc.read_values(key=keys, val=values, session=test_session).agg(
         x=func, partition_by=C("key")
     )
 
@@ -701,7 +701,7 @@ def test_agg_tuple_result_generator(test_session):
     keys = ["n1", "n2", "n1"]
     values = [1, 5, 9]
     ds = (
-        dc.from_values(key=keys, val=values, session=test_session)
+        dc.read_values(key=keys, val=values, session=test_session)
         .agg(x=func, partition_by=C("key"))
         .order_by("x_1.name")
     )
@@ -715,7 +715,7 @@ def test_batch_map(test_session):
         sqrt: float
         my_name: str
 
-    chain = dc.from_values(t1=features, session=test_session).batch_map(
+    chain = dc.read_values(t1=features, session=test_session).batch_map(
         x=lambda m_frs: [
             _TestFr(
                 sqrt=math.sqrt(m_fr.count),
@@ -744,7 +744,7 @@ def test_batch_map_wrong_size(test_session):
         total: int
         names: str
 
-    chain = dc.from_values(t1=features, session=test_session).batch_map(
+    chain = dc.read_values(t1=features, session=test_session).batch_map(
         x=lambda m_frs: [
             _TestFr(
                 total=sum(m_fr.count for m_fr in m_frs),
@@ -771,7 +771,7 @@ def test_batch_map_two_params(test_session):
         MyFr(nnn="n1", count=2),
     ]
 
-    ds = dc.from_values(t1=features, t2=features2, session=test_session).batch_map(
+    ds = dc.read_values(t1=features, t2=features2, session=test_session).batch_map(
         x=lambda frs1, frs2: [
             _TestFr(
                 f=File(path=""),
@@ -797,13 +797,13 @@ def test_batch_map_tuple_result_iterator(test_session):
         for val in t1:
             yield math.sqrt(val)
 
-    chain = dc.from_values(t1=[1, 4, 9], session=test_session).batch_map(x=sqrt)
+    chain = dc.read_values(t1=[1, 4, 9], session=test_session).batch_map(x=sqrt)
 
     assert list(chain.order_by("x").collect("x")) == [1, 2, 3]
 
 
 def test_collect(test_session):
-    chain = dc.from_values(f1=features, num=range(len(features)), session=test_session)
+    chain = dc.read_values(f1=features, num=range(len(features)), session=test_session)
 
     n = 0
     for sample in chain.order_by("f1.nnn", "f1.count").collect():
@@ -821,7 +821,7 @@ def test_collect(test_session):
 
 
 def test_collect_nested_feature(test_session):
-    chain = dc.from_values(sign1=features_nested, session=test_session)
+    chain = dc.read_values(sign1=features_nested, session=test_session)
 
     for n, sample in enumerate(
         chain.order_by("sign1.fr.nnn", "sign1.fr.count").collect()
@@ -837,7 +837,7 @@ def test_select_read_hf_without_sys_columns(test_session):
     from datachain import func
 
     chain = (
-        dc.from_values(
+        dc.read_values(
             name=["a", "a", "b", "b", "b", "c"],
             val=[1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
         )
@@ -854,7 +854,7 @@ def test_select_read_hf_without_sys_columns(test_session):
 
 
 def test_select_feature(test_session):
-    chain = dc.from_values(my_n=features_nested, session=test_session)
+    chain = dc.read_values(my_n=features_nested, session=test_session)
     dc_ordered = chain.order_by("my_n.fr.nnn", "my_n.fr.count")
 
     samples = dc_ordered.select("my_n").collect()
@@ -882,7 +882,7 @@ def test_select_feature(test_session):
 
 
 def test_select_columns_intersection(test_session):
-    chain = dc.from_values(my_n=features_nested, session=test_session)
+    chain = dc.read_values(my_n=features_nested, session=test_session)
 
     samples = (
         chain.order_by("my_n.fr.nnn", "my_n.fr.count")
@@ -899,7 +899,7 @@ def test_select_columns_intersection(test_session):
 
 
 def test_select_except(test_session):
-    chain = dc.from_values(fr1=features_nested, fr2=features, session=test_session)
+    chain = dc.read_values(fr1=features_nested, fr2=features, session=test_session)
 
     samples = (
         chain.order_by("fr1.fr.nnn", "fr1.fr.count").select_except("fr2").collect()
@@ -913,7 +913,7 @@ def test_select_except(test_session):
 
 
 def test_select_wrong_type(test_session):
-    chain = dc.from_values(fr1=features_nested, fr2=features, session=test_session)
+    chain = dc.read_values(fr1=features_nested, fr2=features, session=test_session)
 
     with pytest.raises(SignalResolvingTypeError):
         list(chain.select(4).collect())
@@ -923,7 +923,7 @@ def test_select_wrong_type(test_session):
 
 
 def test_select_except_error(test_session):
-    chain = dc.from_values(fr1=features_nested, fr2=features, session=test_session)
+    chain = dc.read_values(fr1=features_nested, fr2=features, session=test_session)
 
     with pytest.raises(SignalResolvingError):
         list(chain.select_except("not_exist", "file").collect())
@@ -933,7 +933,7 @@ def test_select_except_error(test_session):
 
 
 def test_select_restore_from_saving(test_session):
-    chain = dc.from_values(my_n=features_nested, session=test_session)
+    chain = dc.read_values(my_n=features_nested, session=test_session)
 
     name = "test_test_select_save"
     chain.select("my_n.fr").save(name)
@@ -962,7 +962,7 @@ def test_select_distinct(test_session):
     ]
 
     actual = (
-        dc.from_values(
+        dc.read_values(
             embedding=[
                 Embedding(id=1, filename="a.jpg", values=expected[0]),
                 Embedding(id=2, filename="b.jpg", values=expected[2]),
@@ -986,7 +986,7 @@ def test_select_distinct(test_session):
 
 def test_read_hf_name_version(test_session):
     name = "test-version"
-    dc.from_values(
+    dc.read_values(
         first_name=["Alice", "Bob", "Charlie"],
         age=[40, 30, None],
         city=[
@@ -1004,7 +1004,7 @@ def test_read_hf_name_version(test_session):
 
 def test_chain_of_maps(test_session):
     chain = (
-        dc.from_values(my_n=features_nested, session=test_session)
+        dc.read_values(my_n=features_nested, session=test_session)
         .map(full_name=lambda my_n: my_n.label + "-" + my_n.fr.nnn, output=str)
         .map(square=lambda my_n: my_n.fr.count**2, output=int)
     )
@@ -1025,7 +1025,7 @@ def test_vector(test_session):
     def get_vector(key) -> list[float]:
         return vector
 
-    ds = dc.from_values(key=[123], session=test_session).map(emd=get_vector)
+    ds = dc.read_values(key=[123], session=test_session).map(emd=get_vector)
 
     df = ds.to_pandas()
     assert np.allclose(df["emd"].tolist()[0], vector)
@@ -1037,7 +1037,7 @@ def test_vector_of_vectors(test_session):
     def get_vector(key) -> list[list[float]]:
         return vector
 
-    ds = dc.from_values(key=[123], session=test_session).map(emd_list=get_vector)
+    ds = dc.read_values(key=[123], session=test_session).map(emd_list=get_vector)
 
     df = ds.to_pandas()
     actual = df["emd_list"].tolist()[0]
@@ -1053,7 +1053,7 @@ def test_unsupported_output_type(test_session):
         return [vector]
 
     with pytest.raises(TypeError):
-        dc.from_values(key=[123], session=test_session).map(emd=get_vector)
+        dc.read_values(key=[123], session=test_session).map(emd=get_vector)
 
 
 def test_collect_single_item(test_session):
@@ -1063,7 +1063,7 @@ def test_collect_single_item(test_session):
 
     scores = [0.1, 0.2, 0.3, 0.4, 0.5]
 
-    chain = dc.from_values(file=files, score=scores, session=test_session)
+    chain = dc.read_values(file=files, score=scores, session=test_session)
     chain = chain.order_by("file.path", "file.size")
 
     assert list(chain.collect("file")) == files
@@ -1084,7 +1084,7 @@ def test_default_output_type(test_session):
     names = sorted(["f1.jpg", "f1.json", "f1.txt", "f2.jpg", "f2.json"])
     suffix = "-new"
 
-    chain = dc.from_values(name=names, session=test_session).map(
+    chain = dc.read_values(name=names, session=test_session).map(
         res1=lambda name: name + suffix
     )
 
@@ -1167,7 +1167,7 @@ def test_parse_tabular_partitions(tmp_dir, test_session):
 
 
 def test_parse_tabular_no_files(test_session):
-    chain = dc.from_values(
+    chain = dc.read_values(
         f1=features, num=range(len(features)), session=test_session, in_memory=True
     )
     with pytest.raises(DatasetPrepareError):
@@ -1442,7 +1442,7 @@ def test_read_csv_parse_options(tmp_dir, test_session):
 
 
 def test_to_csv_features(tmp_dir, test_session):
-    dc_to = dc.from_values(f1=features, num=range(len(features)), session=test_session)
+    dc_to = dc.read_values(f1=features, num=range(len(features)), session=test_session)
     path = tmp_dir / "test.csv"
     dc_to.order_by("f1.nnn", "f1.count").to_csv(path)
     with open(path) as f:
@@ -1451,7 +1451,7 @@ def test_to_csv_features(tmp_dir, test_session):
 
 
 def test_to_tsv_features(tmp_dir, test_session):
-    dc_to = dc.from_values(f1=features, num=range(len(features)), session=test_session)
+    dc_to = dc.read_values(f1=features, num=range(len(features)), session=test_session)
     path = tmp_dir / "test.csv"
     dc_to.order_by("f1.nnn", "f1.count").to_csv(path, delimiter="\t")
     with open(path) as f:
@@ -1460,7 +1460,7 @@ def test_to_tsv_features(tmp_dir, test_session):
 
 
 def test_to_csv_features_nested(tmp_dir, test_session):
-    dc_to = dc.from_values(sign1=features_nested, session=test_session)
+    dc_to = dc.read_values(sign1=features_nested, session=test_session)
     path = tmp_dir / "test.csv"
     dc_to.order_by("sign1.fr.nnn", "sign1.fr.count").to_csv(path)
     with open(path) as f:
@@ -1522,14 +1522,14 @@ def test_explode(tmp_dir, test_session, column_type, object_name, model_name):
 
 
 def test_explode_raises_on_wrong_column_type(test_session):
-    chain = dc.from_values(f1=features, session=test_session)
+    chain = dc.read_values(f1=features, session=test_session)
 
     with pytest.raises(TypeError):
         chain.explode("f1.count")
 
 
 def test_to_json_features(tmp_dir, test_session):
-    dc_to = dc.from_values(f1=features, num=range(len(features)), session=test_session)
+    dc_to = dc.read_values(f1=features, num=range(len(features)), session=test_session)
     path = tmp_dir / "test.json"
     dc_to.order_by("f1.nnn", "f1.count").to_json(path)
     with open(path) as f:
@@ -1541,7 +1541,7 @@ def test_to_json_features(tmp_dir, test_session):
 
 
 def test_to_json_features_nested(tmp_dir, test_session):
-    dc_to = dc.from_values(sign1=features_nested, session=test_session)
+    dc_to = dc.read_values(sign1=features_nested, session=test_session)
     path = tmp_dir / "test.json"
     dc_to.order_by("sign1.fr.nnn", "sign1.fr.count").to_json(path)
     with open(path) as f:
@@ -1598,7 +1598,7 @@ def test_read_jsonl_jmespath(tmp_dir, test_session):
 
 
 def test_to_jsonl_features(tmp_dir, test_session):
-    dc_to = dc.from_values(f1=features, num=range(len(features)), session=test_session)
+    dc_to = dc.read_values(f1=features, num=range(len(features)), session=test_session)
     path = tmp_dir / "test.json"
     dc_to.order_by("f1.nnn", "f1.count").to_jsonl(path)
     with open(path) as f:
@@ -1610,7 +1610,7 @@ def test_to_jsonl_features(tmp_dir, test_session):
 
 
 def test_to_jsonl_features_nested(tmp_dir, test_session):
-    dc_to = dc.from_values(sign1=features_nested, session=test_session)
+    dc_to = dc.read_values(sign1=features_nested, session=test_session)
     path = tmp_dir / "test.json"
     dc_to.order_by("sign1.fr.nnn", "sign1.fr.count").to_jsonl(path)
     with open(path) as f:
@@ -1723,7 +1723,7 @@ def test_to_read_parquet_partitioned(tmp_dir, test_session, chunk_size):
 
 @pytest.mark.parametrize("chunk_size", (1000, 2))
 def test_to_read_parquet_features(tmp_dir, test_session, chunk_size):
-    dc_to = dc.from_values(f1=features, num=range(len(features)), session=test_session)
+    dc_to = dc.read_values(f1=features, num=range(len(features)), session=test_session)
 
     path = tmp_dir / "test.parquet"
     dc_to.to_parquet(path, chunk_size=chunk_size)
@@ -1749,7 +1749,7 @@ def test_to_read_parquet_features(tmp_dir, test_session, chunk_size):
 
 @pytest.mark.parametrize("chunk_size", (1000, 2))
 def test_to_read_parquet_nested_features(tmp_dir, test_session, chunk_size):
-    dc_to = dc.from_values(sign1=features_nested, session=test_session)
+    dc_to = dc.read_values(sign1=features_nested, session=test_session)
 
     path = tmp_dir / "test.parquet"
     dc_to.to_parquet(path, chunk_size=chunk_size)
@@ -1770,7 +1770,7 @@ def test_to_read_parquet_nested_features(tmp_dir, test_session, chunk_size):
 
 @pytest.mark.parametrize("chunk_size", (1000, 2))
 def test_to_read_parquet_two_top_level_features(tmp_dir, test_session, chunk_size):
-    dc_to = dc.from_values(f1=features, nest1=features_nested, session=test_session)
+    dc_to = dc.read_values(f1=features, nest1=features_nested, session=test_session)
 
     path = tmp_dir / "test.parquet"
     dc_to.to_parquet(path, chunk_size=chunk_size)
@@ -1798,7 +1798,7 @@ def test_parallel_in_memory():
 
     with pytest.raises(RuntimeError):
         list(
-            dc.from_values(key=vals, in_memory=True)
+            dc.read_values(key=vals, in_memory=True)
             .settings(parallel=True)
             .map(res=lambda key: prefix + key)
             .collect("res")
@@ -1810,7 +1810,7 @@ def test_exec(test_session):
     all_names = set()
 
     chain = (
-        dc.from_values(name=names, session=test_session)
+        dc.read_values(name=names, session=test_session)
         .map(nop=lambda name: all_names.add(name))
         .exec()
     )
@@ -1819,7 +1819,7 @@ def test_exec(test_session):
 
 
 def test_extend_features(test_session):
-    chain = dc.from_values(f1=features, num=range(len(features)), session=test_session)
+    chain = dc.read_values(f1=features, num=range(len(features)), session=test_session)
 
     res = chain._extend_to_data_model("sum", "num")
     assert res == sum(range(len(features)))
@@ -1837,7 +1837,7 @@ def test_from_features_object_name(test_session):
     fib = [1, 1, 2, 3, 5, 8]
     values = ["odd" if num % 2 else "even" for num in fib]
 
-    chain = dc.from_values(
+    chain = dc.read_values(
         fib=fib, odds=values, object_name="custom", session=test_session
     )
     assert "custom.fib" in chain.to_pandas(flatten=True).columns
@@ -1854,7 +1854,7 @@ def test_parse_tabular_object_name(tmp_dir, test_session):
 
 
 def test_sys_feature(test_session):
-    ds = dc.from_values(t1=features, session=test_session).order_by(
+    ds = dc.read_values(t1=features, session=test_session).order_by(
         "t1.nnn", "t1.count"
     )
     ds_sys = ds.settings(sys=True)
@@ -1886,7 +1886,7 @@ def test_sys_feature(test_session):
 
 
 def test_to_pandas_multi_level(test_session):
-    df = dc.from_values(t1=features, session=test_session).to_pandas()
+    df = dc.read_values(t1=features, session=test_session).to_pandas()
 
     assert "t1" in df.columns
     assert "nnn" in df["t1"].columns
@@ -1895,7 +1895,7 @@ def test_to_pandas_multi_level(test_session):
 
 
 def test_to_pandas_multi_level_flatten(test_session):
-    df = dc.from_values(t1=features, session=test_session).to_pandas(flatten=True)
+    df = dc.read_values(t1=features, session=test_session).to_pandas(flatten=True)
 
     assert "t1.nnn" in df.columns
     assert "t1.count" in df.columns
@@ -1905,7 +1905,7 @@ def test_to_pandas_multi_level_flatten(test_session):
 
 def test_to_pandas_empty(test_session):
     df = (
-        dc.from_values(t1=[1, 2, 3], session=test_session)
+        dc.read_values(t1=[1, 2, 3], session=test_session)
         .limit(0)
         .to_pandas(flatten=True)
     )
@@ -1915,7 +1915,7 @@ def test_to_pandas_empty(test_session):
     assert df["t1"].tolist() == []
 
     df = (
-        dc.from_values(my_n=features_nested, session=test_session)
+        dc.read_values(my_n=features_nested, session=test_session)
         .limit(0)
         .to_pandas(flatten=False)
     )
@@ -1929,7 +1929,7 @@ def test_to_pandas_empty(test_session):
     ]
 
     df = (
-        dc.from_values(my_n=features_nested, session=test_session)
+        dc.read_values(my_n=features_nested, session=test_session)
         .limit(0)
         .to_pandas(flatten=True)
     )
@@ -1941,7 +1941,7 @@ def test_to_pandas_empty(test_session):
 
 def test_mutate(test_session):
     chain = (
-        dc.from_values(t1=features, session=test_session)
+        dc.read_values(t1=features, session=test_session)
         .order_by("t1.nnn", "t1.count")
         .mutate(circle=2 * 3.14 * Column("t1.count"), place="pref_" + Column("t1.nnn"))
     )
@@ -1957,7 +1957,7 @@ def test_mutate(test_session):
 def test_order_by_with_nested_columns(test_session, with_function):
     names = ["a.txt", "c.txt", "d.txt", "a.txt", "b.txt"]
 
-    chain = dc.from_values(
+    chain = dc.read_values(
         file=[File(path=name) for name in names], session=test_session
     )
     if with_function:
@@ -1980,7 +1980,7 @@ def test_order_by_collect(test_session):
     numbers = [6, 2, 3, 1, 5, 7, 4]
     letters = ["u", "y", "x", "z", "v", "t", "w"]
 
-    chain = dc.from_values(number=numbers, letter=letters, session=test_session)
+    chain = dc.read_values(number=numbers, letter=letters, session=test_session)
     assert list(chain.order_by("number").collect()) == [
         (1, "z"),
         (2, "y"),
@@ -2006,7 +2006,7 @@ def test_order_by_collect(test_session):
 def test_order_by_descending(test_session, with_function):
     names = ["a.txt", "c.txt", "d.txt", "a.txt", "b.txt"]
 
-    chain = dc.from_values(
+    chain = dc.read_values(
         file=[File(path=name) for name in names], session=test_session
     )
     if with_function:
@@ -2026,17 +2026,17 @@ def test_order_by_descending(test_session, with_function):
 
 
 def test_union(test_session):
-    chain1 = dc.from_values(value=[1, 2], session=test_session)
-    chain2 = dc.from_values(value=[3, 4], session=test_session)
+    chain1 = dc.read_values(value=[1, 2], session=test_session)
+    chain2 = dc.read_values(value=[3, 4], session=test_session)
     chain3 = chain1 | chain2
     assert chain3.count() == 4
     assert list(chain3.order_by("value").collect("value")) == [1, 2, 3, 4]
 
 
 def test_union_different_columns(test_session):
-    chain1 = dc.from_values(value=[1, 2], name=["chain", "more"], session=test_session)
-    chain2 = dc.from_values(value=[3, 4], session=test_session)
-    chain3 = dc.from_values(other=["a", "different", "thing"], session=test_session)
+    chain1 = dc.read_values(value=[1, 2], name=["chain", "more"], session=test_session)
+    chain2 = dc.read_values(value=[3, 4], session=test_session)
+    chain3 = dc.read_values(other=["a", "different", "thing"], session=test_session)
     with pytest.raises(
         ValueError, match="Cannot perform union. name only present in left"
     ):
@@ -2055,8 +2055,8 @@ def test_union_different_columns(test_session):
 
 
 def test_union_different_column_order(test_session):
-    chain1 = dc.from_values(value=[1, 2], name=["chain", "more"], session=test_session)
-    chain2 = dc.from_values(
+    chain1 = dc.read_values(value=[1, 2], name=["chain", "more"], session=test_session)
+    chain2 = dc.read_values(
         name=["different", "order"], value=[9, 10], session=test_session
     )
     assert list(chain1.union(chain2).order_by("value").collect()) == [
@@ -2068,27 +2068,27 @@ def test_union_different_column_order(test_session):
 
 
 def test_subtract(test_session):
-    chain1 = dc.from_values(a=[1, 1, 2], b=["x", "y", "z"], session=test_session)
-    chain2 = dc.from_values(a=[1, 2], b=["x", "y"], session=test_session)
+    chain1 = dc.read_values(a=[1, 1, 2], b=["x", "y", "z"], session=test_session)
+    chain2 = dc.read_values(a=[1, 2], b=["x", "y"], session=test_session)
     assert set(chain1.subtract(chain2, on=["a", "b"]).collect()) == {(1, "y"), (2, "z")}
     assert set(chain1.subtract(chain2, on=["b"]).collect()) == {(2, "z")}
     assert set(chain1.subtract(chain2, on=["a"]).collect()) == set()
     assert set(chain1.subtract(chain2).collect()) == {(1, "y"), (2, "z")}
     assert chain1.subtract(chain1).count() == 0
 
-    chain3 = dc.from_values(a=[1, 3], c=["foo", "bar"], session=test_session)
+    chain3 = dc.read_values(a=[1, 3], c=["foo", "bar"], session=test_session)
     assert set(chain1.subtract(chain3, on="a").collect()) == {(2, "z")}
     assert set(chain1.subtract(chain3).collect()) == {(2, "z")}
 
-    chain4 = dc.from_values(d=[1, 2, 3], e=["x", "y", "z"], session=test_session)
-    chain5 = dc.from_values(a=[1, 2], b=["x", "y"], session=test_session)
+    chain4 = dc.read_values(d=[1, 2, 3], e=["x", "y", "z"], session=test_session)
+    chain5 = dc.read_values(a=[1, 2], b=["x", "y"], session=test_session)
 
     assert set(chain4.subtract(chain5, on="d", right_on="a").collect()) == {(3, "z")}
 
 
 def test_subtract_error(test_session):
-    chain1 = dc.from_values(a=[1, 1, 2], b=["x", "y", "z"], session=test_session)
-    chain2 = dc.from_values(a=[1, 2], b=["x", "y"], session=test_session)
+    chain1 = dc.read_values(a=[1, 1, 2], b=["x", "y", "z"], session=test_session)
+    chain2 = dc.read_values(a=[1, 2], b=["x", "y"], session=test_session)
     with pytest.raises(DataChainParamsError):
         chain1.subtract(chain2, on=[])
     with pytest.raises(TypeError):
@@ -2124,14 +2124,14 @@ def test_subtract_error(test_session):
     with pytest.raises(TypeError):
         chain1.subtract(chain2, on=42, right_on=42)
 
-    chain3 = dc.from_values(c=["foo", "bar"], session=test_session)
+    chain3 = dc.read_values(c=["foo", "bar"], session=test_session)
     with pytest.raises(DataChainParamsError):
         chain1.subtract(chain3)
 
 
 def test_column_math(test_session):
     fib = [1, 1, 2, 3, 5, 8]
-    chain = dc.from_values(num=fib, session=test_session).order_by("num")
+    chain = dc.read_values(num=fib, session=test_session).order_by("num")
 
     ch = chain.mutate(add2=chain.column("num") + 2)
     assert list(ch.collect("add2")) == [x + 2 for x in fib]
@@ -2143,15 +2143,15 @@ def test_column_math(test_session):
 @skip_if_not_sqlite
 def test_column_math_division(test_session):
     fib = [1, 1, 2, 3, 5, 8]
-    chain = dc.from_values(num=fib, session=test_session)
+    chain = dc.read_values(num=fib, session=test_session)
 
     ch = chain.mutate(div2=chain.column("num") / 2.0)
     assert list(ch.collect("div2")) == [x / 2.0 for x in fib]
 
 
-def test_from_values_array_of_floats(test_session):
+def test_read_values_array_of_floats(test_session):
     embeddings = [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]]
-    chain = dc.from_values(emd=embeddings, session=test_session)
+    chain = dc.read_values(emd=embeddings, session=test_session)
 
     assert list(chain.order_by("emd").collect("emd")) == embeddings
 
@@ -2168,7 +2168,7 @@ def test_custom_model_with_nested_lists(test_session):
 
     DataModel.register(Nested)
 
-    ds = dc.from_values(
+    ds = dc.read_values(
         nested=[
             Nested(
                 values=[[0.5, 0.5], [0.5, 0.5]],
@@ -2190,7 +2190,7 @@ def test_custom_model_with_nested_lists(test_session):
 
 
 def test_min_limit(test_session):
-    chain = dc.from_values(a=[1, 2, 3, 4, 5], session=test_session)
+    chain = dc.read_values(a=[1, 2, 3, 4, 5], session=test_session)
     assert chain.count() == 5
     assert chain.limit(4).count() == 4
     assert chain.count() == 5
@@ -2203,7 +2203,7 @@ def test_min_limit(test_session):
 
 
 def test_show_limit(test_session):
-    chain = dc.from_values(a=[1, 2, 3, 4, 5], session=test_session)
+    chain = dc.read_values(a=[1, 2, 3, 4, 5], session=test_session)
     assert chain.count() == 5
     assert chain.limit(4).count() == 4
     chain.show(1)
@@ -2227,7 +2227,7 @@ def test_gen_limit(test_session):
     keys = ["a", "b", "c", "d"]
     values = [3, 3, 3, 3]
 
-    ds = dc.from_values(key=keys, val=values, session=test_session)
+    ds = dc.read_values(key=keys, val=values, session=test_session)
 
     assert ds.count() == 4
     assert ds.gen(res=func).count() == 12
@@ -2246,7 +2246,7 @@ def test_gen_filter(test_session):
     keys = ["a", "b", "c", "d"]
     values = [3, 3, 3, 3]
 
-    ds = dc.from_values(key=keys, val=values, session=test_session)
+    ds = dc.read_values(key=keys, val=values, session=test_session)
 
     assert ds.count() == 4
     assert ds.gen(res=func).count() == 12
@@ -2254,7 +2254,7 @@ def test_gen_filter(test_session):
 
 
 def test_rename_non_object_column_name_with_mutate(test_session):
-    ds = dc.from_values(ids=[1, 2, 3], session=test_session)
+    ds = dc.read_values(ids=[1, 2, 3], session=test_session)
     ds = ds.mutate(my_ids=Column("ids"))
 
     assert ds.signals_schema.values == {"my_ids": int}
@@ -2270,7 +2270,7 @@ def test_rename_object_column_name_with_mutate(test_session):
     sizes = [1, 2, 3]
     files = [File(path=name, size=size) for name, size in zip(names, sizes)]
 
-    ds = dc.from_values(file=files, ids=[1, 2, 3], session=test_session)
+    ds = dc.read_values(file=files, ids=[1, 2, 3], session=test_session)
     ds = ds.mutate(fname=Column("file.path"))
 
     assert list(ds.order_by("fname").collect("fname")) == ["a", "b", "c"]
@@ -2291,7 +2291,7 @@ def test_rename_object_name_with_mutate(test_session):
     sizes = [1, 2, 3]
     files = [File(path=name, size=size) for name, size in zip(names, sizes)]
 
-    ds = dc.from_values(file=files, ids=[1, 2, 3], session=test_session)
+    ds = dc.read_values(file=files, ids=[1, 2, 3], session=test_session)
     ds = ds.mutate(my_file=Column("file"))
 
     assert list(ds.order_by("my_file.path").collect("my_file.path")) == ["a", "b", "c"]
@@ -2308,7 +2308,7 @@ def test_rename_object_name_with_mutate(test_session):
 
 
 def test_column(test_session):
-    ds = dc.from_values(
+    ds = dc.read_values(
         ints=[1, 2],
         floats=[0.5, 0.5],
         file=[File(path="a"), File(path="b")],
@@ -2335,36 +2335,36 @@ def test_column(test_session):
 
 
 def test_mutate_with_subtraction(test_session):
-    ds = dc.from_values(id=[1, 2], session=test_session)
+    ds = dc.read_values(id=[1, 2], session=test_session)
     assert ds.mutate(new=ds.column("id") - 1).signals_schema.values["new"] is int
 
 
 def test_mutate_with_addition(test_session):
-    ds = dc.from_values(id=[1, 2], session=test_session)
+    ds = dc.read_values(id=[1, 2], session=test_session)
     assert ds.mutate(new=ds.column("id") + 1).signals_schema.values["new"] is int
 
 
 def test_mutate_with_division(test_session):
-    ds = dc.from_values(id=[1, 2], session=test_session)
+    ds = dc.read_values(id=[1, 2], session=test_session)
     assert ds.mutate(new=ds.column("id") / 10).signals_schema.values["new"] is float
 
 
 def test_mutate_with_multiplication(test_session):
-    ds = dc.from_values(id=[1, 2], session=test_session)
+    ds = dc.read_values(id=[1, 2], session=test_session)
     assert ds.mutate(new=ds.column("id") * 10).signals_schema.values["new"] is int
 
 
 def test_mutate_with_sql_func(test_session):
     from datachain import func
 
-    ds = dc.from_values(id=[1, 2], session=test_session)
+    ds = dc.read_values(id=[1, 2], session=test_session)
     assert ds.mutate(new=func.avg("id")).signals_schema.values["new"] is float
 
 
 def test_mutate_with_complex_expression(test_session):
     from datachain import func
 
-    ds = dc.from_values(id=[1, 2], name=["Jim", "Jon"], session=test_session)
+    ds = dc.read_values(id=[1, 2], name=["Jim", "Jon"], session=test_session)
     assert (
         ds.mutate(new=func.sum("id") * (5 - func.min("id"))).signals_schema.values[
             "new"
@@ -2375,7 +2375,7 @@ def test_mutate_with_complex_expression(test_session):
 
 @skip_if_not_sqlite
 def test_mutate_with_saving(test_session):
-    ds = dc.from_values(id=[1, 2], session=test_session)
+    ds = dc.read_values(id=[1, 2], session=test_session)
     ds = ds.mutate(new=ds.column("id") / 2).save("mutated")
 
     ds = dc.read_dataset(name="mutated", session=test_session)
@@ -2385,7 +2385,7 @@ def test_mutate_with_saving(test_session):
 
 def test_mutate_with_expression_without_type(test_session):
     with pytest.raises(DataChainColumnError) as excinfo:
-        dc.from_values(id=[1, 2], session=test_session).mutate(
+        dc.read_values(id=[1, 2], session=test_session).mutate(
             new=(Column("id") - 1)
         ).save()
 
@@ -2394,9 +2394,9 @@ def test_mutate_with_expression_without_type(test_session):
     )
 
 
-def test_from_values_nan_inf(test_session):
+def test_read_values_nan_inf(test_session):
     vals = [float("nan"), float("inf"), float("-inf")]
-    chain = dc.from_values(vals=vals, session=test_session)
+    chain = dc.read_values(vals=vals, session=test_session)
     res = list(chain.collect("vals"))
     assert len(res) == 3
     assert any(r for r in res if np.isnan(r))
@@ -2464,7 +2464,7 @@ def test_group_by_int(test_session):
     from datachain import func
 
     ds = (
-        dc.from_values(
+        dc.read_values(
             col1=["a", "a", "b", "b", "b", "c"],
             col2=[1, 2, 3, 4, 5, 6],
             session=test_session,
@@ -2538,7 +2538,7 @@ def test_group_by_float(test_session):
     from datachain import func
 
     ds = (
-        dc.from_values(
+        dc.read_values(
             col1=["a", "a", "b", "b", "b", "c"],
             col2=[1.5, 2.5, 3.5, 4.5, 5.5, 6.5],
             session=test_session,
@@ -2612,7 +2612,7 @@ def test_group_by_str(test_session):
     from datachain import func
 
     ds = (
-        dc.from_values(
+        dc.read_values(
             col1=["a", "a", "b", "b", "b", "c"],
             col2=["1", "2", "3", "4", "5", "6"],
             session=test_session,
@@ -2686,7 +2686,7 @@ def test_group_by_multiple_partition_by(test_session):
     from datachain import func
 
     ds = (
-        dc.from_values(
+        dc.read_values(
             col1=["a", "a", "b", "b", "b", "c"],
             col2=[1, 2, 1, 2, 1, 2],
             col3=[1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
@@ -2777,7 +2777,7 @@ def test_group_by_no_partition_by(test_session):
     from datachain import func
 
     ds = (
-        dc.from_values(
+        dc.read_values(
             col1=["a", "a", "b", "b", "b", "c"],
             col2=[1, 2, 1, 2, 1, 2],
             col3=[1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
@@ -2832,7 +2832,7 @@ def test_group_by_schema(test_session):
         return Parent(signal=signal)
 
     chain = (
-        dc.from_values(
+        dc.read_values(
             name=["a", "a", "b", "b", "b", "c"],
             val=[1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
         )
@@ -2878,7 +2878,7 @@ def test_group_by_schema(test_session):
 def test_group_by_error(test_session):
     from datachain import func
 
-    chain = dc.from_values(
+    chain = dc.read_values(
         col1=["a", "a", "b", "b", "b", "c"],
         col2=[1, 2, 3, 4, 5, 6],
         session=test_session,
@@ -2909,7 +2909,7 @@ def test_group_by_error(test_session):
 def test_group_by_case(test_session):
     from datachain import func
 
-    ds = dc.from_values(
+    ds = dc.read_values(
         col1=[1.0, 0.0, 3.2, 0.1, 5.9, -1.0],
         col2=[0.0, 6.1, -0.05, 3.7, 0.1, -3.0],
         session=test_session,
@@ -2936,7 +2936,7 @@ def test_window_functions(test_session, desc):
 
     window = func.window(partition_by="col1", order_by="col2", desc=desc)
 
-    ds = dc.from_values(
+    ds = dc.read_values(
         col1=["a", "a", "b", "b", "b", "c"],
         col2=[1, 2, 3, 4, 5, 6],
         session=test_session,
@@ -3016,7 +3016,7 @@ def test_window_error(test_session):
 
     window = func.window(partition_by="col1", order_by="col2")
 
-    chain = dc.from_values(
+    chain = dc.read_values(
         col1=["a", "a", "b", "b", "b", "c"],
         col2=[1, 2, 3, 4, 5, 6],
         session=test_session,

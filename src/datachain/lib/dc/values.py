@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     P = ParamSpec("P")
 
 
-def from_values(
+def read_values(
     ds_name: str = "",
     session: Optional[Session] = None,
     settings: Optional[dict] = None,
@@ -32,7 +32,7 @@ def from_values(
     Example:
         ```py
         import datachain as dc
-        dc.from_values(fib=[1, 2, 3, 5, 8])
+        dc.read_values(fib=[1, 2, 3, 5, 8])
         ```
     """
     from .datachain import DataChain

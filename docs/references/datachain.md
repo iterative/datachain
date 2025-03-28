@@ -29,7 +29,7 @@ for examples of how to create a chain.
 
 ::: datachain.lib.dc.storage.read_storage
 
-::: datachain.lib.dc.values.from_values
+::: datachain.lib.dc.values.read_values
 
 ::: datachain.lib.dc.DataChain
 

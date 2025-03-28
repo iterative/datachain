@@ -5,7 +5,6 @@ from datachain.lib.dc import (
     DataChain,
     Sys,
     datasets,
-    from_values,
     listings,
     read_csv,
     read_dataset,
@@ -15,6 +14,7 @@ from datachain.lib.dc import (
     read_parquet,
     read_records,
     read_storage,
+    read_values,
 )
 from datachain.lib.file import (
     ArrowRow,
@@ -61,7 +61,6 @@ __all__ = [
     "VideoFragment",
     "VideoFrame",
     "datasets",
-    "from_values",
     "is_chain_type",
     "listings",
     "metrics",
@@ -74,4 +73,5 @@ __all__ = [
     "read_parquet",
     "read_records",
     "read_storage",
+    "read_values",
 ]

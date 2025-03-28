@@ -16,7 +16,7 @@ def test_listing_dataset_lifecycle(tmp_path, catalog):
         with Session(session_name, catalog=catalog):
             ds_name = "my_test_ds13"
             dc.read_storage(str(tmp_path)).exec()
-            dc.from_values(key=["a", "b", "c"]).save(ds_name)
+            dc.read_values(key=["a", "b", "c"]).save(ds_name)
             raise ValueError("This is a test exception")
 
     with pytest.raises(DatasetNotFoundError):

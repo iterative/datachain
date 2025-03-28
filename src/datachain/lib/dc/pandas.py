@@ -5,7 +5,7 @@ from typing import (
 
 from datachain.query import Session
 
-from .values import from_values
+from .values import read_values
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -46,7 +46,7 @@ def read_pandas(  # type: ignore[override]
                 f"import from pandas error - '{column}' cannot be a column name",
             )
 
-    return from_values(
+    return read_values(
         name,
         session,
         settings=settings,

@@ -779,7 +779,7 @@ def test_dataset_preview_order(test_session):
     catalog = test_session.catalog
     dataset_name = "test"
 
-    dc.from_values(id=ids, order=order, session=test_session).order_by("order").save(
+    dc.read_values(id=ids, order=order, session=test_session).order_by("order").save(
         dataset_name
     )
 

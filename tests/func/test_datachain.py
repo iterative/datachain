@@ -358,7 +358,7 @@ def test_export_images_files(test_session, tmp_dir, tmp_path, use_cache):
     for img in images:
         img["data"].save(tmp_path / img["name"])
 
-    dc.from_values(
+    dc.read_values(
         file=[
             ImageFile(path=img["name"], source=f"file://{tmp_path}") for img in images
         ],
@@ -474,7 +474,7 @@ def test_to_storage_relative_path(test_session, tmp_path):
     for img in images:
         img["data"].save(tmp_path / img["name"])
 
-    dc.from_values(
+    dc.read_values(
         file=[
             ImageFile(path=img["name"], source=f"file://{tmp_path}") for img in images
         ],
@@ -507,7 +507,7 @@ def test_to_storage_files_filename_placement_not_unique_files(tmp_dir, test_sess
 
 def test_show(capsys, test_session):
     first_name = ["Alice", "Bob", "Charlie"]
-    dc.from_values(
+    dc.read_values(
         first_name=first_name,
         age=[40, 30, None],
         city=[
@@ -530,7 +530,7 @@ def test_class_method_deprecated(capsys, test_session):
 
 
 def test_save(test_session):
-    chain = dc.from_values(key=["a", "b", "c"])
+    chain = dc.read_values(key=["a", "b", "c"])
     chain.save(
         name="new_name",
         version=1,
@@ -556,7 +556,7 @@ def test_save(test_session):
 
 def test_show_nested_empty(capsys, test_session):
     files = [File(size=s, path=p) for p, s in zip(list("abcde"), range(5))]
-    dc.from_values(file=files, session=test_session).limit(0).show()
+    dc.read_values(file=files, session=test_session).limit(0).show()
 
     captured = capsys.readouterr()
     normalized_output = re.sub(r"\s+", " ", captured.out)
@@ -566,7 +566,7 @@ def test_show_nested_empty(capsys, test_session):
 
 def test_show_empty(capsys, test_session):
     first_name = ["Alice", "Bob", "Charlie"]
-    dc.from_values(first_name=first_name, session=test_session).limit(0).show()
+    dc.read_values(first_name=first_name, session=test_session).limit(0).show()
 
     captured = capsys.readouterr()
     normalized_output = re.sub(r"\s+", " ", captured.out)
@@ -576,7 +576,7 @@ def test_show_empty(capsys, test_session):
 
 def test_show_limit(capsys, test_session):
     first_name = ["Alice", "Bob", "Charlie"]
-    dc.from_values(
+    dc.read_values(
         first_name=first_name,
         age=[40, 30, None],
         city=[
@@ -594,7 +594,7 @@ def test_show_limit(capsys, test_session):
 def test_show_transpose(capsys, test_session):
     first_name = ["Alice", "Bob", "Charlie"]
     last_name = ["A", "B", "C"]
-    dc.from_values(
+    dc.read_values(
         first_name=first_name,
         last_name=last_name,
         session=test_session,
@@ -614,7 +614,7 @@ def test_show_truncate(capsys, test_session):
         "Not very nice",
     ]
 
-    chain = dc.from_values(
+    chain = dc.read_values(
         client=client,
         details=details,
         session=test_session,
@@ -638,7 +638,7 @@ def test_show_no_truncate(capsys, test_session):
         "Not very nice",
     ]
 
-    chain = dc.from_values(
+    chain = dc.read_values(
         client=client,
         details=details,
         session=test_session,
@@ -657,7 +657,7 @@ def test_show_ordered(capsys, test_session, ordered_by):
     numbers = [6, 2, 3, 1, 5, 7, 4]
     letters = ["u", "y", "x", "z", "v", "t", "w"]
 
-    dc.from_values(number=numbers, letter=letters, session=test_session).order_by(
+    dc.read_values(number=numbers, letter=letters, session=test_session).order_by(
         ordered_by
     ).show()
 
@@ -715,7 +715,7 @@ def test_read_storage_check_rows(tmp_dir, test_session):
 
 
 def test_mutate_existing_column(test_session):
-    ds = dc.from_values(ids=[1, 2, 3], session=test_session)
+    ds = dc.read_values(ids=[1, 2, 3], session=test_session)
     ds = ds.mutate(ids=Column("ids") + 1)
 
     assert list(ds.order_by("ids").collect()) == [(2,), (3,), (4,)]
@@ -728,7 +728,7 @@ def test_parallel(processes, test_session_tmpfile):
     vals = ["a", "b", "c", "d", "e", "f", "g", "h", "i"]
 
     res = list(
-        dc.from_values(key=vals, session=test_session_tmpfile)
+        dc.read_values(key=vals, session=test_session_tmpfile)
         .settings(parallel=processes)
         .map(res=lambda key: prefix + key)
         .order_by("res")
@@ -819,7 +819,7 @@ def test_udf_parallel_boostrap(test_session_tmpfile):
         def teardown(self):
             self.value = MyMapper.TEARDOWN_VALUE
 
-    chain = dc.from_values(key=vals, session=test_session_tmpfile)
+    chain = dc.read_values(key=vals, session=test_session_tmpfile)
 
     res = list(chain.settings(parallel=4).map(res=MyMapper()).collect("res"))
 
@@ -1639,7 +1639,7 @@ def test_process_and_open_tar(cloud_test_catalog, cloud_type):
 
 
 def test_datachain_save_with_job(test_session, catalog, datachain_job_id):
-    dc.from_values(value=["val1", "val2"], session=test_session).save("my-ds")
+    dc.read_values(value=["val1", "val2"], session=test_session).save("my-ds")
 
     dataset = catalog.get_dataset("my-ds")
     result_job_id = dataset.get_version(dataset.latest_version).job_id
@@ -2205,7 +2205,7 @@ def test_datachain_functional_after_exceptions(test_session):
 
     keys = ["a", "b", "c"]
     values = [3, 1, 2]
-    chain = dc.from_values(key=keys, val=values, session=test_session)
+    chain = dc.read_values(key=keys, val=values, session=test_session)
     # Running a few times, since sessions closing and cleaning up
     # DB connections on errors. We need to make sure that it reconnects
     # if needed.
