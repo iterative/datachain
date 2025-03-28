@@ -210,14 +210,14 @@ name                  usage        usage             usage
 
 In the previous examples, datasets were saved in the embedded database
 (`SQLite` in folder `.datachain` of the working directory). These datasets were automatically versioned, and
-can be accessed using `dc.read_hf("dataset_name")`.
+can be accessed using `dc.read_dataset("dataset_name")`.
 
 Here is how to retrieve a saved dataset and iterate over the objects:
 
 ``` py
 import datachain as dc
 
-chain = dc.read_hf("response")
+chain = dc.read_dataset("response")
 
 # Iterating one-by-one: support out-of-memory workflow
 for file, response in chain.limit(5).collect("file", "response"):
@@ -248,7 +248,7 @@ output tokens:
 
 ``` py
 import datachain as dc
-chain = dc.read_hf("mistral_dataset")
+chain = dc.read_dataset("mistral_dataset")
 
 cost = chain.sum("response.usage.prompt_tokens")*0.000002 \
            + chain.sum("response.usage.completion_tokens")*0.000006

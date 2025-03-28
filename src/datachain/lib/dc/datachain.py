@@ -318,7 +318,7 @@ class DataChain:
         from .storage import read_storage
 
         warnings.warn(
-            "Class method `read_storage` is deprecated. "
+            "Class method `from_storage` is deprecated. "
             "Use `read_storage` function instead from top_module.",
             DeprecationWarning,
             stacklevel=2,
@@ -330,7 +330,7 @@ class DataChain:
         from .datasets import read_dataset
 
         warnings.warn(
-            "Class method `read_dataset` is deprecated. "
+            "Class method `from_dataset` is deprecated. "
             "Use `read_dataset` function instead from top_module.",
             DeprecationWarning,
             stacklevel=2,
@@ -346,7 +346,7 @@ class DataChain:
         from .json import read_json
 
         warnings.warn(
-            "Class method `read_json` is deprecated. "
+            "Class method `from_json` is deprecated. "
             "Use `read_json` function instead from top_module.",
             DeprecationWarning,
             stacklevel=2,
@@ -1469,7 +1469,7 @@ class DataChain:
         from .values import read_values
 
         warnings.warn(
-            "Class method `read_values` is deprecated. "
+            "Class method `from_values` is deprecated. "
             "Use `read_values` function instead from top_module.",
             DeprecationWarning,
             stacklevel=2,
@@ -1485,7 +1485,7 @@ class DataChain:
         from .pandas import read_pandas
 
         warnings.warn(
-            "Class method `read_pandas` is deprecated. "
+            "Class method `from_pandas` is deprecated. "
             "Use `read_pandas` function instead from top_module.",
             DeprecationWarning,
             stacklevel=2,
@@ -1578,7 +1578,7 @@ class DataChain:
         from .hf import read_hf
 
         warnings.warn(
-            "Class method `read_hf` is deprecated. "
+            "Class method `from_hf` is deprecated. "
             "Use `read_hf` function instead from top_module.",
             DeprecationWarning,
             stacklevel=2,
@@ -1683,7 +1683,7 @@ class DataChain:
         from .csv import read_csv
 
         warnings.warn(
-            "Class method `read_csv` is deprecated. "
+            "Class method `from_csv` is deprecated. "
             "Use `read_csv` function instead from top_module.",
             DeprecationWarning,
             stacklevel=2,
@@ -1699,7 +1699,7 @@ class DataChain:
         from .parquet import read_parquet
 
         warnings.warn(
-            "Class method `read_parquet` is deprecated. "
+            "Class method `from_parquet` is deprecated. "
             "Use `read_parquet` function instead from top_module.",
             DeprecationWarning,
             stacklevel=2,
@@ -1933,7 +1933,7 @@ class DataChain:
         from .records import read_records
 
         warnings.warn(
-            "Class method `read_records` is deprecated. "
+            "Class method `from_records` is deprecated. "
             "Use `read_records` function instead from top_module.",
             DeprecationWarning,
             stacklevel=2,

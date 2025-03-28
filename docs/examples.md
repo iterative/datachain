@@ -111,8 +111,8 @@ chain = (
     .save("dialog-rating")
 )
 
-** iter = chain.collect("mistral")
-** print(*map(lambda chat_response: chat_response.choices[0].message.content, iter))
+**iter = chain.collect("mistral")
+**print(*map(lambda chat_response: chat_response.choices[0].message.content, iter))
 ```
 
 ```

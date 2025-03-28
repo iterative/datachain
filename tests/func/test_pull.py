@@ -271,7 +271,7 @@ def test_pull_dataset_success(
 
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
 @skip_if_not_sqlite
-def test_datachain_read_hf_pull(
+def test_datachain_read_dataset_pull(
     mocker,
     cloud_test_catalog,
     remote_dataset_info,
