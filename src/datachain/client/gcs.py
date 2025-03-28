@@ -16,6 +16,7 @@ from .fsspec import DELIMITER, Client, ResultQueue
 # Patch gcsfs for consistency with s3fs
 GCSFileSystem.set_session = GCSFileSystem._set_session
 PageQueue = asyncio.Queue[Optional[Iterable[dict[str, Any]]]]
+ANONYMOUS_TOKEN = "anon"  # noqa: S105
 
 
 class GCSClient(Client):
@@ -24,12 +25,85 @@ class GCSClient(Client):
     protocol = "gs"
 
     @classmethod
-    def create_fs(cls, **kwargs) -> GCSFileSystem:
+    def _try_authenticate(cls, gcreds, method: str) -> bool:
+        """Attempt to authenticate using the specified method.
+
+        Args:
+            gcreds: Google credentials object
+            method: Authentication method to try
+
+        Returns:
+            bool: True if authentication succeeded, False otherwise
+        """
+        from google.auth.exceptions import GoogleAuthError
+
+        try:
+            gcreds.connect(method=method)
+            return True
+        except (GoogleAuthError, ValueError):
+            # Reset credentials if authentication failed (reverts to 'anon' behavior)
+            gcreds.credentials = None
+            return False
+
+    @classmethod
+    def _get_default_credentials(cls, **kwargs) -> dict[str, Any]:
+        """Get default GCS credentials using various authentication methods.
+
+        Returns:
+            dict: Updated kwargs with appropriate token
+        """
+        from gcsfs.core import DEFAULT_PROJECT
+        from gcsfs.credentials import GoogleCredentials
+        from google.auth.compute_engine._metadata import is_on_gce
+
+        def request_callback(*args, **kwargs):
+            from google.auth.exceptions import TransportError
+
+            raise TransportError("Skip metadata check")
+
+        # If credentials provided in env var, use those
         if os.environ.get("DATACHAIN_GCP_CREDENTIALS"):
             kwargs["token"] = json.loads(os.environ["DATACHAIN_GCP_CREDENTIALS"])
-        if kwargs.pop("anon", False):
-            kwargs["token"] = "anon"  # noqa: S105
+            return kwargs
 
+        # If token is provided, use it
+        if "token" in kwargs:
+            return kwargs
+
+        # If anonymous access requested, force anonymous access
+        if kwargs.get("anon"):
+            kwargs["token"] = ANONYMOUS_TOKEN
+            return kwargs
+
+        # Try various authentication methods
+        gcreds = GoogleCredentials(
+            token=ANONYMOUS_TOKEN,
+            project=DEFAULT_PROJECT,
+            access="full_control",
+        )
+
+        # Define authentication methods to try
+        auth_methods = ["google_default", "cache"]
+        if is_on_gce(request_callback):
+            auth_methods.append("cloud")
+
+        # Try each authentication method
+        for method in auth_methods:
+            if cls._try_authenticate(gcreds, method):
+                return kwargs
+
+        # If no authentication method worked, use anonymous access
+        kwargs["token"] = ANONYMOUS_TOKEN
+        return kwargs
+
+    @classmethod
+    def create_fs(cls, **kwargs) -> GCSFileSystem:
+        """Create a GCS filesystem with appropriate authentication.
+
+        Returns:
+            GCSFileSystem: Authenticated filesystem object
+        """
+        kwargs = cls._get_default_credentials(**kwargs)
         return cast("GCSFileSystem", super().create_fs(**kwargs))
 
     def url(self, path: str, expires: int = 3600, **kwargs) -> str:
