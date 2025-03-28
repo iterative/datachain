@@ -17,7 +17,7 @@ for examples of how to create a chain.
 
 ::: datachain.lib.dc.hf.read_hf
 
-::: datachain.lib.dc.json.from_json
+::: datachain.lib.dc.json.read_json
 
 ::: datachain.lib.dc.listings.listings
 

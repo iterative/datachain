@@ -237,8 +237,8 @@ images_uri = "gs://datachain-demo/coco2017/images/val/"
 captions_uri = "gs://datachain-demo/coco2017/annotations/captions_val2017.json"
 
 images = dc.read_storage(images_uri)
-meta = dc.from_json(captions_uri, jmespath="images")
-captions = dc.from_json(captions_uri, jmespath="annotations")
+meta = dc.read_json(captions_uri, jmespath="images")
+captions = dc.read_json(captions_uri, jmespath="annotations")
 
 images_meta = images.merge(meta, on="file.name", right_on="images.file_name")
 captioned_images = images_meta.merge(captions, on="images.id", right_on="annotations.image_id")

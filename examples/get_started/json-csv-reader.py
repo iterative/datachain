@@ -31,7 +31,7 @@ ChatFeature = ModelStore.register(ChatDialog)
 def main():
     # Dynamic JSONl schema from 2 objects
     uri = "gs://datachain-demo/jsonl/object.jsonl"
-    jsonl_ds = dc.from_json(uri, format="jsonl", anon="True")
+    jsonl_ds = dc.read_json(uri, format="jsonl", anon="True")
     jsonl_ds.show()
 
     # Dynamic JSON schema from 200 OpenImage json-pairs with validation errors
@@ -39,7 +39,7 @@ def main():
     schema_uri = (
         "gs://datachain-demo/openimages-v6-test-jsonpairs/08392c290ecc9d2a.json"
     )
-    json_pairs_ds = dc.from_json(
+    json_pairs_ds = dc.read_json(
         uri, schema_from=schema_uri, jmespath="@", model_name="OpenImage", anon="True"
     )
     json_pairs_ds.show()
@@ -52,13 +52,13 @@ def main():
     print(gen_datamodel_code(file, jmespath="@", model_name="Coco"))
 
     # Static JSON schema test parsing 3/7 objects
-    static_json_ds = dc.from_json(
+    static_json_ds = dc.read_json(
         uri, jmespath="licenses", spec=LicenseFeature, nrows=3, anon="True"
     )
     static_json_ds.show()
 
     # Dynamic JSON schema test parsing 5K objects
-    dynamic_json_ds = dc.from_json(uri, jmespath="images", anon="True")
+    dynamic_json_ds = dc.read_json(uri, jmespath="images", anon="True")
     print(dynamic_json_ds.to_pandas())
 
     # Static CSV with header schema test parsing 3.5K objects

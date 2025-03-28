@@ -1554,7 +1554,7 @@ def test_to_json_features_nested(tmp_dir, test_session):
 
 # These deprecation warnings occur in the datamodel-code-generator package.
 @pytest.mark.filterwarnings("ignore::pydantic.warnings.PydanticDeprecatedSince20")
-def test_to_from_jsonl(tmp_dir, test_session):
+def test_to_read_jsonl(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
     dc_to = dc.from_pandas(df, session=test_session)
     path = tmp_dir / "test.jsonl"
@@ -1567,7 +1567,7 @@ def test_to_from_jsonl(tmp_dir, test_session):
         for n, a, c in zip(DF_DATA["first_name"], DF_DATA["age"], DF_DATA["city"])
     ]
 
-    dc_from = dc.from_json(path.as_uri(), format="jsonl", session=test_session)
+    dc_from = dc.read_json(path.as_uri(), format="jsonl", session=test_session)
     df1 = dc_from.select("jsonl.first_name", "jsonl.age", "jsonl.city").to_pandas()
     df1 = df1["jsonl"]
     assert df_equal(df1, df)
@@ -1575,7 +1575,7 @@ def test_to_from_jsonl(tmp_dir, test_session):
 
 # These deprecation warnings occur in the datamodel-code-generator package.
 @pytest.mark.filterwarnings("ignore::pydantic.warnings.PydanticDeprecatedSince20")
-def test_from_jsonl_jmespath(tmp_dir, test_session):
+def test_read_jsonl_jmespath(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
     values = [
         {"first_name": n, "age": a, "city": c}
@@ -1589,7 +1589,7 @@ def test_from_jsonl_jmespath(tmp_dir, test_session):
             )
             f.write("\n")
 
-    dc_from = dc.from_json(
+    dc_from = dc.read_json(
         path.as_uri(), format="jsonl", jmespath="value", session=test_session
     )
     df1 = dc_from.select("value.first_name", "value.age", "value.city").to_pandas()

@@ -95,7 +95,7 @@ class DataChain:
 
         `from_pandas(pd.DataFrame(...))` - generating from pandas.
 
-        `from_json("file.json")` - generating from json.
+        `read_json("file.json")` - generating from json.
 
         `read_csv("file.csv")` - generating from csv.
 
@@ -343,15 +343,15 @@ class DataChain:
         *args,
         **kwargs,
     ) -> "DataChain":
-        from .json import from_json
+        from .json import read_json
 
         warnings.warn(
-            "Class method `from_json` is deprecated. "
-            "Use `from_json` function instead from top_module.",
+            "Class method `read_json` is deprecated. "
+            "Use `read_json` function instead from top_module.",
             DeprecationWarning,
             stacklevel=2,
         )
-        return from_json(*args, **kwargs)
+        return read_json(*args, **kwargs)
 
     def explode(
         self,

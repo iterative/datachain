@@ -39,7 +39,7 @@ using JSON metadata:
 ``` py
 import datachain as dc
 
-meta = dc.from_json("gs://datachain-demo/dogs-and-cats/*json", object_name="meta", anon=True)
+meta = dc.read_json("gs://datachain-demo/dogs-and-cats/*json", object_name="meta", anon=True)
 images = dc.read_storage("gs://datachain-demo/dogs-and-cats/*jpg", anon=True)
 
 images_id = images.map(id=lambda file: file.path.split('.')[-2])

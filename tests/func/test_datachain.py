@@ -2130,7 +2130,7 @@ def test_to_from_parquet_partitioned_remote(cloud_test_catalog_upload):
 
 # These deprecation warnings occur in the datamodel-code-generator package.
 @pytest.mark.filterwarnings("ignore::pydantic.warnings.PydanticDeprecatedSince20")
-def test_to_from_json(tmp_dir, test_session):
+def test_to_read_json(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
     dc_to = dc.from_pandas(df, session=test_session)
     path = tmp_dir / "test.json"
@@ -2143,7 +2143,7 @@ def test_to_from_json(tmp_dir, test_session):
         for n, a, c in zip(DF_DATA["first_name"], DF_DATA["age"], DF_DATA["city"])
     ]
 
-    dc_from = dc.from_json(path.as_uri(), session=test_session)
+    dc_from = dc.read_json(path.as_uri(), session=test_session)
     df1 = dc_from.select("json.first_name", "json.age", "json.city").to_pandas()
     df1 = df1["json"]
     assert df_equal(df1, df)
@@ -2151,7 +2151,7 @@ def test_to_from_json(tmp_dir, test_session):
 
 # These deprecation warnings occur in the datamodel-code-generator package.
 @pytest.mark.filterwarnings("ignore::pydantic.warnings.PydanticDeprecatedSince20")
-def test_from_json_jmespath(tmp_dir, test_session):
+def test_read_json_jmespath(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
     values = [
         {"first_name": n, "age": a, "city": c}
@@ -2161,7 +2161,7 @@ def test_from_json_jmespath(tmp_dir, test_session):
     with open(path, "w") as f:
         json.dump({"author": "Test User", "version": 5, "values": values}, f)
 
-    dc_from = dc.from_json(path, jmespath="values", session=test_session)
+    dc_from = dc.read_json(path, jmespath="values", session=test_session)
     df1 = dc_from.select("values.first_name", "values.age", "values.city").to_pandas()
     df1 = df1["values"]
     assert df_equal(df1, df)
@@ -2169,7 +2169,7 @@ def test_from_json_jmespath(tmp_dir, test_session):
 
 # These deprecation warnings occur in the datamodel-code-generator package.
 @pytest.mark.filterwarnings("ignore::pydantic.warnings.PydanticDeprecatedSince20")
-def test_to_from_json_remote(cloud_test_catalog_upload):
+def test_to_read_json_remote(cloud_test_catalog_upload):
     ctc = cloud_test_catalog_upload
     path = f"{ctc.src_uri}/test.json"
 
@@ -2177,7 +2177,7 @@ def test_to_from_json_remote(cloud_test_catalog_upload):
     dc_to = dc.from_pandas(df, session=ctc.session)
     dc_to.to_json(path)
 
-    dc_from = dc.from_json(path, session=ctc.session)
+    dc_from = dc.read_json(path, session=ctc.session)
     df1 = dc_from.select("json.first_name", "json.age", "json.city").to_pandas()
     df1 = df1["json"]
     assert df_equal(df1, df)
@@ -2185,7 +2185,7 @@ def test_to_from_json_remote(cloud_test_catalog_upload):
 
 # These deprecation warnings occur in the datamodel-code-generator package.
 @pytest.mark.filterwarnings("ignore::pydantic.warnings.PydanticDeprecatedSince20")
-def test_to_from_jsonl_remote(cloud_test_catalog_upload):
+def test_to_read_jsonl_remote(cloud_test_catalog_upload):
     ctc = cloud_test_catalog_upload
     path = f"{ctc.src_uri}/test.jsonl"
 
@@ -2193,7 +2193,7 @@ def test_to_from_jsonl_remote(cloud_test_catalog_upload):
     dc_to = dc.from_pandas(df, session=ctc.session)
     dc_to.to_jsonl(path)
 
-    dc_from = dc.from_json(path, format="jsonl", session=ctc.session)
+    dc_from = dc.read_json(path, format="jsonl", session=ctc.session)
     df1 = dc_from.select("jsonl.first_name", "jsonl.age", "jsonl.city").to_pandas()
     df1 = df1["jsonl"]
     assert df_equal(df1, df)
