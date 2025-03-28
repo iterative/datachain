@@ -131,7 +131,7 @@ countplusone: int
 
 def test_pandas_conversion(test_session):
     df = pd.DataFrame(DF_DATA)
-    df1 = dc.from_pandas(df, session=test_session)
+    df1 = dc.read_pandas(df, session=test_session)
     df1 = df1.select("first_name", "age", "city").to_pandas()
     assert df_equal(df1, df)
 
@@ -139,7 +139,7 @@ def test_pandas_conversion(test_session):
 @skip_if_not_sqlite
 def test_pandas_conversion_in_memory():
     df = pd.DataFrame(DF_DATA)
-    chain = dc.from_pandas(df, in_memory=True)
+    chain = dc.read_pandas(df, in_memory=True)
     assert chain.session.catalog.in_memory is True
     assert chain.session.catalog.metastore.db.db_file == ":memory:"
     assert chain.session.catalog.warehouse.db.db_file == ":memory:"
@@ -153,26 +153,26 @@ def test_pandas_uppercase_columns(test_session):
         "Age": [25, 30, 35, 40, 45],
         "City": ["New York", "Los Angeles", "Chicago", "Houston", "Phoenix"],
     }
-    df = dc.from_pandas(pd.DataFrame(data), session=test_session).to_pandas()
+    df = dc.read_pandas(pd.DataFrame(data), session=test_session).to_pandas()
     assert all(col not in df.columns for col in data)
     assert all(col.lower() in df.columns for col in data)
 
 
 def test_pandas_incorrect_column_names(test_session):
     with pytest.raises(DataChainParamsError):
-        dc.from_pandas(
+        dc.read_pandas(
             pd.DataFrame({"First Name": ["Alice", "Bob", "Charlie", "David", "Eva"]}),
             session=test_session,
         )
 
     with pytest.raises(DataChainParamsError):
-        dc.from_pandas(
+        dc.read_pandas(
             pd.DataFrame({"": ["Alice", "Bob", "Charlie", "David", "Eva"]}),
             session=test_session,
         )
 
     with pytest.raises(DataChainParamsError):
-        dc.from_pandas(
+        dc.read_pandas(
             pd.DataFrame({"First@Name": ["Alice", "Bob", "Charlie", "David", "Eva"]}),
             session=test_session,
         )
@@ -1282,7 +1282,7 @@ def test_read_csv(tmp_dir, test_session):
 
 def test_to_read_csv(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
-    dc_to = dc.from_pandas(df, session=test_session)
+    dc_to = dc.read_pandas(df, session=test_session)
     path = tmp_dir / "test.csv"
     dc_to.to_csv(path)
     dc_from = dc.read_csv(path.as_uri(), session=test_session)
@@ -1303,7 +1303,7 @@ def test_read_csv_in_memory(tmp_dir):
 @skip_if_not_sqlite
 def test_to_read_csv_in_memory(tmp_dir):
     df = pd.DataFrame(DF_DATA)
-    dc_to = dc.from_pandas(df, in_memory=True)
+    dc_to = dc.read_pandas(df, in_memory=True)
     path = tmp_dir / "test.csv"
     dc_to.to_csv(path)
     dc_from = dc.read_csv(path.as_uri(), in_memory=True)
@@ -1556,7 +1556,7 @@ def test_to_json_features_nested(tmp_dir, test_session):
 @pytest.mark.filterwarnings("ignore::pydantic.warnings.PydanticDeprecatedSince20")
 def test_to_read_jsonl(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
-    dc_to = dc.from_pandas(df, session=test_session)
+    dc_to = dc.read_pandas(df, session=test_session)
     path = tmp_dir / "test.jsonl"
     dc_to.order_by("first_name", "age").to_jsonl(path)
 
@@ -1654,7 +1654,7 @@ def test_from_parquet_partitioned(tmp_dir, test_session):
 
 def test_to_parquet(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
-    chain = dc.from_pandas(df, session=test_session)
+    chain = dc.read_pandas(df, session=test_session)
 
     path = tmp_dir / "test.parquet"
     chain.to_parquet(path)
@@ -1665,7 +1665,7 @@ def test_to_parquet(tmp_dir, test_session):
 
 def test_to_parquet_partitioned(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
-    chain = dc.from_pandas(df, session=test_session)
+    chain = dc.read_pandas(df, session=test_session)
 
     path = tmp_dir / "parquets"
     chain.to_parquet(path, partition_cols=["first_name"])
@@ -1684,7 +1684,7 @@ def test_to_parquet_partitioned(tmp_dir, test_session):
 @pytest.mark.parametrize("kwargs", ({}, {"compression": "gzip"}))
 def test_to_from_parquet(tmp_dir, test_session, chunk_size, kwargs):
     df = pd.DataFrame(DF_DATA)
-    dc_to = dc.from_pandas(df, session=test_session)
+    dc_to = dc.read_pandas(df, session=test_session)
 
     path = tmp_dir / "test.parquet"
     dc_to.to_parquet(path, chunk_size=chunk_size, **kwargs)
@@ -1701,7 +1701,7 @@ def test_to_from_parquet(tmp_dir, test_session, chunk_size, kwargs):
 @pytest.mark.parametrize("chunk_size", (1000, 2))
 def test_to_from_parquet_partitioned(tmp_dir, test_session, chunk_size):
     df = pd.DataFrame(DF_DATA)
-    dc_to = dc.from_pandas(df, session=test_session)
+    dc_to = dc.read_pandas(df, session=test_session)
 
     path = tmp_dir / "parquets"
     dc_to.to_parquet(path, partition_cols=["first_name"], chunk_size=chunk_size)
@@ -2404,10 +2404,10 @@ def test_from_values_nan_inf(test_session):
     assert any(r for r in res if np.isneginf(r))
 
 
-def test_from_pandas_nan_inf(test_session):
+def test_read_pandas_nan_inf(test_session):
     vals = [float("nan"), float("inf"), float("-inf")]
     df = pd.DataFrame({"vals": vals})
-    chain = dc.from_pandas(df, session=test_session)
+    chain = dc.read_pandas(df, session=test_session)
     res = list(chain.collect("vals"))
     assert len(res) == 3
     assert any(r for r in res if np.isnan(r))

@@ -93,7 +93,7 @@ class DataChain:
 
         `from_values(fib=[1, 2, 3, 5, 8])` - generating from values.
 
-        `from_pandas(pd.DataFrame(...))` - generating from pandas.
+        `read_pandas(pd.DataFrame(...))` - generating from pandas.
 
         `read_json("file.json")` - generating from json.
 
@@ -1482,15 +1482,15 @@ class DataChain:
         *args,
         **kwargs,
     ) -> "DataChain":
-        from .pandas import from_pandas
+        from .pandas import read_pandas
 
         warnings.warn(
-            "Class method `from_pandas` is deprecated. "
-            "Use `from_pandas` function instead from top_module.",
+            "Class method `read_pandas` is deprecated. "
+            "Use `read_pandas` function instead from top_module.",
             DeprecationWarning,
             stacklevel=2,
         )
-        return from_pandas(*args, **kwargs)
+        return read_pandas(*args, **kwargs)
 
     def to_pandas(self, flatten=False, include_hidden=True) -> "pd.DataFrame":
         """Return a pandas DataFrame from the chain.

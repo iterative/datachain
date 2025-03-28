@@ -4,7 +4,7 @@ from .datasets import datasets, read_dataset
 from .hf import read_hf
 from .json import read_json
 from .listings import listings
-from .pandas import from_pandas
+from .pandas import read_pandas
 from .parquet import from_parquet
 from .records import from_records
 from .storage import read_storage
@@ -19,7 +19,6 @@ __all__ = [
     "DatasetPrepareError",
     "Sys",
     "datasets",
-    "from_pandas",
     "from_parquet",
     "from_records",
     "from_values",
@@ -28,5 +27,6 @@ __all__ = [
     "read_dataset",
     "read_hf",
     "read_json",
+    "read_pandas",
     "read_storage",
 ]

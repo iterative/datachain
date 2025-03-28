@@ -2090,7 +2090,7 @@ def test_to_read_csv_remote(cloud_test_catalog_upload):
     path = f"{ctc.src_uri}/test.csv"
 
     df = pd.DataFrame(DF_DATA)
-    dc_to = dc.from_pandas(df, session=ctc.session)
+    dc_to = dc.read_pandas(df, session=ctc.session)
     dc_to.to_csv(path)
 
     dc_from = dc.read_csv(path, session=ctc.session)
@@ -2105,7 +2105,7 @@ def test_to_from_parquet_remote(cloud_test_catalog_upload, chunk_size, kwargs):
     path = f"{ctc.src_uri}/test.parquet"
 
     df = pd.DataFrame(DF_DATA)
-    dc_to = dc.from_pandas(df, session=ctc.session)
+    dc_to = dc.read_pandas(df, session=ctc.session)
     dc_to.to_parquet(path, chunk_size=chunk_size, **kwargs)
 
     dc_from = dc.from_parquet(path, session=ctc.session)
@@ -2119,7 +2119,7 @@ def test_to_from_parquet_partitioned_remote(cloud_test_catalog_upload):
     path = f"{ctc.src_uri}/parquets"
 
     df = pd.DataFrame(DF_DATA)
-    dc_to = dc.from_pandas(df, session=ctc.session)
+    dc_to = dc.read_pandas(df, session=ctc.session)
     dc_to.to_parquet(path, partition_cols=["first_name"], chunk_size=2)
 
     dc_from = dc.from_parquet(path, session=ctc.session)
@@ -2132,7 +2132,7 @@ def test_to_from_parquet_partitioned_remote(cloud_test_catalog_upload):
 @pytest.mark.filterwarnings("ignore::pydantic.warnings.PydanticDeprecatedSince20")
 def test_to_read_json(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
-    dc_to = dc.from_pandas(df, session=test_session)
+    dc_to = dc.read_pandas(df, session=test_session)
     path = tmp_dir / "test.json"
     dc_to.order_by("first_name", "age").to_json(path)
 
@@ -2174,7 +2174,7 @@ def test_to_read_json_remote(cloud_test_catalog_upload):
     path = f"{ctc.src_uri}/test.json"
 
     df = pd.DataFrame(DF_DATA)
-    dc_to = dc.from_pandas(df, session=ctc.session)
+    dc_to = dc.read_pandas(df, session=ctc.session)
     dc_to.to_json(path)
 
     dc_from = dc.read_json(path, session=ctc.session)
@@ -2190,7 +2190,7 @@ def test_to_read_jsonl_remote(cloud_test_catalog_upload):
     path = f"{ctc.src_uri}/test.jsonl"
 
     df = pd.DataFrame(DF_DATA)
-    dc_to = dc.from_pandas(df, session=ctc.session)
+    dc_to = dc.read_pandas(df, session=ctc.session)
     dc_to.to_jsonl(path)
 
     dc_from = dc.read_json(path, format="jsonl", session=ctc.session)

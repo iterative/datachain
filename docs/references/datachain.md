@@ -21,7 +21,7 @@ for examples of how to create a chain.
 
 ::: datachain.lib.dc.listings.listings
 
-::: datachain.lib.dc.pandas.from_pandas
+::: datachain.lib.dc.pandas.read_pandas
 
 ::: datachain.lib.dc.parquet.from_parquet
 

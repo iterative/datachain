@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     P = ParamSpec("P")
 
 
-def from_pandas(  # type: ignore[override]
+def read_pandas(  # type: ignore[override]
     df: "pd.DataFrame",
     name: str = "",
     session: Optional[Session] = None,
@@ -32,7 +32,7 @@ def from_pandas(  # type: ignore[override]
         import datachain as dc
 
         df = pd.DataFrame({"fib": [1, 2, 3, 5, 8]})
-        dc.from_pandas(df)
+        dc.read_pandas(df)
         ```
     """
     from .utils import DatasetPrepareError

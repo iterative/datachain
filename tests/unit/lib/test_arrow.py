@@ -68,7 +68,7 @@ def test_arrow_generator_output_schema(tmp_path, catalog):
     texts = ["28", "22", "we", "hello world"]
     dicts = [{"a": 1, "b": 2}, {"a": 3, "b": 4}, {"a": 5, "b": 6}, {"a": 7, "b": 8}]
     df = pd.DataFrame({"id": ids, "text": texts, "dict": dicts})
-    table = pa.Table.from_pandas(df)
+    table = pa.Table.read_pandas(df)
 
     name = "111.parquet"
     pq_path = tmp_path / name
