@@ -89,7 +89,7 @@ def read_storage(
     """
     from .datachain import DataChain
     from .datasets import read_dataset
-    from .records import from_records
+    from .records import read_records
     from .values import from_values
 
     file_type = get_file_type(type)
@@ -130,7 +130,7 @@ def read_storage(
             def lst_fn(ds_name, lst_uri):
                 # disable prefetch for listing, as it pre-downloads all files
                 (
-                    from_records(
+                    read_records(
                         DataChain.DEFAULT_FILE_RECORD,
                         session=session,
                         settings=settings,

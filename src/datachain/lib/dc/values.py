@@ -6,7 +6,7 @@ from typing import (
 
 from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import dict_to_data_model
-from datachain.lib.dc.records import from_records
+from datachain.lib.dc.records import read_records
 from datachain.lib.dc.utils import OutputType
 from datachain.query import Session
 
@@ -42,7 +42,7 @@ def from_values(
     def _func_fr() -> Iterator[tuple_type]:  # type: ignore[valid-type]
         yield from tuples
 
-    chain = from_records(
+    chain = read_records(
         DataChain.DEFAULT_FILE_RECORD,
         session=session,
         settings=settings,

@@ -1930,15 +1930,15 @@ class DataChain:
         *args,
         **kwargs,
     ) -> "DataChain":
-        from .records import from_records
+        from .records import read_records
 
         warnings.warn(
-            "Class method `from_records` is deprecated. "
-            "Use `from_records` function instead from top_module.",
+            "Class method `read_records` is deprecated. "
+            "Use `read_records` function instead from top_module.",
             DeprecationWarning,
             stacklevel=2,
         )
-        return from_records(*args, **kwargs)
+        return read_records(*args, **kwargs)
 
     def sum(self, fr: DataType):  # type: ignore[override]
         """Compute the sum of a column."""

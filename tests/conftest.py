@@ -712,7 +712,7 @@ def studio_datasets(requests_mock):
 def not_random_ds(test_session):
     # `sys__rand` column is carefully crafted to ensure that `train_test_split` func
     # will always return columns in the `sys__id` order if no seed is provided.
-    return dc.from_records(
+    return dc.read_records(
         [
             {"sys__id": 1, "sys__rand": 8025184816406567794, "fib": 0},
             {"sys__id": 2, "sys__rand": 8264763963075908010, "fib": 1},
@@ -732,7 +732,7 @@ def not_random_ds(test_session):
 
 @pytest.fixture
 def pseudo_random_ds(test_session):
-    return dc.from_records(
+    return dc.read_records(
         [
             {"sys__id": 1, "sys__rand": 2406827533654413759, "fib": 0},
             {"sys__id": 2, "sys__rand": 743035223448130834, "fib": 1},

@@ -6,7 +6,7 @@ from .json import read_json
 from .listings import listings
 from .pandas import read_pandas
 from .parquet import read_parquet
-from .records import from_records
+from .records import read_records
 from .storage import read_storage
 from .utils import DatasetMergeError, DatasetPrepareError, Sys
 from .values import from_values
@@ -19,7 +19,6 @@ __all__ = [
     "DatasetPrepareError",
     "Sys",
     "datasets",
-    "from_records",
     "from_values",
     "listings",
     "read_csv",
@@ -28,5 +27,6 @@ __all__ = [
     "read_json",
     "read_pandas",
     "read_parquet",
+    "read_records",
     "read_storage",
 ]

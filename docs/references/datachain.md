@@ -25,7 +25,7 @@ for examples of how to create a chain.
 
 ::: datachain.lib.dc.parquet.read_parquet
 
-::: datachain.lib.dc.records.from_records
+::: datachain.lib.dc.records.read_records
 
 ::: datachain.lib.dc.storage.read_storage
 

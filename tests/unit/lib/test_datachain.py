@@ -179,7 +179,7 @@ def test_pandas_incorrect_column_names(test_session):
 
 
 def test_from_features_basic(test_session):
-    ds = dc.from_records(dc.DataChain.DEFAULT_FILE_RECORD, session=test_session)
+    ds = dc.read_records(dc.DataChain.DEFAULT_FILE_RECORD, session=test_session)
     ds = ds.gen(lambda prm: [File(path="")] * 5, params="path", output={"file": File})
 
     ds_name = "my_ds"
@@ -194,7 +194,7 @@ def test_from_features_basic(test_session):
 
 @skip_if_not_sqlite
 def test_from_features_basic_in_memory():
-    ds = dc.from_records(dc.DataChain.DEFAULT_FILE_RECORD, in_memory=True)
+    ds = dc.read_records(dc.DataChain.DEFAULT_FILE_RECORD, in_memory=True)
     assert ds.session.catalog.in_memory is True
     assert ds.session.catalog.metastore.db.db_file == ":memory:"
     assert ds.session.catalog.warehouse.db.db_file == ":memory:"
@@ -211,7 +211,7 @@ def test_from_features_basic_in_memory():
 
 
 def test_from_features(test_session):
-    ds = dc.from_records(dc.DataChain.DEFAULT_FILE_RECORD, session=test_session)
+    ds = dc.read_records(dc.DataChain.DEFAULT_FILE_RECORD, session=test_session)
     ds = ds.gen(
         lambda prm: list(zip([File(path="")] * len(features), features)),
         params="path",
@@ -221,9 +221,9 @@ def test_from_features(test_session):
     assert [r[1] for r in ds.order_by("t1.nnn", "t1.count").collect()] == features
 
 
-def test_from_records_empty_chain_with_schema(test_session):
+def test_read_record_empty_chain_with_schema(test_session):
     schema = {"my_file": File, "my_col": int}
-    ds = dc.from_records([], schema=schema, session=test_session)
+    ds = dc.read_records([], schema=schema, session=test_session)
 
     ds_name = "my_ds"
     ds.save(ds_name)
@@ -243,8 +243,8 @@ def test_from_records_empty_chain_with_schema(test_session):
     )
 
 
-def test_from_records_empty_chain_without_schema(test_session):
-    ds = dc.from_records([], schema=None, session=test_session)
+def test_read_record_empty_chain_without_schema(test_session):
+    ds = dc.read_records([], schema=None, session=test_session)
 
     ds_name = "my_ds"
     ds.save(ds_name)
@@ -400,7 +400,7 @@ def test_listings_reindex_subpath_local_file_system(test_session, tmp_dir):
 
 
 def test_preserve_feature_schema(test_session):
-    ds = dc.from_records(dc.DataChain.DEFAULT_FILE_RECORD, session=test_session)
+    ds = dc.read_records(dc.DataChain.DEFAULT_FILE_RECORD, session=test_session)
     ds = ds.gen(
         lambda prm: list(zip([File(path="")] * len(features), features, features)),
         params="path",
@@ -1174,7 +1174,7 @@ def test_parse_tabular_no_files(test_session):
         chain.parse_tabular()
 
     schema = {"file": File, "my_col": int}
-    chain = dc.from_records([], schema=schema, session=test_session, in_memory=True)
+    chain = dc.read_records([], schema=schema, session=test_session, in_memory=True)
 
     with pytest.raises(DatasetPrepareError):
         chain.parse_tabular()

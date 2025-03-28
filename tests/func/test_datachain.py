@@ -445,7 +445,7 @@ def test_read_storage_multiple_uris_cache(cloud_test_catalog):
             "dog4",
         }
 
-        # Verify from_records was called exactly twice
+        # Verify read_records was called exactly twice
         assert mock_get_listing.call_count == 4  # TODO FIX THIS
 
 
