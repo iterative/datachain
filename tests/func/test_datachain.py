@@ -218,7 +218,7 @@ def test_read_storage_listing_happens_once(cloud_test_catalog, cloud_type):
     uri = f"{ctc.src_uri}"
     ds_name = "cats_dogs"
 
-    chain = dc.from_storage(uri, session=ctc.session)
+    chain = dc.read_storage(uri, session=ctc.session)
     dc_cats = chain.filter(dc.C("file.path").glob("cats*"))
     dc_dogs = chain.filter(dc.C("file.path").glob("dogs*"))
     dc_cats.union(dc_dogs).save(ds_name)
