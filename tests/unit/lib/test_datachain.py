@@ -1621,32 +1621,32 @@ def test_to_jsonl_features_nested(tmp_dir, test_session):
     ]
 
 
-def test_from_parquet(tmp_dir, test_session):
+def test_read_parquet(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.parquet"
     df.to_parquet(path)
-    chain = dc.from_parquet(path.as_uri(), session=test_session)
+    chain = dc.read_parquet(path.as_uri(), session=test_session)
     df1 = chain.select("first_name", "age", "city").to_pandas()
 
     assert df_equal(df1, df)
 
 
 @skip_if_not_sqlite
-def test_from_parquet_in_memory(tmp_dir):
+def test_read_parquet_in_memory(tmp_dir):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.parquet"
     df.to_parquet(path)
-    chain = dc.from_parquet(path.as_uri(), in_memory=True)
+    chain = dc.read_parquet(path.as_uri(), in_memory=True)
     df1 = chain.select("first_name", "age", "city").to_pandas()
 
     assert df_equal(df1, df)
 
 
-def test_from_parquet_partitioned(tmp_dir, test_session):
+def test_read_parquet_partitioned(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.parquet"
     df.to_parquet(path, partition_cols=["first_name"])
-    chain = dc.from_parquet(path.as_uri(), session=test_session)
+    chain = dc.read_parquet(path.as_uri(), session=test_session)
     df1 = chain.select("first_name", "age", "city").to_pandas()
     df1 = df1.sort_values("first_name").reset_index(drop=True)
     assert df_equal(df1, df)
@@ -1682,7 +1682,7 @@ def test_to_parquet_partitioned(tmp_dir, test_session):
 
 @pytest.mark.parametrize("chunk_size", (1000, 2))
 @pytest.mark.parametrize("kwargs", ({}, {"compression": "gzip"}))
-def test_to_from_parquet(tmp_dir, test_session, chunk_size, kwargs):
+def test_to_read_parquet(tmp_dir, test_session, chunk_size, kwargs):
     df = pd.DataFrame(DF_DATA)
     dc_to = dc.read_pandas(df, session=test_session)
 
@@ -1692,14 +1692,14 @@ def test_to_from_parquet(tmp_dir, test_session, chunk_size, kwargs):
     assert path.is_file()
     pd.testing.assert_frame_equal(sort_df(pd.read_parquet(path)), sort_df(df))
 
-    dc_from = dc.from_parquet(path.as_uri(), session=test_session)
+    dc_from = dc.read_parquet(path.as_uri(), session=test_session)
     df1 = dc_from.select("first_name", "age", "city").to_pandas()
 
     assert df_equal(df1, df)
 
 
 @pytest.mark.parametrize("chunk_size", (1000, 2))
-def test_to_from_parquet_partitioned(tmp_dir, test_session, chunk_size):
+def test_to_read_parquet_partitioned(tmp_dir, test_session, chunk_size):
     df = pd.DataFrame(DF_DATA)
     dc_to = dc.read_pandas(df, session=test_session)
 
@@ -1715,14 +1715,14 @@ def test_to_from_parquet_partitioned(tmp_dir, test_session, chunk_size):
     df1 = df1.sort_values("first_name").reset_index(drop=True)
     pd.testing.assert_frame_equal(df1, df)
 
-    dc_from = dc.from_parquet(path.as_uri(), session=test_session)
+    dc_from = dc.read_parquet(path.as_uri(), session=test_session)
     df1 = dc_from.select("first_name", "age", "city").to_pandas()
     df1 = df1.sort_values("first_name").reset_index(drop=True)
     assert df1.equals(df)
 
 
 @pytest.mark.parametrize("chunk_size", (1000, 2))
-def test_to_from_parquet_features(tmp_dir, test_session, chunk_size):
+def test_to_read_parquet_features(tmp_dir, test_session, chunk_size):
     dc_to = dc.from_values(f1=features, num=range(len(features)), session=test_session)
 
     path = tmp_dir / "test.parquet"
@@ -1730,7 +1730,7 @@ def test_to_from_parquet_features(tmp_dir, test_session, chunk_size):
 
     assert path.is_file()
 
-    dc_from = dc.from_parquet(path.as_uri(), session=test_session)
+    dc_from = dc.read_parquet(path.as_uri(), session=test_session)
 
     n = 0
     for sample in dc_from.order_by("f1.nnn", "f1.count").select("f1", "num").collect():
@@ -1748,7 +1748,7 @@ def test_to_from_parquet_features(tmp_dir, test_session, chunk_size):
 
 
 @pytest.mark.parametrize("chunk_size", (1000, 2))
-def test_to_from_parquet_nested_features(tmp_dir, test_session, chunk_size):
+def test_to_read_parquet_nested_features(tmp_dir, test_session, chunk_size):
     dc_to = dc.from_values(sign1=features_nested, session=test_session)
 
     path = tmp_dir / "test.parquet"
@@ -1756,7 +1756,7 @@ def test_to_from_parquet_nested_features(tmp_dir, test_session, chunk_size):
 
     assert path.is_file()
 
-    dc_from = dc.from_parquet(path.as_uri(), session=test_session)
+    dc_from = dc.read_parquet(path.as_uri(), session=test_session)
 
     for n, sample in enumerate(
         dc_from.order_by("sign1.fr.nnn", "sign1.fr.count").select("sign1").collect()
@@ -1769,7 +1769,7 @@ def test_to_from_parquet_nested_features(tmp_dir, test_session, chunk_size):
 
 
 @pytest.mark.parametrize("chunk_size", (1000, 2))
-def test_to_from_parquet_two_top_level_features(tmp_dir, test_session, chunk_size):
+def test_to_read_parquet_two_top_level_features(tmp_dir, test_session, chunk_size):
     dc_to = dc.from_values(f1=features, nest1=features_nested, session=test_session)
 
     path = tmp_dir / "test.parquet"
@@ -1777,7 +1777,7 @@ def test_to_from_parquet_two_top_level_features(tmp_dir, test_session, chunk_siz
 
     assert path.is_file()
 
-    dc_from = dc.from_parquet(path.as_uri(), session=test_session)
+    dc_from = dc.read_parquet(path.as_uri(), session=test_session)
 
     for n, sample in enumerate(
         dc_from.order_by("f1.nnn", "f1.count").select("f1", "nest1").collect()
@@ -2415,12 +2415,12 @@ def test_read_pandas_nan_inf(test_session):
     assert any(r for r in res if np.isneginf(r))
 
 
-def test_from_parquet_nan_inf(tmp_dir, test_session):
+def test_read_parquet_nan_inf(tmp_dir, test_session):
     vals = [float("nan"), float("inf"), float("-inf")]
     tbl = pa.table({"vals": vals})
     path = tmp_dir / "test.parquet"
     pq.write_table(tbl, path)
-    chain = dc.from_parquet(path.as_uri(), session=test_session)
+    chain = dc.read_parquet(path.as_uri(), session=test_session)
 
     res = list(chain.collect("vals"))
     assert len(res) == 3

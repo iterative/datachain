@@ -99,7 +99,7 @@ class DataChain:
 
         `read_csv("file.csv")` - generating from csv.
 
-        `from_parquet("file.parquet")` - generating from parquet.
+        `read_parquet("file.parquet")` - generating from parquet.
 
     Example:
         ```py
@@ -1696,15 +1696,15 @@ class DataChain:
         *args,
         **kwargs,
     ) -> "DataChain":
-        from .parquet import from_parquet
+        from .parquet import read_parquet
 
         warnings.warn(
-            "Class method `from_parquet` is deprecated. "
-            "Use `from_parquet` function instead from top_module.",
+            "Class method `read_parquet` is deprecated. "
+            "Use `read_parquet` function instead from top_module.",
             DeprecationWarning,
             stacklevel=2,
         )
-        return from_parquet(*args, **kwargs)
+        return read_parquet(*args, **kwargs)
 
     def to_parquet(
         self,

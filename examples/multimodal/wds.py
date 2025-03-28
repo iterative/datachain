@@ -22,7 +22,7 @@ wds_images = (
 )
 
 wds_with_pq = (
-    dc.from_parquet(PARQUET_METADATA)
+    dc.read_parquet(PARQUET_METADATA)
     .settings(cache=True)
     .merge(wds_images, on="uid", right_on="laion.json.uid", inner=True)
 )

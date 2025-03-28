@@ -101,7 +101,7 @@ def test_wds_merge_with_parquet_meta(
         laion=process_webdataset(spec=WDSLaion), params="file"
     )
 
-    meta = dc.from_parquet(Path(webdataset_metadata).as_uri())
+    meta = dc.read_parquet(Path(webdataset_metadata).as_uri())
 
     res = wds.merge(meta, on="laion.json.uid", right_on="uid")
 

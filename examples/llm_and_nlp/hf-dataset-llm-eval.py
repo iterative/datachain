@@ -58,7 +58,7 @@ def eval_dialog(
 # Read it back to filter and show.
 # It restores the Pydantic model from Parquet under the hood.
 (
-    dc.from_parquet(
+    dc.read_parquet(
         "hf://datasets/dvcorg/test-datachain-llm-eval/data.parquet", source=False
     )
     .filter(dc.C("response.result") == "Failure")

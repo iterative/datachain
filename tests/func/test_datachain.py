@@ -2100,7 +2100,7 @@ def test_to_read_csv_remote(cloud_test_catalog_upload):
 
 @pytest.mark.parametrize("chunk_size", (1000, 2))
 @pytest.mark.parametrize("kwargs", ({}, {"compression": "gzip"}))
-def test_to_from_parquet_remote(cloud_test_catalog_upload, chunk_size, kwargs):
+def test_to_read_parquet_remote(cloud_test_catalog_upload, chunk_size, kwargs):
     ctc = cloud_test_catalog_upload
     path = f"{ctc.src_uri}/test.parquet"
 
@@ -2108,13 +2108,13 @@ def test_to_from_parquet_remote(cloud_test_catalog_upload, chunk_size, kwargs):
     dc_to = dc.read_pandas(df, session=ctc.session)
     dc_to.to_parquet(path, chunk_size=chunk_size, **kwargs)
 
-    dc_from = dc.from_parquet(path, session=ctc.session)
+    dc_from = dc.read_parquet(path, session=ctc.session)
     df1 = dc_from.select("first_name", "age", "city").to_pandas()
 
     assert df_equal(df1, df)
 
 
-def test_to_from_parquet_partitioned_remote(cloud_test_catalog_upload):
+def test_to_read_parquet_partitioned_remote(cloud_test_catalog_upload):
     ctc = cloud_test_catalog_upload
     path = f"{ctc.src_uri}/parquets"
 
@@ -2122,7 +2122,7 @@ def test_to_from_parquet_partitioned_remote(cloud_test_catalog_upload):
     dc_to = dc.read_pandas(df, session=ctc.session)
     dc_to.to_parquet(path, partition_cols=["first_name"], chunk_size=2)
 
-    dc_from = dc.from_parquet(path, session=ctc.session)
+    dc_from = dc.read_parquet(path, session=ctc.session)
     df1 = dc_from.select("first_name", "age", "city").to_pandas()
     df1 = df1.sort_values("first_name").reset_index(drop=True)
     assert df_equal(df1, df)

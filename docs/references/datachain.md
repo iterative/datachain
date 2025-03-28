@@ -23,7 +23,7 @@ for examples of how to create a chain.
 
 ::: datachain.lib.dc.pandas.read_pandas
 
-::: datachain.lib.dc.parquet.from_parquet
+::: datachain.lib.dc.parquet.read_parquet
 
 ::: datachain.lib.dc.records.from_records
 
