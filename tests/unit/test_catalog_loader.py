@@ -5,8 +5,8 @@ import pytest
 
 from datachain.catalog.loader import (
     get_catalog,
-    get_distributed_class,
     get_metastore,
+    get_udf_distributor_class,
     get_warehouse,
 )
 from datachain.data_storage.sqlite import (
@@ -44,7 +44,7 @@ def test_get_metastore(sqlite_db):
 def test_get_metastore_in_memory():
     if os.environ.get("DATACHAIN_METASTORE"):
         with pytest.raises(RuntimeError):
-            metastore = get_metastore(in_memory=True)
+            get_metastore(in_memory=True)
     else:
         metastore = get_metastore(in_memory=True)
         assert isinstance(metastore, SQLiteMetastore)
@@ -71,7 +71,7 @@ def test_get_warehouse(sqlite_db):
 def test_get_warehouse_in_memory():
     if os.environ.get("DATACHAIN_WAREHOUSE"):
         with pytest.raises(RuntimeError):
-            warehouse = get_warehouse(in_memory=True)
+            get_warehouse(in_memory=True)
     else:
         warehouse = get_warehouse(in_memory=True)
         assert isinstance(warehouse, SQLiteWarehouse)
@@ -80,38 +80,31 @@ def test_get_warehouse_in_memory():
 
 
 def test_get_distributed_class():
-    distributed_args = {"foo": "bar", "baz": "37", "empty": ""}
     env = {
         "DATACHAIN_DISTRIBUTED": "tests.unit.test_catalog_loader.DistributedClass",
-        "DATACHAIN_DISTRIBUTED_ARG_FOO": "bar",
-        "DATACHAIN_DISTRIBUTED_ARG_BAZ": "37",
-        "DATACHAIN_DISTRIBUTED_ARG_EMPTY": "",
     }
 
     with patch.dict(os.environ, env):
-        distributed = get_distributed_class()
-        assert distributed
-        assert isinstance(distributed, DistributedClass)
-        assert distributed.kwargs == distributed_args
+        assert get_udf_distributor_class() == DistributedClass
 
     with patch.dict(os.environ, {"DATACHAIN_DISTRIBUTED": ""}):
         with pytest.raises(
             RuntimeError, match="DATACHAIN_DISTRIBUTED import path is required"
         ):
-            get_distributed_class()
+            get_udf_distributor_class()
 
     with patch.dict(
         os.environ,
         {"DATACHAIN_DISTRIBUTED": "tests.unit.test_catalog_loader.NonExistent"},
     ):
         with pytest.raises(AttributeError, match="has no attribute 'NonExistent'"):
-            get_distributed_class()
+            get_udf_distributor_class()
 
     with patch.dict(os.environ, {"DATACHAIN_DISTRIBUTED": "DistributionClass"}):
         with pytest.raises(
             RuntimeError, match="Invalid DATACHAIN_DISTRIBUTED import path"
         ):
-            get_distributed_class()
+            get_udf_distributor_class()
 
 
 def test_get_catalog(sqlite_db):
