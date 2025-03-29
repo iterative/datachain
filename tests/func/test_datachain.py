@@ -213,6 +213,20 @@ def test_read_storage_partials_with_update(cloud_test_catalog):
     )
 
 
+def test_read_storage_listing_happens_once(cloud_test_catalog, cloud_type):
+    ctc = cloud_test_catalog
+    uri = f"{ctc.src_uri}"
+    ds_name = "cats_dogs"
+
+    chain = dc.read_storage(uri, session=ctc.session)
+    dc_cats = chain.filter(dc.C("file.path").glob("cats*"))
+    dc_dogs = chain.filter(dc.C("file.path").glob("dogs*"))
+    dc_cats.union(dc_dogs).save(ds_name)
+
+    lst_ds_name = parse_listing_uri(uri, ctc.session.catalog.client_config)[0]
+    assert _get_listing_datasets(ctc.session) == [f"{lst_ds_name}@v1"]
+
+
 def test_read_storage_dependencies(cloud_test_catalog, cloud_type):
     ctc = cloud_test_catalog
     src_uri = ctc.src_uri
