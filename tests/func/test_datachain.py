@@ -538,7 +538,7 @@ def test_show(capsys, test_session):
         assert f"{i} {first_name[i]}" in normalized_output
 
 
-def test_show_temp_datasets(capsys, test_session):
+def test_show_without_temp_datasets(capsys, test_session):
     dc.read_values(
         key=[1, 2, 3, 4], session=test_session
     ).save()  # creates temp dataset
