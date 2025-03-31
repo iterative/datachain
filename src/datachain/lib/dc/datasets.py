@@ -140,6 +140,8 @@ def datasets(
         )
     ]
 
+    datasets_values = [d for d in datasets_values if not d.is_temp]
+
     return read_values(
         session=session,
         settings=settings,

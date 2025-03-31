@@ -538,6 +538,17 @@ def test_show(capsys, test_session):
         assert f"{i} {first_name[i]}" in normalized_output
 
 
+def test_show_without_temp_datasets(capsys, test_session):
+    dc.read_values(
+        key=[1, 2, 3, 4], session=test_session
+    ).save()  # creates temp dataset
+    dc.datasets().show()
+    captured = capsys.readouterr()
+    normalized_output = re.sub(r"\s+", " ", captured.out)
+    print(normalized_output)
+    assert "Empty result" in normalized_output
+
+
 def test_class_method_deprecated(capsys, test_session):
     with pytest.warns(DeprecationWarning):
         dc.DataChain.from_values(key=["a", "b", "c"], session=test_session)

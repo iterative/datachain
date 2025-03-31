@@ -47,6 +47,18 @@ def test_session_empty_name():
     assert name.startswith(Session.GLOBAL_SESSION_NAME + "_")
 
 
+@pytest.mark.parametrize(
+    "name,is_temp",
+    (
+        ("session_global_456b5d_0cda3b", True),
+        ("session_TestSession_456b5d_0cda3b", True),
+        ("cats", False),
+    ),
+)
+def test_is_temp_dataset(name, is_temp):
+    assert Session.is_temp_dataset(name) is is_temp
+
+
 def test_ephemeral_dataset_lifecycle(catalog):
     session_name = "asd3d4"
     with Session(session_name, catalog=catalog) as session:
