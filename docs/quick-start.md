@@ -39,8 +39,8 @@ using JSON metadata:
 ``` py
 import datachain as dc
 
-meta = dc.from_json("gs://datachain-demo/dogs-and-cats/*json", object_name="meta", anon=True)
-images = dc.from_storage("gs://datachain-demo/dogs-and-cats/*jpg", anon=True)
+meta = dc.read_json("gs://datachain-demo/dogs-and-cats/*json", object_name="meta", anon=True)
+images = dc.read_storage("gs://datachain-demo/dogs-and-cats/*jpg", anon=True)
 
 images_id = images.map(id=lambda file: file.path.split('.')[-2])
 annotated = images_id.merge(meta, on="id", right_on="meta.id")
@@ -77,7 +77,7 @@ def is_positive_dialogue_ending(file) -> bool:
     return classifier(dialogue_ending)[0]["label"] == "POSITIVE"
 
 chain = (
-   dc.from_storage("gs://datachain-demo/chatbot-KiT/",
+   dc.read_storage("gs://datachain-demo/chatbot-KiT/",
                           object_name="file", type="text", anon=True)
    .settings(parallel=8, cache=True)
    .map(is_positive=is_positive_dialogue_ending)
@@ -132,7 +132,7 @@ def eval_dialogue(file: dc.File) -> bool:
      return result.lower().startswith("success")
 
 chain = (
-   dc.from_storage("gs://datachain-demo/chatbot-KiT/", object_name="file", anon=True)
+   dc.read_storage("gs://datachain-demo/chatbot-KiT/", object_name="file", anon=True)
    .map(is_success=eval_dialogue)
    .save("mistral_files")
 )
@@ -177,7 +177,7 @@ def eval_dialog(file: dc.File) -> ChatCompletionResponse:
                    {"role": "user", "content": file.read()}])
 
 chain = (
-   dc.from_storage("gs://datachain-demo/chatbot-KiT/", object_name="file", anon=True)
+   dc.read_storage("gs://datachain-demo/chatbot-KiT/", object_name="file", anon=True)
    .settings(parallel=4, cache=True)
    .map(response=eval_dialog)
    .map(status=lambda response: response.choices[0].message.content.lower()[:7])
@@ -210,14 +210,14 @@ name                  usage        usage             usage
 
 In the previous examples, datasets were saved in the embedded database
 (`SQLite` in folder `.datachain` of the working directory). These datasets were automatically versioned, and
-can be accessed using `dc.from_dataset("dataset_name")`.
+can be accessed using `dc.read_dataset("dataset_name")`.
 
 Here is how to retrieve a saved dataset and iterate over the objects:
 
 ``` py
 import datachain as dc
 
-chain = dc.from_dataset("response")
+chain = dc.read_dataset("response")
 
 # Iterating one-by-one: support out-of-memory workflow
 for file, response in chain.limit(5).collect("file", "response"):
@@ -248,7 +248,7 @@ output tokens:
 
 ``` py
 import datachain as dc
-chain = dc.from_dataset("mistral_dataset")
+chain = dc.read_dataset("mistral_dataset")
 
 cost = chain.sum("response.usage.prompt_tokens")*0.000002 \
            + chain.sum("response.usage.completion_tokens")*0.000006
@@ -276,7 +276,7 @@ import datachain as dc
 processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
 chain = (
-    dc.from_storage("gs://datachain-demo/dogs-and-cats/", type="image", anon=True)
+    dc.read_storage("gs://datachain-demo/dogs-and-cats/", type="image", anon=True)
     .map(label=lambda name: name.split(".")[0], params=["file.name"])
     .select("file", "label").to_pytorch(
         transform=processor.image_processor,

@@ -12,7 +12,7 @@ def test_column_filter_by_regex(test_session):
         "dog.txtx",
     ]
 
-    chain = dc.from_values(file=[File(path=p) for p in names]).filter(
+    chain = dc.read_values(file=[File(path=p) for p in names]).filter(
         dc.C("file.path").regexp("dog\\.txt$")
     )
 

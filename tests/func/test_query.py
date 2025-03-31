@@ -80,7 +80,7 @@ def test_query_cli(cloud_test_catalog_tmpfile, tmp_path, catalog_info_filepath, 
     import datachain as dc
     from datachain import metrics, param
 
-    chain = dc.from_storage(param("url"), session=session)
+    chain = dc.read_storage(param("url"), session=session)
 
     metrics.set("count", chain.count())
 
