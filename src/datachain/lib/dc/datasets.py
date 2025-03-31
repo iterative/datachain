@@ -1,7 +1,4 @@
-from typing import (
-    TYPE_CHECKING,
-    Optional,
-)
+from typing import TYPE_CHECKING, Optional, get_type_hints
 
 from datachain.lib.dataset_info import DatasetInfo
 from datachain.lib.file import (
@@ -12,6 +9,7 @@ from datachain.lib.signal_schema import SignalSchema
 from datachain.query import Session
 from datachain.query.dataset import DatasetQuery
 
+from .records import read_records
 from .utils import Sys
 from .values import read_values
 
@@ -102,7 +100,7 @@ def datasets(
     session: Optional[Session] = None,
     settings: Optional[dict] = None,
     in_memory: bool = False,
-    object_name: str = "dataset",
+    column: Optional[str] = None,
     include_listing: bool = False,
     studio: bool = False,
 ) -> "DataChain":
@@ -112,7 +110,8 @@ def datasets(
         session: Optional session instance. If not provided, uses default session.
         settings: Optional dictionary of settings to configure the chain.
         in_memory: If True, creates an in-memory session. Defaults to False.
-        object_name: Name of the output object in the chain. Defaults to "dataset".
+        column: Name of the output object in the chain. Defaults to None which
+            means no top level object will becreated.
         include_listing: If True, includes listing datasets. Defaults to False.
         studio: If True, returns datasets from Studio only,
             otherwise returns all local datasets. Defaults to False.
@@ -124,7 +123,7 @@ def datasets(
         ```py
         import datachain as dc
 
-        chain = dc.datasets()
+        chain = dc.datasets(column="dataset")
         for ds in chain.collect("dataset"):
             print(f"{ds.name}@v{ds.version}")
         ```
@@ -140,10 +139,23 @@ def datasets(
         )
     ]
 
+    if not column:
+        return read_records(
+            [d.model_dump() for d in datasets_values],
+            session=session,
+            settings=settings,
+            in_memory=in_memory,
+            schema={
+                k: v
+                for k, v in get_type_hints(DatasetInfo).items()
+                if k in DatasetInfo.model_fields
+            },
+        )
+
     return read_values(
         session=session,
         settings=settings,
         in_memory=in_memory,
-        output={object_name: DatasetInfo},
-        **{object_name: datasets_values},  # type: ignore[arg-type]
+        output={column: DatasetInfo},
+        **{column: datasets_values},  # type: ignore[arg-type]
     )

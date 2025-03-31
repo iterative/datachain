@@ -52,9 +52,9 @@ def _get_listing_datasets(session):
     return sorted(
         [
             f"{ds.name}@v{ds.version}"
-            for ds in dc.datasets(session=session, include_listing=True).collect(
-                "dataset"
-            )
+            for ds in dc.datasets(
+                column="dataset", session=session, include_listing=True
+            ).collect("dataset")
             if is_listing_dataset(ds.name)
         ]
     )
