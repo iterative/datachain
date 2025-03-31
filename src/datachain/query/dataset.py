@@ -415,9 +415,7 @@ class UDFStep(Step, ABC):
     def populate_udf_table(self, udf_table: "Table", query: Select) -> None:
         from datachain.catalog import QUERY_SCRIPT_CANCELED_EXIT_CODE
 
-        count_query = sqlalchemy.select(f.count()).select_from(query.subquery())
-        rows_total = next(self.catalog.warehouse.db.execute(count_query))[0]
-
+        rows_total = self.catalog.warehouse.query_count(query)
         if rows_total == 0:
             return
 
@@ -451,10 +449,10 @@ class UDFStep(Step, ABC):
                         workers=workers,
                         processes=processes,
                         udf_fields=udf_fields,
+                        rows_total=rows_total,
                         use_cache=self.cache,
                         is_generator=self.is_generator,
                         min_task_size=self.min_task_size,
-                        rows_total=rows_total,
                     )
                     udf_distributor()
                 elif processes:
