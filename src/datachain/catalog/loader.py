@@ -7,6 +7,7 @@ from datachain.utils import get_envs_by_prefix
 if TYPE_CHECKING:
     from datachain.catalog import Catalog
     from datachain.data_storage import AbstractMetastore, AbstractWarehouse
+    from datachain.query.udf import AbstractUDFDistributor
 
 METASTORE_SERIALIZED = "DATACHAIN__METASTORE"
 METASTORE_IMPORT_PATH = "DATACHAIN_METASTORE"
@@ -15,7 +16,6 @@ WAREHOUSE_SERIALIZED = "DATACHAIN__WAREHOUSE"
 WAREHOUSE_IMPORT_PATH = "DATACHAIN_WAREHOUSE"
 WAREHOUSE_ARG_PREFIX = "DATACHAIN_WAREHOUSE_ARG_"
 DISTRIBUTED_IMPORT_PATH = "DATACHAIN_DISTRIBUTED"
-DISTRIBUTED_ARG_PREFIX = "DATACHAIN_DISTRIBUTED_ARG_"
 
 IN_MEMORY_ERROR_MESSAGE = "In-memory is only supported on SQLite"
 
@@ -100,27 +100,22 @@ def get_warehouse(in_memory: bool = False) -> "AbstractWarehouse":
     return warehouse_class(**warehouse_args)
 
 
-def get_distributed_class(**kwargs):
+def get_udf_distributor_class() -> type["AbstractUDFDistributor"]:
     distributed_import_path = os.environ.get(DISTRIBUTED_IMPORT_PATH)
-    distributed_arg_envs = get_envs_by_prefix(DISTRIBUTED_ARG_PREFIX)
-    # Convert env variable names to keyword argument names by lowercasing them
-    distributed_args = {k.lower(): v for k, v in distributed_arg_envs.items()}
 
     if not distributed_import_path:
         raise RuntimeError(
             f"{DISTRIBUTED_IMPORT_PATH} import path is required "
             "for distributed UDF processing."
         )
-    # Distributed class paths are specified as (for example):
-    # module.classname
+    # Distributed class paths are specified as (for example): module.classname
     if "." not in distributed_import_path:
         raise RuntimeError(
             f"Invalid {DISTRIBUTED_IMPORT_PATH} import path: {distributed_import_path}"
         )
     module_name, _, class_name = distributed_import_path.rpartition(".")
     distributed = import_module(module_name)
-    distributed_class = getattr(distributed, class_name)
-    return distributed_class(**distributed_args | kwargs)
+    return getattr(distributed, class_name)
 
 
 def get_catalog(
