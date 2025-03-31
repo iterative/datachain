@@ -60,8 +60,8 @@ high confidence scores.
 
     import datachain as dc
 
-    meta = dc.from_json("gs://datachain-demo/dogs-and-cats/*json", object_name="meta", anon=True)
-    images = dc.from_storage("gs://datachain-demo/dogs-and-cats/*jpg", anon=True)
+    meta = dc.read_json("gs://datachain-demo/dogs-and-cats/*json", object_name="meta", anon=True)
+    images = dc.read_storage("gs://datachain-demo/dogs-and-cats/*jpg", anon=True)
 
     images_id = images.map(id=lambda file: file.path.split('.')[-2])
     annotated = images_id.merge(meta, on="id", right_on="meta.id")
@@ -102,7 +102,7 @@ Python code:
          return result.lower().startswith("success")
 
     chain = (
-       dc.from_storage("gs://datachain-demo/chatbot-KiT/", object_name="file", anon=True)
+       dc.read_storage("gs://datachain-demo/chatbot-KiT/", object_name="file", anon=True)
        .settings(parallel=4, cache=True)
        .map(is_success=eval_dialogue)
        .save("mistral_files")

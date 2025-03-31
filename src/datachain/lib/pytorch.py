@@ -14,7 +14,7 @@ from torchvision.transforms import v2
 from datachain import Session
 from datachain.cache import get_temp_cache
 from datachain.catalog import Catalog, get_catalog
-from datachain.lib.dc.datasets import from_dataset
+from datachain.lib.dc.datasets import read_dataset
 from datachain.lib.settings import Settings
 from datachain.lib.text import convert_text
 from datachain.progress import CombinedDownloadCallback
@@ -122,7 +122,7 @@ class PytorchDataset(IterableDataset):
     ) -> Generator[tuple[Any, ...], None, None]:
         catalog = self._get_catalog()
         session = Session("PyTorch", catalog=catalog)
-        ds = from_dataset(
+        ds = read_dataset(
             name=self.name, version=self.version, session=session
         ).settings(cache=self.cache, prefetch=self.prefetch)
         ds = ds.remove_file_signals()

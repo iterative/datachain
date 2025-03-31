@@ -16,7 +16,7 @@ title: Examples
     import datachain as dc # (1)!
     from transformers import AutoProcessor, PaliGemmaForConditionalGeneration # (2)!
 
-    images = dc.from_storage("gs://datachain-demo/newyorker_caption_contest/images", type="image")
+    images = dc.read_storage("gs://datachain-demo/newyorker_caption_contest/images", type="image")
 
     model = PaliGemmaForConditionalGeneration.from_pretrained("google/paligemma-3b-mix-224")
     processor = AutoProcessor.from_pretrained("google/paligemma-3b-mix-224")
@@ -93,20 +93,20 @@ dc.DataModel.register(MistralModel)
 
 chain = (
     dc
-    .from_storage("gs://datachain-demo/chatbot-KiT/", type="text")
+    .read_storage("gs://datachain-demo/chatbot-KiT/", type="text")
     .filter(dc.Column("file.name").glob("*.txt"))
     .limit(5)
     .settings(parallel=4, cache=True)
     .map(
-       mistral=lambda file: MistralClient(api_key=api_key).chat(
-                                          model="open-mixtral-8x22b",
-                                          response_format={"type": "json_object"},
-                                          messages= [
-                                             ChatMessage(role="system", content=f"{prompt}"),
-                                             ChatMessage(role="user", content=f"{file.read()}")
-                                          ]
-                            ),
-       output=MistralModel
+        mistral=lambda file: MistralClient(api_key=api_key).chat(
+            model="open-mixtral-8x22b",
+            response_format={"type": "json_object"},
+            messages=[
+                ChatMessage(role="system", content=f"{prompt}"),
+                ChatMessage(role="user", content=f"{file.read()}")
+            ]
+        ),
+        output=MistralModel
     )
     .save("dialog-rating")
 )
@@ -145,7 +145,7 @@ The cost of 5 calls to Mixtral 8x22b : $0.0142
 The “save” operation makes chain dataset persistent in the current (working) directory of the query. A hidden folder `.datachain/` holds the records. A persistent dataset can be accessed later to start a derivative chain:
 
 ```python
-dc.from_dataset("rating").limit(2).save("dialog-rating")
+dc.read_dataset("rating").limit(2).save("dialog-rating")
 ```
 
 Persistent datasets are immutable and automatically versioned. Here is how to access the dataset registry:
@@ -167,7 +167,7 @@ dialog-rating@v2
 By default, when a saved dataset is loaded, the latest version is fetched but another version can be requested:
 
 ```python
-ds = dc.from_dataset("dialog-rating", version = 1)
+ds = dc.read_dataset("dialog-rating", version=1)
 ```
 
 ### Chain execution, optimization and parallelism
@@ -189,8 +189,8 @@ Here is an example of reading a simple CSV file where schema is heuristically de
 ```python
 from datachain import DataChain
 
-uri="gs://datachain-demo/chatbot-csv/"
-csv_dataset = dc.from_csv(uri)
+uri = "gs://datachain-demo/chatbot-csv/"
+csv_dataset = dc.read_csv(uri)
 
 print(csv_dataset.to_pandas())
 ```
@@ -233,12 +233,12 @@ However, Datachain can easily parse the entire COCO structure via several readin
 ```python
 import datachain as dc
 
-images_uri="gs://datachain-demo/coco2017/images/val/"
-captions_uri="gs://datachain-demo/coco2017/annotations/captions_val2017.json"
+images_uri = "gs://datachain-demo/coco2017/images/val/"
+captions_uri = "gs://datachain-demo/coco2017/annotations/captions_val2017.json"
 
-images = dc.from_storage(images_uri)
-meta = dc.from_json(captions_uri, jmespath = "images")
-captions = dc.from_json(captions_uri, jmespath = "annotations")
+images = dc.read_storage(images_uri)
+meta = dc.read_json(captions_uri, jmespath="images")
+captions = dc.read_json(captions_uri, jmespath="annotations")
 
 images_meta = images.merge(meta, on="file.name", right_on="images.file_name")
 captioned_images = images_meta.merge(captions, on="images.id", right_on="annotations.image_id")

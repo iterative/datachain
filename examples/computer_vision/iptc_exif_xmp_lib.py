@@ -67,7 +67,7 @@ def image_description(file):
 
 if __name__ == "__main__":
     (
-        dc.from_storage(source, type="image")
+        dc.read_storage(source, type="image")
         .settings(parallel=-1)
         .filter(dc.C("file.path").glob("*.jpg"))
         .limit(5000)

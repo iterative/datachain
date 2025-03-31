@@ -2,12 +2,12 @@
 
 `VideoFile` extends [`File`](file.md) and provides additional methods for working with video files.
 
-`VideoFile` instances are created when a `DataChain` is initialized [from storage](../datachain.md#datachain.lib.dc.storage.from_storage) with the `type="video"` parameter:
+`VideoFile` instances are created when a `DataChain` is initialized [from storage](../datachain.md#datachain.lib.dc.storage.read_storage) with the `type="video"` parameter:
 
 ```python
 import datachain as dc
 
-chain = dc.from_storage("s3://bucket-name/", type="video")
+chain = dc.read_storage("s3://bucket-name/", type="video")
 ```
 
 There are additional models for working with video files:

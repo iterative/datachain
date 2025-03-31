@@ -27,7 +27,7 @@ from tests.utils import skip_if_not_sqlite
 
 @pytest.fixture()
 def chain():
-    return dc.from_values(
+    return dc.read_values(
         num=list(range(1, 6)),
         val=["x" * i for i in range(1, 6)],
     )
@@ -853,7 +853,7 @@ def test_ifelse_mutate_with_columns_as_values(chain, if_val, else_val, type_, re
 @pytest.mark.parametrize("col", ["val", dc.C("val")])
 @skip_if_not_sqlite
 def test_isnone_mutate(col):
-    chain = dc.from_values(
+    chain = dc.read_values(
         num=list(range(1, 6)),
         val=[None if i > 3 else "A" for i in range(1, 6)],
     )
@@ -868,7 +868,7 @@ def test_isnone_mutate(col):
 @pytest.mark.parametrize("col", [dc.C("val"), "val"])
 @skip_if_not_sqlite
 def test_isnone_with_ifelse_mutate(col):
-    chain = dc.from_values(
+    chain = dc.read_values(
         num=list(range(1, 6)),
         val=[None if i > 3 else "A" for i in range(1, 6)],
     )
@@ -879,7 +879,7 @@ def test_isnone_with_ifelse_mutate(col):
 
 
 def test_array_contains():
-    chain = dc.from_values(
+    chain = dc.read_values(
         arr=[list(range(1, i)) * i for i in range(2, 7)],
         val=list(range(2, 7)),
     )

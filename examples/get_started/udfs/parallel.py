@@ -30,7 +30,7 @@ def path_len_benchmark(path):
 
 
 # Run in chain
-dc.from_storage(
+dc.read_storage(
     "gs://datachain-demo/dogs-and-cats/",
 ).settings(parallel=-1).map(
     path_len_benchmark,
