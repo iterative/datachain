@@ -275,7 +275,7 @@ def test_empty_chain_skip_udf_run(test_session):
     # Test that UDF is not called for empty chain
     with patch.object(UDFAdapter, "run") as mock_udf_run:
         (
-            dc.from_records([], schema={"val": int}, session=test_session)
+            dc.read_records([], schema={"val": int}, session=test_session)
             .map(lambda val: val * 2, params="val", output={"val2": int})
             .exec()
         )
