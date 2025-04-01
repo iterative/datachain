@@ -110,8 +110,8 @@ def datasets(
         session: Optional session instance. If not provided, uses default session.
         settings: Optional dictionary of settings to configure the chain.
         in_memory: If True, creates an in-memory session. Defaults to False.
-        column: Name of the output object in the chain. Defaults to None which
-            means no top level object will becreated.
+        column: Name of the output column in the chain. Defaults to None which
+            means no top level column will be created.
         include_listing: If True, includes listing datasets. Defaults to False.
         studio: If True, returns datasets from Studio only,
             otherwise returns all local datasets. Defaults to False.
