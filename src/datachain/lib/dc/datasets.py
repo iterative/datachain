@@ -138,6 +138,7 @@ def datasets(
             include_listing=include_listing, studio=studio
         )
     ]
+    datasets_values = [d for d in datasets_values if not d.is_temp]
 
     if not column:
         return read_records(

@@ -11,11 +11,10 @@ import multiprocess
 from cloudpickle import load, loads
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 from multiprocess import get_context
-from sqlalchemy.sql import func
 
 from datachain.catalog import Catalog
 from datachain.catalog.catalog import clone_catalog_with_cache
-from datachain.catalog.loader import get_distributed_class
+from datachain.catalog.loader import get_udf_distributor_class
 from datachain.lib.udf import _get_cache
 from datachain.query.batch import RowsOutput, RowsOutputBatch
 from datachain.query.dataset import (
@@ -59,6 +58,7 @@ def udf_entrypoint() -> int:
     dispatch = UDFDispatcher(udf_info)
 
     query = udf_info["query"]
+    rows_total = udf_info["rows_total"]
     batching = udf_info["batching"]
     n_workers = udf_info["processes"]
     if n_workers is True:
@@ -66,12 +66,6 @@ def udf_entrypoint() -> int:
 
     wh_cls, wh_args, wh_kwargs = udf_info["warehouse_clone_params"]
     warehouse: AbstractWarehouse = wh_cls(*wh_args, **wh_kwargs)
-
-    total_rows = next(
-        warehouse.db.execute(
-            query.with_only_columns(func.count(query.c.sys__id)).order_by(None)
-        )
-    )[0]
 
     with contextlib.closing(
         batching(warehouse.dataset_select_paginated, query, ids_only=True)
@@ -81,7 +75,7 @@ def udf_entrypoint() -> int:
         try:
             dispatch.run_udf_parallel(
                 udf_inputs,
-                total_rows=total_rows,
+                rows_total=rows_total,
                 n_workers=n_workers,
                 processed_cb=processed_cb,
                 download_cb=download_cb,
@@ -94,7 +88,7 @@ def udf_entrypoint() -> int:
 
 
 def udf_worker_entrypoint() -> int:
-    return get_distributed_class().run_worker()
+    return get_udf_distributor_class().run_worker()
 
 
 class UDFDispatcher:
@@ -164,14 +158,14 @@ class UDFDispatcher:
     def run_udf_parallel(  # noqa: C901, PLR0912
         self,
         input_rows: Iterable[RowsOutput],
-        total_rows: int,
+        rows_total: int,
         n_workers: Optional[int] = None,
         processed_cb: Callback = DEFAULT_CALLBACK,
         download_cb: Callback = DEFAULT_CALLBACK,
     ) -> None:
         n_workers = get_n_workers_from_arg(n_workers)
 
-        input_batch_size = total_rows // n_workers
+        input_batch_size = rows_total // n_workers
         if input_batch_size == 0:
             input_batch_size = 1
         elif input_batch_size > DEFAULT_BATCH_SIZE:
