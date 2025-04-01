@@ -620,18 +620,28 @@ class SignalSchema:
         return curr_type
 
     def select_except_signals(self, *args: str) -> "SignalSchema":
-        schema = copy.deepcopy(self.values)
-        for field in args:
-            if not isinstance(field, str):
-                raise SignalResolvingTypeError("select_except()", field)
+        def has_signal(signal: str):
+            signal = signal.replace(".", DEFAULT_DELIMITER)
+            return any(signal == s for s in self.db_signals())
 
-            if field not in self.values:
+        schema = copy.deepcopy(self.values)
+        for signal in args:
+            if not isinstance(signal, str):
+                raise SignalResolvingTypeError("select_except()", signal)
+
+            if signal not in self.values:
+                if has_signal(signal):
+                    raise SignalResolvingError(
+                        signal.split("."),
+                        "select_except() error - cannot remove nested signal since"
+                        " that is going to break it's parent schema which is not"
+                        " currently supported",
+                    )
                 raise SignalResolvingError(
-                    field.split("."),
-                    "select_except() error - the feature name does not exist or "
-                    "inside of feature (not supported)",
+                    signal.split("."),
+                    "select_except() error - the signal does not exist",
                 )
-            del schema[field]
+            del schema[signal]
 
         return SignalSchema(schema)
 
