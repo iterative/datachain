@@ -16,7 +16,6 @@ from datachain.lib.convert.flatten import flatten
 from datachain.lib.data_model import DataValue
 from datachain.lib.file import File
 from datachain.lib.utils import AbstractUDF, DataChainError, DataChainParamsError
-from datachain.progress import CombinedDownloadCallback
 from datachain.query.batch import (
     Batch,
     BatchingStrategy,
@@ -327,8 +326,9 @@ def _prefetch_inputs(
 
     if after_prefetch is None:
         after_prefetch = noop
-        if isinstance(download_cb, CombinedDownloadCallback):
-            after_prefetch = download_cb.increment_file_count
+        if download_cb and hasattr(download_cb, "increment_file_count"):
+            increment_file_count: Callable[[], None] = download_cb.increment_file_count
+            after_prefetch = increment_file_count
 
     f = partial(_prefetch_input, download_cb=download_cb, after_prefetch=after_prefetch)
     mapper = AsyncMapper(f, prepared_inputs, workers=prefetch)

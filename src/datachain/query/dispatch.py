@@ -4,9 +4,8 @@ from itertools import chain
 from multiprocessing import cpu_count
 from sys import stdin
 from threading import Timer
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Literal, Optional
 
-import attrs
 import multiprocess
 from cloudpickle import load, loads
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
@@ -60,6 +59,7 @@ def udf_entrypoint() -> int:
     query = udf_info["query"]
     rows_total = udf_info["rows_total"]
     batching = udf_info["batching"]
+    is_generator = udf_info["is_generator"]
     n_workers = udf_info["processes"]
     if n_workers is True:
         n_workers = None  # Use default number of CPUs (cores)
@@ -72,17 +72,20 @@ def udf_entrypoint() -> int:
     ) as udf_inputs:
         download_cb = get_download_callback()
         processed_cb = get_processed_callback()
+        generated_cb = get_generated_callback(is_generator)
         try:
             dispatch.run_udf_parallel(
                 udf_inputs,
                 rows_total=rows_total,
                 n_workers=n_workers,
-                processed_cb=processed_cb,
                 download_cb=download_cb,
+                processed_cb=processed_cb,
+                generated_cb=generated_cb,
             )
         finally:
             download_cb.close()
             processed_cb.close()
+            generated_cb.close()
 
     return 0
 
@@ -128,7 +131,6 @@ class UDFDispatcher:
             self.done_queue,
             self.query,
             self.table,
-            self.is_generator,
             self.is_batching,
             self.cache,
             self.udf_fields,
@@ -152,16 +154,14 @@ class UDFDispatcher:
         for _ in range(n_workers):
             put_into_queue(task_queue, STOP_SIGNAL)
 
-    def create_input_queue(self):
-        return self.ctx.Queue()
-
     def run_udf_parallel(  # noqa: C901, PLR0912
         self,
         input_rows: Iterable[RowsOutput],
         rows_total: int,
         n_workers: Optional[int] = None,
-        processed_cb: Callback = DEFAULT_CALLBACK,
         download_cb: Callback = DEFAULT_CALLBACK,
+        processed_cb: Callback = DEFAULT_CALLBACK,
+        generated_cb: Callback = DEFAULT_CALLBACK,
     ) -> None:
         n_workers = get_n_workers_from_arg(n_workers)
 
@@ -214,6 +214,8 @@ class UDFDispatcher:
                     download_cb.relative_update(downloaded)
                 if processed := result.get("processed"):
                     processed_cb.relative_update(processed)
+                if generated := result.get("generated"):
+                    generated_cb.relative_update(generated)
 
                 status = result["status"]
                 if status in (OK_STATUS, NOTIFY_STATUS):
@@ -260,46 +262,61 @@ class UDFDispatcher:
                 p.join()
 
 
-class WorkerCallback(Callback):
-    def __init__(self, queue: "multiprocess.Queue"):
+class DownloadCallback(Callback):
+    def __init__(self, queue: "multiprocess.Queue") -> None:
         self.queue = queue
         super().__init__()
 
     def relative_update(self, inc: int = 1) -> None:
+        # This callback is used to notify the size of the downloaded files
+        pass
+
+    def increment_file_count(self, inc: int = 1) -> None:
         put_into_queue(self.queue, {"status": NOTIFY_STATUS, "downloaded": inc})
 
 
 class ProcessedCallback(Callback):
-    def __init__(self):
-        self.processed_rows: Optional[int] = None
+    def __init__(
+        self,
+        name: Literal["processed", "generated"],
+        queue: "multiprocess.Queue",
+    ) -> None:
+        self.name = name
+        self.queue = queue
         super().__init__()
 
     def relative_update(self, inc: int = 1) -> None:
-        self.processed_rows = inc
+        put_into_queue(self.queue, {"status": NOTIFY_STATUS, self.name: inc})
 
 
-@attrs.define
 class UDFWorker:
-    catalog: "Catalog"
-    udf: "UDFAdapter"
-    task_queue: "multiprocess.Queue"
-    done_queue: "multiprocess.Queue"
-    query: "Select"
-    table: "Table"
-    is_generator: bool
-    is_batching: bool
-    cache: bool
-    udf_fields: Sequence[str]
-    cb: Callback = attrs.field()
+    def __init__(
+        self,
+        catalog: "Catalog",
+        udf: "UDFAdapter",
+        task_queue: "multiprocess.Queue",
+        done_queue: "multiprocess.Queue",
+        query: "Select",
+        table: "Table",
+        is_batching: bool,
+        cache: bool,
+        udf_fields: Sequence[str],
+    ) -> None:
+        self.catalog = catalog
+        self.udf = udf
+        self.task_queue = task_queue
+        self.done_queue = done_queue
+        self.query = query
+        self.table = table
+        self.is_batching = is_batching
+        self.cache = cache
+        self.udf_fields = udf_fields
 
-    @cb.default
-    def _default_callback(self) -> WorkerCallback:
-        return WorkerCallback(self.done_queue)
+        self.download_cb = DownloadCallback(self.done_queue)
+        self.processed_cb = ProcessedCallback("processed", self.done_queue)
+        self.generated_cb = ProcessedCallback("generated", self.done_queue)
 
     def run(self) -> None:
-        processed_cb = ProcessedCallback()
-        generated_cb = get_generated_callback(self.is_generator)
-
         prefetch = self.udf.prefetch
         with _get_cache(self.catalog.cache, prefetch, use_cache=self.cache) as _cache:
             catalog = clone_catalog_with_cache(self.catalog, _cache)
@@ -308,29 +325,22 @@ class UDFWorker:
                 self.get_inputs(),
                 catalog,
                 self.cache,
-                download_cb=self.cb,
-                processed_cb=processed_cb,
+                download_cb=self.download_cb,
+                processed_cb=self.processed_cb,
             )
             with safe_closing(udf_results):
                 process_udf_outputs(
                     catalog.warehouse,
                     self.table,
-                    self.notify_and_process(udf_results, processed_cb),
+                    self.notify_and_process(udf_results),
                     self.udf,
-                    cb=generated_cb,
+                    cb=self.generated_cb,
                 )
+        put_into_queue(self.done_queue, {"status": FINISHED_STATUS})
 
-        put_into_queue(
-            self.done_queue,
-            {"status": FINISHED_STATUS, "processed": processed_cb.processed_rows},
-        )
-
-    def notify_and_process(self, udf_results, processed_cb):
+    def notify_and_process(self, udf_results):
         for row in udf_results:
-            put_into_queue(
-                self.done_queue,
-                {"status": OK_STATUS, "processed": processed_cb.processed_rows},
-            )
+            put_into_queue(self.done_queue, {"status": OK_STATUS})
             yield row
 
     def get_inputs(self):
