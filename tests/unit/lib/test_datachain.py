@@ -22,6 +22,7 @@ from datachain.lib.file import File
 from datachain.lib.listing import LISTING_PREFIX
 from datachain.lib.listing_info import ListingInfo
 from datachain.lib.signal_schema import (
+    SignalRemoveError,
     SignalResolvingError,
     SignalResolvingTypeError,
     SignalSchema,
@@ -940,7 +941,7 @@ def test_select_except_error(test_session):
     with pytest.raises(SignalResolvingError):
         list(chain.select_except("not_exist", "file").collect())
 
-    with pytest.raises(SignalResolvingError):
+    with pytest.raises(SignalRemoveError):
         list(chain.select_except("fr1.label", "file").collect())
 
 

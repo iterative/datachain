@@ -10,6 +10,7 @@ from datachain.lib.file import File, TextFile
 from datachain.lib.model_store import ModelStore
 from datachain.lib.signal_schema import (
     SetupError,
+    SignalRemoveError,
     SignalResolvingError,
     SignalSchema,
     SignalSchemaError,
@@ -590,7 +591,7 @@ def test_select_except_signals():
 def test_select_except_signals_error():
     schema = SignalSchema({"age": float, "address": str, "f": MyType1})
 
-    with pytest.raises(SignalResolvingError):
+    with pytest.raises(SignalRemoveError):
         schema.select_except_signals("address", "f.aa")
 
     with pytest.raises(SignalResolvingError):
