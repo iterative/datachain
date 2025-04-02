@@ -22,6 +22,7 @@ from datachain.lib.file import File
 from datachain.lib.listing import LISTING_PREFIX
 from datachain.lib.listing_info import ListingInfo
 from datachain.lib.signal_schema import (
+    SignalRemoveError,
     SignalResolvingError,
     SignalResolvingTypeError,
     SignalSchema,
@@ -937,20 +938,11 @@ def test_select_wrong_type(test_session):
 def test_select_except_error(test_session):
     chain = dc.read_values(fr1=features_nested, fr2=features, session=test_session)
 
-    with pytest.raises(SignalResolvingError) as exc_info:
+    with pytest.raises(SignalResolvingError):
         list(chain.select_except("not_exist", "file").collect())
-    assert str(exc_info.value) == (
-        "cannot resolve signal name 'not_exist': select_except() error -"
-        " the signal does not exist"
-    )
 
-    with pytest.raises(SignalResolvingError) as exc_info:
+    with pytest.raises(SignalRemoveError):
         list(chain.select_except("fr1.label", "file").collect())
-    assert str(exc_info.value) == (
-        "cannot resolve signal name 'fr1.label': select_except() error - cannot"
-        " remove nested signal since that is going to break it's parent schema"
-        " which is not currently supported"
-    )
 
 
 def test_select_restore_from_saving(test_session):

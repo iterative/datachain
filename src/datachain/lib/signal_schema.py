@@ -87,6 +87,12 @@ class SignalResolvingTypeError(SignalResolvingError):
         )
 
 
+class SignalRemoveError(SignalSchemaError):
+    def __init__(self, path: Optional[list[str]], msg: str):
+        name = " '" + ".".join(path) + "'" if path else ""
+        super().__init__(f"cannot remove signal name{name}: {msg}")
+
+
 class CustomType(BaseModel):
     schema_version: int = Field(ge=1, le=2, strict=True)
     name: str
@@ -631,11 +637,10 @@ class SignalSchema:
 
             if signal not in self.values:
                 if has_signal(signal):
-                    raise SignalResolvingError(
+                    raise SignalRemoveError(
                         signal.split("."),
-                        "select_except() error - cannot remove nested signal since"
-                        " that is going to break it's parent schema which is not"
-                        " currently supported",
+                        "select_except() error - removing nested signal would"
+                        " break parent schema, which isn't supported.",
                     )
                 raise SignalResolvingError(
                     signal.split("."),
