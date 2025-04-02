@@ -4,6 +4,7 @@ import os
 import posixpath
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Callable, Optional, TypeVar, Union
 
 from fsspec.asyn import get_loop
@@ -30,6 +31,16 @@ D = TypeVar("D", bound="DataChain")
 # Disable warnings for remote errors in clients
 logging.getLogger("aiobotocore.credentials").setLevel(logging.CRITICAL)
 logging.getLogger("gcsfs").setLevel(logging.CRITICAL)
+
+
+def listing_dataset_expired(lst_ds) -> bool:
+    """Function that checks if listing dataset is expired or not"""
+    lst_version = lst_ds.versions[-1]
+    if not lst_version.finished_at:
+        return False
+
+    expires = lst_version.finished_at + timedelta(seconds=LISTING_TTL)
+    return datetime.now(timezone.utc) > expires
 
 
 def list_bucket(uri: str, cache, client_config=None) -> Callable:

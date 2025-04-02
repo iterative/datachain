@@ -213,6 +213,20 @@ def test_read_storage_partials_with_update(cloud_test_catalog):
     )
 
 
+def test_read_storage_listing_happens_once(cloud_test_catalog, cloud_type):
+    ctc = cloud_test_catalog
+    uri = f"{ctc.src_uri}"
+    ds_name = "cats_dogs"
+
+    chain = dc.read_storage(uri, session=ctc.session)
+    dc_cats = chain.filter(dc.C("file.path").glob("cats*"))
+    dc_dogs = chain.filter(dc.C("file.path").glob("dogs*"))
+    dc_cats.union(dc_dogs).save(ds_name)
+
+    lst_ds_name = parse_listing_uri(uri, ctc.session.catalog.client_config)[0]
+    assert _get_listing_datasets(ctc.session) == [f"{lst_ds_name}@v1"]
+
+
 def test_read_storage_dependencies(cloud_test_catalog, cloud_type):
     ctc = cloud_test_catalog
     src_uri = ctc.src_uri
@@ -522,6 +536,17 @@ def test_show(capsys, test_session):
     assert "first_name age city" in normalized_output
     for i in range(3):
         assert f"{i} {first_name[i]}" in normalized_output
+
+
+def test_show_without_temp_datasets(capsys, test_session):
+    dc.read_values(
+        key=[1, 2, 3, 4], session=test_session
+    ).save()  # creates temp dataset
+    dc.datasets().show()
+    captured = capsys.readouterr()
+    normalized_output = re.sub(r"\s+", " ", captured.out)
+    print(normalized_output)
+    assert "Empty result" in normalized_output
 
 
 def test_class_method_deprecated(capsys, test_session):
