@@ -74,7 +74,7 @@ def test_import_time(catalog, test_session):
 
     chain, min_import_time = min(import_timings, key=lambda x: x[1])
     # If there is a regression, uncomment the following to find the culprit:
-    # dc.show(limit=40)
+    chain.show(limit=40)
     for module in lazy_modules:
         assert not list(chain.filter(dc.C("import").startswith(module)).collect()), (
             f"found {module} at import time"

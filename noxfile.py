@@ -51,6 +51,7 @@ def tests(session: nox.Session) -> None:
         "--durations=10",
         "--numprocesses=logical",
         "--dist=loadgroup",
+        "--log-level=info",
         *session.posargs,
         env=env,
     )
