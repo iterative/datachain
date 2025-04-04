@@ -169,11 +169,13 @@ class Step(ABC):
 
 @frozen
 class QueryStep:
+    """A query that returns all rows from specific dataset version"""
+
     catalog: "Catalog"
     dataset_name: str
     dataset_version: int
 
-    def apply(self):
+    def apply(self) -> "StepResult":
         def q(*columns):
             return sqlalchemy.select(*columns)
 
