@@ -301,7 +301,7 @@ def test_datasets(test_session):
     assert datasets[0].num_objects == 6
 
 
-def test_datasets_without_object_name(test_session):
+def test_datasets_without_column_name(test_session):
     dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save("fibonacci")
     ds = dc.datasets(session=test_session)
     names = [name for name in ds.collect("name") if name == "fibonacci"]

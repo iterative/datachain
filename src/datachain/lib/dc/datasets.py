@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Optional, get_type_hints
+from typing import TYPE_CHECKING, Optional, get_origin, get_type_hints
 
 from datachain.lib.dataset_info import DatasetInfo
 from datachain.lib.file import (
@@ -9,7 +9,6 @@ from datachain.lib.signal_schema import SignalSchema
 from datachain.query import Session
 from datachain.query.dataset import DatasetQuery
 
-from .records import read_records
 from .utils import Sys
 from .values import read_values
 
@@ -141,16 +140,23 @@ def datasets(
     datasets_values = [d for d in datasets_values if not d.is_temp]
 
     if not column:
-        return read_records(
-            [d.model_dump() for d in datasets_values],
+        # flattening dataset fields
+        schema = {
+            k: get_origin(v) if get_origin(v) is dict else v
+            for k, v in get_type_hints(DatasetInfo).items()
+            if k in DatasetInfo.model_fields
+        }
+        data = {k: [] for k in DatasetInfo.model_fields}  # type: ignore[var-annotated]
+        for d in [d.model_dump() for d in datasets_values]:
+            for field, value in d.items():
+                data[field].append(value)
+
+        return read_values(
             session=session,
             settings=settings,
             in_memory=in_memory,
-            schema={
-                k: v
-                for k, v in get_type_hints(DatasetInfo).items()
-                if k in DatasetInfo.model_fields
-            },
+            output=schema,
+            **data,  # type: ignore[arg-type]
         )
 
     return read_values(
