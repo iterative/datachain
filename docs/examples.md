@@ -13,10 +13,10 @@ title: Examples
     For example, let us consider the New Yorker Cartoon caption contest dataset, where cartoons are matched against the potential titles. Let us imagine we want to augment this dataset with synthetic scene descriptions coming from an AI model. The below code takes images from the cloud, and applies PaliGemma model to caption the first five of them and put the results in the column “scene”:
 
     ```python
-    from datachain import Column, DataChain, File # (1)!
+    import datachain as dc # (1)!
     from transformers import AutoProcessor, PaliGemmaForConditionalGeneration # (2)!
 
-    images = DataChain.from_storage("gs://datachain-demo/newyorker_caption_contest/images", type="image")
+    images = dc.read_storage("gs://datachain-demo/newyorker_caption_contest/images", type="image")
 
     model = PaliGemmaForConditionalGeneration.from_pretrained("google/paligemma-3b-mix-224")
     processor = AutoProcessor.from_pretrained("google/paligemma-3b-mix-224")
@@ -80,7 +80,7 @@ In the below example, we are calling a Mixtral 8x22b model to judge the “servi
 # $ export MISTRAL_API_KEY='your key'
 
 import os
-from datachain import Column, DataChain, DataModel, Feature
+import datachain as dc
 from mistralai.client import MistralClient
 from mistralai.models.chat_completion import ChatMessage
 from mistralai.models.chat_completion import ChatCompletionResponse as MistralModel
@@ -89,24 +89,24 @@ prompt = "Was this dialog successful? Describe the 'result' as 'Yes' or 'No' in 
 api_key = os.environ["MISTRAL_API_KEY"]
 
 ## register the data model ###
-DataModel.register(MistralModel)
+dc.DataModel.register(MistralModel)
 
 chain = (
-    DataChain
-    .from_storage("gs://datachain-demo/chatbot-KiT/", type="text")
-    .filter(Column("file.name").glob("*.txt"))
+    dc
+    .read_storage("gs://datachain-demo/chatbot-KiT/", type="text")
+    .filter(dc.Column("file.name").glob("*.txt"))
     .limit(5)
     .settings(parallel=4, cache=True)
     .map(
-       mistral=lambda file: MistralClient(api_key=api_key).chat(
-                                          model="open-mixtral-8x22b",
-                                          response_format={"type": "json_object"},
-                                          messages= [
-                                             ChatMessage(role="system", content=f"{prompt}"),
-                                             ChatMessage(role="user", content=f"{file.read()}")
-                                          ]
-                            ),
-       output=MistralModel
+        mistral=lambda file: MistralClient(api_key=api_key).chat(
+            model="open-mixtral-8x22b",
+            response_format={"type": "json_object"},
+            messages=[
+                ChatMessage(role="system", content=f"{prompt}"),
+                ChatMessage(role="user", content=f"{file.read()}")
+            ]
+        ),
+        output=MistralModel
     )
     .save("dialog-rating")
 )
@@ -145,13 +145,13 @@ The cost of 5 calls to Mixtral 8x22b : $0.0142
 The “save” operation makes chain dataset persistent in the current (working) directory of the query. A hidden folder `.datachain/` holds the records. A persistent dataset can be accessed later to start a derivative chain:
 
 ```python
-DataChain.from_dataset("rating").limit(2).save("dialog-rating")
+dc.read_dataset("rating").limit(2).save("dialog-rating")
 ```
 
 Persistent datasets are immutable and automatically versioned. Here is how to access the dataset registry:
 
 ```python
-mydatasets = DataChain.datasets()
+mydatasets = dc.datasets()
 for ds in mydatasets.collect("dataset"):
     print(f"{ds.name}@v{ds.version}")
 
@@ -167,7 +167,7 @@ dialog-rating@v2
 By default, when a saved dataset is loaded, the latest version is fetched but another version can be requested:
 
 ```python
-ds = DataChain.from_dataset("dialog-rating", version = 1)
+ds = dc.read_dataset("dialog-rating", version=1)
 ```
 
 ### Chain execution, optimization and parallelism
@@ -189,8 +189,8 @@ Here is an example of reading a simple CSV file where schema is heuristically de
 ```python
 from datachain import DataChain
 
-uri="gs://datachain-demo/chatbot-csv/"
-csv_dataset = DataChain.from_csv(uri)
+uri = "gs://datachain-demo/chatbot-csv/"
+csv_dataset = dc.read_csv(uri)
 
 print(csv_dataset.to_pandas())
 ```
@@ -231,15 +231,14 @@ Note how complicated the setup is. Every image is references by the name, and th
 However, Datachain can easily parse the entire COCO structure via several reading and merging operators:
 
 ```python
+import datachain as dc
 
-from datachain import Column, DataChain
+images_uri = "gs://datachain-demo/coco2017/images/val/"
+captions_uri = "gs://datachain-demo/coco2017/annotations/captions_val2017.json"
 
-images_uri="gs://datachain-demo/coco2017/images/val/"
-captions_uri="gs://datachain-demo/coco2017/annotations/captions_val2017.json"
-
-images = DataChain.from_storage(images_uri)
-meta = DataChain.from_json(captions_uri, jmespath = "images")
-captions = DataChain.from_json(captions_uri, jmespath = "annotations")
+images = dc.read_storage(images_uri)
+meta = dc.read_json(captions_uri, jmespath="images")
+captions = dc.read_json(captions_uri, jmespath="annotations")
 
 images_meta = images.merge(meta, on="file.name", right_on="images.file_name")
 captioned_images = images_meta.merge(captions, on="images.id", right_on="annotations.image_id")
@@ -248,7 +247,7 @@ captioned_images = images_meta.merge(captions, on="images.id", right_on="annotat
 The resulting dataset has image entries as files decorated with all the metadata and captions:
 
 ```python
-images_with_dogs = captioned_images.filter(Column("annotations.caption").glob("*dog*"))
+images_with_dogs = captioned_images.filter(dc.Column("annotations.caption").glob("*dog*"))
 images_with_dogs.select("annotations", "file.name").show()
 ```
 

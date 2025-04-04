@@ -6,7 +6,7 @@ import anthropic
 from anthropic.types import Message
 from pydantic import BaseModel
 
-from datachain import Column, DataChain, File
+import datachain as dc
 
 DATA = "gs://datachain-demo/chatbot-KiT"
 MODEL = "claude-3-opus-20240229"
@@ -39,8 +39,8 @@ class Rating(BaseModel):
 
 
 chain = (
-    DataChain.from_storage(DATA, type="text")
-    .filter(Column("file.path").glob("*.txt"))
+    dc.read_storage(DATA, type="text")
+    .filter(dc.Column("file.path").glob("*.txt"))
     .limit(5)
     .settings(parallel=4, cache=True)
     .setup(client=lambda: anthropic.Anthropic(api_key=API_KEY))
@@ -51,7 +51,7 @@ chain = (
             messages=[
                 {
                     "role": "user",
-                    "content": file.read() if isinstance(file, File) else file,
+                    "content": file.read() if isinstance(file, dc.File) else file,
                 },
             ],
             temperature=TEMPERATURE,
@@ -68,9 +68,9 @@ chain = (
 )
 
 chain = chain.settings(parallel=13).mutate(
-    x=Column("file.path"),
-    y=Column("rating.status"),
-    price=Column("claude.usage.output_tokens") * 0.0072,
+    x=dc.Column("file.path"),
+    y=dc.Column("rating.status"),
+    price=dc.Column("claude.usage.output_tokens") * 0.0072,
 )
 
 # chain.print_schema()

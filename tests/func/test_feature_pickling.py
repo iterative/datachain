@@ -5,8 +5,8 @@ import cloudpickle
 import pytest
 from pydantic import BaseModel
 
+import datachain as dc
 from datachain.lib.data_model import DataModel
-from datachain.lib.dc import C, DataChain
 from datachain.lib.file import File
 from datachain.lib.signal_schema import create_feature_model
 
@@ -84,8 +84,8 @@ def test_feature_udf_parallel(cloud_test_catalog_tmpfile):
     cloudpickle.register_pickle_by_value(tfp)
 
     chain = (
-        DataChain.from_storage(source, type="text", session=ctc.session)
-        .filter(C("file.path").glob("*cat*"))
+        dc.read_storage(source, type="text", session=ctc.session)
+        .filter(dc.C("file.path").glob("*cat*"))
         .settings(parallel=2)
         .map(
             message=file_to_message,
@@ -132,8 +132,8 @@ def test_feature_udf_parallel_local(cloud_test_catalog_tmpfile):
     cloudpickle.register_pickle_by_value(tfp)
 
     chain = (
-        DataChain.from_storage(source, type="text", session=ctc.session)
-        .filter(C("file.path").glob("*cat*"))
+        dc.read_storage(source, type="text", session=ctc.session)
+        .filter(dc.C("file.path").glob("*cat*"))
         .settings(parallel=2)
         .map(
             message=lambda file: AIMessageLocal(
@@ -189,8 +189,8 @@ def test_feature_udf_parallel_local_pydantic(cloud_test_catalog_tmpfile):
     cloudpickle.register_pickle_by_value(tfp)
 
     chain = (
-        DataChain.from_storage(source, type="text", session=ctc.session)
-        .filter(C("file.path").glob("*cat*"))
+        dc.read_storage(source, type="text", session=ctc.session)
+        .filter(dc.C("file.path").glob("*cat*"))
         .settings(parallel=2)
         .map(
             message=lambda file: AIMessageLocalPydantic(
@@ -250,8 +250,8 @@ def test_feature_udf_parallel_local_pydantic_old(cloud_test_catalog_tmpfile):
     cloudpickle.register_pickle_by_value(tfp)
 
     chain = (
-        DataChain.from_storage(source, type="text", session=ctc.session)
-        .filter(C("file.path").glob("*cat*"))
+        dc.read_storage(source, type="text", session=ctc.session)
+        .filter(dc.C("file.path").glob("*cat*"))
         .settings(parallel=2)
         .map(
             message=lambda file: AIMessageLocalPydantic(
@@ -322,8 +322,8 @@ def test_feature_udf_parallel_dynamic(cloud_test_catalog_tmpfile):
     cloudpickle.register_pickle_by_value(tfp)
 
     chain = (
-        DataChain.from_storage(source, type="text", session=session)
-        .filter(C("file__path").glob("*cat*"))
+        dc.read_storage(source, type="text", session=session)
+        .filter(dc.C("file__path").glob("*cat*"))
         .settings(parallel=2)
         .map(
             message=lambda file: ai_message_dynamic(

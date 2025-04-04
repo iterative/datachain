@@ -1,7 +1,7 @@
 import pytest
 import pytz
 
-from datachain import DataChain
+import datachain as dc
 from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.lib.file import File
 from datachain.utils import TIME_ZERO
@@ -19,8 +19,8 @@ def test_resolve_file(cloud_test_catalog):
 
     is_sqlite = isinstance(cloud_test_catalog.catalog.warehouse, SQLiteWarehouse)
 
-    dc = DataChain.from_storage(ctc.src_uri, session=ctc.session)
-    for orig_file in dc.collect("file"):
+    chain = dc.read_storage(ctc.src_uri, session=ctc.session)
+    for orig_file in chain.collect("file"):
         file = File(
             source=orig_file.source,
             path=orig_file.path,

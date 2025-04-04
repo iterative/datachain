@@ -37,11 +37,11 @@ def train_test_split(
     Examples:
         Train-test split:
         ```python
-        from datachain import DataChain
+        import datachain as dc
         from datachain.toolkit import train_test_split
 
         # Load a DataChain from a storage source (e.g., S3 bucket)
-        dc = DataChain.from_storage("s3://bucket/dir/")
+        dc = dc.read_storage("s3://bucket/dir/")
 
         # Perform a 70/30 train-test split
         train, test = train_test_split(dc, [0.7, 0.3])

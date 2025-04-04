@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from datachain import C, DataChain
+import datachain as dc
 
 logger = logging.getLogger(__name__)
 
@@ -36,15 +36,15 @@ def _import_time_chain(test_session):
     Path("import_time.csv").write_bytes(out)
 
     try:
-        dc = DataChain.from_csv("import_time.csv", session=test_session, delimiter="|")
+        chain = dc.read_csv("import_time.csv", session=test_session, delimiter="|")
     except Exception:
         logger.error("Failed to parse output: %r", proc.stderr)
         raise
 
-    dc = dc.save("import_time")
+    chain = chain.save("import_time")
     # TODO: use `mutate` instead of `map`
     return (
-        dc.map(cumulative_ms=lambda cumulative: cumulative // 1000, output=int)
+        chain.map(cumulative_ms=lambda cumulative: cumulative // 1000, output=int)
         .map(self_ms=lambda self_us: self_us // 1000, output=int)
         .map(**{"import": lambda imported_package: imported_package.lstrip()})
         .select("self_ms", "cumulative_ms", "import")
@@ -64,19 +64,19 @@ def test_import_time(catalog, test_session):
     """
     import_timings = []
     for attempt in range(MAX_ATTEMPTS):
-        dc = _import_time_chain(test_session)
-        (import_time_ms,) = dc.filter(
-            C("import") == "datachain",
+        chain = _import_time_chain(test_session)
+        (import_time_ms,) = chain.filter(
+            dc.C("import") == "datachain",
         ).collect("cumulative_ms")
-        import_timings.append((dc, import_time_ms))
+        import_timings.append((chain, import_time_ms))
         # pass `--log-cli-level=info` to see these logs live
         logger.info("attempt %d, import time: %dms", attempt + 1, import_time_ms)
 
-    dc, min_import_time = min(import_timings, key=lambda x: x[1])
+    chain, min_import_time = min(import_timings, key=lambda x: x[1])
     # If there is a regression, uncomment the following to find the culprit:
     # dc.show(limit=40)
     for module in lazy_modules:
-        assert not list(dc.filter(C("import").startswith(module)).collect()), (
+        assert not list(chain.filter(dc.C("import").startswith(module)).collect()), (
             f"found {module} at import time"
         )
     assert min_import_time < MAX_IMPORT_TIME_MS, (

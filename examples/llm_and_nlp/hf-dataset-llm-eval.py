@@ -1,7 +1,7 @@
 from huggingface_hub import InferenceClient
 from requests import HTTPError
 
-from datachain import C, DataChain, DataModel
+import datachain as dc
 
 PROMPT = """
 Was this dialog successful? Put result as a single word: Success or Failure.
@@ -9,7 +9,7 @@ Explain the reason in a few words.
 """
 
 
-class DialogEval(DataModel):
+class DialogEval(dc.DataModel):
     result: str
     reason: str
 
@@ -48,9 +48,7 @@ def eval_dialog(
 # Save to HF as Parquet. Dataset can be previewed here:
 # https://huggingface.co/datasets/dvcorg/test-datachain-llm-eval/viewer
 (
-    DataChain.from_csv(
-        "hf://datasets/infinite-dataset-hub/MobilePlanAssistant/data.csv"
-    )
+    dc.read_csv("hf://datasets/infinite-dataset-hub/MobilePlanAssistant/data.csv")
     .settings(parallel=10)
     .setup(client=lambda: InferenceClient("meta-llama/Llama-3.1-70B-Instruct"))
     .map(response=eval_dialog)
@@ -60,9 +58,9 @@ def eval_dialog(
 # Read it back to filter and show.
 # It restores the Pydantic model from Parquet under the hood.
 (
-    DataChain.from_parquet(
+    dc.read_parquet(
         "hf://datasets/dvcorg/test-datachain-llm-eval/data.parquet", source=False
     )
-    .filter(C("response.result") == "Failure")
+    .filter(dc.C("response.result") == "Failure")
     .show(3)
 )

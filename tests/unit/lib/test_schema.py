@@ -1,4 +1,4 @@
-from datachain.lib.dc import C, DataChain
+import datachain as dc
 from datachain.lib.file import File
 
 
@@ -12,11 +12,11 @@ def test_column_filter_by_regex(test_session):
         "dog.txtx",
     ]
 
-    dc = DataChain.from_values(file=[File(path=p) for p in names]).filter(
-        C("file.path").regexp("dog\\.txt$")
+    chain = dc.read_values(file=[File(path=p) for p in names]).filter(
+        dc.C("file.path").regexp("dog\\.txt$")
     )
 
-    assert set(dc.collect("file.path")) == {
+    assert set(chain.collect("file.path")) == {
         "dog.txt",
         "1dog.txt",
     }

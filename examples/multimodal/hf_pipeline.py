@@ -15,10 +15,10 @@ os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 import torch
 from transformers import pipeline
 
-from datachain import C, DataChain, Mapper
+import datachain as dc
 
 
-class Helper(Mapper):
+class Helper(dc.Mapper):
     def __init__(self, model, device, **kwargs):
         self.model = model
         self.device = device
@@ -50,12 +50,12 @@ if __name__ == "__main__":
     print("** HuggingFace pipeline helper model zoo demo **")
     print("\nZero-shot object detection and classification:")
     (
-        DataChain.from_storage(
+        dc.read_storage(
             image_source,
             anon=True,
             type="image",
         )
-        .filter(C("file.path").glob("*.jpg"))
+        .filter(dc.C("file.path").glob("*.jpg"))
         .limit(1)
         .map(
             Helper(
@@ -72,12 +72,12 @@ if __name__ == "__main__":
 
     print("\nNot-safe-for-work image detection:")
     (
-        DataChain.from_storage(
+        dc.read_storage(
             image_source,
             anon=True,
             type="image",
         )
-        .filter(C("file.path").glob("*.jpg"))
+        .filter(dc.C("file.path").glob("*.jpg"))
         .limit(1)
         .map(
             Helper(
@@ -95,12 +95,12 @@ if __name__ == "__main__":
     try:
         subprocess.run(["ffmpeg", "-L"], check=True)  # noqa: S603, S607
         (
-            DataChain.from_storage(
+            dc.read_storage(
                 audio_source,
                 anon=True,
                 type="binary",
             )
-            .filter(C("file.path").glob("*.wav"))
+            .filter(dc.C("file.path").glob("*.wav"))
             .limit(1)
             .map(
                 Helper(
@@ -118,12 +118,12 @@ if __name__ == "__main__":
 
     print("\nLong text summarization:")
     (
-        DataChain.from_storage(
+        dc.read_storage(
             text_source,
             anon=True,
             type="text",
         )
-        .filter(C("file.path").glob("*.story"))
+        .filter(dc.C("file.path").glob("*.story"))
         .limit(1)
         .map(
             Helper(

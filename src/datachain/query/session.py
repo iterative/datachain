@@ -100,6 +100,10 @@ class Session:
     def get_temp_prefix(self) -> str:
         return f"{self.DATASET_PREFIX}{self.name}_"
 
+    @classmethod
+    def is_temp_dataset(cls, name) -> bool:
+        return name.startswith(cls.DATASET_PREFIX)
+
     def _cleanup_temp_datasets(self) -> None:
         prefix = self.get_temp_prefix()
         try:

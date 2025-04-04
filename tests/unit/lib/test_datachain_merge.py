@@ -6,7 +6,8 @@ import pytest
 from pydantic import BaseModel
 from sqlalchemy import func
 
-from datachain.lib.dc import C, DataChain, DatasetMergeError
+import datachain as dc
+from datachain.lib.dc import C, DatasetMergeError
 from datachain.sql.types import Int, String
 from tests.utils import skip_if_not_sqlite
 
@@ -48,8 +49,8 @@ team = [
 
 
 def test_merge_objects(test_session):
-    ch1 = DataChain.from_values(emp=employees, session=test_session)
-    ch2 = DataChain.from_values(team=team, session=test_session)
+    ch1 = dc.read_values(emp=employees, session=test_session)
+    ch2 = dc.read_values(team=team, session=test_session)
     ch = ch1.merge(ch2, "emp.person.name", "team.player")
 
     str_default = String.default_value(test_session.catalog.warehouse.db.dialect)
@@ -83,8 +84,8 @@ def test_merge_objects(test_session):
 
 @pytest.mark.parametrize("multiple_predicates", [True, False])
 def test_merge_objects_full_join(test_session, multiple_predicates):
-    ch1 = DataChain.from_values(emp=employees, session=test_session)
-    ch2 = DataChain.from_values(team=team, session=test_session)
+    ch1 = dc.read_values(emp=employees, session=test_session)
+    ch2 = dc.read_values(team=team, session=test_session)
     if multiple_predicates:
         ch = ch1.merge(
             ch2,
@@ -134,8 +135,8 @@ def test_merge_similar_objects(test_session):
         Employee(id=154, person=User(name="David", age=29)),
     ]
 
-    ch1 = DataChain.from_values(emp=employees, session=test_session)
-    ch2 = DataChain.from_values(emp=new_employees, session=test_session)
+    ch1 = dc.read_values(emp=employees, session=test_session)
+    ch2 = dc.read_values(emp=new_employees, session=test_session)
 
     rname = "qq"
     ch = ch1.merge(ch2, "emp.person.name", rname=rname)
@@ -159,9 +160,9 @@ def test_merge_similar_objects_in_memory():
         Employee(id=154, person=User(name="David", age=29)),
     ]
 
-    ch1 = DataChain.from_values(emp=employees, in_memory=True)
+    ch1 = dc.read_values(emp=employees, in_memory=True)
     # This should use the same session as above (in_memory=True automatically)
-    ch2 = DataChain.from_values(emp=new_employees)
+    ch2 = dc.read_values(emp=new_employees)
     assert ch1.session.catalog.in_memory is True
     assert ch1.session.catalog.metastore.db.db_file == ":memory:"
     assert ch1.session.catalog.warehouse.db.db_file == ":memory:"
@@ -192,10 +193,8 @@ def test_merge_values(test_session):
     delivery_ids = [11, 44]
     delivery_time = [24.0, 16.5]
 
-    ch1 = DataChain.from_values(id=order_ids, descr=order_descr, session=test_session)
-    ch2 = DataChain.from_values(
-        id=delivery_ids, time=delivery_time, session=test_session
-    )
+    ch1 = dc.read_values(id=order_ids, descr=order_descr, session=test_session)
+    ch2 = dc.read_values(id=delivery_ids, time=delivery_time, session=test_session)
 
     ch = ch1.merge(ch2, "id")
 
@@ -236,10 +235,10 @@ def test_merge_multi_conditions(test_session):
     delivery_name = ["water", "unknown"]
     delivery_time = [24.0, 16.5]
 
-    ch1 = DataChain.from_values(
+    ch1 = dc.read_values(
         id=order_ids, name=order_name, descr=order_descr, session=test_session
     )
-    ch2 = DataChain.from_values(
+    ch2 = dc.read_values(
         id=delivery_ids, d_name=delivery_name, time=delivery_time, session=test_session
     )
 
@@ -257,8 +256,8 @@ def test_merge_multi_conditions(test_session):
 
 
 def test_merge_errors(test_session):
-    ch1 = DataChain.from_values(emp=employees, session=test_session)
-    ch2 = DataChain.from_values(team=team, session=test_session)
+    ch1 = dc.read_values(emp=employees, session=test_session)
+    ch2 = dc.read_values(team=team, session=test_session)
 
     with pytest.raises(DatasetMergeError):
         ch1.merge(ch2, "unknown")
@@ -288,7 +287,7 @@ def test_merge_errors(test_session):
 
 
 def test_merge_with_itself(test_session):
-    ch = DataChain.from_values(emp=employees, session=test_session)
+    ch = dc.read_values(emp=employees, session=test_session)
     merged = ch.merge(ch, "emp.id")
 
     count = 0
@@ -302,7 +301,7 @@ def test_merge_with_itself(test_session):
 
 
 def test_merge_with_itself_column(test_session):
-    ch = DataChain.from_values(emp=employees, session=test_session)
+    ch = dc.read_values(emp=employees, session=test_session)
     merged = ch.merge(ch, C("emp.id"))
 
     count = 0
@@ -316,15 +315,15 @@ def test_merge_with_itself_column(test_session):
 
 
 def test_merge_on_expression(test_session):
-    def _get_expr(dc):
-        c = dc.c("team.sport")
+    def _get_expr(chain):
+        c = chain.c("team.sport")
         return func.substr(c, func.length(c) - 3)
 
-    dc = DataChain.from_values(team=team, session=test_session)
-    right_dc = dc.clone()
+    chain = dc.read_values(team=team, session=test_session)
+    right_dc = chain.clone()
 
     # cross join on "ball" from sport
-    merged = dc.merge(right_dc, on=_get_expr(dc), right_on=_get_expr(right_dc))
+    merged = chain.merge(right_dc, on=_get_expr(chain), right_on=_get_expr(right_dc))
 
     cross_team = [
         (left_member, right_member) for left_member in team for right_member in team

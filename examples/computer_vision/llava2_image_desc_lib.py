@@ -11,7 +11,7 @@ from transformers import (
     LlavaForConditionalGeneration,
 )
 
-from datachain import C, DataChain, Mapper
+import datachain as dc
 
 model = "llava-hf/llava-1.5-7b-hf"
 
@@ -41,7 +41,7 @@ def infer_dtype(device):
     return torch.float16
 
 
-class LLaVADescribe(Mapper):
+class LLaVADescribe(dc.Mapper):
     def __init__(self, device="cpu", model="llava-hf/llava-1.5-7b-hf", max_tokens=300):
         self.device = device
         self.model_name = model
@@ -71,8 +71,8 @@ class LLaVADescribe(Mapper):
 
 if __name__ == "__main__":
     (
-        DataChain.from_storage(source, type="image")
-        .filter(C("file.path").glob("*/cat*.jpg"))
+        dc.read_storage(source, type="image")
+        .filter(dc.C("file.path").glob("*/cat*.jpg"))
         .map(
             desc=LLaVADescribe(
                 device=device,

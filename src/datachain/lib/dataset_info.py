@@ -12,6 +12,7 @@ from datachain.dataset import (
 )
 from datachain.job import Job
 from datachain.lib.data_model import DataModel
+from datachain.query.session import Session
 from datachain.utils import TIME_ZERO
 
 if TYPE_CHECKING:
@@ -31,6 +32,10 @@ class DatasetInfo(DataModel):
     metrics: dict[str, Any] = Field(default={})
     error_message: str = Field(default="")
     error_stack: str = Field(default="")
+
+    @property
+    def is_temp(self) -> bool:
+        return Session.is_temp_dataset(self.name)
 
     @staticmethod
     def _validate_dict(

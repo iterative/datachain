@@ -2,7 +2,8 @@ import json
 
 from PIL import Image
 
-from datachain import C, DataChain, File, model
+import datachain as dc
+from datachain import File, model
 from datachain.func import path
 
 
@@ -40,8 +41,8 @@ def openimage_detect(args):
 source = "gs://datachain-demo/openimages-v6-test-jsonpairs/"
 
 (
-    DataChain.from_storage(source)
-    .filter(C("file.path").glob("*.jpg") | C("file.path").glob("*.json"))
+    dc.read_storage(source)
+    .filter(dc.C("file.path").glob("*.jpg") | dc.C("file.path").glob("*.json"))
     .agg(
         openimage_detect,
         partition_by=path.file_stem("file.path"),

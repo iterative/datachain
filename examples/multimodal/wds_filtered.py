@@ -1,15 +1,16 @@
+import datachain as dc
 import datachain.error
-from datachain import C, DataChain, func
+from datachain import func
 from datachain.lib.webdataset import process_webdataset
 from datachain.lib.webdataset_laion import WDSLaion
 
 name = "wds"
 try:
-    wds = DataChain.from_dataset(name=name)
+    wds = dc.read_dataset(name=name)
 except datachain.error.DatasetNotFoundError:
     wds = (
-        DataChain.from_storage("gs://datachain-demo/datacomp-small/shards")
-        .filter(C("file.path").glob("*/00000000.tar"))
+        dc.read_storage("gs://datachain-demo/datacomp-small/shards")
+        .filter(dc.C("file.path").glob("*/00000000.tar"))
         .settings(cache=True)
         .gen(laion=process_webdataset(spec=WDSLaion), params="file")
         .save(name)

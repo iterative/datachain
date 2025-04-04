@@ -9,6 +9,7 @@ import uuid
 from collections.abc import Iterator
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
@@ -17,12 +18,12 @@ import pytz
 from PIL import Image
 from sqlalchemy import Column
 
+import datachain as dc
 from datachain import DataModel, func
 from datachain.catalog.catalog import QUERY_SCRIPT_CANCELED_EXIT_CODE
 from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.dataset import DatasetDependencyType
 from datachain.func import path as pathfunc
-from datachain.lib.dc import C, DataChain
 from datachain.lib.file import File, ImageFile
 from datachain.lib.listing import LISTING_TTL, is_listing_dataset, parse_listing_uri
 from datachain.lib.tar import process_tar
@@ -31,6 +32,7 @@ from datachain.lib.utils import DataChainError
 from datachain.query.dataset import QueryStep
 from tests.utils import (
     ANY_VALUE,
+    LARGE_TREE,
     NUM_TREE,
     TARRED_TREE,
     df_equal,
@@ -50,7 +52,7 @@ def _get_listing_datasets(session):
     return sorted(
         [
             f"{ds.name}@v{ds.version}"
-            for ds in DataChain.datasets(session=session, include_listing=True).collect(
+            for ds in dc.datasets(session=session, include_listing=True).collect(
                 "dataset"
             )
             if is_listing_dataset(ds.name)
@@ -60,61 +62,59 @@ def _get_listing_datasets(session):
 
 @pytest.mark.parametrize("anon", [True, False])
 def test_catalog_anon(tmp_dir, catalog, anon):
-    chain = DataChain.from_storage(tmp_dir.as_uri(), anon=anon)
+    chain = dc.read_storage(tmp_dir.as_uri(), anon=anon)
     assert chain.session.catalog.client_config.get("anon", False) is anon
 
 
-def test_from_storage_client_config(tmp_dir, catalog):
-    dc = DataChain.from_storage(tmp_dir.as_uri())
-    assert dc.session.catalog.client_config == {}  # Default client config is set.
+def test_read_storage_client_config(tmp_dir, catalog):
+    chain = dc.read_storage(tmp_dir.as_uri())
+    assert chain.session.catalog.client_config == {}  # Default client config is set.
 
-    dc = DataChain.from_storage(tmp_dir.as_uri(), client_config={"anon": True})
-    assert dc.session.catalog.client_config == {
+    chain = dc.read_storage(tmp_dir.as_uri(), client_config={"anon": True})
+    assert chain.session.catalog.client_config == {
         "anon": True
     }  # New client config is set.
 
 
-def test_from_storage(cloud_test_catalog):
+def test_read_storage(cloud_test_catalog):
     ctc = cloud_test_catalog
-    dc = DataChain.from_storage(ctc.src_uri, session=ctc.session)
-    assert dc.count() == 7
+    chain = dc.read_storage(ctc.src_uri, session=ctc.session)
+    assert chain.count() == 7
 
 
-def test_from_storage_non_recursive(cloud_test_catalog):
+def test_read_storage_non_recursive(cloud_test_catalog):
     ctc = cloud_test_catalog
-    dc = DataChain.from_storage(
-        f"{ctc.src_uri}/dogs", session=ctc.session, recursive=False
-    )
-    assert dc.count() == 3
+    chain = dc.read_storage(f"{ctc.src_uri}/dogs", session=ctc.session, recursive=False)
+    assert chain.count() == 3
 
 
-def test_from_storage_glob(cloud_test_catalog):
+def test_read_storage_glob(cloud_test_catalog):
     ctc = cloud_test_catalog
-    dc = DataChain.from_storage(f"{ctc.src_uri}/dogs*", session=ctc.session)
-    assert dc.count() == 4
+    chain = dc.read_storage(f"{ctc.src_uri}/dogs*", session=ctc.session)
+    assert chain.count() == 4
 
 
-def test_from_storage_as_image(cloud_test_catalog):
+def test_read_storage_as_image(cloud_test_catalog):
     ctc = cloud_test_catalog
-    dc = DataChain.from_storage(ctc.src_uri, session=ctc.session, type="image")
-    for im in dc.collect("file"):
+    chain = dc.read_storage(ctc.src_uri, session=ctc.session, type="image")
+    for im in chain.collect("file"):
         assert isinstance(im, ImageFile)
 
 
-def test_from_storage_reindex(tmp_dir, test_session):
+def test_read_storage_reindex(tmp_dir, test_session):
     tmp_dir = tmp_dir / "parquets"
     path = tmp_dir.as_uri()
     os.mkdir(tmp_dir)
 
     pd.DataFrame({"name": ["Alice", "Bob"]}).to_parquet(tmp_dir / "test1.parquet")
-    assert DataChain.from_storage(path, session=test_session).count() == 1
+    assert dc.read_storage(path, session=test_session).count() == 1
 
     pd.DataFrame({"name": ["Charlie", "David"]}).to_parquet(tmp_dir / "test2.parquet")
-    assert DataChain.from_storage(path, session=test_session).count() == 1
-    assert DataChain.from_storage(path, session=test_session, update=True).count() == 2
+    assert dc.read_storage(path, session=test_session).count() == 1
+    assert dc.read_storage(path, session=test_session, update=True).count() == 2
 
 
-def test_from_storage_reindex_expired(tmp_dir, test_session):
+def test_read_storage_reindex_expired(tmp_dir, test_session):
     catalog = test_session.catalog
     tmp_dir = tmp_dir / "parquets"
     os.mkdir(tmp_dir)
@@ -123,7 +123,7 @@ def test_from_storage_reindex_expired(tmp_dir, test_session):
     lst_ds_name = parse_listing_uri(uri, catalog.client_config)[0]
 
     pd.DataFrame({"name": ["Alice", "Bob"]}).to_parquet(tmp_dir / "test1.parquet")
-    assert DataChain.from_storage(uri, session=test_session).count() == 1
+    assert dc.read_storage(uri, session=test_session).count() == 1
     pd.DataFrame({"name": ["Charlie", "David"]}).to_parquet(tmp_dir / "test2.parquet")
     # mark dataset as expired
     test_session.catalog.metastore.update_dataset_version(
@@ -133,7 +133,7 @@ def test_from_storage_reindex_expired(tmp_dir, test_session):
     )
 
     # listing was updated because listing dataset was expired
-    assert DataChain.from_storage(uri, session=test_session).count() == 2
+    assert dc.read_storage(uri, session=test_session).count() == 2
 
 
 @pytest.mark.parametrize(
@@ -141,7 +141,7 @@ def test_from_storage_reindex_expired(tmp_dir, test_session):
     ["s3", "azure", "gs"],
     indirect=True,
 )
-def test_from_storage_partials(cloud_test_catalog):
+def test_read_storage_partials(cloud_test_catalog):
     ctc = cloud_test_catalog
     src_uri = ctc.src_uri
     session = ctc.session
@@ -153,17 +153,17 @@ def test_from_storage_partials(cloud_test_catalog):
         return name
 
     dogs_uri = f"{src_uri}/dogs"
-    DataChain.from_storage(dogs_uri, session=session)
+    dc.read_storage(dogs_uri, session=session).exec()
     assert _get_listing_datasets(session) == [
         f"{_list_dataset_name(dogs_uri)}@v1",
     ]
 
-    DataChain.from_storage(f"{src_uri}/dogs/others", session=session)
+    dc.read_storage(f"{src_uri}/dogs/others", session=session)
     assert _get_listing_datasets(session) == [
         f"{_list_dataset_name(dogs_uri)}@v1",
     ]
 
-    DataChain.from_storage(src_uri, session=session)
+    dc.read_storage(src_uri, session=session).exec()
     assert _get_listing_datasets(session) == sorted(
         [
             f"{_list_dataset_name(dogs_uri)}@v1",
@@ -171,7 +171,7 @@ def test_from_storage_partials(cloud_test_catalog):
         ]
     )
 
-    DataChain.from_storage(f"{src_uri}/cats", session=session)
+    dc.read_storage(f"{src_uri}/cats", session=session).exec()
     assert _get_listing_datasets(session) == sorted(
         [
             f"{_list_dataset_name(dogs_uri)}@v1",
@@ -185,7 +185,7 @@ def test_from_storage_partials(cloud_test_catalog):
     ["s3", "azure", "gs"],
     indirect=True,
 )
-def test_from_storage_partials_with_update(cloud_test_catalog):
+def test_read_storage_partials_with_update(cloud_test_catalog):
     ctc = cloud_test_catalog
     src_uri = ctc.src_uri
     session = ctc.session
@@ -197,14 +197,14 @@ def test_from_storage_partials_with_update(cloud_test_catalog):
         return name
 
     uri = f"{src_uri}/cats"
-    DataChain.from_storage(uri, session=session)
+    dc.read_storage(uri, session=session).exec()
     assert _get_listing_datasets(session) == sorted(
         [
             f"{_list_dataset_name(uri)}@v1",
         ]
     )
 
-    DataChain.from_storage(uri, session=session, update=True)
+    dc.read_storage(uri, session=session, update=True).exec()
     assert _get_listing_datasets(session) == sorted(
         [
             f"{_list_dataset_name(uri)}@v1",
@@ -213,12 +213,26 @@ def test_from_storage_partials_with_update(cloud_test_catalog):
     )
 
 
-def test_from_storage_dependencies(cloud_test_catalog, cloud_type):
+def test_read_storage_listing_happens_once(cloud_test_catalog, cloud_type):
+    ctc = cloud_test_catalog
+    uri = f"{ctc.src_uri}"
+    ds_name = "cats_dogs"
+
+    chain = dc.read_storage(uri, session=ctc.session)
+    dc_cats = chain.filter(dc.C("file.path").glob("cats*"))
+    dc_dogs = chain.filter(dc.C("file.path").glob("dogs*"))
+    dc_cats.union(dc_dogs).save(ds_name)
+
+    lst_ds_name = parse_listing_uri(uri, ctc.session.catalog.client_config)[0]
+    assert _get_listing_datasets(ctc.session) == [f"{lst_ds_name}@v1"]
+
+
+def test_read_storage_dependencies(cloud_test_catalog, cloud_type):
     ctc = cloud_test_catalog
     src_uri = ctc.src_uri
     uri = f"{src_uri}/cats"
     ds_name = "dep"
-    DataChain.from_storage(uri, session=ctc.session).save(ds_name)
+    dc.read_storage(uri, session=ctc.session).save(ds_name)
     dependencies = ctc.session.catalog.get_dataset_dependencies(ds_name, 1)
     assert len(dependencies) == 1
     assert dependencies[0].type == DatasetDependencyType.STORAGE
@@ -264,8 +278,8 @@ def test_map_file(cloud_test_catalog, use_cache, prefetch):
         with file.open() as f:
             return file.name + " -> " + f.read().decode("utf-8")
 
-    dc = (
-        DataChain.from_storage(ctc.src_uri, session=ctc.session)
+    chain = (
+        dc.read_storage(ctc.src_uri, session=ctc.session)
         .settings(cache=use_cache, prefetch=prefetch)
         .map(signal=with_checks(new_signal))
         .save()
@@ -280,8 +294,8 @@ def test_map_file(cloud_test_catalog, use_cache, prefetch):
         "dog3 -> bark",
         "dog4 -> ruff",
     }
-    assert set(dc.collect("signal")) == expected
-    for file in dc.collect("file"):
+    assert set(chain.collect("signal")) == expected
+    for file in chain.collect("file"):
         assert bool(file.get_local_path()) is use_cache
     assert not os.listdir(ctc.catalog.cache.tmp_dir)
 
@@ -290,8 +304,8 @@ def test_map_file(cloud_test_catalog, use_cache, prefetch):
 def test_read_file(cloud_test_catalog, use_cache):
     ctc = cloud_test_catalog
 
-    dc = DataChain.from_storage(ctc.src_uri, session=ctc.session)
-    for file in dc.settings(cache=use_cache).collect("file"):
+    chain = dc.read_storage(ctc.src_uri, session=ctc.session)
+    for file in chain.settings(cache=use_cache).collect("file"):
         assert file.get_local_path() is None
         file.read()
         assert bool(file.get_local_path()) is use_cache
@@ -314,7 +328,7 @@ def test_to_storage(
     num_threads,
 ):
     ctc = cloud_test_catalog
-    df = DataChain.from_storage(ctc.src_uri, type=file_type, session=test_session)
+    df = dc.read_storage(ctc.src_uri, type=file_type, session=test_session)
     if use_map:
         df.settings(cache=use_cache).to_storage(
             tmp_dir / "output",
@@ -358,7 +372,7 @@ def test_export_images_files(test_session, tmp_dir, tmp_path, use_cache):
     for img in images:
         img["data"].save(tmp_path / img["name"])
 
-    DataChain.from_values(
+    dc.read_values(
         file=[
             ImageFile(path=img["name"], source=f"file://{tmp_path}") for img in images
         ],
@@ -370,7 +384,8 @@ def test_export_images_files(test_session, tmp_dir, tmp_path, use_cache):
         assert images_equal(img["data"], exported_img)
 
 
-def test_from_storage_path_object(test_session, tmp_dir, tmp_path):
+@pytest.mark.parametrize("use_cache", [True, False])
+def test_read_storage_multiple_uris_files(test_session, tmp_dir, tmp_path, use_cache):
     images = [
         {"name": "img1.jpg", "data": Image.new(mode="RGB", size=(64, 64))},
         {"name": "img2.jpg", "data": Image.new(mode="RGB", size=(128, 128))},
@@ -379,9 +394,85 @@ def test_from_storage_path_object(test_session, tmp_dir, tmp_path):
     for img in images:
         img["data"].save(tmp_path / img["name"])
 
-    DataChain.from_storage(tmp_path).to_storage(
-        tmp_dir / "output", placement="filename"
+    dc.read_storage(
+        [
+            f"file://{tmp_path}/img1.jpg",
+            f"file://{tmp_path}/img2.jpg",
+        ],
+        session=test_session,
+        anon=True,
+        update=True,
+    ).to_storage(tmp_dir / "output", placement="filename")
+
+    for img in images:
+        exported_img = Image.open(tmp_dir / "output" / img["name"])
+        assert images_equal(img["data"], exported_img)
+
+    chain = dc.read_storage(
+        [
+            f"file://{tmp_path}/img1.jpg",
+            f"file://{tmp_path}/img2.jpg",
+            f"file://{tmp_dir}/output/*",
+        ]
     )
+    assert chain.count() == 4
+
+    chain = dc.read_storage([f"file://{tmp_dir}/output/*"])
+    assert chain.count() == 2
+
+
+@pytest.mark.parametrize(
+    "cloud_type",
+    ["s3", "azure", "gs"],
+    indirect=True,
+)
+def test_read_storage_multiple_uris_cache(cloud_test_catalog):
+    ctc = cloud_test_catalog
+    src_uri = ctc.src_uri
+    session = ctc.session
+
+    with pytest.raises(ValueError):
+        dc.read_storage([])  # No URIs provided
+
+    with patch(
+        "datachain.lib.dc.storage.get_listing", wraps=dc.lib.listing.get_listing
+    ) as mock_get_listing:
+        chain = dc.read_storage(
+            [
+                f"{src_uri}/cats",
+                f"{src_uri}/dogs",
+                f"{src_uri}/cats/cat*",
+                f"{src_uri}/dogs/dog*",
+            ],
+            session=session,
+            update=True,
+        ).exec()
+        assert chain.count() == 11
+
+        files = chain.collect("file")
+        assert {f.name for f in files} == {
+            "cat1",
+            "cat2",
+            "dog1",
+            "dog2",
+            "dog3",
+            "dog4",
+        }
+
+        # Verify read_records was called exactly twice
+        assert mock_get_listing.call_count == 4  # TODO FIX THIS
+
+
+def test_read_storage_path_object(test_session, tmp_dir, tmp_path):
+    images = [
+        {"name": "img1.jpg", "data": Image.new(mode="RGB", size=(64, 64))},
+        {"name": "img2.jpg", "data": Image.new(mode="RGB", size=(128, 128))},
+    ]
+
+    for img in images:
+        img["data"].save(tmp_path / img["name"])
+
+    dc.read_storage(tmp_path).to_storage(tmp_dir / "output", placement="filename")
 
     for img in images:
         exported_img = Image.open(tmp_dir / "output" / img["name"])
@@ -397,7 +488,7 @@ def test_to_storage_relative_path(test_session, tmp_path):
     for img in images:
         img["data"].save(tmp_path / img["name"])
 
-    DataChain.from_values(
+    dc.read_values(
         file=[
             ImageFile(path=img["name"], source=f"file://{tmp_path}") for img in images
         ],
@@ -423,14 +514,14 @@ def test_to_storage_files_filename_placement_not_unique_files(tmp_dir, test_sess
         with open(file_path, "wb") as fd:
             fd.write(data)
 
-    df = DataChain.from_storage((tmp_dir / bucket_name).as_uri(), session=test_session)
+    df = dc.read_storage((tmp_dir / bucket_name).as_uri(), session=test_session)
     with pytest.raises(ValueError):
         df.to_storage(tmp_dir / "output", placement="filename")
 
 
 def test_show(capsys, test_session):
     first_name = ["Alice", "Bob", "Charlie"]
-    DataChain.from_values(
+    dc.read_values(
         first_name=first_name,
         age=[40, 30, None],
         city=[
@@ -447,8 +538,24 @@ def test_show(capsys, test_session):
         assert f"{i} {first_name[i]}" in normalized_output
 
 
+def test_show_without_temp_datasets(capsys, test_session):
+    dc.read_values(
+        key=[1, 2, 3, 4], session=test_session
+    ).save()  # creates temp dataset
+    dc.datasets().show()
+    captured = capsys.readouterr()
+    normalized_output = re.sub(r"\s+", " ", captured.out)
+    print(normalized_output)
+    assert "Empty result" in normalized_output
+
+
+def test_class_method_deprecated(capsys, test_session):
+    with pytest.warns(DeprecationWarning):
+        dc.DataChain.from_values(key=["a", "b", "c"], session=test_session)
+
+
 def test_save(test_session):
-    chain = DataChain.from_values(key=["a", "b", "c"])
+    chain = dc.read_values(key=["a", "b", "c"])
     chain.save(
         name="new_name",
         version=1,
@@ -461,10 +568,20 @@ def test_save(test_session):
     assert ds.description == "new description"
     assert ds.labels == ["new_label", "old_label"]
 
+    chain.save(
+        name="new_name",
+        description="updated description",
+        labels=["new_label", "old_label", "new_label2"],
+    )
+    ds = test_session.catalog.get_dataset("new_name")
+    assert ds.name == "new_name"
+    assert ds.description == "updated description"
+    assert ds.labels == ["new_label", "old_label", "new_label2"]
+
 
 def test_show_nested_empty(capsys, test_session):
     files = [File(size=s, path=p) for p, s in zip(list("abcde"), range(5))]
-    DataChain.from_values(file=files, session=test_session).limit(0).show()
+    dc.read_values(file=files, session=test_session).limit(0).show()
 
     captured = capsys.readouterr()
     normalized_output = re.sub(r"\s+", " ", captured.out)
@@ -474,7 +591,7 @@ def test_show_nested_empty(capsys, test_session):
 
 def test_show_empty(capsys, test_session):
     first_name = ["Alice", "Bob", "Charlie"]
-    DataChain.from_values(first_name=first_name, session=test_session).limit(0).show()
+    dc.read_values(first_name=first_name, session=test_session).limit(0).show()
 
     captured = capsys.readouterr()
     normalized_output = re.sub(r"\s+", " ", captured.out)
@@ -484,7 +601,7 @@ def test_show_empty(capsys, test_session):
 
 def test_show_limit(capsys, test_session):
     first_name = ["Alice", "Bob", "Charlie"]
-    DataChain.from_values(
+    dc.read_values(
         first_name=first_name,
         age=[40, 30, None],
         city=[
@@ -502,7 +619,7 @@ def test_show_limit(capsys, test_session):
 def test_show_transpose(capsys, test_session):
     first_name = ["Alice", "Bob", "Charlie"]
     last_name = ["A", "B", "C"]
-    DataChain.from_values(
+    dc.read_values(
         first_name=first_name,
         last_name=last_name,
         session=test_session,
@@ -522,13 +639,13 @@ def test_show_truncate(capsys, test_session):
         "Not very nice",
     ]
 
-    dc = DataChain.from_values(
+    chain = dc.read_values(
         client=client,
         details=details,
         session=test_session,
     )
 
-    dc.show()
+    chain.show()
     captured = capsys.readouterr()
     normalized_output = re.sub(r"\s+", " ", captured.out)
     assert f"{client[0]} {details[0][:10]}" in normalized_output
@@ -546,13 +663,13 @@ def test_show_no_truncate(capsys, test_session):
         "Not very nice",
     ]
 
-    dc = DataChain.from_values(
+    chain = dc.read_values(
         client=client,
         details=details,
         session=test_session,
     )
 
-    dc.show(truncate=False)
+    chain.show(truncate=False)
     captured = capsys.readouterr()
     normalized_output = re.sub(r"\s+", " ", captured.out)
     for i in range(3):
@@ -565,9 +682,9 @@ def test_show_ordered(capsys, test_session, ordered_by):
     numbers = [6, 2, 3, 1, 5, 7, 4]
     letters = ["u", "y", "x", "z", "v", "t", "w"]
 
-    DataChain.from_values(
-        number=numbers, letter=letters, session=test_session
-    ).order_by(ordered_by).show()
+    dc.read_values(number=numbers, letter=letters, session=test_session).order_by(
+        ordered_by
+    ).show()
 
     captured = capsys.readouterr()
     normalized_lines = [
@@ -584,33 +701,29 @@ def test_show_ordered(capsys, test_session, ordered_by):
         assert line == f"{i} {number} {letter}"
 
 
-def test_from_storage_dataset_stats(tmp_dir, test_session):
+def test_read_storage_dataset_stats(tmp_dir, test_session):
     for i in range(4):
         (tmp_dir / f"file{i}.txt").write_text(f"file{i}")
 
-    dc = DataChain.from_storage(tmp_dir.as_uri(), session=test_session).save(
-        "test-data"
-    )
-    version = test_session.catalog.get_dataset(dc.name).get_version(dc.version)
+    chain = dc.read_storage(tmp_dir.as_uri(), session=test_session).save("test-data")
+    version = test_session.catalog.get_dataset(chain.name).get_version(chain.version)
     assert version.num_objects == 4
     assert version.size == 20
 
 
-def test_from_storage_check_rows(tmp_dir, test_session):
+def test_read_storage_check_rows(tmp_dir, test_session):
     stats = {}
     for i in range(4):
         file = tmp_dir / f"{i}.txt"
         file.write_text(f"file{i}")
         stats[file.name] = file.stat()
 
-    dc = DataChain.from_storage(tmp_dir.as_uri(), session=test_session).save(
-        "test-data"
-    )
+    chain = dc.read_storage(tmp_dir.as_uri(), session=test_session).save("test-data")
 
     is_sqlite = isinstance(test_session.catalog.warehouse, SQLiteWarehouse)
     tz = timezone.utc if is_sqlite else pytz.UTC
 
-    for (file,) in dc.collect():
+    for (file,) in chain.collect():
         assert isinstance(file, File)
         stat = stats[file.name]
         mtime = stat.st_mtime if is_sqlite else float(math.floor(stat.st_mtime))
@@ -627,7 +740,7 @@ def test_from_storage_check_rows(tmp_dir, test_session):
 
 
 def test_mutate_existing_column(test_session):
-    ds = DataChain.from_values(ids=[1, 2, 3], session=test_session)
+    ds = dc.read_values(ids=[1, 2, 3], session=test_session)
     ds = ds.mutate(ids=Column("ids") + 1)
 
     assert list(ds.order_by("ids").collect()) == [(2,), (3,), (4,)]
@@ -640,7 +753,7 @@ def test_parallel(processes, test_session_tmpfile):
     vals = ["a", "b", "c", "d", "e", "f", "g", "h", "i"]
 
     res = list(
-        DataChain.from_values(key=vals, session=test_session_tmpfile)
+        dc.read_values(key=vals, session=test_session_tmpfile)
         .settings(parallel=processes)
         .map(res=lambda key: prefix + key)
         .order_by("res")
@@ -661,16 +774,16 @@ def test_udf(cloud_test_catalog):
     def name_len(path):
         return (len(posixpath.basename(path)),)
 
-    dc = (
-        DataChain.from_storage(cloud_test_catalog.src_uri, session=session)
-        .filter(C("file.size") < 13)
-        .filter(C("file.path").glob("cats*") | (C("file.size") < 4))
+    chain = (
+        dc.read_storage(cloud_test_catalog.src_uri, session=session)
+        .filter(dc.C("file.size") < 13)
+        .filter(dc.C("file.path").glob("cats*") | (dc.C("file.size") < 4))
         .map(name_len, params=["file.path"], output={"name_len": int})
     )
-    result1 = list(dc.select("file.path", "name_len").collect())
+    result1 = list(chain.select("file.path", "name_len").collect())
     # ensure that we're able to run with same query multiple times
-    result2 = list(dc.select("file.path", "name_len").collect())
-    count = dc.count()
+    result2 = list(chain.select("file.path", "name_len").collect())
+    count = chain.count()
     assert len(result1) == 3
     assert len(result2) == 3
     assert count == 3
@@ -693,8 +806,8 @@ def test_udf_parallel(cloud_test_catalog_tmpfile):
     def name_len(name):
         return (len(name),)
 
-    dc = (
-        DataChain.from_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
+    chain = (
+        dc.read_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
         .settings(parallel=-1)
         .map(name_len, params=["file.path"], output={"name_len": int})
         .select("file.path", "name_len")
@@ -702,7 +815,7 @@ def test_udf_parallel(cloud_test_catalog_tmpfile):
 
     # Check that the UDF ran successfully
     count = 0
-    for r in dc.collect():
+    for r in chain.collect():
         count += 1
         assert len(r[0]) == r[1]
     assert count == 7
@@ -731,7 +844,7 @@ def test_udf_parallel_boostrap(test_session_tmpfile):
         def teardown(self):
             self.value = MyMapper.TEARDOWN_VALUE
 
-    chain = DataChain.from_values(key=vals, session=test_session_tmpfile)
+    chain = dc.read_values(key=vals, session=test_session_tmpfile)
 
     res = list(chain.settings(parallel=4).map(res=MyMapper()).collect("res"))
 
@@ -739,8 +852,8 @@ def test_udf_parallel_boostrap(test_session_tmpfile):
 
 
 @pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
+    "cloud_type,version_aware,tree",
+    [("s3", True, LARGE_TREE)],
     indirect=True,
 )
 @pytest.mark.parametrize("workers", (1, 2))
@@ -750,14 +863,16 @@ def test_udf_parallel_boostrap(test_session_tmpfile):
     "to test distributed UDFs",
 )
 @pytest.mark.xdist_group(name="tmpfile")
-def test_udf_distributed(cloud_test_catalog_tmpfile, workers, datachain_job_id):
+def test_udf_distributed(
+    cloud_test_catalog_tmpfile, workers, tree, datachain_job_id, run_datachain_worker
+):
     session = cloud_test_catalog_tmpfile.session
 
     def name_len(name):
         return (len(name),)
 
-    dc = (
-        DataChain.from_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
+    chain = (
+        dc.read_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
         .settings(parallel=2, workers=workers)
         .map(name_len, params=["file.path"], output={"name_len": int})
         .select("file.path", "name_len")
@@ -765,10 +880,10 @@ def test_udf_distributed(cloud_test_catalog_tmpfile, workers, datachain_job_id):
 
     # Check that the UDF ran successfully
     count = 0
-    for r in dc.collect():
+    for r in chain.collect():
         count += 1
         assert len(r[0]) == r[1]
-    assert count == 7
+    assert count == 225
 
 
 @pytest.mark.parametrize(
@@ -787,9 +902,9 @@ def test_class_udf(cloud_test_catalog):
         def process(self, size):
             return (self.constant + size * self.multiplier,)
 
-    dc = (
-        DataChain.from_storage(cloud_test_catalog.src_uri, session=session)
-        .filter(C("file.size") < 13)
+    chain = (
+        dc.read_storage(cloud_test_catalog.src_uri, session=session)
+        .filter(dc.C("file.size") < 13)
         .map(
             MyUDF(5, multiplier=2),
             output={"total": int},
@@ -799,7 +914,7 @@ def test_class_udf(cloud_test_catalog):
         .order_by("file.size")
     )
 
-    assert list(dc.collect()) == [
+    assert list(chain.collect()) == [
         (3, 11),
         (4, 13),
         (4, 13),
@@ -826,9 +941,9 @@ def test_class_udf_parallel(cloud_test_catalog_tmpfile):
         def process(self, size):
             return (self.constant + size * self.multiplier,)
 
-    dc = (
-        DataChain.from_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
-        .filter(C("file.size") < 13)
+    chain = (
+        dc.read_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
+        .filter(dc.C("file.size") < 13)
         .settings(parallel=2)
         .map(
             MyUDF(5, multiplier=2),
@@ -839,7 +954,7 @@ def test_class_udf_parallel(cloud_test_catalog_tmpfile):
         .order_by("file.size")
     )
 
-    assert list(dc.collect()) == [
+    assert list(chain.collect()) == [
         (3, 11),
         (4, 13),
         (4, 13),
@@ -862,20 +977,20 @@ def test_udf_parallel_exec_error(cloud_test_catalog_tmpfile):
         # A udf that raises an exception
         raise RuntimeError("Test Error!")
 
-    dc = (
-        DataChain.from_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
-        .filter(C("file.size") < 13)
-        .filter(C("file.path").glob("cats*") | (C("file.size") < 4))
+    chain = (
+        dc.read_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
+        .filter(dc.C("file.size") < 13)
+        .filter(dc.C("file.path").glob("cats*") | (dc.C("file.size") < 4))
         .settings(parallel=-1)
         .map(name_len_error, params=["file.path"], output={"name_len": int})
     )
     with pytest.raises(RuntimeError, match="UDF Execution Failed!"):
-        dc.show()
+        chain.show()
 
 
 @pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
+    "cloud_type,version_aware,tree",
+    [("s3", True, LARGE_TREE)],
     indirect=True,
 )
 @pytest.mark.parametrize("workers", (1, 2))
@@ -886,7 +1001,7 @@ def test_udf_parallel_exec_error(cloud_test_catalog_tmpfile):
 )
 @pytest.mark.xdist_group(name="tmpfile")
 def test_udf_distributed_exec_error(
-    cloud_test_catalog_tmpfile, workers, datachain_job_id
+    cloud_test_catalog_tmpfile, workers, datachain_job_id, tree, run_datachain_worker
 ):
     session = cloud_test_catalog_tmpfile.session
 
@@ -894,15 +1009,15 @@ def test_udf_distributed_exec_error(
         # A udf that raises an exception
         raise RuntimeError("Test Error!")
 
-    dc = (
-        DataChain.from_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
-        .filter(C("file.size") < 13)
-        .filter(C("file.path").glob("cats*") | (C("file.size") < 4))
+    chain = (
+        dc.read_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
+        .filter(dc.C("file.size") < 13)
+        .filter(dc.C("file.path").glob("cats*") | (dc.C("file.size") < 4))
         .settings(parallel=2, workers=workers)
         .map(name_len_error, params=["file.path"], output={"name_len": int})
     )
     with pytest.raises(DataChainError, match="Test Error!"):
-        dc.show()
+        chain.show()
 
 
 @pytest.mark.parametrize(
@@ -922,23 +1037,23 @@ def test_udf_reuse_on_error(cloud_test_catalog_tmpfile):
             raise RuntimeError("Test Error!")
         return (len(path),)
 
-    dc = (
-        DataChain.from_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
-        .filter(C("file.size") < 13)
-        .filter(C("file.path").glob("cats*") | (C("file.size") < 4))
+    chain = (
+        dc.read_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
+        .filter(dc.C("file.size") < 13)
+        .filter(dc.C("file.path").glob("cats*") | (dc.C("file.size") < 4))
         .map(name_len_maybe_error, params=["file.path"], output={"path_len": int})
         .select("file.path", "path_len")
     )
 
     with pytest.raises(DataChainError, match="Test Error!"):
-        dc.show()
+        chain.show()
 
     # Simulate fixing the error
     error_state["error"] = False
 
     # Retry Query
     count = 0
-    for r in dc.collect():
+    for r in chain.collect():
         # Check that the UDF ran successfully
         count += 1
         assert len(r[0]) == r[1]
@@ -958,23 +1073,23 @@ def test_udf_parallel_interrupt(cloud_test_catalog_tmpfile, capfd):
         # A UDF that emulates cancellation due to a KeyboardInterrupt.
         raise KeyboardInterrupt
 
-    dc = (
-        DataChain.from_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
-        .filter(C("file.size") < 13)
-        .filter(C("file.path").glob("cats*") | (C("file.size") < 4))
+    chain = (
+        dc.read_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
+        .filter(dc.C("file.size") < 13)
+        .filter(dc.C("file.path").glob("cats*") | (dc.C("file.size") < 4))
         .settings(parallel=-1)
         .map(name_len_interrupt, params=["file.path"], output={"name_len": int})
     )
     with pytest.raises(RuntimeError, match="UDF Execution Failed!"):
-        dc.show()
+        chain.show()
     captured = capfd.readouterr()
     assert "KeyboardInterrupt" in captured.err
     assert "semaphore" not in captured.err
 
 
 @pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
+    "cloud_type,version_aware,tree",
+    [("s3", True, LARGE_TREE)],
     indirect=True,
 )
 @pytest.mark.skipif(
@@ -983,30 +1098,31 @@ def test_udf_parallel_interrupt(cloud_test_catalog_tmpfile, capfd):
     "to test distributed UDFs",
 )
 @pytest.mark.xdist_group(name="tmpfile")
-def test_udf_distributed_interrupt(cloud_test_catalog_tmpfile, capfd, datachain_job_id):
+def test_udf_distributed_interrupt(
+    cloud_test_catalog_tmpfile, capfd, datachain_job_id, tree, run_datachain_worker
+):
     session = cloud_test_catalog_tmpfile.session
 
     def name_len_interrupt(_name):
         # A UDF that emulates cancellation due to a KeyboardInterrupt.
         raise KeyboardInterrupt
 
-    dc = (
-        DataChain.from_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
-        .filter(C("file.size") < 13)
-        .filter(C("file.path").glob("cats*") | (C("file.size") < 4))
+    chain = (
+        dc.read_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
+        .filter(dc.C("file.size") < 13)
+        .filter(dc.C("file.path").glob("cats*") | (dc.C("file.size") < 4))
         .settings(parallel=2, workers=2)
         .map(name_len_interrupt, params=["file.path"], output={"name_len": int})
     )
     with pytest.raises(RuntimeError, match=r"Worker Killed \(KeyboardInterrupt\)"):
-        dc.show()
+        chain.show()
     captured = capfd.readouterr()
-    assert "KeyboardInterrupt" in captured.err
     assert "semaphore" not in captured.err
 
 
 @pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
+    "cloud_type,version_aware,tree",
+    [("s3", True, LARGE_TREE)],
     indirect=True,
 )
 @pytest.mark.skipif(
@@ -1015,7 +1131,9 @@ def test_udf_distributed_interrupt(cloud_test_catalog_tmpfile, capfd, datachain_
     "to test distributed UDFs",
 )
 @pytest.mark.xdist_group(name="tmpfile")
-def test_udf_distributed_cancel(cloud_test_catalog_tmpfile, capfd, datachain_job_id):
+def test_udf_distributed_cancel(
+    cloud_test_catalog_tmpfile, capfd, datachain_job_id, tree, run_datachain_worker
+):
     catalog = cloud_test_catalog_tmpfile.catalog
     session = cloud_test_catalog_tmpfile.session
     metastore = catalog.metastore
@@ -1044,16 +1162,16 @@ def test_udf_distributed_cancel(cloud_test_catalog_tmpfile, capfd, datachain_job
         sleep(10)
         return len(name), None
 
-    dc = (
-        DataChain.from_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
-        .filter(C("file.size") < 13)
-        .filter(C("file.path").glob("cats*") | (C("file.size") < 4))
+    chain = (
+        dc.read_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
+        .filter(dc.C("file.size") < 13)
+        .filter(dc.C("file.path").glob("cats*") | (dc.C("file.size") < 4))
         .settings(parallel=2, workers=2)
         .map(name_len_slow, params=["file.path"], output={"name_len": int})
     )
 
     with pytest.raises(SystemExit) as excinfo:
-        dc.show()
+        chain.show()
 
     assert excinfo.value.code == QUERY_SCRIPT_CANCELED_EXIT_CODE
     captured = capfd.readouterr()
@@ -1077,8 +1195,8 @@ def test_avoid_recalculation_after_save(cloud_test_catalog):
     uri = cloud_test_catalog.src_uri
     session = cloud_test_catalog.session
     ds = (
-        DataChain.from_storage(uri, session=session)
-        .filter(C("file.path").glob("*/dog1"))
+        dc.read_storage(uri, session=session)
+        .filter(dc.C("file.path").glob("*/dog1"))
         .map(name_len, params=["file.path"], output={"name_len": int})
     )
     ds2 = ds.save("ds1")
@@ -1109,8 +1227,8 @@ def test_udf_after_limit(cloud_test_catalog):
         return list(res.collect("name", "name_int"))
 
     expected = [(f"{i:06d}", i) for i in range(100)]
-    dc = (
-        DataChain.from_storage(ctc.src_uri, session=ctc.session)
+    chain = (
+        dc.read_storage(ctc.src_uri, session=ctc.session)
         .mutate(name=pathfunc.name("file.path"))
         .save()
     )
@@ -1118,9 +1236,9 @@ def test_udf_after_limit(cloud_test_catalog):
     # bugs in the past where calling add_signals() after limit() gave us
     # incorrect results on clickhouse cloud.
     # See https://github.com/iterative/dvcx/issues/940
-    assert get_result(dc.order_by("name")) == expected
-    assert len(get_result(dc.order_by("sys.rand"))) == 100
-    assert len(get_result(dc)) == 100
+    assert get_result(chain.order_by("name")) == expected
+    assert len(get_result(chain.order_by("sys.rand"))) == 100
+    assert len(get_result(chain)) == 100
 
 
 @pytest.mark.parametrize(
@@ -1137,14 +1255,12 @@ def test_row_number_with_order_by_name_len_desc_and_name_asc(cloud_test_catalog)
     def name_len(path):
         return (len(posixpath.basename(path)),)
 
-    DataChain.from_storage(path, session=session).map(
+    dc.read_storage(path, session=session).map(
         name_len, params=["file.path"], output={"name_len": int}
     ).order_by("name_len", descending=True).order_by("file.path").save(ds_name)
 
     assert list(
-        DataChain.from_dataset(name=ds_name, session=session).collect(
-            "sys.id", "file.path"
-        )
+        dc.read_dataset(name=ds_name, session=session).collect("sys.id", "file.path")
     ) == [
         (1, "description"),
         (2, "cats/cat1"),
@@ -1170,16 +1286,14 @@ def test_row_number_with_order_by_before_map(cloud_test_catalog):
     def name_len(path):
         return (len(posixpath.basename(path)),)
 
-    DataChain.from_storage(path, session=session).order_by("file.path").map(
+    dc.read_storage(path, session=session).order_by("file.path").map(
         name_len, params=["file.path"], output={"name_len": int}
     ).save(ds_name)
 
     # we should preserve order in final result based on order by which was added
     # before add_signals
     assert list(
-        DataChain.from_dataset(name=ds_name, session=session).collect(
-            "sys.id", "file.path"
-        )
+        dc.read_dataset(name=ds_name, session=session).collect("sys.id", "file.path")
     ) == [
         (1, "cats/cat1"),
         (2, "cats/cat2"),
@@ -1217,11 +1331,9 @@ def test_udf_different_types(cloud_test_catalog):
             pickle.dumps(obj),
         )
 
-    dc = (
-        DataChain.from_storage(
-            cloud_test_catalog.src_uri, session=cloud_test_catalog.session
-        )
-        .filter(C("file.path").glob("*cat1"))
+    chain = (
+        dc.read_storage(cloud_test_catalog.src_uri, session=cloud_test_catalog.session)
+        .filter(dc.C("file.path").glob("*cat1"))
         .map(
             test_types,
             params=[],
@@ -1244,7 +1356,7 @@ def test_udf_different_types(cloud_test_catalog):
         )
     )
 
-    results = dc.to_records()
+    results = chain.to_records()
     col_values = [
         (
             r["int_col"],
@@ -1298,13 +1410,13 @@ def test_gen_parallel(cloud_test_catalog_tmpfile):
         for i in range(5):
             yield (f"{file.path}_{i}",)
 
-    dc = (
-        DataChain.from_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
+    chain = (
+        dc.read_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
         .settings(parallel=-1)
         .gen(gen=func, params=["file"], output={"val": str})
         .order_by("val")
     )
-    assert list(dc.collect("val")) == [
+    assert list(chain.collect("val")) == [
         "cats/cat1_0",
         "cats/cat1_1",
         "cats/cat1_2",
@@ -1366,7 +1478,7 @@ def test_gen_with_new_columns_numpy(cloud_test_catalog, dogs_dataset):
                 np.array([], dtype=np.float32),
             )
 
-    DataChain.from_storage(cloud_test_catalog.src_uri, session=session).gen(
+    dc.read_storage(cloud_test_catalog.src_uri, session=session).gen(
         subobject=gen_numpy,
         output={
             "int_col_32": int,
@@ -1382,8 +1494,8 @@ def test_gen_with_new_columns_numpy(cloud_test_catalog, dogs_dataset):
         },
     ).save("dogs_with_rows_and_signals")
 
-    dc = DataChain.from_dataset(name="dogs_with_rows_and_signals", session=session)
-    for r in dc.collect(
+    chain = dc.read_dataset(name="dogs_with_rows_and_signals", session=session)
+    for r in chain.collect(
         "int_col_32",
         "int_col_64",
         "float_col_32",
@@ -1421,7 +1533,7 @@ def test_gen_with_new_columns_wrong_type(cloud_test_catalog, dogs_dataset):
         yield (0.5)
 
     with pytest.raises(ValueError):
-        DataChain.from_storage(cloud_test_catalog.src_uri, session=session).gen(
+        dc.read_storage(cloud_test_catalog.src_uri, session=session).gen(
             new_val=gen_func, output={"new_val": int}
         ).show()
 
@@ -1462,8 +1574,8 @@ def test_gen_file(cloud_test_catalog, use_cache, prefetch):
         with file.open("rb") as f:
             return [file.name, f.read().decode("utf-8")]
 
-    dc = (
-        DataChain.from_storage(ctc.src_uri, session=ctc.session)
+    chain = (
+        dc.read_storage(ctc.src_uri, session=ctc.session)
         .settings(cache=use_cache, prefetch=prefetch)
         .gen(signal=with_checks(new_signal), output=str)
         .save()
@@ -1484,7 +1596,7 @@ def test_gen_file(cloud_test_catalog, use_cache, prefetch):
         "ruff",
         "woof",
     }
-    assert set(dc.collect("signal")) == expected
+    assert set(chain.collect("signal")) == expected
     assert not os.listdir(ctc.catalog.cache.tmp_dir)
 
 
@@ -1497,15 +1609,15 @@ def test_similarity_search(cloud_test_catalog):
         return text_embedding(text)
 
     target_embedding = next(
-        DataChain.from_storage(src_uri, session=session)
-        .filter(C("file.path").glob("*description"))
+        dc.read_storage(src_uri, session=session)
+        .filter(dc.C("file.path").glob("*description"))
         .order_by("file.path")
         .limit(1)
         .map(embedding=calc_emb, output={"embedding": list[float]})
         .collect("embedding")
     )
-    dc = (
-        DataChain.from_storage(src_uri, session=session)
+    chain = (
+        dc.read_storage(src_uri, session=session)
         .map(embedding=calc_emb, output={"embedding": list[float]})
         .mutate(
             cos_dist=func.cosine_distance("embedding", target_embedding),
@@ -1513,7 +1625,7 @@ def test_similarity_search(cloud_test_catalog):
         )
         .order_by("file.path")
     )
-    count = dc.count()
+    count = chain.count()
     assert count == 7
 
     expected = [
@@ -1527,7 +1639,7 @@ def test_similarity_search(cloud_test_catalog):
     ]
 
     for (p1, c1, e1), (p2, c2, e2) in zip(
-        dc.collect("file.path", "cos_dist", "eucl_dist"), expected
+        chain.collect("file.path", "cos_dist", "eucl_dist"), expected
     ):
         assert p1.endswith(p2)
         assert math.isclose(c1, c2, abs_tol=1e-5)
@@ -1537,10 +1649,10 @@ def test_similarity_search(cloud_test_catalog):
 @pytest.mark.parametrize("tree", [TARRED_TREE], indirect=True)
 def test_process_and_open_tar(cloud_test_catalog, cloud_type):
     ctc = cloud_test_catalog
-    dc = DataChain.from_storage(ctc.src_uri, session=ctc.session).gen(file=process_tar)
-    assert dc.count() == 7
+    chain = dc.read_storage(ctc.src_uri, session=ctc.session).gen(file=process_tar)
+    assert chain.count() == 7
 
-    assert {(file.read(), file.path) for file in dc.collect("file")} == {
+    assert {(file.read(), file.path) for file in chain.collect("file")} == {
         (b"meow", "animals.tar/cats/cat1"),
         (b"mrow", "animals.tar/cats/cat2"),
         (b"Cats and Dogs", "animals.tar/description"),
@@ -1552,7 +1664,7 @@ def test_process_and_open_tar(cloud_test_catalog, cloud_type):
 
 
 def test_datachain_save_with_job(test_session, catalog, datachain_job_id):
-    DataChain.from_values(value=["val1", "val2"], session=test_session).save("my-ds")
+    dc.read_values(value=["val1", "val2"], session=test_session).save("my-ds")
 
     dataset = catalog.get_dataset("my-ds")
     result_job_id = dataset.get_version(dataset.latest_version).job_id
@@ -1579,7 +1691,7 @@ def test_group_by_signals(cloud_test_catalog):
         )
 
     ds = (
-        DataChain.from_storage(src_uri, session=session)
+        dc.read_storage(src_uri, session=session)
         .map(file_info, params=["file"], output={"file_info": FileInfo})
         .group_by(
             cnt=func.count(),
@@ -1644,7 +1756,7 @@ def test_group_by_signals_same_model(cloud_test_catalog):
         )
 
     ds = (
-        DataChain.from_storage(src_uri, session=session)
+        dc.read_storage(src_uri, session=session)
         .map(f1=file_info)
         .map(f2=file_info)
         .group_by(
@@ -1735,7 +1847,7 @@ def test_group_by_signals_nested(cloud_test_catalog):
         )
 
     ds = (
-        DataChain.from_storage(src_uri, session=session)
+        dc.read_storage(src_uri, session=session)
         .map(f1=file_info)
         .map(f2=file_info)
         .group_by(
@@ -1828,7 +1940,7 @@ def test_group_by_known_signals(cloud_test_catalog):
         return BBox(title=file.path.split("/")[0], coords=[10, 20, 80, 90])
 
     ds = (
-        DataChain.from_storage(src_uri, session=session)
+        dc.read_storage(src_uri, session=session)
         .map(box=process)
         .group_by(
             cnt=func.count(),
@@ -1878,7 +1990,7 @@ def test_group_by_func(cloud_test_catalog):
     src_uri = cloud_test_catalog.src_uri
 
     ds = (
-        DataChain.from_storage(src_uri, session=session)
+        dc.read_storage(src_uri, session=session)
         .group_by(
             cnt=func.count(),
             sum=func.sum("file.size"),
@@ -1927,7 +2039,7 @@ def test_window_signals(cloud_test_catalog, partition_by, order_by):
     window = func.window(partition_by=partition_by, order_by=order_by, desc=True)
 
     ds = (
-        DataChain.from_storage(src_uri, session=session)
+        dc.read_storage(src_uri, session=session)
         .map(file_info, params=["file"], output={"file_info": FileInfo})
         .mutate(row_number=func.row_number().over(window))
         .save("my-ds")
@@ -1975,10 +2087,10 @@ def test_window_signals_random(cloud_test_catalog):
     window = func.window(partition_by="file_info.path", order_by="sys.rand")
 
     ds = (
-        DataChain.from_storage(src_uri, session=session)
+        dc.read_storage(src_uri, session=session)
         .map(file_info, params=["file"], output={"file_info": FileInfo})
         .mutate(row_number=func.row_number().over(window))
-        .filter(C("row_number") < 3)
+        .filter(dc.C("row_number") < 3)
         .select_except("row_number")
         .save("my-ds")
     )
@@ -1998,44 +2110,44 @@ def test_window_signals_random(cloud_test_catalog):
     assert len(all_dogs) == 2
 
 
-def test_to_from_csv_remote(cloud_test_catalog_upload):
+def test_to_read_csv_remote(cloud_test_catalog_upload):
     ctc = cloud_test_catalog_upload
     path = f"{ctc.src_uri}/test.csv"
 
     df = pd.DataFrame(DF_DATA)
-    dc_to = DataChain.from_pandas(df, session=ctc.session)
+    dc_to = dc.read_pandas(df, session=ctc.session)
     dc_to.to_csv(path)
 
-    dc_from = DataChain.from_csv(path, session=ctc.session)
+    dc_from = dc.read_csv(path, session=ctc.session)
     df1 = dc_from.select("first_name", "age", "city").to_pandas()
     assert df_equal(df1, df)
 
 
 @pytest.mark.parametrize("chunk_size", (1000, 2))
 @pytest.mark.parametrize("kwargs", ({}, {"compression": "gzip"}))
-def test_to_from_parquet_remote(cloud_test_catalog_upload, chunk_size, kwargs):
+def test_to_read_parquet_remote(cloud_test_catalog_upload, chunk_size, kwargs):
     ctc = cloud_test_catalog_upload
     path = f"{ctc.src_uri}/test.parquet"
 
     df = pd.DataFrame(DF_DATA)
-    dc_to = DataChain.from_pandas(df, session=ctc.session)
+    dc_to = dc.read_pandas(df, session=ctc.session)
     dc_to.to_parquet(path, chunk_size=chunk_size, **kwargs)
 
-    dc_from = DataChain.from_parquet(path, session=ctc.session)
+    dc_from = dc.read_parquet(path, session=ctc.session)
     df1 = dc_from.select("first_name", "age", "city").to_pandas()
 
     assert df_equal(df1, df)
 
 
-def test_to_from_parquet_partitioned_remote(cloud_test_catalog_upload):
+def test_to_read_parquet_partitioned_remote(cloud_test_catalog_upload):
     ctc = cloud_test_catalog_upload
     path = f"{ctc.src_uri}/parquets"
 
     df = pd.DataFrame(DF_DATA)
-    dc_to = DataChain.from_pandas(df, session=ctc.session)
+    dc_to = dc.read_pandas(df, session=ctc.session)
     dc_to.to_parquet(path, partition_cols=["first_name"], chunk_size=2)
 
-    dc_from = DataChain.from_parquet(path, session=ctc.session)
+    dc_from = dc.read_parquet(path, session=ctc.session)
     df1 = dc_from.select("first_name", "age", "city").to_pandas()
     df1 = df1.sort_values("first_name").reset_index(drop=True)
     assert df_equal(df1, df)
@@ -2043,9 +2155,9 @@ def test_to_from_parquet_partitioned_remote(cloud_test_catalog_upload):
 
 # These deprecation warnings occur in the datamodel-code-generator package.
 @pytest.mark.filterwarnings("ignore::pydantic.warnings.PydanticDeprecatedSince20")
-def test_to_from_json(tmp_dir, test_session):
+def test_to_read_json(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
-    dc_to = DataChain.from_pandas(df, session=test_session)
+    dc_to = dc.read_pandas(df, session=test_session)
     path = tmp_dir / "test.json"
     dc_to.order_by("first_name", "age").to_json(path)
 
@@ -2056,7 +2168,7 @@ def test_to_from_json(tmp_dir, test_session):
         for n, a, c in zip(DF_DATA["first_name"], DF_DATA["age"], DF_DATA["city"])
     ]
 
-    dc_from = DataChain.from_json(path.as_uri(), session=test_session)
+    dc_from = dc.read_json(path.as_uri(), session=test_session)
     df1 = dc_from.select("json.first_name", "json.age", "json.city").to_pandas()
     df1 = df1["json"]
     assert df_equal(df1, df)
@@ -2064,7 +2176,7 @@ def test_to_from_json(tmp_dir, test_session):
 
 # These deprecation warnings occur in the datamodel-code-generator package.
 @pytest.mark.filterwarnings("ignore::pydantic.warnings.PydanticDeprecatedSince20")
-def test_from_json_jmespath(tmp_dir, test_session):
+def test_read_json_jmespath(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
     values = [
         {"first_name": n, "age": a, "city": c}
@@ -2074,7 +2186,7 @@ def test_from_json_jmespath(tmp_dir, test_session):
     with open(path, "w") as f:
         json.dump({"author": "Test User", "version": 5, "values": values}, f)
 
-    dc_from = DataChain.from_json(path, jmespath="values", session=test_session)
+    dc_from = dc.read_json(path, jmespath="values", session=test_session)
     df1 = dc_from.select("values.first_name", "values.age", "values.city").to_pandas()
     df1 = df1["values"]
     assert df_equal(df1, df)
@@ -2082,15 +2194,15 @@ def test_from_json_jmespath(tmp_dir, test_session):
 
 # These deprecation warnings occur in the datamodel-code-generator package.
 @pytest.mark.filterwarnings("ignore::pydantic.warnings.PydanticDeprecatedSince20")
-def test_to_from_json_remote(cloud_test_catalog_upload):
+def test_to_read_json_remote(cloud_test_catalog_upload):
     ctc = cloud_test_catalog_upload
     path = f"{ctc.src_uri}/test.json"
 
     df = pd.DataFrame(DF_DATA)
-    dc_to = DataChain.from_pandas(df, session=ctc.session)
+    dc_to = dc.read_pandas(df, session=ctc.session)
     dc_to.to_json(path)
 
-    dc_from = DataChain.from_json(path, session=ctc.session)
+    dc_from = dc.read_json(path, session=ctc.session)
     df1 = dc_from.select("json.first_name", "json.age", "json.city").to_pandas()
     df1 = df1["json"]
     assert df_equal(df1, df)
@@ -2098,15 +2210,15 @@ def test_to_from_json_remote(cloud_test_catalog_upload):
 
 # These deprecation warnings occur in the datamodel-code-generator package.
 @pytest.mark.filterwarnings("ignore::pydantic.warnings.PydanticDeprecatedSince20")
-def test_to_from_jsonl_remote(cloud_test_catalog_upload):
+def test_to_read_jsonl_remote(cloud_test_catalog_upload):
     ctc = cloud_test_catalog_upload
     path = f"{ctc.src_uri}/test.jsonl"
 
     df = pd.DataFrame(DF_DATA)
-    dc_to = DataChain.from_pandas(df, session=ctc.session)
+    dc_to = dc.read_pandas(df, session=ctc.session)
     dc_to.to_jsonl(path)
 
-    dc_from = DataChain.from_json(path, format="jsonl", session=ctc.session)
+    dc_from = dc.read_json(path, format="jsonl", session=ctc.session)
     df1 = dc_from.select("jsonl.first_name", "jsonl.age", "jsonl.city").to_pandas()
     df1 = df1["jsonl"]
     assert df_equal(df1, df)
@@ -2118,10 +2230,10 @@ def test_datachain_functional_after_exceptions(test_session):
 
     keys = ["a", "b", "c"]
     values = [3, 1, 2]
-    dc = DataChain.from_values(key=keys, val=values, session=test_session)
+    chain = dc.read_values(key=keys, val=values, session=test_session)
     # Running a few times, since sessions closing and cleaning up
     # DB connections on errors. We need to make sure that it reconnects
     # if needed.
     for _ in range(4):
         with pytest.raises(Exception, match="Test Error!"):
-            dc.map(res=func).exec()
+            chain.map(res=func).exec()

@@ -13,7 +13,7 @@ from PIL import (
     TiffImagePlugin,
 )
 
-from datachain import C, DataChain
+import datachain as dc
 
 source = "gs://datachain-demo/open-images-v6/"
 
@@ -67,9 +67,9 @@ def image_description(file):
 
 if __name__ == "__main__":
     (
-        DataChain.from_storage(source, type="image")
+        dc.read_storage(source, type="image")
         .settings(parallel=-1)
-        .filter(C("file.path").glob("*.jpg"))
+        .filter(dc.C("file.path").glob("*.jpg"))
         .limit(5000)
         .map(
             image_description,
@@ -77,6 +77,6 @@ if __name__ == "__main__":
             output={"xmp": dict, "exif": dict, "iptc": dict, "error": str},
         )
         .select("file.path", "xmp", "exif", "iptc", "error")
-        .filter((C("xmp") != "{}") | (C("exif") != "{}") | (C("iptc") != "{}"))
+        .filter((dc.C("xmp") != "{}") | (dc.C("exif") != "{}") | (dc.C("iptc") != "{}"))
         .show()
     )

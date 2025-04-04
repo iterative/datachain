@@ -77,13 +77,14 @@ def test_query_cli(cloud_test_catalog_tmpfile, tmp_path, catalog_info_filepath, 
     src_uri = cloud_test_catalog_tmpfile.src_uri
 
     query_script = """\
-    from datachain import DataChain, metrics, param
+    import datachain as dc
+    from datachain import metrics, param
 
-    dc = DataChain.from_storage(param("url"), session=session)
+    chain = dc.read_storage(param("url"), session=session)
 
-    metrics.set("count", dc.count())
+    metrics.set("count", chain.count())
 
-    dc.save("my-ds")
+    chain.save("my-ds")
     """
     query_script = setup_catalog(query_script, catalog_info_filepath)
 

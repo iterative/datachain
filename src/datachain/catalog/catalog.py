@@ -583,12 +583,12 @@ class Catalog:
         object_name="file",
         skip_indexing=False,
     ) -> tuple[Optional["Listing"], "Client", str]:
-        from datachain.lib.dc import DataChain
+        from datachain import read_storage
         from datachain.listing import Listing
 
-        DataChain.from_storage(
+        read_storage(
             source, session=self.session, update=update, object_name=object_name
-        )
+        ).exec()
 
         list_ds_name, list_uri, list_path, _ = get_listing(
             source, self.session, update=update
@@ -795,6 +795,19 @@ class Catalog:
         try:
             dataset = self.get_dataset(name)
             default_version = dataset.next_version
+
+            if (description or labels) and (
+                dataset.description != description or dataset.labels != labels
+            ):
+                description = description or dataset.description
+                labels = labels or dataset.labels
+
+                self.update_dataset(
+                    dataset,
+                    description=description,
+                    labels=labels,
+                )
+
         except DatasetNotFoundError:
             schema = {
                 c.name: c.type.to_dict() for c in columns if isinstance(c.type, SQLType)
@@ -981,18 +994,14 @@ class Catalog:
         if not sources:
             raise ValueError("Sources needs to be non empty list")
 
-        from datachain.lib.dc import DataChain
+        from datachain import read_dataset, read_storage
 
         chains = []
         for source in sources:
             if source.startswith(DATASET_PREFIX):
-                dc = DataChain.from_dataset(
-                    source[len(DATASET_PREFIX) :], session=self.session
-                )
+                dc = read_dataset(source[len(DATASET_PREFIX) :], session=self.session)
             else:
-                dc = DataChain.from_storage(
-                    source, session=self.session, recursive=recursive
-                )
+                dc = read_storage(source, session=self.session, recursive=recursive)
 
             chains.append(dc)
 

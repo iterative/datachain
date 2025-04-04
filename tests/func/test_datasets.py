@@ -5,6 +5,7 @@ from unittest.mock import ANY
 import pytest
 import sqlalchemy as sa
 
+import datachain as dc
 from datachain.data_storage.schema import DataTable
 from datachain.dataset import DatasetDependencyType, DatasetStatus
 from datachain.error import (
@@ -12,7 +13,6 @@ from datachain.error import (
     DatasetNotFoundError,
     DatasetVersionNotFoundError,
 )
-from datachain.lib.dc import DataChain
 from datachain.lib.file import File
 from datachain.lib.listing import parse_listing_uri
 from datachain.query.dataset import DatasetQuery
@@ -668,9 +668,7 @@ def test_ls_dataset_rows_with_custom_columns(cloud_test_catalog):
         )
 
     (
-        DataChain.from_storage(
-            cloud_test_catalog.src_uri, session=cloud_test_catalog.session
-        )
+        dc.read_storage(cloud_test_catalog.src_uri, session=cloud_test_catalog.session)
         .map(
             test_types,
             params=[],
@@ -734,9 +732,7 @@ def test_dataset_preview_custom_columns(cloud_test_catalog, dogs_dataset):
         )
 
     (
-        DataChain.from_storage(
-            cloud_test_catalog.src_uri, session=cloud_test_catalog.session
-        )
+        dc.read_storage(cloud_test_catalog.src_uri, session=cloud_test_catalog.session)
         .map(
             test_types,
             params=[],
@@ -783,9 +779,9 @@ def test_dataset_preview_order(test_session):
     catalog = test_session.catalog
     dataset_name = "test"
 
-    DataChain.from_values(id=ids, order=order, session=test_session).order_by(
-        "order"
-    ).save(dataset_name)
+    dc.read_values(id=ids, order=order, session=test_session).order_by("order").save(
+        dataset_name
+    )
 
     preview_values = []
 
@@ -796,12 +792,12 @@ def test_dataset_preview_order(test_session):
         preview_values.append((id, o))
         assert (r["id"], r["order"]) == entry
 
-    DataChain.from_dataset(dataset_name, session=test_session).save(dataset_name)
+    dc.read_dataset(dataset_name, session=test_session).save(dataset_name)
 
     for r in catalog.get_dataset(dataset_name).get_version(2).preview:
         assert (r["id"], r["order"]) == preview_values.pop(0)
 
-    DataChain.from_dataset(dataset_name, 2, session=test_session).order_by("id").save(
+    dc.read_dataset(dataset_name, 2, session=test_session).order_by("id").save(
         dataset_name
     )
 
@@ -860,7 +856,7 @@ def test_dataset_storage_dependencies(cloud_test_catalog, cloud_type, indirect):
     uri = cloud_test_catalog.src_uri
 
     ds_name = "some_ds"
-    DataChain.from_storage(uri, session=session).save(ds_name)
+    dc.read_storage(uri, session=session).save(ds_name)
 
     lst_ds_name, _, _ = parse_listing_uri(uri, catalog.client_config)
     lst_dataset = catalog.metastore.get_dataset(lst_ds_name)

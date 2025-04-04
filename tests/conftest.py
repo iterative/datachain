@@ -1,8 +1,11 @@
 import os
 import os.path
+import signal
+import subprocess  # nosec B404
 import uuid
 from collections.abc import Generator
 from pathlib import PosixPath
+from time import sleep
 from typing import NamedTuple
 
 import attrs
@@ -11,6 +14,7 @@ import sqlalchemy
 from pytest import MonkeyPatch, TempPathFactory
 from upath.implementations.cloud import CloudPath
 
+import datachain as dc
 from datachain.catalog import Catalog
 from datachain.catalog.loader import get_metastore, get_warehouse
 from datachain.cli.utils import CommaSeparatedArgs
@@ -21,7 +25,7 @@ from datachain.data_storage.sqlite import (
     SQLiteWarehouse,
 )
 from datachain.dataset import DatasetRecord
-from datachain.lib.dc import DataChain, Sys
+from datachain.lib.dc import Sys
 from datachain.query.session import Session
 from datachain.utils import (
     ENV_DATACHAIN_GLOBAL_CONFIG_DIR,
@@ -536,7 +540,7 @@ def cloud_test_catalog_tmpfile(
 @pytest.fixture
 def listed_bucket(cloud_test_catalog):
     ctc = cloud_test_catalog
-    DataChain.from_storage(ctc.src_uri, session=ctc.session).exec()
+    dc.read_storage(ctc.src_uri, session=ctc.session).exec()
 
 
 @pytest.fixture
@@ -708,7 +712,7 @@ def studio_datasets(requests_mock):
 def not_random_ds(test_session):
     # `sys__rand` column is carefully crafted to ensure that `train_test_split` func
     # will always return columns in the `sys__id` order if no seed is provided.
-    return DataChain.from_records(
+    return dc.read_records(
         [
             {"sys__id": 1, "sys__rand": 8025184816406567794, "fib": 0},
             {"sys__id": 2, "sys__rand": 8264763963075908010, "fib": 1},
@@ -728,7 +732,7 @@ def not_random_ds(test_session):
 
 @pytest.fixture
 def pseudo_random_ds(test_session):
-    return DataChain.from_records(
+    return dc.read_records(
         [
             {"sys__id": 1, "sys__rand": 2406827533654413759, "fib": 0},
             {"sys__id": 2, "sys__rand": 743035223448130834, "fib": 1},
@@ -744,3 +748,47 @@ def pseudo_random_ds(test_session):
         session=test_session,
         schema={"sys": Sys, "fib": int},
     )
+
+
+@pytest.fixture()
+def run_datachain_worker():
+    if not os.environ.get("DATACHAIN_DISTRIBUTED"):
+        pytest.skip("Distributed tests are disabled")
+    # This worker can take several tasks in parallel, as it's very handy
+    # for testing, where we don't want [yet] to constrain the number of
+    # available workers.
+    workers = []
+    worker_cmd = [
+        "celery",
+        "-A",
+        "datachain_server.distributed",
+        "worker",
+        "--loglevel=INFO",
+        "-Q",
+        "datachain-worker",
+        "-n",
+        "datachain-worker-tests",
+    ]
+    workers.append(subprocess.Popen(worker_cmd, shell=False))  # noqa: S603
+    try:
+        from datachain_server.distributed import app
+
+        inspect = app.control.inspect()
+        attempts = 0
+        # Wait 10 seconds for the Celery worker(s) to be up
+        while not inspect.active() and attempts < 10:
+            sleep(1)
+            attempts += 1
+
+        if attempts == 10:
+            raise RuntimeError("Celery worker(s) did not start in time")
+
+        yield workers
+    finally:
+        for worker in workers:
+            os.kill(worker.pid, signal.SIGTERM)
+        for worker in workers:
+            try:
+                worker.wait(timeout=30)  # seconds
+            except subprocess.TimeoutExpired:
+                os.kill(worker.pid, signal.SIGKILL)

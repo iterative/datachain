@@ -47,14 +47,20 @@ from datachain.error import (
     QueryScriptCancelError,
 )
 from datachain.func.base import Function
+from datachain.lib.listing import (
+    is_listing_dataset,
+    listing_dataset_expired,
+)
 from datachain.lib.udf import UDFAdapter, _get_cache
 from datachain.progress import CombinedDownloadCallback, TqdmCombinedDownloadCallback
 from datachain.query.schema import C, UDFParamSpec, normalize_param
 from datachain.query.session import Session
+from datachain.query.udf import UdfInfo
 from datachain.sql.functions.random import rand
 from datachain.utils import (
     batched,
     determine_processes,
+    determine_workers,
     filtered_cloudpickle_dumps,
     get_datachain_executable,
     safe_closing,
@@ -70,7 +76,6 @@ if TYPE_CHECKING:
     from datachain.data_storage import AbstractWarehouse
     from datachain.dataset import DatasetRecord
     from datachain.lib.udf import UDFAdapter, UDFResult
-    from datachain.query.udf import UdfInfo
 
     P = ParamSpec("P")
 
@@ -151,13 +156,6 @@ def step_result(
     )
 
 
-class StartingStep(ABC):
-    """An initial query processing step, referencing a data source."""
-
-    @abstractmethod
-    def apply(self) -> "StepResult": ...
-
-
 @frozen
 class Step(ABC):
     """A query processing step (filtering, mutation, etc.)"""
@@ -170,7 +168,7 @@ class Step(ABC):
 
 
 @frozen
-class QueryStep(StartingStep):
+class QueryStep:
     catalog: "Catalog"
     dataset_name: str
     dataset_version: int
@@ -417,20 +415,15 @@ class UDFStep(Step, ABC):
     def populate_udf_table(self, udf_table: "Table", query: Select) -> None:
         from datachain.catalog import QUERY_SCRIPT_CANCELED_EXIT_CODE
 
+        rows_total = self.catalog.warehouse.query_count(query)
+        if rows_total == 0:
+            return
+
+        workers = determine_workers(self.workers, rows_total=rows_total)
+        processes = determine_processes(self.parallel, rows_total=rows_total)
+
         use_partitioning = self.partition_by is not None
         batching = self.udf.get_batching(use_partitioning)
-        workers = self.workers
-        if (
-            not workers
-            and os.environ.get("DATACHAIN_DISTRIBUTED")
-            and os.environ.get("DATACHAIN_SETTINGS_WORKERS")
-        ):
-            # Enable distributed processing by default if the module is available,
-            # and a default number of workers is provided.
-            workers = True
-
-        processes = determine_processes(self.parallel)
-
         udf_fields = [str(c.name) for c in query.selected_columns]
 
         prefetch = self.udf.prefetch
@@ -444,23 +437,24 @@ class UDFStep(Step, ABC):
                             "distributed processing."
                         )
 
-                    from datachain.catalog.loader import get_distributed_class
+                    from datachain.catalog.loader import get_udf_distributor_class
 
-                    distributor = get_distributed_class(
-                        min_task_size=self.min_task_size
-                    )
-                    distributor(
-                        self.udf,
-                        catalog,
-                        udf_table,
-                        query,
-                        workers,
-                        processes,
+                    udf_distributor_class = get_udf_distributor_class()
+                    udf_distributor = udf_distributor_class(
+                        catalog=catalog,
+                        table=udf_table,
+                        query=query,
+                        udf_data=filtered_cloudpickle_dumps(self.udf),
+                        batching=batching,
+                        workers=workers,
+                        processes=processes,
                         udf_fields=udf_fields,
+                        rows_total=rows_total,
+                        use_cache=self.cache,
                         is_generator=self.is_generator,
-                        use_partitioning=use_partitioning,
-                        cache=self.cache,
+                        min_task_size=self.min_task_size,
                     )
+                    udf_distributor()
                 elif processes:
                     # Parallel processing (faster for more CPU-heavy UDFs)
                     if catalog.in_memory:
@@ -468,19 +462,21 @@ class UDFStep(Step, ABC):
                             "In-memory databases cannot be used "
                             "with parallel processing."
                         )
-                    udf_info: UdfInfo = {
-                        "udf_data": filtered_cloudpickle_dumps(self.udf),
-                        "catalog_init": catalog.get_init_params(),
-                        "metastore_clone_params": catalog.metastore.clone_params(),
-                        "warehouse_clone_params": catalog.warehouse.clone_params(),
-                        "table": udf_table,
-                        "query": query,
-                        "udf_fields": udf_fields,
-                        "batching": batching,
-                        "processes": processes,
-                        "is_generator": self.is_generator,
-                        "cache": self.cache,
-                    }
+
+                    udf_info = UdfInfo(
+                        udf_data=filtered_cloudpickle_dumps(self.udf),
+                        catalog_init=catalog.get_init_params(),
+                        metastore_clone_params=catalog.metastore.clone_params(),
+                        warehouse_clone_params=catalog.warehouse.clone_params(),
+                        table=udf_table,
+                        query=query,
+                        udf_fields=udf_fields,
+                        batching=batching,
+                        processes=processes,
+                        is_generator=self.is_generator,
+                        cache=self.cache,
+                        rows_total=rows_total,
+                    )
 
                     # Run the UDFDispatcher in another process to avoid needing
                     # if __name__ == '__main__': in user scripts
@@ -1086,6 +1082,7 @@ class DatasetQuery:
         indexing_column_types: Optional[dict[str, Any]] = None,
         in_memory: bool = False,
         fallback_to_studio: bool = True,
+        update: bool = False,
     ) -> None:
         from datachain.remote.studio import is_token_set
 
@@ -1097,26 +1094,44 @@ class DatasetQuery:
         self.temp_table_names: list[str] = []
         self.dependencies: set[DatasetDependencyType] = set()
         self.table = self.get_table()
-        self.starting_step: StartingStep
+        self.starting_step: Optional[QueryStep] = None
         self.name: Optional[str] = None
         self.version: Optional[int] = None
         self.feature_schema: Optional[dict] = None
         self.column_types: Optional[dict[str, Any]] = None
+        self.before_steps: list[Callable] = []
+        self.listing_fn: Optional[Callable] = None
+        self.update = update
+
+        self.list_ds_name: Optional[str] = None
 
         self.name = name
+        self.dialect = self.catalog.warehouse.db.dialect
+        if version:
+            self.version = version
 
-        if fallback_to_studio and is_token_set():
-            ds = self.catalog.get_dataset_with_remote_fallback(name, version)
+        if is_listing_dataset(name):
+            # not setting query step yet as listing dataset might not exist at
+            # this point
+            self.list_ds_name = name
+        elif fallback_to_studio and is_token_set():
+            self._set_starting_step(
+                self.catalog.get_dataset_with_remote_fallback(name, version)
+            )
         else:
-            ds = self.catalog.get_dataset(name)
+            self._set_starting_step(self.catalog.get_dataset(name))
 
-        self.version = version or ds.latest_version
+    def _set_starting_step(self, ds: "DatasetRecord") -> None:
+        if not self.version:
+            self.version = ds.latest_version
+
+        self.starting_step = QueryStep(self.catalog, ds.name, self.version)
+
+        # at this point we know our starting dataset so setting up schemas
         self.feature_schema = ds.get_version(self.version).feature_schema
         self.column_types = copy(ds.schema)
         if "sys__id" in self.column_types:
             self.column_types.pop("sys__id")
-        self.starting_step = QueryStep(self.catalog, name, self.version)
-        self.dialect = self.catalog.warehouse.db.dialect
 
     def __iter__(self):
         return iter(self.db_results())
@@ -1180,11 +1195,30 @@ class DatasetQuery:
         col.table = self.table
         return col
 
+    def set_listing_fn(self, fn: Callable) -> None:
+        """Setting listing function to be run if needed"""
+        self.listing_fn = fn
+
     def apply_steps(self) -> QueryGenerator:
         """
         Apply the steps in the query and return the resulting
         sqlalchemy.SelectBase.
         """
+        if self.list_ds_name and not self.starting_step:
+            listing_ds = None
+            try:
+                listing_ds = self.catalog.get_dataset(self.list_ds_name)
+            except DatasetNotFoundError:
+                pass
+
+            if not listing_ds or self.update or listing_dataset_expired(listing_ds):
+                assert self.listing_fn
+                self.listing_fn()
+                listing_ds = self.catalog.get_dataset(self.list_ds_name)
+
+            # at this point we know what is our starting listing dataset name
+            self._set_starting_step(listing_ds)  # type: ignore [arg-type]
+
         query = self.clone()
 
         index = os.getenv("DATACHAIN_QUERY_CHUNK_INDEX", self._chunk_index)
@@ -1203,6 +1237,7 @@ class DatasetQuery:
             query = query.filter(C.sys__rand % total == index)
             query.steps = query.steps[-1:] + query.steps[:-1]
 
+        assert query.starting_step
         result = query.starting_step.apply()
         self.dependencies.update(result.dependencies)
 

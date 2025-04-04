@@ -1,6 +1,6 @@
 import pytest
 
-from datachain.lib.dc import DataChain
+import datachain as dc
 from datachain.sql.types import Int
 
 
@@ -16,8 +16,8 @@ def test_merge_union(cloud_test_catalog, inner, cloud_type):
 
     src = cloud_test_catalog.src_uri
 
-    dogs = DataChain.from_storage(f"{src}/dogs/*", session=session)
-    cats = DataChain.from_storage(f"{src}/cats/*", session=session)
+    dogs = dc.read_storage(f"{src}/dogs/*", session=session)
+    cats = dc.read_storage(f"{src}/cats/*", session=session)
 
     signal_default_value = Int.default_value(catalog.warehouse.db.dialect)
 
@@ -60,8 +60,8 @@ def test_merge_multiple(cloud_test_catalog, inner1, inner2, inner3):
 
     src = cloud_test_catalog.src_uri
 
-    dogs = DataChain.from_storage(f"{src}/dogs/*", session=session)
-    cats = DataChain.from_storage(f"{src}/cats/*", session=session)
+    dogs = dc.read_storage(f"{src}/dogs/*", session=session)
+    cats = dc.read_storage(f"{src}/cats/*", session=session)
 
     signal_default_value = Int.default_value(catalog.warehouse.db.dialect)
 

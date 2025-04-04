@@ -11,10 +11,10 @@ os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 
 import open_clip
 
-from datachain import C, DataChain, Mapper
+import datachain as dc
 
 
-class ImageEncoder(Mapper):
+class ImageEncoder(dc.Mapper):
     def __init__(self, model_name: str, pretrained: str):
         self.model_name = model_name
         self.pretrained = pretrained
@@ -34,8 +34,8 @@ class ImageEncoder(Mapper):
 if __name__ == "__main__":
     # Run in chain
     (
-        DataChain.from_storage("gs://datachain-demo/dogs-and-cats/", type="image")
-        .filter(C("file.path").glob("*cat*.jpg"))
+        dc.read_storage("gs://datachain-demo/dogs-and-cats/", type="image")
+        .filter(dc.C("file.path").glob("*cat*.jpg"))
         .settings(parallel=2)
         .limit(5)
         .map(
