@@ -1,7 +1,4 @@
-from typing import (
-    TYPE_CHECKING,
-    Optional,
-)
+from typing import TYPE_CHECKING, Optional, get_origin, get_type_hints
 
 from datachain.lib.dataset_info import DatasetInfo
 from datachain.lib.file import (
@@ -102,7 +99,7 @@ def datasets(
     session: Optional[Session] = None,
     settings: Optional[dict] = None,
     in_memory: bool = False,
-    object_name: str = "dataset",
+    column: Optional[str] = None,
     include_listing: bool = False,
     studio: bool = False,
 ) -> "DataChain":
@@ -112,7 +109,8 @@ def datasets(
         session: Optional session instance. If not provided, uses default session.
         settings: Optional dictionary of settings to configure the chain.
         in_memory: If True, creates an in-memory session. Defaults to False.
-        object_name: Name of the output object in the chain. Defaults to "dataset".
+        column: Name of the output column in the chain. Defaults to None which
+            means no top level column will be created.
         include_listing: If True, includes listing datasets. Defaults to False.
         studio: If True, returns datasets from Studio only,
             otherwise returns all local datasets. Defaults to False.
@@ -124,7 +122,7 @@ def datasets(
         ```py
         import datachain as dc
 
-        chain = dc.datasets()
+        chain = dc.datasets(column="dataset")
         for ds in chain.collect("dataset"):
             print(f"{ds.name}@v{ds.version}")
         ```
@@ -139,13 +137,32 @@ def datasets(
             include_listing=include_listing, studio=studio
         )
     ]
-
     datasets_values = [d for d in datasets_values if not d.is_temp]
+
+    if not column:
+        # flattening dataset fields
+        schema = {
+            k: get_origin(v) if get_origin(v) is dict else v
+            for k, v in get_type_hints(DatasetInfo).items()
+            if k in DatasetInfo.model_fields
+        }
+        data = {k: [] for k in DatasetInfo.model_fields}  # type: ignore[var-annotated]
+        for d in [d.model_dump() for d in datasets_values]:
+            for field, value in d.items():
+                data[field].append(value)
+
+        return read_values(
+            session=session,
+            settings=settings,
+            in_memory=in_memory,
+            output=schema,
+            **data,  # type: ignore[arg-type]
+        )
 
     return read_values(
         session=session,
         settings=settings,
         in_memory=in_memory,
-        output={object_name: DatasetInfo},
-        **{object_name: datasets_values},  # type: ignore[arg-type]
+        output={column: DatasetInfo},
+        **{column: datasets_values},  # type: ignore[arg-type]
     )
