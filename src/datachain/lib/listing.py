@@ -72,7 +72,7 @@ def ls(
     dc: D,
     path: str,
     recursive: Optional[bool] = True,
-    object_name="file",
+    column="file",
 ) -> D:
     """
     Return files by some path from DataChain instance which contains bucket listing.
@@ -82,7 +82,7 @@ def ls(
     """
 
     def _file_c(name: str) -> Column:
-        return Column(f"{object_name}.{name}")
+        return Column(f"{column}.{name}")
 
     dc = dc.filter(_file_c("is_latest") == true())
 

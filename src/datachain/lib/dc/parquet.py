@@ -19,7 +19,7 @@ def read_parquet(
     path,
     partitioning: Any = "hive",
     output: Optional[dict[str, DataType]] = None,
-    object_name: str = "",
+    column: str = "",
     model_name: str = "",
     source: bool = True,
     session: Optional[Session] = None,
@@ -33,7 +33,7 @@ def read_parquet(
             as `s3://`, `gs://`, `az://` or "file:///".
         partitioning : Any pyarrow partitioning schema.
         output : Dictionary defining column names and their corresponding types.
-        object_name : Created object column name.
+        column : Created column name.
         model_name : Generated model name.
         source : Whether to include info about the source file.
         session : Session to use for the chain.
@@ -57,7 +57,7 @@ def read_parquet(
     chain = read_storage(path, session=session, settings=settings, **kwargs)
     return chain.parse_tabular(
         output=output,
-        object_name=object_name,
+        column=column,
         model_name=model_name,
         source=source,
         format="parquet",

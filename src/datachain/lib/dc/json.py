@@ -28,7 +28,7 @@ def read_json(
     spec: Optional[DataType] = None,
     schema_from: Optional[str] = "auto",
     jmespath: Optional[str] = None,
-    object_name: Optional[str] = "",
+    column: Optional[str] = "",
     model_name: Optional[str] = None,
     format: Optional[str] = "json",
     nrows=None,
@@ -42,7 +42,7 @@ def read_json(
         type : read file as "binary", "text", or "image" data. Default is "text".
         spec : optional Data Model
         schema_from : path to sample to infer spec (if schema not provided)
-        object_name : generated object column name
+        column : generated column name
         model_name : optional generated model name
         format: "json", "jsonl"
         jmespath : optional JMESPATH expression to reduce JSON
@@ -70,13 +70,13 @@ def read_json(
         name_end = re.search(r"\W", s).start() if re.search(r"\W", s) else len(s)  # type: ignore[union-attr]
         return s[:name_end]
 
-    if (not object_name) and jmespath:
-        object_name = jmespath_to_name(jmespath)
-    if not object_name:
-        object_name = format
+    if (not column) and jmespath:
+        column = jmespath_to_name(jmespath)
+    if not column:
+        column = format
     chain = read_storage(uri=path, type=type, **kwargs)
     signal_dict = {
-        object_name: read_meta(
+        column: read_meta(
             schema_from=schema_from,
             format=format,
             spec=spec,
