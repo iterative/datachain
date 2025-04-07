@@ -1032,7 +1032,7 @@ def test_chain_of_maps(test_session):
     for signal in signals:
         assert signal in chain.schema
 
-    preserved = chain.save()
+    preserved = chain.persist()
     for signal in signals:
         assert signal in preserved.schema
 
@@ -2405,7 +2405,7 @@ def test_mutate_with_expression_without_type(test_session):
     with pytest.raises(DataChainColumnError) as excinfo:
         dc.read_values(id=[1, 2], session=test_session).mutate(
             new=(Column("id") - 1)
-        ).save()
+        ).persist()
 
     assert str(excinfo.value) == (
         "Error for column new: Cannot infer type with expression id - :id_1"
