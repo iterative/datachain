@@ -8,8 +8,6 @@ import sqlalchemy
 
 from datachain.dataset import DatasetDependencyType, DatasetStatus
 from datachain.error import (
-    DatasetInvalidVersionError,
-    DatasetNotFoundError,
     DatasetVersionNotFoundError,
 )
 from datachain.query import C, DatasetQuery, Object, Stream
@@ -32,64 +30,6 @@ def dogs_cats_dataset(listed_bucket, cloud_test_catalog, dogs_dataset, cats_data
         .save(dataset_name)
     )
     return catalog.get_dataset(dataset_name)
-
-
-@pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
-    indirect=True,
-)
-def test_delete_dataset(cloud_test_catalog, cats_dataset):
-    catalog = cloud_test_catalog.catalog
-    DatasetQuery(cats_dataset.name, catalog=catalog).save("cats", version=1)
-    DatasetQuery(cats_dataset.name, catalog=catalog).save("cats", version=2)
-
-    DatasetQuery.delete("cats", version=1, catalog=catalog)
-    dataset = catalog.get_dataset("cats")
-    assert dataset.versions_values == [2]
-
-
-@pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
-    indirect=True,
-)
-def test_delete_dataset_latest_version(cloud_test_catalog, cats_dataset):
-    catalog = cloud_test_catalog.catalog
-    DatasetQuery(cats_dataset.name, catalog=catalog).save("cats", version=1)
-    DatasetQuery(cats_dataset.name, catalog=catalog).save("cats", version=2)
-
-    DatasetQuery.delete("cats", catalog=catalog)
-    dataset = catalog.get_dataset("cats")
-    assert dataset.versions_values == [1]
-
-
-@pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
-    indirect=True,
-)
-def test_delete_dataset_only_version(cloud_test_catalog, cats_dataset):
-    catalog = cloud_test_catalog.catalog
-    DatasetQuery(cats_dataset.name, catalog=catalog).save("cats", version=1)
-
-    DatasetQuery.delete("cats", catalog=catalog)
-    with pytest.raises(DatasetNotFoundError):
-        catalog.get_dataset("cats")
-
-
-@pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
-    indirect=True,
-)
-def test_delete_dataset_missing_version(cloud_test_catalog, cats_dataset):
-    catalog = cloud_test_catalog.catalog
-    DatasetQuery(cats_dataset.name, catalog=catalog).save("cats", version=1)
-    DatasetQuery(cats_dataset.name, catalog=catalog).save("cats", version=2)
-
-    with pytest.raises(DatasetInvalidVersionError):
-        DatasetQuery.delete("cats", version=5, catalog=catalog)
 
 
 @pytest.mark.parametrize(

@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 import datachain as dc
 from datachain import Column
+from datachain.error import DatasetInvalidVersionError
 from datachain.lib.data_model import DataModel
 from datachain.lib.dc import C, DatasetPrepareError, Sys
 from datachain.lib.file import File
@@ -3055,3 +3056,49 @@ def test_window_error(test_session):
         ),
     ):
         chain.mutate(first=func.sum("col2").over(window))
+
+
+def test_delete_dataset_version(test_session):
+    name = "numbers"
+    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version=1)
+    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version=2)
+
+    dc.delete_dataset(name, version=1, session=test_session)
+
+    ds = dc.datasets(column="dataset", session=test_session)
+    datasets = [d for d in ds.collect("dataset") if d.name == name]
+    assert len(datasets) == 1
+    assert datasets[0].version == 2
+
+
+def test_delete_dataset_latest_version(test_session):
+    name = "numbers"
+    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version=1)
+    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version=2)
+
+    dc.delete_dataset(name, session=test_session)
+
+    ds = dc.datasets(column="dataset", session=test_session)
+    datasets = [d for d in ds.collect("dataset") if d.name == name]
+    assert len(datasets) == 1
+    assert datasets[0].version == 1
+
+
+def test_delete_dataset_only_version(test_session):
+    name = "numbers"
+    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version=1)
+
+    dc.delete_dataset(name, session=test_session)
+
+    ds = dc.datasets(column="dataset", session=test_session)
+    datasets = [d for d in ds.collect("dataset") if d.name == name]
+    assert len(datasets) == 0
+
+
+def test_delete_dataset_missing_version(test_session):
+    name = "numbers"
+    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version=1)
+    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version=2)
+
+    with pytest.raises(DatasetInvalidVersionError):
+        dc.delete_dataset(name, version=5, session=test_session)

@@ -166,3 +166,37 @@ def datasets(
         output={column: DatasetInfo},
         **{column: datasets_values},  # type: ignore[arg-type]
     )
+
+
+def delete_dataset(
+    name: str,
+    version: Optional[int] = None,
+    session: Optional[Session] = None,
+    in_memory: bool = False,
+) -> None:
+    """Removes specific dataset version, or the latest one if no version is specified.
+
+    Args:
+        name : Dataset name
+        version : Optional dataset version
+        session: Optional session instance. If not provided, uses default session.
+        in_memory: If True, creates an in-memory session. Defaults to False.
+
+    Returns: None
+
+    Example:
+        ```py
+        import datachain as dc
+        dc.delete_dataset("cats")
+        ```
+
+        ```py
+        import datachain as dc
+        dc.delete_dataset("cats", version=1)
+        ```
+    """
+
+    session = Session.get(session, in_memory=in_memory)
+    catalog = session.catalog
+    version = version or catalog.get_dataset(name).latest_version
+    catalog.remove_dataset(name, version)
