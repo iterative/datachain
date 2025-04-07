@@ -580,15 +580,13 @@ class Catalog:
         source: str,
         update=False,
         client_config=None,
-        object_name="file",
+        column="file",
         skip_indexing=False,
     ) -> tuple[Optional["Listing"], "Client", str]:
         from datachain import read_storage
         from datachain.listing import Listing
 
-        read_storage(
-            source, session=self.session, update=update, column=object_name
-        ).exec()
+        read_storage(source, session=self.session, update=update, column=column).exec()
 
         list_ds_name, list_uri, list_path, _ = get_listing(
             source, self.session, update=update
@@ -602,7 +600,7 @@ class Catalog:
                 self.warehouse.clone(),
                 client,
                 dataset_name=list_ds_name,
-                object_name=object_name,
+                column=column,
             )
 
         return lst, client, list_path
