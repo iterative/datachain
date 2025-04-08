@@ -47,7 +47,7 @@ def listing(test_session):
         catalog.warehouse.clone(),
         Client.get_client("file:///whatever", catalog.cache, **catalog.client_config),
         dataset_name=dataset_name,
-        object_name="file",
+        column="file",
     )
 
 

@@ -42,7 +42,7 @@ def test_dir_expansion(cloud_test_catalog, version_aware, cloud_type):
     chain = create_tar_dataset_with_legacy_columns(session, ctc.src_uri, "dc")
     dataset = catalog.get_dataset(chain.name)
     with catalog.warehouse.clone() as warehouse:
-        dr = warehouse.dataset_rows(dataset, object_name="file")
+        dr = warehouse.dataset_rows(dataset, column="file")
         de = dr.dir_expansion()
         q = de.query(dr.get_table())
 

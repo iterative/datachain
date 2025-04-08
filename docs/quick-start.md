@@ -39,7 +39,7 @@ using JSON metadata:
 ``` py
 import datachain as dc
 
-meta = dc.read_json("gs://datachain-demo/dogs-and-cats/*json", object_name="meta", anon=True)
+meta = dc.read_json("gs://datachain-demo/dogs-and-cats/*json", column="meta", anon=True)
 images = dc.read_storage("gs://datachain-demo/dogs-and-cats/*jpg", anon=True)
 
 images_id = images.map(id=lambda file: file.path.split('.')[-2])
@@ -78,7 +78,7 @@ def is_positive_dialogue_ending(file) -> bool:
 
 chain = (
    dc.read_storage("gs://datachain-demo/chatbot-KiT/",
-                          object_name="file", type="text", anon=True)
+                          column="file", type="text", anon=True)
    .settings(parallel=8, cache=True)
    .map(is_positive=is_positive_dialogue_ending)
    .save("file_response")
@@ -132,7 +132,7 @@ def eval_dialogue(file: dc.File) -> bool:
      return result.lower().startswith("success")
 
 chain = (
-   dc.read_storage("gs://datachain-demo/chatbot-KiT/", object_name="file", anon=True)
+   dc.read_storage("gs://datachain-demo/chatbot-KiT/", column="file", anon=True)
    .map(is_success=eval_dialogue)
    .save("mistral_files")
 )
@@ -177,7 +177,7 @@ def eval_dialog(file: dc.File) -> ChatCompletionResponse:
                    {"role": "user", "content": file.read()}])
 
 chain = (
-   dc.read_storage("gs://datachain-demo/chatbot-KiT/", object_name="file", anon=True)
+   dc.read_storage("gs://datachain-demo/chatbot-KiT/", column="file", anon=True)
    .settings(parallel=4, cache=True)
    .map(response=eval_dialog)
    .map(status=lambda response: response.choices[0].message.content.lower()[:7])

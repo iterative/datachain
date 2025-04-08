@@ -357,7 +357,7 @@ class DataChain:
         self,
         col: str,
         model_name: Optional[str] = None,
-        object_name: Optional[str] = None,
+        column: Optional[str] = None,
         schema_sample_size: int = 1,
     ) -> "DataChain":
         """Explodes a column containing JSON objects (dict or str DataChain type) into
@@ -368,7 +368,7 @@ class DataChain:
             col: the name of the column containing JSON to be exploded.
             model_name: optional generated model name.  By default generates the name
                 automatically.
-            object_name: optional generated object column name. By default generates the
+            column: optional generated column name. By default generates the
                 name automatically.
             schema_sample_size: the number of rows to use for inferring the schema of
                 the JSON (in case some fields are optional and it's not enough to
@@ -406,10 +406,10 @@ class DataChain:
             )
             return model.model_validate(json_dict)
 
-        if not object_name:
-            object_name = f"{col}_expl"
+        if not column:
+            column = f"{col}_expl"
 
-        return self.map(json_to_model, params=col, output={object_name: model})
+        return self.map(json_to_model, params=col, output={column: model})
 
     @classmethod
     def datasets(
@@ -1598,7 +1598,7 @@ class DataChain:
     def parse_tabular(
         self,
         output: OutputType = None,
-        object_name: str = "",
+        column: str = "",
         model_name: str = "",
         source: bool = True,
         nrows: Optional[int] = None,
@@ -1610,7 +1610,7 @@ class DataChain:
             output : Dictionary or feature class defining column names and their
                 corresponding types. List of column names is also accepted, in which
                 case types will be inferred.
-            object_name : Generated object column name.
+            column : Generated column name.
             model_name : Generated model name.
             source : Whether to include info about the source file.
             nrows : Optional row limit.
@@ -1661,14 +1661,14 @@ class DataChain:
                 raise DatasetPrepareError(self.name, e) from e
 
         if isinstance(output, dict):
-            model_name = model_name or object_name or ""
+            model_name = model_name or column or ""
             model = dict_to_data_model(model_name, output)
             output = model
         else:
             model = output  # type: ignore[assignment]
 
-        if object_name:
-            output = {object_name: model}  # type: ignore[dict-item]
+        if column:
+            output = {column: model}  # type: ignore[dict-item]
         elif isinstance(output, type(BaseModel)):
             output = {
                 name: info.annotation  # type: ignore[misc]
