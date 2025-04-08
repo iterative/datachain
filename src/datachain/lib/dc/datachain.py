@@ -444,8 +444,11 @@ class DataChain:
         return listings(*args, **kwargs)
 
     def persist(self) -> "Self":
-        """Save to temporary dataset that will be removed after the process ends.
-        Temporary datasets are useful for optimization.
+        """Saves temporary chain that will be removed after the process ends.
+        Temporary datasets are useful for optimization, for example when we have
+        multiple chains starting with identical sub-chain. We can then persist that
+        common chain and use it to calculate other chains, to avoid re-calculation
+        every time.
         It returns the chain itself.
         """
         schema = self.signals_schema.clone_without_sys_signals().serialize()
