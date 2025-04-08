@@ -133,7 +133,7 @@ class DataChain:
                 .choices[0]
                 .message.content,
             )
-            .save()
+            .persist()
         )
 
         try:
@@ -443,9 +443,20 @@ class DataChain:
         )
         return listings(*args, **kwargs)
 
+    def persist(self) -> "Self":
+        """Saves temporary chain that will be removed after the process ends.
+        Temporary datasets are useful for optimization, for example when we have
+        multiple chains starting with identical sub-chain. We can then persist that
+        common chain and use it to calculate other chains, to avoid re-calculation
+        every time.
+        It returns the chain itself.
+        """
+        schema = self.signals_schema.clone_without_sys_signals().serialize()
+        return self._evolve(query=self._query.save(feature_schema=schema))
+
     def save(  # type: ignore[override]
         self,
-        name: Optional[str] = None,
+        name: str,
         version: Optional[int] = None,
         description: Optional[str] = None,
         labels: Optional[list[str]] = None,
@@ -454,8 +465,7 @@ class DataChain:
         """Save to a Dataset. It returns the chain itself.
 
         Parameters:
-            name : dataset name. Empty name saves to a temporary dataset that will be
-                removed after process ends. Temp dataset are useful for optimization.
+            name : dataset name.
             version : version of a dataset. Default - the last version that exist.
             description : description of a dataset.
             labels : labels of a dataset.
@@ -1112,7 +1122,7 @@ class DataChain:
         if self._query.attached:
             chain = self
         else:
-            chain = self.save()
+            chain = self.persist()
         assert chain.name is not None  # for mypy
         return PytorchDataset(
             chain.name,
