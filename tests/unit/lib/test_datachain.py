@@ -284,26 +284,33 @@ def test_empty_chain_skip_udf_run(test_session):
 
 
 def test_datasets(test_session):
-    ds = dc.datasets(session=test_session)
+    ds = dc.datasets(column="dataset", session=test_session)
     datasets = [d for d in ds.collect("dataset") if d.name == "fibonacci"]
     assert len(datasets) == 0
 
     dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save("fibonacci")
 
-    ds = dc.datasets(session=test_session)
+    ds = dc.datasets(column="dataset", session=test_session)
     datasets = [d for d in ds.collect("dataset") if d.name == "fibonacci"]
     assert len(datasets) == 1
     assert datasets[0].num_objects == 6
 
-    ds = dc.datasets(object_name="foo", session=test_session)
+    ds = dc.datasets(column="foo", session=test_session)
     datasets = [d for d in ds.collect("foo") if d.name == "fibonacci"]
     assert len(datasets) == 1
     assert datasets[0].num_objects == 6
 
 
+def test_datasets_without_column_name(test_session):
+    dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save("fibonacci")
+    ds = dc.datasets(session=test_session)
+    names = [name for name in ds.collect("name") if name == "fibonacci"]
+    assert len(names) == 1
+
+
 def test_datasets_studio(studio_datasets, test_session):
     dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save("fibonacci")
-    ds = dc.datasets(studio=True, session=test_session)
+    ds = dc.datasets(column="dataset", studio=True, session=test_session)
     # Local datasets are not included in the list
     datasets = [d for d in ds.collect("dataset") if d.name == "fibonacci"]
     assert len(datasets) == 0
@@ -314,14 +321,14 @@ def test_datasets_studio(studio_datasets, test_session):
     assert datasets[0].num_objects == 6
 
     # Exclude studio datasets
-    ds = dc.datasets(studio=False, session=test_session)
+    ds = dc.datasets(column="dataset", studio=False, session=test_session)
     datasets = [d for d in ds.collect("dataset") if d.name == "cats"]
     assert len(datasets) == 0
 
 
 @skip_if_not_sqlite
 def test_datasets_in_memory():
-    ds = dc.datasets(in_memory=True)
+    ds = dc.datasets(column="dataset", in_memory=True)
     assert ds.session.catalog.in_memory is True
     assert ds.session.catalog.metastore.db.db_file == ":memory:"
     assert ds.session.catalog.warehouse.db.db_file == ":memory:"
@@ -330,7 +337,7 @@ def test_datasets_in_memory():
 
     dc.read_values(fib=[1, 1, 2, 3, 5, 8]).save("fibonacci")
 
-    ds = dc.datasets()
+    ds = dc.datasets(column="dataset")
     assert ds.session.catalog.in_memory is True
     assert ds.session.catalog.metastore.db.db_file == ":memory:"
     assert ds.session.catalog.warehouse.db.db_file == ":memory:"
@@ -338,7 +345,7 @@ def test_datasets_in_memory():
     assert len(datasets) == 1
     assert datasets[0].num_objects == 6
 
-    ds = dc.datasets(object_name="foo")
+    ds = dc.datasets(column="foo")
     assert ds.session.catalog.in_memory is True
     assert ds.session.catalog.metastore.db.db_file == ":memory:"
     assert ds.session.catalog.warehouse.db.db_file == ":memory:"
@@ -357,9 +364,7 @@ def test_listings(test_session, tmp_dir):
     # check that listing is not returned as normal dataset
     assert not any(
         n.startswith(LISTING_PREFIX)
-        for n in [
-            ds.name for ds in dc.datasets(session=test_session).collect("dataset")
-        ]
+        for n in dc.datasets(session=test_session).collect("name")
     )
 
     listings = list(dc.listings(session=test_session).collect("listing"))
