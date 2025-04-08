@@ -179,7 +179,7 @@ class AbstractWarehouse(ABC, Serializable):
         self,
         dataset: DatasetRecord,
         version: Optional[int] = None,
-        object_name: str = "file",
+        column: str = "file",
     ):
         version = version or dataset.latest_version
 
@@ -188,7 +188,7 @@ class AbstractWarehouse(ABC, Serializable):
             table_name,
             self.db,
             dataset.get_schema(version),
-            object_name=object_name,
+            column=column,
         )
 
     @property
@@ -487,7 +487,7 @@ class AbstractWarehouse(ABC, Serializable):
         dataset_rows: "DataTable",
         path_list: list[str],
         glob_name: str,
-        object_name="file",
+        column="file",
     ) -> Iterator[Node]:
         """Finds all Nodes that correspond to GLOB like path pattern."""
         dr = dataset_rows
@@ -521,7 +521,7 @@ class AbstractWarehouse(ABC, Serializable):
         de = dr.dir_expansion()
         q = de.query(
             dr.select().where(dr.c("is_latest") == true()).subquery(),
-            object_name=dr.object_name,
+            column=dr.column,
         ).subquery()
         q = self.expand_query(de, q, dr)
 
@@ -597,12 +597,10 @@ class AbstractWarehouse(ABC, Serializable):
             with_default(dr.c("is_latest")),
             dr.c("last_modified"),
             with_default(dr.c("size")),
-            with_default(dr.c("rand", object_name="sys")),
+            with_default(dr.c("rand", column="sys")),
             dr.c("location"),
             de.c(q, "source"),
-        ).select_from(
-            q.outerjoin(dr.table, q.c.sys__id == dr.c("id", object_name="sys"))
-        )
+        ).select_from(q.outerjoin(dr.table, q.c.sys__id == dr.c("id", column="sys")))
 
     def get_node_by_path(self, dataset_rows: "DataTable", path: str) -> Node:
         """Gets node that corresponds to some path"""

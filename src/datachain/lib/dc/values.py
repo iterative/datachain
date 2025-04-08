@@ -24,7 +24,7 @@ def read_values(
     settings: Optional[dict] = None,
     in_memory: bool = False,
     output: OutputType = None,
-    object_name: str = "",
+    column: str = "",
     **fr_map,
 ) -> "DataChain":
     """Generate chain from list of values.
@@ -48,6 +48,6 @@ def read_values(
         settings=settings,
         in_memory=in_memory,
     )
-    if object_name:
-        output = {object_name: dict_to_data_model(object_name, output)}  # type: ignore[arg-type]
+    if column:
+        output = {column: dict_to_data_model(column, output)}  # type: ignore[arg-type]
     return chain.gen(_func_fr, output=output)

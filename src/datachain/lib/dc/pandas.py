@@ -22,7 +22,7 @@ def read_pandas(  # type: ignore[override]
     session: Optional[Session] = None,
     settings: Optional[dict] = None,
     in_memory: bool = False,
-    object_name: str = "",
+    column: str = "",
 ) -> "DataChain":
     """Generate chain from pandas data-frame.
 
@@ -39,18 +39,18 @@ def read_pandas(  # type: ignore[override]
 
     fr_map = {col.lower(): df[col].tolist() for col in df.columns}
 
-    for column in fr_map:
-        if not column.isidentifier():
+    for c in fr_map:
+        if not c.isidentifier():
             raise DatasetPrepareError(
                 name,
-                f"import from pandas error - '{column}' cannot be a column name",
+                f"import from pandas error - '{c}' cannot be a column name",
             )
 
     return read_values(
         name,
         session,
         settings=settings,
-        object_name=object_name,
+        column=column,
         in_memory=in_memory,
         **fr_map,
     )

@@ -27,14 +27,14 @@ class Listing:
         client: "Client",
         dataset_name: Optional["str"] = None,
         dataset_version: Optional[int] = None,
-        object_name: str = "file",
+        column: str = "file",
     ):
         self.metastore = metastore
         self.warehouse = warehouse
         self.client = client
         self.dataset_name = dataset_name  # dataset representing bucket listing
         self.dataset_version = dataset_version  # dataset representing bucket listing
-        self.object_name = object_name
+        self.column = column
 
     def clone(self) -> "Listing":
         return self.__class__(
@@ -43,7 +43,7 @@ class Listing:
             self.client,
             self.dataset_name,
             self.dataset_version,
-            self.object_name,
+            self.column,
         )
 
     def __enter__(self) -> "Listing":
@@ -74,7 +74,7 @@ class Listing:
         return self.warehouse.dataset_rows(
             dataset,
             self.dataset_version or dataset.latest_version,
-            object_name=self.object_name,
+            column=self.column,
         )
 
     def expand_path(self, path, use_glob=True) -> list[Node]:
