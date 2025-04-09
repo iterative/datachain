@@ -64,11 +64,6 @@ def test_not_array_value_error():
         dc.read_values(value=True)
 
 
-def test_empty_value_list_error():
-    with pytest.raises(ValuesToTupleError):
-        dc.read_values(value=[])
-
-
 def test_features_length_missmatch():
     with pytest.raises(ValuesToTupleError):
         dc.read_values(value1=[1, 2, 3], value2=[1, 2, 3, 4, 5])

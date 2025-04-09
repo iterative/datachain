@@ -31,6 +31,10 @@ for examples of how to create a chain.
 
 ::: datachain.lib.dc.values.read_values
 
+::: datachain.lib.dc.database.read_database
+
+::: datachain.lib.dc.database.ConnectionType
+
 ::: datachain.lib.dc.DataChain
 
 ::: datachain.lib.utils.DataChainError

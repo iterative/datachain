@@ -1,5 +1,6 @@
+import itertools
 from collections.abc import Sequence
-from typing import Any, Union
+from typing import Any, Optional, Union
 
 from datachain.lib.data_model import (
     DataType,
@@ -66,21 +67,29 @@ def values_to_tuples(  # noqa: C901, PLR0912
                     f"signal '{k}' is not present in the output",
                 )
         else:
-            if len_ == 0:
-                raise ValuesToTupleError(ds_name, f"signal '{k}' is empty list")
-
-            first_element = next(iter(v))
-            typ = type(first_element)
-            if not is_chain_type(typ):
-                raise ValuesToTupleError(
-                    ds_name,
-                    f"signal '{k}' has unsupported type '{typ.__name__}'."
-                    f" Please use DataModel types: {DataTypeNames}",
+            # FIXME: Stops as soon as it finds the first non-None value.
+            # If a non-None value appears early, it won't check the remaining items for
+            # `None` values.
+            try:
+                pos, first_not_none_element = next(
+                    itertools.dropwhile(lambda pair: pair[1] is None, enumerate(v))
                 )
-            if isinstance(first_element, list):
-                types_map[k] = list[type(first_element[0])]  # type: ignore[assignment, misc]
+            except StopIteration:
+                typ = str  # default to str if all values are None or has length 0
+                nullable = True
             else:
-                types_map[k] = typ
+                nullable = pos > 0
+                typ = type(first_not_none_element)  # type: ignore[assignment]
+                if not is_chain_type(typ):
+                    raise ValuesToTupleError(
+                        ds_name,
+                        f"signal '{k}' has unsupported type '{typ.__name__}'."
+                        f" Please use DataModel types: {DataTypeNames}",
+                    )
+                if isinstance(first_not_none_element, list):
+                    typ = list[type(first_not_none_element[0])]  # type: ignore[assignment, misc]
+
+            types_map[k] = Optional[typ] if nullable else typ  # type: ignore[assignment]
 
         if length < 0:
             length = len_
