@@ -42,15 +42,9 @@ from datachain.data_storage.schema import (
     partition_columns,
 )
 from datachain.dataset import DATASET_PREFIX, DatasetStatus, RowDict
-from datachain.error import (
-    DatasetNotFoundError,
-    QueryScriptCancelError,
-)
+from datachain.error import DatasetNotFoundError, QueryScriptCancelError
 from datachain.func.base import Function
-from datachain.lib.listing import (
-    is_listing_dataset,
-    listing_dataset_expired,
-)
+from datachain.lib.listing import is_listing_dataset, listing_dataset_expired
 from datachain.lib.udf import UDFAdapter, _get_cache
 from datachain.progress import CombinedDownloadCallback, TqdmCombinedDownloadCallback
 from datachain.query.schema import C, UDFParamSpec, normalize_param
@@ -413,11 +407,14 @@ class UDFStep(Step, ABC):
         """
 
     def populate_udf_table(self, udf_table: "Table", query: Select) -> None:
-        from datachain.catalog import QUERY_SCRIPT_CANCELED_EXIT_CODE
-
-        rows_total = self.catalog.warehouse.query_count(query)
-        if rows_total == 0:
+        if (rows_total := self.catalog.warehouse.query_count(query)) == 0:
             return
+
+        from datachain.catalog import QUERY_SCRIPT_CANCELED_EXIT_CODE
+        from datachain.catalog.loader import (
+            DISTRIBUTED_IMPORT_PATH,
+            get_udf_distributor_class,
+        )
 
         workers = determine_workers(self.workers, rows_total=rows_total)
         processes = determine_processes(self.parallel, rows_total=rows_total)
@@ -425,29 +422,15 @@ class UDFStep(Step, ABC):
         use_partitioning = self.partition_by is not None
         batching = self.udf.get_batching(use_partitioning)
         udf_fields = [str(c.name) for c in query.selected_columns]
+        udf_distributor_class = get_udf_distributor_class()
 
         prefetch = self.udf.prefetch
         with _get_cache(self.catalog.cache, prefetch, use_cache=self.cache) as _cache:
             catalog = clone_catalog_with_cache(self.catalog, _cache)
+
             try:
-                if workers:
-                    if catalog.in_memory:
-                        raise RuntimeError(
-                            "In-memory databases cannot be used with "
-                            "distributed processing."
-                        )
-
-                    from datachain.catalog.loader import (
-                        DISTRIBUTED_IMPORT_PATH,
-                        get_udf_distributor_class,
-                    )
-
-                    if not (udf_distributor_class := get_udf_distributor_class()):
-                        raise RuntimeError(
-                            f"{DISTRIBUTED_IMPORT_PATH} import path is required "
-                            "for distributed UDF processing."
-                        )
-
+                if udf_distributor_class and not catalog.in_memory:
+                    # Use the UDF distributor if available (running in SaaS)
                     udf_distributor = udf_distributor_class(
                         catalog=catalog,
                         table=udf_table,
@@ -463,7 +446,20 @@ class UDFStep(Step, ABC):
                         min_task_size=self.min_task_size,
                     )
                     udf_distributor()
-                elif processes:
+                    return
+
+                if workers:
+                    if catalog.in_memory:
+                        raise RuntimeError(
+                            "In-memory databases cannot be used with "
+                            "distributed processing."
+                        )
+
+                    raise RuntimeError(
+                        f"{DISTRIBUTED_IMPORT_PATH} import path is required "
+                        "for distributed UDF processing."
+                    )
+                if processes:
                     # Parallel processing (faster for more CPU-heavy UDFs)
                     if catalog.in_memory:
                         raise RuntimeError(
@@ -497,7 +493,12 @@ class UDFStep(Step, ABC):
                     with subprocess.Popen(  # noqa: S603
                         cmd, env=envs, stdin=subprocess.PIPE
                     ) as process:
-                        process.communicate(process_data)
+                        try:
+                            process.communicate(process_data)
+                        except KeyboardInterrupt:
+                            raise QueryScriptCancelError(
+                                "UDF execution was canceled by the user."
+                            ) from None
                         if retval := process.poll():
                             raise RuntimeError(
                                 f"UDF Execution Failed! Exit code: {retval}"

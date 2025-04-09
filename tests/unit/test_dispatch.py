@@ -1,12 +1,7 @@
 from queue import Empty, Full
 from typing import Optional
 
-from datachain.query.dispatch import (
-    STOP_SIGNAL,
-    UDFDispatcher,
-    get_from_queue,
-    put_into_queue,
-)
+from datachain.query.dispatch import STOP_SIGNAL, get_from_queue, put_into_queue
 
 
 class MockQueue:
@@ -42,12 +37,3 @@ def test_put_into_queue():
 
     assert put_into_queue(mock_queue, STOP_SIGNAL) is None
     assert mock_queue.put_signal == STOP_SIGNAL
-
-
-def test_send_stop_signal_to_workers():
-    mock_queue = MockQueue()
-
-    UDFDispatcher.send_stop_signal_to_workers(mock_queue, 8)
-
-    assert mock_queue.put_signal == STOP_SIGNAL
-    assert mock_queue.put_count == 8

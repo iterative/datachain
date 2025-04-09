@@ -651,30 +651,31 @@ class AbstractDBMetastore(AbstractMetastore):
         dataset_version = dataset.get_version(version)
 
         values = {}
+        version_values: dict = {}
         for field, value in kwargs.items():
             if field in self._dataset_version_fields[1:]:
                 if field == "schema":
-                    dataset_version.update(**{field: DatasetRecord.parse_schema(value)})
                     values[field] = json.dumps(value) if value else None
+                    version_values[field] = DatasetRecord.parse_schema(value)
                 elif field == "feature_schema":
                     values[field] = json.dumps(value) if value else None
+                    version_values[field] = value
                 elif field == "preview" and isinstance(value, list):
                     values[field] = json.dumps(value, cls=JSONSerialize)
+                    version_values[field] = value
                 else:
                     values[field] = value
-                    dataset_version.update(**{field: value})
+                    version_values[field] = value
 
-        if not values:
-            # Nothing to update
-            return dataset_version
-
-        dv = self._datasets_versions
-        self.db.execute(
-            self._datasets_versions_update()
-            .where(dv.c.id == dataset_version.id)
-            .values(values),
-            conn=conn,
-        )  # type: ignore [attr-defined]
+        if values:
+            dv = self._datasets_versions
+            self.db.execute(
+                self._datasets_versions_update()
+                .where(dv.c.dataset_id == dataset.id and dv.c.version == version)
+                .values(values),
+                conn=conn,
+            )  # type: ignore [attr-defined]
+            dataset_version.update(**version_values)
 
         return dataset_version
 
@@ -702,7 +703,7 @@ class AbstractDBMetastore(AbstractMetastore):
         dataset_fields: list[str],
         dataset_version_fields: list[str],
         isouter: bool = True,
-    ):
+    ) -> "Select":
         if not (
             self.db.has_table(self._datasets.name)
             and self.db.has_table(self._datasets_versions.name)
@@ -719,12 +720,12 @@ class AbstractDBMetastore(AbstractMetastore):
         j = d.join(dv, d.c.id == dv.c.dataset_id, isouter=isouter)
         return query.select_from(j)
 
-    def _base_dataset_query(self):
+    def _base_dataset_query(self) -> "Select":
         return self._get_dataset_query(
             self._dataset_fields, self._dataset_version_fields
         )
 
-    def _base_list_datasets_query(self):
+    def _base_list_datasets_query(self) -> "Select":
         return self._get_dataset_query(
             self._dataset_list_fields, self._dataset_list_version_fields, isouter=False
         )
@@ -1057,8 +1058,8 @@ class AbstractDBMetastore(AbstractMetastore):
         conn: Optional[Any] = None,
     ) -> None:
         """Set the status of the given job."""
-        values: dict = {"status": status.value}
-        if status.value in JobStatus.finished():
+        values: dict = {"status": status}
+        if status in JobStatus.finished():
             values["finished_at"] = datetime.now(timezone.utc)
         if error_message:
             values["error_message"] = error_message

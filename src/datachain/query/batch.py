@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Optional, Union
 
 from datachain.data_storage.schema import PARTITION_COLUMN_ID
-from datachain.data_storage.warehouse import SELECT_BATCH_SIZE
 from datachain.query.utils import get_query_column, get_query_id_column
 
 if TYPE_CHECKING:
@@ -72,6 +71,8 @@ class Batch(BatchingStrategy):
         query: "Select",
         ids_only: bool = False,
     ) -> Generator[RowsOutputBatch, None, None]:
+        from datachain.data_storage.warehouse import SELECT_BATCH_SIZE
+
         if ids_only:
             query = query.with_only_columns(get_query_id_column(query))
 
