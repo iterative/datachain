@@ -1033,7 +1033,7 @@ def test_chain_of_maps(test_session):
     for signal in signals:
         assert signal in chain.schema
 
-    preserved = chain.save()
+    preserved = chain.persist()
     for signal in signals:
         assert signal in preserved.schema
 
@@ -1402,7 +1402,7 @@ def test_read_csv_null_collect(tmp_dir, test_session):
     df["gender"] = gender
     path = tmp_dir / "test.csv"
     df.to_csv(path, index=False)
-    chain = dc.read_csv(path.as_uri(), object_name="csv", session=test_session)
+    chain = dc.read_csv(path.as_uri(), column="csv", session=test_session)
     for i, row in enumerate(chain.collect()):
         # None value in numeric column will get converted to nan.
         if not height[i]:
@@ -1494,9 +1494,9 @@ def test_to_csv_features_nested(tmp_dir, test_session):
 
 
 @pytest.mark.parametrize("column_type", (str, dict))
-@pytest.mark.parametrize("object_name", (None, "test_object_name"))
+@pytest.mark.parametrize("column", (None, "test_column"))
 @pytest.mark.parametrize("model_name", (None, "TestModelNameExploded"))
-def test_explode(tmp_dir, test_session, column_type, object_name, model_name):
+def test_explode(tmp_dir, test_session, column_type, column, model_name):
     df = pd.DataFrame(DF_DATA_NESTED_NOT_NORMALIZED)
     path = tmp_dir / "test.json"
     df.to_json(path, orient="records", lines=True)
@@ -1509,13 +1509,13 @@ def test_explode(tmp_dir, test_session, column_type, object_name, model_name):
         )
         .explode(
             "content",
-            object_name=object_name,
+            column=column,
             model_name=model_name,
             schema_sample_size=2,
         )
     )
 
-    object_name = object_name or "content_expl"
+    column = column or "content_expl"
     model_name = model_name or "ContentExplodedModel"
 
     # In CH we have (atm at least) None converted to ''
@@ -1524,9 +1524,9 @@ def test_explode(tmp_dir, test_session, column_type, object_name, model_name):
 
     assert set(
         chain.collect(
-            f"{object_name}.na_me.first_select",
-            f"{object_name}.age",
-            f"{object_name}.city",
+            f"{column}.na_me.first_select",
+            f"{column}.age",
+            f"{column}.city",
         )
     ) == {
         ("Alice", 25, "New York"),
@@ -1537,7 +1537,7 @@ def test_explode(tmp_dir, test_session, column_type, object_name, model_name):
         ("Ivan", 41, "San Francisco"),
     }
 
-    assert next(chain.limit(1).collect(object_name)).__class__.__name__ == model_name
+    assert next(chain.limit(1).collect(column)).__class__.__name__ == model_name
 
 
 def test_explode_raises_on_wrong_column_type(test_session):
@@ -1844,30 +1844,28 @@ def test_extend_features(test_session):
     assert res == sum(range(len(features)))
 
 
-def test_read_storage_object_name(tmp_dir, test_session):
+def test_read_storage_column(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.parquet"
     df.to_parquet(path)
-    chain = dc.read_storage(path.as_uri(), object_name="custom", session=test_session)
+    chain = dc.read_storage(path.as_uri(), column="custom", session=test_session)
     assert chain.schema["custom"] == File
 
 
-def test_from_features_object_name(test_session):
+def test_from_features_column(test_session):
     fib = [1, 1, 2, 3, 5, 8]
     values = ["odd" if num % 2 else "even" for num in fib]
 
-    chain = dc.read_values(
-        fib=fib, odds=values, object_name="custom", session=test_session
-    )
+    chain = dc.read_values(fib=fib, odds=values, column="custom", session=test_session)
     assert "custom.fib" in chain.to_pandas(flatten=True).columns
 
 
-def test_parse_tabular_object_name(tmp_dir, test_session):
+def test_parse_tabular_column(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
     path = tmp_dir / "test.parquet"
     df.to_parquet(path)
     chain = dc.read_storage(path.as_uri(), session=test_session).parse_tabular(
-        object_name="tbl"
+        column="tbl"
     )
     assert "tbl.first_name" in chain.to_pandas(flatten=True).columns
 
@@ -2305,7 +2303,7 @@ def test_rename_object_column_name_with_mutate(test_session):
     assert list(ds.order_by("fname").collect("fname")) == ["a", "b", "c"]
 
 
-def test_rename_object_name_with_mutate(test_session):
+def test_rename_column_with_mutate(test_session):
     names = ["a", "b", "c"]
     sizes = [1, 2, 3]
     files = [File(path=name, size=size) for name, size in zip(names, sizes)]
@@ -2406,7 +2404,7 @@ def test_mutate_with_expression_without_type(test_session):
     with pytest.raises(DataChainColumnError) as excinfo:
         dc.read_values(id=[1, 2], session=test_session).mutate(
             new=(Column("id") - 1)
-        ).save()
+        ).persist()
 
     assert str(excinfo.value) == (
         "Error for column new: Cannot infer type with expression id - :id_1"
@@ -2468,9 +2466,9 @@ def test_read_hf(test_session):
     assert df_equal(df, pd.DataFrame(DF_DATA))
 
 
-def test_read_hf_object_name(test_session):
+def test_read_hf_column(test_session):
     ds = Dataset.from_dict(DF_DATA)
-    df = dc.read_hf(ds, session=test_session, object_name="obj").to_pandas()
+    df = dc.read_hf(ds, session=test_session, column="obj").to_pandas()
     assert df_equal(df["obj"], pd.DataFrame(DF_DATA))
 
 

@@ -63,13 +63,13 @@ def main():
 
     # Static CSV with header schema test parsing 3.5K objects
     uri = "gs://datachain-demo/chatbot-csv/"
-    static_csv_ds = dc.read_csv(uri, output=ChatDialog, object_name="chat", anon="True")
+    static_csv_ds = dc.read_csv(uri, output=ChatDialog, column="chat", anon="True")
     static_csv_ds.print_schema()
     static_csv_ds.show()
 
     # Dynamic CSV with header schema test parsing 3/3M objects
     uri = "gs://datachain-demo/laion-aesthetics-csv/laion_aesthetics_1024_33M_1.csv"
-    dynamic_csv_ds = dc.read_csv(uri, object_name="laion", nrows=3, anon="True")
+    dynamic_csv_ds = dc.read_csv(uri, column="laion", nrows=3, anon="True")
     dynamic_csv_ds.print_schema()
     dynamic_csv_ds.show()
 

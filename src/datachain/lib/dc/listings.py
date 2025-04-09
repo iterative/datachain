@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 def listings(
     session: Optional[Session] = None,
     in_memory: bool = False,
-    object_name: str = "listing",
+    column: str = "listing",
     **kwargs,
 ) -> "DataChain":
     """Generate chain with list of cached listings.
@@ -38,6 +38,6 @@ def listings(
     return read_values(
         session=session,
         in_memory=in_memory,
-        output={object_name: ListingInfo},
-        **{object_name: catalog.listings()},  # type: ignore[arg-type]
+        output={column: ListingInfo},
+        **{column: catalog.listings()},  # type: ignore[arg-type]
     )

@@ -21,7 +21,7 @@ def read_csv(
     delimiter: Optional[str] = None,
     header: bool = True,
     output: OutputType = None,
-    object_name: str = "",
+    column: str = "",
     model_name: str = "",
     source: bool = True,
     nrows=None,
@@ -42,7 +42,7 @@ def read_csv(
         output : Dictionary or feature class defining column names and their
             corresponding types. List of column names is also accepted, in which
             case types will be inferred.
-        object_name : Created object column name.
+        column : Created column name.
         model_name : Generated model name.
         source : Whether to include info about the source file.
         nrows : Optional row limit.
@@ -119,7 +119,7 @@ def read_csv(
     )
     return chain.parse_tabular(
         output=output,
-        object_name=object_name,
+        column=column,
         model_name=model_name,
         source=source,
         nrows=nrows,

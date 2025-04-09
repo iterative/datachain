@@ -93,7 +93,7 @@ if __name__ == "__main__":
 
     print("\nAudio emotion classification:")
     try:
-        subprocess.run(["ffmpeg", "-L"], check=True)  # noqa: S603, S607
+        subprocess.run(["ffmpeg", "-L"], check=True)  # noqa: S607
         (
             dc.read_storage(
                 audio_source,

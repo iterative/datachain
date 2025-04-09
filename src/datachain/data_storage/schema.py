@@ -30,8 +30,8 @@ if TYPE_CHECKING:
 DEFAULT_DELIMITER = "__"
 
 
-def col_name(name: str, object_name: str = "file") -> str:
-    return f"{object_name}{DEFAULT_DELIMITER}{name}"
+def col_name(name: str, column: str = "file") -> str:
+    return f"{column}{DEFAULT_DELIMITER}{name}"
 
 
 def dedup_columns(columns: Iterable[sa.Column]) -> list[sa.Column]:
@@ -84,19 +84,19 @@ def convert_rows_custom_column_types(
 
 
 class DirExpansion:
-    def __init__(self, object_name: str):
-        self.object_name = object_name
+    def __init__(self, column: str):
+        self.column = column
 
-    def col_name(self, name: str, object_name: Optional[str] = None) -> str:
-        object_name = object_name or self.object_name
-        return col_name(name, object_name)
+    def col_name(self, name: str, column: Optional[str] = None) -> str:
+        column = column or self.column
+        return col_name(name, column)
 
-    def c(self, query, name: str, object_name: Optional[str] = None) -> str:
-        return getattr(query.c, self.col_name(name, object_name=object_name))
+    def c(self, query, name: str, column: Optional[str] = None) -> str:
+        return getattr(query.c, self.col_name(name, column=column))
 
     def base_select(self, q):
         return sa.select(
-            self.c(q, "id", object_name="sys"),
+            self.c(q, "id", column="sys"),
             false().label(self.col_name("is_dir")),
             self.c(q, "source"),
             self.c(q, "path"),
@@ -153,12 +153,12 @@ class DataTable:
         name: str,
         engine: "DatabaseEngine",
         column_types: Optional[dict[str, SQLType]] = None,
-        object_name: str = "file",
+        column: str = "file",
     ):
         self.name: str = name
         self.engine = engine
         self.column_types: dict[str, SQLType] = column_types or {}
-        self.object_name = object_name
+        self.column = column
 
     @staticmethod
     def copy_column(
@@ -224,18 +224,16 @@ class DataTable:
     def columns(self) -> "ReadOnlyColumnCollection[str, sa.Column[Any]]":
         return self.table.columns
 
-    def col_name(self, name: str, object_name: Optional[str] = None) -> str:
-        object_name = object_name or self.object_name
-        return col_name(name, object_name)
+    def col_name(self, name: str, column: Optional[str] = None) -> str:
+        column = column or self.column
+        return col_name(name, column)
 
-    def without_object(
-        self, column_name: str, object_name: Optional[str] = None
-    ) -> str:
-        object_name = object_name or self.object_name
-        return column_name.removeprefix(f"{object_name}{DEFAULT_DELIMITER}")
+    def without_object(self, column_name: str, column: Optional[str] = None) -> str:
+        column = column or self.column
+        return column_name.removeprefix(f"{column}{DEFAULT_DELIMITER}")
 
-    def c(self, name: str, object_name: Optional[str] = None):
-        return getattr(self.columns, self.col_name(name, object_name=object_name))
+    def c(self, name: str, column: Optional[str] = None):
+        return getattr(self.columns, self.col_name(name, column=column))
 
     @property
     def table(self) -> "sa.Table":
@@ -275,7 +273,7 @@ class DataTable:
         ]
 
     def dir_expansion(self):
-        return DirExpansion(self.object_name)
+        return DirExpansion(self.column)
 
 
 PARTITION_COLUMN_ID = "partition_id"

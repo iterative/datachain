@@ -23,7 +23,7 @@ def read_hf(
     *args,
     session: Optional[Session] = None,
     settings: Optional[dict] = None,
-    object_name: str = "",
+    column: str = "",
     model_name: str = "",
     **kwargs,
 ) -> "DataChain":
@@ -34,7 +34,7 @@ def read_hf(
             or an instance of `datasets.Dataset`-like object.
         session : Session to use for the chain.
         settings : Settings to use for the chain.
-        object_name : Generated object column name.
+        column : Generated object column name.
         model_name : Generated model name.
         kwargs : Parameters to pass to datasets.load_dataset.
 
@@ -62,12 +62,12 @@ def read_hf(
     if len(ds_dict) > 1:
         output = {"split": str}
 
-    model_name = model_name or object_name or ""
+    model_name = model_name or column or ""
     hf_features = next(iter(ds_dict.values())).features
     output = output | get_output_schema(hf_features)
     model = dict_to_data_model(model_name, output)
-    if object_name:
-        output = {object_name: model}
+    if column:
+        output = {column: model}
 
     chain = read_values(split=list(ds_dict.keys()), session=session, settings=settings)
     return chain.gen(HFGenerator(dataset, model, *args, **kwargs), output=output)
