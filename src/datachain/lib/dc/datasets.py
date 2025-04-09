@@ -171,14 +171,20 @@ def datasets(
 def delete_dataset(
     name: str,
     version: Optional[int] = None,
+    force: Optional[bool] = False,
+    studio: Optional[bool] = False,
     session: Optional[Session] = None,
     in_memory: bool = False,
 ) -> None:
-    """Removes specific dataset version, or the latest one if no version is specified.
+    """Removes specific dataset version or all dataset versions, depending on
+    a force flag.
 
     Args:
         name : Dataset name
         version : Optional dataset version
+        force: If true, all datasets versions will be removed. Defaults to False.
+        studio: If True, removes dataset from Studio only,
+            otherwise remove from local. Defaults to False.
         session: Optional session instance. If not provided, uses default session.
         in_memory: If True, creates an in-memory session. Defaults to False.
 
@@ -198,5 +204,8 @@ def delete_dataset(
 
     session = Session.get(session, in_memory=in_memory)
     catalog = session.catalog
-    version = version or catalog.get_dataset(name).latest_version
-    catalog.remove_dataset(name, version)
+    if not force:
+        version = version or catalog.get_dataset(name).latest_version
+    else:
+        version = None
+    catalog.remove_dataset(name, version=version, force=force, studio=studio)
