@@ -3053,3 +3053,48 @@ def test_window_error(test_session):
         ),
     ):
         chain.mutate(first=func.sum("col2").over(window))
+
+
+def test_storage_switch(test_session):
+    old_storage = "s3://old"
+    new_storage = "s3://new"
+    ds = (
+        dc.read_records(dc.DataChain.DEFAULT_FILE_RECORD, session=test_session)
+        .gen(
+            lambda prm: [File(source=old_storage, path="")] * 5,
+            params="path",
+            output={"file": File},
+        )
+        .storage_switch(new_storage)
+    )
+
+    assert all(source == new_storage for source in ds.collect("file.source"))
+
+
+def test_storage_switch_only_some_files(test_session):
+    old_storage1 = "s3://old_1"
+    old_storage2 = "s3://old_2"
+    new_storage = "s3://new"
+
+    def create_dc(source):
+        return dc.read_records(
+            dc.DataChain.DEFAULT_FILE_RECORD, session=test_session
+        ).gen(
+            lambda prm: [File(source=source, path="")] * 2,
+            params="path",
+            output={"file": File},
+        )
+
+    # create datachain with multiple different sources
+    ds = (
+        create_dc(old_storage1)
+        .union(create_dc(old_storage2))
+        .storage_switch(new_storage, old_storage=old_storage1)
+    )
+
+    assert sorted(ds.collect("file.source")) == [
+        new_storage,
+        new_storage,
+        old_storage2,
+        old_storage2,
+    ]
