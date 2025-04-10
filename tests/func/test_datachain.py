@@ -2224,6 +2224,30 @@ def test_to_read_jsonl_remote(cloud_test_catalog_upload):
     assert df_equal(df1, df)
 
 
+def test_read_pandas_multiindex(test_session):
+    # Create a DataFrame with MultiIndex columns
+    header = pd.MultiIndex.from_tuples(
+        [("A", "cat"), ("B", "dog"), ("B", "cat"), ("A", "dog")]
+    )
+    data = [[1, 2, 3, 4], [5, 6, 7, 8]]
+    df = pd.DataFrame(data, columns=header)
+
+    # Read the DataFrame into a DataChain
+    chain = dc.read_pandas(df, session=test_session)
+
+    # Check the resulting column names and data
+    expected_columns = ["a_cat", "b_dog", "b_cat", "a_dog"]
+    assert list(chain.columns) == expected_columns
+
+    expected_data = [
+        {"a_cat": 1, "b_dog": 2, "b_cat": 3, "a_dog": 4},
+        {"a_cat": 5, "b_dog": 6, "b_cat": 7, "a_dog": 8},
+    ]
+    assert sorted_dicts(chain.to_records(), *expected_columns) == sorted_dicts(
+        expected_data, *expected_columns
+    )
+
+
 def test_datachain_functional_after_exceptions(test_session):
     def func(key: str) -> str:
         raise Exception("Test Error!")
