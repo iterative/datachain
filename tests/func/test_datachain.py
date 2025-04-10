@@ -739,6 +739,21 @@ def test_read_storage_check_rows(tmp_dir, test_session):
         )
 
 
+def test_read_values_with_dict(test_session):
+    """Verify that dictionaries can be inserted and read back correctly."""
+    schema = {"d": dict, "my_col": int}
+    data = [{"d": {"a": 1, "b": "test"}, "my_col": 1}, {"d": {}, "my_col": 2}]
+    chain = dc.read_values(data, schema=schema, session=test_session)
+
+    # Collect the data to ensure serialization/deserialization works
+    collected_data = chain.order_by("my_col").to_records()
+
+    # Sort expected data for comparison
+    expected_data = sorted(data, key=lambda x: x["my_col"])
+
+    assert collected_data == expected_data
+
+
 def test_mutate_existing_column(test_session):
     ds = dc.read_values(ids=[1, 2, 3], session=test_session)
     ds = ds.mutate(ids=Column("ids") + 1)

@@ -335,6 +335,14 @@ class Array(SQLType):
 class JSON(SQLType):
     impl = types.JSON
 
+    def process_bind_param(self, value: Any, dialect) -> Any:
+        """Convert Python dict to JSON string for storage."""
+        if value is not None:
+            # Use orjson for efficient serialization
+            # decode('utf-8') is needed as orjson.dumps returns bytes
+            return orjson.dumps(value).decode("utf-8")
+        return value
+
     @property
     def python_type(self) -> StandardType:
         return dict
