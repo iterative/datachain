@@ -3071,7 +3071,7 @@ def test_storage_switch(test_session):
     assert all(source == new_storage for source in ds.collect("file.source"))
 
 
-def test_storage_switch_only_some_files(test_session):
+def test_storage_switch_with_explicit_old_storage(test_session):
     old_storage1 = "s3://old_1"
     old_storage2 = "s3://old_2"
     new_storage = "s3://new"
