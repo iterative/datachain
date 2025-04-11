@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 import datachain as dc
 from datachain import Column
+from datachain.error import DatasetInvalidVersionError
 from datachain.lib.data_model import DataModel
 from datachain.lib.dc import C, DatasetPrepareError, Sys
 from datachain.lib.file import File
@@ -31,6 +32,7 @@ from datachain.lib.udf import UDFAdapter
 from datachain.lib.udf_signature import UdfSignatureError
 from datachain.lib.utils import DataChainColumnError, DataChainParamsError
 from datachain.sql.types import Float, Int64, String
+from datachain.utils import STUDIO_URL
 from tests.utils import ANY_VALUE, df_equal, skip_if_not_sqlite, sort_df, sorted_dicts
 
 DF_DATA = {
@@ -3053,3 +3055,82 @@ def test_window_error(test_session):
         ),
     ):
         chain.mutate(first=func.sum("col2").over(window))
+
+
+def test_delete_dataset_version(test_session):
+    name = "numbers"
+    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version=1)
+    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version=2)
+
+    dc.delete_dataset(name, version=1, session=test_session)
+
+    ds = dc.datasets(column="dataset", session=test_session)
+    datasets = [d for d in ds.collect("dataset") if d.name == name]
+    assert len(datasets) == 1
+    assert datasets[0].version == 2
+
+
+def test_delete_dataset_latest_version(test_session):
+    name = "numbers"
+    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version=1)
+    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version=2)
+
+    dc.delete_dataset(name, session=test_session)
+
+    ds = dc.datasets(column="dataset", session=test_session)
+    datasets = [d for d in ds.collect("dataset") if d.name == name]
+    assert len(datasets) == 1
+    assert datasets[0].version == 1
+
+
+def test_delete_dataset_only_version(test_session):
+    name = "numbers"
+    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version=1)
+
+    dc.delete_dataset(name, session=test_session)
+
+    ds = dc.datasets(column="dataset", session=test_session)
+    datasets = [d for d in ds.collect("dataset") if d.name == name]
+    assert len(datasets) == 0
+
+
+def test_delete_dataset_missing_version(test_session):
+    name = "numbers"
+    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version=1)
+    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version=2)
+
+    with pytest.raises(DatasetInvalidVersionError):
+        dc.delete_dataset(name, version=5, session=test_session)
+
+
+def test_delete_dataset_versions_all(test_session):
+    name = "numbers"
+    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version=1)
+    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version=2)
+
+    dc.delete_dataset(name, force=True, session=test_session)
+
+    ds = dc.datasets(column="dataset", session=test_session)
+    datasets = [d for d in ds.collect("dataset") if d.name == name]
+    assert len(datasets) == 0
+
+
+@pytest.mark.parametrize("force", (True, False))
+def test_delete_dataset_from_studio(test_session, studio_token, requests_mock, force):
+    requests_mock.delete(f"{STUDIO_URL}/api/datachain/datasets", json={"ok": True})
+    dc.delete_dataset("cats", version=1, studio=True, force=force, session=test_session)
+
+
+def test_delete_dataset_from_studio_not_found(
+    test_session, studio_token, requests_mock
+):
+    error_message = "Dataset cats not found"
+    requests_mock.delete(
+        f"{STUDIO_URL}/api/datachain/datasets",
+        json={"message": error_message},
+        status_code=404,
+    )
+    with pytest.raises(Exception) as exc_info:
+        dc.delete_dataset("cats", version=1, studio=True, session=test_session)
+
+    assert str(exc_info.value) == error_message

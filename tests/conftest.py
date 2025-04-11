@@ -631,10 +631,13 @@ def dataset_rows():
 
 
 @pytest.fixture
-def studio_datasets(requests_mock):
+def studio_token():
     with Config(ConfigLevel.GLOBAL).edit() as conf:
         conf["studio"] = {"token": "isat_access_token", "team": "team_name"}
 
+
+@pytest.fixture
+def studio_datasets(requests_mock, studio_token):
     common_version_info = {
         "status": 1,
         "created_at": "2024-02-23T10:42:31.842944+00:00",

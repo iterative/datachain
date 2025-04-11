@@ -1299,7 +1299,17 @@ class Catalog:
         name: str,
         version: Optional[int] = None,
         force: Optional[bool] = False,
+        studio: Optional[bool] = False,
     ):
+        from datachain.remote.studio import StudioClient
+
+        if studio:
+            client = StudioClient()
+            response = client.rm_dataset(name, version=version, force=force)
+            if not response.ok:
+                raise DataChainError(response.message)
+            return
+
         dataset = self.get_dataset(name)
         if not version and not force:
             raise ValueError(f"Missing dataset version from input for dataset {name}")

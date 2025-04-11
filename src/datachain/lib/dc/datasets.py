@@ -166,3 +166,46 @@ def datasets(
         output={column: DatasetInfo},
         **{column: datasets_values},  # type: ignore[arg-type]
     )
+
+
+def delete_dataset(
+    name: str,
+    version: Optional[int] = None,
+    force: Optional[bool] = False,
+    studio: Optional[bool] = False,
+    session: Optional[Session] = None,
+    in_memory: bool = False,
+) -> None:
+    """Removes specific dataset version or all dataset versions, depending on
+    a force flag.
+
+    Args:
+        name : Dataset name
+        version : Optional dataset version
+        force: If true, all datasets versions will be removed. Defaults to False.
+        studio: If True, removes dataset from Studio only,
+            otherwise remove from local. Defaults to False.
+        session: Optional session instance. If not provided, uses default session.
+        in_memory: If True, creates an in-memory session. Defaults to False.
+
+    Returns: None
+
+    Example:
+        ```py
+        import datachain as dc
+        dc.delete_dataset("cats")
+        ```
+
+        ```py
+        import datachain as dc
+        dc.delete_dataset("cats", version=1)
+        ```
+    """
+
+    session = Session.get(session, in_memory=in_memory)
+    catalog = session.catalog
+    if not force:
+        version = version or catalog.get_dataset(name).latest_version
+    else:
+        version = None
+    catalog.remove_dataset(name, version=version, force=force, studio=studio)
