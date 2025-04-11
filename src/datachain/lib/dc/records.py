@@ -1,8 +1,5 @@
-from typing import (
-    TYPE_CHECKING,
-    Optional,
-    Union,
-)
+from collections.abc import Iterable
+from typing import TYPE_CHECKING, Optional, Union
 
 import sqlalchemy
 
@@ -22,7 +19,7 @@ if TYPE_CHECKING:
 
 
 def read_records(
-    to_insert: Optional[Union[dict, list[dict]]],
+    to_insert: Optional[Union[dict, Iterable[dict]]],
     session: Optional[Session] = None,
     settings: Optional[dict] = None,
     in_memory: bool = False,
