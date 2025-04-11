@@ -37,7 +37,14 @@ def read_pandas(  # type: ignore[override]
     """
     from .utils import DatasetPrepareError
 
-    fr_map = {col.lower(): df[col].tolist() for col in df.columns}
+    def get_col_name(col):
+        if isinstance(col, tuple):
+            # Join tuple elements with underscore for MultiIndex columns
+            return "_".join(map(str, col)).lower()
+        # Handle regular string column names
+        return str(col).lower()
+
+    fr_map = {get_col_name(col): df[col].tolist() for col in df.columns}
 
     for c in fr_map:
         if not c.isidentifier():
