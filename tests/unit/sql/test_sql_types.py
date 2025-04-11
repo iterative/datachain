@@ -1,5 +1,4 @@
 import orjson
-import pytest
 from sqlalchemy.dialects import sqlite
 
 from datachain.sql.types import JSON  # Corrected import
@@ -44,6 +43,4 @@ def test_json_type_on_read_convert():
     # Test with an empty JSON object string
     empty_json_string = "{}"
     expected_empty_dict = {}
-    assert (
-        json_type.on_read_convert(empty_json_string, dialect) == expected_empty_dict
-    )
+    assert json_type.on_read_convert(empty_json_string, dialect) == expected_empty_dict
