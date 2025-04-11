@@ -740,8 +740,12 @@ def test_read_storage_check_rows(tmp_dir, test_session):
 
 
 def test_read_values_with_dict(test_session):
-    """Verify that dictionaries can be inserted and read back correctly."""
-    data = [{"d": {"a": 1, "b": "test"}, "my_col": 1}, {"d": {}, "my_col": 2}]
+    """Verify that dictionaries and None can be inserted and read back correctly."""
+    data = [
+        {"d": {"a": 1, "b": "test"}, "my_col": 1},
+        {"d": {}, "my_col": 2},
+        {"d": None, "my_col": 3},  # Add row with None value for 'd'
+    ]
     # Prepare data in the format expected by read_values (keyword args with sequences)
     kwargs = {key: [row.get(key) for row in data] for key in data[0]}
     chain = dc.read_values(**kwargs, session=test_session)
