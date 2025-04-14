@@ -505,7 +505,7 @@ def test_dataset_stats(test_session):
         ids=ids,
         file=[dc.File(path=name, size=size) for name, size in values],
         session=test_session,
-    ).save()
+    ).persist()
     dataset_version1 = test_session.catalog.get_dataset(ds1.name).get_version(1)
     assert dataset_version1.num_objects == 3
     assert dataset_version1.size == 6
@@ -515,7 +515,7 @@ def test_dataset_stats(test_session):
         file1=[dc.File(path=name, size=size) for name, size in values],
         file2=[dc.File(path=name, size=size * 2) for name, size in values],
         session=test_session,
-    ).save()
+    ).persist()
     dataset_version2 = test_session.catalog.get_dataset(ds2.name).get_version(1)
     assert dataset_version2.num_objects == 3
     assert dataset_version2.size == 18
@@ -561,7 +561,7 @@ def test_ls_datasets_no_json(test_session):
         ids=ids,
         file=[dc.File(path=name, size=size) for name, size in values],
         session=test_session,
-    ).save()
+    ).persist()
     datasets = test_session.catalog.ls_datasets()
     assert datasets
     for d in datasets:

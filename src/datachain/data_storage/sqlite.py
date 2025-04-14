@@ -489,7 +489,7 @@ class SQLiteWarehouse(AbstractWarehouse):
         self, dataset: DatasetRecord, version: int
     ) -> list[StorageURI]:
         dr = self.dataset_rows(dataset, version)
-        query = dr.select(dr.c("source", object_name="file")).distinct()
+        query = dr.select(dr.c("source", column="file")).distinct()
         cur = self.db.cursor()
         cur.row_factory = sqlite3.Row  # type: ignore[assignment]
 

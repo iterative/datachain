@@ -134,7 +134,7 @@ class DataChain:
                 .choices[0]
                 .message.content,
             )
-            .save()
+            .persist()
         )
 
         try:
@@ -358,7 +358,7 @@ class DataChain:
         self,
         col: str,
         model_name: Optional[str] = None,
-        object_name: Optional[str] = None,
+        column: Optional[str] = None,
         schema_sample_size: int = 1,
     ) -> "DataChain":
         """Explodes a column containing JSON objects (dict or str DataChain type) into
@@ -369,7 +369,7 @@ class DataChain:
             col: the name of the column containing JSON to be exploded.
             model_name: optional generated model name.  By default generates the name
                 automatically.
-            object_name: optional generated object column name. By default generates the
+            column: optional generated column name. By default generates the
                 name automatically.
             schema_sample_size: the number of rows to use for inferring the schema of
                 the JSON (in case some fields are optional and it's not enough to
@@ -407,10 +407,10 @@ class DataChain:
             )
             return model.model_validate(json_dict)
 
-        if not object_name:
-            object_name = f"{col}_expl"
+        if not column:
+            column = f"{col}_expl"
 
-        return self.map(json_to_model, params=col, output={object_name: model})
+        return self.map(json_to_model, params=col, output={column: model})
 
     @classmethod
     def datasets(
@@ -444,9 +444,20 @@ class DataChain:
         )
         return listings(*args, **kwargs)
 
+    def persist(self) -> "Self":
+        """Saves temporary chain that will be removed after the process ends.
+        Temporary datasets are useful for optimization, for example when we have
+        multiple chains starting with identical sub-chain. We can then persist that
+        common chain and use it to calculate other chains, to avoid re-calculation
+        every time.
+        It returns the chain itself.
+        """
+        schema = self.signals_schema.clone_without_sys_signals().serialize()
+        return self._evolve(query=self._query.save(feature_schema=schema))
+
     def save(  # type: ignore[override]
         self,
-        name: Optional[str] = None,
+        name: str,
         version: Optional[int] = None,
         description: Optional[str] = None,
         labels: Optional[list[str]] = None,
@@ -456,8 +467,7 @@ class DataChain:
         """Save to a Dataset. It returns the chain itself.
 
         Parameters:
-            name : dataset name. Empty name saves to a temporary dataset that will be
-                removed after process ends. Temp dataset are useful for optimization.
+            name : dataset name.
             version : version of a dataset. Default - the last version that exist.
             description : description of a dataset.
             labels : labels of a dataset.
@@ -1136,7 +1146,7 @@ class DataChain:
         if self._query.attached:
             chain = self
         else:
-            chain = self.save()
+            chain = self.persist()
         assert chain.name is not None  # for mypy
         return PytorchDataset(
             chain.name,
@@ -1612,7 +1622,7 @@ class DataChain:
     def parse_tabular(
         self,
         output: OutputType = None,
-        object_name: str = "",
+        column: str = "",
         model_name: str = "",
         source: bool = True,
         nrows: Optional[int] = None,
@@ -1624,7 +1634,7 @@ class DataChain:
             output : Dictionary or feature class defining column names and their
                 corresponding types. List of column names is also accepted, in which
                 case types will be inferred.
-            object_name : Generated object column name.
+            column : Generated column name.
             model_name : Generated model name.
             source : Whether to include info about the source file.
             nrows : Optional row limit.
@@ -1675,14 +1685,14 @@ class DataChain:
                 raise DatasetPrepareError(self.name, e) from e
 
         if isinstance(output, dict):
-            model_name = model_name or object_name or ""
+            model_name = model_name or column or ""
             model = dict_to_data_model(model_name, output)
             output = model
         else:
             model = output  # type: ignore[assignment]
 
-        if object_name:
-            output = {object_name: model}  # type: ignore[dict-item]
+        if column:
+            output = {column: model}  # type: ignore[dict-item]
         elif isinstance(output, type(BaseModel)):
             output = {
                 name: info.annotation  # type: ignore[misc]

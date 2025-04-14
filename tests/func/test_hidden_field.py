@@ -61,7 +61,7 @@ def test_datachain_save(test_session):
     inner = InnerClass(inner_value=1.1, hide_inner=1.2)
     outer = OuterClass(outer_value=1.3, hide_outer=1.4, inner_object=inner)
 
-    ds = dc.read_values(outer=[outer], nums=[1], session=test_session).save()
+    ds = dc.read_values(outer=[outer], nums=[1], session=test_session).persist()
 
     version = test_session.catalog.get_dataset(ds.name).get_version(1)
     feature_schema = version.feature_schema

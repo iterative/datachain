@@ -29,7 +29,7 @@ def read_storage(
     settings: Optional[dict] = None,
     in_memory: bool = False,
     recursive: Optional[bool] = True,
-    object_name: str = "file",
+    column: str = "file",
     update: bool = False,
     anon: bool = False,
     client_config: Optional[dict] = None,
@@ -43,7 +43,7 @@ def read_storage(
             as `s3://`, `gs://`, `az://` or "file:///"
         type : read file as "binary", "text", or "image" data. Default is "binary".
         recursive : search recursively for the given path.
-        object_name : Created object column name.
+        column : Created column name.
         update : force storage reindexing. Default is False.
         anon : If True, we will treat cloud bucket as public one
         client_config : Optional client configuration for the storage client.
@@ -124,7 +124,7 @@ def read_storage(
 
         dc = read_dataset(list_ds_name, session=session, settings=settings)
         dc._query.update = update
-        dc.signals_schema = dc.signals_schema.mutate({f"{object_name}": file_type})
+        dc.signals_schema = dc.signals_schema.mutate({f"{column}": file_type})
 
         if update or not list_ds_exists:
 
@@ -140,7 +140,7 @@ def read_storage(
                     .settings(prefetch=0)
                     .gen(
                         list_bucket(lst_uri, cache, client_config=client_config),
-                        output={f"{object_name}": file_type},
+                        output={f"{column}": file_type},
                     )
                     .save(ds_name, listing=True)
                 )
@@ -149,7 +149,7 @@ def read_storage(
                 lambda ds_name=list_ds_name, lst_uri=list_uri: lst_fn(ds_name, lst_uri)
             )
 
-        chain = ls(dc, list_path, recursive=recursive, object_name=object_name)
+        chain = ls(dc, list_path, recursive=recursive, column=column)
 
         storage_chain = storage_chain.union(chain) if storage_chain else chain
         listed_ds_name.add(list_ds_name)
@@ -162,7 +162,7 @@ def read_storage(
             file=file_values,
         )
         file_chain.signals_schema = file_chain.signals_schema.mutate(
-            {f"{object_name}": file_type}
+            {f"{column}": file_type}
         )
         storage_chain = storage_chain.union(file_chain) if storage_chain else file_chain
 

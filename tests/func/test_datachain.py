@@ -282,7 +282,7 @@ def test_map_file(cloud_test_catalog, use_cache, prefetch):
         dc.read_storage(ctc.src_uri, session=ctc.session)
         .settings(cache=use_cache, prefetch=prefetch)
         .map(signal=with_checks(new_signal))
-        .save()
+        .persist()
     )
 
     expected = {
@@ -541,7 +541,7 @@ def test_show(capsys, test_session):
 def test_show_without_temp_datasets(capsys, test_session):
     dc.read_values(
         key=[1, 2, 3, 4], session=test_session
-    ).save()  # creates temp dataset
+    ).persist()  # creates temp dataset
     dc.datasets().show()
     captured = capsys.readouterr()
     normalized_output = re.sub(r"\s+", " ", captured.out)
@@ -1230,7 +1230,7 @@ def test_udf_after_limit(cloud_test_catalog):
     chain = (
         dc.read_storage(ctc.src_uri, session=ctc.session)
         .mutate(name=pathfunc.name("file.path"))
-        .save()
+        .persist()
     )
     # We test a few different orderings here, because we've had strange
     # bugs in the past where calling add_signals() after limit() gave us
@@ -1578,7 +1578,7 @@ def test_gen_file(cloud_test_catalog, use_cache, prefetch):
         dc.read_storage(ctc.src_uri, session=ctc.session)
         .settings(cache=use_cache, prefetch=prefetch)
         .gen(signal=with_checks(new_signal), output=str)
-        .save()
+        .persist()
     )
     expected = {
         "Cats and Dogs",
@@ -2222,6 +2222,30 @@ def test_to_read_jsonl_remote(cloud_test_catalog_upload):
     df1 = dc_from.select("jsonl.first_name", "jsonl.age", "jsonl.city").to_pandas()
     df1 = df1["jsonl"]
     assert df_equal(df1, df)
+
+
+def test_read_pandas_multiindex(test_session):
+    # Create a DataFrame with MultiIndex columns
+    header = pd.MultiIndex.from_tuples(
+        [("A", "cat"), ("B", "dog"), ("B", "cat"), ("A", "dog")]
+    )
+    data = [[1, 2, 3, 4], [5, 6, 7, 8]]
+    df = pd.DataFrame(data, columns=header)
+
+    # Read the DataFrame into a DataChain
+    chain = dc.read_pandas(df, session=test_session)
+
+    # Check the resulting column names and data
+    expected_columns = ["a_cat", "b_dog", "b_cat", "a_dog"]
+    assert set(chain.signals_schema.db_signals()) == set(expected_columns)
+
+    expected_data = [
+        {"a_cat": 1, "b_dog": 2, "b_cat": 3, "a_dog": 4},
+        {"a_cat": 5, "b_dog": 6, "b_cat": 7, "a_dog": 8},
+    ]
+    assert sorted_dicts(chain.to_records(), *expected_columns) == sorted_dicts(
+        expected_data, *expected_columns
+    )
 
 
 def test_datachain_functional_after_exceptions(test_session):

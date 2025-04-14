@@ -27,7 +27,7 @@ filtered = (
         / func.least("laion.json.original_width", "laion.json.original_height")
         < 3.0
     )
-    .save()
+    .persist()
 )
 
 filtered.show(3)
