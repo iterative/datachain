@@ -1,4 +1,5 @@
 import os
+import sys
 from importlib import import_module
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -15,6 +16,7 @@ METASTORE_ARG_PREFIX = "DATACHAIN_METASTORE_ARG_"
 WAREHOUSE_SERIALIZED = "DATACHAIN__WAREHOUSE"
 WAREHOUSE_IMPORT_PATH = "DATACHAIN_WAREHOUSE"
 WAREHOUSE_ARG_PREFIX = "DATACHAIN_WAREHOUSE_ARG_"
+DISTRIBUTED_IMPORT_PYTHONPATH = "DATACHAIN_DISTRIBUTED_PYTHONPATH"
 DISTRIBUTED_IMPORT_PATH = "DATACHAIN_DISTRIBUTED"
 
 IN_MEMORY_ERROR_MESSAGE = "In-memory is only supported on SQLite"
@@ -100,19 +102,21 @@ def get_warehouse(in_memory: bool = False) -> "AbstractWarehouse":
     return warehouse_class(**warehouse_args)
 
 
-def get_udf_distributor_class() -> type["AbstractUDFDistributor"]:
-    distributed_import_path = os.environ.get(DISTRIBUTED_IMPORT_PATH)
+def get_udf_distributor_class() -> Optional[type["AbstractUDFDistributor"]]:
+    if not (distributed_import_path := os.environ.get(DISTRIBUTED_IMPORT_PATH)):
+        return None
 
-    if not distributed_import_path:
-        raise RuntimeError(
-            f"{DISTRIBUTED_IMPORT_PATH} import path is required "
-            "for distributed UDF processing."
-        )
     # Distributed class paths are specified as (for example): module.classname
     if "." not in distributed_import_path:
         raise RuntimeError(
             f"Invalid {DISTRIBUTED_IMPORT_PATH} import path: {distributed_import_path}"
         )
+
+    # Optional: set the Python path to look for the module
+    distributed_import_pythonpath = os.environ.get(DISTRIBUTED_IMPORT_PYTHONPATH)
+    if distributed_import_pythonpath and distributed_import_pythonpath not in sys.path:
+        sys.path.insert(0, distributed_import_pythonpath)
+
     module_name, _, class_name = distributed_import_path.rpartition(".")
     distributed = import_module(module_name)
     return getattr(distributed, class_name)
