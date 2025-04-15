@@ -387,8 +387,8 @@ class Mapper(UDFBase):
                 result_objs = self.process_safe(udf_args)
                 udf_output = self._flatten_row(result_objs)
                 output = [{"sys__id": id_} | dict(zip(self.signal_names, udf_output))]
-                processed_cb.relative_update(1)
                 yield output
+                processed_cb.relative_update(1)
 
         self.teardown()
 
@@ -430,8 +430,8 @@ class BatchMapper(UDFBase):
                 {"sys__id": row_id} | dict(zip(self.signal_names, signals))
                 for row_id, signals in zip(row_ids, udf_outputs)
             ]
-            processed_cb.relative_update(n_rows)
             yield output
+            processed_cb.relative_update(n_rows)
 
         self.teardown()
 
@@ -474,8 +474,9 @@ class Generator(UDFBase):
             remove_prefetched=bool(self.prefetch) and not cache,
         )
         with closing(prepared_inputs):
-            for row in processed_cb.wrap(prepared_inputs):
+            for row in prepared_inputs:
                 yield _process_row(row)
+                processed_cb.relative_update(1)
 
         self.teardown()
 
@@ -507,7 +508,7 @@ class Aggregator(UDFBase):
             result_objs = self.process_safe(udf_args)
             udf_outputs = (self._flatten_row(row) for row in result_objs)
             output = (dict(zip(self.signal_names, row)) for row in udf_outputs)
-            processed_cb.relative_update(len(batch.rows))
             yield output
+            processed_cb.relative_update(len(batch.rows))
 
         self.teardown()
