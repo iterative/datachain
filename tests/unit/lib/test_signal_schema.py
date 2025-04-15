@@ -1041,17 +1041,6 @@ def test_get_flatten_hidden_fields(schema, hidden_fields):
     assert SignalSchema.get_flatten_hidden_fields(schema_serialized) == hidden_fields
 
 
-@pytest.mark.parametrize(
-    "schema,result",
-    [
-        ({"name": str, "value": int}, False),
-        ({"name": str, "age": float, "f": File}, True),
-    ],
-)
-def test_contains_file(schema, result):
-    assert SignalSchema(schema).contains_file() is result
-
-
 def test_slice():
     schema = {"name": str, "age": float, "address": str}
     setup_values = {"init": lambda: 37}
