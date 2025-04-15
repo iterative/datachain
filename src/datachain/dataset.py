@@ -105,21 +105,24 @@ class DatasetDependency:
         dataset_version: Optional[int],
         dataset_version_created_at: Optional[datetime],
     ) -> Optional["DatasetDependency"]:
-        from datachain.lib.listing import is_listing_dataset
+        from datachain.client import Client
+        from datachain.lib.listing import is_listing_dataset, listing_uri_from_name
 
         if not dataset_id:
             return None
 
         assert dataset_name is not None
+        dependency_type = DatasetDependencyType.DATASET
+        dependency_name = dataset_name
+
+        if is_listing_dataset(dataset_name):
+            dependency_type = DatasetDependencyType.STORAGE  # type: ignore[arg-type]
+            dependency_name, _ = Client.parse_url(listing_uri_from_name(dataset_name))
 
         return cls(
             id,
-            (
-                DatasetDependencyType.STORAGE
-                if is_listing_dataset(dataset_name)
-                else DatasetDependencyType.DATASET
-            ),
-            dataset_name,
+            dependency_type,
+            dependency_name,
             (
                 str(dataset_version)  # type: ignore[arg-type]
                 if dataset_version
