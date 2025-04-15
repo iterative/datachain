@@ -24,7 +24,7 @@ from pydantic import BaseModel
 from tqdm import tqdm
 
 from datachain.dataset import DatasetRecord
-from datachain.func import literal
+from datachain.func import ifelse, literal
 from datachain.func.base import Function
 from datachain.func.func import Func
 from datachain.lib.convert.python_to_sql import python_to_sql
@@ -2159,3 +2159,33 @@ class DataChain:
             Use 0/3, 1/3 and 2/3, not 1/3, 2/3 and 3/3.
         """
         return self._evolve(query=self._query.chunk(index, total))
+
+    def storage_switch(
+        self, new_storage: str, old_storage: Optional[str] = None, file_column="file"
+    ) -> "Self":
+        """Update files source (without copying any data).
+
+        Parameters:
+            new_storage : New storage to update `source` column.
+            old_storage : Optional old storage values to be replaced by new one. If not
+                defined, `source` column in all rows will be updated with new_storage
+            file_column : column name for the File structure to modify.
+                It modifies `source` to target storage and resets `version`,
+                `etag`, `is_latest`, `last_modified` and `size`.
+                Use `bucket_update()` to set new `version`, `etag` etc.
+
+        Returns:
+                DataChain: A DataChain object.
+        """
+        source_col = f"{file_column}.source"
+        source_col_name = self.signals_schema.resolve(source_col).db_signals()[0]
+        if old_storage:
+            mutate = {
+                f"{source_col_name}": ifelse(
+                    C(source_col) == old_storage, new_storage, C(source_col)
+                )
+            }
+        else:
+            mutate = {f"{source_col_name}": new_storage}  # type: ignore[dict-item]
+
+        return self.mutate(**mutate).select_except(source_col_name)  # type: ignore[arg-type]
