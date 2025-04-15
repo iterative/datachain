@@ -1,5 +1,6 @@
 from typing import TYPE_CHECKING, Optional
 
+import datachain
 from datachain.error import DatasetNotFoundError
 
 if TYPE_CHECKING:
@@ -24,7 +25,7 @@ def delta_update(dc: "DataChain", name: str) -> Optional["DataChain"]:
     apply all the DataChain methods like filters, mappers, generators etc.)
     but just the diff part which is very important for performance.
     """
-    from datachain.lib.dc import DataChain
+    dc._query.apply_listing_pre_step()
 
     file_signal = dc.signals_schema.get_file_signal()
     if not file_signal:
@@ -35,11 +36,12 @@ def delta_update(dc: "DataChain", name: str) -> Optional["DataChain"]:
         # first creation of delta update dataset
         return None
 
+    assert dc._query.starting_step
     source_ds_name = dc._query.starting_step.dataset_name
     source_ds_version = dc._query.starting_step.dataset_version
 
-    diff = DataChain.from_dataset(source_ds_name, version=source_ds_version).diff(
-        DataChain.from_dataset(name, version=latest_version),
+    diff = datachain.read_dataset(source_ds_name, version=source_ds_version).diff(
+        datachain.read_dataset(name, version=latest_version),
         on=file_signal,
     )
 
@@ -48,15 +50,13 @@ def delta_update(dc: "DataChain", name: str) -> Optional["DataChain"]:
 
     # merging diff and the latest version of dataset
     return (
-        DataChain.from_dataset(name, latest_version)
+        datachain.read_dataset(name, latest_version)
         .diff(diff, added=True, modified=False)
         .union(diff)
     )
 
 
 def delta_update_alternative(dc: "DataChain", name: str) -> Optional["DataChain"]:
-    from datachain.lib.dc import DataChain
-
     catalog = dc.session.catalog
     try:
         latest_version = catalog.get_dataset(name).latest_version
@@ -78,8 +78,8 @@ def delta_update_alternative(dc: "DataChain", name: str) -> Optional["DataChain"
     source_ds_version = int(dep.version)
     source_ds_latest_version = catalog.get_dataset(source_ds_name).latest_version
 
-    source_dc = DataChain.from_dataset(source_ds_name, source_ds_version)
-    source_dc_latest = DataChain.from_dataset(source_ds_name, source_ds_latest_version)
+    source_dc = datachain.read_dataset(source_ds_name, source_ds_version)
+    source_dc_latest = datachain.read_dataset(source_ds_name, source_ds_latest_version)
     file_signal = source_dc.signals_schema.get_file_signal()
     if not file_signal:
         raise ValueError("Datasets without file signals cannot have delta updates")
@@ -90,7 +90,7 @@ def delta_update_alternative(dc: "DataChain", name: str) -> Optional["DataChain"
 
     # merging diff and the latest version of dataset
     return (
-        DataChain.from_dataset(name, latest_version)
+        datachain.read_dataset(name, latest_version)
         .diff(diff, added=True, modified=False)
         .union(diff)
     )

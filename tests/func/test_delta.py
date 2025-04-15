@@ -4,8 +4,9 @@ import pytest
 import regex as re
 from PIL import Image
 
+import datachain as dc
 from datachain import func
-from datachain.lib.dc import C, DataChain
+from datachain.lib.dc import C
 from datachain.lib.file import File, ImageFile
 
 
@@ -21,7 +22,7 @@ def test_delta_update_from_dataset(test_session, tmp_dir, tmp_path):
     ]
 
     def create_image_dataset(ds_name, images):
-        DataChain.from_values(
+        dc.read_values(
             file=[
                 ImageFile(path=img["name"], source=f"file://{tmp_path}")
                 for img in images
@@ -30,7 +31,7 @@ def test_delta_update_from_dataset(test_session, tmp_dir, tmp_path):
         ).save(ds_name)
 
     def create_delta_dataset(ds_name):
-        DataChain.from_dataset(
+        dc.read_dataset(
             starting_ds_name,
             session=test_session,
         ).save(ds_name, delta=True)
@@ -45,18 +46,14 @@ def test_delta_update_from_dataset(test_session, tmp_dir, tmp_path):
     create_delta_dataset(ds_name)
 
     assert list(
-        DataChain.from_dataset(ds_name, version=1)
-        .order_by("file.path")
-        .collect("file.path")
+        dc.read_dataset(ds_name, version=1).order_by("file.path").collect("file.path")
     ) == [
         "img1.jpg",
         "img2.jpg",
     ]
 
     assert list(
-        DataChain.from_dataset(ds_name, version=2)
-        .order_by("file.path")
-        .collect("file.path")
+        dc.read_dataset(ds_name, version=2).order_by("file.path").collect("file.path")
     ) == [
         "img1.jpg",
         "img2.jpg",
@@ -92,7 +89,7 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
             return int(re.search(r, file.path).group(1))  # type: ignore[union-attr]
 
         (
-            DataChain.from_storage(path, update=True, session=test_session)
+            dc.read_storage(path, update=True, session=test_session)
             .filter(C("file.path").glob("*.jpg"))
             .map(emb=my_embedding)
             .mutate(dist=func.cosine_distance("emb", (0.1, 0.2)))
@@ -108,7 +105,7 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
     # into consideration on delta update
     etags = {
         r[0]: r[1].etag
-        for r in DataChain.from_dataset(ds_name, version=1).collect("index", "file")
+        for r in dc.read_dataset(ds_name, version=1).collect("index", "file")
     }
 
     # remove last couple of images to simulate modification since we will re-create it
@@ -123,9 +120,7 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
     create_delta_dataset()
 
     assert list(
-        DataChain.from_dataset(ds_name, version=1)
-        .order_by("file.path")
-        .collect("file.path")
+        dc.read_dataset(ds_name, version=1).order_by("file.path").collect("file.path")
     ) == [
         "images/img4.jpg",
         "images/img6.jpg",
@@ -133,9 +128,7 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
     ]
 
     assert list(
-        DataChain.from_dataset(ds_name, version=2)
-        .order_by("file.path")
-        .collect("file.path")
+        dc.read_dataset(ds_name, version=2).order_by("file.path").collect("file.path")
     ) == [
         "images/img10.jpg",
         "images/img12.jpg",
@@ -151,7 +144,7 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
     # and modified rows etags should be bigger than the old ones
     assert (
         next(
-            DataChain.from_dataset(ds_name, version=2)
+            dc.read_dataset(ds_name, version=2)
             .filter(C("index") == 6)
             .order_by("file.path", "file.etag")
             .collect("file.etag")
@@ -180,7 +173,7 @@ def test_delta_update_no_diff(test_session, tmp_dir, tmp_path):
             return int(re.search(r, file.path).group(1))  # type: ignore[union-attr]
 
         (
-            DataChain.from_storage(path, update=True, session=test_session)
+            dc.read_storage(path, update=True, session=test_session)
             .filter(C("file.path").glob("*.jpg"))
             .map(index=get_index)
             .filter(C("index") > 5)
@@ -192,12 +185,12 @@ def test_delta_update_no_diff(test_session, tmp_dir, tmp_path):
 
     assert (
         list(
-            DataChain.from_dataset(ds_name, version=1)
+            dc.read_dataset(ds_name, version=1)
             .order_by("file.path")
             .collect("file.path")
         )
         == list(
-            DataChain.from_dataset(ds_name, version=2)
+            dc.read_dataset(ds_name, version=2)
             .order_by("file.path")
             .collect("file.path")
         )
@@ -213,10 +206,10 @@ def test_delta_update_no_diff(test_session, tmp_dir, tmp_path):
 def test_delta_update_no_file_signals(test_session):
     starting_ds_name = "starting_ds"
 
-    DataChain.from_values(num=[10, 20], session=test_session).save(starting_ds_name)
+    dc.read_values(num=[10, 20], session=test_session).save(starting_ds_name)
 
     with pytest.raises(ValueError) as excinfo:
-        DataChain.from_dataset(
+        dc.read_dataset(
             starting_ds_name,
             session=test_session,
         ).save("delta_ds", delta=True)
