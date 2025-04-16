@@ -169,11 +169,13 @@ class Step(ABC):
 
 @frozen
 class QueryStep:
+    """A query that returns all rows from specific dataset version"""
+
     catalog: "Catalog"
     dataset_name: str
     dataset_version: int
 
-    def apply(self):
+    def apply(self) -> "StepResult":
         def q(*columns):
             return sqlalchemy.select(*columns)
 
@@ -1119,9 +1121,14 @@ class DatasetQuery:
             self.version = version
 
         if is_listing_dataset(name):
-            # not setting query step yet as listing dataset might not exist at
-            # this point
-            self.list_ds_name = name
+            if version:
+                # this listing dataset should already be listed as we specify
+                # exact version
+                self._set_starting_step(self.catalog.get_dataset(name))
+            else:
+                # not setting query step yet as listing dataset might not exist at
+                # this point
+                self.list_ds_name = name
         elif fallback_to_studio and is_token_set():
             self._set_starting_step(
                 self.catalog.get_dataset_with_remote_fallback(name, version)
@@ -1207,11 +1214,8 @@ class DatasetQuery:
         """Setting listing function to be run if needed"""
         self.listing_fn = fn
 
-    def apply_steps(self) -> QueryGenerator:
-        """
-        Apply the steps in the query and return the resulting
-        sqlalchemy.SelectBase.
-        """
+    def apply_listing_pre_step(self) -> None:
+        """Runs listing pre-step if needed"""
         if self.list_ds_name and not self.starting_step:
             listing_ds = None
             try:
@@ -1226,6 +1230,13 @@ class DatasetQuery:
 
             # at this point we know what is our starting listing dataset name
             self._set_starting_step(listing_ds)  # type: ignore [arg-type]
+
+    def apply_steps(self) -> QueryGenerator:
+        """
+        Apply the steps in the query and return the resulting
+        sqlalchemy.SelectBase.
+        """
+        self.apply_listing_pre_step()
 
         query = self.clone()
 
