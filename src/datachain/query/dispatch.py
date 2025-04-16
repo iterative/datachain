@@ -13,7 +13,7 @@ from multiprocess import get_context
 
 from datachain.catalog import Catalog
 from datachain.catalog.catalog import clone_catalog_with_cache
-from datachain.catalog.loader import get_udf_distributor_class
+from datachain.catalog.loader import DISTRIBUTED_IMPORT_PATH, get_udf_distributor_class
 from datachain.lib.udf import _get_cache
 from datachain.query.batch import RowsOutput, RowsOutputBatch
 from datachain.query.dataset import (
@@ -91,7 +91,12 @@ def udf_entrypoint() -> int:
 
 
 def udf_worker_entrypoint() -> int:
-    return get_udf_distributor_class().run_worker()
+    if not (udf_distributor_class := get_udf_distributor_class()):
+        raise RuntimeError(
+            f"{DISTRIBUTED_IMPORT_PATH} import path is required "
+            "for distributed UDF processing."
+        )
+    return udf_distributor_class.run_worker()
 
 
 class UDFDispatcher:
