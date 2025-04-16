@@ -125,7 +125,7 @@ def remote_dataset(remote_dataset_version, schema):
         "id": 1,
         "name": "dogs",
         "description": "",
-        "labels": [],
+        "attrs": [],
         "schema": schema,
         "status": 4,
         "feature_schema": {},

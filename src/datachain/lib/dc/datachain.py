@@ -459,7 +459,7 @@ class DataChain:
         name: str,
         version: Optional[int] = None,
         description: Optional[str] = None,
-        labels: Optional[list[str]] = None,
+        attrs: Optional[list[str]] = None,
         **kwargs,
     ) -> "Self":
         """Save to a Dataset. It returns the chain itself.
@@ -468,7 +468,8 @@ class DataChain:
             name : dataset name.
             version : version of a dataset. Default - the last version that exist.
             description : description of a dataset.
-            labels : labels of a dataset.
+            attrs : attributes of a dataset. They can be without value, e.g "NLP",
+                or with a value, e.g "location=US".
         """
         schema = self.signals_schema.clone_without_sys_signals().serialize()
         return self._evolve(
@@ -476,7 +477,7 @@ class DataChain:
                 name=name,
                 version=version,
                 description=description,
-                labels=labels,
+                attrs=attrs,
                 feature_schema=schema,
                 **kwargs,
             )
