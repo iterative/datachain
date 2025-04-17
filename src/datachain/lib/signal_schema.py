@@ -21,7 +21,6 @@ from typing import (  # noqa: UP035
     get_origin,
 )
 
-import sqlalchemy
 from pydantic import BaseModel, Field, create_model
 from sqlalchemy import ColumnElement
 from typing_extensions import Literal as LiteralEx
@@ -574,7 +573,7 @@ class SignalSchema:
 
     def db_signals(
         self, name: Optional[str] = None, as_columns=False, include_hidden: bool = True
-    ) -> Union[list[str], list[sqlalchemy.Column]]:
+    ) -> Union[list[str], list[Column]]:
         """
         Returns DB columns as strings or Column objects with proper types
         Optionally, it can filter results by specific object, returning only his signals
@@ -582,7 +581,7 @@ class SignalSchema:
         signals = [
             DEFAULT_DELIMITER.join(path)
             if not as_columns
-            else sqlalchemy.Column(
+            else Column(
                 DEFAULT_DELIMITER.join(path),
                 python_to_sql(_type),
                 nullable=is_optional(_type),

@@ -9,6 +9,7 @@ from datachain.lib.file import (
 )
 from datachain.lib.signal_schema import SignalSchema
 from datachain.query import Session
+from datachain.query.schema import Column
 
 if TYPE_CHECKING:
     from typing_extensions import ParamSpec
@@ -51,7 +52,11 @@ def read_records(
 
     if schema:
         signal_schema = SignalSchema(schema)
-        columns = signal_schema.db_signals(as_columns=True)
+        columns = []
+        for c in signal_schema.db_signals(as_columns=True):
+            assert isinstance(c, Column)
+            kw = {"nullable": c.nullable} if c.nullable is not None else {}
+            columns.append(sqlalchemy.Column(c.name, c.type, **kw))
     else:
         columns = [
             sqlalchemy.Column(name, typ)
