@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 
 from datachain import read_database
 from datachain.lib.dc import database
-from tests.utils import skip_if_not_sqlite
 
 
 @pytest.fixture
