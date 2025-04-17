@@ -102,6 +102,7 @@ def datasets(
     column: Optional[str] = None,
     include_listing: bool = False,
     studio: bool = False,
+    attrs: Optional[list[str]] = None,
 ) -> "DataChain":
     """Generate chain with list of registered datasets.
 
@@ -138,6 +139,10 @@ def datasets(
         )
     ]
     datasets_values = [d for d in datasets_values if not d.is_temp]
+
+    if attrs:
+        for attr in attrs:
+            datasets_values = [d for d in datasets_values if not d.has_attr(attr)]
 
     if not column:
         # flattening dataset fields

@@ -32,10 +32,27 @@ class DatasetInfo(DataModel):
     metrics: dict[str, Any] = Field(default={})
     error_message: str = Field(default="")
     error_stack: str = Field(default="")
+    attrs: list[str] = Field(default=[])
 
     @property
     def is_temp(self) -> bool:
         return Session.is_temp_dataset(self.name)
+
+    def has_attr(self, attr: str) -> bool:
+        s = attr.split("=")
+        if len(s) == 1:
+            return attr in self.attrs
+
+        name = s[0]
+        value = s[1]
+        for a in self.attrs:
+            s = a.split("=")
+            if value == "*" and s[0] == name:
+                return True
+            if len(s) == 2 and s[0] == name and s[1] == value:
+                return True
+
+        return False
 
     @staticmethod
     def _validate_dict(
@@ -83,4 +100,5 @@ class DatasetInfo(DataModel):
             metrics=job.metrics if job else {},
             error_message=version.error_message,
             error_stack=version.error_stack,
+            attrs=dataset.attrs,
         )
