@@ -115,6 +115,10 @@ def datasets(
         include_listing: If True, includes listing datasets. Defaults to False.
         studio: If True, returns datasets from Studio only,
             otherwise returns all local datasets. Defaults to False.
+        attrs: Optional list of attributes to filter datasets on. It can be just
+            attribute without value e.g "NLP", or attribute with value
+            e.g "location=US". Attribute with value can also accept "*" to target
+            all that have specific name e.g "location=*"
 
     Returns:
         DataChain: A new DataChain instance containing dataset information.
@@ -142,7 +146,7 @@ def datasets(
 
     if attrs:
         for attr in attrs:
-            datasets_values = [d for d in datasets_values if not d.has_attr(attr)]
+            datasets_values = [d for d in datasets_values if d.has_attr(attr)]
 
     if not column:
         # flattening dataset fields
