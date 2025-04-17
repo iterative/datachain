@@ -81,7 +81,6 @@ def test(sqlite3_connection, connection, test_session):
     ]
 
 
-@skip_if_not_sqlite
 def test_nullable(sqlite3_connection, test_session):
     """
     Verify that a column containing a sequence of NULL values is handled correctly
@@ -101,10 +100,6 @@ def test_nullable(sqlite3_connection, test_session):
     ]
 
 
-# FIXME: `read_records`/`SignalSchema.db_signals` strips `Optional` types from the
-# SignalSchema, and creates the column as `T` instead.
-# This works on sqlite3, but fails on other databases.
-@skip_if_not_sqlite
 def test_all_null_values(sqlite3_connection, test_session):
     sqlite3_connection.execute("CREATE TABLE tbl (id INTEGER PRIMARY KEY, num INTEGER)")
     sqlite3_connection.executemany(

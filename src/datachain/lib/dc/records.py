@@ -51,10 +51,7 @@ def read_records(
 
     if schema:
         signal_schema = SignalSchema(schema)
-        columns = [
-            sqlalchemy.Column(c.name, c.type)  # type: ignore[union-attr]
-            for c in signal_schema.db_signals(as_columns=True)  # type: ignore[assignment]
-        ]
+        columns = signal_schema.db_signals(as_columns=True)
     else:
         columns = [
             sqlalchemy.Column(name, typ)

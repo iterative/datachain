@@ -21,6 +21,7 @@ from typing import (  # noqa: UP035
     get_origin,
 )
 
+import sqlalchemy
 from pydantic import BaseModel, Field, create_model
 from sqlalchemy import ColumnElement
 from typing_extensions import Literal as LiteralEx
@@ -573,7 +574,7 @@ class SignalSchema:
 
     def db_signals(
         self, name: Optional[str] = None, as_columns=False, include_hidden: bool = True
-    ) -> Union[list[str], list[Column]]:
+    ) -> Union[list[str], list[sqlalchemy.Column]]:
         """
         Returns DB columns as strings or Column objects with proper types
         Optionally, it can filter results by specific object, returning only his signals
@@ -581,7 +582,11 @@ class SignalSchema:
         signals = [
             DEFAULT_DELIMITER.join(path)
             if not as_columns
-            else Column(DEFAULT_DELIMITER.join(path), python_to_sql(_type))
+            else sqlalchemy.Column(
+                DEFAULT_DELIMITER.join(path),
+                python_to_sql(_type),
+                nullable=is_optional(_type),
+            )
             for path, _type, has_subtree, _ in self.get_flat_tree(
                 include_hidden=include_hidden
             )
@@ -990,3 +995,8 @@ class SignalSchema:
             }
 
         return SignalSchema.deserialize(schema)
+
+
+def is_optional(type_: Any) -> bool:
+    """Check if a type is Optional."""
+    return get_origin(type_) is Union and type(None) in get_args(type_)
