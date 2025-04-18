@@ -8,7 +8,6 @@ import pytest
 
 import datachain as dc
 from datachain.client.fsspec import Client
-from datachain.config import Config, ConfigLevel
 from datachain.dataset import DatasetStatus
 from datachain.error import DataChainError, DatasetNotFoundError
 from datachain.query.session import Session
@@ -17,12 +16,6 @@ from tests.data import ENTRIES
 from tests.utils import assert_row_names, skip_if_not_sqlite, tree_from_path
 
 DATASET_UUID = "20f5a2f1-fc9a-4e36-8b91-5a530f289451"
-
-
-@pytest.fixture(autouse=True)
-def studio_config():
-    with Config(ConfigLevel.GLOBAL).edit() as conf:
-        conf["studio"] = {"token": "isat_access_token", "team": "team_name"}
 
 
 @pytest.fixture
@@ -186,6 +179,7 @@ def dataset_export_data_chunk(
 @skip_if_not_sqlite
 def test_pull_dataset_success(
     mocker,
+    studio_token,
     cloud_test_catalog,
     remote_dataset_info,
     dataset_export,
@@ -273,6 +267,7 @@ def test_pull_dataset_success(
 @skip_if_not_sqlite
 def test_datachain_read_dataset_pull(
     mocker,
+    studio_token,
     cloud_test_catalog,
     remote_dataset_info,
     dataset_export,
@@ -310,6 +305,7 @@ def test_datachain_read_dataset_pull(
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
 @skip_if_not_sqlite
 def test_pull_dataset_wrong_dataset_uri_format(
+    studio_token,
     requests_mock,
     cloud_test_catalog,
     remote_dataset,
@@ -324,6 +320,7 @@ def test_pull_dataset_wrong_dataset_uri_format(
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
 @skip_if_not_sqlite
 def test_pull_dataset_wrong_version(
+    studio_token,
     requests_mock,
     cloud_test_catalog,
     remote_dataset_info,
@@ -338,6 +335,7 @@ def test_pull_dataset_wrong_version(
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
 @skip_if_not_sqlite
 def test_pull_dataset_not_found_in_remote(
+    studio_token,
     requests_mock,
     cloud_test_catalog,
 ):
@@ -357,6 +355,7 @@ def test_pull_dataset_not_found_in_remote(
 @pytest.mark.parametrize("export_status", ["failed", "removed"])
 @skip_if_not_sqlite
 def test_pull_dataset_exporting_dataset_failed_in_remote(
+    studio_token,
     requests_mock,
     cloud_test_catalog,
     remote_dataset_info,
@@ -378,6 +377,7 @@ def test_pull_dataset_exporting_dataset_failed_in_remote(
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
 @skip_if_not_sqlite
 def test_pull_dataset_empty_parquet(
+    studio_token,
     requests_mock,
     cloud_test_catalog,
     remote_dataset_info,
@@ -395,6 +395,7 @@ def test_pull_dataset_empty_parquet(
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
 @skip_if_not_sqlite
 def test_pull_dataset_already_exists_locally(
+    studio_token,
     cloud_test_catalog,
     remote_dataset_info,
     dataset_export,
@@ -421,6 +422,7 @@ def test_pull_dataset_already_exists_locally(
 @pytest.mark.parametrize("local_ds_name", [None, "other"])
 @skip_if_not_sqlite
 def test_pull_dataset_local_name_already_exists(
+    studio_token,
     cloud_test_catalog,
     remote_dataset_info,
     dataset_export,
