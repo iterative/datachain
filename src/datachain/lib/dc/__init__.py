@@ -1,7 +1,7 @@
 from .csv import read_csv
 from .database import read_database
 from .datachain import C, Column, DataChain
-from .datasets import datasets, read_dataset
+from .datasets import datasets, delete_dataset, read_dataset
 from .hf import read_hf
 from .json import read_json
 from .listings import listings
@@ -20,6 +20,7 @@ __all__ = [
     "DatasetPrepareError",
     "Sys",
     "datasets",
+    "delete_dataset",
     "listings",
     "read_csv",
     "read_database",

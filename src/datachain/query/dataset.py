@@ -1170,16 +1170,6 @@ class DatasetQuery:
         )
         return sqlalchemy.table(table_name)
 
-    @staticmethod
-    def delete(
-        name: str, version: Optional[int] = None, catalog: Optional["Catalog"] = None
-    ) -> None:
-        from datachain.catalog import get_catalog
-
-        catalog = catalog or get_catalog()
-        version = version or catalog.get_dataset(name).latest_version
-        catalog.remove_dataset(name, version)
-
     @property
     def attached(self) -> bool:
         """
