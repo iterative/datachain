@@ -1,4 +1,5 @@
 import os
+import pathlib
 from unittest.mock import patch
 
 import pytest
@@ -80,18 +81,28 @@ def test_get_warehouse_in_memory():
 
 
 def test_get_distributed_class():
-    env = {
-        "DATACHAIN_DISTRIBUTED": "tests.unit.test_catalog_loader.DistributedClass",
-    }
-
-    with patch.dict(os.environ, env):
-        assert get_udf_distributor_class() == DistributedClass
-
     with patch.dict(os.environ, {"DATACHAIN_DISTRIBUTED": ""}):
-        with pytest.raises(
-            RuntimeError, match="DATACHAIN_DISTRIBUTED import path is required"
-        ):
-            get_udf_distributor_class()
+        assert get_udf_distributor_class() is None
+
+    with patch.dict(
+        os.environ,
+        {"DATACHAIN_DISTRIBUTED": "tests.unit.test_catalog_loader.DistributedClass"},
+    ):
+        distributed_class = get_udf_distributor_class()
+        assert distributed_class == DistributedClass
+        assert distributed_class.__name__ == "DistributedClass"
+        assert distributed_class.__module__ == "tests.unit.test_catalog_loader"
+
+    with patch.dict(
+        os.environ,
+        {
+            "DATACHAIN_DISTRIBUTED_PYTHONPATH": str(pathlib.Path(__file__).parent),
+            "DATACHAIN_DISTRIBUTED": "test_catalog_loader.DistributedClass",
+        },
+    ):
+        distributed_class = get_udf_distributor_class()
+        assert distributed_class.__name__ == "DistributedClass"
+        assert distributed_class.__module__ == "test_catalog_loader"
 
     with patch.dict(
         os.environ,

@@ -437,9 +437,17 @@ class UDFStep(Step, ABC):
                             "distributed processing."
                         )
 
-                    from datachain.catalog.loader import get_udf_distributor_class
+                    from datachain.catalog.loader import (
+                        DISTRIBUTED_IMPORT_PATH,
+                        get_udf_distributor_class,
+                    )
 
-                    udf_distributor_class = get_udf_distributor_class()
+                    if not (udf_distributor_class := get_udf_distributor_class()):
+                        raise RuntimeError(
+                            f"{DISTRIBUTED_IMPORT_PATH} import path is required "
+                            "for distributed UDF processing."
+                        )
+
                     udf_distributor = udf_distributor_class(
                         catalog=catalog,
                         table=udf_table,
