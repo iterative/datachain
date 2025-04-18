@@ -550,7 +550,7 @@ def animal_dataset(listed_bucket, cloud_test_catalog):
     src_uri = cloud_test_catalog.src_uri
     dataset = catalog.create_dataset_from_sources(name, [src_uri], recursive=True)
     return catalog.update_dataset(
-        dataset, {"description": "animal dataset", "labels": ["cats", "dogs"]}
+        dataset, {"description": "animal dataset", "attrs": ["cats", "dogs"]}
     )
 
 
@@ -563,7 +563,7 @@ def dogs_dataset(listed_bucket, cloud_test_catalog):
         name, [f"{src_uri}/dogs/*"], recursive=True
     )
     return catalog.update_dataset(
-        dataset, {"description": "dogs dataset", "labels": ["dogs", "dataset"]}
+        dataset, {"description": "dogs dataset", "attrs": ["dogs", "dataset"]}
     )
 
 
@@ -576,7 +576,7 @@ def cats_dataset(listed_bucket, cloud_test_catalog):
         name, [f"{src_uri}/cats/*"], recursive=True
     )
     return catalog.update_dataset(
-        dataset, {"description": "cats dataset", "labels": ["cats", "dataset"]}
+        dataset, {"description": "cats dataset", "attrs": ["cats", "dataset"]}
     )
 
 
@@ -586,7 +586,7 @@ def dataset_record():
         id=1,
         name=f"ds_{uuid.uuid4().hex}",
         description="",
-        labels=[],
+        attrs=[],
         versions=[],
         status=1,
         schema={},
@@ -651,7 +651,7 @@ def studio_datasets(requests_mock, studio_token):
         "id": 1,
         "name": "dogs",
         "description": "dogs dataset",
-        "labels": ["dogs", "dataset"],
+        "attrs": ["dogs", "dataset"],
         "versions": [
             {
                 "version": 1,
@@ -676,7 +676,7 @@ def studio_datasets(requests_mock, studio_token):
             "id": 2,
             "name": "cats",
             "description": "cats dataset",
-            "labels": ["cats", "dataset"],
+            "attrs": ["cats", "dataset"],
             "versions": [
                 {
                     "version": 1,
@@ -691,7 +691,7 @@ def studio_datasets(requests_mock, studio_token):
             "id": 3,
             "name": "both",
             "description": "both dataset",
-            "labels": ["both", "dataset"],
+            "attrs": ["both", "dataset"],
             "versions": [
                 {
                     "version": 1,

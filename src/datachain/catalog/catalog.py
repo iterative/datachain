@@ -776,7 +776,7 @@ class Catalog:
         listing: Optional[bool] = False,
         uuid: Optional[str] = None,
         description: Optional[str] = None,
-        labels: Optional[list[str]] = None,
+        attrs: Optional[list[str]] = None,
     ) -> "DatasetRecord":
         """
         Creates new dataset of a specific version.
@@ -794,16 +794,16 @@ class Catalog:
             dataset = self.get_dataset(name)
             default_version = dataset.next_version
 
-            if (description or labels) and (
-                dataset.description != description or dataset.labels != labels
+            if (description or attrs) and (
+                dataset.description != description or dataset.attrs != attrs
             ):
                 description = description or dataset.description
-                labels = labels or dataset.labels
+                attrs = attrs or dataset.attrs
 
                 self.update_dataset(
                     dataset,
                     description=description,
-                    labels=labels,
+                    attrs=attrs,
                 )
 
         except DatasetNotFoundError:
@@ -817,7 +817,7 @@ class Catalog:
                 schema=schema,
                 ignore_if_exists=True,
                 description=description,
-                labels=labels,
+                attrs=attrs,
             )
 
         version = version or default_version
@@ -1334,15 +1334,15 @@ class Catalog:
         name: str,
         new_name: Optional[str] = None,
         description: Optional[str] = None,
-        labels: Optional[list[str]] = None,
+        attrs: Optional[list[str]] = None,
     ) -> DatasetRecord:
         update_data = {}
         if new_name:
             update_data["name"] = new_name
         if description is not None:
             update_data["description"] = description
-        if labels is not None:
-            update_data["labels"] = labels  # type: ignore[assignment]
+        if attrs is not None:
+            update_data["attrs"] = attrs  # type: ignore[assignment]
 
         dataset = self.get_dataset(name)
         return self.update_dataset(dataset, **update_data)

@@ -329,7 +329,7 @@ class DatasetRecord:
     id: int
     name: str
     description: Optional[str]
-    labels: list[str]
+    attrs: list[str]
     schema: dict[str, Union[SQLType, type[SQLType]]]
     feature_schema: dict
     versions: list[DatasetVersion]
@@ -357,7 +357,7 @@ class DatasetRecord:
         id: int,
         name: str,
         description: Optional[str],
-        labels: str,
+        attrs: str,
         status: int,
         feature_schema: Optional[str],
         created_at: datetime,
@@ -387,7 +387,7 @@ class DatasetRecord:
         version_schema: str,
         version_job_id: Optional[str] = None,
     ) -> "DatasetRecord":
-        labels_lst: list[str] = json.loads(labels) if labels else []
+        attrs_lst: list[str] = json.loads(attrs) if attrs else []
         schema_dct: dict[str, Any] = json.loads(schema) if schema else {}
         version_schema_dct: dict[str, str] = (
             json.loads(version_schema) if version_schema else {}
@@ -418,7 +418,7 @@ class DatasetRecord:
             id,
             name,
             description,
-            labels_lst,
+            attrs_lst,
             cls.parse_schema(schema_dct),  # type: ignore[arg-type]
             json.loads(feature_schema) if feature_schema else {},
             [dataset_version],
@@ -562,7 +562,7 @@ class DatasetListRecord:
     id: int
     name: str
     description: Optional[str]
-    labels: list[str]
+    attrs: list[str]
     versions: list[DatasetListVersion]
     created_at: Optional[datetime] = None
 
@@ -572,7 +572,7 @@ class DatasetListRecord:
         id: int,
         name: str,
         description: Optional[str],
-        labels: str,
+        attrs: str,
         created_at: datetime,
         version_id: int,
         version_uuid: str,
@@ -588,7 +588,7 @@ class DatasetListRecord:
         version_query_script: Optional[str],
         version_job_id: Optional[str] = None,
     ) -> "DatasetListRecord":
-        labels_lst: list[str] = json.loads(labels) if labels else []
+        attrs_lst: list[str] = json.loads(attrs) if attrs else []
 
         dataset_version = DatasetListVersion.parse(
             version_id,
@@ -610,7 +610,7 @@ class DatasetListRecord:
             id,
             name,
             description,
-            labels_lst,
+            attrs_lst,
             [dataset_version],
             created_at,
         )

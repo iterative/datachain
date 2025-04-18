@@ -187,10 +187,10 @@ def edit_studio_dataset(
     name: str,
     new_name: Optional[str] = None,
     description: Optional[str] = None,
-    labels: Optional[list[str]] = None,
+    attrs: Optional[list[str]] = None,
 ):
     client = StudioClient(team=team_name)
-    response = client.edit_dataset(name, new_name, description, labels)
+    response = client.edit_dataset(name, new_name, description, attrs)
     if not response.ok:
         raise DataChainError(response.message)
 

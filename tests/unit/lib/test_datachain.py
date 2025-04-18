@@ -356,6 +356,41 @@ def test_datasets_in_memory():
     assert datasets[0].num_objects == 6
 
 
+@pytest.mark.parametrize(
+    "attrs,result",
+    [
+        (["number"], ["evens", "primes"]),
+        (["num=prime"], ["primes"]),
+        (["num=even"], ["evens"]),
+        (["num=*"], ["evens", "primes"]),
+        (["num=*", "small"], ["primes"]),
+        (["letter"], ["letters"]),
+        (["missing"], []),
+        (["num=*", "missing"], []),
+        (None, ["evens", "letters", "primes"]),
+        ([], ["evens", "letters", "primes"]),
+    ],
+)
+def test_datasets_filtering(test_session, attrs, result):
+    ds = dc.datasets(column="dataset", session=test_session)
+    datasets = [d for d in ds.collect("dataset") if d.name == "fibonacci"]
+    assert len(datasets) == 0
+
+    dc.read_values(num=[1, 2, 3], session=test_session).save(
+        "primes", attrs=["number", "num=prime", "small"]
+    )
+
+    dc.read_values(num=[2, 4, 6], session=test_session).save(
+        "evens", attrs=["number", "num=even"]
+    )
+
+    dc.read_values(letter=["a", "b", "c"], session=test_session).save(
+        "letters", attrs=["letter"]
+    )
+
+    assert sorted(dc.datasets(attrs=attrs).collect("name")) == sorted(result)
+
+
 def test_listings(test_session, tmp_dir):
     df = pd.DataFrame(DF_DATA)
     df.to_parquet(tmp_dir / "df.parquet")

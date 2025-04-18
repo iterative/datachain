@@ -42,8 +42,8 @@ def show(
     print("Name: ", name)
     if dataset.description:
         print("Description: ", dataset.description)
-    if dataset.labels:
-        print("Labels: ", ",".join(dataset.labels))
+    if dataset.attrs:
+        print("Attributes: ", ",".join(dataset.attrs))
     print("\n")
 
     show_records(records, collapse_columns=not no_collapse, hidden_fields=hidden_fields)
