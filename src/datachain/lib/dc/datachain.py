@@ -755,7 +755,7 @@ class DataChain:
 
         Example:
             ```py
-            dc.distinct("file.parent", "file.name")
+            dc.distinct("file.path")
             ```
         """
         return self._evolve(
@@ -881,7 +881,7 @@ class DataChain:
         ```py
          dc.mutate(
             area=Column("image.height") * Column("image.width"),
-            extension=file_ext(Column("file.name")),
+            extension=file_ext(Column("file.path")),
             dist=cosine_distance(embedding_text, embedding_image)
         )
         ```
@@ -1070,13 +1070,13 @@ class DataChain:
 
             Iterating over all rows with selected columns:
             ```py
-            for name, size in dc.collect("file.name", "file.size"):
+            for name, size in dc.collect("file.path", "file.size"):
                 print(name, size)
             ```
 
             Iterating over a single column:
             ```py
-            for file in dc.collect("file.name"):
+            for file in dc.collect("file.path"):
                 print(file)
             ```
         """
@@ -1629,7 +1629,7 @@ class DataChain:
             import datachain as dc
 
             chain = dc.read_storage("s3://mybucket")
-            chain = chain.filter(dc.C("file.name").glob("*.jsonl"))
+            chain = chain.filter(dc.C("file.path").glob("*.jsonl"))
             chain = chain.parse_tabular(format="json")
             ```
         """
@@ -2088,25 +2088,25 @@ class DataChain:
 
             Using glob to match patterns
             ```py
-            dc.filter(C("file.name").glob("*.jpg"))
+            dc.filter(C("file.path").glob("*.jpg"))
             ```
 
             Using `datachain.func`
             ```py
             from datachain.func import string
-            dc.filter(string.length(C("file.name")) > 5)
+            dc.filter(string.length(C("file.path")) > 5)
             ```
 
             Combining filters with "or"
             ```py
-            dc.filter(C("file.name").glob("cat*") | C("file.name").glob("dog*))
+            dc.filter(C("file.path").glob("cat*") | C("file.path").glob("dog*))
             ```
 
             Combining filters with "and"
             ```py
             dc.filter(
-                C("file.name").glob("*.jpg) &
-                (string.length(C("file.name")) > 5)
+                C("file.path").glob("*.jpg) &
+                (string.length(C("file.path")) > 5)
             )
             ```
         """

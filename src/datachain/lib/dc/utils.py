@@ -31,8 +31,8 @@ def resolve_columns(
 ) -> "Callable[Concatenate[D, P], D]":
     """Decorator that resolvs input column names to their actual DB names. This is
     specially important for nested columns as user works with them by using dot
-    notation e.g (file.name) but are actually defined with default delimiter
-    in DB, e.g file__name.
+    notation e.g (file.path) but are actually defined with default delimiter
+    in DB, e.g file__path.
     If there are any sql functions in arguments, they will just be transferred as is
     to a method.
     """
