@@ -64,8 +64,10 @@ def convert_rows_custom_column_types(
     subclasses of our SQLType, as only for those we have converters registered.
     """
     # indexes of SQLType column in a list of columns so that we can skip the rest
-    custom_columns_types: list[tuple[int, SQLType]] = [
-        (idx, c.type) for idx, c in enumerate(columns) if isinstance(c.type, SQLType)
+    custom_columns_types: list[tuple[int, SQLType, bool]] = [
+        (idx, c.type, getattr(c, "nullable", None))
+        for idx, c in enumerate(columns)
+        if isinstance(c.type, SQLType)
     ]
 
     if not custom_columns_types:
@@ -73,12 +75,11 @@ def convert_rows_custom_column_types(
 
     for row in rows:
         row_list = list(row)
-        for idx, t in custom_columns_types:
-            row_list[idx] = (
-                t.default_value(dialect)
-                if row_list[idx] is None
-                else t.on_read_convert(row_list[idx], dialect)
-            )
+        for idx, t, nullable in custom_columns_types:
+            if row_list[idx] is not None:
+                row_list[idx] = t.on_read_convert(row_list[idx], dialect)
+            else:
+                row_list[idx] = None if nullable is True else t.default_value(dialect)
 
         yield tuple(row_list)
 
