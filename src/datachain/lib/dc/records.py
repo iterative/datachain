@@ -1,8 +1,5 @@
-from typing import (
-    TYPE_CHECKING,
-    Optional,
-    Union,
-)
+from collections.abc import Iterable
+from typing import TYPE_CHECKING, Optional, Union
 
 import sqlalchemy
 
@@ -12,6 +9,7 @@ from datachain.lib.file import (
 )
 from datachain.lib.signal_schema import SignalSchema
 from datachain.query import Session
+from datachain.query.schema import Column
 
 if TYPE_CHECKING:
     from typing_extensions import ParamSpec
@@ -22,7 +20,7 @@ if TYPE_CHECKING:
 
 
 def read_records(
-    to_insert: Optional[Union[dict, list[dict]]],
+    to_insert: Optional[Union[dict, Iterable[dict]]],
     session: Optional[Session] = None,
     settings: Optional[dict] = None,
     in_memory: bool = False,
@@ -54,10 +52,11 @@ def read_records(
 
     if schema:
         signal_schema = SignalSchema(schema)
-        columns = [
-            sqlalchemy.Column(c.name, c.type)  # type: ignore[union-attr]
-            for c in signal_schema.db_signals(as_columns=True)  # type: ignore[assignment]
-        ]
+        columns = []
+        for c in signal_schema.db_signals(as_columns=True):
+            assert isinstance(c, Column)
+            kw = {"nullable": c.nullable} if c.nullable is not None else {}
+            columns.append(sqlalchemy.Column(c.name, c.type, **kw))
     else:
         columns = [
             sqlalchemy.Column(name, typ)
@@ -83,8 +82,7 @@ def read_records(
 
     warehouse = catalog.warehouse
     dr = warehouse.dataset_rows(dsr)
-    db = warehouse.db
-    insert_q = dr.get_table().insert()
-    for record in to_insert:
-        db.execute(insert_q.values(**record))
+    table = dr.get_table()
+    warehouse.insert_rows(table, to_insert)
+    warehouse.insert_rows_done(table)
     return read_dataset(name=dsr.name, session=session, settings=settings)
