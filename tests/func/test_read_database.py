@@ -171,5 +171,5 @@ def test_schema_is_not_inferred_when_all_types_are_provided(
         output={"id": int, "value": int},
         session=test_session,
     )
-    spy.assert_called_once_with(mocker.ANY, set(), 100)
+    spy.assert_called_once_with(mocker.ANY, [], 100)
     assert chain.schema == {"id": int, "value": int}

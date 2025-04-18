@@ -56,7 +56,7 @@ def _connect(
 
 def _infer_schema(
     result: "sqlalchemy.engine.Result",
-    to_infer: set[str],
+    to_infer: list[str],
     infer_schema_length: Optional[int] = 100,
 ) -> tuple[list["sqlalchemy.Row"], dict[str, "DataType"]]:
     from datachain.lib.convert.values_to_tuples import values_to_tuples
@@ -121,7 +121,8 @@ def read_database(
         query = sqlalchemy.text(query)
     kw = {"execution_options": {"stream_results": True}}  # use server-side cursors
     with _connect(connection) as conn, conn.execute(query, params, **kw) as result:
-        to_infer = result.keys() - output.keys()
+        cols = result.keys()
+        to_infer = [k for k in cols if k not in output]  # preserve the order
         rows, inferred_schema = _infer_schema(result, to_infer, infer_schema_length)
         records = (row._asdict() for row in itertools.chain(rows, result))
         return read_records(
