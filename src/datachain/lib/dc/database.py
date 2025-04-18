@@ -106,13 +106,30 @@ def read_database(
             so large values can lead to high memory usage.
             Only applies if the `output` parameter is not set for the given column.
 
-    Example:
+    Examples:
         Reading from a SQL query against a user-supplied connection:
         ```python
         query = "SELECT key, value FROM tbl"
-        chain = dc.read_database(query, connection)
-        chain.show()
+        chain = dc.read_database(query, connection, output={"value": float})
         ```
+
+        Load data from a SQLAlchemy driver/engine:
+        ```python
+        from sqlalchemy import create_engine
+        engine = create_engine("postgresql+psycopg://myuser:mypassword@localhost:5432/mydb")
+        chain = dc.read_database("select * from tbl", engine)
+        ```
+
+        Load data from a parameterized SQLAlchemy query:
+        ```python
+        query = "SELECT key, value FROM tbl WHERE value > :value"
+        dc.read_database(query, engine, params={"value": 50})
+        ```
+
+    Notes:
+        This function works with a variety of databases — including, but not limited to,
+        SQLite, DuckDB, PostgreSQL, and Snowflake, provided the appropriate driver is
+        installed.
     """
     from datachain.lib.dc.records import read_records
 
