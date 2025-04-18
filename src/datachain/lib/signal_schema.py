@@ -581,7 +581,11 @@ class SignalSchema:
         signals = [
             DEFAULT_DELIMITER.join(path)
             if not as_columns
-            else Column(DEFAULT_DELIMITER.join(path), python_to_sql(_type))
+            else Column(
+                DEFAULT_DELIMITER.join(path),
+                python_to_sql(_type),
+                nullable=is_optional(_type),
+            )
             for path, _type, has_subtree, _ in self.get_flat_tree(
                 include_hidden=include_hidden
             )
@@ -990,3 +994,8 @@ class SignalSchema:
             }
 
         return SignalSchema.deserialize(schema)
+
+
+def is_optional(type_: Any) -> bool:
+    """Check if a type is Optional."""
+    return get_origin(type_) is Union and type(None) in get_args(type_)

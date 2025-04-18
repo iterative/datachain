@@ -1,4 +1,5 @@
 from .csv import read_csv
+from .database import read_database
 from .datachain import C, Column, DataChain
 from .datasets import datasets, read_dataset
 from .hf import read_hf
@@ -21,6 +22,7 @@ __all__ = [
     "datasets",
     "listings",
     "read_csv",
+    "read_database",
     "read_dataset",
     "read_hf",
     "read_json",
