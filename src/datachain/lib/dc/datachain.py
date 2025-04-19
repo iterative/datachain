@@ -2091,6 +2091,12 @@ class DataChain:
             dc.filter(C("file.name").glob("*.jpg"))
             ```
 
+            Using in to match lists
+            ```py
+            ids = [1,2,3]
+            dc.filter(C("experiment_id").in_(ids))
+            ```
+
             Using `datachain.func`
             ```py
             from datachain.func import string
