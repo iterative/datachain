@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 
 from datachain import read_database
 from datachain.lib.dc import database
-from tests.utils import skip_if_not_sqlite
 
 
 @pytest.fixture
@@ -81,13 +80,6 @@ def test(sqlite3_connection, connection, test_session):
     ]
 
 
-# FIXME: `clickhouse` requires wrapping column types in `Nullable` to make the column
-# nullable, setting `nullable=True` is not enough.
-# https://github.com/xzkostyan/clickhouse-sqlalchemy/issues/189#issuecomment-1274736713
-# Also, was not able to figure out how to read nullable columns back from clickhouse.
-
-
-@skip_if_not_sqlite
 def test_nullable(sqlite3_connection, test_session):
     """
     Verify that a column containing a sequence of NULL values is handled correctly
@@ -107,7 +99,6 @@ def test_nullable(sqlite3_connection, test_session):
     ]
 
 
-@skip_if_not_sqlite
 def test_all_null_values(sqlite3_connection, test_session):
     sqlite3_connection.execute("CREATE TABLE tbl (id INTEGER PRIMARY KEY, num INTEGER)")
     sqlite3_connection.executemany(
