@@ -94,7 +94,7 @@ dc.DataModel.register(MistralModel)
 chain = (
     dc
     .read_storage("gs://datachain-demo/chatbot-KiT/", type="text")
-    .filter(dc.Column("file.name").glob("*.txt"))
+    .filter(dc.Column("file.path").glob("*.txt"))
     .limit(5)
     .settings(parallel=4, cache=True)
     .map(
@@ -228,7 +228,7 @@ Here is an example from MS COCO “captions” JSON which employs separate secti
 
 Note how complicated the setup is. Every image is references by the name, and the metadata for this file is keyed by the “id” field. This same field is references later in the “annotations” array, which is present in JSON files describing captions and the detected instances. The categories for the instances are stored in the “categories” array.
 
-However, Datachain can easily parse the entire COCO structure via several reading and merging operators:
+However, DataChain can easily parse the entire COCO structure via several reading and merging operators:
 
 ```python
 import datachain as dc
@@ -240,7 +240,7 @@ images = dc.read_storage(images_uri)
 meta = dc.read_json(captions_uri, jmespath="images")
 captions = dc.read_json(captions_uri, jmespath="annotations")
 
-images_meta = images.merge(meta, on="file.name", right_on="images.file_name")
+images_meta = images.merge(meta, on="file.path", right_on="images.file_name")
 captioned_images = images_meta.merge(captions, on="images.id", right_on="annotations.image_id")
 ```
 
@@ -248,12 +248,12 @@ The resulting dataset has image entries as files decorated with all the metadata
 
 ```python
 images_with_dogs = captioned_images.filter(dc.Column("annotations.caption").glob("*dog*"))
-images_with_dogs.select("annotations", "file.name").show()
+images_with_dogs.select("annotations", "file.path").show()
 ```
 
 ```
    captions captions                                           captions              file
-   image_id       id                                            caption              name
+   image_id       id                                            caption              path
 0     17029   778902         a dog jumping to catch a frisbee in a yard  000000017029.jpg
 1     17029   779838   A dog jumping to catch a red frisbee in a garden  000000017029.jpg
 2     17029   781941  The dog is catching the Frisbee in mid air in ...  000000017029.jpg
