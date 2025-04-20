@@ -4,12 +4,9 @@ from typing import TYPE_CHECKING, Optional, Union
 import sqlalchemy
 
 from datachain.lib.data_model import DataType
-from datachain.lib.file import (
-    File,
-)
+from datachain.lib.file import File
 from datachain.lib.signal_schema import SignalSchema
 from datachain.query import Session
-from datachain.query.schema import Column
 
 if TYPE_CHECKING:
     from typing_extensions import ParamSpec
@@ -41,6 +38,9 @@ def read_records(
         single_record = dc.read_records(dc.DEFAULT_FILE_RECORD)
         ```
     """
+    from datachain.query.dataset import adjust_outputs, get_col_types
+    from datachain.sql.types import SQLType
+
     from .datasets import read_dataset
 
     session = Session.get(session, in_memory=in_memory)
@@ -52,11 +52,10 @@ def read_records(
 
     if schema:
         signal_schema = SignalSchema(schema)
-        columns = []
-        for c in signal_schema.db_signals(as_columns=True):
-            assert isinstance(c, Column)
-            kw = {"nullable": c.nullable} if c.nullable is not None else {}
-            columns.append(sqlalchemy.Column(c.name, c.type, **kw))
+        columns = [
+            sqlalchemy.Column(c.name, c.type)  # type: ignore[union-attr]
+            for c in signal_schema.db_signals(as_columns=True)
+        ]
     else:
         columns = [
             sqlalchemy.Column(name, typ)
@@ -83,6 +82,13 @@ def read_records(
     warehouse = catalog.warehouse
     dr = warehouse.dataset_rows(dsr)
     table = dr.get_table()
-    warehouse.insert_rows(table, to_insert)
+
+    # Optimization: Compute row types once, rather than for every row.
+    col_types = get_col_types(
+        warehouse,
+        {c.name: c.type for c in columns if isinstance(c.type, SQLType)},
+    )
+    records = (adjust_outputs(warehouse, record, col_types) for record in to_insert)
+    warehouse.insert_rows(table, records)
     warehouse.insert_rows_done(table)
     return read_dataset(name=dsr.name, session=session, settings=settings)
