@@ -84,6 +84,18 @@ nav:
           - Torch: references/torch.md
           - Functions: references/func.md
           - Toolkit: references/toolkit.md
+      - 📖 CLI Reference:
+          - Overview: commands/index.md
+          - Commands:
+              - auth:
+                  - login: commands/auth/login.md
+                  - logout: commands/auth/logout.md
+                  - token: commands/auth/token.md
+                  - team: commands/auth/team.md
+              - job:
+                  - run: commands/job/run.md
+                  - logs: commands/job/logs.md
+                  - cancel: commands/job/cancel.md
       - 📡 Interacting with remote storage: references/remotes.md
       - 🤝 Contributing: contributing.md
 

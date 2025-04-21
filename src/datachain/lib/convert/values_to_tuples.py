@@ -1,6 +1,6 @@
 import itertools
 from collections.abc import Sequence
-from typing import Any, Optional, Union
+from typing import Any, Union
 
 from datachain.lib.data_model import (
     DataType,
@@ -71,14 +71,13 @@ def values_to_tuples(  # noqa: C901, PLR0912
             # If a non-None value appears early, it won't check the remaining items for
             # `None` values.
             try:
-                pos, first_not_none_element = next(
-                    itertools.dropwhile(lambda pair: pair[1] is None, enumerate(v))
+                first_not_none_element = next(
+                    itertools.dropwhile(lambda i: i is None, v)
                 )
             except StopIteration:
-                typ = str  # default to str if all values are None or has length 0
-                nullable = True
+                # set default type to `str` if column is empty or all values are `None`
+                typ = str
             else:
-                nullable = pos > 0
                 typ = type(first_not_none_element)  # type: ignore[assignment]
                 if not is_chain_type(typ):
                     raise ValuesToTupleError(
@@ -88,8 +87,7 @@ def values_to_tuples(  # noqa: C901, PLR0912
                     )
                 if isinstance(first_not_none_element, list):
                     typ = list[type(first_not_none_element[0])]  # type: ignore[assignment, misc]
-
-            types_map[k] = Optional[typ] if nullable else typ  # type: ignore[assignment]
+            types_map[k] = typ
 
         if length < 0:
             length = len_

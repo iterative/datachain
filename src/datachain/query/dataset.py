@@ -51,6 +51,7 @@ from datachain.query.schema import C, UDFParamSpec, normalize_param
 from datachain.query.session import Session
 from datachain.query.udf import UdfInfo
 from datachain.sql.functions.random import rand
+from datachain.sql.types import SQLType
 from datachain.utils import (
     batched,
     determine_processes,
@@ -61,6 +62,8 @@ from datachain.utils import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from sqlalchemy.sql.elements import ClauseElement
     from sqlalchemy.sql.schema import Table
     from sqlalchemy.sql.selectable import GenerativeSelect
@@ -267,7 +270,9 @@ class Subtract(DatasetDiffOperation):
 
 
 def adjust_outputs(
-    warehouse: "AbstractWarehouse", row: dict[str, Any], udf_col_types: list[tuple]
+    warehouse: "AbstractWarehouse",
+    row: dict[str, Any],
+    col_types: list[tuple[str, SQLType, type, str, Any]],
 ) -> dict[str, Any]:
     """
     This function does a couple of things to prepare a row for inserting into the db:
@@ -283,7 +288,7 @@ def adjust_outputs(
         col_python_type,
         col_type_name,
         default_value,
-    ) in udf_col_types:
+    ) in col_types:
         row_val = row.get(col_name)
 
         # Fill None or missing values with defaults (get returns None if not in the row)
@@ -298,8 +303,10 @@ def adjust_outputs(
     return row
 
 
-def get_udf_col_types(warehouse: "AbstractWarehouse", udf: "UDFAdapter") -> list[tuple]:
-    """Optimization: Precompute UDF column types so these don't have to be computed
+def get_col_types(
+    warehouse: "AbstractWarehouse", output: "Mapping[str, Any]"
+) -> list[tuple]:
+    """Optimization: Precompute column types so these don't have to be computed
     in the convert_type function for each row in a loop."""
     dialect = warehouse.db.dialect
     return [
@@ -311,7 +318,7 @@ def get_udf_col_types(warehouse: "AbstractWarehouse", udf: "UDFAdapter") -> list
             type(col_type_inst).__name__,
             col_type.default_value(dialect),
         )
-        for col_name, col_type in udf.output.items()
+        for col_name, col_type in output.items()
     ]
 
 
@@ -327,7 +334,7 @@ def process_udf_outputs(
 
     rows: list[UDFResult] = []
     # Optimization: Compute row types once, rather than for every row.
-    udf_col_types = get_udf_col_types(warehouse, udf)
+    udf_col_types = get_col_types(warehouse, udf.output)
 
     for udf_output in udf_results:
         if not udf_output:
