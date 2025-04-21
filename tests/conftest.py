@@ -764,19 +764,19 @@ def run_datachain_worker():
     worker_cmd = [
         "celery",
         "-A",
-        "datachain_server.distributed",
+        "datachain_worker.tasks",
         "worker",
         "--loglevel=INFO",
         "-Q",
-        "datachain-worker",
+        "udf_runner_queue",
         "-n",
         "datachain-worker-tests",
     ]
     workers.append(subprocess.Popen(worker_cmd, shell=False))  # noqa: S603
     try:
-        from datachain_server.distributed import app
+        from datachain_worker.utils.celery import celery_app
 
-        inspect = app.control.inspect()
+        inspect = celery_app.control.inspect()
         attempts = 0
         # Wait 10 seconds for the Celery worker(s) to be up
         while not inspect.active() and attempts < 10:

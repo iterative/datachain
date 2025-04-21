@@ -244,7 +244,9 @@ def test_read_storage_dependencies(cloud_test_catalog, cloud_type):
 
 @pytest.mark.parametrize("use_cache", [True, False])
 @pytest.mark.parametrize("prefetch", [0, 2])
-def test_map_file(cloud_test_catalog, use_cache, prefetch):
+def test_map_file(cloud_test_catalog, use_cache, prefetch, monkeypatch):
+    monkeypatch.setenv("DATACHAIN_DISTRIBUTED", "")
+
     ctc = cloud_test_catalog
     ctc.catalog.cache.clear()
 
@@ -984,7 +986,7 @@ def test_udf_parallel_exec_error(cloud_test_catalog_tmpfile):
         .settings(parallel=-1)
         .map(name_len_error, params=["file.path"], output={"name_len": int})
     )
-    with pytest.raises(RuntimeError, match="UDF Execution Failed!"):
+    with pytest.raises(DataChainError, match="Test Error!"):
         chain.show()
 
 

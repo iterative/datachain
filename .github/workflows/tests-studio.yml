@@ -98,6 +98,7 @@ jobs:
       - name: Run tests
         # Generate `.test_durations` file with `pytest --store-durations --durations-path ../.github/.test_durations ...`
         run: >
+          PYTHONPATH="$(pwd)/..:${PYTHONPATH}"
           pytest
           --config-file=pyproject.toml -rs
           --splits=6 --group=${{ matrix.group }} --durations-path=../../.github/.test_durations
