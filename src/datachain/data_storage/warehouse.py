@@ -929,12 +929,8 @@ class AbstractWarehouse(ABC, Serializable):
         are cleaned up as soon as they are no longer needed.
         """
         to_drop = set(names)
-        with tqdm(
-            desc="Cleanup", unit=" tables", total=len(to_drop), leave=False
-        ) as pbar:
-            for name in to_drop:
-                self.db.drop_table(Table(name, self.db.metadata), if_exists=True)
-                pbar.update(1)
+        for name in to_drop:
+            self.db.drop_table(Table(name, self.db.metadata), if_exists=True)
 
 
 def _random_string(length: int) -> str:
