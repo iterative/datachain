@@ -1,12 +1,12 @@
 from typing import TYPE_CHECKING, Optional, Union
 
-from sqlalchemy import Column, ColumnElement, TextClause
+from sqlalchemy import Column
 
 if TYPE_CHECKING:
-    from sqlalchemy import Select
+    from sqlalchemy import ColumnElement, Select, TextClause
 
 
-ColT = Union[Column, ColumnElement, TextClause]
+ColT = Union[Column, "ColumnElement", "TextClause"]
 
 
 def column_name(col: ColT) -> str:
@@ -19,10 +19,10 @@ def get_query_column(query: "Select", name: str) -> Optional[ColT]:
     return next((col for col in query.inner_columns if column_name(col) == name), None)
 
 
-def get_query_id_column(query: "Select") -> ColumnElement:
+def get_query_id_column(query: "Select") -> ColT:
     """Returns ID column element from query or None if column not found."""
     col = get_query_column(query, "sys__id")
-    if col is None or not isinstance(col, Column):
+    if col is None:
         raise RuntimeError("sys__id column not found in query")
     return col
 
