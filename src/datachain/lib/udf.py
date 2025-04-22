@@ -219,6 +219,18 @@ class UDFBase(AbstractUDF):
         return self.__class__.__name__
 
     @property
+    def verbose_name(self):
+        """Returns the name of the function or class that implements the UDF."""
+        if self._func and callable(self._func):
+            if hasattr(self._func, "__name__"):
+                return self._func.__name__
+            if hasattr(self._func, "__class__") and hasattr(
+                self._func.__class__, "__name__"
+            ):
+                return self._func.__class__.__name__
+        return "<unknown>"
+
+    @property
     def signal_names(self) -> Iterable[str]:
         return self.output.to_udf_spec().keys()
 
