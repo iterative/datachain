@@ -38,8 +38,9 @@ def read_records(
         single_record = dc.read_records(dc.DEFAULT_FILE_RECORD)
         ```
     """
-    from datachain.query.dataset import adjust_outputs, get_col_types
+    from datachain.query.dataset import INSERT_BATCH_SIZE, adjust_outputs, get_col_types
     from datachain.sql.types import SQLType
+    from datachain.utils import batched
 
     from .datasets import read_dataset
 
@@ -89,6 +90,7 @@ def read_records(
         {c.name: c.type for c in columns if isinstance(c.type, SQLType)},
     )
     records = (adjust_outputs(warehouse, record, col_types) for record in to_insert)
-    warehouse.insert_rows(table, records)
+    for chunk in batched(records, INSERT_BATCH_SIZE):
+        warehouse.insert_rows(table, chunk)
     warehouse.insert_rows_done(table)
     return read_dataset(name=dsr.name, session=session, settings=settings)
