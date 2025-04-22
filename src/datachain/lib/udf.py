@@ -423,13 +423,13 @@ class BatchMapper(UDFBase):
         self.setup()
 
         for batch in udf_inputs:
-            n_rows = len(batch.rows)
+            n_rows = len(batch)
             row_ids, *udf_args = zip(
                 *[
                     self._prepare_row_and_id(
                         row, udf_fields, catalog, cache, download_cb
                     )
-                    for row in batch.rows
+                    for row in batch
                 ]
             )
             result_objs = list(self.process_safe(udf_args))
@@ -501,7 +501,7 @@ class Aggregator(UDFBase):
 
     def run(
         self,
-        udf_fields: "Sequence[str]",
+        udf_fields: Sequence[str],
         udf_inputs: Iterable[RowsOutputBatch],
         catalog: "Catalog",
         cache: bool,
@@ -514,13 +514,13 @@ class Aggregator(UDFBase):
             udf_args = zip(
                 *[
                     self._prepare_row(row, udf_fields, catalog, cache, download_cb)
-                    for row in batch.rows
+                    for row in batch
                 ]
             )
             result_objs = self.process_safe(udf_args)
             udf_outputs = (self._flatten_row(row) for row in result_objs)
             output = (dict(zip(self.signal_names, row)) for row in udf_outputs)
-            processed_cb.relative_update(len(batch.rows))
+            processed_cb.relative_update(len(batch))
             yield output
 
         self.teardown()

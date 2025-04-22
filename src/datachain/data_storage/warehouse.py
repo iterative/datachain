@@ -18,7 +18,7 @@ from datachain.data_storage.schema import convert_rows_custom_column_types
 from datachain.data_storage.serializer import Serializable
 from datachain.dataset import DatasetRecord, StorageURI
 from datachain.node import DirType, DirTypeGroup, Node, NodeWithPath, get_path
-from datachain.query.batch import RowsOutput, RowsOutputBatch
+from datachain.query.batch import RowsOutput
 from datachain.query.utils import get_query_id_column
 from datachain.sql.functions import path as pathfunc
 from datachain.sql.types import Int, SQLType
@@ -322,20 +322,18 @@ class AbstractWarehouse(ABC, Serializable):
         self,
         query: sa.Select,
         ids: Iterable[RowsOutput],
+        is_batched: bool,
     ) -> Iterator[RowsOutput]:
         """
         Fetch dataset rows from database using a list of IDs.
         """
-        is_batched = False
-        if isinstance(ids, RowsOutputBatch):
-            ids = [row[0] for row in ids.rows]
-            is_batched = True
+        ids = [row[0] for row in ids] if is_batched else ids
 
         col_id = get_query_id_column(query)
         rows = self.dataset_rows_select(query.where(col_id.in_(ids)))
 
         if is_batched:
-            yield RowsOutputBatch(list(rows))
+            yield list(rows)
         else:
             yield from rows
 

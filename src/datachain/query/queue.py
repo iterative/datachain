@@ -7,7 +7,7 @@ from typing import Any
 
 import msgpack
 
-from datachain.query.batch import RowsOutput, RowsOutputBatch
+from datachain.query.batch import RowsOutput
 
 DEFAULT_BATCH_SIZE = 10000
 STOP_SIGNAL = "STOP"
@@ -56,7 +56,6 @@ def put_into_queue(queue: Queue, item: Any) -> None:
 
 
 MSGPACK_EXT_TYPE_DATETIME = 42
-MSGPACK_EXT_TYPE_ROWS_INPUT_BATCH = 43
 
 
 def _msgpack_pack_extended_types(obj: Any) -> msgpack.ExtType:
@@ -69,12 +68,6 @@ def _msgpack_pack_extended_types(obj: Any) -> msgpack.ExtType:
             return msgpack.ExtType(MSGPACK_EXT_TYPE_DATETIME, pack("!dl", *data))
         data = (obj.timestamp(),)  # type: ignore   # noqa: PGH003
         return msgpack.ExtType(MSGPACK_EXT_TYPE_DATETIME, pack("!d", *data))
-
-    if isinstance(obj, RowsOutputBatch):
-        return msgpack.ExtType(
-            MSGPACK_EXT_TYPE_ROWS_INPUT_BATCH,
-            msgpack_pack(obj.rows),
-        )
 
     raise TypeError(f"Unknown type: {obj}")
 
@@ -99,9 +92,6 @@ def _msgpack_unpack_extended_types(code: int, data: bytes) -> Any:
             timezone_offset = values[1]
             tz_info = datetime.timezone(datetime.timedelta(seconds=timezone_offset))
         return datetime.datetime.fromtimestamp(timestamp, tz=tz_info)
-
-    if code == MSGPACK_EXT_TYPE_ROWS_INPUT_BATCH:
-        return RowsOutputBatch(msgpack_unpack(data))
 
     return msgpack.ExtType(code, data)
 

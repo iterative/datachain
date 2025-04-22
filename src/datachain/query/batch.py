@@ -2,7 +2,6 @@ import contextlib
 import math
 from abc import ABC, abstractmethod
 from collections.abc import Generator, Sequence
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Optional, Union
 
 from datachain.data_storage.schema import PARTITION_COLUMN_ID
@@ -12,11 +11,7 @@ if TYPE_CHECKING:
     from sqlalchemy import Select
 
 
-@dataclass
-class RowsOutputBatch:
-    rows: Sequence[Sequence]
-
-
+RowsOutputBatch = Sequence[Sequence]
 RowsOutput = Union[Sequence, RowsOutputBatch]
 
 
@@ -87,10 +82,10 @@ class Batch(BatchingStrategy):
                 results.append(row)
                 if len(results) >= self.count:
                     batch, results = results[: self.count], results[self.count :]
-                    yield RowsOutputBatch(batch)
+                    yield batch
 
             if len(results) > 0:
-                yield RowsOutputBatch(results)
+                yield results
 
 
 class Partition(BatchingStrategy):
@@ -133,9 +128,9 @@ class Partition(BatchingStrategy):
                 if current_partition != partition:
                     current_partition = partition
                     if len(batch) > 0:
-                        yield RowsOutputBatch(batch)
+                        yield batch
                         batch = []
                 batch.append([row[id_column_idx]] if ids_only else row)
 
             if len(batch) > 0:
-                yield RowsOutputBatch(batch)
+                yield batch

@@ -122,6 +122,7 @@ class UDFDispatcher:
             self.query,
             self.table,
             self.cache,
+            self.is_batching,
             self.udf_fields,
         )
 
@@ -181,7 +182,9 @@ class UDFDispatcher:
 
         def get_inputs() -> Iterable["RowsOutput"]:
             warehouse = self.catalog.warehouse.clone()
-            yield from warehouse.dataset_rows_select_from_ids(self.query, input_rows)
+            yield from warehouse.dataset_rows_select_from_ids(
+                self.query, input_rows, self.is_batching
+            )
 
         prefetch = udf.prefetch
         with _get_cache(self.catalog.cache, prefetch, use_cache=self.cache) as _cache:
@@ -349,6 +352,7 @@ class UDFWorker:
         query: "Select",
         table: "Table",
         cache: bool,
+        is_batching: bool,
         udf_fields: Sequence[str],
     ) -> None:
         self.catalog = catalog
@@ -358,6 +362,7 @@ class UDFWorker:
         self.query = query
         self.table = table
         self.cache = cache
+        self.is_batching = is_batching
         self.udf_fields = udf_fields
 
         self.download_cb = DownloadCallback(self.done_queue)
@@ -394,4 +399,6 @@ class UDFWorker:
     def get_inputs(self) -> Iterable["RowsOutput"]:
         warehouse = self.catalog.warehouse.clone()
         while (batch := get_from_queue(self.task_queue)) != STOP_SIGNAL:
-            yield from warehouse.dataset_rows_select_from_ids(self.query, batch)
+            yield from warehouse.dataset_rows_select_from_ids(
+                self.query, batch, self.is_batching
+            )
