@@ -215,5 +215,6 @@ def test_delta_update_no_file_signals(test_session):
         ).save("delta_ds", delta=True)
 
     assert (
-        str(excinfo.value) == "Datasets without file signals cannot have delta updates"
+        str(excinfo.value)
+        == "Chain doesn't produce file signal, cannot do delta update"
     )
