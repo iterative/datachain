@@ -329,8 +329,10 @@ class AbstractWarehouse(ABC, Serializable):
         """
         ids = [row[0] for row in ids] if is_batched else ids
 
-        col_id = get_query_id_column(query)
-        rows = self.dataset_rows_select(query.where(col_id.in_(ids)))
+        if (id_col := get_query_id_column(query)) is None:
+            raise RuntimeError("sys__id column not found in query")
+
+        rows = self.dataset_rows_select(query.where(id_col.in_(ids)))
 
         if is_batched:
             yield list(rows)

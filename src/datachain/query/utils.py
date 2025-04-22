@@ -15,12 +15,10 @@ def get_query_column(query: sa.Select, name: str) -> Optional[ColT]:
     return next((col for col in query.inner_columns if column_name(col) == name), None)
 
 
-def get_query_id_column(query: sa.Select) -> sa.ColumnElement:
+def get_query_id_column(query: sa.Select) -> Optional[sa.ColumnElement]:
     """Returns ID column element from query or None if column not found."""
     col = get_query_column(query, "sys__id")
-    if col is None or not isinstance(col, sa.ColumnElement):
-        raise RuntimeError("sys__id column not found in query")
-    return col
+    return col if col is not None and isinstance(col, sa.ColumnElement) else None
 
 
 def select_only_columns(query: sa.Select, *names: str) -> sa.Select:

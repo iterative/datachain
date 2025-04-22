@@ -244,7 +244,7 @@ def test_read_storage_dependencies(cloud_test_catalog, cloud_type):
 @pytest.mark.parametrize("use_cache", [True, False])
 @pytest.mark.parametrize("prefetch", [0, 2])
 def test_map_file(cloud_test_catalog, use_cache, prefetch, monkeypatch):
-    monkeypatch.setenv("DATACHAIN_DISTRIBUTED", "")
+    monkeypatch.delenv("DATACHAIN_DISTRIBUTED", raising=False)
 
     ctc = cloud_test_catalog
     ctc.catalog.cache.clear()
@@ -1136,7 +1136,9 @@ def test_udf_distributed_interrupt(
     [("s3", True)],
     indirect=True,
 )
-def test_avoid_recalculation_after_save(cloud_test_catalog):
+def test_avoid_recalculation_after_save(cloud_test_catalog, monkeypatch):
+    monkeypatch.delenv("DATACHAIN_DISTRIBUTED", raising=False)
+
     calls = 0
 
     def name_len(path):
@@ -1492,7 +1494,9 @@ def test_gen_with_new_columns_wrong_type(cloud_test_catalog, dogs_dataset):
 
 @pytest.mark.parametrize("use_cache", [True, False])
 @pytest.mark.parametrize("prefetch", [0, 2])
-def test_gen_file(cloud_test_catalog, use_cache, prefetch):
+def test_gen_file(cloud_test_catalog, use_cache, prefetch, monkeypatch):
+    monkeypatch.delenv("DATACHAIN_DISTRIBUTED", raising=False)
+
     ctc = cloud_test_catalog
     ctc.catalog.cache.clear()
 

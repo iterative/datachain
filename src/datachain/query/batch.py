@@ -2,14 +2,12 @@ import contextlib
 import math
 from abc import ABC, abstractmethod
 from collections.abc import Generator, Sequence
-from typing import TYPE_CHECKING, Callable, Optional, Union
+from typing import Callable, Optional, Union
+
+import sqlalchemy as sa
 
 from datachain.data_storage.schema import PARTITION_COLUMN_ID
-from datachain.query.utils import get_query_column, get_query_id_column
-
-if TYPE_CHECKING:
-    from sqlalchemy import Select
-
+from datachain.query.utils import get_query_column
 
 RowsOutputBatch = Sequence[Sequence]
 RowsOutput = Union[Sequence, RowsOutputBatch]
@@ -24,8 +22,8 @@ class BatchingStrategy(ABC):
     def __call__(
         self,
         execute: Callable,
-        query: "Select",
-        ids_only: bool = False,
+        query: sa.Select,
+        id_col: Optional[sa.ColumnElement] = None,
     ) -> Generator[RowsOutput, None, None]:
         """Apply the provided parameters to the UDF."""
 
@@ -41,11 +39,11 @@ class NoBatching(BatchingStrategy):
     def __call__(
         self,
         execute: Callable,
-        query: "Select",
-        ids_only: bool = False,
+        query: sa.Select,
+        id_col: Optional[sa.ColumnElement] = None,
     ) -> Generator[Sequence, None, None]:
-        if ids_only:
-            query = query.with_only_columns(get_query_id_column(query))
+        if id_col is not None:
+            query = query.with_only_columns(id_col)
         return execute(query)
 
 
@@ -63,13 +61,13 @@ class Batch(BatchingStrategy):
     def __call__(
         self,
         execute: Callable,
-        query: "Select",
-        ids_only: bool = False,
+        query: sa.Select,
+        id_col: Optional[sa.ColumnElement] = None,
     ) -> Generator[RowsOutputBatch, None, None]:
         from datachain.data_storage.warehouse import SELECT_BATCH_SIZE
 
-        if ids_only:
-            query = query.with_only_columns(get_query_id_column(query))
+        if id_col is not None:
+            query = query.with_only_columns(id_col)
 
         # choose page size that is a multiple of the batch size
         page_size = math.ceil(SELECT_BATCH_SIZE / self.count) * self.count
@@ -100,14 +98,13 @@ class Partition(BatchingStrategy):
     def __call__(
         self,
         execute: Callable,
-        query: "Select",
-        ids_only: bool = False,
+        query: sa.Select,
+        id_col: Optional[sa.ColumnElement] = None,
     ) -> Generator[RowsOutputBatch, None, None]:
-        id_col = get_query_id_column(query)
         if (partition_col := get_query_column(query, PARTITION_COLUMN_ID)) is None:
             raise RuntimeError("partition column not found in query")
 
-        if ids_only:
+        if id_col is not None:
             query = query.with_only_columns(id_col, partition_col)
 
         current_partition: Optional[int] = None
@@ -130,7 +127,7 @@ class Partition(BatchingStrategy):
                     if len(batch) > 0:
                         yield batch
                         batch = []
-                batch.append([row[id_column_idx]] if ids_only else row)
+                batch.append([row[id_column_idx]] if id_col else row)
 
             if len(batch) > 0:
                 yield batch
