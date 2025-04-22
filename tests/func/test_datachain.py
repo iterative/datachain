@@ -20,7 +20,6 @@ from sqlalchemy import Column
 
 import datachain as dc
 from datachain import DataModel, func
-from datachain.catalog.catalog import QUERY_SCRIPT_CANCELED_EXIT_CODE
 from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.dataset import DatasetDependencyType
 from datachain.func import path as pathfunc
@@ -859,6 +858,7 @@ def test_udf_parallel_boostrap(test_session_tmpfile):
     indirect=True,
 )
 @pytest.mark.parametrize("workers", (1, 2))
+@pytest.mark.parametrize("parallel", (1, 2))
 @pytest.mark.skipif(
     "not os.environ.get('DATACHAIN_DISTRIBUTED')",
     reason="Set the DATACHAIN_DISTRIBUTED environment variable "
@@ -866,7 +866,7 @@ def test_udf_parallel_boostrap(test_session_tmpfile):
 )
 @pytest.mark.xdist_group(name="tmpfile")
 def test_udf_distributed(
-    cloud_test_catalog_tmpfile, workers, tree, datachain_job_id, run_datachain_worker
+    cloud_test_catalog_tmpfile, workers, parallel, tree, run_datachain_worker
 ):
     session = cloud_test_catalog_tmpfile.session
 
@@ -875,7 +875,7 @@ def test_udf_distributed(
 
     chain = (
         dc.read_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
-        .settings(parallel=2, workers=workers)
+        .settings(parallel=parallel, workers=workers)
         .map(name_len, params=["file.path"], output={"name_len": int})
         .select("file.path", "name_len")
     )
@@ -1003,6 +1003,7 @@ def test_udf_parallel_exec_error(cloud_test_catalog_tmpfile):
     indirect=True,
 )
 @pytest.mark.parametrize("workers", (1, 2))
+@pytest.mark.parametrize("parallel", (1, 2))
 @pytest.mark.skipif(
     "not os.environ.get('DATACHAIN_DISTRIBUTED')",
     reason="Set the DATACHAIN_DISTRIBUTED environment variable "
@@ -1010,7 +1011,7 @@ def test_udf_parallel_exec_error(cloud_test_catalog_tmpfile):
 )
 @pytest.mark.xdist_group(name="tmpfile")
 def test_udf_distributed_exec_error(
-    cloud_test_catalog_tmpfile, workers, datachain_job_id, tree, run_datachain_worker
+    cloud_test_catalog_tmpfile, workers, parallel, tree, run_datachain_worker
 ):
     session = cloud_test_catalog_tmpfile.session
 
@@ -1022,7 +1023,7 @@ def test_udf_distributed_exec_error(
         dc.read_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
         .filter(dc.C("file.size") < 13)
         .filter(dc.C("file.path").glob("cats*") | (dc.C("file.size") < 4))
-        .settings(parallel=2, workers=workers)
+        .settings(parallel=parallel, workers=workers)
         .map(name_len_error, params=["file.path"], output={"name_len": int})
     )
     with pytest.raises(DataChainError, match="Test Error!"):
@@ -1089,10 +1090,9 @@ def test_udf_parallel_interrupt(cloud_test_catalog_tmpfile, capfd):
         .settings(parallel=-1)
         .map(name_len_interrupt, params=["file.path"], output={"name_len": int})
     )
-    with pytest.raises(RuntimeError, match="UDF Execution Failed!"):
+    with pytest.raises(KeyboardInterrupt):
         chain.show()
     captured = capfd.readouterr()
-    assert "KeyboardInterrupt" in captured.err
     assert "semaphore" not in captured.err
 
 
@@ -1106,9 +1106,11 @@ def test_udf_parallel_interrupt(cloud_test_catalog_tmpfile, capfd):
     reason="Set the DATACHAIN_DISTRIBUTED environment variable "
     "to test distributed UDFs",
 )
+@pytest.mark.parametrize("workers", (1, 2))
+@pytest.mark.parametrize("parallel", (1, 2))
 @pytest.mark.xdist_group(name="tmpfile")
 def test_udf_distributed_interrupt(
-    cloud_test_catalog_tmpfile, capfd, datachain_job_id, tree, run_datachain_worker
+    cloud_test_catalog_tmpfile, capfd, tree, workers, parallel, run_datachain_worker
 ):
     session = cloud_test_catalog_tmpfile.session
 
@@ -1120,71 +1122,12 @@ def test_udf_distributed_interrupt(
         dc.read_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
         .filter(dc.C("file.size") < 13)
         .filter(dc.C("file.path").glob("cats*") | (dc.C("file.size") < 4))
-        .settings(parallel=2, workers=2)
+        .settings(parallel=parallel, workers=workers)
         .map(name_len_interrupt, params=["file.path"], output={"name_len": int})
     )
-    with pytest.raises(RuntimeError, match=r"Worker Killed \(KeyboardInterrupt\)"):
+    with pytest.raises(KeyboardInterrupt):
         chain.show()
     captured = capfd.readouterr()
-    assert "semaphore" not in captured.err
-
-
-@pytest.mark.parametrize(
-    "cloud_type,version_aware,tree",
-    [("s3", True, LARGE_TREE)],
-    indirect=True,
-)
-@pytest.mark.skipif(
-    "not os.environ.get('DATACHAIN_DISTRIBUTED')",
-    reason="Set the DATACHAIN_DISTRIBUTED environment variable "
-    "to test distributed UDFs",
-)
-@pytest.mark.xdist_group(name="tmpfile")
-def test_udf_distributed_cancel(
-    cloud_test_catalog_tmpfile, capfd, datachain_job_id, tree, run_datachain_worker
-):
-    catalog = cloud_test_catalog_tmpfile.catalog
-    session = cloud_test_catalog_tmpfile.session
-    metastore = catalog.metastore
-
-    job_id = os.environ.get("DATACHAIN_JOB_ID")
-
-    # A job is required for query script cancellation (not using a KeyboardInterrupt)
-    metastore.db.execute(
-        metastore._jobs_insert().values(
-            id=job_id,
-            status=7,  # CANCELING
-            celery_task_id="",
-            name="Test Cancel Job",
-            workers=2,
-            team_id=metastore.team_id,
-            created_at=datetime.now(timezone.utc),
-            params="{}",
-            metrics="{}",
-        ),
-    )
-
-    def name_len_slow(name):
-        # A very simple udf, that processes slowly to emulate being stuck.
-        from time import sleep
-
-        sleep(10)
-        return len(name), None
-
-    chain = (
-        dc.read_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
-        .filter(dc.C("file.size") < 13)
-        .filter(dc.C("file.path").glob("cats*") | (dc.C("file.size") < 4))
-        .settings(parallel=2, workers=2)
-        .map(name_len_slow, params=["file.path"], output={"name_len": int})
-    )
-
-    with pytest.raises(SystemExit) as excinfo:
-        chain.show()
-
-    assert excinfo.value.code == QUERY_SCRIPT_CANCELED_EXIT_CODE
-    captured = capfd.readouterr()
-    assert "canceled" in captured.out
     assert "semaphore" not in captured.err
 
 

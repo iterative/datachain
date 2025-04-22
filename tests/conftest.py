@@ -455,7 +455,7 @@ def cloud_server(request, tmp_upath_factory, cloud_type, version_aware, tree):
 
 @pytest.fixture()
 def datachain_job_id(monkeypatch):
-    job_id = uuid.uuid4().hex
+    job_id = str(uuid.uuid4())
     monkeypatch.setenv("DATACHAIN_JOB_ID", job_id)
     return job_id
 
@@ -754,9 +754,13 @@ def pseudo_random_ds(test_session):
 
 
 @pytest.fixture()
-def run_datachain_worker():
+def run_datachain_worker(datachain_job_id):
     if not os.environ.get("DATACHAIN_DISTRIBUTED"):
         pytest.skip("Distributed tests are disabled")
+
+    job_id = os.environ.get("DATACHAIN_JOB_ID")
+    assert job_id, "DATACHAIN_JOB_ID environment variable is required for this test"
+
     # This worker can take several tasks in parallel, as it's very handy
     # for testing, where we don't want [yet] to constrain the number of
     # available workers.
@@ -767,12 +771,33 @@ def run_datachain_worker():
         "datachain_worker.tasks",
         "worker",
         "--loglevel=INFO",
+        "--hostname=tests-datachain-worker-main",
+        "--pool=solo",
+        "--concurrency=1",
+        "--max-tasks-per-child=1",
+        "--prefetch-multiplier=1",
         "-Q",
-        "udf_runner_queue",
-        "-n",
-        "datachain-worker-tests",
+        f"datachain-worker-main-{job_id}",
     ]
+    print(f"Starting worker with command: {' '.join(worker_cmd)}")
     workers.append(subprocess.Popen(worker_cmd, shell=False))  # noqa: S603
+    for i in range(2):
+        worker_cmd = [
+            "celery",
+            "-A",
+            "datachain_worker.tasks",
+            "worker",
+            "--loglevel=INFO",
+            f"--hostname=tests-datachain-worker-udf-runner-{i}",
+            "--pool=solo",
+            "--concurrency=1",
+            "--max-tasks-per-child=1",
+            "--prefetch-multiplier=1",
+            "-Q",
+            "udf_runner_queue",
+        ]
+        print(f"Starting worker with command: {' '.join(worker_cmd)}")
+        workers.append(subprocess.Popen(worker_cmd, shell=False))  # noqa: S603
     try:
         from datachain_worker.utils.celery import celery_app
 
@@ -780,6 +805,7 @@ def run_datachain_worker():
         attempts = 0
         # Wait 10 seconds for the Celery worker(s) to be up
         while not inspect.active() and attempts < 10:
+            print("Waiting for Celery worker(s) to start...")
             sleep(1)
             attempts += 1
 
@@ -789,6 +815,7 @@ def run_datachain_worker():
         yield workers
     finally:
         for worker in workers:
+            print(f"Stopping worker {worker.pid}")
             os.kill(worker.pid, signal.SIGTERM)
         for worker in workers:
             try:
