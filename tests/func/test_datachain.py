@@ -986,8 +986,15 @@ def test_udf_parallel_exec_error(cloud_test_catalog_tmpfile):
         .settings(parallel=-1)
         .map(name_len_error, params=["file.path"], output={"name_len": int})
     )
-    with pytest.raises(DataChainError, match="Test Error!"):
-        chain.show()
+
+    if os.environ.get("DATACHAIN_DISTRIBUTED"):
+        # in distributed mode we expect DataChainError with the error message
+        with pytest.raises(DataChainError, match="Test Error!"):
+            chain.show()
+    else:
+        # while in local mode we expect RuntimeError with the error message
+        with pytest.raises(RuntimeError, match="UDF Execution Failed!"):
+            chain.show()
 
 
 @pytest.mark.parametrize(
