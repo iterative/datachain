@@ -184,7 +184,7 @@ chain = (
    .save("response")
 )
 
-chain.select("file.name", "status", "response.usage").show(5)
+chain.select("file.path", "status", "response.usage").show(5)
 
 success_rate = chain.filter(dc.Column("status") == "success").count() / chain.count()
 print(f"{100*success_rate:.1f}% dialogs were successful")
@@ -194,7 +194,7 @@ Output:
 
 ``` shell
 file   status      response     response          response
-name                  usage        usage             usage
+path                  usage        usage             usage
               prompt_tokens total_tokens completion_tokens
 0   1.txt  success           547          548                 1
 1  10.txt  failure          3576         3578                 2
@@ -277,7 +277,7 @@ processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
 chain = (
     dc.read_storage("gs://datachain-demo/dogs-and-cats/", type="image", anon=True)
-    .map(label=lambda name: name.split(".")[0], params=["file.name"])
+    .map(label=lambda name: name.split(".")[0], params=["file.path"])
     .select("file", "label").to_pytorch(
         transform=processor.image_processor,
         tokenizer=processor.tokenizer,

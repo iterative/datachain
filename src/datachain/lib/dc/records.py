@@ -1,15 +1,10 @@
-from typing import (
-    TYPE_CHECKING,
-    Optional,
-    Union,
-)
+from collections.abc import Iterable
+from typing import TYPE_CHECKING, Optional, Union
 
 import sqlalchemy
 
 from datachain.lib.data_model import DataType
-from datachain.lib.file import (
-    File,
-)
+from datachain.lib.file import File
 from datachain.lib.signal_schema import SignalSchema
 from datachain.query import Session
 
@@ -22,7 +17,7 @@ if TYPE_CHECKING:
 
 
 def read_records(
-    to_insert: Optional[Union[dict, list[dict]]],
+    to_insert: Optional[Union[dict, Iterable[dict]]],
     session: Optional[Session] = None,
     settings: Optional[dict] = None,
     in_memory: bool = False,
@@ -43,6 +38,10 @@ def read_records(
         single_record = dc.read_records(dc.DEFAULT_FILE_RECORD)
         ```
     """
+    from datachain.query.dataset import INSERT_BATCH_SIZE, adjust_outputs, get_col_types
+    from datachain.sql.types import SQLType
+    from datachain.utils import batched
+
     from .datasets import read_dataset
 
     session = Session.get(session, in_memory=in_memory)
@@ -56,7 +55,7 @@ def read_records(
         signal_schema = SignalSchema(schema)
         columns = [
             sqlalchemy.Column(c.name, c.type)  # type: ignore[union-attr]
-            for c in signal_schema.db_signals(as_columns=True)  # type: ignore[assignment]
+            for c in signal_schema.db_signals(as_columns=True)
         ]
     else:
         columns = [
@@ -83,8 +82,15 @@ def read_records(
 
     warehouse = catalog.warehouse
     dr = warehouse.dataset_rows(dsr)
-    db = warehouse.db
-    insert_q = dr.get_table().insert()
-    for record in to_insert:
-        db.execute(insert_q.values(**record))
+    table = dr.get_table()
+
+    # Optimization: Compute row types once, rather than for every row.
+    col_types = get_col_types(
+        warehouse,
+        {c.name: c.type for c in columns if isinstance(c.type, SQLType)},
+    )
+    records = (adjust_outputs(warehouse, record, col_types) for record in to_insert)
+    for chunk in batched(records, INSERT_BATCH_SIZE):
+        warehouse.insert_rows(table, chunk)
+    warehouse.insert_rows_done(table)
     return read_dataset(name=dsr.name, session=session, settings=settings)

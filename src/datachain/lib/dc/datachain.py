@@ -460,7 +460,7 @@ class DataChain:
         name: str,
         version: Optional[int] = None,
         description: Optional[str] = None,
-        labels: Optional[list[str]] = None,
+        attrs: Optional[list[str]] = None,
         delta: Optional[bool] = False,
         **kwargs,
     ) -> "Self":
@@ -470,7 +470,8 @@ class DataChain:
             name : dataset name.
             version : version of a dataset. Default - the last version that exist.
             description : description of a dataset.
-            labels : labels of a dataset.
+            attrs : attributes of a dataset. They can be without value, e.g "NLP",
+                or with a value, e.g "location=US".
             delta : If True, we optimize on creation of the new dataset versions
                 by calculating diff between source and the last version of dataset
                 and applying all needed modifications (mappers, filters etc.) only
@@ -500,7 +501,7 @@ class DataChain:
                 name=name,
                 version=version,
                 description=description,
-                labels=labels,
+                attrs=attrs,
                 feature_schema=schema,
                 **kwargs,
             )
@@ -779,7 +780,7 @@ class DataChain:
 
         Example:
             ```py
-            dc.distinct("file.parent", "file.name")
+            dc.distinct("file.path")
             ```
         """
         return self._evolve(
@@ -905,7 +906,7 @@ class DataChain:
         ```py
          dc.mutate(
             area=Column("image.height") * Column("image.width"),
-            extension=file_ext(Column("file.name")),
+            extension=file_ext(Column("file.path")),
             dist=cosine_distance(embedding_text, embedding_image)
         )
         ```
@@ -1094,13 +1095,13 @@ class DataChain:
 
             Iterating over all rows with selected columns:
             ```py
-            for name, size in dc.collect("file.name", "file.size"):
+            for name, size in dc.collect("file.path", "file.size"):
                 print(name, size)
             ```
 
             Iterating over a single column:
             ```py
-            for file in dc.collect("file.name"):
+            for file in dc.collect("file.path"):
                 print(file)
             ```
         """
@@ -1653,7 +1654,7 @@ class DataChain:
             import datachain as dc
 
             chain = dc.read_storage("s3://mybucket")
-            chain = chain.filter(dc.C("file.name").glob("*.jsonl"))
+            chain = chain.filter(dc.C("file.path").glob("*.jsonl"))
             chain = chain.parse_tabular(format="json")
             ```
         """
@@ -2112,25 +2113,31 @@ class DataChain:
 
             Using glob to match patterns
             ```py
-            dc.filter(C("file.name").glob("*.jpg"))
+            dc.filter(C("file.path").glob("*.jpg"))
+            ```
+
+            Using in to match lists
+            ```py
+            ids = [1,2,3]
+            dc.filter(C("experiment_id").in_(ids))
             ```
 
             Using `datachain.func`
             ```py
             from datachain.func import string
-            dc.filter(string.length(C("file.name")) > 5)
+            dc.filter(string.length(C("file.path")) > 5)
             ```
 
             Combining filters with "or"
             ```py
-            dc.filter(C("file.name").glob("cat*") | C("file.name").glob("dog*))
+            dc.filter(C("file.path").glob("cat*") | C("file.path").glob("dog*))
             ```
 
             Combining filters with "and"
             ```py
             dc.filter(
-                C("file.name").glob("*.jpg) &
-                (string.length(C("file.name")) > 5)
+                C("file.path").glob("*.jpg) &
+                (string.length(C("file.path")) > 5)
             )
             ```
         """

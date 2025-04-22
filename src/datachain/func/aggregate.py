@@ -165,7 +165,7 @@ def any_value(col: str) -> Func:
     Example:
         ```py
         dc.group_by(
-            file_example=func.any_value("file.name"),
+            file_example=func.any_value("file.path"),
             partition_by="signal.category",
         )
         ```
@@ -227,7 +227,7 @@ def concat(col: str, separator="") -> Func:
     Example:
         ```py
         dc.group_by(
-            files=func.concat("file.name", separator=", "),
+            files=func.concat("file.path", separator=", "),
             partition_by="signal.category",
         )
         ```
@@ -343,7 +343,7 @@ def first(col: str) -> Func:
         ```py
         window = func.window(partition_by="signal.category", order_by="created_at")
         dc.mutate(
-            first_file=func.first("file.name").over(window),
+            first_file=func.first("file.path").over(window),
         )
         ```
 

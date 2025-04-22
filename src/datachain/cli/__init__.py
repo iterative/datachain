@@ -149,7 +149,7 @@ def handle_dataset_command(args, catalog):
             args.name,
             new_name=args.new_name,
             description=args.description,
-            labels=args.labels,
+            attrs=args.attrs,
             studio=args.studio,
             local=args.local,
             all=args.all,

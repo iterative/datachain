@@ -474,8 +474,9 @@ class Generator(UDFBase):
             remove_prefetched=bool(self.prefetch) and not cache,
         )
         with closing(prepared_inputs):
-            for row in processed_cb.wrap(prepared_inputs):
+            for row in prepared_inputs:
                 yield _process_row(row)
+                processed_cb.relative_update(1)
 
         self.teardown()
 
