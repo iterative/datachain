@@ -10,6 +10,7 @@ from datachain.dataset import DatasetDependencyType, DatasetStatus
 from datachain.error import (
     DatasetVersionNotFoundError,
 )
+from datachain.lib.listing import parse_listing_uri
 from datachain.query import C, DatasetQuery, Object, Stream
 from datachain.sql.functions import path as pathfunc
 from datachain.sql.types import String
@@ -956,6 +957,9 @@ def test_dataset_dependencies_one_storage_as_dependency(
     ds_name = uuid.uuid4().hex
     catalog = cloud_test_catalog.catalog
     listing = catalog.listings()[0]
+    dep_name, _, _ = parse_listing_uri(
+        cloud_test_catalog.src_uri, catalog.client_config
+    )
 
     DatasetQuery(cats_dataset.name, catalog=catalog).save(ds_name)
 
@@ -968,7 +972,7 @@ def test_dataset_dependencies_one_storage_as_dependency(
         {
             "id": ANY,
             "type": DatasetDependencyType.STORAGE,
-            "name": cloud_test_catalog.src_uri,
+            "name": dep_name,
             "version": str(1),
             "created_at": listing.created_at,
             "dependencies": [],
@@ -983,6 +987,10 @@ def test_dataset_dependencies_one_registered_dataset_as_dependency(
     ds_name = uuid.uuid4().hex
     catalog = cloud_test_catalog.catalog
     listing = catalog.listings()[0]
+
+    dep_name, _, _ = parse_listing_uri(
+        cloud_test_catalog.src_uri, catalog.client_config
+    )
 
     DatasetQuery(name=dogs_dataset.name, catalog=catalog).save(ds_name)
 
@@ -1002,7 +1010,7 @@ def test_dataset_dependencies_one_registered_dataset_as_dependency(
             {
                 "id": ANY,
                 "type": DatasetDependencyType.STORAGE,
-                "name": cloud_test_catalog.src_uri,
+                "name": dep_name,
                 "version": str(1),
                 "created_at": listing.created_at,
                 "dependencies": [],
@@ -1028,6 +1036,9 @@ def test_dataset_dependencies_multiple_direct_dataset_dependencies(
     ds_name = uuid.uuid4().hex
     catalog = cloud_test_catalog.catalog
     listing = catalog.listings()[0]
+    dep_name, _, _ = parse_listing_uri(
+        cloud_test_catalog.src_uri, catalog.client_config
+    )
 
     dogs = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
     cats = DatasetQuery(name=cats_dataset.name, version=1, catalog=catalog)
@@ -1040,7 +1051,7 @@ def test_dataset_dependencies_multiple_direct_dataset_dependencies(
     storage_depenedncy = {
         "id": ANY,
         "type": DatasetDependencyType.STORAGE,
-        "name": cloud_test_catalog.src_uri,
+        "name": dep_name,
         "version": str(1),
         "created_at": listing.created_at,
         "dependencies": [],
@@ -1097,6 +1108,9 @@ def test_dataset_dependencies_multiple_union(
     ds_name = uuid.uuid4().hex
     catalog = cloud_test_catalog.catalog
     listing = catalog.listings()[0]
+    dep_name, _, _ = parse_listing_uri(
+        cloud_test_catalog.src_uri, catalog.client_config
+    )
 
     dogs = DatasetQuery(name=dogs_dataset.name, version=1, catalog=catalog)
     cats = DatasetQuery(name=cats_dataset.name, version=1, catalog=catalog)
@@ -1107,7 +1121,7 @@ def test_dataset_dependencies_multiple_union(
     storage_depenedncy = {
         "id": ANY,
         "type": DatasetDependencyType.STORAGE,
-        "name": cloud_test_catalog.src_uri,
+        "name": dep_name,
         "version": str(1),
         "created_at": listing.created_at,
         "dependencies": [],
