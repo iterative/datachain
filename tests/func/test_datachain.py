@@ -1090,8 +1090,12 @@ def test_udf_parallel_interrupt(cloud_test_catalog_tmpfile, capfd):
         .settings(parallel=-1)
         .map(name_len_interrupt, params=["file.path"], output={"name_len": int})
     )
-    with pytest.raises(KeyboardInterrupt):
-        chain.show()
+    if os.environ.get("DATACHAIN_DISTRIBUTED"):
+        with pytest.raises(KeyboardInterrupt):
+            chain.show()
+    else:
+        with pytest.raises(RuntimeError, match="UDF Execution Failed!"):
+            chain.show()
     captured = capfd.readouterr()
     assert "semaphore" not in captured.err
 
