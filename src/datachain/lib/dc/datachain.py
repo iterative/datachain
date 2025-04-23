@@ -1636,18 +1636,27 @@ class DataChain:
         """
         from pyarrow.dataset import CsvFileFormat, JsonFileFormat
 
-        from datachain.lib.arrow import ArrowGenerator, infer_schema, schema_to_output
+        from datachain.lib.arrow import (
+            ArrowGenerator,
+            fix_pyarrow_format,
+            infer_schema,
+            schema_to_output,
+        )
 
-        if nrows:
-            format = kwargs.get("format")
-            if format not in ["csv", "json"] and not isinstance(
-                format, (CsvFileFormat, JsonFileFormat)
-            ):
-                raise DatasetPrepareError(
-                    self.name,
-                    "error in `parse_tabular` - "
-                    "`nrows` only supported for csv and json formats.",
-                )
+        parse_options = kwargs.pop("parse_options", None)
+        if format := kwargs.get("format"):
+            kwargs["format"] = fix_pyarrow_format(format, parse_options)
+
+        if (
+            nrows
+            and format not in ["csv", "json"]
+            and not isinstance(format, (CsvFileFormat, JsonFileFormat))
+        ):
+            raise DatasetPrepareError(
+                self.name,
+                "error in `parse_tabular` - "
+                "`nrows` only supported for csv and json formats.",
+            )
 
         if "file" not in self.schema or not self.count():
             raise DatasetPrepareError(self.name, "no files to parse.")
@@ -1656,7 +1665,7 @@ class DataChain:
         col_names = output if isinstance(output, Sequence) else None
         if col_names or not output:
             try:
-                schema = infer_schema(self, **kwargs)
+                schema = infer_schema(self, **kwargs, parse_options=parse_options)
                 output, _ = schema_to_output(schema, col_names)
             except ValueError as e:
                 raise DatasetPrepareError(self.name, e) from e
@@ -1682,7 +1691,15 @@ class DataChain:
         # disable prefetch if nrows is set
         settings = {"prefetch": 0} if nrows else {}
         return self.settings(**settings).gen(  # type: ignore[arg-type]
-            ArrowGenerator(schema, model, source, nrows, **kwargs), output=output
+            ArrowGenerator(
+                schema,
+                model,
+                source,
+                nrows,
+                parse_options=parse_options,
+                **kwargs,
+            ),
+            output=output,
         )
 
     @classmethod

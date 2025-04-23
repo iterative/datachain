@@ -124,4 +124,5 @@ def read_csv(
         source=source,
         nrows=nrows,
         format=format,
+        parse_options=parse_options,
     )
