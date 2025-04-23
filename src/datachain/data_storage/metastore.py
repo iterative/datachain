@@ -1048,6 +1048,14 @@ class AbstractDBMetastore(AbstractMetastore):
         )
         return job_id
 
+    def get_job(self, job_id: str, conn=None) -> Optional[Job]:
+        """Returns the job with the given ID."""
+        query = self._jobs_select(self._jobs).where(self._jobs.c.id == job_id)
+        results = list(self.db.execute(query, conn=conn))
+        if not results:
+            return None
+        return self._parse_job(results[0])
+
     def set_job_status(
         self,
         job_id: str,
