@@ -1,5 +1,6 @@
 import math
 from types import GeneratorType
+from typing import Union
 
 import pytest
 import sqlalchemy as sa
@@ -9,13 +10,18 @@ from datachain.query.batch import Batch, NoBatching, Partition
 from datachain.sql.functions import path
 
 
+def to_str(val: Union[bytes, str]) -> str:
+    """Convert bytes to string if necessary."""
+    return val.decode("utf-8") if isinstance(val, bytes) else val
+
+
 @pytest.mark.parametrize("cloud_type,version_aware", [("file", False)], indirect=True)
 def test_no_batching_full_row(warehouse, animal_dataset):
     table = warehouse.get_table(
         warehouse.dataset_table_name(animal_dataset.name, animal_dataset.latest_version)
     )
     cols = (table.c.sys__id, table.c.file__path)
-    db_ids, db_files = zip(*warehouse.db.execute(sa.select(*cols)).fetchall())
+    db_ids, db_files = zip(*warehouse.db.execute(sa.select(*cols)))
 
     batching = NoBatching()
     rows = batching(
@@ -30,7 +36,7 @@ def test_no_batching_full_row(warehouse, animal_dataset):
 
     ids, paths = zip(*rows)
     assert set(ids) == set(db_ids)
-    assert set(paths) == set(db_files)
+    assert {to_str(f) for f in paths} == set(db_files)
 
 
 @pytest.mark.parametrize("cloud_type,version_aware", [("file", False)], indirect=True)
@@ -39,7 +45,7 @@ def test_no_batching_ids_only(warehouse, animal_dataset):
         warehouse.dataset_table_name(animal_dataset.name, animal_dataset.latest_version)
     )
     cols = (table.c.sys__id, table.c.file__path)
-    db_ids = [r[0] for r in warehouse.db.execute(sa.select(table.c.sys__id)).fetchall()]
+    db_ids = [r[0] for r in warehouse.db.execute(sa.select(table.c.sys__id))]
 
     batching = NoBatching()
     rows = batching(
@@ -61,7 +67,7 @@ def test_batching_full_row(batch_size, warehouse, animal_dataset):
         warehouse.dataset_table_name(animal_dataset.name, animal_dataset.latest_version)
     )
     cols = (table.c.sys__id, table.c.file__path)
-    db_values = set(warehouse.db.execute(sa.select(*cols)).fetchall())
+    db_values = set(warehouse.db.execute(sa.select(*cols)))
 
     batching = Batch(batch_size)
     batches = batching(
@@ -80,6 +86,7 @@ def test_batching_full_row(batch_size, warehouse, animal_dataset):
             assert 0 < len(batch) <= batch_size
 
         for row in batch:
+            row = (row[0], to_str(row[1]))
             assert row in db_values
             db_values.remove(row)
 
@@ -93,7 +100,7 @@ def test_batching_ids_only(batch_size, warehouse, animal_dataset):
         warehouse.dataset_table_name(animal_dataset.name, animal_dataset.latest_version)
     )
     cols = (table.c.sys__id, table.c.file__path)
-    db_ids = {r[0] for r in warehouse.db.execute(sa.select(table.c.sys__id)).fetchall()}
+    db_ids = {r[0] for r in warehouse.db.execute(sa.select(table.c.sys__id))}
 
     batching = Batch(count=batch_size)
     batches = batching(
@@ -152,7 +159,7 @@ def test_partition_full_row(warehouse, partitioned_animal_dataset_query):
     subq = query.subquery()
     cols = (subq.c.sys__id, subq.c.file__path)
 
-    db_ids, db_files = zip(*warehouse.db.execute(sa.select(*cols)).fetchall())
+    db_ids, db_files = zip(*warehouse.db.execute(sa.select(*cols)))
     db_ids, db_files = set(db_ids), set(db_files)
 
     partition_files = {
@@ -179,7 +186,7 @@ def test_partition_full_row(warehouse, partitioned_animal_dataset_query):
         assert ids.issubset(db_ids)
         db_ids = db_ids - ids
 
-        files = {row[1] for row in batch}
+        files = {to_str(row[1]) for row in batch}
         assert files.issubset(db_files)
         db_files = db_files - files
 
@@ -198,9 +205,7 @@ def test_partition_ids_only(warehouse, partitioned_animal_dataset_query):
     subq = query.subquery()
     cols = (subq.c.sys__id, subq.c.file__path)
 
-    db_rows = {
-        file: id_ for id_, file in warehouse.db.execute(sa.select(*cols)).fetchall()
-    }
+    db_rows = {file: id_ for id_, file in warehouse.db.execute(sa.select(*cols))}
     partition_files = {
         ("description",),
         ("cats/cat1", "cats/cat2"),
