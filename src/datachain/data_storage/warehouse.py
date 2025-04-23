@@ -327,17 +327,14 @@ class AbstractWarehouse(ABC, Serializable):
         """
         Fetch dataset rows from database using a list of IDs.
         """
-        ids = [row[0] for row in ids] if is_batched else ids
-
         if (id_col := get_query_id_column(query)) is None:
             raise RuntimeError("sys__id column not found in query")
 
-        rows = self.dataset_rows_select(query.where(id_col.in_(ids)))
-
         if is_batched:
-            yield list(rows)
+            for batch in ids:
+                yield list(self.dataset_rows_select(query.where(id_col.in_(batch))))
         else:
-            yield from rows
+            yield from self.dataset_rows_select(query.where(id_col.in_(ids)))
 
     @abstractmethod
     def get_dataset_sources(

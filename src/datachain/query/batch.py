@@ -42,9 +42,13 @@ class NoBatching(BatchingStrategy):
         query: sa.Select,
         id_col: Optional[sa.ColumnElement] = None,
     ) -> Generator[Sequence, None, None]:
+        ids_only = False
         if id_col is not None:
             query = query.with_only_columns(id_col)
-        return execute(query)
+            ids_only = True
+
+        rows = execute(query)
+        yield from (r[0] for r in rows) if ids_only else rows
 
 
 class Batch(BatchingStrategy):
@@ -63,27 +67,29 @@ class Batch(BatchingStrategy):
         execute: Callable,
         query: sa.Select,
         id_col: Optional[sa.ColumnElement] = None,
-    ) -> Generator[RowsOutputBatch, None, None]:
+    ) -> Generator[RowsOutput, None, None]:
         from datachain.data_storage.warehouse import SELECT_BATCH_SIZE
 
+        ids_only = False
         if id_col is not None:
             query = query.with_only_columns(id_col)
+            ids_only = True
 
         # choose page size that is a multiple of the batch size
         page_size = math.ceil(SELECT_BATCH_SIZE / self.count) * self.count
 
         # select rows in batches
-        results: list[Sequence] = []
+        results = []
 
-        with contextlib.closing(execute(query, page_size=page_size)) as rows:
-            for row in rows:
+        with contextlib.closing(execute(query, page_size=page_size)) as batch_rows:
+            for row in batch_rows:
                 results.append(row)
                 if len(results) >= self.count:
                     batch, results = results[: self.count], results[self.count :]
-                    yield batch
+                    yield [r[0] for r in batch] if ids_only else batch
 
             if len(results) > 0:
-                yield results
+                yield [r[0] for r in results] if ids_only else results
 
 
 class Partition(BatchingStrategy):
@@ -100,15 +106,17 @@ class Partition(BatchingStrategy):
         execute: Callable,
         query: sa.Select,
         id_col: Optional[sa.ColumnElement] = None,
-    ) -> Generator[RowsOutputBatch, None, None]:
+    ) -> Generator[RowsOutput, None, None]:
         if (partition_col := get_query_column(query, PARTITION_COLUMN_ID)) is None:
             raise RuntimeError("partition column not found in query")
 
+        ids_only = False
         if id_col is not None:
             query = query.with_only_columns(id_col, partition_col)
+            ids_only = True
 
         current_partition: Optional[int] = None
-        batch: list[Sequence] = []
+        batch: list = []
 
         query_fields = [str(c.name) for c in query.selected_columns]
         id_column_idx = query_fields.index("sys__id")
@@ -127,7 +135,7 @@ class Partition(BatchingStrategy):
                     if len(batch) > 0:
                         yield batch
                         batch = []
-                batch.append([row[id_column_idx]] if id_col is not None else row)
+                batch.append(row[id_column_idx] if ids_only else row)
 
             if len(batch) > 0:
                 yield batch
