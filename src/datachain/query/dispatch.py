@@ -185,7 +185,7 @@ class UDFDispatcher:
     ) -> None:
         udf = loads(self.udf_data)
 
-        if ids_only and not self.is_batching:
+        if ids_only or self.is_batching:
             input_rows = flatten(input_rows)
 
         def get_inputs() -> Iterable["RowsOutput"]:

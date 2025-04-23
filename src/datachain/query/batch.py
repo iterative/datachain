@@ -127,7 +127,7 @@ class Partition(BatchingStrategy):
                     if len(batch) > 0:
                         yield batch
                         batch = []
-                batch.append([row[id_column_idx]] if id_col else row)
+                batch.append([row[id_column_idx]] if id_col is not None else row)
 
             if len(batch) > 0:
                 yield batch
