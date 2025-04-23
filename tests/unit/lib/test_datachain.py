@@ -1860,7 +1860,9 @@ def test_parallel_in_memory():
         )
 
 
-def test_exec(test_session):
+def test_exec(test_session, monkeypatch):
+    monkeypatch.delenv("DATACHAIN_DISTRIBUTED", raising=False)
+
     names = ("f1.jpg", "f1.json", "f1.txt", "f2.jpg", "f2.json")
     all_names = set()
 
@@ -1906,7 +1908,9 @@ def test_parse_tabular_column(tmp_dir, test_session):
     assert "tbl.first_name" in chain.to_pandas(flatten=True).columns
 
 
-def test_sys_feature(test_session):
+def test_sys_feature(test_session, monkeypatch):
+    monkeypatch.delenv("DATACHAIN_DISTRIBUTED", raising=False)
+
     ds = dc.read_values(t1=features, session=test_session).order_by(
         "t1.nnn", "t1.count"
     )
