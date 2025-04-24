@@ -48,6 +48,16 @@ class contains(GenericFunction):  # noqa: N801
     inherit_cache = True
 
 
+class get_element(GenericFunction):  # noqa: N801
+    """
+    Returns the element at the given index in the array.
+    """
+
+    package = "array"
+    name = "get_element"
+    inherit_cache = True
+
+
 class sip_hash_64(GenericFunction):  # noqa: N801
     """
     Computes the SipHash-64 hash of the array.
@@ -63,4 +73,5 @@ compiler_not_implemented(cosine_distance)
 compiler_not_implemented(euclidean_distance)
 compiler_not_implemented(length)
 compiler_not_implemented(contains)
+compiler_not_implemented(get_element)
 compiler_not_implemented(sip_hash_64)

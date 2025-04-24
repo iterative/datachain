@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-from typing import Any, Union
+from typing import Any, Optional, Union
 
 from datachain.sql.functions import array
 
@@ -176,6 +176,60 @@ def contains(arr: Union[str, Sequence, Func], elem: Any) -> Func:
         args = [arr]
 
     return Func("contains", inner=inner, cols=cols, args=args, result_type=int)
+
+
+def get_element(arg: Union[str, Sequence, Func], index: int) -> Func:
+    """
+    Returns the element at the given index from the array.
+
+    Args:
+        arg (str | Sequence | Func): Array to get the element from.
+            If a string is provided, it is assumed to be the name of the array column.
+            If a sequence is provided, it is assumed to be an array of values.
+            If a Func is provided, it is assumed to be a function returning an array.
+        index (int): Index of the element to get from the array.
+
+    Returns:
+        Func: A Func object that represents the array get_element function.
+
+    Example:
+        ```py
+        dc.mutate(
+            first_el=func.array.get_element("signal.values", 0),
+            last_el=func.array.get_element([1, 2, 3, 4, 5], -1),
+        )
+        ```
+
+    Note:
+        - Result column will always be the same type as the elements of the array.
+    """
+
+    def type_from_args(arr, _):
+        if isinstance(arr, list):
+            try:
+                return type(arr[0])
+            except IndexError:
+                return str  # # if the array is empty, return str as default type
+        return None
+
+    cols: Optional[Union[str, Sequence, Func]]
+    args: Union[str, Sequence, Func, int]
+
+    if isinstance(arg, (str, Func)):
+        cols = [arg]
+        args = [index]
+    else:
+        cols = None
+        args = [arg, index]
+
+    return Func(
+        "get_element",
+        inner=array.get_element,
+        cols=cols,
+        args=args,
+        from_array=True,
+        type_from_args=type_from_args,
+    )
 
 
 def sip_hash_64(arg: Union[str, Sequence]) -> Func:

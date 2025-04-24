@@ -70,6 +70,25 @@ def test_length(warehouse):
     assert result == ((4, 5, 2),)
 
 
+def test_get_element(warehouse):
+    query = select(
+        func.array.get_element(["abc", "def", "g", "hi"], 0).label("first1"),
+        func.array.get_element(["abc", "def", "g", "hi"], 1).label("second1"),
+        func.array.get_element(["abc", "def", "g", "hi"], -1).label("last1"),
+        func.array.get_element([3.0, 5.0, 1.0, 6.0, 1.0], 0).label("first2"),
+        func.array.get_element([3.0, 5.0, 1.0, 6.0, 1.0], 1).label("second2"),
+        func.array.get_element([3.0, 5.0, 1.0, 6.0, 1.0], -1).label("last2"),
+        func.array.get_element([1, 2, 3, 4, 5, 6], 0).label("first3"),
+        func.array.get_element([1, 2, 3, 4, 5, 6], 1).label("second3"),
+        func.array.get_element([1, 2, 3, 4, 5, 6], -1).label("last3"),
+        func.array.get_element([], 0).label("not_found1"),
+        func.array.get_element([], -1).label("not_found2"),
+        func.array.get_element([1], 2).label("not_found3"),
+    )
+    result = tuple(warehouse.db.execute(query))
+    assert result == (("abc", "def", "hi", 3.0, 5.0, 1.0, 1, 2, 6, None, None, None),)
+
+
 def test_contains(warehouse):
     query = select(
         func.contains(["abc", "def", "g", "hi"], "abc").label("contains1"),
