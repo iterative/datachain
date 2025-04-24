@@ -1,6 +1,6 @@
 import inspect
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union, get_args, get_origin
 
 from sqlalchemy import BindParameter, Case, ColumnElement, Integer, cast, desc
 from sqlalchemy.sql import func as sa_func
@@ -36,7 +36,9 @@ class Func(Function):
         args: Optional[Sequence[Any]] = None,
         kwargs: Optional[dict[str, Any]] = None,
         result_type: Optional["DataType"] = None,
+        type_from_args: Optional[Callable[[Any], "DataType"]] = None,
         is_array: bool = False,
+        from_array: bool = False,
         is_window: bool = False,
         window: Optional["Window"] = None,
         label: Optional[str] = None,
@@ -47,7 +49,9 @@ class Func(Function):
         self.args = args or []
         self.kwargs = kwargs or {}
         self.result_type = result_type
+        self.type_from_args = type_from_args
         self.is_array = is_array
+        self.from_array = from_array
         self.is_window = is_window
         self.window = window
         self.col_label = label
@@ -66,7 +70,9 @@ class Func(Function):
             self.args,
             self.kwargs,
             self.result_type,
+            self.type_from_args,
             self.is_array,
+            self.from_array,
             self.is_window,
             window,
             self.col_label,
@@ -100,6 +106,20 @@ class Func(Function):
                     str(self),
                     "Columns must have the same type to infer result type",
                 )
+
+        if self.from_array:
+            if get_origin(col_type) is list:
+                col_args = get_args(col_type)
+                if len(col_args) != 1:
+                    raise DataChainColumnError(
+                        str(self),
+                        "Array column must have a single type argument",
+                    )
+                return col_args[0]
+            raise DataChainColumnError(
+                str(self),
+                "Array column must be of type list",
+            )
 
         return list[col_type] if self.is_array else col_type  # type: ignore[valid-type]
 
@@ -339,7 +359,9 @@ class Func(Function):
             self.args,
             self.kwargs,
             self.result_type,
+            self.type_from_args,
             self.is_array,
+            self.from_array,
             self.is_window,
             self.window,
             label,
@@ -367,6 +389,15 @@ class Func(Function):
 
         if signals_schema and (col_type := self._db_col_type(signals_schema)):
             return col_type
+
+        if (
+            self.type_from_args
+            and (self.cols is None or self.cols == [])
+            and self.args is not None
+            and len(self.args) > 0
+            and (result_type := self.type_from_args(*self.args)) is not None
+        ):
+            return result_type
 
         raise DataChainColumnError(
             str(self),

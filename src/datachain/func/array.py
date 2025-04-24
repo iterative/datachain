@@ -178,6 +178,53 @@ def contains(arr: Union[str, Sequence, Func], elem: Any) -> Func:
     return Func("contains", inner=inner, cols=cols, args=args, result_type=int)
 
 
+def first(arg: Union[str, Sequence, Func]) -> Func:
+    """
+    Returns the first element of the array.
+
+    Args:
+        arg (str | Sequence | Func): Array to get the first element from.
+            If a string is provided, it is assumed to be the name of the array column.
+            If a sequence is provided, it is assumed to be an array of values.
+            If a Func is provided, it is assumed to be a function returning an array.
+
+    Returns:
+        Func: A Func object that represents the array first function.
+
+    Example:
+        ```py
+        dc.mutate(
+            first1=func.array.first("signal.values"),
+            first2=func.array.first([1, 2, 3, 4, 5]),
+        )
+        ```
+
+    Note:
+        - Result column will always be of type int.
+    """
+
+    def type_from_args(args):
+        if isinstance(args, list) and len(args) > 0:
+            return type(args[0])
+        return None
+
+    if isinstance(arg, (str, Func)):
+        cols = [arg]
+        args = None
+    else:
+        cols = None
+        args = [arg]
+
+    return Func(
+        "first",
+        inner=array.first,
+        cols=cols,
+        args=args,
+        from_array=True,
+        type_from_args=type_from_args,
+    )
+
+
 def sip_hash_64(arg: Union[str, Sequence]) -> Func:
     """
     Computes the SipHash-64 hash of the array.

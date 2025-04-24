@@ -70,6 +70,16 @@ def test_length(warehouse):
     assert result == ((4, 5, 2),)
 
 
+def test_first(warehouse):
+    query = select(
+        func.array.first(["abc", "def", "g", "hi"]).label("first1"),
+        func.array.first([3.0, 5.0, 1.0, 6.0, 1.0]).label("first2"),
+        func.array.first([1, 2, 3, 4, 5, 6]).label("first3"),
+    )
+    result = tuple(warehouse.db.execute(query))
+    assert result == (("abc", 3.0, 1),)
+
+
 def test_contains(warehouse):
     query = select(
         func.contains(["abc", "def", "g", "hi"], "abc").label("contains1"),
