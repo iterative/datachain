@@ -254,6 +254,7 @@ class AbstractMetastore(ABC, Serializable):
         name: str,
         query: str,
         query_type: JobQueryType = JobQueryType.PYTHON,
+        status: JobStatus = JobStatus.CREATED,
         workers: int = 1,
         python_version: Optional[str] = None,
         params: Optional[dict[str, str]] = None,
@@ -264,13 +265,29 @@ class AbstractMetastore(ABC, Serializable):
         """
 
     @abstractmethod
+    def get_job(self, job_id: str) -> Optional[Job]:
+        """Returns the job with the given ID."""
+
+    @abstractmethod
+    def update_job(
+        self,
+        job_id: str,
+        status: Optional[JobStatus] = None,
+        exit_code: Optional[int] = None,
+        error_message: Optional[str] = None,
+        error_stack: Optional[str] = None,
+        finished_at: Optional[datetime] = None,
+        metrics: Optional[dict[str, Any]] = None,
+    ) -> Optional["Job"]:
+        """Updates job fields."""
+
+    @abstractmethod
     def set_job_status(
         self,
         job_id: str,
         status: JobStatus,
         error_message: Optional[str] = None,
         error_stack: Optional[str] = None,
-        metrics: Optional[dict[str, Any]] = None,
     ) -> None:
         """Set the status of the given job."""
 
@@ -1019,6 +1036,7 @@ class AbstractDBMetastore(AbstractMetastore):
         name: str,
         query: str,
         query_type: JobQueryType = JobQueryType.PYTHON,
+        status: JobStatus = JobStatus.CREATED,
         workers: int = 1,
         python_version: Optional[str] = None,
         params: Optional[dict[str, str]] = None,
@@ -1033,7 +1051,7 @@ class AbstractDBMetastore(AbstractMetastore):
             self._jobs_insert().values(
                 id=job_id,
                 name=name,
-                status=JobStatus.CREATED,
+                status=status,
                 created_at=datetime.now(timezone.utc),
                 query=query,
                 query_type=query_type.value,
@@ -1056,13 +1074,47 @@ class AbstractDBMetastore(AbstractMetastore):
             return None
         return self._parse_job(results[0])
 
+    def update_job(
+        self,
+        job_id: str,
+        status: Optional[JobStatus] = None,
+        exit_code: Optional[int] = None,
+        error_message: Optional[str] = None,
+        error_stack: Optional[str] = None,
+        finished_at: Optional[datetime] = None,
+        metrics: Optional[dict[str, Any]] = None,
+        conn: Optional[Any] = None,
+    ) -> Optional["Job"]:
+        """Updates job fields."""
+        values: dict = {}
+        if status is not None:
+            values["status"] = status
+        if exit_code is not None:
+            values["exit_code"] = exit_code
+        if error_message is not None:
+            values["error_message"] = error_message
+        if error_stack is not None:
+            values["error_stack"] = error_stack
+        if finished_at is not None:
+            values["finished_at"] = finished_at
+        if metrics:
+            values["metrics"] = json.dumps(metrics)
+
+        if values:
+            j = self._jobs
+            self.db.execute(
+                self._jobs_update().where(j.c.id == job_id).values(**values),
+                conn=conn,
+            )  # type: ignore [attr-defined]
+
+        return self.get_job(job_id, conn=conn)
+
     def set_job_status(
         self,
         job_id: str,
         status: JobStatus,
         error_message: Optional[str] = None,
         error_stack: Optional[str] = None,
-        metrics: Optional[dict[str, Any]] = None,
         conn: Optional[Any] = None,
     ) -> None:
         """Set the status of the given job."""
@@ -1073,8 +1125,6 @@ class AbstractDBMetastore(AbstractMetastore):
             values["error_message"] = error_message
         if error_stack:
             values["error_stack"] = error_stack
-        if metrics:
-            values["metrics"] = json.dumps(metrics)
         self.db.execute(
             self._jobs_update(self._jobs.c.id == job_id).values(**values),
             conn=conn,
