@@ -32,6 +32,7 @@ def read_storage(
     column: str = "file",
     update: bool = False,
     anon: bool = False,
+    delta: bool = False,
     client_config: Optional[dict] = None,
 ) -> "DataChain":
     """Get data from storage(s) as a list of file with all file attributes.
@@ -47,6 +48,21 @@ def read_storage(
         update : force storage reindexing. Default is False.
         anon : If True, we will treat cloud bucket as public one
         client_config : Optional client configuration for the storage client.
+        delta : If True, we optimize on creation of the new dataset versions
+            by calculating diff between last version of this storage and the version
+            with which last version of resulting chain dataset (the one specified in
+            `.save()`) was created.
+            We then run the "diff" chain with this diff data returned instead of
+            all storage data, and we union that diff chain with last version of
+            resulting dataset creating new version of it.
+            This way we avoid applying modifications to all records from storage
+            every time since that can be expensive operation.
+            Dataset needs to have File object in schema.
+            Diff is calculated using `DataChain.diff()` method which looks into
+            File `source` and `path` for matching, and File `version` and `etag`
+            for checking if the record is changed.
+            Note that this takes in account only added and changed records in
+            storage while deleted records are not removed in the new dataset version.
 
     Returns:
         DataChain: A DataChain object containing the file information.
@@ -122,7 +138,7 @@ def read_storage(
             )
             continue
 
-        dc = read_dataset(list_ds_name, session=session, settings=settings)
+        dc = read_dataset(list_ds_name, session=session, settings=settings, delta=delta)
         dc._query.update = update
         dc.signals_schema = dc.signals_schema.mutate({f"{column}": file_type})
 
@@ -151,7 +167,7 @@ def read_storage(
 
         chain = ls(dc, list_path, recursive=recursive, column=column)
 
-        storage_chain = storage_chain.union(chain) if storage_chain else chain
+        storage_chain = storage_chain.union(chain) if storage_chain else chain  # type: ignore[attr-defined]
         listed_ds_name.add(list_ds_name)
 
     if file_values:

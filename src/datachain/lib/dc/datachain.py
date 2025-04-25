@@ -4,6 +4,7 @@ import os.path
 import sys
 import warnings
 from collections.abc import Iterator, Sequence
+from functools import wraps
 from typing import (
     IO,
     TYPE_CHECKING,
@@ -67,9 +68,32 @@ DEFAULT_PARQUET_CHUNK_SIZE = 100_000
 
 if TYPE_CHECKING:
     import pandas as pd
-    from typing_extensions import ParamSpec, Self
+    from typing_extensions import Concatenate, ParamSpec, Self
 
     P = ParamSpec("P")
+
+
+T = TypeVar("T", bound="DataChain")
+
+
+def delta_disabled(
+    method: "Callable[Concatenate[T, P], T]",
+) -> "Callable[Concatenate[T, P], T]":
+    """
+    Decorator for disabling DataChain methods (e.g `.agg()` or `.union()`) to
+    work with delta updates. It throws `NotImplementedError` if chain on which
+    method is called is marked as delta.
+    """
+
+    @wraps(method)
+    def _inner(self: T, *args: "P.args", **kwargs: "P.kwargs") -> T:
+        if self.delta:
+            raise NotImplementedError(
+                f"Delta update cannot be used with {method.__name__}"
+            )
+        return method(self, *args, **kwargs)
+
+    return _inner
 
 
 class DataChain:
@@ -164,6 +188,7 @@ class DataChain:
         self.signals_schema = signal_schema
         self._setup: dict = setup or {}
         self._sys = _sys
+        self._delta = False
 
     def __repr__(self) -> str:
         """Return a string representation of the chain."""
@@ -176,6 +201,16 @@ class DataChain:
         file = io.StringIO()
         self.print_schema(file=file)
         return file.getvalue()
+
+    def as_delta(self, delta: bool = False) -> "Self":
+        """Marks this chain as delta, which means special delta process will be
+        called on saving dataset for optimization"""
+        self._delta = delta
+        return self
+
+    @property
+    def delta(self) -> bool:
+        return self._delta
 
     @property
     def schema(self) -> dict[str, DataType]:
@@ -461,7 +496,6 @@ class DataChain:
         version: Optional[int] = None,
         description: Optional[str] = None,
         attrs: Optional[list[str]] = None,
-        delta: Optional[bool] = False,
         **kwargs,
     ) -> "Self":
         """Save to a Dataset. It returns the chain itself.
@@ -488,7 +522,7 @@ class DataChain:
                 source while deleted records are not removed in the new dataset version.
         """
         schema = self.signals_schema.clone_without_sys_signals().serialize()
-        if delta and name:
+        if self.delta and name:
             delta_ds = delta_update(self, name)
             if delta_ds:
                 return self._evolve(
@@ -620,6 +654,7 @@ class DataChain:
             signal_schema=udf_obj.output,
         )
 
+    @delta_disabled
     def agg(
         self,
         func: Optional[Callable] = None,
@@ -773,6 +808,7 @@ class DataChain:
 
         return self._evolve(query=self._query.order_by(*args))
 
+    @delta_disabled
     def distinct(self, arg: str, *args: str) -> "Self":  # type: ignore[override]
         """Removes duplicate rows based on uniqueness of some input column(s)
         i.e if rows are found with the same value of input column(s), only one
@@ -807,6 +843,7 @@ class DataChain:
             query=self._query.select(*columns), signal_schema=new_schema
         )
 
+    @delta_disabled  # type: ignore[arg-type]
     def group_by(
         self,
         *,
@@ -1165,6 +1202,7 @@ class DataChain:
         schema = self.signals_schema.clone_without_file_signals()
         return self.select(*schema.values.keys())
 
+    @delta_disabled
     def merge(
         self,
         right_ds: "DataChain",
@@ -1273,6 +1311,7 @@ class DataChain:
 
         return ds
 
+    @delta_disabled
     def union(self, other: "Self") -> "Self":
         """Return the set union of the two datasets.
 

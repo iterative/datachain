@@ -31,10 +31,9 @@ def test_delta_update_from_dataset(test_session, tmp_dir, tmp_path):
         ).save(ds_name)
 
     def create_delta_dataset(ds_name):
-        dc.read_dataset(
-            starting_ds_name,
-            session=test_session,
-        ).save(ds_name, delta=True)
+        dc.read_dataset(starting_ds_name, session=test_session, delta=True).save(
+            ds_name
+        )
 
     # first version of starting dataset
     create_image_dataset(starting_ds_name, images[:2])
@@ -89,13 +88,13 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
             return int(re.search(r, file.path).group(1))  # type: ignore[union-attr]
 
         (
-            dc.read_storage(path, update=True, session=test_session)
+            dc.read_storage(path, update=True, session=test_session, delta=True)
             .filter(C("file.path").glob("*.jpg"))
             .map(emb=my_embedding)
             .mutate(dist=func.cosine_distance("emb", (0.1, 0.2)))
             .map(index=get_index)
             .filter(C("index") > 3)
-            .save(ds_name, delta=True)
+            .save(ds_name)
         )
 
     # first version of delta dataset
@@ -173,11 +172,11 @@ def test_delta_update_no_diff(test_session, tmp_dir, tmp_path):
             return int(re.search(r, file.path).group(1))  # type: ignore[union-attr]
 
         (
-            dc.read_storage(path, update=True, session=test_session)
+            dc.read_storage(path, update=True, session=test_session, delta=True)
             .filter(C("file.path").glob("*.jpg"))
             .map(index=get_index)
             .filter(C("index") > 5)
-            .save(ds_name, delta=True)
+            .save(ds_name)
         )
 
     create_delta_dataset()
@@ -212,9 +211,80 @@ def test_delta_update_no_file_signals(test_session):
         dc.read_dataset(
             starting_ds_name,
             session=test_session,
-        ).save("delta_ds", delta=True)
+            delta=True,
+        ).save("delta_ds")
 
     assert (
         str(excinfo.value)
         == "Chain doesn't produce file signal, cannot do delta update"
     )
+
+
+@pytest.fixture
+def file_dataset(test_session):
+    return dc.read_values(
+        file=[
+            File(path="a.jpg", source="s3://bucket"),
+            File(path="b.jpg", source="s3://bucket"),
+        ],
+        session=test_session,
+    ).save("file_ds")
+
+
+def test_delta_update_union(test_session, file_dataset):
+    dc.read_values(num=[10, 20], session=test_session).save("numbers")
+
+    with pytest.raises(NotImplementedError) as excinfo:
+        (
+            dc.read_dataset(file_dataset.name, session=test_session, delta=True).union(
+                dc.read_dataset("numbers"), session=test_session
+            )
+        )
+
+    assert str(excinfo.value) == "Delta update cannot be used with union"
+
+
+def test_delta_update_merge(test_session, file_dataset):
+    dc.read_values(num=[10, 20], session=test_session).save("numbers")
+
+    with pytest.raises(NotImplementedError) as excinfo:
+        (
+            dc.read_dataset(file_dataset.name, session=test_session, delta=True).merge(
+                dc.read_dataset("numbers"), on="id", session=test_session
+            )
+        )
+
+    assert str(excinfo.value) == "Delta update cannot be used with merge"
+
+
+def test_delta_update_distinct(test_session, file_dataset):
+    with pytest.raises(NotImplementedError) as excinfo:
+        (
+            dc.read_dataset(
+                file_dataset.name, session=test_session, delta=True
+            ).distinct("file.path")
+        )
+
+    assert str(excinfo.value) == "Delta update cannot be used with distinct"
+
+
+def test_delta_update_group_by(test_session, file_dataset):
+    with pytest.raises(NotImplementedError) as excinfo:
+        (
+            dc.read_dataset(
+                file_dataset.name, session=test_session, delta=True
+            ).group_by(cnt=func.count(), partition_by="file.path")
+        )
+
+    assert str(excinfo.value) == "Delta update cannot be used with group_by"
+
+
+def test_delta_update_agg(test_session, file_dataset):
+    with pytest.raises(NotImplementedError) as excinfo:
+        (
+            dc.read_dataset(file_dataset.name, session=test_session, delta=True).agg(
+                cnt=func.count(), partition_by="file.path"
+            )
+        )
+
+    assert str(excinfo.value) == "Delta update cannot be used with agg"

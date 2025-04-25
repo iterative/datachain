@@ -26,6 +26,7 @@ def read_dataset(
     session: Optional[Session] = None,
     settings: Optional[dict] = None,
     fallback_to_studio: bool = True,
+    delta: bool = False,
 ) -> "DataChain":
     """Get data from a saved Dataset. It returns the chain itself.
     If dataset or version is not found locally, it will try to pull it from Studio.
@@ -37,6 +38,21 @@ def read_dataset(
         settings : Settings to use for the chain.
         fallback_to_studio : Try to pull dataset from Studio if not found locally.
             Default is True.
+        delta : If True, we optimize on creation of the new dataset versions
+            by calculating diff between last version of this dataset and the version
+            with which last version of resulting chain dataset (the one specified in
+            `.save()`) was created.
+            We then run the "diff" chain with this diff data returned instead of
+            all dataset data, and we union that diff chain with last version of
+            resulting dataset creating new version of it.
+            This way we avoid applying modifications to all records from dataset
+            every time since that can be expensive operation.
+            Dataset needs to have File object in schema.
+            Diff is calculated using `DataChain.diff()` method which looks into
+            File `source` and `path` for matching, and File `version` and `etag`
+            for checking if the record is changed.
+            Note that this takes in account only added and changed records in
+            dataset while deleted records are not removed in the new dataset version.
 
     Example:
         ```py
@@ -92,7 +108,7 @@ def read_dataset(
         signals_schema |= SignalSchema.deserialize(query.feature_schema)
     else:
         signals_schema |= SignalSchema.from_column_types(query.column_types or {})
-    return DataChain(query, _settings, signals_schema)
+    return DataChain(query, _settings, signals_schema).as_delta(delta)
 
 
 def datasets(

@@ -40,7 +40,9 @@ def delta_update(dc: "DataChain", name: str) -> Optional["DataChain"]:
         # first creation of delta update dataset
         return None
 
-    dependencies = catalog.get_dataset_dependencies(name, latest_version)
+    dependencies = catalog.get_dataset_dependencies(
+        name, latest_version, indirect=False
+    )
     if len(dependencies) > 1:
         raise Exception(
             "Cannot do delta with dataset that has multiple direct dependencies"
