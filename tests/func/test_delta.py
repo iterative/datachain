@@ -6,6 +6,7 @@ from PIL import Image
 
 import datachain as dc
 from datachain import func
+from datachain.error import DatasetVersionNotFoundError
 from datachain.lib.dc import C
 from datachain.lib.file import File, ImageFile
 
@@ -182,24 +183,19 @@ def test_delta_update_no_diff(test_session, tmp_dir, tmp_path):
     create_delta_dataset()
     create_delta_dataset()
 
-    assert (
-        list(
-            dc.read_dataset(ds_name, version=1)
-            .order_by("file.path")
-            .collect("file.path")
-        )
-        == list(
-            dc.read_dataset(ds_name, version=2)
-            .order_by("file.path")
-            .collect("file.path")
-        )
-        == [
-            "images/img6.jpg",
-            "images/img7.jpg",
-            "images/img8.jpg",
-            "images/img9.jpg",
-        ]
-    )
+    assert list(
+        dc.read_dataset(ds_name, version=1).order_by("file.path").collect("file.path")
+    ) == [
+        "images/img6.jpg",
+        "images/img7.jpg",
+        "images/img8.jpg",
+        "images/img9.jpg",
+    ]
+
+    with pytest.raises(DatasetVersionNotFoundError) as exc_info:
+        dc.read_dataset(ds_name, version=2)
+
+    assert str(exc_info.value) == f"Dataset {ds_name} does not have version 2"
 
 
 def test_delta_update_no_file_signals(test_session):

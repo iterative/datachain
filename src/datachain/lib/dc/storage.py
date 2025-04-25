@@ -138,7 +138,7 @@ def read_storage(
             )
             continue
 
-        dc = read_dataset(list_ds_name, session=session, settings=settings, delta=delta)
+        dc = read_dataset(list_ds_name, session=session, settings=settings)
         dc._query.update = update
         dc.signals_schema = dc.signals_schema.mutate({f"{column}": file_type})
 
@@ -184,4 +184,4 @@ def read_storage(
 
     assert storage_chain is not None
 
-    return storage_chain
+    return storage_chain.as_delta(delta)

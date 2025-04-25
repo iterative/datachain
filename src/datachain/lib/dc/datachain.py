@@ -291,7 +291,7 @@ class DataChain:
             _sys = self._sys
         return type(self)(
             query, settings, signal_schema=signal_schema, setup=self._setup, _sys=_sys
-        )
+        ).as_delta(self.delta)
 
     def settings(
         self,
@@ -497,7 +497,7 @@ class DataChain:
         description: Optional[str] = None,
         attrs: Optional[list[str]] = None,
         **kwargs,
-    ) -> "Self":
+    ) -> "DataChain":
         """Save to a Dataset. It returns the chain itself.
 
         Parameters:
@@ -523,13 +523,24 @@ class DataChain:
         """
         schema = self.signals_schema.clone_without_sys_signals().serialize()
         if self.delta and name:
-            delta_ds = delta_update(self, name)
+            delta_ds, has_changes = delta_update(self, name)
+
             if delta_ds:
                 return self._evolve(
                     query=delta_ds._query.save(
                         name=name, version=version, feature_schema=schema, **kwargs
                     )
                 )
+
+            if not has_changes:
+                # sources have not been changed so new version of resulting dataset
+                # would be the same as previous one. To avoid duplicating exact
+                # datasets, we won't create new version of it and we will return
+                # current latest version instead.
+                from .datasets import read_dataset
+
+                return read_dataset(name, **kwargs)
+
         return self._evolve(
             query=self._query.save(
                 name=name,
@@ -2207,6 +2218,10 @@ class DataChain:
     def count(self) -> int:
         """Return the number of rows in the chain."""
         return self._query.count()
+
+    def is_empty(self) -> bool:
+        """Returns True if chain has zero number of rows"""
+        return not bool(self.count())
 
     def exec(self) -> "Self":
         """Execute the chain."""

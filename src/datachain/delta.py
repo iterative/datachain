@@ -17,7 +17,7 @@ def _append_steps(dc: "DataChain", other: "DataChain"):
     return dc
 
 
-def delta_update(dc: "DataChain", name: str) -> Optional["DataChain"]:
+def delta_update(dc: "DataChain", name: str) -> tuple[Optional["DataChain"], bool]:
     """
     Creates new chain that consists of the last version of current delta dataset
     plus diff from the source with all needed modifications.
@@ -38,7 +38,7 @@ def delta_update(dc: "DataChain", name: str) -> Optional["DataChain"]:
         latest_version = catalog.get_dataset(name).latest_version
     except DatasetNotFoundError:
         # first creation of delta update dataset
-        return None
+        return None, True
 
     dependencies = catalog.get_dataset_dependencies(
         name, latest_version, indirect=False
@@ -52,7 +52,7 @@ def delta_update(dc: "DataChain", name: str) -> Optional["DataChain"]:
     if not dep:
         # starting dataset (e.g listing) was removed so we are backing off to normal
         # dataset creation, as it was created first time
-        return None
+        return None, True
 
     source_ds_name = dep.name
     source_ds_version = int(dep.version)
@@ -68,6 +68,9 @@ def delta_update(dc: "DataChain", name: str) -> Optional["DataChain"]:
     # We append all the steps from the original chain to diff, e.g filters, mappers.
     diff = _append_steps(diff, dc)
 
+    if diff.is_empty():
+        return None, False
+
     # merging diff and the latest version of dataset
     return (
         datachain.read_dataset(name, latest_version)
@@ -79,4 +82,4 @@ def delta_update(dc: "DataChain", name: str) -> Optional["DataChain"]:
             modified=False,
         )
         .union(diff)
-    )
+    ), True
