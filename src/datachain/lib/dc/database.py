@@ -127,9 +127,11 @@ def read_database(
         ```
 
     Notes:
-        This function works with a variety of databases — including, but not limited to,
-        SQLite, DuckDB, PostgreSQL, and Snowflake, provided the appropriate driver is
-        installed.
+        - This function works with a variety of databases — including,
+        but not limited to, SQLite, DuckDB, PostgreSQL, and Snowflake,
+        provided the appropriate driver is installed.
+        - This call is blocking, and will execute the query and returns once the
+          results are saved.
     """
     from datachain.lib.dc.records import read_records
 
