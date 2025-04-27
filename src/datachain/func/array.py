@@ -209,7 +209,7 @@ def get_element(arg: Union[str, Sequence, Func], index: int) -> Func:
             try:
                 return type(arr[0])
             except IndexError:
-                return str  # # if the array is empty, return str as default type
+                return str  # if the array is empty, return str as default type
         return None
 
     cols: Optional[Union[str, Sequence, Func]]
