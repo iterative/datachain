@@ -196,7 +196,7 @@ def get_element(arg: Union[str, Sequence, Func], index: int) -> Func:
         ```py
         dc.mutate(
             first_el=func.array.get_element("signal.values", 0),
-            last_el=func.array.get_element([1, 2, 3, 4, 5], -1),
+            second_el=func.array.get_element([1, 2, 3, 4, 5], 1),
         )
         ```
 
