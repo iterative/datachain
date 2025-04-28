@@ -1,4 +1,5 @@
 import os.path
+from functools import reduce
 from typing import (
     TYPE_CHECKING,
     Optional,
@@ -122,7 +123,7 @@ def read_storage(
     if not uris:
         raise ValueError("No URIs provided")
 
-    storage_chain = None
+    chains = []
     listed_ds_name = set()
     file_values = []
 
@@ -166,10 +167,10 @@ def read_storage(
                 lambda ds_name=list_ds_name, lst_uri=list_uri: lst_fn(ds_name, lst_uri)
             )
 
-        chain = ls(dc, list_path, recursive=recursive, column=column)
-
-        storage_chain = storage_chain.union(chain) if storage_chain else chain  # type: ignore[attr-defined]
+        chains.append(ls(dc, list_path, recursive=recursive, column=column))
         listed_ds_name.add(list_ds_name)
+
+    storage_chain = None if not chains else reduce(lambda x, y: x.union(y), chains)
 
     if file_values:
         file_chain = read_values(
