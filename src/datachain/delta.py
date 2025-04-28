@@ -13,7 +13,7 @@ def _append_steps(dc: "DataChain", other: "DataChain"):
     """
     dc = dc.clone()
     dc._query.steps += other._query.steps.copy()
-    dc.signals_schema = dc.signals_schema.append(other.signals_schema)
+    dc.signals_schema = other.signals_schema
     return dc
 
 
