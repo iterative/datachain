@@ -5,6 +5,7 @@ from numpy.testing import assert_array_almost_equal
 
 from datachain import func
 from datachain.sql import select
+from datachain.sql.types import Int, String
 
 
 def test_cosine_distance(warehouse):
@@ -71,6 +72,8 @@ def test_length(warehouse):
 
 
 def test_get_element(warehouse):
+    db_dialect = warehouse.db.dialect
+
     query = select(
         func.array.get_element(["abc", "def", "g", "hi"], 0).label("first1"),
         func.array.get_element(["abc", "def", "g", "hi"], 1).label("second1"),
@@ -84,8 +87,22 @@ def test_get_element(warehouse):
         func.array.get_element([], -1).label("not_found2"),
         func.array.get_element([1], 2).label("not_found3"),
     )
-    result = tuple(warehouse.db.execute(query))
-    assert result == (("abc", "def", 3.0, 5.0, 1, 2, 1, 2.0, None, None, None),)
+    result = tuple(warehouse.dataset_rows_select(query))
+    assert result == (
+        (
+            "abc",
+            "def",
+            3.0,
+            5.0,
+            1,
+            2,
+            1,
+            2.0,
+            String.default_value(db_dialect),
+            String.default_value(db_dialect),
+            Int.default_value(db_dialect),
+        ),
+    )
 
 
 def test_contains(warehouse):
