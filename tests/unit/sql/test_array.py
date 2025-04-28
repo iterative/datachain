@@ -78,12 +78,14 @@ def test_get_element(warehouse):
         func.array.get_element([3.0, 5.0, 1.0, 6.0, 1.0], 1).label("second2"),
         func.array.get_element([1, 2, 3, 4, 5, 6], 0).label("first3"),
         func.array.get_element([1, 2, 3, 4, 5, 6], 1).label("second3"),
+        func.array.get_element([1], 0).label("first4"),
+        func.array.get_element([2.0], 0).label("first5"),
         func.array.get_element([], 0).label("not_found1"),
         func.array.get_element([], -1).label("not_found2"),
         func.array.get_element([1], 2).label("not_found3"),
     )
     result = tuple(warehouse.db.execute(query))
-    assert result == (("abc", "def", 3.0, 5.0, 1, 2, None, None, None),)
+    assert result == (("abc", "def", 3.0, 5.0, 1, 2, 1, 2.0, None, None, None),)
 
 
 def test_contains(warehouse):

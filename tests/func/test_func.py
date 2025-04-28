@@ -20,6 +20,7 @@ def test_array_get_element():
             unknown_i=func.array.get_element("arr.i", 100),
             first_f=func.array.get_element("arr.f", 0),
             second_f=func.array.get_element("arr.f", 1),
+            first_f2=func.array.get_element([9.0], 0),
             first_s=func.array.get_element(["a", "b", "c", "d"], 0),
             second_s=func.array.get_element(["a", "b", "c", "d"], 1),
             unknown_s=func.array.get_element(["a", "b", "c", "d"], 100),
@@ -31,6 +32,7 @@ def test_array_get_element():
             "unknown_i",
             "first_f",
             "second_f",
+            "first_f2",
             "first_s",
             "second_s",
             "unknown_s",
@@ -39,6 +41,6 @@ def test_array_get_element():
     )
 
     assert set(ds) == {
-        (10, 20, None, 1.0, 2.0, "a", "b", None, None),
-        (40, 50, None, 4.0, 5.0, "a", "b", None, None),
+        (10, 20, None, 1.0, 2.0, 9.0, "a", "b", None, None),
+        (40, 50, None, 4.0, 5.0, 9.0, "a", "b", None, None),
     }
