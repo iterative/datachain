@@ -43,10 +43,6 @@ def delta_update(dc: "DataChain", name: str) -> tuple[Optional["DataChain"], boo
     dependencies = catalog.get_dataset_dependencies(
         name, latest_version, indirect=False
     )
-    if len(dependencies) > 1:
-        raise Exception(
-            "Cannot do delta with dataset that has multiple direct dependencies"
-        )
 
     dep = dependencies[0]
     if not dep:
