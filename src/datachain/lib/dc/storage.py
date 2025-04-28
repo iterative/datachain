@@ -48,21 +48,22 @@ def read_storage(
         update : force storage reindexing. Default is False.
         anon : If True, we will treat cloud bucket as public one
         client_config : Optional client configuration for the storage client.
-        delta : If True, we optimize on creation of the new dataset versions
-            by calculating diff between last version of this storage and the version
-            with which last version of resulting chain dataset (the one specified in
-            `.save()`) was created.
-            We then run the "diff" chain with this diff data returned instead of
-            all storage data, and we union that diff chain with last version of
-            resulting dataset creating new version of it.
-            This way we avoid applying modifications to all records from storage
-            every time since that can be expensive operation.
-            Dataset needs to have File object in schema.
-            Diff is calculated using `DataChain.diff()` method which looks into
-            File `source` and `path` for matching, and File `version` and `etag`
-            for checking if the record is changed.
-            Note that this takes in account only added and changed records in
-            storage while deleted records are not removed in the new dataset version.
+        delta: If True, we optimize the creation of new dataset versions by calculating
+            the diff between the latest version of this storage and the version used to
+            create the most recent version of the resulting chain dataset (the one
+            specified in .save()).
+            We then run the "diff" chain using only the diff data, rather than the
+            entire storage data, and merge that diff chain with the latest version
+            of the resulting dataset to create a new version.
+            This approach avoids applying modifications to all records from storage
+            every time, which can be an expensive operation.
+            The dataset schema must include a File object.
+            The diff is calculated using the DataChain.diff() method, which compares
+            the source and path fields of File objects to find matches, and checks the
+            version and etag fields to determine if a record has changed.
+            Note that this process only considers added and modified records in
+            storage.
+            Deleted records are not removed from the new dataset version.
 
     Returns:
         DataChain: A DataChain object containing the file information.
@@ -184,4 +185,4 @@ def read_storage(
 
     assert storage_chain is not None
 
-    return storage_chain.as_delta(delta)
+    return storage_chain._as_delta(delta)

@@ -38,21 +38,21 @@ def read_dataset(
         settings : Settings to use for the chain.
         fallback_to_studio : Try to pull dataset from Studio if not found locally.
             Default is True.
-        delta : If True, we optimize on creation of the new dataset versions
-            by calculating diff between last version of this dataset and the version
-            with which last version of resulting chain dataset (the one specified in
-            `.save()`) was created.
-            We then run the "diff" chain with this diff data returned instead of
-            all dataset data, and we union that diff chain with last version of
-            resulting dataset creating new version of it.
-            This way we avoid applying modifications to all records from dataset
-            every time since that can be expensive operation.
-            Dataset needs to have File object in schema.
-            Diff is calculated using `DataChain.diff()` method which looks into
-            File `source` and `path` for matching, and File `version` and `etag`
-            for checking if the record is changed.
-            Note that this takes in account only added and changed records in
-            dataset while deleted records are not removed in the new dataset version.
+        delta: If True, we optimize the creation of new dataset versions by calculating
+            the diff between the latest version of this dataset and the version used
+            to create the most recent version of the resulting chain dataset (the one
+            specified in .save()).
+            We then run the "diff" chain using only the diff data, instead of the
+            entire dataset, and merge that diff chain with the latest version of the
+            resulting dataset to create a new version.
+            This approach avoids modifying all records in the dataset every time,
+            which can be an expensive operation.
+            The dataset schema must include a File object.
+            The diff is calculated using the DataChain.diff() method, which compares
+            the source and path fields of File objects to find matches, and checks
+            the version and etag fields to determine if a record has changed.
+            Note that this process only accounts for added and modified records in
+            the dataset. Deleted records are not removed in the new dataset version.
 
     Example:
         ```py
@@ -108,7 +108,7 @@ def read_dataset(
         signals_schema |= SignalSchema.deserialize(query.feature_schema)
     else:
         signals_schema |= SignalSchema.from_column_types(query.column_types or {})
-    return DataChain(query, _settings, signals_schema).as_delta(delta)
+    return DataChain(query, _settings, signals_schema)._as_delta(delta)
 
 
 def datasets(

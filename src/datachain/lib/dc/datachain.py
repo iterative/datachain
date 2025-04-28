@@ -202,7 +202,7 @@ class DataChain:
         self.print_schema(file=file)
         return file.getvalue()
 
-    def as_delta(self, delta: bool = False) -> "Self":
+    def _as_delta(self, delta: bool = False) -> "Self":
         """Marks this chain as delta, which means special delta process will be
         called on saving dataset for optimization"""
         self._delta = delta
@@ -291,7 +291,7 @@ class DataChain:
             _sys = self._sys
         return type(self)(
             query, settings, signal_schema=signal_schema, setup=self._setup, _sys=_sys
-        ).as_delta(self.delta)
+        )._as_delta(self.delta)
 
     def settings(
         self,
