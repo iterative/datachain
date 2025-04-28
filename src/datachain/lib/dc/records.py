@@ -37,6 +37,9 @@ def read_records(
         import datachain as dc
         single_record = dc.read_records(dc.DEFAULT_FILE_RECORD)
         ```
+
+    Notes:
+        This call blocks until all records are inserted.
     """
     from datachain.query.dataset import INSERT_BATCH_SIZE, adjust_outputs, get_col_types
     from datachain.sql.types import SQLType

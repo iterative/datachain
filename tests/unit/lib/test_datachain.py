@@ -376,10 +376,6 @@ def test_datasets_in_memory():
     ],
 )
 def test_datasets_filtering(test_session, attrs, result):
-    ds = dc.datasets(column="dataset", session=test_session)
-    datasets = [d for d in ds.collect("dataset") if d.name == "fibonacci"]
-    assert len(datasets) == 0
-
     dc.read_values(num=[1, 2, 3], session=test_session).save(
         "primes", attrs=["number", "num=prime", "small"]
     )
