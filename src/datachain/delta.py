@@ -68,10 +68,11 @@ def delta_update(dc: "DataChain", name: str) -> tuple[Optional["DataChain"], boo
     # We append all the steps from the original chain to diff, e.g filters, mappers.
     diff = _append_steps(diff, dc)
 
+    # to avoid re-calculating diff multiple times
+    diff = diff.persist()
+
     if diff.is_empty():
         return None, False
-
-    diff = diff.persist()
 
     # merging diff and the latest version of dataset
     return (
