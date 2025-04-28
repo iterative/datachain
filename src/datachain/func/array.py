@@ -181,6 +181,7 @@ def contains(arr: Union[str, Sequence, Func], elem: Any) -> Func:
 def get_element(arg: Union[str, Sequence, Func], index: int) -> Func:
     """
     Returns the element at the given index from the array.
+    If the index is out of bounds, it returns None or columns default value.
 
     Args:
         arg (str | Sequence | Func): Array to get the element from.
