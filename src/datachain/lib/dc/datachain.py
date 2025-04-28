@@ -506,20 +506,6 @@ class DataChain:
             description : description of a dataset.
             attrs : attributes of a dataset. They can be without value, e.g "NLP",
                 or with a value, e.g "location=US".
-            delta : If True, we optimize on creation of the new dataset versions
-                by calculating diff between source and the last version of dataset
-                and applying all needed modifications (mappers, filters etc.) only
-                on that diff.
-                Then we merge modified diff with the last version of dataset to
-                create new version. This way we avoid applying modifications to all
-                records from source every time since that can be expensive operation.
-                Source can be cloud storage or other dataset which has File object
-                in schema.
-                Diff is calculated using `DataChain.diff()` method which looks into
-                File `source` and `path` for matching, and File `version` and `etag`
-                for checking if the record is changed.
-                Note that this takes in account only added and changed records in
-                source while deleted records are not removed in the new dataset version.
         """
         schema = self.signals_schema.clone_without_sys_signals().serialize()
         if self.delta and name:

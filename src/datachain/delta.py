@@ -71,6 +71,8 @@ def delta_update(dc: "DataChain", name: str) -> tuple[Optional["DataChain"], boo
     if diff.is_empty():
         return None, False
 
+    diff = diff.persist()
+
     # merging diff and the latest version of dataset
     return (
         datachain.read_dataset(name, latest_version)
