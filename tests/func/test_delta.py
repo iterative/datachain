@@ -153,6 +153,50 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
     )
 
 
+def test_delta_update_check_num_calls(test_session, tmp_dir, tmp_path, capsys):
+    ds_name = "delta_ds"
+    path = tmp_dir.as_uri()
+    tmp_dir = tmp_dir / "images"
+    os.mkdir(tmp_dir)
+    map_print = "In map"
+
+    images = [
+        {
+            "name": f"img{i}.jpg",
+            "data": Image.new(mode="RGB", size=((i + 1) * 10, (i + 1) * 10)),
+        }
+        for i in range(20)
+    ]
+
+    # save only half of the images for now
+    for img in images[:10]:
+        img["data"].save(tmp_dir / img["name"])
+
+    def create_delta_dataset():
+        def get_index(file: File) -> int:
+            print(map_print)  # needed to count number of map calls
+            r = r".+\/img(\d+)\.jpg"
+            return int(re.search(r, file.path).group(1))  # type: ignore[union-attr]
+
+        (
+            dc.read_storage(path, update=True, session=test_session, delta=True)
+            .map(index=get_index)
+            .save(ds_name)
+        )
+
+    # first version of delta dataset
+    create_delta_dataset()
+    # save other half of images
+    for img in images[10:]:
+        img["data"].save(tmp_dir / img["name"])
+    # second version of delta dataset
+    create_delta_dataset()
+
+    captured = capsys.readouterr()
+    # assert captured.out == "Garbage collecting 2 tables.\n"
+    assert captured.out == "\n".join([map_print] * 20) + "\n"
+
+
 def test_delta_update_no_diff(test_session, tmp_dir, tmp_path):
     ds_name = "delta_ds"
     path = tmp_dir.as_uri()
