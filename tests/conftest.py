@@ -549,9 +549,7 @@ def animal_dataset(listed_bucket, cloud_test_catalog):
     catalog = cloud_test_catalog.catalog
     src_uri = cloud_test_catalog.src_uri
     dataset = catalog.create_dataset_from_sources(name, [src_uri], recursive=True)
-    return catalog.update_dataset(
-        dataset, {"description": "animal dataset", "attrs": ["cats", "dogs"]}
-    )
+    return catalog.update_dataset(dataset, {"description": "animal dataset"})
 
 
 @pytest.fixture
@@ -562,9 +560,7 @@ def dogs_dataset(listed_bucket, cloud_test_catalog):
     dataset = catalog.create_dataset_from_sources(
         name, [f"{src_uri}/dogs/*"], recursive=True
     )
-    return catalog.update_dataset(
-        dataset, {"description": "dogs dataset", "attrs": ["dogs", "dataset"]}
-    )
+    return catalog.update_dataset(dataset, {"description": "dogs dataset"})
 
 
 @pytest.fixture
@@ -575,9 +571,7 @@ def cats_dataset(listed_bucket, cloud_test_catalog):
     dataset = catalog.create_dataset_from_sources(
         name, [f"{src_uri}/cats/*"], recursive=True
     )
-    return catalog.update_dataset(
-        dataset, {"description": "cats dataset", "attrs": ["cats", "dataset"]}
-    )
+    return catalog.update_dataset(dataset, {"description": "cats dataset"})
 
 
 @pytest.fixture
@@ -586,7 +580,6 @@ def dataset_record():
         id=1,
         name=f"ds_{uuid.uuid4().hex}",
         description="",
-        attrs=[],
         versions=[],
         status=1,
         schema={},
