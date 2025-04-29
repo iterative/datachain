@@ -100,5 +100,5 @@ class DatasetInfo(DataModel):
             metrics=job.metrics if job else {},
             error_message=version.error_message,
             error_stack=version.error_stack,
-            attrs=dataset.attrs,
+            attrs=version.attrs,
         )

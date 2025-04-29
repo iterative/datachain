@@ -165,6 +165,7 @@ class DatasetVersion:
     dataset_id: int
     version: int
     status: int
+    attrs: list[str]
     feature_schema: dict
     created_at: datetime
     finished_at: Optional[datetime]
@@ -187,6 +188,7 @@ class DatasetVersion:
         dataset_id: int,
         version: int,
         status: int,
+        attrs: list[str],
         feature_schema: Optional[str],
         created_at: datetime,
         finished_at: Optional[datetime],
@@ -207,6 +209,7 @@ class DatasetVersion:
             dataset_id,
             version,
             status,
+            attrs,
             json.loads(feature_schema) if feature_schema else {},
             created_at,
             finished_at,
@@ -277,6 +280,7 @@ class DatasetListVersion:
     dataset_id: int
     version: int
     status: int
+    attrs: list[str]
     created_at: datetime
     finished_at: Optional[datetime]
     error_message: str
@@ -294,6 +298,7 @@ class DatasetListVersion:
         dataset_id: int,
         version: int,
         status: int,
+        attrs: list[str],
         created_at: datetime,
         finished_at: Optional[datetime],
         error_message: str,
@@ -310,6 +315,7 @@ class DatasetListVersion:
             dataset_id,
             version,
             status,
+            attrs,
             created_at,
             finished_at,
             error_message,
@@ -329,7 +335,6 @@ class DatasetRecord:
     id: int
     name: str
     description: Optional[str]
-    attrs: list[str]
     schema: dict[str, Union[SQLType, type[SQLType]]]
     feature_schema: dict
     versions: list[DatasetVersion]
@@ -357,7 +362,6 @@ class DatasetRecord:
         id: int,
         name: str,
         description: Optional[str],
-        attrs: str,
         status: int,
         feature_schema: Optional[str],
         created_at: datetime,
@@ -385,9 +389,12 @@ class DatasetRecord:
         version_sources: Optional[str],
         version_query_script: Optional[str],
         version_schema: str,
+        version_attrs: str,
         version_job_id: Optional[str] = None,
     ) -> "DatasetRecord":
-        attrs_lst: list[str] = json.loads(attrs) if attrs else []
+        version_attrs_lst: list[str] = (
+            json.loads(version_attrs) if version_attrs else []
+        )
         schema_dct: dict[str, Any] = json.loads(schema) if schema else {}
         version_schema_dct: dict[str, str] = (
             json.loads(version_schema) if version_schema else {}
@@ -399,6 +406,7 @@ class DatasetRecord:
             version_dataset_id,
             version,
             version_status,
+            version_attrs_lst,
             version_feature_schema,
             version_created_at,
             version_finished_at,
@@ -418,7 +426,6 @@ class DatasetRecord:
             id,
             name,
             description,
-            attrs_lst,
             cls.parse_schema(schema_dct),  # type: ignore[arg-type]
             json.loads(feature_schema) if feature_schema else {},
             [dataset_version],
@@ -562,7 +569,6 @@ class DatasetListRecord:
     id: int
     name: str
     description: Optional[str]
-    attrs: list[str]
     versions: list[DatasetListVersion]
     created_at: Optional[datetime] = None
 
@@ -572,7 +578,6 @@ class DatasetListRecord:
         id: int,
         name: str,
         description: Optional[str],
-        attrs: str,
         created_at: datetime,
         version_id: int,
         version_uuid: str,
@@ -586,9 +591,12 @@ class DatasetListRecord:
         version_num_objects: Optional[int],
         version_size: Optional[int],
         version_query_script: Optional[str],
+        version_attrs: Optional[str],
         version_job_id: Optional[str] = None,
     ) -> "DatasetListRecord":
-        attrs_lst: list[str] = json.loads(attrs) if attrs else []
+        version_attrs_lst: list[str] = (
+            json.loads(version_attrs) if version_attrs else []
+        )
 
         dataset_version = DatasetListVersion.parse(
             version_id,
@@ -596,6 +604,7 @@ class DatasetListRecord:
             version_dataset_id,
             version,
             version_status,
+            version_attrs_lst,
             version_created_at,
             version_finished_at,
             version_error_message,
@@ -610,7 +619,6 @@ class DatasetListRecord:
             id,
             name,
             description,
-            attrs_lst,
             [dataset_version],
             created_at,
         )

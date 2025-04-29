@@ -38,6 +38,7 @@ from datachain.dataset import (
     DatasetListRecord,
     DatasetRecord,
     DatasetStatus,
+    DatasetVersion,
     StorageURI,
     create_dataset_uri,
     parse_dataset_uri,
@@ -794,17 +795,8 @@ class Catalog:
             dataset = self.get_dataset(name)
             default_version = dataset.next_version
 
-            if (description or attrs) and (
-                dataset.description != description or dataset.attrs != attrs
-            ):
-                description = description or dataset.description
-                attrs = attrs or dataset.attrs
-
-                self.update_dataset(
-                    dataset,
-                    description=description,
-                    attrs=attrs,
-                )
+            if description and dataset.description != description:
+                self.update_dataset(dataset, description=description)
 
         except DatasetNotFoundError:
             schema = {
@@ -817,7 +809,6 @@ class Catalog:
                 schema=schema,
                 ignore_if_exists=True,
                 description=description,
-                attrs=attrs,
             )
 
         version = version or default_version
@@ -840,6 +831,7 @@ class Catalog:
             create_rows_table=create_rows,
             columns=columns,
             uuid=uuid,
+            attrs=attrs,
         )
 
     def create_new_dataset_version(
@@ -857,6 +849,7 @@ class Catalog:
         create_rows_table=True,
         job_id: Optional[str] = None,
         uuid: Optional[str] = None,
+        attrs: Optional[list[str]] = None,
     ) -> DatasetRecord:
         """
         Creates dataset version if it doesn't exist.
@@ -881,6 +874,7 @@ class Catalog:
             job_id=job_id,
             ignore_if_exists=True,
             uuid=uuid,
+            attrs=attrs,
         )
 
         if create_rows_table:
@@ -1334,18 +1328,32 @@ class Catalog:
         name: str,
         new_name: Optional[str] = None,
         description: Optional[str] = None,
-        attrs: Optional[list[str]] = None,
     ) -> DatasetRecord:
         update_data = {}
         if new_name:
             update_data["name"] = new_name
         if description is not None:
             update_data["description"] = description
-        if attrs is not None:
-            update_data["attrs"] = attrs  # type: ignore[assignment]
 
         dataset = self.get_dataset(name)
         return self.update_dataset(dataset, **update_data)
+
+    def edit_dataset_version(
+        self,
+        name: str,
+        version: int,
+        attrs: Optional[list[str]] = None,
+    ) -> DatasetVersion:
+        update_data = {}
+        dataset = self.get_dataset(name)
+
+        if attrs is not None:
+            update_data["attrs"] = attrs  # type: ignore[assignment]
+
+        if not update_data:
+            return dataset.get_version(version)
+
+        return self.metastore.update_dataset_version(dataset, version, **update_data)
 
     def ls(
         self,

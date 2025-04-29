@@ -566,7 +566,7 @@ def test_save(test_session):
     ds = test_session.catalog.get_dataset("new_name")
     assert ds.name == "new_name"
     assert ds.description == "new description"
-    assert ds.attrs == ["new_label", "old_label"]
+    assert ds.get_version(1).attrs == ["new_label", "old_label"]
 
     chain.save(
         name="new_name",
@@ -576,7 +576,7 @@ def test_save(test_session):
     ds = test_session.catalog.get_dataset("new_name")
     assert ds.name == "new_name"
     assert ds.description == "updated description"
-    assert ds.attrs == ["new_label", "old_label", "new_label2"]
+    assert ds.get_version(2).attrs == ["new_label", "old_label", "new_label2"]
 
 
 def test_show_nested_empty(capsys, test_session):

@@ -217,11 +217,6 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         help="Dataset description",
     )
     parse_edit_dataset.add_argument(
-        "--attrs",
-        nargs="+",
-        help="Dataset attributes",
-    )
-    parse_edit_dataset.add_argument(
         "--studio",
         action="store_true",
         default=False,

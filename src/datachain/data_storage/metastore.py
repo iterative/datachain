@@ -120,7 +120,6 @@ class AbstractMetastore(ABC, Serializable):
         schema: Optional[dict[str, Any]] = None,
         ignore_if_exists: bool = False,
         description: Optional[str] = None,
-        attrs: Optional[list[str]] = None,
     ) -> DatasetRecord:
         """Creates new dataset."""
 
@@ -145,6 +144,7 @@ class AbstractMetastore(ABC, Serializable):
         preview: Optional[list[dict]] = None,
         job_id: Optional[str] = None,
         uuid: Optional[str] = None,
+        attrs: Optional[list[str]] = None,
     ) -> DatasetRecord:
         """Creates new dataset version."""
 
@@ -326,7 +326,6 @@ class AbstractDBMetastore(AbstractMetastore):
             Column("id", Integer, primary_key=True),
             Column("name", Text, nullable=False),
             Column("description", Text),
-            Column("attrs", JSON, nullable=True),
             Column("status", Integer, nullable=False),
             Column("feature_schema", JSON, nullable=True),
             Column("created_at", DateTime(timezone=True)),
@@ -385,6 +384,7 @@ class AbstractDBMetastore(AbstractMetastore):
             Column("sources", Text, nullable=False, default=""),
             Column("query_script", Text, nullable=False, default=""),
             Column("schema", JSON, nullable=True),
+            Column("attrs", JSON, nullable=True),
             Column("job_id", Text, nullable=True),
             UniqueConstraint("dataset_id", "version"),
         ]
@@ -521,7 +521,6 @@ class AbstractDBMetastore(AbstractMetastore):
         schema: Optional[dict[str, Any]] = None,
         ignore_if_exists: bool = False,
         description: Optional[str] = None,
-        attrs: Optional[list[str]] = None,
         **kwargs,  # TODO registered = True / False
     ) -> DatasetRecord:
         """Creates new dataset."""
@@ -538,7 +537,6 @@ class AbstractDBMetastore(AbstractMetastore):
             query_script=query_script,
             schema=json.dumps(schema or {}),
             description=description,
-            attrs=json.dumps(attrs or []),
         )
         if ignore_if_exists and hasattr(query, "on_conflict_do_nothing"):
             # SQLite and PostgreSQL both support 'on_conflict_do_nothing',
@@ -568,6 +566,7 @@ class AbstractDBMetastore(AbstractMetastore):
         preview: Optional[list[dict]] = None,
         job_id: Optional[str] = None,
         uuid: Optional[str] = None,
+        attrs: Optional[list[str]] = None,
         conn=None,
     ) -> DatasetRecord:
         """Creates new dataset version."""
@@ -594,6 +593,7 @@ class AbstractDBMetastore(AbstractMetastore):
             size=size,
             preview=json.dumps(preview or []),
             job_id=job_id or os.getenv("DATACHAIN_JOB_ID"),
+            attrs=json.dumps(attrs or []),
         )
         if ignore_if_exists and hasattr(query, "on_conflict_do_nothing"):
             # SQLite and PostgreSQL both support 'on_conflict_do_nothing',
@@ -621,14 +621,12 @@ class AbstractDBMetastore(AbstractMetastore):
         dataset_values = {}
         for field, value in kwargs.items():
             if field in self._dataset_fields[1:]:
-                if field in ["attrs", "schema"]:
-                    values[field] = json.dumps(value) if value else None
-                else:
-                    values[field] = value
                 if field == "schema":
+                    values[field] = json.dumps(value) if value else None
                     dataset_values[field] = DatasetRecord.parse_schema(value)
                 else:
                     dataset_values[field] = value
+                    values[field] = value
 
         if not values:
             # Nothing to update
@@ -653,6 +651,8 @@ class AbstractDBMetastore(AbstractMetastore):
         values = {}
         for field, value in kwargs.items():
             if field in self._dataset_version_fields[1:]:
+                if field == "attrs":
+                    values[field] = json.dumps(value) if value else None
                 if field == "schema":
                     dataset_version.update(**{field: DatasetRecord.parse_schema(value)})
                     values[field] = json.dumps(value) if value else None

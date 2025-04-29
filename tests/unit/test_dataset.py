@@ -124,6 +124,7 @@ def test_dataset_version_from_dict(use_string):
         "dataset_id": 40,
         "version": 2,
         "status": 1,
+        "attrs": ["dogs", "cats"],
         "feature_schema": {},
         "created_at": datetime.fromisoformat("2023-10-01T12:00:00"),
         "finished_at": None,

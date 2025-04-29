@@ -247,7 +247,6 @@ def test_studio_edit_dataset(capsys, mocker):
             "new_name": "new-name",
             "team_name": "team_name",
             "description": None,
-            "attrs": None,
         }
 
         # With all arguments
@@ -261,8 +260,6 @@ def test_studio_edit_dataset(capsys, mocker):
                     "new-name",
                     "--description",
                     "description",
-                    "--attrs",
-                    "attr1",
                     "--team",
                     "team_name",
                     "--studio",
@@ -275,7 +272,6 @@ def test_studio_edit_dataset(capsys, mocker):
             "dataset_name": "name",
             "new_name": "new-name",
             "description": "description",
-            "attrs": ["attr1"],
             "team_name": "team_name",
         }
 

@@ -170,10 +170,10 @@ def test_create_dataset_from_sources(listed_bucket, cloud_test_catalog):
     assert dataset.name == dataset_name
     assert dataset.description is None
     assert dataset.versions_values == [1]
-    assert dataset.attrs == []
     assert dataset.status == DatasetStatus.COMPLETE
 
     assert dataset_version.status == DatasetStatus.COMPLETE
+    assert dataset_version.attrs == []
     assert dataset_version.created_at
     assert dataset_version.finished_at
     assert dataset_version.error_message == ""
@@ -207,10 +207,10 @@ def test_create_dataset_from_sources_dataset(cloud_test_catalog, dogs_dataset):
     assert dataset.name == dataset_name
     assert dataset.description is None
     assert dataset.versions_values == [1]
-    assert dataset.attrs == []
     assert dataset.status == DatasetStatus.COMPLETE
 
     assert dataset_version.status == DatasetStatus.COMPLETE
+    assert dataset_version.attrs == []
     assert dataset_version.created_at
     assert dataset_version.finished_at
     assert dataset_version.error_message == ""
@@ -537,6 +537,16 @@ def test_remove_dataset_wrong_version(cloud_test_catalog, dogs_dataset):
         catalog.remove_dataset(dogs_dataset.name, version=100)
 
 
+@pytest.mark.parametrize("attrs", [["cats", "birds"], []])
+def test_edit_dataset_version(cloud_test_catalog, dogs_dataset, attrs):
+    catalog = cloud_test_catalog.catalog
+
+    catalog.edit_dataset_version(dogs_dataset.name, 1, attrs=attrs)
+
+    dataset_version = catalog.get_dataset(dogs_dataset.name).get_version(1)
+    assert dataset_version.attrs == attrs
+
+
 def test_edit_dataset(cloud_test_catalog, dogs_dataset):
     dataset_old_name = dogs_dataset.name
     dataset_new_name = uuid.uuid4().hex
@@ -546,14 +556,12 @@ def test_edit_dataset(cloud_test_catalog, dogs_dataset):
         dogs_dataset.name,
         new_name=dataset_new_name,
         description="new description",
-        attrs=["cats", "birds"],
     )
 
     dataset = catalog.get_dataset(dataset_new_name)
     assert dataset.versions_values == [1]
     assert dataset.name == dataset_new_name
     assert dataset.description == "new description"
-    assert dataset.attrs == ["cats", "birds"]
 
     # check if dataset tables are renamed correctly
     old_dataset_table_name = catalog.warehouse.dataset_table_name(dataset_old_name, 1)
@@ -589,7 +597,7 @@ def test_edit_dataset_same_name(cloud_test_catalog, dogs_dataset):
     )
 
 
-def test_edit_dataset_remove_attrs_and_description(cloud_test_catalog, dogs_dataset):
+def test_edit_dataset_remove_description(cloud_test_catalog, dogs_dataset):
     dataset_new_name = uuid.uuid4().hex
     catalog = cloud_test_catalog.catalog
 
@@ -597,14 +605,12 @@ def test_edit_dataset_remove_attrs_and_description(cloud_test_catalog, dogs_data
         dogs_dataset.name,
         new_name=dataset_new_name,
         description="",
-        attrs=[],
     )
 
     dataset = catalog.get_dataset(dataset_new_name)
     assert dataset.versions_values == [1]
     assert dataset.name == dataset_new_name
     assert dataset.description == ""
-    assert dataset.attrs == []
 
 
 def test_ls_dataset_rows(cloud_test_catalog, dogs_dataset):

@@ -154,7 +154,6 @@ def edit_dataset(
     name: str,
     new_name: Optional[str] = None,
     description: Optional[str] = None,
-    attrs: Optional[list[str]] = None,
     studio: bool = False,
     local: bool = False,
     all: bool = True,
@@ -167,9 +166,9 @@ def edit_dataset(
 
     if all or local:
         try:
-            catalog.edit_dataset(name, new_name, description, attrs)
+            catalog.edit_dataset(name, new_name, description)
         except DatasetNotFoundError:
             print("Dataset not found in local", file=sys.stderr)
 
     if (all or studio) and token:
-        edit_studio_dataset(team, name, new_name, description, attrs)
+        edit_studio_dataset(team, name, new_name, description)

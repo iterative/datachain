@@ -290,13 +290,11 @@ class StudioClient:
         name: str,
         new_name: Optional[str] = None,
         description: Optional[str] = None,
-        attrs: Optional[list[str]] = None,
     ) -> Response[DatasetInfoData]:
         body = {
             "new_name": new_name,
             "dataset_name": name,
             "description": description,
-            "attrs": attrs,
         }
 
         return self._send_request(
