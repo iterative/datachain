@@ -34,6 +34,9 @@ jobs:
           enable-cache: true
           cache-suffix: lint
           cache-dependency-glob: pyproject.toml
+          # revert after this is fixed
+          # https://github.com/wntrblm/nox/issues/953      
+          version: ">=0.6,<0.7"
 
       - name: Install nox
         run: uv pip install nox --system
