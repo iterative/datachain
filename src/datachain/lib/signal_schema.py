@@ -144,31 +144,28 @@ def create_feature_model(
 class SignalSchema:
     values: dict[str, DataType]
     tree: dict[str, Any]
-    setup_func: dict[str, Callable]
+    setup_args: dict[str, Any]
     setup_values: Optional[dict[str, Any]]
 
     def __init__(
         self,
         values: dict[str, DataType],
-        setup: Optional[dict[str, Callable]] = None,
+        setup: Optional[dict[str, Any]] = None,
     ):
         self.values = values
         self.tree = self._build_tree(values)
 
-        self.setup_func = setup or {}
+        self.setup_args = setup or {}
         self.setup_values = None
-        for key, func in self.setup_func.items():
-            if not callable(func):
-                raise SetupError(key, "value must be function or callable class")
 
     def _init_setup_values(self) -> None:
         if self.setup_values is not None:
             return
 
         res = {}
-        for key, func in self.setup_func.items():
+        for key, arg in self.setup_args.items():
             try:
-                res[key] = func()
+                res[key] = arg() if callable(arg) else arg
             except Exception as ex:
                 raise SetupError(key, f"error when call function: '{ex}'") from ex
         self.setup_values = res
@@ -438,7 +435,7 @@ class SignalSchema:
     def to_udf_spec(self) -> dict[str, type]:
         res = {}
         for path, type_, has_subtree, _ in self.get_flat_tree():
-            if path[0] in self.setup_func:
+            if path[0] in self.setup_args:
                 continue
             if not has_subtree:
                 db_name = DEFAULT_DELIMITER.join(path)
