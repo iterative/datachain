@@ -989,7 +989,7 @@ def test_row_to_objs():
     assert res == ["myname", 12.5, val, None]
 
 
-def test_row_to_objs_setup():
+def test_row_to_objs_setup_callable():
     spec = {"name": str, "age": float, "init_val": int, "fr": MyType2}
     setup_value = 84635
     setup = {"init_val": lambda: setup_value}
@@ -1009,8 +1009,11 @@ def test_row_to_objs_setup():
 
 
 def test_setup_not_callable():
-    with pytest.raises(SetupError):
-        SignalSchema({"name": str}, {"init_val": "asdfd"})
+    setup_value = "asdfd"
+    schema = SignalSchema({"name": str, "init_val": str}, {"init_val": setup_value})
+    row = ("myname",)
+    res = schema.row_to_objs(row)
+    assert res == ["myname", setup_value]
 
 
 def test_setup_error():

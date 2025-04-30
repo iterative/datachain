@@ -1993,7 +1993,8 @@ class DataChain:
         """Setup variables to pass to UDF functions.
 
         Use before running map/gen/agg/batch_map to save an object and pass it as an
-        argument to the UDF.
+        argument to the UDF. If callable / function value is passed it will be called
+        and the result value is cached and used.
 
         Example:
             ```py
@@ -2004,7 +2005,7 @@ class DataChain:
             (
                 dc.read_storage(DATA, type="text")
                 .settings(parallel=4, cache=True)
-                .setup(client=lambda: anthropic.Anthropic(api_key=API_KEY))
+                .setup(client=anthropic.Anthropic(api_key=API_KEY))
                 .map(
                     claude=lambda client, file: client.messages.create(
                         model=MODEL,
