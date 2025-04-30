@@ -60,6 +60,11 @@ datachain job run --workers 4 --files utils.py config.json query.py
 datachain job run --env API_KEY=123 --req pandas numpy query.py
 ```
 
+6. Run a job with a repository (will be cloned in the job working directory):
+```bash
+datachain job run --repository https://github.com/iterative/datachain query.py
+```
+
 ## Notes
 
 * Closing the logs command (e.g., with Ctrl+C) will only stop displaying the logs but will not cancel the job execution

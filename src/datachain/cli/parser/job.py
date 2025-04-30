@@ -13,7 +13,7 @@ def add_jobs_parser(subparsers, parent_parser) -> None:
     )
     jobs_subparser = jobs_parser.add_subparsers(
         dest="cmd",
-        help="Use `datachain auth CMD --help` to display command-specific help",
+        help="Use `datachain job CMD --help` to display command-specific help",
     )
 
     studio_run_help = "Run a job in Studio"
@@ -65,6 +65,11 @@ def add_jobs_parser(subparsers, parent_parser) -> None:
         "--python-version",
         action="store",
         help="Python version for the job (e.g., 3.9, 3.10, 3.11)",
+    )
+    studio_run_parser.add_argument(
+        "--repository",
+        action="store",
+        help="Repository URL to clone before running the job",
     )
     studio_run_parser.add_argument(
         "--req-file",
