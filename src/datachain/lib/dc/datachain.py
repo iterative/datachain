@@ -214,7 +214,7 @@ class DataChain:
         return self._query.name
 
     @property
-    def version(self) -> Optional[int]:
+    def version(self) -> Optional[str]:
         """Version of the underlying dataset, if there is one."""
         return self._query.version
 
@@ -457,7 +457,7 @@ class DataChain:
     def save(  # type: ignore[override]
         self,
         name: str,
-        version: Optional[int] = None,
+        version: Optional[str] = None,
         description: Optional[str] = None,
         attrs: Optional[list[str]] = None,
         **kwargs,

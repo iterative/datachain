@@ -6,6 +6,7 @@ from uuid import uuid4
 from pydantic import Field, field_validator
 
 from datachain.dataset import (
+    DEFAULT_DATASET_VERSION,
     DatasetListRecord,
     DatasetListVersion,
     DatasetStatus,
@@ -22,7 +23,7 @@ if TYPE_CHECKING:
 class DatasetInfo(DataModel):
     name: str
     uuid: str = Field(default=str(uuid4()))
-    version: int = Field(default=1)
+    version: str = Field(default=DEFAULT_DATASET_VERSION)
     status: int = Field(default=DatasetStatus.CREATED)
     created_at: datetime = Field(default=TIME_ZERO)
     finished_at: Optional[datetime] = Field(default=None)

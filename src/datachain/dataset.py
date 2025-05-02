@@ -25,6 +25,8 @@ DATASET_PREFIX = "ds://"
 QUERY_DATASET_PREFIX = "ds_query_"
 LISTING_PREFIX = "lst__"
 
+DEFAULT_DATASET_VERSION = "1.0.0"
+
 
 # StorageURI represents a normalised URI to a valid storage location (full bucket or
 # absolute local path).
@@ -33,12 +35,43 @@ LISTING_PREFIX = "lst__"
 StorageURI = NewType("StorageURI", str)
 
 
-def parse_dataset_uri(uri: str) -> tuple[str, Optional[int]]:
+def semver_parse(version: str) -> tuple[int, int, int]:
+    vals = version.split(".")
+    return (int(vals[0]), int(vals[1]), int(vals[2]))
+
+
+def semver_create(major: int = 0, minor: int = 0, bug: int = 0) -> str:
+    return ".".join([str(major), str(minor), str(bug)])
+
+
+def semver_value(version: str) -> int:
+    major, minor, bug = semver_parse(version)
+    return major * 100 + minor * 10 + bug
+
+
+def semver_compare(v1: str, v2: str) -> int:
+    """
+    Compares 2 versions and returns:
+        1. -1 if v1 < v2
+        2.  0 if v1 == v2
+        3.  1 if v1 > v2
+    """
+    v1_val = semver_value(v1)
+    v2_val = semver_value(v2)
+
+    if v1_val < v2_val:
+        return -1
+    if v1_val > v2_val:
+        return 1
+    return 0
+
+
+def parse_dataset_uri(uri: str) -> tuple[str, Optional[str]]:
     """
     Parse dataser uri to extract name and version out of it (if version is defined)
     Example:
-        Input: ds://zalando@v3
-        Output: (zalando, 3)
+        Input: ds://zalando@v3.0.1
+        Output: (zalando, 3.0.1)
     """
     p = urlparse(uri)
     if p.scheme != "ds":
@@ -51,16 +84,15 @@ def parse_dataset_uri(uri: str) -> tuple[str, Optional[int]]:
         raise Exception(
             "Wrong dataset uri format, it should be: ds://<name>@v<version>"
         )
-    version = int(s[1])
-    return name, version
+    return name, s[1]
 
 
-def create_dataset_uri(name: str, version: Optional[int] = None) -> str:
+def create_dataset_uri(name: str, version: Optional[str] = None) -> str:
     """
     Creates a dataset uri based on dataset name and optionally version
     Example:
-        Input: zalando, 3
-        Output: ds//zalando@v3
+        Input: zalando, 3.0.1
+        Output: ds//zalando@v3.0.1
     """
     uri = f"{DATASET_PREFIX}{name}"
     if version:
@@ -79,7 +111,7 @@ class DatasetDependency:
     id: int
     type: str
     name: str
-    version: str  # TODO change to int
+    version: str
     created_at: datetime
     dependencies: list[Optional["DatasetDependency"]]
 
@@ -102,7 +134,7 @@ class DatasetDependency:
         dataset_id: Optional[int],
         dataset_version_id: Optional[int],
         dataset_name: Optional[str],
-        dataset_version: Optional[int],
+        dataset_version: Optional[str],
         dataset_version_created_at: Optional[datetime],
     ) -> Optional["DatasetDependency"]:
         from datachain.client import Client
@@ -124,7 +156,7 @@ class DatasetDependency:
             dependency_type,
             dependency_name,
             (
-                str(dataset_version)  # type: ignore[arg-type]
+                dataset_version  # type: ignore[arg-type]
                 if dataset_version
                 else None
             ),
@@ -163,7 +195,7 @@ class DatasetVersion:
     id: int
     uuid: str
     dataset_id: int
-    version: int
+    version: str
     status: int
     feature_schema: dict
     created_at: datetime
@@ -185,7 +217,7 @@ class DatasetVersion:
         id: int,
         uuid: str,
         dataset_id: int,
-        version: int,
+        version: str,
         status: int,
         feature_schema: Optional[str],
         created_at: datetime,
@@ -222,6 +254,10 @@ class DatasetVersion:
             job_id,
         )
 
+    @property
+    def version_value(self) -> int:
+        return semver_value(self.version)
+
     def __eq__(self, other):
         if not isinstance(other, DatasetVersion):
             return False
@@ -230,7 +266,7 @@ class DatasetVersion:
     def __lt__(self, other):
         if not isinstance(other, DatasetVersion):
             return False
-        return self.version < other.version
+        return self.version_value < other.version_value
 
     def __hash__(self):
         return hash(f"{self.dataset_id}_{self.version}")
@@ -275,7 +311,7 @@ class DatasetListVersion:
     id: int
     uuid: str
     dataset_id: int
-    version: int
+    version: str
     status: int
     created_at: datetime
     finished_at: Optional[datetime]
@@ -292,7 +328,7 @@ class DatasetListVersion:
         id: int,
         uuid: str,
         dataset_id: int,
-        version: int,
+        version: str,
         status: int,
         created_at: datetime,
         finished_at: Optional[datetime],
@@ -322,6 +358,10 @@ class DatasetListVersion:
 
     def __hash__(self):
         return hash(f"{self.dataset_id}_{self.version}")
+
+    @property
+    def version_value(self) -> int:
+        return semver_value(self.version)
 
 
 @dataclass
@@ -371,7 +411,7 @@ class DatasetRecord:
         version_id: int,
         version_uuid: str,
         version_dataset_id: int,
-        version: int,
+        version: str,
         version_status: int,
         version_feature_schema: Optional[str],
         version_created_at: datetime,
@@ -441,7 +481,7 @@ class DatasetRecord:
             for c_name, c_type in self.schema.items()
         }
 
-    def get_schema(self, version: int) -> dict[str, Union[SQLType, type[SQLType]]]:
+    def get_schema(self, version: str) -> dict[str, Union[SQLType, type[SQLType]]]:
         return self.get_version(version).schema if version else self.schema
 
     def update(self, **kwargs):
@@ -460,20 +500,23 @@ class DatasetRecord:
             self.versions = []
 
         self.versions = list(set(self.versions + other.versions))
-        self.versions.sort(key=lambda v: v.version)
+        self.versions.sort(key=lambda v: v.version_value)
         return self
 
-    def has_version(self, version: int) -> bool:
-        return version in self.versions_values
+    def has_version(self, version: str) -> bool:
+        return version in [v.version for v in self.versions]
 
-    def is_valid_next_version(self, version: int) -> bool:
+    def is_valid_next_version(self, version: str) -> bool:
         """
         Checks if a number can be a valid next latest version for dataset.
         The only rule is that it cannot be lower than current latest version
         """
-        return not (self.latest_version and self.latest_version >= version)
+        return not (
+            self.latest_version
+            and semver_value(self.latest_version) >= semver_value(version)
+        )
 
-    def get_version(self, version: int) -> DatasetVersion:
+    def get_version(self, version: str) -> DatasetVersion:
         if not self.has_version(version):
             raise DatasetVersionNotFoundError(
                 f"Dataset {self.name} does not have version {version}"
@@ -496,15 +539,15 @@ class DatasetRecord:
                 f"Dataset {self.name} does not have version with uuid {uuid}"
             ) from None
 
-    def remove_version(self, version: int) -> None:
+    def remove_version(self, version: str) -> None:
         if not self.versions or not self.has_version(version):
             return
 
         self.versions = [v for v in self.versions if v.version != version]
 
-    def identifier(self, version: int) -> str:
+    def identifier(self, version: str) -> str:
         """
-        Get identifier in the form my-dataset@v3
+        Get identifier in the form my-dataset@v3.0.1
         """
         if not self.has_version(version):
             raise DatasetVersionNotFoundError(
@@ -512,43 +555,52 @@ class DatasetRecord:
             )
         return f"{self.name}@v{version}"
 
-    def uri(self, version: int) -> str:
+    def uri(self, version: str) -> str:
         """
-        Dataset uri example: ds://dogs@v3
+        Dataset uri example: ds://dogs@v3.0.1
         """
         identifier = self.identifier(version)
         return f"{DATASET_PREFIX}{identifier}"
 
     @property
-    def versions_values(self) -> list[int]:
-        """
-        Extracts actual versions from list of DatasetVersion objects
-        in self.versions attribute
-        """
-        if not self.versions:
-            return []
-
-        return sorted(v.version for v in self.versions)
-
-    @property
-    def next_version(self) -> int:
+    def next_version_major(self) -> str:
         """Returns what should be next autoincrement version of dataset"""
         if not self.versions:
-            return 1
-        return max(self.versions_values) + 1
+            return "1.0.0"
+
+        major, minor, bug = semver_parse(self.latest_version)
+        return semver_create(major + 1, 0, 0)
 
     @property
-    def latest_version(self) -> int:
+    def next_version_minor(self) -> str:
+        """Returns what should be next autoincrement version of dataset"""
+        if not self.versions:
+            return "1.0.0"
+
+        major, minor, bug = semver_parse(self.latest_version)
+        return semver_create(major, minor + 1, 0)
+
+    @property
+    def next_version_bug(self) -> str:
+        """Returns what should be next autoincrement version of dataset"""
+        if not self.versions:
+            return "1.0.0"
+
+        major, minor, bug = semver_parse(self.latest_version)
+        return semver_create(major, minor, bug + 1)
+
+    @property
+    def latest_version(self) -> str:
         """Returns latest version of a dataset"""
-        return max(self.versions_values)
+        return max(self.versions).version
 
     @property
-    def prev_version(self) -> Optional[int]:
+    def prev_version(self) -> Optional[str]:
         """Returns previous version of a dataset"""
         if len(self.versions) == 1:
             return None
 
-        return sorted(self.versions_values)[-2]
+        return sorted(self.versions)[-2].version
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "DatasetRecord":
@@ -577,7 +629,7 @@ class DatasetListRecord:
         version_id: int,
         version_uuid: str,
         version_dataset_id: int,
-        version: int,
+        version: str,
         version_status: int,
         version_created_at: datetime,
         version_finished_at: Optional[datetime],
@@ -626,11 +678,11 @@ class DatasetListRecord:
             self.versions = []
 
         self.versions = list(set(self.versions + other.versions))
-        self.versions.sort(key=lambda v: v.version)
+        self.versions.sort(key=lambda v: v.version_value)
         return self
 
     def latest_version(self) -> DatasetListVersion:
-        return max(self.versions, key=lambda v: v.version)
+        return max(self.versions, key=lambda v: v.version_value)
 
     @property
     def is_bucket_listing(self) -> bool:

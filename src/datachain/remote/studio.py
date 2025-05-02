@@ -307,7 +307,7 @@ class StudioClient:
     def rm_dataset(
         self,
         name: str,
-        version: Optional[int] = None,
+        version: Optional[str] = None,
         force: Optional[bool] = False,
     ) -> Response[DatasetInfoData]:
         return self._send_request(
@@ -336,7 +336,7 @@ class StudioClient:
         return response
 
     def dataset_rows_chunk(
-        self, name: str, version: int, offset: int
+        self, name: str, version: str, offset: int
     ) -> Response[DatasetRowsData]:
         req_data = {"dataset_name": name, "dataset_version": version}
         return self._send_request_msgpack(
@@ -353,7 +353,7 @@ class StudioClient:
         )
 
     def export_dataset_table(
-        self, name: str, version: int
+        self, name: str, version: str
     ) -> Response[DatasetExportSignedUrls]:
         return self._send_request(
             "datachain/datasets/export",
@@ -362,7 +362,7 @@ class StudioClient:
         )
 
     def dataset_export_status(
-        self, name: str, version: int
+        self, name: str, version: str
     ) -> Response[DatasetExportStatus]:
         return self._send_request(
             "datachain/datasets/export-status",

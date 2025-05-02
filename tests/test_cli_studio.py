@@ -393,7 +393,7 @@ def test_studio_run(capsys, mocker, tmp_dir):
         out.strip() == "Job 1 created\nOpen the job in Studio at https://example.com\n"
         "========================================\n\n\n"
         ">>>> Dataset versions created during the job:\n"
-        "    - dataset_name@v1"
+        "    - dataset_name@v1.0.0"
     )
 
     first_request = m.request_history[0]

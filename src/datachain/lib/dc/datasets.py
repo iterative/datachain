@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 def read_dataset(
     name: str,
-    version: Optional[int] = None,
+    version: Optional[str] = None,
     session: Optional[Session] = None,
     settings: Optional[dict] = None,
     fallback_to_studio: bool = True,
@@ -49,7 +49,7 @@ def read_dataset(
         ```
 
         ```py
-        chain = dc.read_dataset("my_cats", version=1)
+        chain = dc.read_dataset("my_cats", version="1.0.0")
         ```
 
         ```py
@@ -63,7 +63,7 @@ def read_dataset(
         }
         chain = dc.read_dataset(
             name="my_cats",
-            version=1,
+            version="1.0.0",
             session=session,
             settings=settings,
             fallback_to_studio=True,
@@ -179,7 +179,7 @@ def datasets(
 
 def delete_dataset(
     name: str,
-    version: Optional[int] = None,
+    version: Optional[str] = None,
     force: Optional[bool] = False,
     studio: Optional[bool] = False,
     session: Optional[Session] = None,
@@ -207,7 +207,7 @@ def delete_dataset(
 
         ```py
         import datachain as dc
-        dc.delete_dataset("cats", version=1)
+        dc.delete_dataset("cats", version="1.0.0")
         ```
     """
 

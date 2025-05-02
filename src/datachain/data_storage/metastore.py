@@ -128,7 +128,7 @@ class AbstractMetastore(ABC, Serializable):
     def create_dataset_version(  # noqa: PLR0913
         self,
         dataset: DatasetRecord,
-        version: int,
+        version: str,
         status: int,
         sources: str = "",
         feature_schema: Optional[dict] = None,
@@ -158,13 +158,13 @@ class AbstractMetastore(ABC, Serializable):
 
     @abstractmethod
     def update_dataset_version(
-        self, dataset: DatasetRecord, version: int, **kwargs
+        self, dataset: DatasetRecord, version: str, **kwargs
     ) -> DatasetVersion:
         """Updates dataset version fields."""
 
     @abstractmethod
     def remove_dataset_version(
-        self, dataset: DatasetRecord, version: int
+        self, dataset: DatasetRecord, version: str
     ) -> DatasetRecord:
         """
         Deletes one single dataset version.
@@ -188,7 +188,7 @@ class AbstractMetastore(ABC, Serializable):
         self,
         dataset: DatasetRecord,
         status: int,
-        version: Optional[int] = None,
+        version: Optional[str] = None,
         error_message="",
         error_stack="",
         script_output="",
@@ -202,9 +202,9 @@ class AbstractMetastore(ABC, Serializable):
     def add_dataset_dependency(
         self,
         source_dataset_name: str,
-        source_dataset_version: int,
+        source_dataset_version: str,
         dataset_name: str,
-        dataset_version: int,
+        dataset_version: str,
     ) -> None:
         """Adds dataset dependency to dataset."""
 
@@ -212,21 +212,21 @@ class AbstractMetastore(ABC, Serializable):
     def update_dataset_dependency_source(
         self,
         source_dataset: DatasetRecord,
-        source_dataset_version: int,
+        source_dataset_version: str,
         new_source_dataset: Optional[DatasetRecord] = None,
-        new_source_dataset_version: Optional[int] = None,
+        new_source_dataset_version: Optional[str] = None,
     ) -> None:
         """Updates dataset dependency source."""
 
     @abstractmethod
     def get_direct_dataset_dependencies(
-        self, dataset: DatasetRecord, version: int
+        self, dataset: DatasetRecord, version: str
     ) -> list[Optional[DatasetDependency]]:
         """Gets direct dataset dependencies."""
 
     @abstractmethod
     def remove_dataset_dependencies(
-        self, dataset: DatasetRecord, version: Optional[int] = None
+        self, dataset: DatasetRecord, version: Optional[str] = None
     ) -> None:
         """
         When we remove dataset, we need to clean up it's dependencies as well.
@@ -234,7 +234,7 @@ class AbstractMetastore(ABC, Serializable):
 
     @abstractmethod
     def remove_dataset_dependants(
-        self, dataset: DatasetRecord, version: Optional[int] = None
+        self, dataset: DatasetRecord, version: Optional[str] = None
     ) -> None:
         """
         When we remove dataset, we need to clear its references in other dataset
@@ -288,7 +288,7 @@ class AbstractMetastore(ABC, Serializable):
         """Set the status of the given job and dataset."""
 
     @abstractmethod
-    def get_job_dataset_versions(self, job_id: str) -> list[tuple[str, int]]:
+    def get_job_dataset_versions(self, job_id: str) -> list[tuple[str, str]]:
         """Returns dataset names and versions for the job."""
         raise NotImplementedError
 
@@ -367,7 +367,7 @@ class AbstractDBMetastore(AbstractMetastore):
                 ForeignKey(f"{cls.DATASET_TABLE}.id", ondelete="CASCADE"),
                 nullable=False,
             ),
-            Column("version", Integer, nullable=False),
+            Column("version", Text, nullable=False, default="1.0.0"),
             Column(
                 "status",
                 Integer,
@@ -551,7 +551,7 @@ class AbstractDBMetastore(AbstractMetastore):
     def create_dataset_version(  # noqa: PLR0913
         self,
         dataset: DatasetRecord,
-        version: int,
+        version: str,
         status: int,
         sources: str = "",
         feature_schema: Optional[dict] = None,
@@ -645,7 +645,7 @@ class AbstractDBMetastore(AbstractMetastore):
         return result_ds
 
     def update_dataset_version(
-        self, dataset: DatasetRecord, version: int, conn=None, **kwargs
+        self, dataset: DatasetRecord, version: str, conn=None, **kwargs
     ) -> DatasetVersion:
         """Updates dataset fields."""
         dataset_version = dataset.get_version(version)
@@ -754,7 +754,7 @@ class AbstractDBMetastore(AbstractMetastore):
         return ds
 
     def remove_dataset_version(
-        self, dataset: DatasetRecord, version: int
+        self, dataset: DatasetRecord, version: str
     ) -> DatasetRecord:
         """
         Deletes one single dataset version.
@@ -787,7 +787,7 @@ class AbstractDBMetastore(AbstractMetastore):
         self,
         dataset: DatasetRecord,
         status: int,
-        version: Optional[int] = None,
+        version: Optional[str] = None,
         error_message="",
         error_stack="",
         script_output="",
@@ -821,9 +821,9 @@ class AbstractDBMetastore(AbstractMetastore):
     def add_dataset_dependency(
         self,
         source_dataset_name: str,
-        source_dataset_version: int,
+        source_dataset_version: str,
         dataset_name: str,
-        dataset_version: int,
+        dataset_version: str,
     ) -> None:
         """Adds dataset dependency to dataset."""
         source_dataset = self.get_dataset(source_dataset_name)
@@ -843,9 +843,9 @@ class AbstractDBMetastore(AbstractMetastore):
     def update_dataset_dependency_source(
         self,
         source_dataset: DatasetRecord,
-        source_dataset_version: int,
+        source_dataset_version: str,
         new_source_dataset: Optional[DatasetRecord] = None,
-        new_source_dataset_version: Optional[int] = None,
+        new_source_dataset_version: Optional[str] = None,
     ) -> None:
         dd = self._datasets_dependencies
 
@@ -876,7 +876,7 @@ class AbstractDBMetastore(AbstractMetastore):
         """
 
     def get_direct_dataset_dependencies(
-        self, dataset: DatasetRecord, version: int
+        self, dataset: DatasetRecord, version: str
     ) -> list[Optional[DatasetDependency]]:
         d = self._datasets
         dd = self._datasets_dependencies
@@ -905,7 +905,7 @@ class AbstractDBMetastore(AbstractMetastore):
         return [self.dependency_class.parse(*r) for r in self.db.execute(query)]
 
     def remove_dataset_dependencies(
-        self, dataset: DatasetRecord, version: Optional[int] = None
+        self, dataset: DatasetRecord, version: Optional[str] = None
     ) -> None:
         """
         When we remove dataset, we need to clean up it's dependencies as well
@@ -924,7 +924,7 @@ class AbstractDBMetastore(AbstractMetastore):
         self.db.execute(q)
 
     def remove_dataset_dependants(
-        self, dataset: DatasetRecord, version: Optional[int] = None
+        self, dataset: DatasetRecord, version: Optional[str] = None
     ) -> None:
         """
         When we remove dataset, we need to clear its references in other dataset
@@ -1106,7 +1106,7 @@ class AbstractDBMetastore(AbstractMetastore):
             )
             self.db.execute(query, conn=conn)  # type: ignore[attr-defined]
 
-    def get_job_dataset_versions(self, job_id: str) -> list[tuple[str, int]]:
+    def get_job_dataset_versions(self, job_id: str) -> list[tuple[str, str]]:
         """Returns dataset names and versions for the job."""
         dv = self._datasets_versions
         ds = self._datasets

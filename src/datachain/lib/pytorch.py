@@ -43,7 +43,7 @@ class PytorchDataset(IterableDataset):
     def __init__(
         self,
         name: str,
-        version: Optional[int] = None,
+        version: Optional[str] = None,
         catalog: Optional["Catalog"] = None,
         transform: Optional["Transform"] = None,
         tokenizer: Optional[Callable] = None,
@@ -60,7 +60,7 @@ class PytorchDataset(IterableDataset):
 
         Args:
             name (str): Name of DataChain dataset to stream.
-            version (int): Version of DataChain dataset to stream.
+            version (str): Version of DataChain dataset to stream.
             catalog (Catalog): DataChain catalog to which dataset belongs.
             transform (Transform): Torchvision transforms to apply to the dataset.
             tokenizer (Callable): Tokenizer to use to tokenize text values.
