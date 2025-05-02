@@ -121,49 +121,49 @@ def test_studio_team_global():
 
 def test_studio_datasets(capsys, studio_datasets, mocker):
     def list_datasets_local(_, __):
-        yield "local", 1
-        yield "both", 1
+        yield "local", "1.0.0"
+        yield "both", "1.0.0"
 
     mocker.patch(
         "datachain.cli.commands.datasets.list_datasets_local",
         side_effect=list_datasets_local,
     )
     local_rows = [
-        {"Name": "both", "Latest Version": "v1"},
-        {"Name": "local", "Latest Version": "v1"},
+        {"Name": "both", "Latest Version": "v1.0.0"},
+        {"Name": "local", "Latest Version": "v1.0.0"},
     ]
     local_output = tabulate(local_rows, headers="keys")
 
     studio_rows = [
-        {"Name": "both", "Latest Version": "v1"},
+        {"Name": "both", "Latest Version": "v1.0.0"},
         {
             "Name": "cats",
-            "Latest Version": "v1",
+            "Latest Version": "v1.0.0",
         },
-        {"Name": "dogs", "Latest Version": "v2"},
+        {"Name": "dogs", "Latest Version": "v2.0.0"},
     ]
     studio_output = tabulate(studio_rows, headers="keys")
 
     both_rows = [
-        {"Name": "both", "Studio": "v1", "Local": "v1"},
-        {"Name": "cats", "Studio": "v1", "Local": "\u2716"},
-        {"Name": "dogs", "Studio": "v2", "Local": "\u2716"},
-        {"Name": "local", "Studio": "\u2716", "Local": "v1"},
+        {"Name": "both", "Studio": "v1.0.0", "Local": "v1.0.0"},
+        {"Name": "cats", "Studio": "v1.0.0", "Local": "\u2716"},
+        {"Name": "dogs", "Studio": "v2.0.0", "Local": "\u2716"},
+        {"Name": "local", "Studio": "\u2716", "Local": "v1.0.0"},
     ]
     both_output = tabulate(both_rows, headers="keys")
 
     both_rows_versions = [
-        {"Name": "both", "Studio": "v1", "Local": "v1"},
-        {"Name": "cats", "Studio": "v1", "Local": "\u2716"},
-        {"Name": "dogs", "Studio": "v1", "Local": "\u2716"},
-        {"Name": "dogs", "Studio": "v2", "Local": "\u2716"},
-        {"Name": "local", "Studio": "\u2716", "Local": "v1"},
+        {"Name": "both", "Studio": "v1.0.0", "Local": "v1.0.0"},
+        {"Name": "cats", "Studio": "v1.0.0", "Local": "\u2716"},
+        {"Name": "dogs", "Studio": "v1.0.0", "Local": "\u2716"},
+        {"Name": "dogs", "Studio": "v2.0.0", "Local": "\u2716"},
+        {"Name": "local", "Studio": "\u2716", "Local": "v1.0.0"},
     ]
     both_output_versions = tabulate(both_rows_versions, headers="keys")
 
     dogs_rows = [
-        {"Name": "dogs", "Latest Version": "v1"},
-        {"Name": "dogs", "Latest Version": "v2"},
+        {"Name": "dogs", "Latest Version": "v1.0.0"},
+        {"Name": "dogs", "Latest Version": "v2.0.0"},
     ]
     dogs_output = tabulate(dogs_rows, headers="keys")
 
@@ -302,7 +302,7 @@ def test_studio_rm_dataset(capsys, mocker):
                     "--team",
                     "team_name",
                     "--version",
-                    "1",
+                    "1.0.0",
                     "--force",
                     "--studio",
                 ]
@@ -315,7 +315,7 @@ def test_studio_rm_dataset(capsys, mocker):
         assert last_request.json() == {
             "dataset_name": "name",
             "team_name": "team_name",
-            "dataset_version": 1,
+            "dataset_version": "1.0.0",
             "force": True,
         }
 
@@ -353,7 +353,11 @@ def test_studio_run(capsys, mocker, tmp_dir):
         )
         m.get(
             f"{STUDIO_URL}/api/datachain/datasets/dataset_job_versions?job_id=1&team_name=team_name",
-            json={"dataset_versions": [{"dataset_name": "dataset_name", "version": 1}]},
+            json={
+                "dataset_versions": [
+                    {"dataset_name": "dataset_name", "version": "1.0.0"}
+                ]
+            },
         )
 
         (tmp_dir / "env_file.txt").write_text("ENV_FROM_FILE=1")

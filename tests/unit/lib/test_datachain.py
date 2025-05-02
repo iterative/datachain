@@ -434,7 +434,7 @@ def test_listings_reindex(test_session, tmp_dir):
     assert listings[0].storage_uri == uri
     assert listings[0].version == "1.0.0"
     assert listings[1].storage_uri == uri
-    assert listings[1].version == "2.0.0"
+    assert listings[1].version == "1.0.1"
 
 
 def test_listings_reindex_subpath_local_file_system(test_session, tmp_dir):

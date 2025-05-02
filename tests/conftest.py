@@ -654,14 +654,14 @@ def studio_datasets(requests_mock, studio_token):
         "attrs": ["dogs", "dataset"],
         "versions": [
             {
-                "version": 1,
+                "version": "1.0.0",
                 "id": 1,
                 "uuid": "dab73bdf-ceb3-4af3-8e01-1d44eb41acf9",
                 "dataset_id": 1,
                 **common_version_info,
             },
             {
-                "version": 2,
+                "version": "2.0.0",
                 "id": 2,
                 "uuid": "dab73bdf-ceb3-4af3-8e01-1d44eb41acf8",
                 "dataset_id": 1,
@@ -679,7 +679,7 @@ def studio_datasets(requests_mock, studio_token):
             "attrs": ["cats", "dataset"],
             "versions": [
                 {
-                    "version": 1,
+                    "version": "1.0.0",
                     "id": 3,
                     "uuid": "dab73bdf-ceb3-4af3-8e01-1d44eb41acf7",
                     "dataset_id": 2,
@@ -694,7 +694,7 @@ def studio_datasets(requests_mock, studio_token):
             "attrs": ["both", "dataset"],
             "versions": [
                 {
-                    "version": 1,
+                    "version": "1.0.0",
                     "id": 4,
                     "uuid": "dab73bdf-ceb3-4af3-8e01-1d44eb41acf6",
                     "dataset_id": 3,
