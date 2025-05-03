@@ -25,10 +25,11 @@ from sqlalchemy.sql.selectable import Select
 from tqdm.auto import tqdm
 
 import datachain.sql.sqlite
+from datachain import semver
 from datachain.data_storage import AbstractDBMetastore, AbstractWarehouse
 from datachain.data_storage.db_engine import DatabaseEngine
 from datachain.data_storage.schema import DefaultSchema
-from datachain.dataset import DatasetRecord, StorageURI, semver_compare
+from datachain.dataset import DatasetRecord, StorageURI
 from datachain.error import DataChainError
 from datachain.sql.sqlite import create_user_defined_sql_functions, sqlite_dialect
 from datachain.sql.sqlite.base import load_usearch_extension
@@ -534,7 +535,7 @@ class SQLiteWarehouse(AbstractWarehouse):
             dst_previous_versions = [
                 v.version
                 for v in dst.versions  # type: ignore [union-attr]
-                if semver_compare(v.version, dst_version) == -1
+                if semver.compare(v.version, dst_version) == -1
             ]
             if dst_previous_versions:
                 dst_version_latest = max(dst_previous_versions)

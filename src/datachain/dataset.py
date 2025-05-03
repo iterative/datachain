@@ -12,6 +12,7 @@ from typing import (
 )
 from urllib.parse import urlparse
 
+from datachain import semver
 from datachain.error import DatasetVersionNotFoundError
 from datachain.sql.types import NAME_TYPES_MAPPING, SQLType
 
@@ -33,37 +34,6 @@ DEFAULT_DATASET_VERSION = "1.0.0"
 # Valid examples: s3://foo, file:///var/data
 # Invalid examples: s3://foo/, s3://foo/bar, file://~
 StorageURI = NewType("StorageURI", str)
-
-
-def semver_parse(version: str) -> tuple[int, int, int]:
-    vals = version.split(".")
-    return (int(vals[0]), int(vals[1]), int(vals[2]))
-
-
-def semver_create(major: int = 0, minor: int = 0, bug: int = 0) -> str:
-    return ".".join([str(major), str(minor), str(bug)])
-
-
-def semver_value(version: str) -> int:
-    major, minor, bug = semver_parse(version)
-    return major * 100 + minor * 10 + bug
-
-
-def semver_compare(v1: str, v2: str) -> int:
-    """
-    Compares 2 versions and returns:
-        1. -1 if v1 < v2
-        2.  0 if v1 == v2
-        3.  1 if v1 > v2
-    """
-    v1_val = semver_value(v1)
-    v2_val = semver_value(v2)
-
-    if v1_val < v2_val:
-        return -1
-    if v1_val > v2_val:
-        return 1
-    return 0
 
 
 def parse_dataset_uri(uri: str) -> tuple[str, Optional[str]]:
@@ -256,7 +226,7 @@ class DatasetVersion:
 
     @property
     def version_value(self) -> int:
-        return semver_value(self.version)
+        return semver.value(self.version)
 
     def __eq__(self, other):
         if not isinstance(other, DatasetVersion):
@@ -361,7 +331,7 @@ class DatasetListVersion:
 
     @property
     def version_value(self) -> int:
-        return semver_value(self.version)
+        return semver.value(self.version)
 
 
 @dataclass
@@ -513,7 +483,7 @@ class DatasetRecord:
         """
         return not (
             self.latest_version
-            and semver_value(self.latest_version) >= semver_value(version)
+            and semver.value(self.latest_version) >= semver.value(version)
         )
 
     def get_version(self, version: str) -> DatasetVersion:
@@ -568,8 +538,8 @@ class DatasetRecord:
         if not self.versions:
             return "1.0.0"
 
-        major, minor, bug = semver_parse(self.latest_version)
-        return semver_create(major + 1, 0, 0)
+        major, minor, bug = semver.parse(self.latest_version)
+        return semver.create(major + 1, 0, 0)
 
     @property
     def next_version_minor(self) -> str:
@@ -577,8 +547,8 @@ class DatasetRecord:
         if not self.versions:
             return "1.0.0"
 
-        major, minor, bug = semver_parse(self.latest_version)
-        return semver_create(major, minor + 1, 0)
+        major, minor, bug = semver.parse(self.latest_version)
+        return semver.create(major, minor + 1, 0)
 
     @property
     def next_version_bug(self) -> str:
@@ -586,8 +556,8 @@ class DatasetRecord:
         if not self.versions:
             return "1.0.0"
 
-        major, minor, bug = semver_parse(self.latest_version)
-        return semver_create(major, minor, bug + 1)
+        major, minor, bug = semver.parse(self.latest_version)
+        return semver.create(major, minor, bug + 1)
 
     @property
     def latest_version(self) -> str:
