@@ -295,20 +295,6 @@ class AbstractMetastore(ABC, Serializable):
     def get_job_status(self, job_id: str) -> Optional[JobStatus]:
         """Returns the status of the given job."""
 
-    @abstractmethod
-    def set_job_and_dataset_status(
-        self,
-        job_id: str,
-        job_status: JobStatus,
-        dataset_status: DatasetStatus,
-    ) -> None:
-        """Set the status of the given job and dataset."""
-
-    @abstractmethod
-    def get_job_dataset_versions(self, job_id: str) -> list[tuple[str, int]]:
-        """Returns dataset names and versions for the job."""
-        raise NotImplementedError
-
 
 class AbstractDBMetastore(AbstractMetastore):
     """
@@ -1145,37 +1131,3 @@ class AbstractDBMetastore(AbstractMetastore):
         if not results:
             return None
         return results[0][0]
-
-    def set_job_and_dataset_status(
-        self,
-        job_id: str,
-        job_status: JobStatus,
-        dataset_status: DatasetStatus,
-    ) -> None:
-        """Set the status of the given job and dataset."""
-        with self.db.transaction() as conn:
-            self.set_job_status(job_id, status=job_status, conn=conn)
-            dv = self._datasets_versions
-            query = (
-                self._datasets_versions_update()
-                .where(
-                    (dv.c.job_id == job_id) & (dv.c.status != DatasetStatus.COMPLETE)
-                )
-                .values(status=dataset_status)
-            )
-            self.db.execute(query, conn=conn)  # type: ignore[attr-defined]
-
-    def get_job_dataset_versions(self, job_id: str) -> list[tuple[str, int]]:
-        """Returns dataset names and versions for the job."""
-        dv = self._datasets_versions
-        ds = self._datasets
-
-        join_condition = dv.c.dataset_id == ds.c.id
-
-        query = (
-            self._datasets_versions_select(ds.c.name, dv.c.version)
-            .select_from(dv.join(ds, join_condition))
-            .where(dv.c.job_id == job_id)
-        )
-
-        return list(self.db.execute(query))

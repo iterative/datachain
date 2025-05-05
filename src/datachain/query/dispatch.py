@@ -12,6 +12,7 @@ from multiprocess import get_context
 
 from datachain.catalog import Catalog
 from datachain.catalog.catalog import clone_catalog_with_cache
+from datachain.catalog.loader import DISTRIBUTED_IMPORT_PATH, get_udf_distributor_class
 from datachain.lib.udf import _get_cache
 from datachain.query.dataset import (
     get_download_callback,
@@ -84,6 +85,16 @@ def udf_entrypoint() -> int:
     return 0
 
 
+def udf_worker_entrypoint(fd: Optional[int] = None) -> int:
+    if not (udf_distributor_class := get_udf_distributor_class()):
+        raise RuntimeError(
+            f"{DISTRIBUTED_IMPORT_PATH} import path is required "
+            "for distributed UDF processing."
+        )
+
+    return udf_distributor_class.run_udf(fd)
+
+
 class UDFDispatcher:
     _catalog: Optional[Catalog] = None
     task_queue: Optional[multiprocess.Queue] = None
@@ -118,9 +129,10 @@ class UDFDispatcher:
         return self._catalog
 
     def _create_worker(self) -> "UDFWorker":
+        udf: UDFAdapter = loads(self.udf_data)
         return UDFWorker(
             self.catalog,
-            loads(self.udf_data),
+            udf,
             self.task_queue,
             self.done_queue,
             self.query,
@@ -183,7 +195,7 @@ class UDFDispatcher:
         processed_cb: Callback = DEFAULT_CALLBACK,
         generated_cb: Callback = DEFAULT_CALLBACK,
     ) -> None:
-        udf = loads(self.udf_data)
+        udf: UDFAdapter = loads(self.udf_data)
 
         if ids_only and not self.is_batching:
             input_rows = flatten(input_rows)

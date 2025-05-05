@@ -43,3 +43,7 @@ class AbstractUDFDistributor(ABC):
 
     @abstractmethod
     def __call__(self) -> None: ...
+
+    @staticmethod
+    @abstractmethod
+    def run_udf(fd: Optional[int] = None) -> int: ...
