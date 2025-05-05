@@ -381,6 +381,8 @@ def test_studio_run(capsys, mocker, tmp_dir):
                     "reqs.txt",
                     "--req",
                     "stupidity",
+                    "--repository",
+                    "https://github.com/iterative/datachain",
                 ]
             )
             == 0
@@ -417,4 +419,5 @@ def test_studio_run(capsys, mocker, tmp_dir):
         "python_version": "3.12",
         "requirements": "pyjokes\nstupidity",
         "team_name": "team_name",
+        "repository": "https://github.com/iterative/datachain",
     }
