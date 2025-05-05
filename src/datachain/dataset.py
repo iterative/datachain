@@ -534,7 +534,9 @@ class DatasetRecord:
 
     @property
     def next_version_major(self) -> str:
-        """Returns what should be next autoincrement version of dataset"""
+        """
+        Returns the next auto-incremented version if the major part is being bumped.
+        """
         if not self.versions:
             return "1.0.0"
 
@@ -543,7 +545,9 @@ class DatasetRecord:
 
     @property
     def next_version_minor(self) -> str:
-        """Returns what should be next autoincrement version of dataset"""
+        """
+        Returns the next auto-incremented version if the minor part is being bumped.
+        """
         if not self.versions:
             return "1.0.0"
 
@@ -552,7 +556,9 @@ class DatasetRecord:
 
     @property
     def next_version_patch(self) -> str:
-        """Returns what should be next autoincrement version of dataset"""
+        """
+        Returns the next auto-incremented version if the patch part is being bumped.
+        """
         if not self.versions:
             return "1.0.0"
 

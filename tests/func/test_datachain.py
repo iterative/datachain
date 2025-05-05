@@ -151,17 +151,34 @@ def test_update_versions(cloud_test_catalog, update_version, versions):
     chain.save(ds_name, update_version=update_version)
     chain.save(ds_name, update_version=update_version)
     chain.save(ds_name, update_version=update_version)
-    assert (
-        sorted(
-            [
-                ds.version
-                for ds in dc.datasets(column="dataset", session=ctc.session).collect(
-                    "dataset"
-                )
-            ]
-        )
-        == versions
-    )
+    assert sorted(
+        [
+            ds.version
+            for ds in dc.datasets(column="dataset", session=ctc.session).collect(
+                "dataset"
+            )
+        ]
+    ) == sorted(versions)
+
+
+def test_update_versions_mix_major_minor_patch(cloud_test_catalog):
+    ctc = cloud_test_catalog
+    ds_name = "ds"
+    chain = dc.read_storage(ctc.src_uri, session=ctc.session)
+    chain.save(ds_name)
+    chain.save(ds_name, update_version="patch")
+    chain.save(ds_name, update_version="minor")
+    chain.save(ds_name, update_version="major")
+    chain.save(ds_name, update_version="minor")
+    chain.save(ds_name, update_version="patch")
+    assert sorted(
+        [
+            ds.version
+            for ds in dc.datasets(column="dataset", session=ctc.session).collect(
+                "dataset"
+            )
+        ]
+    ) == sorted(["1.0.0", "1.0.1", "1.1.0", "2.0.0", "2.1.0", "2.1.1"])
 
 
 @pytest.mark.parametrize(
