@@ -460,6 +460,7 @@ class DataChain:
         version: Optional[str] = None,
         description: Optional[str] = None,
         attrs: Optional[list[str]] = None,
+        update_version: Optional[str] = "patch",
         **kwargs,
     ) -> "Self":
         """Save to a Dataset. It returns the chain itself.
@@ -470,7 +471,18 @@ class DataChain:
             description : description of a dataset.
             attrs : attributes of a dataset. They can be without value, e.g "NLP",
                 or with a value, e.g "location=US".
+            update_version: which part of the dataset version to automatically increase.
+                Available values: `major`, `minor` or `patch`. Default is `patch`.
         """
+        if update_version is not None and update_version not in [
+            "patch",
+            "major",
+            "minor",
+        ]:
+            raise ValueError(
+                "update_version can have one of the following values: major, minor or",
+                " patch",
+            )
         schema = self.signals_schema.clone_without_sys_signals().serialize()
         return self._evolve(
             query=self._query.save(
@@ -479,6 +491,7 @@ class DataChain:
                 description=description,
                 attrs=attrs,
                 feature_schema=schema,
+                update_version=update_version,
                 **kwargs,
             )
         )

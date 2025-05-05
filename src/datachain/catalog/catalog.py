@@ -778,6 +778,7 @@ class Catalog:
         uuid: Optional[str] = None,
         description: Optional[str] = None,
         attrs: Optional[list[str]] = None,
+        update_version: Optional[str] = "patch",
     ) -> "DatasetRecord":
         """
         Creates new dataset of a specific version.
@@ -793,9 +794,11 @@ class Catalog:
         default_version = DEFAULT_DATASET_VERSION
         try:
             dataset = self.get_dataset(name)
-            default_version = (
-                dataset.next_version_bug
-            )  ## TODO sometimes we need minor increase
+            default_version = dataset.next_version_patch
+            if update_version == "major":
+                default_version = dataset.next_version_major
+            if update_version == "minor":
+                default_version = dataset.next_version_minor
 
             if (description or attrs) and (
                 dataset.description != description or dataset.attrs != attrs
@@ -1038,79 +1041,6 @@ class Catalog:
         )
 
         return self.get_dataset(name)
-
-    def register_dataset(
-        self,
-        dataset: DatasetRecord,
-        version: str,
-        target_dataset: DatasetRecord,
-        target_version: Optional[str] = None,
-    ) -> DatasetRecord:
-        """
-        Registers dataset version of one dataset as dataset version of another
-        one (it can be new version of existing one).
-        It also removes original dataset version
-        """
-        target_version = (
-            target_version or target_dataset.next_version_bug
-        )  ## TODO majbe minor
-
-        if not target_dataset.is_valid_next_version(target_version):
-            raise DatasetInvalidVersionError(
-                f"Version {target_version} must be higher than the current latest one"
-            )
-
-        dataset_version = dataset.get_version(version)
-        if not dataset_version:
-            raise DatasetVersionNotFoundError(
-                f"Dataset {dataset.name} does not have version {version}"
-            )
-
-        if not dataset_version.is_final_status():
-            raise ValueError("Cannot register dataset version in non final status")
-
-        # copy dataset version
-        target_dataset = self.metastore.create_dataset_version(
-            target_dataset,
-            target_version,
-            sources=dataset_version.sources,
-            status=dataset_version.status,
-            query_script=dataset_version.query_script,
-            error_message=dataset_version.error_message,
-            error_stack=dataset_version.error_stack,
-            script_output=dataset_version.script_output,
-            created_at=dataset_version.created_at,
-            finished_at=dataset_version.finished_at,
-            schema=dataset_version.serialized_schema,
-            num_objects=dataset_version.num_objects,
-            size=dataset_version.size,
-            preview=dataset_version.preview,
-            job_id=dataset_version.job_id,
-        )
-
-        # to avoid re-creating rows table, we are just renaming it for a new version
-        # of target dataset
-        self.warehouse.rename_dataset_table(
-            dataset.name,
-            target_dataset.name,
-            old_version=version,
-            new_version=target_version,
-        )
-        self.metastore.update_dataset_dependency_source(
-            dataset,
-            version,
-            new_source_dataset=target_dataset,
-            new_source_dataset_version=target_version,
-        )
-
-        if dataset.id == target_dataset.id:
-            # we are updating the same dataset so we need to refresh it to have newly
-            # added version in step before
-            dataset = self.get_dataset(dataset.name)
-
-        self.remove_dataset_version(dataset, version, drop_rows=False)
-
-        return self.get_dataset(target_dataset.name)
 
     def get_dataset(self, name: str) -> DatasetRecord:
         return self.metastore.get_dataset(name)

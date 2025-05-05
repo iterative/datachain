@@ -137,6 +137,34 @@ def test_read_storage_reindex_expired(tmp_dir, test_session):
 
 
 @pytest.mark.parametrize(
+    "update_version,versions",
+    [
+        ("patch", ["1.0.0", "1.0.1", "1.0.2"]),
+        ("minor", ["1.0.0", "1.1.0", "1.2.0"]),
+        ("major", ["1.0.0", "2.0.0", "3.0.0"]),
+    ],
+)
+def test_update_versions(cloud_test_catalog, update_version, versions):
+    ctc = cloud_test_catalog
+    ds_name = "ds"
+    chain = dc.read_storage(ctc.src_uri, session=ctc.session)
+    chain.save(ds_name, update_version=update_version)
+    chain.save(ds_name, update_version=update_version)
+    chain.save(ds_name, update_version=update_version)
+    assert (
+        sorted(
+            [
+                ds.version
+                for ds in dc.datasets(column="dataset", session=ctc.session).collect(
+                    "dataset"
+                )
+            ]
+        )
+        == versions
+    )
+
+
+@pytest.mark.parametrize(
     "cloud_type",
     ["s3", "azure", "gs"],
     indirect=True,
@@ -208,7 +236,7 @@ def test_read_storage_partials_with_update(cloud_test_catalog):
     assert _get_listing_datasets(session) == sorted(
         [
             f"{_list_dataset_name(uri)}@v1.0.0",
-            f"{_list_dataset_name(uri)}@v1.0.1",
+            f"{_list_dataset_name(uri)}@v2.0.0",
         ]
     )
 

@@ -142,7 +142,8 @@ def read_storage(
                         list_bucket(lst_uri, cache, client_config=client_config),
                         output={f"{column}": file_type},
                     )
-                    .save(ds_name, listing=True)
+                    # for internal listing datasets, we always bump major version
+                    .save(ds_name, listing=True, update_version="major")
                 )
 
             dc._query.set_listing_fn(

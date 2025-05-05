@@ -538,7 +538,7 @@ class DatasetRecord:
         if not self.versions:
             return "1.0.0"
 
-        major, minor, bug = semver.parse(self.latest_version)
+        major, minor, patch = semver.parse(self.latest_version)
         return semver.create(major + 1, 0, 0)
 
     @property
@@ -547,17 +547,17 @@ class DatasetRecord:
         if not self.versions:
             return "1.0.0"
 
-        major, minor, bug = semver.parse(self.latest_version)
+        major, minor, patch = semver.parse(self.latest_version)
         return semver.create(major, minor + 1, 0)
 
     @property
-    def next_version_bug(self) -> str:
+    def next_version_patch(self) -> str:
         """Returns what should be next autoincrement version of dataset"""
         if not self.versions:
             return "1.0.0"
 
-        major, minor, bug = semver.parse(self.latest_version)
-        return semver.create(major, minor, bug + 1)
+        major, minor, patch = semver.parse(self.latest_version)
+        return semver.create(major, minor, patch + 1)
 
     @property
     def latest_version(self) -> str:
