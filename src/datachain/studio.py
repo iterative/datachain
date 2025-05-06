@@ -35,6 +35,7 @@ def process_jobs_args(args: "Namespace"):
             args.workers,
             args.files,
             args.python_version,
+            args.repository,
             args.req,
             args.req_file,
         )
@@ -256,6 +257,7 @@ def create_job(
     workers: Optional[int] = None,
     files: Optional[list[str]] = None,
     python_version: Optional[str] = None,
+    repository: Optional[str] = None,
     req: Optional[list[str]] = None,
     req_file: Optional[str] = None,
 ):
@@ -284,6 +286,7 @@ def create_job(
         query_name=os.path.basename(query_file),
         files=file_ids,
         python_version=python_version,
+        repository=repository,
         requirements=requirements,
     )
     if not response.ok:

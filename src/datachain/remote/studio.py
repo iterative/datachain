@@ -387,6 +387,7 @@ class StudioClient:
         files: Optional[list[str]] = None,
         python_version: Optional[str] = None,
         requirements: Optional[str] = None,
+        repository: Optional[str] = None,
     ) -> Response[JobData]:
         data = {
             "query": query,
@@ -397,6 +398,7 @@ class StudioClient:
             "files": files,
             "python_version": python_version,
             "requirements": requirements,
+            "repository": repository,
         }
         return self._send_request("datachain/job", data)
 
