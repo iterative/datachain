@@ -4,7 +4,6 @@ import os.path
 import sys
 import warnings
 from collections.abc import Iterator, Sequence
-from functools import wraps
 from typing import (
     IO,
     TYPE_CHECKING,
@@ -25,7 +24,7 @@ from pydantic import BaseModel
 from tqdm import tqdm
 
 from datachain.dataset import DatasetRecord
-from datachain.delta import delta_update
+from datachain.delta import delta_disabled, delta_update
 from datachain.func import literal
 from datachain.func.base import Function
 from datachain.func.func import Func
@@ -68,32 +67,12 @@ DEFAULT_PARQUET_CHUNK_SIZE = 100_000
 
 if TYPE_CHECKING:
     import pandas as pd
-    from typing_extensions import Concatenate, ParamSpec, Self
+    from typing_extensions import ParamSpec, Self
 
     P = ParamSpec("P")
 
 
 T = TypeVar("T", bound="DataChain")
-
-
-def delta_disabled(
-    method: "Callable[Concatenate[T, P], T]",
-) -> "Callable[Concatenate[T, P], T]":
-    """
-    Decorator for disabling DataChain methods (e.g `.agg()` or `.union()`) to
-    work with delta updates. It throws `NotImplementedError` if chain on which
-    method is called is marked as delta.
-    """
-
-    @wraps(method)
-    def _inner(self: T, *args: "P.args", **kwargs: "P.kwargs") -> T:
-        if self.delta:
-            raise NotImplementedError(
-                f"Delta update cannot be used with {method.__name__}"
-            )
-        return method(self, *args, **kwargs)
-
-    return _inner
 
 
 class DataChain:
