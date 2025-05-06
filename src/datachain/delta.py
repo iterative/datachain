@@ -95,7 +95,7 @@ def delta_update(dc: "DataChain", name: str) -> tuple[Optional["DataChain"], boo
     # to avoid re-calculating diff multiple times
     diff = diff.persist()
 
-    if diff.is_empty():
+    if diff.empty:
         return None, False
 
     # merging diff and the latest version of dataset

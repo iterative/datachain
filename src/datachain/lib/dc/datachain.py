@@ -188,7 +188,13 @@ class DataChain:
         return self
 
     @property
+    def empty(self) -> bool:
+        """Returns True if chain has zero number of rows"""
+        return not bool(self.count())
+
+    @property
     def delta(self) -> bool:
+        """Returns True if this chain is ran in "delta" update mode"""
         return self._delta
 
     @property
@@ -2183,10 +2189,6 @@ class DataChain:
     def count(self) -> int:
         """Return the number of rows in the chain."""
         return self._query.count()
-
-    def is_empty(self) -> bool:
-        """Returns True if chain has zero number of rows"""
-        return not bool(self.count())
 
     def exec(self) -> "Self":
         """Execute the chain."""

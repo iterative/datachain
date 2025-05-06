@@ -274,8 +274,8 @@ def test_read_record_empty_chain_without_schema(test_session):
     )
 
 
-def test_is_empty(test_session):
-    assert dc.read_records([], schema=None, session=test_session).is_empty() is True
+def test_empty(test_session):
+    assert dc.read_records([], schema=None, session=test_session).empty is True
 
 
 def test_empty_chain_skip_udf_run(test_session):
