@@ -29,7 +29,7 @@ DatasetExportStatus = Optional[dict[str, Any]]
 DatasetExportSignedUrls = Optional[list[str]]
 FileUploadData = Optional[dict[str, Any]]
 JobData = Optional[dict[str, Any]]
-JobListData = Optional[list[dict[str, Any]]]
+JobListData = list[dict[str, Any]]
 logger = logging.getLogger("datachain")
 
 DATASET_ROWS_CHUNK_SIZE = 8192
