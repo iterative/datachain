@@ -46,10 +46,10 @@ def process_jobs_args(args: "Namespace"):
         return cancel_job(args.id, args.team)
     if args.cmd == "logs":
         return show_job_logs(args.id, args.team)
-    
+
     if args.cmd == "ls":
         return list_jobs(args.status, args.team)
-    
+
     raise DataChainError(f"Unknown command '{args.cmd}'.")
 
 
@@ -353,7 +353,7 @@ def list_jobs(status: Optional[str], team_name: Optional[str]):
     if not jobs:
         print("No jobs found")
         return
-    
+
     rows = [
         {
             "ID": job.get("id"),
@@ -366,6 +366,7 @@ def list_jobs(status: Optional[str], team_name: Optional[str]):
     ]
 
     print(tabulate.tabulate(rows, headers="keys", tablefmt="grid"))
+
 
 def show_job_logs(job_id: str, team_name: Optional[str]):
     token = Config().read().get("studio", {}).get("token")
