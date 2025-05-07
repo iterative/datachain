@@ -83,6 +83,31 @@ def add_jobs_parser(subparsers, parent_parser) -> None:
         help="Python package requirements",
     )
 
+    studio_ls_help = "List jobs in Studio"
+    studio_ls_description = "List jobs in Studio."
+
+    studio_ls_parser = jobs_subparser.add_parser(
+        "ls",
+        parents=[parent_parser],
+        description=studio_ls_description,
+        help=studio_ls_help,
+        formatter_class=CustomHelpFormatter,
+    )
+
+    studio_ls_parser.add_argument(
+        "--status",
+        action="store",
+        help="Status to filter jobs by",
+    )
+
+    studio_ls_parser.add_argument(
+        "--team",
+        action="store",
+        default=None,
+        help="Team to list jobs for (default: from config)",
+    )
+
+
     studio_cancel_help = "Cancel a job in Studio"
     studio_cancel_description = "Cancel a running job in Studio."
 
