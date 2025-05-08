@@ -254,6 +254,7 @@ class AbstractMetastore(ABC, Serializable):
         name: str,
         query: str,
         query_type: JobQueryType = JobQueryType.PYTHON,
+        status: JobStatus = JobStatus.CREATED,
         workers: int = 1,
         python_version: Optional[str] = None,
         params: Optional[dict[str, str]] = None,
@@ -264,33 +265,35 @@ class AbstractMetastore(ABC, Serializable):
         """
 
     @abstractmethod
+    def get_job(self, job_id: str) -> Optional[Job]:
+        """Returns the job with the given ID."""
+
+    @abstractmethod
+    def update_job(
+        self,
+        job_id: str,
+        status: Optional[JobStatus] = None,
+        exit_code: Optional[int] = None,
+        error_message: Optional[str] = None,
+        error_stack: Optional[str] = None,
+        finished_at: Optional[datetime] = None,
+        metrics: Optional[dict[str, Any]] = None,
+    ) -> Optional["Job"]:
+        """Updates job fields."""
+
+    @abstractmethod
     def set_job_status(
         self,
         job_id: str,
         status: JobStatus,
         error_message: Optional[str] = None,
         error_stack: Optional[str] = None,
-        metrics: Optional[dict[str, Any]] = None,
     ) -> None:
         """Set the status of the given job."""
 
     @abstractmethod
     def get_job_status(self, job_id: str) -> Optional[JobStatus]:
         """Returns the status of the given job."""
-
-    @abstractmethod
-    def set_job_and_dataset_status(
-        self,
-        job_id: str,
-        job_status: JobStatus,
-        dataset_status: DatasetStatus,
-    ) -> None:
-        """Set the status of the given job and dataset."""
-
-    @abstractmethod
-    def get_job_dataset_versions(self, job_id: str) -> list[tuple[str, int]]:
-        """Returns dataset names and versions for the job."""
-        raise NotImplementedError
 
 
 class AbstractDBMetastore(AbstractMetastore):
@@ -651,30 +654,31 @@ class AbstractDBMetastore(AbstractMetastore):
         dataset_version = dataset.get_version(version)
 
         values = {}
+        version_values: dict = {}
         for field, value in kwargs.items():
             if field in self._dataset_version_fields[1:]:
                 if field == "schema":
-                    dataset_version.update(**{field: DatasetRecord.parse_schema(value)})
                     values[field] = json.dumps(value) if value else None
+                    version_values[field] = DatasetRecord.parse_schema(value)
                 elif field == "feature_schema":
                     values[field] = json.dumps(value) if value else None
+                    version_values[field] = value
                 elif field == "preview" and isinstance(value, list):
                     values[field] = json.dumps(value, cls=JSONSerialize)
+                    version_values[field] = value
                 else:
                     values[field] = value
-                    dataset_version.update(**{field: value})
+                    version_values[field] = value
 
-        if not values:
-            # Nothing to update
-            return dataset_version
-
-        dv = self._datasets_versions
-        self.db.execute(
-            self._datasets_versions_update()
-            .where(dv.c.id == dataset_version.id)
-            .values(values),
-            conn=conn,
-        )  # type: ignore [attr-defined]
+        if values:
+            dv = self._datasets_versions
+            self.db.execute(
+                self._datasets_versions_update()
+                .where(dv.c.dataset_id == dataset.id and dv.c.version == version)
+                .values(values),
+                conn=conn,
+            )  # type: ignore [attr-defined]
+            dataset_version.update(**version_values)
 
         return dataset_version
 
@@ -702,7 +706,7 @@ class AbstractDBMetastore(AbstractMetastore):
         dataset_fields: list[str],
         dataset_version_fields: list[str],
         isouter: bool = True,
-    ):
+    ) -> "Select":
         if not (
             self.db.has_table(self._datasets.name)
             and self.db.has_table(self._datasets_versions.name)
@@ -719,12 +723,12 @@ class AbstractDBMetastore(AbstractMetastore):
         j = d.join(dv, d.c.id == dv.c.dataset_id, isouter=isouter)
         return query.select_from(j)
 
-    def _base_dataset_query(self):
+    def _base_dataset_query(self) -> "Select":
         return self._get_dataset_query(
             self._dataset_fields, self._dataset_version_fields
         )
 
-    def _base_list_datasets_query(self):
+    def _base_list_datasets_query(self) -> "Select":
         return self._get_dataset_query(
             self._dataset_list_fields, self._dataset_list_version_fields, isouter=False
         )
@@ -1018,6 +1022,7 @@ class AbstractDBMetastore(AbstractMetastore):
         name: str,
         query: str,
         query_type: JobQueryType = JobQueryType.PYTHON,
+        status: JobStatus = JobStatus.CREATED,
         workers: int = 1,
         python_version: Optional[str] = None,
         params: Optional[dict[str, str]] = None,
@@ -1032,7 +1037,7 @@ class AbstractDBMetastore(AbstractMetastore):
             self._jobs_insert().values(
                 id=job_id,
                 name=name,
-                status=JobStatus.CREATED,
+                status=status,
                 created_at=datetime.now(timezone.utc),
                 query=query,
                 query_type=query_type.value,
@@ -1047,25 +1052,65 @@ class AbstractDBMetastore(AbstractMetastore):
         )
         return job_id
 
+    def get_job(self, job_id: str, conn=None) -> Optional[Job]:
+        """Returns the job with the given ID."""
+        query = self._jobs_select(self._jobs).where(self._jobs.c.id == job_id)
+        results = list(self.db.execute(query, conn=conn))
+        if not results:
+            return None
+        return self._parse_job(results[0])
+
+    def update_job(
+        self,
+        job_id: str,
+        status: Optional[JobStatus] = None,
+        exit_code: Optional[int] = None,
+        error_message: Optional[str] = None,
+        error_stack: Optional[str] = None,
+        finished_at: Optional[datetime] = None,
+        metrics: Optional[dict[str, Any]] = None,
+        conn: Optional[Any] = None,
+    ) -> Optional["Job"]:
+        """Updates job fields."""
+        values: dict = {}
+        if status is not None:
+            values["status"] = status
+        if exit_code is not None:
+            values["exit_code"] = exit_code
+        if error_message is not None:
+            values["error_message"] = error_message
+        if error_stack is not None:
+            values["error_stack"] = error_stack
+        if finished_at is not None:
+            values["finished_at"] = finished_at
+        if metrics:
+            values["metrics"] = json.dumps(metrics)
+
+        if values:
+            j = self._jobs
+            self.db.execute(
+                self._jobs_update().where(j.c.id == job_id).values(**values),
+                conn=conn,
+            )  # type: ignore [attr-defined]
+
+        return self.get_job(job_id, conn=conn)
+
     def set_job_status(
         self,
         job_id: str,
         status: JobStatus,
         error_message: Optional[str] = None,
         error_stack: Optional[str] = None,
-        metrics: Optional[dict[str, Any]] = None,
         conn: Optional[Any] = None,
     ) -> None:
         """Set the status of the given job."""
-        values: dict = {"status": status.value}
-        if status.value in JobStatus.finished():
+        values: dict = {"status": status}
+        if status in JobStatus.finished():
             values["finished_at"] = datetime.now(timezone.utc)
         if error_message:
             values["error_message"] = error_message
         if error_stack:
             values["error_stack"] = error_stack
-        if metrics:
-            values["metrics"] = json.dumps(metrics)
         self.db.execute(
             self._jobs_update(self._jobs.c.id == job_id).values(**values),
             conn=conn,
@@ -1086,37 +1131,3 @@ class AbstractDBMetastore(AbstractMetastore):
         if not results:
             return None
         return results[0][0]
-
-    def set_job_and_dataset_status(
-        self,
-        job_id: str,
-        job_status: JobStatus,
-        dataset_status: DatasetStatus,
-    ) -> None:
-        """Set the status of the given job and dataset."""
-        with self.db.transaction() as conn:
-            self.set_job_status(job_id, status=job_status, conn=conn)
-            dv = self._datasets_versions
-            query = (
-                self._datasets_versions_update()
-                .where(
-                    (dv.c.job_id == job_id) & (dv.c.status != DatasetStatus.COMPLETE)
-                )
-                .values(status=dataset_status)
-            )
-            self.db.execute(query, conn=conn)  # type: ignore[attr-defined]
-
-    def get_job_dataset_versions(self, job_id: str) -> list[tuple[str, int]]:
-        """Returns dataset names and versions for the job."""
-        dv = self._datasets_versions
-        ds = self._datasets
-
-        join_condition = dv.c.dataset_id == ds.c.id
-
-        query = (
-            self._datasets_versions_select(ds.c.name, dv.c.version)
-            .select_from(dv.join(ds, join_condition))
-            .where(dv.c.job_id == job_id)
-        )
-
-        return list(self.db.execute(query))

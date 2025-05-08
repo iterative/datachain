@@ -29,6 +29,7 @@ def query(
         name=os.path.basename(script),
         query=script_content,
         query_type=JobQueryType.PYTHON,
+        status=JobStatus.RUNNING,
         python_version=python_version,
         params=params,
     )

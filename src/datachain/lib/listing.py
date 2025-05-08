@@ -56,6 +56,8 @@ def list_bucket(uri: str, cache, client_config=None) -> Callable:
         for entries in iter_over_async(client.scandir(path.rstrip("/")), get_loop()):
             yield from entries
 
+    list_func.__name__ = "read_storage"
+
     return list_func
 
 

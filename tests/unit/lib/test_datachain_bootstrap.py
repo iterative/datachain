@@ -5,7 +5,9 @@ from datachain.lib.dc import DatasetPrepareError
 from datachain.lib.udf import Mapper
 
 
-def test_udf():
+def test_udf(monkeypatch):
+    monkeypatch.delenv("DATACHAIN_DISTRIBUTED", raising=False)
+
     class MyMapper(Mapper):
         DEFAULT_VALUE = 84
         BOOTSTRAP_VALUE = 1452
