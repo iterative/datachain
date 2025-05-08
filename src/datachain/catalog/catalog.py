@@ -80,6 +80,7 @@ DATASET_INTERNAL_ERROR_MESSAGE = "Internal error on creating dataset"
 QUERY_SCRIPT_INVALID_LAST_STATEMENT_EXIT_CODE = 10
 # exit code we use if query script was canceled
 QUERY_SCRIPT_CANCELED_EXIT_CODE = 11
+QUERY_SCRIPT_SIGTERM_EXIT_CODE = -15  # if query script was terminated by SIGTERM
 
 # dataset pull
 PULL_DATASET_MAX_THREADS = 5
@@ -1580,7 +1581,10 @@ class Catalog:
                     thread.join()  # wait for the reader thread
 
         logger.info("Process %s exited with return code %s", proc.pid, proc.returncode)
-        if proc.returncode == QUERY_SCRIPT_CANCELED_EXIT_CODE:
+        if proc.returncode in (
+            QUERY_SCRIPT_CANCELED_EXIT_CODE,
+            QUERY_SCRIPT_SIGTERM_EXIT_CODE,
+        ):
             raise QueryScriptCancelError(
                 "Query script was canceled by user",
                 return_code=proc.returncode,

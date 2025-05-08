@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 import orjson
 import pyarrow as pa
+from pyarrow._csv import ParseOptions
 from pyarrow.dataset import CsvFileFormat, dataset
 from tqdm.auto import tqdm
 
@@ -24,6 +25,18 @@ if TYPE_CHECKING:
 
 
 DATACHAIN_SIGNAL_SCHEMA_PARQUET_KEY = b"DataChain SignalSchema"
+
+
+def fix_pyarrow_format(format, parse_options=None):
+    # Re-init invalid row handler: https://issues.apache.org/jira/browse/ARROW-17641
+    if (
+        format
+        and isinstance(format, CsvFileFormat)
+        and parse_options
+        and isinstance(parse_options, ParseOptions)
+    ):
+        format.parse_options = parse_options
+    return format
 
 
 class ArrowGenerator(Generator):
@@ -53,6 +66,7 @@ class ArrowGenerator(Generator):
         self.output_schema = output_schema
         self.source = source
         self.nrows = nrows
+        self.parse_options = kwargs.pop("parse_options", None)
         self.kwargs = kwargs
 
     def process(self, file: File):
@@ -64,7 +78,11 @@ class ArrowGenerator(Generator):
         else:
             fs, fs_path = file.get_fs(), file.get_path()
 
-        ds = dataset(fs_path, schema=self.input_schema, filesystem=fs, **self.kwargs)
+        kwargs = self.kwargs
+        if format := kwargs.get("format"):
+            kwargs["format"] = fix_pyarrow_format(format, self.parse_options)
+
+        ds = dataset(fs_path, schema=self.input_schema, filesystem=fs, **kwargs)
 
         hf_schema = _get_hf_schema(ds.schema)
         use_datachain_schema = (
@@ -137,6 +155,10 @@ class ArrowGenerator(Generator):
 
 
 def infer_schema(chain: "DataChain", **kwargs) -> pa.Schema:
+    parse_options = kwargs.pop("parse_options", None)
+    if format := kwargs.get("format"):
+        kwargs["format"] = fix_pyarrow_format(format, parse_options)
+
     schemas = []
     for file in chain.collect("file"):
         ds = dataset(file.get_path(), filesystem=file.get_fs(), **kwargs)  # type: ignore[union-attr]
