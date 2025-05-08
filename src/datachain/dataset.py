@@ -570,6 +570,21 @@ class DatasetRecord:
         """Returns latest version of a dataset"""
         return max(self.versions).version
 
+    def latest_major_version(self, major: int) -> Optional[str]:
+        """
+        Returns latest specific major version, e.g if dataset has versions:
+            - 1.4.1
+            - 2.0.1
+            - 2.1.1
+            - 2.4.0
+        and we call `.latest_major_version(2)` it will return: "2.4.0".
+        If no major version is find with input value, None will be returned
+        """
+        versions = [v for v in self.versions if semver.parse(v.version)[0] == major]
+        if not versions:
+            return None
+        return max(versions).version
+
     @property
     def prev_version(self) -> Optional[str]:
         """Returns previous version of a dataset"""

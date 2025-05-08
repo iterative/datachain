@@ -135,41 +135,6 @@ def test_read_storage_reindex_expired(tmp_dir, test_session):
     assert dc.read_storage(uri, session=test_session).count() == 2
 
 
-def test_update_versions_mix_major_minor_patch(cloud_test_catalog):
-    ctc = cloud_test_catalog
-    ds_name = "ds"
-    chain = dc.read_storage(ctc.src_uri, session=ctc.session)
-    chain.save(ds_name)
-    chain.save(ds_name)
-    chain.save(ds_name, version="1.1.0")
-    chain.save(ds_name)
-    chain.save(ds_name, version="2.0.0")
-    chain.save(ds_name)
-    chain.save(ds_name, version="2.1.0")
-    chain.save(ds_name)
-    chain.save(ds_name)
-    assert sorted(
-        [
-            ds.version
-            for ds in dc.datasets(column="dataset", session=ctc.session).collect(
-                "dataset"
-            )
-        ]
-    ) == sorted(
-        [
-            "1.0.0",
-            "1.0.1",
-            "1.1.0",
-            "1.1.1",
-            "2.0.0",
-            "2.0.1",
-            "2.1.0",
-            "2.1.1",
-            "2.1.2",
-        ]
-    )
-
-
 @pytest.mark.parametrize(
     "cloud_type",
     ["s3", "azure", "gs"],

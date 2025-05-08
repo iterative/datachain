@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 import datachain as dc
 from datachain import Column
-from datachain.error import DatasetInvalidVersionError
+from datachain.error import DatasetInvalidVersionError, DatasetVersionNotFoundError
 from datachain.lib.data_model import DataModel
 from datachain.lib.dc import C, DatasetPrepareError, Sys
 from datachain.lib.file import File
@@ -3171,6 +3171,57 @@ def test_delete_dataset_from_studio_not_found(
         dc.delete_dataset("cats", version="1.0.0", studio=True, session=test_session)
 
     assert str(exc_info.value) == error_message
+
+
+def test_update_versions_mix_major_minor_patch(test_session):
+    ds_name = "fibonacci"
+    chain = dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session)
+    chain.save(ds_name)
+    chain.save(ds_name)
+    chain.save(ds_name, version="1.1.0")
+    chain.save(ds_name)
+    chain.save(ds_name, version="2.0.0")
+    chain.save(ds_name)
+    chain.save(ds_name, version="2.1.0")
+    chain.save(ds_name)
+    chain.save(ds_name)
+    assert sorted(
+        [
+            ds.version
+            for ds in dc.datasets(column="dataset", session=test_session).collect(
+                "dataset"
+            )
+        ]
+    ) == sorted(
+        [
+            "1.0.0",
+            "1.0.1",
+            "1.1.0",
+            "1.1.1",
+            "2.0.0",
+            "2.0.1",
+            "2.1.0",
+            "2.1.1",
+            "2.1.2",
+        ]
+    )
+
+
+def test_from_dataset_version_int_backward_compatible(test_session):
+    ds_name = "numbers"
+    dc.read_values(nums=[1], session=test_session).save(ds_name, version="1.0.0")
+    dc.read_values(nums=[2], session=test_session).save(ds_name, version="1.0.1")
+    dc.read_values(nums=[3], session=test_session).save(ds_name, version="2.0.0")
+    dc.read_values(nums=[4], session=test_session).save(ds_name, version="2.1.0")
+    dc.read_values(nums=[5], session=test_session).save(ds_name, version="2.1.2")
+    dc.read_values(nums=[6], session=test_session).save(ds_name, version="3.0.0")
+
+    assert list(dc.read_dataset(ds_name, version=1).collect("nums")) == [2]
+    assert list(dc.read_dataset(ds_name, version=2).collect("nums")) == [5]
+    assert list(dc.read_dataset(ds_name, version=3).collect("nums")) == [6]
+    assert list(dc.read_dataset(ds_name, version="1.0.0").collect("nums")) == [1]
+    with pytest.raises(DatasetVersionNotFoundError):
+        dc.read_dataset(ds_name, version=5)
 
 
 def test_wrong_semver_format(test_session):
