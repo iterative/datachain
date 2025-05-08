@@ -1,5 +1,6 @@
+from collections.abc import Sequence
 from functools import wraps
-from typing import TYPE_CHECKING, Callable, Optional, TypeVar
+from typing import TYPE_CHECKING, Callable, Optional, TypeVar, Union
 
 import datachain
 from datachain.error import DatasetNotFoundError
@@ -45,7 +46,13 @@ def _append_steps(dc: "DataChain", other: "DataChain"):
     return dc
 
 
-def delta_update(dc: "DataChain", name: str) -> tuple[Optional["DataChain"], bool]:
+def delta_update(
+    dc: "DataChain",
+    name: str,
+    on: Union[str, Sequence[str]],
+    right_on: Optional[Union[str, Sequence[str]]] = None,
+    compare: Optional[Union[str, Sequence[str]]] = None,
+) -> tuple[Optional["DataChain"], bool]:
     """
     Creates new chain that consists of the last version of current delta dataset
     plus diff from the source with all needed modifications.
@@ -57,10 +64,6 @@ def delta_update(dc: "DataChain", name: str) -> tuple[Optional["DataChain"], boo
     """
     catalog = dc.session.catalog
     dc._query.apply_listing_pre_step()
-
-    chain_file_signal = dc.signals_schema.get_file_signal()
-    if not chain_file_signal:
-        raise ValueError("Chain doesn't produce file signal, cannot do delta update")
 
     try:
         latest_version = catalog.get_dataset(name).latest_version
@@ -84,11 +87,8 @@ def delta_update(dc: "DataChain", name: str) -> tuple[Optional["DataChain"], boo
 
     source_dc = datachain.read_dataset(source_ds_name, source_ds_version)
     source_dc_latest = datachain.read_dataset(source_ds_name, source_ds_latest_version)
-    source_file_signal = source_dc.signals_schema.get_file_signal()
-    if not source_file_signal:
-        raise ValueError("Source dataset doesn't have file signals")
 
-    diff = source_dc_latest.diff(source_dc, on=source_file_signal)
+    diff = source_dc_latest.compare(source_dc, on=on, compare=compare)
     # We append all the steps from the original chain to diff, e.g filters, mappers.
     diff = _append_steps(diff, dc)
 
@@ -101,10 +101,11 @@ def delta_update(dc: "DataChain", name: str) -> tuple[Optional["DataChain"], boo
     # merging diff and the latest version of dataset
     return (
         datachain.read_dataset(name, latest_version)
-        .diff(
+        .compare(
             diff,
-            on=chain_file_signal,
-            right_on=source_file_signal,
+            on=on,
+            compare=compare,
+            right_on=right_on,
             added=True,
             modified=False,
         )

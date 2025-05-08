@@ -181,10 +181,20 @@ class DataChain:
         self.print_schema(file=file)
         return file.getvalue()
 
-    def _as_delta(self, delta: bool = False) -> "Self":
+    def _as_delta(
+        self,
+        on: Optional[Union[str, Sequence[str]]] = None,
+        right_on: Optional[Union[str, Sequence[str]]] = None,
+        compare: Optional[Union[str, Sequence[str]]] = None,
+    ) -> "Self":
         """Marks this chain as delta, which means special delta process will be
         called on saving dataset for optimization"""
-        self._delta = delta
+        if on is None:
+            raise ValueError("'delta on' fields must be defined")
+        self._delta = True
+        self._delta_on = on
+        self._delta_right_on = right_on
+        self._delta_compare = compare
         return self
 
     @property
@@ -274,9 +284,17 @@ class DataChain:
             signal_schema = copy.deepcopy(self.signals_schema)
         if _sys is None:
             _sys = self._sys
-        return type(self)(
+        chain = type(self)(
             query, settings, signal_schema=signal_schema, setup=self._setup, _sys=_sys
-        )._as_delta(self.delta)
+        )
+        if self.delta:
+            chain = chain._as_delta(
+                on=self._delta_on,
+                right_on=self._delta_right_on,
+                compare=self._delta_compare,
+            )
+
+        return chain
 
     def settings(
         self,
@@ -494,7 +512,13 @@ class DataChain:
         """
         schema = self.signals_schema.clone_without_sys_signals().serialize()
         if self.delta and name:
-            delta_ds, has_changes = delta_update(self, name)
+            delta_ds, has_changes = delta_update(
+                self,
+                name,
+                on=self._delta_on,
+                right_on=self._delta_right_on,
+                compare=self._delta_compare,
+            )
 
             if delta_ds:
                 return self._evolve(

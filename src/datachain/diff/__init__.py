@@ -77,14 +77,16 @@ def _compare(  # noqa: C901, PLR0912
     cols_select = list(left.signals_schema.clone_without_sys_signals().values.keys())
 
     # getting correct on and right_on column names
+    on_ = on
     on = left.signals_schema.resolve(*on).db_signals()  # type: ignore[assignment]
-    right_on = right.signals_schema.resolve(*(right_on or on)).db_signals()  # type: ignore[assignment]
+    right_on = right.signals_schema.resolve(*(right_on or on_)).db_signals()  # type: ignore[assignment]
 
     # getting correct compare and right_compare column names if they are defined
     if compare:
+        compare_ = compare
         compare = left.signals_schema.resolve(*compare).db_signals()  # type: ignore[assignment]
         right_compare = right.signals_schema.resolve(
-            *(right_compare or compare)
+            *(right_compare or compare_)
         ).db_signals()  # type: ignore[assignment]
     elif not compare and len(cols) != len(right_cols):
         # here we will mark all rows that are not added or deleted as modified since
