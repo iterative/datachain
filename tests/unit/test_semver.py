@@ -11,7 +11,8 @@ def test_parse_wrong_format():
     with pytest.raises(ValueError) as excinfo:
         semver.parse("1.2")
     assert str(excinfo.value) == (
-        "Wrong version format, should be: <major>.<minor>.<patch>"
+        "Invalid version. It should be in format: <major>.<minor>.<patch> where"
+        " each version part is positive integer"
     )
 
 
@@ -44,3 +45,27 @@ def test_value():
 )
 def test_compare(v1, v2, result):
     assert semver.compare(v1, v2) == result
+
+
+@pytest.mark.parametrize(
+    "version,valid",
+    [
+        ("0.0.0", True),
+        ("100.100.100", True),
+        ("-1.2.3", False),
+        ("1.2.3-alpha+01", False),
+        ("1.2", False),
+        ("1", False),
+        ("1.2.3.4", False),
+    ],
+)
+def test_validate(version, valid):
+    if valid:
+        semver.validate(version)
+    else:
+        with pytest.raises(ValueError) as excinfo:
+            semver.validate(version)
+        assert str(excinfo.value) == (
+            "Invalid version. It should be in format: <major>.<minor>.<patch> where"
+            " each version part is positive integer"
+        )

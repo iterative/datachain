@@ -3171,3 +3171,13 @@ def test_delete_dataset_from_studio_not_found(
         dc.delete_dataset("cats", version="1.0.0", studio=True, session=test_session)
 
     assert str(exc_info.value) == error_message
+
+
+def test_wrong_semver_format(test_session):
+    dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save("fibonacci")
+    with pytest.raises(ValueError) as excinfo:
+        dc.read_dataset("fibonacci").save("fibonacci", version="1.0")
+    assert str(excinfo.value) == (
+        "Invalid version. It should be in format: <major>.<minor>.<patch> where"
+        " each version part is positive integer"
+    )

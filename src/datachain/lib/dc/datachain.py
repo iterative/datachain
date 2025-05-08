@@ -23,6 +23,7 @@ import sqlalchemy
 from pydantic import BaseModel
 from tqdm import tqdm
 
+from datachain import semver
 from datachain.dataset import DatasetRecord
 from datachain.func import literal
 from datachain.func.base import Function
@@ -474,6 +475,9 @@ class DataChain:
             update_version: which part of the dataset version to automatically increase.
                 Available values: `major`, `minor` or `patch`. Default is `patch`.
         """
+        if version is not None:
+            semver.validate(version)
+
         if update_version is not None and update_version not in [
             "patch",
             "major",

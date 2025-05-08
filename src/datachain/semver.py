@@ -1,9 +1,28 @@
 def parse(version: str) -> tuple[int, int, int]:
     """Parsing semver into 3 integers: major, minor, patch"""
-    vals = version.split(".")
-    if len(vals) != 3:
-        raise ValueError("Wrong version format, should be: <major>.<minor>.<patch>")
-    return (int(vals[0]), int(vals[1]), int(vals[2]))
+    validate(version)
+    parts = version.split(".")
+    return (int(parts[0]), int(parts[1]), int(parts[2]))
+
+
+def validate(version: str) -> None:
+    """
+    Raises exception if version doesn't have valid semver format which is:
+    <major>.<minor>.<patch> or one of version parts is not positive integer
+    """
+    error_message = (
+        "Invalid version. It should be in format: <major>.<minor>.<patch> where"
+        " each version part is positive integer"
+    )
+    parts = version.split(".")
+    if len(parts) != 3:
+        raise ValueError(error_message)
+    for part in parts:
+        try:
+            val = int(part)
+            assert val >= 0
+        except (ValueError, AssertionError):
+            raise ValueError(error_message) from None
 
 
 def create(major: int = 0, minor: int = 0, patch: int = 0) -> str:
