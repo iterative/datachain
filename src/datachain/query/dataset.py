@@ -1689,7 +1689,6 @@ class DatasetQuery:
         feature_schema: Optional[dict] = None,
         description: Optional[str] = None,
         attrs: Optional[list[str]] = None,
-        update_version: Optional[str] = "patch",
         **kwargs,
     ) -> "Self":
         """Save the query as a dataset."""
@@ -1724,7 +1723,6 @@ class DatasetQuery:
                 columns=columns,
                 description=description,
                 attrs=attrs,
-                update_version=update_version,
                 **kwargs,
             )
             version = version or dataset.latest_version

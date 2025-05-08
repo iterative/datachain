@@ -135,41 +135,19 @@ def test_read_storage_reindex_expired(tmp_dir, test_session):
     assert dc.read_storage(uri, session=test_session).count() == 2
 
 
-@pytest.mark.parametrize(
-    "update_version,versions",
-    [
-        ("patch", ["1.0.0", "1.0.1", "1.0.2"]),
-        ("minor", ["1.0.0", "1.1.0", "1.2.0"]),
-        ("major", ["1.0.0", "2.0.0", "3.0.0"]),
-    ],
-)
-def test_update_versions(cloud_test_catalog, update_version, versions):
-    ctc = cloud_test_catalog
-    ds_name = "ds"
-    chain = dc.read_storage(ctc.src_uri, session=ctc.session)
-    chain.save(ds_name, update_version=update_version)
-    chain.save(ds_name, update_version=update_version)
-    chain.save(ds_name, update_version=update_version)
-    assert sorted(
-        [
-            ds.version
-            for ds in dc.datasets(column="dataset", session=ctc.session).collect(
-                "dataset"
-            )
-        ]
-    ) == sorted(versions)
-
-
 def test_update_versions_mix_major_minor_patch(cloud_test_catalog):
     ctc = cloud_test_catalog
     ds_name = "ds"
     chain = dc.read_storage(ctc.src_uri, session=ctc.session)
     chain.save(ds_name)
-    chain.save(ds_name, update_version="patch")
-    chain.save(ds_name, update_version="minor")
-    chain.save(ds_name, update_version="major")
-    chain.save(ds_name, update_version="minor")
-    chain.save(ds_name, update_version="patch")
+    chain.save(ds_name)
+    chain.save(ds_name, version="1.1.0")
+    chain.save(ds_name)
+    chain.save(ds_name, version="2.0.0")
+    chain.save(ds_name)
+    chain.save(ds_name, version="2.1.0")
+    chain.save(ds_name)
+    chain.save(ds_name)
     assert sorted(
         [
             ds.version
@@ -177,7 +155,19 @@ def test_update_versions_mix_major_minor_patch(cloud_test_catalog):
                 "dataset"
             )
         ]
-    ) == sorted(["1.0.0", "1.0.1", "1.1.0", "2.0.0", "2.1.0", "2.1.1"])
+    ) == sorted(
+        [
+            "1.0.0",
+            "1.0.1",
+            "1.1.0",
+            "1.1.1",
+            "2.0.0",
+            "2.0.1",
+            "2.1.0",
+            "2.1.1",
+            "2.1.2",
+        ]
+    )
 
 
 @pytest.mark.parametrize(
