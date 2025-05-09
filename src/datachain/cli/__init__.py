@@ -34,8 +34,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     datachain_parser = get_parser()
     args = datachain_parser.parse_args(argv)
 
-    if args.command in ("internal-run-udf", "internal-run-udf-worker"):
-        return handle_udf(args.command)
+    if args.command == "internal-run-udf":
+        return handle_udf()
+    if args.command == "internal-run-udf-worker":
+        return handle_udf_runner(args.fd)
 
     if args.command is None:
         datachain_parser.print_help(sys.stderr)
@@ -303,13 +305,13 @@ def handle_general_exception(exc, args, logging_level):
     return error, 1
 
 
-def handle_udf(command):
-    if command == "internal-run-udf":
-        from datachain.query.dispatch import udf_entrypoint
+def handle_udf() -> int:
+    from datachain.query.dispatch import udf_entrypoint
 
-        return udf_entrypoint()
+    return udf_entrypoint()
 
-    if command == "internal-run-udf-worker":
-        from datachain.query.dispatch import udf_worker_entrypoint
 
-        return udf_worker_entrypoint()
+def handle_udf_runner(fd: Optional[int] = None) -> int:
+    from datachain.query.dispatch import udf_worker_entrypoint
+
+    return udf_worker_entrypoint(fd)

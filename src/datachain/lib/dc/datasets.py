@@ -1,6 +1,7 @@
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Optional, Union, get_origin, get_type_hints
 
+from datachain.error import DatasetVersionNotFoundError
 from datachain.lib.dataset_info import DatasetInfo
 from datachain.lib.file import (
     File,
@@ -23,7 +24,7 @@ if TYPE_CHECKING:
 
 def read_dataset(
     name: str,
-    version: Optional[int] = None,
+    version: Optional[Union[str, int]] = None,
     session: Optional[Session] = None,
     settings: Optional[dict] = None,
     fallback_to_studio: bool = True,
@@ -81,7 +82,7 @@ def read_dataset(
         ```
 
         ```py
-        chain = dc.read_dataset("my_cats", version=1)
+        chain = dc.read_dataset("my_cats", version="1.0.0")
         ```
 
         ```py
@@ -95,7 +96,7 @@ def read_dataset(
         }
         chain = dc.read_dataset(
             name="my_cats",
-            version=1,
+            version="1.0.0",
             session=session,
             settings=settings,
             fallback_to_studio=True,
@@ -106,9 +107,29 @@ def read_dataset(
 
     from .datachain import DataChain
 
+    if version is not None:
+        try:
+            # for backward compatibility we still allow users to put version as integer
+            # in which case we are trying to find latest version where major part is
+            # equal to that input version. For example if user sets version=2, we could
+            # continue with something like 2.4.3 (assuming 2.4.3 is the biggest among
+            # all 2.* dataset versions). If dataset doesn't have any versions where
+            # major part is equal to that input, exception is thrown.
+            major = int(version)
+            dataset = Session.get(session).catalog.get_dataset(name)
+            latest_major = dataset.latest_major_version(major)
+            if not latest_major:
+                raise DatasetVersionNotFoundError(
+                    f"Dataset {name} does not have version {version}"
+                )
+            version = latest_major
+        except ValueError:
+            # version is in new semver string format, continuing as normal
+            pass
+
     query = DatasetQuery(
         name=name,
-        version=version,
+        version=version,  #  type: ignore[arg-type]
         session=session,
         indexing_column_types=File._datachain_column_types,
         fallback_to_studio=fallback_to_studio,
@@ -216,7 +237,7 @@ def datasets(
 
 def delete_dataset(
     name: str,
-    version: Optional[int] = None,
+    version: Optional[str] = None,
     force: Optional[bool] = False,
     studio: Optional[bool] = False,
     session: Optional[Session] = None,
@@ -244,7 +265,7 @@ def delete_dataset(
 
         ```py
         import datachain as dc
-        dc.delete_dataset("cats", version=1)
+        dc.delete_dataset("cats", version="1.0.0")
         ```
     """
 

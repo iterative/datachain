@@ -33,6 +33,7 @@ from datachain.cache import Cache
 from datachain.client import Client
 from datachain.dataset import (
     DATASET_PREFIX,
+    DEFAULT_DATASET_VERSION,
     QUERY_DATASET_PREFIX,
     DatasetDependency,
     DatasetListRecord,
@@ -79,6 +80,7 @@ DATASET_INTERNAL_ERROR_MESSAGE = "Internal error on creating dataset"
 QUERY_SCRIPT_INVALID_LAST_STATEMENT_EXIT_CODE = 10
 # exit code we use if query script was canceled
 QUERY_SCRIPT_CANCELED_EXIT_CODE = 11
+QUERY_SCRIPT_SIGTERM_EXIT_CODE = -15  # if query script was terminated by SIGTERM
 
 # dataset pull
 PULL_DATASET_MAX_THREADS = 5
@@ -153,9 +155,9 @@ class DatasetRowsFetcher(NodesThreadPool):
         metastore: "AbstractMetastore",
         warehouse: "AbstractWarehouse",
         remote_ds_name: str,
-        remote_ds_version: int,
+        remote_ds_version: str,
         local_ds_name: str,
-        local_ds_version: int,
+        local_ds_version: str,
         schema: dict[str, Union[SQLType, type[SQLType]]],
         max_threads: int = PULL_DATASET_MAX_THREADS,
         progress_bar=None,
@@ -285,7 +287,7 @@ class NodeGroup:
     # (not including the bucket name or s3:// prefix)
     source_path: str = ""
     dataset_name: Optional[str] = None
-    dataset_version: Optional[int] = None
+    dataset_version: Optional[str] = None
     instantiated_nodes: Optional[list[NodeWithPath]] = None
 
     @property
@@ -606,7 +608,7 @@ class Catalog:
         return lst, client, list_path
 
     def _remove_dataset_rows_and_warehouse_info(
-        self, dataset: DatasetRecord, version: int, **kwargs
+        self, dataset: DatasetRecord, version: str, **kwargs
     ):
         self.warehouse.drop_dataset_rows_table(dataset, version)
         self.update_dataset_version_with_warehouse_info(
@@ -766,7 +768,7 @@ class Catalog:
     def create_dataset(
         self,
         name: str,
-        version: Optional[int] = None,
+        version: Optional[str] = None,
         *,
         columns: Sequence[Column],
         feature_schema: Optional[dict] = None,
@@ -782,18 +784,17 @@ class Catalog:
         Creates new dataset of a specific version.
         If dataset is not yet created, it will create it with version 1
         If version is None, then next unused version is created.
-        If version is given, then it must be an unused version number.
+        If version is given, then it must be an unused version.
         """
         assert [c.name for c in columns if c.name != "sys__id"], f"got {columns=}"
         if not listing and Client.is_data_source_uri(name):
             raise RuntimeError(
                 "Cannot create dataset that starts with source prefix, e.g s3://"
             )
-        default_version = 1
+        default_version = DEFAULT_DATASET_VERSION
         try:
             dataset = self.get_dataset(name)
-            default_version = dataset.next_version
-
+            default_version = dataset.next_version_patch
             if (description or attrs) and (
                 dataset.description != description or dataset.attrs != attrs
             ):
@@ -845,7 +846,7 @@ class Catalog:
     def create_new_dataset_version(
         self,
         dataset: DatasetRecord,
-        version: int,
+        version: str,
         *,
         columns: Sequence[Column],
         sources="",
@@ -891,7 +892,7 @@ class Catalog:
         return dataset
 
     def update_dataset_version_with_warehouse_info(
-        self, dataset: DatasetRecord, version: int, rows_dropped=False, **kwargs
+        self, dataset: DatasetRecord, version: str, rows_dropped=False, **kwargs
     ) -> None:
         from datachain.query.dataset import DatasetQuery
 
@@ -958,7 +959,7 @@ class Catalog:
         return dataset
 
     def remove_dataset_version(
-        self, dataset: DatasetRecord, version: int, drop_rows: Optional[bool] = True
+        self, dataset: DatasetRecord, version: str, drop_rows: Optional[bool] = True
     ) -> None:
         """
         Deletes one single dataset version.
@@ -1036,82 +1037,11 @@ class Catalog:
 
         return self.get_dataset(name)
 
-    def register_dataset(
-        self,
-        dataset: DatasetRecord,
-        version: int,
-        target_dataset: DatasetRecord,
-        target_version: Optional[int] = None,
-    ) -> DatasetRecord:
-        """
-        Registers dataset version of one dataset as dataset version of another
-        one (it can be new version of existing one).
-        It also removes original dataset version
-        """
-        target_version = target_version or target_dataset.next_version
-
-        if not target_dataset.is_valid_next_version(target_version):
-            raise DatasetInvalidVersionError(
-                f"Version {target_version} must be higher than the current latest one"
-            )
-
-        dataset_version = dataset.get_version(version)
-        if not dataset_version:
-            raise DatasetVersionNotFoundError(
-                f"Dataset {dataset.name} does not have version {version}"
-            )
-
-        if not dataset_version.is_final_status():
-            raise ValueError("Cannot register dataset version in non final status")
-
-        # copy dataset version
-        target_dataset = self.metastore.create_dataset_version(
-            target_dataset,
-            target_version,
-            sources=dataset_version.sources,
-            status=dataset_version.status,
-            query_script=dataset_version.query_script,
-            error_message=dataset_version.error_message,
-            error_stack=dataset_version.error_stack,
-            script_output=dataset_version.script_output,
-            created_at=dataset_version.created_at,
-            finished_at=dataset_version.finished_at,
-            schema=dataset_version.serialized_schema,
-            num_objects=dataset_version.num_objects,
-            size=dataset_version.size,
-            preview=dataset_version.preview,
-            job_id=dataset_version.job_id,
-        )
-
-        # to avoid re-creating rows table, we are just renaming it for a new version
-        # of target dataset
-        self.warehouse.rename_dataset_table(
-            dataset.name,
-            target_dataset.name,
-            old_version=version,
-            new_version=target_version,
-        )
-        self.metastore.update_dataset_dependency_source(
-            dataset,
-            version,
-            new_source_dataset=target_dataset,
-            new_source_dataset_version=target_version,
-        )
-
-        if dataset.id == target_dataset.id:
-            # we are updating the same dataset so we need to refresh it to have newly
-            # added version in step before
-            dataset = self.get_dataset(dataset.name)
-
-        self.remove_dataset_version(dataset, version, drop_rows=False)
-
-        return self.get_dataset(target_dataset.name)
-
     def get_dataset(self, name: str) -> DatasetRecord:
         return self.metastore.get_dataset(name)
 
     def get_dataset_with_remote_fallback(
-        self, name: str, version: Optional[int] = None
+        self, name: str, version: Optional[str] = None
     ) -> DatasetRecord:
         try:
             ds = self.get_dataset(name)
@@ -1156,7 +1086,7 @@ class Catalog:
         return DatasetRecord.from_dict(dataset_info)
 
     def get_dataset_dependencies(
-        self, name: str, version: int, indirect=False
+        self, name: str, version: str, indirect=False
     ) -> list[Optional[DatasetDependency]]:
         dataset = self.get_dataset(name)
 
@@ -1174,7 +1104,7 @@ class Catalog:
             if d.is_dataset:
                 # only datasets can have dependencies
                 d.dependencies = self.get_dataset_dependencies(
-                    d.name, int(d.version), indirect=indirect
+                    d.name, d.version, indirect=indirect
                 )
 
         return direct_dependencies
@@ -1243,7 +1173,7 @@ class Catalog:
         ]
 
     def ls_dataset_rows(
-        self, name: str, version: int, offset=None, limit=None
+        self, name: str, version: str, offset=None, limit=None
     ) -> list[dict]:
         from datachain.query.dataset import DatasetQuery
 
@@ -1281,7 +1211,7 @@ class Catalog:
         self,
         bucket_uri: str,
         name: str,
-        version: int,
+        version: str,
         client_config=None,
     ) -> list[str]:
         dataset = self.get_dataset(name)
@@ -1290,14 +1220,14 @@ class Catalog:
             bucket_uri, dataset, version, client_config
         )
 
-    def dataset_table_export_file_names(self, name: str, version: int) -> list[str]:
+    def dataset_table_export_file_names(self, name: str, version: str) -> list[str]:
         dataset = self.get_dataset(name)
         return self.warehouse.dataset_table_export_file_names(dataset, version)
 
     def remove_dataset(
         self,
         name: str,
-        version: Optional[int] = None,
+        version: Optional[str] = None,
         force: Optional[bool] = False,
         studio: Optional[bool] = False,
     ):
@@ -1371,7 +1301,7 @@ class Catalog:
         remote_ds_uri: str,
         output: Optional[str] = None,
         local_ds_name: Optional[str] = None,
-        local_ds_version: Optional[int] = None,
+        local_ds_version: Optional[str] = None,
         cp: bool = False,
         force: bool = False,
         *,
@@ -1645,7 +1575,10 @@ class Catalog:
                     thread.join()  # wait for the reader thread
 
         logger.info("Process %s exited with return code %s", proc.pid, proc.returncode)
-        if proc.returncode == QUERY_SCRIPT_CANCELED_EXIT_CODE:
+        if proc.returncode in (
+            QUERY_SCRIPT_CANCELED_EXIT_CODE,
+            QUERY_SCRIPT_SIGTERM_EXIT_CODE,
+        ):
             raise QueryScriptCancelError(
                 "Query script was canceled by user",
                 return_code=proc.returncode,

@@ -7,6 +7,7 @@ from typing import (
     Union,
 )
 
+from datachain.error import DatasetNotFoundError
 from datachain.lib.file import (
     FileType,
     get_file_type,
@@ -129,7 +130,8 @@ def read_storage(
     if anon:
         client_config = (client_config or {}) | {"anon": True}
     session = Session.get(session, client_config=client_config, in_memory=in_memory)
-    cache = session.catalog.cache
+    catalog = session.catalog
+    cache = catalog.cache
     client_config = session.catalog.client_config
 
     uris = uri if isinstance(uri, (list, tuple)) else [uri]
@@ -162,6 +164,11 @@ def read_storage(
 
             def lst_fn(ds_name, lst_uri):
                 # disable prefetch for listing, as it pre-downloads all files
+                try:
+                    version = catalog.get_dataset(ds_name).next_version_major
+                except DatasetNotFoundError:
+                    version = None
+
                 (
                     read_records(
                         DataChain.DEFAULT_FILE_RECORD,
@@ -174,7 +181,8 @@ def read_storage(
                         list_bucket(lst_uri, cache, client_config=client_config),
                         output={f"{column}": file_type},
                     )
-                    .save(ds_name, listing=True)
+                    # for internal listing datasets, we always bump major version
+                    .save(ds_name, listing=True, version=version)
                 )
 
             dc._query.set_listing_fn(

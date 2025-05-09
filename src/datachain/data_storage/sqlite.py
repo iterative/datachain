@@ -25,6 +25,7 @@ from sqlalchemy.sql.selectable import Select
 from tqdm.auto import tqdm
 
 import datachain.sql.sqlite
+from datachain import semver
 from datachain.data_storage import AbstractDBMetastore, AbstractWarehouse
 from datachain.data_storage.db_engine import DatabaseEngine
 from datachain.data_storage.schema import DefaultSchema
@@ -486,7 +487,7 @@ class SQLiteWarehouse(AbstractWarehouse):
         return table
 
     def get_dataset_sources(
-        self, dataset: DatasetRecord, version: int
+        self, dataset: DatasetRecord, version: str
     ) -> list[StorageURI]:
         dr = self.dataset_rows(dataset, version)
         query = dr.select(dr.c("source", column="file")).distinct()
@@ -502,8 +503,8 @@ class SQLiteWarehouse(AbstractWarehouse):
         self,
         src: DatasetRecord,
         dst: DatasetRecord,
-        src_version: int,
-        dst_version: int,
+        src_version: str,
+        dst_version: str,
     ) -> None:
         dst_empty = False
 
@@ -534,7 +535,7 @@ class SQLiteWarehouse(AbstractWarehouse):
             dst_previous_versions = [
                 v.version
                 for v in dst.versions  # type: ignore [union-attr]
-                if v.version < dst_version
+                if semver.compare(v.version, dst_version) == -1
             ]
             if dst_previous_versions:
                 dst_version_latest = max(dst_previous_versions)
@@ -570,7 +571,7 @@ class SQLiteWarehouse(AbstractWarehouse):
                 conn=conn,
             )
 
-    def insert_dataset_rows(self, df, dataset: DatasetRecord, version: int) -> int:
+    def insert_dataset_rows(self, df, dataset: DatasetRecord, version: str) -> int:
         dr = self.dataset_rows(dataset, version)
         return self.db.insert_dataframe(dr.table.name, df)
 
@@ -595,7 +596,7 @@ class SQLiteWarehouse(AbstractWarehouse):
         return col_type.python_type
 
     def dataset_table_export_file_names(
-        self, dataset: DatasetRecord, version: int
+        self, dataset: DatasetRecord, version: str
     ) -> list[str]:
         raise NotImplementedError("Exporting dataset table not implemented for SQLite")
 
@@ -603,7 +604,7 @@ class SQLiteWarehouse(AbstractWarehouse):
         self,
         bucket_uri: str,
         dataset: DatasetRecord,
-        version: int,
+        version: str,
         client_config=None,
     ) -> list[str]:
         raise NotImplementedError("Exporting dataset table not implemented for SQLite")

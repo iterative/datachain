@@ -100,16 +100,19 @@ def test_query_cli(cloud_test_catalog_tmpfile, tmp_path, catalog_info_filepath, 
     dataset = catalog.get_dataset("my-ds")
     result_job_id = dataset.get_version(dataset.latest_version).job_id
     assert result_job_id
-    job = get_latest_job(catalog.metastore)
-    assert job.id == result_job_id
-    assert job.name == "query_script.py"
-    assert job.status == JobStatus.COMPLETE
-    assert job.query == query_script
-    assert job.query_type == JobQueryType.PYTHON
-    assert job.workers == 1
-    assert job.params == {"url": src_uri}
-    assert job.metrics == {"count": 7}
-    assert job.python_version == f"{sys.version_info.major}.{sys.version_info.minor}"
+    if not os.environ.get("DATACHAIN_DISTRIBUTED"):
+        job = get_latest_job(catalog.metastore)
+        assert job.id == result_job_id
+        assert job.name == "query_script.py"
+        assert job.status == JobStatus.COMPLETE
+        assert job.query == query_script
+        assert job.query_type == JobQueryType.PYTHON
+        assert job.workers == 1
+        assert job.params == {"url": src_uri}
+        assert job.metrics == {"count": 7}
+        assert (
+            job.python_version == f"{sys.version_info.major}.{sys.version_info.minor}"
+        )
 
 
 if sys.platform == "win32":

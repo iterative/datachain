@@ -15,11 +15,10 @@ def set(key: str, value: Union[str, int, float, bool, None]) -> None:  # noqa: P
     metrics[key] = value
 
     if job_id := os.getenv("DATACHAIN_JOB_ID"):
-        from datachain.data_storage.job import JobStatus
         from datachain.query.session import Session
 
         metastore = Session.get().catalog.metastore
-        metastore.set_job_status(job_id, JobStatus.RUNNING, metrics=metrics)
+        metastore.update_job(job_id, metrics=metrics)
 
 
 def get(key: str) -> Optional[Union[str, int, float, bool]]:

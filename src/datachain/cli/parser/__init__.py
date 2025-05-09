@@ -302,7 +302,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         "--version",
         action="store",
         default=None,
-        type=int,
+        type=str,
         help="Dataset version",
     )
     rm_dataset_parser.add_argument(
@@ -495,7 +495,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         "--version",
         action="store",
         default=None,
-        type=int,
+        type=str,
         help="Dataset version",
     )
     show_parser.add_argument("--schema", action="store_true", help="Show schema")
@@ -549,7 +549,15 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     add_anon_arg(parse_gc)
 
     subp.add_parser("internal-run-udf", parents=[parent_parser])
-    subp.add_parser("internal-run-udf-worker", parents=[parent_parser])
+    run_udf_worker = subp.add_parser("internal-run-udf-worker", parents=[parent_parser])
+    run_udf_worker.add_argument(
+        "--fd",
+        type=int,
+        action="store",
+        default=None,
+        help="File descriptor to write results to",
+    )
+
     add_completion_parser(subp, [parent_parser])
     return parser
 
