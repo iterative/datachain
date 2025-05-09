@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 def show(
     catalog: "Catalog",
     name: str,
-    version: Optional[int] = None,
+    version: Optional[str] = None,
     limit: int = 10,
     offset: int = 0,
     columns: Sequence[str] = (),

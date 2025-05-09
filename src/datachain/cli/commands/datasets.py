@@ -127,7 +127,7 @@ def _datasets_tabulate_row(name, both, local_version, studio_version):
 def rm_dataset(
     catalog: "Catalog",
     name: str,
-    version: Optional[int] = None,
+    version: Optional[str] = None,
     force: Optional[bool] = False,
     studio: bool = False,
     local: bool = False,

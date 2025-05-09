@@ -176,7 +176,7 @@ class AbstractWarehouse(ABC, Serializable):
     def dataset_rows(
         self,
         dataset: DatasetRecord,
-        version: Optional[int] = None,
+        version: Optional[str] = None,
         column: str = "file",
     ):
         version = version or dataset.latest_version
@@ -253,7 +253,7 @@ class AbstractWarehouse(ABC, Serializable):
         name = parsed.path if parsed.scheme == "file" else parsed.netloc
         return parsed.scheme, name
 
-    def dataset_table_name(self, dataset_name: str, version: int) -> str:
+    def dataset_table_name(self, dataset_name: str, version: str) -> str:
         prefix = self.DATASET_TABLE_PREFIX
         if Client.is_data_source_uri(dataset_name):
             # for datasets that are created for bucket listing we use different prefix
@@ -282,7 +282,7 @@ class AbstractWarehouse(ABC, Serializable):
     def drop_dataset_rows_table(
         self,
         dataset: DatasetRecord,
-        version: int,
+        version: str,
         if_exists: bool = True,
     ) -> None:
         """Drops a dataset rows table for the given dataset name."""
@@ -295,8 +295,8 @@ class AbstractWarehouse(ABC, Serializable):
         self,
         src: "DatasetRecord",
         dst: "DatasetRecord",
-        src_version: int,
-        dst_version: int,
+        src_version: str,
+        dst_version: str,
     ) -> None:
         """
         Merges source dataset rows and current latest destination dataset rows
@@ -338,15 +338,15 @@ class AbstractWarehouse(ABC, Serializable):
 
     @abstractmethod
     def get_dataset_sources(
-        self, dataset: DatasetRecord, version: int
+        self, dataset: DatasetRecord, version: str
     ) -> list[StorageURI]: ...
 
     def rename_dataset_table(
         self,
         old_name: str,
         new_name: str,
-        old_version: int,
-        new_version: int,
+        old_version: str,
+        new_version: str,
     ) -> None:
         old_ds_table_name = self.dataset_table_name(old_name, old_version)
         new_ds_table_name = self.dataset_table_name(new_name, new_version)
@@ -362,7 +362,7 @@ class AbstractWarehouse(ABC, Serializable):
         return res[0]
 
     def dataset_stats(
-        self, dataset: DatasetRecord, version: int
+        self, dataset: DatasetRecord, version: str
     ) -> tuple[Optional[int], Optional[int]]:
         """
         Returns tuple with dataset stats: total number of rows and total dataset size.
@@ -399,7 +399,7 @@ class AbstractWarehouse(ABC, Serializable):
         """
 
     @abstractmethod
-    def insert_dataset_rows(self, df, dataset: DatasetRecord, version: int) -> int:
+    def insert_dataset_rows(self, df, dataset: DatasetRecord, version: str) -> int:
         """Inserts dataset rows directly into dataset table"""
 
     @abstractmethod
@@ -418,7 +418,7 @@ class AbstractWarehouse(ABC, Serializable):
 
     @abstractmethod
     def dataset_table_export_file_names(
-        self, dataset: DatasetRecord, version: int
+        self, dataset: DatasetRecord, version: str
     ) -> list[str]:
         """
         Returns list of file names that will be created when user runs dataset export
@@ -429,7 +429,7 @@ class AbstractWarehouse(ABC, Serializable):
         self,
         bucket_uri: str,
         dataset: DatasetRecord,
-        version: int,
+        version: str,
         client_config=None,
     ) -> list[str]:
         """

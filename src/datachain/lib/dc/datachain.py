@@ -23,6 +23,7 @@ import sqlalchemy
 from pydantic import BaseModel
 from tqdm import tqdm
 
+from datachain import semver
 from datachain.dataset import DatasetRecord
 from datachain.func import literal
 from datachain.func.base import Function
@@ -214,7 +215,7 @@ class DataChain:
         return self._query.name
 
     @property
-    def version(self) -> Optional[int]:
+    def version(self) -> Optional[str]:
         """Version of the underlying dataset, if there is one."""
         return self._query.version
 
@@ -457,7 +458,7 @@ class DataChain:
     def save(  # type: ignore[override]
         self,
         name: str,
-        version: Optional[int] = None,
+        version: Optional[str] = None,
         description: Optional[str] = None,
         attrs: Optional[list[str]] = None,
         **kwargs,
@@ -466,11 +467,15 @@ class DataChain:
 
         Parameters:
             name : dataset name.
-            version : version of a dataset. Default - the last version that exist.
+            version : version of a dataset. If version is not specified and dataset
+                already exists, version patch increment will happen e.g 1.2.1 -> 1.2.2.
             description : description of a dataset.
             attrs : attributes of a dataset. They can be without value, e.g "NLP",
                 or with a value, e.g "location=US".
         """
+        if version is not None:
+            semver.validate(version)
+
         schema = self.signals_schema.clone_without_sys_signals().serialize()
         return self._evolve(
             query=self._query.save(

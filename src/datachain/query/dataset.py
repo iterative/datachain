@@ -83,7 +83,7 @@ PartitionByType = Union[
     Function, ColumnElement, Sequence[Union[Function, ColumnElement]]
 ]
 JoinPredicateType = Union[str, ColumnClause, ColumnElement]
-DatasetDependencyType = tuple[str, int]
+DatasetDependencyType = tuple[str, str]
 
 logger = logging.getLogger("datachain")
 
@@ -168,7 +168,7 @@ class Step(ABC):
 class QueryStep:
     catalog: "Catalog"
     dataset_name: str
-    dataset_version: int
+    dataset_version: str
 
     def apply(self):
         def q(*columns):
@@ -1092,7 +1092,7 @@ class DatasetQuery:
     def __init__(
         self,
         name: str,
-        version: Optional[int] = None,
+        version: Optional[str] = None,
         catalog: Optional["Catalog"] = None,
         session: Optional[Session] = None,
         indexing_column_types: Optional[dict[str, Any]] = None,
@@ -1112,7 +1112,7 @@ class DatasetQuery:
         self.table = self.get_table()
         self.starting_step: Optional[QueryStep] = None
         self.name: Optional[str] = None
-        self.version: Optional[int] = None
+        self.version: Optional[str] = None
         self.feature_schema: Optional[dict] = None
         self.column_types: Optional[dict[str, Any]] = None
         self.before_steps: list[Callable] = []
@@ -1155,7 +1155,7 @@ class DatasetQuery:
     def __or__(self, other):
         return self.union(other)
 
-    def pull_dataset(self, name: str, version: Optional[int] = None) -> "DatasetRecord":
+    def pull_dataset(self, name: str, version: Optional[str] = None) -> "DatasetRecord":
         print("Dataset not found in local catalog, trying to get from studio")
 
         remote_ds_uri = f"{DATASET_PREFIX}{name}"
@@ -1185,8 +1185,8 @@ class DatasetQuery:
         it completely. If this is the case, name and version of underlying dataset
         will be defined.
         DatasetQuery instance can become attached in two scenarios:
-            1. ds = DatasetQuery(name="dogs", version=1) -> ds is attached to dogs
-            2. ds = ds.save("dogs", version=1) -> ds is attached to dogs dataset
+            1. ds = DatasetQuery(name="dogs", version="1.0.0") -> ds is attached to dogs
+            2. ds = ds.save("dogs", version="1.0.0") -> ds is attached to dogs dataset
         It can move to detached state if filter or similar methods are called on it,
         as then it no longer 100% represents underlying datasets.
         """
@@ -1663,7 +1663,7 @@ class DatasetQuery:
         )
         return query
 
-    def _add_dependencies(self, dataset: "DatasetRecord", version: int):
+    def _add_dependencies(self, dataset: "DatasetRecord", version: str):
         for dependency in self.dependencies:
             ds_dependency_name, ds_dependency_version = dependency
             self.catalog.metastore.add_dataset_dependency(
@@ -1685,7 +1685,7 @@ class DatasetQuery:
     def save(
         self,
         name: Optional[str] = None,
-        version: Optional[int] = None,
+        version: Optional[str] = None,
         feature_schema: Optional[dict] = None,
         description: Optional[str] = None,
         attrs: Optional[list[str]] = None,

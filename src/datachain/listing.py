@@ -26,7 +26,7 @@ class Listing:
         warehouse: "AbstractWarehouse",
         client: "Client",
         dataset_name: Optional["str"] = None,
-        dataset_version: Optional[int] = None,
+        dataset_version: Optional[str] = None,
         column: str = "file",
     ):
         self.metastore = metastore

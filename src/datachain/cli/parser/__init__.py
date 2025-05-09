@@ -302,7 +302,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         "--version",
         action="store",
         default=None,
-        type=int,
+        type=str,
         help="Dataset version",
     )
     rm_dataset_parser.add_argument(
@@ -495,7 +495,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         "--version",
         action="store",
         default=None,
-        type=int,
+        type=str,
         help="Dataset version",
     )
     show_parser.add_argument("--schema", action="store_true", help="Show schema")

@@ -127,7 +127,7 @@ def test_read_storage_reindex_expired(tmp_dir, test_session):
     # mark dataset as expired
     test_session.catalog.metastore.update_dataset_version(
         test_session.catalog.get_dataset(lst_ds_name),
-        1,
+        "1.0.0",
         finished_at=datetime.now(timezone.utc) - timedelta(seconds=LISTING_TTL + 20),
     )
 
@@ -154,27 +154,27 @@ def test_read_storage_partials(cloud_test_catalog):
     dogs_uri = f"{src_uri}/dogs"
     dc.read_storage(dogs_uri, session=session).exec()
     assert _get_listing_datasets(session) == [
-        f"{_list_dataset_name(dogs_uri)}@v1",
+        f"{_list_dataset_name(dogs_uri)}@v1.0.0",
     ]
 
     dc.read_storage(f"{src_uri}/dogs/others", session=session)
     assert _get_listing_datasets(session) == [
-        f"{_list_dataset_name(dogs_uri)}@v1",
+        f"{_list_dataset_name(dogs_uri)}@v1.0.0",
     ]
 
     dc.read_storage(src_uri, session=session).exec()
     assert _get_listing_datasets(session) == sorted(
         [
-            f"{_list_dataset_name(dogs_uri)}@v1",
-            f"{_list_dataset_name(src_uri)}@v1",
+            f"{_list_dataset_name(dogs_uri)}@v1.0.0",
+            f"{_list_dataset_name(src_uri)}@v1.0.0",
         ]
     )
 
     dc.read_storage(f"{src_uri}/cats", session=session).exec()
     assert _get_listing_datasets(session) == sorted(
         [
-            f"{_list_dataset_name(dogs_uri)}@v1",
-            f"{_list_dataset_name(src_uri)}@v1",
+            f"{_list_dataset_name(dogs_uri)}@v1.0.0",
+            f"{_list_dataset_name(src_uri)}@v1.0.0",
         ]
     )
 
@@ -199,15 +199,15 @@ def test_read_storage_partials_with_update(cloud_test_catalog):
     dc.read_storage(uri, session=session).exec()
     assert _get_listing_datasets(session) == sorted(
         [
-            f"{_list_dataset_name(uri)}@v1",
+            f"{_list_dataset_name(uri)}@v1.0.0",
         ]
     )
 
     dc.read_storage(uri, session=session, update=True).exec()
     assert _get_listing_datasets(session) == sorted(
         [
-            f"{_list_dataset_name(uri)}@v1",
-            f"{_list_dataset_name(uri)}@v2",
+            f"{_list_dataset_name(uri)}@v1.0.0",
+            f"{_list_dataset_name(uri)}@v2.0.0",
         ]
     )
 
@@ -223,7 +223,7 @@ def test_read_storage_listing_happens_once(cloud_test_catalog, cloud_type):
     dc_cats.union(dc_dogs).save(ds_name)
 
     lst_ds_name = parse_listing_uri(uri, ctc.session.catalog.client_config)[0]
-    assert _get_listing_datasets(ctc.session) == [f"{lst_ds_name}@v1"]
+    assert _get_listing_datasets(ctc.session) == [f"{lst_ds_name}@v1.0.0"]
 
 
 def test_read_storage_dependencies(cloud_test_catalog, cloud_type):
@@ -232,7 +232,7 @@ def test_read_storage_dependencies(cloud_test_catalog, cloud_type):
     uri = f"{src_uri}/cats"
     ds_name = "dep"
     dc.read_storage(uri, session=ctc.session).save(ds_name)
-    dependencies = ctc.session.catalog.get_dataset_dependencies(ds_name, 1)
+    dependencies = ctc.session.catalog.get_dataset_dependencies(ds_name, "1.0.0")
     assert len(dependencies) == 1
     assert dependencies[0].type == DatasetDependencyType.STORAGE
     if cloud_type == "file":
@@ -559,7 +559,7 @@ def test_save(test_session):
     chain = dc.read_values(key=["a", "b", "c"])
     chain.save(
         name="new_name",
-        version=1,
+        version="1.0.0",
         description="new description",
         attrs=["new_label", "old_label"],
     )

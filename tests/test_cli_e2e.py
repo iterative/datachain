@@ -148,11 +148,11 @@ E2E_STEPS = (
     },
     {
         "command": ("datachain", "dataset", "ls"),
-        "expected": _tabulated_datasets("mnt", 1),
+        "expected": _tabulated_datasets("mnt", "1.0.0"),
     },
     {
         "command": ("datachain", "dataset", "ls"),
-        "expected": _tabulated_datasets("mnt", 1),
+        "expected": _tabulated_datasets("mnt", "1.0.0"),
     },
     {
         "command": ("datachain", "dataset", "edit", "mnt", "--new-name", "mnt-new"),
@@ -160,10 +160,10 @@ E2E_STEPS = (
     },
     {
         "command": ("datachain", "dataset", "ls"),
-        "expected": _tabulated_datasets("mnt-new", 1),
+        "expected": _tabulated_datasets("mnt-new", "1.0.0"),
     },
     {
-        "command": ("datachain", "dataset", "rm", "mnt-new", "--version", "1"),
+        "command": ("datachain", "dataset", "rm", "mnt-new", "--version", "1.0.0"),
         "expected": "",
     },
     {

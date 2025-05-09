@@ -167,7 +167,7 @@ dialog-rating@v2
 By default, when a saved dataset is loaded, the latest version is fetched but another version can be requested:
 
 ```python
-ds = dc.read_dataset("dialog-rating", version=1)
+ds = dc.read_dataset("dialog-rating", version="1.0.0")
 ```
 
 ### Chain execution, optimization and parallelism
