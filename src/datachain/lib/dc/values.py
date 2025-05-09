@@ -42,6 +42,8 @@ def read_values(
     def _func_fr() -> Iterator[tuple_type]:  # type: ignore[valid-type]
         yield from tuples
 
+    _func_fr.__name__ = "read_values"
+
     chain = read_records(
         DataChain.DEFAULT_FILE_RECORD,
         session=session,
