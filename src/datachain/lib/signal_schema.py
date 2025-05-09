@@ -461,14 +461,13 @@ class SignalSchema:
                 pos += 1
         return objs
 
-    def contains_file(self) -> bool:
-        for type_ in self.values.values():
-            if (fr := ModelStore.to_pydantic(type_)) is not None and issubclass(
+    def get_file_signal(self) -> Optional[str]:
+        for signal_name, signal_type in self.values.items():
+            if (fr := ModelStore.to_pydantic(signal_type)) is not None and issubclass(
                 fr, File
             ):
-                return True
-
-        return False
+                return signal_name
+        return None
 
     def slice(
         self,
@@ -704,6 +703,13 @@ class SignalSchema:
         }
 
         return SignalSchema(self.values | schema_right)
+
+    def append(self, right: "SignalSchema") -> "SignalSchema":
+        missing_schema = {
+            key: right.values[key]
+            for key in [k for k in right.values if k not in self.values]
+        }
+        return SignalSchema(self.values | missing_schema)
 
     def get_signals(self, target_type: type[DataModel]) -> Iterator[str]:
         for path, type_, has_subtree, _ in self.get_flat_tree():

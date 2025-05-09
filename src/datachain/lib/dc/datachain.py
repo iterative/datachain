@@ -25,6 +25,7 @@ from tqdm import tqdm
 
 from datachain import semver
 from datachain.dataset import DatasetRecord
+from datachain.delta import delta_disabled, delta_update
 from datachain.func import literal
 from datachain.func.base import Function
 from datachain.func.func import Func
@@ -70,6 +71,9 @@ if TYPE_CHECKING:
     from typing_extensions import ParamSpec, Self
 
     P = ParamSpec("P")
+
+
+T = TypeVar("T", bound="DataChain")
 
 
 class DataChain:
@@ -164,6 +168,7 @@ class DataChain:
         self.signals_schema = signal_schema
         self._setup: dict = setup or {}
         self._sys = _sys
+        self._delta = False
 
     def __repr__(self) -> str:
         """Return a string representation of the chain."""
@@ -176,6 +181,32 @@ class DataChain:
         file = io.StringIO()
         self.print_schema(file=file)
         return file.getvalue()
+
+    def _as_delta(
+        self,
+        on: Optional[Union[str, Sequence[str]]] = None,
+        right_on: Optional[Union[str, Sequence[str]]] = None,
+        compare: Optional[Union[str, Sequence[str]]] = None,
+    ) -> "Self":
+        """Marks this chain as delta, which means special delta process will be
+        called on saving dataset for optimization"""
+        if on is None:
+            raise ValueError("'delta on' fields must be defined")
+        self._delta = True
+        self._delta_on = on
+        self._delta_right_on = right_on
+        self._delta_compare = compare
+        return self
+
+    @property
+    def empty(self) -> bool:
+        """Returns True if chain has zero number of rows"""
+        return not bool(self.count())
+
+    @property
+    def delta(self) -> bool:
+        """Returns True if this chain is ran in "delta" update mode"""
+        return self._delta
 
     @property
     def schema(self) -> dict[str, DataType]:
@@ -254,9 +285,17 @@ class DataChain:
             signal_schema = copy.deepcopy(self.signals_schema)
         if _sys is None:
             _sys = self._sys
-        return type(self)(
+        chain = type(self)(
             query, settings, signal_schema=signal_schema, setup=self._setup, _sys=_sys
         )
+        if self.delta:
+            chain = chain._as_delta(
+                on=self._delta_on,
+                right_on=self._delta_right_on,
+                compare=self._delta_compare,
+            )
+
+        return chain
 
     def settings(
         self,
@@ -462,7 +501,7 @@ class DataChain:
         description: Optional[str] = None,
         attrs: Optional[list[str]] = None,
         **kwargs,
-    ) -> "Self":
+    ) -> "DataChain":
         """Save to a Dataset. It returns the chain itself.
 
         Parameters:
@@ -477,6 +516,31 @@ class DataChain:
             semver.validate(version)
 
         schema = self.signals_schema.clone_without_sys_signals().serialize()
+        if self.delta and name:
+            delta_ds, has_changes = delta_update(
+                self,
+                name,
+                on=self._delta_on,
+                right_on=self._delta_right_on,
+                compare=self._delta_compare,
+            )
+
+            if delta_ds:
+                return self._evolve(
+                    query=delta_ds._query.save(
+                        name=name, version=version, feature_schema=schema, **kwargs
+                    )
+                )
+
+            if not has_changes:
+                # sources have not been changed so new version of resulting dataset
+                # would be the same as previous one. To avoid duplicating exact
+                # datasets, we won't create new version of it and we will return
+                # current latest version instead.
+                from .datasets import read_dataset
+
+                return read_dataset(name, **kwargs)
+
         return self._evolve(
             query=self._query.save(
                 name=name,
@@ -601,6 +665,7 @@ class DataChain:
             signal_schema=udf_obj.output,
         )
 
+    @delta_disabled
     def agg(
         self,
         func: Optional[Callable] = None,
@@ -754,6 +819,7 @@ class DataChain:
 
         return self._evolve(query=self._query.order_by(*args))
 
+    @delta_disabled
     def distinct(self, arg: str, *args: str) -> "Self":  # type: ignore[override]
         """Removes duplicate rows based on uniqueness of some input column(s)
         i.e if rows are found with the same value of input column(s), only one
@@ -788,6 +854,7 @@ class DataChain:
             query=self._query.select(*columns), signal_schema=new_schema
         )
 
+    @delta_disabled  # type: ignore[arg-type]
     def group_by(
         self,
         *,
@@ -1146,6 +1213,7 @@ class DataChain:
         schema = self.signals_schema.clone_without_file_signals()
         return self.select(*schema.values.keys())
 
+    @delta_disabled
     def merge(
         self,
         right_ds: "DataChain",
@@ -1254,6 +1322,7 @@ class DataChain:
 
         return ds
 
+    @delta_disabled
     def union(self, other: "Self") -> "Self":
         """Return the set union of the two datasets.
 
