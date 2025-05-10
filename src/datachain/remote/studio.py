@@ -29,7 +29,7 @@ DatasetExportStatus = Optional[dict[str, Any]]
 DatasetExportSignedUrls = Optional[list[str]]
 FileUploadData = Optional[dict[str, Any]]
 JobData = Optional[dict[str, Any]]
-JobListData = list[dict[str, Any]]
+JobListData = dict[str, Any]
 logger = logging.getLogger("datachain")
 
 DATASET_ROWS_CHUNK_SIZE = 8192
@@ -405,10 +405,11 @@ class StudioClient:
     def get_jobs(
         self,
         status: Optional[str] = None,
+        limit: int = 20,
     ) -> Response[JobListData]:
         return self._send_request(
             "datachain/jobs",
-            {"status": status} if status else {},
+            {"status": status, "limit": limit} if status else {"limit": limit},
             method="GET",
         )
 

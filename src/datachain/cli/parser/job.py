@@ -106,6 +106,12 @@ def add_jobs_parser(subparsers, parent_parser) -> None:
         default=None,
         help="Team to list jobs for (default: from config)",
     )
+    studio_ls_parser.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="Limit the number of jobs returned (default: 20)",
+    )
 
     studio_cancel_help = "Cancel a job in Studio"
     studio_cancel_description = "Cancel a running job in Studio."

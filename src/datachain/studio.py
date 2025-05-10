@@ -48,7 +48,7 @@ def process_jobs_args(args: "Namespace"):
         return show_job_logs(args.id, args.team)
 
     if args.cmd == "ls":
-        return list_jobs(args.status, args.team)
+        return list_jobs(args.status, args.team, args.limit)
 
     raise DataChainError(f"Unknown command '{args.cmd}'.")
 
@@ -343,9 +343,9 @@ def cancel_job(job_id: str, team_name: Optional[str]):
     print(f"Job {job_id} canceled")
 
 
-def list_jobs(status: Optional[str], team_name: Optional[str]):
+def list_jobs(status: Optional[str], team_name: Optional[str], limit: int):
     client = StudioClient(team=team_name)
-    response = client.get_jobs(status)
+    response = client.get_jobs(status, limit)
     if not response.ok:
         raise DataChainError(response.message)
 
