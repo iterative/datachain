@@ -40,13 +40,14 @@ You will be able to filter the job with following status:
 * `INACTIVE` - Job is in inactive state.
 
 Note: The following statuses are considered active jobs:
-- CREATED
-- SCHEDULED
-- QUEUED
-- INIT
-- RUNNING
-- CANCELING_SCHEDULED
-- CANCELING
+
+* `CREATED`
+* `SCHEDULED`
+* `QUEUED`
+* `INIT`
+* `RUNNING`
+* `CANCELING_SCHEDULED`
+* `CANCELING`
 
 
 ## Examples
