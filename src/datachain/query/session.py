@@ -69,7 +69,7 @@ class Session:
         self.catalog = catalog or get_catalog(
             client_config=client_config, in_memory=in_memory
         )
-        self.dataset_versions: list[tuple[DatasetRecord, int, bool]] = []
+        self.dataset_versions: list[tuple[DatasetRecord, str, bool]] = []
 
     def __enter__(self):
         # Push the current context onto the stack
@@ -90,7 +90,7 @@ class Session:
             Session.SESSION_CONTEXTS.pop()
 
     def add_dataset_version(
-        self, dataset: "DatasetRecord", version: int, listing: bool = False
+        self, dataset: "DatasetRecord", version: str, listing: bool = False
     ) -> None:
         self.dataset_versions.append((dataset, version, listing))
 

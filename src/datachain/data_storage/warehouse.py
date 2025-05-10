@@ -11,16 +11,15 @@ from urllib.parse import urlparse
 
 import attrs
 import sqlalchemy as sa
-from sqlalchemy import Table, case, select
-from sqlalchemy.sql import func
 from sqlalchemy.sql.expression import true
-from tqdm.auto import tqdm
 
 from datachain.client import Client
 from datachain.data_storage.schema import convert_rows_custom_column_types
 from datachain.data_storage.serializer import Serializable
 from datachain.dataset import DatasetRecord, StorageURI
 from datachain.node import DirType, DirTypeGroup, Node, NodeWithPath, get_path
+from datachain.query.batch import RowsOutput
+from datachain.query.utils import get_query_id_column
 from datachain.sql.functions import path as pathfunc
 from datachain.sql.types import Int, SQLType
 from datachain.utils import sql_escape_like
@@ -31,7 +30,6 @@ if TYPE_CHECKING:
         _FromClauseArgument,
         _OnClauseArgument,
     )
-    from sqlalchemy.sql.selectable import Select
     from sqlalchemy.types import TypeEngine
 
     from datachain.data_storage import schema
@@ -178,7 +176,7 @@ class AbstractWarehouse(ABC, Serializable):
     def dataset_rows(
         self,
         dataset: DatasetRecord,
-        version: Optional[int] = None,
+        version: Optional[str] = None,
         column: str = "file",
     ):
         version = version or dataset.latest_version
@@ -199,13 +197,13 @@ class AbstractWarehouse(ABC, Serializable):
     # Query Execution
     #
 
-    def query_count(self, query: sa.sql.selectable.Select) -> int:
+    def query_count(self, query: sa.Select) -> int:
         """Count the number of rows in a query."""
-        count_query = sa.select(func.count(1)).select_from(query.subquery())
+        count_query = sa.select(sa.func.count(1)).select_from(query.subquery())
         return next(self.db.execute(count_query))[0]
 
     def table_rows_count(self, table) -> int:
-        count_query = sa.select(func.count(1)).select_from(table)
+        count_query = sa.select(sa.func.count(1)).select_from(table)
         return next(self.db.execute(count_query))[0]
 
     def dataset_select_paginated(
@@ -255,7 +253,7 @@ class AbstractWarehouse(ABC, Serializable):
         name = parsed.path if parsed.scheme == "file" else parsed.netloc
         return parsed.scheme, name
 
-    def dataset_table_name(self, dataset_name: str, version: int) -> str:
+    def dataset_table_name(self, dataset_name: str, version: str) -> str:
         prefix = self.DATASET_TABLE_PREFIX
         if Client.is_data_source_uri(dataset_name):
             # for datasets that are created for bucket listing we use different prefix
@@ -278,18 +276,18 @@ class AbstractWarehouse(ABC, Serializable):
         name: str,
         columns: Sequence["sa.Column"] = (),
         if_not_exists: bool = True,
-    ) -> Table:
+    ) -> sa.Table:
         """Creates a dataset rows table for the given dataset name and columns"""
 
     def drop_dataset_rows_table(
         self,
         dataset: DatasetRecord,
-        version: int,
+        version: str,
         if_exists: bool = True,
     ) -> None:
         """Drops a dataset rows table for the given dataset name."""
         table_name = self.dataset_table_name(dataset.name, version)
-        table = Table(table_name, self.db.metadata)
+        table = sa.Table(table_name, self.db.metadata)
         self.db.drop_table(table, if_exists=if_exists)
 
     @abstractmethod
@@ -297,8 +295,8 @@ class AbstractWarehouse(ABC, Serializable):
         self,
         src: "DatasetRecord",
         dst: "DatasetRecord",
-        src_version: int,
-        dst_version: int,
+        src_version: str,
+        dst_version: str,
     ) -> None:
         """
         Merges source dataset rows and current latest destination dataset rows
@@ -309,7 +307,7 @@ class AbstractWarehouse(ABC, Serializable):
 
     def dataset_rows_select(
         self,
-        query: sa.sql.selectable.Select,
+        query: sa.Select,
         **kwargs,
     ) -> Iterator[tuple[Any, ...]]:
         """
@@ -320,17 +318,35 @@ class AbstractWarehouse(ABC, Serializable):
             query.selected_columns, rows, self.db.dialect
         )
 
+    def dataset_rows_select_from_ids(
+        self,
+        query: sa.Select,
+        ids: Iterable[RowsOutput],
+        is_batched: bool,
+    ) -> Iterator[RowsOutput]:
+        """
+        Fetch dataset rows from database using a list of IDs.
+        """
+        if (id_col := get_query_id_column(query)) is None:
+            raise RuntimeError("sys__id column not found in query")
+
+        if is_batched:
+            for batch in ids:
+                yield list(self.dataset_rows_select(query.where(id_col.in_(batch))))
+        else:
+            yield from self.dataset_rows_select(query.where(id_col.in_(ids)))
+
     @abstractmethod
     def get_dataset_sources(
-        self, dataset: DatasetRecord, version: int
+        self, dataset: DatasetRecord, version: str
     ) -> list[StorageURI]: ...
 
     def rename_dataset_table(
         self,
         old_name: str,
         new_name: str,
-        old_version: int,
-        new_version: int,
+        old_version: str,
+        new_version: str,
     ) -> None:
         old_ds_table_name = self.dataset_table_name(old_name, old_version)
         new_ds_table_name = self.dataset_table_name(new_name, new_version)
@@ -341,12 +357,12 @@ class AbstractWarehouse(ABC, Serializable):
         """Returns total number of rows in a dataset"""
         dr = self.dataset_rows(dataset, version)
         table = dr.get_table()
-        query = select(sa.func.count(table.c.sys__id))
+        query = sa.select(sa.func.count(table.c.sys__id))
         (res,) = self.db.execute(query)
         return res[0]
 
     def dataset_stats(
-        self, dataset: DatasetRecord, version: int
+        self, dataset: DatasetRecord, version: str
     ) -> tuple[Optional[int], Optional[int]]:
         """
         Returns tuple with dataset stats: total number of rows and total dataset size.
@@ -364,7 +380,7 @@ class AbstractWarehouse(ABC, Serializable):
         ]
         if size_columns:
             expressions = (*expressions, sa.func.sum(sum(size_columns)))
-        query = select(*expressions)
+        query = sa.select(*expressions)
         ((nrows, *rest),) = self.db.execute(query)
         return nrows, rest[0] if rest else 0
 
@@ -373,17 +389,17 @@ class AbstractWarehouse(ABC, Serializable):
         """Convert File entries so they can be passed on to `insert_rows()`"""
 
     @abstractmethod
-    def insert_rows(self, table: Table, rows: Iterable[dict[str, Any]]) -> None:
+    def insert_rows(self, table: sa.Table, rows: Iterable[dict[str, Any]]) -> None:
         """Does batch inserts of any kind of rows into table"""
 
-    def insert_rows_done(self, table: Table) -> None:
+    def insert_rows_done(self, table: sa.Table) -> None:
         """
         Only needed for certain implementations
         to signal when rows inserts are complete.
         """
 
     @abstractmethod
-    def insert_dataset_rows(self, df, dataset: DatasetRecord, version: int) -> int:
+    def insert_dataset_rows(self, df, dataset: DatasetRecord, version: str) -> int:
         """Inserts dataset rows directly into dataset table"""
 
     @abstractmethod
@@ -402,7 +418,7 @@ class AbstractWarehouse(ABC, Serializable):
 
     @abstractmethod
     def dataset_table_export_file_names(
-        self, dataset: DatasetRecord, version: int
+        self, dataset: DatasetRecord, version: str
     ) -> list[str]:
         """
         Returns list of file names that will be created when user runs dataset export
@@ -413,7 +429,7 @@ class AbstractWarehouse(ABC, Serializable):
         self,
         bucket_uri: str,
         dataset: DatasetRecord,
-        version: int,
+        version: str,
         client_config=None,
     ) -> list[str]:
         """
@@ -497,7 +513,7 @@ class AbstractWarehouse(ABC, Serializable):
         ).subquery()
         path_glob = "/".join([*path_list, glob_name])
         dirpath = path_glob[: -len(glob_name)]
-        relpath = func.substr(de.c(q, "path"), len(dirpath) + 1)
+        relpath = sa.func.substr(de.c(q, "path"), len(dirpath) + 1)
 
         return self.get_nodes(
             self.expand_query(de, q, dr)
@@ -584,13 +600,13 @@ class AbstractWarehouse(ABC, Serializable):
             default = getattr(
                 attrs.fields(Node), dr.without_object(column.name)
             ).default
-            return func.coalesce(column, default).label(column.name)
+            return sa.func.coalesce(column, default).label(column.name)
 
         return sa.select(
             q.c.sys__id,
-            case((de.c(q, "is_dir") == true(), DirType.DIR), else_=DirType.FILE).label(
-                dr.col_name("dir_type")
-            ),
+            sa.case(
+                (de.c(q, "is_dir") == true(), DirType.DIR), else_=DirType.FILE
+            ).label(dr.col_name("dir_type")),
             de.c(q, "path"),
             with_default(dr.c("etag")),
             de.c(q, "version"),
@@ -665,7 +681,7 @@ class AbstractWarehouse(ABC, Serializable):
             return de.c(inner_query, f)
 
         return self.db.execute(
-            select(*(field_to_expr(f) for f in fields)).order_by(
+            sa.select(*(field_to_expr(f) for f in fields)).order_by(
                 de.c(inner_query, "source"),
                 de.c(inner_query, "path"),
                 de.c(inner_query, "version"),
@@ -687,7 +703,7 @@ class AbstractWarehouse(ABC, Serializable):
             return dr.c(f)
 
         q = (
-            select(*(field_to_expr(f) for f in fields))
+            sa.select(*(field_to_expr(f) for f in fields))
             .where(
                 dr.c("path").like(f"{sql_escape_like(dirpath)}%"),
                 ~self.instr(pathfunc.name(dr.c("path")), "/"),
@@ -722,10 +738,10 @@ class AbstractWarehouse(ABC, Serializable):
         sub_glob = posixpath.join(path, "*")
         dr = dataset_rows
         selections: list[sa.ColumnElement] = [
-            func.sum(dr.c("size")),
+            sa.func.sum(dr.c("size")),
         ]
         if count_files:
-            selections.append(func.count())
+            selections.append(sa.func.count())
         results = next(
             self.db.execute(
                 dr.select(*selections).where(
@@ -842,7 +858,7 @@ class AbstractWarehouse(ABC, Serializable):
         self,
         columns: Sequence["sa.Column"] = (),
         name: Optional[str] = None,
-    ) -> "sa.Table":
+    ) -> sa.Table:
         """
         Create a temporary table for storing custom signals generated by a UDF.
         SQLite TEMPORARY tables cannot be directly used as they are process-specific,
@@ -860,8 +876,8 @@ class AbstractWarehouse(ABC, Serializable):
     @abstractmethod
     def copy_table(
         self,
-        table: Table,
-        query: "Select",
+        table: sa.Table,
+        query: sa.Select,
         progress_cb: Optional[Callable[[int], None]] = None,
     ) -> None:
         """
@@ -875,13 +891,13 @@ class AbstractWarehouse(ABC, Serializable):
         right: "_FromClauseArgument",
         onclause: "_OnClauseArgument",
         inner: bool = True,
-    ) -> "Select":
+    ) -> sa.Select:
         """
         Join two tables together.
         """
 
     @abstractmethod
-    def create_pre_udf_table(self, query: "Select") -> "Table":
+    def create_pre_udf_table(self, query: sa.Select) -> sa.Table:
         """
         Create a temporary table from a query for use in a UDF.
         """
@@ -906,12 +922,8 @@ class AbstractWarehouse(ABC, Serializable):
         are cleaned up as soon as they are no longer needed.
         """
         to_drop = set(names)
-        with tqdm(
-            desc="Cleanup", unit=" tables", total=len(to_drop), leave=False
-        ) as pbar:
-            for name in to_drop:
-                self.db.drop_table(Table(name, self.db.metadata), if_exists=True)
-                pbar.update(1)
+        for name in to_drop:
+            self.db.drop_table(sa.Table(name, self.db.metadata), if_exists=True)
 
 
 def _random_string(length: int) -> str:

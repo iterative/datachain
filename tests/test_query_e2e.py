@@ -198,7 +198,7 @@ def run_step(step, catalog):  # noqa: PLR0912
             stdin_file.close()
 
     if interrupt_after:
-        if process.returncode not in (interrupt_exit_code, 1):
+        if process.returncode not in (interrupt_exit_code, 11):
             print(f"Process stdout: {stdout}")
             print(f"Process stderr: {stderr}")
             raise RuntimeError(
@@ -238,8 +238,9 @@ def run_step(step, catalog):  # noqa: PLR0912
 
 @pytest.mark.e2e
 @pytest.mark.xdist_group(name="tmpfile")
-def test_query_e2e(tmp_dir, catalog_tmpfile):
+def test_query_e2e(tmp_dir, catalog_tmpfile, monkeypatch):
     """End-to-end CLI Query Test"""
+    monkeypatch.delenv("DATACHAIN_DISTRIBUTED", raising=False)
     for step in E2E_STEPS:
         run_step(step, catalog_tmpfile)
 

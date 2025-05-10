@@ -3,6 +3,7 @@ from enum import Enum
 
 class JobStatus(int, Enum):
     CREATED = 1
+    SCHEDULED = 10
     QUEUED = 2
     INIT = 3
     RUNNING = 4

@@ -42,15 +42,9 @@ from datachain.data_storage.schema import (
     partition_columns,
 )
 from datachain.dataset import DATASET_PREFIX, DatasetStatus, RowDict
-from datachain.error import (
-    DatasetNotFoundError,
-    QueryScriptCancelError,
-)
+from datachain.error import DatasetNotFoundError, QueryScriptCancelError
 from datachain.func.base import Function
-from datachain.lib.listing import (
-    is_listing_dataset,
-    listing_dataset_expired,
-)
+from datachain.lib.listing import is_listing_dataset, listing_dataset_expired
 from datachain.lib.udf import UDFAdapter, _get_cache
 from datachain.progress import CombinedDownloadCallback, TqdmCombinedDownloadCallback
 from datachain.query.schema import C, UDFParamSpec, normalize_param
@@ -89,7 +83,7 @@ PartitionByType = Union[
     Function, ColumnElement, Sequence[Union[Function, ColumnElement]]
 ]
 JoinPredicateType = Union[str, ColumnClause, ColumnElement]
-DatasetDependencyType = tuple[str, int]
+DatasetDependencyType = tuple[str, str]
 
 logger = logging.getLogger("datachain")
 
@@ -174,7 +168,7 @@ class Step(ABC):
 class QueryStep:
     catalog: "Catalog"
     dataset_name: str
-    dataset_version: int
+    dataset_version: str
 
     def apply(self):
         def q(*columns):
@@ -420,11 +414,14 @@ class UDFStep(Step, ABC):
         """
 
     def populate_udf_table(self, udf_table: "Table", query: Select) -> None:
-        from datachain.catalog import QUERY_SCRIPT_CANCELED_EXIT_CODE
-
-        rows_total = self.catalog.warehouse.query_count(query)
-        if rows_total == 0:
+        if (rows_total := self.catalog.warehouse.query_count(query)) == 0:
             return
+
+        from datachain.catalog import QUERY_SCRIPT_CANCELED_EXIT_CODE
+        from datachain.catalog.loader import (
+            DISTRIBUTED_IMPORT_PATH,
+            get_udf_distributor_class,
+        )
 
         workers = determine_workers(self.workers, rows_total=rows_total)
         processes = determine_processes(self.parallel, rows_total=rows_total)
@@ -432,29 +429,15 @@ class UDFStep(Step, ABC):
         use_partitioning = self.partition_by is not None
         batching = self.udf.get_batching(use_partitioning)
         udf_fields = [str(c.name) for c in query.selected_columns]
+        udf_distributor_class = get_udf_distributor_class()
 
         prefetch = self.udf.prefetch
         with _get_cache(self.catalog.cache, prefetch, use_cache=self.cache) as _cache:
             catalog = clone_catalog_with_cache(self.catalog, _cache)
+
             try:
-                if workers:
-                    if catalog.in_memory:
-                        raise RuntimeError(
-                            "In-memory databases cannot be used with "
-                            "distributed processing."
-                        )
-
-                    from datachain.catalog.loader import (
-                        DISTRIBUTED_IMPORT_PATH,
-                        get_udf_distributor_class,
-                    )
-
-                    if not (udf_distributor_class := get_udf_distributor_class()):
-                        raise RuntimeError(
-                            f"{DISTRIBUTED_IMPORT_PATH} import path is required "
-                            "for distributed UDF processing."
-                        )
-
+                if udf_distributor_class and not catalog.in_memory:
+                    # Use the UDF distributor if available (running in SaaS)
                     udf_distributor = udf_distributor_class(
                         catalog=catalog,
                         table=udf_table,
@@ -470,7 +453,20 @@ class UDFStep(Step, ABC):
                         min_task_size=self.min_task_size,
                     )
                     udf_distributor()
-                elif processes:
+                    return
+
+                if workers:
+                    if catalog.in_memory:
+                        raise RuntimeError(
+                            "In-memory databases cannot be used with "
+                            "distributed processing."
+                        )
+
+                    raise RuntimeError(
+                        f"{DISTRIBUTED_IMPORT_PATH} import path is required "
+                        "for distributed UDF processing."
+                    )
+                if processes:
                     # Parallel processing (faster for more CPU-heavy UDFs)
                     if catalog.in_memory:
                         raise RuntimeError(
@@ -504,7 +500,12 @@ class UDFStep(Step, ABC):
                     with subprocess.Popen(  # noqa: S603
                         cmd, env=envs, stdin=subprocess.PIPE
                     ) as process:
-                        process.communicate(process_data)
+                        try:
+                            process.communicate(process_data)
+                        except KeyboardInterrupt:
+                            raise QueryScriptCancelError(
+                                "UDF execution was canceled by the user."
+                            ) from None
                         if retval := process.poll():
                             raise RuntimeError(
                                 f"UDF Execution Failed! Exit code: {retval}"
@@ -1091,7 +1092,7 @@ class DatasetQuery:
     def __init__(
         self,
         name: str,
-        version: Optional[int] = None,
+        version: Optional[str] = None,
         catalog: Optional["Catalog"] = None,
         session: Optional[Session] = None,
         indexing_column_types: Optional[dict[str, Any]] = None,
@@ -1111,7 +1112,7 @@ class DatasetQuery:
         self.table = self.get_table()
         self.starting_step: Optional[QueryStep] = None
         self.name: Optional[str] = None
-        self.version: Optional[int] = None
+        self.version: Optional[str] = None
         self.feature_schema: Optional[dict] = None
         self.column_types: Optional[dict[str, Any]] = None
         self.before_steps: list[Callable] = []
@@ -1154,7 +1155,7 @@ class DatasetQuery:
     def __or__(self, other):
         return self.union(other)
 
-    def pull_dataset(self, name: str, version: Optional[int] = None) -> "DatasetRecord":
+    def pull_dataset(self, name: str, version: Optional[str] = None) -> "DatasetRecord":
         print("Dataset not found in local catalog, trying to get from studio")
 
         remote_ds_uri = f"{DATASET_PREFIX}{name}"
@@ -1184,8 +1185,8 @@ class DatasetQuery:
         it completely. If this is the case, name and version of underlying dataset
         will be defined.
         DatasetQuery instance can become attached in two scenarios:
-            1. ds = DatasetQuery(name="dogs", version=1) -> ds is attached to dogs
-            2. ds = ds.save("dogs", version=1) -> ds is attached to dogs dataset
+            1. ds = DatasetQuery(name="dogs", version="1.0.0") -> ds is attached to dogs
+            2. ds = ds.save("dogs", version="1.0.0") -> ds is attached to dogs dataset
         It can move to detached state if filter or similar methods are called on it,
         as then it no longer 100% represents underlying datasets.
         """
@@ -1662,7 +1663,7 @@ class DatasetQuery:
         )
         return query
 
-    def _add_dependencies(self, dataset: "DatasetRecord", version: int):
+    def _add_dependencies(self, dataset: "DatasetRecord", version: str):
         for dependency in self.dependencies:
             ds_dependency_name, ds_dependency_version = dependency
             self.catalog.metastore.add_dataset_dependency(
@@ -1684,7 +1685,7 @@ class DatasetQuery:
     def save(
         self,
         name: Optional[str] = None,
-        version: Optional[int] = None,
+        version: Optional[str] = None,
         feature_schema: Optional[dict] = None,
         description: Optional[str] = None,
         attrs: Optional[list[str]] = None,

@@ -207,7 +207,7 @@ def edit_studio_dataset(
 def remove_studio_dataset(
     team_name: Optional[str],
     name: str,
-    version: Optional[int] = None,
+    version: Optional[str] = None,
     force: Optional[bool] = False,
 ):
     client = StudioClient(team=team_name)

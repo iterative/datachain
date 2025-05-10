@@ -92,7 +92,7 @@ def remote_dataset_version(schema, dataset_rows):
         "id": 1,
         "uuid": DATASET_UUID,
         "dataset_id": 1,
-        "version": 1,
+        "version": "1.0.0",
         "status": 4,
         "feature_schema": {},
         "created_at": "2024-02-23T10:42:31.842944+00:00",
@@ -172,9 +172,9 @@ def dataset_export_data_chunk(
 
 
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
-@pytest.mark.parametrize("dataset_uri", ["ds://dogs@v1", "ds://dogs"])
+@pytest.mark.parametrize("dataset_uri", ["ds://dogs@v1.0.0", "ds://dogs"])
 @pytest.mark.parametrize("local_ds_name", [None, "other"])
-@pytest.mark.parametrize("local_ds_version", [None, 2])
+@pytest.mark.parametrize("local_ds_version", [None, "2.0.0"])
 @pytest.mark.parametrize("instantiate", [True, False])
 @skip_if_not_sqlite
 def test_pull_dataset_success(
@@ -222,12 +222,12 @@ def test_pull_dataset_success(
             )
 
     dataset = catalog.get_dataset(local_ds_name or "dogs")
-    assert dataset.versions_values == [local_ds_version or 1]
+    assert [v.version for v in dataset.versions] == [local_ds_version or "1.0.0"]
     assert dataset.status == DatasetStatus.COMPLETE
     assert dataset.created_at
     assert dataset.finished_at
     assert dataset.schema
-    dataset_version = dataset.get_version(local_ds_version or 1)
+    dataset_version = dataset.get_version(local_ds_version or "1.0.0")
     assert dataset_version.status == DatasetStatus.COMPLETE
     assert dataset_version.created_at
     assert dataset_version.finished_at
@@ -239,7 +239,7 @@ def test_pull_dataset_success(
     assert_row_names(
         catalog,
         dataset,
-        local_ds_version or 1,
+        local_ds_version or "1.0.0",
         {
             "dog1",
             "dog2",
@@ -289,12 +289,12 @@ def test_datachain_read_dataset_pull(
     with Session("testSession", catalog=catalog):
         ds = dc.read_dataset(
             name="dogs",
-            version=1,
+            version="1.0.0",
             fallback_to_studio=True,
         )
 
     assert ds.dataset.name == "dogs"
-    assert ds.dataset.latest_version == 1
+    assert ds.dataset.latest_version == "1.0.0"
     assert ds.dataset.status == DatasetStatus.COMPLETE
 
     # Check that dataset is available locally after pulling
@@ -347,7 +347,7 @@ def test_pull_dataset_not_found_in_remote(
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(DataChainError) as exc_info:
-        catalog.pull_dataset("ds://dogs@v1")
+        catalog.pull_dataset("ds://dogs@v1.0.0")
     assert str(exc_info.value) == "Dataset not found"
 
 
@@ -370,7 +370,7 @@ def test_pull_dataset_exporting_dataset_failed_in_remote(
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(DataChainError) as exc_info:
-        catalog.pull_dataset("ds://dogs@v1")
+        catalog.pull_dataset("ds://dogs@v1.0.0")
     assert str(exc_info.value) == f"Dataset export {export_status} in Studio"
 
 
@@ -389,7 +389,7 @@ def test_pull_dataset_empty_parquet(
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(RuntimeError):
-        catalog.pull_dataset("ds://dogs@v1")
+        catalog.pull_dataset("ds://dogs@v1.0.0")
 
 
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
@@ -404,11 +404,11 @@ def test_pull_dataset_already_exists_locally(
 ):
     catalog = cloud_test_catalog.catalog
 
-    catalog.pull_dataset("ds://dogs@v1", local_ds_name="other")
-    catalog.pull_dataset("ds://dogs@v1")
+    catalog.pull_dataset("ds://dogs@v1.0.0", local_ds_name="other")
+    catalog.pull_dataset("ds://dogs@v1.0.0")
 
     other = catalog.get_dataset("other")
-    other_version = other.get_version(1)
+    other_version = other.get_version("1.0.0")
     assert other_version.uuid == DATASET_UUID
     assert other_version.num_objects == 4
     assert other_version.size == 15
@@ -437,14 +437,14 @@ def test_pull_dataset_local_name_already_exists(
         local_ds_name or "dogs", [f"{src_uri}/dogs/*"], recursive=True
     )
     with pytest.raises(DataChainError) as exc_info:
-        catalog.pull_dataset("ds://dogs@v1", local_ds_name=local_ds_name)
+        catalog.pull_dataset("ds://dogs@v1.0.0", local_ds_name=local_ds_name)
 
     assert str(exc_info.value) == (
-        f"Local dataset ds://{local_ds_name or 'dogs'}@v1 already exists with different"
-        " uuid, please choose different local dataset name or version"
+        f"Local dataset ds://{local_ds_name or 'dogs'}@v1.0.0 already exists with"
+        " different uuid, please choose different local dataset name or version"
     )
 
     # able to save it as version 2 of local dataset name
     catalog.pull_dataset(
-        "ds://dogs@v1", local_ds_name=local_ds_name, local_ds_version=2
+        "ds://dogs@v1.0.0", local_ds_name=local_ds_name, local_ds_version="2.0.0"
     )
