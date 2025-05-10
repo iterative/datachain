@@ -203,9 +203,10 @@ class UDFDispatcher:
         def get_inputs() -> Iterable["RowsOutput"]:
             warehouse = self.catalog.warehouse.clone()
             if ids_only:
-                yield from warehouse.dataset_rows_select_from_ids(
-                    self.query, input_rows, self.is_batching
-                )
+                for ids in batched(input_rows, DEFAULT_BATCH_SIZE):
+                    yield from warehouse.dataset_rows_select_from_ids(
+                        self.query, ids, self.is_batching
+                    )
             else:
                 yield from input_rows
 
@@ -425,8 +426,9 @@ class UDFWorker:
         warehouse = self.catalog.warehouse.clone()
         while (batch := get_from_queue(self.task_queue)) != STOP_SIGNAL:
             if ids_only:
-                yield from warehouse.dataset_rows_select_from_ids(
-                    self.query, batch, self.is_batching
-                )
+                for ids in batched(batch, DEFAULT_BATCH_SIZE):
+                    yield from warehouse.dataset_rows_select_from_ids(
+                        self.query, ids, self.is_batching
+                    )
             else:
                 yield from batch
