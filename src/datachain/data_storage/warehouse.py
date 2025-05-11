@@ -253,12 +253,16 @@ class AbstractWarehouse(ABC, Serializable):
         name = parsed.path if parsed.scheme == "file" else parsed.netloc
         return parsed.scheme, name
 
-    def dataset_table_name(self, dataset_name: str, version: str) -> str:
+    def dataset_table_name(self, dataset_name: str, version: Union[str, int]) -> str:
         prefix = self.DATASET_TABLE_PREFIX
         if Client.is_data_source_uri(dataset_name):
             # for datasets that are created for bucket listing we use different prefix
             prefix = self.DATASET_SOURCE_TABLE_PREFIX
-        return f"{prefix}{dataset_name}_{version.replace('.', '_')}"
+        if isinstance(version, int):
+            normalized_version = f"{version}_0_0"
+        else:
+            normalized_version = version.replace(".", "_")
+        return f"{prefix}{dataset_name}_{normalized_version}"
 
     def temp_table_name(self) -> str:
         return self.TMP_TABLE_NAME_PREFIX + _random_string(6)
