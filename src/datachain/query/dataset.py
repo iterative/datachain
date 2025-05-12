@@ -545,6 +545,7 @@ class UDFStep(Step, ABC):
                 self.catalog.warehouse.close()
                 sys.exit(QUERY_SCRIPT_CANCELED_EXIT_CODE)
             except (Exception, KeyboardInterrupt):
+                logger.exception("Error during UDF execution")
                 # Close any open database connections if an error is encountered
                 self.catalog.warehouse.close()
                 raise
