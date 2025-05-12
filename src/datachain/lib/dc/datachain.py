@@ -194,7 +194,7 @@ class DataChain:
             raise ValueError("'delta on' fields must be defined")
         self._delta = True
         self._delta_on = on
-        self._delta_right_on = right_on
+        self._delta_result_on = right_on
         self._delta_compare = compare
         return self
 
@@ -291,7 +291,7 @@ class DataChain:
         if self.delta:
             chain = chain._as_delta(
                 on=self._delta_on,
-                right_on=self._delta_right_on,
+                right_on=self._delta_result_on,
                 compare=self._delta_compare,
             )
 
@@ -521,7 +521,7 @@ class DataChain:
                 self,
                 name,
                 on=self._delta_on,
-                right_on=self._delta_right_on,
+                right_on=self._delta_result_on,
                 compare=self._delta_compare,
             )
 

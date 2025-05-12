@@ -35,9 +35,9 @@ def read_storage(
     column: str = "file",
     update: bool = False,
     anon: bool = False,
-    delta: bool = False,
+    delta: Optional[bool] = False,
     delta_on: Optional[Union[str, Sequence[str]]] = None,
-    delta_right_on: Optional[Union[str, Sequence[str]]] = None,
+    delta_result_on: Optional[Union[str, Sequence[str]]] = None,
     delta_compare: Optional[Union[str, Sequence[str]]] = None,
     client_config: Optional[dict] = None,
 ) -> "DataChain":
@@ -73,10 +73,14 @@ def read_storage(
             If two rows have the same values, they are considered the same (e.g., they
             could be different versions of the same row in a versioned source).
             This is used in the delta update to calculate the diff.
-        delta_right_on: A list of fields in the final dataset that correspond to the
-            `delta_on` fields if they were renamed.
-            There is no need to define this if the fields from `delta_on` are present
-            in the final dataset.
+        delta_result_on: A list of fields in the resulting dataset that correspond
+            to the `delta_on` fields from the source.
+            This is needed to identify rows that have changed in the source but are
+            already present in the current version of the resulting dataset, in order
+            to avoid including outdated versions of those rows in the new dataset.
+            We retain only the latest versions of rows to prevent duplication.
+            There is no need to define this if the `delta_on` fields are present in
+            the final dataset and have not been renamed.
         delta_compare: A list of fields used to check if the same row has been modified
             in the new version of the source.
             If not defined, all fields except those defined in delta_on will be used.
@@ -210,6 +214,6 @@ def read_storage(
 
     if delta:
         storage_chain = storage_chain._as_delta(
-            on=delta_on, right_on=delta_right_on, compare=delta_compare
+            on=delta_on, right_on=delta_result_on, compare=delta_compare
         )
     return storage_chain
