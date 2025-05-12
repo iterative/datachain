@@ -258,7 +258,7 @@ class AbstractWarehouse(ABC, Serializable):
         if Client.is_data_source_uri(dataset_name):
             # for datasets that are created for bucket listing we use different prefix
             prefix = self.DATASET_SOURCE_TABLE_PREFIX
-        return f"{prefix}{dataset_name}_{version}"
+        return f"{prefix}{dataset_name}_{version.replace('.', '_')}"
 
     def temp_table_name(self) -> str:
         return self.TMP_TABLE_NAME_PREFIX + _random_string(6)

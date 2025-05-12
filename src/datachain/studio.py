@@ -3,6 +3,8 @@ import os
 import sys
 from typing import TYPE_CHECKING, Optional
 
+import tabulate
+
 from datachain.config import Config, ConfigLevel
 from datachain.dataset import QUERY_DATASET_PREFIX
 from datachain.error import DataChainError
@@ -44,6 +46,10 @@ def process_jobs_args(args: "Namespace"):
         return cancel_job(args.id, args.team)
     if args.cmd == "logs":
         return show_job_logs(args.id, args.team)
+
+    if args.cmd == "ls":
+        return list_jobs(args.status, args.team, args.limit)
+
     raise DataChainError(f"Unknown command '{args.cmd}'.")
 
 
@@ -240,13 +246,13 @@ def show_logs_from_client(client, job_id):
         raise DataChainError(response.message)
 
     response_data = response.data
-    if response_data:
+    if response_data and response_data.get("dataset_versions"):
         dataset_versions = response_data.get("dataset_versions", [])
         print("\n\n>>>> Dataset versions created during the job:")
         for version in dataset_versions:
             print(f"    - {version.get('dataset_name')}@v{version.get('version')}")
     else:
-        print("No dataset versions created during the job.")
+        print("\n\nNo dataset versions created during the job.")
 
 
 def create_job(
@@ -335,6 +341,31 @@ def cancel_job(job_id: str, team_name: Optional[str]):
         raise DataChainError(response.message)
 
     print(f"Job {job_id} canceled")
+
+
+def list_jobs(status: Optional[str], team_name: Optional[str], limit: int):
+    client = StudioClient(team=team_name)
+    response = client.get_jobs(status, limit)
+    if not response.ok:
+        raise DataChainError(response.message)
+
+    jobs = response.data.get("jobs", [])
+    if not jobs:
+        print("No jobs found")
+        return
+
+    rows = [
+        {
+            "ID": job.get("id"),
+            "Name": job.get("name"),
+            "Status": job.get("status"),
+            "Created at": job.get("created_at"),
+            "Created by": job.get("created_by"),
+        }
+        for job in jobs
+    ]
+
+    print(tabulate.tabulate(rows, headers="keys", tablefmt="grid"))
 
 
 def show_job_logs(job_id: str, team_name: Optional[str]):

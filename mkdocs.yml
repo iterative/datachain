@@ -96,6 +96,7 @@ nav:
                   - run: commands/job/run.md
                   - logs: commands/job/logs.md
                   - cancel: commands/job/cancel.md
+                  - ls: commands/job/ls.md
       - 📡 Interacting with remote storage: references/remotes.md
       - 🤝 Contributing: contributing.md
 
