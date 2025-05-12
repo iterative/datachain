@@ -48,7 +48,7 @@ dependencies = [
   "Pillow>=10.0.0,<12",
   "msgpack>=1.0.4,<2",
   "psutil",
-  "huggingface_hub<0.31",  # fix for "Provider 'featherless-ai' not supported" error
+  "huggingface_hub<0.32",  # fix for "Provider 'featherless-ai' not supported" error
   "iterative-telemetry>=0.0.10",
   "platformdirs",
   "dvc-studio-client>=0.21,<1",
