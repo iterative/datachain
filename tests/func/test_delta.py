@@ -50,14 +50,18 @@ def test_delta_update_from_dataset(test_session, tmp_dir, tmp_path):
     create_delta_dataset(ds_name)
 
     assert list(
-        dc.read_dataset(ds_name, version=1).order_by("file.path").collect("file.path")
+        dc.read_dataset(ds_name, version="1.0.0")
+        .order_by("file.path")
+        .collect("file.path")
     ) == [
         "img1.jpg",
         "img2.jpg",
     ]
 
     assert list(
-        dc.read_dataset(ds_name, version=2).order_by("file.path").collect("file.path")
+        dc.read_dataset(ds_name, version="1.0.1")
+        .order_by("file.path")
+        .collect("file.path")
     ) == [
         "img1.jpg",
         "img2.jpg",
@@ -116,7 +120,7 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
     # into consideration on delta update
     etags = {
         r[0]: r[1].etag
-        for r in dc.read_dataset(ds_name, version=1).collect("index", "file")
+        for r in dc.read_dataset(ds_name, version="1.0.0").collect("index", "file")
     }
 
     # remove last couple of images to simulate modification since we will re-create it
@@ -131,7 +135,9 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
     create_delta_dataset()
 
     assert list(
-        dc.read_dataset(ds_name, version=1).order_by("file.path").collect("file.path")
+        dc.read_dataset(ds_name, version="1.0.0")
+        .order_by("file.path")
+        .collect("file.path")
     ) == [
         "images/img4.jpg",
         "images/img6.jpg",
@@ -139,7 +145,9 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
     ]
 
     assert list(
-        dc.read_dataset(ds_name, version=2).order_by("file.path").collect("file.path")
+        dc.read_dataset(ds_name, version="1.0.1")
+        .order_by("file.path")
+        .collect("file.path")
     ) == [
         "images/img10.jpg",
         "images/img12.jpg",
@@ -155,7 +163,7 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
     # and modified rows etags should be bigger than the old ones
     assert (
         next(
-            dc.read_dataset(ds_name, version=2)
+            dc.read_dataset(ds_name, version="1.0.1")
             .filter(C("index") == 6)
             .order_by("file.path", "file.etag")
             .collect("file.etag")
@@ -253,7 +261,9 @@ def test_delta_update_no_diff(test_session, tmp_dir, tmp_path):
     create_delta_dataset()
 
     assert list(
-        dc.read_dataset(ds_name, version=1).order_by("file.path").collect("file.path")
+        dc.read_dataset(ds_name, version="1.0.0")
+        .order_by("file.path")
+        .collect("file.path")
     ) == [
         "images/img6.jpg",
         "images/img7.jpg",
@@ -262,9 +272,9 @@ def test_delta_update_no_diff(test_session, tmp_dir, tmp_path):
     ]
 
     with pytest.raises(DatasetVersionNotFoundError) as exc_info:
-        dc.read_dataset(ds_name, version=2)
+        dc.read_dataset(ds_name, version="1.0.1")
 
-    assert str(exc_info.value) == f"Dataset {ds_name} does not have version 2"
+    assert str(exc_info.value) == f"Dataset {ds_name} does not have version 1.0.1"
 
 
 @pytest.fixture

@@ -82,7 +82,7 @@ def delta_update(
         return None, True
 
     source_ds_name = dep.name
-    source_ds_version = int(dep.version)
+    source_ds_version = dep.version
     source_ds_latest_version = catalog.get_dataset(source_ds_name).latest_version
 
     source_dc = datachain.read_dataset(source_ds_name, source_ds_version)
