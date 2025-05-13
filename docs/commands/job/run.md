@@ -29,6 +29,7 @@ This command runs a job in Studio using the specified query file. You can config
 * `--python-version PYTHON_VERSION` - Python version for the job (e.g., 3.9, 3.10, 3.11)
 * `--req-file REQ_FILE` - Python requirements file
 * `--req REQ` - Python package requirements
+* `--priority PRIORITY` - Priority for the job in range 0-5. Lower value is higher priority (default: 5)
 * `-h`, `--help` - Show the help message and exit.
 * `-v`, `--verbose` - Be verbose.
 * `-q`, `--quiet` - Be quiet.
@@ -63,6 +64,11 @@ datachain job run --env API_KEY=123 --req pandas numpy query.py
 6. Run a job with a repository (will be cloned in the job working directory):
 ```bash
 datachain job run --repository https://github.com/iterative/datachain query.py
+```
+
+7. Run a job with higher priority
+```bash
+datachain job run --priority 2 query.py
 ```
 
 ## Notes
