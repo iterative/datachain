@@ -11,7 +11,17 @@ from datachain.lib.dc import C
 from datachain.lib.file import File, ImageFile
 
 
+def _get_dependencies(catalog, name, version) -> list[tuple[str, str]]:
+    return sorted(
+        [
+            (d.name, d.version)
+            for d in catalog.get_dataset_dependencies(name, version, indirect=False)
+        ]
+    )
+
+
 def test_delta_update_from_dataset(test_session, tmp_dir, tmp_path):
+    catalog = test_session.catalog
     starting_ds_name = "starting_ds"
     ds_name = "delta_ds"
 
@@ -37,6 +47,7 @@ def test_delta_update_from_dataset(test_session, tmp_dir, tmp_path):
             session=test_session,
             delta=True,
             delta_on=["file.source", "file.path"],
+            delta_result_on=["file.source", "file.path"],
             delta_compare=["file.version", "file.etag"],
         ).save(ds_name)
 
@@ -44,10 +55,12 @@ def test_delta_update_from_dataset(test_session, tmp_dir, tmp_path):
     create_image_dataset(starting_ds_name, images[:2])
     # first version of delta dataset
     create_delta_dataset(ds_name)
+    assert _get_dependencies(catalog, ds_name, "1.0.0") == [(starting_ds_name, "1.0.0")]
     # second version of starting dataset
     create_image_dataset(starting_ds_name, images[2:])
     # second version of delta dataset
     create_delta_dataset(ds_name)
+    assert _get_dependencies(catalog, ds_name, "1.0.1") == [(starting_ds_name, "1.0.1")]
 
     assert list(
         dc.read_dataset(ds_name, version="1.0.0")
@@ -68,6 +81,8 @@ def test_delta_update_from_dataset(test_session, tmp_dir, tmp_path):
         "img3.jpg",
         "img4.jpg",
     ]
+
+    create_delta_dataset(ds_name)
 
 
 def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
@@ -103,6 +118,7 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
                 session=test_session,
                 delta=True,
                 delta_on=["file.source", "file.path"],
+                delta_result_on=["file.source", "file.path"],
                 delta_compare=["file.version", "file.etag"],
             )
             .filter(C("file.path").glob("*.jpg"))
@@ -204,6 +220,7 @@ def test_delta_update_check_num_calls(test_session, tmp_dir, tmp_path, capsys):
                 session=test_session,
                 delta=True,
                 delta_on=["file.source", "file.path"],
+                delta_result_on=["file.source", "file.path"],
                 delta_compare=["file.version", "file.etag"],
             )
             .map(index=get_index)

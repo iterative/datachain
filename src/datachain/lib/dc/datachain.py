@@ -517,7 +517,7 @@ class DataChain:
 
         schema = self.signals_schema.clone_without_sys_signals().serialize()
         if self.delta and name:
-            delta_ds, has_changes = delta_update(
+            delta_ds, dependencies, has_changes = delta_update(
                 self,
                 name,
                 on=self._delta_on,
@@ -528,7 +528,11 @@ class DataChain:
             if delta_ds:
                 return self._evolve(
                     query=delta_ds._query.save(
-                        name=name, version=version, feature_schema=schema, **kwargs
+                        name=name,
+                        version=version,
+                        feature_schema=schema,
+                        dependencies=dependencies,
+                        **kwargs,
                     )
                 )
 

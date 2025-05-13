@@ -41,7 +41,7 @@ from datachain.data_storage.schema import (
     partition_col_names,
     partition_columns,
 )
-from datachain.dataset import DATASET_PREFIX, DatasetStatus, RowDict
+from datachain.dataset import DATASET_PREFIX, DatasetDependency, DatasetStatus, RowDict
 from datachain.error import DatasetNotFoundError, QueryScriptCancelError
 from datachain.func.base import Function
 from datachain.lib.listing import is_listing_dataset, listing_dataset_expired
@@ -1698,6 +1698,7 @@ class DatasetQuery:
         name: Optional[str] = None,
         version: Optional[str] = None,
         feature_schema: Optional[dict] = None,
+        dependencies: Optional[list[DatasetDependency]] = None,
         description: Optional[str] = None,
         attrs: Optional[list[str]] = None,
         **kwargs,
@@ -1751,6 +1752,9 @@ class DatasetQuery:
             )
             self.catalog.update_dataset_version_with_warehouse_info(dataset, version)
 
+            if dependencies:
+                # overriding dependencies
+                self.dependencies = {(dep.name, dep.version) for dep in dependencies}
             self._add_dependencies(dataset, version)  # type: ignore [arg-type]
         finally:
             self.cleanup()

@@ -1,8 +1,10 @@
 from collections.abc import Sequence
+from copy import copy
 from functools import wraps
 from typing import TYPE_CHECKING, Callable, Optional, TypeVar, Union
 
 import datachain
+from datachain.dataset import DatasetDependency
 from datachain.error import DatasetNotFoundError
 
 if TYPE_CHECKING:
@@ -52,7 +54,7 @@ def delta_update(
     on: Union[str, Sequence[str]],
     right_on: Optional[Union[str, Sequence[str]]] = None,
     compare: Optional[Union[str, Sequence[str]]] = None,
-) -> tuple[Optional["DataChain"], bool]:
+) -> tuple[Optional["DataChain"], Optional[list[DatasetDependency]], bool]:
     """
     Creates new chain that consists of the last version of current delta dataset
     plus diff from the source with all needed modifications.
@@ -69,7 +71,7 @@ def delta_update(
         latest_version = catalog.get_dataset(name).latest_version
     except DatasetNotFoundError:
         # first creation of delta update dataset
-        return None, True
+        return None, None, True
 
     dependencies = catalog.get_dataset_dependencies(
         name, latest_version, indirect=False
@@ -79,11 +81,14 @@ def delta_update(
     if not dep:
         # starting dataset (e.g listing) was removed so we are backing off to normal
         # dataset creation, as it was created first time
-        return None, True
+        return None, None, True
 
     source_ds_name = dep.name
     source_ds_version = dep.version
     source_ds_latest_version = catalog.get_dataset(source_ds_name).latest_version
+    dependencies = copy(dependencies)
+    dependencies = [d for d in dependencies if d is not None]  # filter out removed dep
+    dependencies[0].version = source_ds_latest_version  # type: ignore[union-attr]
 
     source_dc = datachain.read_dataset(source_ds_name, source_ds_version)
     source_dc_latest = datachain.read_dataset(source_ds_name, source_ds_latest_version)
@@ -96,18 +101,18 @@ def delta_update(
     diff = diff.persist()
 
     if diff.empty:
-        return None, False
+        return None, None, False
 
     # merging diff and the latest version of dataset
-    return (
+    delta_chain = (
         datachain.read_dataset(name, latest_version)
         .compare(
             diff,
-            on=on,
-            compare=compare,
-            right_on=right_on,
+            on=right_on or on,
             added=True,
             modified=False,
         )
         .union(diff)
-    ), True
+    )
+
+    return delta_chain, dependencies, True  # type: ignore[return-value]
