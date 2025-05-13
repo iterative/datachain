@@ -402,7 +402,6 @@ class StudioClient:
             "repository": repository,
             "priority": priority,
         }
-        print(data)
         return self._send_request("datachain/job", data)
 
     def get_jobs(
