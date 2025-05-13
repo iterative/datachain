@@ -424,4 +424,5 @@ def test_studio_run(capsys, mocker, tmp_dir):
         "requirements": "pyjokes\nstupidity",
         "team_name": "team_name",
         "repository": "https://github.com/iterative/datachain",
+        "priority": 5,
     }

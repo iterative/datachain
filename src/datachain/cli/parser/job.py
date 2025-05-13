@@ -82,6 +82,13 @@ def add_jobs_parser(subparsers, parent_parser) -> None:
         nargs="+",
         help="Python package requirements",
     )
+    studio_run_parser.add_argument(
+        "--priority",
+        type=int,
+        default=5,
+        help="Priority for the job in range 0-5. "
+        "Lower value is higher priority (default: 5)",
+    )
 
     studio_ls_help = "List jobs in Studio"
     studio_ls_description = "List jobs in Studio."
