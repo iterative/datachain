@@ -68,7 +68,7 @@ datachain job run --repository https://github.com/iterative/datachain query.py
 
 7. Run a job with higher priority
 ```bash
-datachain job run --priority 1 query.py
+datachain job run --priority 2 query.py
 ```
 
 ## Notes
