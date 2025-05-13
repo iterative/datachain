@@ -388,6 +388,7 @@ class StudioClient:
         python_version: Optional[str] = None,
         requirements: Optional[str] = None,
         repository: Optional[str] = None,
+        priority: Optional[int] = None,
     ) -> Response[JobData]:
         data = {
             "query": query,
@@ -399,7 +400,9 @@ class StudioClient:
             "python_version": python_version,
             "requirements": requirements,
             "repository": repository,
+            "priority": priority,
         }
+        print(data)
         return self._send_request("datachain/job", data)
 
     def get_jobs(
