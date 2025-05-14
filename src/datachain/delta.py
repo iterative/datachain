@@ -93,7 +93,7 @@ def delta_update(
     source_dc = datachain.read_dataset(source_ds_name, source_ds_version)
     source_dc_latest = datachain.read_dataset(source_ds_name, source_ds_latest_version)
 
-    diff = source_dc_latest.compare(source_dc, on=on, compare=compare)
+    diff = source_dc_latest.compare(source_dc, on=on, compare=compare, deleted=False)
     # We append all the steps from the original chain to diff, e.g filters, mappers.
     diff = _append_steps(diff, dc)
 
@@ -111,6 +111,7 @@ def delta_update(
             on=right_on or on,
             added=True,
             modified=False,
+            deleted=False,
         )
         .union(diff)
     )

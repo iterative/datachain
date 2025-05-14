@@ -83,7 +83,7 @@ def read_storage(
             the final dataset and have not been renamed.
         delta_compare: A list of fields used to check if the same row has been modified
             in the new version of the source.
-            If not defined, all fields except those defined in delta_on will be used.
+            If not defined, all fields except those defined in `delta_on` will be used.
 
     Returns:
         DataChain: A DataChain object containing the file information.

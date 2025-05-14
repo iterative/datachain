@@ -147,6 +147,10 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
     for img in images[5:]:
         img["data"].save(tmp_dir / img["name"])
 
+    # remove first 5 images to check that deleted rows are not taken into consideration
+    for img in images[0:5]:
+        os.remove(tmp_dir / img["name"])
+
     # second version of delta dataset
     create_delta_dataset()
 
