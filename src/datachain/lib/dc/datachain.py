@@ -485,8 +485,8 @@ class DataChain:
             "minor",
         ]:
             raise ValueError(
-                "update_version can have one of the following values: major, minor or",
-                " patch",
+                "update_version can have one of the following values: major, minor or"
+                " patch"
             )
 
         schema = self.signals_schema.clone_without_sys_signals().serialize()

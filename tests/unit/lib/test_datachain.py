@@ -3229,6 +3229,18 @@ def test_update_versions_mix_major_minor_patch(test_session):
     )
 
 
+def test_update_versions_wrong_value(test_session):
+    ds_name = "fibonacci"
+    chain = dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session)
+    chain.save(ds_name)
+    with pytest.raises(ValueError) as excinfo:
+        chain.save(ds_name, update_version="wrong")
+
+    assert str(excinfo.value) == (
+        "update_version can have one of the following values: major, minor or patch"
+    )
+
+
 def test_from_dataset_version_int_backward_compatible(test_session):
     ds_name = "numbers"
     dc.read_values(nums=[1], session=test_session).save(ds_name, version="1.0.0")
