@@ -5,7 +5,6 @@ from typing import (
     Union,
 )
 
-from datachain.error import DatasetNotFoundError
 from datachain.lib.file import (
     FileType,
     get_file_type,
@@ -132,11 +131,6 @@ def read_storage(
 
             def lst_fn(ds_name, lst_uri):
                 # disable prefetch for listing, as it pre-downloads all files
-                try:
-                    version = catalog.get_dataset(ds_name).next_version_major
-                except DatasetNotFoundError:
-                    version = None
-
                 (
                     read_records(
                         DataChain.DEFAULT_FILE_RECORD,
@@ -150,7 +144,7 @@ def read_storage(
                         output={f"{column}": file_type},
                     )
                     # for internal listing datasets, we always bump major version
-                    .save(ds_name, listing=True, version=version)
+                    .save(ds_name, listing=True, update_version="major")
                 )
 
             dc._query.set_listing_fn(

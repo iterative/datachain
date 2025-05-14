@@ -3173,18 +3173,41 @@ def test_delete_dataset_from_studio_not_found(
     assert str(exc_info.value) == error_message
 
 
+@pytest.mark.parametrize(
+    "update_version,versions",
+    [
+        ("patch", ["1.0.0", "1.0.1", "1.0.2"]),
+        ("minor", ["1.0.0", "1.1.0", "1.2.0"]),
+        ("major", ["1.0.0", "2.0.0", "3.0.0"]),
+    ],
+)
+def test_update_versions(test_session, update_version, versions):
+    ds_name = "fibonacci"
+    chain = dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session)
+    chain.save(ds_name, update_version=update_version)
+    chain.save(ds_name, update_version=update_version)
+    chain.save(ds_name, update_version=update_version)
+    assert sorted(
+        [
+            ds.version
+            for ds in dc.datasets(column="dataset", session=test_session).collect(
+                "dataset"
+            )
+        ]
+    ) == sorted(versions)
+
+
 def test_update_versions_mix_major_minor_patch(test_session):
     ds_name = "fibonacci"
     chain = dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session)
     chain.save(ds_name)
+    chain.save(ds_name, update_version="patch")
+    chain.save(ds_name, update_version="minor")
+    chain.save(ds_name, update_version="major")
+    chain.save(ds_name, update_version="minor")
+    chain.save(ds_name, update_version="patch")
     chain.save(ds_name)
-    chain.save(ds_name, version="1.1.0")
-    chain.save(ds_name)
-    chain.save(ds_name, version="2.0.0")
-    chain.save(ds_name)
-    chain.save(ds_name, version="2.1.0")
-    chain.save(ds_name)
-    chain.save(ds_name)
+    chain.save(ds_name, version="3.0.0")
     assert sorted(
         [
             ds.version
@@ -3197,12 +3220,11 @@ def test_update_versions_mix_major_minor_patch(test_session):
             "1.0.0",
             "1.0.1",
             "1.1.0",
-            "1.1.1",
             "2.0.0",
-            "2.0.1",
             "2.1.0",
             "2.1.1",
             "2.1.2",
+            "3.0.0",
         ]
     )
 
