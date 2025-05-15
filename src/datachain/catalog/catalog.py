@@ -779,6 +779,7 @@ class Catalog:
         uuid: Optional[str] = None,
         description: Optional[str] = None,
         attrs: Optional[list[str]] = None,
+        update_version: Optional[str] = "patch",
     ) -> "DatasetRecord":
         """
         Creates new dataset of a specific version.
@@ -795,6 +796,11 @@ class Catalog:
         try:
             dataset = self.get_dataset(name)
             default_version = dataset.next_version_patch
+            if update_version == "major":
+                default_version = dataset.next_version_major
+            if update_version == "minor":
+                default_version = dataset.next_version_minor
+
             if (description or attrs) and (
                 dataset.description != description or dataset.attrs != attrs
             ):
