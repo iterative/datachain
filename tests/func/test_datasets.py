@@ -666,6 +666,7 @@ def test_dataset_storage_dependencies(cloud_test_catalog, cloud_type, indirect):
     session = ctc.session
     catalog = session.catalog
     uri = cloud_test_catalog.src_uri
+    dep_name, _, _ = parse_listing_uri(ctc.src_uri, catalog.client_config)
 
     ds_name = "some_ds"
     dc.read_storage(uri, session=session).save(ds_name)
@@ -680,7 +681,7 @@ def test_dataset_storage_dependencies(cloud_test_catalog, cloud_type, indirect):
         {
             "id": ANY,
             "type": DatasetDependencyType.STORAGE,
-            "name": uri,
+            "name": dep_name,
             "version": "1.0.0",
             "created_at": lst_dataset.get_version("1.0.0").created_at,
             "dependencies": [],

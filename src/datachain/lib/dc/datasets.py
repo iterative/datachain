@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Optional, Union, get_origin, get_type_hints
 
 from datachain.error import DatasetVersionNotFoundError
@@ -27,6 +28,10 @@ def read_dataset(
     session: Optional[Session] = None,
     settings: Optional[dict] = None,
     fallback_to_studio: bool = True,
+    delta: Optional[bool] = False,
+    delta_on: Optional[Union[str, Sequence[str]]] = None,
+    delta_result_on: Optional[Union[str, Sequence[str]]] = None,
+    delta_compare: Optional[Union[str, Sequence[str]]] = None,
 ) -> "DataChain":
     """Get data from a saved Dataset. It returns the chain itself.
     If dataset or version is not found locally, it will try to pull it from Studio.
@@ -38,6 +43,36 @@ def read_dataset(
         settings : Settings to use for the chain.
         fallback_to_studio : Try to pull dataset from Studio if not found locally.
             Default is True.
+        delta: If set to True, we optimize the creation of new dataset versions by
+            calculating the diff between the latest version of this storage and the
+            version used to create the most recent version of the resulting chain
+            dataset (the one specified in `.save()`). We then run the "diff" chain
+            using only the diff data, rather than the entire storage data, and merge
+            that diff chain with the latest version of the resulting dataset to create
+            a new version. This approach avoids applying modifications to all records
+            from storage every time, which can be an expensive operation.
+            The diff is calculated using the `DataChain.compare()` method, which
+            compares the `delta_on` fields to find matches and checks the compare
+            fields to determine if a record has changed. Note that this process only
+            considers added and modified records in storage; deleted records are not
+            removed from the new dataset version.
+            This calculation is based on the difference between the current version
+            of the source and the version used to create the dataset.
+        delta_on: A list of fields that uniquely identify rows in the source.
+            If two rows have the same values, they are considered the same (e.g., they
+            could be different versions of the same row in a versioned source).
+            This is used in the delta update to calculate the diff.
+        delta_result_on: A list of fields in the resulting dataset that correspond
+            to the `delta_on` fields from the source.
+            This is needed to identify rows that have changed in the source but are
+            already present in the current version of the resulting dataset, in order
+            to avoid including outdated versions of those rows in the new dataset.
+            We retain only the latest versions of rows to prevent duplication.
+            There is no need to define this if the `delta_on` fields are present in
+            the final dataset and have not been renamed.
+        delta_compare: A list of fields used to check if the same row has been modified
+            in the new version of the source.
+            If not defined, all fields except those defined in delta_on will be used.
 
     Example:
         ```py
@@ -113,7 +148,12 @@ def read_dataset(
         signals_schema |= SignalSchema.deserialize(query.feature_schema)
     else:
         signals_schema |= SignalSchema.from_column_types(query.column_types or {})
-    return DataChain(query, _settings, signals_schema)
+    chain = DataChain(query, _settings, signals_schema)
+    if delta:
+        chain = chain._as_delta(
+            on=delta_on, right_on=delta_result_on, compare=delta_compare
+        )
+    return chain
 
 
 def datasets(

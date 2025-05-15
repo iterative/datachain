@@ -41,7 +41,7 @@ from datachain.data_storage.schema import (
     partition_col_names,
     partition_columns,
 )
-from datachain.dataset import DATASET_PREFIX, DatasetStatus, RowDict
+from datachain.dataset import DATASET_PREFIX, DatasetDependency, DatasetStatus, RowDict
 from datachain.error import DatasetNotFoundError, QueryScriptCancelError
 from datachain.func.base import Function
 from datachain.lib.listing import is_listing_dataset, listing_dataset_expired
@@ -166,11 +166,13 @@ class Step(ABC):
 
 @frozen
 class QueryStep:
+    """A query that returns all rows from specific dataset version"""
+
     catalog: "Catalog"
     dataset_name: str
     dataset_version: str
 
-    def apply(self):
+    def apply(self) -> "StepResult":
         def q(*columns):
             return sqlalchemy.select(*columns)
 
@@ -1127,9 +1129,14 @@ class DatasetQuery:
             self.version = version
 
         if is_listing_dataset(name):
-            # not setting query step yet as listing dataset might not exist at
-            # this point
-            self.list_ds_name = name
+            if version:
+                # this listing dataset should already be listed as we specify
+                # exact version
+                self._set_starting_step(self.catalog.get_dataset(name))
+            else:
+                # not setting query step yet as listing dataset might not exist at
+                # this point
+                self.list_ds_name = name
         elif fallback_to_studio and is_token_set():
             self._set_starting_step(
                 self.catalog.get_dataset_with_remote_fallback(name, version)
@@ -1205,11 +1212,8 @@ class DatasetQuery:
         """Setting listing function to be run if needed"""
         self.listing_fn = fn
 
-    def apply_steps(self) -> QueryGenerator:
-        """
-        Apply the steps in the query and return the resulting
-        sqlalchemy.SelectBase.
-        """
+    def apply_listing_pre_step(self) -> None:
+        """Runs listing pre-step if needed"""
         if self.list_ds_name and not self.starting_step:
             listing_ds = None
             try:
@@ -1224,6 +1228,13 @@ class DatasetQuery:
 
             # at this point we know what is our starting listing dataset name
             self._set_starting_step(listing_ds)  # type: ignore [arg-type]
+
+    def apply_steps(self) -> QueryGenerator:
+        """
+        Apply the steps in the query and return the resulting
+        sqlalchemy.SelectBase.
+        """
+        self.apply_listing_pre_step()
 
         query = self.clone()
 
@@ -1687,6 +1698,7 @@ class DatasetQuery:
         name: Optional[str] = None,
         version: Optional[str] = None,
         feature_schema: Optional[dict] = None,
+        dependencies: Optional[list[DatasetDependency]] = None,
         description: Optional[str] = None,
         attrs: Optional[list[str]] = None,
         update_version: Optional[str] = "patch",
@@ -1742,6 +1754,9 @@ class DatasetQuery:
             )
             self.catalog.update_dataset_version_with_warehouse_info(dataset, version)
 
+            if dependencies:
+                # overriding dependencies
+                self.dependencies = {(dep.name, dep.version) for dep in dependencies}
             self._add_dependencies(dataset, version)  # type: ignore [arg-type]
         finally:
             self.cleanup()

@@ -230,15 +230,13 @@ def test_read_storage_dependencies(cloud_test_catalog, cloud_type):
     ctc = cloud_test_catalog
     src_uri = ctc.src_uri
     uri = f"{src_uri}/cats"
+    dep_name, _, _ = parse_listing_uri(uri, ctc.catalog.client_config)
     ds_name = "dep"
     dc.read_storage(uri, session=ctc.session).save(ds_name)
     dependencies = ctc.session.catalog.get_dataset_dependencies(ds_name, "1.0.0")
     assert len(dependencies) == 1
     assert dependencies[0].type == DatasetDependencyType.STORAGE
-    if cloud_type == "file":
-        assert dependencies[0].name == uri
-    else:
-        assert dependencies[0].name == src_uri
+    assert dependencies[0].name == dep_name
 
 
 @pytest.mark.parametrize("use_cache", [True, False])
