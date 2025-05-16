@@ -674,7 +674,7 @@ class AbstractDBMetastore(AbstractMetastore):
             dv = self._datasets_versions
             self.db.execute(
                 self._datasets_versions_update()
-                .where(dv.c.dataset_id == dataset.id and dv.c.version == version)
+                .where(dv.c.dataset_id == dataset.id, dv.c.version == version)
                 .values(values),
                 conn=conn,
             )  # type: ignore [attr-defined]

@@ -3270,3 +3270,13 @@ def test_wrong_semver_format(test_session):
         "Invalid version. It should be in format: <major>.<minor>.<patch> where"
         " each version part is positive integer"
     )
+
+
+def test_semver_preview_ok(test_session):
+    ds_name = "numbers"
+    dc.read_values(num=[1, 2], session=test_session).save(ds_name)
+    dc.read_values(num=[3, 4], session=test_session).save(ds_name)
+
+    dataset = test_session.catalog.get_dataset(ds_name)
+    assert sorted([p["num"] for p in dataset.get_version("1.0.0").preview]) == [1, 2]
+    assert sorted([p["num"] for p in dataset.get_version("1.0.1").preview]) == [3, 4]
