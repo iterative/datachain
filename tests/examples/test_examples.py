@@ -12,6 +12,10 @@ llm_and_nlp_examples = sorted(glob.glob("examples/llm_and_nlp/**/*.py", recursiv
 
 multimodal_examples = sorted(glob.glob("examples/multimodal/**/*.py", recursive=True))
 
+incremental_processing_examples = sorted(
+    glob.glob("examples/incremental_processing/delta.py", recursive=True)
+)
+
 computer_vision_examples = sorted(
     [
         filename
@@ -84,6 +88,13 @@ def test_multimodal(example):
             "NPZ_METADATA": "gs://datachain-demo/datacomp-small/metadata/036d6b9ae87a00e738f8fc554130b65b.npz",
         },
     )
+
+
+@pytest.mark.examples
+@pytest.mark.incremental_processing
+@pytest.mark.parametrize("example", incremental_processing_examples)
+def test_incremental_processing_examples(example):
+    smoke_test(example)
 
 
 @pytest.mark.examples
