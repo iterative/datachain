@@ -34,13 +34,12 @@ def process_files_with_delta():
     This demonstrates incremental processing - only new files are processed.
     """
     chain = (
-        dc
-            .read_storage("test/", update=True, delta=True, delta_on="file.path")
-            .filter(C("file.path").glob("*.txt"))
-            .map(file_number=extract_file_number)
-            .map(content=lambda file: file.read_text())
-            .map(processed_at=lambda: time.strftime("%Y-%m-%d %H:%M:%S"))
-            .save(name="test_files")
+        dc.read_storage("test/", update=True, delta=True, delta_on="file.path")
+        .filter(C("file.path").glob("*.txt"))
+        .map(file_number=extract_file_number)
+        .map(content=lambda file: file.read_text())
+        .map(processed_at=lambda: time.strftime("%Y-%m-%d %H:%M:%S"))
+        .save(name="test_files")
     )
 
     # Show information about the dataset
