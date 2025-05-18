@@ -195,5 +195,11 @@ class Session:
             Session.GLOBAL_SESSION_CTX.__exit__(None, None, None)
 
         for obj in gc.get_objects():  # Get all tracked objects
-            if isinstance(obj, Session):  # Cleanup temp dataset for session variables.
-                obj.__exit__(None, None, None)
+            try:
+                if isinstance(obj, Session):
+                    # Cleanup temp dataset for session variables.
+                    obj.__exit__(None, None, None)
+            except ReferenceError:
+                continue  # Object has been finalized already
+            except Exception as e:  # noqa: BLE001
+                logger.error(f"Exception while cleaning up session: {e}")  # noqa: G004
