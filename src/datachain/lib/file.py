@@ -237,7 +237,7 @@ class File(DataModel):
     @field_validator("path", mode="before")
     @classmethod
     def validate_path(cls, path):
-        return Path(path).as_posix()
+        return Path(path).as_posix() if path else ""
 
     def model_dump_custom(self):
         res = self.model_dump()
