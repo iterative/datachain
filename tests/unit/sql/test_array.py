@@ -123,6 +123,46 @@ def test_contains(warehouse):
     assert result == ((1, 0, 1, 1, 1, 1),)
 
 
+def test_slice(warehouse):
+    query = select(
+        func.array.slice(["abc", "def", "g", "hi"], 1).label("slice1"),
+        func.array.slice(["abc", "def", "g", "hi"], 0, 10).label("slice2"),
+        func.array.slice(["abc", "def", "g", "hi"], 0, 2).label("slice3"),
+        func.array.slice([3.0, 5.0, 1.0, 6.0, 1.0], 4).label("slice4"),
+        func.array.slice([[1, None, 3], [4, 5, 6]], 0).label("slice5"),
+        func.array.slice([1, None, 3], 1, 10).label("slice6"),
+        func.array.slice([1, True, 3], 0).label("slice7"),
+    )
+    result = tuple(warehouse.dataset_rows_select(query))
+    assert result == (
+        (
+            ["def", "g", "hi"],
+            ["abc", "def", "g", "hi"],
+            ["abc", "def"],
+            [1.0],
+            [[1, None, 3], [4, 5, 6]],
+            [None, 3],
+            [1, True, 3],
+        ),
+    )
+
+
+def test_join(warehouse):
+    query = select(
+        func.array.join(["abc", "def", "g", "hi"], "/").label("join1"),
+        func.array.join(["abc", "def", "g", "hi"], "").label("join2"),
+        func.array.join(["abc"], ":").label("join3"),
+    )
+    result = tuple(warehouse.dataset_rows_select(query))
+    assert result == (
+        (
+            "abc/def/g/hi",
+            "abcdefghi",
+            "abc",
+        ),
+    )
+
+
 def test_length_on_split(warehouse):
     query = select(
         func.array.length(func.string.split(func.literal("abc/def/g/hi"), "/")),

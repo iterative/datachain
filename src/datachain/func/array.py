@@ -178,6 +178,124 @@ def contains(arr: Union[str, Sequence, Func], elem: Any) -> Func:
     return Func("contains", inner=inner, cols=cols, args=args, result_type=int)
 
 
+def slice(
+    arr: Union[str, Sequence, Func],
+    offset: int,
+    length: Optional[int] = None,
+) -> Func:
+    """
+    Returns a slice of the array.
+
+    Args:
+        arr (str | Sequence | Func): Array to check for the element.
+            If a string is provided, it is assumed to be the name of the array column.
+            If a sequence is provided, it is assumed to be an array of values.
+            If a Func is provided, it is assumed to be a function returning an array.
+        offset (int): Offset to start the slice from.
+        length (int, optional): Length of the slice. If not provided, the slice will
+            continue to the end of the array.
+
+    Returns:
+        Func: A Func object that represents the slice function. Result of the
+            function will be a slice of the array starting from the offset
+            and with the given length.
+
+    Example:
+        ```py
+        dc.mutate(
+            contains1=func.array.slice("signal.values", 3),
+            contains2=func.array.slice([1, 2, 3, 4, 5], 1, 3),
+        )
+        ```
+    """
+
+    def inner(arg):
+        if length is not None:
+            return array.slice(arg, offset, length)
+        return array.slice(arg, offset)
+
+    def element_type(el):
+        if isinstance(el, list):
+            try:
+                return list[element_type(el[0])]
+            except IndexError:
+                return str
+        return type(el)
+
+    def type_from_args(arr, *_):
+        if isinstance(arr, list):
+            try:
+                return list[element_type(arr[0])]
+            except IndexError:
+                return str  # if the array is empty, return str as default type
+        return None
+
+    if isinstance(arr, (str, Func)):
+        cols = [arr]
+        args = None
+    else:
+        cols = None
+        args = [arr]
+
+    return Func(
+        "slice",
+        inner=inner,
+        cols=cols,
+        args=args,
+        from_array=True,
+        is_array=True,
+        type_from_args=type_from_args,
+    )
+
+
+def join(
+    arr: Union[str, Sequence, Func],
+    sep: str,
+) -> Func:
+    """
+    Returns a string that is the concatenation of the elements of the array,
+
+    Args:
+        arr (str | Sequence | Func): Array to check for the element.
+            If a string is provided, it is assumed to be the name of the array column.
+            If a sequence is provided, it is assumed to be an array of values.
+            If a Func is provided, it is assumed to be a function returning an array.
+        sep (str): Separator to use for the concatenation.
+
+    Returns:
+        Func: A Func object that represents the join function. Result of the
+            function will be a string that is the concatenation of the elements
+            of the array, separated by the given separator.
+
+    Example:
+        ```py
+        dc.mutate(
+            contains1=func.array.join("signal.values", ":"),
+            contains2=func.array.join([1, 2, 3, 4, 5], "/"),
+        )
+        ```
+    """
+
+    def inner(arg):
+        return array.join(arg, sep)
+
+    if isinstance(arr, (str, Func)):
+        cols = [arr]
+        args = None
+    else:
+        cols = None
+        args = [arr]
+
+    return Func(
+        "join",
+        inner=inner,
+        cols=cols,
+        args=args,
+        from_array=True,
+        result_type=str,
+    )
+
+
 def get_element(arg: Union[str, Sequence, Func], index: int) -> Func:
     """
     Returns the element at the given index from the array.
