@@ -127,10 +127,11 @@ class ArrowGenerator(Generator):
         arrow_file = ArrowRow(file=file, index=index, kwargs=kwargs)
 
         if (self.output_schema and hasattr(vals[0], "source")) or not self.source:
-            vals[0].source = arrow_file  # type: ignore[attr-defined]
             # if we are reading parquet file written by datachain it might have
-            # source inside of it already, so we should not add it again regardless
+            # source inside of it already, so we should not duplicate it, instead
+            # we are re-creating it
             # of the self.source flag
+            vals[0].source = arrow_file  # type: ignore[attr-defined]
             return vals
 
         return [arrow_file, *vals]
