@@ -120,21 +120,23 @@ class ArrowGenerator(Generator):
         else:
             vals = self._process_non_datachain_record(record, hf_schema)
 
-        kwargs: dict = self.kwargs
-        # Can't serialize CsvFileFormat; may lose formatting options.
-        if isinstance(kwargs.get("format"), CsvFileFormat):
-            kwargs["format"] = "csv"
-        arrow_file = ArrowRow(file=file, index=index, kwargs=kwargs)
+        if self.source:
+            kwargs: dict = self.kwargs
+            # Can't serialize CsvFileFormat; may lose formatting options.
+            if isinstance(kwargs.get("format"), CsvFileFormat):
+                kwargs["format"] = "csv"
+            arrow_file = ArrowRow(file=file, index=index, kwargs=kwargs)
 
-        if (self.output_schema and hasattr(vals[0], "source")) or not self.source:
-            # if we are reading parquet file written by datachain it might have
-            # source inside of it already, so we should not duplicate it, instead
-            # we are re-creating it
-            # of the self.source flag
-            vals[0].source = arrow_file  # type: ignore[attr-defined]
-            return vals
+            if self.output_schema and hasattr(vals[0], "source"):
+                # if we are reading parquet file written by datachain it might have
+                # source inside of it already, so we should not duplicate it, instead
+                # we are re-creating it
+                # of the self.source flag
+                vals[0].source = arrow_file  # type: ignore[attr-defined]
+                return vals
+            return [arrow_file, *vals]
 
-        return [arrow_file, *vals]
+        return vals
 
     def _process_non_datachain_record(
         self,
