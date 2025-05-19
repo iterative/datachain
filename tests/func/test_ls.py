@@ -35,7 +35,7 @@ def test_ls_no_args(cloud_test_catalog, cloud_type, capsys):
     dc.read_storage(src, session=session).exec()
     ls([], catalog=catalog)
     captured = capsys.readouterr()
-    assert captured.out == f"{src}/@v1\n"
+    assert captured.out == f"{src}/@v1.0.0\n"
 
 
 def test_ls_root(cloud_test_catalog, cloud_type, capsys):

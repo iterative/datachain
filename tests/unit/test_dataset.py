@@ -100,7 +100,7 @@ def test_dataset_dependency_dataset_name(dep_name, dep_type, expected):
     dep = DatasetDependency(
         id=1,
         name=dep_name,
-        version="1",
+        version="1.0.0",
         type=dep_type,
         created_at=datetime.now(timezone.utc),
         dependencies=[],
@@ -122,7 +122,7 @@ def test_dataset_version_from_dict(use_string):
         "id": 1,
         "uuid": "98928be4-b6e8-4b7b-a7c5-2ce3b33130d8",
         "dataset_id": 40,
-        "version": 2,
+        "version": "2.0.0",
         "status": 1,
         "feature_schema": {},
         "created_at": datetime.fromisoformat("2023-10-01T12:00:00"),

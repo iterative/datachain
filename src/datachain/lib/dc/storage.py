@@ -1,4 +1,6 @@
 import os.path
+from collections.abc import Sequence
+from functools import reduce
 from typing import (
     TYPE_CHECKING,
     Optional,
@@ -32,6 +34,10 @@ def read_storage(
     column: str = "file",
     update: bool = False,
     anon: bool = False,
+    delta: Optional[bool] = False,
+    delta_on: Optional[Union[str, Sequence[str]]] = None,
+    delta_result_on: Optional[Union[str, Sequence[str]]] = None,
+    delta_compare: Optional[Union[str, Sequence[str]]] = None,
     client_config: Optional[dict] = None,
 ) -> "DataChain":
     """Get data from storage(s) as a list of file with all file attributes.
@@ -47,6 +53,36 @@ def read_storage(
         update : force storage reindexing. Default is False.
         anon : If True, we will treat cloud bucket as public one
         client_config : Optional client configuration for the storage client.
+        delta: If set to True, we optimize the creation of new dataset versions by
+            calculating the diff between the latest version of this storage and the
+            version used to create the most recent version of the resulting chain
+            dataset (the one specified in `.save()`). We then run the "diff" chain
+            using only the diff data, rather than the entire storage data, and merge
+            that diff chain with the latest version of the resulting dataset to create
+            a new version. This approach avoids applying modifications to all records
+            from storage every time, which can be an expensive operation.
+            The diff is calculated using the `DataChain.compare()` method, which
+            compares the `delta_on` fields to find matches and checks the compare
+            fields to determine if a record has changed. Note that this process only
+            considers added and modified records in storage; deleted records are not
+            removed from the new dataset version.
+            This calculation is based on the difference between the current version
+            of the source and the version used to create the dataset.
+        delta_on: A list of fields that uniquely identify rows in the source.
+            If two rows have the same values, they are considered the same (e.g., they
+            could be different versions of the same row in a versioned source).
+            This is used in the delta update to calculate the diff.
+        delta_result_on: A list of fields in the resulting dataset that correspond
+            to the `delta_on` fields from the source.
+            This is needed to identify rows that have changed in the source but are
+            already present in the current version of the resulting dataset, in order
+            to avoid including outdated versions of those rows in the new dataset.
+            We retain only the latest versions of rows to prevent duplication.
+            There is no need to define this if the `delta_on` fields are present in
+            the final dataset and have not been renamed.
+        delta_compare: A list of fields used to check if the same row has been modified
+            in the new version of the source.
+            If not defined, all fields except those defined in `delta_on` will be used.
 
     Returns:
         DataChain: A DataChain object containing the file information.
@@ -97,7 +133,8 @@ def read_storage(
     if anon:
         client_config = (client_config or {}) | {"anon": True}
     session = Session.get(session, client_config=client_config, in_memory=in_memory)
-    cache = session.catalog.cache
+    catalog = session.catalog
+    cache = catalog.cache
     client_config = session.catalog.client_config
 
     uris = uri if isinstance(uri, (list, tuple)) else [uri]
@@ -105,7 +142,7 @@ def read_storage(
     if not uris:
         raise ValueError("No URIs provided")
 
-    storage_chain = None
+    chains = []
     listed_ds_name = set()
     file_values = []
 
@@ -142,17 +179,18 @@ def read_storage(
                         list_bucket(lst_uri, cache, client_config=client_config),
                         output={f"{column}": file_type},
                     )
-                    .save(ds_name, listing=True)
+                    # for internal listing datasets, we always bump major version
+                    .save(ds_name, listing=True, update_version="major")
                 )
 
             dc._query.set_listing_fn(
                 lambda ds_name=list_ds_name, lst_uri=list_uri: lst_fn(ds_name, lst_uri)
             )
 
-        chain = ls(dc, list_path, recursive=recursive, column=column)
-
-        storage_chain = storage_chain.union(chain) if storage_chain else chain
+        chains.append(ls(dc, list_path, recursive=recursive, column=column))
         listed_ds_name.add(list_ds_name)
+
+    storage_chain = None if not chains else reduce(lambda x, y: x.union(y), chains)
 
     if file_values:
         file_chain = read_values(
@@ -168,4 +206,8 @@ def read_storage(
 
     assert storage_chain is not None
 
+    if delta:
+        storage_chain = storage_chain._as_delta(
+            on=delta_on, right_on=delta_result_on, compare=delta_compare
+        )
     return storage_chain

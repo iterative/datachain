@@ -90,6 +90,7 @@ def build(session: nox.Session) -> None:
 @nox.session(python=python_versions)
 def examples(session: nox.Session) -> None:
     session.install(".[examples]")
+    session.run("uv", "pip", "list")
     session.run(
         "pytest",
         "--durations=0",

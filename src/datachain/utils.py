@@ -323,6 +323,9 @@ def determine_processes(
         return True
     if parallel < 0:
         return True
+    if parallel == 1:
+        # Disable parallel processing if only one process is requested.
+        return False
     return parallel
 
 

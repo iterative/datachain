@@ -29,7 +29,7 @@ DatasetExportStatus = Optional[dict[str, Any]]
 DatasetExportSignedUrls = Optional[list[str]]
 FileUploadData = Optional[dict[str, Any]]
 JobData = Optional[dict[str, Any]]
-
+JobListData = dict[str, Any]
 logger = logging.getLogger("datachain")
 
 DATASET_ROWS_CHUNK_SIZE = 8192
@@ -307,7 +307,7 @@ class StudioClient:
     def rm_dataset(
         self,
         name: str,
-        version: Optional[int] = None,
+        version: Optional[str] = None,
         force: Optional[bool] = False,
     ) -> Response[DatasetInfoData]:
         return self._send_request(
@@ -336,7 +336,7 @@ class StudioClient:
         return response
 
     def dataset_rows_chunk(
-        self, name: str, version: int, offset: int
+        self, name: str, version: str, offset: int
     ) -> Response[DatasetRowsData]:
         req_data = {"dataset_name": name, "dataset_version": version}
         return self._send_request_msgpack(
@@ -353,7 +353,7 @@ class StudioClient:
         )
 
     def export_dataset_table(
-        self, name: str, version: int
+        self, name: str, version: str
     ) -> Response[DatasetExportSignedUrls]:
         return self._send_request(
             "datachain/datasets/export",
@@ -362,7 +362,7 @@ class StudioClient:
         )
 
     def dataset_export_status(
-        self, name: str, version: int
+        self, name: str, version: str
     ) -> Response[DatasetExportStatus]:
         return self._send_request(
             "datachain/datasets/export-status",
@@ -387,6 +387,8 @@ class StudioClient:
         files: Optional[list[str]] = None,
         python_version: Optional[str] = None,
         requirements: Optional[str] = None,
+        repository: Optional[str] = None,
+        priority: Optional[int] = None,
     ) -> Response[JobData]:
         data = {
             "query": query,
@@ -397,8 +399,21 @@ class StudioClient:
             "files": files,
             "python_version": python_version,
             "requirements": requirements,
+            "repository": repository,
+            "priority": priority,
         }
         return self._send_request("datachain/job", data)
+
+    def get_jobs(
+        self,
+        status: Optional[str] = None,
+        limit: int = 20,
+    ) -> Response[JobListData]:
+        return self._send_request(
+            "datachain/jobs",
+            {"status": status, "limit": limit} if status else {"limit": limit},
+            method="GET",
+        )
 
     def cancel_job(
         self,

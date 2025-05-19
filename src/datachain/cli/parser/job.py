@@ -13,7 +13,7 @@ def add_jobs_parser(subparsers, parent_parser) -> None:
     )
     jobs_subparser = jobs_parser.add_subparsers(
         dest="cmd",
-        help="Use `datachain auth CMD --help` to display command-specific help",
+        help="Use `datachain job CMD --help` to display command-specific help",
     )
 
     studio_run_help = "Run a job in Studio"
@@ -67,6 +67,11 @@ def add_jobs_parser(subparsers, parent_parser) -> None:
         help="Python version for the job (e.g., 3.9, 3.10, 3.11)",
     )
     studio_run_parser.add_argument(
+        "--repository",
+        action="store",
+        help="Repository URL to clone before running the job",
+    )
+    studio_run_parser.add_argument(
         "--req-file",
         action="store",
         help="Python requirements file",
@@ -76,6 +81,43 @@ def add_jobs_parser(subparsers, parent_parser) -> None:
         "--req",
         nargs="+",
         help="Python package requirements",
+    )
+    studio_run_parser.add_argument(
+        "--priority",
+        type=int,
+        default=5,
+        help="Priority for the job in range 0-5. "
+        "Lower value is higher priority (default: 5)",
+    )
+
+    studio_ls_help = "List jobs in Studio"
+    studio_ls_description = "List jobs in Studio."
+
+    studio_ls_parser = jobs_subparser.add_parser(
+        "ls",
+        parents=[parent_parser],
+        description=studio_ls_description,
+        help=studio_ls_help,
+        formatter_class=CustomHelpFormatter,
+    )
+
+    studio_ls_parser.add_argument(
+        "--status",
+        action="store",
+        help="Status to filter jobs by",
+    )
+
+    studio_ls_parser.add_argument(
+        "--team",
+        action="store",
+        default=None,
+        help="Team to list jobs for (default: from config)",
+    )
+    studio_ls_parser.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="Limit the number of jobs returned (default: 20)",
     )
 
     studio_cancel_help = "Cancel a job in Studio"

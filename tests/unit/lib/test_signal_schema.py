@@ -1041,17 +1041,6 @@ def test_get_flatten_hidden_fields(schema, hidden_fields):
     assert SignalSchema.get_flatten_hidden_fields(schema_serialized) == hidden_fields
 
 
-@pytest.mark.parametrize(
-    "schema,result",
-    [
-        ({"name": str, "value": int}, False),
-        ({"name": str, "age": float, "f": File}, True),
-    ],
-)
-def test_contains_file(schema, result):
-    assert SignalSchema(schema).contains_file() is result
-
-
 def test_slice():
     schema = {"name": str, "age": float, "address": str}
     setup_values = {"init": lambda: 37}
@@ -1316,3 +1305,14 @@ def test_to_partial_nested():
         "f": "FilePartial1@v1",
         "custom": "CustomPartial1@v1",
     }
+
+
+def test_get_file_signal():
+    assert SignalSchema({"name": str, "f": File}).get_file_signal() == "f"
+    assert SignalSchema({"name": str}).get_file_signal() is None
+
+
+def test_append():
+    s1 = SignalSchema({"name": str, "f": File})
+    s2 = SignalSchema({"name": str, "f": File, "age": int})
+    assert s1.append(s2).values == {"name": str, "f": File, "age": int}

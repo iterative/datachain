@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 import datachain as dc
 from datachain import Column
-from datachain.error import DatasetInvalidVersionError
+from datachain.error import DatasetInvalidVersionError, DatasetVersionNotFoundError
 from datachain.lib.data_model import DataModel
 from datachain.lib.dc import C, DatasetPrepareError, Sys
 from datachain.lib.file import File
@@ -274,6 +274,10 @@ def test_read_record_empty_chain_without_schema(test_session):
     )
 
 
+def test_empty(test_session):
+    assert dc.read_records([], schema=None, session=test_session).empty is True
+
+
 def test_empty_chain_skip_udf_run(test_session):
     # Test that UDF is not called for empty chain
     with patch.object(UDFAdapter, "run") as mock_udf_run:
@@ -407,7 +411,7 @@ def test_listings(test_session, tmp_dir):
     assert listing.storage_uri == uri
     assert listing.is_expired is False
     assert listing.expires
-    assert listing.version == 1
+    assert listing.version == "1.0.0"
     assert listing.num_objects == 1
     # Exact number if unreliable here since it depends on the PyArrow version
     assert listing.size > 1000
@@ -432,9 +436,9 @@ def test_listings_reindex(test_session, tmp_dir):
     assert len(listings) == 2
     listings.sort(key=lambda lst: lst.version)
     assert listings[0].storage_uri == uri
-    assert listings[0].version == 1
+    assert listings[0].version == "1.0.0"
     assert listings[1].storage_uri == uri
-    assert listings[1].version == 2
+    assert listings[1].version == "2.0.0"
 
 
 def test_listings_reindex_subpath_local_file_system(test_session, tmp_dir):
@@ -1872,7 +1876,9 @@ def test_parallel_in_memory():
         )
 
 
-def test_exec(test_session):
+def test_exec(test_session, monkeypatch):
+    monkeypatch.delenv("DATACHAIN_DISTRIBUTED", raising=False)
+
     names = ("f1.jpg", "f1.json", "f1.txt", "f2.jpg", "f2.json")
     all_names = set()
 
@@ -1918,7 +1924,9 @@ def test_parse_tabular_column(tmp_dir, test_session):
     assert "tbl.first_name" in chain.to_pandas(flatten=True).columns
 
 
-def test_sys_feature(test_session):
+def test_sys_feature(test_session, monkeypatch):
+    monkeypatch.delenv("DATACHAIN_DISTRIBUTED", raising=False)
+
     ds = dc.read_values(t1=features, session=test_session).order_by(
         "t1.nnn", "t1.count"
     )
@@ -3106,33 +3114,33 @@ def test_window_error(test_session):
 
 def test_delete_dataset_version(test_session):
     name = "numbers"
-    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version=1)
-    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version=2)
+    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version="1.0.0")
+    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version="2.0.0")
 
-    dc.delete_dataset(name, version=1, session=test_session)
+    dc.delete_dataset(name, version="1.0.0", session=test_session)
 
     ds = dc.datasets(column="dataset", session=test_session)
     datasets = [d for d in ds.collect("dataset") if d.name == name]
     assert len(datasets) == 1
-    assert datasets[0].version == 2
+    assert datasets[0].version == "2.0.0"
 
 
 def test_delete_dataset_latest_version(test_session):
     name = "numbers"
-    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version=1)
-    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version=2)
+    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version="1.0.0")
+    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version="2.0.0")
 
     dc.delete_dataset(name, session=test_session)
 
     ds = dc.datasets(column="dataset", session=test_session)
     datasets = [d for d in ds.collect("dataset") if d.name == name]
     assert len(datasets) == 1
-    assert datasets[0].version == 1
+    assert datasets[0].version == "1.0.0"
 
 
 def test_delete_dataset_only_version(test_session):
     name = "numbers"
-    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version=1)
+    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version="1.0.0")
 
     dc.delete_dataset(name, session=test_session)
 
@@ -3143,17 +3151,17 @@ def test_delete_dataset_only_version(test_session):
 
 def test_delete_dataset_missing_version(test_session):
     name = "numbers"
-    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version=1)
-    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version=2)
+    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version="1.0.0")
+    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version="2.0.0")
 
     with pytest.raises(DatasetInvalidVersionError):
-        dc.delete_dataset(name, version=5, session=test_session)
+        dc.delete_dataset(name, version="5.0.0", session=test_session)
 
 
 def test_delete_dataset_versions_all(test_session):
     name = "numbers"
-    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version=1)
-    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version=2)
+    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version="1.0.0")
+    dc.read_values(num=[1, 2, 3], session=test_session).save(name, version="2.0.0")
 
     dc.delete_dataset(name, force=True, session=test_session)
 
@@ -3165,7 +3173,9 @@ def test_delete_dataset_versions_all(test_session):
 @pytest.mark.parametrize("force", (True, False))
 def test_delete_dataset_from_studio(test_session, studio_token, requests_mock, force):
     requests_mock.delete(f"{STUDIO_URL}/api/datachain/datasets", json={"ok": True})
-    dc.delete_dataset("cats", version=1, studio=True, force=force, session=test_session)
+    dc.delete_dataset(
+        "cats", version="1.0.0", studio=True, force=force, session=test_session
+    )
 
 
 def test_delete_dataset_from_studio_not_found(
@@ -3178,6 +3188,111 @@ def test_delete_dataset_from_studio_not_found(
         status_code=404,
     )
     with pytest.raises(Exception) as exc_info:
-        dc.delete_dataset("cats", version=1, studio=True, session=test_session)
+        dc.delete_dataset("cats", version="1.0.0", studio=True, session=test_session)
 
     assert str(exc_info.value) == error_message
+
+
+@pytest.mark.parametrize(
+    "update_version,versions",
+    [
+        ("patch", ["1.0.0", "1.0.1", "1.0.2"]),
+        ("minor", ["1.0.0", "1.1.0", "1.2.0"]),
+        ("major", ["1.0.0", "2.0.0", "3.0.0"]),
+    ],
+)
+def test_update_versions(test_session, update_version, versions):
+    ds_name = "fibonacci"
+    chain = dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session)
+    chain.save(ds_name, update_version=update_version)
+    chain.save(ds_name, update_version=update_version)
+    chain.save(ds_name, update_version=update_version)
+    assert sorted(
+        [
+            ds.version
+            for ds in dc.datasets(column="dataset", session=test_session).collect(
+                "dataset"
+            )
+        ]
+    ) == sorted(versions)
+
+
+def test_update_versions_mix_major_minor_patch(test_session):
+    ds_name = "fibonacci"
+    chain = dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session)
+    chain.save(ds_name)
+    chain.save(ds_name, update_version="patch")
+    chain.save(ds_name, update_version="minor")
+    chain.save(ds_name, update_version="major")
+    chain.save(ds_name, update_version="minor")
+    chain.save(ds_name, update_version="patch")
+    chain.save(ds_name)
+    chain.save(ds_name, version="3.0.0")
+    assert sorted(
+        [
+            ds.version
+            for ds in dc.datasets(column="dataset", session=test_session).collect(
+                "dataset"
+            )
+        ]
+    ) == sorted(
+        [
+            "1.0.0",
+            "1.0.1",
+            "1.1.0",
+            "2.0.0",
+            "2.1.0",
+            "2.1.1",
+            "2.1.2",
+            "3.0.0",
+        ]
+    )
+
+
+def test_update_versions_wrong_value(test_session):
+    ds_name = "fibonacci"
+    chain = dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session)
+    chain.save(ds_name)
+    with pytest.raises(ValueError) as excinfo:
+        chain.save(ds_name, update_version="wrong")
+
+    assert str(excinfo.value) == (
+        "update_version can have one of the following values: major, minor or patch"
+    )
+
+
+def test_from_dataset_version_int_backward_compatible(test_session):
+    ds_name = "numbers"
+    dc.read_values(nums=[1], session=test_session).save(ds_name, version="1.0.0")
+    dc.read_values(nums=[2], session=test_session).save(ds_name, version="1.0.1")
+    dc.read_values(nums=[3], session=test_session).save(ds_name, version="2.0.0")
+    dc.read_values(nums=[4], session=test_session).save(ds_name, version="2.1.0")
+    dc.read_values(nums=[5], session=test_session).save(ds_name, version="2.1.2")
+    dc.read_values(nums=[6], session=test_session).save(ds_name, version="3.0.0")
+
+    assert list(dc.read_dataset(ds_name, version=1).collect("nums")) == [2]
+    assert list(dc.read_dataset(ds_name, version=2).collect("nums")) == [5]
+    assert list(dc.read_dataset(ds_name, version=3).collect("nums")) == [6]
+    assert list(dc.read_dataset(ds_name, version="1.0.0").collect("nums")) == [1]
+    with pytest.raises(DatasetVersionNotFoundError):
+        dc.read_dataset(ds_name, version=5)
+
+
+def test_wrong_semver_format(test_session):
+    dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save("fibonacci")
+    with pytest.raises(ValueError) as excinfo:
+        dc.read_dataset("fibonacci").save("fibonacci", version="1.0")
+    assert str(excinfo.value) == (
+        "Invalid version. It should be in format: <major>.<minor>.<patch> where"
+        " each version part is positive integer"
+    )
+
+
+def test_semver_preview_ok(test_session):
+    ds_name = "numbers"
+    dc.read_values(num=[1, 2], session=test_session).save(ds_name)
+    dc.read_values(num=[3, 4], session=test_session).save(ds_name)
+
+    dataset = test_session.catalog.get_dataset(ds_name)
+    assert sorted([p["num"] for p in dataset.get_version("1.0.0").preview]) == [1, 2]
+    assert sorted([p["num"] for p in dataset.get_version("1.0.1").preview]) == [3, 4]

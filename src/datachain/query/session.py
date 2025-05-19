@@ -69,7 +69,7 @@ class Session:
         self.catalog = catalog or get_catalog(
             client_config=client_config, in_memory=in_memory
         )
-        self.dataset_versions: list[tuple[DatasetRecord, int, bool]] = []
+        self.dataset_versions: list[tuple[DatasetRecord, str, bool]] = []
 
     def __enter__(self):
         # Push the current context onto the stack
@@ -90,7 +90,7 @@ class Session:
             Session.SESSION_CONTEXTS.pop()
 
     def add_dataset_version(
-        self, dataset: "DatasetRecord", version: int, listing: bool = False
+        self, dataset: "DatasetRecord", version: str, listing: bool = False
     ) -> None:
         self.dataset_versions.append((dataset, version, listing))
 
@@ -195,5 +195,11 @@ class Session:
             Session.GLOBAL_SESSION_CTX.__exit__(None, None, None)
 
         for obj in gc.get_objects():  # Get all tracked objects
-            if isinstance(obj, Session):  # Cleanup temp dataset for session variables.
-                obj.__exit__(None, None, None)
+            try:
+                if isinstance(obj, Session):
+                    # Cleanup temp dataset for session variables.
+                    obj.__exit__(None, None, None)
+            except ReferenceError:
+                continue  # Object has been finalized already
+            except Exception as e:  # noqa: BLE001
+                logger.error(f"Exception while cleaning up session: {e}")  # noqa: G004
