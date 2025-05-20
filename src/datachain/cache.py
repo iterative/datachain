@@ -76,9 +76,9 @@ class Cache:
     async def download(
         self, file: "File", client: "Client", callback: Optional[Callback] = None
     ) -> None:
-        from_path = f"{file.source}/{file.path}"
         from dvc_objects.fs.utils import tmp_fname
 
+        from_path = file.get_uri()
         odb_fs = self.odb.fs
         tmp_info = odb_fs.join(self.odb.tmp_dir, tmp_fname())  # type: ignore[arg-type]
         size = file.size
