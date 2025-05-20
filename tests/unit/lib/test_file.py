@@ -367,3 +367,31 @@ def test_export_with_symlink(tmp_path, catalog, use_cache):
 
     dst = Path(file.get_local_path()) if use_cache else path
     assert (tmp_path / "dir" / "myfile.txt").resolve() == dst
+
+
+@pytest.mark.parametrize(
+    "path,expected,raises",
+    [
+        ("", "", None),
+        (".", "", None),
+        ("foo/..", "", None),
+        ("dir/file.txt", "dir/file.txt", None),
+        ("./dir/file.txt", "dir/file.txt", None),
+        ("dir/./file.txt", "dir/file.txt", None),
+        ("dir/../file.txt", "file.txt", None),
+        ("dir/foo/../file.txt", "dir/file.txt", None),
+        ("./dir/./foo/../file.txt", "dir/file.txt", None),
+        ("/", None, "must be relative"),
+        ("/dir", None, "must be relative"),
+        ("/dir/file.txt", None, "must be relative"),
+        ("../file.txt", None, "must not contain '..'"),
+        ("dir/../../file.txt", None, "must not contain '..'"),
+    ],
+)
+def test_path_validation(path, expected, raises):
+    if raises:
+        with pytest.raises(ValueError, match=raises):
+            File(path=path, source="file:///")
+    else:
+        file = File(path=path, source="file:///")
+        assert file.path == expected

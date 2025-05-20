@@ -11,7 +11,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from functools import partial
 from io import BytesIO
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePath, PurePosixPath
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, Optional, Union
 from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
@@ -236,8 +236,23 @@ class File(DataModel):
 
     @field_validator("path", mode="before")
     @classmethod
-    def validate_path(cls, path):
-        return Path(path).as_posix() if path else ""
+    def validate_path(cls, path: str) -> str:
+        if not path:
+            return ""
+
+        normalized_path = PurePath(path).as_posix()
+        normalized_path = os.path.normpath(normalized_path)
+
+        if not normalized_path or normalized_path == ".":
+            return ""
+
+        if normalized_path.startswith("/"):
+            raise ValueError(f"Path '{path}' must be relative")
+
+        if any(part == ".." for part in PurePath(normalized_path).parts):
+            raise ValueError(f"Path '{path}' must not contain '..'")
+
+        return normalized_path
 
     def model_dump_custom(self):
         res = self.model_dump()
