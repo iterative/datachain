@@ -32,13 +32,16 @@ from datachain.dataset import (
     DatasetRecord,
     DatasetStatus,
     DatasetVersion,
+    Project,
     StorageURI,
 )
 from datachain.error import (
     DatasetNotFoundError,
+    NamespaceNotFoundError,
     TableMissingError,
 )
 from datachain.job import Job
+from datachain.namespace import Namespace
 from datachain.utils import JSONSerialize
 
 if TYPE_CHECKING:
@@ -60,6 +63,8 @@ class AbstractMetastore(ABC, Serializable):
     uri: StorageURI
 
     schema: "schema.Schema"
+    namespace_class: type[Namespace] = Namespace
+    project_class: type[Project] = Project
     dataset_class: type[DatasetRecord] = DatasetRecord
     dataset_list_class: type[DatasetListRecord] = DatasetListRecord
     dataset_list_version_class: type[DatasetListVersion] = DatasetListVersion
@@ -106,9 +111,29 @@ class AbstractMetastore(ABC, Serializable):
         """Cleanup for tests."""
 
     #
+    # Namespaces
+    #
+    @abstractmethod
+    def create_namespace(
+        self,
+        name: str,
+        description: Optional[str] = None,
+        ignore_if_exists: bool = True,
+        **kwargs,
+    ) -> Namespace:
+        """Creates new namespace"""
+
+    @abstractmethod
+    def remove_namespace(self, namespace: Namespace) -> None:
+        """Removes existing namespace"""
+
+    @abstractmethod
+    def get_namespace(self, name: str, conn=None) -> Namespace:
+        """Gets a single namespace by name"""
+
+    #
     # Datasets
     #
-
     @abstractmethod
     def create_dataset(
         self,
@@ -304,6 +329,8 @@ class AbstractDBMetastore(AbstractMetastore):
     and has shared logic for all database systems currently in use.
     """
 
+    NAMESPACE_TABLE = "namespaces"
+    PROJECT_TABLE = "projects"
     DATASET_TABLE = "datasets"
     DATASET_VERSION_TABLE = "datasets_versions"
     DATASET_DEPENDENCY_TABLE = "datasets_dependencies"
@@ -323,10 +350,60 @@ class AbstractDBMetastore(AbstractMetastore):
         """Cleanup temp tables."""
 
     @classmethod
+    def _namespaces_columns(cls) -> list["SchemaItem"]:
+        """Namespace table columns."""
+        return [
+            Column("id", Integer, primary_key=True),
+            Column("uuid", Text, nullable=False, default=uuid4()),
+            Column("name", Text, nullable=False),
+            Column("description", Text),
+            Column("created_at", DateTime(timezone=True)),
+        ]
+
+    @cached_property
+    def _namespaces_fields(self) -> list[str]:
+        return [
+            c.name  # type: ignore [attr-defined]
+            for c in self._namespaces_columns()
+            if c.name  # type: ignore [attr-defined]
+        ]
+
+    @classmethod
+    def _projects_columns(cls) -> list["SchemaItem"]:
+        """Project table columns."""
+        return [
+            Column("id", Integer, primary_key=True),
+            Column("uuid", Text, nullable=False, default=uuid4()),
+            Column("name", Text, nullable=False),
+            Column("description", Text),
+            Column("created_at", DateTime(timezone=True)),
+            Column(
+                "namespace_id",
+                Integer,
+                ForeignKey(f"{cls.NAMESPACE_TABLE}.id", ondelete="CASCADE"),
+                nullable=False,
+            ),
+        ]
+
+    @cached_property
+    def _projects_fields(self) -> list[str]:
+        return [
+            c.name  # type: ignore [attr-defined]
+            for c in self._projects_columns()
+            if c.name  # type: ignore [attr-defined]
+        ]
+
+    @classmethod
     def _datasets_columns(cls) -> list["SchemaItem"]:
         """Datasets table columns."""
         return [
             Column("id", Integer, primary_key=True),
+            Column(
+                "project_id",
+                Integer,
+                ForeignKey(f"{cls.PROJECT_TABLE}.id", ondelete="CASCADE"),
+                nullable=False,
+            ),
             Column("name", Text, nullable=False),
             Column("description", Text),
             Column("attrs", JSON, nullable=True),
@@ -446,6 +523,16 @@ class AbstractDBMetastore(AbstractMetastore):
     # Query Tables
     #
     @cached_property
+    def _namespaces(self) -> Table:
+        return Table(
+            self.NAMESPACE_TABLE, self.db.metadata, *self._namespaces_columns()
+        )
+
+    @cached_property
+    def _projects(self) -> Table:
+        return Table(self.PROJECT_TABLE, self.db.metadata, *self._projects_columns())
+
+    @cached_property
     def _datasets(self) -> Table:
         return Table(self.DATASET_TABLE, self.db.metadata, *self._datasets_columns())
 
@@ -468,6 +555,34 @@ class AbstractDBMetastore(AbstractMetastore):
     #
     # Query Starters (These can be overridden by subclasses)
     #
+    @abstractmethod
+    def _namespaces_insert(self) -> "Insert": ...
+
+    def _namespaces_select(self, *columns) -> "Select":
+        if not columns:
+            return self._namespaces.select()
+        return select(*columns)
+
+    def _namespaces_update(self) -> "Update":
+        return self._namespaces.update()
+
+    def _namespaces_delete(self) -> "Delete":
+        return self._namespaces.delete()
+
+    @abstractmethod
+    def _projects_insert(self) -> "Insert": ...
+
+    def _projects_select(self, *columns) -> "Select":
+        if not columns:
+            return self._projects.select()
+        return select(*columns)
+
+    def _projects_update(self) -> "Update":
+        return self._projects.update()
+
+    def _projects_delete(self) -> "Delete":
+        return self._projects.delete()
+
     @abstractmethod
     def _datasets_insert(self) -> "Insert": ...
 
@@ -509,6 +624,56 @@ class AbstractDBMetastore(AbstractMetastore):
 
     def _datasets_dependencies_delete(self) -> "Delete":
         return self._datasets_dependencies.delete()
+
+    #
+    # Namespaces
+    #
+    def create_namespace(
+        self,
+        name: str,
+        description: Optional[str] = None,
+        ignore_if_exists: bool = True,
+        **kwargs,
+    ) -> Namespace:
+        """Creates new namespace."""
+        query = self._namespaces_insert().values(
+            name=name,
+            uuid=str(uuid4()),
+            created_at=datetime.now(timezone.utc),
+            description=description,
+        )
+        if ignore_if_exists and hasattr(query, "on_conflict_do_nothing"):
+            # SQLite and PostgreSQL both support 'on_conflict_do_nothing',
+            # but generic SQL does not
+            query = query.on_conflict_do_nothing(index_elements=["name"])
+        self.db.execute(query)
+
+        return self.get_namespace(name)
+
+    def remove_namespace(self, namespace: Namespace) -> None:
+        """Removes namespace."""
+        n = self._namespaces
+        self.db.execute(self._namespaces_delete().where(n.c.id == namespace.id))
+
+    def update_namespace(self, namespace: Namespace, conn=None, **kwargs) -> Namespace:
+        raise NotImplementedError("Updating namespaces not implemented")
+
+    def get_namespace(self, name: str, conn=None) -> Namespace:
+        """Gets a single namespace by name"""
+        n = self._namespaces
+        if not self.db.has_table(self._namespaces.name):
+            raise TableMissingError
+
+        query = self._namespaces_select(
+            *(getattr(n.c, f) for f in self._namespaces_fields),
+            # *(getattr(p.c, f) for f in self._projects_fields),
+        ).where(n.c.name == name)
+        # j = n.join(p, n.c.id == p.c.namespace_id, isouter=isouter)
+        # query = query.select_from(query).where(n.c.name == name)
+        rows = list(self.db.execute(query, conn=conn))
+        if not rows:
+            raise NamespaceNotFoundError(f"Namespace {name} not found.")
+        return self.namespace_class.parse(*rows[0])
 
     #
     # Datasets

@@ -1,3 +1,4 @@
+from datachain.lib import namespaces
 from datachain.lib.data_model import DataModel, DataType, is_chain_type
 from datachain.lib.dc import (
     C,
@@ -67,6 +68,7 @@ __all__ = [
     "is_chain_type",
     "listings",
     "metrics",
+    "namespaces",
     "param",
     "read_csv",
     "read_database",

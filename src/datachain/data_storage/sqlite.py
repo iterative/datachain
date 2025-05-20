@@ -359,6 +359,10 @@ class SQLiteMetastore(AbstractDBMetastore):
 
     def _init_tables(self) -> None:
         """Initialize tables."""
+        self.db.create_table(self._namespaces, if_not_exists=True)
+        self.default_table_names.append(self._namespaces.name)
+        self.db.create_table(self._projects, if_not_exists=True)
+        self.default_table_names.append(self._projects.name)
         self.db.create_table(self._datasets, if_not_exists=True)
         self.default_table_names.append(self._datasets.name)
         self.db.create_table(self._datasets_versions, if_not_exists=True)
@@ -372,6 +376,17 @@ class SQLiteMetastore(AbstractDBMetastore):
     def _datasets_columns(cls) -> list["SchemaItem"]:
         """Datasets table columns."""
         return [*super()._datasets_columns(), UniqueConstraint("name")]
+
+    @classmethod
+    def _namespaces_columns(cls) -> list["SchemaItem"]:
+        """Datasets table columns."""
+        return [*super()._namespaces_columns(), UniqueConstraint("name")]
+
+    def _namespaces_insert(self) -> "Insert":
+        return sqlite.insert(self._namespaces)
+
+    def _projects_insert(self) -> "Insert":
+        return sqlite.insert(self._projects)
 
     def _datasets_insert(self) -> "Insert":
         return sqlite.insert(self._datasets)
