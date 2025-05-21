@@ -10,15 +10,6 @@ coverage:
         # non-blocking status checks
         informational: true
         only_pulls: true
-    patch:
-      default:
-        # auto compares coverage to the previous base commit
-        target: auto
-        # adjust accordingly based on how flaky your tests are
-        # this allows a 10% drop from the previous base commit coverage
-        threshold: 10%
-        # non-blocking status checks
-        informational: true
 
 comment:
   # sections shown in the PR comment
