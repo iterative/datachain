@@ -1,6 +1,6 @@
 from sqlalchemy.sql.functions import GenericFunction
 
-from datachain.sql.types import Boolean, Float, Int64
+from datachain.sql.types import Boolean, Float, Int64, String
 from datachain.sql.utils import compiler_not_implemented
 
 
@@ -45,6 +45,27 @@ class contains(GenericFunction):  # noqa: N801
     type = Boolean()
     package = "array"
     name = "contains"
+    inherit_cache = True
+
+
+class slice(GenericFunction):  # noqa: N801
+    """
+    Returns a slice of the array.
+    """
+
+    package = "array"
+    name = "slice"
+    inherit_cache = True
+
+
+class join(GenericFunction):  # noqa: N801
+    """
+    Returns the concatenation of the array elements.
+    """
+
+    type = String()
+    package = "array"
+    name = "join"
     inherit_cache = True
 
 
