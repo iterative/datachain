@@ -239,6 +239,25 @@ def test_read_storage_dependencies(cloud_test_catalog, cloud_type):
     assert dependencies[0].name == dep_name
 
 
+def test_persist_not_affects_dependencies(tmp_dir, test_session):
+    for i in range(4):
+        (tmp_dir / f"file{i}.txt").write_text(f"file{i}")
+
+    uri = tmp_dir.as_uri()
+    dep_name, _, _ = parse_listing_uri(uri, test_session.catalog.client_config)
+    chain = dc.read_storage(uri, session=test_session)  # .persist()
+    # calling multiple persists to create temp datasets
+    chain = chain.persist()
+    chain = chain.persist()
+    chain = chain.persist()
+    chain.save("test-data")
+    dependencies = test_session.catalog.get_dataset_dependencies("test-data", "1.0.0")
+
+    assert len(dependencies) == 1
+    assert dependencies[0].name == dep_name
+    assert dependencies[0].type == DatasetDependencyType.STORAGE
+
+
 @pytest.mark.parametrize("use_cache", [True, False])
 @pytest.mark.parametrize("prefetch", [0, 2])
 def test_map_file(cloud_test_catalog, use_cache, prefetch, monkeypatch):
