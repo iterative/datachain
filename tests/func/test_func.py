@@ -221,3 +221,77 @@ def test_array_get_element(test_session):
             ),
         ),
     )
+
+
+def test_array_length(test_session):
+    class Arr(dc.DataModel):
+        i: list[int]
+        f: list[float]
+        s: list[str]
+
+    ds = list(
+        dc.read_values(
+            id=[1, 2, 3, 4],
+            arr=(
+                Arr(i=[10, 20, 30], f=[1.0, 2.0, 3.0], s=["a", "b", "c"]),
+                Arr(i=[40, 50], f=[4.0, 5.0, 6.0, 7.0], s=["d"]),
+                Arr(i=[50], f=[5.0], s=["g"]),
+                Arr(i=[], f=[], s=[]),
+            ),
+            session=test_session,
+        )
+        .mutate(
+            t1=func.array.length("arr.i"),
+            t2=func.array.length("arr.f"),
+            t3=func.array.length("arr.s"),
+            t4=func.array.length([1, 2, 3, 4, 5]),
+            t5=func.array.length([]),
+        )
+        .order_by("id")
+        .collect("t1", "t2", "t3", "t4", "t5")
+    )
+
+    assert tuple(ds) == (
+        (3, 3, 3, 5, 0),
+        (2, 4, 1, 5, 0),
+        (1, 1, 1, 5, 0),
+        (0, 0, 0, 5, 0),
+    )
+
+
+def test_array_contains(test_session):
+    class Arr(dc.DataModel):
+        i: list[int]
+        f: list[float]
+        s: list[str]
+
+    ds = list(
+        dc.read_values(
+            id=[1, 2, 3],
+            arr=(
+                Arr(i=[10, 20, 30], f=[1.0, 2.0, 3.0], s=["a", "b", "c"]),
+                Arr(i=[40, 50, 60], f=[4.0, 5.0, 6.0], s=["d", "e", "f"]),
+                Arr(i=[50], f=[5.0], s=["g"]),
+            ),
+            session=test_session,
+        )
+        .mutate(
+            t1=func.array.contains("arr.i", 20),
+            t2=func.array.contains("arr.i", 100),
+            t3=func.array.contains("arr.f", 2.0),
+            t4=func.array.contains("arr.f", 7.0),
+            t5=func.array.contains("arr.s", "b"),
+            t6=func.array.contains("arr.s", "x"),
+            t7=func.array.contains([1, 2, 3, 4, 5], 3),
+            t8=func.array.contains([1, 2, 3, 4, 5], 7),
+            t9=func.array.contains([], 1),
+        )
+        .order_by("id")
+        .collect("t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9")
+    )
+
+    assert tuple(ds) == (
+        (1, 0, 1, 0, 1, 0, 1, 0, 0),
+        (0, 0, 0, 0, 0, 0, 1, 0, 0),
+        (0, 0, 0, 0, 0, 0, 1, 0, 0),
+    )
