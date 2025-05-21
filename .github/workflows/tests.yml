@@ -124,6 +124,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.xml
           flags: datachain
+        continue-on-error: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build package
         run: nox -s build
