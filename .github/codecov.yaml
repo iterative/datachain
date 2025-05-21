@@ -9,6 +9,13 @@ coverage:
         threshold: 10%
         # non-blocking status checks
         informational: true
+        only_pulls: true
+
+comment:
+  # sections shown in the PR comment
+  layout: "reach, diff, flags, files"
+  # updates the comment on PRs when coverage changes
+  behavior: default
 
 flags:
   datachain:
