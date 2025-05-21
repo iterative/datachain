@@ -7,6 +7,7 @@ from collections.abc import Generator
 from pathlib import PosixPath
 from time import sleep
 from typing import NamedTuple
+from unittest.mock import patch
 
 import attrs
 import pytest
@@ -26,6 +27,8 @@ from datachain.data_storage.sqlite import (
 )
 from datachain.dataset import DatasetRecord
 from datachain.lib.dc import Sys
+from datachain.namespace import Namespace
+from datachain.project import Project
 from datachain.query.session import Session
 from datachain.utils import (
     ENV_DATACHAIN_GLOBAL_CONFIG_DIR,
@@ -535,6 +538,26 @@ def cloud_test_catalog_tmpfile(
         metastore_tmpfile,
         warehouse_tmpfile,
     )
+
+
+@pytest.fixture(autouse=True)
+def mock_allowed_to_create_project(request):
+    if "disable_autouse" in request.keywords:
+        yield
+    else:
+        with patch("datachain.projects.Project", wraps=Project) as mock_project:
+            mock_project.allowed_to_create.return_value = True
+            yield mock_project
+
+
+@pytest.fixture(autouse=True)
+def mock_allowed_to_create_namespace(request):
+    if "disable_autouse" in request.keywords:
+        yield
+    else:
+        with patch("datachain.namespaces.Namespace", wraps=Namespace) as mock_namespace:
+            mock_namespace.allowed_to_create.return_value = True
+            yield mock_namespace
 
 
 @pytest.fixture
