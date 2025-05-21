@@ -2,6 +2,7 @@ import pytest
 
 import datachain as dc
 from datachain.error import NamespaceCreateNotAllowedError, NamespaceNotFoundError
+from datachain.namespace import Namespace
 
 
 @pytest.fixture
@@ -52,3 +53,8 @@ def test_get_namespace_not_found(test_session, dev_namespace):
         dc.namespaces.get("wrong", session=test_session)
 
     assert str(excinfo.value) == "Namespace wrong not found."
+
+
+def test_local_namespace_is_created(test_session):
+    local_namespace = dc.namespaces.get(Namespace.default(), session=test_session)
+    assert local_namespace.name == Namespace.default()

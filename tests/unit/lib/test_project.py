@@ -6,6 +6,9 @@ from datachain.error import (
     ProjectCreateNotAllowedError,
     ProjectNotFoundError,
 )
+from datachain.namespace import Namespace
+from datachain.project import Project
+from tests.utils import skip_if_not_sqlite
 
 
 @pytest.fixture
@@ -107,3 +110,11 @@ def test_get_project_not_found_but_exists_in_other_namespace(
         dc.projects.get(name, dev_namespace.name, session=test_session)
 
     assert str(excinfo.value) == f"Project {name} in namespace dev not found."
+
+
+@skip_if_not_sqlite
+def test_local_project_is_created(test_session):
+    local_project = dc.projects.get(
+        Project.default(), Namespace.default(), session=test_session
+    )
+    assert local_project.name == Project.default()

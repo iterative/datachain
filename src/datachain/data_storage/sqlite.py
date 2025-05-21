@@ -317,6 +317,7 @@ class SQLiteMetastore(AbstractDBMetastore):
         self.db = db or SQLiteDatabaseEngine.from_db_file(db_file)
 
         self._init_tables()
+        self._init_namespace()
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
         """Close connection upon exit from context manager."""
@@ -371,6 +372,18 @@ class SQLiteMetastore(AbstractDBMetastore):
         self.default_table_names.append(self._datasets_dependencies.name)
         self.db.create_table(self._jobs, if_not_exists=True)
         self.default_table_names.append(self._jobs.name)
+
+    def _init_namespace(self) -> None:
+        """
+        Creates local namespace and local project connected to it.
+        In local environment user cannot explicitly create other namespaces and
+        projects and all datasets user creates will be stored in those.
+        When pulling dataset from Studio, then other namespaces and projects will
+        be created implicitly though, to keep the same fully qualified name with
+        Studio dataset.
+        """
+        local_namespace = self.create_namespace("local", "Local namespace")
+        self.create_project("local", local_namespace, "Local project")
 
     @classmethod
     def _datasets_columns(cls) -> list["SchemaItem"]:
