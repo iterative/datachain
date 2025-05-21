@@ -7,7 +7,7 @@ from fsspec.implementations.local import LocalFileSystem
 from PIL import Image
 
 from datachain.catalog import Catalog
-from datachain.lib.file import File, ImageFile, TextFile, resolve
+from datachain.lib.file import File, FileError, ImageFile, TextFile, resolve
 
 
 def create_file(source: str):
@@ -380,7 +380,7 @@ def test_path_validation(path, expected):
 @pytest.mark.parametrize(
     "path,expected,raises",
     [
-        ("", None, "Path must not be empty"),
+        ("", None, "must not be empty"),
         ("/", None, "must not be a directory"),
         (".", None, "must not be a directory"),
         ("dir/..", None, "must not be a directory"),
@@ -405,7 +405,7 @@ def test_path_validation(path, expected):
 def test_path_normalized(path, expected, raises):
     file = File(path=path, source="s3://bucket")
     if raises:
-        with pytest.raises(ValueError, match=raises):
+        with pytest.raises(FileError, match=raises):
             file.get_path_normalized()
     else:
         assert file.get_path_normalized() == expected
