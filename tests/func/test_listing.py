@@ -36,10 +36,7 @@ def test_listing_generator(cloud_test_catalog, cloud_type):
 )
 def test_parse_listing_uri(cloud_test_catalog, cloud_type):
     ctc = cloud_test_catalog
-    catalog = ctc.catalog
-    dataset_name, listing_uri, listing_path = parse_listing_uri(
-        f"{ctc.src_uri}/dogs", catalog.client_config
-    )
+    dataset_name, listing_uri, listing_path = parse_listing_uri(f"{ctc.src_uri}/dogs")
     assert dataset_name == f"lst__{ctc.src_uri}/dogs/"
     assert listing_uri == f"{ctc.src_uri}/dogs/"
     if cloud_type == "file":
@@ -55,10 +52,7 @@ def test_parse_listing_uri(cloud_test_catalog, cloud_type):
 )
 def test_parse_listing_uri_with_glob(cloud_test_catalog):
     ctc = cloud_test_catalog
-    catalog = ctc.catalog
-    dataset_name, listing_uri, listing_path = parse_listing_uri(
-        f"{ctc.src_uri}/dogs/*", catalog.client_config
-    )
+    dataset_name, listing_uri, listing_path = parse_listing_uri(f"{ctc.src_uri}/dogs/*")
     assert dataset_name == f"lst__{ctc.src_uri}/dogs/"
     assert listing_uri == f"{ctc.src_uri}/dogs"
     assert listing_path == "dogs/*"

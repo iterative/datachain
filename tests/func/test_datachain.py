@@ -114,12 +114,11 @@ def test_read_storage_reindex(tmp_dir, test_session):
 
 
 def test_read_storage_reindex_expired(tmp_dir, test_session):
-    catalog = test_session.catalog
     tmp_dir = tmp_dir / "parquets"
     os.mkdir(tmp_dir)
     uri = tmp_dir.as_uri()
 
-    lst_ds_name = parse_listing_uri(uri, catalog.client_config)[0]
+    lst_ds_name = parse_listing_uri(uri)[0]
 
     pd.DataFrame({"name": ["Alice", "Bob"]}).to_parquet(tmp_dir / "test1.parquet")
     assert dc.read_storage(uri, session=test_session).count() == 1
@@ -144,10 +143,9 @@ def test_read_storage_partials(cloud_test_catalog):
     ctc = cloud_test_catalog
     src_uri = ctc.src_uri
     session = ctc.session
-    catalog = session.catalog
 
     def _list_dataset_name(uri: str) -> str:
-        name = parse_listing_uri(uri, catalog.client_config)[0]
+        name = parse_listing_uri(uri)[0]
         assert name
         return name
 
@@ -188,10 +186,9 @@ def test_read_storage_partials_with_update(cloud_test_catalog):
     ctc = cloud_test_catalog
     src_uri = ctc.src_uri
     session = ctc.session
-    catalog = session.catalog
 
     def _list_dataset_name(uri: str) -> str:
-        name = parse_listing_uri(uri, catalog.client_config)[0]
+        name = parse_listing_uri(uri)[0]
         assert name
         return name
 
@@ -222,7 +219,7 @@ def test_read_storage_listing_happens_once(cloud_test_catalog, cloud_type):
     dc_dogs = chain.filter(dc.C("file.path").glob("dogs*"))
     dc_cats.union(dc_dogs).save(ds_name)
 
-    lst_ds_name = parse_listing_uri(uri, ctc.session.catalog.client_config)[0]
+    lst_ds_name = parse_listing_uri(uri)[0]
     assert _get_listing_datasets(ctc.session) == [f"{lst_ds_name}@v1.0.0"]
 
 
@@ -230,7 +227,7 @@ def test_read_storage_dependencies(cloud_test_catalog, cloud_type):
     ctc = cloud_test_catalog
     src_uri = ctc.src_uri
     uri = f"{src_uri}/cats"
-    dep_name, _, _ = parse_listing_uri(uri, ctc.catalog.client_config)
+    dep_name, _, _ = parse_listing_uri(uri)
     ds_name = "dep"
     dc.read_storage(uri, session=ctc.session).save(ds_name)
     dependencies = ctc.session.catalog.get_dataset_dependencies(ds_name, "1.0.0")
@@ -244,7 +241,7 @@ def test_persist_not_affects_dependencies(tmp_dir, test_session):
         (tmp_dir / f"file{i}.txt").write_text(f"file{i}")
 
     uri = tmp_dir.as_uri()
-    dep_name, _, _ = parse_listing_uri(uri, test_session.catalog.client_config)
+    dep_name, _, _ = parse_listing_uri(uri)
     chain = dc.read_storage(uri, session=test_session)  # .persist()
     # calling multiple persists to create temp datasets
     chain = chain.persist()
