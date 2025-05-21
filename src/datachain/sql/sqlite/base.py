@@ -88,6 +88,8 @@ def setup():
     compiles(sql_path.file_ext, "sqlite")(compile_path_file_ext)
     compiles(array.length, "sqlite")(compile_array_length)
     compiles(array.contains, "sqlite")(compile_array_contains)
+    compiles(array.slice, "sqlite")(compile_array_slice)
+    compiles(array.join, "sqlite")(compile_array_join)
     compiles(array.get_element, "sqlite")(compile_array_get_element)
     compiles(string.length, "sqlite")(compile_string_length)
     compiles(string.split, "sqlite")(compile_string_split)
@@ -275,6 +277,15 @@ def register_user_defined_sql_functions() -> None:
         conn.create_function(
             "json_array_get_element", 2, py_json_array_get_element, deterministic=True
         )
+        conn.create_function(
+            "json_array_slice", 2, py_json_array_slice, deterministic=True
+        )
+        conn.create_function(
+            "json_array_slice", 3, py_json_array_slice, deterministic=True
+        )
+        conn.create_function(
+            "json_array_join", 2, py_json_array_join, deterministic=True
+        )
 
     _registered_function_creators["array_functions"] = create_array_functions
 
@@ -454,6 +465,20 @@ def py_json_array_get_element(val, idx):
         return None
 
 
+def py_json_array_slice(val, offset: int, length: Optional[int] = None):
+    arr = orjson.loads(val)
+    try:
+        return orjson.dumps(
+            list(arr[offset : offset + length] if length is not None else arr[offset:])
+        ).decode("utf-8")
+    except IndexError:
+        return None
+
+
+def py_json_array_join(val, sep: str):
+    return sep.join(orjson.loads(val))
+
+
 def compile_array_get_element(element, compiler, **kwargs):
     return compiler.process(
         func.json_array_get_element(*element.clauses.clauses), **kwargs
@@ -468,6 +493,14 @@ def compile_array_contains(element, compiler, **kwargs):
     return compiler.process(
         func.json_array_contains(*element.clauses.clauses), **kwargs
     )
+
+
+def compile_array_slice(element, compiler, **kwargs):
+    return compiler.process(func.json_array_slice(*element.clauses.clauses), **kwargs)
+
+
+def compile_array_join(element, compiler, **kwargs):
+    return compiler.process(func.json_array_join(*element.clauses.clauses), **kwargs)
 
 
 def compile_string_length(element, compiler, **kwargs):
