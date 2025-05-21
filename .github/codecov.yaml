@@ -9,6 +9,7 @@ coverage:
         threshold: 10%
         # non-blocking status checks
         informational: true
+        only_pulls: true
     patch:
       default:
         # auto compares coverage to the previous base commit
