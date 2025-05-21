@@ -16,7 +16,6 @@ from datachain import semver
 from datachain.error import DatasetVersionNotFoundError
 from datachain.sql.types import NAME_TYPES_MAPPING, SQLType
 
-P = TypeVar("P", bound="Project")
 T = TypeVar("T", bound="DatasetRecord")
 LT = TypeVar("LT", bound="DatasetListRecord")
 V = TypeVar("V", bound="DatasetVersion")
@@ -70,28 +69,6 @@ def create_dataset_uri(name: str, version: Optional[str] = None) -> str:
         uri += f"@v{version}"
 
     return uri
-
-
-@dataclass
-class Project:
-    id: int
-    uuid: str
-    name: str
-    description: Optional[str]
-    created_at: datetime
-    namespace_id: int
-
-    @classmethod
-    def parse(
-        cls: builtins.type[P],
-        id: int,
-        uuid: str,
-        name: str,
-        description: Optional[str],
-        created_at: datetime,
-        namespace_id: int,
-    ) -> "Project":
-        return cls(id, uuid, name, description, created_at, namespace_id)
 
 
 class DatasetDependencyType:

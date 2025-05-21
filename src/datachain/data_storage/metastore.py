@@ -32,16 +32,17 @@ from datachain.dataset import (
     DatasetRecord,
     DatasetStatus,
     DatasetVersion,
-    Project,
     StorageURI,
 )
 from datachain.error import (
     DatasetNotFoundError,
     NamespaceNotFoundError,
+    ProjectNotFoundError,
     TableMissingError,
 )
 from datachain.job import Job
 from datachain.namespace import Namespace
+from datachain.project import Project
 from datachain.utils import JSONSerialize
 
 if TYPE_CHECKING:
@@ -130,6 +131,28 @@ class AbstractMetastore(ABC, Serializable):
     @abstractmethod
     def get_namespace(self, name: str, conn=None) -> Namespace:
         """Gets a single namespace by name"""
+
+    #
+    # Projects
+    #
+    @abstractmethod
+    def create_project(
+        self,
+        name: str,
+        namespace: Namespace,
+        description: Optional[str] = None,
+        ignore_if_exists: bool = True,
+        **kwargs,
+    ) -> Project:
+        """Creates new project in specific namespace"""
+
+    @abstractmethod
+    def remove_project(self, project: Project) -> None:
+        """Removes existing project"""
+
+    @abstractmethod
+    def get_project(self, name: str, namespace: Namespace, conn=None) -> Project:
+        """Gets a single project inside some namespace by name"""
 
     #
     # Datasets
@@ -383,6 +406,7 @@ class AbstractDBMetastore(AbstractMetastore):
                 ForeignKey(f"{cls.NAMESPACE_TABLE}.id", ondelete="CASCADE"),
                 nullable=False,
             ),
+            UniqueConstraint("namespace_id", "name"),
         ]
 
     @cached_property
@@ -635,7 +659,6 @@ class AbstractDBMetastore(AbstractMetastore):
         ignore_if_exists: bool = True,
         **kwargs,
     ) -> Namespace:
-        """Creates new namespace."""
         query = self._namespaces_insert().values(
             name=name,
             uuid=str(uuid4()),
@@ -651,7 +674,6 @@ class AbstractDBMetastore(AbstractMetastore):
         return self.get_namespace(name)
 
     def remove_namespace(self, namespace: Namespace) -> None:
-        """Removes namespace."""
         n = self._namespaces
         self.db.execute(self._namespaces_delete().where(n.c.id == namespace.id))
 
@@ -666,14 +688,62 @@ class AbstractDBMetastore(AbstractMetastore):
 
         query = self._namespaces_select(
             *(getattr(n.c, f) for f in self._namespaces_fields),
-            # *(getattr(p.c, f) for f in self._projects_fields),
         ).where(n.c.name == name)
-        # j = n.join(p, n.c.id == p.c.namespace_id, isouter=isouter)
-        # query = query.select_from(query).where(n.c.name == name)
         rows = list(self.db.execute(query, conn=conn))
         if not rows:
             raise NamespaceNotFoundError(f"Namespace {name} not found.")
         return self.namespace_class.parse(*rows[0])
+
+    #
+    # Projects
+    #
+    def create_project(
+        self,
+        name: str,
+        namespace: Namespace,
+        description: Optional[str] = None,
+        ignore_if_exists: bool = True,
+        **kwargs,
+    ) -> Project:
+        query = self._projects_insert().values(
+            namespace_id=namespace.id,
+            uuid=str(uuid4()),
+            name=name,
+            created_at=datetime.now(timezone.utc),
+            description=description,
+        )
+        if ignore_if_exists and hasattr(query, "on_conflict_do_nothing"):
+            # SQLite and PostgreSQL both support 'on_conflict_do_nothing',
+            # but generic SQL does not
+            query = query.on_conflict_do_nothing(
+                index_elements=["namespace_id", "name"]
+            )
+        self.db.execute(query)
+
+        return self.get_project(name, namespace)
+
+    def remove_project(self, project: Project) -> None:
+        p = self._projects
+        self.db.execute(self._projects_delete().where(p.c.id == project.id))
+
+    def update_project(self, project: Project, conn=None, **kwargs) -> Project:
+        raise NotImplementedError("Updating projects not implemented")
+
+    def get_project(self, name: str, namespace: Namespace, conn=None) -> Project:
+        """Gets a single project inside some namespace by name"""
+        p = self._projects
+        if not self.db.has_table(self._projects.name):
+            raise TableMissingError
+
+        query = self._projects_select(
+            *(getattr(p.c, f) for f in self._projects_fields),
+        ).where(p.c.name == name, p.c.namespace_id == namespace.id)
+        rows = list(self.db.execute(query, conn=conn))
+        if not rows:
+            raise ProjectNotFoundError(
+                f"Project {name} in namespace {namespace.name} not found."
+            )
+        return self.project_class.parse(*rows[0])
 
     #
     # Datasets
