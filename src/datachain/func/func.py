@@ -108,18 +108,20 @@ class Func(Function):
                 )
 
         if self.from_array:
-            if get_origin(col_type) is list:
-                col_args = get_args(col_type)
-                if len(col_args) != 1:
-                    raise DataChainColumnError(
-                        str(self),
-                        "Array column must have a single type argument",
-                    )
-                return col_args[0]
-            raise DataChainColumnError(
-                str(self),
-                "Array column must be of type list",
-            )
+            if get_origin(col_type) is not list:
+                raise DataChainColumnError(
+                    str(self),
+                    "Array column must be of type list",
+                )
+            if self.is_array:
+                return col_type
+            col_args = get_args(col_type)
+            if len(col_args) != 1:
+                raise DataChainColumnError(
+                    str(self),
+                    "Array column must have a single type argument",
+                )
+            return col_args[0]
 
         return list[col_type] if self.is_array else col_type  # type: ignore[valid-type]
 

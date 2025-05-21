@@ -219,7 +219,8 @@ def slice(
             try:
                 return list[element_type(el[0])]
             except IndexError:
-                return str
+                # if the array is empty, return list[str] as default type
+                return list[str]
         return type(el)
 
     def type_from_args(arr, *_):
@@ -227,7 +228,8 @@ def slice(
             try:
                 return list[element_type(arr[0])]
             except IndexError:
-                return str  # if the array is empty, return str as default type
+                # if the array is empty, return list[str] as default type
+                return list[str]
         return None
 
     if isinstance(arr, (str, Func)):
@@ -250,7 +252,7 @@ def slice(
 
 def join(
     arr: Union[str, Sequence, Func],
-    sep: str,
+    sep: str = "",
 ) -> Func:
     """
     Returns a string that is the concatenation of the elements of the array,
@@ -260,7 +262,7 @@ def join(
             If a string is provided, it is assumed to be the name of the array column.
             If a sequence is provided, it is assumed to be an array of values.
             If a Func is provided, it is assumed to be a function returning an array.
-        sep (str): Separator to use for the concatenation.
+        sep (str): Separator to use for the concatenation. Default is an empty string.
 
     Returns:
         Func: A Func object that represents the join function. Result of the
@@ -271,7 +273,7 @@ def join(
         ```py
         dc.mutate(
             contains1=func.array.join("signal.values", ":"),
-            contains2=func.array.join([1, 2, 3, 4, 5], "/"),
+            contains2=func.array.join(["1", "2", "3", "4", "5"], "/"),
         )
         ```
     """

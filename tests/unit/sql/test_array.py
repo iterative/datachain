@@ -150,13 +150,15 @@ def test_slice(warehouse):
 def test_join(warehouse):
     query = select(
         func.array.join(["abc", "def", "g", "hi"], "/").label("join1"),
-        func.array.join(["abc", "def", "g", "hi"], "").label("join2"),
-        func.array.join(["abc"], ":").label("join3"),
+        func.array.join(["abc", "def", "g", "hi"], ",").label("join2"),
+        func.array.join(["abc", "def", "g", "hi"]).label("join3"),
+        func.array.join(["abc"], ":").label("join4"),
     )
     result = tuple(warehouse.dataset_rows_select(query))
     assert result == (
         (
             "abc/def/g/hi",
+            "abc,def,g,hi",
             "abcdefghi",
             "abc",
         ),
