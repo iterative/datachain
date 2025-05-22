@@ -282,8 +282,10 @@ class StudioClient:
             response = self._send_request_msgpack("datachain/ls", {"source": path})
             yield path, response
 
-    def ls_datasets(self) -> Response[LsData]:
-        return self._send_request("datachain/datasets", {}, method="GET")
+    def ls_datasets(self, prefix: Optional[str] = None) -> Response[LsData]:
+        return self._send_request(
+            "datachain/datasets", {"prefix": prefix}, method="GET"
+        )
 
     def edit_dataset(
         self,
