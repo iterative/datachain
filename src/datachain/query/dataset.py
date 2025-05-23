@@ -85,7 +85,7 @@ PartitionByType = Union[
     Function, ColumnElement, Sequence[Union[Function, ColumnElement]]
 ]
 JoinPredicateType = Union[str, ColumnClause, ColumnElement]
-DatasetDependencyType = tuple[str, str]
+DatasetDependencyType = tuple["DatasetRecord", str]
 
 logger = logging.getLogger("datachain")
 
@@ -180,9 +180,8 @@ class QueryStep:
 
         dr = self.catalog.warehouse.dataset_rows(self.dataset, self.dataset_version)
 
-        # TODO fix dependencies
         return step_result(
-            q, dr.columns, dependencies=[(self.dataset.name, self.dataset_version)]
+            q, dr.columns, dependencies=[(self.dataset, self.dataset_version)]
         )
 
 
@@ -1670,26 +1669,36 @@ class DatasetQuery:
 
     def _add_dependencies(self, dataset: "DatasetRecord", version: str):
         dependencies: set[DatasetDependencyType] = set()
-        for dep_name, dep_version in self.dependencies:
-            if Session.is_temp_dataset(dep_name):
+        for dep_dataset, dep_dataset_version in self.dependencies:
+            if Session.is_temp_dataset(dep_dataset.name):
                 # temp dataset are created for optimization and they will be removed
                 # afterwards. Therefore, we should not put them as dependencies, but
                 # their own direct dependencies
                 for dep in self.catalog.get_dataset_dependencies(
-                    dep_name, dep_version, indirect=False
+                    dep_dataset.name,
+                    dep_dataset_version,
+                    dep_dataset.project,
+                    indirect=False,
                 ):
                     if dep:
-                        dependencies.add((dep.name, dep.version))
+                        dep_project = self.catalog.metastore.get_namespace_project(
+                            dep.namespace, dep.project
+                        )
+                        dependencies.add(
+                            (
+                                self.catalog.get_dataset(dep.name, dep_project),
+                                dep.version,
+                            )
+                        )
             else:
-                dependencies.add((dep_name, dep_version))
+                dependencies.add((dep_dataset, dep_dataset_version))
 
-        for dep_name, dep_version in dependencies:
-            # ds_dependency_name, ds_dependency_version = dependency
+        for dep_dataset, dep_dataset_version in dependencies:
             self.catalog.metastore.add_dataset_dependency(
-                dataset.name,
+                dataset,
                 version,
-                dep_name,
-                dep_version,
+                dep_dataset,
+                dep_dataset_version,
             )
 
     def exec(self) -> "Self":
@@ -1771,7 +1780,15 @@ class DatasetQuery:
 
             if dependencies:
                 # overriding dependencies
-                self.dependencies = {(dep.name, dep.version) for dep in dependencies}
+                self.dependencies = set()
+                for dep in dependencies:
+                    dep_project = self.catalog.metastore.get_namespace_project(
+                        dep.namespace, dep.project
+                    )
+                    self.dependencies.add(
+                        (self.catalog.get_dataset(dep.name, dep_project), dep.version)
+                    )
+
             self._add_dependencies(dataset, version)  # type: ignore [arg-type]
         finally:
             self.cleanup()

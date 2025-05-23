@@ -418,6 +418,8 @@ class SQLiteMetastore(AbstractDBMetastore):
 
     def _dataset_dependencies_select_columns(self) -> list["SchemaItem"]:
         return [
+            self._namespaces.c.name,
+            self._projects.c.name,
             self._datasets_dependencies.c.id,
             self._datasets_dependencies.c.dataset_id,
             self._datasets_dependencies.c.dataset_version_id,

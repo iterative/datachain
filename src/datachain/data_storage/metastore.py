@@ -170,6 +170,13 @@ class AbstractMetastore(ABC, Serializable):
     def get_project(self, name: str, namespace: Namespace, conn=None) -> Project:
         """Gets a single project inside some namespace by name"""
 
+    @abstractmethod
+    def get_namespace_project(self, namespace_name: str, project_name: str) -> Project:
+        """
+        Gets a single project inside some namespace by name where the input is
+        namespace name instead of namespace object
+        """
+
     @property
     def default_project(self) -> Project:
         return self.get_project(self.default_project_name, self.default_namespace)
@@ -270,10 +277,10 @@ class AbstractMetastore(ABC, Serializable):
     @abstractmethod
     def add_dataset_dependency(
         self,
-        source_dataset_name: str,
+        source_dataset: "DatasetRecord",
         source_dataset_version: str,
-        dataset_name: str,
-        dataset_version: str,
+        dep_dataset: "DatasetRecord",
+        dep_dataset_version: str,
     ) -> None:
         """Adds dataset dependency to dataset."""
 
@@ -768,6 +775,10 @@ class AbstractDBMetastore(AbstractMetastore):
             )
         return self.project_class.parse(*rows[0])
 
+    def get_namespace_project(self, namespace_name: str, project_name: str) -> Project:
+        namespace = self.get_namespace(namespace_name)
+        return self.get_project(project_name, namespace)
+
     #
     # Datasets
     #
@@ -991,7 +1002,6 @@ class AbstractDBMetastore(AbstractMetastore):
             .join(d, p.c.id == d.c.project_id)
             .join(dv, d.c.id == dv.c.dataset_id, isouter=isouter)
         )
-        # j = d.join(dv, d.c.id == dv.c.dataset_id, isouter=isouter)
         return query.select_from(j)
 
     def _base_dataset_query(self) -> "Select":
@@ -1111,24 +1121,20 @@ class AbstractDBMetastore(AbstractMetastore):
     #
     def add_dataset_dependency(
         self,
-        source_dataset_name: str,
+        source_dataset: "DatasetRecord",
         source_dataset_version: str,
-        dataset_name: str,
-        dataset_version: str,
+        dep_dataset: "DatasetRecord",
+        dep_dataset_version: str,
     ) -> None:
         """Adds dataset dependency to dataset."""
-        source_dataset = self.get_dataset(source_dataset_name)
-        # TODO fix dependencies
-        dataset = self.get_dataset(dataset_name)
-
         self.db.execute(
             self._datasets_dependencies_insert().values(
                 source_dataset_id=source_dataset.id,
                 source_dataset_version_id=(
                     source_dataset.get_version(source_dataset_version).id
                 ),
-                dataset_id=dataset.id,
-                dataset_version_id=dataset.get_version(dataset_version).id,
+                dataset_id=dep_dataset.id,
+                dataset_version_id=dep_dataset.get_version(dep_dataset_version).id,
             )
         )
 
@@ -1170,6 +1176,8 @@ class AbstractDBMetastore(AbstractMetastore):
     def get_direct_dataset_dependencies(
         self, dataset: DatasetRecord, version: str
     ) -> list[Optional[DatasetDependency]]:
+        n = self._namespaces
+        p = self._projects
         d = self._datasets
         dd = self._datasets_dependencies
         dv = self._datasets_versions
@@ -1181,18 +1189,16 @@ class AbstractDBMetastore(AbstractMetastore):
         query = (
             self._datasets_dependencies_select(*select_cols)
             .select_from(
-                dd.join(d, dd.c.dataset_id == d.c.id, isouter=True).join(
-                    dv, dd.c.dataset_version_id == dv.c.id, isouter=True
-                )
+                dd.join(d, dd.c.dataset_id == d.c.id, isouter=True)
+                .join(dv, dd.c.dataset_version_id == dv.c.id, isouter=True)
+                .join(p, d.c.project_id == p.c.id)
+                .join(n, p.c.namespace_id == n.c.id)
             )
             .where(
                 (dd.c.source_dataset_id == dataset.id)
                 & (dd.c.source_dataset_version_id == dataset_version.id)
             )
         )
-        if version:
-            dataset_version = dataset.get_version(version)
-            query = query.where(dd.c.source_dataset_version_id == dataset_version.id)
 
         return [self.dependency_class.parse(*r) for r in self.db.execute(query)]
 

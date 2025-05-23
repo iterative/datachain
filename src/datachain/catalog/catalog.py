@@ -1123,9 +1123,10 @@ class Catalog:
                 # dependency has been removed
                 continue
             if d.is_dataset:
+                project = self.metastore.get_namespace_project(d.namespace, d.project)
                 # only datasets can have dependencies
                 d.dependencies = self.get_dataset_dependencies(
-                    d.name, d.version, indirect=indirect
+                    d.name, d.version, project, indirect=indirect
                 )
 
         return direct_dependencies

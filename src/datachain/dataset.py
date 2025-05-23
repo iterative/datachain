@@ -91,8 +91,12 @@ class DatasetDependencyType:
 
 @dataclass
 class DatasetDependency:
+    # TODO put `DatasetRecord` instead of name + version which will
+    # simplify codebase in various places
     id: int
     type: str
+    namespace: str
+    project: str
     name: str
     version: str
     created_at: datetime
@@ -113,6 +117,8 @@ class DatasetDependency:
     @classmethod
     def parse(
         cls: builtins.type[DD],
+        namespace_name: str,
+        project_name: str,
         id: int,
         dataset_id: Optional[int],
         dataset_version_id: Optional[int],
@@ -134,6 +140,8 @@ class DatasetDependency:
                 if is_listing_dataset(dataset_name)
                 else DatasetDependencyType.DATASET
             ),
+            namespace_name,
+            project_name,
             dataset_name,
             (
                 dataset_version  # type: ignore[arg-type]
