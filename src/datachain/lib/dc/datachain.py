@@ -2082,6 +2082,11 @@ class DataChain:
         Use before running map/gen/agg/batch_map to save an object and pass it as an
         argument to the UDF.
 
+        The value must be a callable (a `lambda: <value>` syntax can be used to quickly
+        create one) that returns the object to be passed to the UDF. It is evaluated
+        lazily when UDF is running, in case of multiple machines the callable is run on
+        a worker machine.
+
         Example:
             ```py
             import anthropic
@@ -2091,7 +2096,11 @@ class DataChain:
             (
                 dc.read_storage(DATA, type="text")
                 .settings(parallel=4, cache=True)
+
+                # Setup Anthropic client and pass it to the UDF below automatically
+                # The value is callable (see the note above)
                 .setup(client=lambda: anthropic.Anthropic(api_key=API_KEY))
+
                 .map(
                     claude=lambda client, file: client.messages.create(
                         model=MODEL,
