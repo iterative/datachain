@@ -900,7 +900,7 @@ class Catalog:
         )
 
         if create_rows_table:
-            table_name = self.warehouse.dataset_table_name(dataset.name, version)
+            table_name = self.warehouse.dataset_table_name(dataset, version)
             self.warehouse.create_dataset_rows_table(table_name, columns=columns)
             self.update_dataset_version_with_warehouse_info(dataset, version)
 
@@ -970,6 +970,7 @@ class Catalog:
             # updating name must result in updating dataset table names as well
             for version in [v.version for v in dataset.versions]:
                 self.warehouse.rename_dataset_table(
+                    dataset,
                     old_name,
                     new_name,
                     old_version=version,

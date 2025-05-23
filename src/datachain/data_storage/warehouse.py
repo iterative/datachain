@@ -181,7 +181,7 @@ class AbstractWarehouse(ABC, Serializable):
     ):
         version = version or dataset.latest_version
 
-        table_name = self.dataset_table_name(dataset.name, version)
+        table_name = self.dataset_table_name(dataset, version)
         return self.schema.dataset_row_cls(
             table_name,
             self.db,
@@ -253,12 +253,22 @@ class AbstractWarehouse(ABC, Serializable):
         name = parsed.path if parsed.scheme == "file" else parsed.netloc
         return parsed.scheme, name
 
-    def dataset_table_name(self, dataset_name: str, version: str) -> str:
+    def dataset_table_name(self, dataset: DatasetRecord, version: str) -> str:
+        return self._construct_dataset_table_name(
+            dataset.namespace.name,
+            dataset.project.name,
+            dataset.name,
+            version,
+        )
+
+    def _construct_dataset_table_name(
+        self, namespace: str, project: str, dataset_name: str, version: str
+    ) -> str:
         prefix = self.DATASET_TABLE_PREFIX
         if Client.is_data_source_uri(dataset_name):
             # for datasets that are created for bucket listing we use different prefix
             prefix = self.DATASET_SOURCE_TABLE_PREFIX
-        return f"{prefix}{dataset_name}_{version.replace('.', '_')}"
+        return f"{prefix}{namespace}{project}{dataset_name}_{version.replace('.', '_')}"
 
     def temp_table_name(self) -> str:
         return self.TMP_TABLE_NAME_PREFIX + _random_string(6)
@@ -286,7 +296,7 @@ class AbstractWarehouse(ABC, Serializable):
         if_exists: bool = True,
     ) -> None:
         """Drops a dataset rows table for the given dataset name."""
-        table_name = self.dataset_table_name(dataset.name, version)
+        table_name = self.dataset_table_name(dataset, version)
         table = sa.Table(table_name, self.db.metadata)
         self.db.drop_table(table, if_exists=if_exists)
 
@@ -343,13 +353,20 @@ class AbstractWarehouse(ABC, Serializable):
 
     def rename_dataset_table(
         self,
+        dataset: DatasetRecord,
         old_name: str,
         new_name: str,
         old_version: str,
         new_version: str,
     ) -> None:
-        old_ds_table_name = self.dataset_table_name(old_name, old_version)
-        new_ds_table_name = self.dataset_table_name(new_name, new_version)
+        namespace = dataset.namespace.name
+        project = dataset.project.name
+        old_ds_table_name = self._construct_dataset_table_name(
+            namespace, project, old_name, old_version
+        )
+        new_ds_table_name = self._construct_dataset_table_name(
+            namespace, project, new_name, new_version
+        )
 
         self.db.rename_table(old_ds_table_name, new_ds_table_name)
 
@@ -367,7 +384,7 @@ class AbstractWarehouse(ABC, Serializable):
         """
         Returns tuple with dataset stats: total number of rows and total dataset size.
         """
-        if not (self.db.has_table(self.dataset_table_name(dataset.name, version))):
+        if not (self.db.has_table(self.dataset_table_name(dataset, version))):
             return None, None
 
         dr = self.dataset_rows(dataset, version)

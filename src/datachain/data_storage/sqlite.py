@@ -556,16 +556,16 @@ class SQLiteWarehouse(AbstractWarehouse):
     ) -> None:
         dst_empty = False
 
-        if not self.db.has_table(self.dataset_table_name(src.name, src_version)):
+        if not self.db.has_table(self.dataset_table_name(src, src_version)):
             # source table doesn't exist, nothing to do
             return
 
         src_dr = self.dataset_rows(src, src_version).table
 
-        if not self.db.has_table(self.dataset_table_name(dst.name, dst_version)):
+        if not self.db.has_table(self.dataset_table_name(dst, dst_version)):
             # destination table doesn't exist, create it
             self.create_dataset_rows_table(
-                self.dataset_table_name(dst.name, dst_version),
+                self.dataset_table_name(dst, dst_version),
                 columns=src_dr.columns,
             )
             dst_empty = True

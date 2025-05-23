@@ -310,9 +310,7 @@ def test_remove_dataset(cloud_test_catalog, dogs_dataset):
     with pytest.raises(DatasetNotFoundError):
         catalog.get_dataset(dogs_dataset.name, dogs_dataset.project)
 
-    dataset_table_name = catalog.warehouse.dataset_table_name(
-        dogs_dataset.name, "1.0.0"
-    )
+    dataset_table_name = catalog.warehouse.dataset_table_name(dogs_dataset, "1.0.0")
     assert get_table_row_count(catalog.warehouse.db, dataset_table_name) is None
 
     assert (
@@ -330,9 +328,9 @@ def test_remove_dataset_with_multiple_versions(cloud_test_catalog, dogs_dataset)
     assert updated_dogs_dataset.has_version("2.0.0")
     assert updated_dogs_dataset.has_version("1.0.0")
 
-    catalog.remove_dataset(updated_dogs_dataset.name, force=True)
+    catalog.remove_dataset(updated_dogs_dataset.name, dogs_dataset.project, force=True)
     with pytest.raises(DatasetNotFoundError):
-        catalog.get_dataset(updated_dogs_dataset.name)
+        catalog.get_dataset(updated_dogs_dataset.name, dogs_dataset.project)
 
     assert (
         catalog.metastore.get_direct_dataset_dependencies(updated_dogs_dataset, "1.0.0")
@@ -340,18 +338,20 @@ def test_remove_dataset_with_multiple_versions(cloud_test_catalog, dogs_dataset)
     )
 
 
-def test_remove_dataset_dataset_not_found(cloud_test_catalog):
+def test_remove_dataset_dataset_not_found(cloud_test_catalog, project):
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(DatasetNotFoundError):
-        catalog.remove_dataset("wrong_name", force=True)
+        catalog.remove_dataset("wrong_name", project, force=True)
 
 
 def test_remove_dataset_wrong_version(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(DatasetInvalidVersionError):
-        catalog.remove_dataset(dogs_dataset.name, version="100.0.0")
+        catalog.remove_dataset(
+            dogs_dataset.name, dogs_dataset.project, version="100.0.0"
+        )
 
 
 def test_edit_dataset(cloud_test_catalog, dogs_dataset):
@@ -361,6 +361,7 @@ def test_edit_dataset(cloud_test_catalog, dogs_dataset):
 
     catalog.edit_dataset(
         dogs_dataset.name,
+        dogs_dataset.project,
         new_name=dataset_new_name,
         description="new description",
         attrs=["cats", "birds"],
@@ -372,11 +373,17 @@ def test_edit_dataset(cloud_test_catalog, dogs_dataset):
     assert dataset.attrs == ["cats", "birds"]
 
     # check if dataset tables are renamed correctly
-    old_dataset_table_name = catalog.warehouse.dataset_table_name(
-        dataset_old_name, "1.0.0"
+    old_dataset_table_name = catalog.warehouse._constuct_dataset_table_name(
+        dataset.namespace.name,
+        dataset.project.name,
+        dataset_old_name,
+        "1.0.0",
     )
-    new_dataset_table_name = catalog.warehouse.dataset_table_name(
-        dataset_new_name, "1.0.0"
+    new_dataset_table_name = catalog.warehouse._constuct_dataset_table_name(
+        dataset.namespace.name,
+        dataset.project.name,
+        dataset_new_name,
+        "1.0.0",
     )
     assert get_table_row_count(catalog.warehouse.db, old_dataset_table_name) is None
     expected_table_row_count = get_table_row_count(
@@ -397,11 +404,11 @@ def test_edit_dataset_same_name(cloud_test_catalog, dogs_dataset):
     assert dataset.name == dataset_new_name
 
     # check if dataset tables are renamed correctly
-    old_dataset_table_name = catalog.warehouse.dataset_table_name(
-        dataset_old_name, "1.0.0"
+    old_dataset_table_name = catalog.warehouse._construct_dataset_table_name(
+        dataset.namespace.name, dataset.project.name, dataset_old_name, "1.0.0"
     )
-    new_dataset_table_name = catalog.warehouse.dataset_table_name(
-        dataset_new_name, "1.0.0"
+    new_dataset_table_name = catalog.warehouse._construct_dataset_table_name(
+        dataset.namespace.name, dataset.project.name, dataset_new_name, "1.0.0"
     )
     expected_table_row_count = get_table_row_count(
         catalog.warehouse.db, old_dataset_table_name
