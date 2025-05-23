@@ -114,6 +114,12 @@ class AbstractMetastore(ABC, Serializable):
     #
     # Namespaces
     #
+
+    @property
+    @abstractmethod
+    def default_namespace_name(self):
+        """Gets default namespace name"""
+
     @abstractmethod
     def create_namespace(
         self,
@@ -132,9 +138,19 @@ class AbstractMetastore(ABC, Serializable):
     def get_namespace(self, name: str, conn=None) -> Namespace:
         """Gets a single namespace by name"""
 
+    @property
+    def default_namespace(self) -> Namespace:
+        return self.get_namespace(self.default_namespace_name)
+
     #
     # Projects
     #
+
+    @property
+    @abstractmethod
+    def default_project_name(self):
+        """Gets default project name"""
+
     @abstractmethod
     def create_project(
         self,
@@ -154,6 +170,10 @@ class AbstractMetastore(ABC, Serializable):
     def get_project(self, name: str, namespace: Namespace, conn=None) -> Project:
         """Gets a single project inside some namespace by name"""
 
+    @property
+    def default_project(self) -> Project:
+        return self.get_project(self.default_project_name, self.default_namespace)
+
     #
     # Datasets
     #
@@ -161,6 +181,7 @@ class AbstractMetastore(ABC, Serializable):
     def create_dataset(
         self,
         name: str,
+        project: Project,
         status: int = DatasetStatus.CREATED,
         sources: Optional[list[str]] = None,
         feature_schema: Optional[dict] = None,
@@ -228,7 +249,7 @@ class AbstractMetastore(ABC, Serializable):
         """Lists all datasets which names start with prefix."""
 
     @abstractmethod
-    def get_dataset(self, name: str) -> DatasetRecord:
+    def get_dataset(self, name: str, project: Project) -> DatasetRecord:
         """Gets a single dataset by name."""
 
     @abstractmethod
@@ -652,6 +673,7 @@ class AbstractDBMetastore(AbstractMetastore):
     #
     # Namespaces
     #
+
     def create_namespace(
         self,
         name: str,
@@ -697,6 +719,7 @@ class AbstractDBMetastore(AbstractMetastore):
     #
     # Projects
     #
+
     def create_project(
         self,
         name: str,
@@ -752,6 +775,7 @@ class AbstractDBMetastore(AbstractMetastore):
     def create_dataset(
         self,
         name: str,
+        project: Project,
         status: int = DatasetStatus.CREATED,
         sources: Optional[list[str]] = None,
         feature_schema: Optional[dict] = None,
@@ -766,6 +790,7 @@ class AbstractDBMetastore(AbstractMetastore):
         # TODO abstract this method and add registered = True based on kwargs
         query = self._datasets_insert().values(
             name=name,
+            project_id=project.id,
             status=status,
             feature_schema=json.dumps(feature_schema or {}),
             created_at=datetime.now(timezone.utc),
@@ -784,7 +809,7 @@ class AbstractDBMetastore(AbstractMetastore):
             query = query.on_conflict_do_nothing(index_elements=["name"])
         self.db.execute(query)
 
-        return self.get_dataset(name)
+        return self.get_dataset(name, project)
 
     def create_dataset_version(  # noqa: PLR0913
         self,
@@ -841,7 +866,7 @@ class AbstractDBMetastore(AbstractMetastore):
             )
         self.db.execute(query, conn=conn)
 
-        return self.get_dataset(dataset.name, conn=conn)
+        return self.get_dataset(dataset.name, dataset.project, conn=conn)
 
     def remove_dataset(self, dataset: DatasetRecord) -> None:
         """Removes dataset."""
@@ -938,6 +963,8 @@ class AbstractDBMetastore(AbstractMetastore):
 
     def _get_dataset_query(
         self,
+        namespace_fields: list[str],
+        project_fields: list[str],
         dataset_fields: list[str],
         dataset_version_fields: list[str],
         isouter: bool = True,
@@ -948,28 +975,45 @@ class AbstractDBMetastore(AbstractMetastore):
         ):
             raise TableMissingError
 
+        n = self._namespaces
+        p = self._projects
         d = self._datasets
         dv = self._datasets_versions
 
         query = self._datasets_select(
+            *(getattr(n.c, f) for f in namespace_fields),
+            *(getattr(d.c, f) for f in project_fields),
             *(getattr(d.c, f) for f in dataset_fields),
             *(getattr(dv.c, f) for f in dataset_version_fields),
         )
-        j = d.join(dv, d.c.id == dv.c.dataset_id, isouter=isouter)
+        j = (
+            n.join(p, n.c.id == p.c.namespace_id)
+            .join(d, p.c.id == d.c.project_id)
+            .join(dv, d.c.id == dv.c.dataset_id, isouter=isouter)
+        )
+        # j = d.join(dv, d.c.id == dv.c.dataset_id, isouter=isouter)
         return query.select_from(j)
 
     def _base_dataset_query(self) -> "Select":
         return self._get_dataset_query(
-            self._dataset_fields, self._dataset_version_fields
+            self._namespaces_fields,
+            self._projects_fields,
+            self._dataset_fields,
+            self._dataset_version_fields,
         )
 
     def _base_list_datasets_query(self) -> "Select":
         return self._get_dataset_query(
-            self._dataset_list_fields, self._dataset_list_version_fields, isouter=False
+            self._namespaces_fields,
+            self._projects_fields,
+            self._dataset_list_fields,
+            self._dataset_list_version_fields,
+            isouter=False,
         )
 
     def list_datasets(self) -> Iterator["DatasetListRecord"]:
         """Lists all datasets."""
+        # TODO add namespace and project input
         query = self._base_list_datasets_query().order_by(
             self._datasets.c.name, self._datasets_versions.c.version
         )
@@ -978,15 +1022,23 @@ class AbstractDBMetastore(AbstractMetastore):
     def list_datasets_by_prefix(
         self, prefix: str, conn=None
     ) -> Iterator["DatasetListRecord"]:
+        # TODO add namespace and project input
         query = self._base_list_datasets_query()
         query = query.where(self._datasets.c.name.startswith(prefix))
         yield from self._parse_dataset_list(self.db.execute(query))
 
-    def get_dataset(self, name: str, conn=None) -> DatasetRecord:
-        """Gets a single dataset by name"""
+    def get_dataset(
+        self,
+        name: str,  # normal, not full dataset name
+        project: Project,
+        conn=None,
+    ) -> DatasetRecord:
+        """
+        Gets a single dataset in project by dataset name.
+        """
         d = self._datasets
         query = self._base_dataset_query()
-        query = query.where(d.c.name == name)  # type: ignore [attr-defined]
+        query = query.where(d.c.name == name, d.c.project_id == project.id)  # type: ignore [attr-defined]
         ds = self._parse_dataset(self.db.execute(query, conn=conn))
         if not ds:
             raise DatasetNotFoundError(f"Dataset {name} not found.")
@@ -1066,6 +1118,7 @@ class AbstractDBMetastore(AbstractMetastore):
     ) -> None:
         """Adds dataset dependency to dataset."""
         source_dataset = self.get_dataset(source_dataset_name)
+        # TODO fix dependencies
         dataset = self.get_dataset(dataset_name)
 
         self.db.execute(

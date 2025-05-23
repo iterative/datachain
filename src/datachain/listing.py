@@ -66,7 +66,9 @@ class Listing:
     @cached_property
     def dataset(self) -> "DatasetRecord":
         assert self.dataset_name
-        return self.metastore.get_dataset(self.dataset_name)
+        return self.metastore.get_dataset(
+            self.dataset_name, self.metastore.default_project
+        )
 
     @cached_property
     def dataset_rows(self):

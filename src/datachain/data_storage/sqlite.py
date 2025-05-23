@@ -31,6 +31,8 @@ from datachain.data_storage.db_engine import DatabaseEngine
 from datachain.data_storage.schema import DefaultSchema
 from datachain.dataset import DatasetRecord, StorageURI
 from datachain.error import DataChainError
+from datachain.namespace import Namespace
+from datachain.project import Project
 from datachain.sql.sqlite import create_user_defined_sql_functions, sqlite_dialect
 from datachain.sql.sqlite.base import load_usearch_extension
 from datachain.sql.types import SQLType
@@ -430,6 +432,22 @@ class SQLiteMetastore(AbstractDBMetastore):
 
     def _jobs_insert(self) -> "Insert":
         return sqlite.insert(self._jobs)
+
+    #
+    # Namespaces
+    #
+
+    @property
+    def default_namespace_name(self):
+        return Namespace.default()
+
+    #
+    # Projects
+    #
+
+    @property
+    def default_project_name(self):
+        return Project.default()
 
 
 class SQLiteWarehouse(AbstractWarehouse):

@@ -106,9 +106,10 @@ class Session:
 
     def _cleanup_temp_datasets(self) -> None:
         prefix = self.get_temp_prefix()
+        default_project = self.catalog.metastore.default_project
         try:
             for dataset in list(self.catalog.metastore.list_datasets_by_prefix(prefix)):
-                self.catalog.remove_dataset(dataset.name, force=True)
+                self.catalog.remove_dataset(dataset.name, default_project, force=True)
         # suppress error when metastore has been reset during testing
         except TableMissingError:
             pass

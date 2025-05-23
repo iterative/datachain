@@ -4,6 +4,7 @@ import signal
 import subprocess  # nosec B404
 import uuid
 from collections.abc import Generator
+from datetime import datetime
 from pathlib import PosixPath
 from time import sleep
 from typing import NamedTuple
@@ -561,29 +562,41 @@ def mock_allowed_to_create_namespace(request):
 
 
 @pytest.fixture
+def namespace(test_session):
+    return dc.namespaces.create("dev", "Dev namespace")
+
+
+@pytest.fixture
+def project(test_session, dev_namespace):
+    return dc.projects.create("animals", "dev", "Animals project")
+
+
+@pytest.fixture
 def listed_bucket(cloud_test_catalog):
     ctc = cloud_test_catalog
     dc.read_storage(ctc.src_uri, session=ctc.session).exec()
 
 
 @pytest.fixture
-def animal_dataset(listed_bucket, cloud_test_catalog):
+def animal_dataset(listed_bucket, project, cloud_test_catalog):
     name = uuid.uuid4().hex
     catalog = cloud_test_catalog.catalog
     src_uri = cloud_test_catalog.src_uri
-    dataset = catalog.create_dataset_from_sources(name, [src_uri], recursive=True)
+    dataset = catalog.create_dataset_from_sources(
+        name, project, [src_uri], recursive=True
+    )
     return catalog.update_dataset(
         dataset, {"description": "animal dataset", "attrs": ["cats", "dogs"]}
     )
 
 
 @pytest.fixture
-def dogs_dataset(listed_bucket, cloud_test_catalog):
+def dogs_dataset(listed_bucket, project, cloud_test_catalog):
     name = uuid.uuid4().hex
     catalog = cloud_test_catalog.catalog
     src_uri = cloud_test_catalog.src_uri
     dataset = catalog.create_dataset_from_sources(
-        name, [f"{src_uri}/dogs/*"], recursive=True
+        name, project, [f"{src_uri}/dogs/*"], recursive=True
     )
     return catalog.update_dataset(
         dataset, {"description": "dogs dataset", "attrs": ["dogs", "dataset"]}
@@ -591,12 +604,12 @@ def dogs_dataset(listed_bucket, cloud_test_catalog):
 
 
 @pytest.fixture
-def cats_dataset(listed_bucket, cloud_test_catalog):
+def cats_dataset(listed_bucket, project, cloud_test_catalog):
     name = uuid.uuid4().hex
     catalog = cloud_test_catalog.catalog
     src_uri = cloud_test_catalog.src_uri
     dataset = catalog.create_dataset_from_sources(
-        name, [f"{src_uri}/cats/*"], recursive=True
+        name, project, [f"{src_uri}/cats/*"], recursive=True
     )
     return catalog.update_dataset(
         dataset, {"description": "cats dataset", "attrs": ["cats", "dataset"]}
@@ -614,6 +627,20 @@ def dataset_record():
         status=1,
         schema={},
         feature_schema={},
+        namespace=Namespace(
+            id=1,
+            name="dev",
+            uuid=str(uuid.uuid4()),
+            crated_at=datetime.now(),
+            namespace_id=1,
+        ),
+        project=Project(
+            id=1,
+            uuid=str(uuid.uuid4()),
+            name="my_project",
+            crated_at=datetime.now(),
+            namespace_id=1,
+        ),
     )
 
 
@@ -661,6 +688,7 @@ def studio_token():
 
 @pytest.fixture
 def studio_datasets(requests_mock, studio_token):
+    # TODO add namespace and project
     common_version_info = {
         "status": 1,
         "created_at": "2024-02-23T10:42:31.842944+00:00",
@@ -691,6 +719,19 @@ def studio_datasets(requests_mock, studio_token):
                 **common_version_info,
             },
         ],
+        "namespace": {
+            "id": 1,
+            "name": "dev",
+            "uuid": str(uuid.uuid4()),
+            "crated_at": datetime.now(),
+        },
+        "project": {
+            "id": 1,
+            "uuid": str(uuid.uuid4()),
+            "name": "my_project",
+            "crated_at": datetime.now(),
+            "namespace_id": 1,
+        },
     }
 
     datasets = [
