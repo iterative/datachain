@@ -58,12 +58,12 @@ class YoloPose(DataModel):
         name = summary[0].get("name", "")
         box = (
             BBox.from_dict(summary[0]["box"], title=name)
-            if "box" in summary[0]
+            if summary[0].get("box")
             else BBox()
         )
         pose = (
             Pose3D.from_dict(summary[0]["keypoints"])
-            if "keypoints" in summary[0]
+            if summary[0].get("keypoints")
             else Pose3D()
         )
         return YoloPose(
@@ -102,8 +102,10 @@ class YoloPoses(DataModel):
                 cls.append(s["class"])
                 names.append(name)
                 confidence.append(s["confidence"])
-                box.append(BBox.from_dict(s.get("box", {}), title=name))
-                pose.append(Pose3D.from_dict(s.get("keypoints", {})))
+                if s.get("box"):
+                    box.append(BBox.from_dict(s.get("box"), title=name))
+                if s.get("keypoints"):
+                    pose.append(Pose3D.from_dict(s.get("keypoints")))
         return YoloPoses(
             cls=cls,
             name=names,
