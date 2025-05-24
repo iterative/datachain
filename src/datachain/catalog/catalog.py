@@ -1018,7 +1018,7 @@ class Catalog:
         from datachain import read_dataset, read_storage
 
         if project:
-            namespace = project
+            namespace = project.namespace
         else:
             project = self.metastore.default_project
             namespace = self.metastore.default_namespace
