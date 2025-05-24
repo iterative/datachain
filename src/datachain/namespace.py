@@ -6,7 +6,7 @@ from typing import Optional, TypeVar
 N = TypeVar("N", bound="Namespace")
 
 
-@dataclass
+@dataclass(frozen=True)
 class Namespace:
     id: int
     uuid: str

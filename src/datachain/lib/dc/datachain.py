@@ -307,6 +307,8 @@ class DataChain:
         min_task_size=None,
         prefetch: Optional[int] = None,
         sys: Optional[bool] = None,
+        namespace: Optional[str] = None,
+        project: Optional[str] = None,
     ) -> "Self":
         """Change settings for chain.
 
@@ -322,6 +324,8 @@ class DataChain:
             prefetch: number of workers to use for downloading files in advance.
                       This is enabled by default and uses 2 workers.
                       To disable prefetching, set it to 0.
+            namespace: namespace name.
+            project: project name.
 
         Example:
             ```py
@@ -335,7 +339,11 @@ class DataChain:
         if sys is None:
             sys = self._sys
         settings = copy.copy(self._settings)
-        settings.add(Settings(cache, parallel, workers, min_task_size, prefetch))
+        settings.add(
+            Settings(
+                cache, parallel, workers, min_task_size, prefetch, namespace, project
+            )
+        )
         return self._evolve(settings=settings, _sys=sys)
 
     def reset_settings(self, settings: Optional[Settings] = None) -> "Self":

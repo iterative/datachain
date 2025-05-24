@@ -6,7 +6,7 @@ from typing import Optional, TypeVar
 P = TypeVar("P", bound="Project")
 
 
-@dataclass
+@dataclass(frozen=True)
 class Project:
     id: int
     uuid: str

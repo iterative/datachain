@@ -256,7 +256,7 @@ class AbstractMetastore(ABC, Serializable):
         """Lists all datasets which names start with prefix."""
 
     @abstractmethod
-    def get_dataset(self, name: str, project: Project) -> DatasetRecord:
+    def get_dataset(self, name: str, project: Optional[Project]) -> DatasetRecord:
         """Gets a single dataset by name."""
 
     @abstractmethod
@@ -993,7 +993,7 @@ class AbstractDBMetastore(AbstractMetastore):
 
         query = self._datasets_select(
             *(getattr(n.c, f) for f in namespace_fields),
-            *(getattr(d.c, f) for f in project_fields),
+            *(getattr(p.c, f) for f in project_fields),
             *(getattr(d.c, f) for f in dataset_fields),
             *(getattr(dv.c, f) for f in dataset_version_fields),
         )
@@ -1040,12 +1040,13 @@ class AbstractDBMetastore(AbstractMetastore):
     def get_dataset(
         self,
         name: str,  # normal, not full dataset name
-        project: Project,
+        project: Optional[Project],
         conn=None,
     ) -> DatasetRecord:
         """
         Gets a single dataset in project by dataset name.
         """
+        project = project or self.default_project
         d = self._datasets
         query = self._base_dataset_query()
         query = query.where(d.c.name == name, d.c.project_id == project.id)  # type: ignore [attr-defined]

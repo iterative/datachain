@@ -1007,8 +1007,8 @@ class Catalog:
     def create_dataset_from_sources(
         self,
         name: str,
-        project: Project,
         sources: list[str],
+        project: Optional[Project] = None,
         client_config=None,
         recursive=False,
     ) -> DatasetRecord:
@@ -1016,6 +1016,12 @@ class Catalog:
             raise ValueError("Sources needs to be non empty list")
 
         from datachain import read_dataset, read_storage
+
+        if project:
+            namespace = project
+        else:
+            project = self.metastore.default_project
+            namespace = self.metastore.default_namespace
 
         chains = []
         for source in sources:
@@ -1029,6 +1035,7 @@ class Catalog:
         # create union of all dataset queries created from sources
         dc = reduce(lambda dc1, dc2: dc1.union(dc2), chains)
         try:
+            dc = dc.settings(project=project.name, namespace=namespace.name)
             dc.save(name)
         except Exception as e:  # noqa: BLE001
             try:
@@ -1059,11 +1066,14 @@ class Catalog:
 
         return self.get_dataset(name, project)
 
-    def get_dataset(self, name: str, project: Project) -> DatasetRecord:
+    def get_dataset(self, name: str, project: Optional[Project]) -> DatasetRecord:
         return self.metastore.get_dataset(name, project)
 
     def get_dataset_with_remote_fallback(
-        self, name: str, project: Project, version: Optional[str] = None
+        self,
+        name: str,
+        project: Optional[Project] = None,
+        version: Optional[str] = None,
     ) -> DatasetRecord:
         try:
             ds = self.get_dataset(name, project)
@@ -1108,7 +1118,7 @@ class Catalog:
         return DatasetRecord.from_dict(dataset_info)
 
     def get_dataset_dependencies(
-        self, name: str, version: str, project: Project, indirect=False
+        self, name: str, version: str, project: Optional[Project], indirect=False
     ) -> list[Optional[DatasetDependency]]:
         dataset = self.get_dataset(name, project)
 
@@ -1217,7 +1227,12 @@ class Catalog:
         ]
 
     def ls_dataset_rows(
-        self, name: str, version: str, project: Project, offset=None, limit=None
+        self,
+        name: str,
+        version: str,
+        project: Optional[Project] = None,
+        offset=None,
+        limit=None,
     ) -> list[dict]:
         # TODO refactor to take DatasetRecord maybe
         from datachain.query.dataset import DatasetQuery
@@ -1225,7 +1240,7 @@ class Catalog:
         dataset = self.get_dataset(name, project)
 
         q = DatasetQuery(
-            name=dataset.name, project=project, version=version, catalog=self
+            name=dataset.name, project=dataset.project, version=version, catalog=self
         )
         if limit:
             q = q.limit(limit)
@@ -1560,8 +1575,8 @@ class Catalog:
 
         self.create_dataset_from_sources(
             output,
-            self.metastore.default_project,
             sources,
+            self.metastore.default_project,
             client_config=client_config,
             recursive=recursive,
         )

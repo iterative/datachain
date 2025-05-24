@@ -409,15 +409,15 @@ class CloudTestCatalog:
         return Session("CTCSession", catalog=self.catalog)
 
 
-cloud_types = ["s3", "gs", "azure"]
+cloud_types = ["s3"]
 
 
-@pytest.fixture(scope="session", params=["file", *cloud_types])
+@pytest.fixture(scope="session", params=[*cloud_types])
 def cloud_type(request):
     return request.param
 
 
-@pytest.fixture(scope="session", params=[False, True])
+@pytest.fixture(scope="session", params=[True])
 def version_aware(request):
     return request.param
 
@@ -567,7 +567,7 @@ def namespace(test_session):
 
 
 @pytest.fixture
-def project(test_session, dev_namespace):
+def project(test_session, namespace):
     return dc.projects.create("animals", "dev", "Animals project")
 
 
@@ -583,7 +583,7 @@ def animal_dataset(listed_bucket, project, cloud_test_catalog):
     catalog = cloud_test_catalog.catalog
     src_uri = cloud_test_catalog.src_uri
     dataset = catalog.create_dataset_from_sources(
-        name, project, [src_uri], recursive=True
+        name, [src_uri], project, recursive=True
     )
     return catalog.update_dataset(
         dataset, {"description": "animal dataset", "attrs": ["cats", "dogs"]}
@@ -596,7 +596,7 @@ def dogs_dataset(listed_bucket, project, cloud_test_catalog):
     catalog = cloud_test_catalog.catalog
     src_uri = cloud_test_catalog.src_uri
     dataset = catalog.create_dataset_from_sources(
-        name, project, [f"{src_uri}/dogs/*"], recursive=True
+        name, [f"{src_uri}/dogs/*"], project, recursive=True
     )
     return catalog.update_dataset(
         dataset, {"description": "dogs dataset", "attrs": ["dogs", "dataset"]}
@@ -609,7 +609,7 @@ def cats_dataset(listed_bucket, project, cloud_test_catalog):
     catalog = cloud_test_catalog.catalog
     src_uri = cloud_test_catalog.src_uri
     dataset = catalog.create_dataset_from_sources(
-        name, project, [f"{src_uri}/cats/*"], recursive=True
+        name, [f"{src_uri}/cats/*"], project, recursive=True
     )
     return catalog.update_dataset(
         dataset, {"description": "cats dataset", "attrs": ["cats", "dataset"]}

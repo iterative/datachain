@@ -396,6 +396,7 @@ class DatasetRecord:
         project_created_at: datetime,
         project_namespace_id: int,
         dataset_id: int,
+        dataset_project_id: int,
         name: str,
         description: Optional[str],
         attrs: str,
