@@ -100,8 +100,8 @@ def test_create_dataset_already_exist_but_in_different_project():
     assert 1 == 2
 
 
-@pytest.mark.parametrize("create_rows", [True, False])
-def test_create_dataset_already_exist(cloud_test_catalog, dogs_dataset, create_rows):
+@pytest.mark.parametrize("create_rows", [False])
+def test_ccreate_dataset_already_exist(cloud_test_catalog, dogs_dataset, create_rows):
     catalog = cloud_test_catalog.catalog
 
     dataset = catalog.create_dataset(

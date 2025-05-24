@@ -372,6 +372,9 @@ class DatasetRecord:
     sources: str = ""
     query_script: str = ""
 
+    def __hash__(self):
+        return hash(f"{self.id}")
+
     @staticmethod
     def parse_schema(
         ct: dict[str, Any],
