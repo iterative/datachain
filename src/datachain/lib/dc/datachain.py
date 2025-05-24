@@ -37,7 +37,6 @@ from datachain.lib.file import (
     FileExporter,
 )
 from datachain.lib.file import ExportPlacement as FileExportPlacement
-from datachain.lib.namespaces import get as get_namespace
 from datachain.lib.projects import get as get_project
 from datachain.lib.settings import Settings
 from datachain.lib.signal_schema import SignalSchema
@@ -493,6 +492,22 @@ class DataChain:
         )
         return listings(*args, **kwargs)
 
+    @property
+    def namespace_name(self) -> str:
+        """Current namespace name in which the chain is running"""
+        return (
+            self._settings.namespace
+            or self.session.catalog.metastore.default_namespace_name
+        )
+
+    @property
+    def project_name(self) -> str:
+        """Current project name in which the chain is running"""
+        return (
+            self._settings.project
+            or self.session.catalog.metastore.default_project_name
+        )
+
     def persist(self) -> "Self":
         """Saves temporary chain that will be removed after the process ends.
         Temporary datasets are useful for optimization, for example when we have
@@ -502,13 +517,10 @@ class DataChain:
         It returns the chain itself.
         """
         schema = self.signals_schema.clone_without_sys_signals().serialize()
-        namespace = get_namespace(self._settings.namespace, session=self.session)
         project = get_project(
-            self._settings.project, namespace.name, session=self.session
+            self.project_name, self.namespace_name, session=self.session
         )
-        return self._evolve(
-            query=self._query.save(namespace, project, feature_schema=schema)
-        )
+        return self._evolve(query=self._query.save(project, feature_schema=schema))
 
     def save(  # type: ignore[override]
         self,
@@ -555,12 +567,11 @@ class DataChain:
             or self.session.catalog.metastore.default_namespace_name
         )
         project_name = (
-            namespace_name
+            project_name
             or self._settings.project
             or self.session.catalog.metastore.default_project_name
         )
 
-        namespace = get_namespace(namespace_name, session=self.session)
         project = get_project(project_name, namespace_name, session=self.session)
 
         schema = self.signals_schema.clone_without_sys_signals().serialize()
@@ -576,7 +587,6 @@ class DataChain:
             if delta_ds:
                 return self._evolve(
                     query=delta_ds._query.save(
-                        namespace,
                         project,
                         name=name,
                         version=version,
@@ -597,7 +607,6 @@ class DataChain:
 
         return self._evolve(
             query=self._query.save(
-                namespace,
                 project,
                 name=name,
                 version=version,

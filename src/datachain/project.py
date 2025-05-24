@@ -3,6 +3,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional, TypeVar
 
+from datachain.namespace import Namespace
+
 P = TypeVar("P", bound="Project")
 
 
@@ -13,7 +15,7 @@ class Project:
     name: str
     description: Optional[str]
     created_at: datetime
-    namespace_id: int
+    namespace: Namespace
 
     @staticmethod
     def default() -> str:
@@ -35,11 +37,24 @@ class Project:
     @classmethod
     def parse(
         cls: builtins.type[P],
-        id: int,
+        namespace_id: int,
+        namespace_uuid: str,
+        namespace_name: str,
+        namespace_description: Optional[str],
+        namespace_created_at: datetime,
+        project_id: int,
         uuid: str,
         name: str,
         description: Optional[str],
         created_at: datetime,
-        namespace_id: int,
+        project_namespace_id: int,
     ) -> "Project":
-        return cls(id, uuid, name, description, created_at, namespace_id)
+        namespace = Namespace.parse(
+            namespace_id,
+            namespace_uuid,
+            namespace_name,
+            namespace_description,
+            namespace_created_at,
+        )
+
+        return cls(project_id, uuid, name, description, created_at, namespace)

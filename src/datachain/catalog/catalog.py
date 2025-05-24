@@ -1017,11 +1017,7 @@ class Catalog:
 
         from datachain import read_dataset, read_storage
 
-        if project:
-            namespace = project.namespace
-        else:
-            project = self.metastore.default_project
-            namespace = self.metastore.default_namespace
+        project = project or self.metastore.default_project
 
         chains = []
         for source in sources:
@@ -1035,7 +1031,7 @@ class Catalog:
         # create union of all dataset queries created from sources
         dc = reduce(lambda dc1, dc2: dc1.union(dc2), chains)
         try:
-            dc = dc.settings(project=project.name, namespace=namespace.name)
+            dc = dc.settings(project=project.name, namespace=project.namespace.name)
             dc.save(name)
         except Exception as e:  # noqa: BLE001
             try:
@@ -1134,7 +1130,7 @@ class Catalog:
                 # dependency has been removed
                 continue
             if d.is_dataset:
-                project = self.metastore.get_namespace_project(d.namespace, d.project)
+                project = self.metastore.get_project(d.project, d.namespace)
                 # only datasets can have dependencies
                 d.dependencies = self.get_dataset_dependencies(
                     d.name, d.version, project, indirect=indirect

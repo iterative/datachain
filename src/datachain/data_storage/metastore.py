@@ -138,10 +138,6 @@ class AbstractMetastore(ABC, Serializable):
     def get_namespace(self, name: str, conn=None) -> Namespace:
         """Gets a single namespace by name"""
 
-    @property
-    def default_namespace(self) -> Namespace:
-        return self.get_namespace(self.default_namespace_name)
-
     #
     # Projects
     #
@@ -167,19 +163,12 @@ class AbstractMetastore(ABC, Serializable):
         """Removes existing project"""
 
     @abstractmethod
-    def get_project(self, name: str, namespace: Namespace, conn=None) -> Project:
+    def get_project(self, name: str, namespace_name: str, conn=None) -> Project:
         """Gets a single project inside some namespace by name"""
-
-    @abstractmethod
-    def get_namespace_project(self, namespace_name: str, project_name: str) -> Project:
-        """
-        Gets a single project inside some namespace by name where the input is
-        namespace name instead of namespace object
-        """
 
     @property
     def default_project(self) -> Project:
-        return self.get_project(self.default_project_name, self.default_namespace)
+        return self.get_project(self.default_project_name, self.default_namespace_name)
 
     #
     # Datasets
@@ -750,7 +739,7 @@ class AbstractDBMetastore(AbstractMetastore):
             )
         self.db.execute(query)
 
-        return self.get_project(name, namespace)
+        return self.get_project(name, namespace.name)
 
     def remove_project(self, project: Project) -> None:
         p = self._projects
@@ -759,25 +748,27 @@ class AbstractDBMetastore(AbstractMetastore):
     def update_project(self, project: Project, conn=None, **kwargs) -> Project:
         raise NotImplementedError("Updating projects not implemented")
 
-    def get_project(self, name: str, namespace: Namespace, conn=None) -> Project:
+    def get_project(self, name: str, namespace_name: str, conn=None) -> Project:
         """Gets a single project inside some namespace by name"""
+        n = self._namespaces
         p = self._projects
         if not self.db.has_table(self._projects.name):
             raise TableMissingError
 
         query = self._projects_select(
+            *(getattr(n.c, f) for f in self._namespaces_fields),
             *(getattr(p.c, f) for f in self._projects_fields),
-        ).where(p.c.name == name, p.c.namespace_id == namespace.id)
+        )
+        query = query.select_from(n.join(p, n.c.id == p.c.namespace_id)).where(
+            p.c.name == name, n.c.name == namespace_name
+        )
+
         rows = list(self.db.execute(query, conn=conn))
         if not rows:
             raise ProjectNotFoundError(
-                f"Project {name} in namespace {namespace.name} not found."
+                f"Project {name} in namespace {namespace_name} not found."
             )
         return self.project_class.parse(*rows[0])
-
-    def get_namespace_project(self, namespace_name: str, project_name: str) -> Project:
-        namespace = self.get_namespace(namespace_name)
-        return self.get_project(project_name, namespace)
 
     #
     # Datasets

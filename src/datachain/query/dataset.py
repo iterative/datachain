@@ -46,7 +46,6 @@ from datachain.error import DatasetNotFoundError, QueryScriptCancelError
 from datachain.func.base import Function
 from datachain.lib.listing import is_listing_dataset, listing_dataset_expired
 from datachain.lib.udf import UDFAdapter, _get_cache
-from datachain.namespace import Namespace
 from datachain.progress import CombinedDownloadCallback, TqdmCombinedDownloadCallback
 from datachain.project import Project
 from datachain.query.schema import C, UDFParamSpec, normalize_param
@@ -1681,8 +1680,8 @@ class DatasetQuery:
                     indirect=False,
                 ):
                     if dep:
-                        dep_project = self.catalog.metastore.get_namespace_project(
-                            dep.namespace, dep.project
+                        dep_project = self.catalog.metastore.get_project(
+                            dep.project, dep.namespace
                         )
                         dependencies.add(
                             (
@@ -1712,7 +1711,6 @@ class DatasetQuery:
 
     def save(
         self,
-        namespace: Namespace,
         project: Project,
         name: Optional[str] = None,
         version: Optional[str] = None,
@@ -1782,8 +1780,8 @@ class DatasetQuery:
                 # overriding dependencies
                 self.dependencies = set()
                 for dep in dependencies:
-                    dep_project = self.catalog.metastore.get_namespace_project(
-                        dep.namespace, dep.project
+                    dep_project = self.catalog.metastore.get_project(
+                        dep.project, dep.namespace
                     )
                     self.dependencies.add(
                         (self.catalog.get_dataset(dep.name, dep_project), dep.version)

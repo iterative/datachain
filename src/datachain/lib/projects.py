@@ -57,6 +57,4 @@ def get(name: str, namespace_name: str, session: Optional[Session]) -> Project:
         namespace = dc.get_project("my-project", "local")
         ```
     """
-    session = Session.get(session)
-    namespace = get_namespace(namespace_name, session=session)
-    return session.catalog.metastore.get_project(name, namespace)
+    return Session.get(session).catalog.metastore.get_project(name, namespace_name)

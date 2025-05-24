@@ -27,7 +27,7 @@ def test_create_project(test_session, dev_namespace):
     assert project.uuid
     assert project.created_at
     assert project.name == "chatbot"
-    assert project.namespace_id == dev_namespace.id
+    assert project.namespace == dev_namespace
 
 
 def test_create_project_namespace_does_not_exist(test_session):
@@ -88,7 +88,7 @@ def test_get_project(test_session, chatbot_project, dev_namespace):
     assert project.name == chatbot_project.name
     assert project.description == chatbot_project.description
     assert project.created_at == chatbot_project.created_at
-    assert project.namespace_id == dev_namespace.id
+    assert project.namespace == dev_namespace
 
 
 def test_get_project_not_found(test_session, dev_namespace):
