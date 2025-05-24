@@ -1,0 +1,52 @@
+from typing import Optional
+
+from datachain.error import NamespaceCreateNotAllowedError
+from datachain.namespace import Namespace
+from datachain.query import Session
+
+
+def create(
+    name: str, description: Optional[str] = None, session: Optional[Session] = None
+) -> Namespace:
+    """
+    Creates new custom namespace.
+    Note that creating namespaces is not allowed for local environment, unlike in
+    Studio where it is allowed.
+    In local environment all datasets are created under default `local` namespace.
+
+    Parameters:
+        name : namespace name.
+        description : namespace description.
+        session : Session to use for creating namespace.
+
+    Example:
+        ```py
+        import datachain as dc
+        namespace = dc.create_namespace("dev", "Dev namespace")
+        ```
+    """
+    if not Namespace.allowed_to_create():
+        raise NamespaceCreateNotAllowedError("Creating custom namespace is not allowed")
+    if name in Namespace.reserved_names():
+        raise ValueError(f"Namespace name {name} is reserved.")
+    session = Session.get(session)
+    return session.catalog.metastore.create_namespace(name, description)
+
+
+def get(name: str, session: Optional[Session]) -> Namespace:
+    """
+    Gets namespace by name.
+    If namespace is not found, `NamespaceNotFoundError` is thrown.
+
+    Parameters:
+        name : namespace name.
+        session : Session to use for getting namespace.
+
+    Example:
+        ```py
+        import datachain as dc
+        namespace = dc.get_namespace("local")
+        ```
+    """
+    session = Session.get(session)
+    return session.catalog.metastore.get_namespace(name)

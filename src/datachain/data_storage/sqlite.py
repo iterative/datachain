@@ -31,6 +31,8 @@ from datachain.data_storage.db_engine import DatabaseEngine
 from datachain.data_storage.schema import DefaultSchema
 from datachain.dataset import DatasetRecord, StorageURI
 from datachain.error import DataChainError
+from datachain.namespace import Namespace
+from datachain.project import Project
 from datachain.sql.sqlite import create_user_defined_sql_functions, sqlite_dialect
 from datachain.sql.sqlite.base import load_usearch_extension
 from datachain.sql.types import SQLType
@@ -317,6 +319,7 @@ class SQLiteMetastore(AbstractDBMetastore):
         self.db = db or SQLiteDatabaseEngine.from_db_file(db_file)
 
         self._init_tables()
+        self._init_namespace()
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
         """Close connection upon exit from context manager."""
@@ -359,6 +362,10 @@ class SQLiteMetastore(AbstractDBMetastore):
 
     def _init_tables(self) -> None:
         """Initialize tables."""
+        self.db.create_table(self._namespaces, if_not_exists=True)
+        self.default_table_names.append(self._namespaces.name)
+        self.db.create_table(self._projects, if_not_exists=True)
+        self.default_table_names.append(self._projects.name)
         self.db.create_table(self._datasets, if_not_exists=True)
         self.default_table_names.append(self._datasets.name)
         self.db.create_table(self._datasets_versions, if_not_exists=True)
@@ -368,10 +375,33 @@ class SQLiteMetastore(AbstractDBMetastore):
         self.db.create_table(self._jobs, if_not_exists=True)
         self.default_table_names.append(self._jobs.name)
 
+    def _init_namespace(self) -> None:
+        """
+        Creates local namespace and local project connected to it.
+        In local environment user cannot explicitly create other namespaces and
+        projects and all datasets user creates will be stored in those.
+        When pulling dataset from Studio, then other namespaces and projects will
+        be created implicitly though, to keep the same fully qualified name with
+        Studio dataset.
+        """
+        local_namespace = self.create_namespace("local", "Local namespace")
+        self.create_project("local", local_namespace, "Local project")
+
     @classmethod
     def _datasets_columns(cls) -> list["SchemaItem"]:
         """Datasets table columns."""
         return [*super()._datasets_columns(), UniqueConstraint("name")]
+
+    @classmethod
+    def _namespaces_columns(cls) -> list["SchemaItem"]:
+        """Datasets table columns."""
+        return [*super()._namespaces_columns(), UniqueConstraint("name")]
+
+    def _namespaces_insert(self) -> "Insert":
+        return sqlite.insert(self._namespaces)
+
+    def _projects_insert(self) -> "Insert":
+        return sqlite.insert(self._projects)
 
     def _datasets_insert(self) -> "Insert":
         return sqlite.insert(self._datasets)
@@ -388,6 +418,8 @@ class SQLiteMetastore(AbstractDBMetastore):
 
     def _dataset_dependencies_select_columns(self) -> list["SchemaItem"]:
         return [
+            self._namespaces.c.name,
+            self._projects.c.name,
             self._datasets_dependencies.c.id,
             self._datasets_dependencies.c.dataset_id,
             self._datasets_dependencies.c.dataset_version_id,
@@ -402,6 +434,22 @@ class SQLiteMetastore(AbstractDBMetastore):
 
     def _jobs_insert(self) -> "Insert":
         return sqlite.insert(self._jobs)
+
+    #
+    # Namespaces
+    #
+
+    @property
+    def default_namespace_name(self):
+        return Namespace.default()
+
+    #
+    # Projects
+    #
+
+    @property
+    def default_project_name(self):
+        return Project.default()
 
 
 class SQLiteWarehouse(AbstractWarehouse):
@@ -508,16 +556,16 @@ class SQLiteWarehouse(AbstractWarehouse):
     ) -> None:
         dst_empty = False
 
-        if not self.db.has_table(self.dataset_table_name(src.name, src_version)):
+        if not self.db.has_table(self.dataset_table_name(src, src_version)):
             # source table doesn't exist, nothing to do
             return
 
         src_dr = self.dataset_rows(src, src_version).table
 
-        if not self.db.has_table(self.dataset_table_name(dst.name, dst_version)):
+        if not self.db.has_table(self.dataset_table_name(dst, dst_version)):
             # destination table doesn't exist, create it
             self.create_dataset_rows_table(
-                self.dataset_table_name(dst.name, dst_version),
+                self.dataset_table_name(dst, dst_version),
                 columns=src_dr.columns,
             )
             dst_empty = True

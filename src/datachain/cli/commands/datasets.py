@@ -105,6 +105,7 @@ def list_datasets_local(catalog: "Catalog", name: Optional[str] = None):
 
 
 def list_datasets_local_versions(catalog: "Catalog", name: str):
+    # TODO fix CLI
     ds = catalog.get_dataset(name)
     for v in ds.versions:
         yield (name, v.version)

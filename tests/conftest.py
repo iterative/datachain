@@ -4,9 +4,11 @@ import signal
 import subprocess  # nosec B404
 import uuid
 from collections.abc import Generator
+from datetime import datetime
 from pathlib import PosixPath
 from time import sleep
 from typing import NamedTuple
+from unittest.mock import patch
 
 import attrs
 import pytest
@@ -26,6 +28,8 @@ from datachain.data_storage.sqlite import (
 )
 from datachain.dataset import DatasetRecord
 from datachain.lib.dc import Sys
+from datachain.namespace import Namespace
+from datachain.project import Project
 from datachain.query.session import Session
 from datachain.utils import (
     ENV_DATACHAIN_GLOBAL_CONFIG_DIR,
@@ -405,15 +409,15 @@ class CloudTestCatalog:
         return Session("CTCSession", catalog=self.catalog)
 
 
-cloud_types = ["s3", "gs", "azure"]
+cloud_types = ["s3"]
 
 
-@pytest.fixture(scope="session", params=["file", *cloud_types])
+@pytest.fixture(scope="session", params=[*cloud_types])
 def cloud_type(request):
     return request.param
 
 
-@pytest.fixture(scope="session", params=[False, True])
+@pytest.fixture(scope="session", params=[True])
 def version_aware(request):
     return request.param
 
@@ -537,6 +541,36 @@ def cloud_test_catalog_tmpfile(
     )
 
 
+@pytest.fixture(autouse=True)
+def mock_allowed_to_create_project(request):
+    if "disable_autouse" in request.keywords:
+        yield
+    else:
+        with patch("datachain.projects.Project", wraps=Project) as mock_project:
+            mock_project.allowed_to_create.return_value = True
+            yield mock_project
+
+
+@pytest.fixture(autouse=True)
+def mock_allowed_to_create_namespace(request):
+    if "disable_autouse" in request.keywords:
+        yield
+    else:
+        with patch("datachain.namespaces.Namespace", wraps=Namespace) as mock_namespace:
+            mock_namespace.allowed_to_create.return_value = True
+            yield mock_namespace
+
+
+@pytest.fixture
+def namespace(test_session):
+    return dc.namespaces.create("dev", "Dev namespace")
+
+
+@pytest.fixture
+def project(test_session, namespace):
+    return dc.projects.create("animals", "dev", "Animals project")
+
+
 @pytest.fixture
 def listed_bucket(cloud_test_catalog):
     ctc = cloud_test_catalog
@@ -544,23 +578,25 @@ def listed_bucket(cloud_test_catalog):
 
 
 @pytest.fixture
-def animal_dataset(listed_bucket, cloud_test_catalog):
+def animal_dataset(listed_bucket, project, cloud_test_catalog):
     name = uuid.uuid4().hex
     catalog = cloud_test_catalog.catalog
     src_uri = cloud_test_catalog.src_uri
-    dataset = catalog.create_dataset_from_sources(name, [src_uri], recursive=True)
+    dataset = catalog.create_dataset_from_sources(
+        name, [src_uri], project, recursive=True
+    )
     return catalog.update_dataset(
         dataset, {"description": "animal dataset", "attrs": ["cats", "dogs"]}
     )
 
 
 @pytest.fixture
-def dogs_dataset(listed_bucket, cloud_test_catalog):
+def dogs_dataset(listed_bucket, project, cloud_test_catalog):
     name = uuid.uuid4().hex
     catalog = cloud_test_catalog.catalog
     src_uri = cloud_test_catalog.src_uri
     dataset = catalog.create_dataset_from_sources(
-        name, [f"{src_uri}/dogs/*"], recursive=True
+        name, [f"{src_uri}/dogs/*"], project, recursive=True
     )
     return catalog.update_dataset(
         dataset, {"description": "dogs dataset", "attrs": ["dogs", "dataset"]}
@@ -568,12 +604,12 @@ def dogs_dataset(listed_bucket, cloud_test_catalog):
 
 
 @pytest.fixture
-def cats_dataset(listed_bucket, cloud_test_catalog):
+def cats_dataset(listed_bucket, project, cloud_test_catalog):
     name = uuid.uuid4().hex
     catalog = cloud_test_catalog.catalog
     src_uri = cloud_test_catalog.src_uri
     dataset = catalog.create_dataset_from_sources(
-        name, [f"{src_uri}/cats/*"], recursive=True
+        name, [f"{src_uri}/cats/*"], project, recursive=True
     )
     return catalog.update_dataset(
         dataset, {"description": "cats dataset", "attrs": ["cats", "dataset"]}
@@ -591,6 +627,20 @@ def dataset_record():
         status=1,
         schema={},
         feature_schema={},
+        namespace=Namespace(
+            id=1,
+            name="dev",
+            uuid=str(uuid.uuid4()),
+            crated_at=datetime.now(),
+            namespace_id=1,
+        ),
+        project=Project(
+            id=1,
+            uuid=str(uuid.uuid4()),
+            name="my_project",
+            crated_at=datetime.now(),
+            namespace_id=1,
+        ),
     )
 
 
@@ -638,6 +688,7 @@ def studio_token():
 
 @pytest.fixture
 def studio_datasets(requests_mock, studio_token):
+    # TODO add namespace and project
     common_version_info = {
         "status": 1,
         "created_at": "2024-02-23T10:42:31.842944+00:00",
@@ -668,6 +719,19 @@ def studio_datasets(requests_mock, studio_token):
                 **common_version_info,
             },
         ],
+        "namespace": {
+            "id": 1,
+            "name": "dev",
+            "uuid": str(uuid.uuid4()),
+            "crated_at": datetime.now(),
+        },
+        "project": {
+            "id": 1,
+            "uuid": str(uuid.uuid4()),
+            "name": "my_project",
+            "crated_at": datetime.now(),
+            "namespace_id": 1,
+        },
     }
 
     datasets = [

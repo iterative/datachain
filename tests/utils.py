@@ -187,7 +187,9 @@ def wait_for_condition(
 def assert_row_names(
     catalog: Catalog, dataset: DatasetRecord, version: str, expected_names: set
 ) -> None:
-    dataset_rows = catalog.ls_dataset_rows(dataset.name, version, limit=20)
+    dataset_rows = catalog.ls_dataset_rows(
+        dataset.name, version, dataset.project, limit=20
+    )
     assert dataset_rows
     preview = dataset.get_version(version).preview
     assert preview

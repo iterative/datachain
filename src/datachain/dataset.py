@@ -14,6 +14,8 @@ from urllib.parse import urlparse
 
 from datachain import semver
 from datachain.error import DatasetVersionNotFoundError
+from datachain.namespace import Namespace
+from datachain.project import Project
 from datachain.sql.types import NAME_TYPES_MAPPING, SQLType
 
 T = TypeVar("T", bound="DatasetRecord")
@@ -71,6 +73,17 @@ def create_dataset_uri(name: str, version: Optional[str] = None) -> str:
     return uri
 
 
+def parse_dataset_name(name: str) -> tuple[Optional[str], Optional[str], str]:
+    """Parses dataset name and returns namespace, project and name"""
+    if not name:
+        raise ValueError("Name must be defined to parse it")
+    split = name.split(".")
+    if len(split) == 3:
+        return tuple(split)  # type: ignore[return-value]
+
+    return None, None, name
+
+
 class DatasetDependencyType:
     DATASET = "dataset"
     STORAGE = "storage"
@@ -78,8 +91,12 @@ class DatasetDependencyType:
 
 @dataclass
 class DatasetDependency:
+    # TODO put `DatasetRecord` instead of name + version which will
+    # simplify codebase in various places
     id: int
     type: str
+    namespace: str
+    project: str
     name: str
     version: str
     created_at: datetime
@@ -100,6 +117,8 @@ class DatasetDependency:
     @classmethod
     def parse(
         cls: builtins.type[DD],
+        namespace_name: str,
+        project_name: str,
         id: int,
         dataset_id: Optional[int],
         dataset_version_id: Optional[int],
@@ -121,6 +140,8 @@ class DatasetDependency:
                 if is_listing_dataset(dataset_name)
                 else DatasetDependencyType.DATASET
             ),
+            namespace_name,
+            project_name,
             dataset_name,
             (
                 dataset_version  # type: ignore[arg-type]
@@ -335,6 +356,8 @@ class DatasetListVersion:
 class DatasetRecord:
     id: int
     name: str
+    namespace: Namespace
+    project: Project
     description: Optional[str]
     attrs: list[str]
     schema: dict[str, Union[SQLType, type[SQLType]]]
@@ -349,6 +372,9 @@ class DatasetRecord:
     sources: str = ""
     query_script: str = ""
 
+    def __hash__(self):
+        return hash(f"{self.id}")
+
     @staticmethod
     def parse_schema(
         ct: dict[str, Any],
@@ -361,7 +387,19 @@ class DatasetRecord:
     @classmethod
     def parse(  # noqa: PLR0913
         cls,
-        id: int,
+        namespace_id: int,
+        namespace_uuid: str,
+        namespace_name: str,
+        namespace_description: Optional[str],
+        namespace_created_at: datetime,
+        project_id: int,
+        project_uuid: str,
+        project_name: str,
+        project_description: Optional[str],
+        project_created_at: datetime,
+        project_namespace_id: int,
+        dataset_id: int,
+        dataset_project_id: int,
         name: str,
         description: Optional[str],
         attrs: str,
@@ -400,6 +438,23 @@ class DatasetRecord:
             json.loads(version_schema) if version_schema else {}
         )
 
+        namespace = Namespace.parse(
+            namespace_id,
+            namespace_uuid,
+            namespace_name,
+            namespace_description,
+            namespace_created_at,
+        )
+
+        project = Project.parse(
+            project_id,
+            project_uuid,
+            project_name,
+            project_description,
+            project_created_at,
+            project_namespace_id,
+        )
+
         dataset_version = DatasetVersion.parse(
             version_id,
             version_uuid,
@@ -422,8 +477,10 @@ class DatasetRecord:
         )
 
         return cls(
-            id,
+            dataset_id,
             name,
+            namespace,
+            project,
             description,
             attrs_lst,
             cls.parse_schema(schema_dct),  # type: ignore[arg-type]
@@ -447,6 +504,10 @@ class DatasetRecord:
             else c_type().to_dict()
             for c_name, c_type in self.schema.items()
         }
+
+    @property
+    def full_name(self) -> str:
+        return f"{self.namespace.name}.{self.project.name}.{self.name}"
 
     def get_schema(self, version: str) -> dict[str, Union[SQLType, type[SQLType]]]:
         return self.get_version(version).schema if version else self.schema
@@ -601,6 +662,8 @@ class DatasetRecord:
 class DatasetListRecord:
     id: int
     name: str
+    namespace: Namespace
+    project: Project
     description: Optional[str]
     attrs: list[str]
     versions: list[DatasetListVersion]
@@ -609,7 +672,18 @@ class DatasetListRecord:
     @classmethod
     def parse(  # noqa: PLR0913
         cls,
-        id: int,
+        namespace_id: int,
+        namespace_uuid: str,
+        namespace_name: str,
+        namespace_description: Optional[str],
+        namespace_created_at: datetime,
+        project_id: int,
+        project_uuid: str,
+        project_name: str,
+        project_description: Optional[str],
+        project_created_at: datetime,
+        project_namespace_id: int,
+        dataset_id: int,
         name: str,
         description: Optional[str],
         attrs: str,
@@ -630,6 +704,23 @@ class DatasetListRecord:
     ) -> "DatasetListRecord":
         attrs_lst: list[str] = json.loads(attrs) if attrs else []
 
+        namespace = Namespace.parse(
+            namespace_id,
+            namespace_uuid,
+            namespace_name,
+            namespace_description,
+            namespace_created_at,
+        )
+
+        project = Project.parse(
+            project_id,
+            project_uuid,
+            project_name,
+            project_description,
+            project_created_at,
+            project_namespace_id,
+        )
+
         dataset_version = DatasetListVersion.parse(
             version_id,
             version_uuid,
@@ -647,13 +738,19 @@ class DatasetListRecord:
         )
 
         return cls(
-            id,
+            dataset_id,
             name,
+            namespace,
+            project,
             description,
             attrs_lst,
             [dataset_version],
             created_at,
         )
+
+    @property
+    def full_name(self) -> str:
+        return f"{self.namespace.name}.{self.project.name}.{self.name}"
 
     def merge_versions(self, other: "DatasetListRecord") -> "DatasetListRecord":
         """Merge versions from another dataset"""

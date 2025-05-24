@@ -6,6 +6,26 @@ class NotFoundError(Exception):
     pass
 
 
+class NamespaceNotFoundError(NotFoundError):
+    pass
+
+
+class NotAllowedError(Exception):
+    pass
+
+
+class NamespaceCreateNotAllowedError(NotAllowedError):
+    pass
+
+
+class ProjectCreateNotAllowedError(NotAllowedError):
+    pass
+
+
+class ProjectNotFoundError(NotFoundError):
+    pass
+
+
 class DatasetNotFoundError(NotFoundError):
     pass
 

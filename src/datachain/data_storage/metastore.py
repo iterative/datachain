@@ -36,9 +36,13 @@ from datachain.dataset import (
 )
 from datachain.error import (
     DatasetNotFoundError,
+    NamespaceNotFoundError,
+    ProjectNotFoundError,
     TableMissingError,
 )
 from datachain.job import Job
+from datachain.namespace import Namespace
+from datachain.project import Project
 from datachain.utils import JSONSerialize
 
 if TYPE_CHECKING:
@@ -60,6 +64,8 @@ class AbstractMetastore(ABC, Serializable):
     uri: StorageURI
 
     schema: "schema.Schema"
+    namespace_class: type[Namespace] = Namespace
+    project_class: type[Project] = Project
     dataset_class: type[DatasetRecord] = DatasetRecord
     dataset_list_class: type[DatasetListRecord] = DatasetListRecord
     dataset_list_version_class: type[DatasetListVersion] = DatasetListVersion
@@ -106,13 +112,83 @@ class AbstractMetastore(ABC, Serializable):
         """Cleanup for tests."""
 
     #
-    # Datasets
+    # Namespaces
     #
 
+    @property
+    @abstractmethod
+    def default_namespace_name(self):
+        """Gets default namespace name"""
+
+    @abstractmethod
+    def create_namespace(
+        self,
+        name: str,
+        description: Optional[str] = None,
+        ignore_if_exists: bool = True,
+        **kwargs,
+    ) -> Namespace:
+        """Creates new namespace"""
+
+    @abstractmethod
+    def remove_namespace(self, namespace: Namespace) -> None:
+        """Removes existing namespace"""
+
+    @abstractmethod
+    def get_namespace(self, name: str, conn=None) -> Namespace:
+        """Gets a single namespace by name"""
+
+    @property
+    def default_namespace(self) -> Namespace:
+        return self.get_namespace(self.default_namespace_name)
+
+    #
+    # Projects
+    #
+
+    @property
+    @abstractmethod
+    def default_project_name(self):
+        """Gets default project name"""
+
+    @abstractmethod
+    def create_project(
+        self,
+        name: str,
+        namespace: Namespace,
+        description: Optional[str] = None,
+        ignore_if_exists: bool = True,
+        **kwargs,
+    ) -> Project:
+        """Creates new project in specific namespace"""
+
+    @abstractmethod
+    def remove_project(self, project: Project) -> None:
+        """Removes existing project"""
+
+    @abstractmethod
+    def get_project(self, name: str, namespace: Namespace, conn=None) -> Project:
+        """Gets a single project inside some namespace by name"""
+
+    @abstractmethod
+    def get_namespace_project(self, namespace_name: str, project_name: str) -> Project:
+        """
+        Gets a single project inside some namespace by name where the input is
+        namespace name instead of namespace object
+        """
+
+    @property
+    def default_project(self) -> Project:
+        return self.get_project(self.default_project_name, self.default_namespace)
+
+    #
+    # Datasets
+    #
     @abstractmethod
     def create_dataset(
         self,
         name: str,
+        project: Project,
         status: int = DatasetStatus.CREATED,
         sources: Optional[list[str]] = None,
         feature_schema: Optional[dict] = None,
@@ -180,7 +256,7 @@ class AbstractMetastore(ABC, Serializable):
         """Lists all datasets which names start with prefix."""
 
     @abstractmethod
-    def get_dataset(self, name: str) -> DatasetRecord:
+    def get_dataset(self, name: str, project: Optional[Project]) -> DatasetRecord:
         """Gets a single dataset by name."""
 
     @abstractmethod
@@ -201,10 +277,10 @@ class AbstractMetastore(ABC, Serializable):
     @abstractmethod
     def add_dataset_dependency(
         self,
-        source_dataset_name: str,
+        source_dataset: "DatasetRecord",
         source_dataset_version: str,
-        dataset_name: str,
-        dataset_version: str,
+        dep_dataset: "DatasetRecord",
+        dep_dataset_version: str,
     ) -> None:
         """Adds dataset dependency to dataset."""
 
@@ -304,6 +380,8 @@ class AbstractDBMetastore(AbstractMetastore):
     and has shared logic for all database systems currently in use.
     """
 
+    NAMESPACE_TABLE = "namespaces"
+    PROJECT_TABLE = "projects"
     DATASET_TABLE = "datasets"
     DATASET_VERSION_TABLE = "datasets_versions"
     DATASET_DEPENDENCY_TABLE = "datasets_dependencies"
@@ -323,10 +401,61 @@ class AbstractDBMetastore(AbstractMetastore):
         """Cleanup temp tables."""
 
     @classmethod
+    def _namespaces_columns(cls) -> list["SchemaItem"]:
+        """Namespace table columns."""
+        return [
+            Column("id", Integer, primary_key=True),
+            Column("uuid", Text, nullable=False, default=uuid4()),
+            Column("name", Text, nullable=False),
+            Column("description", Text),
+            Column("created_at", DateTime(timezone=True)),
+        ]
+
+    @cached_property
+    def _namespaces_fields(self) -> list[str]:
+        return [
+            c.name  # type: ignore [attr-defined]
+            for c in self._namespaces_columns()
+            if c.name  # type: ignore [attr-defined]
+        ]
+
+    @classmethod
+    def _projects_columns(cls) -> list["SchemaItem"]:
+        """Project table columns."""
+        return [
+            Column("id", Integer, primary_key=True),
+            Column("uuid", Text, nullable=False, default=uuid4()),
+            Column("name", Text, nullable=False),
+            Column("description", Text),
+            Column("created_at", DateTime(timezone=True)),
+            Column(
+                "namespace_id",
+                Integer,
+                ForeignKey(f"{cls.NAMESPACE_TABLE}.id", ondelete="CASCADE"),
+                nullable=False,
+            ),
+            UniqueConstraint("namespace_id", "name"),
+        ]
+
+    @cached_property
+    def _projects_fields(self) -> list[str]:
+        return [
+            c.name  # type: ignore [attr-defined]
+            for c in self._projects_columns()
+            if c.name  # type: ignore [attr-defined]
+        ]
+
+    @classmethod
     def _datasets_columns(cls) -> list["SchemaItem"]:
         """Datasets table columns."""
         return [
             Column("id", Integer, primary_key=True),
+            Column(
+                "project_id",
+                Integer,
+                ForeignKey(f"{cls.PROJECT_TABLE}.id", ondelete="CASCADE"),
+                nullable=False,
+            ),
             Column("name", Text, nullable=False),
             Column("description", Text),
             Column("attrs", JSON, nullable=True),
@@ -446,6 +575,16 @@ class AbstractDBMetastore(AbstractMetastore):
     # Query Tables
     #
     @cached_property
+    def _namespaces(self) -> Table:
+        return Table(
+            self.NAMESPACE_TABLE, self.db.metadata, *self._namespaces_columns()
+        )
+
+    @cached_property
+    def _projects(self) -> Table:
+        return Table(self.PROJECT_TABLE, self.db.metadata, *self._projects_columns())
+
+    @cached_property
     def _datasets(self) -> Table:
         return Table(self.DATASET_TABLE, self.db.metadata, *self._datasets_columns())
 
@@ -468,6 +607,34 @@ class AbstractDBMetastore(AbstractMetastore):
     #
     # Query Starters (These can be overridden by subclasses)
     #
+    @abstractmethod
+    def _namespaces_insert(self) -> "Insert": ...
+
+    def _namespaces_select(self, *columns) -> "Select":
+        if not columns:
+            return self._namespaces.select()
+        return select(*columns)
+
+    def _namespaces_update(self) -> "Update":
+        return self._namespaces.update()
+
+    def _namespaces_delete(self) -> "Delete":
+        return self._namespaces.delete()
+
+    @abstractmethod
+    def _projects_insert(self) -> "Insert": ...
+
+    def _projects_select(self, *columns) -> "Select":
+        if not columns:
+            return self._projects.select()
+        return select(*columns)
+
+    def _projects_update(self) -> "Update":
+        return self._projects.update()
+
+    def _projects_delete(self) -> "Delete":
+        return self._projects.delete()
+
     @abstractmethod
     def _datasets_insert(self) -> "Insert": ...
 
@@ -511,12 +678,115 @@ class AbstractDBMetastore(AbstractMetastore):
         return self._datasets_dependencies.delete()
 
     #
+    # Namespaces
+    #
+
+    def create_namespace(
+        self,
+        name: str,
+        description: Optional[str] = None,
+        ignore_if_exists: bool = True,
+        **kwargs,
+    ) -> Namespace:
+        query = self._namespaces_insert().values(
+            name=name,
+            uuid=str(uuid4()),
+            created_at=datetime.now(timezone.utc),
+            description=description,
+        )
+        if ignore_if_exists and hasattr(query, "on_conflict_do_nothing"):
+            # SQLite and PostgreSQL both support 'on_conflict_do_nothing',
+            # but generic SQL does not
+            query = query.on_conflict_do_nothing(index_elements=["name"])
+        self.db.execute(query)
+
+        return self.get_namespace(name)
+
+    def remove_namespace(self, namespace: Namespace) -> None:
+        n = self._namespaces
+        self.db.execute(self._namespaces_delete().where(n.c.id == namespace.id))
+
+    def update_namespace(self, namespace: Namespace, conn=None, **kwargs) -> Namespace:
+        raise NotImplementedError("Updating namespaces not implemented")
+
+    def get_namespace(self, name: str, conn=None) -> Namespace:
+        """Gets a single namespace by name"""
+        n = self._namespaces
+        if not self.db.has_table(self._namespaces.name):
+            raise TableMissingError
+
+        query = self._namespaces_select(
+            *(getattr(n.c, f) for f in self._namespaces_fields),
+        ).where(n.c.name == name)
+        rows = list(self.db.execute(query, conn=conn))
+        if not rows:
+            raise NamespaceNotFoundError(f"Namespace {name} not found.")
+        return self.namespace_class.parse(*rows[0])
+
+    #
+    # Projects
+    #
+
+    def create_project(
+        self,
+        name: str,
+        namespace: Namespace,
+        description: Optional[str] = None,
+        ignore_if_exists: bool = True,
+        **kwargs,
+    ) -> Project:
+        query = self._projects_insert().values(
+            namespace_id=namespace.id,
+            uuid=str(uuid4()),
+            name=name,
+            created_at=datetime.now(timezone.utc),
+            description=description,
+        )
+        if ignore_if_exists and hasattr(query, "on_conflict_do_nothing"):
+            # SQLite and PostgreSQL both support 'on_conflict_do_nothing',
+            # but generic SQL does not
+            query = query.on_conflict_do_nothing(
+                index_elements=["namespace_id", "name"]
+            )
+        self.db.execute(query)
+
+        return self.get_project(name, namespace)
+
+    def remove_project(self, project: Project) -> None:
+        p = self._projects
+        self.db.execute(self._projects_delete().where(p.c.id == project.id))
+
+    def update_project(self, project: Project, conn=None, **kwargs) -> Project:
+        raise NotImplementedError("Updating projects not implemented")
+
+    def get_project(self, name: str, namespace: Namespace, conn=None) -> Project:
+        """Gets a single project inside some namespace by name"""
+        p = self._projects
+        if not self.db.has_table(self._projects.name):
+            raise TableMissingError
+
+        query = self._projects_select(
+            *(getattr(p.c, f) for f in self._projects_fields),
+        ).where(p.c.name == name, p.c.namespace_id == namespace.id)
+        rows = list(self.db.execute(query, conn=conn))
+        if not rows:
+            raise ProjectNotFoundError(
+                f"Project {name} in namespace {namespace.name} not found."
+            )
+        return self.project_class.parse(*rows[0])
+
+    def get_namespace_project(self, namespace_name: str, project_name: str) -> Project:
+        namespace = self.get_namespace(namespace_name)
+        return self.get_project(project_name, namespace)
+
+    #
     # Datasets
     #
 
     def create_dataset(
         self,
         name: str,
+        project: Project,
         status: int = DatasetStatus.CREATED,
         sources: Optional[list[str]] = None,
         feature_schema: Optional[dict] = None,
@@ -531,6 +801,7 @@ class AbstractDBMetastore(AbstractMetastore):
         # TODO abstract this method and add registered = True based on kwargs
         query = self._datasets_insert().values(
             name=name,
+            project_id=project.id,
             status=status,
             feature_schema=json.dumps(feature_schema or {}),
             created_at=datetime.now(timezone.utc),
@@ -549,7 +820,7 @@ class AbstractDBMetastore(AbstractMetastore):
             query = query.on_conflict_do_nothing(index_elements=["name"])
         self.db.execute(query)
 
-        return self.get_dataset(name)
+        return self.get_dataset(name, project)
 
     def create_dataset_version(  # noqa: PLR0913
         self,
@@ -606,7 +877,7 @@ class AbstractDBMetastore(AbstractMetastore):
             )
         self.db.execute(query, conn=conn)
 
-        return self.get_dataset(dataset.name, conn=conn)
+        return self.get_dataset(dataset.name, dataset.project, conn=conn)
 
     def remove_dataset(self, dataset: DatasetRecord) -> None:
         """Removes dataset."""
@@ -703,6 +974,8 @@ class AbstractDBMetastore(AbstractMetastore):
 
     def _get_dataset_query(
         self,
+        namespace_fields: list[str],
+        project_fields: list[str],
         dataset_fields: list[str],
         dataset_version_fields: list[str],
         isouter: bool = True,
@@ -713,28 +986,44 @@ class AbstractDBMetastore(AbstractMetastore):
         ):
             raise TableMissingError
 
+        n = self._namespaces
+        p = self._projects
         d = self._datasets
         dv = self._datasets_versions
 
         query = self._datasets_select(
+            *(getattr(n.c, f) for f in namespace_fields),
+            *(getattr(p.c, f) for f in project_fields),
             *(getattr(d.c, f) for f in dataset_fields),
             *(getattr(dv.c, f) for f in dataset_version_fields),
         )
-        j = d.join(dv, d.c.id == dv.c.dataset_id, isouter=isouter)
+        j = (
+            n.join(p, n.c.id == p.c.namespace_id)
+            .join(d, p.c.id == d.c.project_id)
+            .join(dv, d.c.id == dv.c.dataset_id, isouter=isouter)
+        )
         return query.select_from(j)
 
     def _base_dataset_query(self) -> "Select":
         return self._get_dataset_query(
-            self._dataset_fields, self._dataset_version_fields
+            self._namespaces_fields,
+            self._projects_fields,
+            self._dataset_fields,
+            self._dataset_version_fields,
         )
 
     def _base_list_datasets_query(self) -> "Select":
         return self._get_dataset_query(
-            self._dataset_list_fields, self._dataset_list_version_fields, isouter=False
+            self._namespaces_fields,
+            self._projects_fields,
+            self._dataset_list_fields,
+            self._dataset_list_version_fields,
+            isouter=False,
         )
 
     def list_datasets(self) -> Iterator["DatasetListRecord"]:
         """Lists all datasets."""
+        # TODO add namespace and project input
         query = self._base_list_datasets_query().order_by(
             self._datasets.c.name, self._datasets_versions.c.version
         )
@@ -743,15 +1032,24 @@ class AbstractDBMetastore(AbstractMetastore):
     def list_datasets_by_prefix(
         self, prefix: str, conn=None
     ) -> Iterator["DatasetListRecord"]:
+        # TODO add namespace and project input
         query = self._base_list_datasets_query()
         query = query.where(self._datasets.c.name.startswith(prefix))
         yield from self._parse_dataset_list(self.db.execute(query))
 
-    def get_dataset(self, name: str, conn=None) -> DatasetRecord:
-        """Gets a single dataset by name"""
+    def get_dataset(
+        self,
+        name: str,  # normal, not full dataset name
+        project: Optional[Project],
+        conn=None,
+    ) -> DatasetRecord:
+        """
+        Gets a single dataset in project by dataset name.
+        """
+        project = project or self.default_project
         d = self._datasets
         query = self._base_dataset_query()
-        query = query.where(d.c.name == name)  # type: ignore [attr-defined]
+        query = query.where(d.c.name == name, d.c.project_id == project.id)  # type: ignore [attr-defined]
         ds = self._parse_dataset(self.db.execute(query, conn=conn))
         if not ds:
             raise DatasetNotFoundError(f"Dataset {name} not found.")
@@ -824,23 +1122,20 @@ class AbstractDBMetastore(AbstractMetastore):
     #
     def add_dataset_dependency(
         self,
-        source_dataset_name: str,
+        source_dataset: "DatasetRecord",
         source_dataset_version: str,
-        dataset_name: str,
-        dataset_version: str,
+        dep_dataset: "DatasetRecord",
+        dep_dataset_version: str,
     ) -> None:
         """Adds dataset dependency to dataset."""
-        source_dataset = self.get_dataset(source_dataset_name)
-        dataset = self.get_dataset(dataset_name)
-
         self.db.execute(
             self._datasets_dependencies_insert().values(
                 source_dataset_id=source_dataset.id,
                 source_dataset_version_id=(
                     source_dataset.get_version(source_dataset_version).id
                 ),
-                dataset_id=dataset.id,
-                dataset_version_id=dataset.get_version(dataset_version).id,
+                dataset_id=dep_dataset.id,
+                dataset_version_id=dep_dataset.get_version(dep_dataset_version).id,
             )
         )
 
@@ -882,6 +1177,8 @@ class AbstractDBMetastore(AbstractMetastore):
     def get_direct_dataset_dependencies(
         self, dataset: DatasetRecord, version: str
     ) -> list[Optional[DatasetDependency]]:
+        n = self._namespaces
+        p = self._projects
         d = self._datasets
         dd = self._datasets_dependencies
         dv = self._datasets_versions
@@ -893,18 +1190,16 @@ class AbstractDBMetastore(AbstractMetastore):
         query = (
             self._datasets_dependencies_select(*select_cols)
             .select_from(
-                dd.join(d, dd.c.dataset_id == d.c.id, isouter=True).join(
-                    dv, dd.c.dataset_version_id == dv.c.id, isouter=True
-                )
+                dd.join(d, dd.c.dataset_id == d.c.id, isouter=True)
+                .join(dv, dd.c.dataset_version_id == dv.c.id, isouter=True)
+                .join(p, d.c.project_id == p.c.id)
+                .join(n, p.c.namespace_id == n.c.id)
             )
             .where(
                 (dd.c.source_dataset_id == dataset.id)
                 & (dd.c.source_dataset_version_id == dataset_version.id)
             )
         )
-        if version:
-            dataset_version = dataset.get_version(version)
-            query = query.where(dd.c.source_dataset_version_id == dataset_version.id)
 
         return [self.dependency_class.parse(*r) for r in self.db.execute(query)]
 
