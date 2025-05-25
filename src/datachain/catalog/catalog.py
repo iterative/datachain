@@ -1062,7 +1062,9 @@ class Catalog:
 
         return self.get_dataset(name, project)
 
-    def get_dataset(self, name: str, project: Optional[Project]) -> DatasetRecord:
+    def get_dataset(
+        self, name: str, project: Optional[Project] = None
+    ) -> DatasetRecord:
         return self.metastore.get_dataset(name, project)
 
     def get_dataset_with_remote_fallback(
@@ -1114,7 +1116,7 @@ class Catalog:
         return DatasetRecord.from_dict(dataset_info)
 
     def get_dataset_dependencies(
-        self, name: str, version: str, project: Optional[Project], indirect=False
+        self, name: str, version: str, project: Optional[Project] = None, indirect=False
     ) -> list[Optional[DatasetDependency]]:
         dataset = self.get_dataset(name, project)
 
@@ -1270,7 +1272,7 @@ class Catalog:
         bucket_uri: str,
         name: str,
         version: str,
-        project: Project,
+        project: Optional[Project] = None,
         client_config=None,
     ) -> list[str]:
         # TODO maybe also receive `DatasetRecord` as argument
@@ -1281,7 +1283,7 @@ class Catalog:
         )
 
     def dataset_table_export_file_names(
-        self, name: str, version: str, project: Project
+        self, name: str, version: str, project: Optional[Project] = None
     ) -> list[str]:
         dataset = self.get_dataset(name, project)
         return self.warehouse.dataset_table_export_file_names(dataset, version)
@@ -1289,7 +1291,7 @@ class Catalog:
     def remove_dataset(
         self,
         name: str,
-        project: Project,
+        project: Optional[Project] = None,
         version: Optional[str] = None,
         force: Optional[bool] = False,
         studio: Optional[bool] = False,
@@ -1325,7 +1327,7 @@ class Catalog:
     def edit_dataset(
         self,
         name: str,
-        project: Project,
+        project: Optional[Project] = None,
         new_name: Optional[str] = None,
         description: Optional[str] = None,
         attrs: Optional[list[str]] = None,

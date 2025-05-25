@@ -255,7 +255,7 @@ class AbstractWarehouse(ABC, Serializable):
 
     def dataset_table_name(self, dataset: DatasetRecord, version: str) -> str:
         return self._construct_dataset_table_name(
-            dataset.namespace.name,
+            dataset.project.namespace.name,
             dataset.project.name,
             dataset.name,
             version,
@@ -359,7 +359,7 @@ class AbstractWarehouse(ABC, Serializable):
         old_version: str,
         new_version: str,
     ) -> None:
-        namespace = dataset.namespace.name
+        namespace = dataset.project.namespace.name
         project = dataset.project.name
         old_ds_table_name = self._construct_dataset_table_name(
             namespace, project, old_name, old_version

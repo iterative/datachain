@@ -356,7 +356,6 @@ class DatasetListVersion:
 class DatasetRecord:
     id: int
     name: str
-    namespace: Namespace
     project: Project
     description: Optional[str]
     attrs: list[str]
@@ -438,7 +437,7 @@ class DatasetRecord:
             json.loads(version_schema) if version_schema else {}
         )
 
-        namespace = Namespace.parse(
+        namespace = Namespace(
             namespace_id,
             namespace_uuid,
             namespace_name,
@@ -446,13 +445,13 @@ class DatasetRecord:
             namespace_created_at,
         )
 
-        project = Project.parse(
+        project = Project(
             project_id,
             project_uuid,
             project_name,
             project_description,
             project_created_at,
-            project_namespace_id,
+            namespace,
         )
 
         dataset_version = DatasetVersion.parse(
@@ -479,7 +478,6 @@ class DatasetRecord:
         return cls(
             dataset_id,
             name,
-            namespace,
             project,
             description,
             attrs_lst,
@@ -507,7 +505,7 @@ class DatasetRecord:
 
     @property
     def full_name(self) -> str:
-        return f"{self.namespace.name}.{self.project.name}.{self.name}"
+        return f"{self.project.namespace.name}.{self.project.name}.{self.name}"
 
     def get_schema(self, version: str) -> dict[str, Union[SQLType, type[SQLType]]]:
         return self.get_version(version).schema if version else self.schema
@@ -662,7 +660,6 @@ class DatasetRecord:
 class DatasetListRecord:
     id: int
     name: str
-    namespace: Namespace
     project: Project
     description: Optional[str]
     attrs: list[str]
@@ -704,7 +701,7 @@ class DatasetListRecord:
     ) -> "DatasetListRecord":
         attrs_lst: list[str] = json.loads(attrs) if attrs else []
 
-        namespace = Namespace.parse(
+        namespace = Namespace(
             namespace_id,
             namespace_uuid,
             namespace_name,
@@ -712,13 +709,13 @@ class DatasetListRecord:
             namespace_created_at,
         )
 
-        project = Project.parse(
+        project = Project(
             project_id,
             project_uuid,
             project_name,
             project_description,
             project_created_at,
-            project_namespace_id,
+            namespace,
         )
 
         dataset_version = DatasetListVersion.parse(
@@ -740,7 +737,6 @@ class DatasetListRecord:
         return cls(
             dataset_id,
             name,
-            namespace,
             project,
             description,
             attrs_lst,
@@ -750,7 +746,7 @@ class DatasetListRecord:
 
     @property
     def full_name(self) -> str:
-        return f"{self.namespace.name}.{self.project.name}.{self.name}"
+        return f"{self.project.namespace.name}.{self.project.name}.{self.name}"
 
     def merge_versions(self, other: "DatasetListRecord") -> "DatasetListRecord":
         """Merge versions from another dataset"""

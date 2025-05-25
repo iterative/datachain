@@ -95,13 +95,24 @@ def test_create_dataset_with_explicit_version(cloud_test_catalog, project, creat
         assert dataset_version.num_objects is None
 
 
-def test_create_dataset_already_exist_but_in_different_project():
-    # TODO finish test
-    assert 1 == 2
+def test_create_dataset_already_exist_but_in_different_project(
+    cloud_test_catalog, dogs_dataset
+):
+    catalog = cloud_test_catalog.catalog
+    dataset = catalog.create_dataset(
+        dogs_dataset.name,
+        catalog.metastore.default_project,
+        query_script="script",
+        columns=[sa.Column("similarity", Float32)],
+    )
+
+    assert dataset.id != dogs_dataset.id
+    assert dataset.name == dogs_dataset.name
+    assert dataset.project != dogs_dataset.project
 
 
-@pytest.mark.parametrize("create_rows", [False])
-def test_ccreate_dataset_already_exist(cloud_test_catalog, dogs_dataset, create_rows):
+@pytest.mark.parametrize("create_rows", [True, False])
+def test_create_dataset_already_exist(cloud_test_catalog, dogs_dataset, create_rows):
     catalog = cloud_test_catalog.catalog
 
     dataset = catalog.create_dataset(
@@ -207,9 +218,10 @@ def test_create_dataset_from_sources(listed_bucket, cloud_test_catalog, project)
 def test_create_dataset_from_sources_dataset(cloud_test_catalog, dogs_dataset, project):
     dataset_name = uuid.uuid4().hex
     catalog = cloud_test_catalog.catalog
+    ds_uri = f"ds://{dogs_dataset.full_name}"
 
     dataset = catalog.create_dataset_from_sources(
-        dataset_name, [f"ds://{dogs_dataset.name}"], project, recursive=True
+        dataset_name, [ds_uri], project, recursive=True
     )
 
     dataset_version = dataset.get_version(dataset.latest_version)
@@ -226,7 +238,7 @@ def test_create_dataset_from_sources_dataset(cloud_test_catalog, dogs_dataset, p
     assert dataset_version.error_message == ""
     assert dataset_version.error_stack == ""
     assert dataset_version.script_output == ""
-    assert dataset_version.sources == f"ds://{dogs_dataset.name}"
+    assert dataset_version.sources == ds_uri
     assert dataset_version.uuid
 
     dr = catalog.warehouse.schema.dataset_row_cls
@@ -631,12 +643,15 @@ def test_dataset_preview_order(test_session):
 
 def test_dataset_preview_last_modified(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
+    project = dogs_dataset.project
 
-    DatasetQuery(
-        name=dogs_dataset.name, project=dogs_dataset.project, catalog=catalog
-    ).save("dogs_custom_columns")
+    DatasetQuery(name=dogs_dataset.name, project=project, catalog=catalog).save(
+        project, "dogs_custom_columns"
+    )
 
-    for r in catalog.get_dataset("dogs_custom_columns").get_version("1.0.0").preview:
+    for r in (
+        catalog.get_dataset("dogs_custom_columns", project).get_version("1.0.0").preview
+    ):
         assert isinstance(r.get("file__last_modified"), str)
 
 
@@ -701,6 +716,8 @@ def test_dataset_storage_dependencies(cloud_test_catalog, cloud_type, indirect):
             "id": ANY,
             "type": DatasetDependencyType.STORAGE,
             "name": dep_name,
+            "namespace": catalog.metastore.default_namespace_name,
+            "project": catalog.metastore.default_project_name,
             "version": "1.0.0",
             "created_at": lst_dataset.get_version("1.0.0").created_at,
             "dependencies": [],

@@ -245,7 +245,9 @@ class AbstractMetastore(ABC, Serializable):
         """Lists all datasets which names start with prefix."""
 
     @abstractmethod
-    def get_dataset(self, name: str, project: Optional[Project]) -> DatasetRecord:
+    def get_dataset(
+        self, name: str, project: Optional[Project] = None
+    ) -> DatasetRecord:
         """Gets a single dataset by name."""
 
     @abstractmethod
@@ -958,7 +960,7 @@ class AbstractDBMetastore(AbstractMetastore):
 
     def _parse_dataset_list(self, rows) -> Iterator["DatasetListRecord"]:
         # grouping rows by dataset id
-        for _, g in groupby(rows, lambda r: r[0]):
+        for _, g in groupby(rows, lambda r: r[11]):
             dataset = self._parse_list_dataset(list(g))
             if dataset:
                 yield dataset
@@ -1031,7 +1033,7 @@ class AbstractDBMetastore(AbstractMetastore):
     def get_dataset(
         self,
         name: str,  # normal, not full dataset name
-        project: Optional[Project],
+        project: Optional[Project] = None,
         conn=None,
     ) -> DatasetRecord:
         """
@@ -1043,7 +1045,10 @@ class AbstractDBMetastore(AbstractMetastore):
         query = query.where(d.c.name == name, d.c.project_id == project.id)  # type: ignore [attr-defined]
         ds = self._parse_dataset(self.db.execute(query, conn=conn))
         if not ds:
-            raise DatasetNotFoundError(f"Dataset {name} not found.")
+            raise DatasetNotFoundError(
+                f"Dataset {name} not found in namespace {project.namespace.name}"
+                f" and project {project.name}."
+            )
         return ds
 
     def remove_dataset_version(
