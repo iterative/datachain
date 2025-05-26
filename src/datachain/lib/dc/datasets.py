@@ -120,7 +120,6 @@ def read_dataset(
     namespace_name, project_name, name = parse_dataset_name(name)
     namespace_name = namespace_name or session.catalog.metastore.default_namespace_name
     project_name = project_name or session.catalog.metastore.default_project_name
-    project = get_project(project_name, namespace_name, session=session)
 
     if version is not None:
         try:
@@ -131,6 +130,7 @@ def read_dataset(
             # all 2.* dataset versions). If dataset doesn't have any versions where
             # major part is equal to that input, exception is thrown.
             major = int(version)
+            project = get_project(project_name, namespace_name, session=session)
             dataset = session.catalog.get_dataset(name, project)
             latest_major = dataset.latest_major_version(major)
             if not latest_major:
@@ -149,7 +149,8 @@ def read_dataset(
 
     query = DatasetQuery(
         name=name,
-        project=project,
+        project_name=project_name,
+        namespace_name=namespace_name,
         version=version,  #  type: ignore[arg-type]
         session=session,
         indexing_column_types=File._datachain_column_types,

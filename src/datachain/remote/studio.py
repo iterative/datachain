@@ -17,6 +17,7 @@ import websockets
 from requests.exceptions import HTTPError, Timeout
 
 from datachain.config import Config
+from datachain.dataset import DatasetRecord
 from datachain.error import DataChainError
 from datachain.utils import STUDIO_URL, retry_with_backoff
 
@@ -322,16 +323,22 @@ class StudioClient:
             method="DELETE",
         )
 
-    def dataset_info(self, name: str) -> Response[DatasetInfoData]:
+    def dataset_info(
+        self, namespace: str, project: str, name: str
+    ) -> Response[DatasetInfoData]:
         def _parse_dataset_info(dataset_info):
             _parse_dates(dataset_info, ["created_at", "finished_at"])
             for version in dataset_info.get("versions"):
                 _parse_dates(version, ["created_at"])
+            _parse_dates(dataset_info.get("project"), ["created_at"])
+            _parse_dates(dataset_info.get("project").get("namespace"), ["created_at"])
 
             return dataset_info
 
         response = self._send_request(
-            "datachain/datasets/info", {"dataset_name": name}, method="GET"
+            "datachain/datasets/info",
+            {"namespace": namespace, "project": project, "name": name},
+            method="GET",
         )
         if response.ok:
             response.data = _parse_dataset_info(response.data)
@@ -355,20 +362,30 @@ class StudioClient:
         )
 
     def export_dataset_table(
-        self, name: str, version: str
+        self, dataset: DatasetRecord, version: str
     ) -> Response[DatasetExportSignedUrls]:
         return self._send_request(
             "datachain/datasets/export",
-            {"dataset_name": name, "dataset_version": version},
+            {
+                "namespace": dataset.project.namespace.name,
+                "project": dataset.project.name,
+                "name": dataset.name,
+                "version": version,
+            },
             method="GET",
         )
 
     def dataset_export_status(
-        self, name: str, version: str
+        self, dataset: DatasetRecord, version: str
     ) -> Response[DatasetExportStatus]:
         return self._send_request(
             "datachain/datasets/export-status",
-            {"dataset_name": name, "dataset_version": version},
+            {
+                "namespace": dataset.project.namespace.name,
+                "project": dataset.project.name,
+                "name": dataset.name,
+                "version": version,
+            },
             method="GET",
         )
 

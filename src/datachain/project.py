@@ -1,7 +1,7 @@
 import builtins
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from datetime import datetime
-from typing import Optional, TypeVar
+from typing import Any, Optional, TypeVar
 
 from datachain.namespace import Namespace
 
@@ -58,3 +58,9 @@ class Project:
         )
 
         return cls(project_id, uuid, name, description, created_at, namespace)
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> "Project":
+        namespace = Namespace.from_dict(d.pop("namespace"))
+        kwargs = {f.name: d[f.name] for f in fields(cls) if f.name in d}
+        return cls(**kwargs, namespace=namespace)

@@ -1095,7 +1095,8 @@ class DatasetQuery:
         self,
         name: str,
         version: Optional[str] = None,
-        project: Optional[Project] = None,
+        project_name: Optional[str] = None,
+        namespace_name: Optional[str] = None,
         catalog: Optional["Catalog"] = None,
         session: Optional[Session] = None,
         indexing_column_types: Optional[dict[str, Any]] = None,
@@ -1121,7 +1122,6 @@ class DatasetQuery:
         self.before_steps: list[Callable] = []
         self.listing_fn: Optional[Callable] = None
         self.update = update
-        self.project = project
 
         self.list_ds_name: Optional[str] = None
 
@@ -1130,22 +1130,24 @@ class DatasetQuery:
         if version:
             self.version = version
 
-        if is_listing_dataset(name):
-            if version:
-                # this listing dataset should already be listed as we specify
-                # exact version
-                self._set_starting_step(self.catalog.get_dataset(name, project=project))
-            else:
-                # not setting query step yet as listing dataset might not exist at
-                # this point
-                self.list_ds_name = name
+        namespace_name = namespace_name or self.catalog.metastore.default_namespace_name
+        project_name = project_name or self.catalog.metastore.default_project_name
+
+        if is_listing_dataset(name) and not version:
+            # not setting query step yet as listing dataset might not exist at
+            # this point
+            self.list_ds_name = name
         elif fallback_to_studio and is_token_set():
             self._set_starting_step(
                 self.catalog.get_dataset_with_remote_fallback(
-                    name, project=project, version=version
+                    name,
+                    namespace_name=namespace_name,
+                    project_name=project_name,
+                    version=version,
                 )
             )
         else:
+            project = self.catalog.metastore.get_project(project_name, namespace_name)
             self._set_starting_step(self.catalog.get_dataset(name, project=project))
 
     def _set_starting_step(self, ds: "DatasetRecord") -> None:
@@ -1159,6 +1161,7 @@ class DatasetQuery:
         self.column_types = copy(ds.schema)
         if "sys__id" in self.column_types:
             self.column_types.pop("sys__id")
+        self.project = ds.project
 
     def __iter__(self):
         return iter(self.db_results())
@@ -1794,7 +1797,11 @@ class DatasetQuery:
         finally:
             self.cleanup()
         return self.__class__(
-            name=name, project=project, version=version, catalog=self.catalog
+            name=name,
+            namespace_name=project.namespace.name,
+            project_name=project.name,
+            version=version,
+            catalog=self.catalog,
         )
 
     @property

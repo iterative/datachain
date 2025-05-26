@@ -1,7 +1,7 @@
 import builtins
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from datetime import datetime
-from typing import Optional, TypeVar
+from typing import Any, Optional, TypeVar
 
 N = TypeVar("N", bound="Namespace")
 
@@ -41,3 +41,8 @@ class Namespace:
         created_at: datetime,
     ) -> "Namespace":
         return cls(id, uuid, name, description, created_at)
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> "Namespace":
+        kwargs = {f.name: d[f.name] for f in fields(cls) if f.name in d}
+        return cls(**kwargs)

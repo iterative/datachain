@@ -646,9 +646,12 @@ def test_dataset_preview_last_modified(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
     project = dogs_dataset.project
 
-    DatasetQuery(name=dogs_dataset.name, project=project, catalog=catalog).save(
-        project, "dogs_custom_columns"
-    )
+    DatasetQuery(
+        name=dogs_dataset.name,
+        namespace_name=project.namespace.name,
+        project_name=project.name,
+        catalog=catalog,
+    ).save("dogs_custom_columns", project=project)
 
     for r in (
         catalog.get_dataset("dogs_custom_columns", project).get_version("1.0.0").preview

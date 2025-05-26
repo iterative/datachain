@@ -13,7 +13,7 @@ from typing import (
 from urllib.parse import urlparse
 
 from datachain import semver
-from datachain.error import DatasetVersionNotFoundError
+from datachain.error import DatasetVersionNotFoundError, InvalidDatasetNameError
 from datachain.namespace import Namespace
 from datachain.project import Project
 from datachain.sql.types import NAME_TYPES_MAPPING, SQLType
@@ -59,14 +59,17 @@ def parse_dataset_uri(uri: str) -> tuple[str, Optional[str]]:
     return name, s[1]
 
 
-def create_dataset_uri(name: str, version: Optional[str] = None) -> str:
+def create_dataset_uri(
+    name: str, namespace: str, project: str, version: Optional[str] = None
+) -> str:
     """
-    Creates a dataset uri based on dataset name and optionally version
+    Creates a dataset uri based on namespace, project, dataset name and optionally
+    version.
     Example:
-        Input: zalando, 3.0.1
-        Output: ds//zalando@v3.0.1
+        Input: dev, clothes, zalando, 3.0.1
+        Output: ds//dev.clothes.zalando@v3.0.1
     """
-    uri = f"{DATASET_PREFIX}{name}"
+    uri = f"{DATASET_PREFIX}{namespace}.{project}.{name}"
     if version:
         uri += f"@v{version}"
 
@@ -383,6 +386,15 @@ class DatasetRecord:
             for c_name, c_type in ct.items()
         }
 
+    @staticmethod
+    def validate_name(name: str) -> None:
+        reserved_chars = ["."]
+        for c in reserved_chars:
+            if c in name:
+                raise InvalidDatasetNameError(
+                    f"Character {c} is reserved and not allowed in dataset name"
+                )
+
     @classmethod
     def parse(  # noqa: PLR0913
         cls,
@@ -586,7 +598,10 @@ class DatasetRecord:
         Dataset uri example: ds://dogs@v3.0.1
         """
         identifier = self.identifier(version)
-        return f"{DATASET_PREFIX}{identifier}"
+        return (
+            f"{DATASET_PREFIX}{self.project.namespace.name}"
+            f".{self.project.name}.{identifier}"
+        )
 
     @property
     def next_version_major(self) -> str:
@@ -651,9 +666,10 @@ class DatasetRecord:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "DatasetRecord":
+        project = Project.from_dict(d.pop("project"))
         versions = [DatasetVersion.from_dict(v) for v in d.pop("versions", [])]
         kwargs = {f.name: d[f.name] for f in fields(cls) if f.name in d}
-        return cls(**kwargs, versions=versions)
+        return cls(**kwargs, versions=versions, project=project)
 
 
 @dataclass
@@ -784,9 +800,11 @@ class DatasetListRecord:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "DatasetListRecord":
+        project = Project.from_dict(d.pop("project"))
         versions = [DatasetListVersion.parse(**v) for v in d.get("versions", [])]
         kwargs = {f.name: d[f.name] for f in fields(cls) if f.name in d}
         kwargs["versions"] = versions
+        kwargs["project"] = project
         return cls(**kwargs)
 
 

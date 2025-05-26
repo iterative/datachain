@@ -2,6 +2,10 @@ class DataChainError(RuntimeError):
     pass
 
 
+class InvalidDatasetNameError(RuntimeError):
+    pass
+
+
 class NotFoundError(Exception):
     pass
 
