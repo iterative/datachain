@@ -108,6 +108,7 @@ def test_create_dataset_already_exist_but_in_different_project(
 
     assert dataset.id != dogs_dataset.id
     assert dataset.name == dogs_dataset.name
+    assert dataset.project == catalog.metastore.default_project
     assert dataset.project != dogs_dataset.project
 
 

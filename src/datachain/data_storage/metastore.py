@@ -810,7 +810,7 @@ class AbstractDBMetastore(AbstractMetastore):
         if ignore_if_exists and hasattr(query, "on_conflict_do_nothing"):
             # SQLite and PostgreSQL both support 'on_conflict_do_nothing',
             # but generic SQL does not
-            query = query.on_conflict_do_nothing(index_elements=["name"])
+            query = query.on_conflict_do_nothing(index_elements=["project_id", "name"])
         self.db.execute(query)
 
         return self.get_dataset(name, project)

@@ -390,7 +390,7 @@ class SQLiteMetastore(AbstractDBMetastore):
     @classmethod
     def _datasets_columns(cls) -> list["SchemaItem"]:
         """Datasets table columns."""
-        return [*super()._datasets_columns(), UniqueConstraint("name")]
+        return [*super()._datasets_columns(), UniqueConstraint("project_id", "name")]
 
     @classmethod
     def _namespaces_columns(cls) -> list["SchemaItem"]:
