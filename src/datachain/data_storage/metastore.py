@@ -1188,8 +1188,8 @@ class AbstractDBMetastore(AbstractMetastore):
             .select_from(
                 dd.join(d, dd.c.dataset_id == d.c.id, isouter=True)
                 .join(dv, dd.c.dataset_version_id == dv.c.id, isouter=True)
-                .join(p, d.c.project_id == p.c.id)
-                .join(n, p.c.namespace_id == n.c.id)
+                .join(p, d.c.project_id == p.c.id, isouter=True)
+                .join(n, p.c.namespace_id == n.c.id, isouter=True)
             )
             .where(
                 (dd.c.source_dataset_id == dataset.id)

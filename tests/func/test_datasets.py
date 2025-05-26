@@ -96,19 +96,19 @@ def test_create_dataset_with_explicit_version(cloud_test_catalog, project, creat
 
 
 def test_create_dataset_already_exist_but_in_different_project(
-    cloud_test_catalog, dogs_dataset
+    cloud_test_catalog, dogs_dataset, project
 ):
     catalog = cloud_test_catalog.catalog
     dataset = catalog.create_dataset(
         dogs_dataset.name,
-        catalog.metastore.default_project,
+        project,
         query_script="script",
         columns=[sa.Column("similarity", Float32)],
     )
 
     assert dataset.id != dogs_dataset.id
     assert dataset.name == dogs_dataset.name
-    assert dataset.project == catalog.metastore.default_project
+    assert dataset.project == project
     assert dataset.project != dogs_dataset.project
 
 

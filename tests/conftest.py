@@ -578,12 +578,12 @@ def listed_bucket(cloud_test_catalog):
 
 
 @pytest.fixture
-def animal_dataset(listed_bucket, project, cloud_test_catalog):
+def animal_dataset(listed_bucket, cloud_test_catalog):
     name = uuid.uuid4().hex
     catalog = cloud_test_catalog.catalog
     src_uri = cloud_test_catalog.src_uri
     dataset = catalog.create_dataset_from_sources(
-        name, [src_uri], project, recursive=True
+        name, [src_uri], catalog.metastore.default_project, recursive=True
     )
     return catalog.update_dataset(
         dataset, {"description": "animal dataset", "attrs": ["cats", "dogs"]}
@@ -591,12 +591,12 @@ def animal_dataset(listed_bucket, project, cloud_test_catalog):
 
 
 @pytest.fixture
-def dogs_dataset(listed_bucket, project, cloud_test_catalog):
+def dogs_dataset(listed_bucket, cloud_test_catalog):
     name = uuid.uuid4().hex
     catalog = cloud_test_catalog.catalog
     src_uri = cloud_test_catalog.src_uri
     dataset = catalog.create_dataset_from_sources(
-        name, [f"{src_uri}/dogs/*"], project, recursive=True
+        name, [f"{src_uri}/dogs/*"], catalog.metastore.default_project, recursive=True
     )
     return catalog.update_dataset(
         dataset, {"description": "dogs dataset", "attrs": ["dogs", "dataset"]}
@@ -604,12 +604,12 @@ def dogs_dataset(listed_bucket, project, cloud_test_catalog):
 
 
 @pytest.fixture
-def cats_dataset(listed_bucket, project, cloud_test_catalog):
+def cats_dataset(listed_bucket, cloud_test_catalog):
     name = uuid.uuid4().hex
     catalog = cloud_test_catalog.catalog
     src_uri = cloud_test_catalog.src_uri
     dataset = catalog.create_dataset_from_sources(
-        name, [f"{src_uri}/cats/*"], project, recursive=True
+        name, [f"{src_uri}/cats/*"], catalog.metastore.default_project, recursive=True
     )
     return catalog.update_dataset(
         dataset, {"description": "cats dataset", "attrs": ["cats", "dataset"]}

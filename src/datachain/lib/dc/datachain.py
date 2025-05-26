@@ -520,7 +520,9 @@ class DataChain:
         project = get_project(
             self.project_name, self.namespace_name, session=self.session
         )
-        return self._evolve(query=self._query.save(project, feature_schema=schema))
+        return self._evolve(
+            query=self._query.save(project=project, feature_schema=schema)
+        )
 
     def save(  # type: ignore[override]
         self,
@@ -587,9 +589,9 @@ class DataChain:
             if delta_ds:
                 return self._evolve(
                     query=delta_ds._query.save(
-                        project,
                         name=name,
                         version=version,
+                        project=project,
                         feature_schema=schema,
                         dependencies=dependencies,
                         **kwargs,
@@ -607,9 +609,9 @@ class DataChain:
 
         return self._evolve(
             query=self._query.save(
-                project,
                 name=name,
                 version=version,
+                project=project,
                 description=description,
                 attrs=attrs,
                 feature_schema=schema,

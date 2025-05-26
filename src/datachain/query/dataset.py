@@ -1094,8 +1094,8 @@ class DatasetQuery:
     def __init__(
         self,
         name: str,
-        project: Project,
         version: Optional[str] = None,
+        project: Optional[Project] = None,
         catalog: Optional["Catalog"] = None,
         session: Optional[Session] = None,
         indexing_column_types: Optional[dict[str, Any]] = None,
@@ -1134,17 +1134,19 @@ class DatasetQuery:
             if version:
                 # this listing dataset should already be listed as we specify
                 # exact version
-                self._set_starting_step(self.catalog.get_dataset(name, project))
+                self._set_starting_step(self.catalog.get_dataset(name, project=project))
             else:
                 # not setting query step yet as listing dataset might not exist at
                 # this point
                 self.list_ds_name = name
         elif fallback_to_studio and is_token_set():
             self._set_starting_step(
-                self.catalog.get_dataset_with_remote_fallback(name, project, version)
+                self.catalog.get_dataset_with_remote_fallback(
+                    name, project=project, version=version
+                )
             )
         else:
-            self._set_starting_step(self.catalog.get_dataset(name, project))
+            self._set_starting_step(self.catalog.get_dataset(name, project=project))
 
     def _set_starting_step(self, ds: "DatasetRecord") -> None:
         if not self.version:
@@ -1711,9 +1713,9 @@ class DatasetQuery:
 
     def save(
         self,
-        project: Project,
         name: Optional[str] = None,
         version: Optional[str] = None,
+        project: Optional[Project] = None,
         feature_schema: Optional[dict] = None,
         dependencies: Optional[list[DatasetDependency]] = None,
         description: Optional[str] = None,
@@ -1722,6 +1724,7 @@ class DatasetQuery:
         **kwargs,
     ) -> "Self":
         """Save the query as a dataset."""
+        project = project or self.catalog.metastore.default_project
         try:
             if (
                 name
