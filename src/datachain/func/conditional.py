@@ -192,7 +192,7 @@ def ifelse(
     return case((condition, if_val), else_=else_val)
 
 
-def isnone(col: Union[str | ColumnElement]) -> Func:
+def isnone(col: Union[str, ColumnElement]) -> Func:
     """
     Returns a function that checks if the column value is `None` (NULL in DB).
 
