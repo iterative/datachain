@@ -103,6 +103,8 @@ def test_dataset_dependency_dataset_name(dep_name, dep_type, expected):
         version="1.0.0",
         type=dep_type,
         created_at=datetime.now(timezone.utc),
+        namespace="dev",
+        project="animals",
         dependencies=[],
     )
 
