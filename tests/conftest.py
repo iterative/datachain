@@ -627,19 +627,19 @@ def dataset_record():
         status=1,
         schema={},
         feature_schema={},
-        namespace=Namespace(
-            id=1,
-            name="dev",
-            uuid=str(uuid.uuid4()),
-            crated_at=datetime.now(),
-            namespace_id=1,
-        ),
         project=Project(
             id=1,
             uuid=str(uuid.uuid4()),
             name="my_project",
-            crated_at=datetime.now(),
-            namespace_id=1,
+            created_at=datetime.now(),
+            description="",
+            namespace=Namespace(
+                id=1,
+                uuid=str(uuid.uuid4()),
+                name="dev",
+                created_at=datetime.now(),
+                description="",
+            ),
         ),
     )
 
@@ -697,11 +697,28 @@ def studio_datasets(requests_mock, studio_token):
         "num_objects": 6,
         "size": 100,
     }
+
+    project = {
+        "id": 1,
+        "uuid": str(uuid.uuid4()),
+        "name": "my_project",
+        "created_at": "2024-02-23T10:42:31.842944+00:00",
+        "description": "",
+        "namespace": {
+            "id": 1,
+            "name": "dev",
+            "uuid": str(uuid.uuid4()),
+            "created_at": "2024-02-23T10:42:31.842944+00:00",
+            "description": "",
+        },
+    }
+
     dogs_dataset = {
         "id": 1,
         "name": "dogs",
         "description": "dogs dataset",
         "attrs": ["dogs", "dataset"],
+        "project": project,
         "versions": [
             {
                 "version": "1.0.0",
@@ -718,19 +735,6 @@ def studio_datasets(requests_mock, studio_token):
                 **common_version_info,
             },
         ],
-        "namespace": {
-            "id": 1,
-            "name": "dev",
-            "uuid": str(uuid.uuid4()),
-            "crated_at": datetime.now(),
-        },
-        "project": {
-            "id": 1,
-            "uuid": str(uuid.uuid4()),
-            "name": "my_project",
-            "crated_at": datetime.now(),
-            "namespace_id": 1,
-        },
     }
 
     datasets = [
@@ -740,6 +744,7 @@ def studio_datasets(requests_mock, studio_token):
             "name": "cats",
             "description": "cats dataset",
             "attrs": ["cats", "dataset"],
+            "project": project,
             "versions": [
                 {
                     "version": "1.0.0",
@@ -755,6 +760,7 @@ def studio_datasets(requests_mock, studio_token):
             "name": "both",
             "description": "both dataset",
             "attrs": ["both", "dataset"],
+            "project": project,
             "versions": [
                 {
                     "version": "1.0.0",

@@ -13,6 +13,7 @@ from sqlalchemy.sql.expression import true
 import datachain.fs.utils as fsutils
 from datachain.asyn import iter_over_async
 from datachain.client import Client
+from datachain.dataset import DatasetRecord
 from datachain.error import ClientError
 from datachain.lib.file import File
 from datachain.query.schema import Column
@@ -195,5 +196,6 @@ def get_listing(
         list_path = f"{ds_name.strip('/').removeprefix(listing.name)}/{list_path}"
 
     ds_name = listing.name if listing else ds_name
+    ds_name = DatasetRecord.clean_name(ds_name)
 
     return ds_name, list_uri, list_path, bool(listing)

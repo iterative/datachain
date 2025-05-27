@@ -29,6 +29,8 @@ QUERY_DATASET_PREFIX = "ds_query_"
 LISTING_PREFIX = "lst__"
 
 DEFAULT_DATASET_VERSION = "1.0.0"
+DATASET_NAME_RESERVED_CHARS = ["."]
+DATASET_NAME_REPLACEMENT_CHAR = "_"
 
 
 # StorageURI represents a normalised URI to a valid storage location (full bucket or
@@ -388,12 +390,20 @@ class DatasetRecord:
 
     @staticmethod
     def validate_name(name: str) -> None:
-        reserved_chars = ["."]
-        for c in reserved_chars:
+        """Makes sure name doesn't have reserved characters"""
+        for c in DATASET_NAME_RESERVED_CHARS:
             if c in name:
                 raise InvalidDatasetNameError(
                     f"Character {c} is reserved and not allowed in dataset name"
                 )
+
+    @staticmethod
+    def clean_name(name: str) -> str:
+        """Replaces all reserved characters with valid ones"""
+        for c in DATASET_NAME_RESERVED_CHARS:
+            name = name.replace(c, DATASET_NAME_REPLACEMENT_CHAR)
+
+        return name
 
     @classmethod
     def parse(  # noqa: PLR0913
