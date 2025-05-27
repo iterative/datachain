@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from .window import Window
 
 
-ColT = Union[str, ColumnElement, "Func", tuple]
+ColT = Union[str, Column, ColumnElement, "Func", tuple]
 
 
 class Func(Function):
