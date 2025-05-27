@@ -249,9 +249,9 @@ def slice(
             try:
                 return list[element_type(arr[0])]
             except IndexError:
-                # if the array is empty, return list[str] as default type
-                return list[str]
-        return None
+                pass
+        # if not an array or array is empty, return list[str] as default type
+        return list[str]
 
     if isinstance(arr, (str, Column, Func)):
         cols = [arr]
