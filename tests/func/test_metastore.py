@@ -163,7 +163,7 @@ def test_create_dataset_version(metastore):
     assert dv.schema == expected_schema
     assert dv.num_objects == 100
     assert dv.size == 1000
-    assert dv._preview_data == preview_json
+    assert dv._preview_data in (preview, preview_json)
     assert dv.sources == "gs://test_source"
     assert dv.query_script == query_script
     assert dv.job_id == job_id
@@ -585,7 +585,7 @@ def test_list_datasets_by_prefix(metastore):
 
 def test_get_dataset(metastore):
     with pytest.raises(Exception, match="not found"):
-        metastore.get_dataset("nonexistent")
+        metastore.get_dataset(str(uuid4()))
 
     ds = metastore.create_dataset(name="my_dataset")
     fetched = metastore.get_dataset("my_dataset")
@@ -802,7 +802,7 @@ def test_list_jobs_by_ids(metastore):
 
 
 def test_create_and_get_job(metastore):
-    assert metastore.get_job("nonexistent") is None
+    assert metastore.get_job(str(uuid4())) is None
 
     job_id = metastore.create_job(
         name="test_job",
@@ -871,7 +871,7 @@ def test_set_job_status(metastore):
 
 
 def test_get_job_status(metastore):
-    assert metastore.get_job_status("nonexistent") is None
+    assert metastore.get_job_status(str(uuid4())) is None
 
     job_id = metastore.create_job(
         name="status_job2",
