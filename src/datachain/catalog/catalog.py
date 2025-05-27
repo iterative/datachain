@@ -911,11 +911,7 @@ class Catalog:
             values["num_objects"] = None
             values["size"] = None
             values["preview"] = None
-            self.metastore.update_dataset_version(
-                dataset,
-                version,
-                **values,
-            )
+            self.metastore.update_dataset_version(dataset, version, **values)
             return
 
         if not dataset_version.num_objects:
@@ -935,11 +931,7 @@ class Catalog:
         if not values:
             return
 
-        self.metastore.update_dataset_version(
-            dataset,
-            version,
-            **values,
-        )
+        self.metastore.update_dataset_version(dataset, version, **values)
 
     def update_dataset(
         self, dataset: DatasetRecord, conn=None, **kwargs
