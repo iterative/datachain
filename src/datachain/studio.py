@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Optional
 import tabulate
 
 from datachain.config import Config, ConfigLevel
-from datachain.dataset import QUERY_DATASET_PREFIX
+from datachain.dataset import QUERY_DATASET_PREFIX, parse_dataset_name
 from datachain.error import DataChainError
 from datachain.remote.studio import StudioClient
 from datachain.utils import STUDIO_URL
@@ -177,7 +177,10 @@ def list_datasets(team: Optional[str] = None, name: Optional[str] = None):
 def list_dataset_versions(team: Optional[str] = None, name: str = ""):
     client = StudioClient(team=team)
 
-    response = client.dataset_info(name)
+    namespace_name, project_name, name = parse_dataset_name(name)
+    if not namespace_name or not project_name:
+        raise DataChainError(f"Missing namespace or project form dataset name {name}")
+    response = client.dataset_info(namespace_name, project_name, name)
 
     if not response.ok:
         raise DataChainError(response.message)

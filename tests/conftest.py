@@ -630,7 +630,7 @@ def dataset_record():
         project=Project(
             id=1,
             uuid=str(uuid.uuid4()),
-            name="my_project",
+            name="animals",
             created_at=datetime.now(),
             description="",
             namespace=Namespace(
@@ -701,7 +701,7 @@ def studio_datasets(requests_mock, studio_token):
     project = {
         "id": 1,
         "uuid": str(uuid.uuid4()),
-        "name": "my_project",
+        "name": "animals",
         "created_at": "2024-02-23T10:42:31.842944+00:00",
         "description": "",
         "namespace": {
@@ -775,7 +775,10 @@ def studio_datasets(requests_mock, studio_token):
 
     requests_mock.get(f"{STUDIO_URL}/api/datachain/datasets", json=datasets)
     requests_mock.get(
-        f"{STUDIO_URL}/api/datachain/datasets/info?dataset_name=dogs&team_name=team_name",
+        (
+            f"{STUDIO_URL}/api/datachain/datasets/info?namespace=dev&project=animals"
+            "&name=dogs&team_name=team_name"
+        ),
         json=dogs_dataset,
     )
 

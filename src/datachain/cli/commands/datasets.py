@@ -106,7 +106,11 @@ def list_datasets_local(catalog: "Catalog", name: Optional[str] = None):
 
 
 def list_datasets_local_versions(catalog: "Catalog", name: str):
-    ds = catalog.get_dataset(name)
+    namespace_name, project_name, name = parse_dataset_name(name)
+    namespace_name = namespace_name or catalog.metastore.default_namespace_name
+    project_name = project_name or catalog.metastore.default_project_name
+    project = catalog.metastore.get_project(project_name, namespace_name)
+    ds = catalog.get_dataset(name, project)
     for v in ds.versions:
         yield (name, v.version)
 
@@ -159,7 +163,7 @@ def rm_dataset(
     if (all or studio) and token:
         if not namespace_name or not project_name:
             raise DataChainError("Namespace or project missing in Studio dataset name")
-        remove_studio_dataset(team, name, version, force)
+        remove_studio_dataset(team, name, namespace_name, project_name, version, force)
 
 
 def edit_dataset(
@@ -196,7 +200,9 @@ def edit_dataset(
 
     if (all or studio) and token:
         if not namespace_name or not project_name:
-            raise DataChainError("Namespace or project missing in Studio dataset name")
+            raise DataChainError(
+                f"Namespace or project missing in Studio dataset name {name}"
+            )
         edit_studio_dataset(
             team, name, namespace_name, project_name, new_name, description, attrs
         )
