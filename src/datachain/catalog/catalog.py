@@ -1352,6 +1352,7 @@ class Catalog:
     ) -> DatasetRecord:
         update_data = {}
         if new_name:
+            DatasetRecord.validate_name(new_name)
             update_data["name"] = new_name
         if description is not None:
             update_data["description"] = description

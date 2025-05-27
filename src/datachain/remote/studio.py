@@ -291,13 +291,17 @@ class StudioClient:
     def edit_dataset(
         self,
         name: str,
+        namespace: str,
+        project: str,
         new_name: Optional[str] = None,
         description: Optional[str] = None,
         attrs: Optional[list[str]] = None,
     ) -> Response[DatasetInfoData]:
         body = {
             "new_name": new_name,
-            "dataset_name": name,
+            "name": name,
+            "namespace": namespace,
+            "project": project,
             "description": description,
             "attrs": attrs,
         }
@@ -310,14 +314,18 @@ class StudioClient:
     def rm_dataset(
         self,
         name: str,
+        namespace: str,
+        project: str,
         version: Optional[str] = None,
         force: Optional[bool] = False,
     ) -> Response[DatasetInfoData]:
         return self._send_request(
             "datachain/datasets",
             {
-                "dataset_name": name,
-                "dataset_version": version,
+                "name": name,
+                "namespace": namespace,
+                "project": project,
+                "version": version,
                 "force": force,
             },
             method="DELETE",

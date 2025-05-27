@@ -17,6 +17,9 @@ E2E_STEP_TIMEOUT_SEC = 90
 @pytest.mark.e2e
 @pytest.mark.xdist_group(name="tmpfile")
 def test_atomicity_feature_file(tmp_dir, catalog_tmpfile):
+    namespace = catalog_tmpfile.metastore.create_namespace("dev")
+    project = catalog_tmpfile.metastore.create_project("animals", namespace)
+
     command = (
         python_exc,
         os.path.join(tests_dir, "scripts", "feature_class_exception.py"),
@@ -30,6 +33,7 @@ def test_atomicity_feature_file(tmp_dir, catalog_tmpfile):
 
     catalog_tmpfile.create_dataset(
         "existing_dataset",
+        project,
         query_script="script",
         columns=[sa.Column("similarity", Float32)],
         create_rows=True,

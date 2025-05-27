@@ -116,7 +116,6 @@ def read_dataset(
 
     session = Session.get(session)
 
-    # TODO this part of the code is duplicating
     namespace_name, project_name, name = parse_dataset_name(name)
     namespace_name = namespace_name or session.catalog.metastore.default_namespace_name
     project_name = project_name or session.catalog.metastore.default_project_name
