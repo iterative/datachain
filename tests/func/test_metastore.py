@@ -1,5 +1,5 @@
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
@@ -120,8 +120,8 @@ def test_create_dataset_version(metastore):
     )
     assert ds.id is not None
 
-    created_at = datetime.now(UTC) - timedelta(minutes=3)
-    finished_at = datetime.now(UTC)
+    created_at = datetime.now(timezone.utc) - timedelta(minutes=3)
+    finished_at = datetime.now(timezone.utc)
     job_id = str(uuid4())
     uuid = str(uuid4())
 
@@ -170,7 +170,7 @@ def test_create_dataset_version(metastore):
 
 
 def test_create_dataset_version_finished_at(metastore):
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
     ds = metastore.create_dataset(name="test_dataset")
 
     ds = metastore.create_dataset_version(
@@ -348,7 +348,7 @@ def test_update_dataset_read_only_values(metastore):
     ds2 = metastore.update_dataset(
         ds,
         id=ds.id + 1,
-        created_at=datetime.now(UTC).isoformat(),
+        created_at=datetime.now(timezone.utc).isoformat(),
     )
 
     assert ds2.id == ds.id
@@ -386,7 +386,7 @@ def test_update_dataset_version(metastore):
     )
     dv = ds.versions[0]
 
-    finished_at = datetime.now(UTC)
+    finished_at = datetime.now(timezone.utc)
     job_id = str(uuid4())
     uuid = str(uuid4())
 
@@ -463,7 +463,7 @@ def test_update_dataset_version_read_only_values(metastore):
         ds,
         ds.latest_version,
         id=dv.id + 1,
-        created_at=datetime.now(UTC).isoformat(),
+        created_at=datetime.now(timezone.utc).isoformat(),
     )
 
     assert dv2.id == dv.id
@@ -842,7 +842,7 @@ def test_update_job(metastore):
         status=JobStatus.FAILED,
         error_message="err",
         error_stack="stack",
-        finished_at=datetime.now(UTC),
+        finished_at=datetime.now(timezone.utc),
         metrics={"acc": 0.99},
     )
     assert updated.status == JobStatus.FAILED
