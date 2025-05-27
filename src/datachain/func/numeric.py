@@ -13,8 +13,8 @@ def bit_and(*args: Union[str, Column, Func, int]) -> Func:
     Args:
         args (str | Column | Func | int): Two values to compute
             the bitwise AND operation between.
-            If a string is provided, it is assumed to be the name of the column vector.
-            If a Column is provided, it is assumed to be a column vector.
+            If a string is provided, it is assumed to be the name of the column.
+            If a Column is provided, it is assumed to be a column.
             If a Func is provided, it is assumed to be a function returning an int.
             If an integer is provided, it is assumed to be a constant value.
 
@@ -58,8 +58,8 @@ def bit_or(*args: Union[str, Column, Func, int]) -> Func:
     Args:
         args (str | Column | Func | int): Two values to compute
             the bitwise OR operation between.
-            If a string is provided, it is assumed to be the name of the column vector.
-            If a Column is provided, it is assumed to be a column vector.
+            If a string is provided, it is assumed to be the name of the column.
+            If a Column is provided, it is assumed to be a column.
             If a Func is provided, it is assumed to be a function returning an int.
             If an integer is provided, it is assumed to be a constant value.
 
@@ -103,8 +103,8 @@ def bit_xor(*args: Union[str, Column, Func, int]) -> Func:
     Args:
         args (str | Column | Func | int): Two values to compute
             the bitwise XOR operation between.
-            If a string is provided, it is assumed to be the name of the column vector.
-            If a Column is provided, it is assumed to be a column vector.
+            If a string is provided, it is assumed to be the name of the column.
+            If a Column is provided, it is assumed to be a column.
             If a Func is provided, it is assumed to be a function returning an int.
             If an integer is provided, it is assumed to be a constant value.
 
@@ -146,11 +146,11 @@ def int_hash_64(col: Union[str, Column, Func, int]) -> Func:
     Returns a function that computes the 64-bit hash of an integer.
 
     Args:
-        col (str | Column | Func | int): String to compute the hash of.
+        col (str | Column | Func | int): Integer to compute the hash of.
             If a string is provided, it is assumed to be the name of the column.
-            If a Column is provided, it is assumed to be a column vector.
+            If a Column is provided, it is assumed to be a column.
             If a Func is provided, it is assumed to be a function returning an int.
-            If a int is provided, it is assumed to be an int literal.
+            If an int is provided, it is assumed to be an int literal.
 
     Returns:
         Func: A `Func` object that represents the 64-bit hash function.
@@ -163,7 +163,7 @@ def int_hash_64(col: Union[str, Column, Func, int]) -> Func:
         )
         ```
 
-    Note:
+    Notes:
         - The result column will always be of type int.
     """
     cols, args = [], []
@@ -189,8 +189,8 @@ def bit_hamming_distance(*args: Union[str, Column, Func, int]) -> Func:
     Args:
         args (str | Column | Func | int): Two integers to compute
             the Hamming distance between.
-            If a str is provided, it is assumed to be the name of the column.
-            If a Column is provided, it is assumed to be a column vector.
+            If a string is provided, it is assumed to be the name of the column.
+            If a Column is provided, it is assumed to be a column.
             If a Func is provided, it is assumed to be a function returning an int.
             If an int is provided, it is assumed to be an integer literal.
 
@@ -200,7 +200,8 @@ def bit_hamming_distance(*args: Union[str, Column, Func, int]) -> Func:
     Example:
         ```py
         dc.mutate(
-            ham_dist=func.bit_hamming_distance("embed1", 123456),
+            hd1=func.bit_hamming_distance("signal.value1", "signal.value2"),
+            hd2=func.bit_hamming_distance(dc.C("signal.value1"), 0x0F),
         )
         ```
 

@@ -35,7 +35,7 @@ def greatest(*args: Union[str, Column, Func, float]) -> Func:
         )
         ```
 
-    Note:
+    Notes:
         - The result column will always be of the same type as the input columns.
     """
     cols, func_args = [], []
@@ -76,7 +76,7 @@ def least(*args: Union[str, Column, Func, float]) -> Func:
         )
         ```
 
-    Note:
+    Notes:
         - The result column will always be of the same type as the input columns.
     """
     cols, func_args = [], []
@@ -96,17 +96,17 @@ def case(
     *args: tuple[Union[ColumnElement, Func, bool], CaseT], else_: Optional[CaseT] = None
 ) -> Func:
     """
-    Returns the case function that produces case expression which has a list of
-    conditions and corresponding results. Results can be python primitives like string,
-    numbers or booleans but can also be other nested functions (including case function)
-    or columns.
+    Returns a case expression that evaluates a list of conditions and returns
+    corresponding results. Results can be Python primitives (string, numbers, booleans),
+    nested functions (including case function), or columns.
 
     Args:
-        args (tuple[Column | bool, Column | literal]): Tuple of condition
-            and values pair.
-        else_ (literal, optional): Optional else value in case expression.
-            If omitted, and no case conditions are satisfied,
-            the result will be None (NULL in DB).
+        args (tuple[ColumnElement | Func | bool, CaseT]): Tuples of (condition, value)
+            pairs. Each condition is evaluated in order, and the corresponding value
+            is returned for the first condition that evaluates to True.
+        else_ (CaseT, optional): Value to return if no conditions are satisfied.
+            If omitted and no conditions are satisfied, the result will be None
+            (NULL in DB).
 
     Returns:
         Func: A `Func` object that represents the case function.
@@ -117,7 +117,8 @@ def case(
             res=func.case((dc.C("num") > 0, "P"), (dc.C("num") < 0, "N"), else_="Z"),
         )
         ```
-    Note:
+
+    Notes:
         - The result type is inferred from the values provided in the case statements.
     """
     supported_types = [int, float, complex, str, bool]
@@ -165,16 +166,15 @@ def ifelse(
     condition: Union[ColumnElement, Func], if_val: CaseT, else_val: CaseT
 ) -> Func:
     """
-    Returns the ifelse function that produces if expression which has a condition
-    and values for true and false outcome. Results can be one of python primitives
-    like string, numbers or booleans, but can also be nested functions or columns.
+    Returns an if-else expression that evaluates a condition and returns one
+    of two values based on the result. Values can be Python primitives
+    (string, numbers, booleans), nested functions, or columns.
 
     Args:
-        condition (ColumnElement, Func):  Condition which is evaluated.
-        if_val (str | int | float | complex | bool, Func, ColumnElement): Value for true
-            condition outcome.
-        else_val (str | int | float | complex | bool, Func, ColumnElement): Value for
-            false condition outcome.
+        condition (ColumnElement | Func): Condition to evaluate.
+        if_val (ColumnElement | Func | literal): Value to return if condition is True.
+        else_val (ColumnElement | Func | literal): Value to return if condition
+            is False.
 
     Returns:
         Func: A `Func` object that represents the ifelse function.
@@ -185,7 +185,8 @@ def ifelse(
             res=func.ifelse(isnone("col"), "EMPTY", "NOT_EMPTY")
         )
         ```
-    Note:
+
+    Notes:
         - The result type is inferred from the values provided in the ifelse statement.
     """
     return case((condition, if_val), else_=else_val)
@@ -194,7 +195,6 @@ def ifelse(
 def isnone(col: Union[str | ColumnElement]) -> Func:
     """
     Returns a function that checks if the column value is `None` (NULL in DB).
-    Returns True if column value is None, otherwise False.
 
     Args:
         col (str | Column): Column to check if it's None or not.
@@ -202,15 +202,16 @@ def isnone(col: Union[str | ColumnElement]) -> Func:
             If a Column is provided, it is assumed to be a column in the dataset.
 
     Returns:
-        Func: A `Func` object that represents the conditional to check
-            if column is `None`.
+        Func: A `Func` object that represents the isnone function.
+            Returns True if column value is None, otherwise False.
 
     Example:
         ```py
         dc.mutate(test=ifelse(isnone("col"), "EMPTY", "NOT_EMPTY"))
         ```
-    Note:
-        - The result type is always `bool`.
+
+    Notes:
+        - The result column will always be of type bool.
     """
     if isinstance(col, str):
         # if string is provided, it is assumed to be the name of the column
@@ -225,7 +226,7 @@ def or_(*args: Union[ColumnElement, Func]) -> Func:
     logical operator.
 
     Args:
-        args (str | Column | Func): The expressions for OR statement.
+        args (ColumnElement | Func): The expressions for OR statement.
             If a string is provided, it is assumed to be the name of the column.
             If a Column is provided, it is assumed to be a column in the dataset.
             If a Func is provided, it is assumed to be a function returning a value.
@@ -239,6 +240,9 @@ def or_(*args: Union[ColumnElement, Func]) -> Func:
             test=ifelse(or_(isnone("name"), dc.C("name") == ''), "Empty", "Not Empty")
         )
         ```
+
+    Notes:
+        - The result column will always be of type bool.
     """
     cols, func_args = [], []
 
@@ -257,7 +261,7 @@ def and_(*args: Union[ColumnElement, Func]) -> Func:
     logical operator.
 
     Args:
-        args (str | Column | Func): The expressions for AND statement.
+        args (ColumnElement | Func): The expressions for AND statement.
             If a string is provided, it is assumed to be the name of the column.
             If a Column is provided, it is assumed to be a column in the dataset.
             If a Func is provided, it is assumed to be a function returning a value.
@@ -271,6 +275,9 @@ def and_(*args: Union[ColumnElement, Func]) -> Func:
             test=ifelse(and_(isnone("name"), isnone("surname")), "Empty", "Not Empty")
         )
         ```
+
+    Notes:
+        - The result column will always be of type bool.
     """
     cols, func_args = [], []
 

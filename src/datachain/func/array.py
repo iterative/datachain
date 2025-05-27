@@ -138,7 +138,7 @@ def length(arg: Union[str, Column, Func, Sequence]) -> Func:
         )
         ```
 
-    Note:
+    Notes:
         - The result column will always be of type int.
     """
     if isinstance(arg, (str, Column, Func)):
@@ -153,7 +153,7 @@ def length(arg: Union[str, Column, Func, Sequence]) -> Func:
 
 def contains(arr: Union[str, Column, Func, Sequence], elem: Any) -> Func:
     """
-    Checks whether the array has the element.
+    Checks whether the array contains the specified element.
 
     Args:
         arr (str | Column | Func | Sequence): Array to check for the element.
@@ -176,6 +176,9 @@ def contains(arr: Union[str, Column, Func, Sequence], elem: Any) -> Func:
             contains3=func.array.contains([1, 2, 3, 4, 5], 7),
         )
         ```
+
+    Notes:
+        - The result column will always be of type int.
     """
 
     def inner(arg):
@@ -198,31 +201,33 @@ def slice(
     length: Optional[int] = None,
 ) -> Func:
     """
-    Returns a slice of the array.
+    Returns a slice of the array starting from the specified offset.
 
     Args:
-        arr (str | Column | Func | Sequence): Array to check for the element.
+        arr (str | Column | Func | Sequence): Array to slice.
             If a string is provided, it is assumed to be the name of the array column.
             If a Column is provided, it is assumed to be an array column.
             If a Func is provided, it is assumed to be a function returning an array.
             If a sequence is provided, it is assumed to be an array of values.
-        offset (int): Offset to start the slice from.
-        length (int, optional): Length of the slice. If not provided, the slice will
-            continue to the end of the array.
+        offset (int): Starting position of the slice (0-based).
+        length (int, optional): Number of elements to include in the slice.
+            If not provided, returns all elements from offset to the end.
 
     Returns:
-        Func: A `Func` object that represents the slice function. Result of the
-            function will be a slice of the array starting from the offset
-            and with the given length.
+        Func: A `Func` object that represents the slice function.
 
     Example:
         ```py
         dc.mutate(
-            slice1=func.array.slice("signal.values", 3),
-            slice2=func.array.slice(dc.C("signal.values"), 1, 3),
-            slice3=func.array.slice([1, 2, 3, 4, 5], 1, 3),
+            slice1=func.array.slice("signal.values", 1, 3),
+            slice2=func.array.slice(dc.C("signal.values"), 2),
+            slice3=func.array.slice([1, 2, 3, 4, 5], 1, 2),
         )
         ```
+
+    Notes:
+        - The result column will be of type array with the same element type
+            as the input.
     """
 
     def inner(arg):
@@ -274,7 +279,7 @@ def join(
     Returns a string that is the concatenation of the elements of the array.
 
     Args:
-        arr (str | Column | Func | Sequence): Array to check for the element.
+        arr (str | Column | Func | Sequence): Array to join.
             If a string is provided, it is assumed to be the name of the array column.
             If a Column is provided, it is assumed to be an array column.
             If a Func is provided, it is assumed to be a function returning an array.
@@ -282,9 +287,7 @@ def join(
         sep (str): Separator to use for the concatenation. Default is an empty string.
 
     Returns:
-        Func: A `Func` object that represents the join function. Result of the
-            function will be a string that is the concatenation of the elements
-            of the array, separated by the given separator.
+        Func: A `Func` object that represents the join function.
 
     Example:
         ```py
@@ -294,6 +297,9 @@ def join(
             join3=func.array.join(["1", "2", "3", "4", "5"], "/"),
         )
         ```
+
+    Notes:
+        - The result column will always be of type string.
     """
 
     def inner(arg):
@@ -341,7 +347,7 @@ def get_element(arg: Union[str, Column, Func, Sequence], index: int) -> Func:
         )
         ```
 
-    Note:
+    Notes:
         - The result column will always be the same type as the elements of the array.
     """
 

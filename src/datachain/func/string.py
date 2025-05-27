@@ -30,7 +30,7 @@ def length(col: ColT) -> Func:
         )
         ```
 
-    Note:
+    Notes:
         - The result column will always be of type int.
     """
     return Func("length", inner=string.length, cols=[col], result_type=int)
@@ -57,11 +57,11 @@ def split(col: ColT, sep: str, limit: Optional[int] = None) -> Func:
         dc.mutate(
             path_parts=func.string.split("file.path", "/"),
             signal_values=func.string.split(dc.C("signal.value"), ","),
-            str_words=func.string.length(dc.func.literal("Random string"), " "),
+            str_words=func.string.split(dc.func.literal("Random string"), " "),
         )
         ```
 
-    Note:
+    Notes:
         - The result column will always be of type array of strings.
     """
 
@@ -85,7 +85,7 @@ def replace(col: ColT, pattern: str, replacement: str) -> Func:
     Replaces substring with another string.
 
     Args:
-        col (str | Column | Func | literal): Column to split.
+        col (str | Column | Func | literal): Column to perform replacement on.
             If a string is provided, it is assumed to be the name of the column.
             If a Column is provided, it is assumed to be a column in the dataset.
             If a Func is provided, it is assumed to be a function returning a string.
@@ -99,13 +99,13 @@ def replace(col: ColT, pattern: str, replacement: str) -> Func:
     Example:
         ```py
         dc.mutate(
-            s1=func.string.replace("signal.name", "pattern", "replacement),
+            s1=func.string.replace("signal.name", "pattern", "replacement"),
             s2=func.string.replace(dc.C("signal.name"), "pattern", "replacement"),
             s3=func.string.replace(dc.func.literal("Random string"), "Random", "New"),
         )
         ```
 
-    Note:
+    Notes:
         - The result column will always be of type string.
     """
 
@@ -127,7 +127,7 @@ def regexp_replace(col: ColT, regex: str, replacement: str) -> Func:
     Replaces substring that match a regular expression.
 
     Args:
-        col (str | Column | Func | literal): Column to split.
+        col (str | Column | Func | literal): Column to perform replacement on.
             If a string is provided, it is assumed to be the name of the column.
             If a Column is provided, it is assumed to be a column in the dataset.
             If a Func is provided, it is assumed to be a function returning a string.
@@ -136,18 +136,22 @@ def regexp_replace(col: ColT, regex: str, replacement: str) -> Func:
         replacement (str): Replacement string.
 
     Returns:
-        Func: A Func object that represents the regexp_replace function.
+        Func: A `Func` object that represents the regexp_replace function.
 
     Example:
         ```py
         dc.mutate(
             s1=func.string.regexp_replace("signal.name", r"\d+", "X"),
             s2=func.string.regexp_replace(dc.C("signal.name"), r"\d+", "X"),
-            s3=func.string.regexp_replace(dc.func.literal("Random string"), r"\s+", "_"
+            s3=func.string.regexp_replace(
+                dc.func.literal("Random string"),
+                r"\s+",
+                "_",
+            ),
         )
         ```
 
-    Note:
+    Notes:
         - The result column will always be of type string.
     """
 
@@ -189,7 +193,10 @@ def byte_hamming_distance(*args: ColT) -> Func:
         dc.mutate(
             hd1=func.byte_hamming_distance("file.phash", literal("hello")),
             hd2=func.byte_hamming_distance(dc.C("file.phash"), "hello"),
-            hd3=func.byte_hamming_distance(dc.func.literal("hi"), dc.func.literal("HI")
+            hd3=func.byte_hamming_distance(
+                dc.func.literal("hi"),
+                dc.func.literal("hello"),
+            ),
         )
         ```
 
