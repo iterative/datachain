@@ -1,31 +1,36 @@
 from typing import Union
 
+from datachain.query.schema import Column
 from datachain.sql.functions import numeric
 
-from .func import ColT, Func
+from .func import Func
 
 
-def bit_and(*args: Union[ColT, int]) -> Func:
+def bit_and(*args: Union[str, Column, Func, int]) -> Func:
     """
-    Computes the bitwise AND operation between two values.
+    Returns a function that computes the bitwise AND operation between two values.
 
     Args:
-        args (str | int): Two values to compute the bitwise AND operation between.
+        args (str | Column | Func | int): Two values to compute
+            the bitwise AND operation between.
             If a string is provided, it is assumed to be the name of the column vector.
+            If a Column is provided, it is assumed to be a column vector.
+            If a Func is provided, it is assumed to be a function returning an int.
             If an integer is provided, it is assumed to be a constant value.
 
     Returns:
-        Func: A Func object that represents the bitwise AND function.
+        Func: A `Func` object that represents the bitwise AND function.
 
     Example:
         ```py
         dc.mutate(
-            xor1=func.bit_and("signal.values", 0x0F),
+            and1=func.bit_and("signal.value", 0x0F),
+            and2=func.bit_and(dc.C("signal.value1"), "signal.value2"),
         )
         ```
 
     Notes:
-        - Result column will always be of type int.
+        - The result column will always be of type int.
     """
     cols, func_args = [], []
     for arg in args:
@@ -46,27 +51,31 @@ def bit_and(*args: Union[ColT, int]) -> Func:
     )
 
 
-def bit_or(*args: Union[ColT, int]) -> Func:
+def bit_or(*args: Union[str, Column, Func, int]) -> Func:
     """
-    Computes the bitwise AND operation between two values.
+    Returns a function that computes the bitwise OR operation between two values.
 
     Args:
-        args (str | int): Two values to compute the bitwise OR operation between.
+        args (str | Column | Func | int): Two values to compute
+            the bitwise OR operation between.
             If a string is provided, it is assumed to be the name of the column vector.
+            If a Column is provided, it is assumed to be a column vector.
+            If a Func is provided, it is assumed to be a function returning an int.
             If an integer is provided, it is assumed to be a constant value.
 
     Returns:
-        Func: A Func object that represents the bitwise OR function.
+        Func: A `Func` object that represents the bitwise OR function.
 
     Example:
         ```py
         dc.mutate(
-            xor1=func.bit_or("signal.values", 0x0F),
+            or1=func.bit_or("signal.value", 0x0F),
+            or2=func.bit_or(dc.C("signal.value1"), "signal.value2"),
         )
         ```
 
     Notes:
-        - Result column will always be of type int.
+        - The result column will always be of type int.
     """
     cols, func_args = [], []
     for arg in args:
@@ -87,27 +96,31 @@ def bit_or(*args: Union[ColT, int]) -> Func:
     )
 
 
-def bit_xor(*args: Union[ColT, int]) -> Func:
+def bit_xor(*args: Union[str, Column, Func, int]) -> Func:
     """
-    Computes the bitwise XOR operation between two values.
+    Returns a function that computes the bitwise XOR operation between two values.
 
     Args:
-        args (str | int): Two values to compute the bitwise XOR operation between.
+        args (str | Column | Func | int): Two values to compute
+            the bitwise XOR operation between.
             If a string is provided, it is assumed to be the name of the column vector.
+            If a Column is provided, it is assumed to be a column vector.
+            If a Func is provided, it is assumed to be a function returning an int.
             If an integer is provided, it is assumed to be a constant value.
 
     Returns:
-        Func: A Func object that represents the bitwise XOR function.
+        Func: A `Func` object that represents the bitwise XOR function.
 
     Example:
         ```py
         dc.mutate(
-            xor1=func.bit_xor("signal.values", 0x0F),
+            xor1=func.bit_xor("signal.value", 0x0F),
+            xor2=func.bit_xor(dc.C("signal.value1"), "signal.value2"),
         )
         ```
 
     Notes:
-        - Result column will always be of type int.
+        - The result column will always be of type int.
     """
     cols, func_args = [], []
     for arg in args:
@@ -128,28 +141,30 @@ def bit_xor(*args: Union[ColT, int]) -> Func:
     )
 
 
-def int_hash_64(col: Union[ColT, int]) -> Func:
+def int_hash_64(col: Union[str, Column, Func, int]) -> Func:
     """
-    Returns the 64-bit hash of an integer.
+    Returns a function that computes the 64-bit hash of an integer.
 
     Args:
-        col (str | int): String to compute the hash of.
+        col (str | Column | Func | int): String to compute the hash of.
             If a string is provided, it is assumed to be the name of the column.
-            If a int is provided, it is assumed to be an int literal.
+            If a Column is provided, it is assumed to be a column vector.
             If a Func is provided, it is assumed to be a function returning an int.
+            If a int is provided, it is assumed to be an int literal.
 
     Returns:
-        Func: A Func object that represents the 64-bit hash function.
+        Func: A `Func` object that represents the 64-bit hash function.
 
     Example:
         ```py
         dc.mutate(
             val_hash=func.int_hash_64("val"),
+            val_hash2=func.int_hash_64(dc.C("val2")),
         )
         ```
 
     Note:
-        - Result column will always be of type int.
+        - The result column will always be of type int.
     """
     cols, args = [], []
     if isinstance(col, int):
@@ -162,9 +177,9 @@ def int_hash_64(col: Union[ColT, int]) -> Func:
     )
 
 
-def bit_hamming_distance(*args: Union[ColT, int]) -> Func:
+def bit_hamming_distance(*args: Union[str, Column, Func, int]) -> Func:
     """
-    Computes the Hamming distance between the bit representations of two integer values.
+    Returns a function that computes the Hamming distance between two integers.
 
     The Hamming distance is the number of positions at which the corresponding bits
     are different. This function returns the dissimilarity between the integers,
@@ -172,12 +187,15 @@ def bit_hamming_distance(*args: Union[ColT, int]) -> Func:
     in the integer indicate higher dissimilarity.
 
     Args:
-        args (str | int): Two integers to compute the Hamming distance between.
+        args (str | Column | Func | int): Two integers to compute
+            the Hamming distance between.
             If a str is provided, it is assumed to be the name of the column.
+            If a Column is provided, it is assumed to be a column vector.
+            If a Func is provided, it is assumed to be a function returning an int.
             If an int is provided, it is assumed to be an integer literal.
 
     Returns:
-        Func: A Func object that represents the Hamming distance function.
+        Func: A `Func` object that represents the Hamming distance function.
 
     Example:
         ```py
@@ -187,7 +205,7 @@ def bit_hamming_distance(*args: Union[ColT, int]) -> Func:
         ```
 
     Notes:
-        - Result column will always be of type int.
+        - The result column will always be of type int.
     """
     cols, func_args = [], []
     for arg in args:
