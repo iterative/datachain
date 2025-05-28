@@ -42,7 +42,7 @@ dependencies = [
   "multiprocess==0.70.16",
   "cloudpickle",
   "orjson>=3.10.5",
-  "pydantic>=2,<2.11",
+  "pydantic",
   "jmespath>=1.0",
   "datamodel-code-generator>=0.25",
   "Pillow>=10.0.0,<12",
