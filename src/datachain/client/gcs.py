@@ -74,7 +74,7 @@ class GCSClient(Client):
             try:
                 await self._get_pages(prefix, page_queue)
                 found = await consumer
-                if not found:
+                if not found and prefix:
                     raise FileNotFoundError(f"Unable to resolve remote path: {prefix}")
             finally:
                 consumer.cancel()  # In case _get_pages() raised
