@@ -681,7 +681,7 @@ def test_agg_two_params(test_session):
     assert list(ds.order_by("x.cnt").collect("x.cnt")) == [7, 20]
 
 
-def test_agg_simple_iiterator(test_session):
+def test_agg_simple_iterator(test_session):
     def func(key, val) -> Iterator[tuple[File, str]]:
         for i in range(val):
             yield File(path=""), f"{key}_{i}"
