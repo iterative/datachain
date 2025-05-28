@@ -205,6 +205,45 @@ def test_yolo_segment_from_results_empty(running_img):
     }
 
 
+def test_yolo_segment_from_results_empty_segments(running_img):
+    result = Results(
+        orig_img=running_img,
+        path="running.jpeg",
+        names={0: "person"},
+        boxes=torch.tensor([[102.0, 84.0, 183.0, 238.0, 0.9078, 0.0]]),
+    )
+
+    model = YoloSegment.from_result(result)
+    assert model.model_dump() == {
+        "cls": 0,
+        "name": "person",
+        "confidence": 0.9078,
+        "box": {
+            "coords": [102, 84, 183, 238],
+            "title": "person",
+        },
+        "segment": {
+            "title": "",
+            "x": [],
+            "y": [],
+        },
+    }
+
+    model = YoloSegments.from_results([result])
+    assert model.model_dump() == {
+        "cls": [0],
+        "name": ["person"],
+        "confidence": [0.9078],
+        "box": [
+            {
+                "coords": [102, 84, 183, 238],
+                "title": "person",
+            }
+        ],
+        "segment": [],
+    }
+
+
 def test_yolo_seg_from_results(running_img, running_img_masks):
     result = Results(
         orig_img=running_img,
@@ -2235,6 +2274,40 @@ def test_yolo_pose_from_results_empty(running_img):
         "name": [],
         "confidence": [],
         "box": [],
+        "pose": [],
+    }
+
+
+def test_yolo_pose_from_results_empty_poses(running_img):
+    result = Results(
+        orig_img=running_img,
+        path="running.jpeg",
+        names={0: "person"},
+        boxes=torch.tensor([[102.0, 84.0, 183.0, 238.0, 0.9078, 0.0]]),
+    )
+
+    model = YoloPose.from_result(result)
+    assert model.model_dump() == {
+        "cls": 0,
+        "name": "person",
+        "confidence": 0.9078,
+        "box": {
+            "coords": [102, 84, 183, 238],
+            "title": "person",
+        },
+        "pose": {
+            "x": [],
+            "y": [],
+            "visible": [],
+        },
+    }
+
+    model = YoloPoses.from_results([result])
+    assert model.model_dump() == {
+        "cls": [0],
+        "name": ["person"],
+        "confidence": [0.9078],
+        "box": [{"coords": [102, 84, 183, 238], "title": "person"}],
         "pose": [],
     }
 

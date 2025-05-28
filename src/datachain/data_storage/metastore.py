@@ -36,6 +36,7 @@ from datachain.dataset import (
 )
 from datachain.error import (
     DatasetNotFoundError,
+    DatasetVersionNotFoundError,
     NamespaceNotFoundError,
     ProjectNotFoundError,
     TableMissingError,
@@ -359,7 +360,6 @@ class AbstractMetastore(ABC, Serializable):
         self,
         job_id: str,
         status: Optional[JobStatus] = None,
-        exit_code: Optional[int] = None,
         error_message: Optional[str] = None,
         error_stack: Optional[str] = None,
         finished_at: Optional[datetime] = None,
@@ -924,22 +924,36 @@ class AbstractDBMetastore(AbstractMetastore):
         self, dataset: DatasetRecord, conn=None, **kwargs
     ) -> DatasetRecord:
         """Updates dataset fields."""
-        values = {}
-        dataset_values = {}
+        values: dict[str, Any] = {}
+        dataset_values: dict[str, Any] = {}
         for field, value in kwargs.items():
-            if field in self._dataset_fields[1:]:
-                if field in ["attrs", "schema"]:
-                    values[field] = json.dumps(value) if value else None
+            if field in ("id", "created_at") or field not in self._dataset_fields:
+                continue  # these fields are read-only or not applicable
+
+            if value is None and field in ("name", "status", "sources", "query_script"):
+                raise ValueError(f"Field {field} cannot be None")
+            if field == "name" and not value:
+                raise ValueError("name cannot be empty")
+
+            if field == "attrs":
+                if value is None:
+                    values[field] = None
                 else:
-                    values[field] = value
-                if field == "schema":
+                    values[field] = json.dumps(value)
+                dataset_values[field] = value
+            elif field == "schema":
+                if value is None:
+                    values[field] = None
+                    dataset_values[field] = None
+                else:
+                    values[field] = json.dumps(value)
                     dataset_values[field] = DatasetRecord.parse_schema(value)
-                else:
-                    dataset_values[field] = value
+            else:
+                values[field] = value
+                dataset_values[field] = value
 
         if not values:
-            # Nothing to update
-            return dataset
+            return dataset  # nothing to update
 
         d = self._datasets
         self.db.execute(
@@ -955,36 +969,70 @@ class AbstractDBMetastore(AbstractMetastore):
         self, dataset: DatasetRecord, version: str, conn=None, **kwargs
     ) -> DatasetVersion:
         """Updates dataset fields."""
-        dataset_version = dataset.get_version(version)
-
-        values = {}
-        version_values: dict = {}
+        values: dict[str, Any] = {}
+        version_values: dict[str, Any] = {}
         for field, value in kwargs.items():
-            if field in self._dataset_version_fields[1:]:
-                if field == "schema":
-                    values[field] = json.dumps(value) if value else None
-                    version_values[field] = DatasetRecord.parse_schema(value)
-                elif field == "feature_schema":
-                    values[field] = json.dumps(value) if value else None
-                    version_values[field] = value
-                elif field == "preview" and isinstance(value, list):
-                    values[field] = json.dumps(value, cls=JSONSerialize)
-                    version_values[field] = value
+            if (
+                field in ("id", "created_at")
+                or field not in self._dataset_version_fields
+            ):
+                continue  # these fields are read-only or not applicable
+
+            if value is None and field in (
+                "status",
+                "sources",
+                "query_script",
+                "error_message",
+                "error_stack",
+                "script_output",
+                "uuid",
+            ):
+                raise ValueError(f"Field {field} cannot be None")
+
+            if field == "schema":
+                values[field] = json.dumps(value) if value else None
+                version_values[field] = (
+                    DatasetRecord.parse_schema(value) if value else None
+                )
+            elif field == "feature_schema":
+                if value is None:
+                    values[field] = None
                 else:
-                    values[field] = value
-                    version_values[field] = value
+                    values[field] = json.dumps(value)
+                version_values[field] = value
+            elif field == "preview":
+                if value is None:
+                    values[field] = None
+                elif not isinstance(value, list):
+                    raise ValueError(
+                        f"Field '{field}' must be a list, got {type(value).__name__}"
+                    )
+                else:
+                    values[field] = json.dumps(value, cls=JSONSerialize)
+                version_values["_preview_data"] = value
+            else:
+                values[field] = value
+                version_values[field] = value
 
-        if values:
-            dv = self._datasets_versions
-            self.db.execute(
-                self._datasets_versions_update()
-                .where(dv.c.dataset_id == dataset.id, dv.c.version == version)
-                .values(values),
-                conn=conn,
-            )  # type: ignore [attr-defined]
-            dataset_version.update(**version_values)
+        if not values:
+            return dataset.get_version(version)
 
-        return dataset_version
+        dv = self._datasets_versions
+        self.db.execute(
+            self._datasets_versions_update()
+            .where(dv.c.dataset_id == dataset.id, dv.c.version == version)
+            .values(values),
+            conn=conn,
+        )  # type: ignore [attr-defined]
+
+        for v in dataset.versions:
+            if v.version == version:
+                v.update(**version_values)
+                return v
+
+        raise DatasetVersionNotFoundError(
+            f"Dataset {dataset.name} does not have version {version}"
+        )
 
     def _parse_dataset(self, rows) -> Optional[DatasetRecord]:
         versions = [self.dataset_class.parse(*r) for r in rows]
@@ -1146,7 +1194,7 @@ class AbstractDBMetastore(AbstractMetastore):
             update_data["error_message"] = error_message
             update_data["error_stack"] = error_stack
 
-        self.update_dataset(dataset, conn=conn, **update_data)
+        dataset = self.update_dataset(dataset, conn=conn, **update_data)
 
         if version:
             self.update_dataset_version(dataset, version, conn=conn, **update_data)
@@ -1395,7 +1443,6 @@ class AbstractDBMetastore(AbstractMetastore):
         self,
         job_id: str,
         status: Optional[JobStatus] = None,
-        exit_code: Optional[int] = None,
         error_message: Optional[str] = None,
         error_stack: Optional[str] = None,
         finished_at: Optional[datetime] = None,
@@ -1406,8 +1453,6 @@ class AbstractDBMetastore(AbstractMetastore):
         values: dict = {}
         if status is not None:
             values["status"] = status
-        if exit_code is not None:
-            values["exit_code"] = exit_code
         if error_message is not None:
             values["error_message"] = error_message
         if error_stack is not None:
