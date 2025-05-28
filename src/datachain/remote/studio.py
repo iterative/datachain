@@ -352,6 +352,25 @@ class StudioClient:
             response.data = _parse_dataset_info(response.data)
         return response
 
+    def project_info(self, namespace: str, project: str) -> Response[DatasetInfoData]:
+        def _parse_dataset_info(dataset_info):
+            _parse_dates(dataset_info, ["created_at", "finished_at"])
+            for version in dataset_info.get("versions"):
+                _parse_dates(version, ["created_at"])
+            _parse_dates(dataset_info.get("project"), ["created_at"])
+            _parse_dates(dataset_info.get("project").get("namespace"), ["created_at"])
+
+            return dataset_info
+
+        response = self._send_request(
+            "datachain/projects/info",
+            {"namespace": namespace, "project": project},
+            method="GET",
+        )
+        if response.ok:
+            response.data = _parse_dataset_info(response.data)
+        return response
+
     def dataset_rows_chunk(
         self, name: str, version: str, offset: int
     ) -> Response[DatasetRowsData]:

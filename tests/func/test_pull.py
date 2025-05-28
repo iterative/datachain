@@ -258,6 +258,9 @@ def test_pull_dataset_success(
 
     project = catalog.metastore.get_project(PROJECT_NAME, NAMESPACE_NAME)
     dataset = catalog.get_dataset(local_ds_name or "dogs", project=project)
+    assert dataset.project.namespace.uuid == NAMESPACE_UUID
+    assert dataset.project.uuid == PROJECT_UUID
+
     assert [v.version for v in dataset.versions] == [local_ds_version or "1.0.0"]
     assert dataset.status == DatasetStatus.COMPLETE
     assert dataset.created_at

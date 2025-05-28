@@ -1440,12 +1440,14 @@ class Catalog:
                 f"Dataset {remote_ds_name} doesn't have version {version} on server"
             ) from exc
 
-        local_ds_namespace = remote_ds.project.namespace.name
-        local_ds_project = remote_ds.project.name
         local_ds_name = local_ds_name or remote_ds.name
         local_ds_version = local_ds_version or remote_ds_version.version
+
         local_ds_uri = create_dataset_uri(
-            local_ds_name, local_ds_namespace, local_ds_project, local_ds_version
+            local_ds_name,
+            remote_ds.project.namespace.name,
+            remote_ds.project.name,
+            local_ds_version,
         )
 
         try:
@@ -1473,9 +1475,22 @@ class Catalog:
             pass
 
         # Create namespace and project if doesn't exist
-        print(f"Creating namespace {local_ds_namespace} and project {local_ds_project}")
-        namespace = self.metastore.create_namespace(local_ds_namespace)
-        project = self.metastore.create_project(local_ds_project, namespace)
+        print(
+            f"Creating namespace {remote_ds.project.namespace.name} and project"
+            f" {remote_ds.project.name}"
+        )
+
+        namespace = self.metastore.create_namespace(
+            remote_ds.project.namespace.name,
+            description=remote_ds.project.namespace.description,
+            uuid=remote_ds.project.namespace.uuid,
+        )
+        project = self.metastore.create_project(
+            remote_ds.project.name,
+            namespace,
+            description=remote_ds.project.description,
+            uuid=remote_ds.project.uuid,
+        )
 
         try:
             local_dataset = self.get_dataset(local_ds_name, project=project)

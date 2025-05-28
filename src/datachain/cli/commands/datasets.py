@@ -134,25 +134,21 @@ def rm_dataset(
     name: str,
     version: Optional[str] = None,
     force: Optional[bool] = False,
-    studio: bool = False,
-    local: bool = False,
-    all: bool = True,
     team: Optional[str] = None,
 ):
     from datachain.studio import remove_studio_dataset
 
     token = Config().read().get("studio", {}).get("token")
-    all, local, studio = determine_flavors(studio, local, all, token)
+    if not token:
+        raise DataChainError(
+            "Not logged in to Studio. Log in with 'datachain auth login'."
+        )
 
     namespace_name, project_name, name = parse_dataset_name(name)
-    if all or local:
-        if (
-            namespace_name
-            and namespace_name != catalog.metastore.default_namespace_name
-        ):
-            raise DataChainError("Only local namespace can be used")
-        if project_name and project_name != catalog.metastore.default_project_name:
-            raise DataChainError("Only local project can be used")
+    namespace_name = namespace_name or catalog.metastore.default_namespace_name
+    project_name = project_name or catalog.metastore.default_project_name
+    is_local = catalog.metastore.is_local_dataset(namespace_name)
+    if is_local:
         try:
             catalog.remove_dataset(
                 name, catalog.metastore.default_project, version=version, force=force
@@ -160,9 +156,7 @@ def rm_dataset(
         except DatasetNotFoundError:
             print("Dataset not found in local", file=sys.stderr)
 
-    if (all or studio) and token:
-        if not namespace_name or not project_name:
-            raise DataChainError("Namespace or project missing in Studio dataset name")
+    else:
         remove_studio_dataset(team, name, namespace_name, project_name, version, force)
 
 
@@ -172,37 +166,29 @@ def edit_dataset(
     new_name: Optional[str] = None,
     description: Optional[str] = None,
     attrs: Optional[list[str]] = None,
-    studio: bool = False,
-    local: bool = False,
-    all: bool = True,
     team: Optional[str] = None,
 ):
     from datachain.studio import edit_studio_dataset
 
     token = Config().read().get("studio", {}).get("token")
-    all, local, studio = determine_flavors(studio, local, all, token)
+    if not token:
+        raise DataChainError(
+            "Not logged in to Studio. Log in with 'datachain auth login'."
+        )
 
     namespace_name, project_name, name = parse_dataset_name(name)
-    if all or local:
-        if (
-            namespace_name
-            and namespace_name != catalog.metastore.default_namespace_name
-        ):
-            raise DataChainError("Only local namespace can be used")
-        if project_name and project_name != catalog.metastore.default_project_name:
-            raise DataChainError("Only local project can be used")
+    namespace_name = namespace_name or catalog.metastore.default_namespace_name
+    project_name = project_name or catalog.metastore.default_project_name
+    is_local = catalog.metastore.is_local_dataset(namespace_name)
+
+    if is_local:
         try:
             catalog.edit_dataset(
                 name, catalog.metastore.default_project, new_name, description, attrs
             )
         except DatasetNotFoundError:
             print("Dataset not found in local", file=sys.stderr)
-
-    if (all or studio) and token:
-        if not namespace_name or not project_name:
-            raise DataChainError(
-                f"Namespace or project missing in Studio dataset name {name}"
-            )
+    else:
         edit_studio_dataset(
             team, name, namespace_name, project_name, new_name, description, attrs
         )

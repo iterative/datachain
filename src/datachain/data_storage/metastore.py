@@ -126,6 +126,7 @@ class AbstractMetastore(ABC, Serializable):
         self,
         name: str,
         description: Optional[str] = None,
+        uuid: Optional[str] = None,
         ignore_if_exists: bool = True,
         **kwargs,
     ) -> Namespace:
@@ -167,6 +168,7 @@ class AbstractMetastore(ABC, Serializable):
         name: str,
         namespace: Namespace,
         description: Optional[str] = None,
+        uuid: Optional[str] = None,
         ignore_if_exists: bool = True,
         **kwargs,
     ) -> Project:
@@ -695,12 +697,13 @@ class AbstractDBMetastore(AbstractMetastore):
         self,
         name: str,
         description: Optional[str] = None,
+        uuid: Optional[str] = None,
         ignore_if_exists: bool = True,
         **kwargs,
     ) -> Namespace:
         query = self._namespaces_insert().values(
             name=name,
-            uuid=str(uuid4()),
+            uuid=uuid or str(uuid4()),
             created_at=datetime.now(timezone.utc),
             description=description,
         )
@@ -742,12 +745,13 @@ class AbstractDBMetastore(AbstractMetastore):
         name: str,
         namespace: Namespace,
         description: Optional[str] = None,
+        uuid: Optional[str] = None,
         ignore_if_exists: bool = True,
         **kwargs,
     ) -> Project:
         query = self._projects_insert().values(
             namespace_id=namespace.id,
-            uuid=str(uuid4()),
+            uuid=uuid or str(uuid4()),
             name=name,
             created_at=datetime.now(timezone.utc),
             description=description,
