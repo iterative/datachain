@@ -8,7 +8,7 @@ import re
 import uuid
 from collections.abc import Iterator
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from unittest.mock import patch
 
 import numpy as np
@@ -2235,3 +2235,44 @@ def test_datachain_functional_after_exceptions(test_session):
     for _ in range(4):
         with pytest.raises(Exception, match="Test Error!"):
             chain.map(res=func).exec()
+
+
+@pytest.mark.parametrize("parallel", [1, 2])
+def test_agg(catalog_tmpfile, parallel):
+    from datachain import func
+
+    session = catalog_tmpfile.session
+
+    def process(files: list[str]) -> Iterator[tuple[str, int]]:
+        yield str(PurePosixPath(files[0]).parent), len(files)
+
+    ds = (
+        dc.read_values(
+            filename=(
+                "cats/cat1",
+                "cats/cat2",
+                "dogs/dog1",
+                "dogs/dog2",
+                "dogs/dog3",
+                "dogs/others/dog4",
+            ),
+            session=session,
+        )
+        .settings(parallel=parallel)
+        .agg(
+            process,
+            params=["filename"],
+            output={"parent": str, "count": int},
+            partition_by=func.path.parent("filename"),
+        )
+        .save("my-ds")
+    )
+
+    assert sorted_dicts(ds.to_records(), "parent") == sorted_dicts(
+        [
+            {"parent": "cats", "count": 2},
+            {"parent": "dogs", "count": 3},
+            {"parent": "dogs/others", "count": 1},
+        ],
+        "parent",
+    )
