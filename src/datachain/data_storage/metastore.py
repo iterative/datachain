@@ -138,6 +138,19 @@ class AbstractMetastore(ABC, Serializable):
     def get_namespace(self, name: str, conn=None) -> Namespace:
         """Gets a single namespace by name"""
 
+    @property
+    @abstractmethod
+    def is_studio(self) -> bool:
+        """Returns True if this code is ran in Studio"""
+
+    @abstractmethod
+    def is_local_dataset(self, dataset_namespace: str) -> bool:
+        """
+        Returns True if this dataset is locally present (in local DB)
+        This is False if we ran code in CLI mode but using dataset names that are
+        present in Studio.
+        """
+
     #
     # Projects
     #
@@ -165,6 +178,12 @@ class AbstractMetastore(ABC, Serializable):
     @abstractmethod
     def get_project(self, name: str, namespace_name: str, conn=None) -> Project:
         """Gets a single project inside some namespace by name"""
+
+    @abstractmethod
+    def parse_dataset_name(
+        self, name: str, set_defaults=True
+    ) -> tuple[Optional[str], Optional[str], str]:
+        """"""
 
     @property
     def default_project(self) -> Project:
@@ -771,6 +790,27 @@ class AbstractDBMetastore(AbstractMetastore):
                 f"Project {name} in namespace {namespace_name} not found."
             )
         return self.project_class.parse(*rows[0])
+
+    def parse_dataset_name(
+        self, name: str, set_defaults=True
+    ) -> tuple[Optional[str], Optional[str], str]:
+        """
+        Parses dataset name and returns namespace, project and name.
+        """
+        if not name:
+            raise ValueError("Name must be defined to parse it")
+        namespace_name = project_name = None
+        if set_defaults:
+            namespace_name = self.default_namespace_name
+            project_name = self.default_project_name
+        split = name.split(".")
+        if len(split) == 3:
+            namespace_name, project_name, name = tuple(split)
+
+        return (namespace_name, project_name, name)
+
+    def is_local_dataset(self, dataset_namespace: str) -> bool:
+        return self.is_studio or dataset_namespace == "local"
 
     #
     # Datasets

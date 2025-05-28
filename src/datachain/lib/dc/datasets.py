@@ -2,7 +2,7 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, Optional, Union, get_origin, get_type_hints
 
 from datachain.dataset import parse_dataset_name
-from datachain.error import DatasetVersionNotFoundError
+from datachain.error import DataChainError, DatasetVersionNotFoundError
 from datachain.lib.dataset_info import DatasetInfo
 from datachain.lib.file import (
     File,
@@ -12,6 +12,7 @@ from datachain.lib.settings import Settings
 from datachain.lib.signal_schema import SignalSchema
 from datachain.query import Session
 from datachain.query.dataset import DatasetQuery
+from datachain.studio import remove_studio_dataset
 
 from .utils import Sys
 from .values import read_values
@@ -290,6 +291,12 @@ def delete_dataset(
     catalog = session.catalog
 
     namespace_name, project_name, name = parse_dataset_name(name)
+    if studio:
+        if not namespace_name or not project_name:
+            raise DataChainError("Namespace or project missing in Studio dataset name")
+        return remove_studio_dataset(
+            None, name, namespace_name, project_name, version=version, force=force
+        )
     namespace_name = namespace_name or catalog.metastore.default_namespace_name
     project_name = project_name or catalog.metastore.default_project_name
     project = get_project(project_name, namespace_name, session=session)
@@ -298,4 +305,4 @@ def delete_dataset(
         version = version or catalog.get_dataset(name, project).latest_version
     else:
         version = None
-    catalog.remove_dataset(name, project, version=version, force=force, studio=studio)
+    catalog.remove_dataset(name, project, version=version, force=force)

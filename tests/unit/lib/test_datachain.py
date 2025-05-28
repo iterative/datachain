@@ -3158,7 +3158,11 @@ def test_delete_dataset_versions_all(test_session):
 def test_delete_dataset_from_studio(test_session, studio_token, requests_mock, force):
     requests_mock.delete(f"{STUDIO_URL}/api/datachain/datasets", json={"ok": True})
     dc.delete_dataset(
-        "cats", version="1.0.0", studio=True, force=force, session=test_session
+        "dev.animals.cats",
+        version="1.0.0",
+        studio=True,
+        force=force,
+        session=test_session,
     )
 
 
@@ -3172,7 +3176,9 @@ def test_delete_dataset_from_studio_not_found(
         status_code=404,
     )
     with pytest.raises(Exception) as exc_info:
-        dc.delete_dataset("cats", version="1.0.0", studio=True, session=test_session)
+        dc.delete_dataset(
+            "dev.animals.cats", version="1.0.0", studio=True, session=test_session
+        )
 
     assert str(exc_info.value) == error_message
 
