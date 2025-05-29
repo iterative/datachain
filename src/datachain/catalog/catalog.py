@@ -1238,7 +1238,6 @@ class Catalog:
         offset=None,
         limit=None,
     ) -> list[dict]:
-        # TODO refactor to take DatasetRecord maybe
         from datachain.query.dataset import DatasetQuery
 
         dataset = self.get_dataset(name, project)
@@ -1285,7 +1284,6 @@ class Catalog:
         project: Optional[Project] = None,
         client_config=None,
     ) -> list[str]:
-        # TODO maybe also receive `DatasetRecord` as argument
         dataset = self.get_dataset(name, project)
 
         return self.warehouse.export_dataset_table(
