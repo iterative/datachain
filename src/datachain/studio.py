@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Optional
 import tabulate
 
 from datachain.config import Config, ConfigLevel
-from datachain.dataset import QUERY_DATASET_PREFIX
+from datachain.dataset import QUERY_DATASET_PREFIX, parse_dataset_name
 from datachain.error import DataChainError
 from datachain.remote.studio import StudioClient
 from datachain.utils import STUDIO_URL
@@ -177,7 +177,10 @@ def list_datasets(team: Optional[str] = None, name: Optional[str] = None):
 def list_dataset_versions(team: Optional[str] = None, name: str = ""):
     client = StudioClient(team=team)
 
-    response = client.dataset_info(name)
+    namespace_name, project_name, name = parse_dataset_name(name)
+    if not namespace_name or not project_name:
+        raise DataChainError(f"Missing namespace or project form dataset name {name}")
+    response = client.dataset_info(namespace_name, project_name, name)
 
     if not response.ok:
         raise DataChainError(response.message)
@@ -193,12 +196,16 @@ def list_dataset_versions(team: Optional[str] = None, name: str = ""):
 def edit_studio_dataset(
     team_name: Optional[str],
     name: str,
+    namespace: str,
+    project: str,
     new_name: Optional[str] = None,
     description: Optional[str] = None,
     attrs: Optional[list[str]] = None,
 ):
     client = StudioClient(team=team_name)
-    response = client.edit_dataset(name, new_name, description, attrs)
+    response = client.edit_dataset(
+        name, namespace, project, new_name, description, attrs
+    )
     if not response.ok:
         raise DataChainError(response.message)
 
@@ -208,11 +215,13 @@ def edit_studio_dataset(
 def remove_studio_dataset(
     team_name: Optional[str],
     name: str,
+    namespace: str,
+    project: str,
     version: Optional[str] = None,
     force: Optional[bool] = False,
 ):
     client = StudioClient(team=team_name)
-    response = client.rm_dataset(name, version, force)
+    response = client.rm_dataset(name, namespace, project, version, force)
     if not response.ok:
         raise DataChainError(response.message)
 

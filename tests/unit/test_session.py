@@ -9,7 +9,13 @@ from datachain.query.session import Session
 from datachain.sql.types import String
 
 
-def test_ephemeral_dataset_naming(catalog):
+@pytest.fixture
+def project(catalog):
+    namespace = catalog.metastore.create_namespace("dev")
+    return catalog.metastore.create_project("animals", namespace)
+
+
+def test_ephemeral_dataset_naming(catalog, project):
     session_name = "qwer45"
 
     with pytest.raises(ValueError):
@@ -17,9 +23,17 @@ def test_ephemeral_dataset_naming(catalog):
 
     with Session(session_name, catalog=catalog) as session:
         ds_name = "my_test_ds12"
-        session.catalog.create_dataset(ds_name, columns=(sa.Column("name", String),))
+        # namespace = session.catalog.metastore.create_namespace("dev")
+        # project = session.catalog.metastore.create_project("animals", namespace)
+        session.catalog.create_dataset(
+            ds_name, project, columns=(sa.Column("name", String),)
+        )
         ds_tmp = DatasetQuery(
-            name=ds_name, session=session, catalog=session.catalog
+            name=ds_name,
+            namespace_name=project.namespace.name,
+            project_name=project.name,
+            session=session,
+            catalog=session.catalog,
         ).save()
         session_uuid = f"[0-9a-fA-F]{{{Session.SESSION_UUID_LEN}}}"
         table_uuid = f"[0-9a-fA-F]{{{Session.TEMP_TABLE_UUID_LEN}}}"
@@ -30,13 +44,18 @@ def test_ephemeral_dataset_naming(catalog):
         assert re.match(pattern, ds_tmp.name) is not None
 
 
-def test_global_session_naming(catalog):
+def test_global_session_naming(catalog, project):
     session_uuid = f"[0-9a-fA-F]{{{Session.SESSION_UUID_LEN}}}"
     table_uuid = f"[0-9a-fA-F]{{{Session.TEMP_TABLE_UUID_LEN}}}"
 
     ds_name = "qwsd"
-    catalog.create_dataset(ds_name, columns=(sa.Column("name", String),))
-    ds_tmp = DatasetQuery(name=ds_name, catalog=catalog).save()
+    catalog.create_dataset(ds_name, project, columns=(sa.Column("name", String),))
+    ds_tmp = DatasetQuery(
+        name=ds_name,
+        namespace_name=project.namespace.name,
+        project_name=project.name,
+        catalog=catalog,
+    ).save()
     global_prefix = f"{Session.DATASET_PREFIX}{Session.GLOBAL_SESSION_NAME}"
     pattern = rf"^{global_prefix}_{session_uuid}_{table_uuid}$"
     assert re.match(pattern, ds_tmp.name) is not None
@@ -59,13 +78,19 @@ def test_is_temp_dataset(name, is_temp):
     assert Session.is_temp_dataset(name) is is_temp
 
 
-def test_ephemeral_dataset_lifecycle(catalog):
+def test_ephemeral_dataset_lifecycle(catalog, project):
     session_name = "asd3d4"
     with Session(session_name, catalog=catalog) as session:
         ds_name = "my_test_ds12"
-        session.catalog.create_dataset(ds_name, columns=(sa.Column("name", String),))
+        session.catalog.create_dataset(
+            ds_name, project, columns=(sa.Column("name", String),)
+        )
         ds_tmp = DatasetQuery(
-            name=ds_name, session=session, catalog=session.catalog
+            name=ds_name,
+            namespace_name=project.namespace.name,
+            project_name=project.name,
+            session=session,
+            catalog=session.catalog,
         ).save()
 
         assert isinstance(ds_tmp, DatasetQuery)
