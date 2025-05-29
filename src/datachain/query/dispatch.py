@@ -264,9 +264,10 @@ class UDFDispatcher:
             # Will be set to True when the input is exhausted
             input_finished = False
 
-            if not self.is_batching:
-                batch_size = self.input_batch_size(n_workers)
-                input_rows = batched(flatten(input_rows), batch_size)
+            input_rows = batched(
+                input_rows if self.is_batching else flatten(input_rows),
+                self.input_batch_size(n_workers),
+            )
 
             # Stop all workers after the input rows have finished processing
             input_data = chain(input_rows, [STOP_SIGNAL] * n_workers)

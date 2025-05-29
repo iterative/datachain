@@ -66,6 +66,7 @@ if TYPE_CHECKING:
     )
     from datachain.dataset import DatasetListVersion
     from datachain.job import Job
+    from datachain.lib.listing_info import ListingInfo
     from datachain.listing import Listing
 
 logger = logging.getLogger("datachain")
@@ -910,11 +911,7 @@ class Catalog:
             values["num_objects"] = None
             values["size"] = None
             values["preview"] = None
-            self.metastore.update_dataset_version(
-                dataset,
-                version,
-                **values,
-            )
+            self.metastore.update_dataset_version(dataset, version, **values)
             return
 
         if not dataset_version.num_objects:
@@ -934,11 +931,7 @@ class Catalog:
         if not values:
             return
 
-        self.metastore.update_dataset_version(
-            dataset,
-            version,
-            **values,
-        )
+        self.metastore.update_dataset_version(dataset, version, **values)
 
     def update_dataset(
         self, dataset: DatasetRecord, conn=None, **kwargs
@@ -1116,13 +1109,16 @@ class Catalog:
         return direct_dependencies
 
     def ls_datasets(
-        self, include_listing: bool = False, studio: bool = False
+        self,
+        prefix: Optional[str] = None,
+        include_listing: bool = False,
+        studio: bool = False,
     ) -> Iterator[DatasetListRecord]:
         from datachain.remote.studio import StudioClient
 
         if studio:
             client = StudioClient()
-            response = client.ls_datasets()
+            response = client.ls_datasets(prefix=prefix)
             if not response.ok:
                 raise DataChainError(response.message)
             if not response.data:
@@ -1133,6 +1129,8 @@ class Catalog:
                 for d in response.data
                 if not d.get("name", "").startswith(QUERY_DATASET_PREFIX)
             )
+        elif prefix:
+            datasets = self.metastore.list_datasets_by_prefix(prefix)
         else:
             datasets = self.metastore.list_datasets()
 
@@ -1142,39 +1140,55 @@ class Catalog:
 
     def list_datasets_versions(
         self,
+        prefix: Optional[str] = None,
         include_listing: bool = False,
+        with_job: bool = True,
         studio: bool = False,
     ) -> Iterator[tuple[DatasetListRecord, "DatasetListVersion", Optional["Job"]]]:
         """Iterate over all dataset versions with related jobs."""
         datasets = list(
-            self.ls_datasets(include_listing=include_listing, studio=studio)
+            self.ls_datasets(
+                prefix=prefix, include_listing=include_listing, studio=studio
+            )
         )
 
         # preselect dataset versions jobs from db to avoid multiple queries
-        jobs_ids: set[str] = {
-            v.job_id for ds in datasets for v in ds.versions if v.job_id
-        }
         jobs: dict[str, Job] = {}
-        if jobs_ids:
-            jobs = {j.id: j for j in self.metastore.list_jobs_by_ids(list(jobs_ids))}
+        if with_job:
+            jobs_ids: set[str] = {
+                v.job_id for ds in datasets for v in ds.versions if v.job_id
+            }
+            if jobs_ids:
+                jobs = {
+                    j.id: j for j in self.metastore.list_jobs_by_ids(list(jobs_ids))
+                }
 
         for d in datasets:
             yield from (
-                (d, v, jobs.get(str(v.job_id)) if v.job_id else None)
+                (d, v, jobs.get(str(v.job_id)) if with_job and v.job_id else None)
                 for v in d.versions
             )
 
-    def listings(self):
+    def listings(self, prefix: Optional[str] = None) -> list["ListingInfo"]:
         """
         Returns list of ListingInfo objects which are representing specific
         storage listing datasets
         """
-        from datachain.lib.listing import is_listing_dataset
+        from datachain.lib.listing import LISTING_PREFIX, is_listing_dataset
         from datachain.lib.listing_info import ListingInfo
+
+        if prefix and not prefix.startswith(LISTING_PREFIX):
+            prefix = LISTING_PREFIX + prefix
+
+        listing_datasets_versions = self.list_datasets_versions(
+            prefix=prefix,
+            include_listing=True,
+            with_job=False,
+        )
 
         return [
             ListingInfo.from_models(d, v, j)
-            for d, v, j in self.list_datasets_versions(include_listing=True)
+            for d, v, j in listing_datasets_versions
             if is_listing_dataset(d.name)
         ]
 

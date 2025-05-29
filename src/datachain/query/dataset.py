@@ -1675,13 +1675,27 @@ class DatasetQuery:
         return query
 
     def _add_dependencies(self, dataset: "DatasetRecord", version: str):
-        for dependency in self.dependencies:
-            ds_dependency_name, ds_dependency_version = dependency
+        dependencies: set[DatasetDependencyType] = set()
+        for dep_name, dep_version in self.dependencies:
+            if Session.is_temp_dataset(dep_name):
+                # temp dataset are created for optimization and they will be removed
+                # afterwards. Therefore, we should not put them as dependencies, but
+                # their own direct dependencies
+                for dep in self.catalog.get_dataset_dependencies(
+                    dep_name, dep_version, indirect=False
+                ):
+                    if dep:
+                        dependencies.add((dep.name, dep.version))
+            else:
+                dependencies.add((dep_name, dep_version))
+
+        for dep_name, dep_version in dependencies:
+            # ds_dependency_name, ds_dependency_version = dependency
             self.catalog.metastore.add_dataset_dependency(
                 dataset.name,
                 version,
-                ds_dependency_name,
-                ds_dependency_version,
+                dep_name,
+                dep_version,
             )
 
     def exec(self) -> "Self":

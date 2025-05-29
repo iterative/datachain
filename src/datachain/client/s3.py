@@ -80,7 +80,7 @@ class ClientS3(Client):
             finally:
                 await page_queue.put(None)
 
-        async def process_pages(page_queue, result_queue):
+        async def process_pages(page_queue, result_queue, prefix):
             found = False
             with tqdm(desc=f"Listing {self.uri}", unit=" objects", leave=False) as pbar:
                 while (res := await page_queue.get()) is not None:
@@ -94,7 +94,7 @@ class ClientS3(Client):
                     if entries:
                         await result_queue.put(entries)
                         pbar.update(len(entries))
-            if not found:
+            if not found and prefix:
                 raise FileNotFoundError(f"Unable to resolve remote path: {prefix}")
 
         try:
@@ -118,7 +118,9 @@ class ClientS3(Client):
                 Delimiter="",
             )
             page_queue: asyncio.Queue[list] = asyncio.Queue(2)
-            consumer = asyncio.create_task(process_pages(page_queue, result_queue))
+            consumer = asyncio.create_task(
+                process_pages(page_queue, result_queue, prefix)
+            )
             try:
                 await get_pages(it, page_queue)
                 await consumer

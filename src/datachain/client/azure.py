@@ -65,7 +65,7 @@ class AzureClient(Client):
                         if entries:
                             await result_queue.put(entries)
                             pbar.update(len(entries))
-                    if not found:
+                    if not found and prefix:
                         raise FileNotFoundError(
                             f"Unable to resolve remote path: {prefix}"
                         )
