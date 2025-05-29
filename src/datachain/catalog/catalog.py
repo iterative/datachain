@@ -778,7 +778,7 @@ class Catalog:
     def create_dataset(
         self,
         name: str,
-        project: Project,
+        project: Optional[Project] = None,
         version: Optional[str] = None,
         *,
         columns: Sequence[Column],

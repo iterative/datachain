@@ -136,19 +136,11 @@ def rm_dataset(
     force: Optional[bool] = False,
     team: Optional[str] = None,
 ):
-    from datachain.studio import remove_studio_dataset
-
-    token = Config().read().get("studio", {}).get("token")
-    if not token:
-        raise DataChainError(
-            "Not logged in to Studio. Log in with 'datachain auth login'."
-        )
-
     namespace_name, project_name, name = parse_dataset_name(name)
     namespace_name = namespace_name or catalog.metastore.default_namespace_name
     project_name = project_name or catalog.metastore.default_project_name
-    is_local = catalog.metastore.is_local_dataset(namespace_name)
-    if is_local:
+
+    if catalog.metastore.is_local_dataset(namespace_name):
         try:
             catalog.remove_dataset(
                 name, catalog.metastore.default_project, version=version, force=force
@@ -157,6 +149,13 @@ def rm_dataset(
             print("Dataset not found in local", file=sys.stderr)
 
     else:
+        from datachain.studio import remove_studio_dataset
+
+        token = Config().read().get("studio", {}).get("token")
+        if not token:
+            raise DataChainError(
+                "Not logged in to Studio. Log in with 'datachain auth login'."
+            )
         remove_studio_dataset(team, name, namespace_name, project_name, version, force)
 
 
@@ -168,20 +167,11 @@ def edit_dataset(
     attrs: Optional[list[str]] = None,
     team: Optional[str] = None,
 ):
-    from datachain.studio import edit_studio_dataset
-
-    token = Config().read().get("studio", {}).get("token")
-    if not token:
-        raise DataChainError(
-            "Not logged in to Studio. Log in with 'datachain auth login'."
-        )
-
     namespace_name, project_name, name = parse_dataset_name(name)
     namespace_name = namespace_name or catalog.metastore.default_namespace_name
     project_name = project_name or catalog.metastore.default_project_name
-    is_local = catalog.metastore.is_local_dataset(namespace_name)
 
-    if is_local:
+    if catalog.metastore.is_local_dataset(namespace_name):
         try:
             catalog.edit_dataset(
                 name, catalog.metastore.default_project, new_name, description, attrs
@@ -189,6 +179,13 @@ def edit_dataset(
         except DatasetNotFoundError:
             print("Dataset not found in local", file=sys.stderr)
     else:
+        from datachain.studio import edit_studio_dataset
+
+        token = Config().read().get("studio", {}).get("token")
+        if not token:
+            raise DataChainError(
+                "Not logged in to Studio. Log in with 'datachain auth login'."
+            )
         edit_studio_dataset(
             team, name, namespace_name, project_name, new_name, description, attrs
         )

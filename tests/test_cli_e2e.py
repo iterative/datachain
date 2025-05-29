@@ -191,18 +191,28 @@ def verify_files(files, base=""):
 
 def run_step(step, catalog):
     """Run an end-to-end test step with a command and expected output."""
-    result = subprocess.run(  # noqa: S603
-        step["command"],
-        shell=False,
-        capture_output=True,
-        check=True,
-        encoding="utf-8",
-        env={
-            **os.environ,
-            "DATACHAIN__METASTORE": catalog.metastore.serialize(),
-            "DATACHAIN__WAREHOUSE": catalog.warehouse.serialize(),
-        },
-    )
+    try:
+        result = subprocess.run(  # noqa: S603
+            step["command"],
+            shell=False,
+            capture_output=True,
+            check=True,
+            encoding="utf-8",
+            env={
+                **os.environ,
+                "DATACHAIN__METASTORE": catalog.metastore.serialize(),
+                "DATACHAIN__WAREHOUSE": catalog.warehouse.serialize(),
+            },
+        )
+    except subprocess.CalledProcessError as e:
+        print("HEREEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE")
+        print("HEREEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE")
+        print("HEREEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE")
+        print("HEREEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE")
+        print(e.stdout)
+        print(e.stderr)
+        print("HEREEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE")
+        raise
     if step.get("sort_expected_lines"):
         assert sorted(result.stdout.split("\n")) == sorted(
             step["expected"].lstrip("\n").split("\n")

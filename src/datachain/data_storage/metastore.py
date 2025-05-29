@@ -199,7 +199,7 @@ class AbstractMetastore(ABC, Serializable):
     def create_dataset(
         self,
         name: str,
-        project: Project,
+        project: Optional[Project] = None,
         status: int = DatasetStatus.CREATED,
         sources: Optional[list[str]] = None,
         feature_schema: Optional[dict] = None,
@@ -823,7 +823,7 @@ class AbstractDBMetastore(AbstractMetastore):
     def create_dataset(
         self,
         name: str,
-        project: Project,
+        project: Optional[Project] = None,
         status: int = DatasetStatus.CREATED,
         sources: Optional[list[str]] = None,
         feature_schema: Optional[dict] = None,
@@ -835,7 +835,7 @@ class AbstractDBMetastore(AbstractMetastore):
         **kwargs,  # TODO registered = True / False
     ) -> DatasetRecord:
         """Creates new dataset."""
-        # TODO abstract this method and add registered = True based on kwargs
+        project = project or self.default_project
         query = self._datasets_insert().values(
             name=name,
             project_id=project.id,

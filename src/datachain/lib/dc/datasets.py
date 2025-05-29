@@ -257,7 +257,6 @@ def delete_dataset(
     name: str,
     version: Optional[str] = None,
     force: Optional[bool] = False,
-    studio: Optional[bool] = False,
     session: Optional[Session] = None,
     in_memory: bool = False,
 ) -> None:
@@ -291,14 +290,16 @@ def delete_dataset(
     catalog = session.catalog
 
     namespace_name, project_name, name = parse_dataset_name(name)
-    if studio:
+    namespace_name = namespace_name or catalog.metastore.default_namespace_name
+    project_name = project_name or catalog.metastore.default_project_name
+
+    if not catalog.metastore.is_local_dataset(namespace_name):
         if not namespace_name or not project_name:
             raise DataChainError("Namespace or project missing in Studio dataset name")
         return remove_studio_dataset(
             None, name, namespace_name, project_name, version=version, force=force
         )
-    namespace_name = namespace_name or catalog.metastore.default_namespace_name
-    project_name = project_name or catalog.metastore.default_project_name
+
     project = get_project(project_name, namespace_name, session=session)
 
     if not force:
