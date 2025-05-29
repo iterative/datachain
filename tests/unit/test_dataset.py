@@ -7,7 +7,13 @@ from sqlalchemy.dialects.sqlite import dialect as sqlite_dialect
 from sqlalchemy.schema import CreateTable
 
 from datachain.data_storage.schema import DataTable
-from datachain.dataset import DatasetDependency, DatasetDependencyType, DatasetVersion
+from datachain.dataset import (
+    DatasetDependency,
+    DatasetDependencyType,
+    DatasetRecord,
+    DatasetVersion,
+)
+from datachain.error import InvalidDatasetNameError
 from datachain.sql.types import (
     JSON,
     Array,
@@ -140,3 +146,31 @@ def test_dataset_version_from_dict(use_string):
 
     dataset_version = DatasetVersion.from_dict(data)
     assert dataset_version.preview == preview
+
+
+@pytest.mark.parametrize(
+    "name,cleaned_name",
+    [
+        ("dogs", "dogs"),
+        ("test.parquet", "test_parquet"),
+        ("simple.test.parquet", "simple_test_parquet"),
+    ],
+)
+def test_clean_name(name, cleaned_name):
+    assert DatasetRecord.clean_name(name) == cleaned_name
+
+
+@pytest.mark.parametrize(
+    "name,ok",
+    [
+        ("dogs", True),
+        ("test.parquet", False),
+        ("simple.test.parquet", False),
+    ],
+)
+def test_validate_name(name, ok):
+    if ok:
+        DatasetRecord.validate_name(name)
+    else:
+        with pytest.raises(InvalidDatasetNameError):
+            DatasetRecord.validate_name(name)

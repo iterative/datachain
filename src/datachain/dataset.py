@@ -390,7 +390,7 @@ class DatasetRecord:
 
     @staticmethod
     def validate_name(name: str) -> None:
-        """Makes sure name doesn't have reserved characters"""
+        """Throws exception if name has reserved characters"""
         for c in DATASET_NAME_RESERVED_CHARS:
             if c in name:
                 raise InvalidDatasetNameError(
