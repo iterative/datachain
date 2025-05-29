@@ -34,21 +34,27 @@ def video_info(file: Union[File, VideoFile]) -> Video:
         file.ensure_cached()
         file_path = file.get_local_path()
         if not file_path:
-            raise FileError(file, "unable to download video file")
+            raise FileError("unable to download video file", file.source, file.path)
 
     try:
         probe = ffmpeg.probe(file_path)
     except Exception as exc:
-        raise FileError(file, "unable to extract metadata from video file") from exc
+        raise FileError(
+            "unable to extract metadata from video file", file.source, file.path
+        ) from exc
 
     all_streams = probe.get("streams")
     video_format = probe.get("format")
     if not all_streams or not video_format:
-        raise FileError(file, "unable to extract metadata from video file")
+        raise FileError(
+            "unable to extract metadata from video file", file.source, file.path
+        )
 
     video_streams = [s for s in all_streams if s["codec_type"] == "video"]
     if len(video_streams) == 0:
-        raise FileError(file, "unable to extract metadata from video file")
+        raise FileError(
+            "unable to extract metadata from video file", file.source, file.path
+        )
 
     video_stream = video_streams[0]
 

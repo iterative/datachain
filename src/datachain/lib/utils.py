@@ -18,13 +18,11 @@ class AbstractUDF(ABC):
 
 
 class DataChainError(Exception):
-    def __init__(self, message):
-        super().__init__(message)
+    pass
 
 
 class DataChainParamsError(DataChainError):
-    def __init__(self, message):
-        super().__init__(message)
+    pass
 
 
 class DataChainColumnError(DataChainParamsError):

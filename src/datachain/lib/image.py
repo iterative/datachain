@@ -19,7 +19,7 @@ def image_info(file: Union[File, ImageFile]) -> Image:
     try:
         img = file.as_image_file().read()
     except Exception as exc:
-        raise FileError(file, "unable to open image file") from exc
+        raise FileError("unable to open image file", file.source, file.path) from exc
 
     return Image(
         width=img.width,
