@@ -148,9 +148,9 @@ class AbstractMetastore(ABC, Serializable):
     @abstractmethod
     def is_local_dataset(self, dataset_namespace: str) -> bool:
         """
-        Returns True if this dataset is locally present (in local DB)
-        This is False if we ran code in CLI mode but using dataset names that are
-        present in Studio.
+        Returns True if this is local dataset i.e. not pulled from Studio but
+        created locally. This is False if we ran code in CLI mode but using dataset
+        names that are present in Studio.
         """
 
     #

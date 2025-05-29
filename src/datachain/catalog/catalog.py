@@ -798,7 +798,7 @@ class Catalog:
         If version is None, then next unused version is created.
         If version is given, then it must be an unused version.
         """
-        DatasetRecord.validate_name(name)  # TODO add test
+        DatasetRecord.validate_name(name)
         assert [c.name for c in columns if c.name != "sys__id"], f"got {columns=}"
         if not listing and Client.is_data_source_uri(name):
             raise RuntimeError(

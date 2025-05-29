@@ -40,9 +40,9 @@ def read_dataset(
     If dataset or version is not found locally, it will try to pull it from Studio.
 
     Parameters:
-        name : dataset name which can be full dataset name having namespace and
-            project in it, or it can be just a regular name in which case default
-            namespace and project is used.
+        name : dataset name which can be fully qualified dataset name with namespace
+            and project, or it can be just a regular name in which case default
+            namespace and project are used.
         version : dataset version
         session : Session to use for the chain.
         settings : Settings to use for the chain.
@@ -83,6 +83,11 @@ def read_dataset(
         ```py
         import datachain as dc
         chain = dc.read_dataset("my_cats")
+        ```
+
+        ```py
+        import datachain as dc
+        chain = dc.read_dataset("dev.animals.my_cats")
         ```
 
         ```py
