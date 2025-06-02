@@ -12,7 +12,6 @@ from datachain.lib.settings import Settings
 from datachain.lib.signal_schema import SignalSchema
 from datachain.query import Session
 from datachain.query.dataset import DatasetQuery
-from datachain.studio import remove_studio_dataset
 
 from .utils import Sys
 from .values import read_values
@@ -290,6 +289,7 @@ def delete_dataset(
         dc.delete_dataset("cats", version="1.0.0")
         ```
     """
+    from datachain.studio import remove_studio_dataset
 
     session = Session.get(session, in_memory=in_memory)
     catalog = session.catalog
