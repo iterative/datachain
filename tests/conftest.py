@@ -409,15 +409,15 @@ class CloudTestCatalog:
         return Session("CTCSession", catalog=self.catalog)
 
 
-cloud_types = ["s3"]
+cloud_types = ["s3", "gs", "azure"]
 
 
-@pytest.fixture(scope="session", params=[*cloud_types])
+@pytest.fixture(scope="session", params=["file", *cloud_types])
 def cloud_type(request):
     return request.param
 
 
-@pytest.fixture(scope="session", params=[True])
+@pytest.fixture(scope="session", params=[False, True])
 def version_aware(request):
     return request.param
 
