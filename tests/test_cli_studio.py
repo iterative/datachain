@@ -9,6 +9,7 @@ from datachain.cli import main
 from datachain.config import Config, ConfigLevel
 from datachain.studio import POST_LOGIN_MESSAGE
 from datachain.utils import STUDIO_URL
+from tests.utils import skip_if_not_sqlite
 
 
 def mocked_connect(url, additional_headers):
@@ -196,6 +197,7 @@ def test_studio_datasets(capsys, studio_datasets, mocker):
     assert sorted(out.splitlines()) == sorted(dogs_output.splitlines())
 
 
+@skip_if_not_sqlite
 def test_studio_edit_dataset(capsys, mocker):
     with requests_mock.mock() as m:
         m.post(f"{STUDIO_URL}/api/datachain/datasets", json={})
@@ -281,6 +283,7 @@ def test_studio_edit_dataset(capsys, mocker):
         }
 
 
+@skip_if_not_sqlite
 def test_studio_rm_dataset(capsys, mocker):
     with requests_mock.mock() as m:
         m.delete(f"{STUDIO_URL}/api/datachain/datasets", json={})
