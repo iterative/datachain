@@ -1061,7 +1061,7 @@ def test_dataset_dependencies_multiple_direct_dataset_dependencies(
         "type": DatasetDependencyType.STORAGE,
         "name": dep_name,
         "namespace": catalog.metastore.default_namespace_name,
-        "project": catalog.metastore.default_namespace_name,
+        "project": catalog.metastore.default_project_name,
         "version": "1.0.0",
         "created_at": listing.created_at,
         "dependencies": [],
