@@ -3159,6 +3159,7 @@ def test_delete_dataset_versions_all(test_session):
 
 
 @pytest.mark.parametrize("force", (True, False))
+@skip_if_not_sqlite
 def test_delete_dataset_from_studio(test_session, studio_token, requests_mock, force):
     requests_mock.delete(f"{STUDIO_URL}/api/datachain/datasets", json={"ok": True})
     dc.delete_dataset(
@@ -3169,6 +3170,7 @@ def test_delete_dataset_from_studio(test_session, studio_token, requests_mock, f
     )
 
 
+@skip_if_not_sqlite
 def test_delete_dataset_from_studio_not_found(
     test_session, studio_token, requests_mock
 ):
