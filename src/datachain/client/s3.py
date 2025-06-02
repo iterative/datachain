@@ -101,7 +101,7 @@ class ClientS3(Client):
             prefix = start_prefix
             if prefix:
                 prefix = prefix.lstrip(DELIMITER) + DELIMITER
-            versions = True
+            versions = self._is_version_aware()
             fs = self.fs
             await fs.set_session()
             s3 = await fs.get_s3(self.name)
@@ -139,7 +139,9 @@ class ClientS3(Client):
             source=self.uri,
             path=v["Key"],
             etag=v.get("ETag", "").strip('"'),
-            version=ClientS3.clean_s3_version(v.get("VersionId", "")),
+            version=(
+                ClientS3.clean_s3_version(v.get("VersionId", "")) if versions else ""
+            ),
             is_latest=v.get("IsLatest", True),
             last_modified=v.get("LastModified", ""),
             size=v["Size"],
@@ -193,7 +195,11 @@ class ClientS3(Client):
             source=self.uri,
             path=path,
             size=v["size"],
-            version=ClientS3.clean_s3_version(v.get("VersionId", "")),
+            version=(
+                ClientS3.clean_s3_version(v.get("VersionId", ""))
+                if self._is_version_aware()
+                else ""
+            ),
             etag=v.get("ETag", "").strip('"'),
             is_latest=v.get("IsLatest", True),
             last_modified=v.get("LastModified", ""),
