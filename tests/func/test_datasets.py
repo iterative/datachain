@@ -286,17 +286,21 @@ def test_create_dataset_from_sources_failed(
 
 
 def test_create_dataset_whole_bucket(listed_bucket, cloud_test_catalog, project):
+    ctc = cloud_test_catalog
+    src_uri = ctc.src_uri
+    catalog = ctc.catalog
+
     dataset_name_1 = uuid.uuid4().hex
     dataset_name_2 = uuid.uuid4().hex
-    src_uri = cloud_test_catalog.src_uri
-    catalog = cloud_test_catalog.catalog
 
-    ds1 = catalog.create_dataset_from_sources(
-        dataset_name_1, [f"{src_uri}"], project, recursive=True
-    )
-    ds2 = catalog.create_dataset_from_sources(
-        dataset_name_2, [f"{src_uri}/"], project, recursive=True
-    )
+    ds1 = dc.read_storage(
+        f"{src_uri}",
+        session=ctc.session,
+    ).save(dataset_name_1)
+    ds2 = dc.read_storage(
+        f"{src_uri}/",
+        session=ctc.session,
+    ).save(dataset_name_2)
 
     expected_rows = {
         "description",
@@ -308,8 +312,8 @@ def test_create_dataset_whole_bucket(listed_bucket, cloud_test_catalog, project)
         "dog4",
     }
 
-    assert_row_names(catalog, ds1, ds1.latest_version, expected_rows)
-    assert_row_names(catalog, ds2, ds2.latest_version, expected_rows)
+    assert_row_names(catalog, ds1.dataset, ds1.dataset.latest_version, expected_rows)
+    assert_row_names(catalog, ds2.dataset, ds2.dataset.latest_version, expected_rows)
 
 
 def test_remove_dataset(cloud_test_catalog, dogs_dataset):
@@ -665,7 +669,7 @@ def test_row_random(cloud_test_catalog):
     # of accidental failure is < 1e-10
     ctc = cloud_test_catalog
     catalog = ctc.catalog
-    catalog.create_dataset_from_sources("test", [ctc.src_uri])
+    dc.read_storage(ctc.src_uri, session=ctc.session).save("test")
     random_values = [
         row["sys__rand"] for row in catalog.ls_dataset_rows("test", "1.0.0")
     ]
@@ -680,7 +684,7 @@ def test_row_random(cloud_test_catalog):
     assert 0.6 * RAND_MAX < max(random_values) < RAND_MAX
 
     # Creating a new dataset preserves random values
-    catalog.create_dataset_from_sources("test2", [ctc.src_uri])
+    dc.read_storage(ctc.src_uri, session=ctc.session).save("test2")
     random_values2 = {
         row["sys__rand"] for row in catalog.ls_dataset_rows("test2", "1.0.0")
     }
@@ -707,7 +711,7 @@ def test_dataset_storage_dependencies(cloud_test_catalog, cloud_type, indirect):
     dep_name, _, _ = parse_listing_uri(ctc.src_uri)
 
     ds_name = "some_ds"
-    dc.read_storage(uri, session=session).save(ds_name)
+    dc.read_storage(uri, session=ctc.session).save(ds_name)
 
     lst_ds_name, _, _ = parse_listing_uri(uri)
     lst_dataset = catalog.metastore.get_dataset(lst_ds_name)
