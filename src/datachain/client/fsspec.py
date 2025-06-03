@@ -207,14 +207,13 @@ class Client(ABC):
         )
 
     async def get_current_etag(self, file: "File") -> str:
-        file_path = file.get_path_normalized()
         kwargs = {}
         if self._is_version_aware():
             kwargs["version_id"] = file.version
         info = await self.fs._info(
-            self.get_full_path(file_path, file.version), **kwargs
+            self.get_full_path(file.path, file.version), **kwargs
         )
-        return self.info_to_file(info, file_path).etag
+        return self.info_to_file(info, file.path).etag
 
     def get_file_info(self, path: str, version_id: Optional[str] = None) -> "File":
         info = self.fs.info(self.get_full_path(path, version_id), version_id=version_id)
@@ -386,8 +385,7 @@ class Client(ABC):
             return open(cache_path, mode="rb")
         assert not file.location
         return FileWrapper(
-            self.fs.open(self.get_full_path(file.get_path_normalized(), file.version)),
-            cb,
+            self.fs.open(self.get_full_path(file.path, file.version)), cb
         )  # type: ignore[return-value]
 
     def upload(self, data: bytes, path: str) -> "File":
