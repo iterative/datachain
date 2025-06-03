@@ -209,7 +209,7 @@ class Client(ABC):
     async def get_current_etag(self, file: "File") -> str:
         file_path = file.get_path_normalized()
         kwargs = {}
-        if getattr(self.fs, "version_aware", False):
+        if self._is_version_aware():
             kwargs["version_id"] = file.version
         info = await self.fs._info(
             self.get_full_path(file_path, file.version), **kwargs
@@ -327,8 +327,11 @@ class Client(ABC):
         """
         return not (key.startswith("/") or key.endswith("/") or "//" in key)
 
+    def _is_version_aware(self) -> bool:
+        return getattr(self.fs, "version_aware", False)
+
     async def ls_dir(self, path):
-        if getattr(self.fs, "version_aware", False):
+        if self._is_version_aware():
             kwargs = {"versions": True}
         return await self.fs._ls(path, detail=True, **kwargs)
 

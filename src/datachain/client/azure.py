@@ -15,7 +15,7 @@ class AzureClient(Client):
     protocol = "az"
 
     def info_to_file(self, v: dict[str, Any], path: str) -> File:
-        version_id = v.get("version_id")
+        version_id = v.get("version_id") if self._is_version_aware() else None
         return File(
             source=self.uri,
             path=path,

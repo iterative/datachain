@@ -25,6 +25,12 @@ def test_listing_generator(cloud_test_catalog, cloud_type):
         assert cat_file.source == ctc.src_uri
         assert cat_file.path == cat_entry.path
         assert cat_file.size == cat_entry.size
+        assert cat_file.etag is not None
+        # If version_aware is not passed it is enforced to be True internally
+        if catalog.client_config.get("version_aware", True):
+            assert cat_file.version is not None
+        else:
+            assert cat_file.version == ""
         assert cat_file.is_latest == cat_entry.is_latest
         assert cat_file.location is None
 

@@ -82,14 +82,28 @@ class FileExporter(NodesThreadPool):
 
 
 class VFileError(DataChainError):
-    def __init__(self, file: "File", message: str, vtype: str = ""):
+    def __init__(self, message: str, source: str, path: str, vtype: str = ""):
+        self.message = message
+        self.source = source
+        self.path = path
+        self.vtype = vtype
+
         type_ = f" of vtype '{vtype}'" if vtype else ""
-        super().__init__(f"Error in v-file '{file.path}'{type_}: {message}")
+        super().__init__(f"Error in v-file '{source}/{path}'{type_}: {message}")
+
+    def __reduce__(self):
+        return self.__class__, (self.message, self.source, self.path, self.vtype)
 
 
 class FileError(DataChainError):
-    def __init__(self, file: "File", message: str):
-        super().__init__(f"Error in file {file.source}/{file.path}: {message}")
+    def __init__(self, message: str, source: str, path: str):
+        self.message = message
+        self.source = source
+        self.path = path
+        super().__init__(f"Error in file '{source}/{path}': {message}")
+
+    def __reduce__(self):
+        return self.__class__, (self.message, self.source, self.path)
 
 
 class VFile(ABC):
@@ -115,18 +129,20 @@ class TarVFile(VFile):
     def open(cls, file: "File", location: list[dict]):
         """Stream file from tar archive based on location in archive."""
         if len(location) > 1:
-            raise VFileError(file, "multiple 'location's are not supported yet")
+            raise VFileError(
+                "multiple 'location's are not supported yet", file.source, file.path
+            )
 
         loc = location[0]
 
         if (offset := loc.get("offset", None)) is None:
-            raise VFileError(file, "'offset' is not specified")
+            raise VFileError("'offset' is not specified", file.source, file.path)
 
         if (size := loc.get("size", None)) is None:
-            raise VFileError(file, "'size' is not specified")
+            raise VFileError("'size' is not specified", file.source, file.path)
 
         if (parent := loc.get("parent", None)) is None:
-            raise VFileError(file, "'parent' is not specified")
+            raise VFileError("'parent' is not specified", file.source, file.path)
 
         tar_file = File(**parent)
         tar_file._set_stream(file._catalog)
@@ -146,14 +162,18 @@ class VFileRegistry:
     @classmethod
     def resolve(cls, file: "File", location: list[dict]):
         if len(location) == 0:
-            raise VFileError(file, "'location' must not be list of JSONs")
+            raise VFileError(
+                "'location' must not be list of JSONs", file.source, file.path
+            )
 
         if not (vtype := location[0].get("vtype", "")):
-            raise VFileError(file, "vtype is not specified")
+            raise VFileError("vtype is not specified", file.source, file.path)
 
         reader = cls._vtype_readers.get(vtype, None)
         if not reader:
-            raise VFileError(file, "reader not registered", vtype)
+            raise VFileError(
+                "reader not registered", file.source, file.path, vtype=vtype
+            )
 
         return reader.open(file, location)
 
@@ -455,19 +475,19 @@ class File(DataModel):
 
     def get_path_normalized(self) -> str:
         if not self.path:
-            raise FileError(self, "path must not be empty")
+            raise FileError("path must not be empty", self.source, self.path)
 
         if self.path.endswith("/"):
-            raise FileError(self, "path must not be a directory")
+            raise FileError("path must not be a directory", self.source, self.path)
 
         normpath = os.path.normpath(self.path)
         normpath = PurePath(normpath).as_posix()
 
         if normpath == ".":
-            raise FileError(self, "path must not be a directory")
+            raise FileError("path must not be a directory", self.source, self.path)
 
         if any(part == ".." for part in PurePath(normpath).parts):
-            raise FileError(self, "path must not contain '..'")
+            raise FileError("path must not contain '..'", self.source, self.path)
 
         return normpath
 
