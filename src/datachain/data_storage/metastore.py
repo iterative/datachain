@@ -719,9 +719,6 @@ class AbstractDBMetastore(AbstractMetastore):
         n = self._namespaces
         self.db.execute(self._namespaces_delete().where(n.c.id == namespace.id))
 
-    def update_namespace(self, namespace: Namespace, conn=None, **kwargs) -> Namespace:
-        raise NotImplementedError("Updating namespaces not implemented")
-
     def get_namespace(self, name: str, conn=None) -> Namespace:
         """Gets a single namespace by name"""
         n = self._namespaces
@@ -769,9 +766,6 @@ class AbstractDBMetastore(AbstractMetastore):
     def remove_project(self, project: Project) -> None:
         p = self._projects
         self.db.execute(self._projects_delete().where(p.c.id == project.id))
-
-    def update_project(self, project: Project, conn=None, **kwargs) -> Project:
-        raise NotImplementedError("Updating projects not implemented")
 
     def get_project(self, name: str, namespace_name: str, conn=None) -> Project:
         """Gets a single project inside some namespace by name"""
