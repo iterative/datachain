@@ -25,7 +25,7 @@ from tqdm import tqdm
 
 from datachain import semver
 from datachain.dataset import DatasetRecord
-from datachain.delta import delta_disabled, delta_update
+from datachain.delta import delta_disabled
 from datachain.func import literal
 from datachain.func.base import Function
 from datachain.func.func import Func
@@ -169,6 +169,7 @@ class DataChain:
         self._setup: dict = setup or {}
         self._sys = _sys
         self._delta = False
+        self._retry = False
 
     def __repr__(self) -> str:
         """Return a string representation of the chain."""
@@ -198,6 +199,24 @@ class DataChain:
         self._delta_compare = compare
         return self
 
+    def _as_retry(
+        self,
+        on: Optional[Union[str, Sequence[str]]] = None,
+        right_on: Optional[Union[str, Sequence[str]]] = None,
+        retry_on: Optional[str] = None,
+        retry_missing: bool = False,
+    ) -> "Self":
+        """Marks this chain as retry, which means we will filter records
+        that need to be reprocessed during saving dataset"""
+        if on is None:
+            raise ValueError("'match_on' fields must be defined")
+        self._retry = True
+        self._retry_match_on = on
+        self._retry_match_result_on = right_on
+        self._retry_on = retry_on
+        self._retry_missing = retry_missing
+        return self
+
     @property
     def empty(self) -> bool:
         """Returns True if chain has zero number of rows"""
@@ -207,6 +226,11 @@ class DataChain:
     def delta(self) -> bool:
         """Returns True if this chain is ran in "delta" update mode"""
         return self._delta
+
+    @property
+    def retry(self) -> bool:
+        """Returns True if this chain is ran in "retry" mode"""
+        return getattr(self, "_retry", False)
 
     @property
     def schema(self) -> dict[str, DataType]:
@@ -529,13 +553,43 @@ class DataChain:
             )
 
         schema = self.signals_schema.clone_without_sys_signals().serialize()
-        if self.delta and name:
-            delta_ds, dependencies, has_changes = delta_update(
+
+        # Handle retry functionality
+        active_chain = self
+        if self.retry and name:
+            from datachain.retry import retry_update
+
+            retry_ds, has_records = retry_update(
                 self,
                 name,
-                on=self._delta_on,
-                right_on=self._delta_result_on,
-                compare=self._delta_compare,
+                on=self._retry_match_on,
+                right_on=self._retry_match_result_on,
+                retry_on=self._retry_on,
+                retry_missing=self._retry_missing,
+            )
+
+            # If retry produced records to reprocess, use that filtered chain
+            if retry_ds is not None and has_records:
+                # Keep delta processing if enabled
+                if self.delta:
+                    retry_ds._delta = True
+                    retry_ds._delta_on = self._delta_on
+                    retry_ds._delta_result_on = self._delta_result_on
+                    retry_ds._delta_compare = self._delta_compare
+
+                # Use the retry-filtered chain for further processing
+                active_chain = retry_ds
+
+        # Handle delta functionality
+        if active_chain.delta and name:
+            from datachain.delta import delta_update
+
+            delta_ds, dependencies, has_changes = delta_update(
+                active_chain,
+                name,
+                on=active_chain._delta_on,
+                right_on=active_chain._delta_result_on,
+                compare=active_chain._delta_compare,
             )
 
             if delta_ds:

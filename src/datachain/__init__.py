@@ -36,6 +36,7 @@ from datachain.lib.udf import Aggregator, Generator, Mapper
 from datachain.lib.utils import AbstractUDF, DataChainError
 from datachain.query import metrics, param
 from datachain.query.session import Session
+from datachain.retry import retry_update
 
 __all__ = [
     "AbstractUDF",
@@ -78,4 +79,5 @@ __all__ = [
     "read_records",
     "read_storage",
     "read_values",
+    "retry_update",
 ]
