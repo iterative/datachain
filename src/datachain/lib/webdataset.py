@@ -35,7 +35,7 @@ warnings.filterwarnings(
 
 class WDSError(DataChainError):
     def __init__(self, tar_stream, message: str):
-        super().__init__(f"WebDataset error '{tar_stream.get_full_name()}': {message}")
+        super().__init__(f"WebDataset error '{tar_stream.name}': {message}")
 
 
 class CoreFileDuplicationError(WDSError):

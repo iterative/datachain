@@ -99,7 +99,7 @@ class FileClient(Client):
         )
 
     async def get_current_etag(self, file: "File") -> str:
-        info = self.fs.info(self.get_full_path(file.path))
+        info = self.fs.info(self.get_full_path(file.get_path_normalized()))
         return self.info_to_file(info, "").etag
 
     async def get_size(self, path: str, version_id: Optional[str] = None) -> int:
@@ -138,8 +138,8 @@ class FileClient(Client):
         if not self.use_symlinks:
             super().fetch_nodes(nodes, shared_progress_bar)
 
-    def do_instantiate_object(self, uid, dst):
+    def do_instantiate_object(self, file: File, dst: str) -> None:
         if self.use_symlinks:
-            os.symlink(Path(self.name, uid.path), dst)
+            os.symlink(Path(self.name, file.path), dst)
         else:
-            super().do_instantiate_object(uid, dst)
+            super().do_instantiate_object(file, dst)
