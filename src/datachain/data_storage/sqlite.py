@@ -150,10 +150,6 @@ class SQLiteDatabaseEngine(DatabaseEngine):
             db.execute("PRAGMA journal_mode = WAL")
             db.execute("PRAGMA synchronous = NORMAL")
             db.execute("PRAGMA case_sensitive_like = ON")
-            # On some old machines is it set to ~100 which breaks us pulling
-            # datasets from Studio. Trying to bump it up ... Added in Python 3.11
-            if hasattr(db, "setlimit"):
-                db.setlimit(sqlite3.SQLITE_LIMIT_FUNCTION_ARG, 1000)  # type: ignore [attr-defined]
             if os.environ.get("DEBUG_SHOW_SQL_QUERIES"):
                 import sys
 
@@ -235,11 +231,13 @@ class SQLiteDatabaseEngine(DatabaseEngine):
         return self.db.execute(sql, parameters)
 
     def insert_dataframe(self, table_name: str, df) -> int:
-        if hasattr(self.db, "getlimit"):
-            # `getlimit` added in Python 3.11
-            chunksize = min(self.db.getlimit(sqlite3.SQLITE_LIMIT_FUNCTION_ARG), 1000)  # type: ignore [attr-defined]
-        else:
-            chunksize = 100
+        # Dynamically calculates chunksize by dividing max variable limit in a
+        # single SQL insert with number of columns in dataframe.
+        # This way we avoid error: sqlite3.OperationalError: too many SQL variables,
+        chunksize = (
+            self.db.getlimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER) // df.shape[1]
+        )
+
         return df.to_sql(
             table_name,
             self.db,
