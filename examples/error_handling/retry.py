@@ -29,15 +29,12 @@ class ProcessingResult(DataModel):
 _processing_attempts = {}
 
 
-def process_data(data: dict) -> ProcessingResult:
+def process_data(item_id: int, content: str) -> ProcessingResult:
     """
     Process a data record - initially fails for odd IDs, but succeeds on retry.
     In a real-world application, this could be data validation,
     transformation, or an ML model inference step.
     """
-    item_id = data["id"]
-    content = data["content"]
-
     # Track processing attempts for this item
     if item_id not in _processing_attempts:
         _processing_attempts[item_id] = 0
@@ -77,14 +74,9 @@ def retry_processing_example():
         "fifth item",
     ]
 
-    sample_data = [
-        {"id": id_val, "content": content_val}
-        for id_val, content_val in zip(sample_ids, sample_contents)
-    ]
-
-    initial_chain = dc.read_values(data=sample_data, in_memory=True).save(
-        name="sample_data"
-    )
+    initial_chain = dc.read_values(
+        item_id=sample_ids, content=sample_contents, in_memory=True
+    ).save(name="sample_data")
     print(f"Created dataset with {initial_chain.count()} records\n")
 
     # Step 2: First processing pass - some records will fail
@@ -113,7 +105,7 @@ def retry_processing_example():
             # Enable retry processing
             retry=True,
             # Match records based on the id field
-            match_on="data.id",
+            match_on="item_id",
             # Retry records where result.error field is not empty
             retry_on="result.error",
         )

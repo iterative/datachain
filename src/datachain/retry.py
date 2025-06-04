@@ -1,7 +1,9 @@
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Optional, Union
 
-from datachain import C, read_dataset
+from datachain import func, read_dataset
+from datachain.error import DatasetNotFoundError
+from datachain.lib.dc import C
 
 if TYPE_CHECKING:
     from datachain.lib.data_model import DataValue
@@ -40,7 +42,7 @@ def retry_update(
 
     try:
         latest_version = catalog.get_dataset(name).latest_version
-    except Exception:  # noqa: BLE001
+    except DatasetNotFoundError:
         # First creation of result dataset, return all source records
         return dc, True
 
@@ -70,7 +72,9 @@ def retry_update(
 
         # Filter source dataset for records matching error identifiers
         if isinstance(on, str):
-            error_source_records = dc.filter(C(on).isin(error_identifiers))
+            error_source_records = dc.filter(
+                func.array.contains(error_identifiers, C(on))
+            )
         else:
             # For multiple fields, we need to create compound conditions
             conditions = []
