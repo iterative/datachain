@@ -117,6 +117,7 @@ def read_meta(  # noqa: C901
             gl = globals()
             exec(model_code, gl)  # type: ignore[arg-type] # noqa: S102
             spec = gl["spec"]
+            spec.__module__ = "__main__"
 
     if not spec and not schema_from:
         raise ValueError(
