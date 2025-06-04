@@ -109,12 +109,14 @@ class SQLiteDatabaseEngine(DatabaseEngine):
         metadata: "MetaData",
         db: sqlite3.Connection,
         db_file: Optional[str] = None,
+        max_variable_number: Optional[int] = 999,
     ):
         self.engine = engine
         self.metadata = metadata
         self.db = db
         self.db_file = db_file
         self.is_closed = False
+        self.max_variable_number = max_variable_number
 
     @classmethod
     def from_db_file(cls, db_file: Optional[str] = None) -> "SQLiteDatabaseEngine":
@@ -123,7 +125,7 @@ class SQLiteDatabaseEngine(DatabaseEngine):
     @staticmethod
     def _connect(
         db_file: Optional[str] = None,
-    ) -> tuple["Engine", "MetaData", sqlite3.Connection, str]:
+    ) -> tuple["Engine", "MetaData", sqlite3.Connection, str, int]:
         try:
             if db_file == ":memory:":
                 # Enable multithreaded usage of the same in-memory db
@@ -150,6 +152,13 @@ class SQLiteDatabaseEngine(DatabaseEngine):
             db.execute("PRAGMA journal_mode = WAL")
             db.execute("PRAGMA synchronous = NORMAL")
             db.execute("PRAGMA case_sensitive_like = ON")
+
+            max_variable_number = 999  # minimum in old SQLite versions
+            for row in db.execute("PRAGMA compile_options;").fetchall():
+                option = row[0]
+                if option.startswith("MAX_VARIABLE_NUMBER"):
+                    max_variable_number = int(option.split("=")[1])
+
             if os.environ.get("DEBUG_SHOW_SQL_QUERIES"):
                 import sys
 
@@ -157,7 +166,7 @@ class SQLiteDatabaseEngine(DatabaseEngine):
 
             load_usearch_extension(db)
 
-            return engine, MetaData(), db, db_file
+            return engine, MetaData(), db, db_file, max_variable_number
         except RuntimeError:
             raise DataChainError("Can't connect to SQLite DB") from None
 
@@ -180,11 +189,14 @@ class SQLiteDatabaseEngine(DatabaseEngine):
     def _reconnect(self) -> None:
         if not self.is_closed:
             raise RuntimeError("Cannot reconnect on still-open DB!")
-        engine, metadata, db, db_file = self._connect(db_file=self.db_file)
+        engine, metadata, db, db_file, max_variable_number = self._connect(
+            db_file=self.db_file
+        )
         self.engine = engine
         self.metadata = metadata
         self.db = db
         self.db_file = db_file
+        self.max_variable_number = max_variable_number
         self.is_closed = False
 
     def get_table(self, name: str) -> Table:
@@ -234,9 +246,7 @@ class SQLiteDatabaseEngine(DatabaseEngine):
         # Dynamically calculates chunksize by dividing max variable limit in a
         # single SQL insert with number of columns in dataframe.
         # This way we avoid error: sqlite3.OperationalError: too many SQL variables,
-        chunksize = (
-            self.db.getlimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER) // df.shape[1]
-        )
+        chunksize = self.max_variable_number // df.shape[1]
 
         return df.to_sql(
             table_name,
