@@ -17,6 +17,8 @@ from datachain.client import Client
 from datachain.data_storage.schema import convert_rows_custom_column_types
 from datachain.data_storage.serializer import Serializable
 from datachain.dataset import DatasetRecord, StorageURI
+from datachain.lib.file import File
+from datachain.lib.signal_schema import SignalSchema
 from datachain.node import DirType, DirTypeGroup, Node, NodeWithPath, get_path
 from datachain.query.batch import RowsOutput
 from datachain.query.utils import get_query_id_column
@@ -35,7 +37,6 @@ if TYPE_CHECKING:
     from datachain.data_storage import schema
     from datachain.data_storage.db_engine import DatabaseEngine
     from datachain.data_storage.schema import DataTable
-    from datachain.lib.file import File
 
 
 logger = logging.getLogger("datachain")
@@ -370,14 +371,18 @@ class AbstractWarehouse(ABC, Serializable):
         if not (self.db.has_table(self.dataset_table_name(dataset.name, version))):
             return None, None
 
+        file_signals = list(
+            SignalSchema.deserialize(dataset.feature_schema).get_signals(File)
+        )
+
         dr = self.dataset_rows(dataset, version)
         table = dr.get_table()
         expressions: tuple[_ColumnsClauseArgument[Any], ...] = (
             sa.func.count(table.c.sys__id),
         )
-        size_columns = [
-            c for c in table.columns if c.name == "size" or c.name.endswith("__size")
-        ]
+        size_column_names = [s.replace(".", "__") + "__size" for s in file_signals]
+        size_columns = [c for c in table.columns if c.name in size_column_names]
+
         if size_columns:
             expressions = (*expressions, sa.func.sum(sum(size_columns)))
         query = sa.select(*expressions)
