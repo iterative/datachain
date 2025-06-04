@@ -68,12 +68,18 @@ def retry_processing_example():
 
     # Step 1: Create initial dataset with sample data
     print("Step 1: Creating initial dataset with sample data...")
+    sample_ids = [1, 2, 3, 4, 5]
+    sample_contents = [
+        "first item",
+        "second item",
+        "third item",
+        "fourth item",
+        "fifth item",
+    ]
+
     sample_data = [
-        {"id": 1, "content": "first item"},
-        {"id": 2, "content": "second item"},
-        {"id": 3, "content": "third item"},
-        {"id": 4, "content": "fourth item"},
-        {"id": 5, "content": "fifth item"},
+        {"id": id_val, "content": content_val}
+        for id_val, content_val in zip(sample_ids, sample_contents)
     ]
 
     initial_chain = dc.read_values(data=sample_data, in_memory=True).save(
@@ -106,10 +112,10 @@ def retry_processing_example():
             "sample_data",
             # Enable retry processing
             retry=True,
-            # Match records based on the data.id field
+            # Match records based on the id field
             match_on="data.id",
-            # Retry records where error field is not None
-            retry_on="error",
+            # Retry records where result.error field is not empty
+            retry_on="result.error",
         )
         .map(result=process_data)
         .save(name="processed_data")

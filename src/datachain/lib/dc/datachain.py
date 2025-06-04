@@ -319,6 +319,14 @@ class DataChain:
                 compare=self._delta_compare,
             )
 
+        if self.retry:
+            chain = chain._as_retry(
+                on=self._retry_match_on,
+                right_on=self._retry_match_result_on,
+                retry_on=self._retry_on,
+                retry_missing=self._retry_missing,
+            )
+
         return chain
 
     def settings(
