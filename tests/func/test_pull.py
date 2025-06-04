@@ -94,7 +94,39 @@ def remote_dataset_version(schema, dataset_rows):
         "dataset_id": 1,
         "version": "1.0.0",
         "status": 4,
-        "feature_schema": {},
+        "feature_schema": {
+            "file": "File@v1",
+            "_custom_types": {
+                "File@v1": {
+                    "schema_version": 2,
+                    "name": "File@v1",
+                    "fields": {
+                        "source": "str",
+                        "path": "str",
+                        "size": "int",
+                        "version": "str",
+                        "etag": "str",
+                        "is_latest": "bool",
+                        "last_modified": "datetime",
+                        "location": "Union[dict, list[dict], NoneType]",
+                    },
+                    "bases": [
+                        ["File", "datachain.lib.file", "File@v1"],
+                        ["DataModel", "datachain.lib.data_model", "DataModel@v1"],
+                        ["BaseModel", "pydantic.main", None],
+                        ["object", "builtins", None],
+                    ],
+                    "hidden_fields": [
+                        "source",
+                        "version",
+                        "etag",
+                        "is_latest",
+                        "last_modified",
+                        "location",
+                    ],
+                }
+            },
+        },
         "created_at": "2024-02-23T10:42:31.842944+00:00",
         "finished_at": "2024-02-23T10:43:31.842944+00:00",
         "error_message": "",
@@ -121,7 +153,39 @@ def remote_dataset(remote_dataset_version, schema):
         "attrs": [],
         "schema": schema,
         "status": 4,
-        "feature_schema": {},
+        "feature_schema": {
+            "file": "File@v1",
+            "_custom_types": {
+                "File@v1": {
+                    "schema_version": 2,
+                    "name": "File@v1",
+                    "fields": {
+                        "source": "str",
+                        "path": "str",
+                        "size": "int",
+                        "version": "str",
+                        "etag": "str",
+                        "is_latest": "bool",
+                        "last_modified": "datetime",
+                        "location": "Union[dict, list[dict], NoneType]",
+                    },
+                    "bases": [
+                        ["File", "datachain.lib.file", "File@v1"],
+                        ["DataModel", "datachain.lib.data_model", "DataModel@v1"],
+                        ["BaseModel", "pydantic.main", None],
+                        ["object", "builtins", None],
+                    ],
+                    "hidden_fields": [
+                        "source",
+                        "version",
+                        "etag",
+                        "is_latest",
+                        "last_modified",
+                        "location",
+                    ],
+                }
+            },
+        },
         "created_at": "2024-02-23T10:42:31.842944+00:00",
         "finished_at": "2024-02-23T10:43:31.842944+00:00",
         "error_message": "",
