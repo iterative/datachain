@@ -248,7 +248,7 @@ class SQLiteDatabaseEngine(DatabaseEngine):
         # This way we avoid error: sqlite3.OperationalError: too many SQL variables,
         num_columns = df.shape[1]
         if num_columns == 0:
-            return 0
+            num_columns = 1
 
         if self.max_variable_number < num_columns:
             raise RuntimeError(
