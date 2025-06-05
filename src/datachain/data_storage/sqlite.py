@@ -156,7 +156,7 @@ class SQLiteDatabaseEngine(DatabaseEngine):
             max_variable_number = 999  # minimum in old SQLite versions
             for row in db.execute("PRAGMA compile_options;").fetchall():
                 option = row[0]
-                if option.startswith("MAX_VARIABLE_NUMBER"):
+                if option.startswith("MAX_VARIABLE_NUMBER="):
                     max_variable_number = int(option.split("=")[1])
 
             if os.environ.get("DEBUG_SHOW_SQL_QUERIES"):
