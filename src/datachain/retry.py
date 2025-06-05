@@ -1,12 +1,11 @@
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Optional, Union
 
-from datachain import func, read_dataset
+from datachain import read_dataset
 from datachain.error import DatasetNotFoundError
 from datachain.lib.dc import C
 
 if TYPE_CHECKING:
-    from datachain.lib.data_model import DataValue
     from datachain.lib.dc import DataChain
 
 
@@ -57,42 +56,19 @@ def retry_update(
         # No error records if retry_on is not provided
         error_records = None
 
-    # Records to reprocess (will be populated based on conditions)
-    records_to_reprocess = []
+    # Initialize reprocess_chain as None
+    reprocess_chain = None
 
     # Handle error records if they exist
-    if error_records is not None and not error_records.empty:
-        # Extract identifiers from error records
-        error_identifiers: list[Union[DataValue, tuple]] = []
-        if isinstance(right_on or on, str):
-            error_identifiers = list(error_records.collect(str(right_on or on)))
-        else:
-            # For multiple fields, collect a list of tuples
-            error_identifiers = list(error_records.collect(*(right_on or on)))
+    if error_records is not None:
+        # Use merge (inner join) to find source records that match error records
+        error_source_records = dc.merge(
+            error_records, on=on, right_on=right_on, inner=True
+        ).select_except(
+            *[col for col in error_records.signals_schema.values if col != "sys"]
+        )
 
-        # Filter source dataset for records matching error identifiers
-        if isinstance(on, str):
-            error_source_records = dc.filter(
-                func.array.contains(error_identifiers, C(on))
-            )
-        else:
-            # For multiple fields, we need to create compound conditions
-            conditions = []
-            for i, field in enumerate(on):
-                # Each condition checks if the field matches any value
-                # from error_identifiers
-                field_values = [
-                    identifier[i] if isinstance(identifier, tuple) else identifier
-                    for identifier in error_identifiers
-                ]
-                conditions.append(C(field).isin(field_values))
-
-            # Combine conditions with AND
-            from functools import reduce
-
-            error_source_records = dc.filter(reduce(lambda x, y: x & y, conditions))
-
-        records_to_reprocess.append(error_source_records)
+        reprocess_chain = error_source_records
 
     # Handle missing records if retry_missing is True
     if retry_missing:
@@ -100,20 +76,14 @@ def retry_update(
         missing_records = dc.subtract(result_dataset, on=on, right_on=right_on)
 
         if not missing_records.empty:
-            records_to_reprocess.append(missing_records)
+            if reprocess_chain is not None:
+                # Union the error records and missing records
+                reprocess_chain = reprocess_chain.union(missing_records)
+            else:
+                reprocess_chain = missing_records
 
     # If no records to reprocess, return None
-    if not records_to_reprocess:
-        return None, False
-
-    # Combine all records to reprocess if there are multiple sources
-    if len(records_to_reprocess) > 1:
-        from functools import reduce
-
-        reprocess_chain = reduce(lambda x, y: x.union(y), records_to_reprocess)
-    elif len(records_to_reprocess) == 1:
-        reprocess_chain = records_to_reprocess[0]
-    else:
+    if reprocess_chain is None:
         return None, False
 
     # Return the chain with records to reprocess
