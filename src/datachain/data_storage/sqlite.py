@@ -246,7 +246,16 @@ class SQLiteDatabaseEngine(DatabaseEngine):
         # Dynamically calculates chunksize by dividing max variable limit in a
         # single SQL insert with number of columns in dataframe.
         # This way we avoid error: sqlite3.OperationalError: too many SQL variables,
-        chunksize = self.max_variable_number // df.shape[1]
+        num_columns = df.shape[1]
+        if num_columns == 0:
+            return 0
+
+        if self.max_variable_number < num_columns:
+            raise RuntimeError(
+                "Number of columns exceeds DB maximum variables when inserting data"
+            )
+
+        chunksize = self.max_variable_number // num_columns
 
         return df.to_sql(
             table_name,
