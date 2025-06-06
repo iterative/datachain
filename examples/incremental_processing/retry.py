@@ -102,10 +102,8 @@ def retry_processing_example():
     retry_chain = (
         dc.read_dataset(
             "sample_data",
-            # Enable retry processing
-            retry=True,
-            # Match records based on the id field
-            match_on="item_id",
+            delta=True,
+            delta_on="item_id",
             # Retry records where result.error field is not empty
             retry_on="result.error",
         )

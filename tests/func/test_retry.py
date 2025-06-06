@@ -13,6 +13,7 @@ class ProcessingResult(DataModel):
     processed_content: str
     processed_at: str
     error: str
+    attempt: int
 
 
 class TestRetryFunctionality:
@@ -20,24 +21,19 @@ class TestRetryFunctionality:
 
     def test_retry_with_error_records(self, test_session):
         """Test retry functionality with records that have errors."""
+
         # Global counter to track processing attempts
-        processing_attempts = {}
-
-        def process_data_with_errors(id: int, content: str) -> ProcessingResult:
+        def process_data_with_errors(
+            item_id: int, content: str, attempt: int
+        ) -> ProcessingResult:
             """Process data that fails for odd IDs on first attempt."""
-            item_id = id
-
-            # Track processing attempts for this item
-            if item_id not in processing_attempts:
-                processing_attempts[item_id] = 0
-            processing_attempts[item_id] += 1
-
             # Simulate an error for odd IDs on first attempt only
-            if item_id % 2 == 1 and processing_attempts[item_id] == 1:
+            if item_id % 2 == 1 and attempt == 1:
                 return ProcessingResult(
                     processed_content="",
                     processed_at=datetime.now(tz=timezone.utc).isoformat(),
                     error=f"Processing error for item {item_id}",
+                    attempt=attempt,
                 )
 
             # Successful processing
@@ -45,6 +41,7 @@ class TestRetryFunctionality:
                 processed_content=content.upper(),
                 processed_at=datetime.now(tz=timezone.utc).isoformat(),
                 error="",
+                attempt=attempt,
             )
 
         # Create initial dataset with sample data
@@ -52,12 +49,13 @@ class TestRetryFunctionality:
         sample_contents = ["first item", "second item", "third item", "fourth item"]
 
         dc.read_values(
-            id=sample_ids, content=sample_contents, session=test_session
+            item_id=sample_ids, content=sample_contents, session=test_session
         ).save("sample_data")
 
         # First processing pass - some records will fail
         first_pass = (
             dc.read_dataset("sample_data", session=test_session)
+            .setup(attempt=lambda: 1)
             .map(result=process_data_with_errors)
             .save("processed_data")
         )
@@ -75,9 +73,10 @@ class TestRetryFunctionality:
                 "sample_data",
                 session=test_session,
                 retry=True,
-                match_on="id",
+                match_on="item_id",
                 retry_on="result.error",
             )
+            .setup(attempt=lambda: 2)
             .map(result=process_data_with_errors)
             .save("processed_data")
         )
@@ -89,11 +88,16 @@ class TestRetryFunctionality:
         assert final_error_count == 0  # No errors after retry
         assert final_success_count == 4  # All records should succeed
 
-        # Verify that retry only processed failed records
-        assert processing_attempts[1] == 2  # Odd ID, processed twice
-        assert processing_attempts[2] == 1  # Even ID, processed once
-        assert processing_attempts[3] == 2  # Odd ID, processed twice
-        assert processing_attempts[4] == 1  # Even ID, processed once
+        final_success_attempts_count = retry_chain.filter(
+            C("result.attempt") == 1
+        ).count()
+        final_error_attempts_count = retry_chain.filter(
+            C("result.attempt") == 2
+        ).count()
+
+        # Only error records should have attempt 2
+        assert final_success_attempts_count == 2
+        assert final_error_attempts_count == 2
 
     def test_retry_with_missing_records(self, test_session):
         """Test retry functionality with missing records."""
@@ -111,6 +115,7 @@ class TestRetryFunctionality:
                 processed_content=content.upper(),
                 processed_at=datetime.now(tz=timezone.utc).isoformat(),
                 error="",
+                attempt=1,
             )
 
         # Process only first 2 records
@@ -159,6 +164,7 @@ class TestRetryFunctionality:
                 processed_content=content.upper(),
                 processed_at=datetime.now(tz=timezone.utc).isoformat(),
                 error="",  # No errors
+                attempt=1,
             )
 
         # First pass - all succeed
@@ -202,6 +208,7 @@ class TestRetryFunctionality:
                 processed_content=content.upper(),
                 processed_at=datetime.now(tz=timezone.utc).isoformat(),
                 error="",
+                attempt=1,
             )
 
         # First run with retry enabled on non-existent dataset
@@ -241,12 +248,14 @@ class TestRetryFunctionality:
                     processed_content="",
                     processed_at=datetime.now(tz=timezone.utc).isoformat(),
                     error=f"Error for {category}-{id}",
+                    attempt=1,
                 )
 
             return ProcessingResult(
                 processed_content=f"{category}-{content}".upper(),
                 processed_at=datetime.now(tz=timezone.utc).isoformat(),
                 error="",
+                attempt=1,
             )
 
         # Create dataset with compound keys
@@ -308,6 +317,7 @@ class TestRetryFunctionality:
                 processed_content=content.upper(),
                 processed_at=datetime.now(tz=timezone.utc).isoformat(),
                 error="",
+                attempt=1,
             )
 
         # Process with retry and delta enabled

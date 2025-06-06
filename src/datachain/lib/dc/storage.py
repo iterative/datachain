@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from .datachain import DataChain
 
 
-def read_storage(  # noqa: PLR0913
+def read_storage(
     uri: Union[str, os.PathLike[str], list[str], list[os.PathLike[str]]],
     *,
     type: FileType = "binary",
@@ -38,9 +38,6 @@ def read_storage(  # noqa: PLR0913
     delta_on: Optional[Union[str, Sequence[str]]] = None,
     delta_result_on: Optional[Union[str, Sequence[str]]] = None,
     delta_compare: Optional[Union[str, Sequence[str]]] = None,
-    retry: Optional[bool] = False,
-    match_on: Optional[Union[str, Sequence[str]]] = None,
-    match_result_on: Optional[Union[str, Sequence[str]]] = None,
     retry_on: Optional[str] = None,
     retry_missing: bool = False,
     client_config: Optional[dict] = None,
@@ -88,15 +85,6 @@ def read_storage(  # noqa: PLR0913
         delta_compare: A list of fields used to check if the same row has been modified
             in the new version of the source.
             If not defined, all fields except those defined in `delta_on` will be used.
-        retry: If set to True, allows reprocessing of certain records from the source
-            dataset that either had errors or are missing in the resulting dataset.
-            This works alongside delta processing.
-        match_on: A list of fields that uniquely identify rows in the source.
-            This parameter replaces and supersedes delta_on when provided, for use with
-            both delta and retry functionality.
-        match_result_on: A list of fields in the resulting dataset that correspond
-            to the match_on fields from the source.
-            This parameter replaces and supersedes delta_result_on when provided.
         retry_on: Specifies a field in the result dataset that indicates an error
             or need for reprocessing when not None. Records where this field is not None
             will be reprocessed.
@@ -226,20 +214,11 @@ def read_storage(  # noqa: PLR0913
 
     assert storage_chain is not None
 
-    # Use match_on/match_result_on if provided, otherwise fall back to
-    # delta_on/delta_result_on
-    match_fields = match_on or delta_on
-    match_result_fields = match_result_on or delta_result_on
-
     if delta:
         storage_chain = storage_chain._as_delta(
-            on=match_fields, right_on=match_result_fields, compare=delta_compare
-        )
-
-    if retry:
-        storage_chain = storage_chain._as_retry(
-            on=match_fields,
-            right_on=match_result_fields,
+            on=delta_on,
+            right_on=delta_result_on,
+            compare=delta_compare,
             retry_on=retry_on,
             retry_missing=retry_missing,
         )
