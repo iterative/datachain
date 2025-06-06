@@ -53,7 +53,7 @@ to get started with `DataChain` and learn more.
         pip install datachain
 
 
-Example: download subset of files based on metadata
+Example: Download Subset of Files Based on Metadata
 ---------------------------------------------------
 
 Sometimes users only need to download a specific subset of files from cloud storage,
@@ -112,10 +112,9 @@ datasets that evolve over time and may occasionally have processing errors.
         dc.read_storage(
             "data/",
             update=True,
-            delta=True,           # Process only new/changed files
-            retry=True,           # Reprocess files with errors
-            match_on="file.path", # Identify files by path
-            retry_on="error"      # Field that indicates errors
+            delta=True,              # Process only new/changed files
+            delta_on="file.path",    # Identify files by path
+            retry_on="error"         # Field that indicates errors
         )
         .map(processed_result=process_file)
         .mutate(

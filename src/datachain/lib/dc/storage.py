@@ -89,7 +89,7 @@ def read_storage(
             or need for reprocessing when not None. Records where this field is not None
             will be reprocessed.
         retry_missing: If True, records that exist in the source dataset but not in
-            the result dataset (based on match_on/match_result_on fields) will be
+            the result dataset (based on delta_on/delta_result_on fields) will be
             reprocessed.
 
     Returns:

@@ -27,9 +27,9 @@ import datachain as dc
 chain = (
     dc.read_storage(
         "data/",
-        delta=True,              # Enable delta processing
-        delta_on="file.path",    # Field that uniquely identifies records
-        delta_compare="file.mtime" # Field to check for changes
+        delta=True,                    # Enable delta processing
+        delta_on="file.path",          # Field that uniquely identifies records
+        delta_compare="file.mtime"     # Field to check for changes
     )
     .map(result=process_function)
     .save(name="processed_data")
@@ -63,9 +63,9 @@ def process_file(file):
 chain = (
     dc.read_storage(
         "data/",
-        update=True,         # Update the storage index
-        delta=True,          # Process only new files
-        delta_on="file.path" # Files are identified by their paths
+        update=True,                   # Update the storage index
+        delta=True,                    # Process only new files
+        delta_on="file.path"           # Files are identified by their paths
     )
     .map(result=process_file)
     .save(name="processed_files")
@@ -80,5 +80,3 @@ Delta processing can be combined with [retry processing](./retry.md) to create a
 
 1. Processes only new or changed records (delta)
 2. Reprocesses records with errors or that are missing (retry)
-
-When both `delta=True` and `retry=True` are specified, DataChain will first identify records that need to be retried, then apply delta processing to that subset.

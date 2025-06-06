@@ -21,9 +21,7 @@ The retry functionality allows you to:
 
 ## Usage
 
-You can enable retry functionality in two ways:
-
-### 1. Using read_storage() or read_dataset()
+`retry` can be enabled by specifying `retry_on` and / or `retry_missing`. It is enabled only when `delta` is enabled.
 
 ```python
 import datachain as dc
@@ -32,12 +30,10 @@ from datachain import C
 chain = (
     dc.read_storage(
         "path/to/data/",
-        # Enable delta processing to handle only new files
+        # Enable delta processing to handle only new files (and retries in this case)
         delta=True,
-        # Enable retry processing to handle errors
-        retry=True,
         # Field(s) that uniquely identify records in the source dataset
-        match_on="id",
+        delta_on="id",
         # Name of the field in result dataset that indicates an error when not None
         retry_on="error",
         # Whether to also retry records missing from the result
@@ -47,37 +43,6 @@ chain = (
     .save(name="processed_data")    # Save results
 )
 ```
-
-### 2. Using the DataChain._as_retry() method
-
-```python
-import datachain as dc
-
-# Create a chain
-chain = dc.read_storage("path/to/data/")
-
-# Configure retry mode
-chain = chain._as_retry(
-    on="id",                 # Field that uniquely identifies records
-    retry_on="error",        # Field in result that indicates errors when not None
-    retry_missing=True       # Whether to retry missing records too
-)
-
-# Process and save
-result = (
-    chain
-    .map(result=process_function)
-    .save(name="processed_data")
-)
-```
-
-## Parameters
-
-- **retry**: Boolean flag to enable retry functionality
-- **match_on**: Field(s) in source dataset that uniquely identify records
-- **match_result_on**: Corresponding field(s) in result dataset if they differ from source
-- **retry_on**: Field in result dataset that indicates an error when not None
-- **retry_missing**: If True, also include records missing from result dataset
 
 ## Example: Processing Files with Error Handling
 
@@ -94,25 +59,24 @@ def process_file(file):
         return {
             "content": content,
             "result": result,
-            "error": None  # No error
+            "error": ""  # No error
         }
     except Exception as e:
         # Log the error and return it in the result
         return {
-            "content": None,
-            "result": None,
+            "content": "",
+            "result": "",
             "error": str(e)  # Store the error message
         }
 
-# Process files with both delta and retry functionality
+# Process files with with retry functionality
 chain = (
     dc.read_storage(
         "data/",
-        delta=True,           # Process only new files
-        retry=True,           # Reprocess files with errors
-        match_on="file.path", # Files are identified by their paths
-        retry_on="error",     # Errors are stored in the "error" field
-        retry_missing=True    # Also process any missing files
+        delta=True,                    # Process only new files
+        delta_on="file.path",          # Files are identified by their paths
+        retry_on="error",              # Errors are stored in the "error" field
+        retry_missing=True             # Also process any missing files
     )
     .map(result=process_file)
     .save(name="processed_files")
