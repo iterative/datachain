@@ -23,38 +23,25 @@ class ProcessingResult(DataModel):
     processed_content: str
     processed_at: str
     error: str
+    attempt: int
 
 
-# Global counter to track processing attempts
-_processing_attempts = {}
-
-
-def process_data(item_id: int, content: str) -> ProcessingResult:
+def process_data(item_id: int, content: str, attempt: int) -> ProcessingResult:
     """
     Process a data record - initially fails for odd IDs, but succeeds on retry.
     In a real-world application, this could be data validation,
     transformation, or an ML model inference step.
     """
-    # Track processing attempts for this item
-    if item_id not in _processing_attempts:
-        _processing_attempts[item_id] = 0
-    _processing_attempts[item_id] += 1
-
     # Simulate an error for odd IDs on first attempt only
     # This will succeed on retry to demonstrate the retry functionality
-    if item_id % 2 == 1 and _processing_attempts[item_id] == 1:
-        return ProcessingResult(
-            processed_content="",
-            processed_at=datetime.now(tz=timezone.utc).isoformat(),
-            error=f"Processing error for item {item_id} "
-            f"(attempt {_processing_attempts[item_id]})",
-        )
-
-    # Successful processing
+    error = item_id % 2 == 1 and attempt == 1
     return ProcessingResult(
-        processed_content=content.upper(),
+        processed_content="" if error else content.upper(),
         processed_at=datetime.now(tz=timezone.utc).isoformat(),
-        error="",
+        error=f"Processing error for item {item_id} (attempt {attempt})"
+        if error
+        else "",
+        attempt=attempt,
     )
 
 
@@ -80,9 +67,18 @@ def retry_processing_example():
     print(f"Created dataset with {initial_chain.count()} records\n")
 
     # Step 2: First processing pass - some records will fail
+    # We enable delta, initially it won't do anything, but it means
+    # that code stays the same across all attempts
     print("Step 2: First processing pass (some records will fail)...")
     first_pass = (
-        dc.read_dataset("sample_data")
+        dc.read_dataset(
+            "sample_data",
+            delta=True,
+            delta_on="item_id",
+            retry_on="result.error",
+        )
+        # Set attempt number for processing, this is specific to this example only
+        .setup(attempt=lambda: 1)
         .map(result=process_data)
         .save(name="processed_data")
     )
@@ -98,6 +94,7 @@ def retry_processing_example():
     first_pass.show()
 
     # Step 3: Retry processing - only failed records will be reprocessed
+    # Note how we use exactly the same DataChain code as above
     print("\nStep 3: Retry processing (failed records will be reprocessed)...")
     retry_chain = (
         dc.read_dataset(
@@ -107,6 +104,7 @@ def retry_processing_example():
             # Retry records where result.error field is not empty
             retry_on="result.error",
         )
+        .setup(attempt=lambda: 2)  # Set attempt number for processing
         .map(result=process_data)
         .save(name="processed_data")
     )
