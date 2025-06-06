@@ -7,7 +7,7 @@ from fsspec.implementations.local import LocalFileSystem
 from PIL import Image
 
 from datachain.catalog import Catalog
-from datachain.lib.file import File, ImageFile, TextFile, resolve
+from datachain.lib.file import File, FileError, ImageFile, TextFile, resolve
 
 
 def create_file(source: str):
@@ -31,12 +31,6 @@ def test_file_ext():
 def test_file_suffix():
     s = File(path=".file.jpg.txt")
     assert s.get_file_suffix() == ".txt"
-
-
-@pytest.mark.parametrize("name", [".file.jpg.txt", "dir1/dir2/name"])
-def test_full_name(name):
-    f = File(path=name)
-    assert f.get_full_name() == name
 
 
 def test_cache_get_path(catalog: Catalog):
@@ -244,7 +238,7 @@ def test_file_info_jsons():
 def test_get_path_local(catalog):
     file = File(path="dir/file", source="file:///")
     file._catalog = catalog
-    assert file.get_path().replace("\\", "/").strip("/") == "dir/file"
+    assert file.get_fs_path().replace("\\", "/").strip("/") == "dir/file"
 
 
 def test_get_fs(catalog):
@@ -367,3 +361,51 @@ def test_export_with_symlink(tmp_path, catalog, use_cache):
 
     dst = Path(file.get_local_path()) if use_cache else path
     assert (tmp_path / "dir" / "myfile.txt").resolve() == dst
+
+
+@pytest.mark.parametrize(
+    "path,expected",
+    [
+        ("", ""),
+        (".", "."),
+        ("dir/file.txt", "dir/file.txt"),
+        ("../dir/file.txt", "../dir/file.txt"),
+        ("/dir/file.txt", "/dir/file.txt"),
+    ],
+)
+def test_path_validation(path, expected):
+    assert File(path=path, source="file:///").path == expected
+
+
+@pytest.mark.parametrize(
+    "path,expected,raises",
+    [
+        ("", None, "must not be empty"),
+        ("/", None, "must not be a directory"),
+        (".", None, "must not be a directory"),
+        ("dir/..", None, "must not be a directory"),
+        ("dir/file.txt", "dir/file.txt", None),
+        ("dir//file.txt", "dir/file.txt", None),
+        ("./dir/file.txt", "dir/file.txt", None),
+        ("dir/./file.txt", "dir/file.txt", None),
+        ("dir/../file.txt", "file.txt", None),
+        ("dir/foo/../file.txt", "dir/file.txt", None),
+        ("./dir/./foo/.././../file.txt", "file.txt", None),
+        ("./dir", "dir", None),
+        ("dir/.", "dir", None),
+        ("./dir/.", "dir", None),
+        ("/dir", "/dir", None),
+        ("/dir/file.txt", "/dir/file.txt", None),
+        ("/dir/../file.txt", "/file.txt", None),
+        ("..", None, "must not contain '..'"),
+        ("../file.txt", None, "must not contain '..'"),
+        ("dir/../../file.txt", None, "must not contain '..'"),
+    ],
+)
+def test_path_normalized(path, expected, raises):
+    file = File(path=path, source="s3://bucket")
+    if raises:
+        with pytest.raises(FileError, match=raises):
+            file.get_path_normalized()
+    else:
+        assert file.get_path_normalized() == expected
