@@ -14,12 +14,16 @@ class Settings:
         workers=None,
         min_task_size=None,
         prefetch=None,
+        namespace=None,
+        project=None,
     ):
         self._cache = cache
         self.parallel = parallel
         self._workers = workers
         self.min_task_size = min_task_size
         self.prefetch = prefetch
+        self.namespace = namespace
+        self.project = project
 
         if not isinstance(cache, bool) and cache is not None:
             raise SettingsError(
@@ -67,6 +71,10 @@ class Settings:
             res["workers"] = self.workers
         if self.min_task_size is not None:
             res["min_task_size"] = self.min_task_size
+        if self.namespace is not None:
+            res["namespace"] = self.namespace
+        if self.project is not None:
+            res["project"] = self.project
         return res
 
     def add(self, settings: "Settings"):
@@ -74,5 +82,7 @@ class Settings:
         self.parallel = settings.parallel or self.parallel
         self._workers = settings._workers or self._workers
         self.min_task_size = settings.min_task_size or self.min_task_size
+        self.namespace = settings.namespace or self.namespace
+        self.project = settings.project or self.project
         if settings.prefetch is not None:
             self.prefetch = settings.prefetch

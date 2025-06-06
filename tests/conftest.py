@@ -4,9 +4,11 @@ import signal
 import subprocess  # nosec B404
 import uuid
 from collections.abc import Generator
+from datetime import datetime
 from pathlib import PosixPath
 from time import sleep
 from typing import NamedTuple
+from unittest.mock import patch
 
 import attrs
 import pytest
@@ -26,6 +28,8 @@ from datachain.data_storage.sqlite import (
 )
 from datachain.dataset import DatasetRecord
 from datachain.lib.dc import Sys
+from datachain.namespace import Namespace
+from datachain.project import Project
 from datachain.query.session import Session
 from datachain.utils import (
     ENV_DATACHAIN_GLOBAL_CONFIG_DIR,
@@ -537,6 +541,36 @@ def cloud_test_catalog_tmpfile(
     )
 
 
+@pytest.fixture(autouse=True)
+def mock_allowed_to_create_project(request):
+    if "disable_autouse" in request.keywords:
+        yield
+    else:
+        with patch("datachain.projects.Project", wraps=Project) as mock_project:
+            mock_project.allowed_to_create.return_value = True
+            yield mock_project
+
+
+@pytest.fixture(autouse=True)
+def mock_allowed_to_create_namespace(request):
+    if "disable_autouse" in request.keywords:
+        yield
+    else:
+        with patch("datachain.namespaces.Namespace", wraps=Namespace) as mock_namespace:
+            mock_namespace.allowed_to_create.return_value = True
+            yield mock_namespace
+
+
+@pytest.fixture
+def namespace(test_session):
+    return dc.namespaces.create("dev", "Dev namespace")
+
+
+@pytest.fixture
+def project(test_session, namespace):
+    return dc.projects.create("animals", "dev", "Animals project")
+
+
 @pytest.fixture
 def listed_bucket(cloud_test_catalog):
     ctc = cloud_test_catalog
@@ -548,7 +582,9 @@ def animal_dataset(listed_bucket, cloud_test_catalog):
     name = uuid.uuid4().hex
     catalog = cloud_test_catalog.catalog
     src_uri = cloud_test_catalog.src_uri
-    dataset = catalog.create_dataset_from_sources(name, [src_uri], recursive=True)
+    dataset = catalog.create_dataset_from_sources(
+        name, [src_uri], catalog.metastore.default_project, recursive=True
+    )
     return catalog.update_dataset(
         dataset, {"description": "animal dataset", "attrs": ["cats", "dogs"]}
     )
@@ -560,7 +596,7 @@ def dogs_dataset(listed_bucket, cloud_test_catalog):
     catalog = cloud_test_catalog.catalog
     src_uri = cloud_test_catalog.src_uri
     dataset = catalog.create_dataset_from_sources(
-        name, [f"{src_uri}/dogs/*"], recursive=True
+        name, [f"{src_uri}/dogs/*"], catalog.metastore.default_project, recursive=True
     )
     return catalog.update_dataset(
         dataset, {"description": "dogs dataset", "attrs": ["dogs", "dataset"]}
@@ -573,7 +609,7 @@ def cats_dataset(listed_bucket, cloud_test_catalog):
     catalog = cloud_test_catalog.catalog
     src_uri = cloud_test_catalog.src_uri
     dataset = catalog.create_dataset_from_sources(
-        name, [f"{src_uri}/cats/*"], recursive=True
+        name, [f"{src_uri}/cats/*"], catalog.metastore.default_project, recursive=True
     )
     return catalog.update_dataset(
         dataset, {"description": "cats dataset", "attrs": ["cats", "dataset"]}
@@ -591,6 +627,20 @@ def dataset_record():
         status=1,
         schema={},
         feature_schema={},
+        project=Project(
+            id=1,
+            uuid=str(uuid.uuid4()),
+            name="animals",
+            created_at=datetime.now(),
+            description="",
+            namespace=Namespace(
+                id=1,
+                uuid=str(uuid.uuid4()),
+                name="dev",
+                created_at=datetime.now(),
+                description="",
+            ),
+        ),
     )
 
 
@@ -647,11 +697,28 @@ def studio_datasets(requests_mock, studio_token):
         "num_objects": 6,
         "size": 100,
     }
+
+    project = {
+        "id": 1,
+        "uuid": str(uuid.uuid4()),
+        "name": "animals",
+        "created_at": "2024-02-23T10:42:31.842944+00:00",
+        "description": "",
+        "namespace": {
+            "id": 1,
+            "name": "dev",
+            "uuid": str(uuid.uuid4()),
+            "created_at": "2024-02-23T10:42:31.842944+00:00",
+            "description": "",
+        },
+    }
+
     dogs_dataset = {
         "id": 1,
         "name": "dogs",
         "description": "dogs dataset",
         "attrs": ["dogs", "dataset"],
+        "project": project,
         "versions": [
             {
                 "version": "1.0.0",
@@ -677,6 +744,7 @@ def studio_datasets(requests_mock, studio_token):
             "name": "cats",
             "description": "cats dataset",
             "attrs": ["cats", "dataset"],
+            "project": project,
             "versions": [
                 {
                     "version": "1.0.0",
@@ -692,6 +760,7 @@ def studio_datasets(requests_mock, studio_token):
             "name": "both",
             "description": "both dataset",
             "attrs": ["both", "dataset"],
+            "project": project,
             "versions": [
                 {
                     "version": "1.0.0",
@@ -706,7 +775,10 @@ def studio_datasets(requests_mock, studio_token):
 
     requests_mock.get(f"{STUDIO_URL}/api/datachain/datasets", json=datasets)
     requests_mock.get(
-        f"{STUDIO_URL}/api/datachain/datasets/info?dataset_name=dogs&team_name=team_name",
+        (
+            f"{STUDIO_URL}/api/datachain/datasets/info?namespace=dev&project=animals"
+            "&name=dogs&team_name=team_name"
+        ),
         json=dogs_dataset,
     )
 

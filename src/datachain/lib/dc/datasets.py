@@ -1,11 +1,13 @@
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Optional, Union, get_origin, get_type_hints
 
-from datachain.error import DatasetVersionNotFoundError
+from datachain.dataset import parse_dataset_name
+from datachain.error import DataChainError, DatasetVersionNotFoundError
 from datachain.lib.dataset_info import DatasetInfo
 from datachain.lib.file import (
     File,
 )
+from datachain.lib.projects import get as get_project
 from datachain.lib.settings import Settings
 from datachain.lib.signal_schema import SignalSchema
 from datachain.query import Session
@@ -37,7 +39,9 @@ def read_dataset(
     If dataset or version is not found locally, it will try to pull it from Studio.
 
     Parameters:
-        name : dataset name
+        name : dataset name which can be fully qualified dataset name with namespace
+            and project, or it can be just a regular name in which case default
+            namespace and project are used.
         version : dataset version
         session : Session to use for the chain.
         settings : Settings to use for the chain.
@@ -81,6 +85,11 @@ def read_dataset(
         ```
 
         ```py
+        import datachain as dc
+        chain = dc.read_dataset("dev.animals.my_cats")
+        ```
+
+        ```py
         chain = dc.read_dataset("my_cats", fallback_to_studio=False)
         ```
 
@@ -110,6 +119,12 @@ def read_dataset(
 
     from .datachain import DataChain
 
+    session = Session.get(session)
+
+    namespace_name, project_name, name = parse_dataset_name(name)
+    namespace_name = namespace_name or session.catalog.metastore.default_namespace_name
+    project_name = project_name or session.catalog.metastore.default_project_name
+
     if version is not None:
         try:
             # for backward compatibility we still allow users to put version as integer
@@ -119,7 +134,8 @@ def read_dataset(
             # all 2.* dataset versions). If dataset doesn't have any versions where
             # major part is equal to that input, exception is thrown.
             major = int(version)
-            dataset = Session.get(session).catalog.get_dataset(name)
+            project = get_project(project_name, namespace_name, session=session)
+            dataset = session.catalog.get_dataset(name, project)
             latest_major = dataset.latest_major_version(major)
             if not latest_major:
                 raise DatasetVersionNotFoundError(
@@ -130,19 +146,22 @@ def read_dataset(
             # version is in new semver string format, continuing as normal
             pass
 
-    query = DatasetQuery(
-        name=name,
-        version=version,  #  type: ignore[arg-type]
-        session=session,
-        indexing_column_types=File._datachain_column_types,
-        fallback_to_studio=fallback_to_studio,
-    )
-    telemetry.send_event_once("class", "datachain_init", name=name, version=version)
     if settings:
         _settings = Settings(**settings)
     else:
         _settings = Settings()
 
+    query = DatasetQuery(
+        name=name,
+        project_name=project_name,
+        namespace_name=namespace_name,
+        version=version,  #  type: ignore[arg-type]
+        session=session,
+        indexing_column_types=File._datachain_column_types,
+        fallback_to_studio=fallback_to_studio,
+    )
+
+    telemetry.send_event_once("class", "datachain_init", name=name, version=version)
     signals_schema = SignalSchema({"sys": Sys})
     if query.feature_schema:
         signals_schema |= SignalSchema.deserialize(query.feature_schema)
@@ -242,7 +261,6 @@ def delete_dataset(
     name: str,
     version: Optional[str] = None,
     force: Optional[bool] = False,
-    studio: Optional[bool] = False,
     session: Optional[Session] = None,
     in_memory: bool = False,
 ) -> None:
@@ -271,11 +289,26 @@ def delete_dataset(
         dc.delete_dataset("cats", version="1.0.0")
         ```
     """
+    from datachain.studio import remove_studio_dataset
 
     session = Session.get(session, in_memory=in_memory)
     catalog = session.catalog
+
+    namespace_name, project_name, name = parse_dataset_name(name)
+    namespace_name = namespace_name or catalog.metastore.default_namespace_name
+    project_name = project_name or catalog.metastore.default_project_name
+
+    if not catalog.metastore.is_local_dataset(namespace_name):
+        if not namespace_name or not project_name:
+            raise DataChainError("Namespace or project missing in Studio dataset name")
+        return remove_studio_dataset(
+            None, name, namespace_name, project_name, version=version, force=force
+        )
+
+    project = get_project(project_name, namespace_name, session=session)
+
     if not force:
-        version = version or catalog.get_dataset(name).latest_version
+        version = version or catalog.get_dataset(name, project).latest_version
     else:
         version = None
-    catalog.remove_dataset(name, version=version, force=force, studio=studio)
+    catalog.remove_dataset(name, project, version=version, force=force)

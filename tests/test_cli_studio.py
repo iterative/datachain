@@ -9,6 +9,7 @@ from datachain.cli import main
 from datachain.config import Config, ConfigLevel
 from datachain.studio import POST_LOGIN_MESSAGE
 from datachain.utils import STUDIO_URL
+from tests.utils import skip_if_not_sqlite
 
 
 def mocked_connect(url, additional_headers):
@@ -191,11 +192,12 @@ def test_studio_datasets(capsys, studio_datasets, mocker):
     out = capsys.readouterr().out
     assert sorted(out.splitlines()) == sorted(both_output_versions.splitlines())
 
-    assert main(["dataset", "ls", "dogs", "--studio"]) == 0
+    assert main(["dataset", "ls", "dev.animals.dogs", "--studio"]) == 0
     out = capsys.readouterr().out
     assert sorted(out.splitlines()) == sorted(dogs_output.splitlines())
 
 
+@skip_if_not_sqlite
 def test_studio_edit_dataset(capsys, mocker):
     with requests_mock.mock() as m:
         m.post(f"{STUDIO_URL}/api/datachain/datasets", json={})
@@ -206,12 +208,11 @@ def test_studio_edit_dataset(capsys, mocker):
                 [
                     "dataset",
                     "edit",
-                    "name",
+                    "dev.animals.name",
                     "--new-name",
                     "new-name",
                     "--team",
                     "team_name",
-                    "--studio",
                 ]
             )
             == 1
@@ -228,12 +229,11 @@ def test_studio_edit_dataset(capsys, mocker):
                 [
                     "dataset",
                     "edit",
-                    "name",
+                    "dev.animals.name",
                     "--new-name",
                     "new-name",
                     "--team",
                     "team_name",
-                    "--studio",
                 ]
             )
             == 0
@@ -243,7 +243,9 @@ def test_studio_edit_dataset(capsys, mocker):
 
         last_request = m.last_request
         assert last_request.json() == {
-            "dataset_name": "name",
+            "name": "name",
+            "namespace": "dev",
+            "project": "animals",
             "new_name": "new-name",
             "team_name": "team_name",
             "description": None,
@@ -256,7 +258,7 @@ def test_studio_edit_dataset(capsys, mocker):
                 [
                     "dataset",
                     "edit",
-                    "name",
+                    "dev.animals.name",
                     "--new-name",
                     "new-name",
                     "--description",
@@ -265,14 +267,15 @@ def test_studio_edit_dataset(capsys, mocker):
                     "attr1",
                     "--team",
                     "team_name",
-                    "--studio",
                 ]
             )
             == 0
         )
         last_request = m.last_request
         assert last_request.json() == {
-            "dataset_name": "name",
+            "name": "name",
+            "namespace": "dev",
+            "project": "animals",
             "new_name": "new-name",
             "description": "description",
             "attrs": ["attr1"],
@@ -280,12 +283,13 @@ def test_studio_edit_dataset(capsys, mocker):
         }
 
 
+@skip_if_not_sqlite
 def test_studio_rm_dataset(capsys, mocker):
     with requests_mock.mock() as m:
         m.delete(f"{STUDIO_URL}/api/datachain/datasets", json={})
 
         # Studio token is required
-        assert main(["dataset", "rm", "name", "--team", "team_name", "--studio"]) == 1
+        assert main(["dataset", "rm", "dev.animals.name", "--team", "team_name"]) == 1
         out = capsys.readouterr().err
         assert "Not logged in to Studio" in out
 
@@ -298,13 +302,12 @@ def test_studio_rm_dataset(capsys, mocker):
                 [
                     "dataset",
                     "rm",
-                    "name",
+                    "dev.animals.name",
                     "--team",
                     "team_name",
                     "--version",
                     "1.0.0",
                     "--force",
-                    "--studio",
                 ]
             )
             == 0
@@ -313,9 +316,11 @@ def test_studio_rm_dataset(capsys, mocker):
 
         last_request = m.last_request
         assert last_request.json() == {
-            "dataset_name": "name",
+            "name": "name",
+            "namespace": "dev",
+            "project": "animals",
             "team_name": "team_name",
-            "dataset_version": "1.0.0",
+            "version": "1.0.0",
             "force": True,
         }
 

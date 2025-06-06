@@ -203,6 +203,7 @@ def run_step(step, catalog):
             "DATACHAIN__WAREHOUSE": catalog.warehouse.serialize(),
         },
     )
+
     if step.get("sort_expected_lines"):
         assert sorted(result.stdout.split("\n")) == sorted(
             step["expected"].lstrip("\n").split("\n")
