@@ -13,7 +13,7 @@ llm_and_nlp_examples = sorted(glob.glob("examples/llm_and_nlp/**/*.py", recursiv
 multimodal_examples = sorted(glob.glob("examples/multimodal/**/*.py", recursive=True))
 
 incremental_processing_examples = sorted(
-    glob.glob("examples/incremental_processing/delta.py", recursive=True)
+    glob.glob("examples/incremental_processing/**/*.py", recursive=True)
 )
 
 computer_vision_examples = sorted(

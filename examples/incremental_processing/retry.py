@@ -5,10 +5,7 @@ Retry Processing Example with DataChain
 This script demonstrates DataChain's retry functionality by:
 1. Creating an initial in-memory dataset with sample data
 2. Processing records with simulated errors
-3. Using retry=True to reprocess failed records in a second pass
-
-The example shows how DataChain can automatically retry processing
-for records that previously failed, using match_on and retry_on parameters.
+3. Using retry flags to reprocess failed records in a second pass
 """
 
 from datetime import datetime, timezone
