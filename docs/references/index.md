@@ -19,8 +19,5 @@ DataChain's API is organized into several modules:
     - [Segment](./data-types/segment.md) - Segment data type
 - [UDF](./udf.md) - User-defined functions and transformations
 - [Functions](./func.md) - Built-in functions for data manipulation and analysis
-- [Data Processing](./processing.md) - Data processing functionality
-    - [Delta](./delta.md) - Incremental processing of new data
-    - [Retry](./retry.md) - Reprocessing error records
 - [Torch](./torch.md) - PyTorch data loading utilities
 - [Toolkit](./toolkit.md) - Functions for common DS/ML operations
