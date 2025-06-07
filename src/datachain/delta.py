@@ -70,8 +70,7 @@ def _get_retry_chain(
     source_ds_latest_version: str,
     on: Union[str, Sequence[str]],
     right_on: Optional[Union[str, Sequence[str]]],
-    retry_on: Optional[str],
-    retry_missing: bool,
+    delta_retry: Optional[Union[bool, str]],
 ) -> Optional["DataChain"]:
     """Get retry chain for processing error records and missing records."""
     # Import here to avoid circular import
@@ -83,27 +82,20 @@ def _get_retry_chain(
     result_dataset = datachain.read_dataset(name, latest_version)
     source_dc_latest = datachain.read_dataset(source_ds_name, source_ds_latest_version)
 
-    # Handle error records if they exist
-    # - Get records with non-None values in retry_on field
-    # - Use merge (inner join) to find source records that match errors
-    if retry_on is not None:
-        error_records = result_dataset.filter(C(retry_on) != "")
+    # Handle error records if delta_retry is a string (column name)
+    if isinstance(delta_retry, str):
+        error_records = result_dataset.filter(C(delta_retry) != "")
         error_source_records = source_dc_latest.merge(
             error_records, on=on, right_on=right_on, inner=True
         ).select(*list(source_dc_latest.signals_schema.values))
         retry_chain = error_source_records
 
-    # Handle missing records if retry_missing is True
-    # Create a subtract operation to find missing records
-    if retry_missing:
+    # Handle missing records if delta_retry is True
+    elif delta_retry is True:
         missing_records = source_dc_latest.subtract(
             result_dataset, on=on, right_on=right_on
         )
-
-        if retry_chain is not None:
-            retry_chain = retry_chain.union(missing_records)
-        else:
-            retry_chain = missing_records
+        retry_chain = missing_records
 
     return retry_chain
 
@@ -143,8 +135,7 @@ def delta_retry_update(
     on: Union[str, Sequence[str]],
     right_on: Optional[Union[str, Sequence[str]]] = None,
     compare: Optional[Union[str, Sequence[str]]] = None,
-    retry_on: Optional[str] = None,
-    retry_missing: bool = False,
+    delta_retry: Optional[Union[bool, str]] = None,
 ) -> tuple[Optional["DataChain"], Optional[list[DatasetDependency]], bool]:
     """
     Creates new chain that consists of the last version of current delta dataset
@@ -157,10 +148,9 @@ def delta_retry_update(
     dependency.
 
     Additionally supports retry functionality to filter records that either:
-    1. Have a non-None value in the field specified by retry_on in the result
-       dataset
+    1. Have a non-None value in the field specified by delta_retry (when it's a string)
     2. Exist in the source dataset but are missing in the result dataset
-       (if retry_missing=True)
+       (when delta_retry=True)
 
     Parameters:
         dc: The DataChain to filter for records that need reprocessing
@@ -169,8 +159,9 @@ def delta_retry_update(
         right_on: Corresponding field(s) in result dataset if they differ from
                   source
         compare: Field(s) used to check if the same row has been modified
-        retry_on: Field in result dataset that indicates an error when not None
-        retry_missing: If True, also include records missing from result dataset
+        delta_retry: If string, field in result dataset that indicates an error
+                    when not None. If True, include records missing from result dataset.
+                    If False/None, no retry functionality.
 
     Returns:
         A tuple containing (filtered chain for delta/retry processing,
@@ -217,7 +208,7 @@ def delta_retry_update(
         dependencies[0].version = source_ds_latest_version  # type: ignore[union-attr]
 
     # Handle retry functionality if enabled
-    if retry_missing or retry_on:
+    if delta_retry:
         retry_chain = _get_retry_chain(
             name,
             latest_version,
@@ -225,8 +216,7 @@ def delta_retry_update(
             source_ds_latest_version,
             on,
             right_on,
-            retry_on,
-            retry_missing,
+            delta_retry,
         )
 
     # Combine delta and retry chains

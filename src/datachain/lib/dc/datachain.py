@@ -169,6 +169,10 @@ class DataChain:
         self._setup: dict = setup or {}
         self._sys = _sys
         self._delta = False
+        self._delta_on: Optional[Union[str, Sequence[str]]] = None
+        self._delta_result_on: Optional[Union[str, Sequence[str]]] = None
+        self._delta_compare: Optional[Union[str, Sequence[str]]] = None
+        self._delta_retry: Optional[Union[bool, str]] = None
 
     def __repr__(self) -> str:
         """Return a string representation of the chain."""
@@ -187,8 +191,7 @@ class DataChain:
         on: Optional[Union[str, Sequence[str]]] = None,
         right_on: Optional[Union[str, Sequence[str]]] = None,
         compare: Optional[Union[str, Sequence[str]]] = None,
-        retry_on: Optional[str] = None,
-        retry_missing: bool = False,
+        delta_retry: Optional[Union[bool, str]] = None,
     ) -> "Self":
         """Marks this chain as delta, which means special delta process will be
         called on saving dataset for optimization"""
@@ -198,8 +201,7 @@ class DataChain:
         self._delta_on = on
         self._delta_result_on = right_on
         self._delta_compare = compare
-        self._retry_on = retry_on
-        self._retry_missing = retry_missing
+        self._delta_retry = delta_retry
         return self
 
     @property
@@ -297,8 +299,7 @@ class DataChain:
                 on=self._delta_on,
                 right_on=self._delta_result_on,
                 compare=self._delta_compare,
-                retry_on=self._retry_on,
-                retry_missing=self._retry_missing,
+                delta_retry=self._delta_retry,
             )
 
         return chain
@@ -540,14 +541,16 @@ class DataChain:
         if self.delta and name:
             from datachain.delta import delta_retry_update
 
+            # Delta chains must have delta_on defined (ensured by _as_delta method)
+            assert self._delta_on is not None, "Delta chain must have delta_on defined"
+
             result_ds, dependencies, has_changes = delta_retry_update(
                 self,
                 name,
                 on=self._delta_on,
                 right_on=self._delta_result_on,
                 compare=self._delta_compare,
-                retry_on=self._retry_on,
-                retry_missing=self._retry_missing,
+                delta_retry=self._delta_retry,
             )
 
             if result_ds:
@@ -1675,9 +1678,12 @@ class DataChain:
 
         with pd.option_context(*options):
             if inside_notebook():
-                from IPython.display import display
+                try:
+                    from IPython.display import display  # type: ignore[import-untyped]
 
-                display(df)
+                    display(df)
+                except ImportError:
+                    print(df)
             else:
                 print(df)
 

@@ -32,8 +32,7 @@ def read_dataset(
     delta_on: Optional[Union[str, Sequence[str]]] = None,
     delta_result_on: Optional[Union[str, Sequence[str]]] = None,
     delta_compare: Optional[Union[str, Sequence[str]]] = None,
-    retry_on: Optional[str] = None,
-    retry_missing: bool = False,
+    delta_retry: Optional[Union[bool, str]] = None,
 ) -> "DataChain":
     """Get data from a saved Dataset. It returns the chain itself.
     If dataset or version is not found locally, it will try to pull it from Studio.
@@ -75,12 +74,11 @@ def read_dataset(
         delta_compare: A list of fields used to check if the same row has been modified
             in the new version of the source.
             If not defined, all fields except those defined in delta_on will be used.
-        retry_on: Specifies a field in the result dataset that indicates an error
-            or need for reprocessing when not None. Records where this field is not None
+        delta_retry: Specifies retry behavior for delta processing. If a string,
+            it's the name of a field in the result dataset that indicates an error
+            when not None - records with errors will be reprocessed. If True,
+            records that exist in the source dataset but not in the result dataset
             will be reprocessed.
-        retry_missing: If True, records that exist in the source dataset but not in
-            the result dataset (based on delta_on/delta_result_on fields) will be
-            reprocessed.
 
     Example:
         ```py
@@ -163,8 +161,7 @@ def read_dataset(
             on=delta_on,
             right_on=delta_result_on,
             compare=delta_compare,
-            retry_on=retry_on,
-            retry_missing=retry_missing,
+            delta_retry=delta_retry,
         )
 
     return chain

@@ -21,7 +21,7 @@ The retry functionality allows you to:
 
 ## Usage
 
-`retry` can be enabled by specifying `retry_on` and / or `retry_missing`. It is enabled only when `delta` is enabled.
+`retry` can be enabled by specifying `delta_retry`. It is enabled only when `delta` is enabled.
 
 ```python
 import datachain as dc
@@ -34,10 +34,11 @@ chain = (
         delta=True,
         # Field(s) that uniquely identify records in the source dataset
         delta_on="id",
-        # Name of the field in result dataset that indicates an error when not None
-        retry_on="error",
-        # Whether to also retry records missing from the result
-        retry_missing=True
+        # Controls which records to reprocess:
+        # - String: field name indicating errors when not empty
+        # - True: retry missing records from result dataset
+        # - False/None: no retry processing
+        delta_retry="error"
     )
     .map(result=process_function)  # Your processing function
     .save(name="processed_data")    # Save results
@@ -75,8 +76,7 @@ chain = (
         "data/",
         delta=True,                    # Process only new files
         delta_on="file.path",          # Files are identified by their paths
-        retry_on="error",              # Errors are stored in the "error" field
-        retry_missing=True             # Also process any missing files
+        delta_retry="error"            # Retry records with errors in "error" field
     )
     .map(result=process_file)
     .save(name="processed_files")

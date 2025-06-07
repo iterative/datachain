@@ -72,7 +72,7 @@ def retry_processing_example():
             "sample_data",
             delta=True,
             delta_on="item_id",
-            retry_on="result.error",
+            delta_retry="result.error",
         )
         # Set attempt number for processing, this is specific to this example only
         .setup(attempt=lambda: 1)
@@ -99,7 +99,7 @@ def retry_processing_example():
             delta=True,
             delta_on="item_id",
             # Retry records where result.error field is not empty
-            retry_on="result.error",
+            delta_retry="result.error",
         )
         .setup(attempt=lambda: 2)  # Set attempt number for processing
         .map(result=process_data)

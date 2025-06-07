@@ -39,7 +39,7 @@ def test_retry_with_error_records(test_session):
                 "sample_data",
                 delta=True,
                 delta_on="id",
-                retry_on="result.error",
+                delta_retry="result.error",
                 session=test_session,
             )
             .setup(attempt=lambda: attempt)
@@ -102,14 +102,14 @@ def test_retry_with_missing_records(test_session):
 
     assert partial_result.count() == 2
 
-    # Use retry with retry_missing=True to process missing records
+    # Use retry with delta_retry=True to process missing records
     retry_chain = (
         dc.read_dataset(
             "source_data",
             session=test_session,
             delta=True,
             delta_on="id",
-            retry_missing=True,
+            delta_retry=True,
         )
         .setup(attempt=lambda: 2)
         .map(result=simple_process)
@@ -166,8 +166,7 @@ def test_retry_no_records_to_retry(test_session):
             session=test_session,
             delta=True,
             delta_on="id",
-            retry_on="result.error",
-            retry_missing=True,
+            delta_retry="result.error",
         )
         .map(result=successful_process)
         .save("successful_data")
@@ -203,8 +202,7 @@ def test_retry_first_dataset_creation(test_session):
             session=test_session,
             delta=True,
             delta_on="id",
-            retry_on="result.error",
-            retry_missing=True,
+            delta_retry="result.error",
         )
         .map(result=simple_process)
         .save("new_dataset")
@@ -255,7 +253,7 @@ def test_retry_with_multiple_match_fields(test_session):
             session=test_session,
             delta=True,
             delta_on=["category", "id"],
-            retry_on="result.error",
+            delta_retry="result.error",
         )
         .setup(attempt=lambda: 2)
         .map(result=process_with_compound_key)
@@ -283,7 +281,7 @@ def test_retry_with_delta_functionality(test_session):
                 "delta_source_v1",
                 delta=True,
                 delta_on="id",
-                retry_on="result.error",
+                delta_retry="result.error",
                 session=test_session,
             )
             .setup(attempt=lambda: attempt)
