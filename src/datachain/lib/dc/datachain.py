@@ -1678,12 +1678,9 @@ class DataChain:
 
         with pd.option_context(*options):
             if inside_notebook():
-                try:
-                    from IPython.display import display  # type: ignore[import-untyped]
+                from IPython.display import display
 
-                    display(df)
-                except ImportError:
-                    print(df)
+                display(df)
             else:
                 print(df)
 
