@@ -38,6 +38,8 @@ def read_storage(
     delta_on: Optional[Union[str, Sequence[str]]] = None,
     delta_result_on: Optional[Union[str, Sequence[str]]] = None,
     delta_compare: Optional[Union[str, Sequence[str]]] = None,
+    retry_on: Optional[str] = None,
+    retry_missing: bool = False,
     client_config: Optional[dict] = None,
 ) -> "DataChain":
     """Get data from storage(s) as a list of file with all file attributes.
@@ -83,6 +85,12 @@ def read_storage(
         delta_compare: A list of fields used to check if the same row has been modified
             in the new version of the source.
             If not defined, all fields except those defined in `delta_on` will be used.
+        retry_on: Specifies a field in the result dataset that indicates an error
+            or need for reprocessing when not None. Records where this field is not None
+            will be reprocessed.
+        retry_missing: If True, records that exist in the source dataset but not in
+            the result dataset (based on delta_on/delta_result_on fields) will be
+            reprocessed.
 
     Returns:
         DataChain: A DataChain object containing the file information.
@@ -208,6 +216,11 @@ def read_storage(
 
     if delta:
         storage_chain = storage_chain._as_delta(
-            on=delta_on, right_on=delta_result_on, compare=delta_compare
+            on=delta_on,
+            right_on=delta_result_on,
+            compare=delta_compare,
+            retry_on=retry_on,
+            retry_missing=retry_missing,
         )
+
     return storage_chain

@@ -86,6 +86,7 @@ The following pages provide detailed documentation on DataChain's features, arch
 - [🏃🏼‍♂️ Quick Start](quick-start.md): Get up and running with DataChain in no time.
 - [🎯 Examples](examples.md): Explore practical examples and use cases.
 - [📚 Tutorials](tutorials.md): Learn how to use DataChain for specific tasks.
+- [📚 User Guide](guide/index.md): Deeper dive into DataChain technical aspects and supported workflows.
 - [🐍 API Reference](references/index.md): Dive into the technical details and API reference.
 - [🤝 Contributing](contributing.md): Learn how to contribute to DataChain.
 

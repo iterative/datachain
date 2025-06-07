@@ -25,7 +25,7 @@ from tqdm import tqdm
 
 from datachain import semver
 from datachain.dataset import DatasetRecord
-from datachain.delta import delta_disabled, delta_update
+from datachain.delta import delta_disabled
 from datachain.func import literal
 from datachain.func.base import Function
 from datachain.func.func import Func
@@ -187,6 +187,8 @@ class DataChain:
         on: Optional[Union[str, Sequence[str]]] = None,
         right_on: Optional[Union[str, Sequence[str]]] = None,
         compare: Optional[Union[str, Sequence[str]]] = None,
+        retry_on: Optional[str] = None,
+        retry_missing: bool = False,
     ) -> "Self":
         """Marks this chain as delta, which means special delta process will be
         called on saving dataset for optimization"""
@@ -196,6 +198,8 @@ class DataChain:
         self._delta_on = on
         self._delta_result_on = right_on
         self._delta_compare = compare
+        self._retry_on = retry_on
+        self._retry_missing = retry_missing
         return self
 
     @property
@@ -293,6 +297,8 @@ class DataChain:
                 on=self._delta_on,
                 right_on=self._delta_result_on,
                 compare=self._delta_compare,
+                retry_on=self._retry_on,
+                retry_missing=self._retry_missing,
             )
 
         return chain
@@ -529,18 +535,24 @@ class DataChain:
             )
 
         schema = self.signals_schema.clone_without_sys_signals().serialize()
+
+        # Handle retry and delta functionality
         if self.delta and name:
-            delta_ds, dependencies, has_changes = delta_update(
+            from datachain.delta import delta_retry_update
+
+            result_ds, dependencies, has_changes = delta_retry_update(
                 self,
                 name,
                 on=self._delta_on,
                 right_on=self._delta_result_on,
                 compare=self._delta_compare,
+                retry_on=self._retry_on,
+                retry_missing=self._retry_missing,
             )
 
-            if delta_ds:
+            if result_ds:
                 return self._evolve(
-                    query=delta_ds._query.save(
+                    query=result_ds._query.save(
                         name=name,
                         version=version,
                         feature_schema=schema,
