@@ -118,3 +118,52 @@ def test_local_project_is_created(test_session):
         project_class.default(), namespace_class.default(), session=test_session
     )
     assert local_project.name == project_class.default()
+
+
+def test_ls_projects(test_session):
+    ns1 = dc.namespaces.create("ns1")
+    ns2 = dc.namespaces.create("ns2")
+
+    p_names = ["p1", "p2", "p3"]
+    for name in p_names:
+        dc.projects.create(name, ns1.name, "", session=test_session)
+        dc.projects.create(name, ns2.name, "", session=test_session)
+
+    projects = dc.projects.ls(session=test_session)
+    assert sorted([(p.namespace.name, p.name) for p in projects]) == [
+        ("local", "local"),
+        ("ns1", "p1"),
+        ("ns1", "p2"),
+        ("ns1", "p3"),
+        ("ns2", "p1"),
+        ("ns2", "p2"),
+        ("ns2", "p3"),
+    ]
+
+
+def test_ls_projects_one_namespace(test_session):
+    ns1 = dc.namespaces.create("ns1")
+    ns2 = dc.namespaces.create("ns2")
+
+    p_names = ["p1", "p2", "p3"]
+    for name in p_names:
+        dc.projects.create(name, ns1.name, "", session=test_session)
+        dc.projects.create(name, ns2.name, "", session=test_session)
+
+    projects = dc.projects.ls("ns1", session=test_session)
+    assert sorted([(p.namespace.name, p.name) for p in projects]) == [
+        ("ns1", "p1"),
+        ("ns1", "p2"),
+        ("ns1", "p3"),
+    ]
+
+
+def test_ls_projects_just_local(test_session):
+    projects = dc.projects.ls(session=test_session)
+    assert [(p.namespace.name, p.name) for p in projects] == [("local", "local")]
+
+
+def test_ls_projects_empty_in_namespace(test_session):
+    dc.namespaces.create("ns1")
+    projects = dc.projects.ls("ns1", session=test_session)
+    assert [(p.namespace.name, p.name) for p in projects] == []

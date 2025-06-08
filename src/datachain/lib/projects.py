@@ -59,3 +59,23 @@ def get(name: str, namespace_name: str, session: Optional[Session]) -> Project:
         ```
     """
     return Session.get(session).catalog.metastore.get_project(name, namespace_name)
+
+
+def ls(
+    namespace_name: Optional[str] = None, session: Optional[Session] = None
+) -> list[Project]:
+    """
+    Gets list of projects in some namespace or in general (all namespaces).
+
+    Parameters:
+        namespace_name : optional namespace name.
+        session : Session to use for getting project.
+
+    Example:
+        ```py
+        import datachain as dc
+        local_namespace_projects = dc.projects.ls("local")
+        all_projects = dc.projects.ls()
+        ```
+    """
+    return Session.get(session).catalog.metastore.list_projects(namespace_name)
