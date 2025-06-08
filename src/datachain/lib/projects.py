@@ -31,12 +31,13 @@ def create(
         project = dc.create_project("my-project", "dev", "My personal project")
         ```
     """
-    if not Project.allowed_to_create():
+    session = Session.get(session)
+
+    if not session.catalog.metastore.project_allowed_to_create:
         raise ProjectCreateNotAllowedError("Creating custom project is not allowed")
     if name in Project.reserved_names():
         raise ValueError(f"Project name {name} is reserved.")
 
-    session = Session.get(session)
     namespace = get_namespace(namespace_name, session=session)
     return session.catalog.metastore.create_project(name, namespace, description)
 

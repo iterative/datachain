@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import PosixPath
 from time import sleep
 from typing import NamedTuple
-from unittest.mock import patch
+from unittest.mock import PropertyMock, patch
 
 import attrs
 import pytest
@@ -21,6 +21,7 @@ from datachain.catalog import Catalog
 from datachain.catalog.loader import get_metastore, get_warehouse
 from datachain.cli.utils import CommaSeparatedArgs
 from datachain.config import Config, ConfigLevel
+from datachain.data_storage.metastore import AbstractMetastore
 from datachain.data_storage.sqlite import (
     SQLiteDatabaseEngine,
     SQLiteMetastore,
@@ -546,9 +547,11 @@ def mock_allowed_to_create_project(request):
     if "disable_autouse" in request.keywords:
         yield
     else:
-        with patch("datachain.projects.Project", wraps=Project) as mock_project:
-            mock_project.allowed_to_create.return_value = True
-            yield mock_project
+        with patch.object(
+            AbstractMetastore, "project_allowed_to_create", new_callable=PropertyMock
+        ) as mock_metastore:
+            mock_metastore.return_value = True
+            yield
 
 
 @pytest.fixture(autouse=True)
@@ -556,9 +559,11 @@ def mock_allowed_to_create_namespace(request):
     if "disable_autouse" in request.keywords:
         yield
     else:
-        with patch("datachain.namespaces.Namespace", wraps=Namespace) as mock_namespace:
-            mock_namespace.allowed_to_create.return_value = True
-            yield mock_namespace
+        with patch.object(
+            AbstractMetastore, "namespace_allowed_to_create", new_callable=PropertyMock
+        ) as mock_metastore:
+            mock_metastore.return_value = True
+            yield
 
 
 @pytest.fixture

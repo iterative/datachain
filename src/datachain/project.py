@@ -27,13 +27,6 @@ class Project:
         """what names cannot be used when creating a project"""
         return [Project.default()]
 
-    @staticmethod
-    def allowed_to_create() -> bool:
-        """
-        User cannot create it's own custom project explicitly by default.
-        """
-        return False
-
     @classmethod
     def parse(
         cls: builtins.type[P],

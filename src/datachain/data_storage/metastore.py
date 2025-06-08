@@ -149,6 +149,10 @@ class AbstractMetastore(ABC, Serializable):
         """
         return self.is_studio or dataset_namespace == "local"
 
+    @property
+    def namespace_allowed_to_create(self):
+        return self.is_studio
+
     #
     # Projects
     #
@@ -177,6 +181,10 @@ class AbstractMetastore(ABC, Serializable):
     @property
     def default_project(self) -> Project:
         return self.get_project(self.default_project_name, self.default_namespace_name)
+
+    @property
+    def project_allowed_to_create(self):
+        return self.is_studio
 
     #
     # Datasets

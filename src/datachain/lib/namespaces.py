@@ -25,11 +25,12 @@ def create(
         namespace = dc.create_namespace("dev", "Dev namespace")
         ```
     """
-    if not Namespace.allowed_to_create():
+    session = Session.get(session)
+
+    if not session.catalog.metastore.namespace_allowed_to_create:
         raise NamespaceCreateNotAllowedError("Creating custom namespace is not allowed")
     if name in Namespace.reserved_names():
         raise ValueError(f"Namespace name {name} is reserved.")
-    session = Session.get(session)
     return session.catalog.metastore.create_namespace(name, description)
 
 
