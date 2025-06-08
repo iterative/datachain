@@ -1623,17 +1623,24 @@ def test_similarity_search(cloud_test_catalog):
 @pytest.mark.parametrize("tree", [TARRED_TREE], indirect=True)
 def test_process_and_open_tar(cloud_test_catalog, cloud_type):
     ctc = cloud_test_catalog
-    chain = dc.read_storage(ctc.src_uri, session=ctc.session).gen(file=process_tar)
+    chain = (
+        dc.read_storage(ctc.src_uri, session=ctc.session)
+        .settings(cache=True, prefetch=2)
+        .gen(file=process_tar)
+        .map(content=lambda file: str(file.read(), encoding="utf-8"))
+    )
     assert chain.count() == 7
 
-    assert {(file.read(), file.path) for file in chain.collect("file")} == {
-        (b"meow", "animals.tar/cats/cat1"),
-        (b"mrow", "animals.tar/cats/cat2"),
-        (b"Cats and Dogs", "animals.tar/description"),
-        (b"woof", "animals.tar/dogs/dog1"),
-        (b"arf", "animals.tar/dogs/dog2"),
-        (b"bark", "animals.tar/dogs/dog3"),
-        (b"ruff", "animals.tar/dogs/others/dog4"),
+    assert {
+        (content, file.path) for file, content in chain.collect("file", "content")
+    } == {
+        ("meow", "animals.tar/cats/cat1"),
+        ("mrow", "animals.tar/cats/cat2"),
+        ("Cats and Dogs", "animals.tar/description"),
+        ("woof", "animals.tar/dogs/dog1"),
+        ("arf", "animals.tar/dogs/dog2"),
+        ("bark", "animals.tar/dogs/dog3"),
+        ("ruff", "animals.tar/dogs/others/dog4"),
     }
 
 
