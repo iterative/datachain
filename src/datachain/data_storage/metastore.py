@@ -136,6 +136,10 @@ class AbstractMetastore(ABC, Serializable):
     def get_namespace(self, name: str, conn=None) -> Namespace:
         """Gets a single namespace by name"""
 
+    @abstractmethod
+    def list_namespaces(self, conn=None) -> list[Namespace]:
+        """Gets a list of all namespaces"""
+
     @property
     @abstractmethod
     def is_studio(self) -> bool:
@@ -727,6 +731,19 @@ class AbstractDBMetastore(AbstractMetastore):
             raise NamespaceNotFoundError(f"Namespace {name} not found.")
         return self.namespace_class.parse(*rows[0])
 
+    def list_namespaces(self, conn=None) -> list[Namespace]:
+        """Gets a list of all namespaces"""
+        n = self._namespaces
+        if not self.db.has_table(self._namespaces.name):
+            raise TableMissingError
+
+        query = self._namespaces_select(
+            *(getattr(n.c, f) for f in self._namespaces_fields),
+        )
+        rows = list(self.db.execute(query, conn=conn))
+
+        return [self.namespace_class.parse(*r) for r in rows]
+
     #
     # Projects
     #
@@ -780,7 +797,9 @@ class AbstractDBMetastore(AbstractMetastore):
         return self.project_class.parse(*rows[0])
 
     def list_projects(self, namespace_name: Optional[str], conn=None) -> list[Project]:
-        """Gets a single project inside some namespace by name"""
+        """
+        Gets a list of projects inside some namespace by name, or in all namespaces
+        """
         n = self._namespaces
         p = self._projects
         if not self.db.has_table(self._projects.name):

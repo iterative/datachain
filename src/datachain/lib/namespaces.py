@@ -51,3 +51,19 @@ def get(name: str, session: Optional[Session]) -> Namespace:
     """
     session = Session.get(session)
     return session.catalog.metastore.get_namespace(name)
+
+
+def ls(session: Optional[Session] = None) -> list[Namespace]:
+    """
+    Gets list of namespaces.
+
+    Parameters:
+        session : Session to use for getting project.
+
+    Example:
+        ```py
+        import datachain as dc
+        namespaces = dc.namespaces.ls()
+        ```
+    """
+    return Session.get(session).catalog.metastore.list_namespaces()

@@ -121,6 +121,9 @@ def test_local_project_is_created(test_session):
 
 
 def test_ls_projects(test_session):
+    default_project_name = test_session.catalog.metastore.default_project_name
+    default_namespace_name = test_session.catalog.metastore.default_namespace_name
+
     ns1 = dc.namespaces.create("ns1")
     ns2 = dc.namespaces.create("ns2")
 
@@ -130,15 +133,17 @@ def test_ls_projects(test_session):
         dc.projects.create(name, ns2.name, "", session=test_session)
 
     projects = dc.projects.ls(session=test_session)
-    assert sorted([(p.namespace.name, p.name) for p in projects]) == [
-        ("local", "local"),
-        ("ns1", "p1"),
-        ("ns1", "p2"),
-        ("ns1", "p3"),
-        ("ns2", "p1"),
-        ("ns2", "p2"),
-        ("ns2", "p3"),
-    ]
+    assert sorted([(p.namespace.name, p.name) for p in projects]) == sorted(
+        [
+            (default_namespace_name, default_project_name),
+            ("ns1", "p1"),
+            ("ns1", "p2"),
+            ("ns1", "p3"),
+            ("ns2", "p1"),
+            ("ns2", "p2"),
+            ("ns2", "p3"),
+        ]
+    )
 
 
 def test_ls_projects_one_namespace(test_session):
@@ -151,16 +156,23 @@ def test_ls_projects_one_namespace(test_session):
         dc.projects.create(name, ns2.name, "", session=test_session)
 
     projects = dc.projects.ls("ns1", session=test_session)
-    assert sorted([(p.namespace.name, p.name) for p in projects]) == [
-        ("ns1", "p1"),
-        ("ns1", "p2"),
-        ("ns1", "p3"),
-    ]
+    assert sorted([(p.namespace.name, p.name) for p in projects]) == sorted(
+        [
+            ("ns1", "p1"),
+            ("ns1", "p2"),
+            ("ns1", "p3"),
+        ]
+    )
 
 
-def test_ls_projects_just_local(test_session):
+def test_ls_projects_just_default(test_session):
+    default_project_name = test_session.catalog.metastore.default_project_name
+    default_namespace_name = test_session.catalog.metastore.default_namespace_name
+
     projects = dc.projects.ls(session=test_session)
-    assert [(p.namespace.name, p.name) for p in projects] == [("local", "local")]
+    assert [(p.namespace.name, p.name) for p in projects] == [
+        (default_namespace_name, default_project_name)
+    ]
 
 
 def test_ls_projects_empty_in_namespace(test_session):
