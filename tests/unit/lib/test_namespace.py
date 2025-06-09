@@ -2,6 +2,7 @@ import pytest
 
 import datachain as dc
 from datachain.error import NamespaceCreateNotAllowedError, NamespaceNotFoundError
+from tests.utils import skip_if_not_sqlite
 
 
 @pytest.fixture
@@ -18,6 +19,7 @@ def test_create_namespace(test_session):
 
 
 @pytest.mark.disable_autouse
+@skip_if_not_sqlite
 def test_create_by_user_not_allowed(test_session):
     with pytest.raises(NamespaceCreateNotAllowedError) as excinfo:
         dc.namespaces.create("dev", session=test_session)

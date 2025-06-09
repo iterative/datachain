@@ -70,6 +70,7 @@ def test_create_with_reserved_name(test_session, dev_namespace):
 
 
 @pytest.mark.disable_autouse
+@skip_if_not_sqlite
 def test_create_by_user_not_allowed(test_session):
     with pytest.raises(ProjectCreateNotAllowedError) as excinfo:
         dc.projects.create("chatbot", "dev", session=test_session)
