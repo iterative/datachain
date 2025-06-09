@@ -560,6 +560,26 @@ def test_list_datasets(metastore):
         assert len(ds.versions) >= 1
 
 
+def test_list_datasets_by_project_id(metastore, project):
+    assert [ds.name for ds in metastore.list_datasets()] == []
+
+    ds1 = metastore.create_dataset(name="dataset1", project=project)
+    metastore.create_dataset_version(
+        dataset=ds1, version="1.0.0", status=DatasetStatus.CREATED
+    )
+    ds2 = metastore.create_dataset(name="dataset2", project=project)
+    metastore.create_dataset_version(
+        dataset=ds2, version="2.0.0", status=DatasetStatus.COMPLETE
+    )
+    ds3 = metastore.create_dataset(name="dataset3")  # default project
+    metastore.create_dataset_version(
+        dataset=ds3, version="3.0.0", status=DatasetStatus.FAILED
+    )
+
+    datasets = list(metastore.list_datasets(project_id=project.id))
+    assert {"dataset1", "dataset2"} == {ds.name for ds in datasets}
+
+
 def test_list_datasets_by_prefix(metastore):
     ds1 = metastore.create_dataset(name="prefix_foo")
     metastore.create_dataset_version(

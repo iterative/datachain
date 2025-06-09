@@ -1108,11 +1108,16 @@ class AbstractDBMetastore(AbstractMetastore):
             isouter=False,
         )
 
-    def list_datasets(self) -> Iterator["DatasetListRecord"]:
+    def list_datasets(
+        self, project_id: Optional[int] = None
+    ) -> Iterator["DatasetListRecord"]:
         """Lists all datasets."""
+        d = self._datasets
         query = self._base_list_datasets_query().order_by(
             self._datasets.c.name, self._datasets_versions.c.version
         )
+        if project_id:
+            query = query.where(d.c.project_id == project_id)
         yield from self._parse_dataset_list(self.db.execute(query))
 
     def list_datasets_by_prefix(
