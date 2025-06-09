@@ -102,7 +102,7 @@ def list_datasets_local(catalog: "Catalog", name: Optional[str] = None):
 
     for d in catalog.ls_datasets():
         for v in d.versions:
-            yield (d.name, v.version)
+            yield (d.full_name, v.version)
 
 
 def list_datasets_local_versions(catalog: "Catalog", name: str):

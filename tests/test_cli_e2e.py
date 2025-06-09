@@ -6,6 +6,8 @@ from textwrap import dedent
 import pytest
 import tabulate
 
+from tests.utils import skip_if_not_sqlite
+
 
 def _tabulated_datasets(name, version):
     row = [
@@ -147,23 +149,7 @@ E2E_STEPS = (
         },
     },
     {
-        "command": ("datachain", "dataset", "ls"),
-        "expected": _tabulated_datasets("mnt", "1.0.0"),
-    },
-    {
-        "command": ("datachain", "dataset", "ls"),
-        "expected": _tabulated_datasets("mnt", "1.0.0"),
-    },
-    {
-        "command": ("datachain", "dataset", "edit", "mnt", "--new-name", "mnt-new"),
-        "expected": "",
-    },
-    {
-        "command": ("datachain", "dataset", "ls"),
-        "expected": _tabulated_datasets("mnt-new", "1.0.0"),
-    },
-    {
-        "command": ("datachain", "dataset", "rm", "mnt-new", "--version", "1.0.0"),
+        "command": ("datachain", "dataset", "rm", "mnt", "--version", "1.0.0"),
         "expected": "",
     },
     {
@@ -173,6 +159,43 @@ E2E_STEPS = (
     {
         "command": ("datachain", "gc"),
         "expected": "Nothing to clean up.\n",
+    },
+)
+
+
+E2E_STEPS_LOCAL = (
+    {
+        "command": (
+            "datachain",
+            "clone",
+            "-r",
+            "--anon",
+            "s3://ldb-public/remote/datasets/mnist-tiny/",
+            "mnt",
+        ),
+        "expected": "",
+        "downloading": True,
+        "instantiating": True,
+        "files": {
+            "mnt": MNT_FILE_TREE,
+        },
+        "listing": True,
+    },
+    {
+        "command": ("datachain", "dataset", "ls"),
+        "expected": _tabulated_datasets("local.local.mnt", "1.0.0"),
+    },
+    {
+        "command": ("datachain", "dataset", "ls"),
+        "expected": _tabulated_datasets("local.local.mnt", "1.0.0"),
+    },
+    {
+        "command": ("datachain", "dataset", "edit", "mnt", "--new-name", "mnt-new"),
+        "expected": "",
+    },
+    {
+        "command": ("datachain", "dataset", "ls"),
+        "expected": _tabulated_datasets("local.local.mnt-new", "1.0.0"),
     },
 )
 
@@ -232,4 +255,13 @@ def run_step(step, catalog):
 def test_cli_e2e(tmp_dir, catalog_tmpfile):
     """End-to-end CLI Test"""
     for step in E2E_STEPS:
+        run_step(step, catalog_tmpfile)
+
+
+@pytest.mark.e2e
+@pytest.mark.xdist_group(name="tmpfile")
+@skip_if_not_sqlite
+def test_cli_e2e_local_only(tmp_dir, catalog_tmpfile):
+    """End-to-end CLI Test"""
+    for step in E2E_STEPS_LOCAL:
         run_step(step, catalog_tmpfile)

@@ -150,6 +150,11 @@ def token():
 
 
 def list_datasets(team: Optional[str] = None, name: Optional[str] = None):
+    def ds_full_name(ds: dict) -> str:
+        return (
+            f"{ds['project']['namespace']['name']}.{ds['project']['name']}.{ds['name']}"
+        )
+
     if name:
         yield from list_dataset_versions(team, name)
         return
@@ -166,12 +171,13 @@ def list_datasets(team: Optional[str] = None, name: Optional[str] = None):
 
     for d in response.data:
         name = d.get("name")
+        full_name = ds_full_name(d)
         if name and name.startswith(QUERY_DATASET_PREFIX):
             continue
 
         for v in d.get("versions", []):
             version = v.get("version")
-            yield (name, version)
+            yield (full_name, version)
 
 
 def list_dataset_versions(team: Optional[str] = None, name: str = ""):
