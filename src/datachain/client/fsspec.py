@@ -330,6 +330,7 @@ class Client(ABC):
         return getattr(self.fs, "version_aware", False)
 
     async def ls_dir(self, path):
+        kwargs = {}
         if self._is_version_aware():
             kwargs = {"versions": True}
         return await self.fs._ls(path, detail=True, **kwargs)

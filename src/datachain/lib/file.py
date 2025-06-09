@@ -127,10 +127,7 @@ class TarVFile(VFile):
     @classmethod
     def open(cls, file: "File", location: list[dict]):
         """Stream file from tar archive based on location in archive."""
-        if len(location) > 1:
-            raise VFileError(
-                "multiple 'location's are not supported yet", file.source, file.path
-            )
+        tar_file = cls.parent(file, location)
 
         loc = location[0]
 
@@ -140,15 +137,26 @@ class TarVFile(VFile):
         if (size := loc.get("size", None)) is None:
             raise VFileError("'size' is not specified", file.source, file.path)
 
+        client = file._catalog.get_client(tar_file.source)
+        fd = client.open_object(tar_file, use_cache=file._caching_enabled)
+        return FileSlice(fd, offset, size, file.name)
+
+    @classmethod
+    def parent(cls, file: "File", location: list[dict]) -> "File":
+        if len(location) > 1:
+            raise VFileError(
+                "multiple 'location's are not supported yet", file.source, file.path
+            )
+
+        loc = location[0]
+
         if (parent := loc.get("parent", None)) is None:
             raise VFileError("'parent' is not specified", file.source, file.path)
 
         tar_file = File(**parent)
         tar_file._set_stream(file._catalog)
 
-        client = file._catalog.get_client(tar_file.source)
-        fd = client.open_object(tar_file, use_cache=file._caching_enabled)
-        return FileSlice(fd, offset, size, file.name)
+        return tar_file
 
 
 class VFileRegistry:
@@ -159,7 +167,7 @@ class VFileRegistry:
         cls._vtype_readers[reader.get_vtype()] = reader
 
     @classmethod
-    def resolve(cls, file: "File", location: list[dict]):
+    def _get_reader(cls, file: "File", location: list[dict]):
         if len(location) == 0:
             raise VFileError(
                 "'location' must not be list of JSONs", file.source, file.path
@@ -174,7 +182,17 @@ class VFileRegistry:
                 "reader not registered", file.source, file.path, vtype=vtype
             )
 
+        return reader
+
+    @classmethod
+    def open(cls, file: "File", location: list[dict]):
+        reader = cls._get_reader(file, location)
         return reader.open(file, location)
+
+    @classmethod
+    def parent(cls, file: "File", location: list[dict]) -> "File":
+        reader = cls._get_reader(file, location)
+        return reader.parent(file, location)
 
 
 class File(DataModel):
@@ -330,7 +348,7 @@ class File(DataModel):
     def open(self, mode: Literal["rb", "r"] = "rb") -> Iterator[Any]:
         """Open the file and return a file object."""
         if self.location:
-            with VFileRegistry.resolve(self, self.location) as f:  # type: ignore[arg-type]
+            with VFileRegistry.open(self, self.location) as f:  # type: ignore[arg-type]
                 yield f
 
         else:
@@ -349,6 +367,13 @@ class File(DataModel):
 
     def read_text(self):
         """Returns file contents as text."""
+        if self.location:
+            raise VFileError(
+                "Reading text from virtual file is not supported",
+                self.source,
+                self.path,
+            )
+
         with self.open(mode="r") as stream:
             return stream.read()
 
@@ -427,9 +452,13 @@ class File(DataModel):
         if self._catalog is None:
             raise RuntimeError("cannot prefetch file because catalog is not setup")
 
+        file = self
+        if self.location:
+            file = VFileRegistry.parent(self, self.location)  # type: ignore[arg-type]
+
         client = self._catalog.get_client(self.source)
-        await client._download(self, callback=download_cb or self._download_cb)
-        self._set_stream(
+        await client._download(file, callback=download_cb or self._download_cb)
+        file._set_stream(
             self._catalog, caching_enabled=True, download_cb=DEFAULT_CALLBACK
         )
         return True
