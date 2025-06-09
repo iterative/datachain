@@ -25,7 +25,7 @@ from tqdm import tqdm
 
 from datachain import semver
 from datachain.dataset import DatasetRecord
-from datachain.delta import delta_disabled, delta_update
+from datachain.delta import delta_disabled
 from datachain.func import literal
 from datachain.func.base import Function
 from datachain.func.func import Func
@@ -169,6 +169,10 @@ class DataChain:
         self._setup: dict = setup or {}
         self._sys = _sys
         self._delta = False
+        self._delta_on: Optional[Union[str, Sequence[str]]] = None
+        self._delta_result_on: Optional[Union[str, Sequence[str]]] = None
+        self._delta_compare: Optional[Union[str, Sequence[str]]] = None
+        self._delta_retry: Optional[Union[bool, str]] = None
 
     def __repr__(self) -> str:
         """Return a string representation of the chain."""
@@ -187,6 +191,7 @@ class DataChain:
         on: Optional[Union[str, Sequence[str]]] = None,
         right_on: Optional[Union[str, Sequence[str]]] = None,
         compare: Optional[Union[str, Sequence[str]]] = None,
+        delta_retry: Optional[Union[bool, str]] = None,
     ) -> "Self":
         """Marks this chain as delta, which means special delta process will be
         called on saving dataset for optimization"""
@@ -196,6 +201,7 @@ class DataChain:
         self._delta_on = on
         self._delta_result_on = right_on
         self._delta_compare = compare
+        self._delta_retry = delta_retry
         return self
 
     @property
@@ -293,6 +299,7 @@ class DataChain:
                 on=self._delta_on,
                 right_on=self._delta_result_on,
                 compare=self._delta_compare,
+                delta_retry=self._delta_retry,
             )
 
         return chain
@@ -529,18 +536,26 @@ class DataChain:
             )
 
         schema = self.signals_schema.clone_without_sys_signals().serialize()
+
+        # Handle retry and delta functionality
         if self.delta and name:
-            delta_ds, dependencies, has_changes = delta_update(
+            from datachain.delta import delta_retry_update
+
+            # Delta chains must have delta_on defined (ensured by _as_delta method)
+            assert self._delta_on is not None, "Delta chain must have delta_on defined"
+
+            result_ds, dependencies, has_changes = delta_retry_update(
                 self,
                 name,
                 on=self._delta_on,
                 right_on=self._delta_result_on,
                 compare=self._delta_compare,
+                delta_retry=self._delta_retry,
             )
 
-            if delta_ds:
+            if result_ds:
                 return self._evolve(
-                    query=delta_ds._query.save(
+                    query=result_ds._query.save(
                         name=name,
                         version=version,
                         feature_schema=schema,

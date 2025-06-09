@@ -97,7 +97,13 @@ nav:
                   - logs: commands/job/logs.md
                   - cancel: commands/job/cancel.md
                   - ls: commands/job/ls.md
-      - 📡 Interacting with remote storage: references/remotes.md
+      - 📚 User Guide:
+          - Overview: guide/index.md
+          - 📡 Interacting with remote storage: guide/remotes.md
+          - Data Processing:
+              - Overview: guide/processing.md
+              - Delta Processing: guide/delta.md
+              - Errors Handling and Retries: guide/retry.md
       - 🤝 Contributing: contributing.md
 
   - DataChain Website ↗: https://datachain.ai" target="_blank"
