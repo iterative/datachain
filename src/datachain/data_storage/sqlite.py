@@ -410,8 +410,8 @@ class SQLiteMetastore(AbstractDBMetastore):
         be created implicitly though, to keep the same fully qualified name with
         Studio dataset.
         """
-        local_namespace = self.create_namespace("local", "Local namespace")
-        self.create_project("local", local_namespace, "Local project")
+        local_namespace = self.create_namespace(Namespace.default(), "Local namespace")
+        self.create_project(Project.default(), local_namespace, "Local project")
 
     @classmethod
     def _datasets_columns(cls) -> list["SchemaItem"]:

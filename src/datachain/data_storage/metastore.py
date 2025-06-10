@@ -151,7 +151,7 @@ class AbstractMetastore(ABC, Serializable):
         created locally. This is False if we ran code in CLI mode but using dataset
         names that are present in Studio.
         """
-        return self.is_studio or dataset_namespace == "local"
+        return self.is_studio or dataset_namespace == Namespace.default()
 
     @property
     def namespace_allowed_to_create(self):
@@ -720,8 +720,6 @@ class AbstractDBMetastore(AbstractMetastore):
     def get_namespace(self, name: str, conn=None) -> Namespace:
         """Gets a single namespace by name"""
         n = self._namespaces
-        if not self.db.has_table(self._namespaces.name):
-            raise TableMissingError
 
         query = self._namespaces_select(
             *(getattr(n.c, f) for f in self._namespaces_fields),
@@ -734,8 +732,6 @@ class AbstractDBMetastore(AbstractMetastore):
     def list_namespaces(self, conn=None) -> list[Namespace]:
         """Gets a list of all namespaces"""
         n = self._namespaces
-        if not self.db.has_table(self._namespaces.name):
-            raise TableMissingError
 
         query = self._namespaces_select(
             *(getattr(n.c, f) for f in self._namespaces_fields),
@@ -778,8 +774,6 @@ class AbstractDBMetastore(AbstractMetastore):
         """Gets a single project inside some namespace by name"""
         n = self._namespaces
         p = self._projects
-        if not self.db.has_table(self._projects.name):
-            raise TableMissingError
 
         query = self._projects_select(
             *(getattr(n.c, f) for f in self._namespaces_fields),
@@ -802,8 +796,6 @@ class AbstractDBMetastore(AbstractMetastore):
         """
         n = self._namespaces
         p = self._projects
-        if not self.db.has_table(self._projects.name):
-            raise TableMissingError
 
         query = self._projects_select(
             *(getattr(n.c, f) for f in self._namespaces_fields),
