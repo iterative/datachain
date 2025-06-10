@@ -52,6 +52,12 @@ def add_jobs_parser(subparsers, parent_parser) -> None:
     )
 
     studio_run_parser.add_argument(
+        "--cluster-id",
+        action="store",
+        help="Compute cluster ID to run the job on",
+    )
+
+    studio_run_parser.add_argument(
         "--workers",
         type=int,
         help="Number of workers for the job",

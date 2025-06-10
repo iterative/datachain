@@ -41,6 +41,7 @@ def process_jobs_args(args: "Namespace"):
             args.req,
             args.req_file,
             args.priority,
+            args.cluster_id,
         )
 
     if args.cmd == "cancel":
@@ -268,6 +269,7 @@ def create_job(
     req: Optional[list[str]] = None,
     req_file: Optional[str] = None,
     priority: Optional[int] = None,
+    cluster_id: Optional[int] = None,
 ):
     query_type = "PYTHON" if query_file.endswith(".py") else "SHELL"
     with open(query_file) as f:
@@ -297,6 +299,7 @@ def create_job(
         repository=repository,
         requirements=requirements,
         priority=priority,
+        cluster_id=cluster_id,
     )
     if not response.ok:
         raise DataChainError(response.message)
