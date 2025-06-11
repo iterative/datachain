@@ -4,7 +4,7 @@ from .datachain import C, Column, DataChain
 from .datasets import datasets, delete_dataset, read_dataset
 from .hf import read_hf
 from .json import read_json
-from .listings import listings
+from .listings import listings, read_listing_dataset
 from .pandas import read_pandas
 from .parquet import read_parquet
 from .records import read_records
@@ -27,6 +27,7 @@ __all__ = [
     "read_dataset",
     "read_hf",
     "read_json",
+    "read_listing_dataset",
     "read_pandas",
     "read_parquet",
     "read_records",
