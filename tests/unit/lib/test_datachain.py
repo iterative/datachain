@@ -489,6 +489,7 @@ def test_listings_read_listing_dataset_with_subpath(test_session, tmp_dir):
     df.to_parquet(subdir / "df3.parquet")
 
     ds_name, _, _ = parse_listing_uri(tmp_dir.as_uri())
+    ds_name = ds_name.removeprefix(LISTING_PREFIX)
     dc.read_storage(tmp_dir.as_uri(), session=test_session).exec()
 
     chain, listing_version = read_listing_dataset(
