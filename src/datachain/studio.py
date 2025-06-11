@@ -89,7 +89,7 @@ def set_team(args: "Namespace"):
             "No default team set. Use `datachain auth team <team_name>` to set one."
         )
 
-    level = ConfigLevel.LOCAL if args.__dict__.get("local") else ConfigLevel.GLOBAL
+    level = ConfigLevel.LOCAL if args.local else ConfigLevel.GLOBAL
     config = Config(level)
     with config.edit() as conf:
         studio_conf = conf.get("studio", {})

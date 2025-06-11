@@ -109,13 +109,13 @@ def test_studio_token(capsys):
 
 def test_studio_team_local():
     assert main(["auth", "team", "team_name"]) == 0
-    config = Config(ConfigLevel.LOCAL).read()
+    config = Config(ConfigLevel.GLOBAL).read()
     assert config["studio"]["team"] == "team_name"
 
 
 def test_studio_team_global():
-    assert main(["auth", "team", "team_name", "--global"]) == 0
-    config = Config(ConfigLevel.GLOBAL).read()
+    assert main(["auth", "team", "team_name", "--local"]) == 0
+    config = Config(ConfigLevel.LOCAL).read()
     assert config["studio"]["team"] == "team_name"
 
 
