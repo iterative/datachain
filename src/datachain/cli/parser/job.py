@@ -172,3 +172,21 @@ def add_jobs_parser(subparsers, parent_parser) -> None:
         default=None,
         help="Team to check logs for (default: from config)",
     )
+
+    studio_clusters_help = "List compute clusters in Studio"
+    studio_clusters_description = "List compute clusters in Studio."
+
+    studio_clusters_parser = jobs_subparser.add_parser(
+        "clusters",
+        parents=[parent_parser],
+        description=studio_clusters_description,
+        help=studio_clusters_help,
+        formatter_class=CustomHelpFormatter,
+    )
+
+    studio_clusters_parser.add_argument(
+        "--team",
+        action="store",
+        default=None,
+        help="Team to list clusters for (default: from config)",
+    )

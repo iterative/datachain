@@ -30,6 +30,7 @@ DatasetExportSignedUrls = Optional[list[str]]
 FileUploadData = Optional[dict[str, Any]]
 JobData = Optional[dict[str, Any]]
 JobListData = dict[str, Any]
+ClusterListData = dict[str, Any]
 logger = logging.getLogger("datachain")
 
 DATASET_ROWS_CHUNK_SIZE = 8192
@@ -425,3 +426,6 @@ class StudioClient:
     ) -> Response[JobData]:
         url = f"datachain/job/{job_id}/cancel"
         return self._send_request(url, data={}, method="POST")
+
+    def get_clusters(self) -> Response[ClusterListData]:
+        return self._send_request("datachain/clusters", {}, method="GET")

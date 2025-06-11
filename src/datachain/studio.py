@@ -52,6 +52,9 @@ def process_jobs_args(args: "Namespace"):
     if args.cmd == "ls":
         return list_jobs(args.status, args.team, args.limit)
 
+    if args.cmd == "clusters":
+        return list_clusters(args.team)
+
     raise DataChainError(f"Unknown command '{args.cmd}'.")
 
 
@@ -383,3 +386,29 @@ def show_job_logs(job_id: str, team_name: Optional[str]):
 
     client = StudioClient(team=team_name)
     show_logs_from_client(client, job_id)
+
+
+def list_clusters(team_name: Optional[str]):
+    client = StudioClient(team=team_name)
+    response = client.get_clusters()
+    if not response.ok:
+        raise DataChainError(response.message)
+
+    clusters = response.data.get("clusters", [])
+    if not clusters:
+        print("No clusters found")
+        return
+
+    rows = [
+        {
+            "ID": cluster.get("id"),
+            "Status": cluster.get("status"),
+            "Cloud Provider": cluster.get("cloud_provider"),
+            "Cloud Credentials": cluster.get("cloud_credentials"),
+            "Is Active": cluster.get("is_active"),
+            "Max Workers": cluster.get("max_workers"),
+        }
+        for cluster in clusters
+    ]
+
+    print(tabulate.tabulate(rows, headers="keys", tablefmt="grid"))

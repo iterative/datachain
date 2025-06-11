@@ -72,8 +72,17 @@ datachain job run --repository https://github.com/iterative/datachain query.py
 datachain job run --priority 2 query.py
 ```
 
+8. Run a job in a specific cluster
+```bash
+# Get the cluster id using following command
+datachain job clusters
+# Use the id  of an active clusters from above
+datachain job run --cluster-id 1 query.py
+```
+
 ## Notes
 
 * Closing the logs command (e.g., with Ctrl+C) will only stop displaying the logs but will not cancel the job execution
 * To cancel a running job, use the `datachain job cancel` command
 * The job will continue running in Studio even after you stop viewing the logs
+* You can get the list of compute clusters using `datachain job clusters` command.
