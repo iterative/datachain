@@ -11,7 +11,7 @@ usage: datachain auth team [-h] [-v] [-q] [--global] [team_name]
 ## Description
 
 This command sets or shows the default team for Studio operations. By default, the team setting is saved globally, but you can use the `--local` option to set it for the current project.
-If team_name is not passed, the current team in used is shown to the user.
+If team_name is not passed, the current team in use is shown to the user.
 
 ## Arguments
 
