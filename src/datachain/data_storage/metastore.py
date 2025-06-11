@@ -183,7 +183,7 @@ class AbstractMetastore(ABC, Serializable):
         """Gets a single project inside some namespace by name"""
 
     @abstractmethod
-    def list_projects(self, namespace_name: Optional[str], conn=None) -> list[Project]:
+    def list_projects(self, namespace_id: Optional[int], conn=None) -> list[Project]:
         """Gets list of projects in some namespace or in general (in all namespaces)"""
 
     @property
@@ -789,9 +789,9 @@ class AbstractDBMetastore(AbstractMetastore):
             )
         return self.project_class.parse(*rows[0])
 
-    def list_projects(self, namespace_name: Optional[str], conn=None) -> list[Project]:
+    def list_projects(self, namespace_id: Optional[int], conn=None) -> list[Project]:
         """
-        Gets a list of projects inside some namespace by name, or in all namespaces
+        Gets a list of projects inside some namespace, or in all namespaces
         """
         n = self._namespaces
         p = self._projects
@@ -802,8 +802,8 @@ class AbstractDBMetastore(AbstractMetastore):
         )
         query = query.select_from(n.join(p, n.c.id == p.c.namespace_id))
 
-        if namespace_name:
-            query = query.where(n.c.name == namespace_name)
+        if namespace_id:
+            query = query.where(n.c.id == namespace_id)
 
         rows = list(self.db.execute(query, conn=conn))
 

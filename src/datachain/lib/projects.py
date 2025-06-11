@@ -53,7 +53,7 @@ def get(name: str, namespace_name: str, session: Optional[Session]) -> Project:
     Example:
         ```py
         import datachain as dc
-        namespace = dc.get_project("my-project", "local")
+        project  = dc.get_project("my-project", "local")
         ```
     """
     return Session.get(session).catalog.metastore.get_project(name, namespace_name)
@@ -76,4 +76,9 @@ def ls(
         all_projects = dc.projects.ls()
         ```
     """
-    return Session.get(session).catalog.metastore.list_projects(namespace_name)
+    session = Session.get(session)
+    namespace_id = None
+    if namespace_name:
+        namespace_id = session.catalog.metastore.get_namespace(namespace_name).id
+
+    return session.catalog.metastore.list_projects(namespace_id)
