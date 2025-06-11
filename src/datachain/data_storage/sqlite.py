@@ -411,7 +411,7 @@ class SQLiteMetastore(AbstractDBMetastore):
         Studio dataset.
         """
         local_namespace = self.create_namespace(Namespace.default(), "Local namespace")
-        self.create_project(Project.default(), local_namespace, "Local project")
+        self.create_project(Project.default(), local_namespace.name, "Local project")
 
     @classmethod
     def _datasets_columns(cls) -> list["SchemaItem"]:

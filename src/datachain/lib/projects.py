@@ -1,7 +1,6 @@
 from typing import Optional
 
 from datachain.error import ProjectCreateNotAllowedError
-from datachain.lib.namespaces import get as get_namespace
 from datachain.project import Project
 from datachain.query import Session
 
@@ -28,7 +27,7 @@ def create(
     Example:
         ```py
         import datachain as dc
-        project = dc.create_project("my-project", "dev", "My personal project")
+        project = dc.projects.create("my-project", "dev", "My personal project")
         ```
     """
     session = Session.get(session)
@@ -38,8 +37,7 @@ def create(
     if name in Project.reserved_names():
         raise ValueError(f"Project name {name} is reserved.")
 
-    namespace = get_namespace(namespace_name, session=session)
-    return session.catalog.metastore.create_project(name, namespace, description)
+    return session.catalog.metastore.create_project(name, namespace_name, description)
 
 
 def get(name: str, namespace_name: str, session: Optional[Session]) -> Project:

@@ -831,7 +831,7 @@ class Catalog:
             }
             dataset = self.metastore.create_dataset(
                 name,
-                project,
+                project.id if project else None,
                 feature_schema=feature_schema,
                 query_script=query_script,
                 schema=schema,
@@ -1062,7 +1062,7 @@ class Catalog:
     def get_dataset(
         self, name: str, project: Optional[Project] = None
     ) -> DatasetRecord:
-        return self.metastore.get_dataset(name, project)
+        return self.metastore.get_dataset(name, project.id if project else None)
 
     def get_dataset_with_remote_fallback(
         self,
@@ -1485,7 +1485,7 @@ class Catalog:
         )
         project = self.metastore.create_project(
             remote_ds.project.name,
-            namespace,
+            namespace.name,
             description=remote_ds.project.description,
             uuid=remote_ds.project.uuid,
         )

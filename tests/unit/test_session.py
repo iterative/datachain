@@ -12,7 +12,7 @@ from datachain.sql.types import String
 @pytest.fixture
 def project(catalog):
     namespace = catalog.metastore.create_namespace("dev")
-    return catalog.metastore.create_project("animals", namespace)
+    return catalog.metastore.create_project("animals", namespace.name)
 
 
 def test_ephemeral_dataset_naming(catalog, project):
@@ -23,8 +23,6 @@ def test_ephemeral_dataset_naming(catalog, project):
 
     with Session(session_name, catalog=catalog) as session:
         ds_name = "my_test_ds12"
-        # namespace = session.catalog.metastore.create_namespace("dev")
-        # project = session.catalog.metastore.create_project("animals", namespace)
         session.catalog.create_dataset(
             ds_name, project, columns=(sa.Column("name", String),)
         )

@@ -22,7 +22,7 @@ def create(
     Example:
         ```py
         import datachain as dc
-        namespace = dc.create_namespace("dev", "Dev namespace")
+        namespace = dc.namespaces.create("dev", "Dev namespace")
         ```
     """
     session = Session.get(session)

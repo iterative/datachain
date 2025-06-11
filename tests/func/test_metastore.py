@@ -563,11 +563,11 @@ def test_list_datasets(metastore):
 def test_list_datasets_by_project_id(metastore, project):
     assert [ds.name for ds in metastore.list_datasets()] == []
 
-    ds1 = metastore.create_dataset(name="dataset1", project=project)
+    ds1 = metastore.create_dataset(name="dataset1", project_id=project.id)
     metastore.create_dataset_version(
         dataset=ds1, version="1.0.0", status=DatasetStatus.CREATED
     )
-    ds2 = metastore.create_dataset(name="dataset2", project=project)
+    ds2 = metastore.create_dataset(name="dataset2", project_id=project.id)
     metastore.create_dataset_version(
         dataset=ds2, version="2.0.0", status=DatasetStatus.COMPLETE
     )

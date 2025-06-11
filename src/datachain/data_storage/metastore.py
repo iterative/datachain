@@ -170,7 +170,7 @@ class AbstractMetastore(ABC, Serializable):
     def create_project(
         self,
         name: str,
-        namespace: Namespace,
+        namespace_name: str,
         description: Optional[str] = None,
         uuid: Optional[str] = None,
         ignore_if_exists: bool = True,
@@ -201,7 +201,7 @@ class AbstractMetastore(ABC, Serializable):
     def create_dataset(
         self,
         name: str,
-        project: Optional[Project] = None,
+        project_id: Optional[int] = None,
         status: int = DatasetStatus.CREATED,
         sources: Optional[list[str]] = None,
         feature_schema: Optional[dict] = None,
@@ -269,9 +269,7 @@ class AbstractMetastore(ABC, Serializable):
         """Lists all datasets which names start with prefix."""
 
     @abstractmethod
-    def get_dataset(
-        self, name: str, project: Optional[Project] = None
-    ) -> DatasetRecord:
+    def get_dataset(self, name: str, project_id: Optional[int] = None) -> DatasetRecord:
         """Gets a single dataset by name."""
 
     @abstractmethod
@@ -747,12 +745,13 @@ class AbstractDBMetastore(AbstractMetastore):
     def create_project(
         self,
         name: str,
-        namespace: Namespace,
+        namespace_name: str,
         description: Optional[str] = None,
         uuid: Optional[str] = None,
         ignore_if_exists: bool = True,
         **kwargs,
     ) -> Project:
+        namespace = self.get_namespace(namespace_name)
         query = self._projects_insert().values(
             namespace_id=namespace.id,
             uuid=uuid or str(uuid4()),
@@ -817,7 +816,7 @@ class AbstractDBMetastore(AbstractMetastore):
     def create_dataset(
         self,
         name: str,
-        project: Optional[Project] = None,
+        project_id: Optional[int] = None,
         status: int = DatasetStatus.CREATED,
         sources: Optional[list[str]] = None,
         feature_schema: Optional[dict] = None,
@@ -829,10 +828,11 @@ class AbstractDBMetastore(AbstractMetastore):
         **kwargs,  # TODO registered = True / False
     ) -> DatasetRecord:
         """Creates new dataset."""
-        project = project or self.default_project
+        project_id = project_id or self.default_project.id
+
         query = self._datasets_insert().values(
             name=name,
-            project_id=project.id,
+            project_id=project_id,
             status=status,
             feature_schema=json.dumps(feature_schema or {}),
             created_at=datetime.now(timezone.utc),
@@ -851,7 +851,7 @@ class AbstractDBMetastore(AbstractMetastore):
             query = query.on_conflict_do_nothing(index_elements=["project_id", "name"])
         self.db.execute(query)
 
-        return self.get_dataset(name, project)
+        return self.get_dataset(name, project_id)
 
     def create_dataset_version(  # noqa: PLR0913
         self,
@@ -908,7 +908,7 @@ class AbstractDBMetastore(AbstractMetastore):
             )
         self.db.execute(query, conn=conn)
 
-        return self.get_dataset(dataset.name, dataset.project, conn=conn)
+        return self.get_dataset(dataset.name, dataset.project.id, conn=conn)
 
     def remove_dataset(self, dataset: DatasetRecord) -> None:
         """Removes dataset."""
@@ -1122,21 +1122,20 @@ class AbstractDBMetastore(AbstractMetastore):
     def get_dataset(
         self,
         name: str,  # normal, not full dataset name
-        project: Optional[Project] = None,
+        project_id: Optional[int] = None,
         conn=None,
     ) -> DatasetRecord:
         """
         Gets a single dataset in project by dataset name.
         """
-        project = project or self.default_project
+        project_id = project_id or self.default_project.id
         d = self._datasets
         query = self._base_dataset_query()
-        query = query.where(d.c.name == name, d.c.project_id == project.id)  # type: ignore [attr-defined]
+        query = query.where(d.c.name == name, d.c.project_id == project_id)  # type: ignore [attr-defined]
         ds = self._parse_dataset(self.db.execute(query, conn=conn))
         if not ds:
             raise DatasetNotFoundError(
-                f"Dataset {name} not found in namespace {project.namespace.name}"
-                f" and project {project.name}."
+                f"Dataset {name} not found in project {project_id}"
             )
         return ds
 
