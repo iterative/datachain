@@ -19,7 +19,7 @@ If team_name is not passed, the current team in use is shown to the user.
 
 ## Options
 
-* `--local` - Set team locally for the current projects
+* `--local` - Set team locally for the current project
 * `-h`, `--help` - Show the help message and exit.
 * `-v`, `--verbose` - Be verbose.
 * `-q`, `--quiet` - Be quiet.
