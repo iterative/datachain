@@ -5,7 +5,7 @@ Set the default team for Studio operations.
 ## Synopsis
 
 ```usage
-usage: datachain auth team [-h] [-v] [-q] [--global] [team_name]
+usage: datachain auth team [-h] [-v] [-q] [--local] [team_name]
 ```
 
 ## Description
