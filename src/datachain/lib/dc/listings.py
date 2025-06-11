@@ -9,7 +9,6 @@ from datachain.lib.settings import Settings
 from datachain.lib.signal_schema import SignalSchema
 from datachain.query import Session
 from datachain.query.dataset import DatasetQuery, QueryStep, step_result
-from datachain.sql.types import JSON, Boolean, DateTime, Int64, String, UInt64
 
 from .values import read_values
 
@@ -45,16 +44,8 @@ class ReadOnlyQueryStep(QueryStep):
             table_name,
             columns=(
                 [
-                    sa.Column("sys__id", UInt64()),
-                    sa.Column("sys__rand", UInt64()),
-                    sa.Column("file__source", String()),
-                    sa.Column("file__path", String()),
-                    sa.Column("file__size", Int64()),
-                    sa.Column("file__version", String()),
-                    sa.Column("file__etag", String()),
-                    sa.Column("file__is_latest", Boolean()),
-                    sa.Column("file__last_modified", DateTime()),
-                    sa.Column("file__location", JSON()),
+                    *dataset_row_cls.sys_columns(),
+                    *dataset_row_cls.listing_columns(),
                 ]
             ),
         )
@@ -105,7 +96,7 @@ def read_listing_dataset(
         version: Version of the dataset
         path: Path within the listing to read. Path can have globs.
         session: Optional Session object to use for reading
-        settings: Optional settings object to use for reading
+        settings: Optional settings dictionary to use for reading
 
     Returns:
         tuple[DataChain, DatasetVersion]: A tuple containing:
@@ -143,9 +134,10 @@ def read_listing_dataset(
         fallback_to_studio=False,
     )
     if settings:
-        if "prefetch" not in settings:
-            settings["prefetch"] = 0
-        _settings = Settings(**settings)
+        cfg = {**settings}
+        if "prefetch" not in cfg:
+            cfg["prefetch"] = 0
+        _settings = Settings(**cfg)
     else:
         _settings = Settings(prefetch=0)
     signal_schema = SignalSchema({"sys": Sys, "file": File})

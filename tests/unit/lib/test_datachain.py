@@ -19,6 +19,7 @@ from datachain import Column
 from datachain.error import DatasetInvalidVersionError, DatasetVersionNotFoundError
 from datachain.lib.data_model import DataModel
 from datachain.lib.dc import C, DatasetPrepareError, Sys
+from datachain.lib.dc.listings import read_listing_dataset
 from datachain.lib.file import File
 from datachain.lib.listing import LISTING_PREFIX, parse_listing_uri
 from datachain.lib.listing_info import ListingInfo
@@ -463,7 +464,7 @@ def test_listings_read_listing_dataset(test_session, tmp_dir, version):
     ds_name, _, _ = parse_listing_uri(uri)
     dc.read_storage(uri, session=test_session).exec()
 
-    chain, listing_version = dc.read_listing_dataset(
+    chain, listing_version = read_listing_dataset(
         ds_name, version=version, session=test_session
     )
     assert listing_version.num_objects == 1
@@ -490,7 +491,7 @@ def test_listings_read_listing_dataset_with_subpath(test_session, tmp_dir):
     ds_name, _, _ = parse_listing_uri(tmp_dir.as_uri())
     dc.read_storage(tmp_dir.as_uri(), session=test_session).exec()
 
-    chain, listing_version = dc.read_listing_dataset(
+    chain, listing_version = read_listing_dataset(
         ds_name, path="subdir", session=test_session
     )
     assert listing_version.num_objects == 3
