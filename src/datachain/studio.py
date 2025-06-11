@@ -72,14 +72,24 @@ def process_auth_cli_args(args: "Namespace"):
         return logout(args.local)
     if args.cmd == "token":
         return token()
-
     if args.cmd == "team":
         return set_team(args)
     raise DataChainError(f"Unknown command '{args.cmd}'.")
 
 
 def set_team(args: "Namespace"):
-    level = ConfigLevel.GLOBAL if args.__dict__.get("global") else ConfigLevel.LOCAL
+    if args.team_name is None:
+        config = Config().read().get("studio", {})
+        team = config.get("team")
+        if team:
+            print(f"Default team is '{team}'")
+            return 0
+
+        raise DataChainError(
+            "No default team set. Use `datachain auth team <team_name>` to set one."
+        )
+
+    level = ConfigLevel.LOCAL if args.__dict__.get("local") else ConfigLevel.GLOBAL
     config = Config(level)
     with config.edit() as conf:
         studio_conf = conf.get("studio", {})
@@ -125,6 +135,7 @@ def login(args: "Namespace"):
     level = ConfigLevel.LOCAL if args.local else ConfigLevel.GLOBAL
     config_path = save_config(hostname, access_token, level=level)
     print(f"Authentication complete. Saved token to {config_path}.")
+    print("You can now use 'datachain auth team' to set the default team.")
     return 0
 
 
