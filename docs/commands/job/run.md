@@ -85,4 +85,4 @@ datachain job run --cluster-id 1 query.py
 * Closing the logs command (e.g., with Ctrl+C) will only stop displaying the logs but will not cancel the job execution
 * To cancel a running job, use the `datachain job cancel` command
 * The job will continue running in Studio even after you stop viewing the logs
-* You can get the list of compute cluster using `datachain job clusters` command.
+* You can get the list of compute clusters using `datachain job clusters` command.
