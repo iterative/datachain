@@ -9,14 +9,17 @@ def create(
     name: str, description: Optional[str] = None, session: Optional[Session] = None
 ) -> Namespace:
     """
-    Creates new custom namespace.
-    Note that creating namespaces is not allowed for local environment, unlike in
-    Studio where it is allowed.
-    In local environment all datasets are created under default `local` namespace.
+    Creates a new custom namespace.
+    A Namespace is an object used to organize datasets. It has name and a list of
+    Project objects underneath it. On the other hand, each Project can have multiple
+    datasets.
+    Note that creating namespaces is not allowed in the local environment, unlike
+    in Studio, where it is allowed.
+    In local environment all datasets are created under the default `local` namespace.
 
     Parameters:
-        name : namespace name.
-        description : namespace description.
+        name : The name of the namespace.
+        description : A description of the namespace.
         session : Session to use for creating namespace.
 
     Example:
@@ -36,11 +39,11 @@ def create(
 
 def get(name: str, session: Optional[Session]) -> Namespace:
     """
-    Gets namespace by name.
-    If namespace is not found, `NamespaceNotFoundError` is thrown.
+    Gets a namespace by name.
+    If the namespace is not found, a `NamespaceNotFoundError` is raised.
 
     Parameters:
-        name : namespace name.
+        name : The name of the namespace.
         session : Session to use for getting namespace.
 
     Example:
@@ -55,7 +58,7 @@ def get(name: str, session: Optional[Session]) -> Namespace:
 
 def ls(session: Optional[Session] = None) -> list[Namespace]:
     """
-    Gets list of namespaces.
+    Gets a list of all namespaces.
 
     Parameters:
         session : Session to use for getting project.

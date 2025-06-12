@@ -12,16 +12,18 @@ def create(
     session: Optional[Session] = None,
 ) -> Project:
     """
-    Creates new custom project.
-    Note that creating projects is not allowed for local environment, unlike in
-    Studio where it is allowed.
-    In local environment all datasets are created under default `local` project.
-    Project is also connected to it's parent namespace.
+    Creates a new custom project.
+    A Project is an object used to organize datasets. It is created under a
+    specific namespace and has a list of datasets underneath it.
+    Note that creating projects is not allowed in the local environment, unlike
+    in Studio, where it is allowed.
+    In local environment all datasets are created under the default `local` project.
 
     Parameters:
-        name : project name.
-        namespace : namespace name under which we are creating new project.
-        description : project description.
+        name : The name of the project.
+        namespace : The name of the namespace under which the new project is being
+            created.
+        description : A description of the project.
         session : Session to use for creating project.
 
     Example:
@@ -42,12 +44,12 @@ def create(
 
 def get(name: str, namespace_name: str, session: Optional[Session]) -> Project:
     """
-    Gets project by name in some namespace.
-    If project is not found, `ProjectNotFoundError` is thrown.
+    Gets a project by name in some namespace.
+    If the project is not found, a `ProjectNotFoundError` is raised.
 
     Parameters:
-        name : project name.
-        namespace_name : namespace name.
+        name : The name of the project.
+        namespace_name : The name of the namespace.
         session : Session to use for getting project.
 
     Example:
@@ -63,10 +65,10 @@ def ls(
     namespace_name: Optional[str] = None, session: Optional[Session] = None
 ) -> list[Project]:
     """
-    Gets list of projects in some namespace or in general (all namespaces).
+    Gets a list of projects in a specific namespace or from all namespaces.
 
     Parameters:
-        namespace_name : optional namespace name.
+        namespace_name : An optional namespace name.
         session : Session to use for getting project.
 
     Example:
