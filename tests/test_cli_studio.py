@@ -110,13 +110,13 @@ def test_studio_token(capsys):
 
 def test_studio_team_local():
     assert main(["auth", "team", "team_name"]) == 0
-    config = Config(ConfigLevel.LOCAL).read()
+    config = Config(ConfigLevel.GLOBAL).read()
     assert config["studio"]["team"] == "team_name"
 
 
 def test_studio_team_global():
-    assert main(["auth", "team", "team_name", "--global"]) == 0
-    config = Config(ConfigLevel.GLOBAL).read()
+    assert main(["auth", "team", "team_name", "--local"]) == 0
+    config = Config(ConfigLevel.LOCAL).read()
     assert config["studio"]["team"] == "team_name"
 
 
@@ -392,6 +392,8 @@ def test_studio_run(capsys, mocker, tmp_dir):
                     "stupidity",
                     "--repository",
                     "https://github.com/iterative/datachain",
+                    "--cluster-id",
+                    "1",
                 ]
             )
             == 0
@@ -430,4 +432,5 @@ def test_studio_run(capsys, mocker, tmp_dir):
         "team_name": "team_name",
         "repository": "https://github.com/iterative/datachain",
         "priority": 5,
+        "compute_cluster_id": 1,
     }

@@ -41,6 +41,7 @@ def process_jobs_args(args: "Namespace"):
             args.req,
             args.req_file,
             args.priority,
+            args.cluster_id,
         )
 
     if args.cmd == "cancel":
@@ -50,6 +51,9 @@ def process_jobs_args(args: "Namespace"):
 
     if args.cmd == "ls":
         return list_jobs(args.status, args.team, args.limit)
+
+    if args.cmd == "clusters":
+        return list_clusters(args.team)
 
     raise DataChainError(f"Unknown command '{args.cmd}'.")
 
@@ -68,14 +72,24 @@ def process_auth_cli_args(args: "Namespace"):
         return logout(args.local)
     if args.cmd == "token":
         return token()
-
     if args.cmd == "team":
         return set_team(args)
     raise DataChainError(f"Unknown command '{args.cmd}'.")
 
 
 def set_team(args: "Namespace"):
-    level = ConfigLevel.GLOBAL if args.__dict__.get("global") else ConfigLevel.LOCAL
+    if args.team_name is None:
+        config = Config().read().get("studio", {})
+        team = config.get("team")
+        if team:
+            print(f"Default team is '{team}'")
+            return 0
+
+        raise DataChainError(
+            "No default team set. Use `datachain auth team <team_name>` to set one."
+        )
+
+    level = ConfigLevel.LOCAL if args.local else ConfigLevel.GLOBAL
     config = Config(level)
     with config.edit() as conf:
         studio_conf = conf.get("studio", {})
@@ -121,6 +135,7 @@ def login(args: "Namespace"):
     level = ConfigLevel.LOCAL if args.local else ConfigLevel.GLOBAL
     config_path = save_config(hostname, access_token, level=level)
     print(f"Authentication complete. Saved token to {config_path}.")
+    print("You can now use 'datachain auth team' to set the default team.")
     return 0
 
 
@@ -283,6 +298,7 @@ def create_job(
     req: Optional[list[str]] = None,
     req_file: Optional[str] = None,
     priority: Optional[int] = None,
+    cluster_id: Optional[int] = None,
 ):
     query_type = "PYTHON" if query_file.endswith(".py") else "SHELL"
     with open(query_file) as f:
@@ -312,6 +328,7 @@ def create_job(
         repository=repository,
         requirements=requirements,
         priority=priority,
+        cluster_id=cluster_id,
     )
     if not response.ok:
         raise DataChainError(response.message)
@@ -395,3 +412,29 @@ def show_job_logs(job_id: str, team_name: Optional[str]):
 
     client = StudioClient(team=team_name)
     show_logs_from_client(client, job_id)
+
+
+def list_clusters(team_name: Optional[str]):
+    client = StudioClient(team=team_name)
+    response = client.get_clusters()
+    if not response.ok:
+        raise DataChainError(response.message)
+
+    clusters = response.data.get("clusters", [])
+    if not clusters:
+        print("No clusters found")
+        return
+
+    rows = [
+        {
+            "ID": cluster.get("id"),
+            "Status": cluster.get("status"),
+            "Cloud Provider": cluster.get("cloud_provider"),
+            "Cloud Credentials": cluster.get("cloud_credentials"),
+            "Is Active": cluster.get("is_active"),
+            "Max Workers": cluster.get("max_workers"),
+        }
+        for cluster in clusters
+    ]
+
+    print(tabulate.tabulate(rows, headers="keys", tablefmt="grid"))

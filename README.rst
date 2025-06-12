@@ -35,6 +35,12 @@ Use Cases
    on these tables at scale.
 3. **Versioning.** DataChain doesn't store, require moving or copying data (unlike DVC).
    Perfect use case is a bucket with thousands or millions of images, videos, audio, PDFs.
+4. **Incremental Processing.** DataChain's delta and retry features allow for efficient
+   processing workflows:
+
+   - **Delta Processing**: Process only new or changed files/records
+   - **Retry Processing**: Automatically reprocess records with errors or missing results
+   - **Combined Approach**: Process new data and fix errors in a single pipeline
 
 Getting Started
 ===============
@@ -47,7 +53,7 @@ to get started with `DataChain` and learn more.
         pip install datachain
 
 
-Example: download subset of files based on metadata
+Example: Download Subset of Files Based on Metadata
 ---------------------------------------------------
 
 Sometimes users only need to download a specific subset of files from cloud storage,
@@ -70,6 +76,54 @@ high confidence scores.
                                    & (dc.Column("meta.inference.class_") == "cat"))
     likely_cats.to_storage("high-confidence-cats/", signal="file")
 
+
+Example: Incremental Processing with Error Handling
+---------------------------------------------------
+
+This example shows how to use both delta and retry processing for efficient handling of large
+datasets that evolve over time and may occasionally have processing errors.
+
+.. code:: py
+
+    import datachain as dc
+    from datachain import C, File
+
+    def process_file(file: File):
+        """Process a file, which may occasionally fail."""
+        try:
+            # Your processing logic here
+            content = file.read_text()
+            result = analyze_content(content)
+            return {
+                "content": content,
+                "result": result,
+                "error": None  # No error
+            }
+        except Exception as e:
+            # Return an error that will trigger reprocessing next time
+            return {
+                "content": None,
+                "result": None,
+                "error": str(e)  # Error field will trigger retry
+            }
+
+    # Process files efficiently with delta and retry
+    chain = (
+        dc.read_storage(
+            "data/",
+            update=True,
+            delta=True,              # Process only new/changed files
+            delta_on="file.path",    # Identify files by path
+            retry_on="error"         # Field that indicates errors
+        )
+        .map(processed_result=process_file)
+        .mutate(
+            content=C("processed_result.content"),
+            result=C("processed_result.result"),
+            error=C("processed_result.error")
+        )
+        .save(name="processed_data")
+    )
 
 Example: LLM based text-file evaluation
 ---------------------------------------

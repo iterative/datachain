@@ -154,6 +154,7 @@ def test_arrow_generator_partitioned(tmp_path, catalog, cache):
         (pa.map_(pa.string(), pa.int32()), dict),
         (pa.dictionary(pa.int64(), pa.string()), str),
         (pa.list_(pa.string()), list[str]),
+        (pa.null(), str),
     ),
 )
 def test_arrow_type_mapper(col_type, expected):
@@ -161,11 +162,11 @@ def test_arrow_type_mapper(col_type, expected):
 
 
 def test_arrow_type_mapper_struct():
-    col_type = pa.struct({"x": pa.int32(), "y": pa.string()})
+    col_type = pa.struct({"x": pa.int32(), "y": pa.string(), "z": pa.null()})
     fields = arrow_type_mapper(col_type).model_fields
-    assert list(fields.keys()) == ["x", "y"]
+    assert list(fields.keys()) == ["x", "y", "z"]
     dtypes = [field.annotation for field in fields.values()]
-    assert dtypes == [Optional[int], Optional[str]]
+    assert dtypes == [Optional[int], Optional[str], Optional[str]]
 
 
 def test_arrow_type_error():
