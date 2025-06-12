@@ -2239,15 +2239,44 @@ class DataChain:
 
             Combining filters with "or"
             ```py
-            dc.filter(C("file.path").glob("cat*") | C("file.path").glob("dog*))
+            dc.filter(
+                C("file.path").glob("cat*") |
+                C("file.path").glob("dog*)
+            )
+            ```
+
+            ```py
+            dc.filter(dc.func.or_(
+                C("file.path").glob("cat*"),
+                C("file.path").glob("dog*)
+            ))
             ```
 
             Combining filters with "and"
             ```py
             dc.filter(
+                C("file.path").glob("*.jpg),
+                string.length(C("file.path")) > 5
+            )
+            ```
+
+            ```py
+            dc.filter(
                 C("file.path").glob("*.jpg) &
                 (string.length(C("file.path")) > 5)
             )
+            ```
+
+            ```py
+            dc.filter(dc.func.and_(
+                C("file.path").glob("*.jpg),
+                string.length(C("file.path")) > 5
+            ))
+            ```
+
+            Combining filters with "not"
+            ```py
+            dc.filter(~(C("file.path").glob("*.jpg)))
             ```
         """
         return self._evolve(query=self._query.filter(*args))
