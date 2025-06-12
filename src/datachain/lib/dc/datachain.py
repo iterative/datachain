@@ -2241,21 +2241,21 @@ class DataChain:
             ```py
             dc.filter(
                 C("file.path").glob("cat*") |
-                C("file.path").glob("dog*)
+                C("file.path").glob("dog*")
             )
             ```
 
             ```py
             dc.filter(dc.func.or_(
                 C("file.path").glob("cat*"),
-                C("file.path").glob("dog*)
+                C("file.path").glob("dog*")
             ))
             ```
 
             Combining filters with "and"
             ```py
             dc.filter(
-                C("file.path").glob("*.jpg),
+                C("file.path").glob("*.jpg"),
                 string.length(C("file.path")) > 5
             )
             ```
