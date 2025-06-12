@@ -77,3 +77,7 @@ class ClientError(RuntimeError):
 
 class TableMissingError(DataChainError):
     pass
+
+
+class OutdatedDatabaseSchemaError(DataChainError):
+    pass
