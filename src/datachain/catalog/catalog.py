@@ -1232,15 +1232,12 @@ class Catalog:
 
     def ls_dataset_rows(
         self,
-        name: str,
+        dataset: DatasetRecord,
         version: str,
-        project: Optional[Project] = None,
         offset=None,
         limit=None,
     ) -> list[dict]:
         from datachain.query.dataset import DatasetQuery
-
-        dataset = self.get_dataset(name, project)
 
         q = DatasetQuery(
             name=dataset.name,

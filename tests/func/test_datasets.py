@@ -448,9 +448,7 @@ def test_ls_dataset_rows(cloud_test_catalog, dogs_dataset):
 
     assert {
         posixpath.basename(r["file__path"])
-        for r in catalog.ls_dataset_rows(
-            dogs_dataset.name, "1.0.0", dogs_dataset.project
-        )
+        for r in catalog.ls_dataset_rows(dogs_dataset, "1.0.0")
     } == {
         "dog1",
         "dog2",
@@ -463,23 +461,11 @@ def test_ls_dataset_rows_with_limit_offset(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
 
     # these should be sorted by id already
-    all_rows = list(
-        catalog.ls_dataset_rows(
-            dogs_dataset.name,
-            "1.0.0",
-            dogs_dataset.project,
-        )
-    )
+    all_rows = list(catalog.ls_dataset_rows(dogs_dataset, "1.0.0"))
 
     assert {
         r["file__path"]
-        for r in catalog.ls_dataset_rows(
-            dogs_dataset.name,
-            "1.0.0",
-            dogs_dataset.project,
-            offset=2,
-            limit=1,
-        )
+        for r in catalog.ls_dataset_rows(dogs_dataset, "1.0.0", offset=2, limit=1)
     } == {
         all_rows[2]["file__path"],
     }
@@ -507,7 +493,7 @@ def test_ls_dataset_rows_with_custom_columns(cloud_test_catalog):
             int_example.to_bytes(2, "big"),
         )
 
-    (
+    chain = (
         dc.read_storage(cloud_test_catalog.src_uri, session=cloud_test_catalog.session)
         .map(
             test_types,
@@ -532,7 +518,7 @@ def test_ls_dataset_rows_with_custom_columns(cloud_test_catalog):
         .save("dogs_custom_columns")
     )
 
-    for r in catalog.ls_dataset_rows("dogs_custom_columns", "1.0.0"):
+    for r in catalog.ls_dataset_rows(chain.dataset, "1.0.0"):
         assert r["int_col"] == 5
         assert r["int_col_32"] == 5
         assert r["int_col_64"] == 5
@@ -669,9 +655,9 @@ def test_row_random(cloud_test_catalog):
     # of accidental failure is < 1e-10
     ctc = cloud_test_catalog
     catalog = ctc.catalog
-    dc.read_storage(ctc.src_uri, session=ctc.session).save("test")
+    chain = dc.read_storage(ctc.src_uri, session=ctc.session).save("test")
     random_values = [
-        row["sys__rand"] for row in catalog.ls_dataset_rows("test", "1.0.0")
+        row["sys__rand"] for row in catalog.ls_dataset_rows(chain.dataset, "1.0.0")
     ]
 
     # Random values are unique
@@ -684,9 +670,9 @@ def test_row_random(cloud_test_catalog):
     assert 0.6 * RAND_MAX < max(random_values) < RAND_MAX
 
     # Creating a new dataset preserves random values
-    dc.read_storage(ctc.src_uri, session=ctc.session).save("test2")
+    chain = dc.read_storage(ctc.src_uri, session=ctc.session).save("test2")
     random_values2 = {
-        row["sys__rand"] for row in catalog.ls_dataset_rows("test2", "1.0.0")
+        row["sys__rand"] for row in catalog.ls_dataset_rows(chain.dataset, "1.0.0")
     }
     assert random_values2 == set(random_values)
 
