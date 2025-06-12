@@ -2262,21 +2262,21 @@ class DataChain:
 
             ```py
             dc.filter(
-                C("file.path").glob("*.jpg) &
+                C("file.path").glob("*.jpg") &
                 (string.length(C("file.path")) > 5)
             )
             ```
 
             ```py
             dc.filter(dc.func.and_(
-                C("file.path").glob("*.jpg),
+                C("file.path").glob("*.jpg"),
                 string.length(C("file.path")) > 5
             ))
             ```
 
             Combining filters with "not"
             ```py
-            dc.filter(~(C("file.path").glob("*.jpg)))
+            dc.filter(~(C("file.path").glob("*.jpg")))
             ```
         """
         return self._evolve(query=self._query.filter(*args))
