@@ -105,6 +105,7 @@ nav:
               - Overview: guide/processing.md
               - Delta Processing: guide/delta.md
               - Errors Handling and Retries: guide/retry.md
+          - Environment Variables: guide/env.md
       - 🤝 Contributing: contributing.md
 
   - DataChain Website ↗: https://datachain.ai" target="_blank"
