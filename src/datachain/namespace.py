@@ -3,7 +3,10 @@ from dataclasses import dataclass, fields
 from datetime import datetime
 from typing import Any, Optional, TypeVar
 
+from datachain.error import InvalidNamespaceNameError
+
 N = TypeVar("N", bound="Namespace")
+NAMESPACE_NAME_RESERVED_CHARS = ["."]
 
 
 @dataclass(frozen=True)
@@ -13,6 +16,23 @@ class Namespace:
     name: str
     description: Optional[str]
     created_at: datetime
+
+    @staticmethod
+    def validate_name(name: str) -> None:
+        """Throws exception if name is invalid, otherwise returns None"""
+        if not name:
+            raise InvalidNamespaceNameError("Namespace name cannot be empty")
+
+        for c in NAMESPACE_NAME_RESERVED_CHARS:
+            if c in name:
+                raise InvalidNamespaceNameError(
+                    f"Character {c} is reserved and not allowed in namespace name"
+                )
+
+        if name in [Namespace.default()]:
+            raise InvalidNamespaceNameError(
+                f"Namespace name {name} is reserved and cannot be used."
+            )
 
     @staticmethod
     def default() -> str:

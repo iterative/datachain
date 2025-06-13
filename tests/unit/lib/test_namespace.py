@@ -1,7 +1,11 @@
 import pytest
 
 import datachain as dc
-from datachain.error import NamespaceCreateNotAllowedError, NamespaceNotFoundError
+from datachain.error import (
+    InvalidNamespaceNameError,
+    NamespaceCreateNotAllowedError,
+    NamespaceNotFoundError,
+)
 from tests.utils import skip_if_not_sqlite
 
 
@@ -33,11 +37,10 @@ def test_create_namespace_already_exists(test_session):
     assert namespace1.id == namespace2.id
 
 
-def test_create_with_reserved_name(test_session):
-    with pytest.raises(ValueError) as excinfo:
-        dc.namespaces.create("local", session=test_session)
-
-    assert str(excinfo.value) == "Namespace name local is reserved."
+@pytest.mark.parametrize("name", ["local", "with.dots", ""])
+def test_invalid_name(test_session, name):
+    with pytest.raises(InvalidNamespaceNameError):
+        dc.namespaces.create(name, session=test_session)
 
 
 def test_get_namespace(test_session, dev_namespace):

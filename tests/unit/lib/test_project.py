@@ -2,6 +2,7 @@ import pytest
 
 import datachain as dc
 from datachain.error import (
+    InvalidProjectNameError,
     NamespaceNotFoundError,
     ProjectCreateNotAllowedError,
     ProjectNotFoundError,
@@ -62,11 +63,10 @@ def test_create_project_with_the_same_name_in_different_namespace(test_session):
     assert prod_project.description == "Prod chatbot"
 
 
-def test_create_with_reserved_name(test_session, dev_namespace):
-    with pytest.raises(ValueError) as excinfo:
-        dc.projects.create("local", dev_namespace.name, session=test_session)
-
-    assert str(excinfo.value) == "Project name local is reserved."
+@pytest.mark.parametrize("name", ["local", "with.dots", ""])
+def test_invalid_name(test_session, dev_namespace, name):
+    with pytest.raises(InvalidProjectNameError):
+        dc.projects.create(name, dev_namespace.name, session=test_session)
 
 
 @pytest.mark.disable_autouse

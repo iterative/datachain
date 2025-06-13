@@ -6,6 +6,14 @@ class InvalidDatasetNameError(RuntimeError):
     pass
 
 
+class InvalidNamespaceNameError(RuntimeError):
+    pass
+
+
+class InvalidProjectNameError(RuntimeError):
+    pass
+
+
 class NotFoundError(Exception):
     pass
 

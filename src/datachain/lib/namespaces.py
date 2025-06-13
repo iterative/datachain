@@ -32,8 +32,9 @@ def create(
 
     if not session.catalog.metastore.namespace_allowed_to_create:
         raise NamespaceCreateNotAllowedError("Creating custom namespace is not allowed")
-    if name in Namespace.reserved_names():
-        raise ValueError(f"Namespace name {name} is reserved.")
+
+    Namespace.validate_name(name)
+
     return session.catalog.metastore.create_namespace(name, description)
 
 

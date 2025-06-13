@@ -3,9 +3,11 @@ from dataclasses import dataclass, fields
 from datetime import datetime
 from typing import Any, Optional, TypeVar
 
+from datachain.error import InvalidProjectNameError
 from datachain.namespace import Namespace
 
 P = TypeVar("P", bound="Project")
+PROJECT_NAME_RESERVED_CHARS = ["."]
 
 
 @dataclass(frozen=True)
@@ -18,14 +20,26 @@ class Project:
     namespace: Namespace
 
     @staticmethod
+    def validate_name(name: str) -> None:
+        """Throws exception if name is invalid, otherwise returns None"""
+        if not name:
+            raise InvalidProjectNameError("Project name cannot be empty")
+
+        for c in PROJECT_NAME_RESERVED_CHARS:
+            if c in name:
+                raise InvalidProjectNameError(
+                    f"Character {c} is reserved and not allowed in project name."
+                )
+
+        if name in [Project.default()]:
+            raise InvalidProjectNameError(
+                f"Project name {name} is reserved and cannot be used."
+            )
+
+    @staticmethod
     def default() -> str:
         """Name of default project"""
         return "local"
-
-    @staticmethod
-    def reserved_names() -> list[str]:
-        """what names cannot be used when creating a project"""
-        return [Project.default()]
 
     @classmethod
     def parse(

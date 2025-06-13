@@ -36,8 +36,8 @@ def create(
 
     if not session.catalog.metastore.project_allowed_to_create:
         raise ProjectCreateNotAllowedError("Creating custom project is not allowed")
-    if name in Project.reserved_names():
-        raise ValueError(f"Project name {name} is reserved.")
+
+    Project.validate_name(name)
 
     return session.catalog.metastore.create_project(name, namespace_name, description)
 
