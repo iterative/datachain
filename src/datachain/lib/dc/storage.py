@@ -144,6 +144,8 @@ def read_storage(
     catalog = session.catalog
     cache = catalog.cache
     client_config = session.catalog.client_config
+    listing_namespace_name = catalog.metastore.system_namespace_name
+    listing_project_name = catalog.metastore.listing_project_name
 
     uris = uri if isinstance(uri, (list, tuple)) else [uri]
 
@@ -167,7 +169,13 @@ def read_storage(
             )
             continue
 
-        dc = read_dataset(list_ds_name, session=session, settings=settings)
+        dc = read_dataset(
+            list_ds_name,
+            namespace=listing_namespace_name,
+            project=listing_project_name,
+            session=session,
+            settings=settings,
+        )
         dc._query.update = update
         dc.signals_schema = dc.signals_schema.mutate({f"{column}": file_type})
 
@@ -182,7 +190,11 @@ def read_storage(
                         settings=settings,
                         in_memory=in_memory,
                     )
-                    .settings(prefetch=0)
+                    .settings(
+                        prefetch=0,
+                        namespace=listing_namespace_name,
+                        project=listing_project_name,
+                    )
                     .gen(
                         list_bucket(lst_uri, cache, client_config=client_config),
                         output={f"{column}": file_type},

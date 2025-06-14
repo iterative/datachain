@@ -24,7 +24,7 @@ from pydantic import BaseModel
 from tqdm import tqdm
 
 from datachain import semver
-from datachain.dataset import DatasetRecord
+from datachain.dataset import DatasetRecord, parse_dataset_name
 from datachain.delta import delta_disabled
 from datachain.func import literal
 from datachain.func.base import Function
@@ -37,6 +37,7 @@ from datachain.lib.file import (
     FileExporter,
 )
 from datachain.lib.file import ExportPlacement as FileExportPlacement
+from datachain.lib.projects import get as get_project
 from datachain.lib.settings import Settings
 from datachain.lib.signal_schema import SignalSchema
 from datachain.lib.udf import Aggregator, BatchMapper, Generator, Mapper, UDFBase
@@ -261,7 +262,7 @@ class DataChain:
         """Underlying dataset, if there is one."""
         if not self.name:
             return None
-        return self.session.catalog.get_dataset(self.name)
+        return self.session.catalog.get_dataset(self.name, self._query.project)
 
     def __or__(self, other: "Self") -> "Self":
         """Return `self.union(other)`."""
@@ -312,6 +313,8 @@ class DataChain:
         min_task_size=None,
         prefetch: Optional[int] = None,
         sys: Optional[bool] = None,
+        namespace: Optional[str] = None,
+        project: Optional[str] = None,
     ) -> "Self":
         """Change settings for chain.
 
@@ -327,6 +330,8 @@ class DataChain:
             prefetch: number of workers to use for downloading files in advance.
                       This is enabled by default and uses 2 workers.
                       To disable prefetching, set it to 0.
+            namespace: namespace name.
+            project: project name.
 
         Example:
             ```py
@@ -340,7 +345,11 @@ class DataChain:
         if sys is None:
             sys = self._sys
         settings = copy.copy(self._settings)
-        settings.add(Settings(cache, parallel, workers, min_task_size, prefetch))
+        settings.add(
+            Settings(
+                cache, parallel, workers, min_task_size, prefetch, namespace, project
+            )
+        )
         return self._evolve(settings=settings, _sys=sys)
 
     def reset_settings(self, settings: Optional[Settings] = None) -> "Self":
@@ -490,6 +499,22 @@ class DataChain:
         )
         return listings(*args, **kwargs)
 
+    @property
+    def namespace_name(self) -> str:
+        """Current namespace name in which the chain is running"""
+        return (
+            self._settings.namespace
+            or self.session.catalog.metastore.default_namespace_name
+        )
+
+    @property
+    def project_name(self) -> str:
+        """Current project name in which the chain is running"""
+        return (
+            self._settings.project
+            or self.session.catalog.metastore.default_project_name
+        )
+
     def persist(self) -> "Self":
         """Saves temporary chain that will be removed after the process ends.
         Temporary datasets are useful for optimization, for example when we have
@@ -499,7 +524,12 @@ class DataChain:
         It returns the chain itself.
         """
         schema = self.signals_schema.clone_without_sys_signals().serialize()
-        return self._evolve(query=self._query.save(feature_schema=schema))
+        project = get_project(
+            self.project_name, self.namespace_name, session=self.session
+        )
+        return self._evolve(
+            query=self._query.save(project=project, feature_schema=schema)
+        )
 
     def save(  # type: ignore[override]
         self,
@@ -513,7 +543,10 @@ class DataChain:
         """Save to a Dataset. It returns the chain itself.
 
         Parameters:
-            name : dataset name.
+            name : dataset name. It can be full name consisting of namespace and
+                project, but it can also be just a regular dataset name in which
+                case we are taking namespace and project from settings, if they
+                are defined there, or default ones instead.
             version : version of a dataset. If version is not specified and dataset
                 already exists, version patch increment will happen e.g 1.2.1 -> 1.2.2.
             description : description of a dataset.
@@ -534,6 +567,21 @@ class DataChain:
                 "update_version can have one of the following values: major, minor or"
                 " patch"
             )
+
+        namespace_name, project_name, name = parse_dataset_name(name)
+
+        namespace_name = (
+            namespace_name
+            or self._settings.namespace
+            or self.session.catalog.metastore.default_namespace_name
+        )
+        project_name = (
+            project_name
+            or self._settings.project
+            or self.session.catalog.metastore.default_project_name
+        )
+
+        project = get_project(project_name, namespace_name, session=self.session)
 
         schema = self.signals_schema.clone_without_sys_signals().serialize()
 
@@ -558,6 +606,7 @@ class DataChain:
                     query=result_ds._query.save(
                         name=name,
                         version=version,
+                        project=project,
                         feature_schema=schema,
                         dependencies=dependencies,
                         **kwargs,
@@ -577,6 +626,7 @@ class DataChain:
             query=self._query.save(
                 name=name,
                 version=version,
+                project=project,
                 description=description,
                 attrs=attrs,
                 feature_schema=schema,

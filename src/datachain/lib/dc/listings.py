@@ -37,7 +37,7 @@ class ReadOnlyQueryStep(QueryStep):
             return sa.select(*columns)
 
         table_name = self.catalog.warehouse.dataset_table_name(
-            self.dataset_name, self.dataset_version
+            self.dataset, self.dataset_version
         )
         dataset_row_cls = self.catalog.warehouse.schema.dataset_row_cls
         table = dataset_row_cls.new_table(
@@ -51,7 +51,7 @@ class ReadOnlyQueryStep(QueryStep):
         )
 
         return step_result(
-            q, table.columns, dependencies=[(self.dataset_name, self.dataset_version)]
+            q, table.columns, dependencies=[(self.dataset, self.dataset_version)]
         )
 
 
@@ -142,7 +142,7 @@ def read_listing_dataset(
         _settings = Settings(prefetch=0)
     signal_schema = SignalSchema({"sys": Sys, "file": File})
 
-    query.starting_step = ReadOnlyQueryStep(query.catalog, name, version)
+    query.starting_step = ReadOnlyQueryStep(query.catalog, dataset, version)
     query.version = version
     # We already know that this is a listing dataset,
     # so we can set the listing function to True

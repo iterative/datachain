@@ -222,26 +222,6 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         help="Dataset attributes",
     )
     parse_edit_dataset.add_argument(
-        "--studio",
-        action="store_true",
-        default=False,
-        help="Edit dataset from Studio",
-    )
-    parse_edit_dataset.add_argument(
-        "-L",
-        "--local",
-        action="store_true",
-        default=False,
-        help="Edit local dataset only",
-    )
-    parse_edit_dataset.add_argument(
-        "-a",
-        "--all",
-        action="store_true",
-        default=True,
-        help="Edit both datasets from studio and local",
-    )
-    parse_edit_dataset.add_argument(
         "--team",
         action="store",
         default=None,
@@ -310,26 +290,6 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         default=False,
         action=BooleanOptionalAction,
         help="Force delete registered dataset with all of its versions",
-    )
-    rm_dataset_parser.add_argument(
-        "--studio",
-        action="store_true",
-        default=False,
-        help="Remove dataset from Studio",
-    )
-    rm_dataset_parser.add_argument(
-        "-L",
-        "--local",
-        action="store_true",
-        default=False,
-        help="Remove local datasets only",
-    )
-    rm_dataset_parser.add_argument(
-        "-a",
-        "--all",
-        action="store_true",
-        default=True,
-        help="Remove both local and studio",
     )
     rm_dataset_parser.add_argument(
         "--team",

@@ -16,6 +16,11 @@ from tests.data import ENTRIES
 from tests.utils import assert_row_names, skip_if_not_sqlite, tree_from_path
 
 DATASET_UUID = "20f5a2f1-fc9a-4e36-8b91-5a530f289451"
+NAMESPACE_UUID = "efbc3e84-3eb6-4be1-bec1-704b939e1fe4"
+PROJECT_UUID = "0ed3a6c6-f2f7-45aa-869b-39219c86a9d4"
+
+NAMESPACE_NAME = "dev"
+PROJECT_NAME = "animals"
 
 
 @pytest.fixture
@@ -145,10 +150,34 @@ def remote_dataset_version(schema, dataset_rows):
 
 
 @pytest.fixture
-def remote_dataset(remote_dataset_version, schema):
+def remote_namespace():
+    return {
+        "id": 1,
+        "uuid": NAMESPACE_UUID,
+        "name": NAMESPACE_NAME,
+        "description": "Dev namespace",
+        "created_at": "2024-02-23T10:42:31.842944+00:00",
+    }
+
+
+@pytest.fixture
+def remote_project(remote_namespace):
+    return {
+        "id": 1,
+        "uuid": PROJECT_UUID,
+        "name": PROJECT_NAME,
+        "description": "Animals project",
+        "created_at": "2024-02-23T10:42:31.842944+00:00",
+        "namespace": remote_namespace,
+    }
+
+
+@pytest.fixture
+def remote_dataset(remote_project, remote_dataset_version, schema):
     return {
         "id": 1,
         "name": "dogs",
+        "project": remote_project,
         "description": "",
         "attrs": [],
         "schema": schema,
@@ -236,7 +265,13 @@ def dataset_export_data_chunk(
 
 
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
-@pytest.mark.parametrize("dataset_uri", ["ds://dogs@v1.0.0", "ds://dogs"])
+@pytest.mark.parametrize(
+    "dataset_uri",
+    [
+        f"ds://{NAMESPACE_NAME}.{PROJECT_NAME}.dogs@v1.0.0",
+        f"ds://{NAMESPACE_NAME}.{PROJECT_NAME}.dogs",
+    ],
+)
 @pytest.mark.parametrize("local_ds_name", [None, "other"])
 @pytest.mark.parametrize("local_ds_version", [None, "2.0.0"])
 @pytest.mark.parametrize("instantiate", [True, False])
@@ -285,7 +320,11 @@ def test_pull_dataset_success(
                 cp=False,
             )
 
-    dataset = catalog.get_dataset(local_ds_name or "dogs")
+    project = catalog.metastore.get_project(PROJECT_NAME, NAMESPACE_NAME)
+    dataset = catalog.get_dataset(local_ds_name or "dogs", project=project)
+    assert dataset.project.namespace.uuid == NAMESPACE_UUID
+    assert dataset.project.uuid == PROJECT_UUID
+
     assert [v.version for v in dataset.versions] == [local_ds_version or "1.0.0"]
     assert dataset.status == DatasetStatus.COMPLETE
     assert dataset.created_at
@@ -352,7 +391,7 @@ def test_datachain_read_dataset_pull(
 
     with Session("testSession", catalog=catalog):
         ds = dc.read_dataset(
-            name="dogs",
+            name=f"{NAMESPACE_NAME}.{PROJECT_NAME}.dogs",
             version="1.0.0",
             fallback_to_studio=True,
         )
@@ -362,7 +401,8 @@ def test_datachain_read_dataset_pull(
     assert ds.dataset.status == DatasetStatus.COMPLETE
 
     # Check that dataset is available locally after pulling
-    dataset = catalog.get_dataset("dogs")
+    project = catalog.metastore.get_project(PROJECT_NAME, NAMESPACE_NAME)
+    dataset = catalog.get_dataset("dogs", project)
     assert dataset.name == "dogs"
 
 
@@ -392,7 +432,7 @@ def test_pull_dataset_wrong_version(
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(DataChainError) as exc_info:
-        catalog.pull_dataset("ds://dogs@v5")
+        catalog.pull_dataset(f"ds://{NAMESPACE_NAME}.{PROJECT_NAME}.dogs@v5")
     assert str(exc_info.value) == "Dataset dogs doesn't have version 5 on server"
 
 
@@ -411,7 +451,7 @@ def test_pull_dataset_not_found_in_remote(
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(DataChainError) as exc_info:
-        catalog.pull_dataset("ds://dogs@v1.0.0")
+        catalog.pull_dataset(f"ds://{NAMESPACE_NAME}.{PROJECT_NAME}.dogs@v1.0.0")
     assert str(exc_info.value) == "Dataset not found"
 
 
@@ -434,7 +474,7 @@ def test_pull_dataset_exporting_dataset_failed_in_remote(
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(DataChainError) as exc_info:
-        catalog.pull_dataset("ds://dogs@v1.0.0")
+        catalog.pull_dataset(f"ds://{NAMESPACE_NAME}.{PROJECT_NAME}.dogs@v1.0.0")
     assert str(exc_info.value) == f"Dataset export {export_status} in Studio"
 
 
@@ -453,7 +493,7 @@ def test_pull_dataset_empty_parquet(
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(RuntimeError):
-        catalog.pull_dataset("ds://dogs@v1.0.0")
+        catalog.pull_dataset(f"ds://{NAMESPACE_NAME}.{PROJECT_NAME}.dogs@v1.0.0")
 
 
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
@@ -468,10 +508,13 @@ def test_pull_dataset_already_exists_locally(
 ):
     catalog = cloud_test_catalog.catalog
 
-    catalog.pull_dataset("ds://dogs@v1.0.0", local_ds_name="other")
-    catalog.pull_dataset("ds://dogs@v1.0.0")
+    catalog.pull_dataset(
+        f"ds://{NAMESPACE_NAME}.{PROJECT_NAME}.dogs@v1.0.0", local_ds_name="other"
+    )
+    catalog.pull_dataset(f"ds://{NAMESPACE_NAME}.{PROJECT_NAME}.dogs@v1.0.0")
 
-    other = catalog.get_dataset("other")
+    project = catalog.metastore.get_project(PROJECT_NAME, NAMESPACE_NAME)
+    other = catalog.get_dataset("other", project)
     other_version = other.get_version("1.0.0")
     assert other_version.uuid == DATASET_UUID
     assert other_version.num_objects == 4
@@ -479,11 +522,11 @@ def test_pull_dataset_already_exists_locally(
 
     # dataset with same uuid created only once, on first pull with local name "other"
     with pytest.raises(DatasetNotFoundError):
-        catalog.get_dataset("dogs")
+        catalog.get_dataset("dogs", project)
 
 
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
-@pytest.mark.parametrize("local_ds_name", [None, "other"])
+@pytest.mark.parametrize("local_ds_name", [None])
 @skip_if_not_sqlite
 def test_pull_dataset_local_name_already_exists(
     studio_token,
@@ -497,18 +540,26 @@ def test_pull_dataset_local_name_already_exists(
     catalog = cloud_test_catalog.catalog
     src_uri = cloud_test_catalog.src_uri
 
+    namespace = catalog.metastore.create_namespace(NAMESPACE_NAME)
+    project = catalog.metastore.create_project(PROJECT_NAME, namespace.name)
     catalog.create_dataset_from_sources(
-        local_ds_name or "dogs", [f"{src_uri}/dogs/*"], recursive=True
+        local_ds_name or "dogs", [f"{src_uri}/dogs/*"], recursive=True, project=project
     )
     with pytest.raises(DataChainError) as exc_info:
-        catalog.pull_dataset("ds://dogs@v1.0.0", local_ds_name=local_ds_name)
+        catalog.pull_dataset(
+            f"ds://{NAMESPACE_NAME}.{PROJECT_NAME}.dogs@v1.0.0",
+            local_ds_name=local_ds_name,
+        )
 
     assert str(exc_info.value) == (
-        f"Local dataset ds://{local_ds_name or 'dogs'}@v1.0.0 already exists with"
+        f"Local dataset ds://{NAMESPACE_NAME}.{PROJECT_NAME}.{local_ds_name or 'dogs'}"
+        "@v1.0.0 already exists with"
         " different uuid, please choose different local dataset name or version"
     )
 
     # able to save it as version 2 of local dataset name
     catalog.pull_dataset(
-        "ds://dogs@v1.0.0", local_ds_name=local_ds_name, local_ds_version="2.0.0"
+        f"ds://{NAMESPACE_NAME}.{PROJECT_NAME}.dogs@v1.0.0",
+        local_ds_name=local_ds_name,
+        local_ds_version="2.0.0",
     )

@@ -2,7 +2,39 @@ class DataChainError(RuntimeError):
     pass
 
 
+class InvalidDatasetNameError(RuntimeError):
+    pass
+
+
+class InvalidNamespaceNameError(RuntimeError):
+    pass
+
+
+class InvalidProjectNameError(RuntimeError):
+    pass
+
+
 class NotFoundError(Exception):
+    pass
+
+
+class NamespaceNotFoundError(NotFoundError):
+    pass
+
+
+class NotAllowedError(Exception):
+    pass
+
+
+class NamespaceCreateNotAllowedError(NotAllowedError):
+    pass
+
+
+class ProjectCreateNotAllowedError(NotAllowedError):
+    pass
+
+
+class ProjectNotFoundError(NotFoundError):
     pass
 
 
@@ -52,4 +84,8 @@ class ClientError(RuntimeError):
 
 
 class TableMissingError(DataChainError):
+    pass
+
+
+class OutdatedDatabaseSchemaError(DataChainError):
     pass

@@ -56,8 +56,10 @@ def _get_delta_chain(
     compare: Optional[Union[str, Sequence[str]]] = None,
 ) -> "DataChain":
     """Get delta chain for processing changes between versions."""
-    source_dc = datachain.read_dataset(source_ds_name, source_ds_version)
-    source_dc_latest = datachain.read_dataset(source_ds_name, source_ds_latest_version)
+    source_dc = datachain.read_dataset(source_ds_name, version=source_ds_version)
+    source_dc_latest = datachain.read_dataset(
+        source_ds_name, version=source_ds_latest_version
+    )
 
     # Calculate diff between source versions
     return source_dc_latest.compare(source_dc, on=on, compare=compare, deleted=False)
@@ -79,8 +81,10 @@ def _get_retry_chain(
     retry_chain = None
 
     # Read the latest version of the result dataset for retry logic
-    result_dataset = datachain.read_dataset(name, latest_version)
-    source_dc_latest = datachain.read_dataset(source_ds_name, source_ds_latest_version)
+    result_dataset = datachain.read_dataset(name, version=latest_version)
+    source_dc_latest = datachain.read_dataset(
+        source_ds_name, version=source_ds_latest_version
+    )
 
     # Handle error records if delta_retry is a string (column name)
     if isinstance(delta_retry, str):
@@ -232,7 +236,7 @@ def delta_retry_update(
     if processing_chain is None or (processing_chain and processing_chain.empty):
         return None, None, False
 
-    latest_dataset = datachain.read_dataset(name, latest_version)
+    latest_dataset = datachain.read_dataset(name, version=latest_version)
     compared_chain = latest_dataset.compare(
         processing_chain,
         on=right_on or on,

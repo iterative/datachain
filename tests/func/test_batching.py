@@ -18,7 +18,7 @@ def to_str(val: Union[bytes, str]) -> str:
 @pytest.mark.parametrize("cloud_type,version_aware", [("file", False)], indirect=True)
 def test_no_batching_full_row(warehouse, animal_dataset):
     table = warehouse.get_table(
-        warehouse.dataset_table_name(animal_dataset.name, animal_dataset.latest_version)
+        warehouse.dataset_table_name(animal_dataset, animal_dataset.latest_version)
     )
     cols = (table.c.sys__id, table.c.file__path)
     db_ids, db_files = zip(*warehouse.db.execute(sa.select(*cols)))
@@ -42,7 +42,7 @@ def test_no_batching_full_row(warehouse, animal_dataset):
 @pytest.mark.parametrize("cloud_type,version_aware", [("file", False)], indirect=True)
 def test_no_batching_ids_only(warehouse, animal_dataset):
     table = warehouse.get_table(
-        warehouse.dataset_table_name(animal_dataset.name, animal_dataset.latest_version)
+        warehouse.dataset_table_name(animal_dataset, animal_dataset.latest_version)
     )
     cols = (table.c.sys__id, table.c.file__path)
     db_ids = [r[0] for r in warehouse.db.execute(sa.select(table.c.sys__id))]
@@ -64,7 +64,7 @@ def test_no_batching_ids_only(warehouse, animal_dataset):
 @pytest.mark.parametrize("cloud_type,version_aware", [("file", False)], indirect=True)
 def test_batching_full_row(batch_size, warehouse, animal_dataset):
     table = warehouse.get_table(
-        warehouse.dataset_table_name(animal_dataset.name, animal_dataset.latest_version)
+        warehouse.dataset_table_name(animal_dataset, animal_dataset.latest_version)
     )
     cols = (table.c.sys__id, table.c.file__path)
     db_values = set(warehouse.db.execute(sa.select(*cols)))
@@ -97,7 +97,7 @@ def test_batching_full_row(batch_size, warehouse, animal_dataset):
 @pytest.mark.parametrize("cloud_type,version_aware", [("file", False)], indirect=True)
 def test_batching_ids_only(batch_size, warehouse, animal_dataset):
     table = warehouse.get_table(
-        warehouse.dataset_table_name(animal_dataset.name, animal_dataset.latest_version)
+        warehouse.dataset_table_name(animal_dataset, animal_dataset.latest_version)
     )
     cols = (table.c.sys__id, table.c.file__path)
     db_ids = {r[0] for r in warehouse.db.execute(sa.select(table.c.sys__id))}
@@ -129,7 +129,7 @@ def test_batching_ids_only(batch_size, warehouse, animal_dataset):
 @pytest.fixture
 def partitioned_animal_dataset_query(warehouse, animal_dataset):
     table = warehouse.get_table(
-        warehouse.dataset_table_name(animal_dataset.name, animal_dataset.latest_version)
+        warehouse.dataset_table_name(animal_dataset, animal_dataset.latest_version)
     )
 
     partition_by = [path.parent(table.c.file__path)]

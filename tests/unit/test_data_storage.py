@@ -5,6 +5,7 @@ from typing import Any
 import pytest
 import sqlalchemy
 
+from datachain.error import OutdatedDatabaseSchemaError
 from datachain.sql.types import (
     JSON,
     Array,
@@ -24,6 +25,7 @@ from datachain.sql.types import (
 from tests.utils import (
     DEFAULT_TREE,
     TARRED_TREE,
+    skip_if_not_sqlite,
 )
 
 COMPLEX_TREE: dict[str, Any] = {
@@ -75,3 +77,32 @@ def test_db_defaults(col_type, default_value, catalog):
         assert values[0] == default_value
 
     warehouse.db.drop_table(table)
+
+
+@skip_if_not_sqlite
+def test_outdated_schema(catalog):
+    from datachain.data_storage.sqlite import SCHEMA_VERSION
+
+    metastore = catalog.metastore
+
+    metastore._check_schema_version()  # should not raise exception
+
+    # update schema version to be lower than current one
+    stmt = (
+        metastore._meta.update()
+        .where(metastore._meta.c.id == 1)
+        .values(schema_version=SCHEMA_VERSION - 1)
+    )
+    metastore.db.execute(stmt)
+
+    with pytest.raises(OutdatedDatabaseSchemaError):
+        metastore._check_schema_version()
+
+
+@skip_if_not_sqlite
+def test_outdated_schema_meta_not_present(catalog):
+    metastore = catalog.metastore
+    metastore.db.drop_table(metastore._meta)
+
+    with pytest.raises(OutdatedDatabaseSchemaError):
+        metastore._init_meta_table()

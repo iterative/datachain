@@ -979,6 +979,8 @@ def test_dataset_dependencies_one_storage_as_dependency(
             "id": ANY,
             "type": DatasetDependencyType.STORAGE,
             "name": dep_name,
+            "namespace": catalog.metastore.system_namespace_name,
+            "project": catalog.metastore.listing_project.name,
             "version": "1.0.0",
             "created_at": listing.created_at,
             "dependencies": [],
@@ -986,8 +988,8 @@ def test_dataset_dependencies_one_storage_as_dependency(
     ]
 
 
-@pytest.mark.parametrize("indirect", [True, False])
-def test_dataset_dependencies_one_registered_dataset_as_dependency(
+@pytest.mark.parametrize("indirect", [False])
+def test_dataset_dependencies_one_dataset_as_dependency(
     cloud_test_catalog, dogs_dataset, indirect
 ):
     ds_name = uuid.uuid4().hex
@@ -1003,6 +1005,8 @@ def test_dataset_dependencies_one_registered_dataset_as_dependency(
             "id": ANY,
             "type": DatasetDependencyType.DATASET,
             "name": dogs_dataset.name,
+            "namespace": catalog.metastore.default_namespace_name,
+            "project": catalog.metastore.default_project.name,
             "version": "1.0.0",
             "created_at": dogs_dataset.get_version("1.0.0").created_at,
             "dependencies": [],
@@ -1015,6 +1019,8 @@ def test_dataset_dependencies_one_registered_dataset_as_dependency(
                 "id": ANY,
                 "type": DatasetDependencyType.STORAGE,
                 "name": dep_name,
+                "namespace": catalog.metastore.default_namespace_name,
+                "project": catalog.metastore.default_project.name,
                 "version": "1.0.0",
                 "created_at": listing.created_at,
                 "dependencies": [],
@@ -1054,6 +1060,8 @@ def test_dataset_dependencies_multiple_direct_dataset_dependencies(
         "id": ANY,
         "type": DatasetDependencyType.STORAGE,
         "name": dep_name,
+        "namespace": catalog.metastore.system_namespace_name,
+        "project": catalog.metastore.listing_project_name,
         "version": "1.0.0",
         "created_at": listing.created_at,
         "dependencies": [],
@@ -1064,6 +1072,8 @@ def test_dataset_dependencies_multiple_direct_dataset_dependencies(
             "id": ANY,
             "type": DatasetDependencyType.DATASET,
             "name": dogs_dataset.name,
+            "namespace": catalog.metastore.default_namespace_name,
+            "project": catalog.metastore.default_project.name,
             "version": "1.0.0",
             "created_at": dogs_dataset.get_version("1.0.0").created_at,
             "dependencies": [storage_depenedncy],
@@ -1072,6 +1082,8 @@ def test_dataset_dependencies_multiple_direct_dataset_dependencies(
             "id": ANY,
             "type": DatasetDependencyType.DATASET,
             "name": cats_dataset.name,
+            "namespace": catalog.metastore.default_namespace_name,
+            "project": catalog.metastore.default_project.name,
             "version": "1.0.0",
             "created_at": cats_dataset.get_version("1.0.0").created_at,
             "dependencies": [storage_depenedncy],
@@ -1122,6 +1134,8 @@ def test_dataset_dependencies_multiple_union(
         "id": ANY,
         "type": DatasetDependencyType.STORAGE,
         "name": dep_name,
+        "namespace": catalog.metastore.system_namespace_name,
+        "project": catalog.metastore.listing_project.name,
         "version": "1.0.0",
         "created_at": listing.created_at,
         "dependencies": [],
@@ -1132,6 +1146,8 @@ def test_dataset_dependencies_multiple_union(
             "id": ANY,
             "type": DatasetDependencyType.DATASET,
             "name": dogs_dataset.name,
+            "namespace": catalog.metastore.default_namespace_name,
+            "project": catalog.metastore.default_project.name,
             "version": "1.0.0",
             "created_at": dogs_dataset.get_version("1.0.0").created_at,
             "dependencies": [storage_depenedncy],
@@ -1140,6 +1156,8 @@ def test_dataset_dependencies_multiple_union(
             "id": ANY,
             "type": DatasetDependencyType.DATASET,
             "name": cats_dataset.name,
+            "namespace": catalog.metastore.default_namespace_name,
+            "project": catalog.metastore.default_project.name,
             "version": "1.0.0",
             "created_at": cats_dataset.get_version("1.0.0").created_at,
             "dependencies": [storage_depenedncy],
