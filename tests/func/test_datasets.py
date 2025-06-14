@@ -623,9 +623,9 @@ def test_dataset_preview_order(test_session):
     for r in catalog.get_dataset(dataset_name).get_version("1.0.1").preview:
         assert (r["id"], r["order"]) == preview_values.pop(0)
 
-    dc.read_dataset(dataset_name, "1.0.1", session=test_session).order_by("id").save(
-        dataset_name
-    )
+    dc.read_dataset(dataset_name, version="1.0.1", session=test_session).order_by(
+        "id"
+    ).save(dataset_name)
 
     for r in catalog.get_dataset(dataset_name).get_version("1.0.2").preview:
         assert r["id"] == ids.pop(0)
@@ -700,7 +700,9 @@ def test_dataset_storage_dependencies(cloud_test_catalog, cloud_type, indirect):
     dc.read_storage(uri, session=ctc.session).save(ds_name)
 
     lst_ds_name, _, _ = parse_listing_uri(uri)
-    lst_dataset = catalog.metastore.get_dataset(lst_ds_name)
+    lst_dataset = catalog.metastore.get_dataset(
+        lst_ds_name, catalog.metastore.listing_project.id
+    )
 
     assert [
         dataset_dependency_asdict(d)
@@ -710,8 +712,8 @@ def test_dataset_storage_dependencies(cloud_test_catalog, cloud_type, indirect):
             "id": ANY,
             "type": DatasetDependencyType.STORAGE,
             "name": dep_name,
-            "namespace": catalog.metastore.default_namespace_name,
-            "project": catalog.metastore.default_project_name,
+            "namespace": catalog.metastore.system_namespace_name,
+            "project": catalog.metastore.listing_project_name,
             "version": "1.0.0",
             "created_at": lst_dataset.get_version("1.0.0").created_at,
             "dependencies": [],

@@ -1062,6 +1062,10 @@ class Catalog:
     def get_dataset(
         self, name: str, project: Optional[Project] = None
     ) -> DatasetRecord:
+        from datachain.lib.listing import is_listing_dataset
+
+        if is_listing_dataset(name):
+            project = self.metastore.listing_project
         return self.metastore.get_dataset(name, project.id if project else None)
 
     def get_dataset_with_remote_fallback(
@@ -1151,8 +1155,11 @@ class Catalog:
         prefix: Optional[str] = None,
         include_listing: bool = False,
         studio: bool = False,
+        project: Optional[Project] = None,
     ) -> Iterator[DatasetListRecord]:
         from datachain.remote.studio import StudioClient
+
+        project_id = project.id if project else None
 
         if studio:
             client = StudioClient()
@@ -1168,9 +1175,11 @@ class Catalog:
                 if not d.get("name", "").startswith(QUERY_DATASET_PREFIX)
             )
         elif prefix:
-            datasets = self.metastore.list_datasets_by_prefix(prefix)
+            datasets = self.metastore.list_datasets_by_prefix(
+                prefix, project_id=project_id
+            )
         else:
-            datasets = self.metastore.list_datasets()
+            datasets = self.metastore.list_datasets(project_id=project_id)
 
         for d in datasets:
             if not d.is_bucket_listing or include_listing:
@@ -1182,11 +1191,15 @@ class Catalog:
         include_listing: bool = False,
         with_job: bool = True,
         studio: bool = False,
+        project: Optional[Project] = None,
     ) -> Iterator[tuple[DatasetListRecord, "DatasetListVersion", Optional["Job"]]]:
         """Iterate over all dataset versions with related jobs."""
         datasets = list(
             self.ls_datasets(
-                prefix=prefix, include_listing=include_listing, studio=studio
+                prefix=prefix,
+                include_listing=include_listing,
+                studio=studio,
+                project=project,
             )
         )
 
@@ -1222,6 +1235,7 @@ class Catalog:
             prefix=prefix,
             include_listing=True,
             with_job=False,
+            project=self.metastore.listing_project,
         )
 
         return [

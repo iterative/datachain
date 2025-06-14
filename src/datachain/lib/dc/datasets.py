@@ -26,6 +26,8 @@ if TYPE_CHECKING:
 
 def read_dataset(
     name: str,
+    namespace: Optional[str] = None,
+    project: Optional[str] = None,
     version: Optional[Union[str, int]] = None,
     session: Optional[Session] = None,
     settings: Optional[dict] = None,
@@ -40,9 +42,12 @@ def read_dataset(
     If dataset or version is not found locally, it will try to pull it from Studio.
 
     Parameters:
-        name : dataset name which can be fully qualified dataset name with namespace
-            and project, or it can be just a regular name in which case default
-            namespace and project are used.
+        name: The dataset name, which can be a fully qualified name including the
+            namespace and project. Alternatively, it can be a regular name, in which
+            case the explicitly defined namespace and project will be used if they are
+            set; otherwise, default values will be applied.
+        namespace : optional name of namespace in which dataset to read is created
+        project : optional name of project in which dataset to read is created
         version : dataset version
         session : Session to use for the chain.
         settings : Settings to use for the chain.
@@ -126,10 +131,13 @@ def read_dataset(
     from .datachain import DataChain
 
     session = Session.get(session)
+    catalog = session.catalog
 
     namespace_name, project_name, name = parse_dataset_name(name)
-    namespace_name = namespace_name or session.catalog.metastore.default_namespace_name
-    project_name = project_name or session.catalog.metastore.default_project_name
+    namespace_name = (
+        namespace_name or namespace or catalog.metastore.default_namespace_name
+    )
+    project_name = project_name or project or catalog.metastore.default_project_name
 
     if version is not None:
         try:
@@ -140,8 +148,9 @@ def read_dataset(
             # all 2.* dataset versions). If dataset doesn't have any versions where
             # major part is equal to that input, exception is thrown.
             major = int(version)
-            project = get_project(project_name, namespace_name, session=session)
-            dataset = session.catalog.get_dataset(name, project)
+            dataset = session.catalog.get_dataset(
+                name, get_project(project_name, namespace_name, session=session)
+            )
             latest_major = dataset.latest_major_version(major)
             if not latest_major:
                 raise DatasetVersionNotFoundError(
@@ -270,6 +279,8 @@ def datasets(
 
 def delete_dataset(
     name: str,
+    namespace: Optional[str] = None,
+    project: Optional[str] = None,
     version: Optional[str] = None,
     force: Optional[bool] = False,
     session: Optional[Session] = None,
@@ -279,7 +290,12 @@ def delete_dataset(
     a force flag.
 
     Args:
-        name : Dataset name
+        name: The dataset name, which can be a fully qualified name including the
+            namespace and project. Alternatively, it can be a regular name, in which
+            case the explicitly defined namespace and project will be used if they are
+            set; otherwise, default values will be applied.
+        namespace : optional name of namespace in which dataset to delete is created
+        project : optional name of project in which dataset to delete is created
         version : Optional dataset version
         force: If true, all datasets versions will be removed. Defaults to False.
         studio: If True, removes dataset from Studio only,
@@ -306,8 +322,10 @@ def delete_dataset(
     catalog = session.catalog
 
     namespace_name, project_name, name = parse_dataset_name(name)
-    namespace_name = namespace_name or catalog.metastore.default_namespace_name
-    project_name = project_name or catalog.metastore.default_project_name
+    namespace_name = (
+        namespace_name or namespace or catalog.metastore.default_namespace_name
+    )
+    project_name = project_name or project or catalog.metastore.default_project_name
 
     if not catalog.metastore.is_local_dataset(namespace_name):
         if not namespace_name or not project_name:
@@ -316,10 +334,10 @@ def delete_dataset(
             None, name, namespace_name, project_name, version=version, force=force
         )
 
-    project = get_project(project_name, namespace_name, session=session)
+    ds_project = get_project(project_name, namespace_name, session=session)
 
     if not force:
-        version = version or catalog.get_dataset(name, project).latest_version
+        version = version or catalog.get_dataset(name, ds_project).latest_version
     else:
         version = None
-    catalog.remove_dataset(name, project, version=version, force=force)
+    catalog.remove_dataset(name, ds_project, version=version, force=force)

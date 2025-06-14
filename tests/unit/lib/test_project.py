@@ -122,8 +122,7 @@ def test_local_project_is_created(test_session):
 
 
 def test_ls_projects(test_session):
-    default_project_name = test_session.catalog.metastore.default_project_name
-    default_namespace_name = test_session.catalog.metastore.default_namespace_name
+    metastore = test_session.catalog.metastore
 
     ns1 = dc.namespaces.create("ns1")
     ns2 = dc.namespaces.create("ns2")
@@ -136,7 +135,8 @@ def test_ls_projects(test_session):
     projects = dc.projects.ls(session=test_session)
     assert sorted([(p.namespace.name, p.name) for p in projects]) == sorted(
         [
-            (default_namespace_name, default_project_name),
+            (metastore.default_namespace_name, metastore.default_project_name),
+            (metastore.system_namespace_name, metastore.listing_project_name),
             ("ns1", "p1"),
             ("ns1", "p2"),
             ("ns1", "p3"),
@@ -167,13 +167,15 @@ def test_ls_projects_one_namespace(test_session):
 
 
 def test_ls_projects_just_default(test_session):
-    default_project_name = test_session.catalog.metastore.default_project_name
-    default_namespace_name = test_session.catalog.metastore.default_namespace_name
+    metastore = test_session.catalog.metastore
 
     projects = dc.projects.ls(session=test_session)
-    assert [(p.namespace.name, p.name) for p in projects] == [
-        (default_namespace_name, default_project_name)
-    ]
+    assert sorted([(p.namespace.name, p.name) for p in projects]) == sorted(
+        [
+            (metastore.default_namespace_name, metastore.default_project_name),
+            (metastore.system_namespace_name, metastore.listing_project_name),
+        ]
+    )
 
 
 def test_ls_projects_empty_in_namespace(test_session):

@@ -67,17 +67,21 @@ def test_local_namespace_is_created(test_session):
 
 def test_ls_namespaces(test_session):
     default_namespace_name = test_session.catalog.metastore.default_namespace_name
+    system_namespace_name = test_session.catalog.metastore.system_namespace_name
 
     dc.namespaces.create("ns1")
     dc.namespaces.create("ns2")
 
     namespaces = dc.namespaces.ls(session=test_session)
     assert sorted([n.name for n in namespaces]) == sorted(
-        [default_namespace_name, "ns1", "ns2"]
+        [default_namespace_name, system_namespace_name, "ns1", "ns2"]
     )
 
 
 def test_ls_namespaces_just_local(test_session):
     default_namespace_name = test_session.catalog.metastore.default_namespace_name
+    system_namespace_name = test_session.catalog.metastore.system_namespace_name
     namespaces = dc.namespaces.ls(session=test_session)
-    assert [n.name for n in namespaces] == [default_namespace_name]
+    assert sorted([n.name for n in namespaces]) == sorted(
+        [default_namespace_name, system_namespace_name]
+    )

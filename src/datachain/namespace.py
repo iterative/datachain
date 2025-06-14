@@ -29,7 +29,7 @@ class Namespace:
                     f"Character {c} is reserved and not allowed in namespace name"
                 )
 
-        if name in [Namespace.default()]:
+        if name in [Namespace.default(), Namespace.system()]:
             raise InvalidNamespaceNameError(
                 f"Namespace name {name} is reserved and cannot be used."
             )
@@ -40,9 +40,9 @@ class Namespace:
         return "local"
 
     @staticmethod
-    def reserved_names() -> list[str]:
-        """what names cannot be used when creating a namespace"""
-        return [Namespace.default()]
+    def system() -> str:
+        """Name of the system namespace"""
+        return "system"
 
     @classmethod
     def parse(

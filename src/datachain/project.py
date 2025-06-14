@@ -31,7 +31,7 @@ class Project:
                     f"Character {c} is reserved and not allowed in project name."
                 )
 
-        if name in [Project.default()]:
+        if name in [Project.default(), Project.listing()]:
             raise InvalidProjectNameError(
                 f"Project name {name} is reserved and cannot be used."
             )
@@ -40,6 +40,11 @@ class Project:
     def default() -> str:
         """Name of default project"""
         return "local"
+
+    @staticmethod
+    def listing() -> str:
+        """Name of listing project where all listing datasets will be saved"""
+        return "listing"
 
     @classmethod
     def parse(

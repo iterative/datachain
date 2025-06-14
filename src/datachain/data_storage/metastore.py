@@ -121,6 +121,10 @@ class AbstractMetastore(ABC, Serializable):
     def default_namespace_name(self):
         """Gets default namespace name"""
 
+    @property
+    def system_namespace_name(self):
+        return Namespace.system()
+
     @abstractmethod
     def create_namespace(
         self,
@@ -166,6 +170,18 @@ class AbstractMetastore(ABC, Serializable):
     def default_project_name(self):
         """Gets default project name"""
 
+    @property
+    def listing_project_name(self):
+        return Project.listing()
+
+    @cached_property
+    def default_project(self) -> Project:
+        return self.get_project(self.default_project_name, self.default_namespace_name)
+
+    @cached_property
+    def listing_project(self) -> Project:
+        return self.get_project(self.listing_project_name, self.system_namespace_name)
+
     @abstractmethod
     def create_project(
         self,
@@ -185,10 +201,6 @@ class AbstractMetastore(ABC, Serializable):
     @abstractmethod
     def list_projects(self, namespace_id: Optional[int], conn=None) -> list[Project]:
         """Gets list of projects in some namespace or in general (in all namespaces)"""
-
-    @property
-    def default_project(self) -> Project:
-        return self.get_project(self.default_project_name, self.default_namespace_name)
 
     @property
     def project_allowed_to_create(self):
@@ -261,12 +273,19 @@ class AbstractMetastore(ABC, Serializable):
         """
 
     @abstractmethod
-    def list_datasets(self) -> Iterator[DatasetListRecord]:
-        """Lists all datasets."""
+    def list_datasets(
+        self, project_id: Optional[int] = None
+    ) -> Iterator[DatasetListRecord]:
+        """Lists all datasets in some project or in all projects."""
 
     @abstractmethod
-    def list_datasets_by_prefix(self, prefix: str) -> Iterator["DatasetListRecord"]:
-        """Lists all datasets which names start with prefix."""
+    def list_datasets_by_prefix(
+        self, prefix: str, project_id: Optional[int] = None
+    ) -> Iterator["DatasetListRecord"]:
+        """
+        Lists all datasets which names start with prefix in some project or in all
+        projects.
+        """
 
     @abstractmethod
     def get_dataset(self, name: str, project_id: Optional[int] = None) -> DatasetRecord:
@@ -1113,9 +1132,12 @@ class AbstractDBMetastore(AbstractMetastore):
         yield from self._parse_dataset_list(self.db.execute(query))
 
     def list_datasets_by_prefix(
-        self, prefix: str, conn=None
+        self, prefix: str, project_id: Optional[int] = None, conn=None
     ) -> Iterator["DatasetListRecord"]:
+        d = self._datasets
         query = self._base_list_datasets_query()
+        if project_id:
+            query = query.where(d.c.project_id == project_id)
         query = query.where(self._datasets.c.name.startswith(prefix))
         yield from self._parse_dataset_list(self.db.execute(query))
 

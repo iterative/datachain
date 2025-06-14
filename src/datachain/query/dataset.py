@@ -1207,21 +1207,16 @@ class DatasetQuery:
     def apply_listing_pre_step(self) -> None:
         """Runs listing pre-step if needed"""
         if self.list_ds_name and not self.starting_step:
-            default_project = self.catalog.metastore.default_project
             listing_ds = None
             try:
-                listing_ds = self.catalog.get_dataset(
-                    self.list_ds_name, default_project
-                )
+                listing_ds = self.catalog.get_dataset(self.list_ds_name)
             except DatasetNotFoundError:
                 pass
 
             if not listing_ds or self.update or listing_dataset_expired(listing_ds):
                 assert self.listing_fn
                 self.listing_fn()
-                listing_ds = self.catalog.get_dataset(
-                    self.list_ds_name, default_project
-                )
+                listing_ds = self.catalog.get_dataset(self.list_ds_name)
 
             # at this point we know what is our starting listing dataset name
             self._set_starting_step(listing_ds)  # type: ignore [arg-type]
@@ -1654,6 +1649,8 @@ class DatasetQuery:
         workers: Union[bool, int] = False,
         min_task_size: Optional[int] = None,
         partition_by: Optional[PartitionByType] = None,
+        namespace: Optional[str] = None,
+        project: Optional[str] = None,
         cache: bool = False,
     ) -> "Self":
         query = self.clone()
