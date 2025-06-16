@@ -13,7 +13,6 @@ from sqlalchemy.sql.expression import true
 import datachain.fs.utils as fsutils
 from datachain.asyn import iter_over_async
 from datachain.client import Client
-from datachain.dataset import DatasetRecord
 from datachain.error import ClientError
 from datachain.lib.file import File
 from datachain.query.schema import Column
@@ -124,6 +123,9 @@ def parse_listing_uri(uri: str) -> tuple[str, str, str]:
         f"{LISTING_PREFIX}{storage_uri}/{posixpath.join(lst_uri_path, '').lstrip('/')}"
     )
 
+    # we should remove dots from the name
+    ds_name = ds_name.replace(".", "_")
+
     return ds_name, lst_uri, path
 
 
@@ -196,6 +198,4 @@ def get_listing(
         list_path = f"{ds_name.strip('/').removeprefix(listing.name)}/{list_path}"
 
     ds_name = listing.name if listing else ds_name
-    ds_name = DatasetRecord.clean_name(ds_name)
-
     return ds_name, list_uri, list_path, bool(listing)

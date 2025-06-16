@@ -149,18 +149,6 @@ def test_dataset_version_from_dict(use_string):
 
 
 @pytest.mark.parametrize(
-    "name,cleaned_name",
-    [
-        ("dogs", "dogs"),
-        ("test.parquet", "test_parquet"),
-        ("simple.test.parquet", "simple_test_parquet"),
-    ],
-)
-def test_clean_name(name, cleaned_name):
-    assert DatasetRecord.clean_name(name) == cleaned_name
-
-
-@pytest.mark.parametrize(
     "name,ok",
     [
         ("dogs", True),

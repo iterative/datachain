@@ -7,6 +7,7 @@ from datachain.data_storage.serializer import deserialize
 from datachain.data_storage.sqlite import SCHEMA_VERSION, SQLiteMetastore
 from datachain.dataset import StorageURI
 from datachain.error import OutdatedDatabaseSchemaError
+from tests.conftest import cleanup_sqlite_db
 
 
 def test_sqlite_metastore(sqlite_db):
@@ -43,8 +44,6 @@ def test_sqlite_metastore(sqlite_db):
 
 
 def test_outdated_schema_meta_not_present():
-    from tests.conftest import cleanup_sqlite_db
-
     metastore = SQLiteMetastore(db_file=":memory:")
 
     metastore.db.drop_table(metastore._meta)
@@ -70,4 +69,5 @@ def test_outdated_schema():
     with pytest.raises(OutdatedDatabaseSchemaError):
         metastore = SQLiteMetastore(db_file=":memory:")
 
+    cleanup_sqlite_db(metastore.db.clone(), metastore.default_table_names)
     metastore.close_on_exit()

@@ -397,14 +397,6 @@ class DatasetRecord:
                     f"Character {c} is reserved and not allowed in dataset name"
                 )
 
-    @staticmethod
-    def clean_name(name: str) -> str:
-        """Replaces all reserved characters with valid ones"""
-        for c in DATASET_NAME_RESERVED_CHARS:
-            name = name.replace(c, DATASET_NAME_REPLACEMENT_CHAR)
-
-        return name
-
     @classmethod
     def parse(  # noqa: PLR0913
         cls,

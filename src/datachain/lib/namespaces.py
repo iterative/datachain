@@ -62,7 +62,7 @@ def ls(session: Optional[Session] = None) -> list[Namespace]:
     Gets a list of all namespaces.
 
     Parameters:
-        session : Session to use for getting project.
+        session : Session to use for getting namespaces.
 
     Example:
         ```py
