@@ -44,6 +44,10 @@ class Namespace:
         """Name of the system namespace"""
         return "system"
 
+    @property
+    def is_system(self):
+        return self.name == Namespace.system()
+
     @classmethod
     def parse(
         cls: builtins.type[N],
