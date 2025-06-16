@@ -371,7 +371,7 @@ class SQLiteMetastore(AbstractDBMetastore):
         self._init_meta_schema_value()
         self._check_schema_version()
         self._init_tables()
-        self._init_namespace()
+        self._init_namespaces_projects()
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
         """Close connection upon exit from context manager."""
@@ -459,7 +459,7 @@ class SQLiteMetastore(AbstractDBMetastore):
         self.db.create_table(self._jobs, if_not_exists=True)
         self.default_table_names.append(self._jobs.name)
 
-    def _init_namespace(self) -> None:
+    def _init_namespaces_projects(self) -> None:
         """
         Creates local namespace and local project connected to it.
         In local environment user cannot explicitly create other namespaces and
