@@ -1,11 +1,12 @@
 import base64
 import pickle
 
+import pytest
+
 from datachain.data_storage.serializer import deserialize
-from datachain.data_storage.sqlite import (
-    SQLiteMetastore,
-)
+from datachain.data_storage.sqlite import SCHEMA_VERSION, SQLiteMetastore
 from datachain.dataset import StorageURI
+from datachain.error import OutdatedDatabaseSchemaError
 
 
 def test_sqlite_metastore(sqlite_db):
@@ -39,3 +40,34 @@ def test_sqlite_metastore(sqlite_db):
     assert obj3.uri == uri
     assert obj3.db.db_file == sqlite_db.db_file
     assert obj3.clone_params() == obj.clone_params()
+
+
+def test_outdated_schema_meta_not_present():
+    from tests.conftest import cleanup_sqlite_db
+
+    metastore = SQLiteMetastore(db_file=":memory:")
+
+    metastore.db.drop_table(metastore._meta)
+
+    with pytest.raises(OutdatedDatabaseSchemaError):
+        metastore = SQLiteMetastore(db_file=":memory:")
+
+    cleanup_sqlite_db(metastore.db.clone(), metastore.default_table_names)
+    metastore.close_on_exit()
+
+
+def test_outdated_schema():
+    metastore = SQLiteMetastore(db_file=":memory:")
+
+    # update schema version to be lower than current one
+    stmt = (
+        metastore._meta.update()
+        .where(metastore._meta.c.id == 1)
+        .values(schema_version=SCHEMA_VERSION - 1)
+    )
+    metastore.db.execute(stmt)
+
+    with pytest.raises(OutdatedDatabaseSchemaError):
+        metastore = SQLiteMetastore(db_file=":memory:")
+
+    metastore.close_on_exit()

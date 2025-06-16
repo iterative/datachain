@@ -74,8 +74,8 @@ quote = sqlite_dialect.identifier_preparer.quote
 SCHEMA_VERSION = 1
 
 OUTDATED_SCHEMA_ERROR_MESSAGE = (
-    "You have old version of database schema. Please refer to the documentation"
-    " for more information"
+    "You have an old version of the database schema. Please refer to the documentation"
+    " for more information."
 )
 
 
