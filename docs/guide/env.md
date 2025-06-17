@@ -11,8 +11,8 @@ List of environment variables used to configure DataChain behavior.
 
 ### Studio Integration
 
-- `DVC_STUDIO_URL` – Custom Studio URL.
-- `DVC_STUDIO_TOKEN` – Authentication token for Studio.
-- `DVC_STUDIO_TEAM` – Studio team name.
+- `DATACHAIN_STUDIO_URL` – Custom Studio URL.
+- `DATACHAIN_STUDIO_TOKEN` – Authentication token for Studio.
+- `DATACHAIN_STUDIO_TEAM` – Studio team name.
 
 Note: Some environment variables are used internally and may not be documented here. For the most up-to-date list, refer to the source code.
