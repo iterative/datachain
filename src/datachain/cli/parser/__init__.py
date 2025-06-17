@@ -292,6 +292,12 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         help="Force delete registered dataset with all of its versions",
     )
     rm_dataset_parser.add_argument(
+        "--studio",
+        action="store_true",
+        default=False,
+        help="Remove dataset from Studio only",
+    )
+    rm_dataset_parser.add_argument(
         "--team",
         action="store",
         default=None,

@@ -168,6 +168,7 @@ def handle_dataset_command(args, catalog):
             args.name,
             version=args.version,
             force=args.force,
+            studio=args.studio,
             team=args.team,
         ),
         "remove": lambda: rm_dataset(
@@ -175,6 +176,7 @@ def handle_dataset_command(args, catalog):
             args.name,
             version=args.version,
             force=args.force,
+            studio=args.studio,
             team=args.team,
         ),
     }

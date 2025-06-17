@@ -2,7 +2,7 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, Optional, Union, get_origin, get_type_hints
 
 from datachain.dataset import parse_dataset_name
-from datachain.error import DataChainError, DatasetVersionNotFoundError
+from datachain.error import DatasetVersionNotFoundError
 from datachain.lib.dataset_info import DatasetInfo
 from datachain.lib.file import (
     File,
@@ -283,6 +283,7 @@ def delete_dataset(
     project: Optional[str] = None,
     version: Optional[str] = None,
     force: Optional[bool] = False,
+    studio: Optional[bool] = False,
     session: Optional[Session] = None,
     in_memory: bool = False,
 ) -> None:
@@ -298,8 +299,8 @@ def delete_dataset(
         project : optional name of project in which dataset to delete is created
         version : Optional dataset version
         force: If true, all datasets versions will be removed. Defaults to False.
-        studio: If True, removes dataset from Studio only,
-            otherwise remove from local. Defaults to False.
+        studio: If True, removes dataset from Studio only, otherwise removes local
+            dataset. Defaults to False.
         session: Optional session instance. If not provided, uses default session.
         in_memory: If True, creates an in-memory session. Defaults to False.
 
@@ -327,9 +328,7 @@ def delete_dataset(
     )
     project_name = project_name or project or catalog.metastore.default_project_name
 
-    if not catalog.metastore.is_local_dataset(namespace_name):
-        if not namespace_name or not project_name:
-            raise DataChainError("Namespace or project missing in Studio dataset name")
+    if not catalog.metastore.is_local_dataset(namespace_name) and studio:
         return remove_studio_dataset(
             None, name, namespace_name, project_name, version=version, force=force
         )

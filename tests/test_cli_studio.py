@@ -289,7 +289,12 @@ def test_studio_rm_dataset(capsys, mocker):
         m.delete(f"{STUDIO_URL}/api/datachain/datasets", json={})
 
         # Studio token is required
-        assert main(["dataset", "rm", "dev.animals.name", "--team", "team_name"]) == 1
+        assert (
+            main(
+                ["dataset", "rm", "dev.animals.name", "--team", "team_name", "--studio"]
+            )
+            == 1
+        )
         out = capsys.readouterr().err
         assert "Not logged in to Studio" in out
 
@@ -308,6 +313,7 @@ def test_studio_rm_dataset(capsys, mocker):
                     "--version",
                     "1.0.0",
                     "--force",
+                    "--studio",
                 ]
             )
             == 0

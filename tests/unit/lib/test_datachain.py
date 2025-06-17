@@ -3217,6 +3217,7 @@ def test_delete_dataset_from_studio(test_session, studio_token, requests_mock, f
         "dev.animals.cats",
         version="1.0.0",
         force=force,
+        studio=True,
         session=test_session,
     )
 
@@ -3232,9 +3233,21 @@ def test_delete_dataset_from_studio_not_found(
         status_code=404,
     )
     with pytest.raises(Exception) as exc_info:
-        dc.delete_dataset("dev.animals.cats", version="1.0.0", session=test_session)
+        dc.delete_dataset(
+            "dev.animals.cats", version="1.0.0", studio=True, session=test_session
+        )
 
     assert str(exc_info.value) == error_message
+
+
+def test_delete_dataset_cached_from_studio(test_session, project):
+    ds_full_name = f"{project.namespace.name}.{project.name}.fibonacci"
+    dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save(ds_full_name)
+
+    dc.delete_dataset(ds_full_name)
+
+    with pytest.raises(DatasetNotFoundError):
+        dc.read_dataset(name=ds_full_name)
 
 
 @pytest.mark.parametrize(
@@ -3370,17 +3383,3 @@ def test_save_to_non_default_project(test_session, project, use_settings):
     with pytest.raises(DatasetNotFoundError):
         # dataset is not in default namespace / project
         dc.read_dataset(name=ds_name)
-
-
-def test_delete_dataset_in_non_default_project(test_session, project):
-    ds_full_name = f"{project.namespace.name}.{project.name}.fibonacci"
-    dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save(ds_full_name)
-
-    with patch.object(
-        test_session.catalog.metastore, "is_local_dataset", return_value=True
-    ):
-        dc.delete_dataset(ds_full_name)
-
-        with pytest.raises(DatasetNotFoundError):
-            # dataset is not in default namespace / project
-            dc.read_dataset(name=ds_full_name)

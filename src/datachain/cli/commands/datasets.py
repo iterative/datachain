@@ -134,21 +134,14 @@ def rm_dataset(
     name: str,
     version: Optional[str] = None,
     force: Optional[bool] = False,
+    studio: Optional[bool] = False,
     team: Optional[str] = None,
 ):
     namespace_name, project_name, name = parse_dataset_name(name)
     namespace_name = namespace_name or catalog.metastore.default_namespace_name
     project_name = project_name or catalog.metastore.default_project_name
 
-    if catalog.metastore.is_local_dataset(namespace_name):
-        try:
-            catalog.remove_dataset(
-                name, catalog.metastore.default_project, version=version, force=force
-            )
-        except DatasetNotFoundError:
-            print("Dataset not found in local", file=sys.stderr)
-
-    else:
+    if not catalog.metastore.is_local_dataset(namespace_name) and studio:
         from datachain.studio import remove_studio_dataset
 
         token = Config().read().get("studio", {}).get("token")
@@ -157,6 +150,13 @@ def rm_dataset(
                 "Not logged in to Studio. Log in with 'datachain auth login'."
             )
         remove_studio_dataset(team, name, namespace_name, project_name, version, force)
+    else:
+        try:
+            catalog.remove_dataset(
+                name, catalog.metastore.default_project, version=version, force=force
+            )
+        except DatasetNotFoundError:
+            print("Dataset not found in local", file=sys.stderr)
 
 
 def edit_dataset(
