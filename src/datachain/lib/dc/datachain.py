@@ -1516,22 +1516,25 @@ class DataChain:
         same: bool = False,
         status_col: Optional[str] = None,
     ) -> "DataChain":
-        """Calculate differences between two datasets containing files.
+        """Calculate differences between two chains containing files.
 
-        This method is specifically designed for file datasets. It uses file `source`
+        This method is specifically designed for file chains. It uses file `source`
         and `path` to match files, and file `version` and `etag` to detect changes.
 
         Parameters:
-            other: Dataset to compare against.
-            on: File column name in this dataset. Default is "file".
-            right_on: File column name in the other dataset. Defaults to `on`.
-            added (bool): Include files that exist in this dataset but not in the other.
-            deleted (bool): Include files that exist only in the other dataset.
+            other: Chain to compare against.
+            on: File column name in this chain. Default is "file".
+            right_on: File column name in the other chain. Defaults to `on`.
+            added (bool): Include files that exist in this chain but not in the other.
+            deleted (bool): Include files that exist only in the other chain.
             modified (bool): Include files that exist in both but have different
                              versions/etags.
-            same (bool): Include files that are identical in both datasets.
+            same (bool): Include files that are identical in both chains.
             status_col (str): Name for the status column showing differences
                               (A=added, D=deleted, M=modified, S=same).
+
+        Default behavior: By default, includes only new files (added=True and
+        modified=True). This is useful for incremental processing.
 
         Example:
             ```py
