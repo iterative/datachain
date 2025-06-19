@@ -68,6 +68,7 @@ def read_records(
 
     dsr = catalog.create_dataset(
         name,
+        catalog.metastore.default_project,
         columns=columns,
         feature_schema=(
             signal_schema.clone_without_sys_signals().serialize()

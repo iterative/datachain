@@ -24,6 +24,7 @@ This command runs a job in Studio using the specified query file. You can config
 * `--team TEAM` - Team to run job for (default: from config)
 * `--env-file ENV_FILE` - File with environment variables for the job
 * `--env ENV` - Environment variables in KEY=VALUE format
+* `--cluster-id CLUSTER_ID` - Compute cluster ID to run the job on
 * `--workers WORKERS` - Number of workers for the job
 * `--files FILES` - Additional files to include in the job
 * `--python-version PYTHON_VERSION` - Python version for the job (e.g., 3.9, 3.10, 3.11)
@@ -71,8 +72,17 @@ datachain job run --repository https://github.com/iterative/datachain query.py
 datachain job run --priority 2 query.py
 ```
 
+8. Run a job in a specific cluster
+```bash
+# Get the cluster id using following command
+datachain job clusters
+# Use the id  of an active clusters from above
+datachain job run --cluster-id 1 query.py
+```
+
 ## Notes
 
 * Closing the logs command (e.g., with Ctrl+C) will only stop displaying the logs but will not cancel the job execution
 * To cancel a running job, use the `datachain job cancel` command
 * The job will continue running in Studio even after you stop viewing the logs
+* You can get the list of compute clusters using `datachain job clusters` command.

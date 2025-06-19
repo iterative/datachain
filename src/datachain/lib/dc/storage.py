@@ -38,6 +38,7 @@ def read_storage(
     delta_on: Optional[Union[str, Sequence[str]]] = None,
     delta_result_on: Optional[Union[str, Sequence[str]]] = None,
     delta_compare: Optional[Union[str, Sequence[str]]] = None,
+    delta_retry: Optional[Union[bool, str]] = None,
     client_config: Optional[dict] = None,
 ) -> "DataChain":
     """Get data from storage(s) as a list of file with all file attributes.
@@ -83,6 +84,13 @@ def read_storage(
         delta_compare: A list of fields used to check if the same row has been modified
             in the new version of the source.
             If not defined, all fields except those defined in `delta_on` will be used.
+        delta_retry: Controls which records to reprocess. Can be:
+            - A string specifying a field name: Records where this field is not None
+              will be reprocessed (error checking mode).
+            - True: Records that exist in the source dataset but not in the result
+              dataset (based on delta_on/delta_result_on fields) will be reprocessed
+              (missing records mode).
+            - False or None: No retry processing.
 
     Returns:
         DataChain: A DataChain object containing the file information.
@@ -136,6 +144,8 @@ def read_storage(
     catalog = session.catalog
     cache = catalog.cache
     client_config = session.catalog.client_config
+    listing_namespace_name = catalog.metastore.system_namespace_name
+    listing_project_name = catalog.metastore.listing_project_name
 
     uris = uri if isinstance(uri, (list, tuple)) else [uri]
 
@@ -159,7 +169,13 @@ def read_storage(
             )
             continue
 
-        dc = read_dataset(list_ds_name, session=session, settings=settings)
+        dc = read_dataset(
+            list_ds_name,
+            namespace=listing_namespace_name,
+            project=listing_project_name,
+            session=session,
+            settings=settings,
+        )
         dc._query.update = update
         dc.signals_schema = dc.signals_schema.mutate({f"{column}": file_type})
 
@@ -174,7 +190,11 @@ def read_storage(
                         settings=settings,
                         in_memory=in_memory,
                     )
-                    .settings(prefetch=0)
+                    .settings(
+                        prefetch=0,
+                        namespace=listing_namespace_name,
+                        project=listing_project_name,
+                    )
                     .gen(
                         list_bucket(lst_uri, cache, client_config=client_config),
                         output={f"{column}": file_type},
@@ -208,6 +228,10 @@ def read_storage(
 
     if delta:
         storage_chain = storage_chain._as_delta(
-            on=delta_on, right_on=delta_result_on, compare=delta_compare
+            on=delta_on,
+            right_on=delta_result_on,
+            compare=delta_compare,
+            delta_retry=delta_retry,
         )
+
     return storage_chain

@@ -241,6 +241,8 @@ def arrow_type_mapper(col_type: pa.DataType, column: str = "") -> type:  # noqa:
         return dict
     if isinstance(col_type, pa.lib.DictionaryType):
         return arrow_type_mapper(col_type.value_type)  # type: ignore[return-value]
+    if pa.types.is_null(col_type):
+        return str  # use strings for null columns
     raise TypeError(f"{col_type!r} datatypes not supported, column: {column}")
 
 

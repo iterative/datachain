@@ -13,7 +13,16 @@ from sqlalchemy.sql import func as f
 from sqlalchemy.sql.expression import false, null, true
 
 from datachain.sql.functions import path as pathfunc
-from datachain.sql.types import Int, SQLType, UInt64
+from datachain.sql.types import (
+    JSON,
+    Boolean,
+    DateTime,
+    Int,
+    Int64,
+    SQLType,
+    String,
+    UInt64,
+)
 
 if TYPE_CHECKING:
     from sqlalchemy.engine.interfaces import Dialect
@@ -270,6 +279,19 @@ class DataTable:
             sa.Column(
                 "sys__rand", UInt64, nullable=False, server_default=f.abs(f.random())
             ),
+        ]
+
+    @classmethod
+    def listing_columns(cls):
+        return [
+            sa.Column("file__source", String()),
+            sa.Column("file__path", String()),
+            sa.Column("file__size", Int64()),
+            sa.Column("file__version", String()),
+            sa.Column("file__etag", String()),
+            sa.Column("file__is_latest", Boolean()),
+            sa.Column("file__last_modified", DateTime()),
+            sa.Column("file__location", JSON()),
         ]
 
     def dir_expansion(self):

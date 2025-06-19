@@ -24,8 +24,8 @@ from pydantic import BaseModel
 from tqdm import tqdm
 
 from datachain import semver
-from datachain.dataset import DatasetRecord
-from datachain.delta import delta_disabled, delta_update
+from datachain.dataset import DatasetRecord, parse_dataset_name
+from datachain.delta import delta_disabled
 from datachain.func import literal
 from datachain.func.base import Function
 from datachain.func.func import Func
@@ -37,6 +37,7 @@ from datachain.lib.file import (
     FileExporter,
 )
 from datachain.lib.file import ExportPlacement as FileExportPlacement
+from datachain.lib.projects import get as get_project
 from datachain.lib.settings import Settings
 from datachain.lib.signal_schema import SignalSchema
 from datachain.lib.udf import Aggregator, BatchMapper, Generator, Mapper, UDFBase
@@ -169,6 +170,10 @@ class DataChain:
         self._setup: dict = setup or {}
         self._sys = _sys
         self._delta = False
+        self._delta_on: Optional[Union[str, Sequence[str]]] = None
+        self._delta_result_on: Optional[Union[str, Sequence[str]]] = None
+        self._delta_compare: Optional[Union[str, Sequence[str]]] = None
+        self._delta_retry: Optional[Union[bool, str]] = None
 
     def __repr__(self) -> str:
         """Return a string representation of the chain."""
@@ -187,6 +192,7 @@ class DataChain:
         on: Optional[Union[str, Sequence[str]]] = None,
         right_on: Optional[Union[str, Sequence[str]]] = None,
         compare: Optional[Union[str, Sequence[str]]] = None,
+        delta_retry: Optional[Union[bool, str]] = None,
     ) -> "Self":
         """Marks this chain as delta, which means special delta process will be
         called on saving dataset for optimization"""
@@ -196,6 +202,7 @@ class DataChain:
         self._delta_on = on
         self._delta_result_on = right_on
         self._delta_compare = compare
+        self._delta_retry = delta_retry
         return self
 
     @property
@@ -255,7 +262,7 @@ class DataChain:
         """Underlying dataset, if there is one."""
         if not self.name:
             return None
-        return self.session.catalog.get_dataset(self.name)
+        return self.session.catalog.get_dataset(self.name, self._query.project)
 
     def __or__(self, other: "Self") -> "Self":
         """Return `self.union(other)`."""
@@ -293,6 +300,7 @@ class DataChain:
                 on=self._delta_on,
                 right_on=self._delta_result_on,
                 compare=self._delta_compare,
+                delta_retry=self._delta_retry,
             )
 
         return chain
@@ -305,6 +313,8 @@ class DataChain:
         min_task_size=None,
         prefetch: Optional[int] = None,
         sys: Optional[bool] = None,
+        namespace: Optional[str] = None,
+        project: Optional[str] = None,
     ) -> "Self":
         """Change settings for chain.
 
@@ -320,6 +330,8 @@ class DataChain:
             prefetch: number of workers to use for downloading files in advance.
                       This is enabled by default and uses 2 workers.
                       To disable prefetching, set it to 0.
+            namespace: namespace name.
+            project: project name.
 
         Example:
             ```py
@@ -333,7 +345,11 @@ class DataChain:
         if sys is None:
             sys = self._sys
         settings = copy.copy(self._settings)
-        settings.add(Settings(cache, parallel, workers, min_task_size, prefetch))
+        settings.add(
+            Settings(
+                cache, parallel, workers, min_task_size, prefetch, namespace, project
+            )
+        )
         return self._evolve(settings=settings, _sys=sys)
 
     def reset_settings(self, settings: Optional[Settings] = None) -> "Self":
@@ -483,6 +499,22 @@ class DataChain:
         )
         return listings(*args, **kwargs)
 
+    @property
+    def namespace_name(self) -> str:
+        """Current namespace name in which the chain is running"""
+        return (
+            self._settings.namespace
+            or self.session.catalog.metastore.default_namespace_name
+        )
+
+    @property
+    def project_name(self) -> str:
+        """Current project name in which the chain is running"""
+        return (
+            self._settings.project
+            or self.session.catalog.metastore.default_project_name
+        )
+
     def persist(self) -> "Self":
         """Saves temporary chain that will be removed after the process ends.
         Temporary datasets are useful for optimization, for example when we have
@@ -492,7 +524,12 @@ class DataChain:
         It returns the chain itself.
         """
         schema = self.signals_schema.clone_without_sys_signals().serialize()
-        return self._evolve(query=self._query.save(feature_schema=schema))
+        project = get_project(
+            self.project_name, self.namespace_name, session=self.session
+        )
+        return self._evolve(
+            query=self._query.save(project=project, feature_schema=schema)
+        )
 
     def save(  # type: ignore[override]
         self,
@@ -506,7 +543,10 @@ class DataChain:
         """Save to a Dataset. It returns the chain itself.
 
         Parameters:
-            name : dataset name.
+            name : dataset name. It can be full name consisting of namespace and
+                project, but it can also be just a regular dataset name in which
+                case we are taking namespace and project from settings, if they
+                are defined there, or default ones instead.
             version : version of a dataset. If version is not specified and dataset
                 already exists, version patch increment will happen e.g 1.2.1 -> 1.2.2.
             description : description of a dataset.
@@ -528,21 +568,45 @@ class DataChain:
                 " patch"
             )
 
+        namespace_name, project_name, name = parse_dataset_name(name)
+
+        namespace_name = (
+            namespace_name
+            or self._settings.namespace
+            or self.session.catalog.metastore.default_namespace_name
+        )
+        project_name = (
+            project_name
+            or self._settings.project
+            or self.session.catalog.metastore.default_project_name
+        )
+
+        project = get_project(project_name, namespace_name, session=self.session)
+
         schema = self.signals_schema.clone_without_sys_signals().serialize()
+
+        # Handle retry and delta functionality
         if self.delta and name:
-            delta_ds, dependencies, has_changes = delta_update(
+            from datachain.delta import delta_retry_update
+
+            # Delta chains must have delta_on defined (ensured by _as_delta method)
+            assert self._delta_on is not None, "Delta chain must have delta_on defined"
+
+            result_ds, dependencies, has_changes = delta_retry_update(
                 self,
                 name,
                 on=self._delta_on,
                 right_on=self._delta_result_on,
                 compare=self._delta_compare,
+                delta_retry=self._delta_retry,
             )
 
-            if delta_ds:
+            if result_ds:
                 return self._evolve(
-                    query=delta_ds._query.save(
+                    query=result_ds._query.save(
                         name=name,
                         version=version,
+                        project=project,
                         feature_schema=schema,
                         dependencies=dependencies,
                         **kwargs,
@@ -562,6 +626,7 @@ class DataChain:
             query=self._query.save(
                 name=name,
                 version=version,
+                project=project,
                 description=description,
                 attrs=attrs,
                 feature_schema=schema,
@@ -2224,15 +2289,44 @@ class DataChain:
 
             Combining filters with "or"
             ```py
-            dc.filter(C("file.path").glob("cat*") | C("file.path").glob("dog*))
+            dc.filter(
+                C("file.path").glob("cat*") |
+                C("file.path").glob("dog*")
+            )
+            ```
+
+            ```py
+            dc.filter(dc.func.or_(
+                C("file.path").glob("cat*"),
+                C("file.path").glob("dog*")
+            ))
             ```
 
             Combining filters with "and"
             ```py
             dc.filter(
-                C("file.path").glob("*.jpg) &
+                C("file.path").glob("*.jpg"),
+                string.length(C("file.path")) > 5
+            )
+            ```
+
+            ```py
+            dc.filter(
+                C("file.path").glob("*.jpg") &
                 (string.length(C("file.path")) > 5)
             )
+            ```
+
+            ```py
+            dc.filter(dc.func.and_(
+                C("file.path").glob("*.jpg"),
+                string.length(C("file.path")) > 5
+            ))
+            ```
+
+            Combining filters with "not"
+            ```py
+            dc.filter(~(C("file.path").glob("*.jpg")))
             ```
         """
         return self._evolve(query=self._query.filter(*args))
