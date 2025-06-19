@@ -152,9 +152,8 @@ def rm_dataset(
         remove_studio_dataset(team, name, namespace_name, project_name, version, force)
     else:
         try:
-            catalog.remove_dataset(
-                name, catalog.metastore.default_project, version=version, force=force
-            )
+            project = catalog.metastore.get_project(project_name, namespace_name)
+            catalog.remove_dataset(name, project, version=version, force=force)
         except DatasetNotFoundError:
             print("Dataset not found in local", file=sys.stderr)
 
