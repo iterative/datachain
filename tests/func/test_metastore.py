@@ -240,9 +240,9 @@ def test_remove_dataset(metastore):
         dataset=ds_src, version="1.2.3", status=DatasetStatus.COMPLETE
     )
     metastore.add_dataset_dependency(
-        ds.name,
+        ds,
         ds.latest_version,
-        ds_src.name,
+        ds_src,
         ds_src.latest_version,
     )
 
@@ -256,9 +256,9 @@ def test_remove_dataset(metastore):
         dataset=ds_dep, version="1.2.3", status=DatasetStatus.COMPLETE
     )
     metastore.add_dataset_dependency(
-        ds_dep.name,
+        ds_dep,
         ds_dep.latest_version,
-        ds.name,
+        ds,
         ds.latest_version,
     )
 
@@ -560,6 +560,26 @@ def test_list_datasets(metastore):
         assert len(ds.versions) >= 1
 
 
+def test_list_datasets_by_project_id(metastore, project):
+    assert [ds.name for ds in metastore.list_datasets()] == []
+
+    ds1 = metastore.create_dataset(name="dataset1", project_id=project.id)
+    metastore.create_dataset_version(
+        dataset=ds1, version="1.0.0", status=DatasetStatus.CREATED
+    )
+    ds2 = metastore.create_dataset(name="dataset2", project_id=project.id)
+    metastore.create_dataset_version(
+        dataset=ds2, version="2.0.0", status=DatasetStatus.COMPLETE
+    )
+    ds3 = metastore.create_dataset(name="dataset3")  # default project
+    metastore.create_dataset_version(
+        dataset=ds3, version="3.0.0", status=DatasetStatus.FAILED
+    )
+
+    datasets = list(metastore.list_datasets(project_id=project.id))
+    assert {"dataset1", "dataset2"} == {ds.name for ds in datasets}
+
+
 def test_list_datasets_by_prefix(metastore):
     ds1 = metastore.create_dataset(name="prefix_foo")
     metastore.create_dataset_version(
@@ -651,11 +671,11 @@ def test_remove_dataset_version_cleans_dependencies(metastore):
     )
 
     ds2 = metastore.create_dataset(name="ds2")
-    metastore.create_dataset_version(
+    ds2 = metastore.create_dataset_version(
         dataset=ds2, version="1.0.0", status=DatasetStatus.CREATED
     )
 
-    metastore.add_dataset_dependency("ds1", "1.0.0", "ds2", "1.0.0")
+    metastore.add_dataset_dependency(ds1, "1.0.0", ds2, "1.0.0")
 
     # Check dependency exists
     assert len(metastore.get_direct_dataset_dependencies(ds1, "1.0.0")) == 1
@@ -714,12 +734,12 @@ def test_update_dataset_dependency_source(metastore):
         dataset=src2, version="1.0.0", status=DatasetStatus.COMPLETE
     )
     tgt = metastore.create_dataset(name="tgt")
-    metastore.create_dataset_version(
+    tgt = metastore.create_dataset_version(
         dataset=tgt, version="1.0.0", status=DatasetStatus.COMPLETE
     )
 
     # Add dependency: src1@1.0.0 -> tgt@1.0.0
-    metastore.add_dataset_dependency("src1", "1.0.0", "tgt", "1.0.0")
+    metastore.add_dataset_dependency(src1, "1.0.0", tgt, "1.0.0")
     deps = metastore.get_direct_dataset_dependencies(src1, "1.0.0")
     assert len(deps) == 1
     assert deps[0].name == "tgt"
@@ -747,12 +767,12 @@ def test_update_dataset_dependency_source_default_new_source(metastore):
         dataset=src, version="2.0.0", status=DatasetStatus.COMPLETE
     )
     tgt = metastore.create_dataset(name="tgt")
-    metastore.create_dataset_version(
+    tgt = metastore.create_dataset_version(
         dataset=tgt, version="1.0.0", status=DatasetStatus.COMPLETE
     )
 
     # Add dependency: src@1.0.0 -> tgt@1.0.0
-    metastore.add_dataset_dependency("src", "1.0.0", "tgt", "1.0.0")
+    metastore.add_dataset_dependency(src, "1.0.0", tgt, "1.0.0")
     deps = metastore.get_direct_dataset_dependencies(src, "1.0.0")
     assert len(deps) == 1
     assert deps[0].name == "tgt"

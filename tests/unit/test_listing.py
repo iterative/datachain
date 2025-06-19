@@ -39,8 +39,14 @@ def _tree_to_entries(tree: dict, path=""):
 @pytest.fixture
 def listing(test_session):
     catalog = test_session.catalog
+    listing_namespace_name = catalog.metastore.system_namespace_name
+    listing_project_name = catalog.metastore.listing_project_name
     dataset_name, _, _, _ = get_listing("file:///whatever", test_session)
-    dc.read_values(file=list(_tree_to_entries(TREE))).save(dataset_name, listing=True)
+    (
+        dc.read_values(file=list(_tree_to_entries(TREE)))
+        .settings(namespace=listing_namespace_name, project=listing_project_name)
+        .save(dataset_name, listing=True)
+    )
 
     return Listing(
         catalog.metastore.clone(),
@@ -54,15 +60,25 @@ def listing(test_session):
 def test_get_listing_returns_exact_math_on_update(test_session):
     # Context: https://github.com/iterative/datachain/pull/726
     # On update it should be returning the exact match (not a "bigger" one)
+    catalog = test_session.catalog
+    listing_namespace_name = catalog.metastore.system_namespace_name
+    listing_project_name = catalog.metastore.listing_project_name
+
     dataset_name_dir1, _, _, exists = get_listing("file:///whatever/dir1", test_session)
-    dc.read_values(file=list(_tree_to_entries(TREE["dir1"]))).save(
-        dataset_name_dir1, listing=True
+    (
+        dc.read_values(file=list(_tree_to_entries(TREE["dir1"])))
+        .settings(namespace=listing_namespace_name, project=listing_project_name)
+        .save(dataset_name_dir1, listing=True)
     )
     assert dataset_name_dir1 == f"{LISTING_PREFIX}file:///whatever/dir1/"
     assert not exists
 
     dataset_name, _, _, exists = get_listing("file:///whatever", test_session)
-    dc.read_values(file=list(_tree_to_entries(TREE))).save(dataset_name, listing=True)
+    (
+        dc.read_values(file=list(_tree_to_entries(TREE)))
+        .settings(namespace=listing_namespace_name, project=listing_project_name)
+        .save(dataset_name, listing=True)
+    )
     assert dataset_name == f"{LISTING_PREFIX}file:///whatever/"
     assert not exists
 

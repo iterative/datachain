@@ -13,7 +13,9 @@ from typing import (
 from urllib.parse import urlparse
 
 from datachain import semver
-from datachain.error import DatasetVersionNotFoundError
+from datachain.error import DatasetVersionNotFoundError, InvalidDatasetNameError
+from datachain.namespace import Namespace
+from datachain.project import Project
 from datachain.sql.types import NAME_TYPES_MAPPING, SQLType
 
 T = TypeVar("T", bound="DatasetRecord")
@@ -27,6 +29,8 @@ QUERY_DATASET_PREFIX = "ds_query_"
 LISTING_PREFIX = "lst__"
 
 DEFAULT_DATASET_VERSION = "1.0.0"
+DATASET_NAME_RESERVED_CHARS = ["."]
+DATASET_NAME_REPLACEMENT_CHAR = "_"
 
 
 # StorageURI represents a normalised URI to a valid storage location (full bucket or
@@ -57,18 +61,32 @@ def parse_dataset_uri(uri: str) -> tuple[str, Optional[str]]:
     return name, s[1]
 
 
-def create_dataset_uri(name: str, version: Optional[str] = None) -> str:
+def create_dataset_uri(
+    name: str, namespace: str, project: str, version: Optional[str] = None
+) -> str:
     """
-    Creates a dataset uri based on dataset name and optionally version
+    Creates a dataset uri based on namespace, project, dataset name and optionally
+    version.
     Example:
-        Input: zalando, 3.0.1
-        Output: ds//zalando@v3.0.1
+        Input: dev, clothes, zalando, 3.0.1
+        Output: ds//dev.clothes.zalando@v3.0.1
     """
-    uri = f"{DATASET_PREFIX}{name}"
+    uri = f"{DATASET_PREFIX}{namespace}.{project}.{name}"
     if version:
         uri += f"@v{version}"
 
     return uri
+
+
+def parse_dataset_name(name: str) -> tuple[Optional[str], Optional[str], str]:
+    """Parses dataset name and returns namespace, project and name"""
+    if not name:
+        raise ValueError("Name must be defined to parse it")
+    split = name.split(".")
+    if len(split) == 3:
+        return tuple(split)  # type: ignore[return-value]
+
+    return None, None, name
 
 
 class DatasetDependencyType:
@@ -78,8 +96,12 @@ class DatasetDependencyType:
 
 @dataclass
 class DatasetDependency:
+    # TODO put `DatasetRecord` instead of name + version which will
+    # simplify codebase in various places
     id: int
     type: str
+    namespace: str
+    project: str
     name: str
     version: str
     created_at: datetime
@@ -100,6 +122,8 @@ class DatasetDependency:
     @classmethod
     def parse(
         cls: builtins.type[DD],
+        namespace_name: str,
+        project_name: str,
         id: int,
         dataset_id: Optional[int],
         dataset_version_id: Optional[int],
@@ -121,6 +145,8 @@ class DatasetDependency:
                 if is_listing_dataset(dataset_name)
                 else DatasetDependencyType.DATASET
             ),
+            namespace_name,
+            project_name,
             dataset_name,
             (
                 dataset_version  # type: ignore[arg-type]
@@ -335,6 +361,7 @@ class DatasetListVersion:
 class DatasetRecord:
     id: int
     name: str
+    project: Project
     description: Optional[str]
     attrs: list[str]
     schema: dict[str, Union[SQLType, type[SQLType]]]
@@ -349,6 +376,9 @@ class DatasetRecord:
     sources: str = ""
     query_script: str = ""
 
+    def __hash__(self):
+        return hash(f"{self.id}")
+
     @staticmethod
     def parse_schema(
         ct: dict[str, Any],
@@ -358,10 +388,31 @@ class DatasetRecord:
             for c_name, c_type in ct.items()
         }
 
+    @staticmethod
+    def validate_name(name: str) -> None:
+        """Throws exception if name has reserved characters"""
+        for c in DATASET_NAME_RESERVED_CHARS:
+            if c in name:
+                raise InvalidDatasetNameError(
+                    f"Character {c} is reserved and not allowed in dataset name"
+                )
+
     @classmethod
     def parse(  # noqa: PLR0913
         cls,
-        id: int,
+        namespace_id: int,
+        namespace_uuid: str,
+        namespace_name: str,
+        namespace_description: Optional[str],
+        namespace_created_at: datetime,
+        project_id: int,
+        project_uuid: str,
+        project_name: str,
+        project_description: Optional[str],
+        project_created_at: datetime,
+        project_namespace_id: int,
+        dataset_id: int,
+        dataset_project_id: int,
         name: str,
         description: Optional[str],
         attrs: str,
@@ -400,6 +451,23 @@ class DatasetRecord:
             json.loads(version_schema) if version_schema else {}
         )
 
+        namespace = Namespace(
+            namespace_id,
+            namespace_uuid,
+            namespace_name,
+            namespace_description,
+            namespace_created_at,
+        )
+
+        project = Project(
+            project_id,
+            project_uuid,
+            project_name,
+            project_description,
+            project_created_at,
+            namespace,
+        )
+
         dataset_version = DatasetVersion.parse(
             version_id,
             version_uuid,
@@ -422,8 +490,9 @@ class DatasetRecord:
         )
 
         return cls(
-            id,
+            dataset_id,
             name,
+            project,
             description,
             attrs_lst,
             cls.parse_schema(schema_dct),  # type: ignore[arg-type]
@@ -447,6 +516,10 @@ class DatasetRecord:
             else c_type().to_dict()
             for c_name, c_type in self.schema.items()
         }
+
+    @property
+    def full_name(self) -> str:
+        return f"{self.project.namespace.name}.{self.project.name}.{self.name}"
 
     def get_schema(self, version: str) -> dict[str, Union[SQLType, type[SQLType]]]:
         return self.get_version(version).schema if version else self.schema
@@ -527,7 +600,10 @@ class DatasetRecord:
         Dataset uri example: ds://dogs@v3.0.1
         """
         identifier = self.identifier(version)
-        return f"{DATASET_PREFIX}{identifier}"
+        return (
+            f"{DATASET_PREFIX}{self.project.namespace.name}"
+            f".{self.project.name}.{identifier}"
+        )
 
     @property
     def next_version_major(self) -> str:
@@ -592,15 +668,17 @@ class DatasetRecord:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "DatasetRecord":
+        project = Project.from_dict(d.pop("project"))
         versions = [DatasetVersion.from_dict(v) for v in d.pop("versions", [])]
         kwargs = {f.name: d[f.name] for f in fields(cls) if f.name in d}
-        return cls(**kwargs, versions=versions)
+        return cls(**kwargs, versions=versions, project=project)
 
 
 @dataclass
 class DatasetListRecord:
     id: int
     name: str
+    project: Project
     description: Optional[str]
     attrs: list[str]
     versions: list[DatasetListVersion]
@@ -609,7 +687,18 @@ class DatasetListRecord:
     @classmethod
     def parse(  # noqa: PLR0913
         cls,
-        id: int,
+        namespace_id: int,
+        namespace_uuid: str,
+        namespace_name: str,
+        namespace_description: Optional[str],
+        namespace_created_at: datetime,
+        project_id: int,
+        project_uuid: str,
+        project_name: str,
+        project_description: Optional[str],
+        project_created_at: datetime,
+        project_namespace_id: int,
+        dataset_id: int,
         name: str,
         description: Optional[str],
         attrs: str,
@@ -630,6 +719,23 @@ class DatasetListRecord:
     ) -> "DatasetListRecord":
         attrs_lst: list[str] = json.loads(attrs) if attrs else []
 
+        namespace = Namespace(
+            namespace_id,
+            namespace_uuid,
+            namespace_name,
+            namespace_description,
+            namespace_created_at,
+        )
+
+        project = Project(
+            project_id,
+            project_uuid,
+            project_name,
+            project_description,
+            project_created_at,
+            namespace,
+        )
+
         dataset_version = DatasetListVersion.parse(
             version_id,
             version_uuid,
@@ -647,13 +753,18 @@ class DatasetListRecord:
         )
 
         return cls(
-            id,
+            dataset_id,
             name,
+            project,
             description,
             attrs_lst,
             [dataset_version],
             created_at,
         )
+
+    @property
+    def full_name(self) -> str:
+        return f"{self.project.namespace.name}.{self.project.name}.{self.name}"
 
     def merge_versions(self, other: "DatasetListRecord") -> "DatasetListRecord":
         """Merge versions from another dataset"""
@@ -691,9 +802,11 @@ class DatasetListRecord:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "DatasetListRecord":
+        project = Project.from_dict(d.pop("project"))
         versions = [DatasetListVersion.parse(**v) for v in d.get("versions", [])]
         kwargs = {f.name: d[f.name] for f in fields(cls) if f.name in d}
         kwargs["versions"] = versions
+        kwargs["project"] = project
         return cls(**kwargs)
 
 
