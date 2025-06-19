@@ -427,7 +427,7 @@ class StudioClient:
         requirements: Optional[str] = None,
         repository: Optional[str] = None,
         priority: Optional[int] = None,
-        cluster_id: Optional[int] = None,
+        cluster: Optional[str] = None,
     ) -> Response[JobData]:
         data = {
             "query": query,
@@ -440,7 +440,7 @@ class StudioClient:
             "requirements": requirements,
             "repository": repository,
             "priority": priority,
-            "compute_cluster_id": cluster_id,
+            "compute_cluster_name": cluster,
         }
         return self._send_request("datachain/job", data)
 
