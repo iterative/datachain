@@ -1495,7 +1495,7 @@ class DataChain:
         """Calculate differences between two chains.
 
         This method identifies records that are added, deleted, modified, or unchanged
-        between two chains. It adds a status column with values: A=added, D=deleted, 
+        between two chains. It adds a status column with values: A=added, D=deleted,
         M=modified, S=same.
 
         Parameters:
