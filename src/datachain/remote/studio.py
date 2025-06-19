@@ -43,9 +43,9 @@ def get_studio_env_variable(name: str) -> Any:
     then checks for the deprecated 'DVC_STUDIO_' prefix.
     If neither is set, it returns the provided default value.
     """
-    if value := os.environ.get(f"DATACHAIN_STUDIO_{name}") is not None:
+    if (value := os.environ.get(f"DATACHAIN_STUDIO_{name}")) is not None:
         return value
-    if value := os.environ.get(f"DVC_STUDIO_{name}") is not None:  # deprecated
+    if (value := os.environ.get(f"DVC_STUDIO_{name}")) is not None:  # deprecated
         logger.warning(
             "Environment variable 'DVC_STUDIO_%s' is deprecated, "
             "use 'DATACHAIN_STUDIO_%s' instead.",
