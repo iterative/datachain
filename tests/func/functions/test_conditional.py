@@ -10,7 +10,7 @@ def test_conditional_and_or(test_session):
         i: int
         f: float
 
-    ds = list(
+    ds = (
         dc.read_values(
             id=(1, 2, 3),
             data=(
@@ -27,8 +27,7 @@ def test_conditional_and_or(test_session):
             t4=func.or_(dc.C("data.i") > 15, dc.C("data.f") > 2.5),
         )
         .order_by("id")
-        .collect("t1", "t2", "t3", "t4")
-    )
+    ).to_list("t1", "t2", "t3", "t4")
 
     assert ds == [(0, 0, 0, 0), (1, 0, 1, 1), (1, 1, 1, 1)]
 
@@ -62,7 +61,7 @@ def test_conditional_case(test_session):
             ),
         )
         .order_by("id")
-        .collect("t1", "t2")
+        .to_list("t1", "t2")
     )
 
     assert ds == [
@@ -94,7 +93,7 @@ def test_conditional_ifelse(test_session):
             t3=func.ifelse(dc.C("data.s") == "b", "middle", "other"),
         )
         .order_by("id")
-        .collect("t1", "t2", "t3")
+        .to_list("t1", "t2", "t3")
     )
 
     assert ds == [
@@ -127,7 +126,7 @@ def test_conditional_isnone(test_session):
             t3=func.isnone("data.s"),
         )
         .order_by("id")
-        .collect("t1", "t2", "t3")
+        .to_list("t1", "t2", "t3")
     )
 
     assert ds == [
@@ -168,7 +167,7 @@ def test_conditional_greatest_least(test_session):
             t10=func.least("data.f", dc.C("ff"), 1.5, 3.5),
         )
         .order_by("id")
-        .collect("t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9", "t10")
+        .to_list("t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9", "t10")
     )
 
     assert ds == [

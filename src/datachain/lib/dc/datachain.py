@@ -1206,34 +1206,8 @@ class DataChain:
     def collect(self, *cols: str) -> Iterator[tuple[DataValue, ...]]: ...
 
     def collect(self, *cols: str) -> Iterator[Union[DataValue, tuple[DataValue, ...]]]:  # type: ignore[overload-overlap,misc]
-        """Yields rows of values, optionally limited to the specified columns.
-
-        Args:
-            *cols: Limit to the specified columns. By default, all columns are selected.
-
-        Yields:
-            (DataType): Yields a single item if a column is selected.
-            (tuple[DataType, ...]): Yields a tuple of items if multiple columns are
-                selected.
-
-        Example:
-            Iterating over all rows:
-            ```py
-            for row in dc.collect():
-                print(row)
-            ```
-
-            Iterating over all rows with selected columns:
-            ```py
-            for name, size in dc.collect("file.path", "file.size"):
-                print(name, size)
-            ```
-
-            Iterating over a single column:
-            ```py
-            for file in dc.collect("file.path"):
-                print(file)
-            ```
+        """
+        Deprecated. Use `to_iter` method instead.
         """
         warnings.warn(
             "Method `collect` is deprecated. Use `to_iter` method instead.",
@@ -2374,3 +2348,45 @@ class DataChain:
             Use 0/3, 1/3 and 2/3, not 1/3, 2/3 and 3/3.
         """
         return self._evolve(query=self._query.chunk(index, total))
+
+    @overload
+    def to_list(self) -> list[tuple[DataValue, ...]]: ...
+
+    @overload
+    def to_list(self, col: str) -> list[DataValue]: ...
+
+    @overload
+    def to_list(self, *cols: str) -> list[tuple[DataValue, ...]]: ...
+
+    def to_list(self, *cols: str) -> list[Union[DataValue, tuple[DataValue, ...]]]:  # type: ignore[overload-overlap,misc]
+        """Returns a list of rows of values, optionally limited to the specified
+        columns.
+
+        Args:
+            *cols: Limit to the specified columns. By default, all columns are selected.
+
+        Returns:
+            list[DataType]: Returns a list of single items if a column is selected.
+            list[tuple[DataType, ...]]: Returns a list of tuples of items if multiple
+            columns are selected.
+
+        Example:
+            Getting all rows as a list:
+            ```py
+            rows = dc.to_list()
+            print(rows)
+            ```
+
+            Getting all rows with selected columns as a list:
+            ```py
+            name_size_pairs = dc.to_list("file.path", "file.size")
+            print(name_size_pairs)
+            ```
+
+            Getting a single column as a list:
+            ```py
+            files = dc.to_list("file.path")
+            print(files)
+            ```
+        """
+        return list(self.to_iter(*cols))

@@ -19,7 +19,7 @@ def test_train_test_split_not_random(not_random_ds, seed, weights, expected):
     assert len(res) == len(expected)
 
     for i, dc in enumerate(res):
-        assert list(dc.collect("sys.id")) == expected[i]
+        assert dc.to_list("sys.id") == expected[i]
 
 
 @pytest.mark.parametrize(
@@ -41,7 +41,7 @@ def test_train_test_split_random(pseudo_random_ds, seed, weights, expected):
     assert len(res) == len(expected)
 
     for i, dc in enumerate(res):
-        assert list(dc.collect("sys.id")) == expected[i]
+        assert dc.to_list("sys.id") == expected[i]
 
 
 def test_train_test_split_errors(not_random_ds):

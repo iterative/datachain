@@ -57,7 +57,7 @@ def test_merge_objects(test_session):
 
     i = 0
     j = 0
-    for items in ch.order_by("emp.person.name", "team.player").collect():
+    for items in ch.order_by("emp.person.name", "team.player").to_iter():
         assert len(items) == 2
 
         empl, player = items
@@ -100,7 +100,7 @@ def test_merge_objects_full_join(test_session, multiple_predicates):
     int_default = Int.default_value(test_session.catalog.warehouse.db.dialect)
 
     i = 0
-    for items in ch.order_by("emp.person.name", "team.player").collect():
+    for items in ch.order_by("emp.person.name", "team.player").to_iter():
         assert len(items) == 2
 
         empl, player = items
@@ -143,12 +143,12 @@ def test_merge_similar_objects(test_session):
 
     assert list(ch.signals_schema.values.keys()) == ["sys", "emp", rname + "emp"]
 
-    empl = list(ch.collect())
+    empl = list(ch.to_list())
     assert len(empl) == 4
     assert len(empl[0]) == 2
 
     ch_inner = ch1.merge(ch2, "emp.person.name", rname=rname, inner=True)
-    assert len(list(ch_inner.collect())) == 2
+    assert len(list(ch_inner.to_list())) == 2
 
 
 @skip_if_not_sqlite
@@ -178,12 +178,12 @@ def test_merge_similar_objects_in_memory():
 
     assert list(ch.signals_schema.values.keys()) == ["sys", "emp", rname + "emp"]
 
-    empl = list(ch.collect())
+    empl = list(ch.to_list())
     assert len(empl) == 4
     assert len(empl[0]) == 2
 
     ch_inner = ch1.merge(ch2, "emp.person.name", rname=rname, inner=True)
-    assert len(list(ch_inner.collect())) == 2
+    assert len(list(ch_inner.to_list())) == 2
 
 
 def test_merge_values(test_session):
@@ -208,7 +208,7 @@ def test_merge_values(test_session):
 
     i = 0
     j = 0
-    sorted_items_list = sorted(ch.collect(), key=lambda x: x[0])
+    sorted_items_list = sorted(ch.to_list(), key=lambda x: x[0])
     for items in sorted_items_list:
         assert len(items) == 4
         id, name, _right_id, time = items
@@ -244,7 +244,7 @@ def test_merge_multi_conditions(test_session):
 
     ch = ch1.merge(ch2, ("id", "name"), ("id", C("d_name")))
 
-    res = list(ch.collect())
+    res = list(ch.to_list())
 
     assert len(res) == max(len(employees), len(team))
     success_ids = set()
@@ -291,7 +291,7 @@ def test_merge_with_itself(test_session):
     merged = ch.merge(ch, "emp.id")
 
     count = 0
-    for left, right in merged.order_by("emp.id").collect():
+    for left, right in merged.order_by("emp.id").to_iter():
         assert isinstance(left, Employee)
         assert isinstance(right, Employee)
         assert left == right == employees[count]
@@ -305,7 +305,7 @@ def test_merge_with_itself_column(test_session):
     merged = ch.merge(ch, C("emp.id"))
 
     count = 0
-    for left, right in merged.order_by("emp.id").collect():
+    for left, right in merged.order_by("emp.id").to_iter():
         assert isinstance(left, Employee)
         assert isinstance(right, Employee)
         assert left == right == employees[count]
@@ -331,7 +331,7 @@ def test_merge_on_expression(test_session):
 
     merged.show()
     count = 0
-    for left, right_dc in merged.order_by("team.player", "right_team.player").collect():
+    for left, right_dc in merged.order_by("team.player", "right_team.player").to_iter():
         assert isinstance(left, TeamMember)
         assert isinstance(right_dc, TeamMember)
         left_member, right_member = cross_team[count]

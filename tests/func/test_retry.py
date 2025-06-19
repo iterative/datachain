@@ -68,7 +68,7 @@ def test_retry_with_error_records(test_session):
     _run_processing(2)
 
     final_result = dc.read_dataset("processed_data", session=test_session)
-    results = list(final_result.collect("id", "result.attempt", "result.error"))
+    results = final_result.to_list("id", "result.attempt", "result.error")
     assert set(results) == {(2, 1, ""), (4, 1, ""), (1, 2, ""), (3, 2, "")}
 
 
@@ -120,7 +120,7 @@ def test_retry_with_missing_records(test_session):
     assert retry_chain.count() == 3
 
     # Verify all records are present
-    ids = set(retry_chain.collect("id"))
+    ids = set(retry_chain.to_iter("id"))
     assert ids == {1, 2, 3}
 
     final_first_attempts_count = retry_chain.filter(C("result.attempt") == 1).count()
@@ -243,7 +243,7 @@ def test_retry_with_multiple_match_fields(test_session):
     )
 
     # Only A-1 should fail (category="A" and odd id)
-    results = list(first_pass.filter(C("result.error") != "").collect("category", "id"))
+    results = list(first_pass.filter(C("result.error") != "").to_list("category", "id"))
     assert results == [("A", 1)]
 
     # Retry with multiple match fields
@@ -261,9 +261,7 @@ def test_retry_with_multiple_match_fields(test_session):
     )
 
     final_result = dc.read_dataset("compound_result", session=test_session)
-    results = list(
-        final_result.collect("category", "id", "result.attempt", "result.error")
-    )
+    results = final_result.to_list("category", "id", "result.attempt", "result.error")
     assert set(results) == {
         ("A", 2, 1, ""),
         ("B", 1, 1, ""),
@@ -294,7 +292,7 @@ def test_retry_with_delta_functionality(test_session):
     )
 
     result = _run_processing(1)
-    assert set(result.collect("id", "result.error")) == {
+    assert set(result.to_iter("id", "result.error")) == {
         (1, "Processing error for item 1"),
         (2, ""),
     }
@@ -308,7 +306,7 @@ def test_retry_with_delta_functionality(test_session):
     ).save("delta_source_v1")
 
     result_v2 = _run_processing(2)
-    assert set(result_v2.collect("id", "result.error", "result.attempt")) == {
+    assert set(result_v2.to_iter("id", "result.error", "result.attempt")) == {
         (1, "", 2),
         (2, "", 1),
         (3, "", 2),

@@ -6,7 +6,7 @@ def test_string_length(test_session):
     class Data(dc.DataModel):
         s1: str
 
-    ds = list(
+    ds = (
         dc.read_values(
             id=(1, 2, 3),
             data=(
@@ -27,8 +27,7 @@ def test_string_length(test_session):
             t7=func.string.length(dc.func.literal("")),
         )
         .order_by("id")
-        .collect("t1", "t2", "t3", "t4", "t5", "t6", "t7")
-    )
+    ).to_list("t1", "t2", "t3", "t4", "t5", "t6", "t7")
 
     assert ds == [
         (5, 5, 13, 13, 5, 13, 0),
@@ -63,7 +62,7 @@ def test_string_split(test_session):
             t8=func.string.split("data.s1", "/", limit=1),
         )
         .order_by("id")
-        .collect("t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8")
+        .to_list("t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8")
     )
 
     assert ds == [
@@ -125,7 +124,7 @@ def test_string_replace(test_session):
             t7=func.string.replace(dc.func.literal(""), "foo", "baz"),
         )
         .order_by("id")
-        .collect("t1", "t2", "t3", "t4", "t5", "t6", "t7")
+        .to_list("t1", "t2", "t3", "t4", "t5", "t6", "t7")
     )
 
     assert ds == [
@@ -162,7 +161,7 @@ def test_string_regexp_replace(test_session):
             t7=func.string.regexp_replace(dc.func.literal(""), r"foo", "bar"),
         )
         .order_by("id")
-        .collect("t1", "t2", "t3", "t4", "t5", "t6", "t7")
+        .to_list("t1", "t2", "t3", "t4", "t5", "t6", "t7")
     )
 
     assert ds == [
@@ -203,7 +202,7 @@ def test_string_byte_hamming_distance(test_session):
             ),
         )
         .order_by("id")
-        .collect("t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9")
+        .to_list("t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9")
     )
 
     assert ds == [

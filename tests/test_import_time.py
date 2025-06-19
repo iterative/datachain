@@ -67,7 +67,7 @@ def test_import_time(catalog, test_session):
         chain = _import_time_chain(test_session)
         (import_time_ms,) = chain.filter(
             dc.C("import") == "datachain",
-        ).collect("cumulative_ms")
+        ).to_list("cumulative_ms")
         import_timings.append((chain, import_time_ms))
         # pass `--log-cli-level=info` to see these logs live
         logger.info("attempt %d, import time: %dms", attempt + 1, import_time_ms)
@@ -76,7 +76,7 @@ def test_import_time(catalog, test_session):
     # If there is a regression, uncomment the following to find the culprit:
     # dc.show(limit=40)
     for module in lazy_modules:
-        assert not list(chain.filter(dc.C("import").startswith(module)).collect()), (
+        assert not chain.filter(dc.C("import").startswith(module)).to_list(), (
             f"found {module} at import time"
         )
     assert min_import_time < MAX_IMPORT_TIME_MS, (

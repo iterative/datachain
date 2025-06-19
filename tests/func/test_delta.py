@@ -62,10 +62,8 @@ def test_delta_update_from_dataset(test_session, tmp_dir, tmp_path):
     create_delta_dataset(ds_name)
     assert _get_dependencies(catalog, ds_name, "1.0.1") == [(starting_ds_name, "1.0.1")]
 
-    assert list(
-        dc.read_dataset(ds_name, version="1.0.0")
-        .order_by("file.path")
-        .collect("file.path")
+    assert (dc.read_dataset(ds_name, version="1.0.0").order_by("file.path")).to_list(
+        "file.path"
     ) == [
         "img1.jpg",
         "img2.jpg",
@@ -74,7 +72,7 @@ def test_delta_update_from_dataset(test_session, tmp_dir, tmp_path):
     assert list(
         dc.read_dataset(ds_name, version="1.0.1")
         .order_by("file.path")
-        .collect("file.path")
+        .to_list("file.path")
     ) == [
         "img1.jpg",
         "img2.jpg",
@@ -136,7 +134,7 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
     # into consideration on delta update
     etags = {
         r[0]: r[1].etag
-        for r in dc.read_dataset(ds_name, version="1.0.0").collect("index", "file")
+        for r in dc.read_dataset(ds_name, version="1.0.0").to_iter("index", "file")
     }
 
     # remove last couple of images to simulate modification since we will re-create it
@@ -157,7 +155,7 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
     assert list(
         dc.read_dataset(ds_name, version="1.0.0")
         .order_by("file.path")
-        .collect("file.path")
+        .to_list("file.path")
     ) == [
         "images/img4.jpg",
         "images/img6.jpg",
@@ -167,7 +165,7 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
     assert list(
         dc.read_dataset(ds_name, version="1.0.1")
         .order_by("file.path")
-        .collect("file.path")
+        .to_list("file.path")
     ) == [
         "images/img10.jpg",
         "images/img12.jpg",
@@ -186,7 +184,7 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
             dc.read_dataset(ds_name, version="1.0.1")
             .filter(C("index") == 6)
             .order_by("file.path", "file.etag")
-            .collect("file.etag")
+            .to_list("file.etag")
         )
         > etags[6]
     )
@@ -284,7 +282,7 @@ def test_delta_update_no_diff(test_session, tmp_dir, tmp_path):
     assert list(
         dc.read_dataset(ds_name, version="1.0.0")
         .order_by("file.path")
-        .collect("file.path")
+        .to_list("file.path")
     ) == [
         "images/img6.jpg",
         "images/img7.jpg",
