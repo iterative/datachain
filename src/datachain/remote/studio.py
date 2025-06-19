@@ -48,7 +48,7 @@ def get_studio_env_variable(name: str) -> Any:
     if value := os.environ.get(f"DVC_STUDIO_{name}") is not None:  # deprecated
         logger.warning(
             "Environment variable 'DVC_STUDIO_%s' is deprecated, "
-            "use 'DATACHAIN_STUDIO_{%s}' instead.",
+            "use 'DATACHAIN_STUDIO_%s' instead.",
             name,
             name,
         )
