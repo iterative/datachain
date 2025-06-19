@@ -1,11 +1,13 @@
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Optional, Union, get_origin, get_type_hints
 
+from datachain.dataset import parse_dataset_name
 from datachain.error import DatasetVersionNotFoundError
 from datachain.lib.dataset_info import DatasetInfo
 from datachain.lib.file import (
     File,
 )
+from datachain.lib.projects import get as get_project
 from datachain.lib.settings import Settings
 from datachain.lib.signal_schema import SignalSchema
 from datachain.query import Session
@@ -24,6 +26,8 @@ if TYPE_CHECKING:
 
 def read_dataset(
     name: str,
+    namespace: Optional[str] = None,
+    project: Optional[str] = None,
     version: Optional[Union[str, int]] = None,
     session: Optional[Session] = None,
     settings: Optional[dict] = None,
@@ -42,7 +46,12 @@ def read_dataset(
     If dataset or version is not found locally, it will try to pull it from Studio.
 
     Parameters:
-        name : dataset name
+        name: The dataset name, which can be a fully qualified name including the
+            namespace and project. Alternatively, it can be a regular name, in which
+            case the explicitly defined namespace and project will be used if they are
+            set; otherwise, default values will be applied.
+        namespace : optional name of namespace in which dataset to read is created
+        project : optional name of project in which dataset to read is created
         version : dataset version
         session : Session to use for the chain.
         settings : Settings to use for the chain.
@@ -75,6 +84,11 @@ def read_dataset(
         ```
 
         ```py
+        import datachain as dc
+        chain = dc.read_dataset("dev.animals.my_cats")
+        ```
+
+        ```py
         chain = dc.read_dataset("my_cats", fallback_to_studio=False)
         ```
 
@@ -104,6 +118,15 @@ def read_dataset(
 
     from .datachain import DataChain
 
+    session = Session.get(session)
+    catalog = session.catalog
+
+    namespace_name, project_name, name = parse_dataset_name(name)
+    namespace_name = (
+        namespace_name or namespace or catalog.metastore.default_namespace_name
+    )
+    project_name = project_name or project or catalog.metastore.default_project_name
+
     if version is not None:
         try:
             # for backward compatibility we still allow users to put version as integer
@@ -113,7 +136,9 @@ def read_dataset(
             # all 2.* dataset versions). If dataset doesn't have any versions where
             # major part is equal to that input, exception is thrown.
             major = int(version)
-            dataset = Session.get(session).catalog.get_dataset(name)
+            dataset = session.catalog.get_dataset(
+                name, get_project(project_name, namespace_name, session=session)
+            )
             latest_major = dataset.latest_major_version(major)
             if not latest_major:
                 raise DatasetVersionNotFoundError(
@@ -124,19 +149,22 @@ def read_dataset(
             # version is in new semver string format, continuing as normal
             pass
 
-    query = DatasetQuery(
-        name=name,
-        version=version,  #  type: ignore[arg-type]
-        session=session,
-        indexing_column_types=File._datachain_column_types,
-        fallback_to_studio=fallback_to_studio,
-    )
-    telemetry.send_event_once("class", "datachain_init", name=name, version=version)
     if settings:
         _settings = Settings(**settings)
     else:
         _settings = Settings()
 
+    query = DatasetQuery(
+        name=name,
+        project_name=project_name,
+        namespace_name=namespace_name,
+        version=version,  #  type: ignore[arg-type]
+        session=session,
+        indexing_column_types=File._datachain_column_types,
+        fallback_to_studio=fallback_to_studio,
+    )
+
+    telemetry.send_event_once("class", "datachain_init", name=name, version=version)
     signals_schema = SignalSchema({"sys": Sys})
     if query.feature_schema:
         signals_schema |= SignalSchema.deserialize(query.feature_schema)
@@ -239,6 +267,8 @@ def datasets(
 
 def delete_dataset(
     name: str,
+    namespace: Optional[str] = None,
+    project: Optional[str] = None,
     version: Optional[str] = None,
     force: Optional[bool] = False,
     studio: Optional[bool] = False,
@@ -249,11 +279,16 @@ def delete_dataset(
     a force flag.
 
     Args:
-        name : Dataset name
+        name: The dataset name, which can be a fully qualified name including the
+            namespace and project. Alternatively, it can be a regular name, in which
+            case the explicitly defined namespace and project will be used if they are
+            set; otherwise, default values will be applied.
+        namespace : optional name of namespace in which dataset to delete is created
+        project : optional name of project in which dataset to delete is created
         version : Optional dataset version
         force: If true, all datasets versions will be removed. Defaults to False.
-        studio: If True, removes dataset from Studio only,
-            otherwise remove from local. Defaults to False.
+        studio: If True, removes dataset from Studio only, otherwise removes local
+            dataset. Defaults to False.
         session: Optional session instance. If not provided, uses default session.
         in_memory: If True, creates an in-memory session. Defaults to False.
 
@@ -270,11 +305,26 @@ def delete_dataset(
         dc.delete_dataset("cats", version="1.0.0")
         ```
     """
+    from datachain.studio import remove_studio_dataset
 
     session = Session.get(session, in_memory=in_memory)
     catalog = session.catalog
+
+    namespace_name, project_name, name = parse_dataset_name(name)
+    namespace_name = (
+        namespace_name or namespace or catalog.metastore.default_namespace_name
+    )
+    project_name = project_name or project or catalog.metastore.default_project_name
+
+    if not catalog.metastore.is_local_dataset(namespace_name) and studio:
+        return remove_studio_dataset(
+            None, name, namespace_name, project_name, version=version, force=force
+        )
+
+    ds_project = get_project(project_name, namespace_name, session=session)
+
     if not force:
-        version = version or catalog.get_dataset(name).latest_version
+        version = version or catalog.get_dataset(name, ds_project).latest_version
     else:
         version = None
-    catalog.remove_dataset(name, version=version, force=force, studio=studio)
+    catalog.remove_dataset(name, ds_project, version=version, force=force)

@@ -16,7 +16,11 @@ from pydantic import BaseModel
 
 import datachain as dc
 from datachain import Column
-from datachain.error import DatasetInvalidVersionError, DatasetVersionNotFoundError
+from datachain.error import (
+    DatasetInvalidVersionError,
+    DatasetNotFoundError,
+    DatasetVersionNotFoundError,
+)
 from datachain.lib.data_model import DataModel
 from datachain.lib.dc import C, DatasetPrepareError, Sys
 from datachain.lib.dc.listings import read_listing_dataset
@@ -3206,13 +3210,19 @@ def test_delete_dataset_versions_all(test_session):
 
 
 @pytest.mark.parametrize("force", (True, False))
+@skip_if_not_sqlite
 def test_delete_dataset_from_studio(test_session, studio_token, requests_mock, force):
     requests_mock.delete(f"{STUDIO_URL}/api/datachain/datasets", json={"ok": True})
     dc.delete_dataset(
-        "cats", version="1.0.0", studio=True, force=force, session=test_session
+        "dev.animals.cats",
+        version="1.0.0",
+        force=force,
+        studio=True,
+        session=test_session,
     )
 
 
+@skip_if_not_sqlite
 def test_delete_dataset_from_studio_not_found(
     test_session, studio_token, requests_mock
 ):
@@ -3223,9 +3233,21 @@ def test_delete_dataset_from_studio_not_found(
         status_code=404,
     )
     with pytest.raises(Exception) as exc_info:
-        dc.delete_dataset("cats", version="1.0.0", studio=True, session=test_session)
+        dc.delete_dataset(
+            "dev.animals.cats", version="1.0.0", studio=True, session=test_session
+        )
 
     assert str(exc_info.value) == error_message
+
+
+def test_delete_dataset_cached_from_studio(test_session, project):
+    ds_full_name = f"{project.namespace.name}.{project.name}.fibonacci"
+    dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save(ds_full_name)
+
+    dc.delete_dataset(ds_full_name)
+
+    with pytest.raises(DatasetNotFoundError):
+        dc.read_dataset(name=ds_full_name)
 
 
 @pytest.mark.parametrize(
@@ -3331,3 +3353,33 @@ def test_semver_preview_ok(test_session):
     dataset = test_session.catalog.get_dataset(ds_name)
     assert sorted([p["num"] for p in dataset.get_version("1.0.0").preview]) == [1, 2]
     assert sorted([p["num"] for p in dataset.get_version("1.0.1").preview]) == [3, 4]
+
+
+def test_save_to_default_project(test_session):
+    catalog = test_session.catalog
+    ds_name = "fibonacci"
+    dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save(ds_name)
+    ds = dc.read_dataset(name=ds_name)
+    assert ds.dataset.project == catalog.metastore.default_project
+
+
+@pytest.mark.parametrize("use_settings", (True, False))
+def test_save_to_non_default_project(test_session, project, use_settings):
+    ds_name = "fibonacci"
+    ds_full_name = f"{project.namespace.name}.{project.name}.fibonacci"
+    ds = dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session)
+    if use_settings:
+        ds = ds.settings(namespace=project.namespace.name, project=project.name).save(
+            ds_name
+        )
+    else:
+        ds = ds.save(ds_full_name)
+
+    ds = dc.read_dataset(name=ds_full_name)
+    assert ds.dataset.project == project
+    assert ds.dataset.name == ds_name
+    assert ds.dataset.full_name == ds_full_name
+
+    with pytest.raises(DatasetNotFoundError):
+        # dataset is not in default namespace / project
+        dc.read_dataset(name=ds_name)
