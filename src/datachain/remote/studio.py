@@ -37,13 +37,33 @@ logger = logging.getLogger("datachain")
 DATASET_ROWS_CHUNK_SIZE = 8192
 
 
+def get_studio_env_variable(name: str) -> Any:
+    """
+    Get the value of a DataChain Studio environment variable.
+    It first checks for the variable prefixed with 'DATACHAIN_STUDIO_',
+    then checks for the deprecated 'DVC_STUDIO_' prefix.
+    If neither is set, it returns the provided default value.
+    """
+    if (value := os.environ.get(f"DATACHAIN_STUDIO_{name}")) is not None:
+        return value
+    if (value := os.environ.get(f"DVC_STUDIO_{name}")) is not None:  # deprecated
+        logger.warning(
+            "Environment variable 'DVC_STUDIO_%s' is deprecated, "
+            "use 'DATACHAIN_STUDIO_%s' instead.",
+            name,
+            name,
+        )
+        return value
+    return None
+
+
 def _is_server_error(status_code: int) -> bool:
     return str(status_code).startswith("5")
 
 
 def is_token_set() -> bool:
     return (
-        bool(os.environ.get("DVC_STUDIO_TOKEN"))
+        bool(get_studio_env_variable("TOKEN"))
         or Config().read().get("studio", {}).get("token") is not None
     )
 
@@ -79,12 +99,12 @@ class StudioClient:
 
     @property
     def token(self) -> str:
-        token = os.environ.get("DVC_STUDIO_TOKEN") or self.config.get("token")
+        token = get_studio_env_variable("TOKEN") or self.config.get("token")
 
         if not token:
             raise DataChainError(
                 "Studio token is not set. Use `datachain auth login` "
-                "or environment variable `DVC_STUDIO_TOKEN` to set it."
+                "or environment variable `DATACHAIN_STUDIO_TOKEN` to set it."
             )
 
         return token
@@ -92,8 +112,8 @@ class StudioClient:
     @property
     def url(self) -> str:
         return (
-            os.environ.get("DVC_STUDIO_URL") or self.config.get("url") or STUDIO_URL
-        ) + "/api"
+            get_studio_env_variable("URL") or self.config.get("url") or STUDIO_URL
+        ).rstrip("/") + "/api"
 
     @property
     def config(self) -> dict:
@@ -108,13 +128,13 @@ class StudioClient:
         return self._team
 
     def _get_team(self) -> str:
-        team = os.environ.get("DVC_STUDIO_TEAM") or self.config.get("team")
+        team = get_studio_env_variable("TEAM") or self.config.get("team")
 
         if not team:
             raise DataChainError(
                 "Studio team is not set. "
                 "Use `datachain auth team <team_name>` "
-                "or environment variable `DVC_STUDIO_TEAM` to set it. "
+                "or environment variable `DATACHAIN_STUDIO_TEAM` to set it. "
                 "You can also set `studio.team` in the config file."
             )
 
