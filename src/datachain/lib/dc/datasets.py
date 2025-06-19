@@ -200,7 +200,7 @@ def datasets(
         import datachain as dc
 
         chain = dc.datasets(column="dataset")
-        for ds in chain.collect("dataset"):
+        for ds in chain.to_iter("dataset"):
             print(f"{ds.name}@v{ds.version}")
         ```
     """

@@ -430,7 +430,7 @@ class DataChain:
 
         from datachain.lib.arrow import schema_to_output
 
-        json_values = list(self.limit(schema_sample_size).collect(col))
+        json_values = self.limit(schema_sample_size).to_list(col)
         json_dicts = [
             json.loads(json_value) if isinstance(json_value, str) else json_value
             for json_value in json_values
@@ -1148,6 +1148,55 @@ class DataChain:
         return self.results(row_factory=to_dict)
 
     @overload
+    def to_iter(self) -> Iterator[tuple[DataValue, ...]]: ...
+
+    @overload
+    def to_iter(self, col: str) -> Iterator[DataValue]: ...
+
+    @overload
+    def to_iter(self, *cols: str) -> Iterator[tuple[DataValue, ...]]: ...
+
+    def to_iter(self, *cols: str) -> Iterator[Union[DataValue, tuple[DataValue, ...]]]:  # type: ignore[overload-overlap,misc]
+        """Yields rows of values, optionally limited to the specified columns.
+
+        Args:
+            *cols: Limit to the specified columns. By default, all columns are selected.
+
+        Yields:
+            (DataType): Yields a single item if a column is selected.
+            (tuple[DataType, ...]): Yields a tuple of items if multiple columns are
+                selected.
+
+        Example:
+            Iterating over all rows:
+            ```py
+            for row in dc.to_iter():
+                print(row)
+            ```
+
+            Iterating over all rows with selected columns:
+            ```py
+            for name, size in dc.to_iter("file.path", "file.size"):
+                print(name, size)
+            ```
+
+            Iterating over a single column:
+            ```py
+            for file in dc.to_iter("file.path"):
+                print(file)
+            ```
+        """
+        chain = self.select(*cols) if cols else self
+        signals_schema = chain._effective_signals_schema
+        db_signals = signals_schema.db_signals()
+        with self._query.ordered_select(*db_signals).as_iterable() as rows:
+            for row in rows:
+                ret = signals_schema.row_to_features(
+                    row, catalog=chain.session.catalog, cache=chain._settings.cache
+                )
+                yield ret[0] if len(cols) == 1 else tuple(ret)
+
+    @overload
     def collect(self) -> Iterator[tuple[DataValue, ...]]: ...
 
     @overload
@@ -1186,15 +1235,12 @@ class DataChain:
                 print(file)
             ```
         """
-        chain = self.select(*cols) if cols else self
-        signals_schema = chain._effective_signals_schema
-        db_signals = signals_schema.db_signals()
-        with self._query.ordered_select(*db_signals).as_iterable() as rows:
-            for row in rows:
-                ret = signals_schema.row_to_features(
-                    row, catalog=chain.session.catalog, cache=chain._settings.cache
-                )
-                yield ret[0] if len(cols) == 1 else tuple(ret)
+        warnings.warn(
+            "Method `collect` is deprecated. Use `to_iter` method instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.to_iter(*cols)
 
     def to_pytorch(
         self,
@@ -2194,7 +2240,7 @@ class DataChain:
             max_threads=num_threads or 1,
             client_config=client_config,
         )
-        file_exporter.run(self.collect(signal), progress_bar)
+        file_exporter.run(self.to_iter(signal), progress_bar)
 
     def shuffle(self) -> "Self":
         """Shuffle the rows of the chain deterministically."""
