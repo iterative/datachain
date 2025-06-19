@@ -58,9 +58,10 @@ def read_storage(
         update : force storage reindexing. Default is False.
         anon : If True, we will treat cloud bucket as public one
         client_config : Optional client configuration for the storage client.
-        delta: If True, only process new or changed files instead of reprocessing everything.
-            This saves time by skipping files that were already processed in previous versions.
-            The optimization is working when a new version of the dataset is created.
+        delta: If True, only process new or changed files instead of reprocessing
+            everything. This saves time by skipping files that were already processed in
+            previous versions. The optimization is working when a new version of the
+            dataset is created.
             Default is False.
         delta_on: Field(s) that uniquely identify each record in the source data.
             Used to detect which records are new or changed.
@@ -72,7 +73,8 @@ def read_storage(
             If not specified, all fields except `delta_on` fields are used.
             Default is None.
         delta_retry: Controls retry behavior for failed records:
-            - String (field name): Reprocess records where this field is not empty (error mode)
+            - String (field name): Reprocess records where this field is not empty
+              (error mode)
             - True: Reprocess records missing from the result dataset (missing mode)
             - None: No retry processing (default)
 

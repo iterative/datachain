@@ -1516,27 +1516,22 @@ class DataChain:
         same: bool = False,
         status_col: Optional[str] = None,
     ) -> "DataChain":
-        """Similar to `.compare()`, which is more generic method to calculate difference
-        between two chains. Unlike `.compare()`, this method works only on those chains
-        that have `File` object, or it's derivatives, in it. File `source` and `path`
-        are used for matching, and file `version` and `etag` for comparing, while in
-        `.compare()` user needs to provide arbitrary columns for matching and comparing.
+        """Calculate differences between two datasets containing files.
+
+        This method is specifically designed for file datasets. It uses file `source`
+        and `path` to match files, and file `version` and `etag` to detect changes.
 
         Parameters:
-            other: Chain to calculate diff from.
-            on: File signal to match on. If both chains have the
-                same file signal then this column is enough for the match. Otherwise,
-                `right_on` parameter has to specify the file signal for the other chain.
-                This value is used to find corresponding row in other dataset. If not
-                found there, row is considered as added (or removed if vice versa), and
-                if found then row can be either modified or same.
-            right_on: Optional file signal for the `other` to match.
-            added (bool): Whether to return added rows in resulting chain.
-            deleted (bool): Whether to return deleted rows in resulting chain.
-            modified (bool): Whether to return modified rows in resulting chain.
-            same (bool): Whether to return unchanged rows in resulting chain.
-            status_col (str): Optional name of the new column that is created in
-                resulting chain representing diff status.
+            other: Dataset to compare against.
+            on: File column name in this dataset. Default is "file".
+            right_on: File column name in the other dataset. Defaults to `on`.
+            added (bool): Include files that exist in this dataset but not in the other.
+            deleted (bool): Include files that exist only in the other dataset.
+            modified (bool): Include files that exist in both but have different
+                             versions/etags.
+            same (bool): Include files that are identical in both datasets.
+            status_col (str): Name for the status column showing differences
+                              (A=added, D=deleted, M=modified, S=same).
 
         Example:
             ```py
