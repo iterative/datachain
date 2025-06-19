@@ -28,7 +28,7 @@ def int_default(test_session):
 @pytest.mark.parametrize("deleted", (True, False))
 @pytest.mark.parametrize("modified", (True, False))
 @pytest.mark.parametrize("same", (True, False))
-def test_compare(test_session, str_default, added, deleted, modified, same):
+def test_diff(test_session, str_default, added, deleted, modified, same):
     ds1 = dc.read_values(
         id=[1, 2, 4],
         name=["John1", "Doe", "Andy"],
@@ -43,7 +43,7 @@ def test_compare(test_session, str_default, added, deleted, modified, same):
 
     if not any([added, deleted, modified, same]):
         with pytest.raises(ValueError) as exc_info:
-            diff = ds1.compare(
+            diff = ds1.diff(
                 ds2,
                 added=added,
                 deleted=deleted,
@@ -57,7 +57,7 @@ def test_compare(test_session, str_default, added, deleted, modified, same):
         )
         return
 
-    diff = ds1.compare(
+    diff = ds1.diff(
         ds2,
         added=added,
         deleted=deleted,
@@ -95,7 +95,7 @@ def test_compare(test_session, str_default, added, deleted, modified, same):
     assert list(diff.order_by("id").collect("diff", "id", "name")) == expected
 
 
-def test_compare_no_status_col(test_session, str_default):
+def test_diff_no_status_col(test_session, str_default):
     ds1 = dc.read_values(
         id=[1, 2, 4],
         name=["John1", "Doe", "Andy"],
@@ -108,7 +108,7 @@ def test_compare_no_status_col(test_session, str_default):
         session=test_session,
     )
 
-    diff = ds1.compare(
+    diff = ds1.diff(
         ds2,
         same=True,
         on=["id"],
@@ -125,7 +125,7 @@ def test_compare_no_status_col(test_session, str_default):
     assert list(diff.order_by("id").collect()) == expected
 
 
-def test_compare_read_hfs(test_session, str_default):
+def test_diff_read_hfs(test_session, str_default):
     ds1 = dc.read_values(
         id=[1, 2, 4],
         name=["John1", "Doe", "Andy"],
@@ -142,7 +142,7 @@ def test_compare_read_hfs(test_session, str_default):
     ds1 = dc.read_dataset("ds1")
     ds2 = dc.read_dataset("ds2")
 
-    diff = ds1.compare(ds2, same=True, on=["id"], status_col="diff")
+    diff = ds1.diff(ds2, same=True, on=["id"], status_col="diff")
 
     assert list(diff.order_by("id").collect("diff", "id", "name")) == [
         (CompareStatus.MODIFIED, 1, "John1"),
@@ -153,7 +153,7 @@ def test_compare_read_hfs(test_session, str_default):
 
 
 @pytest.mark.parametrize("right_name", ("other_name", "name"))
-def test_compare_with_explicit_compare_fields(test_session, str_default, right_name):
+def test_diff_with_explicit_compare_fields(test_session, str_default, right_name):
     ds1 = dc.read_values(
         id=[1, 2, 4],
         name=["John1", "Doe", "Andy"],
@@ -170,7 +170,7 @@ def test_compare_with_explicit_compare_fields(test_session, str_default, right_n
 
     ds2 = dc.read_values(**ds2_data).save("ds2")
 
-    diff = ds1.compare(
+    diff = ds1.diff(
         ds2,
         on=["id"],
         compare=["name"],
@@ -190,7 +190,7 @@ def test_compare_with_explicit_compare_fields(test_session, str_default, right_n
     assert list(diff.order_by("id").collect(*collect_fields)) == expected
 
 
-def test_compare_different_left_right_on_columns(test_session, str_default):
+def test_diff_different_left_right_on_columns(test_session, str_default):
     ds1 = dc.read_values(
         id=[1, 2, 4],
         name=["John1", "Doe", "Andy"],
@@ -203,7 +203,7 @@ def test_compare_different_left_right_on_columns(test_session, str_default):
         session=test_session,
     ).save("ds2")
 
-    diff = ds1.compare(
+    diff = ds1.diff(
         ds2,
         same=True,
         on=["id"],
@@ -223,7 +223,7 @@ def test_compare_different_left_right_on_columns(test_session, str_default):
 
 
 @pytest.mark.parametrize("on_self", (True, False))
-def test_compare_on_equal_datasets(test_session, on_self):
+def test_diff_on_equal_datasets(test_session, on_self):
     ds1 = dc.read_values(
         id=[1, 2, 3],
         name=["John", "Doe", "Andy"],
@@ -239,7 +239,7 @@ def test_compare_on_equal_datasets(test_session, on_self):
             session=test_session,
         )
 
-    diff = ds1.compare(
+    diff = ds1.diff(
         ds2,
         same=True,
         on=["id"],
@@ -256,7 +256,7 @@ def test_compare_on_equal_datasets(test_session, on_self):
     assert list(diff.order_by("id").collect(*collect_fields)) == expected
 
 
-def test_compare_multiple_columns(test_session, str_default):
+def test_diff_multiple_columns(test_session, str_default):
     ds1 = dc.read_values(
         id=[1, 2, 4],
         name=["John", "Doe", "Andy"],
@@ -270,7 +270,7 @@ def test_compare_multiple_columns(test_session, str_default):
         session=test_session,
     )
 
-    diff = ds1.compare(ds2, same=True, on=["id"], status_col="diff")
+    diff = ds1.diff(ds2, same=True, on=["id"], status_col="diff")
 
     assert sorted_dicts(diff.to_records(), "id") == sorted_dicts(
         [
@@ -288,7 +288,7 @@ def test_compare_multiple_columns(test_session, str_default):
     )
 
 
-def test_compare_multiple_match_columns(test_session, str_default):
+def test_diff_multiple_match_columns(test_session, str_default):
     ds1 = dc.read_values(
         id=[1, 2, 4],
         name=["John", "Doe", "Andy"],
@@ -302,7 +302,7 @@ def test_compare_multiple_match_columns(test_session, str_default):
         session=test_session,
     )
 
-    diff = ds1.compare(ds2, same=True, on=["id", "name"], status_col="diff")
+    diff = ds1.diff(ds2, same=True, on=["id", "name"], status_col="diff")
 
     assert sorted_dicts(diff.to_records(), "id") == sorted_dicts(
         [
@@ -320,7 +320,7 @@ def test_compare_multiple_match_columns(test_session, str_default):
     )
 
 
-def test_compare_additional_column_on_left(test_session, str_default):
+def test_diff_additional_column_on_left(test_session, str_default):
     ds1 = dc.read_values(
         id=[1, 2, 4],
         name=["John", "Doe", "Andy"],
@@ -333,7 +333,7 @@ def test_compare_additional_column_on_left(test_session, str_default):
         session=test_session,
     ).save("ds2")
 
-    diff = ds1.compare(ds2, same=True, on=["id"], status_col="diff")
+    diff = ds1.diff(ds2, same=True, on=["id"], status_col="diff")
 
     assert sorted_dicts(diff.to_records(), "id") == sorted_dicts(
         [
@@ -351,7 +351,7 @@ def test_compare_additional_column_on_left(test_session, str_default):
     )
 
 
-def test_compare_additional_column_on_right(test_session, str_default):
+def test_diff_additional_column_on_right(test_session, str_default):
     ds1 = dc.read_values(
         id=[1, 2, 4],
         name=["John", "Doe", "Andy"],
@@ -364,7 +364,7 @@ def test_compare_additional_column_on_right(test_session, str_default):
         session=test_session,
     )
 
-    diff = ds1.compare(ds2, same=True, on=["id"], status_col="diff")
+    diff = ds1.diff(ds2, same=True, on=["id"], status_col="diff")
 
     assert sorted_dicts(diff.to_records(), "id") == sorted_dicts(
         [
@@ -377,53 +377,53 @@ def test_compare_additional_column_on_right(test_session, str_default):
     )
 
 
-def test_compare_missing_on(test_session):
+def test_diff_missing_on(test_session):
     ds1 = dc.read_values(id=[1, 2, 4], session=test_session)
     ds2 = dc.read_values(id=[1, 2, 4], session=test_session)
 
     with pytest.raises(ValueError) as exc_info:
-        ds1.compare(ds2, on=None)
+        ds1.diff(ds2, on=None)
 
     assert str(exc_info.value) == "'on' must be specified"
 
 
-def test_compare_right_on_wrong_length(test_session):
+def test_diff_right_on_wrong_length(test_session):
     ds1 = dc.read_values(id=[1, 2, 4], session=test_session)
     ds2 = dc.read_values(id=[1, 2, 4], session=test_session)
 
     with pytest.raises(ValueError) as exc_info:
-        ds1.compare(ds2, on=["id"], right_on=["id", "name"])
+        ds1.diff(ds2, on=["id"], right_on=["id", "name"])
 
     assert str(exc_info.value) == "'on' and 'right_on' must be have the same length"
 
 
-def test_compare_right_compare_defined_but_not_compare(test_session):
+def test_diff_right_compare_wrong_length(test_session):
     ds1 = dc.read_values(id=[1, 2, 4], session=test_session)
     ds2 = dc.read_values(id=[1, 2, 4], session=test_session)
 
     with pytest.raises(ValueError) as exc_info:
-        ds1.compare(ds2, on=["id"], right_compare=["name"])
-
-    assert str(exc_info.value) == (
-        "'compare' must be defined if 'right_compare' is defined"
-    )
-
-
-def test_compare_right_compare_wrong_length(test_session):
-    ds1 = dc.read_values(id=[1, 2, 4], session=test_session)
-    ds2 = dc.read_values(id=[1, 2, 4], session=test_session)
-
-    with pytest.raises(ValueError) as exc_info:
-        ds1.compare(ds2, on=["id"], compare=["name"], right_compare=["name", "city"])
+        ds1.diff(ds2, on=["id"], compare=["name"], right_compare=["name", "city"])
 
     assert str(exc_info.value) == (
         "'compare' and 'right_compare' must have the same length"
     )
 
 
+def test_diff_right_compare_defined_but_not_compare(test_session):
+    ds1 = dc.read_values(id=[1, 2, 4], session=test_session)
+    ds2 = dc.read_values(id=[1, 2, 4], session=test_session)
+
+    with pytest.raises(ValueError) as exc_info:
+        ds1.diff(ds2, on=["id"], right_compare=["name"])
+
+    assert str(exc_info.value) == (
+        "'compare' must be defined if 'right_compare' is defined"
+    )
+
+
 @pytest.mark.parametrize("status_col", ("diff", None))
 @pytest.mark.parametrize("right_on", ("file2", None))
-def test_diff(test_session, str_default, int_default, status_col, right_on):
+def test_file_diff(test_session, str_default, int_default, status_col, right_on):
     fs1 = File(source="s1", path="p1", version="2", etag="e2")
     fs1_updated = File(source="s1", path="p1", version="1", etag="e1")
     fs2 = File(source="s2", path="p2", version="1", etag="e1")
@@ -443,7 +443,7 @@ def test_diff(test_session, str_default, int_default, status_col, right_on):
             file1=[fs1, fs3, fs4], score=[1, 3, 4], session=test_session
         )
 
-    diff = ds1.diff(
+    diff = ds1.file_diff(
         ds2,
         added=True,
         deleted=True,
@@ -477,7 +477,7 @@ def test_diff(test_session, str_default, int_default, status_col, right_on):
 
 
 @pytest.mark.parametrize("status_col", ("diff", None))
-def test_diff_nested(test_session, str_default, int_default, status_col):
+def test_file_diff_nested(test_session, str_default, int_default, status_col):
     class Nested(BaseModel):
         file: File
 
@@ -492,7 +492,7 @@ def test_diff_nested(test_session, str_default, int_default, status_col):
     )
     ds2 = dc.read_values(nested=[fs1, fs3, fs4], score=[1, 3, 4], session=test_session)
 
-    diff = ds1.diff(
+    diff = ds1.file_diff(
         ds2,
         added=True,
         deleted=True,

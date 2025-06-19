@@ -1429,7 +1429,7 @@ class DataChain:
             )
         return self._evolve(query=self._query.subtract(other._query, signals))  # type: ignore[arg-type]
 
-    def compare(
+    def diff(
         self,
         other: "DataChain",
         on: Union[str, Sequence[str]],
@@ -1476,7 +1476,7 @@ class DataChain:
 
         Example:
             ```py
-            res = persons.compare(
+            res = persons.diff(
                 new_persons,
                 on=["id"],
                 right_on=["other_id"],
@@ -1505,7 +1505,7 @@ class DataChain:
             status_col=status_col,
         )
 
-    def diff(
+    def file_diff(
         self,
         other: "DataChain",
         on: str = "file",
@@ -1538,7 +1538,7 @@ class DataChain:
 
         Example:
             ```py
-            diff = images.diff(
+            diff = images.file_diff(
                 new_images,
                 on="file",
                 right_on="other_file",
@@ -1563,7 +1563,7 @@ class DataChain:
         compare_cols = get_file_signals(on, compare_file_signals)
         right_compare_cols = get_file_signals(right_on, compare_file_signals)
 
-        return self.compare(
+        return self.diff(
             other,
             on_cols,
             right_on=right_on_cols,
