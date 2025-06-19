@@ -35,7 +35,7 @@ def read_storage(
     update: bool = False,
     anon: bool = False,
     delta: Optional[bool] = False,
-    delta_on: Optional[Union[str, Sequence[str]]] = None,
+    delta_on: Optional[Union[str, Sequence[str]]] = ("file.path", "file.etag", "file.version"),
     delta_result_on: Optional[Union[str, Sequence[str]]] = None,
     delta_compare: Optional[Union[str, Sequence[str]]] = None,
     delta_retry: Optional[Union[bool, str]] = None,
