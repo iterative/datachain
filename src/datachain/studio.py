@@ -102,11 +102,13 @@ def set_team(args: "Namespace"):
 def login(args: "Namespace"):
     from dvc_studio_client.auth import StudioAuthError, get_access_token
 
+    from datachain.remote.studio import get_studio_env_variable
+
     config = Config().read().get("studio", {})
     name = args.name
     hostname = (
         args.hostname
-        or os.environ.get("DVC_STUDIO_URL")
+        or get_studio_env_variable("URL")
         or config.get("url")
         or STUDIO_URL
     )
