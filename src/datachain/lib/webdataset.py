@@ -34,29 +34,29 @@ warnings.filterwarnings(
 
 
 class WDSError(DataChainError):
-    def __init__(self, tar_stream, message: str):
-        super().__init__(f"WebDataset error '{tar_stream.name}': {message}")
+    def __init__(self, tar_name: str, message: str):
+        super().__init__(f"WebDataset error '{tar_name}': {message}")
 
 
 class CoreFileDuplicationError(WDSError):
-    def __init__(self, tar_stream, file1: str, file2: str):
+    def __init__(self, tar_name: str, file1: str, file2: str):
         super().__init__(
-            tar_stream, f"duplication of files with core extensions: {file1}, {file2}"
+            tar_name, f"duplication of files with core extensions: {file1}, {file2}"
         )
 
 
 class CoreFileNotFoundError(WDSError):
-    def __init__(self, tar_stream, extensions, stem):
+    def __init__(self, tar_name: str, extensions: Sequence[str], stem: str):
         super().__init__(
-            tar_stream,
+            tar_name,
             f"no files with the extensions '{','.join(extensions)}'"
             f" were found for file stem {stem}",
         )
 
 
 class UnknownFileExtensionError(WDSError):
-    def __init__(self, tar_stream, name, ext):
-        super().__init__(tar_stream, f"unknown extension '{ext}' for file '{name}'")
+    def __init__(self, tar_name, name: str, ext: str):
+        super().__init__(tar_name, f"unknown extension '{ext}' for file '{name}'")
 
 
 class WDSBasic(DataModel):
@@ -113,10 +113,10 @@ class Builder:
     def __init__(
         self,
         tar_stream: File,
-        core_extensions: list[str],
+        core_extensions: Sequence[str],
         wds_class: type[WDSBasic],
-        tar,
-        encoding="utf-8",
+        tar: tarfile.TarFile,
+        encoding: str = "utf-8",
     ):
         self._core_extensions = core_extensions
         self._tar_stream = tar_stream
@@ -145,18 +145,20 @@ class Builder:
         if ext in self._core_extensions:
             if self.state.core_file is not None:
                 raise CoreFileDuplicationError(
-                    self._tar_stream, file.name, self.state.core_file.name
+                    self._tar_stream.name, file.name, self.state.core_file.name
                 )
             self.state.core_file = file
         elif ext in self.state.data:
             raise WDSError(
-                self._tar_stream,
+                self._tar_stream.name,
                 f"file with extension '.{ext}' already exists in the archive",
             )
         else:
             type_ = self._get_type(ext)
             if type_ is None:
-                raise UnknownFileExtensionError(self._tar_stream, fstream.name, ext)
+                raise UnknownFileExtensionError(
+                    self._tar_stream.name, fstream.name, ext
+                )
 
             if issubclass(type_, WDSReadableSubclass):
                 reader = type_._reader
@@ -165,7 +167,7 @@ class Builder:
 
             if reader is None:
                 raise WDSError(
-                    self._tar_stream,
+                    self._tar_stream.name,
                     f"unable to find a reader for type {type_}, extension .{ext}",
                 )
             self.state.data[ext] = reader(self, file)
@@ -173,7 +175,7 @@ class Builder:
     def produce(self):
         if self.state.core_file is None:
             raise CoreFileNotFoundError(
-                self._tar_stream, self._core_extensions, self.state.stem
+                self._tar_stream.name, self._core_extensions, self.state.stem
             )
 
         file = build_tar_member(self._tar_stream, self.state.core_file)
@@ -194,7 +196,13 @@ class Builder:
         return anno
 
 
-def get_tar_groups(stream, tar, core_extensions, spec, encoding="utf-8"):
+def get_tar_groups(
+    stream: File,
+    tar: tarfile.TarFile,
+    core_extensions: Sequence[str],
+    spec: type[WDSBasic],
+    encoding: str = "utf-8",
+) -> Iterator[WDSBasic]:
     builder = Builder(stream, core_extensions, spec, tar, encoding)
 
     for item in sorted(tar.getmembers(), key=lambda m: Path(m.name).stem):
@@ -210,9 +218,11 @@ def get_tar_groups(stream, tar, core_extensions, spec, encoding="utf-8"):
 
 
 def process_webdataset(
-    core_extensions: Sequence[str] = ("jpg", "png"), spec=WDSAllFile, encoding="utf-8"
-) -> Callable:
-    def wds_func(file: File) -> Iterator[spec]:
+    core_extensions: Sequence[str] = ("jpg", "png"),
+    spec: type[WDSBasic] = WDSAllFile,
+    encoding: str = "utf-8",
+) -> Callable[[File], Iterator]:
+    def wds_func(file: File) -> Iterator[spec]:  # type: ignore[valid-type]
         with file.open() as fd:
             with tarfile.open(fileobj=fd) as tar:
                 yield from get_tar_groups(file, tar, core_extensions, spec, encoding)

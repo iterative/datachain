@@ -10,7 +10,7 @@ def build_tar_member(parent: File, info: tarfile.TarInfo) -> File:
     etag = hashlib.md5(etag_string.encode(), usedforsecurity=False).hexdigest()
     return File(
         source=parent.source,
-        path=f"{parent.name}/{info.name}",
+        path=f"{parent.path}/{info.name}",
         version=parent.version,
         size=info.size,
         etag=etag,
