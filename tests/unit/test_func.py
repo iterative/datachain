@@ -95,7 +95,9 @@ def test_add_mutate(chain):
     assert res == [2, 3, 4, 5, 6]
 
     res = (
-        chain.mutate(test=strlen("val") + strlen("val")).order_by("num").to_values("test")
+        chain.mutate(test=strlen("val") + strlen("val"))
+        .order_by("num")
+        .to_values("test")
     )
     assert res == [2, 4, 6, 8, 10]
 
@@ -127,7 +129,9 @@ def test_sub_mutate(chain):
     assert res == [4, 3, 2, 1, 0]
 
     res = (
-        chain.mutate(test=strlen("val") - strlen("val")).order_by("num").to_values("test")
+        chain.mutate(test=strlen("val") - strlen("val"))
+        .order_by("num")
+        .to_values("test")
     )
     assert res == [0, 0, 0, 0, 0]
 
@@ -159,7 +163,9 @@ def test_mul_mutate(chain):
     assert res == [3, 6, 9, 12, 15]
 
     res = (
-        chain.mutate(test=strlen("val") * strlen("val")).order_by("num").to_values("test")
+        chain.mutate(test=strlen("val") * strlen("val"))
+        .order_by("num")
+        .to_values("test")
     )
     assert res == [1, 4, 9, 16, 25]
 
@@ -191,7 +197,9 @@ def test_truediv_mutate(chain):
     assert res == [10.0, 5.0, 10 / 3, 2.5, 2.0]
 
     res = (
-        chain.mutate(test=strlen("val") / strlen("val")).order_by("num").to_values("test")
+        chain.mutate(test=strlen("val") / strlen("val"))
+        .order_by("num")
+        .to_values("test")
     )
     assert res == [1.0, 1.0, 1.0, 1.0, 1.0]
 
@@ -257,7 +265,9 @@ def test_mod_mutate(chain):
     assert res == [0, 0, 1, 2, 0]
 
     res = (
-        chain.mutate(test=strlen("val") % strlen("val")).order_by("num").to_values("test")
+        chain.mutate(test=strlen("val") % strlen("val"))
+        .order_by("num")
+        .to_values("test")
     )
     assert res == [0, 0, 0, 0, 0]
 
@@ -289,7 +299,9 @@ def test_and_mutate(chain):
     assert res == [0, 2, 2, 0, 0]
 
     res = (
-        chain.mutate(test=strlen("val") & strlen("val")).order_by("num").to_values("test")
+        chain.mutate(test=strlen("val") & strlen("val"))
+        .order_by("num")
+        .to_values("test")
     )
     assert res == [1, 2, 3, 4, 5]
 
@@ -321,7 +333,9 @@ def test_or_mutate(chain):
     assert res == [3, 2, 3, 6, 7]
 
     res = (
-        chain.mutate(test=strlen("val") | strlen("val")).order_by("num").to_values("test")
+        chain.mutate(test=strlen("val") | strlen("val"))
+        .order_by("num")
+        .to_values("test")
     )
     assert res == [1, 2, 3, 4, 5]
 
@@ -381,7 +395,9 @@ def test_xor_mutate(chain):
     assert res == [3, 0, 1, 6, 7]
 
     res = (
-        chain.mutate(test=strlen("val") ^ strlen("val")).order_by("num").to_values("test")
+        chain.mutate(test=strlen("val") ^ strlen("val"))
+        .order_by("num")
+        .to_values("test")
     )
     assert res == [0, 0, 0, 0, 0]
 
@@ -481,7 +497,9 @@ def test_lt_mutate(chain):
     assert res == [0, 0, 0, 1, 1]
 
     res = (
-        chain.mutate(test=strlen("val") < strlen("val")).order_by("num").to_values("test")
+        chain.mutate(test=strlen("val") < strlen("val"))
+        .order_by("num")
+        .to_values("test")
     )
     assert res == [0, 0, 0, 0, 0]
 
@@ -621,7 +639,9 @@ def test_gt_mutate(chain):
     assert res == [1, 1, 1, 0, 0]
 
     res = (
-        chain.mutate(test=strlen("val") > strlen("val")).order_by("num").to_values("test")
+        chain.mutate(test=strlen("val") > strlen("val"))
+        .order_by("num")
+        .to_values("test")
     )
     assert res == [0, 0, 0, 0, 0]
 
@@ -674,7 +694,9 @@ def test_sqlite_int_hash_64(value, inthash):
 
 
 def test_int_hash_64_mutate(chain):
-    res = chain.mutate(test=int_hash_64(strlen("val"))).order_by("num").to_values("test")
+    res = (
+        chain.mutate(test=int_hash_64(strlen("val"))).order_by("num").to_values("test")
+    )
     assert [x & (2**64 - 1) for x in res] == [
         10577349846663553072,
         18198135717204167749,
@@ -874,7 +896,9 @@ def test_isnone_with_ifelse_mutate(col):
     )
 
     res = chain.mutate(test=ifelse(isnone(col), "NONE", "NOT_NONE"))
-    assert list(res.order_by("num").to_values("test")) == ["NOT_NONE"] * 3 + ["NONE"] * 2
+    assert (
+        list(res.order_by("num").to_values("test")) == ["NOT_NONE"] * 3 + ["NONE"] * 2
+    )
     assert res.schema["test"] is str
 
 
