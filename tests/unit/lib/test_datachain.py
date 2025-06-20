@@ -908,7 +908,7 @@ def test_batch_map_tuple_result_iterator(test_session):
     assert chain.order_by("x").to_list("x") == [1, 2, 3]
 
 
-def test_collect(test_session):
+def test_iterable_chain(test_session):
     chain = dc.read_values(f1=features, num=range(len(features)), session=test_session)
 
     n = 0
@@ -926,7 +926,7 @@ def test_collect(test_session):
     assert n == len(features)
 
 
-def test_collect_nested_feature(test_session):
+def test_to_list_nested_feature(test_session):
     chain = dc.read_values(sign1=features_nested, session=test_session)
 
     for n, sample in enumerate(
@@ -937,6 +937,14 @@ def test_collect_nested_feature(test_session):
 
         assert isinstance(nested, MyNested)
         assert nested == features_nested[n]
+
+
+def test_collect_deprecated(test_session):
+    chain = dc.read_values(fib=[1, 1, 2, 3, 5], session=test_session)
+
+    with pytest.warns(DeprecationWarning, match="Method `collect` is deprecated"):
+        vals = list(chain.collect("fib"))
+        assert set(vals) == {1, 2, 3, 5}
 
 
 def test_select_read_hf_without_sys_columns(test_session):
@@ -1162,7 +1170,7 @@ def test_unsupported_output_type(test_session):
         dc.read_values(key=[123], session=test_session).map(emd=get_vector)
 
 
-def test_collect_single_item(test_session):
+def test_to_list_single_item(test_session):
     names = ["f1.jpg", "f1.json", "f1.txt", "f2.jpg", "f2.json"]
     sizes = [1, 2, 3, 4, 5]
     files = sort_files([File(path=name, size=size) for name, size in zip(names, sizes)])
@@ -2083,7 +2091,7 @@ def test_order_by_with_nested_columns(test_session, with_function):
     ]
 
 
-def test_order_by_collect(test_session):
+def test_order_by_to_list(test_session):
     numbers = [6, 2, 3, 1, 5, 7, 4]
     letters = ["u", "y", "x", "z", "v", "t", "w"]
 
