@@ -893,7 +893,7 @@ class DataChain:
             Order is not guaranteed when steps are added after an `order_by` statement.
             I.e. when using `read_dataset` an `order_by` statement should be used if
             the order of the records in the chain is important.
-            Using `order_by` directly before `limit`, `collect` and `collect_flatten`
+            Using `order_by` directly before `limit`, `to_list` and similar methods
             will give expected results.
             See https://github.com/iterative/datachain/issues/477 for further details.
         """
@@ -1098,32 +1098,32 @@ class DataChain:
 
     @property
     def _effective_signals_schema(self) -> "SignalSchema":
-        """Effective schema used for user-facing API like collect, to_pandas, etc."""
+        """Effective schema used for user-facing API like to_list, to_pandas, etc."""
         signals_schema = self.signals_schema
         if not self._sys:
             return signals_schema.clone_without_sys_signals()
         return signals_schema
 
     @overload
-    def collect_flatten(self) -> Iterator[tuple[Any, ...]]: ...
+    def _leaf_values(self) -> Iterator[tuple[Any, ...]]: ...
 
     @overload
-    def collect_flatten(self, *, include_hidden: bool) -> Iterator[tuple[Any, ...]]: ...
+    def _leaf_values(self, *, include_hidden: bool) -> Iterator[tuple[Any, ...]]: ...
 
     @overload
-    def collect_flatten(
+    def _leaf_values(
         self, *, row_factory: Callable[[list[str], tuple[Any, ...]], _T]
     ) -> Iterator[_T]: ...
 
     @overload
-    def collect_flatten(
+    def _leaf_values(
         self,
         *,
         row_factory: Callable[[list[str], tuple[Any, ...]], _T],
         include_hidden: bool,
     ) -> Iterator[_T]: ...
 
-    def collect_flatten(self, *, row_factory=None, include_hidden: bool = True):
+    def _leaf_values(self, *, row_factory=None, include_hidden: bool = True):
         """Yields flattened rows of values as a tuple.
 
         Args:
@@ -1151,7 +1151,7 @@ class DataChain:
         headers, _ = self._effective_signals_schema.get_headers_with_length()
         column_names = [".".join(filter(None, header)) for header in headers]
 
-        results_iter = self.collect_flatten()
+        results_iter = self._leaf_values()
 
         def column_chunks() -> Iterator[list[list[Any]]]:
             for chunk_iter in batched_it(results_iter, chunk_size):
@@ -1184,9 +1184,9 @@ class DataChain:
 
     def results(self, *, row_factory=None, include_hidden=True):
         if row_factory is None:
-            return list(self.collect_flatten(include_hidden=include_hidden))
+            return list(self._leaf_values(include_hidden=include_hidden))
         return list(
-            self.collect_flatten(row_factory=row_factory, include_hidden=include_hidden)
+            self._leaf_values(row_factory=row_factory, include_hidden=include_hidden)
         )
 
     def to_records(self) -> list[dict[str, Any]]:
@@ -2037,7 +2037,7 @@ class DataChain:
         headers, _ = self._effective_signals_schema.get_headers_with_length()
         column_names = [".".join(filter(None, header)) for header in headers]
 
-        results_iter = self.collect_flatten()
+        results_iter = self._leaf_values()
 
         with opener(path, "w", newline="") as f:
             writer = csv.writer(f, delimiter=delimiter, **kwargs)
@@ -2089,7 +2089,7 @@ class DataChain:
             if include_outer_list:
                 # This makes the file JSON instead of JSON lines.
                 f.write(b"[\n")
-            for row in self.collect_flatten():
+            for row in self._leaf_values():
                 if not is_first:
                     if include_outer_list:
                         # This makes the file JSON instead of JSON lines.
