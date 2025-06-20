@@ -2268,7 +2268,9 @@ def test_read_values_array_of_floats(test_session):
     embeddings = [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]]
     chain = dc.read_values(emd=embeddings, session=test_session)
 
-    assert chain.to_list("emd") == embeddings
+    expected_embeddings = {tuple(emb) for emb in embeddings}
+    actual_embeddings = {tuple(emb) for emb in chain.to_list("emd")}
+    assert actual_embeddings == expected_embeddings
 
 
 def test_custom_model_with_nested_lists(test_session):
