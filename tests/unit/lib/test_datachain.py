@@ -2241,7 +2241,7 @@ def test_column_math(test_session):
     chain = dc.read_values(num=fib, session=test_session).order_by("num")
 
     ch = chain.mutate(add2=chain.column("num") + 2)
-    assert chain.to_list("add2") == [x + 2 for x in fib]
+    assert ch.to_list("add2") == [x + 2 for x in fib]
 
     ch2 = ch.mutate(x=1 - ch.column("add2"))
     assert ch2.to_list("x") == [1 - (x + 2.0) for x in fib]
