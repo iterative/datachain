@@ -64,7 +64,7 @@ def ls_local(
     else:
         # Collect results in a list here to prevent interference from `tqdm` and `print`
         listing = listings().to_list("listing")
-        for ls in listing:
+        for (ls,) in listing:
             print(format_ls_entry(f"{ls.uri}@v{ls.version}"))  # type: ignore[union-attr]
 
 

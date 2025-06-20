@@ -1184,11 +1184,11 @@ def test_to_list_single_item(test_session):
     chain = dc.read_values(file=files, score=scores, session=test_session)
     chain = chain.order_by("file.path", "file.size")
 
-    assert chain.to_list("file") == files
-    assert chain.to_list("file.path") == names
-    assert chain.to_list("file.size") == sizes
-    assert chain.to_list("file.source") == [""] * len(names)
-    assert np.allclose(chain.to_list("score"), scores)
+    assert [item[0] for item in chain.to_list("file")] == files
+    assert [item[0] for item in chain.to_list("file.path")] == names
+    assert [item[0] for item in chain.to_list("file.size")] == sizes
+    assert [item[0] for item in chain.to_list("file.source")] == [""] * len(names)
+    assert np.allclose([item[0] for item in chain.to_list("score")], scores)
 
     for actual, expected in zip(
         chain.to_list("file.size", "score"), [[x, y] for x, y in zip(sizes, scores)]

@@ -442,7 +442,7 @@ class DataChain:
         json_values = self.limit(schema_sample_size).to_list(col)
         json_dicts = [
             json.loads(json_value) if isinstance(json_value, str) else json_value
-            for json_value in json_values
+            for (json_value,) in json_values
         ]
 
         if any(not isinstance(json_dict, dict) for json_dict in json_dicts):
@@ -1201,21 +1201,16 @@ class DataChain:
     def to_iter(self) -> Iterator[tuple[DataValue, ...]]: ...
 
     @overload
-    def to_iter(self, col: str) -> Iterator[DataValue]: ...
-
-    @overload
     def to_iter(self, *cols: str) -> Iterator[tuple[DataValue, ...]]: ...
 
-    def to_iter(self, *cols: str) -> Iterator[Union[DataValue, tuple[DataValue, ...]]]:  # type: ignore[overload-overlap,misc]
+    def to_iter(self, *cols: str) -> Iterator[tuple[DataValue, ...]]:
         """Yields rows of values, optionally limited to the specified columns.
 
         Args:
             *cols: Limit to the specified columns. By default, all columns are selected.
 
         Yields:
-            (DataType): Yields a single item if a column is selected.
-            (tuple[DataType, ...]): Yields a tuple of items if multiple columns are
-                selected.
+            (tuple[DataType, ...]): Yields a tuple of items for each row.
 
         Example:
             Iterating over all rows:
@@ -1239,7 +1234,7 @@ class DataChain:
 
             Iterating over a single column:
             ```py
-            for file in ds.to_iter("file.path"):
+            for (file,) in ds.to_iter("file.path"):
                 print(file)
             ```
         """
@@ -1251,7 +1246,7 @@ class DataChain:
                 ret = signals_schema.row_to_features(
                     row, catalog=chain.session.catalog, cache=chain._settings.cache
                 )
-                yield ret[0] if len(cols) == 1 else tuple(ret)
+                yield tuple(ret)
 
     @overload
     def collect(self) -> Iterator[tuple[DataValue, ...]]: ...
@@ -1271,7 +1266,11 @@ class DataChain:
             DeprecationWarning,
             stacklevel=2,
         )
-        return self.to_iter(*cols)
+
+        res = self.to_list(*cols)
+        if len(cols) == 1:
+            return [item[0] for item in res]
+        return res
 
     def to_pytorch(
         self,
@@ -2410,12 +2409,9 @@ class DataChain:
     def to_list(self) -> list[tuple[DataValue, ...]]: ...
 
     @overload
-    def to_list(self, col: str) -> list[DataValue]: ...
-
-    @overload
     def to_list(self, *cols: str) -> list[tuple[DataValue, ...]]: ...
 
-    def to_list(self, *cols: str) -> list[Union[DataValue, tuple[DataValue, ...]]]:  # type: ignore[overload-overlap,misc]
+    def to_list(self, *cols: str) -> list[tuple[DataValue, ...]]:
         """Returns a list of rows of values, optionally limited to the specified
         columns.
 
@@ -2423,9 +2419,7 @@ class DataChain:
             *cols: Limit to the specified columns. By default, all columns are selected.
 
         Returns:
-            list[DataType]: Returns a list of single items if a column is selected.
-            list[tuple[DataType, ...]]: Returns a list of tuples of items if multiple
-            columns are selected.
+            list[tuple[DataType, ...]]: Returns a list of tuples of items for each row.
 
         Example:
             Getting all rows as a list:
@@ -2443,7 +2437,7 @@ class DataChain:
             Getting a single column as a list:
             ```py
             files = dc.to_list("file.path")
-            print(files)
+            print(files)  # Returns list of 1-tuples
             ```
         """
         return list(self.to_iter(*cols))

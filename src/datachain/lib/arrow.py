@@ -160,7 +160,7 @@ def infer_schema(chain: "DataChain", **kwargs) -> pa.Schema:
         kwargs["format"] = fix_pyarrow_format(format, parse_options)
 
     schemas = []
-    for file in chain.to_iter("file"):
+    for (file,) in chain.to_iter("file"):
         ds = dataset(file.get_path(), filesystem=file.get_fs(), **kwargs)  # type: ignore[union-attr]
         schemas.append(ds.schema)
     if not schemas:
