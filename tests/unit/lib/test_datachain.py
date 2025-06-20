@@ -912,7 +912,7 @@ def test_collect(test_session):
     chain = dc.read_values(f1=features, num=range(len(features)), session=test_session)
 
     n = 0
-    for sample in chain.order_by("f1.nnn", "f1.count").to_iter():
+    for sample in chain.order_by("f1.nnn", "f1.count"):
         assert len(sample) == 2
         fr, num = sample
 

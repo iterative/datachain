@@ -1170,19 +1170,26 @@ class DataChain:
         Example:
             Iterating over all rows:
             ```py
-            for row in dc.to_iter():
+            for row in ds.to_iter():
+                print(row)
+            ```
+
+            DataChain is iterable and can be used in a for loop directly which is
+            equivalent to `ds.to_iter()`:
+            ```py
+            for row in ds:
                 print(row)
             ```
 
             Iterating over all rows with selected columns:
             ```py
-            for name, size in dc.to_iter("file.path", "file.size"):
+            for name, size in ds.to_iter("file.path", "file.size"):
                 print(name, size)
             ```
 
             Iterating over a single column:
             ```py
-            for file in dc.to_iter("file.path"):
+            for file in ds.to_iter("file.path"):
                 print(file)
             ```
         """
@@ -2390,3 +2397,17 @@ class DataChain:
             ```
         """
         return list(self.to_iter(*cols))
+
+    def __iter__(self) -> Iterator[tuple[DataValue, ...]]:
+        """Make DataChain objects iterable.
+
+        Yields:
+            (tuple[DataValue, ...]): Yields tuples of all column values for each row.
+
+        Example:
+            ```py
+            for row in chain:
+                print(row)
+            ```
+        """
+        return self.to_iter()

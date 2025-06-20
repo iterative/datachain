@@ -738,7 +738,7 @@ def test_read_storage_check_rows(tmp_dir, test_session):
     is_sqlite = isinstance(test_session.catalog.warehouse, SQLiteWarehouse)
     tz = timezone.utc if is_sqlite else pytz.UTC
 
-    for (file,) in chain.to_iter():
+    for file in chain.to_iter("file"):
         assert isinstance(file, File)
         stat = stats[file.name]
         mtime = stat.st_mtime if is_sqlite else float(math.floor(stat.st_mtime))
@@ -830,7 +830,7 @@ def test_udf_parallel(cloud_test_catalog_tmpfile):
 
     # Check that the UDF ran successfully
     count = 0
-    for r in chain.to_iter():
+    for r in chain:
         count += 1
         assert len(r[0]) == r[1]
     assert count == 7
@@ -896,7 +896,7 @@ def test_udf_distributed(
 
     # Check that the UDF ran successfully
     count = 0
-    for r in chain.to_iter():
+    for r in chain:
         count += 1
         assert len(r[0]) == r[1]
     assert count == 225
@@ -1077,7 +1077,7 @@ def test_udf_reuse_on_error(cloud_test_catalog_tmpfile):
 
     # Retry Query
     count = 0
-    for r in chain.to_iter():
+    for r in chain:
         # Check that the UDF ran successfully
         count += 1
         assert len(r[0]) == r[1]
