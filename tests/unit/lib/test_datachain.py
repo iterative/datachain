@@ -296,18 +296,18 @@ def test_empty_chain_skip_udf_run(test_session):
 
 def test_datasets(test_session):
     ds = dc.datasets(column="dataset", session=test_session)
-    datasets = [d for d in ds.to_iter("dataset") if d.name == "fibonacci"]
+    datasets = [d for d in ds.to_values("dataset") if d.name == "fibonacci"]
     assert len(datasets) == 0
 
     dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save("fibonacci")
 
     ds = dc.datasets(column="dataset", session=test_session)
-    datasets = [d for d in ds.to_iter("dataset") if d.name == "fibonacci"]
+    datasets = [d for d in ds.to_values("dataset") if d.name == "fibonacci"]
     assert len(datasets) == 1
     assert datasets[0].num_objects == 6
 
     ds = dc.datasets(column="foo", session=test_session)
-    datasets = [d for d in ds.to_iter("foo") if d.name == "fibonacci"]
+    datasets = [d for d in ds.to_values("foo") if d.name == "fibonacci"]
     assert len(datasets) == 1
     assert datasets[0].num_objects == 6
 
@@ -315,7 +315,7 @@ def test_datasets(test_session):
 def test_datasets_without_column_name(test_session):
     dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save("fibonacci")
     ds = dc.datasets(session=test_session)
-    names = [name for name in ds.to_iter("name") if name == "fibonacci"]
+    names = [name for name in ds.to_values("name") if name == "fibonacci"]
     assert len(names) == 1
 
 
@@ -323,17 +323,17 @@ def test_datasets_studio(studio_datasets, test_session):
     dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save("fibonacci")
     ds = dc.datasets(column="dataset", studio=True, session=test_session)
     # Local datasets are not included in the list
-    datasets = [d for d in ds.to_iter("dataset") if d.name == "fibonacci"]
+    datasets = [d for d in ds.to_values("dataset") if d.name == "fibonacci"]
     assert len(datasets) == 0
 
     # Studio datasets are included in the list
-    datasets = [d for d in ds.to_iter("dataset") if d.name == "cats"]
+    datasets = [d for d in ds.to_values("dataset") if d.name == "cats"]
     assert len(datasets) == 1
     assert datasets[0].num_objects == 6
 
     # Exclude studio datasets
     ds = dc.datasets(column="dataset", studio=False, session=test_session)
-    datasets = [d for d in ds.to_iter("dataset") if d.name == "cats"]
+    datasets = [d for d in ds.to_values("dataset") if d.name == "cats"]
     assert len(datasets) == 0
 
 
@@ -343,7 +343,7 @@ def test_datasets_in_memory():
     assert ds.session.catalog.in_memory is True
     assert ds.session.catalog.metastore.db.db_file == ":memory:"
     assert ds.session.catalog.warehouse.db.db_file == ":memory:"
-    datasets = [d for d in ds.to_iter("dataset") if d.name == "fibonacci"]
+    datasets = [d for d in ds.to_values("dataset") if d.name == "fibonacci"]
     assert len(datasets) == 0
 
     dc.read_values(fib=[1, 1, 2, 3, 5, 8]).save("fibonacci")
@@ -352,7 +352,7 @@ def test_datasets_in_memory():
     assert ds.session.catalog.in_memory is True
     assert ds.session.catalog.metastore.db.db_file == ":memory:"
     assert ds.session.catalog.warehouse.db.db_file == ":memory:"
-    datasets = [d for d in ds.to_iter("dataset") if d.name == "fibonacci"]
+    datasets = [d for d in ds.to_values("dataset") if d.name == "fibonacci"]
     assert len(datasets) == 1
     assert datasets[0].num_objects == 6
 
@@ -360,7 +360,7 @@ def test_datasets_in_memory():
     assert ds.session.catalog.in_memory is True
     assert ds.session.catalog.metastore.db.db_file == ":memory:"
     assert ds.session.catalog.warehouse.db.db_file == ":memory:"
-    datasets = [d for d in ds.to_iter("foo") if d.name == "fibonacci"]
+    datasets = [d for d in ds.to_values("foo") if d.name == "fibonacci"]
     assert len(datasets) == 1
     assert datasets[0].num_objects == 6
 
@@ -393,7 +393,7 @@ def test_datasets_filtering(test_session, attrs, result):
         "letters", attrs=["letter"]
     )
 
-    assert sorted(dc.datasets(attrs=attrs).to_iter("name")) == sorted(result)
+    assert sorted(dc.datasets(attrs=attrs).to_values("name")) == sorted(result)
 
 
 def test_listings(test_session, tmp_dir):
@@ -406,10 +406,10 @@ def test_listings(test_session, tmp_dir):
     # check that listing is not returned as normal dataset
     assert not any(
         n.startswith(LISTING_PREFIX)
-        for n in dc.datasets(session=test_session).to_iter("name")
+        for n in dc.datasets(session=test_session).to_values("name")
     )
 
-    listings = list(dc.listings(session=test_session).to_iter("listing"))
+    listings = list(dc.listings(session=test_session).to_values("listing"))
     assert len(listings) == 1
     listing = listings[0]
     assert isinstance(listing, ListingInfo)
@@ -431,13 +431,13 @@ def test_listings_reindex(test_session, tmp_dir):
     uri = tmp_dir.as_uri()
 
     dc.read_storage(uri, session=test_session).exec()
-    assert len(list(dc.listings(session=test_session).to_iter("listing"))) == 1
+    assert len(list(dc.listings(session=test_session).to_values("listing"))) == 1
 
     dc.read_storage(uri, session=test_session).exec()
-    assert len(list(dc.listings(session=test_session).to_iter("listing"))) == 1
+    assert len(list(dc.listings(session=test_session).to_values("listing"))) == 1
 
     dc.read_storage(uri, session=test_session, update=True).exec()
-    listings = list(dc.listings(session=test_session).to_iter("listing"))
+    listings = list(dc.listings(session=test_session).to_values("listing"))
     assert len(listings) == 2
     listings.sort(key=lambda lst: lst.version)
     assert listings[0].storage_uri == uri
@@ -477,7 +477,7 @@ def test_listings_read_listing_dataset(test_session, tmp_dir, version):
     assert listing_version.status == 4
 
     assert chain.count() == 1
-    files = chain.to_list("file")
+    files = chain.to_values("file")
     assert len(files) == 1
     assert files[0].path == "df.parquet"
     assert files[0].source == uri
@@ -503,7 +503,7 @@ def test_listings_read_listing_dataset_with_subpath(test_session, tmp_dir):
 
     # Chain is filtered for subdir
     assert chain.count() == 1
-    files = chain.to_list("file")
+    files = chain.to_values("file")
     assert len(files) == 1
     assert files[0].path == "subdir/df3.parquet"
     assert files[0].source == tmp_dir.as_uri()
@@ -643,7 +643,7 @@ def test_map(test_session):
         output={"x": _TestFr},
     )
 
-    x_list = chain.order_by("x.my_name", "x.sqrt").to_list("x")
+    x_list = chain.order_by("x.my_name", "x.sqrt").to_values("x")
     test_frs = [
         _TestFr(sqrt=math.sqrt(fr.count), my_name=fr.nnn + "_suf") for fr in features
     ]
@@ -689,7 +689,7 @@ def test_agg(test_session):
         output={"x": _TestFr},
     )
 
-    assert chain.order_by("x.my_name").to_list("x") == [
+    assert chain.order_by("x.my_name").to_values("x") == [
         _TestFr(
             f=File(path=""),
             cnt=sum(fr.count for fr in features if fr.nnn == "n1"),
@@ -732,8 +732,8 @@ def test_agg_two_params(test_session):
         )
     )
 
-    assert ds.order_by("x.my_name").to_list("x.my_name") == ["n1-n1", "n2"]
-    assert ds.order_by("x.cnt").to_list("x.cnt") == [7, 20]
+    assert ds.order_by("x.my_name").to_values("x.my_name") == ["n1-n1", "n2"]
+    assert ds.order_by("x.cnt").to_values("x.cnt") == [7, 20]
 
 
 def test_agg_simple_iterator(test_session):
@@ -794,8 +794,8 @@ def test_agg_tuple_result_iterator(test_session):
         x=func, partition_by=C("key")
     )
 
-    assert ds.order_by("x_1.name").to_list("x_1.name") == ["n1-n1", "n2"]
-    assert ds.order_by("x_1.size").to_list("x_1.size") == [5, 10]
+    assert ds.order_by("x_1.name").to_values("x_1.name") == ["n1-n1", "n2"]
+    assert ds.order_by("x_1.size").to_values("x_1.size") == [5, 10]
 
 
 def test_agg_tuple_result_generator(test_session):
@@ -816,8 +816,8 @@ def test_agg_tuple_result_generator(test_session):
         .order_by("x_1.name")
     )
 
-    assert ds.order_by("x_1.name").to_list("x_1.name") == ["n1-n1", "n2"]
-    assert ds.order_by("x_1.size").to_list("x_1.size") == [5, 10]
+    assert ds.order_by("x_1.name").to_values("x_1.name") == ["n1-n1", "n2"]
+    assert ds.order_by("x_1.size").to_values("x_1.size") == [5, 10]
 
 
 def test_batch_map(test_session):
@@ -837,7 +837,7 @@ def test_batch_map(test_session):
         output={"x": _TestFr},
     )
 
-    x_list = chain.order_by("x.my_name", "x.sqrt").to_list("x")
+    x_list = chain.order_by("x.my_name", "x.sqrt").to_values("x")
     test_frs = [
         _TestFr(sqrt=math.sqrt(fr.count), my_name=fr.nnn + "_suf") for fr in features
     ]
@@ -894,12 +894,12 @@ def test_batch_map_two_params(test_session):
         output={"x": _TestFr},
     )
 
-    assert ds.order_by("x.my_name").to_list("x.my_name") == [
+    assert ds.order_by("x.my_name").to_values("x.my_name") == [
         "n1-n1",
         "n1-n2",
         "n2-n1",
     ]
-    assert ds.order_by("x.cnt").to_list("x.cnt") == [7, 7, 13]
+    assert ds.order_by("x.cnt").to_values("x.cnt") == [7, 7, 13]
 
 
 def test_batch_map_tuple_result_iterator(test_session):
@@ -909,7 +909,7 @@ def test_batch_map_tuple_result_iterator(test_session):
 
     chain = dc.read_values(t1=[1, 4, 9], session=test_session).batch_map(x=sqrt)
 
-    assert chain.order_by("x").to_list("x") == [1, 2, 3]
+    assert chain.order_by("x").to_values("x") == [1, 2, 3]
 
 
 def test_iterable_chain(test_session):
@@ -1184,11 +1184,11 @@ def test_to_list_single_item(test_session):
     chain = dc.read_values(file=files, score=scores, session=test_session)
     chain = chain.order_by("file.path", "file.size")
 
-    assert [item[0] for item in chain.to_list("file")] == files
-    assert [item[0] for item in chain.to_list("file.path")] == names
-    assert [item[0] for item in chain.to_list("file.size")] == sizes
-    assert [item[0] for item in chain.to_list("file.source")] == [""] * len(names)
-    assert np.allclose([item[0] for item in chain.to_list("score")], scores)
+    assert chain.to_values("file") == files
+    assert chain.to_values("file.path") == names
+    assert chain.to_values("file.size") == sizes
+    assert chain.to_values("file.source") == [""] * len(names)
+    assert np.allclose(chain.to_values("score"), scores)
 
     for actual, expected in zip(
         chain.to_list("file.size", "score"), [[x, y] for x, y in zip(sizes, scores)]
@@ -1206,7 +1206,7 @@ def test_default_output_type(test_session):
         res1=lambda name: name + suffix
     )
 
-    assert chain.order_by("name").to_list("res1") == [t + suffix for t in names]
+    assert chain.order_by("name").to_values("res1") == [t + suffix for t in names]
 
 
 def test_parse_tabular(tmp_dir, test_session):
@@ -1636,7 +1636,7 @@ def test_explode(tmp_dir, test_session, column_type, column, model_name):
         ("Ivan", 41, "San Francisco"),
     }
 
-    assert chain.limit(1).to_list(column)[0].__class__.__name__ == model_name
+    assert chain.limit(1).to_values(column)[0].__class__.__name__ == model_name
 
 
 def test_explode_raises_on_wrong_column_type(test_session):
@@ -1919,7 +1919,7 @@ def test_parallel_in_memory():
             dc.read_values(key=vals, in_memory=True)
             .settings(parallel=True)
             .map(res=lambda key: prefix + key)
-        ).to_list("res")
+        ).to_values("res")
 
 
 def test_exec(test_session, monkeypatch):
@@ -2069,7 +2069,7 @@ def test_mutate(test_session):
     assert chain.signals_schema.values["place"] is str
 
     expected = [fr.count * 2 * 3.14 for fr in features]
-    np.testing.assert_allclose(chain.to_list("circle"), expected)
+    np.testing.assert_allclose(chain.to_values("circle"), expected)
 
 
 @pytest.mark.parametrize("with_function", [True, False])
@@ -2086,7 +2086,7 @@ def test_order_by_with_nested_columns(test_session, with_function):
     else:
         chain = chain.order_by("file.path")
 
-    assert chain.to_list("file.path") == [
+    assert chain.to_values("file.path") == [
         "a.txt",
         "a.txt",
         "b.txt",
@@ -2135,7 +2135,7 @@ def test_order_by_descending(test_session, with_function):
     else:
         chain = chain.order_by("file.path", descending=True)
 
-    assert chain.to_list("file.path") == [
+    assert chain.to_values("file.path") == [
         "d.txt",
         "c.txt",
         "b.txt",
@@ -2149,7 +2149,7 @@ def test_union(test_session):
     chain2 = dc.read_values(value=[3, 4], session=test_session)
     chain3 = chain1 | chain2
     assert chain3.count() == 4
-    assert chain3.order_by("value").to_list("value") == [1, 2, 3, 4]
+    assert chain3.order_by("value").to_values("value") == [1, 2, 3, 4]
 
 
 def test_union_different_columns(test_session):
@@ -2253,10 +2253,10 @@ def test_column_math(test_session):
     chain = dc.read_values(num=fib, session=test_session).order_by("num")
 
     ch = chain.mutate(add2=chain.column("num") + 2)
-    assert ch.to_list("add2") == [x + 2 for x in fib]
+    assert ch.to_values("add2") == [x + 2 for x in fib]
 
     ch2 = ch.mutate(x=1 - ch.column("add2"))
-    assert ch2.to_list("x") == [1 - (x + 2.0) for x in fib]
+    assert ch2.to_values("x") == [1 - (x + 2.0) for x in fib]
 
 
 @skip_if_not_sqlite
@@ -2265,7 +2265,7 @@ def test_column_math_division(test_session):
     chain = dc.read_values(num=fib, session=test_session)
 
     ch = chain.mutate(div2=chain.column("num") / 2.0)
-    assert ch.to_list("div2") == [x / 2.0 for x in fib]
+    assert ch.to_values("div2") == [x / 2.0 for x in fib]
 
 
 def test_read_values_array_of_floats(test_session):
@@ -2273,7 +2273,7 @@ def test_read_values_array_of_floats(test_session):
     chain = dc.read_values(emd=embeddings, session=test_session)
 
     expected_embeddings = {tuple(emb) for emb in embeddings}
-    actual_embeddings = {tuple(emb) for emb in chain.to_list("emd")}
+    actual_embeddings = {tuple(emb) for emb in chain.to_values("emd")}
     assert actual_embeddings == expected_embeddings
 
 
@@ -2301,7 +2301,7 @@ def test_custom_model_with_nested_lists(test_session):
         session=test_session,
     )
 
-    assert ds.to_list("nested") == [
+    assert ds.to_values("nested") == [
         Nested(
             values=[[0.5, 0.5], [0.5, 0.5]],
             traces_single=[{"x": 0.5, "y": 0.5}, {"x": 0.5, "y": 0.5}],
@@ -2379,11 +2379,11 @@ def test_rename_non_object_column_name_with_mutate(test_session):
     ds = ds.mutate(my_ids=Column("ids"))
 
     assert ds.signals_schema.values == {"my_ids": int}
-    assert ds.order_by("my_ids").to_list("my_ids") == [1, 2, 3]
+    assert ds.order_by("my_ids").to_values("my_ids") == [1, 2, 3]
 
     assert ds.signals_schema.values.get("my_ids") is int
     assert "ids" not in ds.signals_schema.values
-    assert ds.order_by("my_ids").to_list("my_ids") == [1, 2, 3]
+    assert ds.order_by("my_ids").to_values("my_ids") == [1, 2, 3]
 
 
 def test_rename_object_column_name_with_mutate(test_session):
@@ -2394,7 +2394,7 @@ def test_rename_object_column_name_with_mutate(test_session):
     ds = dc.read_values(file=files, ids=[1, 2, 3], session=test_session)
     ds = ds.mutate(fname=Column("file.path"))
 
-    assert ds.order_by("fname").to_list("fname") == ["a", "b", "c"]
+    assert ds.order_by("fname").to_values("fname") == ["a", "b", "c"]
     assert ds.signals_schema.values == {"file": File, "ids": int, "fname": str}
 
     # check that persist after saving
@@ -2404,7 +2404,7 @@ def test_rename_object_column_name_with_mutate(test_session):
     assert ds.signals_schema.values.get("file") is File
     assert ds.signals_schema.values.get("ids") is int
     assert ds.signals_schema.values.get("fname") is str
-    assert ds.order_by("fname").to_list("fname") == ["a", "b", "c"]
+    assert ds.order_by("fname").to_values("fname") == ["a", "b", "c"]
 
 
 def test_rename_column_with_mutate(test_session):
@@ -2415,7 +2415,7 @@ def test_rename_column_with_mutate(test_session):
     ds = dc.read_values(file=files, ids=[1, 2, 3], session=test_session)
     ds = ds.mutate(my_file=Column("file"))
 
-    assert ds.order_by("my_file.path").to_list("my_file.path") == ["a", "b", "c"]
+    assert ds.order_by("my_file.path").to_values("my_file.path") == ["a", "b", "c"]
     assert ds.signals_schema.values == {"my_file": File, "ids": int}
 
     # check that persist after saving
@@ -2425,7 +2425,7 @@ def test_rename_column_with_mutate(test_session):
     assert ds.signals_schema.values.get("my_file") is File
     assert ds.signals_schema.values.get("ids") is int
     assert "file" not in ds.signals_schema.values
-    assert ds.order_by("my_file.path").to_list("my_file.path") == ["a", "b", "c"]
+    assert ds.order_by("my_file.path").to_values("my_file.path") == ["a", "b", "c"]
 
 
 def test_column(test_session):
@@ -2501,7 +2501,7 @@ def test_mutate_with_saving(test_session):
 
     ds = dc.read_dataset(name="mutated", session=test_session)
     assert ds.signals_schema.values["new"] is float
-    assert ds.to_list("new") == [0.5, 1.0]
+    assert ds.to_values("new") == [0.5, 1.0]
 
 
 def test_mutate_with_expression_without_type(test_session):
@@ -2518,7 +2518,7 @@ def test_mutate_with_expression_without_type(test_session):
 def test_read_values_nan_inf(test_session):
     vals = [float("nan"), float("inf"), float("-inf")]
     chain = dc.read_values(vals=vals, session=test_session)
-    res = chain.to_list("vals")
+    res = chain.to_values("vals")
     assert len(res) == 3
     assert any(r for r in res if np.isnan(r))
     assert any(r for r in res if np.isposinf(r))
@@ -2529,7 +2529,7 @@ def test_read_pandas_nan_inf(test_session):
     vals = [float("nan"), float("inf"), float("-inf")]
     df = pd.DataFrame({"vals": vals})
     chain = dc.read_pandas(df, session=test_session)
-    res = chain.to_list("vals")
+    res = chain.to_values("vals")
     assert len(res) == 3
     assert any(r for r in res if np.isnan(r))
     assert any(r for r in res if np.isposinf(r))
@@ -2543,7 +2543,7 @@ def test_read_parquet_nan_inf(tmp_dir, test_session):
     pq.write_table(tbl, path)
     chain = dc.read_parquet(path.as_uri(), session=test_session)
 
-    res = list(chain.to_list("vals"))
+    res = list(chain.to_values("vals"))
     assert len(res) == 3
     assert any(r for r in res if np.isnan(r))
     assert any(r for r in res if np.isposinf(r))
@@ -2557,7 +2557,7 @@ def test_read_csv_nan_inf(tmp_dir, test_session):
     df.to_csv(path, index=False)
     chain = dc.read_csv(path.as_uri(), session=test_session)
 
-    res = chain.to_list("vals")
+    res = chain.to_values("vals")
     assert len(res) == 3
     assert any(r for r in res if np.isnan(r))
     assert any(r for r in res if np.isposinf(r))
@@ -3168,7 +3168,7 @@ def test_delete_dataset_version(test_session):
     dc.delete_dataset(name, version="1.0.0", session=test_session)
 
     ds = dc.datasets(column="dataset", session=test_session)
-    datasets = [d for d in ds.to_iter("dataset") if d.name == name]
+    datasets = [d for d in ds.to_values("dataset") if d.name == name]
     assert len(datasets) == 1
     assert datasets[0].version == "2.0.0"
 
@@ -3181,7 +3181,7 @@ def test_delete_dataset_latest_version(test_session):
     dc.delete_dataset(name, session=test_session)
 
     ds = dc.datasets(column="dataset", session=test_session)
-    datasets = [d for d in ds.to_iter("dataset") if d.name == name]
+    datasets = [d for d in ds.to_values("dataset") if d.name == name]
     assert len(datasets) == 1
     assert datasets[0].version == "1.0.0"
 
@@ -3193,7 +3193,7 @@ def test_delete_dataset_only_version(test_session):
     dc.delete_dataset(name, session=test_session)
 
     ds = dc.datasets(column="dataset", session=test_session)
-    datasets = [d for d in ds.to_iter("dataset") if d.name == name]
+    datasets = [d for d in ds.to_values("dataset") if d.name == name]
     assert len(datasets) == 0
 
 
@@ -3214,7 +3214,7 @@ def test_delete_dataset_versions_all(test_session):
     dc.delete_dataset(name, force=True, session=test_session)
 
     ds = dc.datasets(column="dataset", session=test_session)
-    datasets = [d for d in ds.to_iter("dataset") if d.name == name]
+    datasets = [d for d in ds.to_values("dataset") if d.name == name]
     assert len(datasets) == 0
 
 
@@ -3276,7 +3276,7 @@ def test_update_versions(test_session, update_version, versions):
     assert sorted(
         [
             ds.version
-            for ds in dc.datasets(column="dataset", session=test_session).to_iter(
+            for ds in dc.datasets(column="dataset", session=test_session).to_values(
                 "dataset"
             )
         ]
@@ -3297,7 +3297,7 @@ def test_update_versions_mix_major_minor_patch(test_session):
     assert sorted(
         [
             ds.version
-            for ds in dc.datasets(column="dataset", session=test_session).to_iter(
+            for ds in dc.datasets(column="dataset", session=test_session).to_values(
                 "dataset"
             )
         ]
@@ -3336,10 +3336,10 @@ def test_from_dataset_version_int_backward_compatible(test_session):
     dc.read_values(nums=[5], session=test_session).save(ds_name, version="2.1.2")
     dc.read_values(nums=[6], session=test_session).save(ds_name, version="3.0.0")
 
-    assert dc.read_dataset(ds_name, version=1).to_list("nums") == [2]
-    assert dc.read_dataset(ds_name, version=2).to_list("nums") == [5]
-    assert dc.read_dataset(ds_name, version=3).to_list("nums") == [6]
-    assert dc.read_dataset(ds_name, version="1.0.0").to_list("nums") == [1]
+    assert dc.read_dataset(ds_name, version=1).to_values("nums") == [2]
+    assert dc.read_dataset(ds_name, version=2).to_values("nums") == [5]
+    assert dc.read_dataset(ds_name, version=3).to_values("nums") == [6]
+    assert dc.read_dataset(ds_name, version="1.0.0").to_values("nums") == [1]
     with pytest.raises(DatasetVersionNotFoundError):
         dc.read_dataset(ds_name, version=5)
 

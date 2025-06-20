@@ -21,7 +21,7 @@ def test_resolve_file(cloud_test_catalog, caching_enabled):
     is_sqlite = isinstance(cloud_test_catalog.catalog.warehouse, SQLiteWarehouse)
 
     chain = dc.read_storage(ctc.src_uri, session=ctc.session)
-    for orig_file in chain.to_iter("file"):
+    for orig_file in chain.to_values("file"):
         file = File(
             source=orig_file.source,
             path=orig_file.path,

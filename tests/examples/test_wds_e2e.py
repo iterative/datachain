@@ -74,7 +74,7 @@ def test_wds(test_session, webdataset_tars):
     )
 
     num_rows = 0
-    for laion_wds in res.to_iter("laion"):
+    for laion_wds in res.to_values("laion"):
         num_rows += 1
         assert isinstance(laion_wds, WDSLaion)
         idx, data = next(
@@ -106,7 +106,7 @@ def test_wds_merge_with_parquet_meta(
     res = wds.merge(meta, on="laion.json.uid", right_on="uid")
 
     num_rows = 0
-    for r in res.to_iter("laion"):
+    for r in res.to_values("laion"):
         num_rows += 1
         assert isinstance(r, WDSLaion)
         assert isinstance(r.file, File)

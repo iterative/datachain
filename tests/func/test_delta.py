@@ -177,7 +177,7 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
         dc.read_dataset(ds_name, version="1.0.1")
         .filter(C("index") == 6)
         .order_by("file.path", "file.etag")
-    ).to_list("file.etag")[0] > etags[6]
+    ).to_values("file.etag")[0] > etags[6]
 
 
 def test_delta_update_check_num_calls(test_session, tmp_dir, tmp_path, capsys):

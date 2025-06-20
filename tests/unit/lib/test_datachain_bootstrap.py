@@ -31,7 +31,7 @@ def test_udf(monkeypatch):
     chain = dc.read_values(key=vals)
 
     udf = MyMapper()
-    res = chain.map(res=udf).to_list("res")
+    res = chain.map(res=udf).to_values("res")
 
     assert res == [MyMapper.BOOTSTRAP_VALUE] * len(vals)
     assert udf.value == MyMapper.TEARDOWN_VALUE
@@ -70,7 +70,7 @@ def test_bootstrap_in_chain():
         .setup(init_val=lambda: base)
         .map(x=lambda val, init_val: val + init_val, output=int)
         .order_by("x")
-        .to_list("x")
+        .to_values("x")
     )
 
     assert res == [base + val for val in prime]

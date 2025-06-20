@@ -1197,12 +1197,6 @@ class DataChain:
 
         return self.results(row_factory=to_dict)
 
-    @overload
-    def to_iter(self) -> Iterator[tuple[DataValue, ...]]: ...
-
-    @overload
-    def to_iter(self, *cols: str) -> Iterator[tuple[DataValue, ...]]: ...
-
     def to_iter(self, *cols: str) -> Iterator[tuple[DataValue, ...]]:
         """Yields rows of values, optionally limited to the specified columns.
 
@@ -2395,12 +2389,6 @@ class DataChain:
         """
         return self._evolve(query=self._query.chunk(index, total))
 
-    @overload
-    def to_list(self) -> list[tuple[DataValue, ...]]: ...
-
-    @overload
-    def to_list(self, *cols: str) -> list[tuple[DataValue, ...]]: ...
-
     def to_list(self, *cols: str) -> list[tuple[DataValue, ...]]:
         """Returns a list of rows of values, optionally limited to the specified
         columns.
@@ -2431,6 +2419,30 @@ class DataChain:
             ```
         """
         return list(self.to_iter(*cols))
+
+    def to_values(self, col: str) -> list[DataValue]:
+        """Returns a flat list of values from a single column.
+
+        Args:
+            col: The name of the column to extract values from.
+
+        Returns:
+            list[DataValue]: Returns a flat list of values from the specified column.
+
+        Example:
+            Getting all values from a single column:
+            ```py
+            file_paths = dc.to_values("file.path")
+            print(file_paths)  # Returns list of strings
+            ```
+
+            Getting all file sizes:
+            ```py
+            sizes = dc.to_values("file.size")
+            print(sizes)  # Returns list of integers
+            ```
+        """
+        return [row[0] for row in self.to_list(col)]
 
     def __iter__(self) -> Iterator[tuple[DataValue, ...]]:
         """Make DataChain objects iterable.

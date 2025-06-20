@@ -53,7 +53,7 @@ def _get_listing_datasets(session):
             f"{ds.name}@v{ds.version}"
             for ds in dc.datasets(
                 column="dataset", session=session, include_listing=True
-            ).to_iter("dataset")
+            ).to_values("dataset")
             if is_listing_dataset(ds.name)
         ]
     )
@@ -96,7 +96,7 @@ def test_read_storage_glob(cloud_test_catalog):
 def test_read_storage_as_image(cloud_test_catalog):
     ctc = cloud_test_catalog
     chain = dc.read_storage(ctc.src_uri, session=ctc.session, type="image")
-    for im in chain.to_iter("file"):
+    for im in chain.to_values("file"):
         assert isinstance(im, ImageFile)
 
 
@@ -309,8 +309,8 @@ def test_map_file(cloud_test_catalog, use_cache, prefetch, monkeypatch):
         "dog3 -> bark",
         "dog4 -> ruff",
     }
-    assert set(chain.to_iter("signal")) == expected
-    for file in chain.to_iter("file"):
+    assert set(chain.to_values("signal")) == expected
+    for file in chain.to_values("file"):
         assert bool(file.get_local_path()) is use_cache
     assert not os.listdir(ctc.catalog.cache.tmp_dir)
 
@@ -320,7 +320,7 @@ def test_read_file(cloud_test_catalog, use_cache):
     ctc = cloud_test_catalog
 
     chain = dc.read_storage(ctc.src_uri, session=ctc.session)
-    for file in chain.settings(cache=use_cache).to_iter("file"):
+    for file in chain.settings(cache=use_cache).to_values("file"):
         assert file.get_local_path() is None
         file.read()
         assert bool(file.get_local_path()) is use_cache
@@ -363,7 +363,7 @@ def test_to_storage(
         "dog4": "ruff",
     }
 
-    for file in df.to_iter("file"):
+    for file in df.to_values("file"):
         if placement == "filename":
             file_path = file.name
         else:
@@ -459,7 +459,7 @@ def test_read_storage_multiple_uris_cache(cloud_test_catalog):
         ).exec()
         assert chain.count() == 11
 
-        files = chain.to_iter("file")
+        files = chain.to_values("file")
         assert {f.name for f in files} == {
             "cat1",
             "cat2",
@@ -733,7 +733,7 @@ def test_read_storage_check_rows(tmp_dir, test_session):
     is_sqlite = isinstance(test_session.catalog.warehouse, SQLiteWarehouse)
     tz = timezone.utc if is_sqlite else pytz.UTC
 
-    for file in chain.to_iter("file"):
+    for file in chain.to_values("file"):
         assert isinstance(file, File)
         stat = stats[file.name]
         mtime = stat.st_mtime if is_sqlite else float(math.floor(stat.st_mtime))
@@ -767,7 +767,7 @@ def test_parallel(processes, test_session_tmpfile):
         .settings(parallel=processes)
         .map(res=lambda key: prefix + key)
         .order_by("res")
-        .to_iter("res")
+        .to_values("res")
     )
 
     assert res == [prefix + v for v in vals]
@@ -856,7 +856,7 @@ def test_udf_parallel_boostrap(test_session_tmpfile):
 
     chain = dc.read_values(key=vals, session=test_session_tmpfile)
 
-    res = chain.settings(parallel=4).map(res=MyMapper()).to_list("res")
+    res = chain.settings(parallel=4).map(res=MyMapper()).to_values("res")
 
     assert res == [MyMapper.BOOTSTRAP_VALUE] * len(vals)
 
@@ -1383,7 +1383,7 @@ def test_gen_parallel(cloud_test_catalog_tmpfile):
         .gen(gen=func, params=["file"], output={"val": str})
         .order_by("val")
     )
-    assert chain.to_list("val") == [
+    assert chain.to_values("val") == [
         "cats/cat1_0",
         "cats/cat1_1",
         "cats/cat1_2",
@@ -1565,7 +1565,7 @@ def test_gen_file(cloud_test_catalog, use_cache, prefetch, monkeypatch):
         "ruff",
         "woof",
     }
-    assert set(chain.to_iter("signal")) == expected
+    assert set(chain.to_values("signal")) == expected
     assert not os.listdir(ctc.catalog.cache.tmp_dir)
 
 
@@ -1583,7 +1583,7 @@ def test_similarity_search(cloud_test_catalog):
         .order_by("file.path")
         .limit(1)
         .map(embedding=calc_emb, output={"embedding": list[float]})
-    ).to_list("embedding")[0]
+    ).to_values("embedding")[0]
 
     chain = (
         dc.read_storage(src_uri, session=session)

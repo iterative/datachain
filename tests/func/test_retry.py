@@ -120,7 +120,7 @@ def test_retry_with_missing_records(test_session):
     assert retry_chain.count() == 3
 
     # Verify all records are present
-    ids = set(retry_chain.to_iter("id"))
+    ids = set(retry_chain.to_values("id"))
     assert ids == {1, 2, 3}
 
     final_first_attempts_count = retry_chain.filter(C("result.attempt") == 1).count()

@@ -10,7 +10,7 @@ def test_random_rand(test_session):
         )
         .mutate(t1=func.rand())
         .order_by("id")
-    ).to_list("t1")
+    ).to_values("t1")
 
     assert len(ds) == 3
     assert all(isinstance(x, int) for x in ds)

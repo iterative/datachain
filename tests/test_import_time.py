@@ -67,7 +67,7 @@ def test_import_time(catalog, test_session):
         chain = _import_time_chain(test_session)
         (import_time_ms,) = chain.filter(
             dc.C("import") == "datachain",
-        ).to_list("cumulative_ms")
+        ).to_values("cumulative_ms")
         import_timings.append((chain, import_time_ms))
         # pass `--log-cli-level=info` to see these logs live
         logger.info("attempt %d, import time: %dms", attempt + 1, import_time_ms)
