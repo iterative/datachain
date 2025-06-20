@@ -152,9 +152,6 @@ def handle_dataset_command(args, catalog):
             new_name=args.new_name,
             description=args.description,
             attrs=args.attrs,
-            studio=args.studio,
-            local=args.local,
-            all=args.all,
             team=args.team,
         ),
         "ls": lambda: list_datasets(
@@ -172,8 +169,6 @@ def handle_dataset_command(args, catalog):
             version=args.version,
             force=args.force,
             studio=args.studio,
-            local=args.local,
-            all=args.all,
             team=args.team,
         ),
         "remove": lambda: rm_dataset(
@@ -182,8 +177,6 @@ def handle_dataset_command(args, catalog):
             version=args.version,
             force=args.force,
             studio=args.studio,
-            local=args.local,
-            all=args.all,
             team=args.team,
         ),
     }

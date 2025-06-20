@@ -17,6 +17,7 @@ import websockets
 from requests.exceptions import HTTPError, Timeout
 
 from datachain.config import Config
+from datachain.dataset import DatasetRecord
 from datachain.error import DataChainError
 from datachain.utils import STUDIO_URL, retry_with_backoff
 
@@ -311,13 +312,17 @@ class StudioClient:
     def edit_dataset(
         self,
         name: str,
+        namespace: str,
+        project: str,
         new_name: Optional[str] = None,
         description: Optional[str] = None,
         attrs: Optional[list[str]] = None,
     ) -> Response[DatasetInfoData]:
         body = {
             "new_name": new_name,
-            "dataset_name": name,
+            "name": name,
+            "namespace": namespace,
+            "project": project,
             "description": description,
             "attrs": attrs,
         }
@@ -330,43 +335,43 @@ class StudioClient:
     def rm_dataset(
         self,
         name: str,
+        namespace: str,
+        project: str,
         version: Optional[str] = None,
         force: Optional[bool] = False,
     ) -> Response[DatasetInfoData]:
         return self._send_request(
             "datachain/datasets",
             {
-                "dataset_name": name,
-                "dataset_version": version,
+                "name": name,
+                "namespace": namespace,
+                "project": project,
+                "version": version,
                 "force": force,
             },
             method="DELETE",
         )
 
-    def dataset_info(self, name: str) -> Response[DatasetInfoData]:
+    def dataset_info(
+        self, namespace: str, project: str, name: str
+    ) -> Response[DatasetInfoData]:
         def _parse_dataset_info(dataset_info):
             _parse_dates(dataset_info, ["created_at", "finished_at"])
             for version in dataset_info.get("versions"):
                 _parse_dates(version, ["created_at"])
+            _parse_dates(dataset_info.get("project"), ["created_at"])
+            _parse_dates(dataset_info.get("project").get("namespace"), ["created_at"])
 
             return dataset_info
 
         response = self._send_request(
-            "datachain/datasets/info", {"dataset_name": name}, method="GET"
+            "datachain/datasets/info",
+            {"namespace": namespace, "project": project, "name": name},
+            method="GET",
         )
         if response.ok:
             response.data = _parse_dataset_info(response.data)
         return response
-
-    def dataset_rows_chunk(
-        self, name: str, version: str, offset: int
-    ) -> Response[DatasetRowsData]:
-        req_data = {"dataset_name": name, "dataset_version": version}
-        return self._send_request_msgpack(
-            "datachain/datasets/rows",
-            {**req_data, "offset": offset, "limit": DATASET_ROWS_CHUNK_SIZE},
-            method="GET",
-        )
 
     def dataset_job_versions(self, job_id: str) -> Response[DatasetJobVersionsData]:
         return self._send_request(
@@ -376,20 +381,30 @@ class StudioClient:
         )
 
     def export_dataset_table(
-        self, name: str, version: str
+        self, dataset: DatasetRecord, version: str
     ) -> Response[DatasetExportSignedUrls]:
         return self._send_request(
             "datachain/datasets/export",
-            {"dataset_name": name, "dataset_version": version},
+            {
+                "namespace": dataset.project.namespace.name,
+                "project": dataset.project.name,
+                "name": dataset.name,
+                "version": version,
+            },
             method="GET",
         )
 
     def dataset_export_status(
-        self, name: str, version: str
+        self, dataset: DatasetRecord, version: str
     ) -> Response[DatasetExportStatus]:
         return self._send_request(
             "datachain/datasets/export-status",
-            {"dataset_name": name, "dataset_version": version},
+            {
+                "namespace": dataset.project.namespace.name,
+                "project": dataset.project.name,
+                "name": dataset.name,
+                "version": version,
+            },
             method="GET",
         )
 
@@ -412,7 +427,7 @@ class StudioClient:
         requirements: Optional[str] = None,
         repository: Optional[str] = None,
         priority: Optional[int] = None,
-        cluster_id: Optional[int] = None,
+        cluster: Optional[str] = None,
     ) -> Response[JobData]:
         data = {
             "query": query,
@@ -425,7 +440,7 @@ class StudioClient:
             "requirements": requirements,
             "repository": repository,
             "priority": priority,
-            "compute_cluster_id": cluster_id,
+            "compute_cluster_name": cluster,
         }
         return self._send_request("datachain/job", data)
 

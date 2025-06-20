@@ -52,10 +52,10 @@ def add_jobs_parser(subparsers, parent_parser) -> None:
     )
 
     studio_run_parser.add_argument(
-        "--cluster-id",
-        type=int,
+        "--cluster",
+        type=str,
         action="store",
-        help="Compute cluster ID to run the job on",
+        help="Compute cluster to run the job on",
     )
 
     studio_run_parser.add_argument(

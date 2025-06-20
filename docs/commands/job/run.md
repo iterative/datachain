@@ -24,7 +24,7 @@ This command runs a job in Studio using the specified query file. You can config
 * `--team TEAM` - Team to run job for (default: from config)
 * `--env-file ENV_FILE` - File with environment variables for the job
 * `--env ENV` - Environment variables in KEY=VALUE format
-* `--cluster-id CLUSTER_ID` - Compute cluster ID to run the job on
+* `--cluster CLUSTER` - Compute cluster to run the job on
 * `--workers WORKERS` - Number of workers for the job
 * `--files FILES` - Additional files to include in the job
 * `--python-version PYTHON_VERSION` - Python version for the job (e.g., 3.9, 3.10, 3.11)

@@ -3,7 +3,7 @@ import os
 import sqlite3
 from collections.abc import Iterable, Sequence
 from contextlib import contextmanager
-from functools import wraps
+from functools import cached_property, wraps
 from time import sleep
 from typing import (
     TYPE_CHECKING,
@@ -15,7 +15,15 @@ from typing import (
 )
 
 import sqlalchemy
-from sqlalchemy import MetaData, Table, UniqueConstraint, exists, select
+from sqlalchemy import (
+    Column,
+    Integer,
+    MetaData,
+    Table,
+    UniqueConstraint,
+    exists,
+    select,
+)
 from sqlalchemy.dialects import sqlite
 from sqlalchemy.schema import CreateIndex, CreateTable, DropTable
 from sqlalchemy.sql import func
@@ -30,7 +38,9 @@ from datachain.data_storage import AbstractDBMetastore, AbstractWarehouse
 from datachain.data_storage.db_engine import DatabaseEngine
 from datachain.data_storage.schema import DefaultSchema
 from datachain.dataset import DatasetRecord, StorageURI
-from datachain.error import DataChainError
+from datachain.error import DataChainError, OutdatedDatabaseSchemaError
+from datachain.namespace import Namespace
+from datachain.project import Project
 from datachain.sql.sqlite import create_user_defined_sql_functions, sqlite_dialect
 from datachain.sql.sqlite.base import load_usearch_extension
 from datachain.sql.types import SQLType
@@ -59,6 +69,14 @@ datachain.sql.sqlite.setup()
 
 quote_schema = sqlite_dialect.identifier_preparer.quote_schema
 quote = sqlite_dialect.identifier_preparer.quote
+
+# NOTE! This should be manually increased when we change our DB schema in codebase
+SCHEMA_VERSION = 1
+
+OUTDATED_SCHEMA_ERROR_MESSAGE = (
+    "You have an old version of the database schema. Please refer to the documentation"
+    " for more information."
+)
 
 
 def _get_in_memory_uri():
@@ -303,6 +321,11 @@ class SQLiteDatabaseEngine(DatabaseEngine):
         )
         return bool(next(self.execute(query))[0])
 
+    @property
+    def table_names(self) -> list[str]:
+        query = "SELECT name FROM sqlite_master WHERE type='table';"
+        return [r[0] for r in self.execute_str(query).fetchall()]
+
     def create_table(self, table: "Table", if_not_exists: bool = True) -> None:
         self.execute(CreateTable(table, if_not_exists=if_not_exists))
 
@@ -320,6 +343,8 @@ class SQLiteMetastore(AbstractDBMetastore):
     SQLite Metastore uses SQLite3 for storing indexed data locally.
     This is currently used for the local cli.
     """
+
+    META_TABLE = "meta"
 
     db: "SQLiteDatabaseEngine"
 
@@ -342,7 +367,11 @@ class SQLiteMetastore(AbstractDBMetastore):
 
         self.db = db or SQLiteDatabaseEngine.from_db_file(db_file)
 
+        self._init_meta_table()
+        self._init_meta_schema_value()
+        self._check_schema_version()
         self._init_tables()
+        self._init_namespaces_projects()
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
         """Close connection upon exit from context manager."""
@@ -383,8 +412,44 @@ class SQLiteMetastore(AbstractDBMetastore):
         (db_class, db_args, db_kwargs) = db_clone_params
         return cls(uri=uri, db=db_class(*db_args, **db_kwargs))
 
+    @cached_property
+    def _meta(self) -> Table:
+        return Table(self.META_TABLE, self.db.metadata, *self._meta_columns())
+
+    def _meta_select(self, *columns) -> "Select":
+        if not columns:
+            return self._meta.select()
+        return select(*columns)
+
+    def _meta_insert(self) -> "Insert":
+        return sqlite.insert(self._meta)
+
+    def _init_meta_table(self) -> None:
+        """Initializes meta table"""
+        # NOTE! needs to be called before _init_tables()
+        table_names = self.db.table_names
+        if table_names and self.META_TABLE not in table_names:
+            # this will happen on first run
+            raise OutdatedDatabaseSchemaError(OUTDATED_SCHEMA_ERROR_MESSAGE)
+
+        self.db.create_table(self._meta, if_not_exists=True)
+        self.default_table_names.append(self._meta.name)
+
+    def _init_meta_schema_value(self) -> None:
+        """Inserts current schema version value if not present in meta table yet"""
+        stmt = (
+            self._meta_insert()
+            .values(id=1, schema_version=SCHEMA_VERSION)
+            .on_conflict_do_nothing(index_elements=["id"])
+        )
+        self.db.execute(stmt)
+
     def _init_tables(self) -> None:
         """Initialize tables."""
+        self.db.create_table(self._namespaces, if_not_exists=True)
+        self.default_table_names.append(self._namespaces.name)
+        self.db.create_table(self._projects, if_not_exists=True)
+        self.default_table_names.append(self._projects.name)
         self.db.create_table(self._datasets, if_not_exists=True)
         self.default_table_names.append(self._datasets.name)
         self.db.create_table(self._datasets_versions, if_not_exists=True)
@@ -394,10 +459,55 @@ class SQLiteMetastore(AbstractDBMetastore):
         self.db.create_table(self._jobs, if_not_exists=True)
         self.default_table_names.append(self._jobs.name)
 
+    def _init_namespaces_projects(self) -> None:
+        """
+        Creates local namespace and local project connected to it.
+        In local environment user cannot explicitly create other namespaces and
+        projects and all datasets user creates will be stored in those.
+        When pulling dataset from Studio, then other namespaces and projects will
+        be created implicitly though, to keep the same fully qualified name with
+        Studio dataset.
+        """
+        system_namespace = self.create_namespace(Namespace.system(), "System namespace")
+        self.create_project(Project.listing(), system_namespace.name, "Listing project")
+
+        local_namespace = self.create_namespace(Namespace.default(), "Local namespace")
+        self.create_project(Project.default(), local_namespace.name, "Local project")
+
+    def _check_schema_version(self) -> None:
+        """
+        Checks if current DB schema is up to date with latest DB model and schema
+        version. If not, OutdatedDatabaseSchemaError is raised.
+        """
+        schema_version = next(self.db.execute(self._meta_select()))[1]
+        if schema_version < SCHEMA_VERSION:
+            raise OutdatedDatabaseSchemaError(OUTDATED_SCHEMA_ERROR_MESSAGE)
+
+    #
+    # Dataset dependencies
+    #
+    @classmethod
+    def _meta_columns(cls) -> list["SchemaItem"]:
+        return [
+            Column("id", Integer, primary_key=True),
+            Column("schema_version", Integer, default=SCHEMA_VERSION),
+        ]
+
     @classmethod
     def _datasets_columns(cls) -> list["SchemaItem"]:
         """Datasets table columns."""
-        return [*super()._datasets_columns(), UniqueConstraint("name")]
+        return [*super()._datasets_columns(), UniqueConstraint("project_id", "name")]
+
+    @classmethod
+    def _namespaces_columns(cls) -> list["SchemaItem"]:
+        """Datasets table columns."""
+        return [*super()._namespaces_columns(), UniqueConstraint("name")]
+
+    def _namespaces_insert(self) -> "Insert":
+        return sqlite.insert(self._namespaces)
+
+    def _projects_insert(self) -> "Insert":
+        return sqlite.insert(self._projects)
 
     def _datasets_insert(self) -> "Insert":
         return sqlite.insert(self._datasets)
@@ -414,6 +524,8 @@ class SQLiteMetastore(AbstractDBMetastore):
 
     def _dataset_dependencies_select_columns(self) -> list["SchemaItem"]:
         return [
+            self._namespaces.c.name,
+            self._projects.c.name,
             self._datasets_dependencies.c.id,
             self._datasets_dependencies.c.dataset_id,
             self._datasets_dependencies.c.dataset_version_id,
@@ -428,6 +540,26 @@ class SQLiteMetastore(AbstractDBMetastore):
 
     def _jobs_insert(self) -> "Insert":
         return sqlite.insert(self._jobs)
+
+    @property
+    def is_studio(self) -> bool:
+        return False
+
+    #
+    # Namespaces
+    #
+
+    @property
+    def default_namespace_name(self):
+        return Namespace.default()
+
+    #
+    # Projects
+    #
+
+    @property
+    def default_project_name(self):
+        return Project.default()
 
 
 class SQLiteWarehouse(AbstractWarehouse):
@@ -534,16 +666,16 @@ class SQLiteWarehouse(AbstractWarehouse):
     ) -> None:
         dst_empty = False
 
-        if not self.db.has_table(self.dataset_table_name(src.name, src_version)):
+        if not self.db.has_table(self.dataset_table_name(src, src_version)):
             # source table doesn't exist, nothing to do
             return
 
         src_dr = self.dataset_rows(src, src_version).table
 
-        if not self.db.has_table(self.dataset_table_name(dst.name, dst_version)):
+        if not self.db.has_table(self.dataset_table_name(dst, dst_version)):
             # destination table doesn't exist, create it
             self.create_dataset_rows_table(
-                self.dataset_table_name(dst.name, dst_version),
+                self.dataset_table_name(dst, dst_version),
                 columns=src_dr.columns,
             )
             dst_empty = True
