@@ -2254,7 +2254,7 @@ class DataChain:
             max_threads=num_threads or 1,
             client_config=client_config,
         )
-        file_exporter.run(self.to_iter(signal), progress_bar)
+        file_exporter.run(self.to_values(signal), progress_bar)
 
     def shuffle(self) -> "Self":
         """Shuffle the rows of the chain deterministically."""
