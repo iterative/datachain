@@ -62,14 +62,14 @@ def test_delta_update_from_dataset(test_session, tmp_dir, tmp_path):
     create_delta_dataset(ds_name)
     assert _get_dependencies(catalog, ds_name, "1.0.1") == [(starting_ds_name, "1.0.1")]
 
-    assert (dc.read_dataset(ds_name, version="1.0.0").order_by("file.path")).to_list(
+    assert (dc.read_dataset(ds_name, version="1.0.0").order_by("file.path")).to_values(
         "file.path"
     ) == [
         "img1.jpg",
         "img2.jpg",
     ]
 
-    assert (dc.read_dataset(ds_name, version="1.0.1").order_by("file.path")).to_list(
+    assert (dc.read_dataset(ds_name, version="1.0.1").order_by("file.path")).to_values(
         "file.path"
     ) == [
         "img1.jpg",
@@ -150,7 +150,7 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
     # second version of delta dataset
     create_delta_dataset()
 
-    assert (dc.read_dataset(ds_name, version="1.0.0").order_by("file.path")).to_list(
+    assert (dc.read_dataset(ds_name, version="1.0.0").order_by("file.path")).to_values(
         "file.path"
     ) == [
         "images/img4.jpg",
@@ -158,7 +158,7 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
         "images/img8.jpg",
     ]
 
-    assert (dc.read_dataset(ds_name, version="1.0.1").order_by("file.path")).to_list(
+    assert (dc.read_dataset(ds_name, version="1.0.1").order_by("file.path")).to_values(
         "file.path"
     ) == [
         "images/img10.jpg",
@@ -269,7 +269,7 @@ def test_delta_update_no_diff(test_session, tmp_dir, tmp_path):
     create_delta_dataset()
     create_delta_dataset()
 
-    assert (dc.read_dataset(ds_name, version="1.0.0").order_by("file.path")).to_list(
+    assert (dc.read_dataset(ds_name, version="1.0.0").order_by("file.path")).to_values(
         "file.path"
     ) == [
         "images/img6.jpg",
