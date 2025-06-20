@@ -1267,10 +1267,10 @@ class DataChain:
             stacklevel=2,
         )
 
-        res = self.to_list(*cols)
         if len(cols) == 1:
-            return [item[0] for item in res]
-        return res
+            yield from [item[0] for item in self.to_iter(*cols)]
+        else:
+            yield from self.to_iter(*cols)
 
     def to_pytorch(
         self,
