@@ -62,7 +62,7 @@ def _get_delta_chain(
     )
 
     # Calculate diff between source versions
-    return source_dc_latest.compare(source_dc, on=on, compare=compare, deleted=False)
+    return source_dc_latest.diff(source_dc, on=on, compare=compare, deleted=False)
 
 
 def _get_retry_chain(
@@ -237,7 +237,7 @@ def delta_retry_update(
         return None, None, False
 
     latest_dataset = datachain.read_dataset(name, version=latest_version)
-    compared_chain = latest_dataset.compare(
+    compared_chain = latest_dataset.diff(
         processing_chain,
         on=right_on or on,
         added=True,
