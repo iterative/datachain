@@ -387,8 +387,8 @@ def test_studio_run(capsys, mocker, tmp_dir):
                     "stupidity",
                     "--repository",
                     "https://github.com/iterative/datachain",
-                    "--cluster-id",
-                    "1",
+                    "--cluster",
+                    "default",
                 ]
             )
             == 0
@@ -427,5 +427,5 @@ def test_studio_run(capsys, mocker, tmp_dir):
         "team_name": "team_name",
         "repository": "https://github.com/iterative/datachain",
         "priority": 5,
-        "compute_cluster_id": 1,
+        "compute_cluster_name": "default",
     }
