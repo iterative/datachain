@@ -76,7 +76,7 @@ class ArrowGenerator(Generator):
             fs_path = file.path
             fs = ReferenceFileSystem({fs_path: [cache_path]})
         else:
-            fs, fs_path = file.get_fs(), file.get_path()
+            fs, fs_path = file.get_fs(), file.get_fs_path()
 
         kwargs = self.kwargs
         if format := kwargs.get("format"):
@@ -161,7 +161,7 @@ def infer_schema(chain: "DataChain", **kwargs) -> pa.Schema:
 
     schemas = []
     for (file,) in chain.to_iter("file"):
-        ds = dataset(file.get_path(), filesystem=file.get_fs(), **kwargs)  # type: ignore[union-attr]
+        ds = dataset(file.get_fs_path(), filesystem=file.get_fs(), **kwargs)  # type: ignore[union-attr]
         schemas.append(ds.schema)
     if not schemas:
         raise ValueError(
