@@ -69,10 +69,8 @@ def test_delta_update_from_dataset(test_session, tmp_dir, tmp_path):
         "img2.jpg",
     ]
 
-    assert list(
-        dc.read_dataset(ds_name, version="1.0.1")
-        .order_by("file.path")
-        .to_list("file.path")
+    assert (dc.read_dataset(ds_name, version="1.0.1").order_by("file.path")).to_list(
+        "file.path"
     ) == [
         "img1.jpg",
         "img2.jpg",
@@ -152,20 +150,16 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
     # second version of delta dataset
     create_delta_dataset()
 
-    assert list(
-        dc.read_dataset(ds_name, version="1.0.0")
-        .order_by("file.path")
-        .to_list("file.path")
+    assert (dc.read_dataset(ds_name, version="1.0.0").order_by("file.path")).to_list(
+        "file.path"
     ) == [
         "images/img4.jpg",
         "images/img6.jpg",
         "images/img8.jpg",
     ]
 
-    assert list(
-        dc.read_dataset(ds_name, version="1.0.1")
-        .order_by("file.path")
-        .to_list("file.path")
+    assert (dc.read_dataset(ds_name, version="1.0.1").order_by("file.path")).to_list(
+        "file.path"
     ) == [
         "images/img10.jpg",
         "images/img12.jpg",
@@ -180,14 +174,10 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
     # check that we have newest versions for modified rows since etags are mtime
     # and modified rows etags should be bigger than the old ones
     assert (
-        next(
-            dc.read_dataset(ds_name, version="1.0.1")
-            .filter(C("index") == 6)
-            .order_by("file.path", "file.etag")
-            .to_list("file.etag")
-        )
-        > etags[6]
-    )
+        dc.read_dataset(ds_name, version="1.0.1")
+        .filter(C("index") == 6)
+        .order_by("file.path", "file.etag")
+    ).to_list("file.etag")[0] > etags[6]
 
 
 def test_delta_update_check_num_calls(test_session, tmp_dir, tmp_path, capsys):
@@ -279,10 +269,8 @@ def test_delta_update_no_diff(test_session, tmp_dir, tmp_path):
     create_delta_dataset()
     create_delta_dataset()
 
-    assert list(
-        dc.read_dataset(ds_name, version="1.0.0")
-        .order_by("file.path")
-        .to_list("file.path")
+    assert (dc.read_dataset(ds_name, version="1.0.0").order_by("file.path")).to_list(
+        "file.path"
     ) == [
         "images/img6.jpg",
         "images/img7.jpg",

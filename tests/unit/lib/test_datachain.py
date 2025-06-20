@@ -639,7 +639,7 @@ def test_map(test_session):
         output={"x": _TestFr},
     )
 
-    x_list = list(chain.order_by("x.my_name", "x.sqrt").to_list("x"))
+    x_list = chain.order_by("x.my_name", "x.sqrt").to_list("x")
     test_frs = [
         _TestFr(sqrt=math.sqrt(fr.count), my_name=fr.nnn + "_suf") for fr in features
     ]
@@ -685,7 +685,7 @@ def test_agg(test_session):
         output={"x": _TestFr},
     )
 
-    assert list(chain.order_by("x.my_name").to_list("x")) == [
+    assert chain.order_by("x.my_name").to_list("x") == [
         _TestFr(
             f=File(path=""),
             cnt=sum(fr.count for fr in features if fr.nnn == "n1"),
@@ -728,8 +728,8 @@ def test_agg_two_params(test_session):
         )
     )
 
-    assert list(ds.order_by("x.my_name").to_list("x.my_name")) == ["n1-n1", "n2"]
-    assert list(ds.order_by("x.cnt").to_list("x.cnt")) == [7, 20]
+    assert ds.order_by("x.my_name").to_list("x.my_name") == ["n1-n1", "n2"]
+    assert ds.order_by("x.cnt").to_list("x.cnt") == [7, 20]
 
 
 def test_agg_simple_iterator(test_session):
@@ -790,8 +790,8 @@ def test_agg_tuple_result_iterator(test_session):
         x=func, partition_by=C("key")
     )
 
-    assert list(ds.order_by("x_1.name").to_list("x_1.name")) == ["n1-n1", "n2"]
-    assert list(ds.order_by("x_1.size").to_list("x_1.size")) == [5, 10]
+    assert ds.order_by("x_1.name").to_list("x_1.name") == ["n1-n1", "n2"]
+    assert ds.order_by("x_1.size").to_list("x_1.size") == [5, 10]
 
 
 def test_agg_tuple_result_generator(test_session):
@@ -812,8 +812,8 @@ def test_agg_tuple_result_generator(test_session):
         .order_by("x_1.name")
     )
 
-    assert list(ds.order_by("x_1.name").to_list("x_1.name")) == ["n1-n1", "n2"]
-    assert list(ds.order_by("x_1.size").to_list("x_1.size")) == [5, 10]
+    assert ds.order_by("x_1.name").to_list("x_1.name") == ["n1-n1", "n2"]
+    assert ds.order_by("x_1.size").to_list("x_1.size") == [5, 10]
 
 
 def test_batch_map(test_session):
@@ -833,7 +833,7 @@ def test_batch_map(test_session):
         output={"x": _TestFr},
     )
 
-    x_list = list(chain.order_by("x.my_name", "x.sqrt").to_list("x"))
+    x_list = chain.order_by("x.my_name", "x.sqrt").to_list("x")
     test_frs = [
         _TestFr(sqrt=math.sqrt(fr.count), my_name=fr.nnn + "_suf") for fr in features
     ]
@@ -862,7 +862,7 @@ def test_batch_map_wrong_size(test_session):
     )
 
     with pytest.raises(AssertionError):
-        list(chain.to_list())
+        chain.to_list()
 
 
 def test_batch_map_two_params(test_session):
@@ -890,12 +890,12 @@ def test_batch_map_two_params(test_session):
         output={"x": _TestFr},
     )
 
-    assert list(ds.order_by("x.my_name").to_list("x.my_name")) == [
+    assert ds.order_by("x.my_name").to_list("x.my_name") == [
         "n1-n1",
         "n1-n2",
         "n2-n1",
     ]
-    assert list(ds.order_by("x.cnt").to_list("x.cnt")) == [7, 7, 13]
+    assert ds.order_by("x.cnt").to_list("x.cnt") == [7, 7, 13]
 
 
 def test_batch_map_tuple_result_iterator(test_session):
@@ -905,14 +905,14 @@ def test_batch_map_tuple_result_iterator(test_session):
 
     chain = dc.read_values(t1=[1, 4, 9], session=test_session).batch_map(x=sqrt)
 
-    assert list(chain.order_by("x").to_list("x")) == [1, 2, 3]
+    assert chain.order_by("x").to_list("x") == [1, 2, 3]
 
 
 def test_collect(test_session):
     chain = dc.read_values(f1=features, num=range(len(features)), session=test_session)
 
     n = 0
-    for sample in chain.order_by("f1.nnn", "f1.count").to_list():
+    for sample in chain.order_by("f1.nnn", "f1.count").to_iter():
         assert len(sample) == 2
         fr, num = sample
 
@@ -1022,20 +1022,20 @@ def test_select_wrong_type(test_session):
     chain = dc.read_values(fr1=features_nested, fr2=features, session=test_session)
 
     with pytest.raises(SignalResolvingTypeError):
-        list(chain.select(4).to_list())
+        chain.select(4).to_list()
 
     with pytest.raises(SignalResolvingTypeError):
-        list(chain.select_except(features[0]).to_list())
+        chain.select_except(features[0]).to_list()
 
 
 def test_select_except_error(test_session):
     chain = dc.read_values(fr1=features_nested, fr2=features, session=test_session)
 
     with pytest.raises(SignalResolvingError):
-        list(chain.select_except("not_exist", "file").to_list())
+        chain.select_except("not_exist", "file").to_list()
 
     with pytest.raises(SignalRemoveError):
-        list(chain.select_except("fr1.label", "file").to_list())
+        chain.select_except("fr1.label", "file").to_list()
 
 
 def test_select_restore_from_saving(test_session):
@@ -1194,7 +1194,7 @@ def test_default_output_type(test_session):
         res1=lambda name: name + suffix
     )
 
-    assert list(chain.order_by("name").to_list("res1")) == [t + suffix for t in names]
+    assert chain.order_by("name").to_list("res1") == [t + suffix for t in names]
 
 
 def test_parse_tabular(tmp_dir, test_session):
@@ -1624,7 +1624,7 @@ def test_explode(tmp_dir, test_session, column_type, column, model_name):
         ("Ivan", 41, "San Francisco"),
     }
 
-    assert next(chain.limit(1).to_list(column)).__class__.__name__ == model_name
+    assert chain.limit(1).to_list(column)[0].__class__.__name__ == model_name
 
 
 def test_explode_raises_on_wrong_column_type(test_session):
@@ -1903,12 +1903,11 @@ def test_parallel_in_memory():
     vals = ["a", "b", "c", "d", "e", "f", "g", "h", "i"]
 
     with pytest.raises(RuntimeError):
-        list(
+        (
             dc.read_values(key=vals, in_memory=True)
             .settings(parallel=True)
             .map(res=lambda key: prefix + key)
-            .to_list("res")
-        )
+        ).to_list("res")
 
 
 def test_exec(test_session, monkeypatch):
@@ -2089,7 +2088,7 @@ def test_order_by_collect(test_session):
     letters = ["u", "y", "x", "z", "v", "t", "w"]
 
     chain = dc.read_values(number=numbers, letter=letters, session=test_session)
-    assert list(chain.order_by("number").to_list()) == [
+    assert chain.order_by("number").to_list() == [
         (1, "z"),
         (2, "y"),
         (3, "x"),
@@ -2099,7 +2098,7 @@ def test_order_by_collect(test_session):
         (7, "t"),
     ]
 
-    assert list(chain.order_by("letter").to_list()) == [
+    assert chain.order_by("letter").to_list() == [
         (7, "t"),
         (6, "u"),
         (5, "v"),
@@ -2138,7 +2137,7 @@ def test_union(test_session):
     chain2 = dc.read_values(value=[3, 4], session=test_session)
     chain3 = chain1 | chain2
     assert chain3.count() == 4
-    assert list(chain3.order_by("value").to_list("value")) == [1, 2, 3, 4]
+    assert chain3.order_by("value").to_list("value") == [1, 2, 3, 4]
 
 
 def test_union_different_columns(test_session):
@@ -2167,7 +2166,7 @@ def test_union_different_column_order(test_session):
     chain2 = dc.read_values(
         name=["different", "order"], value=[9, 10], session=test_session
     )
-    assert list(chain1.union(chain2).order_by("value").to_list()) == [
+    assert chain1.union(chain2).order_by("value").to_list() == [
         (1, "chain"),
         (2, "more"),
         (9, "different"),
@@ -2366,11 +2365,11 @@ def test_rename_non_object_column_name_with_mutate(test_session):
     ds = ds.mutate(my_ids=Column("ids"))
 
     assert ds.signals_schema.values == {"my_ids": int}
-    assert list(ds.order_by("my_ids").to_list("my_ids")) == [1, 2, 3]
+    assert ds.order_by("my_ids").to_list("my_ids") == [1, 2, 3]
 
     assert ds.signals_schema.values.get("my_ids") is int
     assert "ids" not in ds.signals_schema.values
-    assert list(ds.order_by("my_ids").to_list("my_ids")) == [1, 2, 3]
+    assert ds.order_by("my_ids").to_list("my_ids") == [1, 2, 3]
 
 
 def test_rename_object_column_name_with_mutate(test_session):
@@ -2381,7 +2380,7 @@ def test_rename_object_column_name_with_mutate(test_session):
     ds = dc.read_values(file=files, ids=[1, 2, 3], session=test_session)
     ds = ds.mutate(fname=Column("file.path"))
 
-    assert list(ds.order_by("fname").to_list("fname")) == ["a", "b", "c"]
+    assert ds.order_by("fname").to_list("fname") == ["a", "b", "c"]
     assert ds.signals_schema.values == {"file": File, "ids": int, "fname": str}
 
     # check that persist after saving
@@ -2391,7 +2390,7 @@ def test_rename_object_column_name_with_mutate(test_session):
     assert ds.signals_schema.values.get("file") is File
     assert ds.signals_schema.values.get("ids") is int
     assert ds.signals_schema.values.get("fname") is str
-    assert list(ds.order_by("fname").to_list("fname")) == ["a", "b", "c"]
+    assert ds.order_by("fname").to_list("fname") == ["a", "b", "c"]
 
 
 def test_rename_column_with_mutate(test_session):
@@ -2402,7 +2401,7 @@ def test_rename_column_with_mutate(test_session):
     ds = dc.read_values(file=files, ids=[1, 2, 3], session=test_session)
     ds = ds.mutate(my_file=Column("file"))
 
-    assert list(ds.order_by("my_file.path").to_list("my_file.path")) == ["a", "b", "c"]
+    assert ds.order_by("my_file.path").to_list("my_file.path") == ["a", "b", "c"]
     assert ds.signals_schema.values == {"my_file": File, "ids": int}
 
     # check that persist after saving
@@ -2412,7 +2411,7 @@ def test_rename_column_with_mutate(test_session):
     assert ds.signals_schema.values.get("my_file") is File
     assert ds.signals_schema.values.get("ids") is int
     assert "file" not in ds.signals_schema.values
-    assert list(ds.order_by("my_file.path").to_list("my_file.path")) == ["a", "b", "c"]
+    assert ds.order_by("my_file.path").to_list("my_file.path") == ["a", "b", "c"]
 
 
 def test_column(test_session):
@@ -2488,7 +2487,7 @@ def test_mutate_with_saving(test_session):
 
     ds = dc.read_dataset(name="mutated", session=test_session)
     assert ds.signals_schema.values["new"] is float
-    assert list(ds.to_list("new")) == [0.5, 1.0]
+    assert ds.to_list("new") == [0.5, 1.0]
 
 
 def test_mutate_with_expression_without_type(test_session):
@@ -2505,7 +2504,7 @@ def test_mutate_with_expression_without_type(test_session):
 def test_read_values_nan_inf(test_session):
     vals = [float("nan"), float("inf"), float("-inf")]
     chain = dc.read_values(vals=vals, session=test_session)
-    res = list(chain.to_list("vals"))
+    res = chain.to_list("vals")
     assert len(res) == 3
     assert any(r for r in res if np.isnan(r))
     assert any(r for r in res if np.isposinf(r))
@@ -2516,7 +2515,7 @@ def test_read_pandas_nan_inf(test_session):
     vals = [float("nan"), float("inf"), float("-inf")]
     df = pd.DataFrame({"vals": vals})
     chain = dc.read_pandas(df, session=test_session)
-    res = list(chain.to_list("vals"))
+    res = chain.to_list("vals")
     assert len(res) == 3
     assert any(r for r in res if np.isnan(r))
     assert any(r for r in res if np.isposinf(r))
@@ -2544,7 +2543,7 @@ def test_read_csv_nan_inf(tmp_dir, test_session):
     df.to_csv(path, index=False)
     chain = dc.read_csv(path.as_uri(), session=test_session)
 
-    res = list(chain.to_list("vals"))
+    res = chain.to_list("vals")
     assert len(res) == 3
     assert any(r for r in res if np.isnan(r))
     assert any(r for r in res if np.isposinf(r))
@@ -3305,10 +3304,10 @@ def test_from_dataset_version_int_backward_compatible(test_session):
     dc.read_values(nums=[5], session=test_session).save(ds_name, version="2.1.2")
     dc.read_values(nums=[6], session=test_session).save(ds_name, version="3.0.0")
 
-    assert list(dc.read_dataset(ds_name, version=1).to_list("nums")) == [2]
-    assert list(dc.read_dataset(ds_name, version=2).to_list("nums")) == [5]
-    assert list(dc.read_dataset(ds_name, version=3).to_list("nums")) == [6]
-    assert list(dc.read_dataset(ds_name, version="1.0.0").to_list("nums")) == [1]
+    assert dc.read_dataset(ds_name, version=1).to_list("nums") == [2]
+    assert dc.read_dataset(ds_name, version=2).to_list("nums") == [5]
+    assert dc.read_dataset(ds_name, version=3).to_list("nums") == [6]
+    assert dc.read_dataset(ds_name, version="1.0.0").to_list("nums") == [1]
     with pytest.raises(DatasetVersionNotFoundError):
         dc.read_dataset(ds_name, version=5)
 

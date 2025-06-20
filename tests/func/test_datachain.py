@@ -1582,14 +1582,14 @@ def test_similarity_search(cloud_test_catalog):
         text = file.read().decode("utf-8")
         return text_embedding(text)
 
-    target_embedding = next(
+    target_embedding = (
         dc.read_storage(src_uri, session=session)
         .filter(dc.C("file.path").glob("*description"))
         .order_by("file.path")
         .limit(1)
         .map(embedding=calc_emb, output={"embedding": list[float]})
-        .to_iter("embedding")
-    )
+    ).to_list("embedding")[0]
+
     chain = (
         dc.read_storage(src_uri, session=session)
         .map(embedding=calc_emb, output={"embedding": list[float]})
