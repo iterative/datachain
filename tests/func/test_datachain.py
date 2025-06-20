@@ -345,11 +345,6 @@ def test_to_storage(
     ctc = cloud_test_catalog
     df = dc.read_storage(ctc.src_uri, type=file_type, session=test_session)
     if use_map:
-        df.settings(cache=use_cache).to_storage(
-            tmp_dir / "output",
-            placement=placement,
-            num_threads=num_threads,
-        )
         df.settings(cache=use_cache).map(
             res=lambda file: file.export(tmp_dir / "output", placement=placement)
         ).exec()
