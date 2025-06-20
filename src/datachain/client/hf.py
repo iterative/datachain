@@ -21,6 +21,9 @@ def _wrap_class(sync_fs_class):
     asynchronous to False by default. This is similar to other Async FS
     we initialize. E.g. it means we don't break things in Jupyter where code
     run in async.
+
+    This also fixes write operations by ensuring they are properly forwarded
+    to the underlying filesystem without async buffering issues.
     """
     from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
 
@@ -28,6 +31,13 @@ def _wrap_class(sync_fs_class):
         def __init__(self, *args, **kwargs):
             sync_fs = sync_fs_class(*args, **kwargs)
             super().__init__(sync_fs, asynchronous=False)
+
+        def open(self, path, mode="rb", **kwargs):
+            # Override open to ensure write operations work correctly.
+            # It seems to be a bug in the fsspec wrapper. It avoids
+            # wrapping open() explicitly but also doesn't redirect it to
+            # sync filesystem.
+            return self.sync_fs.open(path, mode, **kwargs)
 
     GeneratedAsyncFileSystemWrapper.__name__ = f"Async{sync_fs_class.__name__}Wrapper"
     return GeneratedAsyncFileSystemWrapper

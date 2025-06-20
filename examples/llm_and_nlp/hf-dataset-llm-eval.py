@@ -1,3 +1,5 @@
+import os
+
 from huggingface_hub import InferenceClient
 from requests import HTTPError
 
@@ -23,6 +25,7 @@ def eval_dialog(
 ) -> DialogEval:
     try:
         completion = client.chat_completion(
+            model="meta-llama/Llama-3.3-70B-Instruct",
             messages=[
                 {
                     "role": "user",
@@ -31,9 +34,10 @@ def eval_dialog(
             ],
             response_format={"type": "json", "value": DialogEval.model_json_schema()},
         )
-    except HTTPError:
+    except HTTPError as e:
         return DialogEval(
-            result="Error", reason="Error while interacting with the Hugging Face API."
+            result="Error",
+            reason=f"Error while interacting with the Hugging Face API. {e}",
         )
 
     message = completion.choices[0].message
@@ -48,9 +52,15 @@ def eval_dialog(
 # Save to HF as Parquet. Dataset can be previewed here:
 # https://huggingface.co/datasets/dvcorg/test-datachain-llm-eval/viewer
 (
-    dc.read_csv("hf://datasets/infinite-dataset-hub/MobilePlanAssistant/data.csv")
-    .settings(parallel=10)
-    .setup(client=lambda: InferenceClient("meta-llama/Llama-3.1-70B-Instruct"))
+    dc.read_csv(
+        "hf://datasets/infinite-dataset-hub/MobilePlanAssistant/data.csv", source=False
+    )
+    .settings(parallel=True)
+    .setup(
+        client=lambda: InferenceClient(
+            provider="hf-inference", api_key=os.environ["HF_TOKEN"]
+        )
+    )
     .map(response=eval_dialog)
     .to_parquet("hf://datasets/dvcorg/test-datachain-llm-eval/data.parquet")
 )
