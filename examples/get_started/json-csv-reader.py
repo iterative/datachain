@@ -48,7 +48,7 @@ def main():
 
     # Print JSON schema in Pydantic format from main COCO annotation
     chain = dc.read_storage(uri, anon="True").filter(dc.C("file.path").glob("*.json"))
-    file = chain.limit(1).to_list("file")[0]
+    file = chain.limit(1).to_values("file")[0]
     print(gen_datamodel_code(file, jmespath="@", model_name="Coco"))
 
     # Static JSON schema test parsing 3/7 objects
