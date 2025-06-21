@@ -2191,7 +2191,7 @@ def test_subtract(test_session):
     chain2 = dc.read_values(a=[1, 2], b=["x", "y"], session=test_session)
     assert set(chain1.subtract(chain2, on=["a", "b"]).to_list()) == {(1, "y"), (2, "z")}
     assert set(chain1.subtract(chain2, on=["b"]).to_list()) == {(2, "z")}
-    assert set(chain1.subtract(chain2, on=["a"]).to_list()) == set()
+    assert not set(chain1.subtract(chain2, on=["a"]).to_list())
     assert set(chain1.subtract(chain2).to_list()) == {(1, "y"), (2, "z")}
     assert chain1.subtract(chain1).count() == 0
 
