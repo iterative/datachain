@@ -10,6 +10,7 @@ from time import sleep, time
 from typing import Any, Callable, Optional
 
 import pytest
+import sqlalchemy as sa
 from PIL import Image
 
 import datachain as dc
@@ -231,3 +232,10 @@ def sort_df(df):
 def df_equal(df1, df2) -> bool:
     """Helper function to check if two dataframes are equal regardless of ordering"""
     return sort_df(df1).equals(sort_df(df2))
+
+
+def table_row_count(db, table_name) -> Optional[int]:
+    if not db.has_table(table_name):
+        return None
+    query = sa.select(sa.func.count()).select_from(sa.table(table_name))
+    return next(db.execute(query), (None,))[0]

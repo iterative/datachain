@@ -362,6 +362,7 @@ class AbstractWarehouse(ABC, Serializable):
         old_version: str,
         new_version: str,
     ) -> None:
+        # TODO remove this
         namespace = dataset.project.namespace.name
         project = dataset.project.name
         old_ds_table_name = self._construct_dataset_table_name(
@@ -372,6 +373,24 @@ class AbstractWarehouse(ABC, Serializable):
         )
 
         self.db.rename_table(old_ds_table_name, new_ds_table_name)
+
+    def rename_dataset_tables(
+        self, dataset: DatasetRecord, dataset_updated: DatasetRecord
+    ) -> None:
+        """
+        Renames all dataset version tables when parts of the dataset that
+        are used in constructing table name are updated.
+        If nothing important is changed, nothing will be renamed (no DB calls
+        will be made at all).
+        """
+        for version in [v.version for v in dataset_updated.versions]:
+            if not dataset.has_version(version):
+                continue
+            old_name = self.dataset_table_name(dataset, version)
+            new_name = self.dataset_table_name(dataset_updated, version)
+            if old_name == new_name:
+                continue
+            self.db.rename_table(old_name, new_name)
 
     def dataset_rows_count(self, dataset: DatasetRecord, version=None) -> int:
         """Returns total number of rows in a dataset"""

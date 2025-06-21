@@ -16,7 +16,7 @@ from datachain.lib.file import File
 from datachain.lib.listing import parse_listing_uri
 from datachain.query.dataset import DatasetQuery
 from datachain.sql.types import Float32, Int, Int64
-from tests.utils import assert_row_names, dataset_dependency_asdict
+from tests.utils import assert_row_names, dataset_dependency_asdict, table_row_count
 
 FILE_SCHEMA = {
     f"file__{name}": _type if _type != Int else Int64
@@ -169,14 +169,6 @@ def test_get_dataset(cloud_test_catalog, dogs_dataset):
         catalog.get_dataset("wrong name", dogs_dataset.project)
 
 
-# Returns None if the table does not exist
-def get_table_row_count(db, table_name):
-    if not db.has_table(table_name):
-        return None
-    query = sa.select(sa.func.count()).select_from(sa.table(table_name))
-    return next(db.execute(query), (None,))[0]
-
-
 def test_create_dataset_from_sources(listed_bucket, cloud_test_catalog, project):
     dataset_name = uuid.uuid4().hex
     src_uri = cloud_test_catalog.src_uri
@@ -327,7 +319,7 @@ def test_remove_dataset(cloud_test_catalog, dogs_dataset):
         catalog.get_dataset(dogs_dataset.name, dogs_dataset.project)
 
     dataset_table_name = catalog.warehouse.dataset_table_name(dogs_dataset, "1.0.0")
-    assert get_table_row_count(catalog.warehouse.db, dataset_table_name) is None
+    assert table_row_count(catalog.warehouse.db, dataset_table_name) is None
 
     assert (
         catalog.metastore.get_direct_dataset_dependencies(dogs_dataset, "1.0.0") == []
@@ -391,8 +383,37 @@ def test_edit_dataset(cloud_test_catalog, dogs_dataset):
     old_dataset_table_name = catalog.warehouse.dataset_table_name(dogs_dataset, "1.0.0")
     new_dataset_table_name = catalog.warehouse.dataset_table_name(dataset, "1.0.0")
 
-    assert get_table_row_count(catalog.warehouse.db, old_dataset_table_name) is None
-    expected_table_row_count = get_table_row_count(
+    assert table_row_count(catalog.warehouse.db, old_dataset_table_name) is None
+    expected_table_row_count = table_row_count(
+        catalog.warehouse.db, new_dataset_table_name
+    )
+    assert expected_table_row_count
+    assert dataset.get_version("1.0.0").num_objects == expected_table_row_count
+
+
+def test_move_dataset(cloud_test_catalog, dogs_dataset, project):
+    session = cloud_test_catalog.session
+    catalog = cloud_test_catalog.catalog
+
+    dc.move_dataset(
+        dogs_dataset.name,
+        namespace=dogs_dataset.project.namespace.name,
+        project=dogs_dataset.project.name,
+        new_namespace=project.namespace.name,
+        new_project=project.name,
+        session=session,
+    )
+
+    dataset = catalog.get_dataset(dogs_dataset.name, project)
+    assert dataset.name == dogs_dataset.name
+    assert dataset.project == project
+
+    # check if dataset tables are renamed correctly
+    old_dataset_table_name = catalog.warehouse.dataset_table_name(dogs_dataset, "1.0.0")
+    new_dataset_table_name = catalog.warehouse.dataset_table_name(dataset, "1.0.0")
+
+    assert table_row_count(catalog.warehouse.db, old_dataset_table_name) is None
+    expected_table_row_count = table_row_count(
         catalog.warehouse.db, new_dataset_table_name
     )
     assert expected_table_row_count
@@ -414,12 +435,12 @@ def test_edit_dataset_same_name(cloud_test_catalog, dogs_dataset):
     old_dataset_table_name = catalog.warehouse.dataset_table_name(dogs_dataset, "1.0.0")
     new_dataset_table_name = catalog.warehouse.dataset_table_name(dataset, "1.0.0")
 
-    expected_table_row_count = get_table_row_count(
+    expected_table_row_count = table_row_count(
         catalog.warehouse.db, old_dataset_table_name
     )
     assert expected_table_row_count
     assert dataset.get_version("1.0.0").num_objects == expected_table_row_count
-    assert expected_table_row_count == get_table_row_count(
+    assert expected_table_row_count == table_row_count(
         catalog.warehouse.db, new_dataset_table_name
     )
 
