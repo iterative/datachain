@@ -328,3 +328,23 @@ def delete_dataset(
     else:
         version = None
     catalog.remove_dataset(name, ds_project, version=version, force=force)
+
+
+def move_dataset(
+    name: str,
+    namespace: str,
+    project: str,
+    new_namespace: str,
+    new_project: str,
+    session: Optional[Session] = None,
+    in_memory: bool = False,
+) -> None:
+    session = Session.get(session, in_memory=in_memory)
+    catalog = session.catalog
+
+    dataset = catalog.get_dataset(
+        name, catalog.metastore.get_project(project, namespace)
+    )
+    catalog.update_dataset(
+        dataset, project_id=catalog.metastore.get_project(new_project, new_namespace).id
+    )
