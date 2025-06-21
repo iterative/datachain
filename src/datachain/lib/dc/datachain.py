@@ -439,10 +439,10 @@ class DataChain:
 
         from datachain.lib.arrow import schema_to_output
 
-        json_values = list(self.limit(schema_sample_size).collect(col))
+        json_values = self.limit(schema_sample_size).to_list(col)
         json_dicts = [
             json.loads(json_value) if isinstance(json_value, str) else json_value
-            for json_value in json_values
+            for (json_value,) in json_values
         ]
 
         if any(not isinstance(json_dict, dict) for json_dict in json_dicts):
@@ -893,7 +893,7 @@ class DataChain:
             Order is not guaranteed when steps are added after an `order_by` statement.
             I.e. when using `read_dataset` an `order_by` statement should be used if
             the order of the records in the chain is important.
-            Using `order_by` directly before `limit`, `collect` and `collect_flatten`
+            Using `order_by` directly before `limit`, `to_list` and similar methods
             will give expected results.
             See https://github.com/iterative/datachain/issues/477 for further details.
         """
@@ -1098,32 +1098,32 @@ class DataChain:
 
     @property
     def _effective_signals_schema(self) -> "SignalSchema":
-        """Effective schema used for user-facing API like collect, to_pandas, etc."""
+        """Effective schema used for user-facing API like to_list, to_pandas, etc."""
         signals_schema = self.signals_schema
         if not self._sys:
             return signals_schema.clone_without_sys_signals()
         return signals_schema
 
     @overload
-    def collect_flatten(self) -> Iterator[tuple[Any, ...]]: ...
+    def _leaf_values(self) -> Iterator[tuple[Any, ...]]: ...
 
     @overload
-    def collect_flatten(self, *, include_hidden: bool) -> Iterator[tuple[Any, ...]]: ...
+    def _leaf_values(self, *, include_hidden: bool) -> Iterator[tuple[Any, ...]]: ...
 
     @overload
-    def collect_flatten(
+    def _leaf_values(
         self, *, row_factory: Callable[[list[str], tuple[Any, ...]], _T]
     ) -> Iterator[_T]: ...
 
     @overload
-    def collect_flatten(
+    def _leaf_values(
         self,
         *,
         row_factory: Callable[[list[str], tuple[Any, ...]], _T],
         include_hidden: bool,
     ) -> Iterator[_T]: ...
 
-    def collect_flatten(self, *, row_factory=None, include_hidden: bool = True):
+    def _leaf_values(self, *, row_factory=None, include_hidden: bool = True):
         """Yields flattened rows of values as a tuple.
 
         Args:
@@ -1151,7 +1151,7 @@ class DataChain:
         headers, _ = self._effective_signals_schema.get_headers_with_length()
         column_names = [".".join(filter(None, header)) for header in headers]
 
-        results_iter = self.collect_flatten()
+        results_iter = self._leaf_values()
 
         def column_chunks() -> Iterator[list[list[Any]]]:
             for chunk_iter in batched_it(results_iter, chunk_size):
@@ -1184,9 +1184,9 @@ class DataChain:
 
     def results(self, *, row_factory=None, include_hidden=True):
         if row_factory is None:
-            return list(self.collect_flatten(include_hidden=include_hidden))
+            return list(self._leaf_values(include_hidden=include_hidden))
         return list(
-            self.collect_flatten(row_factory=row_factory, include_hidden=include_hidden)
+            self._leaf_values(row_factory=row_factory, include_hidden=include_hidden)
         )
 
     def to_records(self) -> list[dict[str, Any]]:
@@ -1197,42 +1197,38 @@ class DataChain:
 
         return self.results(row_factory=to_dict)
 
-    @overload
-    def collect(self) -> Iterator[tuple[DataValue, ...]]: ...
-
-    @overload
-    def collect(self, col: str) -> Iterator[DataValue]: ...
-
-    @overload
-    def collect(self, *cols: str) -> Iterator[tuple[DataValue, ...]]: ...
-
-    def collect(self, *cols: str) -> Iterator[Union[DataValue, tuple[DataValue, ...]]]:  # type: ignore[overload-overlap,misc]
+    def to_iter(self, *cols: str) -> Iterator[tuple[DataValue, ...]]:
         """Yields rows of values, optionally limited to the specified columns.
 
         Args:
             *cols: Limit to the specified columns. By default, all columns are selected.
 
         Yields:
-            (DataType): Yields a single item if a column is selected.
-            (tuple[DataType, ...]): Yields a tuple of items if multiple columns are
-                selected.
+            (tuple[DataType, ...]): Yields a tuple of items for each row.
 
         Example:
             Iterating over all rows:
             ```py
-            for row in dc.collect():
+            for row in ds.to_iter():
+                print(row)
+            ```
+
+            DataChain is iterable and can be used in a for loop directly which is
+            equivalent to `ds.to_iter()`:
+            ```py
+            for row in ds:
                 print(row)
             ```
 
             Iterating over all rows with selected columns:
             ```py
-            for name, size in dc.collect("file.path", "file.size"):
+            for name, size in ds.to_iter("file.path", "file.size"):
                 print(name, size)
             ```
 
             Iterating over a single column:
             ```py
-            for file in dc.collect("file.path"):
+            for (file,) in ds.to_iter("file.path"):
                 print(file)
             ```
         """
@@ -1244,7 +1240,31 @@ class DataChain:
                 ret = signals_schema.row_to_features(
                     row, catalog=chain.session.catalog, cache=chain._settings.cache
                 )
-                yield ret[0] if len(cols) == 1 else tuple(ret)
+                yield tuple(ret)
+
+    @overload
+    def collect(self) -> Iterator[tuple[DataValue, ...]]: ...
+
+    @overload
+    def collect(self, col: str) -> Iterator[DataValue]: ...
+
+    @overload
+    def collect(self, *cols: str) -> Iterator[tuple[DataValue, ...]]: ...
+
+    def collect(self, *cols: str) -> Iterator[Union[DataValue, tuple[DataValue, ...]]]:  # type: ignore[overload-overlap,misc]
+        """
+        Deprecated. Use `to_iter` method instead.
+        """
+        warnings.warn(
+            "Method `collect` is deprecated. Use `to_iter` method instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
+        if len(cols) == 1:
+            yield from [item[0] for item in self.to_iter(*cols)]
+        else:
+            yield from self.to_iter(*cols)
 
     def to_pytorch(
         self,
@@ -2017,7 +2037,7 @@ class DataChain:
         headers, _ = self._effective_signals_schema.get_headers_with_length()
         column_names = [".".join(filter(None, header)) for header in headers]
 
-        results_iter = self.collect_flatten()
+        results_iter = self._leaf_values()
 
         with opener(path, "w", newline="") as f:
             writer = csv.writer(f, delimiter=delimiter, **kwargs)
@@ -2069,7 +2089,7 @@ class DataChain:
             if include_outer_list:
                 # This makes the file JSON instead of JSON lines.
                 f.write(b"[\n")
-            for row in self.collect_flatten():
+            for row in self._leaf_values():
                 if not is_first:
                     if include_outer_list:
                         # This makes the file JSON instead of JSON lines.
@@ -2234,7 +2254,7 @@ class DataChain:
             max_threads=num_threads or 1,
             client_config=client_config,
         )
-        file_exporter.run(self.collect(signal), progress_bar)
+        file_exporter.run(self.to_values(signal), progress_bar)
 
     def shuffle(self) -> "Self":
         """Shuffle the rows of the chain deterministically."""
@@ -2368,3 +2388,72 @@ class DataChain:
             Use 0/3, 1/3 and 2/3, not 1/3, 2/3 and 3/3.
         """
         return self._evolve(query=self._query.chunk(index, total))
+
+    def to_list(self, *cols: str) -> list[tuple[DataValue, ...]]:
+        """Returns a list of rows of values, optionally limited to the specified
+        columns.
+
+        Args:
+            *cols: Limit to the specified columns. By default, all columns are selected.
+
+        Returns:
+            list[tuple[DataType, ...]]: Returns a list of tuples of items for each row.
+
+        Example:
+            Getting all rows as a list:
+            ```py
+            rows = dc.to_list()
+            print(rows)
+            ```
+
+            Getting all rows with selected columns as a list:
+            ```py
+            name_size_pairs = dc.to_list("file.path", "file.size")
+            print(name_size_pairs)
+            ```
+
+            Getting a single column as a list:
+            ```py
+            files = dc.to_list("file.path")
+            print(files)  # Returns list of 1-tuples
+            ```
+        """
+        return list(self.to_iter(*cols))
+
+    def to_values(self, col: str) -> list[DataValue]:
+        """Returns a flat list of values from a single column.
+
+        Args:
+            col: The name of the column to extract values from.
+
+        Returns:
+            list[DataValue]: Returns a flat list of values from the specified column.
+
+        Example:
+            Getting all values from a single column:
+            ```py
+            file_paths = dc.to_values("file.path")
+            print(file_paths)  # Returns list of strings
+            ```
+
+            Getting all file sizes:
+            ```py
+            sizes = dc.to_values("file.size")
+            print(sizes)  # Returns list of integers
+            ```
+        """
+        return [row[0] for row in self.to_list(col)]
+
+    def __iter__(self) -> Iterator[tuple[DataValue, ...]]:
+        """Make DataChain objects iterable.
+
+        Yields:
+            (tuple[DataValue, ...]): Yields tuples of all column values for each row.
+
+        Example:
+            ```py
+            for row in chain:
+                print(row)
+            ```
+        """
+        return self.to_iter()

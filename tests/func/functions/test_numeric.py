@@ -7,7 +7,7 @@ def test_numeric_bit_operations(test_session):
         i: int
         j: int
 
-    ds = list(
+    ds = (
         dc.read_values(
             id=(1, 2, 3),
             data=(
@@ -28,8 +28,7 @@ def test_numeric_bit_operations(test_session):
             t6=func.bit_xor(dc.C("ii"), 0x0F),
         )
         .order_by("id")
-        .collect("t1", "t2", "t3", "t4", "t5", "t6")
-    )
+    ).to_list("t1", "t2", "t3", "t4", "t5", "t6")
 
     assert ds == [
         (0, 15, 15, 4, 31, 27),
@@ -66,7 +65,7 @@ def test_numeric_bit_hamming_distance(test_session):
             t8=func.bit_hamming_distance(37, dc.C("data.j")),
         )
         .order_by("id")
-        .collect("t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8")
+        .to_list("t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8")
     )
 
     assert ds == [
@@ -99,7 +98,7 @@ def test_numeric_int_hash_64(test_session):
             t5=func.int_hash_64(42),
         )
         .order_by("id")
-        .collect("t1", "t2", "t3", "t4", "t5")
+        .to_list("t1", "t2", "t3", "t4", "t5")
     )
 
     assert [tuple(col & (2**64 - 1) for col in row) for row in ds] == [

@@ -47,7 +47,7 @@ def process_files_with_delta():
     print("\nDataset versions:")
     test_dataset = dc.datasets().filter(C("name") == "test_files")
 
-    for version in test_dataset.collect("version"):
+    for version in test_dataset.to_iter("version"):
         print(f"- Version: {version}")
 
     # Show the last 3 records to demonstrate the incremental processing

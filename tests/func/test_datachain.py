@@ -53,7 +53,7 @@ def _get_listing_datasets(session):
             f"{ds.name}@v{ds.version}"
             for ds in dc.datasets(
                 column="dataset", session=session, include_listing=True
-            ).collect("dataset")
+            ).to_values("dataset")
             if is_listing_dataset(ds.name)
         ]
     )
@@ -96,7 +96,7 @@ def test_read_storage_glob(cloud_test_catalog):
 def test_read_storage_as_image(cloud_test_catalog):
     ctc = cloud_test_catalog
     chain = dc.read_storage(ctc.src_uri, session=ctc.session, type="image")
-    for im in chain.collect("file"):
+    for im in chain.to_values("file"):
         assert isinstance(im, ImageFile)
 
 
@@ -309,8 +309,8 @@ def test_map_file(cloud_test_catalog, use_cache, prefetch, monkeypatch):
         "dog3 -> bark",
         "dog4 -> ruff",
     }
-    assert set(chain.collect("signal")) == expected
-    for file in chain.collect("file"):
+    assert set(chain.to_values("signal")) == expected
+    for file in chain.to_values("file"):
         assert bool(file.get_local_path()) is use_cache
     assert not os.listdir(ctc.catalog.cache.tmp_dir)
 
@@ -320,7 +320,7 @@ def test_read_file(cloud_test_catalog, use_cache):
     ctc = cloud_test_catalog
 
     chain = dc.read_storage(ctc.src_uri, session=ctc.session)
-    for file in chain.settings(cache=use_cache).collect("file"):
+    for file in chain.settings(cache=use_cache).to_values("file"):
         assert file.get_local_path() is None
         file.read()
         assert bool(file.get_local_path()) is use_cache
@@ -363,7 +363,7 @@ def test_to_storage(
         "dog4": "ruff",
     }
 
-    for file in df.collect("file"):
+    for file in df.to_values("file"):
         if placement == "filename":
             file_path = file.name
         else:
@@ -459,7 +459,7 @@ def test_read_storage_multiple_uris_cache(cloud_test_catalog):
         ).exec()
         assert chain.count() == 11
 
-        files = chain.collect("file")
+        files = chain.to_values("file")
         assert {f.name for f in files} == {
             "cat1",
             "cat2",
@@ -733,7 +733,7 @@ def test_read_storage_check_rows(tmp_dir, test_session):
     is_sqlite = isinstance(test_session.catalog.warehouse, SQLiteWarehouse)
     tz = timezone.utc if is_sqlite else pytz.UTC
 
-    for (file,) in chain.collect():
+    for file in chain.to_values("file"):
         assert isinstance(file, File)
         stat = stats[file.name]
         mtime = stat.st_mtime if is_sqlite else float(math.floor(stat.st_mtime))
@@ -753,7 +753,7 @@ def test_mutate_existing_column(test_session):
     ds = dc.read_values(ids=[1, 2, 3], session=test_session)
     ds = ds.mutate(ids=Column("ids") + 1)
 
-    assert list(ds.order_by("ids").collect()) == [(2,), (3,), (4,)]
+    assert ds.order_by("ids").to_list() == [(2,), (3,), (4,)]
 
 
 @pytest.mark.parametrize("processes", [False, 2, True])
@@ -767,7 +767,7 @@ def test_parallel(processes, test_session_tmpfile):
         .settings(parallel=processes)
         .map(res=lambda key: prefix + key)
         .order_by("res")
-        .collect("res")
+        .to_values("res")
     )
 
     assert res == [prefix + v for v in vals]
@@ -790,9 +790,9 @@ def test_udf(cloud_test_catalog):
         .filter(dc.C("file.path").glob("cats*") | (dc.C("file.size") < 4))
         .map(name_len, params=["file.path"], output={"name_len": int})
     )
-    result1 = list(chain.select("file.path", "name_len").collect())
+    result1 = chain.select("file.path", "name_len").to_list()
     # ensure that we're able to run with same query multiple times
-    result2 = list(chain.select("file.path", "name_len").collect())
+    result2 = chain.select("file.path", "name_len").to_list()
     count = chain.count()
     assert len(result1) == 3
     assert len(result2) == 3
@@ -825,7 +825,7 @@ def test_udf_parallel(cloud_test_catalog_tmpfile):
 
     # Check that the UDF ran successfully
     count = 0
-    for r in chain.collect():
+    for r in chain:
         count += 1
         assert len(r[0]) == r[1]
     assert count == 7
@@ -856,7 +856,7 @@ def test_udf_parallel_boostrap(test_session_tmpfile):
 
     chain = dc.read_values(key=vals, session=test_session_tmpfile)
 
-    res = list(chain.settings(parallel=4).map(res=MyMapper()).collect("res"))
+    res = chain.settings(parallel=4).map(res=MyMapper()).to_values("res")
 
     assert res == [MyMapper.BOOTSTRAP_VALUE] * len(vals)
 
@@ -891,7 +891,7 @@ def test_udf_distributed(
 
     # Check that the UDF ran successfully
     count = 0
-    for r in chain.collect():
+    for r in chain:
         count += 1
         assert len(r[0]) == r[1]
     assert count == 225
@@ -925,7 +925,7 @@ def test_class_udf(cloud_test_catalog):
         .order_by("file.size")
     )
 
-    assert list(chain.collect()) == [
+    assert chain.to_list() == [
         (3, 11),
         (4, 13),
         (4, 13),
@@ -965,7 +965,7 @@ def test_class_udf_parallel(cloud_test_catalog_tmpfile):
         .order_by("file.size")
     )
 
-    assert list(chain.collect()) == [
+    assert chain.to_list() == [
         (3, 11),
         (4, 13),
         (4, 13),
@@ -1072,7 +1072,7 @@ def test_udf_reuse_on_error(cloud_test_catalog_tmpfile):
 
     # Retry Query
     count = 0
-    for r in chain.collect():
+    for r in chain:
         # Check that the UDF ran successfully
         count += 1
         assert len(r[0]) == r[1]
@@ -1191,7 +1191,7 @@ def test_udf_after_limit(cloud_test_catalog):
 
     def get_result(chain):
         res = chain.limit(100).map(name_int=name_int).order_by("name")
-        return list(res.collect("name", "name_int"))
+        return res.to_list("name", "name_int")
 
     expected = [(f"{i:06d}", i) for i in range(100)]
     chain = (
@@ -1226,8 +1226,8 @@ def test_row_number_with_order_by_name_len_desc_and_name_asc(cloud_test_catalog)
         name_len, params=["file.path"], output={"name_len": int}
     ).order_by("name_len", descending=True).order_by("file.path").save(ds_name)
 
-    assert list(
-        dc.read_dataset(name=ds_name, session=session).collect("sys.id", "file.path")
+    assert dc.read_dataset(name=ds_name, session=session).to_list(
+        "sys.id", "file.path"
     ) == [
         (1, "description"),
         (2, "cats/cat1"),
@@ -1259,8 +1259,8 @@ def test_row_number_with_order_by_before_map(cloud_test_catalog):
 
     # we should preserve order in final result based on order by which was added
     # before add_signals
-    assert list(
-        dc.read_dataset(name=ds_name, session=session).collect("sys.id", "file.path")
+    assert dc.read_dataset(name=ds_name, session=session).to_list(
+        "sys.id", "file.path"
     ) == [
         (1, "cats/cat1"),
         (2, "cats/cat2"),
@@ -1383,7 +1383,7 @@ def test_gen_parallel(cloud_test_catalog_tmpfile):
         .gen(gen=func, params=["file"], output={"val": str})
         .order_by("val")
     )
-    assert list(chain.collect("val")) == [
+    assert chain.to_values("val") == [
         "cats/cat1_0",
         "cats/cat1_1",
         "cats/cat1_2",
@@ -1462,7 +1462,7 @@ def test_gen_with_new_columns_numpy(cloud_test_catalog, dogs_dataset):
     ).save("dogs_with_rows_and_signals")
 
     chain = dc.read_dataset(name="dogs_with_rows_and_signals", session=session)
-    for r in chain.collect(
+    for r in chain.to_iter(
         "int_col_32",
         "int_col_64",
         "float_col_32",
@@ -1565,7 +1565,7 @@ def test_gen_file(cloud_test_catalog, use_cache, prefetch, monkeypatch):
         "ruff",
         "woof",
     }
-    assert set(chain.collect("signal")) == expected
+    assert set(chain.to_values("signal")) == expected
     assert not os.listdir(ctc.catalog.cache.tmp_dir)
 
 
@@ -1577,14 +1577,14 @@ def test_similarity_search(cloud_test_catalog):
         text = file.read().decode("utf-8")
         return text_embedding(text)
 
-    target_embedding = next(
+    target_embedding = (
         dc.read_storage(src_uri, session=session)
         .filter(dc.C("file.path").glob("*description"))
         .order_by("file.path")
         .limit(1)
         .map(embedding=calc_emb, output={"embedding": list[float]})
-        .collect("embedding")
-    )
+    ).to_values("embedding")[0]
+
     chain = (
         dc.read_storage(src_uri, session=session)
         .map(embedding=calc_emb, output={"embedding": list[float]})
@@ -1608,7 +1608,7 @@ def test_similarity_search(cloud_test_catalog):
     ]
 
     for (p1, c1, e1), (p2, c2, e2) in zip(
-        chain.collect("file.path", "cos_dist", "eucl_dist"), expected
+        chain.to_iter("file.path", "cos_dist", "eucl_dist"), expected
     ):
         assert p1.endswith(p2)
         assert math.isclose(c1, c2, abs_tol=1e-5)
@@ -1627,7 +1627,7 @@ def test_process_and_open_tar(cloud_test_catalog, cloud_type):
     assert chain.count() == 7
 
     assert {
-        (content, file.path) for file, content in chain.collect("file", "content")
+        (content, file.path) for file, content in chain.to_iter("file", "content")
     } == {
         ("meow", "animals.tar/cats/cat1"),
         ("mrow", "animals.tar/cats/cat2"),

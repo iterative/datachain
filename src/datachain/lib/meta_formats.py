@@ -106,7 +106,7 @@ def read_meta(  # noqa: C901
     from datachain import read_storage
 
     if schema_from:
-        file = next(read_storage(schema_from, type="text").limit(1).collect("file"))
+        file = read_storage(schema_from, type="text").limit(1).to_values("file")[0]
         model_code = gen_datamodel_code(
             file, format=format, jmespath=jmespath, model_name=model_name
         )

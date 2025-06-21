@@ -29,16 +29,14 @@ def path_ds(test_session) -> dc.DataChain:
 
 
 def test_path_file_ext(path_ds):
-    ds = list(
+    ds = (
         path_ds.mutate(
             t1=func.file_ext("data.path"),
             t2=func.file_ext(dc.C("file")),
             t3=func.file_ext(dc.func.literal("path/to/file.txt")),
             t4=func.file_ext(dc.func.literal("path/to/file")),
-        )
-        .order_by("id")
-        .collect("t1", "t2", "t3", "t4")
-    )
+        ).order_by("id")
+    ).to_list("t1", "t2", "t3", "t4")
 
     assert ds == [
         ("txt", "txt", "txt", ""),
@@ -57,7 +55,7 @@ def test_path_file_stem(path_ds):
             t4=func.file_stem(dc.func.literal("path/to/file")),
         )
         .order_by("id")
-        .collect("t1", "t2", "t3", "t4")
+        .to_list("t1", "t2", "t3", "t4")
     )
 
     assert ds == [
@@ -77,7 +75,7 @@ def test_path_name(path_ds):
             t4=func.name(dc.func.literal("path/to/file")),
         )
         .order_by("id")
-        .collect("t1", "t2", "t3", "t4")
+        .to_list("t1", "t2", "t3", "t4")
     )
 
     assert ds == [
@@ -97,7 +95,7 @@ def test_path_parent(path_ds):
             t4=func.parent(dc.func.literal("path/to/file")),
         )
         .order_by("id")
-        .collect("t1", "t2", "t3", "t4")
+        .to_list("t1", "t2", "t3", "t4")
     )
 
     assert ds == [

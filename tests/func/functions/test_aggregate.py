@@ -7,7 +7,7 @@ def test_aggregate_avg(test_session):
         i: int
         f: float
 
-    ds = list(
+    ds = (
         dc.read_values(
             id=(1, 2, 3),
             data=(
@@ -18,15 +18,13 @@ def test_aggregate_avg(test_session):
             ii=(20, 40, 60),
             ff=(2.0, 4.0, 6.0),
             session=test_session,
-        )
-        .group_by(
+        ).group_by(
             t1=func.avg("data.i"),
             t2=func.avg(dc.C("data.f")),
             t3=func.avg(dc.C("ii")),
             t4=func.avg("ff"),
         )
-        .collect("t1", "t2", "t3", "t4")
-    )
+    ).to_list("t1", "t2", "t3", "t4")
 
     assert ds == [(20.0, 2.0, 40.0, 4.0)]
 
@@ -58,7 +56,7 @@ def test_aggregate_count(test_session):
             t5=func.count(dc.C("ff")),
             t6=func.count("ss"),
         )
-        .collect("t1", "t2", "t3", "t4", "t5", "t6")
+        .to_list("t1", "t2", "t3", "t4", "t5", "t6")
     )
 
     assert ds == [(3, 3, 3, 3, 3, 3)]
@@ -87,7 +85,7 @@ def test_aggregate_sum(test_session):
             t3=func.sum(dc.C("ii")),
             t4=func.sum("ff"),
         )
-        .collect("t1", "t2", "t3", "t4")
+        .to_list("t1", "t2", "t3", "t4")
     )
 
     assert ds == [(60, 6.0, 120, 12.0)]
@@ -125,7 +123,7 @@ def test_aggregate_min_max(test_session):
             t10=func.max(dc.C("ii")),
             t11=func.max("ff"),
         )
-        .collect("t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9", "t10", "t11")
+        .to_list("t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9", "t10", "t11")
     )
 
     assert ds == [(10, 1.0, "a", 30, 3.0, "c", 20, 2.0, "x", 60, 6.0)]
@@ -160,7 +158,7 @@ def test_aggregate_any_value(test_session):
             partition_by="id",
         )
         .order_by("id")
-        .collect("t1", "t2", "t3", "t4", "t5", "t6")
+        .to_list("t1", "t2", "t3", "t4", "t5", "t6")
     )
 
     # any_value can return any value from the group,

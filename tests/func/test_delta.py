@@ -62,19 +62,15 @@ def test_delta_update_from_dataset(test_session, tmp_dir, tmp_path):
     create_delta_dataset(ds_name)
     assert _get_dependencies(catalog, ds_name, "1.0.1") == [(starting_ds_name, "1.0.1")]
 
-    assert list(
-        dc.read_dataset(ds_name, version="1.0.0")
-        .order_by("file.path")
-        .collect("file.path")
+    assert (dc.read_dataset(ds_name, version="1.0.0").order_by("file.path")).to_values(
+        "file.path"
     ) == [
         "img1.jpg",
         "img2.jpg",
     ]
 
-    assert list(
-        dc.read_dataset(ds_name, version="1.0.1")
-        .order_by("file.path")
-        .collect("file.path")
+    assert (dc.read_dataset(ds_name, version="1.0.1").order_by("file.path")).to_values(
+        "file.path"
     ) == [
         "img1.jpg",
         "img2.jpg",
@@ -136,7 +132,7 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
     # into consideration on delta update
     etags = {
         r[0]: r[1].etag
-        for r in dc.read_dataset(ds_name, version="1.0.0").collect("index", "file")
+        for r in dc.read_dataset(ds_name, version="1.0.0").to_iter("index", "file")
     }
 
     # remove last couple of images to simulate modification since we will re-create it
@@ -154,20 +150,16 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
     # second version of delta dataset
     create_delta_dataset()
 
-    assert list(
-        dc.read_dataset(ds_name, version="1.0.0")
-        .order_by("file.path")
-        .collect("file.path")
+    assert (dc.read_dataset(ds_name, version="1.0.0").order_by("file.path")).to_values(
+        "file.path"
     ) == [
         "images/img4.jpg",
         "images/img6.jpg",
         "images/img8.jpg",
     ]
 
-    assert list(
-        dc.read_dataset(ds_name, version="1.0.1")
-        .order_by("file.path")
-        .collect("file.path")
+    assert (dc.read_dataset(ds_name, version="1.0.1").order_by("file.path")).to_values(
+        "file.path"
     ) == [
         "images/img10.jpg",
         "images/img12.jpg",
@@ -182,14 +174,10 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
     # check that we have newest versions for modified rows since etags are mtime
     # and modified rows etags should be bigger than the old ones
     assert (
-        next(
-            dc.read_dataset(ds_name, version="1.0.1")
-            .filter(C("index") == 6)
-            .order_by("file.path", "file.etag")
-            .collect("file.etag")
-        )
-        > etags[6]
-    )
+        dc.read_dataset(ds_name, version="1.0.1")
+        .filter(C("index") == 6)
+        .order_by("file.path", "file.etag")
+    ).to_values("file.etag")[0] > etags[6]
 
 
 def test_delta_update_check_num_calls(test_session, tmp_dir, tmp_path, capsys):
@@ -281,10 +269,8 @@ def test_delta_update_no_diff(test_session, tmp_dir, tmp_path):
     create_delta_dataset()
     create_delta_dataset()
 
-    assert list(
-        dc.read_dataset(ds_name, version="1.0.0")
-        .order_by("file.path")
-        .collect("file.path")
+    assert (dc.read_dataset(ds_name, version="1.0.0").order_by("file.path")).to_values(
+        "file.path"
     ) == [
         "images/img6.jpg",
         "images/img7.jpg",
