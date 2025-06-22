@@ -16,19 +16,33 @@ NPZ_METADATA = os.getenv(
 )
 
 wds_images = (
-    dc.read_storage(IMAGE_TARS, type="image")
+    dc.read_storage(IMAGE_TARS, type="image", anon=True)
     .settings(cache=True)
     .gen(laion=process_webdataset(spec=WDSLaion), params="file")
+    .persist()
 )
+
+wds_images.show(5)
 
 wds_with_pq = (
-    dc.read_parquet(PARQUET_METADATA)
+    dc.read_parquet(PARQUET_METADATA, anon=True)
     .settings(cache=True)
     .merge(wds_images, on="uid", right_on="laion.json.uid", inner=True)
+    .persist()
 )
 
-wds_npz = dc.read_storage(NPZ_METADATA).settings(cache=True).gen(emd=process_laion_meta)
+wds_with_pq.show(5)
 
+wds_npz = (
+    dc.read_storage(NPZ_METADATA, anon=True)
+    .settings(cache=True)
+    .gen(emd=process_laion_meta)
+    .persist()
+)
+
+wds_npz.show(5)
+
+print("Merging all metadata into a single dataset ...")
 
 res = wds_npz.merge(
     wds_with_pq,
