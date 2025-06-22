@@ -3,7 +3,6 @@ import pytest
 import datachain as dc
 from datachain.error import (
     InvalidProjectNameError,
-    NamespaceNotFoundError,
     ProjectCreateNotAllowedError,
     ProjectNotFoundError,
 )
@@ -20,20 +19,17 @@ def chatbot_project(test_session, dev_namespace):
     return dc.projects.create("chatbot", "dev", "Chatbot project")
 
 
-def test_create_project(test_session, dev_namespace):
-    project = dc.projects.create("chatbot", dev_namespace.name, session=test_session)
+@pytest.mark.parametrize("namespace_created_upfront", (True, False))
+def test_create_project(test_session, namespace_created_upfront):
+    if namespace_created_upfront:
+        dc.namespaces.create("dev")
+
+    project = dc.projects.create("chatbot", "dev", session=test_session)
     assert project.id
     assert project.uuid
     assert project.created_at
     assert project.name == "chatbot"
-    assert project.namespace == dev_namespace
-
-
-def test_create_project_namespace_does_not_exist(test_session):
-    with pytest.raises(NamespaceNotFoundError) as excinfo:
-        dc.projects.create("chatbot", "wrong", session=test_session)
-
-    assert str(excinfo.value) == "Namespace wrong not found."
+    assert project.namespace == dc.namespaces.get("dev", session=test_session)
 
 
 def test_create_project_that_already_exists_in_namespace(test_session, dev_namespace):

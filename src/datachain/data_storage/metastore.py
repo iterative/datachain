@@ -770,7 +770,11 @@ class AbstractDBMetastore(AbstractMetastore):
         ignore_if_exists: bool = True,
         **kwargs,
     ) -> Project:
-        namespace = self.get_namespace(namespace_name)
+        try:
+            namespace = self.get_namespace(namespace_name)
+        except NamespaceNotFoundError:
+            namespace = self.create_namespace(namespace_name)
+
         query = self._projects_insert().values(
             namespace_id=namespace.id,
             uuid=uuid or str(uuid4()),

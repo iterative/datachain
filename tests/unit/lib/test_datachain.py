@@ -20,6 +20,7 @@ from datachain.error import (
     DatasetInvalidVersionError,
     DatasetNotFoundError,
     DatasetVersionNotFoundError,
+    ProjectCreateNotAllowedError,
 )
 from datachain.lib.data_model import DataModel
 from datachain.lib.dc import C, DatasetPrepareError, Sys
@@ -3373,48 +3374,63 @@ def test_save_to_default_project(test_session):
 
 
 @pytest.mark.parametrize("use_settings", (True, False))
-def test_save_to_non_default_namespace_and_project(test_session, project, use_settings):
-    ds_name = "fibonacci"
-    ds_full_name = f"{project.namespace.name}.{project.name}.fibonacci"
+@pytest.mark.parametrize("project_created_upfront", (True, False))
+def test_save_to_non_default_namespace_and_project(
+    test_session, use_settings, project_created_upfront
+):
+    catalog = test_session.catalog
+    if project_created_upfront:
+        catalog.metastore.create_project("numbers", "dev")
+
     ds = dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session)
     if use_settings:
-        ds = ds.settings(namespace=project.namespace.name, project=project.name).save(
-            ds_name
-        )
+        ds = ds.settings(namespace="dev", project="numbers").save("fibonacci")
     else:
-        ds = ds.save(ds_full_name)
+        ds = ds.save("dev.numbers.fibonacci")
 
-    ds = dc.read_dataset(name=ds_full_name)
-    assert ds.dataset.project == project
-    assert ds.dataset.name == ds_name
-    assert ds.dataset.full_name == ds_full_name
+    ds = dc.read_dataset(name="dev.numbers.fibonacci")
+    assert ds.dataset.project == catalog.metastore.get_project("numbers", "dev")
+    assert ds.dataset.name == "fibonacci"
+    assert ds.dataset.full_name == "dev.numbers.fibonacci"
 
     with pytest.raises(DatasetNotFoundError):
         # dataset is not in default namespace / project
-        dc.read_dataset(name=ds_name)
+        dc.read_dataset(name="fibonacci")
 
 
 @pytest.mark.parametrize("use_settings", (True, False))
-def test_save_specify_only_non_default_project(test_session, use_settings):
+@pytest.mark.parametrize("project_created_upfront", (True, False))
+def test_save_specify_only_non_default_project(
+    test_session, use_settings, project_created_upfront
+):
     catalog = test_session.catalog
-    ds_name = "fibonacci"
-    project_name = "dev"
-    project = catalog.metastore.create_project(
-        project_name, catalog.metastore.default_namespace_name
-    )
+    default_namespace_name = catalog.metastore.default_namespace_name
+
+    if project_created_upfront:
+        catalog.metastore.create_project("numbers", default_namespace_name)
+
     ds = dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session)
     if use_settings:
-        ds = ds.settings(project=project.name).save("fibonacci")
+        ds = ds.settings(project="numbers").save("fibonacci")
     else:
-        ds = ds.save("dev.fibonacci")
+        ds = ds.save("numbers.fibonacci")
 
-    ds = dc.read_dataset(name="dev.fibonacci")
-    assert ds.dataset.project == project
-    assert ds.dataset.name == ds_name
-    assert ds.dataset.full_name == (
-        f"{catalog.metastore.default_namespace_name}.dev.fibonacci"
+    ds = dc.read_dataset(name="numbers.fibonacci")
+    assert ds.dataset.project == catalog.metastore.get_project(
+        "numbers", default_namespace_name
     )
+    assert ds.dataset.name == "fibonacci"
+    assert ds.dataset.full_name == (f"{default_namespace_name}.numbers.fibonacci")
 
     with pytest.raises(DatasetNotFoundError):
         # dataset is not in default namespace / project
-        dc.read_dataset(name=ds_name)
+        dc.read_dataset(name="fibonacci")
+
+
+@pytest.mark.disable_autouse
+@skip_if_not_sqlite
+def test_save_create_project_not_allowed(test_session):
+    with pytest.raises(ProjectCreateNotAllowedError):
+        dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save(
+            "dev.numbers.fibonacci"
+        )

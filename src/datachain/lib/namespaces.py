@@ -38,7 +38,7 @@ def create(
     return session.catalog.metastore.create_namespace(name, description)
 
 
-def get(name: str, session: Optional[Session]) -> Namespace:
+def get(name: str, session: Optional[Session] = None) -> Namespace:
     """
     Gets a namespace by name.
     If the namespace is not found, a `NamespaceNotFoundError` is raised.
