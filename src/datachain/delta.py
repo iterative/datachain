@@ -73,6 +73,7 @@ def _get_retry_chain(
     on: Union[str, Sequence[str]],
     right_on: Optional[Union[str, Sequence[str]]],
     delta_retry: Optional[Union[bool, str]],
+    diff_chain: "DataChain",
 ) -> Optional["DataChain"]:
     """Get retry chain for processing error records and missing records."""
     # Import here to avoid circular import
@@ -97,7 +98,10 @@ def _get_retry_chain(
         missing_records = source_dc.subtract(result_dataset, on=on, right_on=right_on)
         retry_chain = missing_records
 
-    return retry_chain
+    # Subtract also diff chain since some items might be picked
+    # up by `delta=True` itself (e.g. records got modified AND are missing in the
+    # result dataset atm)
+    return retry_chain.subtract(diff_chain, on=on) if retry_chain else None
 
 
 def _get_source_info(
@@ -217,15 +221,12 @@ def delta_retry_update(
             on,
             right_on,
             delta_retry,
+            diff_chain,
         )
 
     # Combine delta and retry chains
-    # Distinct is needed since delta and retry still might pick up the same records
-    # e.g. when some records were modified in the source dataset and were not
-    # processed in the previous run.
     if retry_chain is not None:
-        args = [on] if isinstance(on, str) else list(on)
-        processing_chain = diff_chain.union(retry_chain).distinct(*args)
+        processing_chain = diff_chain.union(retry_chain)
     else:
         processing_chain = diff_chain
 
