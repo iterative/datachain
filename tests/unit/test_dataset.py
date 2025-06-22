@@ -12,6 +12,7 @@ from datachain.dataset import (
     DatasetDependencyType,
     DatasetRecord,
     DatasetVersion,
+    parse_dataset_name,
 )
 from datachain.error import InvalidDatasetNameError
 from datachain.sql.types import (
@@ -162,3 +163,20 @@ def test_validate_name(name, ok):
     else:
         with pytest.raises(InvalidDatasetNameError):
             DatasetRecord.validate_name(name)
+
+
+@pytest.mark.parametrize(
+    "full_name,namespace,project,name",
+    [
+        ("dogs", None, None, "dogs"),
+        ("animals.dogs", None, "animals", "dogs"),
+        ("dev.animals.dogs", "dev", "animals", "dogs"),
+    ],
+)
+def test_parse_dataset_name(full_name, namespace, project, name):
+    assert parse_dataset_name(full_name) == (namespace, project, name)
+
+
+def test_parse_dataset_name_empty_name():
+    with pytest.raises(ValueError):
+        assert parse_dataset_name(None)

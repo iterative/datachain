@@ -3373,7 +3373,7 @@ def test_save_to_default_project(test_session):
 
 
 @pytest.mark.parametrize("use_settings", (True, False))
-def test_save_to_non_default_project(test_session, project, use_settings):
+def test_save_to_non_default_namespace_and_project(test_session, project, use_settings):
     ds_name = "fibonacci"
     ds_full_name = f"{project.namespace.name}.{project.name}.fibonacci"
     ds = dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session)
@@ -3388,6 +3388,32 @@ def test_save_to_non_default_project(test_session, project, use_settings):
     assert ds.dataset.project == project
     assert ds.dataset.name == ds_name
     assert ds.dataset.full_name == ds_full_name
+
+    with pytest.raises(DatasetNotFoundError):
+        # dataset is not in default namespace / project
+        dc.read_dataset(name=ds_name)
+
+
+@pytest.mark.parametrize("use_settings", (True, False))
+def test_save_specify_only_non_default_project(test_session, use_settings):
+    catalog = test_session.catalog
+    ds_name = "fibonacci"
+    project_name = "dev"
+    project = catalog.metastore.create_project(
+        project_name, catalog.metastore.default_namespace_name
+    )
+    ds = dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session)
+    if use_settings:
+        ds = ds.settings(project=project.name).save("fibonacci")
+    else:
+        ds = ds.save("dev.fibonacci")
+
+    ds = dc.read_dataset(name="dev.fibonacci")
+    assert ds.dataset.project == project
+    assert ds.dataset.name == ds_name
+    assert ds.dataset.full_name == (
+        f"{catalog.metastore.default_namespace_name}.dev.fibonacci"
+    )
 
     with pytest.raises(DatasetNotFoundError):
         # dataset is not in default namespace / project
