@@ -1,15 +1,14 @@
-import json
 import os
 import sys
 
 import anthropic
-from anthropic.types import Message
 from pydantic import BaseModel
 
 import datachain as dc
+from datachain import C, File
 
 DATA = "gs://datachain-demo/chatbot-KiT"
-MODEL = "claude-3-opus-20240229"
+MODEL = "claude-3-5-haiku-latest"
 PROMPT = """Consider the dialogue between the 'user' and the 'bot'. \
 The 'user' is a human trying to find the best mobile plan. \
 The 'bot' is a chatbot designed to query the user and offer the \
@@ -38,41 +37,26 @@ class Rating(BaseModel):
     explanation: str = ""
 
 
-chain = (
+def rate(claude_client: anthropic.Anthropic, file: File) -> Rating:
+    content = file.read()
+    return claude_client.messages.create(
+        model=MODEL,
+        max_tokens=DEFAULT_OUTPUT_TOKENS,
+        system=PROMPT,
+        messages=[
+            {"role": "user", "content": f"{content}"},
+        ],
+        temperature=TEMPERATURE,
+        output=Rating,
+    )
+
+
+(
     dc.read_storage(DATA, type="text")
-    .filter(dc.Column("file.path").glob("*.txt"))
+    .filter(C("file.path").glob("*.txt"))
     .limit(5)
     .settings(parallel=4, cache=True)
     .setup(client=lambda: anthropic.Anthropic(api_key=API_KEY))
-    .map(
-        claude=lambda client, file: client.messages.create(
-            model=MODEL,
-            system=PROMPT,
-            messages=[
-                {
-                    "role": "user",
-                    "content": file.read() if isinstance(file, dc.File) else file,
-                },
-            ],
-            temperature=TEMPERATURE,
-            max_tokens=DEFAULT_OUTPUT_TOKENS,
-        ),
-        output=Message,
-    )
-    .map(
-        rating=lambda claude: Rating(
-            **(json.loads(claude.content[0].text) if claude.content else {})
-        ),
-        output=Rating,
-    )
+    .map(rating=rate)
+    .show()
 )
-
-chain = chain.settings(parallel=13).mutate(
-    x=dc.Column("file.path"),
-    y=dc.Column("rating.status"),
-    price=dc.Column("claude.usage.output_tokens") * 0.0072,
-)
-
-# chain.print_schema()
-
-chain.show()
