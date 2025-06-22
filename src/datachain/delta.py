@@ -69,7 +69,7 @@ def _get_retry_chain(
     name: str,
     latest_version: str,
     source_ds_name: str,
-    source_ds_latest_version: str,
+    source_ds_version: str,
     on: Union[str, Sequence[str]],
     right_on: Optional[Union[str, Sequence[str]]],
     delta_retry: Optional[Union[bool, str]],
@@ -82,23 +82,19 @@ def _get_retry_chain(
 
     # Read the latest version of the result dataset for retry logic
     result_dataset = datachain.read_dataset(name, version=latest_version)
-    source_dc_latest = datachain.read_dataset(
-        source_ds_name, version=source_ds_latest_version
-    )
+    source_dc = datachain.read_dataset(source_ds_name, version=source_ds_version)
 
     # Handle error records if delta_retry is a string (column name)
     if isinstance(delta_retry, str):
         error_records = result_dataset.filter(C(delta_retry) != "")
-        error_source_records = source_dc_latest.merge(
+        error_source_records = source_dc.merge(
             error_records, on=on, right_on=right_on, inner=True
-        ).select(*list(source_dc_latest.signals_schema.values))
+        ).select(*list(source_dc.signals_schema.values))
         retry_chain = error_source_records
 
     # Handle missing records if delta_retry is True
     elif delta_retry is True:
-        missing_records = source_dc_latest.subtract(
-            result_dataset, on=on, right_on=right_on
-        )
+        missing_records = source_dc.subtract(result_dataset, on=on, right_on=right_on)
         retry_chain = missing_records
 
     return retry_chain
@@ -217,15 +213,19 @@ def delta_retry_update(
             name,
             latest_version,
             source_ds_name,
-            source_ds_latest_version,
+            source_ds_version,
             on,
             right_on,
             delta_retry,
         )
 
     # Combine delta and retry chains
+    # Distinct is needed since delta and retry still might pick up the same records
+    # e.g. when some records were modified in the source dataset and were not
+    # processed in the previous run.
     if retry_chain is not None:
-        processing_chain = diff_chain.union(retry_chain)
+        args = [on] if isinstance(on, str) else list(on)
+        processing_chain = diff_chain.union(retry_chain).distinct(*args)
     else:
         processing_chain = diff_chain
 

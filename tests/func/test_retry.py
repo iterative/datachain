@@ -30,6 +30,13 @@ def _process_with_errors(id: int, content: str, attempt: int) -> ProcessingResul
     )
 
 
+def _create_sample_data(test_session, ids=None, contents=None):
+    """Helper function to create sample data for retry tests."""
+    ids = ids or [1, 2, 3, 4]
+    contents = contents or ["first item", "second item", "third item", "fourth item"]
+    dc.read_values(id=ids, content=contents, session=test_session).save("sample_data")
+
+
 def test_retry_with_error_records(test_session):
     """Test retry functionality with records that have errors."""
 
@@ -48,13 +55,7 @@ def test_retry_with_error_records(test_session):
         )
 
     # First processing pass - some records will fail
-    sample_ids = [1, 2, 3, 4]
-    sample_contents = ["first item", "second item", "third item", "fourth item"]
-
-    dc.read_values(id=sample_ids, content=sample_contents, session=test_session).save(
-        "sample_data"
-    )
-
+    _create_sample_data(test_session)
     first_pass = _run_processing(1)
 
     # Check that some records failed
@@ -74,13 +75,7 @@ def test_retry_with_error_records(test_session):
 
 def test_retry_with_missing_records(test_session):
     """Test retry functionality with missing records."""
-    # Create source dataset
-    source_ids = [1, 2, 3]
-    source_contents = ["first", "second", "third"]
-
-    dc.read_values(id=source_ids, content=source_contents, session=test_session).save(
-        "source_data"
-    )
+    _create_sample_data(test_session)
 
     def simple_process(id: int, content: str, attempt: int) -> ProcessingResult:
         return ProcessingResult(
@@ -93,7 +88,7 @@ def test_retry_with_missing_records(test_session):
     # Process only first 2 records
     # Create partial result dataset (missing id=3)
     partial_result = (
-        dc.read_dataset("source_data", session=test_session)
+        dc.read_dataset("sample_data", session=test_session)
         .setup(attempt=lambda: 1)
         .filter(C("id") < 3)
         .map(result=simple_process)
@@ -105,7 +100,66 @@ def test_retry_with_missing_records(test_session):
     # Use retry with delta_retry=True to process missing records
     retry_chain = (
         dc.read_dataset(
-            "source_data",
+            "sample_data",
+            session=test_session,
+            delta=True,
+            delta_on="id",
+            delta_retry=True,
+        )
+        .setup(attempt=lambda: 2)
+        .map(result=simple_process)
+        .save("partial_result")
+    )
+
+    # Should now have all 4 records
+    assert retry_chain.count() == 4
+
+    # Verify all records are present
+    ids = set(retry_chain.to_values("id"))
+    assert ids == {1, 2, 3, 4}
+
+    final_first_attempts_count = retry_chain.filter(C("result.attempt") == 1).count()
+    final_missing_attempts_count = retry_chain.filter(C("result.attempt") == 2).count()
+
+    # Only missing records should have attempt 2
+    assert final_missing_attempts_count == 2
+    assert final_first_attempts_count == 2
+
+
+def test_retry_with_missing_and_new_records(test_session):
+    """Test retry functionality with missing records (e.g. ignored
+    in first pass since they failed). Also we add new records to the source
+    to test that retry and delta don't pick records twice."""
+    _create_sample_data(test_session)
+
+    def simple_process(id: int, content: str, attempt: int) -> ProcessingResult:
+        return ProcessingResult(
+            processed_content=content.upper(),
+            processed_at=datetime.now(tz=timezone.utc).isoformat(),
+            error="",
+            attempt=attempt,
+        )
+
+    # Process only first 2 records
+    # Create partial result dataset (missing id=3)
+    partial_result = (
+        dc.read_dataset("sample_data", session=test_session)
+        .setup(attempt=lambda: 1)
+        .filter(C("id") < 3)
+        .map(result=simple_process)
+        .save("partial_result")
+    )
+
+    assert partial_result.count() == 2
+
+    ids = [1, 2, 3, 4, 5]
+    contents = ["first item", "second item", "third item", "fourth item", "fifth item"]
+    _create_sample_data(test_session, ids, contents)
+
+    # Use retry with delta_retry=True to process missing records
+    retry_chain = (
+        dc.read_dataset(
+            "sample_data",
             session=test_session,
             delta=True,
             delta_on="id",
@@ -117,29 +171,23 @@ def test_retry_with_missing_records(test_session):
     )
 
     # Should now have all 3 records
-    assert retry_chain.count() == 3
+    assert retry_chain.count() == 5
 
     # Verify all records are present
     ids = set(retry_chain.to_values("id"))
-    assert ids == {1, 2, 3}
+    assert ids == {1, 2, 3, 4, 5}
 
     final_first_attempts_count = retry_chain.filter(C("result.attempt") == 1).count()
     final_missing_attempts_count = retry_chain.filter(C("result.attempt") == 2).count()
 
     # Only missing records should have attempt 2
-    assert final_missing_attempts_count == 1
+    assert final_missing_attempts_count == 3
     assert final_first_attempts_count == 2
 
 
 def test_retry_no_records_to_retry(test_session):
     """Test retry when no records need to be retried."""
-    # Create dataset with all successful records
-    source_ids = [1, 2]
-    source_contents = ["first", "second"]
-
-    dc.read_values(id=source_ids, content=source_contents, session=test_session).save(
-        "source_data"
-    )
+    _create_sample_data(test_session, ids=[1, 2], contents=["first", "second"])
 
     def successful_process(id: int, content: str) -> ProcessingResult:
         return ProcessingResult(
@@ -151,7 +199,7 @@ def test_retry_no_records_to_retry(test_session):
 
     # First pass - all succeed
     first_pass = (
-        dc.read_dataset("source_data", session=test_session)
+        dc.read_dataset("sample_data", session=test_session)
         .map(result=successful_process)
         .save("successful_data")
     )
@@ -162,7 +210,7 @@ def test_retry_no_records_to_retry(test_session):
     # Retry - should not create a new version since no records need retry
     (
         dc.read_dataset(
-            "source_data",
+            "sample_data",
             session=test_session,
             delta=True,
             delta_on="id",
@@ -179,12 +227,7 @@ def test_retry_no_records_to_retry(test_session):
 
 def test_retry_first_dataset_creation(test_session):
     """Test retry when dataset doesn't exist yet (first creation)."""
-    source_ids = [1, 2]
-    source_contents = ["first", "second"]
-
-    dc.read_values(id=source_ids, content=source_contents, session=test_session).save(
-        "source_data"
-    )
+    _create_sample_data(test_session, ids=[1, 2], contents=["first", "second"])
 
     def simple_process(id: int, content: str) -> ProcessingResult:
         return ProcessingResult(
@@ -198,7 +241,7 @@ def test_retry_first_dataset_creation(test_session):
     # Should process all records
     retry_chain = (
         dc.read_dataset(
-            "source_data",
+            "sample_data",
             session=test_session,
             delta=True,
             delta_on="id",
