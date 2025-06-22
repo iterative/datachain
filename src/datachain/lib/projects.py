@@ -7,7 +7,7 @@ from datachain.query import Session
 
 def create(
     name: str,
-    namespace_name: str,
+    namespace: str,
     description: Optional[str] = None,
     session: Optional[Session] = None,
 ) -> Project:
@@ -39,17 +39,17 @@ def create(
 
     Project.validate_name(name)
 
-    return session.catalog.metastore.create_project(name, namespace_name, description)
+    return session.catalog.metastore.create_project(name, namespace, description)
 
 
-def get(name: str, namespace_name: str, session: Optional[Session]) -> Project:
+def get(name: str, namespace: str, session: Optional[Session]) -> Project:
     """
     Gets a project by name in some namespace.
     If the project is not found, a `ProjectNotFoundError` is raised.
 
     Parameters:
         name : The name of the project.
-        namespace_name : The name of the namespace.
+        namespace : The name of the namespace.
         session : Session to use for getting project.
 
     Example:
@@ -58,17 +58,17 @@ def get(name: str, namespace_name: str, session: Optional[Session]) -> Project:
         project  = dc.get_project("my-project", "local")
         ```
     """
-    return Session.get(session).catalog.metastore.get_project(name, namespace_name)
+    return Session.get(session).catalog.metastore.get_project(name, namespace)
 
 
 def ls(
-    namespace_name: Optional[str] = None, session: Optional[Session] = None
+    namespace: Optional[str] = None, session: Optional[Session] = None
 ) -> list[Project]:
     """
     Gets a list of projects in a specific namespace or from all namespaces.
 
     Parameters:
-        namespace_name : An optional namespace name.
+        namespace : An optional namespace name.
         session : Session to use for getting project.
 
     Example:
@@ -80,7 +80,7 @@ def ls(
     """
     session = Session.get(session)
     namespace_id = None
-    if namespace_name:
-        namespace_id = session.catalog.metastore.get_namespace(namespace_name).id
+    if namespace:
+        namespace_id = session.catalog.metastore.get_namespace(namespace).id
 
     return session.catalog.metastore.list_projects(namespace_id)
