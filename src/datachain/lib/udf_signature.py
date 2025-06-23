@@ -162,6 +162,9 @@ class UdfSignature:
             and self.output_schema.values == other.output_schema.values
         )
 
+    def __hash__() -> int:
+        raise NotImplementedError
+
     @staticmethod
     def _func_signature(
         chain: str, udf_func: Union[Callable, UDFBase]
