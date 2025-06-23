@@ -222,7 +222,7 @@ ignore = [
   "PERF401",
   "D100",  # undocumented-public-module
   "D205",  # one-blank-line-after-class
-  "PLC0415" # import-outside-top-level
+  "PLC0415"  # import-outside-top-level
 ]
 select = [
   "B",  # flake8-bugbear
