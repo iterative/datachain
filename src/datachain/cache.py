@@ -50,6 +50,9 @@ class Cache:
     def __eq__(self, other) -> bool:
         return self.odb == other.odb
 
+    def __hash__() -> int:
+        raise NotImplementedError()
+
     @property
     def cache_dir(self):
         return self.odb.path
