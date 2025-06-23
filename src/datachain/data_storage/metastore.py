@@ -185,8 +185,8 @@ class AbstractMetastore(ABC, Serializable):
     @abstractmethod
     def create_project(
         self,
-        name: str,
         namespace_name: str,
+        name: str,
         description: Optional[str] = None,
         uuid: Optional[str] = None,
         ignore_if_exists: bool = True,
@@ -763,8 +763,8 @@ class AbstractDBMetastore(AbstractMetastore):
 
     def create_project(
         self,
-        name: str,
         namespace_name: str,
+        name: str,
         description: Optional[str] = None,
         uuid: Optional[str] = None,
         ignore_if_exists: bool = True,

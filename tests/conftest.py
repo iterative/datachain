@@ -568,7 +568,7 @@ def mock_allowed_to_create_namespace(request):
 
 @pytest.fixture
 def project(test_session):
-    return dc.create_project("animals", "dev", "Animals project")
+    return dc.create_project("dev", "animals", "Animals project")
 
 
 @pytest.fixture

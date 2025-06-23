@@ -540,8 +540,7 @@ def test_pull_dataset_local_name_already_exists(
     catalog = cloud_test_catalog.catalog
     src_uri = cloud_test_catalog.src_uri
 
-    namespace = catalog.metastore.create_namespace(NAMESPACE_NAME)
-    project = catalog.metastore.create_project(PROJECT_NAME, namespace.name)
+    project = catalog.metastore.create_project(NAMESPACE_NAME, PROJECT_NAME)
     catalog.create_dataset_from_sources(
         local_ds_name or "dogs", [f"{src_uri}/dogs/*"], recursive=True, project=project
     )

@@ -20,7 +20,7 @@ def dev_namespace(test_session):
 
 @pytest.fixture
 def chatbot_project(test_session):
-    return dc.create_project("chatbot", "dev", "Chatbot project")
+    return dc.create_project("dev", "chatbot", "Chatbot project")
 
 
 @pytest.mark.parametrize("namespace_created_upfront", (True, False))
@@ -28,7 +28,7 @@ def test_create_project(test_session, namespace_created_upfront):
     if namespace_created_upfront:
         create_namespace("dev")
 
-    project = dc.create_project("chatbot", "dev", session=test_session)
+    project = dc.create_project("dev", "chatbot", session=test_session)
     assert project.id
     assert project.uuid
     assert project.created_at
@@ -36,20 +36,18 @@ def test_create_project(test_session, namespace_created_upfront):
     assert project.namespace == get_namespace("dev", session=test_session)
 
 
-def test_create_project_that_already_exists_in_namespace(test_session, dev_namespace):
+def test_create_project_that_already_exists_in_namespace(test_session):
     name = "chatbot"
-    dc.create_project(name, dev_namespace.name, "desc 1", session=test_session)
-    project = dc.create_project(
-        name, dev_namespace.name, "desc 2", session=test_session
-    )
+    dc.create_project("dev", name, "desc 1", session=test_session)
+    project = dc.create_project("dev", name, "desc 2", session=test_session)
     assert project.descr == "desc 1"
 
 
 def test_create_project_with_the_same_name_in_different_namespace(test_session):
     name = "chatbot"
 
-    dev_project = dc.create_project(name, "dev", "Dev chatbot", session=test_session)
-    prod_project = dc.create_project(name, "prod", "Prod chatbot", session=test_session)
+    dev_project = dc.create_project("dev", name, "Dev chatbot", session=test_session)
+    prod_project = dc.create_project("prod", name, "Prod chatbot", session=test_session)
 
     assert dev_project.name == name
     assert dev_project.descr == "Dev chatbot"
@@ -58,16 +56,16 @@ def test_create_project_with_the_same_name_in_different_namespace(test_session):
 
 
 @pytest.mark.parametrize("name", ["local", "with.dots", ""])
-def test_invalid_name(test_session, dev_namespace, name):
+def test_invalid_name(test_session, name):
     with pytest.raises(InvalidProjectNameError):
-        dc.create_project(name, dev_namespace.name, session=test_session)
+        dc.create_project("dev", name, session=test_session)
 
 
 @pytest.mark.disable_autouse
 @skip_if_not_sqlite
 def test_create_by_user_not_allowed(test_session):
     with pytest.raises(ProjectCreateNotAllowedError) as excinfo:
-        dc.create_project("chatbot", "dev", session=test_session)
+        dc.create_project("dev", "chatbot", session=test_session)
 
     assert str(excinfo.value) == "Creating project is not allowed"
 
@@ -95,7 +93,7 @@ def test_get_project_not_found_but_exists_in_other_namespace(
     test_session, dev_namespace, chatbot_project
 ):
     name = "images"
-    dc.create_project(name, "prod", session=test_session)
+    dc.create_project("prod", name, session=test_session)
 
     get_project(name, "prod", session=test_session)
     with pytest.raises(ProjectNotFoundError) as excinfo:
@@ -119,8 +117,8 @@ def test_ls_projects(test_session):
 
     p_names = ["p1", "p2", "p3"]
     for name in p_names:
-        dc.create_project(name, "ns1", "", session=test_session)
-        dc.create_project(name, "ns2", "", session=test_session)
+        dc.create_project("ns1", name, "", session=test_session)
+        dc.create_project("ns2", name, "", session=test_session)
 
     projects = ls_projects(session=test_session)
     assert sorted([(p.namespace.name, p.name) for p in projects]) == sorted(
@@ -140,8 +138,8 @@ def test_ls_projects(test_session):
 def test_ls_projects_one_namespace(test_session):
     p_names = ["p1", "p2", "p3"]
     for name in p_names:
-        dc.create_project(name, "ns1", "", session=test_session)
-        dc.create_project(name, "ns2", "", session=test_session)
+        dc.create_project("ns1", name, "", session=test_session)
+        dc.create_project("ns2", name, "", session=test_session)
 
     projects = ls_projects("ns1", session=test_session)
     assert sorted([(p.namespace.name, p.name) for p in projects]) == sorted(

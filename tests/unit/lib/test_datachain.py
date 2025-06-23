@@ -3380,7 +3380,7 @@ def test_save_to_non_default_namespace_and_project(
 ):
     catalog = test_session.catalog
     if project_created_upfront:
-        catalog.metastore.create_project("numbers", "dev")
+        catalog.metastore.create_project("dev", "numbers")
 
     ds = dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session)
     if use_settings:
@@ -3407,7 +3407,7 @@ def test_save_specify_only_non_default_project(
     default_namespace_name = catalog.metastore.default_namespace_name
 
     if project_created_upfront:
-        catalog.metastore.create_project("numbers", default_namespace_name)
+        catalog.metastore.create_project(default_namespace_name, "numbers")
 
     ds = dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session)
     if use_settings:

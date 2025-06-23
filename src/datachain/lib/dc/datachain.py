@@ -590,7 +590,7 @@ class DataChain:
                 raise ProjectCreateNotAllowedError(
                     "Creating project is not allowed"
                 ) from e
-            project = create_project(project_name, namespace_name)
+            project = create_project(namespace_name, project_name)
 
         schema = self.signals_schema.clone_without_sys_signals().serialize()
 

@@ -11,8 +11,7 @@ from datachain.sql.types import String
 
 @pytest.fixture
 def project(catalog):
-    namespace = catalog.metastore.create_namespace("dev")
-    return catalog.metastore.create_project("animals", namespace.name)
+    return catalog.metastore.create_project("dev", "animals")
 
 
 def test_ephemeral_dataset_naming(catalog, project):

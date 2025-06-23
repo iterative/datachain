@@ -6,8 +6,8 @@ from datachain.query import Session
 
 
 def create(
-    name: str,
     namespace: str,
+    name: str,
     descr: Optional[str] = None,
     session: Optional[Session] = None,
 ) -> Project:
@@ -27,7 +27,7 @@ def create(
     Example:
         ```py
         import datachain as dc
-        project = dc.create_project("my-project", "dev", "My personal project")
+        project = dc.create_project("dev", "my-project", "My personal project")
         ```
     """
     session = Session.get(session)
@@ -37,7 +37,7 @@ def create(
 
     Project.validate_name(name)
 
-    return session.catalog.metastore.create_project(name, namespace, descr)
+    return session.catalog.metastore.create_project(namespace, name, descr)
 
 
 def get(name: str, namespace: str, session: Optional[Session]) -> Project:
