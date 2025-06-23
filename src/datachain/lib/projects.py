@@ -30,7 +30,7 @@ def create(
     Example:
         ```py
         import datachain as dc
-        project = dc.projects.create("my-project", "dev", "My personal project")
+        project = dc.create_project("my-project", "dev", "My personal project")
         ```
     """
     session = Session.get(session)
@@ -56,7 +56,8 @@ def get(name: str, namespace: str, session: Optional[Session]) -> Project:
     Example:
         ```py
         import datachain as dc
-        project  = dc.get_project("my-project", "local")
+        from datachain.lib.projects import get as get_project
+        project  = get_project("my-project", "local")
         ```
     """
     return Session.get(session).catalog.metastore.get_project(name, namespace)
@@ -75,8 +76,9 @@ def ls(
     Example:
         ```py
         import datachain as dc
-        local_namespace_projects = dc.projects.ls("local")
-        all_projects = dc.projects.ls()
+        from datachain.lib.projects import ls as ls_projects
+        local_namespace_projects = ls_projects("local")
+        all_projects = ls_projects()
         ```
     """
     session = Session.get(session)

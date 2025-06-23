@@ -24,8 +24,8 @@ def create(
 
     Example:
         ```py
-        import datachain as dc
-        namespace = dc.namespaces.create("dev", "Dev namespace")
+        from datachain.lib.namespaces import create as create_namespace
+        namespace = create_namespace("dev", "Dev namespace")
         ```
     """
     session = Session.get(session)
@@ -66,8 +66,8 @@ def ls(session: Optional[Session] = None) -> list[Namespace]:
 
     Example:
         ```py
-        import datachain as dc
-        namespaces = dc.namespaces.ls()
+        from datachain.lib.namespaces import ls as ls_namespaces
+        namespaces = ls_namespaces()
         ```
     """
     return Session.get(session).catalog.metastore.list_namespaces()
