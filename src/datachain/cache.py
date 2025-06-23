@@ -39,7 +39,7 @@ def temporary_cache(
             cache.destroy()
 
 
-class Cache:
+class Cache:  # noqa: PLW1641
     def __init__(self, cache_dir: str, tmp_dir: str):
         self.odb = LocalHashFileDB(
             LocalFileSystem(),
@@ -49,8 +49,6 @@ class Cache:
 
     def __eq__(self, other) -> bool:
         return self.odb == other.odb
-
-    __hash__ = None  # type: ignore[assignment]
 
     @property
     def cache_dir(self):

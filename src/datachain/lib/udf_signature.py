@@ -16,7 +16,7 @@ class UdfSignatureError(DataChainParamsError):
 
 
 @dataclass
-class UdfSignature:
+class UdfSignature:  # noqa: PLW1641
     func: Union[Callable, UDFBase]
     params: dict[str, Union[DataType, Any]]
     output_schema: SignalSchema
@@ -161,8 +161,6 @@ class UdfSignature:
             and self.params == other.params
             and self.output_schema.values == other.output_schema.values
         )
-
-    __hash__ = None  # type: ignore[assignment]
 
     @staticmethod
     def _func_signature(

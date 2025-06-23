@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 ColT = Union[str, Column, ColumnElement, "Func", tuple]
 
 
-class Func(Function):
+class Func(Function):  # noqa: PLW1641
     """Represents a function to be applied to a column in a SQL query."""
 
     def __init__(
@@ -58,8 +58,6 @@ class Func(Function):
 
     def __str__(self) -> str:
         return self.name + "()"
-
-    __hash__ = None  # type: ignore[assignment]
 
     def over(self, window: "Window") -> "Func":
         if not self.is_window:

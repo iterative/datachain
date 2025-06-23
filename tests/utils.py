@@ -207,7 +207,7 @@ def sorted_dicts(list_of_dicts, *keys):
     return sorted(list_of_dicts, key=lambda x: tuple(x[k] for k in keys))
 
 
-class ANY_VALUE:  # noqa: N801
+class ANY_VALUE:  # noqa: N801, PLW1641
     """A helper object that compares equal to any value from the list."""
 
     def __init__(self, *args):
@@ -215,8 +215,6 @@ class ANY_VALUE:  # noqa: N801
 
     def __eq__(self, other) -> bool:
         return other in self.values
-
-    __hash__ = None  # type: ignore[assignment]
 
     def __ne__(self, other) -> bool:
         return other not in self.values
