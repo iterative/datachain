@@ -6,20 +6,20 @@ from datachain.query import Session
 
 
 def create(
-    name: str, description: Optional[str] = None, session: Optional[Session] = None
+    name: str, descr: Optional[str] = None, session: Optional[Session] = None
 ) -> Namespace:
     """
-    Creates a new custom namespace.
-    A Namespace is an object used to organize datasets. It has name and a list of
-    Project objects underneath it. On the other hand, each Project can have multiple
-    datasets.
-    Note that creating namespaces is not allowed in the local environment, unlike
-    in Studio, where it is allowed.
-    In local environment all datasets are created under the default `local` namespace.
+    Creates a new namespace.
+    A Namespace is an object used to organize datasets. It can have multiple projects
+    and each project can have multiple datasets.
+    Default namespace is always automatically created and is used if not explicitly
+    specified otherwise.
+    In Studio user can create multiple namespaces, while in CLI only default namespace
+    can be used.
 
     Parameters:
         name : The name of the namespace.
-        description : A description of the namespace.
+        descr : A description of the namespace.
         session : Session to use for creating namespace.
 
     Example:
@@ -31,11 +31,11 @@ def create(
     session = Session.get(session)
 
     if not session.catalog.metastore.namespace_allowed_to_create:
-        raise NamespaceCreateNotAllowedError("Creating custom namespace is not allowed")
+        raise NamespaceCreateNotAllowedError("Creating namespace is not allowed")
 
     Namespace.validate_name(name)
 
-    return session.catalog.metastore.create_namespace(name, description)
+    return session.catalog.metastore.create_namespace(name, descr)
 
 
 def get(name: str, session: Optional[Session] = None) -> Namespace:

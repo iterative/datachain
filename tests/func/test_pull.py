@@ -155,7 +155,7 @@ def remote_namespace():
         "id": 1,
         "uuid": NAMESPACE_UUID,
         "name": NAMESPACE_NAME,
-        "description": "Dev namespace",
+        "descr": "Dev namespace",
         "created_at": "2024-02-23T10:42:31.842944+00:00",
     }
 
@@ -166,7 +166,7 @@ def remote_project(remote_namespace):
         "id": 1,
         "uuid": PROJECT_UUID,
         "name": PROJECT_NAME,
-        "description": "Animals project",
+        "descr": "Animals project",
         "created_at": "2024-02-23T10:42:31.842944+00:00",
         "namespace": remote_namespace,
     }

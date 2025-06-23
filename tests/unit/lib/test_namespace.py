@@ -28,7 +28,7 @@ def test_create_by_user_not_allowed(test_session):
     with pytest.raises(NamespaceCreateNotAllowedError) as excinfo:
         dc.namespaces.create("dev", session=test_session)
 
-    assert str(excinfo.value) == "Creating custom namespace is not allowed"
+    assert str(excinfo.value) == "Creating namespace is not allowed"
 
 
 def test_create_namespace_already_exists(test_session):
@@ -48,7 +48,7 @@ def test_get_namespace(test_session, dev_namespace):
     assert namespace.id == dev_namespace.id
     assert namespace.uuid == dev_namespace.uuid
     assert namespace.name == dev_namespace.name
-    assert namespace.description == dev_namespace.description
+    assert namespace.descr == dev_namespace.descr
     assert namespace.created_at == dev_namespace.created_at
 
 

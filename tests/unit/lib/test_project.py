@@ -38,7 +38,7 @@ def test_create_project_that_already_exists_in_namespace(test_session, dev_names
     project = dc.projects.create(
         name, dev_namespace.name, "desc 2", session=test_session
     )
-    assert project.description == "desc 1"
+    assert project.descr == "desc 1"
 
 
 def test_create_project_with_the_same_name_in_different_namespace(test_session):
@@ -54,9 +54,9 @@ def test_create_project_with_the_same_name_in_different_namespace(test_session):
     )
 
     assert dev_project.name == name
-    assert dev_project.description == "Dev chatbot"
+    assert dev_project.descr == "Dev chatbot"
     assert prod_project.name == name
-    assert prod_project.description == "Prod chatbot"
+    assert prod_project.descr == "Prod chatbot"
 
 
 @pytest.mark.parametrize("name", ["local", "with.dots", ""])
@@ -71,7 +71,7 @@ def test_create_by_user_not_allowed(test_session):
     with pytest.raises(ProjectCreateNotAllowedError) as excinfo:
         dc.projects.create("chatbot", "dev", session=test_session)
 
-    assert str(excinfo.value) == "Creating custom project is not allowed"
+    assert str(excinfo.value) == "Creating project is not allowed"
 
 
 def test_get_project(test_session, chatbot_project, dev_namespace):
@@ -81,7 +81,7 @@ def test_get_project(test_session, chatbot_project, dev_namespace):
     assert project.id == chatbot_project.id
     assert project.uuid == chatbot_project.uuid
     assert project.name == chatbot_project.name
-    assert project.description == chatbot_project.description
+    assert project.descr == chatbot_project.descr
     assert project.created_at == chatbot_project.created_at
     assert project.namespace == dev_namespace
 

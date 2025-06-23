@@ -8,22 +8,23 @@ from datachain.query import Session
 def create(
     name: str,
     namespace: str,
-    description: Optional[str] = None,
+    descr: Optional[str] = None,
     session: Optional[Session] = None,
 ) -> Project:
     """
-    Creates a new custom project.
+    Creates a new project.
     A Project is an object used to organize datasets. It is created under a
-    specific namespace and has a list of datasets underneath it.
-    Note that creating projects is not allowed in the local environment, unlike
-    in Studio, where it is allowed.
-    In local environment all datasets are created under the default `local` project.
+    specific namespace and can have multiple datasets.
+    Default project is always automatically created and is used if not explicitly
+    specified otherwise.
+    In Studio user can create multiple projects, while in CLI only default project
+    can be used.
 
     Parameters:
         name : The name of the project.
         namespace : The name of the namespace under which the new project is being
-            created.
-        description : A description of the project.
+            created. If namespace doesn't exist, it will be created automatically.
+        descr : A description of the project.
         session : Session to use for creating project.
 
     Example:
@@ -35,11 +36,11 @@ def create(
     session = Session.get(session)
 
     if not session.catalog.metastore.project_allowed_to_create:
-        raise ProjectCreateNotAllowedError("Creating custom project is not allowed")
+        raise ProjectCreateNotAllowedError("Creating project is not allowed")
 
     Project.validate_name(name)
 
-    return session.catalog.metastore.create_project(name, namespace, description)
+    return session.catalog.metastore.create_project(name, namespace, descr)
 
 
 def get(name: str, namespace: str, session: Optional[Session]) -> Project:

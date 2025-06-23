@@ -14,7 +14,7 @@ class Namespace:
     id: int
     uuid: str
     name: str
-    description: Optional[str]
+    descr: Optional[str]
     created_at: datetime
 
     @staticmethod
@@ -54,10 +54,10 @@ class Namespace:
         id: int,
         uuid: str,
         name: str,
-        description: Optional[str],
+        descr: Optional[str],
         created_at: datetime,
     ) -> "Namespace":
-        return cls(id, uuid, name, description, created_at)
+        return cls(id, uuid, name, descr, created_at)
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "Namespace":

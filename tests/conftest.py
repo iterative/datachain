@@ -637,13 +637,13 @@ def dataset_record():
             uuid=str(uuid.uuid4()),
             name="animals",
             created_at=datetime.now(),
-            description="",
+            descr="",
             namespace=Namespace(
                 id=1,
                 uuid=str(uuid.uuid4()),
                 name="dev",
                 created_at=datetime.now(),
-                description="",
+                descr="",
             ),
         ),
     )
@@ -708,13 +708,13 @@ def studio_datasets(requests_mock, studio_token):
         "uuid": str(uuid.uuid4()),
         "name": "animals",
         "created_at": "2024-02-23T10:42:31.842944+00:00",
-        "description": "",
+        "descr": "",
         "namespace": {
             "id": 1,
             "name": "dev",
             "uuid": str(uuid.uuid4()),
             "created_at": "2024-02-23T10:42:31.842944+00:00",
-            "description": "",
+            "descr": "",
         },
     }
 
