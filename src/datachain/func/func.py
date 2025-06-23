@@ -59,6 +59,9 @@ class Func(Function):
     def __str__(self) -> str:
         return self.name + "()"
 
+    def __hash__() -> int:
+        raise NotImplementedError
+
     def over(self, window: "Window") -> "Func":
         if not self.is_window:
             raise DataChainParamsError(f"{self} doesn't support window (over())")
