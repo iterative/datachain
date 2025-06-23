@@ -195,8 +195,13 @@ class AbstractMetastore(ABC, Serializable):
         """Creates new project in specific namespace"""
 
     @abstractmethod
-    def get_project(self, name: str, namespace_name: str, conn=None) -> Project:
-        """Gets a single project inside some namespace by name"""
+    def get_project(
+        self, name: str, namespace_name: str, create: bool = False, conn=None
+    ) -> Project:
+        """
+        Gets a single project inside some namespace by name.
+        It also creates project if not found and create flag is set to True.
+        """
 
     @abstractmethod
     def list_projects(self, namespace_id: Optional[int], conn=None) -> list[Project]:
@@ -792,7 +797,9 @@ class AbstractDBMetastore(AbstractMetastore):
 
         return self.get_project(name, namespace.name)
 
-    def get_project(self, name: str, namespace_name: str, conn=None) -> Project:
+    def get_project(
+        self, name: str, namespace_name: str, create: bool = False, conn=None
+    ) -> Project:
         """Gets a single project inside some namespace by name"""
         n = self._namespaces
         p = self._projects
@@ -807,6 +814,8 @@ class AbstractDBMetastore(AbstractMetastore):
 
         rows = list(self.db.execute(query, conn=conn))
         if not rows:
+            if create:
+                return self.create_project(namespace_name, name)
             raise ProjectNotFoundError(
                 f"Project {name} in namespace {namespace_name} not found."
             )

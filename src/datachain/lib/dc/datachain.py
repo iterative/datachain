@@ -38,7 +38,6 @@ from datachain.lib.file import (
     FileExporter,
 )
 from datachain.lib.file import ExportPlacement as FileExportPlacement
-from datachain.lib.projects import create as create_project
 from datachain.lib.projects import get as get_project
 from datachain.lib.settings import Settings
 from datachain.lib.signal_schema import SignalSchema
@@ -584,13 +583,14 @@ class DataChain:
         )
 
         try:
-            project = get_project(project_name, namespace_name, session=self.session)
+            project = self.session.catalog.metastore.get_project(
+                project_name,
+                namespace_name,
+                create=self.session.catalog.metastore.project_allowed_to_create,
+            )
         except ProjectNotFoundError as e:
-            if not self.session.catalog.metastore.project_allowed_to_create:
-                raise ProjectCreateNotAllowedError(
-                    "Creating project is not allowed"
-                ) from e
-            project = create_project(namespace_name, project_name)
+            # not being able to create it as creation is not allowed
+            raise ProjectCreateNotAllowedError("Creating project is not allowed") from e
 
         schema = self.signals_schema.clone_without_sys_signals().serialize()
 
