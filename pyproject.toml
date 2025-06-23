@@ -221,7 +221,8 @@ ignore = [
   "PERF203",  # perflint - try-except-in-loop, irrelevant for Python>=3.11
   "PERF401",
   "D100",  # undocumented-public-module
-  "D205"  # one-blank-line-after-class
+  "D205",  # one-blank-line-after-class
+  "PLC0415" # import-outside-top-level
 ]
 select = [
   "B",  # flake8-bugbear
