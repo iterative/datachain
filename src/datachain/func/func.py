@@ -59,7 +59,7 @@ class Func(Function):
     def __str__(self) -> str:
         return self.name + "()"
 
-    def __hash__() -> int:
+    def __hash__(self) -> int:
         raise NotImplementedError
 
     def over(self, window: "Window") -> "Func":

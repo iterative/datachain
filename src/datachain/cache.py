@@ -50,7 +50,7 @@ class Cache:
     def __eq__(self, other) -> bool:
         return self.odb == other.odb
 
-    def __hash__() -> int:
+    def __hash__(self) -> int:
         raise NotImplementedError
 
     @property
