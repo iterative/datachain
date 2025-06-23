@@ -12,20 +12,17 @@ def create(
     session: Optional[Session] = None,
 ) -> Project:
     """
-    Creates a new project.
-    A Project is an object used to organize datasets. It is created under a
-    specific namespace and can have multiple datasets.
-    Default project is always automatically created and is used if not explicitly
-    specified otherwise.
-    In Studio user can create multiple projects, while in CLI only default project
-    can be used.
+    Creates a new project under a specified namespace.
+
+    Projects help organize datasets. A default project is always available,
+    but users can create additional ones (only in Studio, not via CLI).
+
 
     Parameters:
-        name : The name of the project.
-        namespace : The name of the namespace under which the new project is being
-            created. If namespace doesn't exist, it will be created automatically.
-        descr : A description of the project.
-        session : Session to use for creating project.
+        name: Name of the new project.
+        namespace: Namespace to create the project in. Created if it doesn't exist.
+        descr: Optional description of the project.
+        session: Optional session to use for the operation.
 
     Example:
         ```py

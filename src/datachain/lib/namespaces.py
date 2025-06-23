@@ -10,17 +10,15 @@ def create(
 ) -> Namespace:
     """
     Creates a new namespace.
-    A Namespace is an object used to organize datasets. It can have multiple projects
-    and each project can have multiple datasets.
-    Default namespace is always automatically created and is used if not explicitly
-    specified otherwise.
-    In Studio user can create multiple namespaces, while in CLI only default namespace
-    can be used.
+
+    Namespaces organize projects, which in turn organize datasets. A default
+    namespace always exists and is used if none is specified. Multiple namespaces
+    can be created in Studio, but only the default is available in the CLI.
 
     Parameters:
-        name : The name of the namespace.
-        descr : A description of the namespace.
-        session : Session to use for creating namespace.
+        name: Name of the new namespace.
+        descr: Optional description of the namespace.
+        session: Optional session to use for the operation.
 
     Example:
         ```py
