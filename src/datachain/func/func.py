@@ -59,8 +59,7 @@ class Func(Function):
     def __str__(self) -> str:
         return self.name + "()"
 
-    def __hash__(self) -> int:
-        raise NotImplementedError
+    __hash__ = None  # type: ignore[assignment]
 
     def over(self, window: "Window") -> "Func":
         if not self.is_window:

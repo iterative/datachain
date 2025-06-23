@@ -216,8 +216,7 @@ class ANY_VALUE:  # noqa: N801
     def __eq__(self, other) -> bool:
         return other in self.values
 
-    def __hash__(self) -> int:
-        raise NotImplementedError
+    __hash__ = None  # type: ignore[assignment]
 
     def __ne__(self, other) -> bool:
         return other not in self.values

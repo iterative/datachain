@@ -162,8 +162,7 @@ class UdfSignature:
             and self.output_schema.values == other.output_schema.values
         )
 
-    def __hash__(self) -> int:
-        raise NotImplementedError
+    __hash__ = None  # type: ignore[assignment]
 
     @staticmethod
     def _func_signature(
