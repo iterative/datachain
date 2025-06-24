@@ -529,11 +529,6 @@ class DataChain:
             self.namespace_name,
             create=True,
         )
-        """
-        project = get_project(
-            self.project_name, self.namespace_name, create=True, session=self.session
-        )
-        """
         return self._evolve(
             query=self._query.save(project=project, feature_schema=schema)
         )
