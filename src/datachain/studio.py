@@ -290,10 +290,7 @@ def show_logs_from_client(client, job_id):
     else:
         print("\n\nNo dataset versions created during the job.")
 
-    if latest_status in ["FAILED", "CANCELLED"]:
-        return 1
-
-    return 0
+    return 1 if latest_status in ["FAILED", "CANCELLED"] else 0
 
 
 def create_job(
