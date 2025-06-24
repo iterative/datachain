@@ -469,10 +469,10 @@ class SQLiteMetastore(AbstractDBMetastore):
         Studio dataset.
         """
         system_namespace = self.create_namespace(Namespace.system(), "System namespace")
-        self.create_project(Project.listing(), system_namespace.name, "Listing project")
+        self.create_project(system_namespace.name, Project.listing(), "Listing project")
 
         local_namespace = self.create_namespace(Namespace.default(), "Local namespace")
-        self.create_project(Project.default(), local_namespace.name, "Local project")
+        self.create_project(local_namespace.name, Project.default(), "Local project")
 
     def _check_schema_version(self) -> None:
         """

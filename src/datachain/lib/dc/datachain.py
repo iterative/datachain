@@ -26,6 +26,7 @@ from tqdm import tqdm
 from datachain import semver
 from datachain.dataset import DatasetRecord, parse_dataset_name
 from datachain.delta import delta_disabled
+from datachain.error import ProjectCreateNotAllowedError, ProjectNotFoundError
 from datachain.func import literal
 from datachain.func.base import Function
 from datachain.func.func import Func
@@ -581,7 +582,15 @@ class DataChain:
             or self.session.catalog.metastore.default_project_name
         )
 
-        project = get_project(project_name, namespace_name, session=self.session)
+        try:
+            project = self.session.catalog.metastore.get_project(
+                project_name,
+                namespace_name,
+                create=self.session.catalog.metastore.project_allowed_to_create,
+            )
+        except ProjectNotFoundError as e:
+            # not being able to create it as creation is not allowed
+            raise ProjectCreateNotAllowedError("Creating project is not allowed") from e
 
         schema = self.signals_schema.clone_without_sys_signals().serialize()
 

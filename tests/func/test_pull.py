@@ -155,7 +155,7 @@ def remote_namespace():
         "id": 1,
         "uuid": NAMESPACE_UUID,
         "name": NAMESPACE_NAME,
-        "description": "Dev namespace",
+        "descr": "Dev namespace",
         "created_at": "2024-02-23T10:42:31.842944+00:00",
     }
 
@@ -166,7 +166,7 @@ def remote_project(remote_namespace):
         "id": 1,
         "uuid": PROJECT_UUID,
         "name": PROJECT_NAME,
-        "description": "Animals project",
+        "descr": "Animals project",
         "created_at": "2024-02-23T10:42:31.842944+00:00",
         "namespace": remote_namespace,
     }
@@ -540,8 +540,7 @@ def test_pull_dataset_local_name_already_exists(
     catalog = cloud_test_catalog.catalog
     src_uri = cloud_test_catalog.src_uri
 
-    namespace = catalog.metastore.create_namespace(NAMESPACE_NAME)
-    project = catalog.metastore.create_project(PROJECT_NAME, namespace.name)
+    project = catalog.metastore.create_project(NAMESPACE_NAME, PROJECT_NAME)
     catalog.create_dataset_from_sources(
         local_ds_name or "dogs", [f"{src_uri}/dogs/*"], recursive=True, project=project
     )

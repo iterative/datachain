@@ -83,10 +83,11 @@ def parse_dataset_name(name: str) -> tuple[Optional[str], Optional[str], str]:
     if not name:
         raise ValueError("Name must be defined to parse it")
     split = name.split(".")
-    if len(split) == 3:
-        return tuple(split)  # type: ignore[return-value]
+    name = split[-1]
+    project_name = split[-2] if len(split) > 1 else None
+    namespace_name = split[-3] if len(split) > 2 else None
 
-    return None, None, name
+    return namespace_name, project_name, name
 
 
 class DatasetDependencyType:

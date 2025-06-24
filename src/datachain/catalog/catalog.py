@@ -1491,13 +1491,13 @@ class Catalog:
 
         namespace = self.metastore.create_namespace(
             remote_ds.project.namespace.name,
-            description=remote_ds.project.namespace.description,
+            description=remote_ds.project.namespace.descr,
             uuid=remote_ds.project.namespace.uuid,
         )
         project = self.metastore.create_project(
-            remote_ds.project.name,
             namespace.name,
-            description=remote_ds.project.description,
+            remote_ds.project.name,
+            description=remote_ds.project.descr,
             uuid=remote_ds.project.uuid,
         )
 
