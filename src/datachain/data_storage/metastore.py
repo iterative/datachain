@@ -861,7 +861,7 @@ class AbstractDBMetastore(AbstractMetastore):
             .group_by(d.c.project_id)
         )
 
-        return dict(self.db.execute(query, conn=conn))
+        return dict(list(self.db.execute(query, conn=conn)))
 
     #
     # Datasets
