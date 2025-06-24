@@ -440,3 +440,60 @@ def test_studio_run(capsys, mocker, tmp_dir):
         "priority": 5,
         "compute_cluster_name": "default",
     }
+
+
+def test_studio_run_non_zero_exit_code(capsys, mocker, tmp_dir):
+    # Mock tail_job_logs to return a failed status
+    async def mock_tail_job_logs(job_id):
+        # Simulate some log messages
+        yield {"logs": [{"message": "Starting job...\n"}]}
+        yield {"logs": [{"message": "Processing data...\n"}]}
+        # Return failed status
+        yield {"job": {"status": "FAILED"}}
+
+    mocker.patch(
+        "datachain.remote.studio.StudioClient.tail_job_logs",
+        side_effect=mock_tail_job_logs,
+    )
+
+    with Config(ConfigLevel.GLOBAL).edit() as conf:
+        conf["studio"] = {"token": "isat_access_token", "team": "team_name"}
+
+    with requests_mock.mock() as m:
+        m.post(
+            f"{STUDIO_URL}/api/datachain/job",
+            json={"job": {"id": 1, "url": "https://example.com"}},
+        )
+        m.get(
+            f"{STUDIO_URL}/api/datachain/datasets/dataset_job_versions?job_id=1&team_name=team_name",
+            json={
+                "dataset_versions": [
+                    {"dataset_name": "dataset_name", "version": "1.0.0"}
+                ]
+            },
+        )
+
+        (tmp_dir / "example_query.py").write_text("print(1)")
+
+        assert (
+            main(
+                [
+                    "job",
+                    "run",
+                    "example_query.py",
+                ]
+            )
+            == 1
+        )
+
+    out = capsys.readouterr().out
+    assert (
+        out.strip() == "Job 1 created\nOpen the job in Studio at https://example.com\n"
+        "========================================\n"
+        "Starting job...\n"
+        "Processing data...\n"
+        "\n"
+        ">>>> Job is now in FAILED status.\n\n\n"
+        ">>>> Dataset versions created during the job:\n"
+        "    - dataset_name@v1.0.0"
+    )

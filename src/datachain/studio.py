@@ -265,14 +265,17 @@ def save_config(hostname, token, level=ConfigLevel.GLOBAL):
 def show_logs_from_client(client, job_id):
     # Sync usage
     async def _run():
+        latest_status = None
         async for message in client.tail_job_logs(job_id):
             if "logs" in message:
                 for log in message["logs"]:
                     print(log["message"], end="")
             elif "job" in message:
-                print(f"\n>>>> Job is now in {message['job']['status']} status.")
+                latest_status = message["job"]["status"]
+                print(f"\n>>>> Job is now in {latest_status} status.")
+        return latest_status
 
-    asyncio.run(_run())
+    latest_status = asyncio.run(_run())
 
     response = client.dataset_job_versions(job_id)
     if not response.ok:
@@ -286,6 +289,11 @@ def show_logs_from_client(client, job_id):
             print(f"    - {version.get('dataset_name')}@v{version.get('version')}")
     else:
         print("\n\nNo dataset versions created during the job.")
+
+    if latest_status in ["FAILED", "CANCELLED"]:
+        return 1
+
+    return 0
 
 
 def create_job(
@@ -343,7 +351,7 @@ def create_job(
     print("Open the job in Studio at", response.data.get("job", {}).get("url"))
     print("=" * 40)
 
-    show_logs_from_client(client, job_id)
+    return show_logs_from_client(client, job_id)
 
 
 def upload_files(client: StudioClient, files: list[str]) -> list[str]:

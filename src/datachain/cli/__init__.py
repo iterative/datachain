@@ -100,8 +100,10 @@ def handle_command(args, catalog, client_config) -> int:
 
     handler = command_handlers.get(args.command)
     if handler:
-        handler()
-        return 0
+        return_code = handler()
+        if return_code is None:
+            return 0
+        return return_code
     print(f"invalid command: {args.command}", file=sys.stderr)
     return 1
 
