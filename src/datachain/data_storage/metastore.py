@@ -22,6 +22,7 @@ from sqlalchemy import (
     UniqueConstraint,
     select,
 )
+from sqlalchemy.sql import func
 
 from datachain.data_storage import JobQueryType, JobStatus
 from datachain.data_storage.serializer import Serializable
@@ -204,8 +205,14 @@ class AbstractMetastore(ABC, Serializable):
         """
 
     @abstractmethod
-    def list_projects(self, namespace_id: Optional[int], conn=None) -> list[Project]:
+    def list_projects(
+        self, namespace_id: Optional[int] = None, conn=None
+    ) -> list[Project]:
         """Gets list of projects in some namespace or in general (in all namespaces)"""
+
+    @abstractmethod
+    def project_datasets_count(self, conn=None) -> dict[int, int]:
+        """Returns number of datasets created in each project"""
 
     @property
     def project_allowed_to_create(self):
@@ -821,7 +828,9 @@ class AbstractDBMetastore(AbstractMetastore):
             )
         return self.project_class.parse(*rows[0])
 
-    def list_projects(self, namespace_id: Optional[int], conn=None) -> list[Project]:
+    def list_projects(
+        self, namespace_id: Optional[int] = None, conn=None
+    ) -> list[Project]:
         """
         Gets a list of projects inside some namespace, or in all namespaces
         """
@@ -840,6 +849,19 @@ class AbstractDBMetastore(AbstractMetastore):
         rows = list(self.db.execute(query, conn=conn))
 
         return [self.project_class.parse(*r) for r in rows]
+
+    def project_datasets_count(self, conn=None) -> dict[int, int]:
+        """Returns number of datasets created in each project"""
+        d = self._datasets
+        dv = self._datasets_versions
+
+        query = (
+            self._datasets_select(d.c.project_id, func.count())
+            .select_from(d.join(dv, d.c.id == dv.c.dataset_id))
+            .group_by(d.c.project_id)
+        )
+
+        return dict(list(self.db.execute(query, conn=conn)))
 
     #
     # Datasets

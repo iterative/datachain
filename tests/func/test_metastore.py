@@ -65,6 +65,17 @@ preview = [
 preview_json = json.dumps(preview)
 
 
+def _create_datasets(metastore, name, project_id, num_versions=1):
+    ds = metastore.create_dataset(name=name, project_id=project_id)
+    for i in range(num_versions):
+        metastore.create_dataset_version(
+            dataset=ds,
+            version=f"1.0.{i}",
+            status=DatasetStatus.CREATED,
+            finished_at=datetime.now(timezone.utc).isoformat(),
+        )
+
+
 def test_create_dataset(metastore):
     ds = metastore.create_dataset(
         name="test_dataset",
@@ -907,3 +918,15 @@ def test_get_job_status(metastore):
     metastore.set_job_status(job_id, JobStatus.RUNNING)
     status2 = metastore.get_job_status(job_id)
     assert status2 == JobStatus.RUNNING
+
+
+def test_project_dataset_count(metastore):
+    p1 = metastore.create_project("n1", "p1")
+    p2 = metastore.create_project("n1", "p2")
+    metastore.create_project("n2", "p3")
+
+    _create_datasets(metastore, "d1", p1.id, num_versions=4)
+    _create_datasets(metastore, "d2", p1.id, num_versions=2)
+    _create_datasets(metastore, "d3", p2.id, num_versions=3)
+
+    assert metastore.project_datasets_count() == {p1.id: 6, p2.id: 3}
