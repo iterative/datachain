@@ -38,7 +38,6 @@ from datachain.lib.file import (
     FileExporter,
 )
 from datachain.lib.file import ExportPlacement as FileExportPlacement
-from datachain.lib.projects import get as get_project
 from datachain.lib.settings import Settings
 from datachain.lib.signal_schema import SignalSchema
 from datachain.lib.udf import Aggregator, BatchMapper, Generator, Mapper, UDFBase
@@ -525,9 +524,16 @@ class DataChain:
         It returns the chain itself.
         """
         schema = self.signals_schema.clone_without_sys_signals().serialize()
-        project = get_project(
-            self.project_name, self.namespace_name, session=self.session
+        project = self.session.catalog.metastore.get_project(
+            self.project_name,
+            self.namespace_name,
+            create=True,
         )
+        """
+        project = get_project(
+            self.project_name, self.namespace_name, create=True, session=self.session
+        )
+        """
         return self._evolve(
             query=self._query.save(project=project, feature_schema=schema)
         )

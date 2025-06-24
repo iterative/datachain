@@ -471,9 +471,6 @@ class SQLiteMetastore(AbstractDBMetastore):
         system_namespace = self.create_namespace(Namespace.system(), "System namespace")
         self.create_project(system_namespace.name, Project.listing(), "Listing project")
 
-        local_namespace = self.create_namespace(Namespace.default(), "Local namespace")
-        self.create_project(local_namespace.name, Project.default(), "Local project")
-
     def _check_schema_version(self) -> None:
         """
         Checks if current DB schema is up to date with latest DB model and schema

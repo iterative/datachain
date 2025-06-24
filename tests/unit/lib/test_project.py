@@ -102,16 +102,6 @@ def test_get_project_not_found_but_exists_in_other_namespace(
     assert str(excinfo.value) == f"Project {name} in namespace dev not found."
 
 
-@skip_if_not_sqlite
-def test_local_project_is_created(test_session):
-    project_class = test_session.catalog.metastore.project_class
-    namespace_class = test_session.catalog.metastore.namespace_class
-    local_project = get_project(
-        project_class.default(), namespace_class.default(), session=test_session
-    )
-    assert local_project.name == project_class.default()
-
-
 def test_ls_projects(test_session):
     metastore = test_session.catalog.metastore
 
@@ -123,7 +113,6 @@ def test_ls_projects(test_session):
     projects = ls_projects(session=test_session)
     assert sorted([(p.namespace.name, p.name) for p in projects]) == sorted(
         [
-            (metastore.default_namespace_name, metastore.default_project_name),
             (metastore.system_namespace_name, metastore.listing_project_name),
             ("ns1", "p1"),
             ("ns1", "p2"),
@@ -157,7 +146,6 @@ def test_ls_projects_just_default(test_session):
     projects = ls_projects(session=test_session)
     assert sorted([(p.namespace.name, p.name) for p in projects]) == sorted(
         [
-            (metastore.default_namespace_name, metastore.default_project_name),
             (metastore.system_namespace_name, metastore.listing_project_name),
         ]
     )
