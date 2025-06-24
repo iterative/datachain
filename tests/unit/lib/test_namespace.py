@@ -61,14 +61,7 @@ def test_get_namespace_not_found(test_session, dev_namespace):
     assert str(excinfo.value) == "Namespace wrong not found."
 
 
-def test_local_namespace_is_created(test_session):
-    namespace_class = test_session.catalog.metastore.namespace_class
-    local_namespace = get_namespace(namespace_class.default(), session=test_session)
-    assert local_namespace.name == namespace_class.default()
-
-
 def test_ls_namespaces(test_session):
-    default_namespace_name = test_session.catalog.metastore.default_namespace_name
     system_namespace_name = test_session.catalog.metastore.system_namespace_name
 
     create_namespace("ns1")
@@ -76,14 +69,11 @@ def test_ls_namespaces(test_session):
 
     namespaces = ls_namespaces(session=test_session)
     assert sorted([n.name for n in namespaces]) == sorted(
-        [default_namespace_name, system_namespace_name, "ns1", "ns2"]
+        [system_namespace_name, "ns1", "ns2"]
     )
 
 
 def test_ls_namespaces_just_local(test_session):
-    default_namespace_name = test_session.catalog.metastore.default_namespace_name
     system_namespace_name = test_session.catalog.metastore.system_namespace_name
     namespaces = ls_namespaces(session=test_session)
-    assert sorted([n.name for n in namespaces]) == sorted(
-        [default_namespace_name, system_namespace_name]
-    )
+    assert [n.name for n in namespaces] == [system_namespace_name]

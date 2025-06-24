@@ -176,7 +176,9 @@ class AbstractMetastore(ABC, Serializable):
 
     @cached_property
     def default_project(self) -> Project:
-        return self.get_project(self.default_project_name, self.default_namespace_name)
+        return self.get_project(
+            self.default_project_name, self.default_namespace_name, create=True
+        )
 
     @cached_property
     def listing_project(self) -> Project:

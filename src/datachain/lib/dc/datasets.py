@@ -2,7 +2,11 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, Optional, Union, get_origin, get_type_hints
 
 from datachain.dataset import parse_dataset_name
-from datachain.error import DatasetVersionNotFoundError
+from datachain.error import (
+    DatasetNotFoundError,
+    DatasetVersionNotFoundError,
+    ProjectNotFoundError,
+)
 from datachain.lib.dataset_info import DatasetInfo
 from datachain.lib.file import (
     File,
@@ -136,9 +140,15 @@ def read_dataset(
             # all 2.* dataset versions). If dataset doesn't have any versions where
             # major part is equal to that input, exception is thrown.
             major = int(version)
-            dataset = session.catalog.get_dataset(
-                name, get_project(project_name, namespace_name, session=session)
-            )
+            try:
+                ds_project = get_project(project_name, namespace_name, session=session)
+            except ProjectNotFoundError:
+                raise DatasetNotFoundError(
+                    f"Dataset {name} not found in namespace {namespace_name} and",
+                    f" project {project_name}",
+                ) from None
+
+            dataset = session.catalog.get_dataset(name, ds_project)
             latest_major = dataset.latest_major_version(major)
             if not latest_major:
                 raise DatasetVersionNotFoundError(
@@ -321,7 +331,13 @@ def delete_dataset(
             None, name, namespace_name, project_name, version=version, force=force
         )
 
-    ds_project = get_project(project_name, namespace_name, session=session)
+    try:
+        ds_project = get_project(project_name, namespace_name, session=session)
+    except ProjectNotFoundError:
+        raise DatasetNotFoundError(
+            f"Dataset {name} not found in namespace {namespace_name} and project",
+            f" {project_name}",
+        ) from None
 
     if not force:
         version = version or catalog.get_dataset(name, ds_project).latest_version
