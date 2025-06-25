@@ -25,7 +25,7 @@ The recommended fix is to **delete the local database** and let the CLI recreate
 Before deleting the file, we strongly recommend making a backup of your current database:
 
 ```bash
-cp ~/.datachain/db ~/.datachain/db.backup
+cp .datachain/db .datachain/db.backup
 ```
 
 This allows you to recover data manually if needed later.
@@ -66,7 +66,7 @@ for ds_info in dc.datasets(column="dataset").to_values("dataset"):
 Make sure you've backed it up (see above), then:
 
 ```bash
-rm ~/.datachain/db
+rm .datachain/db
 ```
 
 ### Step 3: Re-import All Datasets from Parquet (In Correct Version Order)
