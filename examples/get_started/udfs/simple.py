@@ -2,18 +2,20 @@ import datachain as dc
 
 
 # Define the UDF:
-def path_len(path):
+# DataChain figures out input and output types automatically
+# based on the function signature and the data provided.
+def path_len(path: str) -> int:
     if path.endswith(".json"):
-        return (-1,)
-    return (len(path),)
+        return -1
+    return len(path)
 
 
 if __name__ == "__main__":
-    # Run in chain
-    dc.read_storage(
-        uri="gs://datachain-demo/dogs-and-cats/",
-    ).map(
-        path_len,
-        params=["file.path"],
-        output={"path_len": int},
-    ).show()
+    # Process all the files in the storage bucket, using the UDF
+    # `read_storage` reads files from the specified path
+    # and returns a DataChain object that has `File` objects
+    (
+        dc.read_storage("gs://datachain-demo/dogs-and-cats/", anon=True)
+        .map(path_len=path_len, params=["file.path"])
+        .show()
+    )
