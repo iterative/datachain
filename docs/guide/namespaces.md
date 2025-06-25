@@ -1,8 +1,8 @@
 # Organizing Datasets with Namespace and Project
 
-DataChain allows you to organize datasets using optional namespaces and projects. These provide an additional structure for managing data across different workflows, use cases, or organizational structures.
+DataChain allows you to organize datasets using namespaces and projects. These provide an additional structure for managing data across different workflows, use cases, or organizational structures.
 
-A dataset in DataChain can be organized as:
+A dataset in DataChain is organized as:
 
 ```
 <namespace>.<project>.<dataset>
@@ -104,7 +104,7 @@ dc.read_csv("gs://bucket/metrics.csv") \
   .save("prod.analytics.metrics")
 
 ds = dc.read_dataset("prod.analytics.metrics")
-ds.describe()
+ds.show()
 ```
 
 ## Example (CLI – default only)
