@@ -49,7 +49,7 @@ In Studio, you can explicitly create a project and namespace using:
 ```python
 import datachain as dc
 
-dc.create_project("analytics", "dev")
+dc.create_project("dev", "analytics")
 ```
 
 This creates the `dev` namespace (if it doesn't exist) and a project called `analytics` inside it.
@@ -92,21 +92,13 @@ ds = dc.read_dataset("dev.analytics.metrics")
 
 In CLI, this only works for datasets saved in the default `local.local` project.
 
-## Summary
-
-| Feature                         | Studio                        | CLI                      |
-|--------------------------------|-------------------------------|--------------------------|
-| Create custom namespace/project | Yes                           | No                       |
-| Save to custom project          | Yes (via name or settings)    | No (only `local.local`)  |
-| Use default project             | `users.<username>.<dataset>`  | `local.local.<dataset>`  |
-| Read from specific project      | Yes                           | Only `local.local`       |
 
 ## Example (Studio)
 
 ```python
 import datachain as dc
 
-dc.create_project("analytics", "prod")
+dc.create_project("prod", "analytics")
 
 dc.read_csv("gs://bucket/metrics.csv") \
   .save("prod.analytics.metrics")
