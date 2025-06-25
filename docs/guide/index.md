@@ -12,3 +12,4 @@ Welcome to the DataChain User Guide! This section provides comprehensive documen
     - [Error Handling and Retries](./retry.md) - Learn how to handle processing errors and selectively reprocess problematic records.
 - [Environment Variables](./env.md) - Configure DataChain's behavior using environment variables.
 - [Namespaces](./namespaces.md) - Learn more about namespaces and projects.
+- [Local DB Migrations](./namespaces.md) - Learn how to handle local DB migrations after upgrading datachain.
