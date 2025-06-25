@@ -3,7 +3,7 @@
 When using the DataChain CLI, datasets are stored in a local SQLite database located at:
 
 ```
-~/.datachain/db
+.datachain/db
 ```
 
 Unlike the SaaS version (Studio), the CLI does **not** support automatic database migrations. This means that after upgrading the DataChain CLI, the local database schema may become incompatible with the updated codebase.
@@ -54,7 +54,7 @@ export_dir = "exported_datasets"
 os.makedirs(export_dir, exist_ok=True)
 
 # dc.datasets() returns a chain of DatasetInfo objects
-for ds_info in dc.datasets():
+for ds_info in dc.datasets(column="dataset").to_values("dataset"):
     ds = dc.read_dataset(ds_info.name, version=ds_info.version)
     filename = f"{ds_info.name}.{ds_info.version}.parquet"
     filepath = os.path.join(export_dir, filename)
