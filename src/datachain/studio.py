@@ -430,6 +430,7 @@ def list_clusters(team_name: Optional[str]):
     rows = [
         {
             "ID": cluster.get("id"),
+            "Name": cluster.get("name"),
             "Status": cluster.get("status"),
             "Cloud Provider": cluster.get("cloud_provider"),
             "Cloud Credentials": cluster.get("cloud_credentials"),
