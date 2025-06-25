@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock
 
+import pytest
 import requests_mock
 import websockets
 from dvc_studio_client.auth import AuthorizationExpiredError
@@ -429,3 +430,65 @@ def test_studio_run(capsys, mocker, tmp_dir):
         "priority": 5,
         "compute_cluster_name": "default",
     }
+
+
+@pytest.mark.parametrize(
+    "status,expected_exit_code", [("FAILED", 1), ("CANCELLED", 2), ("COMPLETED", 0)]
+)
+def test_studio_run_non_zero_exit_code(
+    capsys, mocker, tmp_dir, status, expected_exit_code
+):
+    # Mock tail_job_logs to return a status
+    async def mock_tail_job_logs(job_id):
+        # Simulate some log messages
+        yield {"logs": [{"message": "Starting job...\n"}]}
+        yield {"logs": [{"message": "Processing data...\n"}]}
+        # Return failed status
+        yield {"job": {"status": status}}
+
+    mocker.patch(
+        "datachain.remote.studio.StudioClient.tail_job_logs",
+        side_effect=mock_tail_job_logs,
+    )
+
+    with Config(ConfigLevel.GLOBAL).edit() as conf:
+        conf["studio"] = {"token": "isat_access_token", "team": "team_name"}
+
+    with requests_mock.mock() as m:
+        m.post(
+            f"{STUDIO_URL}/api/datachain/job",
+            json={"job": {"id": 1, "url": "https://example.com"}},
+        )
+        m.get(
+            f"{STUDIO_URL}/api/datachain/datasets/dataset_job_versions?job_id=1&team_name=team_name",
+            json={
+                "dataset_versions": [
+                    {"dataset_name": "dataset_name", "version": "1.0.0"}
+                ]
+            },
+        )
+
+        (tmp_dir / "example_query.py").write_text("print(1)")
+
+        assert (
+            main(
+                [
+                    "job",
+                    "run",
+                    "example_query.py",
+                ]
+            )
+            == expected_exit_code
+        )
+
+    out = capsys.readouterr().out
+    assert (
+        out.strip() == "Job 1 created\nOpen the job in Studio at https://example.com\n"
+        "========================================\n"
+        "Starting job...\n"
+        "Processing data...\n"
+        "\n"
+        f">>>> Job is now in {status} status.\n\n\n"
+        ">>>> Dataset versions created during the job:\n"
+        "    - dataset_name@v1.0.0"
+    )
