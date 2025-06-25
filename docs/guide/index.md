@@ -11,4 +11,4 @@ Welcome to the DataChain User Guide! This section provides comprehensive documen
     - [Delta Processing](./delta.md) - Incremental data processing to efficiently handle large datasets that change over time.
     - [Error Handling and Retries](./retry.md) - Learn how to handle processing errors and selectively reprocess problematic records.
 - [Environment Variables](./env.md) - Configure DataChain's behavior using environment variables.
-- Namespaces](./namespaces.md) - Namespaces.
+- [Namespaces](./namespaces.md) - Learn more about namespaces and projects.
