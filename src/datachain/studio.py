@@ -290,7 +290,11 @@ def show_logs_from_client(client, job_id):
     else:
         print("\n\nNo dataset versions created during the job.")
 
-    return 1 if latest_status in ["FAILED", "CANCELLED"] else 0
+    exit_code_by_status = {
+        "FAILED": 1,
+        "CANCELLED": 2,
+    }
+    return exit_code_by_status.get(latest_status.upper(), 0) if latest_status else 0
 
 
 def create_job(
@@ -418,7 +422,7 @@ def show_job_logs(job_id: str, team_name: Optional[str]):
         )
 
     client = StudioClient(team=team_name)
-    show_logs_from_client(client, job_id)
+    return show_logs_from_client(client, job_id)
 
 
 def list_clusters(team_name: Optional[str]):

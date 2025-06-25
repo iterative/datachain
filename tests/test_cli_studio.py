@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock
 
+import pytest
 import requests_mock
 import websockets
 from dvc_studio_client.auth import AuthorizationExpiredError
@@ -442,14 +443,19 @@ def test_studio_run(capsys, mocker, tmp_dir):
     }
 
 
-def test_studio_run_non_zero_exit_code(capsys, mocker, tmp_dir):
-    # Mock tail_job_logs to return a failed status
+@pytest.mark.parametrize(
+    "status,expected_exit_code", [("FAILED", 1), ("CANCELLED", 2), ("COMPLETED", 0)]
+)
+def test_studio_run_non_zero_exit_code(
+    capsys, mocker, tmp_dir, status, expected_exit_code
+):
+    # Mock tail_job_logs to return a status
     async def mock_tail_job_logs(job_id):
         # Simulate some log messages
         yield {"logs": [{"message": "Starting job...\n"}]}
         yield {"logs": [{"message": "Processing data...\n"}]}
         # Return failed status
-        yield {"job": {"status": "FAILED"}}
+        yield {"job": {"status": status}}
 
     mocker.patch(
         "datachain.remote.studio.StudioClient.tail_job_logs",
@@ -483,7 +489,7 @@ def test_studio_run_non_zero_exit_code(capsys, mocker, tmp_dir):
                     "example_query.py",
                 ]
             )
-            == 1
+            == expected_exit_code
         )
 
     out = capsys.readouterr().out
@@ -493,7 +499,7 @@ def test_studio_run_non_zero_exit_code(capsys, mocker, tmp_dir):
         "Starting job...\n"
         "Processing data...\n"
         "\n"
-        ">>>> Job is now in FAILED status.\n\n\n"
+        f">>>> Job is now in {status} status.\n\n\n"
         ">>>> Dataset versions created during the job:\n"
         "    - dataset_name@v1.0.0"
     )
