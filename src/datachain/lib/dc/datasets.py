@@ -55,7 +55,10 @@ def read_dataset(
             set; otherwise, default values will be applied.
         namespace : optional name of namespace in which dataset to read is created
         project : optional name of project in which dataset to read is created
-        version : dataset version
+        version : dataset version. Supports:
+            - Exact version strings: "1.2.3"
+            - Legacy integer versions: 1, 2, 3 (finds latest major version)
+            - Version specifiers (PEP 440): ">=1.0.0,<2.0.0", "~=1.4.2", "==1.2.*", etc.
         session : Session to use for the chain.
         settings : Settings to use for the chain.
         fallback_to_studio : Try to pull dataset from Studio if not found locally.
@@ -100,6 +103,16 @@ def read_dataset(
         ```
 
         ```py
+        # Using version specifiers (PEP 440)
+        chain = dc.read_dataset("my_cats", version=">=1.0.0,<2.0.0")
+        ```
+
+        ```py
+        # Legacy integer version support (finds latest in major version)
+        chain = dc.read_dataset("my_cats", version=1)  # Latest 1.x.x version
+        ```
+
+        ```py
         session = Session.get(client_config={"aws_endpoint_url": "<minio-url>"})
         settings = {
             "cache": True,
@@ -131,31 +144,44 @@ def read_dataset(
     )
 
     if version is not None:
+        # Get dataset to check versions
         try:
-            # for backward compatibility we still allow users to put version as integer
-            # in which case we are trying to find latest version where major part is
-            # equal to that input version. For example if user sets version=2, we could
-            # continue with something like 2.4.3 (assuming 2.4.3 is the biggest among
-            # all 2.* dataset versions). If dataset doesn't have any versions where
-            # major part is equal to that input, exception is thrown.
-            major = int(version)
-            try:
-                ds_project = get_project(project_name, namespace_name, session=session)
-            except ProjectNotFoundError:
-                raise DatasetNotFoundError(
-                    f"Dataset {name} not found in namespace {namespace_name} and",
-                    f" project {project_name}",
-                ) from None
+            ds_project = get_project(project_name, namespace_name, session=session)
+        except ProjectNotFoundError:
+            raise DatasetNotFoundError(
+                f"Dataset {name} not found in namespace {namespace_name} and",
+                f" project {project_name}",
+            ) from None
 
-            dataset = session.catalog.get_dataset(name, ds_project)
-            latest_major = dataset.latest_major_version(major)
-            if not latest_major:
+        dataset = session.catalog.get_dataset(name, ds_project)
+
+        # Convert legacy integer versions to version specifiers
+        # For backward compatibility we still allow users to put version as integer
+        # in which case we convert it to a version specifier that finds the latest
+        # version where major part is equal to that input version.
+        # For example if user sets version=2, we convert it to ">=2.0.0,<3.0.0"
+        # which will find something like 2.4.3 (assuming 2.4.3 is the biggest among
+        # all 2.* dataset versions)
+        if isinstance(version, int):
+            version_spec = f">={version}.0.0,<{version + 1}.0.0"
+        else:
+            version_spec = str(version)
+
+        from packaging.specifiers import InvalidSpecifier, SpecifierSet
+
+        try:
+            # Try to parse as version specifier
+            SpecifierSet(version_spec)
+            # If it's a valid specifier set, find the latest compatible version
+            latest_compatible = dataset.latest_compatible_version(version_spec)
+            if not latest_compatible:
                 raise DatasetVersionNotFoundError(
-                    f"Dataset {name} does not have version {version}"
+                    f"No dataset {name} version matching specifier {version}"
                 )
-            version = latest_major
-        except ValueError:
-            # version is in new semver string format, continuing as normal
+            version = latest_compatible
+        except InvalidSpecifier:
+            # If not a valid specifier, treat as exact version string
+            # This handles cases like "1.2.3" which are exact versions, not specifiers
             pass
 
     if settings:

@@ -12,6 +12,9 @@ from typing import (
 )
 from urllib.parse import urlparse
 
+from packaging.specifiers import SpecifierSet
+from packaging.version import Version
+
 from datachain import semver
 from datachain.error import DatasetVersionNotFoundError, InvalidDatasetNameError
 from datachain.namespace import Namespace
@@ -661,13 +664,39 @@ class DatasetRecord:
             return None
         return max(versions).version
 
-    @property
-    def prev_version(self) -> Optional[str]:
-        """Returns previous version of a dataset"""
-        if len(self.versions) == 1:
+    def latest_compatible_version(self, version_spec: str) -> Optional[str]:
+        """
+        Returns the latest version that matches the given version specifier.
+
+        Supports Python version specifiers like:
+        - ">=1.0.0,<2.0.0" (compatible release range)
+        - "~=1.4.2" (compatible release clause)
+        - "==1.2.*" (prefix matching)
+        - ">1.0.0" (exclusive ordered comparison)
+        - ">=1.0.0" (inclusive ordered comparison)
+        - "!=1.3.0" (version exclusion)
+
+        Args:
+            version_spec: Version specifier string following PEP 440
+
+        Returns:
+            Latest compatible version string, or None if no compatible version found
+        """
+        spec_set = SpecifierSet(version_spec)
+
+        # Convert dataset versions to packaging.Version objects
+        # and filter compatible ones
+        compatible_versions = []
+        for v in self.versions:
+            pkg_version = Version(v.version)
+            if spec_set.contains(pkg_version):
+                compatible_versions.append(v)
+
+        if not compatible_versions:
             return None
 
-        return sorted(self.versions)[-2].version
+        # Return the latest compatible version
+        return max(compatible_versions).version
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "DatasetRecord":
