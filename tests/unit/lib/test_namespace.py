@@ -24,9 +24,9 @@ def test_create_namespace(test_session):
     assert namespace.created_at
 
 
-@pytest.mark.disable_autouse
+@pytest.mark.parametrize("allow_create_namespace", [False])
 @skip_if_not_sqlite
-def test_create_by_user_not_allowed(test_session):
+def test_create_by_user_not_allowed(test_session, allow_create_namespace):
     with pytest.raises(NamespaceCreateNotAllowedError) as excinfo:
         create_namespace("dev", session=test_session)
 

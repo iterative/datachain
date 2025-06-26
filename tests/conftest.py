@@ -542,9 +542,19 @@ def cloud_test_catalog_tmpfile(
     )
 
 
+@pytest.fixture
+def allow_create_project():
+    return True
+
+
+@pytest.fixture
+def allow_create_namespace():
+    return True
+
+
 @pytest.fixture(autouse=True)
-def mock_allowed_to_create_project(request):
-    if "disable_autouse" in request.keywords:
+def mock_allowed_to_create_project(allow_create_project):
+    if not allow_create_project:
         yield
     else:
         with patch.object(
@@ -555,8 +565,8 @@ def mock_allowed_to_create_project(request):
 
 
 @pytest.fixture(autouse=True)
-def mock_allowed_to_create_namespace(request):
-    if "disable_autouse" in request.keywords:
+def mock_allowed_to_create_namespace(allow_create_namespace):
+    if not allow_create_namespace:
         yield
     else:
         with patch.object(

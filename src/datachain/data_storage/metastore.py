@@ -799,12 +799,29 @@ class AbstractDBMetastore(AbstractMetastore):
 
         return self.get_project(name, namespace.name)
 
+    def _is_listing_project(self, project_name: str, namespace_name: str) -> bool:
+        return (
+            project_name == self.listing_project_name
+            and namespace_name == self.system_namespace_name
+        )
+
+    def _is_default_project(self, project_name: str, namespace_name: str) -> bool:
+        return (
+            project_name == self.default_project_name
+            and namespace_name == self.default_namespace_name
+        )
+
     def get_project(
         self, name: str, namespace_name: str, create: bool = False, conn=None
     ) -> Project:
         """Gets a single project inside some namespace by name"""
         n = self._namespaces
         p = self._projects
+        if self._is_listing_project(name, namespace_name) or self._is_default_project(
+            name, namespace_name
+        ):
+            # we are always creating default and listing projects if they don't exist
+            create = True
 
         query = self._projects_select(
             *(getattr(n.c, f) for f in self._namespaces_fields),
