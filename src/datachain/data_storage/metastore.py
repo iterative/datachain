@@ -805,7 +805,7 @@ class AbstractDBMetastore(AbstractMetastore):
             and namespace_name == self.system_namespace_name
         )
 
-    def _is_default_project(self, project_name, namespace_name) -> bool:
+    def _is_default_project(self, project_name: str, namespace_name: str) -> bool:
         return (
             project_name == self.default_project_name
             and namespace_name == self.default_namespace_name
