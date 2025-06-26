@@ -799,7 +799,7 @@ class AbstractDBMetastore(AbstractMetastore):
 
         return self.get_project(name, namespace.name)
 
-    def _is_listing_project(self, project_name, namespace_name) -> bool:
+    def _is_listing_project(self, project_name: str, namespace_name: str) -> bool:
         return (
             project_name == self.listing_project_name
             and namespace_name == self.system_namespace_name
