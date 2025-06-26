@@ -309,7 +309,7 @@ async def _prefetch_input(
     after_prefetch: "Callable[[], None]" = noop,
 ) -> T:
     for obj in row:
-        if isinstance(obj, File) and await obj._prefetch(download_cb):
+        if isinstance(obj, File) and obj.path and await obj._prefetch(download_cb):
             after_prefetch()
     return row
 
