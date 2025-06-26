@@ -3365,10 +3365,28 @@ def test_semver_preview_ok(test_session):
     assert sorted([p["num"] for p in dataset.get_version("1.0.1").preview]) == [3, 4]
 
 
-def test_save_to_default_project(test_session):
+@pytest.mark.parametrize("allow_create_project", [True, False])
+def test_save_to_default_project(test_session, allow_create_project):
     catalog = test_session.catalog
     ds_name = "fibonacci"
     dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save(ds_name)
+    ds = dc.read_dataset(name=ds_name)
+    assert ds.dataset.project == catalog.metastore.default_project
+
+
+@pytest.mark.parametrize("allow_create_project", [True, False])
+def test_save_to_default_project_with_read_storage(
+    tmp_dir, test_session, allow_create_project
+):
+    catalog = test_session.catalog
+    ds_name = "parquet_ds"
+
+    df = pd.DataFrame(DF_DATA)
+    df.to_parquet(tmp_dir / "df.parquet")
+
+    uri = tmp_dir.as_uri()
+    dc.read_storage(uri, session=test_session).save(ds_name)
+
     ds = dc.read_dataset(name=ds_name)
     assert ds.dataset.project == catalog.metastore.default_project
 
@@ -3427,9 +3445,9 @@ def test_save_specify_only_non_default_project(
         dc.read_dataset(name="fibonacci")
 
 
-@pytest.mark.disable_autouse
+@pytest.mark.parametrize("allow_create_project", [False])
 @skip_if_not_sqlite
-def test_save_create_project_not_allowed(test_session):
+def test_save_create_project_not_allowed(test_session, allow_create_project):
     with pytest.raises(ProjectCreateNotAllowedError):
         dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save(
             "dev.numbers.fibonacci"

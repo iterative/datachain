@@ -61,8 +61,8 @@ def test_invalid_name(test_session, name):
         dc.create_project("dev", name, session=test_session)
 
 
-@pytest.mark.disable_autouse
 @skip_if_not_sqlite
+@pytest.mark.parametrize("allow_create_project", [False])
 def test_create_by_user_not_allowed(test_session):
     with pytest.raises(ProjectCreateNotAllowedError) as excinfo:
         dc.create_project("dev", "chatbot", session=test_session)
