@@ -756,6 +756,52 @@ def test_mutate_existing_column(test_session):
     assert ds.order_by("ids").to_list() == [(2,), (3,), (4,)]
 
 
+def test_mutate_with_primitives_save_load(test_session):
+    """Test that mutate with primitive values properly persists schema
+    through save/load cycle."""
+    original_data = [1, 2, 3]
+
+    # Create dataset with multiple primitive columns added via mutate
+    ds = dc.read_values(data=original_data, session=test_session).mutate(
+        str_col="test_string",
+        int_col=42,
+        float_col=3.14,
+        bool_col=True,
+    )
+
+    # Verify schema before saving
+    schema = ds.signals_schema.values
+    assert schema.get("str_col") is str
+    assert schema.get("int_col") is int
+    assert schema.get("float_col") is float
+    assert schema.get("bool_col") is bool
+
+    ds.save("test_mutate_primitives")
+
+    # Load the dataset back
+    loaded_ds = dc.read_dataset("test_mutate_primitives", session=test_session)
+
+    # Verify schema after loading
+    loaded_schema = loaded_ds.signals_schema.values
+    assert loaded_schema.get("str_col") is str
+    assert loaded_schema.get("int_col") is int
+    assert loaded_schema.get("float_col") is float
+    assert loaded_schema.get("bool_col") is bool
+
+    # Verify data integrity
+    results = set(loaded_ds.to_list())
+    assert len(results) == 3
+
+    # Expected tuples: (data, str_col, int_col, float_col, bool_col)
+    expected_results = {
+        (1, "test_string", 42, 3.14, True),
+        (2, "test_string", 42, 3.14, True),
+        (3, "test_string", 42, 3.14, True),
+    }
+
+    assert results == expected_results
+
+
 @pytest.mark.parametrize("processes", [False, 2, True])
 @pytest.mark.xdist_group(name="tmpfile")
 def test_parallel(processes, test_session_tmpfile):
