@@ -3445,6 +3445,26 @@ def test_save_specify_only_non_default_project(
         dc.read_dataset(name="fibonacci")
 
 
+@pytest.mark.parametrize("use_settings", (True, False))
+def test_save_all_ways_to_set_project(test_session, monkeypatch):
+    catalog = test_session.catalog
+    catalog.metastore.create_project("n1", "p1")
+    catalog.metastore.create_project("n2", "p2")
+    p3 = catalog.metastore.create_project("n3", "p3")
+
+    monkeypatch.setenv("DATACHAIN_NAMESPACE", "n1")
+    monkeypatch.setenv("DATACHAIN_PROJECT", "p1")
+    ds = (
+        dc.read_values(fib=[1, 2, 3, 3, 5, 8], session=test_session)
+        .settings(namespace="n2", project="p2")
+        .save("n3.p3.numbers")
+    )
+
+    assert ds.project == p3
+
+    dc.read_dataset("n3.p3.numbers")
+
+
 @pytest.mark.parametrize("allow_create_project", [False])
 @skip_if_not_sqlite
 def test_save_create_project_not_allowed(test_session, allow_create_project):

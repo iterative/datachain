@@ -15,4 +15,8 @@ List of environment variables used to configure DataChain behavior.
 - `DATACHAIN_STUDIO_TOKEN` – Authentication token for Studio.
 - `DATACHAIN_STUDIO_TEAM` – Studio team name.
 
+### Namespaces and projects
+- `DATACHAIN_NAMESPACE` – Namespace name to use as default.
+- `DATACHAIN_PROJECT` – Project name to use as default.
+
 Note: Some environment variables are used internally and may not be documented here. For the most up-to-date list, refer to the source code.

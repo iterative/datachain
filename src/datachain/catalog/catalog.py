@@ -1059,6 +1059,30 @@ class Catalog:
 
         return self.get_dataset(name, project)
 
+    def get_full_dataset_name(
+        self,
+        name: str,
+        project_name: Optional[str] = None,
+        namespace_name: Optional[str] = None,
+    ) -> tuple[str, str, str]:
+        """"""
+        parsed_namespace_name, parsed_project_name, name = parse_dataset_name(name)
+
+        namespace_name = (
+            parsed_namespace_name
+            or namespace_name
+            or os.environ.get("DATACHAIN_NAMESPACE")
+            or self.metastore.default_namespace_name
+        )
+        project_name = (
+            parsed_project_name
+            or project_name
+            or os.environ.get("DATACHAIN_PROJECT")
+            or self.metastore.default_project_name
+        )
+
+        return namespace_name, project_name, name
+
     def get_dataset(
         self, name: str, project: Optional[Project] = None
     ) -> DatasetRecord:
