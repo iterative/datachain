@@ -789,15 +789,15 @@ def test_mutate_with_primitives_save_load(test_session):
     assert loaded_schema.get("bool_col") is bool
 
     # Verify data integrity
-    results = loaded_ds.to_list()
+    results = set(loaded_ds.to_list())
     assert len(results) == 3
 
     # Expected tuples: (data, str_col, int_col, float_col, bool_col)
-    expected_results = [
+    expected_results = {
         (1, "test_string", 42, 3.14, True),
         (2, "test_string", 42, 3.14, True),
         (3, "test_string", 42, 3.14, True),
-    ]
+    }
 
     assert results == expected_results
 
