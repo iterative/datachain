@@ -21,6 +21,7 @@ from datachain.error import (
     DatasetNotFoundError,
     DatasetVersionNotFoundError,
     ProjectCreateNotAllowedError,
+    ProjectNotFoundError,
 )
 from datachain.lib.data_model import DataModel
 from datachain.lib.dc import C, DatasetPrepareError, Sys
@@ -3414,6 +3415,31 @@ def test_save_to_non_default_namespace_and_project(
     with pytest.raises(DatasetNotFoundError):
         # dataset is not in default namespace / project
         dc.read_dataset(name="fibonacci")
+
+
+def test_dataset_not_found_in_default_project(test_session):
+    metastore = test_session.catalog.metastore
+    with pytest.raises(DatasetNotFoundError) as excinfo:
+        dc.read_dataset("fibonacci")
+    assert str(excinfo.value) == (
+        f"Dataset fibonacci not found in namespace {metastore.default_namespace_name}"
+        f" and project {metastore.default_project_name}."
+    )
+
+
+def test_dataset_not_found_in_non_default_project(test_session):
+    dc.create_project("dev", "numbers")
+    with pytest.raises(DatasetNotFoundError) as excinfo:
+        dc.read_dataset("dev.numbers.fibonacci")
+    assert str(excinfo.value) == (
+        "Dataset fibonacci not found in namespace dev and project numbers."
+    )
+
+
+def test_dataset_not_found_missing_project(test_session):
+    with pytest.raises(ProjectNotFoundError) as excinfo:
+        dc.read_dataset("dev.numbers.fibonacci")
+    assert str(excinfo.value) == ("Project numbers in namespace dev not found.")
 
 
 @pytest.mark.parametrize("use_settings", (True, False))

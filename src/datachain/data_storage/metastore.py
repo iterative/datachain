@@ -206,6 +206,10 @@ class AbstractMetastore(ABC, Serializable):
         """
 
     @abstractmethod
+    def get_project_by_id(self, project_id: int, conn=None) -> Project:
+        """Gets a single project by id"""
+
+    @abstractmethod
     def list_projects(self, namespace_id: Optional[int], conn=None) -> list[Project]:
         """Gets list of projects in some namespace or in general (in all namespaces)"""
 
@@ -840,6 +844,24 @@ class AbstractDBMetastore(AbstractMetastore):
             )
         return self.project_class.parse(*rows[0])
 
+    def get_project_by_id(self, project_id: int, conn=None) -> Project:
+        """Gets a single project by id"""
+        n = self._namespaces
+        p = self._projects
+
+        query = self._projects_select(
+            *(getattr(n.c, f) for f in self._namespaces_fields),
+            *(getattr(p.c, f) for f in self._projects_fields),
+        )
+        query = query.select_from(n.join(p, n.c.id == p.c.namespace_id)).where(
+            p.c.id == project_id
+        )
+
+        rows = list(self.db.execute(query, conn=conn))
+        if not rows:
+            raise ProjectNotFoundError(f"Project {project_id} not found.")
+        return self.project_class.parse(*rows[0])
+
     def list_projects(self, namespace_id: Optional[int], conn=None) -> list[Project]:
         """
         Gets a list of projects inside some namespace, or in all namespaces
@@ -1182,15 +1204,29 @@ class AbstractDBMetastore(AbstractMetastore):
         """
         Gets a single dataset in project by dataset name.
         """
-        project_id = project_id or self.default_project.id
+        project = None
+        if not project_id:
+            project = self.default_project
+            project_id = project.id
+
         d = self._datasets
         query = self._base_dataset_query()
         query = query.where(d.c.name == name, d.c.project_id == project_id)  # type: ignore [attr-defined]
         ds = self._parse_dataset(self.db.execute(query, conn=conn))
         if not ds:
+            if not project:
+                try:
+                    project = self.get_project_by_id(project_id)
+                except ProjectNotFoundError:
+                    raise DatasetNotFoundError(
+                        f"Dataset {name} not found because project with id {project_id}"
+                        " doesn't exist."
+                    ) from None
             raise DatasetNotFoundError(
-                f"Dataset {name} not found in project {project_id}"
+                f"Dataset {name} not found in namespace {project.namespace.name}"
+                f" and project {project.name}."
             )
+
         return ds
 
     def remove_dataset_version(
