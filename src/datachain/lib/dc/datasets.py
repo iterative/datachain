@@ -144,7 +144,7 @@ def read_dataset(
                 ds_project = get_project(project_name, namespace_name, session=session)
             except ProjectNotFoundError:
                 raise DatasetNotFoundError(
-                    f"Dataset {name} not found in namespace {namespace_name} and",
+                    f"Dataset {name} not found in namespace {namespace_name} and"
                     f" project {project_name}",
                 ) from None
 
