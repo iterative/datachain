@@ -13,71 +13,38 @@ def test_read_dataset_version_specifiers(test_session):
     # Create a dataset with multiple versions
     dataset_name = "test_version_specifiers"
 
-    (
-        dc.read_values(data=[1, 2], session=test_session)
-        .mutate(dataset_version="1.0.0")
-        .save(dataset_name, version="1.0.0")
-    )
-
-    dc.read_dataset(dataset_name, version="1.0.0", session=test_session).to_values(
-        "dataset_version"
-    )
-
-    (
-        dc.read_values(data=[1, 2, 3], session=test_session)
-        .mutate(dataset_version="1.1.0")
-        .save(dataset_name, version="1.1.0")
-    )
-
-    (
-        dc.read_values(data=[1, 2, 3, 4], session=test_session)
-        .mutate(dataset_version="1.2.0")
-        .save(dataset_name, version="1.2.0")
-    )
-
-    (
-        dc.read_values(data=[10, 20], session=test_session)
-        .mutate(dataset_version="2.0.0")
-        .save(dataset_name, version="2.0.0")
-    )
+    for version in ["1.0.0", "1.1.0", "1.2.0", "2.0.0"]:
+        (
+            dc.read_values(data=[1, 2], session=test_session)
+            .mutate(dataset_version=version)
+            .save(dataset_name, version=version)
+        )
 
     # Test exact version specifier
     result = dc.read_dataset(dataset_name, version="==1.1.0", session=test_session)
-    # Since dataset_version column is not preserved, let's test with data values instead
-    data_values = result.to_values("data")
-    assert data_values == [1, 2, 3]  # version 1.1.0 has data [1, 2, 3]
+    assert result.to_values("dataset_version")[0] == "1.1.0"
 
     # Test greater than or equal specifier - should get latest (2.0.0)
     result = dc.read_dataset(dataset_name, version=">=1.1.0", session=test_session)
-    data_values = result.to_values("data")
-    assert data_values == [10, 20]  # version 2.0.0 has data [10, 20]
-
-    # Test exact version specifier
-    result = dc.read_dataset(dataset_name, version="1.2.0", session=test_session)
-    data_values = result.to_values("data")
-    assert data_values == [1, 2, 3, 4]  # version 1.2.0 has data [1, 2, 3, 4]
+    assert result.to_values("dataset_version")[0] == "2.0.0"
 
     # Test less than specifier - should get 1.2.0 (latest before 2.0.0)
     result = dc.read_dataset(dataset_name, version="<2.0.0", session=test_session)
-    data_values = result.to_values("data")
-    assert data_values == [1, 2, 3, 4]  # version 1.2.0 has data [1, 2, 3, 4]
+    assert result.to_values("dataset_version")[0] == "1.2.0"
 
     # Test compatible release specifier - should get latest 1.x (1.2.0)
     result = dc.read_dataset(dataset_name, version="~=1.0", session=test_session)
-    data_values = result.to_values("data")
-    assert data_values == [1, 2, 3, 4]  # version 1.2.0 has data [1, 2, 3, 4]
+    assert result.to_values("dataset_version")[0] == "1.2.0"
 
     # Test version pattern - should get latest 1.x (1.2.0)
     result = dc.read_dataset(dataset_name, version="==1.*", session=test_session)
-    data_values = result.to_values("data")
-    assert data_values == [1, 2, 3, 4]  # version 1.2.0 has data [1, 2, 3, 4]
+    assert result.to_values("dataset_version")[0] == "1.2.0"
 
     # Test complex specifier - should get 1.2.0
     result = dc.read_dataset(
         dataset_name, version=">=1.1.0,<2.0.0", session=test_session
     )
-    data_values = result.to_values("data")
-    assert data_values == [1, 2, 3, 4]  # version 1.2.0 has data [1, 2, 3, 4]
+    assert result.to_values("dataset_version")[0] == "1.2.0"
 
 
 def test_read_dataset_version_specifiers_no_match(test_session):
@@ -114,33 +81,8 @@ def test_read_dataset_version_specifiers_exact_version(test_session):
 
     # Test reading by exact version
     result = dc.read_dataset(dataset_name, version="1.0.0", session=test_session)
-    data_values = result.to_values("data")
-    assert data_values == [1, 2]  # version 1.0.0 has data [1, 2]
+    assert result.to_values("dataset_version")[0] == "1.0.0"
 
     # Test reading by exact version int - backward compatibility
     result = dc.read_dataset(dataset_name, version=1, session=test_session)
-    data_values = result.to_values("data")
-    assert data_values == [1, 2]  # version 1.0.0 has data [1, 2]
-
-
-def test_read_dataset_version_specifier_no_match_error(test_session):
-    """Test read_dataset with version specifier that doesn't match falls
-    back to proper error."""
-    # Create a dataset with a standard version
-    dataset_name = "test_invalid_specifier"
-
-    # Create a version with a standard semver format
-    (
-        dc.read_values(data=[1, 2], session=test_session)
-        .mutate(dataset_version="1.0.0")
-        .save(dataset_name, version="1.0.0")
-    )
-
-    # Test reading with the exact version works
-    result = dc.read_dataset(dataset_name, version="1.0.0", session=test_session)
-    data_values = result.to_values("data")
-    assert data_values == [1, 2]  # version 1.0.0 has data [1, 2]
-
-    # Test that a specifier that doesn't match throws proper error
-    with pytest.raises(DatasetVersionNotFoundError):
-        dc.read_dataset(dataset_name, version=">=2.0.0", session=test_session)
+    assert result.to_values("dataset_version")[0] == "1.0.0"
