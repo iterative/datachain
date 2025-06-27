@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field, create_model
 from sqlalchemy import ColumnElement
 from typing_extensions import Literal as LiteralEx
 
+from datachain.func import literal
 from datachain.func.func import Func
 from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.convert.sql_to_python import sql_to_python
@@ -659,6 +660,7 @@ class SignalSchema:
 
     def mutate(self, args_map: dict) -> "SignalSchema":
         new_values = self.values.copy()
+        primitives = (bool, str, int, float)
 
         for name, value in args_map.items():
             if isinstance(value, Column) and value.name in self.values:
@@ -678,6 +680,12 @@ class SignalSchema:
             if isinstance(value, Func):
                 # adding new signal with function
                 new_values[name] = value.get_result_type(self)
+                continue
+            if isinstance(value, primitives):
+                # For primitives, store the type, not the value
+                val = literal(value)
+                val.type = python_to_sql(type(value))()
+                new_values[name] = sql_to_python(val)
                 continue
             if isinstance(value, ColumnElement):
                 # adding new signal
