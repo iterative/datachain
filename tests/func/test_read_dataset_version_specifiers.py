@@ -8,89 +8,92 @@ import datachain as dc
 from datachain.error import DatasetVersionNotFoundError
 
 
-@pytest.mark.parametrize("cloud_type", ["file"], indirect=True)
-def test_read_dataset_version_specifiers(cloud_test_catalog):
+def test_read_dataset_version_specifiers(test_session):
     """Test read_dataset with various PEP 440 version specifiers."""
-    session = cloud_test_catalog.session
-    src_uri = cloud_test_catalog.src_uri
-
     # Create a dataset with multiple versions
     dataset_name = "test_version_specifiers"
 
-    # Version 1.0.0
     (
-        dc.read_storage(f"{src_uri}/dogs", session=session)
-        .limit(2)
+        dc.read_values(data=[1, 2], session=test_session)
+        .mutate(dataset_version="1.0.0")
         .save(dataset_name, version="1.0.0")
     )
 
-    # Version 1.1.0
+    dc.read_dataset(dataset_name, version="1.0.0", session=test_session).to_values(
+        "dataset_version"
+    )
+
     (
-        dc.read_storage(f"{src_uri}/dogs", session=session)
-        .limit(3)
+        dc.read_values(data=[1, 2, 3], session=test_session)
+        .mutate(dataset_version="1.1.0")
         .save(dataset_name, version="1.1.0")
     )
 
-    # Version 1.2.0
     (
-        dc.read_storage(f"{src_uri}/dogs", session=session)
-        .limit(4)
+        dc.read_values(data=[1, 2, 3, 4], session=test_session)
+        .mutate(dataset_version="1.2.0")
         .save(dataset_name, version="1.2.0")
     )
 
-    # Version 2.0.0
     (
-        dc.read_storage(f"{src_uri}/cats", session=session)
-        .limit(2)
+        dc.read_values(data=[10, 20], session=test_session)
+        .mutate(dataset_version="2.0.0")
         .save(dataset_name, version="2.0.0")
     )
 
     # Test exact version specifier
-    result = dc.read_dataset(dataset_name, version="==1.1.0", session=session)
-    assert result.count() == 3
+    result = dc.read_dataset(dataset_name, version="==1.1.0", session=test_session)
+    # Since dataset_version column is not preserved, let's test with data values instead
+    data_values = result.to_values("data")
+    assert data_values == [1, 2, 3]  # version 1.1.0 has data [1, 2, 3]
 
     # Test greater than or equal specifier - should get latest (2.0.0)
-    result = dc.read_dataset(dataset_name, version=">=1.1.0", session=session)
-    assert result.count() == 2  # version 2.0.0 has 2 items
+    result = dc.read_dataset(dataset_name, version=">=1.1.0", session=test_session)
+    data_values = result.to_values("data")
+    assert data_values == [10, 20]  # version 2.0.0 has data [10, 20]
 
-    result = dc.read_dataset(dataset_name, version="1.2.0", session=session)
-    assert result.count() == 4  # version 1.2.0 has 4 items
+    # Test exact version specifier
+    result = dc.read_dataset(dataset_name, version="1.2.0", session=test_session)
+    data_values = result.to_values("data")
+    assert data_values == [1, 2, 3, 4]  # version 1.2.0 has data [1, 2, 3, 4]
 
     # Test less than specifier - should get 1.2.0 (latest before 2.0.0)
-    result = dc.read_dataset(dataset_name, version="<2.0.0", session=session)
-    assert result.count() == 4  # version 1.2.0 has 4 items
+    result = dc.read_dataset(dataset_name, version="<2.0.0", session=test_session)
+    data_values = result.to_values("data")
+    assert data_values == [1, 2, 3, 4]  # version 1.2.0 has data [1, 2, 3, 4]
 
     # Test compatible release specifier - should get latest 1.x (1.2.0)
-    result = dc.read_dataset(dataset_name, version="~=1.0", session=session)
-    assert result.count() == 4  # version 1.2.0 has 4 items
+    result = dc.read_dataset(dataset_name, version="~=1.0", session=test_session)
+    data_values = result.to_values("data")
+    assert data_values == [1, 2, 3, 4]  # version 1.2.0 has data [1, 2, 3, 4]
 
     # Test version pattern - should get latest 1.x (1.2.0)
-    result = dc.read_dataset(dataset_name, version="==1.*", session=session)
-    assert result.count() == 4  # version 1.2.0 has 4 items
+    result = dc.read_dataset(dataset_name, version="==1.*", session=test_session)
+    data_values = result.to_values("data")
+    assert data_values == [1, 2, 3, 4]  # version 1.2.0 has data [1, 2, 3, 4]
 
     # Test complex specifier - should get 1.2.0
-    result = dc.read_dataset(dataset_name, version=">=1.1.0,<2.0.0", session=session)
-    assert result.count() == 4  # version 1.2.0 has 4 items
+    result = dc.read_dataset(
+        dataset_name, version=">=1.1.0,<2.0.0", session=test_session
+    )
+    data_values = result.to_values("data")
+    assert data_values == [1, 2, 3, 4]  # version 1.2.0 has data [1, 2, 3, 4]
 
 
-@pytest.mark.parametrize("cloud_type", ["file"], indirect=True)
-def test_read_dataset_version_specifiers_no_match(cloud_test_catalog):
+def test_read_dataset_version_specifiers_no_match(test_session):
     """Test read_dataset with version specifiers that don't match any version."""
-    session = cloud_test_catalog.session
-    src_uri = cloud_test_catalog.src_uri
-
     # Create a dataset with a single version
     dataset_name = "test_no_match_specifiers"
 
     (
-        dc.read_storage(f"{src_uri}/dogs", session=session)
-        .limit(2)
+        dc.read_values(data=[1, 2], session=test_session)
+        .mutate(dataset_version="1.0.0")
         .save(dataset_name, version="1.0.0")
     )
 
     # Test version specifier that doesn't match any existing version
     with pytest.raises(DatasetVersionNotFoundError) as exc_info:
-        dc.read_dataset(dataset_name, version=">=2.0.0", session=session)
+        dc.read_dataset(dataset_name, version=">=2.0.0", session=test_session)
 
     assert (
         "No dataset test_no_match_specifiers version matching specifier >=2.0.0"
@@ -98,25 +101,46 @@ def test_read_dataset_version_specifiers_no_match(cloud_test_catalog):
     )
 
 
-@pytest.mark.parametrize("cloud_type", ["file"], indirect=True)
-def test_read_dataset_version_specifiers_exact_version(cloud_test_catalog):
+def test_read_dataset_version_specifiers_exact_version(test_session):
     """Test that version specifiers work alongside with exact version reads."""
-    session = cloud_test_catalog.session
-    src_uri = cloud_test_catalog.src_uri
-
     # Create a dataset with multiple versions
     dataset_name = "test_backward_compatibility"
 
     (
-        dc.read_storage(f"{src_uri}/dogs", session=session)
-        .limit(2)
+        dc.read_values(data=[1, 2], session=test_session)
+        .mutate(dataset_version="1.0.0")
         .save(dataset_name, version="1.0.0")
     )
 
     # Test reading by exact version
-    result = dc.read_dataset(dataset_name, version="1.0.0", session=session)
-    assert result.count() == 2  # exact version 1.0.0 has 2 items
+    result = dc.read_dataset(dataset_name, version="1.0.0", session=test_session)
+    data_values = result.to_values("data")
+    assert data_values == [1, 2]  # version 1.0.0 has data [1, 2]
 
     # Test reading by exact version int - backward compatibility
-    result = dc.read_dataset(dataset_name, version=1, session=session)
-    assert result.count() == 2  # exact version 1.0.0 has 2 items
+    result = dc.read_dataset(dataset_name, version=1, session=test_session)
+    data_values = result.to_values("data")
+    assert data_values == [1, 2]  # version 1.0.0 has data [1, 2]
+
+
+def test_read_dataset_version_specifier_no_match_error(test_session):
+    """Test read_dataset with version specifier that doesn't match falls
+    back to proper error."""
+    # Create a dataset with a standard version
+    dataset_name = "test_invalid_specifier"
+
+    # Create a version with a standard semver format
+    (
+        dc.read_values(data=[1, 2], session=test_session)
+        .mutate(dataset_version="1.0.0")
+        .save(dataset_name, version="1.0.0")
+    )
+
+    # Test reading with the exact version works
+    result = dc.read_dataset(dataset_name, version="1.0.0", session=test_session)
+    data_values = result.to_values("data")
+    assert data_values == [1, 2]  # version 1.0.0 has data [1, 2]
+
+    # Test that a specifier that doesn't match throws proper error
+    with pytest.raises(DatasetVersionNotFoundError):
+        dc.read_dataset(dataset_name, version=">=2.0.0", session=test_session)
