@@ -3445,24 +3445,67 @@ def test_save_specify_only_non_default_project(
         dc.read_dataset(name="fibonacci")
 
 
-@pytest.mark.parametrize("use_settings", (True, False))
-def test_save_all_ways_to_set_project(test_session, monkeypatch):
-    catalog = test_session.catalog
-    catalog.metastore.create_project("n1", "p1")
-    catalog.metastore.create_project("n2", "p2")
-    p3 = catalog.metastore.create_project("n3", "p3")
+@pytest.mark.parametrize(
+    (
+        "ds_name_namespace,ds_name_project,"
+        "settings_namespace,settings_project,"
+        "env_namespace,env_project,"
+        "result_ds_namespace,result_ds_project"
+    ),
+    [
+        ("n3", "p3", "n2", "p2", "n1", "p1", "n3", "p3"),
+        ("", "", "n2", "p2", "n1", "p1", "n2", "p2"),
+        ("", "", "", "", "n1", "p1", "n1", "p1"),
+        ("", "", "", "", "n5", "n1.p1", "n1", "p1"),
+        ("", "", "", "", "", "n1.p1", "n1", "p1"),
+        ("", "", "", "", "", "n1.p1", "n1", "p1"),
+        ("n3", "p3", "n2", "p2", "", "", "n3", "p3"),
+        ("n3", "p3", "", "", "", "", "n3", "p3"),
+        ("n3", "p3", "", "", "n1", "p1", "n3", "p3"),
+        ("", "", "", "", "", "", "", ""),
+    ],
+)
+def test_save_all_ways_to_set_project(
+    test_session,
+    monkeypatch,
+    ds_name_namespace,
+    ds_name_project,
+    settings_namespace,
+    settings_project,
+    env_namespace,
+    env_project,
+    result_ds_namespace,
+    result_ds_project,
+):
+    def _full_name(namespace, project, name) -> str:
+        if namespace and project:
+            return f"{namespace}.{project}.{name}"
+        return name
 
-    monkeypatch.setenv("DATACHAIN_NAMESPACE", "n1")
-    monkeypatch.setenv("DATACHAIN_PROJECT", "p1")
+    metastore = test_session.catalog.metastore
+    ds_name = "numbers"
+    metastore.create_project("n1", "p1")
+    metastore.create_project("n2", "p2")
+    metastore.create_project("n3", "p3")
+
+    monkeypatch.setenv("DATACHAIN_NAMESPACE", env_namespace)
+    monkeypatch.setenv("DATACHAIN_PROJECT", env_project)
+
+    if not result_ds_namespace and not result_ds_project:
+        # special case when nothing is defined - we set default ones
+        result_ds_namespace = metastore.default_namespace_name
+        result_ds_project = metastore.default_project_name
+
     ds = (
-        dc.read_values(fib=[1, 2, 3, 3, 5, 8], session=test_session)
-        .settings(namespace="n2", project="p2")
-        .save("n3.p3.numbers")
+        dc.read_values(num=[1, 2, 3, 4], session=test_session)
+        .settings(namespace=settings_namespace, project=settings_project)
+        .save(_full_name(ds_name_namespace, ds_name_project, ds_name))
     )
 
-    assert ds.project == p3
-
-    dc.read_dataset("n3.p3.numbers")
+    assert ds.dataset.project == metastore.get_project(
+        result_ds_project, result_ds_namespace
+    )
+    dc.read_dataset(_full_name(result_ds_namespace, result_ds_project, ds_name))
 
 
 @pytest.mark.parametrize("allow_create_project", [False])
