@@ -756,6 +756,85 @@ def test_mutate_existing_column(test_session):
     assert ds.order_by("ids").to_list() == [(2,), (3,), (4,)]
 
 
+def test_mutate_with_primitives_save_load(test_session):
+    """Test that mutate with primitive values properly persists schema
+    through save/load cycle."""
+    # Test various primitive types that should be supported by mutate
+    original_data = [1, 2, 3]
+
+    # Create dataset with multiple primitive columns added via mutate
+    ds = dc.read_values(data=original_data, session=test_session).mutate(
+        str_col="test_string",
+        int_col=42,
+        float_col=3.14,
+        bool_col=True,
+    )
+
+    # Verify schema before saving
+    schema = ds.signals_schema.values
+    assert "str_col" in schema
+    assert "int_col" in schema
+    assert "float_col" in schema
+    assert "bool_col" in schema
+    assert schema["str_col"] is str
+    assert schema["int_col"] is int
+    assert schema["float_col"] is float
+    assert schema["bool_col"] is bool
+
+    # Save the dataset
+    saved_ds = ds.save("test_mutate_primitives")
+
+    # Verify schema after saving
+    saved_schema = saved_ds.signals_schema.values
+    assert "str_col" in saved_schema
+    assert "int_col" in saved_schema
+    assert "float_col" in saved_schema
+    assert "bool_col" in saved_schema
+    assert saved_schema["str_col"] is str
+    assert saved_schema["int_col"] is int
+    assert saved_schema["float_col"] is float
+    assert saved_schema["bool_col"] is bool
+
+    # Load the dataset back
+    loaded_ds = dc.read_dataset("test_mutate_primitives", session=test_session)
+
+    # Verify schema after loading
+    loaded_schema = loaded_ds.signals_schema.values
+    assert "str_col" in loaded_schema
+    assert "int_col" in loaded_schema
+    assert "float_col" in loaded_schema
+    assert "bool_col" in loaded_schema
+    assert loaded_schema["str_col"] is str
+    assert loaded_schema["int_col"] is int
+    assert loaded_schema["float_col"] is float
+    assert loaded_schema["bool_col"] is bool
+
+    # Verify data integrity
+    results = loaded_ds.to_records()
+    assert len(results) == 3
+
+    for i, record in enumerate(results):
+        assert record["data"] == original_data[i]
+        assert record["str_col"] == "test_string"
+        assert record["int_col"] == 42
+        assert record["float_col"] == 3.14
+        # Boolean values may be stored as integers in SQLite
+        assert record["bool_col"] in (True, 1)
+
+    # Verify we can query using the primitive columns
+    filtered_results = loaded_ds.filter(dc.C("str_col") == "test_string").to_records()
+    assert len(filtered_results) == 3
+
+    filtered_results = loaded_ds.filter(dc.C("int_col") == 42).to_records()
+    assert len(filtered_results) == 3
+
+    filtered_results = loaded_ds.filter(dc.C("float_col") == 3.14).to_records()
+    assert len(filtered_results) == 3
+
+    filtered_results = loaded_ds.filter(dc.C("bool_col")).to_records()
+    assert len(filtered_results) == 3
+
+
 @pytest.mark.parametrize("processes", [False, 2, True])
 @pytest.mark.xdist_group(name="tmpfile")
 def test_parallel(processes, test_session_tmpfile):

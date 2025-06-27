@@ -1103,7 +1103,7 @@ class DataChain:
                 mutated[name] = value
 
         return self._evolve(
-            query=self._query.mutate(**mutated), signal_schema=schema.mutate(kwargs)
+            query=self._query.mutate(**mutated), signal_schema=schema.mutate(mutated)
         )
 
     @property
