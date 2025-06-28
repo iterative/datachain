@@ -158,4 +158,4 @@ import datachain as dc
 dc.read_values(scores=[0.8, 1.5, 2.1]).save("metrics")
 
 ds = dc.read_dataset("local.local.metrics")
-ds.sho
+ds.show()
