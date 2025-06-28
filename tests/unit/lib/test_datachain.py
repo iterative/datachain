@@ -19,7 +19,6 @@ from datachain import Column
 from datachain.error import (
     DatasetInvalidVersionError,
     DatasetNotFoundError,
-    DatasetVersionNotFoundError,
     InvalidDatasetNameError,
     InvalidNamespaceNameError,
     InvalidProjectNameError,
@@ -3344,7 +3343,7 @@ def test_from_dataset_version_int_backward_compatible(test_session):
     assert dc.read_dataset(ds_name, version=2).to_values("nums") == [5]
     assert dc.read_dataset(ds_name, version=3).to_values("nums") == [6]
     assert dc.read_dataset(ds_name, version="1.0.0").to_values("nums") == [1]
-    with pytest.raises(DatasetVersionNotFoundError):
+    with pytest.raises(DatasetNotFoundError):
         dc.read_dataset(ds_name, version=5)
 
 
