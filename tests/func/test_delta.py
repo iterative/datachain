@@ -281,7 +281,7 @@ def test_delta_update_no_diff(test_session, tmp_dir, tmp_path):
     with pytest.raises(DatasetNotFoundError) as exc_info:
         dc.read_dataset(ds_name, version="1.0.1")
 
-    assert str(exc_info.value) == f"Dataset {ds_name} does not have version 1.0.1"
+    assert str(exc_info.value) == f"Dataset {ds_name} version 1.0.1 not found"
 
 
 @pytest.fixture

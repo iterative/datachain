@@ -163,7 +163,7 @@ def read_dataset(
             latest_compatible = dataset.latest_compatible_version(version_spec)
             if not latest_compatible:
                 raise DatasetVersionNotFoundError(
-                    f"No dataset {name} version matching specifier {version}"
+                    f"No dataset {name} version matching specifier {version_spec}"
                 )
             version = latest_compatible
         except InvalidSpecifier:

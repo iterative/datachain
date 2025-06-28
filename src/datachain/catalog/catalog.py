@@ -1122,9 +1122,9 @@ class Catalog:
 
         if self.metastore.is_local_dataset(namespace_name):
             raise DatasetNotFoundError(
-                f"Dataset {name}" + f" and version {version}"
-                if version
-                else f" not found in project {namespace_name}.{project_name}"
+                f"Dataset {name}"
+                + (f" version {version} " if version else " ")
+                + "not found"
             )
 
         if pull_dataset:
@@ -1160,6 +1160,10 @@ class Catalog:
 
         info_response = studio_client.dataset_info(namespace, project, name)
         if not info_response.ok:
+            if info_response.status == 404:
+                raise DatasetNotFoundError(
+                    f"Dataset {namespace}.{project}.{name} not found"
+                )
             raise DataChainError(info_response.message)
 
         dataset_info = info_response.data
