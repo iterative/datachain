@@ -3456,6 +3456,7 @@ def test_save_create_project_not_allowed(test_session, allow_create_project):
 
 def test_agg_partition_by_string_notation(test_session):
     """Test that agg method supports string notation for partition_by."""
+
     class _ImageGroup(BaseModel):
         name: str
         size: int
@@ -3467,10 +3468,11 @@ def test_agg_partition_by_string_notation(test_session):
 
     keys = ["n1", "n2", "n1"]
     values = [1, 5, 9]
-    
+
     # Test using string notation (NEW functionality)
     ds = dc.read_values(key=keys, val=values, session=test_session).agg(
-        x=func, partition_by="key"  # String notation instead of C("key")
+        x=func,
+        partition_by="key",  # String notation instead of C("key")
     )
 
     assert ds.order_by("x_1.name").to_values("x_1.name") == ["n1-n1", "n2"]
@@ -3479,6 +3481,7 @@ def test_agg_partition_by_string_notation(test_session):
 
 def test_agg_partition_by_string_sequence(test_session):
     """Test that agg method supports sequence of strings for partition_by."""
+
     class _ImageGroup(BaseModel):
         name: str
         size: int
@@ -3491,17 +3494,18 @@ def test_agg_partition_by_string_sequence(test_session):
     key1_values = ["a", "a", "b"]
     key2_values = ["x", "y", "x"]
     values = [1, 5, 9]
-    
+
     # Test using sequence of strings (NEW functionality)
     ds = dc.read_values(
         key1=key1_values, key2=key2_values, val=values, session=test_session
     ).agg(
-        x=func, partition_by=["key1", "key2"]  # Sequence of strings
+        x=func,
+        partition_by=["key1", "key2"],  # Sequence of strings
     )
 
     result_names = ds.order_by("x_1.name").to_values("x_1.name")
     result_sizes = ds.order_by("x_1.size").to_values("x_1.size")
-    
+
     # Should have 3 partitions: (a,x), (a,y), (b,x)
     assert len(result_names) == 3
     assert len(result_sizes) == 3

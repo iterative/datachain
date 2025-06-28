@@ -4,7 +4,7 @@
 
 ### 1. Updated Type Definition (`src/datachain/query/dataset.py`)
 
-**File**: `src/datachain/query/dataset.py`  
+**File**: `src/datachain/query/dataset.py`
 **Lines**: 83-87
 
 ```python
@@ -13,7 +13,7 @@ PartitionByType = Union[
     Function, ColumnElement, Sequence[Union[Function, ColumnElement]]
 ]
 
-# AFTER  
+# AFTER
 PartitionByType = Union[
     str,
     Function,
@@ -26,7 +26,7 @@ PartitionByType = Union[
 
 ### 2. Added String Conversion Logic (`src/datachain/lib/dc/datachain.py`)
 
-**File**: `src/datachain/lib/dc/datachain.py`  
+**File**: `src/datachain/lib/dc/datachain.py`
 **Lines**: Added after line 812 in the `agg` method
 
 ```python
@@ -37,7 +37,7 @@ if partition_by is not None:
         list_partition_by = [partition_by]
     else:
         list_partition_by = list(partition_by)
-    
+
     processed_partition_columns = []
     for col in list_partition_by:
         if isinstance(col, str):
@@ -51,11 +51,11 @@ if partition_by is not None:
         else:
             # Assume it's already a ColumnElement
             processed_partition_columns.append(col)
-    
+
     processed_partition_by = processed_partition_columns
 ```
 
-**Purpose**: 
+**Purpose**:
 - Converts string column names to proper `Column` objects before passing to UDF steps
 - Uses the same conversion pattern as `group_by` method for consistency
 - Handles both single strings and sequences of mixed types
@@ -63,7 +63,7 @@ if partition_by is not None:
 
 ### 3. Added Comprehensive Tests (`tests/unit/lib/test_datachain.py`)
 
-**File**: `tests/unit/lib/test_datachain.py`  
+**File**: `tests/unit/lib/test_datachain.py`
 **Added**: Two new test functions
 
 #### Test 1: `test_agg_partition_by_string_notation`
@@ -74,7 +74,7 @@ ds = dc.read_values(key=keys, val=values, session=test_session).agg(
 )
 ```
 
-#### Test 2: `test_agg_partition_by_string_sequence`  
+#### Test 2: `test_agg_partition_by_string_sequence`
 Tests sequence of strings support:
 ```python
 ds = dc.read_values(...).agg(
@@ -94,7 +94,7 @@ Users can now use all of these syntaxes for `partition_by`:
 # 1. Simple string notation (NEW)
 chain.agg(func, partition_by="category")
 
-# 2. Sequence of strings (NEW)  
+# 2. Sequence of strings (NEW)
 chain.agg(func, partition_by=["category", "subcategory"])
 
 # 3. Mixed sequences (NEW)
@@ -137,7 +137,7 @@ chain.agg(func, partition_by="file.path")
 ### Test Coverage
 
 - ✅ Basic string notation (`partition_by="key"`)
-- ✅ Sequence of strings (`partition_by=["key1", "key2"]`)  
+- ✅ Sequence of strings (`partition_by=["key1", "key2"]`)
 - ✅ Backward compatibility with `C()` notation
 - ✅ Mixed sequences (strings + Column objects)
 
@@ -148,6 +148,6 @@ All new string-based tests should produce identical results to existing `C()` no
 ## Benefits
 
 1. **User Experience**: Simpler, more intuitive API for common use cases
-2. **Consistency**: Makes `partition_by` consistent with `group_by` method  
+2. **Consistency**: Makes `partition_by` consistent with `group_by` method
 3. **Flexibility**: Supports mixing strings with Column objects in sequences
 4. **Maintainability**: No breaking changes, purely additive functionality

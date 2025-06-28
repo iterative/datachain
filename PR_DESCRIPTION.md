@@ -18,7 +18,7 @@ This PR adds string support to the `partition_by` parameter in the `agg` method 
    PartitionByType = Union[
        str,
        Function,
-       ColumnElement, 
+       ColumnElement,
        Sequence[Union[str, Function, ColumnElement]],
    ]
    ```
@@ -38,7 +38,7 @@ This PR adds string support to the `partition_by` parameter in the `agg` method 
 - Updated `PartitionByType` to include `str` and sequences of strings
 - Maintains backward compatibility with existing `Function` and `ColumnElement` types
 
-### `src/datachain/lib/dc/datachain.py`  
+### `src/datachain/lib/dc/datachain.py`
 - Added string-to-Column conversion logic in the `agg` method
 - Uses the same conversion pattern as the `group_by` method for consistency
 - Processes both single strings and sequences of mixed types (strings, Functions, ColumnElements)
@@ -56,11 +56,11 @@ chain.agg(
     output=int,
 )
 
-# 2. Sequence of strings (NEW)  
+# 2. Sequence of strings (NEW)
 chain.agg(
     total=lambda values: [sum(values)],
     partition_by=["category", "subcategory"],
-    params="value", 
+    params="value",
     output=int,
 )
 
@@ -92,7 +92,7 @@ chain.agg(
 ## Benefits
 
 1. **Consistency**: Makes `partition_by` API consistent with `group_by` method
-2. **Usability**: Simpler, more intuitive syntax for common use cases  
+2. **Usability**: Simpler, more intuitive syntax for common use cases
 3. **Backward Compatibility**: All existing code continues to work unchanged
 4. **Flexibility**: Supports mixing strings with Column objects in sequences
 

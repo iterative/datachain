@@ -817,7 +817,7 @@ class DataChain:
                 list_partition_by = [partition_by]
             else:
                 list_partition_by = list(partition_by)
-            
+
             processed_partition_columns = []
             for col in list_partition_by:
                 if isinstance(col, str):
@@ -831,7 +831,7 @@ class DataChain:
                 else:
                     # Assume it's already a ColumnElement
                     processed_partition_columns.append(col)
-            
+
             processed_partition_by = processed_partition_columns
 
         udf_obj = self._udf_to_obj(Aggregator, func, params, output, signal_map)
