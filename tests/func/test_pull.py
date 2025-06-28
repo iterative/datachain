@@ -393,7 +393,6 @@ def test_datachain_read_dataset_pull(
         ds = dc.read_dataset(
             name=f"{NAMESPACE_NAME}.{PROJECT_NAME}.dogs",
             version="1.0.0",
-            fallback_to_studio=True,
         )
 
     assert ds.dataset.name == "dogs"

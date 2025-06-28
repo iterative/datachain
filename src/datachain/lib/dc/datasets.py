@@ -7,9 +7,6 @@ from datachain.error import (
     ProjectNotFoundError,
 )
 from datachain.lib.dataset_info import DatasetInfo
-from datachain.lib.file import (
-    File,
-)
 from datachain.lib.projects import get as get_project
 from datachain.lib.settings import Settings
 from datachain.lib.signal_schema import SignalSchema
@@ -34,7 +31,6 @@ def read_dataset(
     version: Optional[Union[str, int]] = None,
     session: Optional[Session] = None,
     settings: Optional[dict] = None,
-    fallback_to_studio: bool = True,
     delta: Optional[bool] = False,
     delta_on: Optional[Union[str, Sequence[str]]] = (
         "file.path",
@@ -44,6 +40,7 @@ def read_dataset(
     delta_result_on: Optional[Union[str, Sequence[str]]] = None,
     delta_compare: Optional[Union[str, Sequence[str]]] = None,
     delta_retry: Optional[Union[bool, str]] = None,
+    update: bool = False,
 ) -> "DataChain":
     """Get data from a saved Dataset. It returns the chain itself.
     If dataset or version is not found locally, it will try to pull it from Studio.
@@ -61,8 +58,6 @@ def read_dataset(
             - Version specifiers (PEP 440): ">=1.0.0,<2.0.0", "~=1.4.2", "==1.2.*", etc.
         session : Session to use for the chain.
         settings : Settings to use for the chain.
-        fallback_to_studio : Try to pull dataset from Studio if not found locally.
-            Default is True.
         delta: If True, only process new or changed files instead of reprocessing
             everything. This saves time by skipping files that were already processed in
             previous versions. The optimization is working when a new version of the
@@ -82,6 +77,8 @@ def read_dataset(
               (error mode)
             - True: Reprocess records missing from the result dataset (missing mode)
             - None: No retry processing (default)
+        update: If True, it checks updates for the updates of the dataset on the Studio
+            side.
 
     Example:
         ```py
@@ -92,10 +89,6 @@ def read_dataset(
         ```py
         import datachain as dc
         chain = dc.read_dataset("dev.animals.my_cats")
-        ```
-
-        ```py
-        chain = dc.read_dataset("my_cats", fallback_to_studio=False)
         ```
 
         ```py
@@ -126,13 +119,14 @@ def read_dataset(
             version="1.0.0",
             session=session,
             settings=settings,
-            fallback_to_studio=True,
         )
         ```
     """
     from datachain.telemetry import telemetry
 
     from .datachain import DataChain
+
+    telemetry.send_event_once("class", "datachain_init", name=name, version=version)
 
     session = Session.get(session)
     catalog = session.catalog
@@ -144,16 +138,9 @@ def read_dataset(
     )
 
     if version is not None:
-        # Get dataset to check versions
-        try:
-            ds_project = get_project(project_name, namespace_name, session=session)
-        except ProjectNotFoundError:
-            raise DatasetNotFoundError(
-                f"Dataset {name} not found in namespace {namespace_name} and",
-                f" project {project_name}",
-            ) from None
-
-        dataset = session.catalog.get_dataset(name, ds_project)
+        dataset = session.catalog.get_dataset_with_remote_fallback(
+            name, namespace_name, project_name, update=update
+        )
 
         # Convert legacy integer versions to version specifiers
         # For backward compatibility we still allow users to put version as integer
@@ -195,11 +182,8 @@ def read_dataset(
         namespace_name=namespace_name,
         version=version,  #  type: ignore[arg-type]
         session=session,
-        indexing_column_types=File._datachain_column_types,
-        fallback_to_studio=fallback_to_studio,
     )
 
-    telemetry.send_event_once("class", "datachain_init", name=name, version=version)
     signals_schema = SignalSchema({"sys": Sys})
     if query.feature_schema:
         signals_schema |= SignalSchema.deserialize(query.feature_schema)

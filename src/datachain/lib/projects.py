@@ -54,7 +54,7 @@ def get(name: str, namespace: str, session: Optional[Session]) -> Project:
         ```py
         import datachain as dc
         from datachain.lib.projects import get as get_project
-        project  = get_project("my-project", "local")
+        project = get_project("my-project", "local")
         ```
     """
     return Session.get(session).catalog.metastore.get_project(name, namespace)
