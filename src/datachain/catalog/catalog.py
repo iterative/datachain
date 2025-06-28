@@ -1065,7 +1065,10 @@ class Catalog:
         project_name: Optional[str] = None,
         namespace_name: Optional[str] = None,
     ) -> tuple[str, str, str]:
-        """"""
+        """
+        Returns dataset name together with separated namespace and project name.
+        It takes into account all the ways namespace and project can be added.
+        """
         parsed_namespace_name, parsed_project_name, name = parse_dataset_name(name)
 
         namespace_env = os.environ.get("DATACHAIN_NAMESPACE")
