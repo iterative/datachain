@@ -449,9 +449,11 @@ def test_pull_dataset_not_found_in_remote(
     )
     catalog = cloud_test_catalog.catalog
 
-    with pytest.raises(DataChainError) as exc_info:
+    full_name = f"{NAMESPACE_NAME}.{PROJECT_NAME}.dogs"
+
+    with pytest.raises(DatasetNotFoundError) as exc_info:
         catalog.pull_dataset(f"ds://{NAMESPACE_NAME}.{PROJECT_NAME}.dogs@v1.0.0")
-    assert str(exc_info.value) == "Dataset not found"
+    assert str(exc_info.value) == f"Dataset {full_name} not found"
 
 
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)

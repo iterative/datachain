@@ -179,9 +179,10 @@ def test_ls_partial_indexing(cloud_test_catalog, cloud_type, capsys):
 
 
 class MockResponse:
-    def __init__(self, content, ok=True):
+    def __init__(self, content, status_code, ok=True):
         self.content = content
         self.ok = ok
+        self.status_code = status_code
 
 
 def mock_post(method, url, data=None, json=None, **kwargs):
@@ -196,7 +197,8 @@ def mock_post(method, url, data=None, json=None, **kwargs):
         for d in REMOTE_DATA[path]
     ]
     return MockResponse(
-        content=msgpack.packb({"data": data}, default=_pack_extended_types)
+        content=msgpack.packb({"data": data}, default=_pack_extended_types),
+        status_code=200,
     )
 
 
