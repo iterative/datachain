@@ -1,7 +1,6 @@
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Optional, Union, get_origin, get_type_hints
 
-from datachain.dataset import parse_dataset_name
 from datachain.error import (
     DatasetNotFoundError,
     DatasetVersionNotFoundError,
@@ -125,11 +124,11 @@ def read_dataset(
     session = Session.get(session)
     catalog = session.catalog
 
-    namespace_name, project_name, name = parse_dataset_name(name)
-    namespace_name = (
-        namespace_name or namespace or catalog.metastore.default_namespace_name
+    namespace_name, project_name, name = catalog.get_full_dataset_name(
+        name,
+        project_name=project,
+        namespace_name=namespace,
     )
-    project_name = project_name or project or catalog.metastore.default_project_name
 
     if version is not None:
         try:
@@ -320,11 +319,11 @@ def delete_dataset(
     session = Session.get(session, in_memory=in_memory)
     catalog = session.catalog
 
-    namespace_name, project_name, name = parse_dataset_name(name)
-    namespace_name = (
-        namespace_name or namespace or catalog.metastore.default_namespace_name
+    namespace_name, project_name, name = catalog.get_full_dataset_name(
+        name,
+        project_name=project,
+        namespace_name=namespace,
     )
-    project_name = project_name or project or catalog.metastore.default_project_name
 
     if not catalog.metastore.is_local_dataset(namespace_name) and studio:
         return remove_studio_dataset(
