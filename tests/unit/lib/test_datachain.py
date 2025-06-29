@@ -3253,9 +3253,18 @@ def test_delete_dataset_from_studio_not_found(
     assert str(exc_info.value) == error_message
 
 
-def test_delete_dataset_cached_from_studio(test_session, project):
+def test_delete_dataset_cached_from_studio(
+    test_session, project, studio_token, requests_mock
+):
     ds_full_name = f"{project.namespace.name}.{project.name}.fibonacci"
     dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save(ds_full_name)
+
+    error_message = f"Dataset {ds_full_name} not found"
+    requests_mock.get(
+        f"{STUDIO_URL}/api/datachain/datasets/info",
+        json={"message": error_message},
+        status_code=404,
+    )
 
     dc.delete_dataset(ds_full_name)
 
