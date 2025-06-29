@@ -234,13 +234,13 @@ class AbstractWarehouse(ABC, Serializable):
                 # Cursor results are not thread-safe, so we convert them to a list
                 results = list(wh.dataset_rows_select(paginated_query.offset(offset)))
 
-                processed = False
+                processed = 0
                 for row in results:
-                    processed = True
+                    processed += 1
                     yield row
                     num_yielded += 1
 
-                if not processed:
+                if not processed or processed < page_size:
                     break  # no more results
                 offset += page_size
 
@@ -345,9 +345,15 @@ class AbstractWarehouse(ABC, Serializable):
 
         if is_batched:
             for batch in ids:
-                yield list(self.dataset_rows_select(query.where(id_col.in_(batch))))
+                yield list(
+                    self.dataset_rows_select(
+                        query.offset(None).limit(None).where(id_col.in_(batch))
+                    )
+                )
         else:
-            yield from self.dataset_rows_select(query.where(id_col.in_(ids)))
+            yield from self.dataset_rows_select(
+                query.offset(None).limit(None).where(id_col.in_(ids))
+            )
 
     @abstractmethod
     def get_dataset_sources(
