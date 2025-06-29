@@ -81,7 +81,10 @@ if TYPE_CHECKING:
 INSERT_BATCH_SIZE = 10000
 
 PartitionByType = Union[
-    Function, ColumnElement, Sequence[Union[Function, ColumnElement]]
+    str,
+    Function,
+    ColumnElement,
+    Sequence[Union[str, Function, ColumnElement]],
 ]
 JoinPredicateType = Union[str, ColumnClause, ColumnElement]
 DatasetDependencyType = tuple["DatasetRecord", str]
@@ -1240,11 +1243,7 @@ class DatasetQuery:
                 raise ValueError("chunk index must be between 0 and total")
 
             # Respect limit in chunks
-            query.steps = self._chunk_limit(query.steps, index, total)
-
-            # Prepend the chunk filter to the step chain.
-            query = query.filter(C.sys__rand % total == index)
-            query.steps = query.steps[-1:] + query.steps[:-1]
+            query = query.chunk(index, total)
 
         assert query.starting_step
         result = query.starting_step.apply()
