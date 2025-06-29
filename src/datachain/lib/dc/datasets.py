@@ -77,8 +77,10 @@ def read_dataset(
               (error mode)
             - True: Reprocess records missing from the result dataset (missing mode)
             - None: No retry processing (default)
-        update: If True, it checks updates for the updates of the dataset on the Studio
-            side.
+        update: If True always checks for newer versions available on Studio, even if
+            some version of the dataset exists locally already. If False (default), it
+            will only fetch the dataset from Studio if it is not found locally.
+
 
     Example:
         ```py
@@ -103,6 +105,11 @@ def read_dataset(
         ```py
         # Legacy integer version support (finds latest in major version)
         chain = dc.read_dataset("my_cats", version=1)  # Latest 1.x.x version
+        ```
+
+        ```py
+        # Always check for newer versions matching a version specifier from Studio
+        chain = dc.read_dataset("my_cats", version=">=1.0.0", update=True)
         ```
 
         ```py
