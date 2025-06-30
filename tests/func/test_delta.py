@@ -14,15 +14,20 @@ from datachain.lib.file import File, ImageFile
 def _get_dependencies(catalog, name, version) -> list[tuple[str, str]]:
     return sorted(
         [
-            (d.name, d.version)
+            (f"{d.namespace}.{d.project}.{d.name}", d.version)
             for d in catalog.get_dataset_dependencies(name, version, indirect=False)
         ]
     )
 
 
-def test_delta_update_from_dataset(test_session, tmp_dir, tmp_path):
+@pytest.mark.parametrize("project", ("global.dev", ""))
+def test_delta_update_from_dataset(test_session, tmp_dir, tmp_path, project):
     catalog = test_session.catalog
-    starting_ds_name = "starting_ds"
+
+    if project:
+        starting_ds_name = f"{project}.starting_ds"
+    else:
+        starting_ds_name = "local.local.starting_ds"
     ds_name = "delta_ds"
 
     images = [
