@@ -5,7 +5,7 @@ import pytest
 
 import datachain as dc
 from datachain import C, DataModel
-from datachain.error import DatasetVersionNotFoundError
+from datachain.error import DatasetNotFoundError
 
 if TYPE_CHECKING:
     from datachain import DataChain
@@ -173,7 +173,7 @@ def test_retry_no_records_to_retry(test_session):
     )
 
     # Should not create version 1.0.1 since no retry was needed
-    with pytest.raises(DatasetVersionNotFoundError):
+    with pytest.raises(DatasetNotFoundError):
         dc.read_dataset("successful_data", version="1.0.1", session=test_session)
 
 

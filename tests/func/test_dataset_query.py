@@ -7,9 +7,7 @@ import pytest
 import sqlalchemy
 
 from datachain.dataset import DatasetDependencyType, DatasetStatus
-from datachain.error import (
-    DatasetVersionNotFoundError,
-)
+from datachain.error import DatasetNotFoundError
 from datachain.lib.listing import parse_listing_uri
 from datachain.query import C, DatasetQuery, Object, Stream
 from datachain.sql.functions import path as pathfunc
@@ -70,7 +68,7 @@ def test_save_multiple_versions(cloud_test_catalog, animal_dataset):
     assert DatasetQuery(name=ds_name, version="1.0.1", catalog=catalog).count() == 3
     assert DatasetQuery(name=ds_name, version="1.0.2", catalog=catalog).count() == 3
 
-    with pytest.raises(DatasetVersionNotFoundError):
+    with pytest.raises(DatasetNotFoundError):
         DatasetQuery(name=ds_name, version="4.0.0", catalog=catalog).count()
 
 

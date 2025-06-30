@@ -1099,13 +1099,9 @@ class DatasetQuery:
         namespace_name: Optional[str] = None,
         catalog: Optional["Catalog"] = None,
         session: Optional[Session] = None,
-        indexing_column_types: Optional[dict[str, Any]] = None,
         in_memory: bool = False,
-        fallback_to_studio: bool = True,
         update: bool = False,
     ) -> None:
-        from datachain.remote.studio import is_token_set
-
         self.session = Session.get(session, catalog=catalog, in_memory=in_memory)
         self.catalog = catalog or self.session.catalog
         self.steps: list[Step] = []
@@ -1137,18 +1133,16 @@ class DatasetQuery:
             # not setting query step yet as listing dataset might not exist at
             # this point
             self.list_ds_name = name
-        elif fallback_to_studio and is_token_set():
+        else:
             self._set_starting_step(
                 self.catalog.get_dataset_with_remote_fallback(
                     name,
                     namespace_name=namespace_name,
                     project_name=project_name,
                     version=version,
+                    pull_dataset=True,
                 )
             )
-        else:
-            project = self.catalog.metastore.get_project(project_name, namespace_name)
-            self._set_starting_step(self.catalog.get_dataset(name, project=project))
 
     def _set_starting_step(self, ds: "DatasetRecord") -> None:
         if not self.version:

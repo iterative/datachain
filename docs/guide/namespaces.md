@@ -82,6 +82,49 @@ This is equivalent to saving to `dev.analytics.metrics`.
 
 In CLI, `.settings()` is only supported when both `namespace` and `project` are set to `"local"`.
 
+## Setting Namespace and Project via Environment Variables
+
+In addition to using `.settings()`, you can configure the namespace and project using environment variables:
+
+- `DATACHAIN_NAMESPACE` sets the namespace.
+- `DATACHAIN_PROJECT` sets the project name, or both the namespace and project using the format `namespace.project`.
+
+### Examples
+
+```
+# Set namespace only
+export DATACHAIN_NAMESPACE=dev
+
+# Set project only
+export DATACHAIN_PROJECT=analytics
+
+# Set both namespace and project
+export DATACHAIN_PROJECT=dev.analytics
+```
+
+##  How Namespace and Project Are Resolved
+
+When determining which namespace and project to use, Datachain applies the following precedence:
+
+1. **Fully qualified dataset name**
+   If the dataset name includes both the namespace and project, these values take highest precedence.
+   ```python
+   dc.read_dataset("dev.analytics.metrics")
+
+2. **Explicit settings in code**
+   Values provided via `.settings()` or passed directly to `read_dataset()` or similar methods.
+   ```python
+   dc.settings(namespace="dev", project="analytics")
+   dc.read_dataset("metrics", namespace="dev", project="analytics")
+   ```
+3. **Environment variables**
+   Namespace and project set using environment variables:
+   ```console
+   export DATACHAIN_PROJECT=dev.analytics
+   ```
+4. **Defaults**
+If none of the above are provided, Datachain falls back to the default namespace and project.
+
 ## Reading a Dataset from a Project
 
 To read a dataset from a specific namespace and project:
@@ -116,4 +159,3 @@ dc.read_values(scores=[0.8, 1.5, 2.1]).save("metrics")
 
 ds = dc.read_dataset("local.local.metrics")
 ds.show()
-```
