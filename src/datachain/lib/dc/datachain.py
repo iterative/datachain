@@ -598,6 +598,8 @@ class DataChain:
 
             result_ds, dependencies, has_changes = delta_retry_update(
                 self,
+                namespace_name,
+                project_name,
                 name,
                 on=self._delta_on,
                 right_on=self._delta_result_on,
