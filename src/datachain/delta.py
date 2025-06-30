@@ -69,10 +69,11 @@ def _get_retry_chain(
     name: str,
     latest_version: str,
     source_ds_name: str,
-    source_ds_latest_version: str,
+    source_ds_version: str,
     on: Union[str, Sequence[str]],
     right_on: Optional[Union[str, Sequence[str]]],
     delta_retry: Optional[Union[bool, str]],
+    diff_chain: "DataChain",
 ) -> Optional["DataChain"]:
     """Get retry chain for processing error records and missing records."""
     # Import here to avoid circular import
@@ -82,26 +83,25 @@ def _get_retry_chain(
 
     # Read the latest version of the result dataset for retry logic
     result_dataset = datachain.read_dataset(name, version=latest_version)
-    source_dc_latest = datachain.read_dataset(
-        source_ds_name, version=source_ds_latest_version
-    )
+    source_dc = datachain.read_dataset(source_ds_name, version=source_ds_version)
 
     # Handle error records if delta_retry is a string (column name)
     if isinstance(delta_retry, str):
         error_records = result_dataset.filter(C(delta_retry) != "")
-        error_source_records = source_dc_latest.merge(
+        error_source_records = source_dc.merge(
             error_records, on=on, right_on=right_on, inner=True
-        ).select(*list(source_dc_latest.signals_schema.values))
+        ).select(*list(source_dc.signals_schema.values))
         retry_chain = error_source_records
 
     # Handle missing records if delta_retry is True
     elif delta_retry is True:
-        missing_records = source_dc_latest.subtract(
-            result_dataset, on=on, right_on=right_on
-        )
+        missing_records = source_dc.subtract(result_dataset, on=on, right_on=right_on)
         retry_chain = missing_records
 
-    return retry_chain
+    # Subtract also diff chain since some items might be picked
+    # up by `delta=True` itself (e.g. records got modified AND are missing in the
+    # result dataset atm)
+    return retry_chain.subtract(diff_chain, on=on) if retry_chain else None
 
 
 def _get_source_info(
@@ -217,10 +217,11 @@ def delta_retry_update(
             name,
             latest_version,
             source_ds_name,
-            source_ds_latest_version,
+            source_ds_version,
             on,
             right_on,
             delta_retry,
+            diff_chain,
         )
 
     # Combine delta and retry chains
