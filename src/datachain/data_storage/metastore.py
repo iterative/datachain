@@ -1215,27 +1215,15 @@ class AbstractDBMetastore(AbstractMetastore):
         """
         Gets a single dataset in project by dataset name.
         """
-        project = None
-        if not project_id:
-            project = self.default_project
-            project_id = project.id
+        project_id = project_id or self.default_project.id
 
         d = self._datasets
         query = self._base_dataset_query()
         query = query.where(d.c.name == name, d.c.project_id == project_id)  # type: ignore [attr-defined]
         ds = self._parse_dataset(self.db.execute(query, conn=conn))
         if not ds:
-            if not project:
-                try:
-                    project = self.get_project_by_id(project_id)
-                except ProjectNotFoundError:
-                    raise DatasetNotFoundError(
-                        f"Dataset {name} not found because project with id {project_id}"
-                        " doesn't exist."
-                    ) from None
             raise DatasetNotFoundError(
-                f"Dataset {name} not found in namespace {project.namespace.name}"
-                f" and project {project.name}."
+                f"Dataset {name} not found in project by id {project_id}"
             )
 
         return ds
