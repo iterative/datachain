@@ -1223,7 +1223,7 @@ class AbstractDBMetastore(AbstractMetastore):
         ds = self._parse_dataset(self.db.execute(query, conn=conn))
         if not ds:
             raise DatasetNotFoundError(
-                f"Dataset {name} not found in project by id {project_id}"
+                f"Dataset {name} not found in project with id {project_id}"
             )
 
         return ds
