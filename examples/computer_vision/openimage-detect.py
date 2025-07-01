@@ -1,19 +1,23 @@
 import json
+from collections.abc import Iterator
 
 from PIL import Image
 
 import datachain as dc
-from datachain import File, model
+from datachain import C, File, model
 from datachain.func import path
 
 
-def openimage_detect(args):
-    if len(args) != 2:
+# Example showing extraction of bounding boxes from Open Images dataset
+# that comes as pairs of JPG and JSON files.
+def openimage_detect(file: list[File]) -> Iterator[tuple[File, model.BBox]]:
+    if len(file) != 2:
         raise ValueError("Group jpg-json mismatch")
 
-    stream_jpg = args[0]
-    stream_json = args[1]
-    if args[0].get_file_ext() != "jpg":
+    stream_jpg = file[0]
+    stream_json = file[1]
+    source = stream_jpg.source
+    if stream_jpg.get_file_ext() != "jpg":
         stream_jpg, stream_json = stream_json, stream_jpg
 
     with stream_jpg.open() as fd:
@@ -38,16 +42,14 @@ def openimage_detect(args):
         yield fstream, bbox
 
 
-source = "gs://datachain-demo/openimages-v6-test-jsonpairs/"
-
 (
-    dc.read_storage(source)
-    .filter(dc.C("file.path").glob("*.jpg") | dc.C("file.path").glob("*.json"))
+    dc.read_storage("gs://datachain-demo/openimages-v6-test-jsonpairs/", anon=True)
+    .filter(C("file.path").glob("*.jpg") | C("file.path").glob("*.json"))
+    .settings(cache=True, parallel=True)
     .agg(
         openimage_detect,
         partition_by=path.file_stem("file.path"),
-        params=["file"],
-        output={"file": File, "bbox": model.BBox},
+        output=("file", "bbox"),
     )
     .show()
 )

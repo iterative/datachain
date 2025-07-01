@@ -5,8 +5,6 @@ To install the required dependencies:
 
 """
 
-import json
-
 from PIL import (
     ExifTags,
     IptcImagePlugin,
@@ -14,8 +12,7 @@ from PIL import (
 )
 
 import datachain as dc
-
-source = "gs://datachain-demo/open-images-v6/"
+from datachain import C, DataModel, File
 
 
 def cast(v):  # to JSON serializable types
@@ -34,16 +31,21 @@ def cast(v):  # to JSON serializable types
     return v
 
 
-def image_description(file):
-    (xmp, exif, iptc) = ({}, {}, {})
+class ImageDescription(DataModel):
+    xmp: dict
+    exif: dict
+    iptc: dict
+
+
+def image_description(file: File) -> tuple[ImageDescription, str]:
+    xmp, exif, iptc = {}, {}, {}
     try:
         img = file.read()
         xmp = img.getxmp()
         img_exif = img.getexif()
         img_iptc = IptcImagePlugin.getiptcinfo(img)
     except Exception as err:  # noqa: BLE001
-        error = str(err)
-        return ({}, {}, {}, error)
+        return ImageDescription(xmp={}, exif={}, iptc={}), str(err)
 
     if img_iptc:
         for k, v in img_iptc.items():
@@ -57,26 +59,20 @@ def image_description(file):
             if k in ExifTags.GPSTAGS:
                 exif[ExifTags.GPSTAGS[k]] = v
 
-    return (
-        json.dumps(xmp),
-        json.dumps(exif),
-        json.dumps(iptc),
-        "",
-    )
+    return (ImageDescription(xmp=xmp, exif=exif, iptc=iptc), "")
 
 
 if __name__ == "__main__":
     (
-        dc.read_storage(source, type="image")
-        .settings(parallel=-1)
-        .filter(dc.C("file.path").glob("*.jpg"))
+        dc.read_storage("gs://datachain-demo/open-images-v6/", type="image", anon=True)
+        .filter(C("file.path").glob("*.jpg"))
         .limit(5000)
-        .map(
-            image_description,
-            params=["file"],
-            output={"xmp": dict, "exif": dict, "iptc": dict, "error": str},
+        .settings(parallel=True)
+        .map(image_description, output=("description", "error"))
+        .filter(
+            (C("description.xmp") != "{}")
+            | (C("description.exif") != "{}")
+            | (C("description.iptc") != "{}")
         )
-        .select("file.path", "xmp", "exif", "iptc", "error")
-        .filter((dc.C("xmp") != "{}") | (dc.C("exif") != "{}") | (dc.C("iptc") != "{}"))
         .show()
     )
