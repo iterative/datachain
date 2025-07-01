@@ -20,6 +20,10 @@ from datachain.error import (
     DatasetInvalidVersionError,
     DatasetNotFoundError,
     DatasetVersionNotFoundError,
+    InvalidDatasetNameError,
+    InvalidNamespaceNameError,
+    InvalidProjectNameError,
+    ProjectCreateNotAllowedError,
     ProjectNotFoundError,
 )
 from datachain.lib.data_model import DataModel
@@ -235,7 +239,7 @@ def test_from_features(test_session):
         output={"file": File, "t1": MyFr},
     )
 
-    assert [r[1] for r in ds.order_by("t1.nnn", "t1.count").collect()] == features
+    assert [r[1] for r in ds.order_by("t1.nnn", "t1.count").to_list()] == features
 
 
 def test_read_record_empty_chain_with_schema(test_session):
@@ -304,18 +308,18 @@ def test_empty_chain_skip_udf_run(test_session):
 
 def test_datasets(test_session):
     ds = dc.datasets(column="dataset", session=test_session)
-    datasets = [d for d in ds.collect("dataset") if d.name == "fibonacci"]
+    datasets = [d for d in ds.to_values("dataset") if d.name == "fibonacci"]
     assert len(datasets) == 0
 
     dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save("fibonacci")
 
     ds = dc.datasets(column="dataset", session=test_session)
-    datasets = [d for d in ds.collect("dataset") if d.name == "fibonacci"]
+    datasets = [d for d in ds.to_values("dataset") if d.name == "fibonacci"]
     assert len(datasets) == 1
     assert datasets[0].num_objects == 6
 
     ds = dc.datasets(column="foo", session=test_session)
-    datasets = [d for d in ds.collect("foo") if d.name == "fibonacci"]
+    datasets = [d for d in ds.to_values("foo") if d.name == "fibonacci"]
     assert len(datasets) == 1
     assert datasets[0].num_objects == 6
 
@@ -323,7 +327,7 @@ def test_datasets(test_session):
 def test_datasets_without_column_name(test_session):
     dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save("fibonacci")
     ds = dc.datasets(session=test_session)
-    names = [name for name in ds.collect("name") if name == "fibonacci"]
+    names = [name for name in ds.to_values("name") if name == "fibonacci"]
     assert len(names) == 1
 
 
@@ -331,17 +335,17 @@ def test_datasets_studio(studio_datasets, test_session):
     dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save("fibonacci")
     ds = dc.datasets(column="dataset", studio=True, session=test_session)
     # Local datasets are not included in the list
-    datasets = [d for d in ds.collect("dataset") if d.name == "fibonacci"]
+    datasets = [d for d in ds.to_values("dataset") if d.name == "fibonacci"]
     assert len(datasets) == 0
 
     # Studio datasets are included in the list
-    datasets = [d for d in ds.collect("dataset") if d.name == "cats"]
+    datasets = [d for d in ds.to_values("dataset") if d.name == "cats"]
     assert len(datasets) == 1
     assert datasets[0].num_objects == 6
 
     # Exclude studio datasets
     ds = dc.datasets(column="dataset", studio=False, session=test_session)
-    datasets = [d for d in ds.collect("dataset") if d.name == "cats"]
+    datasets = [d for d in ds.to_values("dataset") if d.name == "cats"]
     assert len(datasets) == 0
 
 
@@ -351,7 +355,7 @@ def test_datasets_in_memory():
     assert ds.session.catalog.in_memory is True
     assert ds.session.catalog.metastore.db.db_file == ":memory:"
     assert ds.session.catalog.warehouse.db.db_file == ":memory:"
-    datasets = [d for d in ds.collect("dataset") if d.name == "fibonacci"]
+    datasets = [d for d in ds.to_values("dataset") if d.name == "fibonacci"]
     assert len(datasets) == 0
 
     dc.read_values(fib=[1, 1, 2, 3, 5, 8]).save("fibonacci")
@@ -360,7 +364,7 @@ def test_datasets_in_memory():
     assert ds.session.catalog.in_memory is True
     assert ds.session.catalog.metastore.db.db_file == ":memory:"
     assert ds.session.catalog.warehouse.db.db_file == ":memory:"
-    datasets = [d for d in ds.collect("dataset") if d.name == "fibonacci"]
+    datasets = [d for d in ds.to_values("dataset") if d.name == "fibonacci"]
     assert len(datasets) == 1
     assert datasets[0].num_objects == 6
 
@@ -368,7 +372,7 @@ def test_datasets_in_memory():
     assert ds.session.catalog.in_memory is True
     assert ds.session.catalog.metastore.db.db_file == ":memory:"
     assert ds.session.catalog.warehouse.db.db_file == ":memory:"
-    datasets = [d for d in ds.collect("foo") if d.name == "fibonacci"]
+    datasets = [d for d in ds.to_values("foo") if d.name == "fibonacci"]
     assert len(datasets) == 1
     assert datasets[0].num_objects == 6
 
@@ -401,7 +405,7 @@ def test_datasets_filtering(test_session, attrs, result):
         "letters", attrs=["letter"]
     )
 
-    assert sorted(dc.datasets(attrs=attrs).collect("name")) == sorted(result)
+    assert sorted(dc.datasets(attrs=attrs).to_values("name")) == sorted(result)
 
 
 def test_listings(test_session, tmp_dir):
@@ -414,10 +418,10 @@ def test_listings(test_session, tmp_dir):
     # check that listing is not returned as normal dataset
     assert not any(
         n.startswith(LISTING_PREFIX)
-        for n in dc.datasets(session=test_session).collect("name")
+        for n in dc.datasets(session=test_session).to_values("name")
     )
 
-    listings = list(dc.listings(session=test_session).collect("listing"))
+    listings = list(dc.listings(session=test_session).to_values("listing"))
     assert len(listings) == 1
     listing = listings[0]
     assert isinstance(listing, ListingInfo)
@@ -439,13 +443,13 @@ def test_listings_reindex(test_session, tmp_dir):
     uri = tmp_dir.as_uri()
 
     dc.read_storage(uri, session=test_session).exec()
-    assert len(list(dc.listings(session=test_session).collect("listing"))) == 1
+    assert len(list(dc.listings(session=test_session).to_values("listing"))) == 1
 
     dc.read_storage(uri, session=test_session).exec()
-    assert len(list(dc.listings(session=test_session).collect("listing"))) == 1
+    assert len(list(dc.listings(session=test_session).to_values("listing"))) == 1
 
     dc.read_storage(uri, session=test_session, update=True).exec()
-    listings = list(dc.listings(session=test_session).collect("listing"))
+    listings = list(dc.listings(session=test_session).to_values("listing"))
     assert len(listings) == 2
     listings.sort(key=lambda lst: lst.version)
     assert listings[0].storage_uri == uri
@@ -485,7 +489,7 @@ def test_listings_read_listing_dataset(test_session, tmp_dir, version):
     assert listing_version.status == 4
 
     assert chain.count() == 1
-    files = list(chain.collect("file"))
+    files = chain.to_values("file")
     assert len(files) == 1
     assert files[0].path == "df.parquet"
     assert files[0].source == uri
@@ -511,7 +515,7 @@ def test_listings_read_listing_dataset_with_subpath(test_session, tmp_dir):
 
     # Chain is filtered for subdir
     assert chain.count() == 1
-    files = list(chain.collect("file"))
+    files = chain.to_values("file")
     assert len(files) == 1
     assert files[0].path == "subdir/df3.parquet"
     assert files[0].source == tmp_dir.as_uri()
@@ -604,7 +608,7 @@ def test_file_list(test_session):
     ds = dc.read_values(file=files, session=test_session)
 
     assert sort_files(files) == [
-        r[0] for r in ds.order_by("file.path", "file.size").collect()
+        r[0] for r in ds.order_by("file.path", "file.size").to_list()
     ]
 
 
@@ -627,7 +631,7 @@ def test_gen(test_session):
         output={"x": _TestFr},
     )
 
-    for i, (x,) in enumerate(ds.order_by("x.my_name", "x.sqrt").collect()):
+    for i, (x,) in enumerate(ds.order_by("x.my_name", "x.sqrt").to_list()):
         assert isinstance(x, _TestFr)
 
         fr = features[i]
@@ -651,7 +655,7 @@ def test_map(test_session):
         output={"x": _TestFr},
     )
 
-    x_list = list(chain.order_by("x.my_name", "x.sqrt").collect("x"))
+    x_list = chain.order_by("x.my_name", "x.sqrt").to_values("x")
     test_frs = [
         _TestFr(sqrt=math.sqrt(fr.count), my_name=fr.nnn + "_suf") for fr in features
     ]
@@ -697,7 +701,7 @@ def test_agg(test_session):
         output={"x": _TestFr},
     )
 
-    assert list(chain.order_by("x.my_name").collect("x")) == [
+    assert chain.order_by("x.my_name").to_values("x") == [
         _TestFr(
             f=File(path=""),
             cnt=sum(fr.count for fr in features if fr.nnn == "n1"),
@@ -740,8 +744,8 @@ def test_agg_two_params(test_session):
         )
     )
 
-    assert list(ds.order_by("x.my_name").collect("x.my_name")) == ["n1-n1", "n2"]
-    assert list(ds.order_by("x.cnt").collect("x.cnt")) == [7, 20]
+    assert ds.order_by("x.my_name").to_values("x.my_name") == ["n1-n1", "n2"]
+    assert ds.order_by("x.cnt").to_values("x.cnt") == [7, 20]
 
 
 def test_agg_simple_iterator(test_session):
@@ -802,8 +806,8 @@ def test_agg_tuple_result_iterator(test_session):
         x=func, partition_by=C("key")
     )
 
-    assert list(ds.order_by("x_1.name").collect("x_1.name")) == ["n1-n1", "n2"]
-    assert list(ds.order_by("x_1.size").collect("x_1.size")) == [5, 10]
+    assert ds.order_by("x_1.name").to_values("x_1.name") == ["n1-n1", "n2"]
+    assert ds.order_by("x_1.size").to_values("x_1.size") == [5, 10]
 
 
 def test_agg_tuple_result_generator(test_session):
@@ -824,8 +828,8 @@ def test_agg_tuple_result_generator(test_session):
         .order_by("x_1.name")
     )
 
-    assert list(ds.order_by("x_1.name").collect("x_1.name")) == ["n1-n1", "n2"]
-    assert list(ds.order_by("x_1.size").collect("x_1.size")) == [5, 10]
+    assert ds.order_by("x_1.name").to_values("x_1.name") == ["n1-n1", "n2"]
+    assert ds.order_by("x_1.size").to_values("x_1.size") == [5, 10]
 
 
 def test_batch_map(test_session):
@@ -845,7 +849,7 @@ def test_batch_map(test_session):
         output={"x": _TestFr},
     )
 
-    x_list = list(chain.order_by("x.my_name", "x.sqrt").collect("x"))
+    x_list = chain.order_by("x.my_name", "x.sqrt").to_values("x")
     test_frs = [
         _TestFr(sqrt=math.sqrt(fr.count), my_name=fr.nnn + "_suf") for fr in features
     ]
@@ -874,7 +878,7 @@ def test_batch_map_wrong_size(test_session):
     )
 
     with pytest.raises(AssertionError):
-        list(chain.collect())
+        chain.to_list()
 
 
 def test_batch_map_two_params(test_session):
@@ -902,12 +906,12 @@ def test_batch_map_two_params(test_session):
         output={"x": _TestFr},
     )
 
-    assert list(ds.order_by("x.my_name").collect("x.my_name")) == [
+    assert ds.order_by("x.my_name").to_values("x.my_name") == [
         "n1-n1",
         "n1-n2",
         "n2-n1",
     ]
-    assert list(ds.order_by("x.cnt").collect("x.cnt")) == [7, 7, 13]
+    assert ds.order_by("x.cnt").to_values("x.cnt") == [7, 7, 13]
 
 
 def test_batch_map_tuple_result_iterator(test_session):
@@ -917,14 +921,14 @@ def test_batch_map_tuple_result_iterator(test_session):
 
     chain = dc.read_values(t1=[1, 4, 9], session=test_session).batch_map(x=sqrt)
 
-    assert list(chain.order_by("x").collect("x")) == [1, 2, 3]
+    assert chain.order_by("x").to_values("x") == [1, 2, 3]
 
 
-def test_collect(test_session):
+def test_iterable_chain(test_session):
     chain = dc.read_values(f1=features, num=range(len(features)), session=test_session)
 
     n = 0
-    for sample in chain.order_by("f1.nnn", "f1.count").collect():
+    for sample in chain.order_by("f1.nnn", "f1.count"):
         assert len(sample) == 2
         fr, num = sample
 
@@ -938,17 +942,25 @@ def test_collect(test_session):
     assert n == len(features)
 
 
-def test_collect_nested_feature(test_session):
+def test_to_list_nested_feature(test_session):
     chain = dc.read_values(sign1=features_nested, session=test_session)
 
     for n, sample in enumerate(
-        chain.order_by("sign1.fr.nnn", "sign1.fr.count").collect()
+        chain.order_by("sign1.fr.nnn", "sign1.fr.count").to_list()
     ):
         assert len(sample) == 1
         nested = sample[0]
 
         assert isinstance(nested, MyNested)
         assert nested == features_nested[n]
+
+
+def test_collect_deprecated(test_session):
+    chain = dc.read_values(fib=[1, 1, 2, 3, 5], session=test_session)
+
+    with pytest.warns(DeprecationWarning, match="Method `collect` is deprecated"):
+        vals = list(chain.collect("fib"))
+        assert set(vals) == {1, 2, 3, 5}
 
 
 def test_select_read_hf_without_sys_columns(test_session):
@@ -975,21 +987,21 @@ def test_select_feature(test_session):
     chain = dc.read_values(my_n=features_nested, session=test_session)
     dc_ordered = chain.order_by("my_n.fr.nnn", "my_n.fr.count")
 
-    samples = dc_ordered.select("my_n").collect()
+    samples = dc_ordered.select("my_n").to_list()
     n = 0
     for sample in samples:
         assert sample[0] == features_nested[n]
         n += 1
     assert n == len(features_nested)
 
-    samples = dc_ordered.select("my_n.fr").collect()
+    samples = dc_ordered.select("my_n.fr").to_list()
     n = 0
     for sample in samples:
         assert sample[0] == features[n]
         n += 1
     assert n == len(features_nested)
 
-    samples = dc_ordered.select("my_n.label", "my_n.fr.count").collect()
+    samples = dc_ordered.select("my_n.label", "my_n.fr.count").to_list()
     n = 0
     for sample in samples:
         label, count = sample
@@ -1005,7 +1017,7 @@ def test_select_columns_intersection(test_session):
     samples = (
         chain.order_by("my_n.fr.nnn", "my_n.fr.count")
         .select("my_n.fr", "my_n.fr.count")
-        .collect()
+        .to_list()
     )
     n = 0
     for sample in samples:
@@ -1020,7 +1032,7 @@ def test_select_except(test_session):
     chain = dc.read_values(fr1=features_nested, fr2=features, session=test_session)
 
     samples = (
-        chain.order_by("fr1.fr.nnn", "fr1.fr.count").select_except("fr2").collect()
+        chain.order_by("fr1.fr.nnn", "fr1.fr.count").select_except("fr2").to_list()
     )
     n = 0
     for sample in samples:
@@ -1034,20 +1046,20 @@ def test_select_wrong_type(test_session):
     chain = dc.read_values(fr1=features_nested, fr2=features, session=test_session)
 
     with pytest.raises(SignalResolvingTypeError):
-        list(chain.select(4).collect())
+        chain.select(4).to_list()
 
     with pytest.raises(SignalResolvingTypeError):
-        list(chain.select_except(features[0]).collect())
+        chain.select_except(features[0]).to_list()
 
 
 def test_select_except_error(test_session):
     chain = dc.read_values(fr1=features_nested, fr2=features, session=test_session)
 
     with pytest.raises(SignalResolvingError):
-        list(chain.select_except("not_exist", "file").collect())
+        chain.select_except("not_exist", "file").to_list()
 
     with pytest.raises(SignalRemoveError):
-        list(chain.select_except("fr1.label", "file").collect())
+        chain.select_except("fr1.label", "file").to_list()
 
 
 def test_select_restore_from_saving(test_session):
@@ -1058,7 +1070,7 @@ def test_select_restore_from_saving(test_session):
 
     restored = dc.read_dataset(name)
     n = 0
-    restored_sorted = sorted(restored.collect(), key=lambda x: x[0].count)
+    restored_sorted = sorted(restored.to_list(), key=lambda x: x[0].count)
     features_sorted = sorted(features, key=lambda x: x.count)
     for sample in restored_sorted:
         assert sample[0] == features_sorted[n]
@@ -1093,7 +1105,7 @@ def test_select_distinct(test_session):
         .select("embedding.values", "embedding.filename")
         .distinct("embedding.values")
         .order_by("embedding.values")
-        .collect()
+        .to_list()
     )
 
     actual = [emb[0] for emb in actual]
@@ -1174,7 +1186,7 @@ def test_unsupported_output_type(test_session):
         dc.read_values(key=[123], session=test_session).map(emd=get_vector)
 
 
-def test_collect_single_item(test_session):
+def test_to_list_single_item(test_session):
     names = ["f1.jpg", "f1.json", "f1.txt", "f2.jpg", "f2.json"]
     sizes = [1, 2, 3, 4, 5]
     files = sort_files([File(path=name, size=size) for name, size in zip(names, sizes)])
@@ -1184,14 +1196,14 @@ def test_collect_single_item(test_session):
     chain = dc.read_values(file=files, score=scores, session=test_session)
     chain = chain.order_by("file.path", "file.size")
 
-    assert list(chain.collect("file")) == files
-    assert list(chain.collect("file.path")) == names
-    assert list(chain.collect("file.size")) == sizes
-    assert list(chain.collect("file.source")) == [""] * len(names)
-    assert np.allclose(list(chain.collect("score")), scores)
+    assert chain.to_values("file") == files
+    assert chain.to_values("file.path") == names
+    assert chain.to_values("file.size") == sizes
+    assert chain.to_values("file.source") == [""] * len(names)
+    assert np.allclose(chain.to_values("score"), scores)
 
     for actual, expected in zip(
-        chain.collect("file.size", "score"), [[x, y] for x, y in zip(sizes, scores)]
+        chain.to_list("file.size", "score"), [[x, y] for x, y in zip(sizes, scores)]
     ):
         assert len(actual) == 2
         assert actual[0] == expected[0]
@@ -1206,7 +1218,7 @@ def test_default_output_type(test_session):
         res1=lambda name: name + suffix
     )
 
-    assert list(chain.order_by("name").collect("res1")) == [t + suffix for t in names]
+    assert chain.order_by("name").to_values("res1") == [t + suffix for t in names]
 
 
 def test_parse_tabular(tmp_dir, test_session):
@@ -1502,7 +1514,7 @@ def test_read_csv_null_collect(tmp_dir, test_session):
     path = tmp_dir / "test.csv"
     df.to_csv(path, index=False)
     chain = dc.read_csv(path.as_uri(), column="csv", session=test_session)
-    for i, row in enumerate(chain.collect()):
+    for i, row in enumerate(chain.to_list()):
         # None value in numeric column will get converted to nan.
         if not height[i]:
             assert math.isnan(row[1].height)
@@ -1622,7 +1634,7 @@ def test_explode(tmp_dir, test_session, column_type, column, model_name):
     string_default = String.default_value(test_session.catalog.warehouse.db.dialect)
 
     assert set(
-        chain.collect(
+        chain.to_list(
             f"{column}.na_me.first_select",
             f"{column}.age",
             f"{column}.city",
@@ -1636,7 +1648,7 @@ def test_explode(tmp_dir, test_session, column_type, column, model_name):
         ("Ivan", 41, "San Francisco"),
     }
 
-    assert next(chain.limit(1).collect(column)).__class__.__name__ == model_name
+    assert chain.limit(1).to_values(column)[0].__class__.__name__ == model_name
 
 
 def test_explode_raises_on_wrong_column_type(test_session):
@@ -1851,7 +1863,7 @@ def test_to_read_parquet_features(tmp_dir, test_session, chunk_size):
     dc_from = dc.read_parquet(path.as_uri(), session=test_session)
 
     n = 0
-    for sample in dc_from.order_by("f1.nnn", "f1.count").select("f1", "num").collect():
+    for sample in dc_from.order_by("f1.nnn", "f1.count").select("f1", "num").to_list():
         assert len(sample) == 2
         fr, num = sample
 
@@ -1877,7 +1889,7 @@ def test_to_read_parquet_nested_features(tmp_dir, test_session, chunk_size):
     dc_from = dc.read_parquet(path.as_uri(), session=test_session)
 
     for n, sample in enumerate(
-        dc_from.order_by("sign1.fr.nnn", "sign1.fr.count").select("sign1").collect()
+        dc_from.order_by("sign1.fr.nnn", "sign1.fr.count").select("sign1").to_list()
     ):
         assert len(sample) == 1
         nested = sample[0]
@@ -1898,7 +1910,7 @@ def test_to_read_parquet_two_top_level_features(tmp_dir, test_session, chunk_siz
     dc_from = dc.read_parquet(path.as_uri(), session=test_session)
 
     for n, sample in enumerate(
-        dc_from.order_by("f1.nnn", "f1.count").select("f1", "nest1").collect()
+        dc_from.order_by("f1.nnn", "f1.count").select("f1", "nest1").to_list()
     ):
         assert len(sample) == 2
         fr, nested = sample
@@ -1915,12 +1927,11 @@ def test_parallel_in_memory():
     vals = ["a", "b", "c", "d", "e", "f", "g", "h", "i"]
 
     with pytest.raises(RuntimeError):
-        list(
+        (
             dc.read_values(key=vals, in_memory=True)
             .settings(parallel=True)
             .map(res=lambda key: prefix + key)
-            .collect("res")
-        )
+        ).to_values("res")
 
 
 def test_exec(test_session, monkeypatch):
@@ -2070,7 +2081,7 @@ def test_mutate(test_session):
     assert chain.signals_schema.values["place"] is str
 
     expected = [fr.count * 2 * 3.14 for fr in features]
-    np.testing.assert_allclose(list(chain.collect("circle")), expected)
+    np.testing.assert_allclose(chain.to_values("circle"), expected)
 
 
 @pytest.mark.parametrize("with_function", [True, False])
@@ -2087,7 +2098,7 @@ def test_order_by_with_nested_columns(test_session, with_function):
     else:
         chain = chain.order_by("file.path")
 
-    assert list(chain.collect("file.path")) == [
+    assert chain.to_values("file.path") == [
         "a.txt",
         "a.txt",
         "b.txt",
@@ -2096,12 +2107,12 @@ def test_order_by_with_nested_columns(test_session, with_function):
     ]
 
 
-def test_order_by_collect(test_session):
+def test_order_by_to_list(test_session):
     numbers = [6, 2, 3, 1, 5, 7, 4]
     letters = ["u", "y", "x", "z", "v", "t", "w"]
 
     chain = dc.read_values(number=numbers, letter=letters, session=test_session)
-    assert list(chain.order_by("number").collect()) == [
+    assert chain.order_by("number").to_list() == [
         (1, "z"),
         (2, "y"),
         (3, "x"),
@@ -2111,7 +2122,7 @@ def test_order_by_collect(test_session):
         (7, "t"),
     ]
 
-    assert list(chain.order_by("letter").collect()) == [
+    assert chain.order_by("letter").to_list() == [
         (7, "t"),
         (6, "u"),
         (5, "v"),
@@ -2136,7 +2147,7 @@ def test_order_by_descending(test_session, with_function):
     else:
         chain = chain.order_by("file.path", descending=True)
 
-    assert list(chain.collect("file.path")) == [
+    assert chain.to_values("file.path") == [
         "d.txt",
         "c.txt",
         "b.txt",
@@ -2150,7 +2161,7 @@ def test_union(test_session):
     chain2 = dc.read_values(value=[3, 4], session=test_session)
     chain3 = chain1 | chain2
     assert chain3.count() == 4
-    assert list(chain3.order_by("value").collect("value")) == [1, 2, 3, 4]
+    assert chain3.order_by("value").to_values("value") == [1, 2, 3, 4]
 
 
 def test_union_different_columns(test_session):
@@ -2179,7 +2190,7 @@ def test_union_different_column_order(test_session):
     chain2 = dc.read_values(
         name=["different", "order"], value=[9, 10], session=test_session
     )
-    assert list(chain1.union(chain2).order_by("value").collect()) == [
+    assert chain1.union(chain2).order_by("value").to_list() == [
         (1, "chain"),
         (2, "more"),
         (9, "different"),
@@ -2190,20 +2201,20 @@ def test_union_different_column_order(test_session):
 def test_subtract(test_session):
     chain1 = dc.read_values(a=[1, 1, 2], b=["x", "y", "z"], session=test_session)
     chain2 = dc.read_values(a=[1, 2], b=["x", "y"], session=test_session)
-    assert set(chain1.subtract(chain2, on=["a", "b"]).collect()) == {(1, "y"), (2, "z")}
-    assert set(chain1.subtract(chain2, on=["b"]).collect()) == {(2, "z")}
-    assert set(chain1.subtract(chain2, on=["a"]).collect()) == set()
-    assert set(chain1.subtract(chain2).collect()) == {(1, "y"), (2, "z")}
+    assert set(chain1.subtract(chain2, on=["a", "b"]).to_list()) == {(1, "y"), (2, "z")}
+    assert set(chain1.subtract(chain2, on=["b"]).to_list()) == {(2, "z")}
+    assert not set(chain1.subtract(chain2, on=["a"]).to_list())
+    assert set(chain1.subtract(chain2).to_list()) == {(1, "y"), (2, "z")}
     assert chain1.subtract(chain1).count() == 0
 
     chain3 = dc.read_values(a=[1, 3], c=["foo", "bar"], session=test_session)
-    assert set(chain1.subtract(chain3, on="a").collect()) == {(2, "z")}
-    assert set(chain1.subtract(chain3).collect()) == {(2, "z")}
+    assert set(chain1.subtract(chain3, on="a").to_list()) == {(2, "z")}
+    assert set(chain1.subtract(chain3).to_list()) == {(2, "z")}
 
     chain4 = dc.read_values(d=[1, 2, 3], e=["x", "y", "z"], session=test_session)
     chain5 = dc.read_values(a=[1, 2], b=["x", "y"], session=test_session)
 
-    assert set(chain4.subtract(chain5, on="d", right_on="a").collect()) == {(3, "z")}
+    assert set(chain4.subtract(chain5, on="d", right_on="a").to_list()) == {(3, "z")}
 
 
 def test_subtract_error(test_session):
@@ -2254,10 +2265,10 @@ def test_column_math(test_session):
     chain = dc.read_values(num=fib, session=test_session).order_by("num")
 
     ch = chain.mutate(add2=chain.column("num") + 2)
-    assert list(ch.collect("add2")) == [x + 2 for x in fib]
+    assert ch.to_values("add2") == [x + 2 for x in fib]
 
     ch2 = ch.mutate(x=1 - ch.column("add2"))
-    assert list(ch2.collect("x")) == [1 - (x + 2.0) for x in fib]
+    assert ch2.to_values("x") == [1 - (x + 2.0) for x in fib]
 
 
 @skip_if_not_sqlite
@@ -2266,14 +2277,16 @@ def test_column_math_division(test_session):
     chain = dc.read_values(num=fib, session=test_session)
 
     ch = chain.mutate(div2=chain.column("num") / 2.0)
-    assert list(ch.collect("div2")) == [x / 2.0 for x in fib]
+    assert ch.to_values("div2") == [x / 2.0 for x in fib]
 
 
 def test_read_values_array_of_floats(test_session):
     embeddings = [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]]
     chain = dc.read_values(emd=embeddings, session=test_session)
 
-    assert list(chain.order_by("emd").collect("emd")) == embeddings
+    expected_embeddings = {tuple(emb) for emb in embeddings}
+    actual_embeddings = {tuple(emb) for emb in chain.to_values("emd")}
+    assert actual_embeddings == expected_embeddings
 
 
 def test_custom_model_with_nested_lists(test_session):
@@ -2300,7 +2313,7 @@ def test_custom_model_with_nested_lists(test_session):
         session=test_session,
     )
 
-    assert list(ds.collect("nested")) == [
+    assert ds.to_values("nested") == [
         Nested(
             values=[[0.5, 0.5], [0.5, 0.5]],
             traces_single=[{"x": 0.5, "y": 0.5}, {"x": 0.5, "y": 0.5}],
@@ -2378,11 +2391,11 @@ def test_rename_non_object_column_name_with_mutate(test_session):
     ds = ds.mutate(my_ids=Column("ids"))
 
     assert ds.signals_schema.values == {"my_ids": int}
-    assert list(ds.order_by("my_ids").collect("my_ids")) == [1, 2, 3]
+    assert ds.order_by("my_ids").to_values("my_ids") == [1, 2, 3]
 
     assert ds.signals_schema.values.get("my_ids") is int
     assert "ids" not in ds.signals_schema.values
-    assert list(ds.order_by("my_ids").collect("my_ids")) == [1, 2, 3]
+    assert ds.order_by("my_ids").to_values("my_ids") == [1, 2, 3]
 
 
 def test_rename_object_column_name_with_mutate(test_session):
@@ -2393,7 +2406,7 @@ def test_rename_object_column_name_with_mutate(test_session):
     ds = dc.read_values(file=files, ids=[1, 2, 3], session=test_session)
     ds = ds.mutate(fname=Column("file.path"))
 
-    assert list(ds.order_by("fname").collect("fname")) == ["a", "b", "c"]
+    assert ds.order_by("fname").to_values("fname") == ["a", "b", "c"]
     assert ds.signals_schema.values == {"file": File, "ids": int, "fname": str}
 
     # check that persist after saving
@@ -2403,7 +2416,7 @@ def test_rename_object_column_name_with_mutate(test_session):
     assert ds.signals_schema.values.get("file") is File
     assert ds.signals_schema.values.get("ids") is int
     assert ds.signals_schema.values.get("fname") is str
-    assert list(ds.order_by("fname").collect("fname")) == ["a", "b", "c"]
+    assert ds.order_by("fname").to_values("fname") == ["a", "b", "c"]
 
 
 def test_rename_column_with_mutate(test_session):
@@ -2414,7 +2427,7 @@ def test_rename_column_with_mutate(test_session):
     ds = dc.read_values(file=files, ids=[1, 2, 3], session=test_session)
     ds = ds.mutate(my_file=Column("file"))
 
-    assert list(ds.order_by("my_file.path").collect("my_file.path")) == ["a", "b", "c"]
+    assert ds.order_by("my_file.path").to_values("my_file.path") == ["a", "b", "c"]
     assert ds.signals_schema.values == {"my_file": File, "ids": int}
 
     # check that persist after saving
@@ -2424,7 +2437,7 @@ def test_rename_column_with_mutate(test_session):
     assert ds.signals_schema.values.get("my_file") is File
     assert ds.signals_schema.values.get("ids") is int
     assert "file" not in ds.signals_schema.values
-    assert list(ds.order_by("my_file.path").collect("my_file.path")) == ["a", "b", "c"]
+    assert ds.order_by("my_file.path").to_values("my_file.path") == ["a", "b", "c"]
 
 
 def test_column(test_session):
@@ -2500,7 +2513,7 @@ def test_mutate_with_saving(test_session):
 
     ds = dc.read_dataset(name="mutated", session=test_session)
     assert ds.signals_schema.values["new"] is float
-    assert list(ds.collect("new")) == [0.5, 1.0]
+    assert ds.to_values("new") == [0.5, 1.0]
 
 
 def test_mutate_with_expression_without_type(test_session):
@@ -2517,7 +2530,7 @@ def test_mutate_with_expression_without_type(test_session):
 def test_read_values_nan_inf(test_session):
     vals = [float("nan"), float("inf"), float("-inf")]
     chain = dc.read_values(vals=vals, session=test_session)
-    res = list(chain.collect("vals"))
+    res = chain.to_values("vals")
     assert len(res) == 3
     assert any(r for r in res if np.isnan(r))
     assert any(r for r in res if np.isposinf(r))
@@ -2528,7 +2541,7 @@ def test_read_pandas_nan_inf(test_session):
     vals = [float("nan"), float("inf"), float("-inf")]
     df = pd.DataFrame({"vals": vals})
     chain = dc.read_pandas(df, session=test_session)
-    res = list(chain.collect("vals"))
+    res = chain.to_values("vals")
     assert len(res) == 3
     assert any(r for r in res if np.isnan(r))
     assert any(r for r in res if np.isposinf(r))
@@ -2542,7 +2555,7 @@ def test_read_parquet_nan_inf(tmp_dir, test_session):
     pq.write_table(tbl, path)
     chain = dc.read_parquet(path.as_uri(), session=test_session)
 
-    res = list(chain.collect("vals"))
+    res = list(chain.to_values("vals"))
     assert len(res) == 3
     assert any(r for r in res if np.isnan(r))
     assert any(r for r in res if np.isposinf(r))
@@ -2556,7 +2569,7 @@ def test_read_csv_nan_inf(tmp_dir, test_session):
     df.to_csv(path, index=False)
     chain = dc.read_csv(path.as_uri(), session=test_session)
 
-    res = list(chain.collect("vals"))
+    res = chain.to_values("vals")
     assert len(res) == 3
     assert any(r for r in res if np.isnan(r))
     assert any(r for r in res if np.isposinf(r))
@@ -3167,7 +3180,7 @@ def test_delete_dataset_version(test_session):
     dc.delete_dataset(name, version="1.0.0", session=test_session)
 
     ds = dc.datasets(column="dataset", session=test_session)
-    datasets = [d for d in ds.collect("dataset") if d.name == name]
+    datasets = [d for d in ds.to_values("dataset") if d.name == name]
     assert len(datasets) == 1
     assert datasets[0].version == "2.0.0"
 
@@ -3180,7 +3193,7 @@ def test_delete_dataset_latest_version(test_session):
     dc.delete_dataset(name, session=test_session)
 
     ds = dc.datasets(column="dataset", session=test_session)
-    datasets = [d for d in ds.collect("dataset") if d.name == name]
+    datasets = [d for d in ds.to_values("dataset") if d.name == name]
     assert len(datasets) == 1
     assert datasets[0].version == "1.0.0"
 
@@ -3192,7 +3205,7 @@ def test_delete_dataset_only_version(test_session):
     dc.delete_dataset(name, session=test_session)
 
     ds = dc.datasets(column="dataset", session=test_session)
-    datasets = [d for d in ds.collect("dataset") if d.name == name]
+    datasets = [d for d in ds.to_values("dataset") if d.name == name]
     assert len(datasets) == 0
 
 
@@ -3213,7 +3226,7 @@ def test_delete_dataset_versions_all(test_session):
     dc.delete_dataset(name, force=True, session=test_session)
 
     ds = dc.datasets(column="dataset", session=test_session)
-    datasets = [d for d in ds.collect("dataset") if d.name == name]
+    datasets = [d for d in ds.to_values("dataset") if d.name == name]
     assert len(datasets) == 0
 
 
@@ -3248,9 +3261,18 @@ def test_delete_dataset_from_studio_not_found(
     assert str(exc_info.value) == error_message
 
 
-def test_delete_dataset_cached_from_studio(test_session, project):
+def test_delete_dataset_cached_from_studio(
+    test_session, project, studio_token, requests_mock
+):
     ds_full_name = f"{project.namespace.name}.{project.name}.fibonacci"
     dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save(ds_full_name)
+
+    error_message = f"Dataset {ds_full_name} not found"
+    requests_mock.get(
+        f"{STUDIO_URL}/api/datachain/datasets/info",
+        json={"message": error_message},
+        status_code=404,
+    )
 
     dc.delete_dataset(ds_full_name)
 
@@ -3275,7 +3297,7 @@ def test_update_versions(test_session, update_version, versions):
     assert sorted(
         [
             ds.version
-            for ds in dc.datasets(column="dataset", session=test_session).collect(
+            for ds in dc.datasets(column="dataset", session=test_session).to_values(
                 "dataset"
             )
         ]
@@ -3296,7 +3318,7 @@ def test_update_versions_mix_major_minor_patch(test_session):
     assert sorted(
         [
             ds.version
-            for ds in dc.datasets(column="dataset", session=test_session).collect(
+            for ds in dc.datasets(column="dataset", session=test_session).to_values(
                 "dataset"
             )
         ]
@@ -3335,10 +3357,10 @@ def test_from_dataset_version_int_backward_compatible(test_session):
     dc.read_values(nums=[5], session=test_session).save(ds_name, version="2.1.2")
     dc.read_values(nums=[6], session=test_session).save(ds_name, version="3.0.0")
 
-    assert list(dc.read_dataset(ds_name, version=1).collect("nums")) == [2]
-    assert list(dc.read_dataset(ds_name, version=2).collect("nums")) == [5]
-    assert list(dc.read_dataset(ds_name, version=3).collect("nums")) == [6]
-    assert list(dc.read_dataset(ds_name, version="1.0.0").collect("nums")) == [1]
+    assert dc.read_dataset(ds_name, version=1).to_values("nums") == [2]
+    assert dc.read_dataset(ds_name, version=2).to_values("nums") == [5]
+    assert dc.read_dataset(ds_name, version=3).to_values("nums") == [6]
+    assert dc.read_dataset(ds_name, version="1.0.0").to_values("nums") == [1]
     with pytest.raises(DatasetVersionNotFoundError):
         dc.read_dataset(ds_name, version=5)
 
@@ -3363,7 +3385,8 @@ def test_semver_preview_ok(test_session):
     assert sorted([p["num"] for p in dataset.get_version("1.0.1").preview]) == [3, 4]
 
 
-def test_save_to_default_project(test_session):
+@pytest.mark.parametrize("allow_create_project", [True, False])
+def test_save_to_default_project(test_session, allow_create_project):
     catalog = test_session.catalog
     ds_name = "fibonacci"
     dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save(ds_name)
@@ -3371,26 +3394,191 @@ def test_save_to_default_project(test_session):
     assert ds.dataset.project == catalog.metastore.default_project
 
 
+@pytest.mark.parametrize("allow_create_project", [True, False])
+def test_save_to_default_project_with_read_storage(
+    tmp_dir, test_session, allow_create_project
+):
+    catalog = test_session.catalog
+    ds_name = "parquet_ds"
+
+    df = pd.DataFrame(DF_DATA)
+    df.to_parquet(tmp_dir / "df.parquet")
+
+    uri = tmp_dir.as_uri()
+    dc.read_storage(uri, session=test_session).save(ds_name)
+
+    ds = dc.read_dataset(name=ds_name)
+    assert ds.dataset.project == catalog.metastore.default_project
+
+
 @pytest.mark.parametrize("use_settings", (True, False))
-def test_save_to_non_default_project(test_session, project, use_settings):
-    ds_name = "fibonacci"
-    ds_full_name = f"{project.namespace.name}.{project.name}.fibonacci"
+@pytest.mark.parametrize("project_created_upfront", (True, False))
+def test_save_to_non_default_namespace_and_project(
+    test_session, use_settings, project_created_upfront
+):
+    catalog = test_session.catalog
+    if project_created_upfront:
+        catalog.metastore.create_project("dev", "numbers")
+
     ds = dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session)
     if use_settings:
-        ds = ds.settings(namespace=project.namespace.name, project=project.name).save(
-            ds_name
-        )
+        ds = ds.settings(namespace="dev", project="numbers").save("fibonacci")
     else:
-        ds = ds.save(ds_full_name)
+        ds = ds.save("dev.numbers.fibonacci")
 
-    ds = dc.read_dataset(name=ds_full_name)
-    assert ds.dataset.project == project
-    assert ds.dataset.name == ds_name
-    assert ds.dataset.full_name == ds_full_name
+    ds = dc.read_dataset(name="dev.numbers.fibonacci")
+    assert ds.dataset.project == catalog.metastore.get_project("numbers", "dev")
+    assert ds.dataset.name == "fibonacci"
+    assert ds.dataset.full_name == "dev.numbers.fibonacci"
 
     with pytest.raises(DatasetNotFoundError):
         # dataset is not in default namespace / project
-        dc.read_dataset(name=ds_name)
+        dc.read_dataset(name="fibonacci")
+
+
+@pytest.mark.parametrize("use_settings", (True, False))
+@pytest.mark.parametrize("project_created_upfront", (True, False))
+def test_save_specify_only_non_default_project(
+    test_session, use_settings, project_created_upfront
+):
+    catalog = test_session.catalog
+    default_namespace_name = catalog.metastore.default_namespace_name
+
+    if project_created_upfront:
+        catalog.metastore.create_project(
+            default_namespace_name, "numbers", validate=False
+        )
+
+    ds = dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session)
+    if use_settings:
+        ds = ds.settings(project="numbers").save("fibonacci")
+    else:
+        ds = ds.save("numbers.fibonacci")
+
+    ds = dc.read_dataset(name="numbers.fibonacci")
+    assert ds.dataset.project == catalog.metastore.get_project(
+        "numbers", default_namespace_name
+    )
+    assert ds.dataset.name == "fibonacci"
+    assert ds.dataset.full_name == (f"{default_namespace_name}.numbers.fibonacci")
+
+    with pytest.raises(DatasetNotFoundError):
+        # dataset is not in default namespace / project
+        dc.read_dataset(name="fibonacci")
+
+
+@pytest.mark.parametrize(
+    (
+        "ds_name_namespace,ds_name_project,"
+        "settings_namespace,settings_project,"
+        "env_namespace,env_project,"
+        "result_ds_namespace,result_ds_project"
+    ),
+    [
+        ("n3", "p3", "n2", "p2", "n1", "p1", "n3", "p3"),
+        ("", "", "n2", "p2", "n1", "p1", "n2", "p2"),
+        ("", "", "", "", "n1", "p1", "n1", "p1"),
+        ("", "", "", "", "n5", "n1.p1", "n1", "p1"),
+        ("", "", "", "", "", "n1.p1", "n1", "p1"),
+        ("", "", "", "", "", "n5.p5", "n5", "p5"),
+        ("n3", "p3", "n2", "p2", "", "", "n3", "p3"),
+        ("n3", "p3", "", "", "", "", "n3", "p3"),
+        ("n3", "p3", "", "", "n1", "p1", "n3", "p3"),
+        ("", "", "", "", "", "", "", ""),
+    ],
+)
+def test_save_all_ways_to_set_project(
+    test_session,
+    monkeypatch,
+    ds_name_namespace,
+    ds_name_project,
+    settings_namespace,
+    settings_project,
+    env_namespace,
+    env_project,
+    result_ds_namespace,
+    result_ds_project,
+):
+    def _full_name(namespace, project, name) -> str:
+        if namespace and project:
+            return f"{namespace}.{project}.{name}"
+        return name
+
+    metastore = test_session.catalog.metastore
+    ds_name = "numbers"
+
+    monkeypatch.setenv("DATACHAIN_NAMESPACE", env_namespace)
+    monkeypatch.setenv("DATACHAIN_PROJECT", env_project)
+
+    if not result_ds_namespace and not result_ds_project:
+        # special case when nothing is defined - we set default ones
+        result_ds_namespace = metastore.default_namespace_name
+        result_ds_project = metastore.default_project_name
+
+    ds = (
+        dc.read_values(num=[1, 2, 3, 4], session=test_session)
+        .settings(namespace=settings_namespace, project=settings_project)
+        .save(_full_name(ds_name_namespace, ds_name_project, ds_name))
+    )
+
+    assert ds.dataset.project == metastore.get_project(
+        result_ds_project, result_ds_namespace
+    )
+    dc.read_dataset(_full_name(result_ds_namespace, result_ds_project, ds_name))
+
+
+@pytest.mark.parametrize(
+    (
+        "ds_name_namespace,ds_name_project,"
+        "settings_namespace,settings_project,"
+        "env_namespace,env_project,"
+        "error"
+    ),
+    [
+        ("n3.n3", "p3", "n2", "p2", "n1", "p1", InvalidDatasetNameError),
+        ("n3", "p3.p3", "n2", "p2", "n1", "p1", InvalidDatasetNameError),
+        ("", "", "n2.n2", "p2", "n1", "p1", InvalidNamespaceNameError),
+        ("", "", "n2", "p2.p2", "n1", "p1", InvalidProjectNameError),
+        ("", "", "", "", "n1.n1", "p1", InvalidNamespaceNameError),
+        ("", "", "", "", "n1", "p1.p1.p1", InvalidProjectNameError),
+    ],
+)
+def test_save_all_ways_to_set_project_invalid_name(
+    test_session,
+    monkeypatch,
+    ds_name_namespace,
+    ds_name_project,
+    settings_namespace,
+    settings_project,
+    env_namespace,
+    env_project,
+    error,
+):
+    def _full_name(namespace, project, name) -> str:
+        if namespace and project:
+            return f"{namespace}.{project}.{name}"
+        return name
+
+    ds_name = "numbers"
+
+    monkeypatch.setenv("DATACHAIN_NAMESPACE", env_namespace)
+    monkeypatch.setenv("DATACHAIN_PROJECT", env_project)
+
+    with pytest.raises(error):
+        (
+            dc.read_values(num=[1, 2, 3, 4], session=test_session)
+            .settings(namespace=settings_namespace, project=settings_project)
+            .save(_full_name(ds_name_namespace, ds_name_project, ds_name))
+        )
+
+
+@pytest.mark.parametrize("allow_create_project", [False])
+@skip_if_not_sqlite
+def test_save_create_project_not_allowed(test_session, allow_create_project):
+    with pytest.raises(ProjectCreateNotAllowedError):
+        dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save(
+            "dev.numbers.fibonacci"
+        )
 
 
 @pytest.mark.parametrize(

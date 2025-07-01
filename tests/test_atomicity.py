@@ -17,8 +17,7 @@ E2E_STEP_TIMEOUT_SEC = 90
 @pytest.mark.e2e
 @pytest.mark.xdist_group(name="tmpfile")
 def test_atomicity_feature_file(tmp_dir, catalog_tmpfile):
-    namespace = catalog_tmpfile.metastore.create_namespace("dev")
-    project = catalog_tmpfile.metastore.create_project("animals", namespace.name)
+    project = catalog_tmpfile.metastore.create_project("dev", "animals")
 
     command = (
         python_exc,

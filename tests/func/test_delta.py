@@ -6,7 +6,7 @@ from PIL import Image
 
 import datachain as dc
 from datachain import func
-from datachain.error import DatasetVersionNotFoundError
+from datachain.error import DatasetNotFoundError
 from datachain.lib.dc import C
 from datachain.lib.file import File, ImageFile
 
@@ -14,15 +14,26 @@ from datachain.lib.file import File, ImageFile
 def _get_dependencies(catalog, name, version) -> list[tuple[str, str]]:
     return sorted(
         [
-            (d.name, d.version)
+            (f"{d.namespace}.{d.project}.{d.name}", d.version)
             for d in catalog.get_dataset_dependencies(name, version, indirect=False)
         ]
     )
 
 
-def test_delta_update_from_dataset(test_session, tmp_dir, tmp_path):
+@pytest.mark.parametrize("project", ("global.dev", ""))
+def test_delta_update_from_dataset(test_session, tmp_dir, tmp_path, project):
     catalog = test_session.catalog
-    starting_ds_name = "starting_ds"
+    default_namespace_name = catalog.metastore.default_namespace_name
+    default_project_name = catalog.metastore.default_project_name
+
+    if project:
+        starting_ds_name = f"{project}.starting_ds"
+        dependency_ds_name = starting_ds_name
+    else:
+        starting_ds_name = "starting_ds"
+        dependency_ds_name = (
+            f"{default_namespace_name}.{default_project_name}.{starting_ds_name}"
+        )
     ds_name = "delta_ds"
 
     images = [
@@ -55,26 +66,26 @@ def test_delta_update_from_dataset(test_session, tmp_dir, tmp_path):
     create_image_dataset(starting_ds_name, images[:2])
     # first version of delta dataset
     create_delta_dataset(ds_name)
-    assert _get_dependencies(catalog, ds_name, "1.0.0") == [(starting_ds_name, "1.0.0")]
+    assert _get_dependencies(catalog, ds_name, "1.0.0") == [
+        (dependency_ds_name, "1.0.0")
+    ]
     # second version of starting dataset
     create_image_dataset(starting_ds_name, images[2:])
     # second version of delta dataset
     create_delta_dataset(ds_name)
-    assert _get_dependencies(catalog, ds_name, "1.0.1") == [(starting_ds_name, "1.0.1")]
+    assert _get_dependencies(catalog, ds_name, "1.0.1") == [
+        (dependency_ds_name, "1.0.1")
+    ]
 
-    assert list(
-        dc.read_dataset(ds_name, version="1.0.0")
-        .order_by("file.path")
-        .collect("file.path")
+    assert (dc.read_dataset(ds_name, version="1.0.0").order_by("file.path")).to_values(
+        "file.path"
     ) == [
         "img1.jpg",
         "img2.jpg",
     ]
 
-    assert list(
-        dc.read_dataset(ds_name, version="1.0.1")
-        .order_by("file.path")
-        .collect("file.path")
+    assert (dc.read_dataset(ds_name, version="1.0.1").order_by("file.path")).to_values(
+        "file.path"
     ) == [
         "img1.jpg",
         "img2.jpg",
@@ -136,7 +147,7 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
     # into consideration on delta update
     etags = {
         r[0]: r[1].etag
-        for r in dc.read_dataset(ds_name, version="1.0.0").collect("index", "file")
+        for r in dc.read_dataset(ds_name, version="1.0.0").to_iter("index", "file")
     }
 
     # remove last couple of images to simulate modification since we will re-create it
@@ -154,20 +165,16 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
     # second version of delta dataset
     create_delta_dataset()
 
-    assert list(
-        dc.read_dataset(ds_name, version="1.0.0")
-        .order_by("file.path")
-        .collect("file.path")
+    assert (dc.read_dataset(ds_name, version="1.0.0").order_by("file.path")).to_values(
+        "file.path"
     ) == [
         "images/img4.jpg",
         "images/img6.jpg",
         "images/img8.jpg",
     ]
 
-    assert list(
-        dc.read_dataset(ds_name, version="1.0.1")
-        .order_by("file.path")
-        .collect("file.path")
+    assert (dc.read_dataset(ds_name, version="1.0.1").order_by("file.path")).to_values(
+        "file.path"
     ) == [
         "images/img10.jpg",
         "images/img12.jpg",
@@ -182,14 +189,10 @@ def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
     # check that we have newest versions for modified rows since etags are mtime
     # and modified rows etags should be bigger than the old ones
     assert (
-        next(
-            dc.read_dataset(ds_name, version="1.0.1")
-            .filter(C("index") == 6)
-            .order_by("file.path", "file.etag")
-            .collect("file.etag")
-        )
-        > etags[6]
-    )
+        dc.read_dataset(ds_name, version="1.0.1")
+        .filter(C("index") == 6)
+        .order_by("file.path", "file.etag")
+    ).to_values("file.etag")[0] > etags[6]
 
 
 def test_delta_update_check_num_calls(test_session, tmp_dir, tmp_path, capsys):
@@ -281,10 +284,8 @@ def test_delta_update_no_diff(test_session, tmp_dir, tmp_path):
     create_delta_dataset()
     create_delta_dataset()
 
-    assert list(
-        dc.read_dataset(ds_name, version="1.0.0")
-        .order_by("file.path")
-        .collect("file.path")
+    assert (dc.read_dataset(ds_name, version="1.0.0").order_by("file.path")).to_values(
+        "file.path"
     ) == [
         "images/img6.jpg",
         "images/img7.jpg",
@@ -292,10 +293,10 @@ def test_delta_update_no_diff(test_session, tmp_dir, tmp_path):
         "images/img9.jpg",
     ]
 
-    with pytest.raises(DatasetVersionNotFoundError) as exc_info:
+    with pytest.raises(DatasetNotFoundError) as exc_info:
         dc.read_dataset(ds_name, version="1.0.1")
 
-    assert str(exc_info.value) == f"Dataset {ds_name} does not have version 1.0.1"
+    assert str(exc_info.value) == f"Dataset {ds_name} version 1.0.1 not found"
 
 
 @pytest.fixture

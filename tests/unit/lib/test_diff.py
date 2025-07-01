@@ -92,7 +92,7 @@ def test_diff(test_session, str_default, added, deleted, modified, same):
         assert "diff" not in chains[CompareStatus.SAME].signals_schema.db_signals()
         expected.append((CompareStatus.SAME, 4, "Andy"))
 
-    assert list(diff.order_by("id").collect("diff", "id", "name")) == expected
+    assert diff.order_by("id").to_list("diff", "id", "name") == expected
 
 
 def test_diff_no_status_col(test_session, str_default):
@@ -122,7 +122,7 @@ def test_diff_no_status_col(test_session, str_default):
         (4, "Andy"),
     ]
 
-    assert list(diff.order_by("id").collect()) == expected
+    assert diff.order_by("id").to_list() == expected
 
 
 def test_diff_read_hfs(test_session, str_default):
@@ -144,7 +144,7 @@ def test_diff_read_hfs(test_session, str_default):
 
     diff = ds1.diff(ds2, same=True, on=["id"], status_col="diff")
 
-    assert list(diff.order_by("id").collect("diff", "id", "name")) == [
+    assert diff.order_by("id").to_list("diff", "id", "name") == [
         (CompareStatus.MODIFIED, 1, "John1"),
         (CompareStatus.ADDED, 2, "Doe"),
         (CompareStatus.DELETED, 3, str_default),
@@ -187,7 +187,7 @@ def test_diff_with_explicit_compare_fields(test_session, str_default, right_name
     ]
 
     collect_fields = ["diff", "id", "name", "city"]
-    assert list(diff.order_by("id").collect(*collect_fields)) == expected
+    assert diff.order_by("id").to_list(*collect_fields) == expected
 
 
 def test_diff_different_left_right_on_columns(test_session, str_default):
@@ -219,7 +219,7 @@ def test_diff_different_left_right_on_columns(test_session, str_default):
     ]
 
     collect_fields = ["diff", "id", "name"]
-    assert list(diff.order_by("id").collect(*collect_fields)) == expected
+    assert diff.order_by("id").to_list(*collect_fields) == expected
 
 
 @pytest.mark.parametrize("on_self", (True, False))
@@ -253,7 +253,7 @@ def test_diff_on_equal_datasets(test_session, on_self):
     ]
 
     collect_fields = ["diff", "id", "name"]
-    assert list(diff.order_by("id").collect(*collect_fields)) == expected
+    assert diff.order_by("id").to_list(*collect_fields) == expected
 
 
 def test_diff_multiple_columns(test_session, str_default):
@@ -473,7 +473,7 @@ def test_file_diff(test_session, str_default, int_default, status_col, right_on)
         expected = [row[1:] for row in expected]
         collect_fields = collect_fields[1:]
 
-    assert list(diff.order_by("file1.source").collect(*collect_fields)) == expected
+    assert diff.order_by("file1.source").to_list(*collect_fields) == expected
 
 
 @pytest.mark.parametrize("status_col", ("diff", None))
@@ -528,6 +528,4 @@ def test_file_diff_nested(test_session, str_default, int_default, status_col):
         expected = [row[1:] for row in expected]
         collect_fields = collect_fields[1:]
 
-    assert (
-        list(diff.order_by("nested.file.source").collect(*collect_fields)) == expected
-    )
+    assert diff.order_by("nested.file.source").to_list(*collect_fields) == expected

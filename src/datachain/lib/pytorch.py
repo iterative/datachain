@@ -130,7 +130,7 @@ class PytorchDataset(IterableDataset):
         if self.num_samples > 0:
             ds = ds.sample(self.num_samples)
         ds = ds.chunk(total_rank, total_workers)
-        yield from ds.collect()
+        yield from ds.to_iter()
 
     def _iter_with_prefetch(self) -> Generator[tuple[Any], None, None]:
         from datachain.lib.udf import _prefetch_inputs

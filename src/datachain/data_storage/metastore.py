@@ -132,6 +132,7 @@ class AbstractMetastore(ABC, Serializable):
         description: Optional[str] = None,
         uuid: Optional[str] = None,
         ignore_if_exists: bool = True,
+        validate: bool = True,
         **kwargs,
     ) -> Namespace:
         """Creates new namespace"""
@@ -176,7 +177,9 @@ class AbstractMetastore(ABC, Serializable):
 
     @cached_property
     def default_project(self) -> Project:
-        return self.get_project(self.default_project_name, self.default_namespace_name)
+        return self.get_project(
+            self.default_project_name, self.default_namespace_name, create=True
+        )
 
     @cached_property
     def listing_project(self) -> Project:
@@ -185,18 +188,24 @@ class AbstractMetastore(ABC, Serializable):
     @abstractmethod
     def create_project(
         self,
-        name: str,
         namespace_name: str,
+        name: str,
         description: Optional[str] = None,
         uuid: Optional[str] = None,
         ignore_if_exists: bool = True,
+        validate: bool = True,
         **kwargs,
     ) -> Project:
         """Creates new project in specific namespace"""
 
     @abstractmethod
-    def get_project(self, name: str, namespace_name: str, conn=None) -> Project:
-        """Gets a single project inside some namespace by name"""
+    def get_project(
+        self, name: str, namespace_name: str, create: bool = False, conn=None
+    ) -> Project:
+        """
+        Gets a single project inside some namespace by name.
+        It also creates project if not found and create flag is set to True.
+        """
 
     @abstractmethod
     def get_project_by_id(self, project_id: int, conn=None) -> Project:
@@ -722,8 +731,11 @@ class AbstractDBMetastore(AbstractMetastore):
         description: Optional[str] = None,
         uuid: Optional[str] = None,
         ignore_if_exists: bool = True,
+        validate: bool = True,
         **kwargs,
     ) -> Namespace:
+        if validate:
+            Namespace.validate_name(name)
         query = self._namespaces_insert().values(
             name=name,
             uuid=uuid or str(uuid4()),
@@ -767,14 +779,21 @@ class AbstractDBMetastore(AbstractMetastore):
 
     def create_project(
         self,
-        name: str,
         namespace_name: str,
+        name: str,
         description: Optional[str] = None,
         uuid: Optional[str] = None,
         ignore_if_exists: bool = True,
+        validate: bool = True,
         **kwargs,
     ) -> Project:
-        namespace = self.get_namespace(namespace_name)
+        if validate:
+            Project.validate_name(name)
+        try:
+            namespace = self.get_namespace(namespace_name)
+        except NamespaceNotFoundError:
+            namespace = self.create_namespace(namespace_name, validate=validate)
+
         query = self._projects_insert().values(
             namespace_id=namespace.id,
             uuid=uuid or str(uuid4()),
@@ -792,10 +811,32 @@ class AbstractDBMetastore(AbstractMetastore):
 
         return self.get_project(name, namespace.name)
 
-    def get_project(self, name: str, namespace_name: str, conn=None) -> Project:
+    def _is_listing_project(self, project_name: str, namespace_name: str) -> bool:
+        return (
+            project_name == self.listing_project_name
+            and namespace_name == self.system_namespace_name
+        )
+
+    def _is_default_project(self, project_name: str, namespace_name: str) -> bool:
+        return (
+            project_name == self.default_project_name
+            and namespace_name == self.default_namespace_name
+        )
+
+    def get_project(
+        self, name: str, namespace_name: str, create: bool = False, conn=None
+    ) -> Project:
         """Gets a single project inside some namespace by name"""
         n = self._namespaces
         p = self._projects
+        validate = True
+
+        if self._is_listing_project(name, namespace_name) or self._is_default_project(
+            name, namespace_name
+        ):
+            # we are always creating default and listing projects if they don't exist
+            create = True
+            validate = False
 
         query = self._projects_select(
             *(getattr(n.c, f) for f in self._namespaces_fields),
@@ -807,6 +848,8 @@ class AbstractDBMetastore(AbstractMetastore):
 
         rows = list(self.db.execute(query, conn=conn))
         if not rows:
+            if create:
+                return self.create_project(namespace_name, name, validate=validate)
             raise ProjectNotFoundError(
                 f"Project {name} in namespace {namespace_name} not found."
             )

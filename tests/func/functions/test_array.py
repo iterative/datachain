@@ -44,7 +44,7 @@ def test_array_slice(test_session):
         f: list[float]
         s: list[str]
 
-    ds = list(
+    ds = (
         dc.read_values(
             id=(1, 2, 3),
             arr=(
@@ -86,22 +86,21 @@ def test_array_slice(test_session):
             t14=func.array.slice([], 0),
         )
         .order_by("id")
-        .collect(
-            "t1",
-            "t2",
-            "t3",
-            "t4",
-            "t5",
-            "t6",
-            "t7",
-            "t8",
-            "t9",
-            "t10",
-            "t11",
-            "t12",
-            "t13",
-            "t14",
-        )
+    ).to_list(
+        "t1",
+        "t2",
+        "t3",
+        "t4",
+        "t5",
+        "t6",
+        "t7",
+        "t8",
+        "t9",
+        "t10",
+        "t11",
+        "t12",
+        "t13",
+        "t14",
     )
 
     assert tuple(ds) == (
@@ -186,7 +185,7 @@ def test_array_join(test_session):
             t8=func.array.join([]),
         )
         .order_by("id")
-        .collect("t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8")
+        .to_list("t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8")
     )
 
     assert tuple(ds) == (
@@ -238,7 +237,7 @@ def test_array_get_element(test_session):
             t12=func.array.get_element([], 0),
         )
         .order_by("id")
-        .collect(
+        .to_list(
             "t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9", "t10", "t11", "t12"
         )
     )
@@ -338,7 +337,7 @@ def test_array_length(test_session):
             t8=func.array.length([]),
         )
         .order_by("id")
-        .collect("t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8")
+        .to_list("t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8")
     )
 
     assert tuple(ds) == (
@@ -398,7 +397,7 @@ def test_array_contains(test_session):
             t15=func.array.contains([], 1),
         )
         .order_by("id")
-        .collect(
+        .to_list(
             "t1",
             "t2",
             "t3",

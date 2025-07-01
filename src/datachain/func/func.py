@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 ColT = Union[str, Column, ColumnElement, "Func", tuple]
 
 
-class Func(Function):
+class Func(Function):  # noqa: PLW1641
     """Represents a function to be applied to a column in a SQL query."""
 
     def __init__(

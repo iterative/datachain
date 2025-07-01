@@ -1,4 +1,3 @@
-from datachain.lib import namespaces, projects
 from datachain.lib.data_model import DataModel, DataType, is_chain_type
 from datachain.lib.dc import (
     C,
@@ -34,6 +33,7 @@ from datachain.lib.file import (
     VideoFrame,
 )
 from datachain.lib.model_store import ModelStore
+from datachain.lib.projects import create as create_project
 from datachain.lib.udf import Aggregator, Generator, Mapper
 from datachain.lib.utils import AbstractUDF, DataChainError
 from datachain.query import metrics, param
@@ -64,15 +64,14 @@ __all__ = [
     "VideoFile",
     "VideoFragment",
     "VideoFrame",
+    "create_project",
     "datasets",
     "delete_dataset",
     "is_chain_type",
     "listings",
     "metrics",
     "move_dataset",
-    "namespaces",
     "param",
-    "projects",
     "read_csv",
     "read_database",
     "read_dataset",

@@ -6,39 +6,37 @@ from datachain.query import Session
 
 
 def create(
-    name: str, description: Optional[str] = None, session: Optional[Session] = None
+    name: str, descr: Optional[str] = None, session: Optional[Session] = None
 ) -> Namespace:
     """
-    Creates a new custom namespace.
-    A Namespace is an object used to organize datasets. It has name and a list of
-    Project objects underneath it. On the other hand, each Project can have multiple
-    datasets.
-    Note that creating namespaces is not allowed in the local environment, unlike
-    in Studio, where it is allowed.
-    In local environment all datasets are created under the default `local` namespace.
+    Creates a new namespace.
+
+    Namespaces organize projects, which in turn organize datasets. A default
+    namespace always exists and is used if none is specified. Multiple namespaces
+    can be created in Studio, but only the default is available in the CLI.
 
     Parameters:
-        name : The name of the namespace.
-        description : A description of the namespace.
-        session : Session to use for creating namespace.
+        name: Name of the new namespace.
+        descr: Optional description of the namespace.
+        session: Optional session to use for the operation.
 
     Example:
         ```py
-        import datachain as dc
-        namespace = dc.namespaces.create("dev", "Dev namespace")
+        from datachain.lib.namespaces import create as create_namespace
+        namespace = create_namespace("dev", "Dev namespace")
         ```
     """
     session = Session.get(session)
 
     if not session.catalog.metastore.namespace_allowed_to_create:
-        raise NamespaceCreateNotAllowedError("Creating custom namespace is not allowed")
+        raise NamespaceCreateNotAllowedError("Creating namespace is not allowed")
 
     Namespace.validate_name(name)
 
-    return session.catalog.metastore.create_namespace(name, description)
+    return session.catalog.metastore.create_namespace(name, descr)
 
 
-def get(name: str, session: Optional[Session]) -> Namespace:
+def get(name: str, session: Optional[Session] = None) -> Namespace:
     """
     Gets a namespace by name.
     If the namespace is not found, a `NamespaceNotFoundError` is raised.
@@ -66,8 +64,8 @@ def ls(session: Optional[Session] = None) -> list[Namespace]:
 
     Example:
         ```py
-        import datachain as dc
-        namespaces = dc.namespaces.ls()
+        from datachain.lib.namespaces import ls as ls_namespaces
+        namespaces = ls_namespaces()
         ```
     """
     return Session.get(session).catalog.metastore.list_namespaces()

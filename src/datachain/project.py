@@ -15,7 +15,7 @@ class Project:
     id: int
     uuid: str
     name: str
-    description: Optional[str]
+    descr: Optional[str]
     created_at: datetime
     namespace: Namespace
 
@@ -52,12 +52,12 @@ class Project:
         namespace_id: int,
         namespace_uuid: str,
         namespace_name: str,
-        namespace_description: Optional[str],
+        namespace_descr: Optional[str],
         namespace_created_at: datetime,
         project_id: int,
         uuid: str,
         name: str,
-        description: Optional[str],
+        descr: Optional[str],
         created_at: datetime,
         project_namespace_id: int,
     ) -> "Project":
@@ -65,11 +65,11 @@ class Project:
             namespace_id,
             namespace_uuid,
             namespace_name,
-            namespace_description,
+            namespace_descr,
             namespace_created_at,
         )
 
-        return cls(project_id, uuid, name, description, created_at, namespace)
+        return cls(project_id, uuid, name, descr, created_at, namespace)
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "Project":

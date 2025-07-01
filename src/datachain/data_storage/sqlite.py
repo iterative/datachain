@@ -468,11 +468,12 @@ class SQLiteMetastore(AbstractDBMetastore):
         be created implicitly though, to keep the same fully qualified name with
         Studio dataset.
         """
-        system_namespace = self.create_namespace(Namespace.system(), "System namespace")
-        self.create_project(Project.listing(), system_namespace.name, "Listing project")
-
-        local_namespace = self.create_namespace(Namespace.default(), "Local namespace")
-        self.create_project(Project.default(), local_namespace.name, "Local project")
+        system_namespace = self.create_namespace(
+            Namespace.system(), "System namespace", validate=False
+        )
+        self.create_project(
+            system_namespace.name, Project.listing(), "Listing project", validate=False
+        )
 
     def _check_schema_version(self) -> None:
         """
