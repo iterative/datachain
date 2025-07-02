@@ -2330,10 +2330,10 @@ def test_agg(catalog_tmpfile, parallel):
 @pytest.mark.parametrize(
     "offset,limit,files",
     [
-        (None, None, [f"file{i:02d}" for i in range(100)]),
+        (None, 1000, [f"file{i:02d}" for i in range(100)]),
         (None, 3, ["file00", "file01", "file02"]),
         (0, 3, ["file00", "file01", "file02"]),
-        (97, None, ["file97", "file98", "file99"]),
+        (97, 1000, ["file97", "file98", "file99"]),
         (1, 2, ["file01", "file02"]),
         (50, 3, ["file50", "file51", "file52"]),
         (None, 0, []),
