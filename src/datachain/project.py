@@ -7,7 +7,7 @@ from datachain.error import InvalidProjectNameError
 from datachain.namespace import Namespace
 
 P = TypeVar("P", bound="Project")
-PROJECT_NAME_RESERVED_CHARS = ["."]
+PROJECT_NAME_RESERVED_CHARS = [".", "@"]
 
 
 @dataclass(frozen=True)
