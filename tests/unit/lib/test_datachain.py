@@ -3599,10 +3599,8 @@ def test_move_dataset(
     catalog = test_session.catalog
     ds_name = "numbers"
 
-    dc.namespaces.create(old_namespace_name)
-    old_project = dc.projects.create(old_project_name, old_namespace_name)
-    dc.namespaces.create(new_namespace_name)
-    new_project = dc.projects.create(new_project_name, new_namespace_name)
+    old_project = dc.create_project(old_namespace_name, old_project_name)
+    new_project = dc.create_project(new_namespace_name, new_project_name)
 
     # create 2 versions of dataset in old project
     for _ in range(2):
