@@ -208,10 +208,6 @@ class AbstractMetastore(ABC, Serializable):
         """
 
     @abstractmethod
-    def get_project_by_id(self, project_id: int, conn=None) -> Project:
-        """Gets a single project by id"""
-
-    @abstractmethod
     def list_projects(self, namespace_id: Optional[int], conn=None) -> list[Project]:
         """Gets list of projects in some namespace or in general (in all namespaces)"""
 
@@ -853,24 +849,6 @@ class AbstractDBMetastore(AbstractMetastore):
             raise ProjectNotFoundError(
                 f"Project {name} in namespace {namespace_name} not found."
             )
-        return self.project_class.parse(*rows[0])
-
-    def get_project_by_id(self, project_id: int, conn=None) -> Project:
-        """Gets a single project by id"""
-        n = self._namespaces
-        p = self._projects
-
-        query = self._projects_select(
-            *(getattr(n.c, f) for f in self._namespaces_fields),
-            *(getattr(p.c, f) for f in self._projects_fields),
-        )
-        query = query.select_from(n.join(p, n.c.id == p.c.namespace_id)).where(
-            p.c.id == project_id
-        )
-
-        rows = list(self.db.execute(query, conn=conn))
-        if not rows:
-            raise ProjectNotFoundError(f"Project {project_id} not found.")
         return self.project_class.parse(*rows[0])
 
     def list_projects(self, namespace_id: Optional[int], conn=None) -> list[Project]:
