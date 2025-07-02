@@ -605,21 +605,10 @@ class UDFStep(Step, ABC):
         if self.partition_by is not None:
             partition_tbl = self.create_partitions_table(query)
             temp_tables.append(partition_tbl.name)
-
-            # Limit and offset are not applied to the partition table,
-            # so we need to apply them to the main query later.
-            limit = query._limit
-            offset = query._offset
-
-            subq = query.limit(None).offset(None).subquery()
-            query = (
-                sqlalchemy.select(*subq.c)
-                .outerjoin(partition_tbl, partition_tbl.c.sys__id == subq.c.sys__id)
-                .add_columns(*partition_columns())
-            )
-
-            # Apply limit and offset to the main query.
-            query = query.offset(offset).limit(limit)
+            query = query.outerjoin(
+                partition_tbl,
+                partition_tbl.c.sys__id == query.selected_columns.sys__id,
+            ).add_columns(*partition_columns())
 
         query, tables = self.process_input_query(query)
         temp_tables.extend(t.name for t in tables)

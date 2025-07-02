@@ -218,7 +218,7 @@ class AbstractWarehouse(ABC, Serializable):
         limit = query._limit
         paginated_query = query.limit(page_size)
 
-        offset = 0
+        offset = query._offset or 0
         num_yielded = 0
 
         # Ensure we're using a thread-local connection
@@ -240,7 +240,7 @@ class AbstractWarehouse(ABC, Serializable):
                     yield row
                     num_yielded += 1
 
-                if not processed or processed < page_size:
+                if processed < page_size:
                     break  # no more results
                 offset += page_size
 
@@ -343,17 +343,13 @@ class AbstractWarehouse(ABC, Serializable):
         if (id_col := get_query_id_column(query)) is None:
             raise RuntimeError("sys__id column not found in query")
 
+        query = query._clone().offset(None).limit(None).order_by(None)
+
         if is_batched:
             for batch in ids:
-                yield list(
-                    self.dataset_rows_select(
-                        query.offset(None).limit(None).where(id_col.in_(batch))
-                    )
-                )
+                yield list(self.dataset_rows_select(query.where(id_col.in_(batch))))
         else:
-            yield from self.dataset_rows_select(
-                query.offset(None).limit(None).where(id_col.in_(ids))
-            )
+            yield from self.dataset_rows_select(query.where(id_col.in_(ids)))
 
     @abstractmethod
     def get_dataset_sources(

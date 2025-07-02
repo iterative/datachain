@@ -2327,19 +2327,34 @@ def test_agg(catalog_tmpfile, parallel):
 
 
 @pytest.mark.parametrize("parallel", [1, 2])
-def test_agg_limit(catalog_tmpfile, parallel):
+@pytest.mark.parametrize(
+    "offset,limit,files",
+    [
+        (None, None, [f"file{i:02d}" for i in range(100)]),
+        (None, 3, ["file00", "file01", "file02"]),
+        (0, 3, ["file00", "file01", "file02"]),
+        (97, None, ["file97", "file98", "file99"]),
+        (1, 2, ["file01", "file02"]),
+        (50, 3, ["file50", "file51", "file52"]),
+        (None, 0, []),
+        (50, 0, []),
+    ],
+)
+def test_agg_offset_limit(catalog_tmpfile, parallel, offset, limit, files):
     def process(filename: list[str]) -> Iterator[tuple[str, int]]:
         yield filename[0], len(filename)
 
+    ds = dc.read_values(
+        filename=[f"file{i:02d}" for i in range(100)],
+        value=list(range(100)),
+        session=catalog_tmpfile.session,
+    )
+    if offset is not None:
+        ds = ds.offset(offset)
+    if limit is not None:
+        ds = ds.limit(limit)
     ds = (
-        dc.read_values(
-            filename=[f"file{i}" for i in range(100)],
-            value=list(range(100)),
-            session=catalog_tmpfile.session,
-        )
-        .offset(50)
-        .limit(3)
-        .settings(parallel=parallel)
+        ds.settings(parallel=parallel)
         .agg(
             process,
             output={"filename": str, "count": int},
@@ -2348,28 +2363,24 @@ def test_agg_limit(catalog_tmpfile, parallel):
         .save("my-ds")
     )
 
-    assert sorted_dicts(ds.to_records(), "filename") == sorted_dicts(
-        [
-            {"filename": "file0", "count": 1},
-            {"filename": "file1", "count": 1},
-            {"filename": "file10", "count": 1},
-        ],
-        "filename",
-    )
+    records = list(ds.to_records())
+    assert len(records) == len(files)
+    assert all(row["count"] == 1 for row in records)
+    assert sorted(row["filename"] for row in records) == sorted(files)
 
 
 @pytest.mark.parametrize("parallel", [1, 2])
-def test_agg_sample(catalog_tmpfile, parallel):
+@pytest.mark.parametrize("sample", [0, 1, 3, 10, 50, 100])
+def test_agg_sample(catalog_tmpfile, parallel, sample):
     def process(filename: list[str]) -> Iterator[tuple[str, int]]:
         yield filename[0], len(filename)
 
     ds = (
         dc.read_values(
-            filename=[f"file{i}" for i in range(100)],
-            value=list(range(100)),
+            filename=[f"file{i:02d}" for i in range(100)],
             session=catalog_tmpfile.session,
         )
-        .sample(3)
+        .sample(sample)
         .settings(parallel=parallel)
         .agg(
             process,
@@ -2380,5 +2391,5 @@ def test_agg_sample(catalog_tmpfile, parallel):
     )
 
     records = list(ds.to_records())
-    assert len(records) == 3
+    assert len(records) == sample
     assert all(row["count"] == 1 for row in records)
