@@ -218,7 +218,7 @@ class AbstractWarehouse(ABC, Serializable):
         limit = query._limit
         paginated_query = query.limit(page_size)
 
-        offset = 0
+        offset = query._offset or 0
         num_yielded = 0
 
         # Ensure we're using a thread-local connection
@@ -234,13 +234,13 @@ class AbstractWarehouse(ABC, Serializable):
                 # Cursor results are not thread-safe, so we convert them to a list
                 results = list(wh.dataset_rows_select(paginated_query.offset(offset)))
 
-                processed = False
+                processed = 0
                 for row in results:
-                    processed = True
+                    processed += 1
                     yield row
                     num_yielded += 1
 
-                if not processed:
+                if processed < page_size:
                     break  # no more results
                 offset += page_size
 
@@ -342,6 +342,8 @@ class AbstractWarehouse(ABC, Serializable):
         """
         if (id_col := get_query_id_column(query)) is None:
             raise RuntimeError("sys__id column not found in query")
+
+        query = query._clone().offset(None).limit(None).order_by(None)
 
         if is_batched:
             for batch in ids:
