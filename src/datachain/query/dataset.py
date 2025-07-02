@@ -11,6 +11,7 @@ from collections.abc import Generator, Iterable, Iterator, Sequence
 from copy import copy
 from functools import wraps
 from secrets import token_hex
+from types import GeneratorType
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -557,8 +558,8 @@ class UDFStep(Step, ABC):
         """
         assert self.partition_by is not None
 
-        if isinstance(self.partition_by, Sequence):
-            list_partition_by = self.partition_by
+        if isinstance(self.partition_by, (list, tuple, GeneratorType)):
+            list_partition_by = list(self.partition_by)
         else:
             list_partition_by = [self.partition_by]
 
@@ -575,7 +576,10 @@ class UDFStep(Step, ABC):
             f.dense_rank().over(order_by=partition_by).label(PARTITION_COLUMN_ID),
         ]
         self.catalog.warehouse.db.execute(
-            tbl.insert().from_select(cols, query.with_only_columns(*cols))
+            tbl.insert().from_select(
+                cols,
+                query.offset(None).limit(None).with_only_columns(*cols),
+            )
         )
 
         return tbl
@@ -601,13 +605,10 @@ class UDFStep(Step, ABC):
         if self.partition_by is not None:
             partition_tbl = self.create_partitions_table(query)
             temp_tables.append(partition_tbl.name)
-
-            subq = query.subquery()
-            query = (
-                sqlalchemy.select(*subq.c)
-                .outerjoin(partition_tbl, partition_tbl.c.sys__id == subq.c.sys__id)
-                .add_columns(*partition_columns())
-            )
+            query = query.outerjoin(
+                partition_tbl,
+                partition_tbl.c.sys__id == query.selected_columns.sys__id,
+            ).add_columns(*partition_columns())
 
         query, tables = self.process_input_query(query)
         temp_tables.extend(t.name for t in tables)

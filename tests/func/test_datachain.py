@@ -2324,3 +2324,72 @@ def test_agg(catalog_tmpfile, parallel):
         ],
         "parent",
     )
+
+
+@pytest.mark.parametrize("parallel", [1, 2])
+@pytest.mark.parametrize(
+    "offset,limit,files",
+    [
+        (None, 1000, [f"file{i:02d}" for i in range(100)]),
+        (None, 3, ["file00", "file01", "file02"]),
+        (0, 3, ["file00", "file01", "file02"]),
+        (97, 1000, ["file97", "file98", "file99"]),
+        (1, 2, ["file01", "file02"]),
+        (50, 3, ["file50", "file51", "file52"]),
+        (None, 0, []),
+        (50, 0, []),
+    ],
+)
+def test_agg_offset_limit(catalog_tmpfile, parallel, offset, limit, files):
+    def process(filename: list[str]) -> Iterator[tuple[str, int]]:
+        yield filename[0], len(filename)
+
+    ds = dc.read_values(
+        filename=[f"file{i:02d}" for i in range(100)],
+        value=list(range(100)),
+        session=catalog_tmpfile.session,
+    )
+    if offset is not None:
+        ds = ds.offset(offset)
+    if limit is not None:
+        ds = ds.limit(limit)
+    ds = (
+        ds.settings(parallel=parallel)
+        .agg(
+            process,
+            output={"filename": str, "count": int},
+            partition_by="filename",
+        )
+        .save("my-ds")
+    )
+
+    records = list(ds.to_records())
+    assert len(records) == len(files)
+    assert all(row["count"] == 1 for row in records)
+    assert sorted(row["filename"] for row in records) == sorted(files)
+
+
+@pytest.mark.parametrize("parallel", [1, 2])
+@pytest.mark.parametrize("sample", [0, 1, 3, 10, 50, 100])
+def test_agg_sample(catalog_tmpfile, parallel, sample):
+    def process(filename: list[str]) -> Iterator[tuple[str, int]]:
+        yield filename[0], len(filename)
+
+    ds = (
+        dc.read_values(
+            filename=[f"file{i:02d}" for i in range(100)],
+            session=catalog_tmpfile.session,
+        )
+        .sample(sample)
+        .settings(parallel=parallel)
+        .agg(
+            process,
+            output={"filename": str, "count": int},
+            partition_by="filename",
+        )
+        .save("my-ds")
+    )
+
+    records = list(ds.to_records())
+    assert len(records) == sample
+    assert all(row["count"] == 1 for row in records)
