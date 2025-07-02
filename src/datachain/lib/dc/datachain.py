@@ -24,7 +24,7 @@ from pydantic import BaseModel
 from tqdm import tqdm
 
 from datachain import semver
-from datachain.dataset import DatasetRecord, parse_dataset_name
+from datachain.dataset import DatasetRecord
 from datachain.delta import delta_disabled
 from datachain.error import ProjectCreateNotAllowedError, ProjectNotFoundError
 from datachain.func import literal
@@ -557,6 +557,7 @@ class DataChain:
             update_version: which part of the dataset version to automatically increase.
                 Available values: `major`, `minor` or `patch`. Default is `patch`.
         """
+        catalog = self.session.catalog
         if version is not None:
             semver.validate(version)
 
@@ -570,17 +571,10 @@ class DataChain:
                 " patch"
             )
 
-        namespace_name, project_name, name = parse_dataset_name(name)
-
-        namespace_name = (
-            namespace_name
-            or self._settings.namespace
-            or self.session.catalog.metastore.default_namespace_name
-        )
-        project_name = (
-            project_name
-            or self._settings.project
-            or self.session.catalog.metastore.default_project_name
+        namespace_name, project_name, name = catalog.get_full_dataset_name(
+            name,
+            namespace_name=self._settings.namespace,
+            project_name=self._settings.project,
         )
 
         try:
@@ -604,6 +598,8 @@ class DataChain:
 
             result_ds, dependencies, has_changes = delta_retry_update(
                 self,
+                namespace_name,
+                project_name,
                 name,
                 on=self._delta_on,
                 right_on=self._delta_result_on,

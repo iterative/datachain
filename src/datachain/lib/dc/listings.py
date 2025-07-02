@@ -127,12 +127,8 @@ def read_listing_dataset(
     if version is None:
         version = dataset.latest_version
 
-    query = DatasetQuery(
-        name=name,
-        session=session,
-        indexing_column_types=File._datachain_column_types,
-        fallback_to_studio=False,
-    )
+    query = DatasetQuery(name=name, session=session)
+
     if settings:
         cfg = {**settings}
         if "prefetch" not in cfg:

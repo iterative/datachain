@@ -8,7 +8,6 @@ if TYPE_CHECKING:
 
 from datachain.cli.utils import determine_flavors
 from datachain.config import Config
-from datachain.dataset import parse_dataset_name
 from datachain.error import DataChainError, DatasetNotFoundError
 from datachain.studio import list_datasets as list_datasets_studio
 
@@ -106,9 +105,8 @@ def list_datasets_local(catalog: "Catalog", name: Optional[str] = None):
 
 
 def list_datasets_local_versions(catalog: "Catalog", name: str):
-    namespace_name, project_name, name = parse_dataset_name(name)
-    namespace_name = namespace_name or catalog.metastore.default_namespace_name
-    project_name = project_name or catalog.metastore.default_project_name
+    namespace_name, project_name, name = catalog.get_full_dataset_name(name)
+
     project = catalog.metastore.get_project(project_name, namespace_name)
     ds = catalog.get_dataset(name, project)
     for v in ds.versions:
@@ -137,9 +135,7 @@ def rm_dataset(
     studio: Optional[bool] = False,
     team: Optional[str] = None,
 ):
-    namespace_name, project_name, name = parse_dataset_name(name)
-    namespace_name = namespace_name or catalog.metastore.default_namespace_name
-    project_name = project_name or catalog.metastore.default_project_name
+    namespace_name, project_name, name = catalog.get_full_dataset_name(name)
 
     if not catalog.metastore.is_local_dataset(namespace_name) and studio:
         from datachain.studio import remove_studio_dataset
@@ -166,9 +162,7 @@ def edit_dataset(
     attrs: Optional[list[str]] = None,
     team: Optional[str] = None,
 ):
-    namespace_name, project_name, name = parse_dataset_name(name)
-    namespace_name = namespace_name or catalog.metastore.default_namespace_name
-    project_name = project_name or catalog.metastore.default_project_name
+    namespace_name, project_name, name = catalog.get_full_dataset_name(name)
 
     if catalog.metastore.is_local_dataset(namespace_name):
         try:

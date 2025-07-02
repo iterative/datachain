@@ -20,6 +20,9 @@ from datachain.error import (
     DatasetInvalidVersionError,
     DatasetNotFoundError,
     DatasetVersionNotFoundError,
+    InvalidDatasetNameError,
+    InvalidNamespaceNameError,
+    InvalidProjectNameError,
     ProjectCreateNotAllowedError,
 )
 from datachain.lib.data_model import DataModel
@@ -3250,9 +3253,18 @@ def test_delete_dataset_from_studio_not_found(
     assert str(exc_info.value) == error_message
 
 
-def test_delete_dataset_cached_from_studio(test_session, project):
+def test_delete_dataset_cached_from_studio(
+    test_session, project, studio_token, requests_mock
+):
     ds_full_name = f"{project.namespace.name}.{project.name}.fibonacci"
     dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save(ds_full_name)
+
+    error_message = f"Dataset {ds_full_name} not found"
+    requests_mock.get(
+        f"{STUDIO_URL}/api/datachain/datasets/info",
+        json={"message": error_message},
+        status_code=404,
+    )
 
     dc.delete_dataset(ds_full_name)
 
@@ -3425,7 +3437,9 @@ def test_save_specify_only_non_default_project(
     default_namespace_name = catalog.metastore.default_namespace_name
 
     if project_created_upfront:
-        catalog.metastore.create_project(default_namespace_name, "numbers")
+        catalog.metastore.create_project(
+            default_namespace_name, "numbers", validate=False
+        )
 
     ds = dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session)
     if use_settings:
@@ -3443,6 +3457,111 @@ def test_save_specify_only_non_default_project(
     with pytest.raises(DatasetNotFoundError):
         # dataset is not in default namespace / project
         dc.read_dataset(name="fibonacci")
+
+
+@pytest.mark.parametrize(
+    (
+        "ds_name_namespace,ds_name_project,"
+        "settings_namespace,settings_project,"
+        "env_namespace,env_project,"
+        "result_ds_namespace,result_ds_project"
+    ),
+    [
+        ("n3", "p3", "n2", "p2", "n1", "p1", "n3", "p3"),
+        ("", "", "n2", "p2", "n1", "p1", "n2", "p2"),
+        ("", "", "", "", "n1", "p1", "n1", "p1"),
+        ("", "", "", "", "n5", "n1.p1", "n1", "p1"),
+        ("", "", "", "", "", "n1.p1", "n1", "p1"),
+        ("", "", "", "", "", "n5.p5", "n5", "p5"),
+        ("n3", "p3", "n2", "p2", "", "", "n3", "p3"),
+        ("n3", "p3", "", "", "", "", "n3", "p3"),
+        ("n3", "p3", "", "", "n1", "p1", "n3", "p3"),
+        ("", "", "", "", "", "", "", ""),
+    ],
+)
+def test_save_all_ways_to_set_project(
+    test_session,
+    monkeypatch,
+    ds_name_namespace,
+    ds_name_project,
+    settings_namespace,
+    settings_project,
+    env_namespace,
+    env_project,
+    result_ds_namespace,
+    result_ds_project,
+):
+    def _full_name(namespace, project, name) -> str:
+        if namespace and project:
+            return f"{namespace}.{project}.{name}"
+        return name
+
+    metastore = test_session.catalog.metastore
+    ds_name = "numbers"
+
+    monkeypatch.setenv("DATACHAIN_NAMESPACE", env_namespace)
+    monkeypatch.setenv("DATACHAIN_PROJECT", env_project)
+
+    if not result_ds_namespace and not result_ds_project:
+        # special case when nothing is defined - we set default ones
+        result_ds_namespace = metastore.default_namespace_name
+        result_ds_project = metastore.default_project_name
+
+    ds = (
+        dc.read_values(num=[1, 2, 3, 4], session=test_session)
+        .settings(namespace=settings_namespace, project=settings_project)
+        .save(_full_name(ds_name_namespace, ds_name_project, ds_name))
+    )
+
+    assert ds.dataset.project == metastore.get_project(
+        result_ds_project, result_ds_namespace
+    )
+    dc.read_dataset(_full_name(result_ds_namespace, result_ds_project, ds_name))
+
+
+@pytest.mark.parametrize(
+    (
+        "ds_name_namespace,ds_name_project,"
+        "settings_namespace,settings_project,"
+        "env_namespace,env_project,"
+        "error"
+    ),
+    [
+        ("n3.n3", "p3", "n2", "p2", "n1", "p1", InvalidDatasetNameError),
+        ("n3", "p3.p3", "n2", "p2", "n1", "p1", InvalidDatasetNameError),
+        ("", "", "n2.n2", "p2", "n1", "p1", InvalidNamespaceNameError),
+        ("", "", "n2", "p2.p2", "n1", "p1", InvalidProjectNameError),
+        ("", "", "", "", "n1.n1", "p1", InvalidNamespaceNameError),
+        ("", "", "", "", "n1", "p1.p1.p1", InvalidProjectNameError),
+    ],
+)
+def test_save_all_ways_to_set_project_invalid_name(
+    test_session,
+    monkeypatch,
+    ds_name_namespace,
+    ds_name_project,
+    settings_namespace,
+    settings_project,
+    env_namespace,
+    env_project,
+    error,
+):
+    def _full_name(namespace, project, name) -> str:
+        if namespace and project:
+            return f"{namespace}.{project}.{name}"
+        return name
+
+    ds_name = "numbers"
+
+    monkeypatch.setenv("DATACHAIN_NAMESPACE", env_namespace)
+    monkeypatch.setenv("DATACHAIN_PROJECT", env_project)
+
+    with pytest.raises(error):
+        (
+            dc.read_values(num=[1, 2, 3, 4], session=test_session)
+            .settings(namespace=settings_namespace, project=settings_project)
+            .save(_full_name(ds_name_namespace, ds_name_project, ds_name))
+        )
 
 
 @pytest.mark.parametrize("allow_create_project", [False])

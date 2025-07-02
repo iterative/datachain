@@ -78,10 +78,11 @@ def _parse_dates(obj: dict, date_fields: list[str]):
 
 
 class Response(Generic[T]):
-    def __init__(self, data: T, ok: bool, message: str) -> None:
+    def __init__(self, data: T, ok: bool, message: str, status: int) -> None:
         self.data = data
         self.ok = ok
         self.message = message
+        self.status = status
 
     def __repr__(self):
         return (
@@ -186,7 +187,7 @@ class StudioClient:
             message = "Indexing in progress"
         else:
             message = content.get("message", "")
-        return Response(response_data, ok, message)
+        return Response(response_data, ok, message, response.status_code)
 
     @retry_with_backoff(retries=3, errors=(HTTPError, Timeout))
     def _send_request(
@@ -236,7 +237,7 @@ class StudioClient:
         else:
             message = ""
 
-        return Response(data, ok, message)
+        return Response(data, ok, message, response.status_code)
 
     @staticmethod
     def _unpacker_hook(code, data):
