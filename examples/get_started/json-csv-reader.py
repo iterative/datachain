@@ -1,31 +1,23 @@
 from typing import Optional
 
-from pydantic import BaseModel
-
 import datachain as dc
-from datachain.lib.data_model import ModelStore
+from datachain import DataModel
 from datachain.lib.meta_formats import gen_datamodel_code
 
 
 # Sample model for static JSON model
-class LicenseModel(BaseModel):
+class LicenseModel(DataModel):
     url: str
     id: int
     name: str
 
 
-LicenseFeature = ModelStore.register(LicenseModel)
-
-
 # Sample model for static CSV model
-class ChatDialog(BaseModel):
+class ChatDialog(DataModel):
     id: Optional[int] = None
     count: Optional[int] = None
     sender: Optional[str] = None
     text: Optional[str] = None
-
-
-ChatFeature = ModelStore.register(ChatDialog)
 
 
 def main():
@@ -53,7 +45,7 @@ def main():
 
     # Static JSON schema test parsing 3/7 objects
     static_json_ds = dc.read_json(
-        uri, jmespath="licenses", spec=LicenseFeature, nrows=3, anon="True"
+        uri, jmespath="licenses", spec=LicenseModel, nrows=3, anon="True"
     )
     static_json_ds.show()
 
@@ -72,6 +64,11 @@ def main():
     dynamic_csv_ds = dc.read_csv(uri, column="laion", nrows=3, anon="True")
     dynamic_csv_ds.print_schema()
     dynamic_csv_ds.show()
+
+    print(
+        "Note: script might hang at the end due to https://github.com/apache/arrow/issues/43497"
+    )
+    print("Just press Ctrl+C to exit.")
 
 
 if __name__ == "__main__":

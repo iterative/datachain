@@ -1,7 +1,7 @@
 """
 To install the required dependencies:
 
-  pip install datachain[examples]
+  uv pip install "datachain[examples]"
 
 """
 

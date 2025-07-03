@@ -1,3 +1,10 @@
+"""
+To install the required dependencies:
+
+  uv pip install "datachain[examples]"
+
+"""
+
 import open_clip
 import torch
 from torch.nn.functional import cosine_similarity
@@ -9,8 +16,10 @@ source = "gs://datachain-demo/50k-laion-files/000000/00000000*"
 
 
 def create_dataset():
-    imgs = dc.read_storage(source, type="image").filter(dc.C("file.path").glob("*.jpg"))
-    captions = dc.read_storage(source, type="text").filter(
+    imgs = dc.read_storage(source, type="image", anon=True).filter(
+        dc.C("file.path").glob("*.jpg")
+    )
+    captions = dc.read_storage(source, type="text", anon=True).filter(
         dc.C("file.path").glob("*.txt")
     )
     return imgs.merge(
@@ -34,9 +43,9 @@ if __name__ == "__main__":
     )
     loader = DataLoader(ds, batch_size=16)
 
-    similarity_sum = 0
+    similarity_sum = 0.0
     row_count = 0
-    with torch.no_grad(), torch.cuda.amp.autocast():
+    with torch.no_grad(), torch.amp.autocast("cuda"):
         for image, text in loader:
             image_features = model.encode_image(image)
             text_features = model.encode_text(text)

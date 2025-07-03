@@ -55,8 +55,8 @@ class CNN(nn.Module):
 
 if __name__ == "__main__":
     ds = (
-        dc.read_storage(STORAGE, type="image")
-        .settings(prefetch=25)
+        dc.read_storage(STORAGE, type="image", anon=True)
+        .settings(prefetch=25, cache=True)
         .filter(dc.C("file.path").glob("*.jpg"))
         .map(
             label=lambda path: label_to_int(basename(path)[:3], CLASSES),
