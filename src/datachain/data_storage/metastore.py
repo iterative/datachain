@@ -1194,14 +1194,16 @@ class AbstractDBMetastore(AbstractMetastore):
         Gets a single dataset in project by dataset name.
         """
         project_id = project_id or self.default_project.id
+
         d = self._datasets
         query = self._base_dataset_query()
         query = query.where(d.c.name == name, d.c.project_id == project_id)  # type: ignore [attr-defined]
         ds = self._parse_dataset(self.db.execute(query, conn=conn))
         if not ds:
             raise DatasetNotFoundError(
-                f"Dataset {name} not found in project {project_id}"
+                f"Dataset {name} not found in project with id {project_id}"
             )
+
         return ds
 
     def remove_dataset_version(

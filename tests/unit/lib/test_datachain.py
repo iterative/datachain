@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 import datachain as dc
 from datachain import Column
+from datachain.data_storage import AbstractMetastore
 from datachain.error import (
     DatasetInvalidVersionError,
     DatasetNotFoundError,
@@ -3426,6 +3427,29 @@ def test_save_to_non_default_namespace_and_project(
     with pytest.raises(DatasetNotFoundError):
         # dataset is not in default namespace / project
         dc.read_dataset(name="fibonacci")
+
+
+def test_dataset_not_found_in_default_project(test_session):
+    metastore = test_session.catalog.metastore
+    with pytest.raises(DatasetNotFoundError) as excinfo:
+        with patch.object(AbstractMetastore, "is_local_dataset", return_value=True):
+            dc.read_dataset("fibonacci")
+    assert str(excinfo.value) == (
+        f"Dataset fibonacci not found in namespace {metastore.default_namespace_name}"
+        f" and project {metastore.default_project_name}"
+    )
+
+
+@pytest.mark.parametrize("project_created", (True, False))
+def test_dataset_not_found_in_non_default_project(test_session, project_created):
+    if project_created:
+        dc.create_project("dev", "numbers")
+    with pytest.raises(DatasetNotFoundError) as excinfo:
+        with patch.object(AbstractMetastore, "is_local_dataset", return_value=True):
+            dc.read_dataset("dev.numbers.fibonacci")
+    assert str(excinfo.value) == (
+        "Dataset fibonacci not found in namespace dev and project numbers"
+    )
 
 
 @pytest.mark.parametrize("use_settings", (True, False))
