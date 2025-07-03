@@ -236,6 +236,22 @@ def test_read_storage_dependencies(cloud_test_catalog, cloud_type):
     assert dependencies[0].name == dep_name
 
 
+def test_persist_after_mutate(test_session):
+    chain = (
+        dc.read_values(fib=[1, 1, 2, 3, 5, 8, 13, 21], session=test_session)
+        .map(mod3=lambda fib: fib % 3, output=int)
+        .group_by(
+            cnt=dc.func.count(),
+            partition_by="mod3",
+        )
+        .mutate(x=1)
+        .persist()
+    )
+
+    assert chain.count() == 3
+    assert set(chain.to_values("mod3")) == {0, 1, 2}
+
+
 def test_persist_not_affects_dependencies(tmp_dir, test_session):
     for i in range(4):
         (tmp_dir / f"file{i}.txt").write_text(f"file{i}")
