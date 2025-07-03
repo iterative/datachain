@@ -442,7 +442,7 @@ def test_move_dataset(
                 namespace=old_project.namespace.name,
                 project=old_project.name,
                 update=False,
-            )
+            ).save("wrong")
     else:
         dc.read_dataset(
             ds_name, namespace=old_project.namespace.name, project=old_project.name
