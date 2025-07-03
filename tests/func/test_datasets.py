@@ -464,6 +464,46 @@ def test_move_dataset(
         assert table_row_count(catalog.warehouse.db, new_table_name) == 3
 
 
+def test_move_dataset_then_save_into(test_session):
+    ds_name = "numbers"
+    old_namespace_name = old_project_name = "old"
+    new_namespace_name = new_project_name = "old"
+
+    # create 2 versions of dataset in old project
+    for _ in range(2):
+        (
+            dc.read_values(num=[1, 2, 3], session=test_session)
+            .settings(namespace=old_namespace_name, project=old_project_name)
+            .save(ds_name)
+        )
+
+    dc.move_dataset(
+        ds_name,
+        namespace=old_namespace_name,
+        project=old_project_name,
+        new_namespace=new_namespace_name,
+        new_project=new_project_name,
+        session=test_session,
+    )
+
+    (
+        dc.read_values(num=[1, 2, 3], session=test_session)
+        .settings(namespace=new_namespace_name, project=new_project_name)
+        .save(ds_name)
+    )
+
+    ds = dc.datasets(column="dataset", session=test_session)
+    datasets = [
+        d
+        for d in ds.to_values("dataset")
+        if d.name == ds_name
+        and d.project == new_project_name
+        and d.namespace == new_namespace_name
+    ]
+
+    assert len(datasets) == 3
+
+
 def test_move_dataset_wrong_old_project(test_session, project):
     ds_name = "numbers"
     dc.read_values(num=[1, 2, 3], session=test_session).save(ds_name)
