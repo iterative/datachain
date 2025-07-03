@@ -248,6 +248,9 @@ def test_delta_update_check_num_calls(test_session, tmp_dir, tmp_path, capsys):
 
 
 def test_delta_update_no_diff(test_session, tmp_dir, tmp_path):
+    catalog = test_session.catalog
+    default_namespace_name = catalog.metastore.default_namespace_name
+    default_project_name = catalog.metastore.default_project_name
     ds_name = "delta_ds"
     path = tmp_dir.as_uri()
     tmp_dir = tmp_dir / "images"
@@ -296,7 +299,10 @@ def test_delta_update_no_diff(test_session, tmp_dir, tmp_path):
     with pytest.raises(DatasetNotFoundError) as exc_info:
         dc.read_dataset(ds_name, version="1.0.1")
 
-    assert str(exc_info.value) == f"Dataset {ds_name} version 1.0.1 not found"
+    assert str(exc_info.value) == (
+        f"Dataset {ds_name} version 1.0.1 not found in namespace "
+        f"{default_namespace_name} and project {default_project_name}"
+    )
 
 
 @pytest.fixture

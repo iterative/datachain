@@ -1081,9 +1081,18 @@ class Catalog:
     ) -> DatasetRecord:
         from datachain.lib.listing import is_listing_dataset
 
+        project = project or self.metastore.default_project
+
         if is_listing_dataset(name):
             project = self.metastore.listing_project
-        return self.metastore.get_dataset(name, project.id if project else None)
+
+        try:
+            return self.metastore.get_dataset(name, project.id if project else None)
+        except DatasetNotFoundError:
+            raise DatasetNotFoundError(
+                f"Dataset {name} not found in namespace {project.namespace.name}"
+                f" and project {project.name}"
+            ) from None
 
     def get_dataset_with_remote_fallback(
         self,
@@ -1107,7 +1116,7 @@ class Catalog:
             raise DatasetNotFoundError(
                 f"Dataset {name}"
                 + (f" version {version} " if version else " ")
-                + "not found"
+                + f"not found in namespace {namespace_name} and project {project_name}"
             )
 
         if pull_dataset:
