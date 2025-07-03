@@ -406,6 +406,7 @@ def test_move_dataset(
     old_project_name,
     new_namespace_name,
     new_project_name,
+    mock_is_local_dataset,
 ):
     catalog = test_session.catalog
     ds_name = "numbers"
@@ -421,7 +422,9 @@ def test_move_dataset(
             .save(ds_name)
         )
 
-    dataset = catalog.get_dataset(ds_name, old_project)
+    dataset = dc.read_dataset(
+        ds_name, namespace=old_project.namespace.name, project=old_project.name
+    ).dataset
 
     dc.move_dataset(
         ds_name,
@@ -434,11 +437,20 @@ def test_move_dataset(
 
     if new_project != old_project:
         with pytest.raises(DatasetNotFoundError):
-            catalog.get_dataset(ds_name, old_project)
+            dc.read_dataset(
+                ds_name,
+                namespace=old_project.namespace.name,
+                project=old_project.name,
+                update=False,
+            )
     else:
-        catalog.get_dataset(ds_name, old_project)
+        dc.read_dataset(
+            ds_name, namespace=old_project.namespace.name, project=old_project.name
+        )
 
-    dataset_updated = catalog.get_dataset(ds_name, new_project)
+    dataset_updated = dc.read_dataset(
+        ds_name, namespace=new_project.namespace.name, project=new_project.name
+    ).dataset
 
     # check if dataset tables are renamed correctly as well
     for version in [v.version for v in dataset.versions]:
