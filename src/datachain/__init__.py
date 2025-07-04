@@ -20,6 +20,9 @@ from datachain.lib.dc import (
 )
 from datachain.lib.file import (
     ArrowRow,
+    Audio,
+    AudioFile,
+    AudioFragment,
     File,
     FileError,
     Image,
@@ -42,6 +45,9 @@ __all__ = [
     "AbstractUDF",
     "Aggregator",
     "ArrowRow",
+    "Audio",
+    "AudioFile",
+    "AudioFragment",
     "C",
     "Column",
     "DataChain",
