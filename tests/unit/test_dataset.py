@@ -178,5 +178,5 @@ def test_parse_dataset_name(full_name, namespace, project, name):
 
 
 def test_parse_dataset_name_empty_name():
-    with pytest.raises(ValueError):
+    with pytest.raises(InvalidDatasetNameError):
         assert parse_dataset_name(None)

@@ -1,16 +1,12 @@
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Optional, Union, get_origin, get_type_hints
 
-from datachain.dataset import parse_dataset_name
 from datachain.error import (
     DatasetNotFoundError,
     DatasetVersionNotFoundError,
     ProjectNotFoundError,
 )
 from datachain.lib.dataset_info import DatasetInfo
-from datachain.lib.file import (
-    File,
-)
 from datachain.lib.projects import get as get_project
 from datachain.lib.settings import Settings
 from datachain.lib.signal_schema import SignalSchema
@@ -35,7 +31,6 @@ def read_dataset(
     version: Optional[Union[str, int]] = None,
     session: Optional[Session] = None,
     settings: Optional[dict] = None,
-    fallback_to_studio: bool = True,
     delta: Optional[bool] = False,
     delta_on: Optional[Union[str, Sequence[str]]] = (
         "file.path",
@@ -45,6 +40,7 @@ def read_dataset(
     delta_result_on: Optional[Union[str, Sequence[str]]] = None,
     delta_compare: Optional[Union[str, Sequence[str]]] = None,
     delta_retry: Optional[Union[bool, str]] = None,
+    update: bool = False,
 ) -> "DataChain":
     """Get data from a saved Dataset. It returns the chain itself.
     If dataset or version is not found locally, it will try to pull it from Studio.
@@ -56,11 +52,12 @@ def read_dataset(
             set; otherwise, default values will be applied.
         namespace : optional name of namespace in which dataset to read is created
         project : optional name of project in which dataset to read is created
-        version : dataset version
+        version : dataset version. Supports:
+            - Exact version strings: "1.2.3"
+            - Legacy integer versions: 1, 2, 3 (finds latest major version)
+            - Version specifiers (PEP 440): ">=1.0.0,<2.0.0", "~=1.4.2", "==1.2.*", etc.
         session : Session to use for the chain.
         settings : Settings to use for the chain.
-        fallback_to_studio : Try to pull dataset from Studio if not found locally.
-            Default is True.
         delta: If True, only process new or changed files instead of reprocessing
             everything. This saves time by skipping files that were already processed in
             previous versions. The optimization is working when a new version of the
@@ -80,6 +77,10 @@ def read_dataset(
               (error mode)
             - True: Reprocess records missing from the result dataset (missing mode)
             - None: No retry processing (default)
+        update: If True always checks for newer versions available on Studio, even if
+            some version of the dataset exists locally already. If False (default), it
+            will only fetch the dataset from Studio if it is not found locally.
+
 
     Example:
         ```py
@@ -93,11 +94,22 @@ def read_dataset(
         ```
 
         ```py
-        chain = dc.read_dataset("my_cats", fallback_to_studio=False)
+        chain = dc.read_dataset("my_cats", version="1.0.0")
         ```
 
         ```py
-        chain = dc.read_dataset("my_cats", version="1.0.0")
+        # Using version specifiers (PEP 440)
+        chain = dc.read_dataset("my_cats", version=">=1.0.0,<2.0.0")
+        ```
+
+        ```py
+        # Legacy integer version support (finds latest in major version)
+        chain = dc.read_dataset("my_cats", version=1)  # Latest 1.x.x version
+        ```
+
+        ```py
+        # Always check for newer versions matching a version specifier from Studio
+        chain = dc.read_dataset("my_cats", version=">=1.0.0", update=True)
         ```
 
         ```py
@@ -114,7 +126,6 @@ def read_dataset(
             version="1.0.0",
             session=session,
             settings=settings,
-            fallback_to_studio=True,
         )
         ```
     """
@@ -122,41 +133,49 @@ def read_dataset(
 
     from .datachain import DataChain
 
+    telemetry.send_event_once("class", "datachain_init", name=name, version=version)
+
     session = Session.get(session)
     catalog = session.catalog
 
-    namespace_name, project_name, name = parse_dataset_name(name)
-    namespace_name = (
-        namespace_name or namespace or catalog.metastore.default_namespace_name
+    namespace_name, project_name, name = catalog.get_full_dataset_name(
+        name,
+        project_name=project,
+        namespace_name=namespace,
     )
-    project_name = project_name or project or catalog.metastore.default_project_name
 
     if version is not None:
-        try:
-            # for backward compatibility we still allow users to put version as integer
-            # in which case we are trying to find latest version where major part is
-            # equal to that input version. For example if user sets version=2, we could
-            # continue with something like 2.4.3 (assuming 2.4.3 is the biggest among
-            # all 2.* dataset versions). If dataset doesn't have any versions where
-            # major part is equal to that input, exception is thrown.
-            major = int(version)
-            try:
-                ds_project = get_project(project_name, namespace_name, session=session)
-            except ProjectNotFoundError:
-                raise DatasetNotFoundError(
-                    f"Dataset {name} not found in namespace {namespace_name} and",
-                    f" project {project_name}",
-                ) from None
+        dataset = session.catalog.get_dataset_with_remote_fallback(
+            name, namespace_name, project_name, update=update
+        )
 
-            dataset = session.catalog.get_dataset(name, ds_project)
-            latest_major = dataset.latest_major_version(major)
-            if not latest_major:
+        # Convert legacy integer versions to version specifiers
+        # For backward compatibility we still allow users to put version as integer
+        # in which case we convert it to a version specifier that finds the latest
+        # version where major part is equal to that input version.
+        # For example if user sets version=2, we convert it to ">=2.0.0,<3.0.0"
+        # which will find something like 2.4.3 (assuming 2.4.3 is the biggest among
+        # all 2.* dataset versions)
+        if isinstance(version, int):
+            version_spec = f">={version}.0.0,<{version + 1}.0.0"
+        else:
+            version_spec = str(version)
+
+        from packaging.specifiers import InvalidSpecifier, SpecifierSet
+
+        try:
+            # Try to parse as version specifier
+            SpecifierSet(version_spec)
+            # If it's a valid specifier set, find the latest compatible version
+            latest_compatible = dataset.latest_compatible_version(version_spec)
+            if not latest_compatible:
                 raise DatasetVersionNotFoundError(
-                    f"Dataset {name} does not have version {version}"
+                    f"No dataset {name} version matching specifier {version_spec}"
                 )
-            version = latest_major
-        except ValueError:
-            # version is in new semver string format, continuing as normal
+            version = latest_compatible
+        except InvalidSpecifier:
+            # If not a valid specifier, treat as exact version string
+            # This handles cases like "1.2.3" which are exact versions, not specifiers
             pass
 
     if settings:
@@ -170,11 +189,8 @@ def read_dataset(
         namespace_name=namespace_name,
         version=version,  #  type: ignore[arg-type]
         session=session,
-        indexing_column_types=File._datachain_column_types,
-        fallback_to_studio=fallback_to_studio,
     )
 
-    telemetry.send_event_once("class", "datachain_init", name=name, version=version)
     signals_schema = SignalSchema({"sys": Sys})
     if query.feature_schema:
         signals_schema |= SignalSchema.deserialize(query.feature_schema)
@@ -320,11 +336,11 @@ def delete_dataset(
     session = Session.get(session, in_memory=in_memory)
     catalog = session.catalog
 
-    namespace_name, project_name, name = parse_dataset_name(name)
-    namespace_name = (
-        namespace_name or namespace or catalog.metastore.default_namespace_name
+    namespace_name, project_name, name = catalog.get_full_dataset_name(
+        name,
+        project_name=project,
+        namespace_name=namespace,
     )
-    project_name = project_name or project or catalog.metastore.default_project_name
 
     if not catalog.metastore.is_local_dataset(namespace_name) and studio:
         return remove_studio_dataset(

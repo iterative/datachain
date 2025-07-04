@@ -468,8 +468,12 @@ class SQLiteMetastore(AbstractDBMetastore):
         be created implicitly though, to keep the same fully qualified name with
         Studio dataset.
         """
-        system_namespace = self.create_namespace(Namespace.system(), "System namespace")
-        self.create_project(system_namespace.name, Project.listing(), "Listing project")
+        system_namespace = self.create_namespace(
+            Namespace.system(), "System namespace", validate=False
+        )
+        self.create_project(
+            system_namespace.name, Project.listing(), "Listing project", validate=False
+        )
 
     def _check_schema_version(self) -> None:
         """
@@ -770,7 +774,15 @@ class SQLiteWarehouse(AbstractWarehouse):
         query: Select,
         progress_cb: Optional[Callable[[int], None]] = None,
     ) -> None:
-        if len(query._group_by_clause) > 0:
+        col_id = (
+            query.selected_columns.sys__id
+            if "sys__id" in query.selected_columns
+            else None
+        )
+
+        # If there is no sys__id column, we cannot copy the table in batches,
+        # and we need to copy all rows at once. Same if there is a group by clause.
+        if col_id is None or len(query._group_by_clause) > 0:
             select_q = query.with_only_columns(
                 *[c for c in query.selected_columns if c.name != "sys__id"]
             )
@@ -778,12 +790,7 @@ class SQLiteWarehouse(AbstractWarehouse):
             self.db.execute(q)
             return
 
-        if "sys__id" in query.selected_columns:
-            col_id = query.selected_columns.sys__id
-        else:
-            col_id = sqlalchemy.column("sys__id")
         select_ids = query.with_only_columns(col_id)
-
         ids = self.db.execute(select_ids).fetchall()
 
         select_q = (

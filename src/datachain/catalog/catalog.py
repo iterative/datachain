@@ -49,6 +49,7 @@ from datachain.error import (
     DatasetInvalidVersionError,
     DatasetNotFoundError,
     DatasetVersionNotFoundError,
+    NamespaceNotFoundError,
     ProjectNotFoundError,
     QueryScriptCancelError,
     QueryScriptRunError,
@@ -1059,14 +1060,56 @@ class Catalog:
 
         return self.get_dataset(name, project)
 
+    def get_full_dataset_name(
+        self,
+        name: str,
+        project_name: Optional[str] = None,
+        namespace_name: Optional[str] = None,
+    ) -> tuple[str, str, str]:
+        """
+        Returns dataset name together with separated namespace and project name.
+        It takes into account all the ways namespace and project can be added.
+        """
+        parsed_namespace_name, parsed_project_name, name = parse_dataset_name(name)
+
+        namespace_env = os.environ.get("DATACHAIN_NAMESPACE")
+        project_env = os.environ.get("DATACHAIN_PROJECT")
+        if project_env and len(project_env.split(".")) == 2:
+            # we allow setting both namespace and project in DATACHAIN_PROJECT
+            namespace_env, project_env = project_env.split(".")
+
+        namespace_name = (
+            parsed_namespace_name
+            or namespace_name
+            or namespace_env
+            or self.metastore.default_namespace_name
+        )
+        project_name = (
+            parsed_project_name
+            or project_name
+            or project_env
+            or self.metastore.default_project_name
+        )
+
+        return namespace_name, project_name, name
+
     def get_dataset(
         self, name: str, project: Optional[Project] = None
     ) -> DatasetRecord:
         from datachain.lib.listing import is_listing_dataset
 
+        project = project or self.metastore.default_project
+
         if is_listing_dataset(name):
             project = self.metastore.listing_project
-        return self.metastore.get_dataset(name, project.id if project else None)
+
+        try:
+            return self.metastore.get_dataset(name, project.id if project else None)
+        except DatasetNotFoundError:
+            raise DatasetNotFoundError(
+                f"Dataset {name} not found in namespace {project.namespace.name}"
+                f" and project {project.name}"
+            ) from None
 
     def get_dataset_with_remote_fallback(
         self,
@@ -1074,21 +1117,26 @@ class Catalog:
         namespace_name: str,
         project_name: str,
         version: Optional[str] = None,
+        pull_dataset: bool = False,
+        update: bool = False,
     ) -> DatasetRecord:
-        try:
-            project = self.metastore.get_project(project_name, namespace_name)
-            ds = self.get_dataset(name, project)
-            if version and not ds.has_version(version):
-                raise DatasetVersionNotFoundError(
-                    f"Dataset {name} does not have version {version}"
-                )
-            return ds
+        if self.metastore.is_local_dataset(namespace_name) or not update:
+            try:
+                project = self.metastore.get_project(project_name, namespace_name)
+                ds = self.get_dataset(name, project)
+                if not version or ds.has_version(version):
+                    return ds
+            except (NamespaceNotFoundError, ProjectNotFoundError, DatasetNotFoundError):
+                pass
 
-        except (
-            ProjectNotFoundError,
-            DatasetNotFoundError,
-            DatasetVersionNotFoundError,
-        ):
+        if self.metastore.is_local_dataset(namespace_name):
+            raise DatasetNotFoundError(
+                f"Dataset {name}"
+                + (f" version {version} " if version else " ")
+                + f"not found in namespace {namespace_name} and project {project_name}"
+            )
+
+        if pull_dataset:
             print("Dataset not found in local catalog, trying to get from studio")
             remote_ds_uri = create_dataset_uri(
                 name, namespace_name, project_name, version
@@ -1102,6 +1150,8 @@ class Catalog:
             return self.get_dataset(
                 name, self.metastore.get_project(project_name, namespace_name)
             )
+
+        return self.get_remote_dataset(namespace_name, project_name, name)
 
     def get_dataset_with_version_uuid(self, uuid: str) -> DatasetRecord:
         """Returns dataset that contains version with specific uuid"""
@@ -1119,6 +1169,10 @@ class Catalog:
 
         info_response = studio_client.dataset_info(namespace, project, name)
         if not info_response.ok:
+            if info_response.status == 404:
+                raise DatasetNotFoundError(
+                    f"Dataset {namespace}.{project}.{name} not found"
+                )
             raise DataChainError(info_response.message)
 
         dataset_info = info_response.data

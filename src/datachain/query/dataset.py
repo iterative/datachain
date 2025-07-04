@@ -11,6 +11,7 @@ from collections.abc import Generator, Iterable, Iterator, Sequence
 from copy import copy
 from functools import wraps
 from secrets import token_hex
+from types import GeneratorType
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -560,8 +561,8 @@ class UDFStep(Step, ABC):
         """
         assert self.partition_by is not None
 
-        if isinstance(self.partition_by, Sequence):
-            list_partition_by = self.partition_by
+        if isinstance(self.partition_by, (list, tuple, GeneratorType)):
+            list_partition_by = list(self.partition_by)
         else:
             list_partition_by = [self.partition_by]
 
@@ -578,7 +579,10 @@ class UDFStep(Step, ABC):
             f.dense_rank().over(order_by=partition_by).label(PARTITION_COLUMN_ID),
         ]
         self.catalog.warehouse.db.execute(
-            tbl.insert().from_select(cols, query.with_only_columns(*cols))
+            tbl.insert().from_select(
+                cols,
+                query.offset(None).limit(None).with_only_columns(*cols),
+            )
         )
 
         return tbl
@@ -604,13 +608,10 @@ class UDFStep(Step, ABC):
         if self.partition_by is not None:
             partition_tbl = self.create_partitions_table(query)
             temp_tables.append(partition_tbl.name)
-
-            subq = query.subquery()
-            query = (
-                sqlalchemy.select(*subq.c)
-                .outerjoin(partition_tbl, partition_tbl.c.sys__id == subq.c.sys__id)
-                .add_columns(*partition_columns())
-            )
+            query = query.outerjoin(
+                partition_tbl,
+                partition_tbl.c.sys__id == query.selected_columns.sys__id,
+            ).add_columns(*partition_columns())
 
         query, tables = self.process_input_query(query)
         temp_tables.extend(t.name for t in tables)
@@ -1102,13 +1103,9 @@ class DatasetQuery:
         namespace_name: Optional[str] = None,
         catalog: Optional["Catalog"] = None,
         session: Optional[Session] = None,
-        indexing_column_types: Optional[dict[str, Any]] = None,
         in_memory: bool = False,
-        fallback_to_studio: bool = True,
         update: bool = False,
     ) -> None:
-        from datachain.remote.studio import is_token_set
-
         self.session = Session.get(session, catalog=catalog, in_memory=in_memory)
         self.catalog = catalog or self.session.catalog
         self.steps: list[Step] = []
@@ -1140,18 +1137,16 @@ class DatasetQuery:
             # not setting query step yet as listing dataset might not exist at
             # this point
             self.list_ds_name = name
-        elif fallback_to_studio and is_token_set():
+        else:
             self._set_starting_step(
                 self.catalog.get_dataset_with_remote_fallback(
                     name,
                     namespace_name=namespace_name,
                     project_name=project_name,
                     version=version,
+                    pull_dataset=True,
                 )
             )
-        else:
-            project = self.catalog.metastore.get_project(project_name, namespace_name)
-            self._set_starting_step(self.catalog.get_dataset(name, project=project))
 
     def _set_starting_step(self, ds: "DatasetRecord") -> None:
         if not self.version:

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Callable, Optional, TypeVar, Union
 import datachain
 from datachain.dataset import DatasetDependency
 from datachain.error import DatasetNotFoundError
+from datachain.project import Project
 
 if TYPE_CHECKING:
     from typing_extensions import Concatenate, ParamSpec
@@ -50,15 +51,24 @@ def _append_steps(dc: "DataChain", other: "DataChain"):
 
 def _get_delta_chain(
     source_ds_name: str,
+    source_ds_project: Project,
     source_ds_version: str,
     source_ds_latest_version: str,
     on: Union[str, Sequence[str]],
     compare: Optional[Union[str, Sequence[str]]] = None,
 ) -> "DataChain":
     """Get delta chain for processing changes between versions."""
-    source_dc = datachain.read_dataset(source_ds_name, version=source_ds_version)
+    source_dc = datachain.read_dataset(
+        source_ds_name,
+        namespace=source_ds_project.namespace.name,
+        project=source_ds_project.name,
+        version=source_ds_version,
+    )
     source_dc_latest = datachain.read_dataset(
-        source_ds_name, version=source_ds_latest_version
+        source_ds_name,
+        namespace=source_ds_project.namespace.name,
+        project=source_ds_project.name,
+        version=source_ds_latest_version,
     )
 
     # Calculate diff between source versions
@@ -67,12 +77,15 @@ def _get_delta_chain(
 
 def _get_retry_chain(
     name: str,
+    project: Project,
     latest_version: str,
     source_ds_name: str,
-    source_ds_latest_version: str,
+    source_ds_project: Project,
+    source_ds_version: str,
     on: Union[str, Sequence[str]],
     right_on: Optional[Union[str, Sequence[str]]],
     delta_retry: Optional[Union[bool, str]],
+    diff_chain: "DataChain",
 ) -> Optional["DataChain"]:
     """Get retry chain for processing error records and missing records."""
     # Import here to avoid circular import
@@ -81,35 +94,49 @@ def _get_retry_chain(
     retry_chain = None
 
     # Read the latest version of the result dataset for retry logic
-    result_dataset = datachain.read_dataset(name, version=latest_version)
-    source_dc_latest = datachain.read_dataset(
-        source_ds_name, version=source_ds_latest_version
+    result_dataset = datachain.read_dataset(
+        name,
+        namespace=project.namespace.name,
+        project=project.name,
+        version=latest_version,
+    )
+    source_dc = datachain.read_dataset(
+        source_ds_name,
+        namespace=source_ds_project.namespace.name,
+        project=source_ds_project.name,
+        version=source_ds_version,
     )
 
     # Handle error records if delta_retry is a string (column name)
     if isinstance(delta_retry, str):
         error_records = result_dataset.filter(C(delta_retry) != "")
-        error_source_records = source_dc_latest.merge(
+        error_source_records = source_dc.merge(
             error_records, on=on, right_on=right_on, inner=True
-        ).select(*list(source_dc_latest.signals_schema.values))
+        ).select(*list(source_dc.signals_schema.values))
         retry_chain = error_source_records
 
     # Handle missing records if delta_retry is True
     elif delta_retry is True:
-        missing_records = source_dc_latest.subtract(
-            result_dataset, on=on, right_on=right_on
-        )
+        missing_records = source_dc.subtract(result_dataset, on=on, right_on=right_on)
         retry_chain = missing_records
 
-    return retry_chain
+    # Subtract also diff chain since some items might be picked
+    # up by `delta=True` itself (e.g. records got modified AND are missing in the
+    # result dataset atm)
+    return retry_chain.subtract(diff_chain, on=on) if retry_chain else None
 
 
 def _get_source_info(
     name: str,
+    project: Project,
     latest_version: str,
     catalog,
 ) -> tuple[
-    Optional[str], Optional[str], Optional[str], Optional[list[DatasetDependency]]
+    Optional[str],
+    Optional[Project],
+    Optional[str],
+    Optional[str],
+    Optional[list[DatasetDependency]],
 ]:
     """Get source dataset information and dependencies.
 
@@ -118,23 +145,34 @@ def _get_source_info(
         Returns (None, None, None, None) if source dataset was removed.
     """
     dependencies = catalog.get_dataset_dependencies(
-        name, latest_version, indirect=False
+        name, latest_version, project=project, indirect=False
     )
 
     dep = dependencies[0]
     if not dep:
         # Starting dataset was removed, back off to normal dataset creation
-        return None, None, None, None
+        return None, None, None, None, None
 
+    source_ds_project = catalog.metastore.get_project(dep.project, dep.namespace)
     source_ds_name = dep.name
     source_ds_version = dep.version
-    source_ds_latest_version = catalog.get_dataset(source_ds_name).latest_version
+    source_ds_latest_version = catalog.get_dataset(
+        source_ds_name, project=source_ds_project
+    ).latest_version
 
-    return source_ds_name, source_ds_version, source_ds_latest_version, dependencies
+    return (
+        source_ds_name,
+        source_ds_project,
+        source_ds_version,
+        source_ds_latest_version,
+        dependencies,
+    )
 
 
 def delta_retry_update(
     dc: "DataChain",
+    namespace_name: str,
+    project_name: str,
     name: str,
     on: Union[str, Sequence[str]],
     right_on: Optional[Union[str, Sequence[str]]] = None,
@@ -173,11 +211,12 @@ def delta_retry_update(
     """
 
     catalog = dc.session.catalog
+    project = catalog.metastore.get_project(project_name, namespace_name)
     dc._query.apply_listing_pre_step()
 
     # Check if dataset exists
     try:
-        dataset = catalog.get_dataset(name)
+        dataset = catalog.get_dataset(name, project=project)
         latest_version = dataset.latest_version
     except DatasetNotFoundError:
         # First creation of result dataset
@@ -189,19 +228,29 @@ def delta_retry_update(
     retry_chain = None
     processing_chain = None
 
-    source_ds_name, source_ds_version, source_ds_latest_version, dependencies = (
-        _get_source_info(name, latest_version, catalog)
-    )
+    (
+        source_ds_name,
+        source_ds_project,
+        source_ds_version,
+        source_ds_latest_version,
+        dependencies,
+    ) = _get_source_info(name, project, latest_version, catalog)
 
     # If source_ds_name is None, starting dataset was removed
     if source_ds_name is None:
         return None, None, True
 
+    assert source_ds_project
     assert source_ds_version
     assert source_ds_latest_version
 
     diff_chain = _get_delta_chain(
-        source_ds_name, source_ds_version, source_ds_latest_version, on, compare
+        source_ds_name,
+        source_ds_project,
+        source_ds_version,
+        source_ds_latest_version,
+        on,
+        compare,
     )
 
     # Filter out removed dep
@@ -215,12 +264,15 @@ def delta_retry_update(
     if delta_retry:
         retry_chain = _get_retry_chain(
             name,
+            project,
             latest_version,
             source_ds_name,
-            source_ds_latest_version,
+            source_ds_project,
+            source_ds_version,
             on,
             right_on,
             delta_retry,
+            diff_chain,
         )
 
     # Combine delta and retry chains
@@ -236,7 +288,12 @@ def delta_retry_update(
     if processing_chain is None or (processing_chain and processing_chain.empty):
         return None, None, False
 
-    latest_dataset = datachain.read_dataset(name, version=latest_version)
+    latest_dataset = datachain.read_dataset(
+        name,
+        namespace=project.namespace.name,
+        project=project.name,
+        version=latest_version,
+    )
     compared_chain = latest_dataset.diff(
         processing_chain,
         on=right_on or on,

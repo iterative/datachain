@@ -6,7 +6,7 @@ from PIL import Image
 
 import datachain as dc
 from datachain import func
-from datachain.error import DatasetVersionNotFoundError
+from datachain.error import DatasetNotFoundError
 from datachain.lib.dc import C
 from datachain.lib.file import File, ImageFile
 
@@ -14,15 +14,26 @@ from datachain.lib.file import File, ImageFile
 def _get_dependencies(catalog, name, version) -> list[tuple[str, str]]:
     return sorted(
         [
-            (d.name, d.version)
+            (f"{d.namespace}.{d.project}.{d.name}", d.version)
             for d in catalog.get_dataset_dependencies(name, version, indirect=False)
         ]
     )
 
 
-def test_delta_update_from_dataset(test_session, tmp_dir, tmp_path):
+@pytest.mark.parametrize("project", ("global.dev", ""))
+def test_delta_update_from_dataset(test_session, tmp_dir, tmp_path, project):
     catalog = test_session.catalog
-    starting_ds_name = "starting_ds"
+    default_namespace_name = catalog.metastore.default_namespace_name
+    default_project_name = catalog.metastore.default_project_name
+
+    if project:
+        starting_ds_name = f"{project}.starting_ds"
+        dependency_ds_name = starting_ds_name
+    else:
+        starting_ds_name = "starting_ds"
+        dependency_ds_name = (
+            f"{default_namespace_name}.{default_project_name}.{starting_ds_name}"
+        )
     ds_name = "delta_ds"
 
     images = [
@@ -55,12 +66,16 @@ def test_delta_update_from_dataset(test_session, tmp_dir, tmp_path):
     create_image_dataset(starting_ds_name, images[:2])
     # first version of delta dataset
     create_delta_dataset(ds_name)
-    assert _get_dependencies(catalog, ds_name, "1.0.0") == [(starting_ds_name, "1.0.0")]
+    assert _get_dependencies(catalog, ds_name, "1.0.0") == [
+        (dependency_ds_name, "1.0.0")
+    ]
     # second version of starting dataset
     create_image_dataset(starting_ds_name, images[2:])
     # second version of delta dataset
     create_delta_dataset(ds_name)
-    assert _get_dependencies(catalog, ds_name, "1.0.1") == [(starting_ds_name, "1.0.1")]
+    assert _get_dependencies(catalog, ds_name, "1.0.1") == [
+        (dependency_ds_name, "1.0.1")
+    ]
 
     assert (dc.read_dataset(ds_name, version="1.0.0").order_by("file.path")).to_values(
         "file.path"
@@ -233,6 +248,9 @@ def test_delta_update_check_num_calls(test_session, tmp_dir, tmp_path, capsys):
 
 
 def test_delta_update_no_diff(test_session, tmp_dir, tmp_path):
+    catalog = test_session.catalog
+    default_namespace_name = catalog.metastore.default_namespace_name
+    default_project_name = catalog.metastore.default_project_name
     ds_name = "delta_ds"
     path = tmp_dir.as_uri()
     tmp_dir = tmp_dir / "images"
@@ -278,10 +296,13 @@ def test_delta_update_no_diff(test_session, tmp_dir, tmp_path):
         "images/img9.jpg",
     ]
 
-    with pytest.raises(DatasetVersionNotFoundError) as exc_info:
+    with pytest.raises(DatasetNotFoundError) as exc_info:
         dc.read_dataset(ds_name, version="1.0.1")
 
-    assert str(exc_info.value) == f"Dataset {ds_name} does not have version 1.0.1"
+    assert str(exc_info.value) == (
+        f"Dataset {ds_name} version 1.0.1 not found in namespace "
+        f"{default_namespace_name} and project {default_project_name}"
+    )
 
 
 @pytest.fixture
