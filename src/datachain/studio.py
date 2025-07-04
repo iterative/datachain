@@ -348,7 +348,6 @@ def create_job(
         raise DataChainError("Failed to create job")
 
     job_id = response.data.get("job", {}).get("id")
-    
 
     if cluster_name := response.data.get("job", {}).get("compute_cluster_name"):
         print(f"Job {job_id} created on cluster '{cluster_name}'")
