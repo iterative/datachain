@@ -43,7 +43,7 @@ logger = logging.getLogger("datachain")
 # how to create file path when exporting
 ExportPlacement = Literal["filename", "etag", "fullpath", "checksum"]
 
-FileType = Literal["binary", "text", "image", "video"]
+FileType = Literal["binary", "text", "image", "video", "audio"]
 EXPORT_FILES_MAX_THREADS = 5
 
 
@@ -309,6 +309,14 @@ class File(DataModel):
         if isinstance(self, VideoFile):
             return self
         file = VideoFile(**self.model_dump())
+        file._set_stream(self._catalog, caching_enabled=self._caching_enabled)
+        return file
+
+    def as_audio_file(self) -> "AudioFile":
+        """Convert the file to a `AudioFile` object."""
+        if isinstance(self, AudioFile):
+            return self
+        file = AudioFile(**self.model_dump())
         file._set_stream(self._catalog, caching_enabled=self._caching_enabled)
         return file
 
@@ -851,6 +859,223 @@ class VideoFile(File):
             start += duration
 
 
+class AudioFile(File):
+    """
+    A data model for handling audio files.
+
+    This model inherits from the `File` model and provides additional functionality
+    for reading audio files, extracting audio segments, and splitting audio into
+    fragments.
+    """
+
+    def get_info(self) -> "Audio":
+        """
+        Retrieves metadata and information about the audio file.
+
+        Returns:
+            Audio: A Model containing audio metadata such as duration,
+                   sample rate, channels, and codec details.
+        """
+        from .audio import audio_info
+
+        return audio_info(self)
+
+    def get_segment(
+        self, start: float = 0, duration: Optional[float] = None
+    ) -> "AudioSegment":
+        """
+        Returns an audio segment from the specified time range.
+
+        Args:
+            start (float): The start time in seconds (default: 0).
+            duration (float, optional): The duration in seconds. If None,
+                                       reads to the end of the audio.
+
+        Returns:
+            AudioSegment: A Model representing the audio segment.
+        """
+        if start < 0:
+            raise ValueError("start must be a non-negative float")
+
+        if duration is not None and duration <= 0:
+            raise ValueError("duration must be a positive float")
+
+        end = start + duration if duration is not None else None
+        return AudioSegment(audio=self, start=start, end=end)
+
+    def get_fragment(self, start: float, end: float) -> "AudioFragment":
+        """
+        Returns an audio fragment from the specified time range.
+
+        Args:
+            start (float): The start time of the fragment in seconds.
+            end (float): The end time of the fragment in seconds.
+
+        Returns:
+            AudioFragment: A Model representing the audio fragment.
+        """
+        if start < 0 or end < 0 or start >= end:
+            raise ValueError(f"Invalid time range: ({start:.3f}, {end:.3f})")
+
+        return AudioFragment(audio=self, start=start, end=end)
+
+    def get_fragments(
+        self,
+        duration: float,
+        start: float = 0,
+        end: Optional[float] = None,
+    ) -> "Iterator[AudioFragment]":
+        """
+        Splits the audio into multiple fragments of a specified duration.
+
+        Args:
+            duration (float): The duration of each audio fragment in seconds.
+            start (float): The starting time in seconds (default: 0).
+            end (float, optional): The ending time in seconds. If None, the entire
+                                   remaining audio is processed (default: None).
+
+        Returns:
+            Iterator[AudioFragment]: An iterator yielding audio fragments.
+
+        Note:
+            If end is not specified, number of samples will be taken from the
+            audio file, this means audio file needs to be downloaded.
+        """
+        if duration <= 0:
+            raise ValueError("duration must be a positive float")
+        if start < 0:
+            raise ValueError("start must be a non-negative float")
+
+        if end is None:
+            end = self.get_info().duration
+
+        if end < 0:
+            raise ValueError("end must be a non-negative float")
+        if start >= end:
+            raise ValueError("start must be less than end")
+
+        while start < end:
+            yield self.get_fragment(start, min(start + duration, end))
+            start += duration
+
+
+class AudioSegment(DataModel):
+    """
+    A data model for representing an audio segment.
+
+    This model represents a segment of audio with a start time and optional duration.
+    It allows access to audio segments and provides functionality for reading
+    audio data as numpy arrays or bytes.
+
+    Attributes:
+        audio (AudioFile): The audio file containing the audio segment.
+        start (float): The starting time of the audio segment in seconds.
+        end (float, optional): The ending time of the audio segment in seconds.
+                              If None, reads to the end of the audio.
+    """
+
+    audio: AudioFile
+    start: float
+    end: Optional[float]
+
+    def get_np(self) -> tuple["ndarray", int]:
+        """
+        Returns the audio segment as a NumPy array with sample rate.
+
+        Returns:
+            tuple[ndarray, int]: A tuple containing the audio data as a NumPy array
+                               and the sample rate.
+        """
+        from .audio import audio_segment_np
+
+        duration = None if self.end is None else self.end - self.start
+        return audio_segment_np(self.audio, self.start, duration)
+
+    def read_bytes(self, format: str = "wav") -> bytes:
+        """
+        Returns the audio segment as audio bytes.
+
+        Args:
+            format (str): The desired audio format (e.g., 'wav', 'mp3').
+                         Defaults to 'wav'.
+
+        Returns:
+            bytes: The encoded audio segment as bytes.
+        """
+        from .audio import audio_segment_bytes
+
+        duration = None if self.end is None else self.end - self.start
+        return audio_segment_bytes(self.audio, self.start, duration, format)
+
+
+class AudioFragment(DataModel):
+    """
+    A data model for representing an audio fragment.
+
+    This model represents a specific fragment within an audio file with defined
+    start and end times. It allows access to individual fragments and provides
+    functionality for reading and saving audio fragments as separate audio files.
+
+    Attributes:
+        audio (AudioFile): The audio file containing the audio fragment.
+        start (float): The starting time of the audio fragment in seconds.
+        end (float): The ending time of the audio fragment in seconds.
+    """
+
+    audio: AudioFile
+    start: float
+    end: float
+
+    def get_np(self) -> tuple["ndarray", int]:
+        """
+        Returns the audio fragment as a NumPy array with sample rate.
+
+        Returns:
+            tuple[ndarray, int]: A tuple containing the audio data as a NumPy array
+                               and the sample rate.
+        """
+        from .audio import audio_segment_np
+
+        duration = self.end - self.start
+        return audio_segment_np(self.audio, self.start, duration)
+
+    def read_bytes(self, format: str = "wav") -> bytes:
+        """
+        Returns the audio fragment as audio bytes.
+
+        Args:
+            format (str): The desired audio format (e.g., 'wav', 'mp3').
+                         Defaults to 'wav'.
+
+        Returns:
+            bytes: The encoded audio fragment as bytes.
+        """
+        from .audio import audio_segment_bytes
+
+        duration = self.end - self.start
+        return audio_segment_bytes(self.audio, self.start, duration, format)
+
+    def save(self, output: str, format: Optional[str] = None) -> "AudioFile":
+        """
+        Saves the audio fragment as a new audio file.
+
+        If `output` is a remote path, the audio file will be uploaded to remote storage.
+
+        Args:
+            output (str): The destination path, which can be a local file path
+                          or a remote URL.
+            format (str, optional): The output audio format (e.g., 'wav', 'mp3').
+                                    If None, the format is inferred from the
+                                    file extension.
+
+        Returns:
+            AudioFile: A Model representing the saved audio file.
+        """
+        from .audio import save_audio_fragment
+
+        return save_audio_fragment(self.audio, self.start, self.end, output, format)
+
+
 class VideoFrame(DataModel):
     """
     A data model for representing a video frame.
@@ -981,6 +1206,34 @@ class Video(DataModel):
     codec: str = Field(default="")
 
 
+class Audio(DataModel):
+    """
+    A data model representing metadata for an audio file.
+
+    Attributes:
+        sample_rate (int): The sample rate of the audio (samples per second).
+                          Defaults to -1 if unknown.
+        channels (int): The number of audio channels. Defaults to -1 if unknown.
+        duration (float): The total duration of the audio in seconds.
+                         Defaults to -1.0 if unknown.
+        samples (int): The total number of samples in the audio.
+                      Defaults to -1 if unknown.
+        format (str): The format of the audio file (e.g., 'wav', 'mp3').
+                     Defaults to an empty string.
+        codec (str): The codec used for encoding the audio. Defaults to an empty string.
+        bit_rate (int): The bit rate of the audio in bits per second.
+                       Defaults to -1 if unknown.
+    """
+
+    sample_rate: int = Field(default=-1)
+    channels: int = Field(default=-1)
+    duration: float = Field(default=-1.0)
+    samples: int = Field(default=-1)
+    format: str = Field(default="")
+    codec: str = Field(default="")
+    bit_rate: int = Field(default=-1)
+
+
 class ArrowRow(DataModel):
     """`DataModel` for reading row from Arrow-supported file."""
 
@@ -1018,5 +1271,7 @@ def get_file_type(type_: FileType = "binary") -> type[File]:
         file = ImageFile  # type: ignore[assignment]
     elif type_ == "video":
         file = VideoFile
+    elif type_ == "audio":
+        file = AudioFile
 
     return file
