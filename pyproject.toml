@@ -72,6 +72,9 @@ torch = [
   "torchvision",
   "transformers>=4.36.0"
 ]
+audio = [
+  "torchaudio"
+]
 remote = [
   "lz4",
   "requests>=2.22.0"
@@ -92,7 +95,7 @@ video = [
   "opencv-python"
 ]
 tests = [
-  "datachain[torch,remote,vector,hf,video]",
+  "datachain[torch,audio,remote,vector,hf,video]",
   "pytest>=8,<9",
   "pytest-sugar>=0.9.6",
   "pytest-cov>=4.1.0",
