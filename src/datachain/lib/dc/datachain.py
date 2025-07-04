@@ -21,6 +21,7 @@ from typing import (
 import orjson
 import sqlalchemy
 from pydantic import BaseModel
+from sqlalchemy.sql.elements import ColumnElement
 from tqdm import tqdm
 
 from datachain import semver
@@ -806,11 +807,35 @@ class DataChain:
             chain.save("new_dataset")
             ```
         """
+        # Convert string partition_by parameters to Column objects
+        processed_partition_by = partition_by
+        if partition_by is not None:
+            if isinstance(partition_by, (str, Function, ColumnElement)):
+                list_partition_by = [partition_by]
+            else:
+                list_partition_by = list(partition_by)
+
+            processed_partition_columns: list[ColumnElement] = []
+            for col in list_partition_by:
+                if isinstance(col, str):
+                    col_db_name = ColumnMeta.to_db_name(col)
+                    col_type = self.signals_schema.get_column_type(col_db_name)
+                    column = Column(col_db_name, python_to_sql(col_type))
+                    processed_partition_columns.append(column)
+                elif isinstance(col, Function):
+                    column = col.get_column(self.signals_schema)
+                    processed_partition_columns.append(column)
+                else:
+                    # Assume it's already a ColumnElement
+                    processed_partition_columns.append(col)
+
+            processed_partition_by = processed_partition_columns
+
         udf_obj = self._udf_to_obj(Aggregator, func, params, output, signal_map)
         return self._evolve(
             query=self._query.generate(
                 udf_obj.to_udf_wrapper(),
-                partition_by=partition_by,
+                partition_by=processed_partition_by,
                 **self._settings.to_dict(),
             ),
             signal_schema=udf_obj.output,

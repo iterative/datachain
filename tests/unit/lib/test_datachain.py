@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 import datachain as dc
 from datachain import Column
+from datachain.data_storage import AbstractMetastore
 from datachain.error import (
     DatasetInvalidVersionError,
     DatasetNotFoundError,
@@ -3428,6 +3429,29 @@ def test_save_to_non_default_namespace_and_project(
         dc.read_dataset(name="fibonacci")
 
 
+def test_dataset_not_found_in_default_project(test_session):
+    metastore = test_session.catalog.metastore
+    with pytest.raises(DatasetNotFoundError) as excinfo:
+        with patch.object(AbstractMetastore, "is_local_dataset", return_value=True):
+            dc.read_dataset("fibonacci")
+    assert str(excinfo.value) == (
+        f"Dataset fibonacci not found in namespace {metastore.default_namespace_name}"
+        f" and project {metastore.default_project_name}"
+    )
+
+
+@pytest.mark.parametrize("project_created", (True, False))
+def test_dataset_not_found_in_non_default_project(test_session, project_created):
+    if project_created:
+        dc.create_project("dev", "numbers")
+    with pytest.raises(DatasetNotFoundError) as excinfo:
+        with patch.object(AbstractMetastore, "is_local_dataset", return_value=True):
+            dc.read_dataset("dev.numbers.fibonacci")
+    assert str(excinfo.value) == (
+        "Dataset fibonacci not found in namespace dev and project numbers"
+    )
+
+
 @pytest.mark.parametrize("use_settings", (True, False))
 @pytest.mark.parametrize("project_created_upfront", (True, False))
 def test_save_specify_only_non_default_project(
@@ -3571,3 +3595,60 @@ def test_save_create_project_not_allowed(test_session, allow_create_project):
         dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save(
             "dev.numbers.fibonacci"
         )
+
+
+def test_agg_partition_by_string_notation(test_session):
+    """Test that agg method supports string notation for partition_by."""
+
+    class _ImageGroup(BaseModel):
+        name: str
+        size: int
+
+    def func(key, val) -> Iterator[tuple[File, _ImageGroup]]:
+        n = "-".join(key)
+        v = sum(val)
+        yield File(path=n), _ImageGroup(name=n, size=v)
+
+    keys = ["n1", "n2", "n1"]
+    values = [1, 5, 9]
+
+    # Test using string notation (NEW functionality)
+    ds = dc.read_values(key=keys, val=values, session=test_session).agg(
+        x=func,
+        partition_by="key",  # String notation instead of C("key")
+    )
+
+    assert ds.order_by("x_1.name").to_values("x_1.name") == ["n1-n1", "n2"]
+    assert ds.order_by("x_1.size").to_values("x_1.size") == [5, 10]
+
+
+def test_agg_partition_by_string_sequence(test_session):
+    """Test that agg method supports sequence of strings for partition_by."""
+
+    class _ImageGroup(BaseModel):
+        name: str
+        size: int
+
+    def func(key1, key2, val) -> Iterator[tuple[File, _ImageGroup]]:
+        n = f"{key1[0]}-{key2[0]}"
+        v = sum(val)
+        yield File(path=n), _ImageGroup(name=n, size=v)
+
+    key1_values = ["a", "a", "b"]
+    key2_values = ["x", "y", "x"]
+    values = [1, 5, 9]
+
+    # Test using sequence of strings (NEW functionality)
+    ds = dc.read_values(
+        key1=key1_values, key2=key2_values, val=values, session=test_session
+    ).agg(
+        x=func,
+        partition_by=["key1", "key2"],  # Sequence of strings
+    )
+
+    result_names = ds.order_by("x_1.name").to_values("x_1.name")
+    result_sizes = ds.order_by("x_1.size").to_values("x_1.size")
+
+    # Should have 3 partitions: (a,x), (a,y), (b,x)
+    assert len(result_names) == 3
+    assert len(result_sizes) == 3
