@@ -21,6 +21,7 @@ from typing import (
 import orjson
 import sqlalchemy
 from pydantic import BaseModel
+from sqlalchemy import ColumnElement
 from tqdm import tqdm
 
 from datachain import semver
@@ -813,7 +814,7 @@ class DataChain:
         # Convert string partition_by parameters to Column objects
         processed_partition_by = partition_by
         if partition_by is not None:
-            if isinstance(partition_by, (str, Function)):
+            if isinstance(partition_by, (str, Function, ColumnElement)):
                 list_partition_by = [partition_by]
             else:
                 list_partition_by = list(partition_by)
