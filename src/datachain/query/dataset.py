@@ -1142,6 +1142,7 @@ class DatasetQuery:
                     project_name=project_name,
                     version=version,
                     pull_dataset=True,
+                    update=update,
                 )
             )
 
