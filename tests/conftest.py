@@ -577,6 +577,12 @@ def mock_allowed_to_create_namespace(allow_create_namespace):
 
 
 @pytest.fixture
+def mock_is_local_dataset():
+    with patch.object(AbstractMetastore, "is_local_dataset", return_value=True):
+        yield
+
+
+@pytest.fixture
 def project(test_session):
     return dc.create_project("dev", "animals", "Animals project")
 

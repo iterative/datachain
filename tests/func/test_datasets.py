@@ -11,12 +11,13 @@ from datachain.dataset import DatasetDependencyType, DatasetStatus
 from datachain.error import (
     DatasetInvalidVersionError,
     DatasetNotFoundError,
+    ProjectNotFoundError,
 )
 from datachain.lib.file import File
 from datachain.lib.listing import parse_listing_uri
 from datachain.query.dataset import DatasetQuery
 from datachain.sql.types import Float32, Int, Int64
-from tests.utils import assert_row_names, dataset_dependency_asdict
+from tests.utils import assert_row_names, dataset_dependency_asdict, table_row_count
 
 FILE_SCHEMA = {
     f"file__{name}": _type if _type != Int else Int64
@@ -169,14 +170,6 @@ def test_get_dataset(cloud_test_catalog, dogs_dataset):
         catalog.get_dataset("wrong name", dogs_dataset.project)
 
 
-# Returns None if the table does not exist
-def get_table_row_count(db, table_name):
-    if not db.has_table(table_name):
-        return None
-    query = sa.select(sa.func.count()).select_from(sa.table(table_name))
-    return next(db.execute(query), (None,))[0]
-
-
 def test_create_dataset_from_sources(listed_bucket, cloud_test_catalog, project):
     dataset_name = uuid.uuid4().hex
     src_uri = cloud_test_catalog.src_uri
@@ -327,7 +320,7 @@ def test_remove_dataset(cloud_test_catalog, dogs_dataset):
         catalog.get_dataset(dogs_dataset.name, dogs_dataset.project)
 
     dataset_table_name = catalog.warehouse.dataset_table_name(dogs_dataset, "1.0.0")
-    assert get_table_row_count(catalog.warehouse.db, dataset_table_name) is None
+    assert table_row_count(catalog.warehouse.db, dataset_table_name) is None
 
     assert (
         catalog.metastore.get_direct_dataset_dependencies(dogs_dataset, "1.0.0") == []
@@ -391,12 +384,158 @@ def test_edit_dataset(cloud_test_catalog, dogs_dataset):
     old_dataset_table_name = catalog.warehouse.dataset_table_name(dogs_dataset, "1.0.0")
     new_dataset_table_name = catalog.warehouse.dataset_table_name(dataset, "1.0.0")
 
-    assert get_table_row_count(catalog.warehouse.db, old_dataset_table_name) is None
-    expected_table_row_count = get_table_row_count(
+    assert table_row_count(catalog.warehouse.db, old_dataset_table_name) is None
+    expected_table_row_count = table_row_count(
         catalog.warehouse.db, new_dataset_table_name
     )
     assert expected_table_row_count
     assert dataset.get_version("1.0.0").num_objects == expected_table_row_count
+
+
+@pytest.mark.parametrize(
+    "old_namespace_name,old_project_name,new_namespace_name,new_project_name",
+    [
+        ("old", "old", "new", "new"),
+        ("old", "old", "old", "new"),
+        ("old", "old", "old", "old"),
+    ],
+)
+def test_move_dataset(
+    test_session,
+    old_namespace_name,
+    old_project_name,
+    new_namespace_name,
+    new_project_name,
+    mock_is_local_dataset,
+):
+    catalog = test_session.catalog
+    ds_name = "numbers"
+
+    old_project = dc.create_project(old_namespace_name, old_project_name)
+    new_project = dc.create_project(new_namespace_name, new_project_name)
+
+    # create 2 versions of dataset in old project
+    for _ in range(2):
+        (
+            dc.read_values(num=[1, 2, 3], session=test_session)
+            .settings(namespace=old_project.namespace.name, project=old_project.name)
+            .save(ds_name)
+        )
+
+    dataset = dc.read_dataset(
+        ds_name, namespace=old_project.namespace.name, project=old_project.name
+    ).dataset
+
+    dc.move_dataset(
+        ds_name,
+        namespace=old_project.namespace.name,
+        project=old_project.name,
+        new_namespace=new_project.namespace.name,
+        new_project=new_project.name,
+        session=test_session,
+    )
+
+    if new_project != old_project:
+        with pytest.raises(DatasetNotFoundError):
+            dc.read_dataset(
+                ds_name,
+                namespace=old_project.namespace.name,
+                project=old_project.name,
+                update=False,
+            )
+    else:
+        dc.read_dataset(
+            ds_name, namespace=old_project.namespace.name, project=old_project.name
+        )
+
+    dataset_updated = dc.read_dataset(
+        ds_name, namespace=new_project.namespace.name, project=new_project.name
+    ).dataset
+
+    # check if dataset tables are renamed correctly as well
+    for version in [v.version for v in dataset.versions]:
+        old_table_name = catalog.warehouse.dataset_table_name(dataset, version)
+        new_table_name = catalog.warehouse.dataset_table_name(dataset_updated, version)
+        if old_project == new_project:
+            assert old_table_name == new_table_name
+        else:
+            assert table_row_count(catalog.warehouse.db, old_table_name) is None
+
+        assert table_row_count(catalog.warehouse.db, new_table_name) == 3
+
+
+def test_move_dataset_then_save_into(test_session):
+    ds_name = "numbers"
+    old_namespace_name = old_project_name = "old"
+    new_namespace_name = new_project_name = "old"
+
+    # create 2 versions of dataset in old project
+    for _ in range(2):
+        (
+            dc.read_values(num=[1, 2, 3], session=test_session)
+            .settings(namespace=old_namespace_name, project=old_project_name)
+            .save(ds_name)
+        )
+
+    dc.move_dataset(
+        ds_name,
+        namespace=old_namespace_name,
+        project=old_project_name,
+        new_namespace=new_namespace_name,
+        new_project=new_project_name,
+        session=test_session,
+    )
+
+    (
+        dc.read_values(num=[1, 2, 3], session=test_session)
+        .settings(namespace=new_namespace_name, project=new_project_name)
+        .save(ds_name)
+    )
+
+    ds = dc.datasets(column="dataset", session=test_session)
+    datasets = [
+        d
+        for d in ds.to_values("dataset")
+        if d.name == ds_name
+        and d.project == new_project_name
+        and d.namespace == new_namespace_name
+    ]
+
+    assert len(datasets) == 3
+
+
+def test_move_dataset_wrong_old_project(test_session, project):
+    ds_name = "numbers"
+    dc.read_values(num=[1, 2, 3], session=test_session).save(ds_name)
+
+    with pytest.raises(ProjectNotFoundError):
+        dc.move_dataset(
+            ds_name,
+            namespace="wrong",
+            project="wrong",
+            new_namespace=project.namespace.name,
+            new_project=project.name,
+            session=test_session,
+        )
+
+
+def test_move_dataset_wrong_new_project(test_session, project):
+    ds_name = "numbers"
+    (
+        dc.read_values(num=[1, 2, 3], session=test_session)
+        .settings(namespace=project.namespace.name, project=project.name)
+        .save(ds_name)
+    )
+
+    with pytest.raises(ProjectNotFoundError):
+        dc.move_dataset(
+            ds_name,
+            namespace=project.namespace.name,
+            project=project.name,
+            new_namespace="wrong",
+            new_project="wrong",
+            session=test_session,
+        )
 
 
 def test_edit_dataset_same_name(cloud_test_catalog, dogs_dataset):
@@ -414,12 +553,12 @@ def test_edit_dataset_same_name(cloud_test_catalog, dogs_dataset):
     old_dataset_table_name = catalog.warehouse.dataset_table_name(dogs_dataset, "1.0.0")
     new_dataset_table_name = catalog.warehouse.dataset_table_name(dataset, "1.0.0")
 
-    expected_table_row_count = get_table_row_count(
+    expected_table_row_count = table_row_count(
         catalog.warehouse.db, old_dataset_table_name
     )
     assert expected_table_row_count
     assert dataset.get_version("1.0.0").num_objects == expected_table_row_count
-    assert expected_table_row_count == get_table_row_count(
+    assert expected_table_row_count == table_row_count(
         catalog.warehouse.db, new_dataset_table_name
     )
 
