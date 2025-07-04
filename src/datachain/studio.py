@@ -348,7 +348,13 @@ def create_job(
         raise DataChainError("Failed to create job")
 
     job_id = response.data.get("job", {}).get("id")
-    print(f"Job {job_id} created")
+    
+
+    if cluster_name := response.data.get("job", {}).get("compute_cluster_name"):
+        print(f"Job {job_id} created on cluster '{cluster_name}'")
+    else:
+        print(f"Job {job_id} created on the default cluster")
+
     print("Open the job in Studio at", response.data.get("job", {}).get("url"))
     print("=" * 40)
 
