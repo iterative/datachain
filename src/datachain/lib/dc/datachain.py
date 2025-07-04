@@ -21,7 +21,7 @@ from typing import (
 import orjson
 import sqlalchemy
 from pydantic import BaseModel
-from sqlalchemy import ColumnElement
+from sqlalchemy.sql.elements import ColumnElement
 from tqdm import tqdm
 
 from datachain import semver
@@ -819,7 +819,7 @@ class DataChain:
             else:
                 list_partition_by = list(partition_by)
 
-            processed_partition_columns = []
+            processed_partition_columns: list[ColumnElement] = []
             for col in list_partition_by:
                 if isinstance(col, str):
                     col_db_name = ColumnMeta.to_db_name(col)
