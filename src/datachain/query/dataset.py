@@ -1243,7 +1243,11 @@ class DatasetQuery:
                 raise ValueError("chunk index must be between 0 and total")
 
             # Respect limit in chunks
-            query = query.chunk(index, total)
+            query.steps = self._chunk_limit(query.steps, index, total)
+
+            # Prepend the chunk filter to the step chain.
+            query = query.filter(C.sys__rand % total == index)
+            query.steps = query.steps[-1:] + query.steps[:-1]
 
         assert query.starting_step
         result = query.starting_step.apply()
