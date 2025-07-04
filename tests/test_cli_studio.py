@@ -408,7 +408,8 @@ def test_studio_run(capsys, mocker, tmp_dir):
 
     out = capsys.readouterr().out
     assert (
-        out.strip() == "Job 1 created on the default cluster\nOpen the job in Studio at https://example.com\n"
+        out.strip()
+        == "Job 1 created on the default cluster\nOpen the job in Studio at https://example.com\n"
         "========================================\n\n\n"
         ">>>> Dataset versions created during the job:\n"
         "    - dataset_name@v1.0.0"
@@ -494,7 +495,8 @@ def test_studio_run_non_zero_exit_code(
 
     out = capsys.readouterr().out
     assert (
-        out.strip() == "Job 1 created on the default cluster\nOpen the job in Studio at https://example.com\n"
+        out.strip()
+        == "Job 1 created on the default cluster\nOpen the job in Studio at https://example.com\n"
         "========================================\n"
         "Starting job...\n"
         "Processing data...\n"
