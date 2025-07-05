@@ -362,8 +362,16 @@ def test_read_dataset_remote_update_flag(
     assert dc.datasets().to_values("version") == ["1.0.0"]
     assert ds1.to_values("version")[0] == "1.0.0"
 
+    # Read without update and version returns a cached version
+    ds1 = dc.read_dataset(
+        f"{REMOTE_NAMESPACE_NAME}.{REMOTE_PROJECT_NAME}.dogs",
+        session=test_session,
+    )
+    assert dc.datasets().to_values("version") == ["1.0.0"]
+    assert ds1.to_values("version")[0] == "1.0.0"
+
     # Second read with update=True with the exact version
-    # returns the same
+    # returns the same dataset version
     ds2 = dc.read_dataset(
         f"{REMOTE_NAMESPACE_NAME}.{REMOTE_PROJECT_NAME}.dogs",
         version="1.0.0",
@@ -385,12 +393,49 @@ def test_read_dataset_remote_update_flag(
     assert dc.datasets().to_values("version") == ["1.0.0"]
     assert ds3.to_values("version")[0] == "1.0.0"
 
-    # Finally, read with update=False even with version specifier
-    # that allows for newer version still bring the same version
-    # as the one already downloaded
+    # Finally, read with update=True brings the latest version
     ds4 = dc.read_dataset(
         f"{REMOTE_NAMESPACE_NAME}.{REMOTE_PROJECT_NAME}.dogs",
         version=">=1.0.0",
+        update=True,
+        session=test_session,
+    )
+
+    assert ds4.to_values("version")[0] == "2.0.0"
+    assert dc.datasets().to_values("version") == ["1.0.0", "2.0.0"]
+
+
+@skip_if_not_sqlite
+def test_read_dataset_remote_update_flag_no_version(
+    studio_token,
+    test_session,
+    remote_dataset_multi_version,
+    mock_dataset_info_endpoint,
+    mock_export_endpoint_with_urls,
+    mock_export_status_completed,
+    mock_s3_parquet_download,
+    mock_dataset_rows_fetcher_status_check,
+    requests_mock,
+):
+    """Test read_dataset with update=True flag to force remote check."""
+
+    # Mock the Studio API responses
+    mock_dataset_info_endpoint(remote_dataset_multi_version)
+    mock_s3_parquet_download()
+
+    # First read - downloads version 1.0.0
+    ds1 = dc.read_dataset(
+        f"{REMOTE_NAMESPACE_NAME}.{REMOTE_PROJECT_NAME}.dogs",
+        version="1.0.0",
+        session=test_session,
+    )
+    assert dc.datasets().to_values("version") == ["1.0.0"]
+    assert ds1.to_values("version")[0] == "1.0.0"
+
+    # Read with update=True w/o version specifier also
+    # checks the most recent remote version and brings it
+    ds4 = dc.read_dataset(
+        f"{REMOTE_NAMESPACE_NAME}.{REMOTE_PROJECT_NAME}.dogs",
         update=True,
         session=test_session,
     )
