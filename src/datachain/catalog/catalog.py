@@ -1103,6 +1103,14 @@ class Catalog:
         pull_dataset: bool = False,
         update: bool = False,
     ) -> DatasetRecord:
+        # Intentionally ignore update flag is version is provided. Here only exact
+        # version can be provided and update then doesn't make sense.
+        # It corresponds to a query like this for example:
+        #
+        #    dc.read_dataset("some.remote.dataset", version="1.0.0", update=True)
+        if version:
+            update = False
+
         if self.metastore.is_local_dataset(namespace_name) or not update:
             try:
                 project = self.metastore.get_project(project_name, namespace_name)

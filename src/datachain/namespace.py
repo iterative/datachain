@@ -6,7 +6,7 @@ from typing import Any, Optional, TypeVar
 from datachain.error import InvalidNamespaceNameError
 
 N = TypeVar("N", bound="Namespace")
-NAMESPACE_NAME_RESERVED_CHARS = ["."]
+NAMESPACE_NAME_RESERVED_CHARS = [".", "@"]
 
 
 @dataclass(frozen=True)

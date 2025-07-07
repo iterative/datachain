@@ -82,7 +82,10 @@ if TYPE_CHECKING:
 INSERT_BATCH_SIZE = 10000
 
 PartitionByType = Union[
-    Function, ColumnElement, Sequence[Union[Function, ColumnElement]]
+    str,
+    Function,
+    ColumnElement,
+    Sequence[Union[str, Function, ColumnElement]],
 ]
 JoinPredicateType = Union[str, ColumnClause, ColumnElement]
 DatasetDependencyType = tuple["DatasetRecord", str]
@@ -1142,6 +1145,7 @@ class DatasetQuery:
                     project_name=project_name,
                     version=version,
                     pull_dataset=True,
+                    update=update,
                 )
             )
 

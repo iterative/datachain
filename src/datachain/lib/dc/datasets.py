@@ -189,6 +189,7 @@ def read_dataset(
         namespace_name=namespace_name,
         version=version,  #  type: ignore[arg-type]
         session=session,
+        update=update,
     )
 
     signals_schema = SignalSchema({"sys": Sys})
