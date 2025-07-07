@@ -393,70 +393,44 @@ def test_edit_dataset(cloud_test_catalog, dogs_dataset):
 
 
 @pytest.mark.parametrize(
-    "old_namespace_name,old_project_name,new_namespace_name,new_project_name",
+    "old_name,new_name",
     [
-        ("old", "old", "new", "new"),
-        ("old", "old", "old", "new"),
-        ("old", "old", "old", "old"),
+        ("old.old.numbers", "new.new.numbers"),
+        ("old.old.numbers", "new.new.numbers_new"),
+        ("old.old.numbers", "old.new.numbers"),
+        ("old.old.numbers", "old.old.numbers"),
+        ("numbers", "numbers2"),
+        ("numbers", "numbers"),
     ],
 )
 def test_move_dataset(
     test_session,
-    old_namespace_name,
-    old_project_name,
-    new_namespace_name,
-    new_project_name,
+    old_name,
+    new_name,
     mock_is_local_dataset,
 ):
     catalog = test_session.catalog
-    ds_name = "numbers"
-
-    old_project = dc.create_project(old_namespace_name, old_project_name)
-    new_project = dc.create_project(new_namespace_name, new_project_name)
 
     # create 2 versions of dataset in old project
     for _ in range(2):
-        (
-            dc.read_values(num=[1, 2, 3], session=test_session)
-            .settings(namespace=old_project.namespace.name, project=old_project.name)
-            .save(ds_name)
-        )
+        (dc.read_values(num=[1, 2, 3], session=test_session).save(old_name))
 
-    dataset = dc.read_dataset(
-        ds_name, namespace=old_project.namespace.name, project=old_project.name
-    ).dataset
+    dataset = dc.read_dataset(old_name).dataset
 
-    dc.move_dataset(
-        ds_name,
-        namespace=old_project.namespace.name,
-        project=old_project.name,
-        new_namespace=new_project.namespace.name,
-        new_project=new_project.name,
-        session=test_session,
-    )
+    dc.move_dataset(old_name, new_name, session=test_session)
 
-    if new_project != old_project:
+    if old_name != new_name:
+        # check that old dataset doesn't exist any more
         with pytest.raises(DatasetNotFoundError):
-            dc.read_dataset(
-                ds_name,
-                namespace=old_project.namespace.name,
-                project=old_project.name,
-                update=False,
-            ).save("wrong")
-    else:
-        dc.read_dataset(
-            ds_name, namespace=old_project.namespace.name, project=old_project.name
-        )
+            dc.read_dataset(old_name).save("wrong")
 
-    dataset_updated = dc.read_dataset(
-        ds_name, namespace=new_project.namespace.name, project=new_project.name
-    ).dataset
+    dataset_updated = dc.read_dataset(new_name).dataset
 
     # check if dataset tables are renamed correctly as well
     for version in [v.version for v in dataset.versions]:
         old_table_name = catalog.warehouse.dataset_table_name(dataset, version)
         new_table_name = catalog.warehouse.dataset_table_name(dataset_updated, version)
-        if old_project == new_project:
+        if old_name == new_name:
             assert old_table_name == new_table_name
         else:
             assert table_row_count(catalog.warehouse.db, old_table_name) is None
@@ -465,77 +439,51 @@ def test_move_dataset(
 
 
 def test_move_dataset_then_save_into(test_session):
-    ds_name = "numbers"
-    old_namespace_name = old_project_name = "old"
-    new_namespace_name = new_project_name = "old"
+    old_name = "old.old.numbers"
+    new_name = "new.new.numbers"
 
     # create 2 versions of dataset in old project
     for _ in range(2):
-        (
-            dc.read_values(num=[1, 2, 3], session=test_session)
-            .settings(namespace=old_namespace_name, project=old_project_name)
-            .save(ds_name)
-        )
+        dc.read_values(num=[1, 2, 3], session=test_session).save(old_name)
 
-    dc.move_dataset(
-        ds_name,
-        namespace=old_namespace_name,
-        project=old_project_name,
-        new_namespace=new_namespace_name,
-        new_project=new_project_name,
-        session=test_session,
-    )
-
-    (
-        dc.read_values(num=[1, 2, 3], session=test_session)
-        .settings(namespace=new_namespace_name, project=new_project_name)
-        .save(ds_name)
-    )
+    dc.move_dataset(old_name, new_name, session=test_session)
+    dc.read_values(num=[1, 2, 3], session=test_session).save(new_name)
 
     ds = dc.datasets(column="dataset", session=test_session)
     datasets = [
         d
         for d in ds.to_values("dataset")
-        if d.name == ds_name
-        and d.project == new_project_name
-        and d.namespace == new_namespace_name
+        if d.name == "numbers" and d.project == "new" and d.namespace == "new"
     ]
 
     assert len(datasets) == 3
 
 
 def test_move_dataset_wrong_old_project(test_session, project):
-    ds_name = "numbers"
-    dc.read_values(num=[1, 2, 3], session=test_session).save(ds_name)
+    dc.read_values(num=[1, 2, 3], session=test_session).save("old.old.numbers")
 
     with pytest.raises(ProjectNotFoundError):
-        dc.move_dataset(
-            ds_name,
-            namespace="wrong",
-            project="wrong",
-            new_namespace=project.namespace.name,
-            new_project=project.name,
-            session=test_session,
-        )
+        dc.move_dataset("wrong.wrong.numbers", "new.new.numbers", session=test_session)
 
 
-def test_move_dataset_wrong_new_project(test_session, project):
-    ds_name = "numbers"
-    (
-        dc.read_values(num=[1, 2, 3], session=test_session)
-        .settings(namespace=project.namespace.name, project=project.name)
-        .save(ds_name)
-    )
+def test_move_dataset_error_in_session_moved_dataset_removed(catalog):
+    from datachain.query.session import Session
 
-    with pytest.raises(ProjectNotFoundError):
-        dc.move_dataset(
-            ds_name,
-            namespace=project.namespace.name,
-            project=project.name,
-            new_namespace="wrong",
-            new_project="wrong",
-            session=test_session,
-        )
+    old_name = "old.old.numbers"
+    new_name = "new.new.numbers"
+
+    with pytest.raises(DatasetNotFoundError):
+        with Session("new", catalog=catalog) as test_session:
+            dc.read_values(num=[1, 2, 3]).save("aa")
+            dc.read_values(num=[1, 2, 3], session=test_session).save(old_name)
+            dc.move_dataset(old_name, new_name, session=test_session)
+
+            # throws DatasetNotFoundError
+            dc.read_dataset("wrong", session=test_session)
+
+    ds = dc.datasets(column="dataset")
+    datasets = [d for d in ds.to_values("dataset")]  # noqa: C416
+    assert len(datasets) == 0
 
 
 def test_edit_dataset_same_name(cloud_test_catalog, dogs_dataset):

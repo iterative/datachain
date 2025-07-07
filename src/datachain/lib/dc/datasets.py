@@ -365,19 +365,54 @@ def delete_dataset(
 
 def move_dataset(
     name: str,
-    namespace: str,
-    project: str,
-    new_namespace: str,
-    new_project: str,
+    destination: str,
     session: Optional[Session] = None,
     in_memory: bool = False,
 ) -> None:
+    """Moves an entire dataset between namespaces and projects.
+
+    Args:
+        name: The source dataset name. This can be a fully qualified name that includes
+            the namespace and project, or a regular name. If a regular name is used,
+            default values will be applied. The source dataset will no longer exist
+            after the move.
+        destination: The destination dataset name. This can also be a fully qualified
+            name with a namespace and project, or just a regular name (default values
+            will be used in that case). The original dataset will be moved here.
+        session: An optional session instance. If not provided, the default session
+            will be used.
+        in_memory: If True, creates an in-memory session. Defaults to False.
+
+    Returns:
+        None
+
+    Examples:
+        ```python
+        import datachain as dc
+        dc.move_dataset("cats", "new_cats")
+        ```
+
+        ```python
+        import datachain as dc
+        dc.move_dataset("dev.animals.cats", "prod.animals.cats")
+        ```
+    """
     session = Session.get(session, in_memory=in_memory)
     catalog = session.catalog
+
+    namespace, project, name = catalog.get_full_dataset_name(name)
+    dest_namespace, dest_project, dest_name = catalog.get_full_dataset_name(destination)
 
     dataset = catalog.get_dataset(
         name, catalog.metastore.get_project(project, namespace)
     )
+
     catalog.update_dataset(
-        dataset, project_id=catalog.metastore.get_project(new_project, new_namespace).id
+        dataset,
+        name=dest_name,
+        project_id=catalog.metastore.get_project(
+            dest_project,
+            dest_namespace,
+            create=catalog.metastore.project_allowed_to_create,
+        ).id,
     )
