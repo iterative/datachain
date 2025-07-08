@@ -187,7 +187,7 @@ def wait_for_condition(
 def assert_row_names(
     catalog: Catalog, dataset: DatasetRecord, version: str, expected_names: set
 ) -> None:
-    dataset_rows = catalog.ls_dataset_rows(dataset.name, version, limit=20)
+    dataset_rows = catalog.ls_dataset_rows(dataset, version, limit=20)
     assert dataset_rows
     preview = dataset.get_version(version).preview
     assert preview
@@ -207,7 +207,7 @@ def sorted_dicts(list_of_dicts, *keys):
     return sorted(list_of_dicts, key=lambda x: tuple(x[k] for k in keys))
 
 
-class ANY_VALUE:  # noqa: N801
+class ANY_VALUE:  # noqa: N801, PLW1641
     """A helper object that compares equal to any value from the list."""
 
     def __init__(self, *args):

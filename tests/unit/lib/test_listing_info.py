@@ -14,7 +14,12 @@ from datachain.lib.listing_info import ListingInfo
     ],
 )
 def test_is_listing_expired(date, is_expired):
-    listing_info = ListingInfo(name="lst_s3://whatever", finished_at=date)
+    listing_info = ListingInfo(
+        name="lst_s3://whatever",
+        namespace="dev",
+        project="my-project",
+        finished_at=date,
+    )
     assert listing_info.is_expired is is_expired
 
 
@@ -30,5 +35,5 @@ def test_is_listing_expired(date, is_expired):
     ],
 )
 def test_listing_subset(ds1_name, ds2_name, contains):
-    listing_info = ListingInfo(name=ds1_name)
+    listing_info = ListingInfo(name=ds1_name, namespace="dev", project="my-project")
     assert listing_info.contains(ds2_name) is contains

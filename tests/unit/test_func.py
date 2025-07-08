@@ -88,16 +88,18 @@ def test_add():
 
 
 def test_add_mutate(chain):
-    res = chain.mutate(test=strlen("val") + 1).order_by("num").collect("test")
-    assert list(res) == [2, 3, 4, 5, 6]
+    res = chain.mutate(test=strlen("val") + 1).order_by("num").to_values("test")
+    assert res == [2, 3, 4, 5, 6]
 
-    res = chain.mutate(test=1 + strlen("val")).order_by("num").collect("test")
-    assert list(res) == [2, 3, 4, 5, 6]
+    res = chain.mutate(test=1 + strlen("val")).order_by("num").to_values("test")
+    assert res == [2, 3, 4, 5, 6]
 
     res = (
-        chain.mutate(test=strlen("val") + strlen("val")).order_by("num").collect("test")
+        chain.mutate(test=strlen("val") + strlen("val"))
+        .order_by("num")
+        .to_values("test")
     )
-    assert list(res) == [2, 4, 6, 8, 10]
+    assert res == [2, 4, 6, 8, 10]
 
 
 def test_sub():
@@ -120,16 +122,18 @@ def test_sub():
 
 
 def test_sub_mutate(chain):
-    res = chain.mutate(test=strlen("val") - 1).order_by("num").collect("test")
-    assert list(res) == [0, 1, 2, 3, 4]
+    res = chain.mutate(test=strlen("val") - 1).order_by("num").to_values("test")
+    assert res == [0, 1, 2, 3, 4]
 
-    res = chain.mutate(test=5 - strlen("val")).order_by("num").collect("test")
-    assert list(res) == [4, 3, 2, 1, 0]
+    res = chain.mutate(test=5 - strlen("val")).order_by("num").to_values("test")
+    assert res == [4, 3, 2, 1, 0]
 
     res = (
-        chain.mutate(test=strlen("val") - strlen("val")).order_by("num").collect("test")
+        chain.mutate(test=strlen("val") - strlen("val"))
+        .order_by("num")
+        .to_values("test")
     )
-    assert list(res) == [0, 0, 0, 0, 0]
+    assert res == [0, 0, 0, 0, 0]
 
 
 def test_mul():
@@ -152,16 +156,18 @@ def test_mul():
 
 
 def test_mul_mutate(chain):
-    res = chain.mutate(test=strlen("val") * 2).order_by("num").collect("test")
-    assert list(res) == [2, 4, 6, 8, 10]
+    res = chain.mutate(test=strlen("val") * 2).order_by("num").to_values("test")
+    assert res == [2, 4, 6, 8, 10]
 
-    res = chain.mutate(test=3 * strlen("val")).order_by("num").collect("test")
-    assert list(res) == [3, 6, 9, 12, 15]
+    res = chain.mutate(test=3 * strlen("val")).order_by("num").to_values("test")
+    assert res == [3, 6, 9, 12, 15]
 
     res = (
-        chain.mutate(test=strlen("val") * strlen("val")).order_by("num").collect("test")
+        chain.mutate(test=strlen("val") * strlen("val"))
+        .order_by("num")
+        .to_values("test")
     )
-    assert list(res) == [1, 4, 9, 16, 25]
+    assert res == [1, 4, 9, 16, 25]
 
 
 def test_truediv():
@@ -184,16 +190,18 @@ def test_truediv():
 
 
 def test_truediv_mutate(chain):
-    res = chain.mutate(test=strlen("val") / 2).order_by("num").collect("test")
-    assert list(res) == [0.5, 1.0, 1.5, 2.0, 2.5]
+    res = chain.mutate(test=strlen("val") / 2).order_by("num").to_values("test")
+    assert res == [0.5, 1.0, 1.5, 2.0, 2.5]
 
-    res = chain.mutate(test=10 / strlen("val")).order_by("num").collect("test")
-    assert list(res) == [10.0, 5.0, 10 / 3, 2.5, 2.0]
+    res = chain.mutate(test=10 / strlen("val")).order_by("num").to_values("test")
+    assert res == [10.0, 5.0, 10 / 3, 2.5, 2.0]
 
     res = (
-        chain.mutate(test=strlen("val") / strlen("val")).order_by("num").collect("test")
+        chain.mutate(test=strlen("val") / strlen("val"))
+        .order_by("num")
+        .to_values("test")
     )
-    assert list(res) == [1.0, 1.0, 1.0, 1.0, 1.0]
+    assert res == [1.0, 1.0, 1.0, 1.0, 1.0]
 
 
 def test_floordiv():
@@ -216,18 +224,18 @@ def test_floordiv():
 
 
 def test_floordiv_mutate(chain):
-    res = chain.mutate(test=strlen("val") // 2).order_by("num").collect("test")
-    assert list(res) == [0, 1, 1, 2, 2]
+    res = chain.mutate(test=strlen("val") // 2).order_by("num").to_values("test")
+    assert res == [0, 1, 1, 2, 2]
 
-    res = chain.mutate(test=10 // strlen("val")).order_by("num").collect("test")
-    assert list(res) == [10, 5, 3, 2, 2]
+    res = chain.mutate(test=10 // strlen("val")).order_by("num").to_values("test")
+    assert res == [10, 5, 3, 2, 2]
 
     res = (
         chain.mutate(test=strlen("val") // strlen("val"))
         .order_by("num")
-        .collect("test")
+        .to_values("test")
     )
-    assert list(res) == [1, 1, 1, 1, 1]
+    assert res == [1, 1, 1, 1, 1]
 
 
 def test_mod():
@@ -250,16 +258,18 @@ def test_mod():
 
 
 def test_mod_mutate(chain):
-    res = chain.mutate(test=strlen("val") % 2).order_by("num").collect("test")
-    assert list(res) == [1, 0, 1, 0, 1]
+    res = chain.mutate(test=strlen("val") % 2).order_by("num").to_values("test")
+    assert res == [1, 0, 1, 0, 1]
 
-    res = chain.mutate(test=10 % strlen("val")).order_by("num").collect("test")
-    assert list(res) == [0, 0, 1, 2, 0]
+    res = chain.mutate(test=10 % strlen("val")).order_by("num").to_values("test")
+    assert res == [0, 0, 1, 2, 0]
 
     res = (
-        chain.mutate(test=strlen("val") % strlen("val")).order_by("num").collect("test")
+        chain.mutate(test=strlen("val") % strlen("val"))
+        .order_by("num")
+        .to_values("test")
     )
-    assert list(res) == [0, 0, 0, 0, 0]
+    assert res == [0, 0, 0, 0, 0]
 
 
 def test_and():
@@ -282,16 +292,18 @@ def test_and():
 
 
 def test_and_mutate(chain):
-    res = chain.mutate(test=strlen("val") & 2).order_by("num").collect("test")
-    assert list(res) == [0, 2, 2, 0, 0]
+    res = chain.mutate(test=strlen("val") & 2).order_by("num").to_values("test")
+    assert res == [0, 2, 2, 0, 0]
 
-    res = chain.mutate(test=2 & strlen("val")).order_by("num").collect("test")
-    assert list(res) == [0, 2, 2, 0, 0]
+    res = chain.mutate(test=2 & strlen("val")).order_by("num").to_values("test")
+    assert res == [0, 2, 2, 0, 0]
 
     res = (
-        chain.mutate(test=strlen("val") & strlen("val")).order_by("num").collect("test")
+        chain.mutate(test=strlen("val") & strlen("val"))
+        .order_by("num")
+        .to_values("test")
     )
-    assert list(res) == [1, 2, 3, 4, 5]
+    assert res == [1, 2, 3, 4, 5]
 
 
 def test_or():
@@ -314,16 +326,18 @@ def test_or():
 
 
 def test_or_mutate(chain):
-    res = chain.mutate(test=strlen("val") | 2).order_by("num").collect("test")
-    assert list(res) == [3, 2, 3, 6, 7]
+    res = chain.mutate(test=strlen("val") | 2).order_by("num").to_values("test")
+    assert res == [3, 2, 3, 6, 7]
 
-    res = chain.mutate(test=2 | strlen("val")).order_by("num").collect("test")
-    assert list(res) == [3, 2, 3, 6, 7]
+    res = chain.mutate(test=2 | strlen("val")).order_by("num").to_values("test")
+    assert res == [3, 2, 3, 6, 7]
 
     res = (
-        chain.mutate(test=strlen("val") | strlen("val")).order_by("num").collect("test")
+        chain.mutate(test=strlen("val") | strlen("val"))
+        .order_by("num")
+        .to_values("test")
     )
-    assert list(res) == [1, 2, 3, 4, 5]
+    assert res == [1, 2, 3, 4, 5]
 
 
 @skip_if_not_sqlite
@@ -331,7 +345,7 @@ def test_or_func_mutate(chain):
     res = chain.mutate(
         test=ifelse(or_(dc.C("num") < 3, dc.C("num") > 4), "Match", "Not Match")
     )
-    assert list(res.order_by("num").collect("test")) == [
+    assert list(res.order_by("num").to_values("test")) == [
         "Match",
         "Match",
         "Not Match",
@@ -345,7 +359,7 @@ def test_and_func_mutate(chain):
     res = chain.mutate(
         test=ifelse(and_(dc.C("num") > 1, dc.C("num") < 4), "Match", "Not Match")
     )
-    assert list(res.order_by("num").collect("test")) == [
+    assert list(res.order_by("num").to_values("test")) == [
         "Not Match",
         "Match",
         "Match",
@@ -374,16 +388,18 @@ def test_xor():
 
 
 def test_xor_mutate(chain):
-    res = chain.mutate(test=strlen("val") ^ 2).order_by("num").collect("test")
-    assert list(res) == [3, 0, 1, 6, 7]
+    res = chain.mutate(test=strlen("val") ^ 2).order_by("num").to_values("test")
+    assert res == [3, 0, 1, 6, 7]
 
-    res = chain.mutate(test=2 ^ strlen("val")).order_by("num").collect("test")
-    assert list(res) == [3, 0, 1, 6, 7]
+    res = chain.mutate(test=2 ^ strlen("val")).order_by("num").to_values("test")
+    assert res == [3, 0, 1, 6, 7]
 
     res = (
-        chain.mutate(test=strlen("val") ^ strlen("val")).order_by("num").collect("test")
+        chain.mutate(test=strlen("val") ^ strlen("val"))
+        .order_by("num")
+        .to_values("test")
     )
-    assert list(res) == [0, 0, 0, 0, 0]
+    assert res == [0, 0, 0, 0, 0]
 
 
 def test_rshift():
@@ -406,18 +422,18 @@ def test_rshift():
 
 
 def test_rshift_mutate(chain):
-    res = chain.mutate(test=strlen("val") >> 2).order_by("num").collect("test")
-    assert list(res) == [0, 0, 0, 1, 1]
+    res = chain.mutate(test=strlen("val") >> 2).order_by("num").to_values("test")
+    assert res == [0, 0, 0, 1, 1]
 
-    res = chain.mutate(test=2 >> strlen("val")).order_by("num").collect("test")
-    assert list(res) == [1, 0, 0, 0, 0]
+    res = chain.mutate(test=2 >> strlen("val")).order_by("num").to_values("test")
+    assert res == [1, 0, 0, 0, 0]
 
     res = (
         chain.mutate(test=strlen("val") >> strlen("val"))
         .order_by("num")
-        .collect("test")
+        .to_values("test")
     )
-    assert list(res) == [0, 0, 0, 0, 0]
+    assert res == [0, 0, 0, 0, 0]
 
 
 def test_lshift():
@@ -440,18 +456,18 @@ def test_lshift():
 
 
 def test_lshift_mutate(chain):
-    res = chain.mutate(test=strlen("val") << 2).order_by("num").collect("test")
-    assert list(res) == [4, 8, 12, 16, 20]
+    res = chain.mutate(test=strlen("val") << 2).order_by("num").to_values("test")
+    assert res == [4, 8, 12, 16, 20]
 
-    res = chain.mutate(test=2 << strlen("val")).order_by("num").collect("test")
-    assert list(res) == [4, 8, 16, 32, 64]
+    res = chain.mutate(test=2 << strlen("val")).order_by("num").to_values("test")
+    assert res == [4, 8, 16, 32, 64]
 
     res = (
         chain.mutate(test=strlen("val") << strlen("val"))
         .order_by("num")
-        .collect("test")
+        .to_values("test")
     )
-    assert list(res) == [2, 8, 24, 64, 160]
+    assert res == [2, 8, 24, 64, 160]
 
 
 def test_lt():
@@ -474,22 +490,24 @@ def test_lt():
 
 
 def test_lt_mutate(chain):
-    res = chain.mutate(test=strlen("val") < 3).order_by("num").collect("test")
-    assert list(res) == [1, 1, 0, 0, 0]
+    res = chain.mutate(test=strlen("val") < 3).order_by("num").to_values("test")
+    assert res == [1, 1, 0, 0, 0]
 
-    res = chain.mutate(test=strlen("val") > 3).order_by("num").collect("test")
-    assert list(res) == [0, 0, 0, 1, 1]
+    res = chain.mutate(test=strlen("val") > 3).order_by("num").to_values("test")
+    assert res == [0, 0, 0, 1, 1]
 
     res = (
-        chain.mutate(test=strlen("val") < strlen("val")).order_by("num").collect("test")
+        chain.mutate(test=strlen("val") < strlen("val"))
+        .order_by("num")
+        .to_values("test")
     )
-    assert list(res) == [0, 0, 0, 0, 0]
+    assert res == [0, 0, 0, 0, 0]
 
 
 @pytest.mark.parametrize("value", [1, 0.5, "a", True])
 def test_mutate_with_literal(chain, value):
-    res = chain.mutate(test=value).collect("test")
-    assert list(res) == [value] * 5
+    res = chain.mutate(test=value).to_values("test")
+    assert res == [value] * 5
 
 
 def test_le():
@@ -512,18 +530,18 @@ def test_le():
 
 
 def test_le_mutate(chain):
-    res = chain.mutate(test=strlen("val") <= 3).order_by("num").collect("test")
-    assert list(res) == [1, 1, 1, 0, 0]
+    res = chain.mutate(test=strlen("val") <= 3).order_by("num").to_values("test")
+    assert res == [1, 1, 1, 0, 0]
 
-    res = chain.mutate(test=strlen("val") >= 3).order_by("num").collect("test")
-    assert list(res) == [0, 0, 1, 1, 1]
+    res = chain.mutate(test=strlen("val") >= 3).order_by("num").to_values("test")
+    assert res == [0, 0, 1, 1, 1]
 
     res = (
         chain.mutate(test=strlen("val") <= strlen("val"))
         .order_by("num")
-        .collect("test")
+        .to_values("test")
     )
-    assert list(res) == [1, 1, 1, 1, 1]
+    assert res == [1, 1, 1, 1, 1]
 
 
 def test_eq():
@@ -546,18 +564,18 @@ def test_eq():
 
 
 def test_eq_mutate(chain):
-    res = chain.mutate(test=strlen("val") == 2).order_by("num").collect("test")
-    assert list(res) == [0, 1, 0, 0, 0]
+    res = chain.mutate(test=strlen("val") == 2).order_by("num").to_values("test")
+    assert res == [0, 1, 0, 0, 0]
 
-    res = chain.mutate(test=strlen("val") == 4).order_by("num").collect("test")
-    assert list(res) == [0, 0, 0, 1, 0]
+    res = chain.mutate(test=strlen("val") == 4).order_by("num").to_values("test")
+    assert res == [0, 0, 0, 1, 0]
 
     res = (
         chain.mutate(test=strlen("val") == strlen("val"))
         .order_by("num")
-        .collect("test")
+        .to_values("test")
     )
-    assert list(res) == [1, 1, 1, 1, 1]
+    assert res == [1, 1, 1, 1, 1]
 
 
 def test_ne():
@@ -580,18 +598,18 @@ def test_ne():
 
 
 def test_ne_mutate(chain):
-    res = chain.mutate(test=strlen("val") != 2).order_by("num").collect("test")
-    assert list(res) == [1, 0, 1, 1, 1]
+    res = chain.mutate(test=strlen("val") != 2).order_by("num").to_values("test")
+    assert res == [1, 0, 1, 1, 1]
 
-    res = chain.mutate(test=strlen("val") != 4).order_by("num").collect("test")
-    assert list(res) == [1, 1, 1, 0, 1]
+    res = chain.mutate(test=strlen("val") != 4).order_by("num").to_values("test")
+    assert res == [1, 1, 1, 0, 1]
 
     res = (
         chain.mutate(test=strlen("val") != strlen("val"))
         .order_by("num")
-        .collect("test")
+        .to_values("test")
     )
-    assert list(res) == [0, 0, 0, 0, 0]
+    assert res == [0, 0, 0, 0, 0]
 
 
 def test_gt():
@@ -614,16 +632,18 @@ def test_gt():
 
 
 def test_gt_mutate(chain):
-    res = chain.mutate(test=strlen("val") > 2).order_by("num").collect("test")
-    assert list(res) == [0, 0, 1, 1, 1]
+    res = chain.mutate(test=strlen("val") > 2).order_by("num").to_values("test")
+    assert res == [0, 0, 1, 1, 1]
 
-    res = chain.mutate(test=strlen("val") < 4).order_by("num").collect("test")
-    assert list(res) == [1, 1, 1, 0, 0]
+    res = chain.mutate(test=strlen("val") < 4).order_by("num").to_values("test")
+    assert res == [1, 1, 1, 0, 0]
 
     res = (
-        chain.mutate(test=strlen("val") > strlen("val")).order_by("num").collect("test")
+        chain.mutate(test=strlen("val") > strlen("val"))
+        .order_by("num")
+        .to_values("test")
     )
-    assert list(res) == [0, 0, 0, 0, 0]
+    assert res == [0, 0, 0, 0, 0]
 
 
 def test_ge():
@@ -646,18 +666,18 @@ def test_ge():
 
 
 def test_ge_mutate(chain):
-    res = chain.mutate(test=strlen("val") >= 2).order_by("num").collect("test")
-    assert list(res) == [0, 1, 1, 1, 1]
+    res = chain.mutate(test=strlen("val") >= 2).order_by("num").to_values("test")
+    assert res == [0, 1, 1, 1, 1]
 
-    res = chain.mutate(test=strlen("val") <= 4).order_by("num").collect("test")
-    assert list(res) == [1, 1, 1, 1, 0]
+    res = chain.mutate(test=strlen("val") <= 4).order_by("num").to_values("test")
+    assert res == [1, 1, 1, 1, 0]
 
     res = (
         chain.mutate(test=strlen("val") >= strlen("val"))
         .order_by("num")
-        .collect("test")
+        .to_values("test")
     )
-    assert list(res) == [1, 1, 1, 1, 1]
+    assert res == [1, 1, 1, 1, 1]
 
 
 @pytest.mark.parametrize(
@@ -674,7 +694,9 @@ def test_sqlite_int_hash_64(value, inthash):
 
 
 def test_int_hash_64_mutate(chain):
-    res = chain.mutate(test=int_hash_64(strlen("val"))).order_by("num").collect("test")
+    res = (
+        chain.mutate(test=int_hash_64(strlen("val"))).order_by("num").to_values("test")
+    )
     assert [x & (2**64 - 1) for x in res] == [
         10577349846663553072,
         18198135717204167749,
@@ -704,9 +726,9 @@ def test_bit_hamming_distance_mutate(chain):
     res = (
         chain.mutate(test=bit_hamming_distance(strlen("val"), 5))
         .order_by("num")
-        .collect("test")
+        .to_values("test")
     )
-    assert list(res) == [1, 3, 2, 1, 0]
+    assert res == [1, 3, 2, 1, 0]
 
 
 @pytest.mark.parametrize(
@@ -728,9 +750,9 @@ def test_byte_hamming_distance_mutate(chain):
     res = (
         chain.mutate(test=byte_hamming_distance("val", literal("xxx")))
         .order_by("num")
-        .collect("test")
+        .to_values("test")
     )
-    assert list(res) == [2, 1, 0, 1, 2]
+    assert res == [2, 1, 0, 1, 2]
 
 
 @pytest.mark.parametrize(
@@ -744,7 +766,7 @@ def test_byte_hamming_distance_mutate(chain):
 )
 def test_case_mutate(chain, val, else_, type_):
     res = chain.mutate(test=case((dc.C("num") < 2, val), else_=else_))
-    assert list(res.order_by("test").collect("test")) == sorted(
+    assert list(res.order_by("test").to_values("test")) == sorted(
         [val, else_, else_, else_, else_]
     )
     assert res.schema["test"] == type_
@@ -752,12 +774,12 @@ def test_case_mutate(chain, val, else_, type_):
 
 def test_case_mutate_column_as_value(chain):
     res = chain.mutate(test=case((dc.C("num") < 3, dc.C("val")), else_="cc"))
-    assert list(res.order_by("num").collect("test")) == ["x", "xx", "cc", "cc", "cc"]
+    assert list(res.order_by("num").to_values("test")) == ["x", "xx", "cc", "cc", "cc"]
 
 
 def test_case_mutate_column_as_value_in_else(chain):
     res = chain.mutate(test=case((dc.C("num") < 3, dc.C("val")), else_=dc.C("val")))
-    assert list(res.order_by("num").collect("test")) == [
+    assert list(res.order_by("num").to_values("test")) == [
         "x",
         "xx",
         "xxx",
@@ -780,7 +802,7 @@ def test_nested_case_on_condition_mutate(chain, val, else_, type_):
     res = chain.mutate(
         test=case((case((dc.C("num") < 2, True), else_=False), val), else_=else_)
     )
-    assert list(res.order_by("test").collect("test")) == sorted(
+    assert list(res.order_by("test").to_values("test")) == sorted(
         [val, else_, else_, else_, else_]
     )
     assert res.schema["test"] == type_
@@ -799,7 +821,7 @@ def test_nested_case_on_value_mutate(chain, v1, v2, v3, type_):
     res = chain.mutate(
         test=case((dc.C("num") < 4, case((dc.C("num") < 2, v1), else_=v2)), else_=v3)
     )
-    assert list(res.order_by("num").collect("test")) == sorted([v1, v2, v2, v3, v3])
+    assert list(res.order_by("num").to_values("test")) == sorted([v1, v2, v2, v3, v3])
     assert res.schema["test"] == type_
 
 
@@ -816,7 +838,7 @@ def test_nested_case_on_else_mutate(chain, v1, v2, v3, type_):
     res = chain.mutate(
         test=case((dc.C("num") < 3, v1), else_=case((dc.C("num") < 4, v2), else_=v3))
     )
-    assert list(res.order_by("num").collect("test")) == sorted([v1, v1, v2, v3, v3])
+    assert list(res.order_by("num").to_values("test")) == sorted([v1, v1, v2, v3, v3])
     assert res.schema["test"] == type_
 
 
@@ -831,7 +853,7 @@ def test_nested_case_on_else_mutate(chain, v1, v2, v3, type_):
 )
 def test_ifelse_mutate(chain, if_val, else_val, type_):
     res = chain.mutate(test=ifelse(dc.C("num") < 2, if_val, else_val))
-    assert list(res.order_by("test").collect("test")) == sorted(
+    assert list(res.order_by("test").to_values("test")) == sorted(
         [if_val, else_val, else_val, else_val, else_val]
     )
     assert res.schema["test"] == type_
@@ -846,7 +868,7 @@ def test_ifelse_mutate(chain, if_val, else_val, type_):
 )
 def test_ifelse_mutate_with_columns_as_values(chain, if_val, else_val, type_, result):
     res = chain.mutate(test=ifelse(dc.C("num") < 3, if_val, else_val))
-    assert list(res.order_by("test").collect("test")) == result
+    assert list(res.order_by("test").to_values("test")) == result
     assert res.schema["test"] == type_
 
 
@@ -859,7 +881,7 @@ def test_isnone_mutate(col):
     )
 
     res = chain.mutate(test=isnone(col))
-    assert list(res.order_by("test").collect("test")) == sorted(
+    assert list(res.order_by("test").to_values("test")) == sorted(
         [False, False, False, True, True]
     )
     assert res.schema["test"] is bool
@@ -874,7 +896,9 @@ def test_isnone_with_ifelse_mutate(col):
     )
 
     res = chain.mutate(test=ifelse(isnone(col), "NONE", "NOT_NONE"))
-    assert list(res.order_by("num").collect("test")) == ["NOT_NONE"] * 3 + ["NONE"] * 2
+    assert (
+        list(res.order_by("num").to_values("test")) == ["NOT_NONE"] * 3 + ["NONE"] * 2
+    )
     assert res.schema["test"] is str
 
 
@@ -885,7 +909,7 @@ def test_array_contains():
     )
 
     assert list(
-        chain.mutate(res=contains("arr", 3)).order_by("val").collect("res")
+        chain.mutate(res=contains("arr", 3)).order_by("val").to_values("res")
     ) == [
         0,
         0,
@@ -894,11 +918,11 @@ def test_array_contains():
         1,
     ]
     assert list(
-        chain.mutate(res=contains(dc.C("arr"), 3)).order_by("val").collect("res")
+        chain.mutate(res=contains(dc.C("arr"), 3)).order_by("val").to_values("res")
     ) == [0, 0, 1, 1, 1]
     assert list(
-        chain.mutate(res=contains(dc.C("arr"), 10)).order_by("val").collect("res")
+        chain.mutate(res=contains(dc.C("arr"), 10)).order_by("val").to_values("res")
     ) == [0, 0, 0, 0, 0]
     assert list(
-        chain.mutate(res=contains(dc.C("arr"), None)).order_by("val").collect("res")
+        chain.mutate(res=contains(dc.C("arr"), None)).order_by("val").to_values("res")
     ) == [0, 0, 0, 0, 0]

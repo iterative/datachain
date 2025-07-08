@@ -4,9 +4,11 @@ import signal
 import subprocess  # nosec B404
 import uuid
 from collections.abc import Generator
+from datetime import datetime
 from pathlib import PosixPath
 from time import sleep
 from typing import NamedTuple
+from unittest.mock import PropertyMock, patch
 
 import attrs
 import pytest
@@ -19,6 +21,7 @@ from datachain.catalog import Catalog
 from datachain.catalog.loader import get_metastore, get_warehouse
 from datachain.cli.utils import CommaSeparatedArgs
 from datachain.config import Config, ConfigLevel
+from datachain.data_storage.metastore import AbstractMetastore
 from datachain.data_storage.sqlite import (
     SQLiteDatabaseEngine,
     SQLiteMetastore,
@@ -26,6 +29,8 @@ from datachain.data_storage.sqlite import (
 )
 from datachain.dataset import DatasetRecord
 from datachain.lib.dc import Sys
+from datachain.namespace import Namespace
+from datachain.project import Project
 from datachain.query.session import Session
 from datachain.utils import (
     ENV_DATACHAIN_GLOBAL_CONFIG_DIR,
@@ -538,6 +543,45 @@ def cloud_test_catalog_tmpfile(
 
 
 @pytest.fixture
+def allow_create_project():
+    return True
+
+
+@pytest.fixture
+def allow_create_namespace():
+    return True
+
+
+@pytest.fixture(autouse=True)
+def mock_allowed_to_create_project(allow_create_project):
+    if not allow_create_project:
+        yield
+    else:
+        with patch.object(
+            AbstractMetastore, "project_allowed_to_create", new_callable=PropertyMock
+        ) as mock_metastore:
+            mock_metastore.return_value = True
+            yield
+
+
+@pytest.fixture(autouse=True)
+def mock_allowed_to_create_namespace(allow_create_namespace):
+    if not allow_create_namespace:
+        yield
+    else:
+        with patch.object(
+            AbstractMetastore, "namespace_allowed_to_create", new_callable=PropertyMock
+        ) as mock_metastore:
+            mock_metastore.return_value = True
+            yield
+
+
+@pytest.fixture
+def project(test_session):
+    return dc.create_project("dev", "animals", "Animals project")
+
+
+@pytest.fixture
 def listed_bucket(cloud_test_catalog):
     ctc = cloud_test_catalog
     dc.read_storage(ctc.src_uri, session=ctc.session).exec()
@@ -548,7 +592,9 @@ def animal_dataset(listed_bucket, cloud_test_catalog):
     name = uuid.uuid4().hex
     catalog = cloud_test_catalog.catalog
     src_uri = cloud_test_catalog.src_uri
-    dataset = catalog.create_dataset_from_sources(name, [src_uri], recursive=True)
+    dataset = catalog.create_dataset_from_sources(
+        name, [src_uri], catalog.metastore.default_project, recursive=True
+    )
     return catalog.update_dataset(
         dataset, {"description": "animal dataset", "attrs": ["cats", "dogs"]}
     )
@@ -560,7 +606,7 @@ def dogs_dataset(listed_bucket, cloud_test_catalog):
     catalog = cloud_test_catalog.catalog
     src_uri = cloud_test_catalog.src_uri
     dataset = catalog.create_dataset_from_sources(
-        name, [f"{src_uri}/dogs/*"], recursive=True
+        name, [f"{src_uri}/dogs/*"], catalog.metastore.default_project, recursive=True
     )
     return catalog.update_dataset(
         dataset, {"description": "dogs dataset", "attrs": ["dogs", "dataset"]}
@@ -573,7 +619,7 @@ def cats_dataset(listed_bucket, cloud_test_catalog):
     catalog = cloud_test_catalog.catalog
     src_uri = cloud_test_catalog.src_uri
     dataset = catalog.create_dataset_from_sources(
-        name, [f"{src_uri}/cats/*"], recursive=True
+        name, [f"{src_uri}/cats/*"], catalog.metastore.default_project, recursive=True
     )
     return catalog.update_dataset(
         dataset, {"description": "cats dataset", "attrs": ["cats", "dataset"]}
@@ -591,6 +637,20 @@ def dataset_record():
         status=1,
         schema={},
         feature_schema={},
+        project=Project(
+            id=1,
+            uuid=str(uuid.uuid4()),
+            name="animals",
+            created_at=datetime.now(),
+            descr="",
+            namespace=Namespace(
+                id=1,
+                uuid=str(uuid.uuid4()),
+                name="dev",
+                created_at=datetime.now(),
+                descr="",
+            ),
+        ),
     )
 
 
@@ -647,11 +707,28 @@ def studio_datasets(requests_mock, studio_token):
         "num_objects": 6,
         "size": 100,
     }
+
+    project = {
+        "id": 1,
+        "uuid": str(uuid.uuid4()),
+        "name": "animals",
+        "created_at": "2024-02-23T10:42:31.842944+00:00",
+        "descr": "",
+        "namespace": {
+            "id": 1,
+            "name": "dev",
+            "uuid": str(uuid.uuid4()),
+            "created_at": "2024-02-23T10:42:31.842944+00:00",
+            "descr": "",
+        },
+    }
+
     dogs_dataset = {
         "id": 1,
         "name": "dogs",
         "description": "dogs dataset",
         "attrs": ["dogs", "dataset"],
+        "project": project,
         "versions": [
             {
                 "version": "1.0.0",
@@ -677,6 +754,7 @@ def studio_datasets(requests_mock, studio_token):
             "name": "cats",
             "description": "cats dataset",
             "attrs": ["cats", "dataset"],
+            "project": project,
             "versions": [
                 {
                     "version": "1.0.0",
@@ -692,6 +770,7 @@ def studio_datasets(requests_mock, studio_token):
             "name": "both",
             "description": "both dataset",
             "attrs": ["both", "dataset"],
+            "project": project,
             "versions": [
                 {
                     "version": "1.0.0",
@@ -706,7 +785,10 @@ def studio_datasets(requests_mock, studio_token):
 
     requests_mock.get(f"{STUDIO_URL}/api/datachain/datasets", json=datasets)
     requests_mock.get(
-        f"{STUDIO_URL}/api/datachain/datasets/info?dataset_name=dogs&team_name=team_name",
+        (
+            f"{STUDIO_URL}/api/datachain/datasets/info?namespace=dev&project=animals"
+            "&name=dogs&team_name=team_name"
+        ),
         json=dogs_dataset,
     )
 
@@ -822,3 +904,172 @@ def run_datachain_worker(datachain_job_id):
                 worker.wait(timeout=30)  # seconds
             except subprocess.TimeoutExpired:
                 os.kill(worker.pid, signal.SIGKILL)
+
+
+# Common constants for remote dataset testing
+REMOTE_DATASET_UUID = "20f5a2f1-fc9a-4e36-8b91-5a530f289451"
+REMOTE_DATASET_UUID_V2 = "30f5a2f1-fc9a-4e36-8b91-5a530f289452"
+REMOTE_NAMESPACE_UUID = "efbc3e84-3eb6-4be1-bec1-704b939e1fe4"
+REMOTE_PROJECT_UUID = "0ed3a6c6-f2f7-45aa-869b-39219c86a9d4"
+
+REMOTE_NAMESPACE_NAME = "dev"
+REMOTE_PROJECT_NAME = "animals"
+
+
+@pytest.fixture
+def remote_dataset_schema():
+    """Common schema for remote datasets."""
+    return {
+        "id": {"type": "UInt64"},
+        "sys__rand": {"type": "UInt64"},
+        "file__path": {"type": "String"},
+        "file__etag": {"type": "String"},
+        "file__version": {"type": "String"},
+        "file__is_latest": {"type": "Boolean"},
+        "file__last_modified": {"type": "DateTime"},
+        "file__size": {"type": "Int64"},
+        "file__location": {"type": "String"},
+        "file__source": {"type": "String"},
+        "version": {"type": "String"},
+    }
+
+
+@pytest.fixture
+def remote_file_feature_schema():
+    """Common File feature schema for remote datasets."""
+    return {
+        "file": "File@v1",
+        "version": "str",
+        "_custom_types": {
+            "File@v1": {
+                "schema_version": 2,
+                "name": "File@v1",
+                "fields": {
+                    "source": "str",
+                    "path": "str",
+                    "size": "int",
+                    "version": "str",
+                    "etag": "str",
+                    "is_latest": "bool",
+                    "last_modified": "datetime",
+                    "location": "Union[dict, list[dict], NoneType]",
+                },
+                "bases": [
+                    ["File", "datachain.lib.file", "File@v1"],
+                    ["DataModel", "datachain.lib.data_model", "DataModel@v1"],
+                    ["BaseModel", "pydantic.main", None],
+                    ["object", "builtins", None],
+                ],
+                "hidden_fields": [
+                    "source",
+                    "version",
+                    "etag",
+                    "is_latest",
+                    "last_modified",
+                    "location",
+                ],
+            }
+        },
+    }
+
+
+@pytest.fixture
+def remote_namespace():
+    """Remote namespace fixture for Studio API mocking."""
+    return {
+        "id": 1,
+        "uuid": REMOTE_NAMESPACE_UUID,
+        "name": REMOTE_NAMESPACE_NAME,
+        "descr": "Dev namespace",
+        "created_at": "2024-02-23T10:42:31.842944+00:00",
+    }
+
+
+@pytest.fixture
+def remote_project(remote_namespace):
+    """Remote project fixture for Studio API mocking."""
+    return {
+        "id": 1,
+        "uuid": REMOTE_PROJECT_UUID,
+        "name": REMOTE_PROJECT_NAME,
+        "descr": "Animals project",
+        "created_at": "2024-02-23T10:42:31.842944+00:00",
+        "namespace": remote_namespace,
+    }
+
+
+@pytest.fixture
+def compressed_parquet_data():
+    """
+    Factory fixture that creates lz4-compressed parquet for datasets.
+    Returns a function that can be called with different data.
+    """
+    import io
+    from datetime import datetime
+
+    import lz4.frame
+    import pandas as pd
+
+    def create_compressed_parquet(data, src_uri=None):
+        def _adapt_row(row):
+            """
+            Adjusting row values to match remote response
+            """
+            adapted = {}
+            for k, v in row.items():
+                if isinstance(v, datetime):
+                    adapted[k] = v.timestamp()
+                elif v is None:
+                    adapted[k] = ""
+                else:
+                    adapted[k] = v
+
+            adapted["sys__id"] = 1
+            adapted["sys__rand"] = 1
+            adapted["file__location"] = ""
+            adapted["file__source"] = src_uri or ""
+            adapted["file__version"] = ""
+            return adapted
+
+        adapted_data = [_adapt_row(row) for row in data]
+        df = pd.DataFrame.from_records(adapted_data)
+        buffer = io.BytesIO()
+        df.to_parquet(buffer, engine="auto")
+
+        return lz4.frame.compress(buffer.getvalue())
+
+    return create_compressed_parquet
+
+
+@pytest.fixture
+def dog_entries():
+    """Factory function to create version-specific dog entries."""
+    from tests.data import ENTRIES
+
+    def _create_dog_entries(version="1.0.0"):
+        return [
+            {
+                "file__path": e.path,
+                "file__etag": e.etag,
+                "file__version": e.version,
+                "file__is_latest": e.is_latest,
+                "file__last_modified": e.last_modified,
+                "file__size": e.size,
+                "version": version,
+            }
+            for e in ENTRIES
+            if e.name.startswith("dog")
+        ]
+
+    return _create_dog_entries
+
+
+@pytest.fixture
+def mock_parquet_data(compressed_parquet_data, dog_entries, version="1.0.0"):
+    return compressed_parquet_data(dog_entries(version))
+
+
+@pytest.fixture
+def mock_parquet_data_cloud(compressed_parquet_data, dog_entries, cloud_test_catalog):
+    src_uri = cloud_test_catalog.src_uri
+    return compressed_parquet_data(dog_entries("1.0.0"), src_uri)

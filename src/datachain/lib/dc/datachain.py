@@ -21,11 +21,13 @@ from typing import (
 import orjson
 import sqlalchemy
 from pydantic import BaseModel
+from sqlalchemy.sql.elements import ColumnElement
 from tqdm import tqdm
 
 from datachain import semver
 from datachain.dataset import DatasetRecord
-from datachain.delta import delta_disabled, delta_update
+from datachain.delta import delta_disabled
+from datachain.error import ProjectCreateNotAllowedError, ProjectNotFoundError
 from datachain.func import literal
 from datachain.func.base import Function
 from datachain.func.func import Func
@@ -169,6 +171,10 @@ class DataChain:
         self._setup: dict = setup or {}
         self._sys = _sys
         self._delta = False
+        self._delta_on: Optional[Union[str, Sequence[str]]] = None
+        self._delta_result_on: Optional[Union[str, Sequence[str]]] = None
+        self._delta_compare: Optional[Union[str, Sequence[str]]] = None
+        self._delta_retry: Optional[Union[bool, str]] = None
 
     def __repr__(self) -> str:
         """Return a string representation of the chain."""
@@ -187,6 +193,7 @@ class DataChain:
         on: Optional[Union[str, Sequence[str]]] = None,
         right_on: Optional[Union[str, Sequence[str]]] = None,
         compare: Optional[Union[str, Sequence[str]]] = None,
+        delta_retry: Optional[Union[bool, str]] = None,
     ) -> "Self":
         """Marks this chain as delta, which means special delta process will be
         called on saving dataset for optimization"""
@@ -196,6 +203,7 @@ class DataChain:
         self._delta_on = on
         self._delta_result_on = right_on
         self._delta_compare = compare
+        self._delta_retry = delta_retry
         return self
 
     @property
@@ -255,7 +263,7 @@ class DataChain:
         """Underlying dataset, if there is one."""
         if not self.name:
             return None
-        return self.session.catalog.get_dataset(self.name)
+        return self.session.catalog.get_dataset(self.name, self._query.project)
 
     def __or__(self, other: "Self") -> "Self":
         """Return `self.union(other)`."""
@@ -293,6 +301,7 @@ class DataChain:
                 on=self._delta_on,
                 right_on=self._delta_result_on,
                 compare=self._delta_compare,
+                delta_retry=self._delta_retry,
             )
 
         return chain
@@ -305,6 +314,8 @@ class DataChain:
         min_task_size=None,
         prefetch: Optional[int] = None,
         sys: Optional[bool] = None,
+        namespace: Optional[str] = None,
+        project: Optional[str] = None,
     ) -> "Self":
         """Change settings for chain.
 
@@ -320,6 +331,8 @@ class DataChain:
             prefetch: number of workers to use for downloading files in advance.
                       This is enabled by default and uses 2 workers.
                       To disable prefetching, set it to 0.
+            namespace: namespace name.
+            project: project name.
 
         Example:
             ```py
@@ -333,7 +346,11 @@ class DataChain:
         if sys is None:
             sys = self._sys
         settings = copy.copy(self._settings)
-        settings.add(Settings(cache, parallel, workers, min_task_size, prefetch))
+        settings.add(
+            Settings(
+                cache, parallel, workers, min_task_size, prefetch, namespace, project
+            )
+        )
         return self._evolve(settings=settings, _sys=sys)
 
     def reset_settings(self, settings: Optional[Settings] = None) -> "Self":
@@ -423,10 +440,10 @@ class DataChain:
 
         from datachain.lib.arrow import schema_to_output
 
-        json_values = list(self.limit(schema_sample_size).collect(col))
+        json_values = self.limit(schema_sample_size).to_list(col)
         json_dicts = [
             json.loads(json_value) if isinstance(json_value, str) else json_value
-            for json_value in json_values
+            for (json_value,) in json_values
         ]
 
         if any(not isinstance(json_dict, dict) for json_dict in json_dicts):
@@ -483,6 +500,22 @@ class DataChain:
         )
         return listings(*args, **kwargs)
 
+    @property
+    def namespace_name(self) -> str:
+        """Current namespace name in which the chain is running"""
+        return (
+            self._settings.namespace
+            or self.session.catalog.metastore.default_namespace_name
+        )
+
+    @property
+    def project_name(self) -> str:
+        """Current project name in which the chain is running"""
+        return (
+            self._settings.project
+            or self.session.catalog.metastore.default_project_name
+        )
+
     def persist(self) -> "Self":
         """Saves temporary chain that will be removed after the process ends.
         Temporary datasets are useful for optimization, for example when we have
@@ -492,7 +525,14 @@ class DataChain:
         It returns the chain itself.
         """
         schema = self.signals_schema.clone_without_sys_signals().serialize()
-        return self._evolve(query=self._query.save(feature_schema=schema))
+        project = self.session.catalog.metastore.get_project(
+            self.project_name,
+            self.namespace_name,
+            create=True,
+        )
+        return self._evolve(
+            query=self._query.save(project=project, feature_schema=schema)
+        )
 
     def save(  # type: ignore[override]
         self,
@@ -506,7 +546,10 @@ class DataChain:
         """Save to a Dataset. It returns the chain itself.
 
         Parameters:
-            name : dataset name.
+            name : dataset name. It can be full name consisting of namespace and
+                project, but it can also be just a regular dataset name in which
+                case we are taking namespace and project from settings, if they
+                are defined there, or default ones instead.
             version : version of a dataset. If version is not specified and dataset
                 already exists, version patch increment will happen e.g 1.2.1 -> 1.2.2.
             description : description of a dataset.
@@ -515,6 +558,7 @@ class DataChain:
             update_version: which part of the dataset version to automatically increase.
                 Available values: `major`, `minor` or `patch`. Default is `patch`.
         """
+        catalog = self.session.catalog
         if version is not None:
             semver.validate(version)
 
@@ -528,21 +572,48 @@ class DataChain:
                 " patch"
             )
 
+        namespace_name, project_name, name = catalog.get_full_dataset_name(
+            name,
+            namespace_name=self._settings.namespace,
+            project_name=self._settings.project,
+        )
+
+        try:
+            project = self.session.catalog.metastore.get_project(
+                project_name,
+                namespace_name,
+                create=self.session.catalog.metastore.project_allowed_to_create,
+            )
+        except ProjectNotFoundError as e:
+            # not being able to create it as creation is not allowed
+            raise ProjectCreateNotAllowedError("Creating project is not allowed") from e
+
         schema = self.signals_schema.clone_without_sys_signals().serialize()
+
+        # Handle retry and delta functionality
         if self.delta and name:
-            delta_ds, dependencies, has_changes = delta_update(
+            from datachain.delta import delta_retry_update
+
+            # Delta chains must have delta_on defined (ensured by _as_delta method)
+            assert self._delta_on is not None, "Delta chain must have delta_on defined"
+
+            result_ds, dependencies, has_changes = delta_retry_update(
                 self,
+                namespace_name,
+                project_name,
                 name,
                 on=self._delta_on,
                 right_on=self._delta_result_on,
                 compare=self._delta_compare,
+                delta_retry=self._delta_retry,
             )
 
-            if delta_ds:
+            if result_ds:
                 return self._evolve(
-                    query=delta_ds._query.save(
+                    query=result_ds._query.save(
                         name=name,
                         version=version,
+                        project=project,
                         feature_schema=schema,
                         dependencies=dependencies,
                         **kwargs,
@@ -562,6 +633,7 @@ class DataChain:
             query=self._query.save(
                 name=name,
                 version=version,
+                project=project,
                 description=description,
                 attrs=attrs,
                 feature_schema=schema,
@@ -735,11 +807,35 @@ class DataChain:
             chain.save("new_dataset")
             ```
         """
+        # Convert string partition_by parameters to Column objects
+        processed_partition_by = partition_by
+        if partition_by is not None:
+            if isinstance(partition_by, (str, Function, ColumnElement)):
+                list_partition_by = [partition_by]
+            else:
+                list_partition_by = list(partition_by)
+
+            processed_partition_columns: list[ColumnElement] = []
+            for col in list_partition_by:
+                if isinstance(col, str):
+                    col_db_name = ColumnMeta.to_db_name(col)
+                    col_type = self.signals_schema.get_column_type(col_db_name)
+                    column = Column(col_db_name, python_to_sql(col_type))
+                    processed_partition_columns.append(column)
+                elif isinstance(col, Function):
+                    column = col.get_column(self.signals_schema)
+                    processed_partition_columns.append(column)
+                else:
+                    # Assume it's already a ColumnElement
+                    processed_partition_columns.append(col)
+
+            processed_partition_by = processed_partition_columns
+
         udf_obj = self._udf_to_obj(Aggregator, func, params, output, signal_map)
         return self._evolve(
             query=self._query.generate(
                 udf_obj.to_udf_wrapper(),
-                partition_by=partition_by,
+                partition_by=processed_partition_by,
                 **self._settings.to_dict(),
             ),
             signal_schema=udf_obj.output,
@@ -828,7 +924,7 @@ class DataChain:
             Order is not guaranteed when steps are added after an `order_by` statement.
             I.e. when using `read_dataset` an `order_by` statement should be used if
             the order of the records in the chain is important.
-            Using `order_by` directly before `limit`, `collect` and `collect_flatten`
+            Using `order_by` directly before `limit`, `to_list` and similar methods
             will give expected results.
             See https://github.com/iterative/datachain/issues/477 for further details.
         """
@@ -1033,32 +1129,32 @@ class DataChain:
 
     @property
     def _effective_signals_schema(self) -> "SignalSchema":
-        """Effective schema used for user-facing API like collect, to_pandas, etc."""
+        """Effective schema used for user-facing API like to_list, to_pandas, etc."""
         signals_schema = self.signals_schema
         if not self._sys:
             return signals_schema.clone_without_sys_signals()
         return signals_schema
 
     @overload
-    def collect_flatten(self) -> Iterator[tuple[Any, ...]]: ...
+    def _leaf_values(self) -> Iterator[tuple[Any, ...]]: ...
 
     @overload
-    def collect_flatten(self, *, include_hidden: bool) -> Iterator[tuple[Any, ...]]: ...
+    def _leaf_values(self, *, include_hidden: bool) -> Iterator[tuple[Any, ...]]: ...
 
     @overload
-    def collect_flatten(
+    def _leaf_values(
         self, *, row_factory: Callable[[list[str], tuple[Any, ...]], _T]
     ) -> Iterator[_T]: ...
 
     @overload
-    def collect_flatten(
+    def _leaf_values(
         self,
         *,
         row_factory: Callable[[list[str], tuple[Any, ...]], _T],
         include_hidden: bool,
     ) -> Iterator[_T]: ...
 
-    def collect_flatten(self, *, row_factory=None, include_hidden: bool = True):
+    def _leaf_values(self, *, row_factory=None, include_hidden: bool = True):
         """Yields flattened rows of values as a tuple.
 
         Args:
@@ -1086,7 +1182,7 @@ class DataChain:
         headers, _ = self._effective_signals_schema.get_headers_with_length()
         column_names = [".".join(filter(None, header)) for header in headers]
 
-        results_iter = self.collect_flatten()
+        results_iter = self._leaf_values()
 
         def column_chunks() -> Iterator[list[list[Any]]]:
             for chunk_iter in batched_it(results_iter, chunk_size):
@@ -1119,9 +1215,9 @@ class DataChain:
 
     def results(self, *, row_factory=None, include_hidden=True):
         if row_factory is None:
-            return list(self.collect_flatten(include_hidden=include_hidden))
+            return list(self._leaf_values(include_hidden=include_hidden))
         return list(
-            self.collect_flatten(row_factory=row_factory, include_hidden=include_hidden)
+            self._leaf_values(row_factory=row_factory, include_hidden=include_hidden)
         )
 
     def to_records(self) -> list[dict[str, Any]]:
@@ -1132,42 +1228,38 @@ class DataChain:
 
         return self.results(row_factory=to_dict)
 
-    @overload
-    def collect(self) -> Iterator[tuple[DataValue, ...]]: ...
-
-    @overload
-    def collect(self, col: str) -> Iterator[DataValue]: ...
-
-    @overload
-    def collect(self, *cols: str) -> Iterator[tuple[DataValue, ...]]: ...
-
-    def collect(self, *cols: str) -> Iterator[Union[DataValue, tuple[DataValue, ...]]]:  # type: ignore[overload-overlap,misc]
+    def to_iter(self, *cols: str) -> Iterator[tuple[DataValue, ...]]:
         """Yields rows of values, optionally limited to the specified columns.
 
         Args:
             *cols: Limit to the specified columns. By default, all columns are selected.
 
         Yields:
-            (DataType): Yields a single item if a column is selected.
-            (tuple[DataType, ...]): Yields a tuple of items if multiple columns are
-                selected.
+            (tuple[DataType, ...]): Yields a tuple of items for each row.
 
         Example:
             Iterating over all rows:
             ```py
-            for row in dc.collect():
+            for row in ds.to_iter():
+                print(row)
+            ```
+
+            DataChain is iterable and can be used in a for loop directly which is
+            equivalent to `ds.to_iter()`:
+            ```py
+            for row in ds:
                 print(row)
             ```
 
             Iterating over all rows with selected columns:
             ```py
-            for name, size in dc.collect("file.path", "file.size"):
+            for name, size in ds.to_iter("file.path", "file.size"):
                 print(name, size)
             ```
 
             Iterating over a single column:
             ```py
-            for file in dc.collect("file.path"):
+            for (file,) in ds.to_iter("file.path"):
                 print(file)
             ```
         """
@@ -1179,7 +1271,31 @@ class DataChain:
                 ret = signals_schema.row_to_features(
                     row, catalog=chain.session.catalog, cache=chain._settings.cache
                 )
-                yield ret[0] if len(cols) == 1 else tuple(ret)
+                yield tuple(ret)
+
+    @overload
+    def collect(self) -> Iterator[tuple[DataValue, ...]]: ...
+
+    @overload
+    def collect(self, col: str) -> Iterator[DataValue]: ...
+
+    @overload
+    def collect(self, *cols: str) -> Iterator[tuple[DataValue, ...]]: ...
+
+    def collect(self, *cols: str) -> Iterator[Union[DataValue, tuple[DataValue, ...]]]:  # type: ignore[overload-overlap,misc]
+        """
+        Deprecated. Use `to_iter` method instead.
+        """
+        warnings.warn(
+            "Method `collect` is deprecated. Use `to_iter` method instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
+        if len(cols) == 1:
+            yield from [item[0] for item in self.to_iter(*cols)]
+        else:
+            yield from self.to_iter(*cols)
 
     def to_pytorch(
         self,
@@ -1414,7 +1530,7 @@ class DataChain:
             )
         return self._evolve(query=self._query.subtract(other._query, signals))  # type: ignore[arg-type]
 
-    def compare(
+    def diff(
         self,
         other: "DataChain",
         on: Union[str, Sequence[str]],
@@ -1427,41 +1543,33 @@ class DataChain:
         same: bool = False,
         status_col: Optional[str] = None,
     ) -> "DataChain":
-        """Comparing two chains by identifying rows that are added, deleted, modified
-        or same. Result is the new chain that has additional column with possible
-        values: `A`, `D`, `M`, `U` representing added, deleted, modified and same
-        rows respectively. Note that if only one "status" is asked, by setting proper
-        flags, this additional column is not created as it would have only one value
-        for all rows. Beside additional diff column, new chain has schema of the chain
-        on which method was called.
+        """Calculate differences between two chains.
+
+        This method identifies records that are added, deleted, modified, or unchanged
+        between two chains. It adds a status column with values: A=added, D=deleted,
+        M=modified, S=same.
 
         Parameters:
-            other: Chain to calculate diff from.
-            on: Column or list of columns to match on. If both chains have the
-                same columns then this column is enough for the match. Otherwise,
-                `right_on` parameter has to specify the columns for the other chain.
-                This value is used to find corresponding row in other dataset. If not
-                found there, row is considered as added (or removed if vice versa), and
-                if found then row can be either modified or same.
-            right_on: Optional column or list of columns
-                for the `other` to match.
-            compare: Column or list of columns to compare on. If both chains have
-                the same columns then this column is enough for the compare. Otherwise,
-                `right_compare` parameter has to specify the columns for the other
-                chain. This value is used to see if row is modified or same. If
-                not set, all columns will be used for comparison
-            right_compare: Optional column or list of columns
-                    for the `other` to compare to.
-            added (bool): Whether to return added rows in resulting chain.
-            deleted (bool): Whether to return deleted rows in resulting chain.
-            modified (bool): Whether to return modified rows in resulting chain.
-            same (bool): Whether to return unchanged rows in resulting chain.
-            status_col (str): Name of the new column that is created in resulting chain
-                representing diff status.
+            other: Chain to compare against.
+            on: Column(s) to match records between chains.
+            right_on: Column(s) in the other chain to match against. Defaults to `on`.
+            compare: Column(s) to check for changes.
+                     If not specified,all columns are used.
+            right_compare: Column(s) in the other chain to compare against.
+                     Defaults to values of `compare`.
+            added (bool): Include records that exist in this chain but not in the other.
+            deleted (bool): Include records that exist only in the other chain.
+            modified (bool): Include records that exist in both
+                     but have different values.
+            same (bool): Include records that are identical in both chains.
+            status_col (str): Name for the status column showing differences.
+
+        Default behavior: By default, shows added, deleted, and modified records,
+        but excludes unchanged records (same=False). Status column is not created.
 
         Example:
             ```py
-            res = persons.compare(
+            res = persons.diff(
                 new_persons,
                 on=["id"],
                 right_on=["other_id"],
@@ -1490,7 +1598,7 @@ class DataChain:
             status_col=status_col,
         )
 
-    def diff(
+    def file_diff(
         self,
         other: "DataChain",
         on: str = "file",
@@ -1501,31 +1609,29 @@ class DataChain:
         same: bool = False,
         status_col: Optional[str] = None,
     ) -> "DataChain":
-        """Similar to `.compare()`, which is more generic method to calculate difference
-        between two chains. Unlike `.compare()`, this method works only on those chains
-        that have `File` object, or it's derivatives, in it. File `source` and `path`
-        are used for matching, and file `version` and `etag` for comparing, while in
-        `.compare()` user needs to provide arbitrary columns for matching and comparing.
+        """Calculate differences between two chains containing files.
+
+        This method is specifically designed for file chains. It uses file `source`
+        and `path` to match files, and file `version` and `etag` to detect changes.
 
         Parameters:
-            other: Chain to calculate diff from.
-            on: File signal to match on. If both chains have the
-                same file signal then this column is enough for the match. Otherwise,
-                `right_on` parameter has to specify the file signal for the other chain.
-                This value is used to find corresponding row in other dataset. If not
-                found there, row is considered as added (or removed if vice versa), and
-                if found then row can be either modified or same.
-            right_on: Optional file signal for the `other` to match.
-            added (bool): Whether to return added rows in resulting chain.
-            deleted (bool): Whether to return deleted rows in resulting chain.
-            modified (bool): Whether to return modified rows in resulting chain.
-            same (bool): Whether to return unchanged rows in resulting chain.
-            status_col (str): Optional name of the new column that is created in
-                resulting chain representing diff status.
+            other: Chain to compare against.
+            on: File column name in this chain. Default is "file".
+            right_on: File column name in the other chain. Defaults to `on`.
+            added (bool): Include files that exist in this chain but not in the other.
+            deleted (bool): Include files that exist only in the other chain.
+            modified (bool): Include files that exist in both but have different
+                             versions/etags.
+            same (bool): Include files that are identical in both chains.
+            status_col (str): Name for the status column showing differences
+                              (A=added, D=deleted, M=modified, S=same).
+
+        Default behavior: By default, includes only new files (added=True and
+        modified=True). This is useful for incremental processing.
 
         Example:
             ```py
-            diff = images.diff(
+            diff = images.file_diff(
                 new_images,
                 on="file",
                 right_on="other_file",
@@ -1550,7 +1656,7 @@ class DataChain:
         compare_cols = get_file_signals(on, compare_file_signals)
         right_compare_cols = get_file_signals(right_on, compare_file_signals)
 
-        return self.compare(
+        return self.diff(
             other,
             on_cols,
             right_on=right_on_cols,
@@ -1962,7 +2068,7 @@ class DataChain:
         headers, _ = self._effective_signals_schema.get_headers_with_length()
         column_names = [".".join(filter(None, header)) for header in headers]
 
-        results_iter = self.collect_flatten()
+        results_iter = self._leaf_values()
 
         with opener(path, "w", newline="") as f:
             writer = csv.writer(f, delimiter=delimiter, **kwargs)
@@ -2014,7 +2120,7 @@ class DataChain:
             if include_outer_list:
                 # This makes the file JSON instead of JSON lines.
                 f.write(b"[\n")
-            for row in self.collect_flatten():
+            for row in self._leaf_values():
                 if not is_first:
                     if include_outer_list:
                         # This makes the file JSON instead of JSON lines.
@@ -2082,6 +2188,11 @@ class DataChain:
         Use before running map/gen/agg/batch_map to save an object and pass it as an
         argument to the UDF.
 
+        The value must be a callable (a `lambda: <value>` syntax can be used to quickly
+        create one) that returns the object to be passed to the UDF. It is evaluated
+        lazily when UDF is running, in case of multiple machines the callable is run on
+        a worker machine.
+
         Example:
             ```py
             import anthropic
@@ -2091,7 +2202,11 @@ class DataChain:
             (
                 dc.read_storage(DATA, type="text")
                 .settings(parallel=4, cache=True)
+
+                # Setup Anthropic client and pass it to the UDF below automatically
+                # The value is callable (see the note above)
                 .setup(client=lambda: anthropic.Anthropic(api_key=API_KEY))
+
                 .map(
                     claude=lambda client, file: client.messages.create(
                         model=MODEL,
@@ -2170,7 +2285,7 @@ class DataChain:
             max_threads=num_threads or 1,
             client_config=client_config,
         )
-        file_exporter.run(self.collect(signal), progress_bar)
+        file_exporter.run(self.to_values(signal), progress_bar)
 
     def shuffle(self) -> "Self":
         """Shuffle the rows of the chain deterministically."""
@@ -2215,15 +2330,44 @@ class DataChain:
 
             Combining filters with "or"
             ```py
-            dc.filter(C("file.path").glob("cat*") | C("file.path").glob("dog*))
+            dc.filter(
+                C("file.path").glob("cat*") |
+                C("file.path").glob("dog*")
+            )
+            ```
+
+            ```py
+            dc.filter(dc.func.or_(
+                C("file.path").glob("cat*"),
+                C("file.path").glob("dog*")
+            ))
             ```
 
             Combining filters with "and"
             ```py
             dc.filter(
-                C("file.path").glob("*.jpg) &
+                C("file.path").glob("*.jpg"),
+                string.length(C("file.path")) > 5
+            )
+            ```
+
+            ```py
+            dc.filter(
+                C("file.path").glob("*.jpg") &
                 (string.length(C("file.path")) > 5)
             )
+            ```
+
+            ```py
+            dc.filter(dc.func.and_(
+                C("file.path").glob("*.jpg"),
+                string.length(C("file.path")) > 5
+            ))
+            ```
+
+            Combining filters with "not"
+            ```py
+            dc.filter(~(C("file.path").glob("*.jpg")))
             ```
         """
         return self._evolve(query=self._query.filter(*args))
@@ -2275,3 +2419,72 @@ class DataChain:
             Use 0/3, 1/3 and 2/3, not 1/3, 2/3 and 3/3.
         """
         return self._evolve(query=self._query.chunk(index, total))
+
+    def to_list(self, *cols: str) -> list[tuple[DataValue, ...]]:
+        """Returns a list of rows of values, optionally limited to the specified
+        columns.
+
+        Args:
+            *cols: Limit to the specified columns. By default, all columns are selected.
+
+        Returns:
+            list[tuple[DataType, ...]]: Returns a list of tuples of items for each row.
+
+        Example:
+            Getting all rows as a list:
+            ```py
+            rows = dc.to_list()
+            print(rows)
+            ```
+
+            Getting all rows with selected columns as a list:
+            ```py
+            name_size_pairs = dc.to_list("file.path", "file.size")
+            print(name_size_pairs)
+            ```
+
+            Getting a single column as a list:
+            ```py
+            files = dc.to_list("file.path")
+            print(files)  # Returns list of 1-tuples
+            ```
+        """
+        return list(self.to_iter(*cols))
+
+    def to_values(self, col: str) -> list[DataValue]:
+        """Returns a flat list of values from a single column.
+
+        Args:
+            col: The name of the column to extract values from.
+
+        Returns:
+            list[DataValue]: Returns a flat list of values from the specified column.
+
+        Example:
+            Getting all values from a single column:
+            ```py
+            file_paths = dc.to_values("file.path")
+            print(file_paths)  # Returns list of strings
+            ```
+
+            Getting all file sizes:
+            ```py
+            sizes = dc.to_values("file.size")
+            print(sizes)  # Returns list of integers
+            ```
+        """
+        return [row[0] for row in self.to_list(col)]
+
+    def __iter__(self) -> Iterator[tuple[DataValue, ...]]:
+        """Make DataChain objects iterable.
+
+        Yields:
+            (tuple[DataValue, ...]): Yields tuples of all column values for each row.
+
+        Example:
+            ```py
+            for row in chain:
+                print(row)
+            ```
+        """
+        return self.to_iter()

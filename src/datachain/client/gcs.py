@@ -74,7 +74,7 @@ class GCSClient(Client):
             try:
                 await self._get_pages(prefix, page_queue)
                 found = await consumer
-                if not found:
+                if not found and prefix:
                     raise FileNotFoundError(f"Unable to resolve remote path: {prefix}")
             finally:
                 consumer.cancel()  # In case _get_pages() raised
@@ -115,7 +115,7 @@ class GCSClient(Client):
                     maxResults=page_size,
                     pageToken=next_page_token,
                     json_out=True,
-                    versions="true",
+                    versions="true" if self._is_version_aware() else "false",
                 )
                 assert page["kind"] == "storage#objects"
                 await page_queue.put(page.get("items", []))
@@ -134,7 +134,7 @@ class GCSClient(Client):
             source=self.uri,
             path=path,
             etag=v.get("etag", ""),
-            version=v.get("generation", ""),
+            version=v.get("generation", "") if self._is_version_aware() else "",
             is_latest=not v.get("timeDeleted"),
             last_modified=self.parse_timestamp(v["updated"]),
             size=v.get("size", ""),

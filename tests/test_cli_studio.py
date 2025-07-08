@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock
 
+import pytest
 import requests_mock
 import websockets
 from dvc_studio_client.auth import AuthorizationExpiredError
@@ -9,6 +10,7 @@ from datachain.cli import main
 from datachain.config import Config, ConfigLevel
 from datachain.studio import POST_LOGIN_MESSAGE
 from datachain.utils import STUDIO_URL
+from tests.utils import skip_if_not_sqlite
 
 
 def mocked_connect(url, additional_headers):
@@ -109,55 +111,55 @@ def test_studio_token(capsys):
 
 def test_studio_team_local():
     assert main(["auth", "team", "team_name"]) == 0
-    config = Config(ConfigLevel.LOCAL).read()
+    config = Config(ConfigLevel.GLOBAL).read()
     assert config["studio"]["team"] == "team_name"
 
 
 def test_studio_team_global():
-    assert main(["auth", "team", "team_name", "--global"]) == 0
-    config = Config(ConfigLevel.GLOBAL).read()
+    assert main(["auth", "team", "team_name", "--local"]) == 0
+    config = Config(ConfigLevel.LOCAL).read()
     assert config["studio"]["team"] == "team_name"
 
 
 def test_studio_datasets(capsys, studio_datasets, mocker):
     def list_datasets_local(_, __):
-        yield "local", "1.0.0"
-        yield "both", "1.0.0"
+        yield "local.local.local", "1.0.0"
+        yield "dev.animals.both", "1.0.0"
 
     mocker.patch(
         "datachain.cli.commands.datasets.list_datasets_local",
         side_effect=list_datasets_local,
     )
     local_rows = [
-        {"Name": "both", "Latest Version": "v1.0.0"},
-        {"Name": "local", "Latest Version": "v1.0.0"},
+        {"Name": "dev.animals.both", "Latest Version": "v1.0.0"},
+        {"Name": "local.local.local", "Latest Version": "v1.0.0"},
     ]
     local_output = tabulate(local_rows, headers="keys")
 
     studio_rows = [
-        {"Name": "both", "Latest Version": "v1.0.0"},
+        {"Name": "dev.animals.both", "Latest Version": "v1.0.0"},
         {
-            "Name": "cats",
+            "Name": "dev.animals.cats",
             "Latest Version": "v1.0.0",
         },
-        {"Name": "dogs", "Latest Version": "v2.0.0"},
+        {"Name": "dev.animals.dogs", "Latest Version": "v2.0.0"},
     ]
     studio_output = tabulate(studio_rows, headers="keys")
 
     both_rows = [
-        {"Name": "both", "Studio": "v1.0.0", "Local": "v1.0.0"},
-        {"Name": "cats", "Studio": "v1.0.0", "Local": "\u2716"},
-        {"Name": "dogs", "Studio": "v2.0.0", "Local": "\u2716"},
-        {"Name": "local", "Studio": "\u2716", "Local": "v1.0.0"},
+        {"Name": "dev.animals.both", "Studio": "v1.0.0", "Local": "v1.0.0"},
+        {"Name": "dev.animals.cats", "Studio": "v1.0.0", "Local": "\u2716"},
+        {"Name": "dev.animals.dogs", "Studio": "v2.0.0", "Local": "\u2716"},
+        {"Name": "local.local.local", "Studio": "\u2716", "Local": "v1.0.0"},
     ]
     both_output = tabulate(both_rows, headers="keys")
 
     both_rows_versions = [
-        {"Name": "both", "Studio": "v1.0.0", "Local": "v1.0.0"},
-        {"Name": "cats", "Studio": "v1.0.0", "Local": "\u2716"},
-        {"Name": "dogs", "Studio": "v1.0.0", "Local": "\u2716"},
-        {"Name": "dogs", "Studio": "v2.0.0", "Local": "\u2716"},
-        {"Name": "local", "Studio": "\u2716", "Local": "v1.0.0"},
+        {"Name": "dev.animals.both", "Studio": "v1.0.0", "Local": "v1.0.0"},
+        {"Name": "dev.animals.cats", "Studio": "v1.0.0", "Local": "\u2716"},
+        {"Name": "dev.animals.dogs", "Studio": "v1.0.0", "Local": "\u2716"},
+        {"Name": "dev.animals.dogs", "Studio": "v2.0.0", "Local": "\u2716"},
+        {"Name": "local.local.local", "Studio": "\u2716", "Local": "v1.0.0"},
     ]
     both_output_versions = tabulate(both_rows_versions, headers="keys")
 
@@ -191,11 +193,12 @@ def test_studio_datasets(capsys, studio_datasets, mocker):
     out = capsys.readouterr().out
     assert sorted(out.splitlines()) == sorted(both_output_versions.splitlines())
 
-    assert main(["dataset", "ls", "dogs", "--studio"]) == 0
+    assert main(["dataset", "ls", "dev.animals.dogs", "--studio"]) == 0
     out = capsys.readouterr().out
     assert sorted(out.splitlines()) == sorted(dogs_output.splitlines())
 
 
+@skip_if_not_sqlite
 def test_studio_edit_dataset(capsys, mocker):
     with requests_mock.mock() as m:
         m.post(f"{STUDIO_URL}/api/datachain/datasets", json={})
@@ -206,12 +209,11 @@ def test_studio_edit_dataset(capsys, mocker):
                 [
                     "dataset",
                     "edit",
-                    "name",
+                    "dev.animals.name",
                     "--new-name",
                     "new-name",
                     "--team",
                     "team_name",
-                    "--studio",
                 ]
             )
             == 1
@@ -228,12 +230,11 @@ def test_studio_edit_dataset(capsys, mocker):
                 [
                     "dataset",
                     "edit",
-                    "name",
+                    "dev.animals.name",
                     "--new-name",
                     "new-name",
                     "--team",
                     "team_name",
-                    "--studio",
                 ]
             )
             == 0
@@ -243,7 +244,9 @@ def test_studio_edit_dataset(capsys, mocker):
 
         last_request = m.last_request
         assert last_request.json() == {
-            "dataset_name": "name",
+            "name": "name",
+            "namespace": "dev",
+            "project": "animals",
             "new_name": "new-name",
             "team_name": "team_name",
             "description": None,
@@ -256,7 +259,7 @@ def test_studio_edit_dataset(capsys, mocker):
                 [
                     "dataset",
                     "edit",
-                    "name",
+                    "dev.animals.name",
                     "--new-name",
                     "new-name",
                     "--description",
@@ -265,14 +268,15 @@ def test_studio_edit_dataset(capsys, mocker):
                     "attr1",
                     "--team",
                     "team_name",
-                    "--studio",
                 ]
             )
             == 0
         )
         last_request = m.last_request
         assert last_request.json() == {
-            "dataset_name": "name",
+            "name": "name",
+            "namespace": "dev",
+            "project": "animals",
             "new_name": "new-name",
             "description": "description",
             "attrs": ["attr1"],
@@ -280,12 +284,18 @@ def test_studio_edit_dataset(capsys, mocker):
         }
 
 
+@skip_if_not_sqlite
 def test_studio_rm_dataset(capsys, mocker):
     with requests_mock.mock() as m:
         m.delete(f"{STUDIO_URL}/api/datachain/datasets", json={})
 
         # Studio token is required
-        assert main(["dataset", "rm", "name", "--team", "team_name", "--studio"]) == 1
+        assert (
+            main(
+                ["dataset", "rm", "dev.animals.name", "--team", "team_name", "--studio"]
+            )
+            == 1
+        )
         out = capsys.readouterr().err
         assert "Not logged in to Studio" in out
 
@@ -298,7 +308,7 @@ def test_studio_rm_dataset(capsys, mocker):
                 [
                     "dataset",
                     "rm",
-                    "name",
+                    "dev.animals.name",
                     "--team",
                     "team_name",
                     "--version",
@@ -313,9 +323,11 @@ def test_studio_rm_dataset(capsys, mocker):
 
         last_request = m.last_request
         assert last_request.json() == {
-            "dataset_name": "name",
+            "name": "name",
+            "namespace": "dev",
+            "project": "animals",
             "team_name": "team_name",
-            "dataset_version": "1.0.0",
+            "version": "1.0.0",
             "force": True,
         }
 
@@ -387,6 +399,8 @@ def test_studio_run(capsys, mocker, tmp_dir):
                     "stupidity",
                     "--repository",
                     "https://github.com/iterative/datachain",
+                    "--cluster",
+                    "default",
                 ]
             )
             == 0
@@ -425,4 +439,67 @@ def test_studio_run(capsys, mocker, tmp_dir):
         "team_name": "team_name",
         "repository": "https://github.com/iterative/datachain",
         "priority": 5,
+        "compute_cluster_name": "default",
     }
+
+
+@pytest.mark.parametrize(
+    "status,expected_exit_code", [("FAILED", 1), ("CANCELLED", 2), ("COMPLETED", 0)]
+)
+def test_studio_run_non_zero_exit_code(
+    capsys, mocker, tmp_dir, status, expected_exit_code
+):
+    # Mock tail_job_logs to return a status
+    async def mock_tail_job_logs(job_id):
+        # Simulate some log messages
+        yield {"logs": [{"message": "Starting job...\n"}]}
+        yield {"logs": [{"message": "Processing data...\n"}]}
+        # Return failed status
+        yield {"job": {"status": status}}
+
+    mocker.patch(
+        "datachain.remote.studio.StudioClient.tail_job_logs",
+        side_effect=mock_tail_job_logs,
+    )
+
+    with Config(ConfigLevel.GLOBAL).edit() as conf:
+        conf["studio"] = {"token": "isat_access_token", "team": "team_name"}
+
+    with requests_mock.mock() as m:
+        m.post(
+            f"{STUDIO_URL}/api/datachain/job",
+            json={"job": {"id": 1, "url": "https://example.com"}},
+        )
+        m.get(
+            f"{STUDIO_URL}/api/datachain/datasets/dataset_job_versions?job_id=1&team_name=team_name",
+            json={
+                "dataset_versions": [
+                    {"dataset_name": "dataset_name", "version": "1.0.0"}
+                ]
+            },
+        )
+
+        (tmp_dir / "example_query.py").write_text("print(1)")
+
+        assert (
+            main(
+                [
+                    "job",
+                    "run",
+                    "example_query.py",
+                ]
+            )
+            == expected_exit_code
+        )
+
+    out = capsys.readouterr().out
+    assert (
+        out.strip() == "Job 1 created\nOpen the job in Studio at https://example.com\n"
+        "========================================\n"
+        "Starting job...\n"
+        "Processing data...\n"
+        "\n"
+        f">>>> Job is now in {status} status.\n\n\n"
+        ">>>> Dataset versions created during the job:\n"
+        "    - dataset_name@v1.0.0"
+    )

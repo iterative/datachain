@@ -89,8 +89,13 @@ def add_auth_parser(subparsers, parent_parser) -> None:
         help="Remove the token from the local project config",
     )
 
-    auth_team_help = "Set default team for Studio operations"
-    auth_team_description = "Set the default team for Studio operations."
+    auth_team_help = "Set or show default team for Studio operations"
+    auth_team_description = (
+        "Set or show the default team for Studio operations. "
+        "This will be used globally by default. "
+        "Use --local to set the team locally for the current project. "
+        "If no team name is provided, the default team will be shown."
+    )
 
     team_parser = auth_subparser.add_parser(
         "team",
@@ -102,13 +107,15 @@ def add_auth_parser(subparsers, parent_parser) -> None:
     team_parser.add_argument(
         "team_name",
         action="store",
+        default=None,
+        nargs="?",
         help="Name of the team to set as default",
     )
     team_parser.add_argument(
-        "--global",
+        "--local",
         action="store_true",
         default=False,
-        help="Set team globally for all projects",
+        help="Set team locally for the current project",
     )
 
     auth_token_help = "View Studio authentication token"  # noqa: S105

@@ -100,8 +100,10 @@ def handle_command(args, catalog, client_config) -> int:
 
     handler = command_handlers.get(args.command)
     if handler:
-        handler()
-        return 0
+        return_code = handler()
+        if return_code is None:
+            return 0
+        return return_code
     print(f"invalid command: {args.command}", file=sys.stderr)
     return 1
 
@@ -152,9 +154,6 @@ def handle_dataset_command(args, catalog):
             new_name=args.new_name,
             description=args.description,
             attrs=args.attrs,
-            studio=args.studio,
-            local=args.local,
-            all=args.all,
             team=args.team,
         ),
         "ls": lambda: list_datasets(
@@ -172,8 +171,6 @@ def handle_dataset_command(args, catalog):
             version=args.version,
             force=args.force,
             studio=args.studio,
-            local=args.local,
-            all=args.all,
             team=args.team,
         ),
         "remove": lambda: rm_dataset(
@@ -182,8 +179,6 @@ def handle_dataset_command(args, catalog):
             version=args.version,
             force=args.force,
             studio=args.studio,
-            local=args.local,
-            all=args.all,
             team=args.team,
         ),
     }

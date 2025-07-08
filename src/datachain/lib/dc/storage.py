@@ -35,9 +35,14 @@ def read_storage(
     update: bool = False,
     anon: bool = False,
     delta: Optional[bool] = False,
-    delta_on: Optional[Union[str, Sequence[str]]] = None,
+    delta_on: Optional[Union[str, Sequence[str]]] = (
+        "file.path",
+        "file.etag",
+        "file.version",
+    ),
     delta_result_on: Optional[Union[str, Sequence[str]]] = None,
     delta_compare: Optional[Union[str, Sequence[str]]] = None,
+    delta_retry: Optional[Union[bool, str]] = None,
     client_config: Optional[dict] = None,
 ) -> "DataChain":
     """Get data from storage(s) as a list of file with all file attributes.
@@ -53,36 +58,25 @@ def read_storage(
         update : force storage reindexing. Default is False.
         anon : If True, we will treat cloud bucket as public one
         client_config : Optional client configuration for the storage client.
-        delta: If set to True, we optimize the creation of new dataset versions by
-            calculating the diff between the latest version of this storage and the
-            version used to create the most recent version of the resulting chain
-            dataset (the one specified in `.save()`). We then run the "diff" chain
-            using only the diff data, rather than the entire storage data, and merge
-            that diff chain with the latest version of the resulting dataset to create
-            a new version. This approach avoids applying modifications to all records
-            from storage every time, which can be an expensive operation.
-            The diff is calculated using the `DataChain.compare()` method, which
-            compares the `delta_on` fields to find matches and checks the compare
-            fields to determine if a record has changed. Note that this process only
-            considers added and modified records in storage; deleted records are not
-            removed from the new dataset version.
-            This calculation is based on the difference between the current version
-            of the source and the version used to create the dataset.
-        delta_on: A list of fields that uniquely identify rows in the source.
-            If two rows have the same values, they are considered the same (e.g., they
-            could be different versions of the same row in a versioned source).
-            This is used in the delta update to calculate the diff.
-        delta_result_on: A list of fields in the resulting dataset that correspond
-            to the `delta_on` fields from the source.
-            This is needed to identify rows that have changed in the source but are
-            already present in the current version of the resulting dataset, in order
-            to avoid including outdated versions of those rows in the new dataset.
-            We retain only the latest versions of rows to prevent duplication.
-            There is no need to define this if the `delta_on` fields are present in
-            the final dataset and have not been renamed.
-        delta_compare: A list of fields used to check if the same row has been modified
-            in the new version of the source.
-            If not defined, all fields except those defined in `delta_on` will be used.
+        delta: If True, only process new or changed files instead of reprocessing
+            everything. This saves time by skipping files that were already processed in
+            previous versions. The optimization is working when a new version of the
+            dataset is created.
+            Default is False.
+        delta_on: Field(s) that uniquely identify each record in the source data.
+            Used to detect which records are new or changed.
+            Default is ("file.path", "file.etag", "file.version").
+        delta_result_on: Field(s) in the result dataset that match `delta_on` fields.
+            Only needed if you rename the identifying fields during processing.
+            Default is None.
+        delta_compare: Field(s) used to detect if a record has changed.
+            If not specified, all fields except `delta_on` fields are used.
+            Default is None.
+        delta_retry: Controls retry behavior for failed records:
+            - String (field name): Reprocess records where this field is not empty
+              (error mode)
+            - True: Reprocess records missing from the result dataset (missing mode)
+            - None: No retry processing (default)
 
     Returns:
         DataChain: A DataChain object containing the file information.
@@ -136,6 +130,8 @@ def read_storage(
     catalog = session.catalog
     cache = catalog.cache
     client_config = session.catalog.client_config
+    listing_namespace_name = catalog.metastore.system_namespace_name
+    listing_project_name = catalog.metastore.listing_project_name
 
     uris = uri if isinstance(uri, (list, tuple)) else [uri]
 
@@ -159,7 +155,13 @@ def read_storage(
             )
             continue
 
-        dc = read_dataset(list_ds_name, session=session, settings=settings)
+        dc = read_dataset(
+            list_ds_name,
+            namespace=listing_namespace_name,
+            project=listing_project_name,
+            session=session,
+            settings=settings,
+        )
         dc._query.update = update
         dc.signals_schema = dc.signals_schema.mutate({f"{column}": file_type})
 
@@ -174,7 +176,11 @@ def read_storage(
                         settings=settings,
                         in_memory=in_memory,
                     )
-                    .settings(prefetch=0)
+                    .settings(
+                        prefetch=0,
+                        namespace=listing_namespace_name,
+                        project=listing_project_name,
+                    )
                     .gen(
                         list_bucket(lst_uri, cache, client_config=client_config),
                         output={f"{column}": file_type},
@@ -208,6 +214,10 @@ def read_storage(
 
     if delta:
         storage_chain = storage_chain._as_delta(
-            on=delta_on, right_on=delta_result_on, compare=delta_compare
+            on=delta_on,
+            right_on=delta_result_on,
+            compare=delta_compare,
+            delta_retry=delta_retry,
         )
+
     return storage_chain

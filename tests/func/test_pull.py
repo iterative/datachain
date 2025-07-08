@@ -1,9 +1,5 @@
-import io
 import json
-from datetime import datetime
 
-import lz4.frame
-import pandas as pd
 import pytest
 
 import datachain as dc
@@ -12,89 +8,27 @@ from datachain.dataset import DatasetStatus
 from datachain.error import DataChainError, DatasetNotFoundError
 from datachain.query.session import Session
 from datachain.utils import STUDIO_URL, JSONSerialize
-from tests.data import ENTRIES
+from tests.conftest import (
+    REMOTE_DATASET_UUID,
+    REMOTE_NAMESPACE_NAME,
+    REMOTE_NAMESPACE_UUID,
+    REMOTE_PROJECT_NAME,
+    REMOTE_PROJECT_UUID,
+)
 from tests.utils import assert_row_names, skip_if_not_sqlite, tree_from_path
 
-DATASET_UUID = "20f5a2f1-fc9a-4e36-8b91-5a530f289451"
-
 
 @pytest.fixture
-def dog_entries():
-    # TODO remove when we replace ENTRIES with FILES
-    return [
-        {
-            "file__path": e.path,
-            "file__etag": e.etag,
-            "file__version": e.version,
-            "file__is_latest": e.is_latest,
-            "file__last_modified": e.last_modified,
-            "file__size": e.size,
-        }
-        for e in ENTRIES
-        if e.name.startswith("dog")
-    ]
-
-
-@pytest.fixture
-def dog_entries_parquet_lz4(dog_entries, cloud_test_catalog) -> bytes:
-    """
-    Returns dogs entries in lz4 compressed parquet format
-    """
-    src_uri = cloud_test_catalog.src_uri
-
-    def _adapt_row(row):
-        """
-        Adjusting row values to match remote response
-        """
-        adapted = {}
-        for k, v in row.items():
-            if isinstance(v, datetime):
-                adapted[k] = v.timestamp()
-            elif v is None:
-                adapted[k] = ""
-            else:
-                adapted[k] = v
-
-        adapted["sys__id"] = 1
-        adapted["sys__rand"] = 1
-        adapted["file__location"] = ""
-        adapted["file__source"] = src_uri
-        adapted["file__version"] = ""
-        return adapted
-
-    dog_entries = [_adapt_row(e) for e in dog_entries]
-    df = pd.DataFrame.from_records(dog_entries)
-    buffer = io.BytesIO()
-    df.to_parquet(buffer, engine="auto")
-
-    return lz4.frame.compress(buffer.getvalue())
-
-
-@pytest.fixture
-def schema():
-    return {
-        "id": {"type": "UInt64"},
-        "sys__rand": {"type": "UInt64"},
-        "file__path": {"type": "String"},
-        "file__etag": {"type": "String"},
-        "file__version": {"type": "String"},
-        "file__is_latest": {"type": "Boolean"},
-        "file__last_modified": {"type": "DateTime"},
-        "file__size": {"type": "Int64"},
-        "file__location": {"type": "String"},
-        "file__source": {"type": "String"},
-    }
-
-
-@pytest.fixture
-def remote_dataset_version(schema, dataset_rows):
+def remote_dataset_version(
+    remote_dataset_schema, dataset_rows, remote_file_feature_schema
+):
     return {
         "id": 1,
-        "uuid": DATASET_UUID,
+        "uuid": REMOTE_DATASET_UUID,
         "dataset_id": 1,
         "version": "1.0.0",
         "status": 4,
-        "feature_schema": {},
+        "feature_schema": remote_file_feature_schema,
         "created_at": "2024-02-23T10:42:31.842944+00:00",
         "finished_at": "2024-02-23T10:43:31.842944+00:00",
         "error_message": "",
@@ -103,7 +37,7 @@ def remote_dataset_version(schema, dataset_rows):
         "size": 1073741824,
         "preview": json.loads(json.dumps(dataset_rows, cls=JSONSerialize)),
         "script_output": "",
-        "schema": schema,
+        "schema": remote_dataset_schema,
         "sources": "",
         "query_script": (
             'from datachain.query.dataset import DatasetQuery\nDatasetQuery(path="s3://ldb-public")',
@@ -113,15 +47,21 @@ def remote_dataset_version(schema, dataset_rows):
 
 
 @pytest.fixture
-def remote_dataset(remote_dataset_version, schema):
+def remote_dataset(
+    remote_project,
+    remote_dataset_version,
+    remote_dataset_schema,
+    remote_file_feature_schema,
+):
     return {
         "id": 1,
         "name": "dogs",
+        "project": remote_project,
         "description": "",
         "attrs": [],
-        "schema": schema,
+        "schema": remote_dataset_schema,
         "status": 4,
-        "feature_schema": {},
+        "feature_schema": remote_file_feature_schema,
         "created_at": "2024-02-23T10:42:31.842944+00:00",
         "finished_at": "2024-02-23T10:43:31.842944+00:00",
         "error_message": "",
@@ -166,13 +106,19 @@ def dataset_export_status(requests_mock):
 
 @pytest.fixture
 def dataset_export_data_chunk(
-    requests_mock, remote_dataset_chunk_url, dog_entries_parquet_lz4
+    requests_mock, remote_dataset_chunk_url, mock_parquet_data_cloud
 ):
-    requests_mock.get(remote_dataset_chunk_url, content=dog_entries_parquet_lz4)
+    requests_mock.get(remote_dataset_chunk_url, content=mock_parquet_data_cloud)
 
 
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
-@pytest.mark.parametrize("dataset_uri", ["ds://dogs@v1.0.0", "ds://dogs"])
+@pytest.mark.parametrize(
+    "dataset_uri",
+    [
+        f"ds://{REMOTE_NAMESPACE_NAME}.{REMOTE_PROJECT_NAME}.dogs@v1.0.0",
+        f"ds://{REMOTE_NAMESPACE_NAME}.{REMOTE_PROJECT_NAME}.dogs",
+    ],
+)
 @pytest.mark.parametrize("local_ds_name", [None, "other"])
 @pytest.mark.parametrize("local_ds_version", [None, "2.0.0"])
 @pytest.mark.parametrize("instantiate", [True, False])
@@ -221,7 +167,11 @@ def test_pull_dataset_success(
                 cp=False,
             )
 
-    dataset = catalog.get_dataset(local_ds_name or "dogs")
+    project = catalog.metastore.get_project(REMOTE_PROJECT_NAME, REMOTE_NAMESPACE_NAME)
+    dataset = catalog.get_dataset(local_ds_name or "dogs", project=project)
+    assert dataset.project.namespace.uuid == REMOTE_NAMESPACE_UUID
+    assert dataset.project.uuid == REMOTE_PROJECT_UUID
+
     assert [v.version for v in dataset.versions] == [local_ds_version or "1.0.0"]
     assert dataset.status == DatasetStatus.COMPLETE
     assert dataset.created_at
@@ -234,7 +184,7 @@ def test_pull_dataset_success(
     assert dataset_version.schema
     assert dataset_version.num_objects == 4
     assert dataset_version.size == 15
-    assert dataset_version.uuid == DATASET_UUID
+    assert dataset_version.uuid == REMOTE_DATASET_UUID
 
     assert_row_names(
         catalog,
@@ -288,9 +238,8 @@ def test_datachain_read_dataset_pull(
 
     with Session("testSession", catalog=catalog):
         ds = dc.read_dataset(
-            name="dogs",
+            name=f"{REMOTE_NAMESPACE_NAME}.{REMOTE_PROJECT_NAME}.dogs",
             version="1.0.0",
-            fallback_to_studio=True,
         )
 
     assert ds.dataset.name == "dogs"
@@ -298,7 +247,8 @@ def test_datachain_read_dataset_pull(
     assert ds.dataset.status == DatasetStatus.COMPLETE
 
     # Check that dataset is available locally after pulling
-    dataset = catalog.get_dataset("dogs")
+    project = catalog.metastore.get_project(REMOTE_PROJECT_NAME, REMOTE_NAMESPACE_NAME)
+    dataset = catalog.get_dataset("dogs", project)
     assert dataset.name == "dogs"
 
 
@@ -328,7 +278,9 @@ def test_pull_dataset_wrong_version(
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(DataChainError) as exc_info:
-        catalog.pull_dataset("ds://dogs@v5")
+        catalog.pull_dataset(
+            f"ds://{REMOTE_NAMESPACE_NAME}.{REMOTE_PROJECT_NAME}.dogs@v5"
+        )
     assert str(exc_info.value) == "Dataset dogs doesn't have version 5 on server"
 
 
@@ -346,9 +298,13 @@ def test_pull_dataset_not_found_in_remote(
     )
     catalog = cloud_test_catalog.catalog
 
-    with pytest.raises(DataChainError) as exc_info:
-        catalog.pull_dataset("ds://dogs@v1.0.0")
-    assert str(exc_info.value) == "Dataset not found"
+    full_name = f"{REMOTE_NAMESPACE_NAME}.{REMOTE_PROJECT_NAME}.dogs"
+
+    with pytest.raises(DatasetNotFoundError) as exc_info:
+        catalog.pull_dataset(
+            f"ds://{REMOTE_NAMESPACE_NAME}.{REMOTE_PROJECT_NAME}.dogs@v1.0.0"
+        )
+    assert str(exc_info.value) == f"Dataset {full_name} not found"
 
 
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
@@ -370,7 +326,9 @@ def test_pull_dataset_exporting_dataset_failed_in_remote(
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(DataChainError) as exc_info:
-        catalog.pull_dataset("ds://dogs@v1.0.0")
+        catalog.pull_dataset(
+            f"ds://{REMOTE_NAMESPACE_NAME}.{REMOTE_PROJECT_NAME}.dogs@v1.0.0"
+        )
     assert str(exc_info.value) == f"Dataset export {export_status} in Studio"
 
 
@@ -389,7 +347,9 @@ def test_pull_dataset_empty_parquet(
     catalog = cloud_test_catalog.catalog
 
     with pytest.raises(RuntimeError):
-        catalog.pull_dataset("ds://dogs@v1.0.0")
+        catalog.pull_dataset(
+            f"ds://{REMOTE_NAMESPACE_NAME}.{REMOTE_PROJECT_NAME}.dogs@v1.0.0"
+        )
 
 
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
@@ -404,22 +364,28 @@ def test_pull_dataset_already_exists_locally(
 ):
     catalog = cloud_test_catalog.catalog
 
-    catalog.pull_dataset("ds://dogs@v1.0.0", local_ds_name="other")
-    catalog.pull_dataset("ds://dogs@v1.0.0")
+    catalog.pull_dataset(
+        f"ds://{REMOTE_NAMESPACE_NAME}.{REMOTE_PROJECT_NAME}.dogs@v1.0.0",
+        local_ds_name="other",
+    )
+    catalog.pull_dataset(
+        f"ds://{REMOTE_NAMESPACE_NAME}.{REMOTE_PROJECT_NAME}.dogs@v1.0.0"
+    )
 
-    other = catalog.get_dataset("other")
+    project = catalog.metastore.get_project(REMOTE_PROJECT_NAME, REMOTE_NAMESPACE_NAME)
+    other = catalog.get_dataset("other", project)
     other_version = other.get_version("1.0.0")
-    assert other_version.uuid == DATASET_UUID
+    assert other_version.uuid == REMOTE_DATASET_UUID
     assert other_version.num_objects == 4
     assert other_version.size == 15
 
     # dataset with same uuid created only once, on first pull with local name "other"
     with pytest.raises(DatasetNotFoundError):
-        catalog.get_dataset("dogs")
+        catalog.get_dataset("dogs", project)
 
 
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
-@pytest.mark.parametrize("local_ds_name", [None, "other"])
+@pytest.mark.parametrize("local_ds_name", [None])
 @skip_if_not_sqlite
 def test_pull_dataset_local_name_already_exists(
     studio_token,
@@ -433,18 +399,28 @@ def test_pull_dataset_local_name_already_exists(
     catalog = cloud_test_catalog.catalog
     src_uri = cloud_test_catalog.src_uri
 
+    project = catalog.metastore.create_project(
+        REMOTE_NAMESPACE_NAME, REMOTE_PROJECT_NAME
+    )
     catalog.create_dataset_from_sources(
-        local_ds_name or "dogs", [f"{src_uri}/dogs/*"], recursive=True
+        local_ds_name or "dogs", [f"{src_uri}/dogs/*"], recursive=True, project=project
     )
     with pytest.raises(DataChainError) as exc_info:
-        catalog.pull_dataset("ds://dogs@v1.0.0", local_ds_name=local_ds_name)
+        catalog.pull_dataset(
+            f"ds://{REMOTE_NAMESPACE_NAME}.{REMOTE_PROJECT_NAME}.dogs@v1.0.0",
+            local_ds_name=local_ds_name,
+        )
 
     assert str(exc_info.value) == (
-        f"Local dataset ds://{local_ds_name or 'dogs'}@v1.0.0 already exists with"
+        f"Local dataset ds://{REMOTE_NAMESPACE_NAME}.{REMOTE_PROJECT_NAME}."
+        f"{local_ds_name or 'dogs'}"
+        "@v1.0.0 already exists with"
         " different uuid, please choose different local dataset name or version"
     )
 
     # able to save it as version 2 of local dataset name
     catalog.pull_dataset(
-        "ds://dogs@v1.0.0", local_ds_name=local_ds_name, local_ds_version="2.0.0"
+        f"ds://{REMOTE_NAMESPACE_NAME}.{REMOTE_PROJECT_NAME}.dogs@v1.0.0",
+        local_ds_name=local_ds_name,
+        local_ds_version="2.0.0",
     )

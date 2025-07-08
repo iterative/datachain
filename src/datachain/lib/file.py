@@ -5,13 +5,14 @@ import json
 import logging
 import os
 import posixpath
+import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import datetime
 from functools import partial
 from io import BytesIO
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePath, PurePosixPath
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, Optional, Union
 from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
@@ -69,7 +70,7 @@ class FileExporter(NodesThreadPool):
         for task in done:
             task.result()
 
-    def do_task(self, file):
+    def do_task(self, file: "File"):
         file.export(
             self.output,
             self.placement,
@@ -81,14 +82,28 @@ class FileExporter(NodesThreadPool):
 
 
 class VFileError(DataChainError):
-    def __init__(self, file: "File", message: str, vtype: str = ""):
+    def __init__(self, message: str, source: str, path: str, vtype: str = ""):
+        self.message = message
+        self.source = source
+        self.path = path
+        self.vtype = vtype
+
         type_ = f" of vtype '{vtype}'" if vtype else ""
-        super().__init__(f"Error in v-file '{file.path}'{type_}: {message}")
+        super().__init__(f"Error in v-file '{source}/{path}'{type_}: {message}")
+
+    def __reduce__(self):
+        return self.__class__, (self.message, self.source, self.path, self.vtype)
 
 
 class FileError(DataChainError):
-    def __init__(self, file: "File", message: str):
-        super().__init__(f"Error in file {file.get_uri()}: {message}")
+    def __init__(self, message: str, source: str, path: str):
+        self.message = message
+        self.source = source
+        self.path = path
+        super().__init__(f"Error in file '{source}/{path}': {message}")
+
+    def __reduce__(self):
+        return self.__class__, (self.message, self.source, self.path)
 
 
 class VFile(ABC):
@@ -113,26 +128,36 @@ class TarVFile(VFile):
     @classmethod
     def open(cls, file: "File", location: list[dict]):
         """Stream file from tar archive based on location in archive."""
-        if len(location) > 1:
-            raise VFileError(file, "multiple 'location's are not supported yet")
+        tar_file = cls.parent(file, location)
 
         loc = location[0]
 
         if (offset := loc.get("offset", None)) is None:
-            raise VFileError(file, "'offset' is not specified")
+            raise VFileError("'offset' is not specified", file.source, file.path)
 
         if (size := loc.get("size", None)) is None:
-            raise VFileError(file, "'size' is not specified")
-
-        if (parent := loc.get("parent", None)) is None:
-            raise VFileError(file, "'parent' is not specified")
-
-        tar_file = File(**parent)
-        tar_file._set_stream(file._catalog)
+            raise VFileError("'size' is not specified", file.source, file.path)
 
         client = file._catalog.get_client(tar_file.source)
         fd = client.open_object(tar_file, use_cache=file._caching_enabled)
         return FileSlice(fd, offset, size, file.name)
+
+    @classmethod
+    def parent(cls, file: "File", location: list[dict]) -> "File":
+        if len(location) > 1:
+            raise VFileError(
+                "multiple 'location's are not supported yet", file.source, file.path
+            )
+
+        loc = location[0]
+
+        if (parent := loc.get("parent", None)) is None:
+            raise VFileError("'parent' is not specified", file.source, file.path)
+
+        tar_file = File(**parent)
+        tar_file._set_stream(file._catalog)
+
+        return tar_file
 
 
 class VFileRegistry:
@@ -143,18 +168,32 @@ class VFileRegistry:
         cls._vtype_readers[reader.get_vtype()] = reader
 
     @classmethod
-    def resolve(cls, file: "File", location: list[dict]):
+    def _get_reader(cls, file: "File", location: list[dict]):
         if len(location) == 0:
-            raise VFileError(file, "'location' must not be list of JSONs")
+            raise VFileError(
+                "'location' must not be list of JSONs", file.source, file.path
+            )
 
         if not (vtype := location[0].get("vtype", "")):
-            raise VFileError(file, "vtype is not specified")
+            raise VFileError("vtype is not specified", file.source, file.path)
 
         reader = cls._vtype_readers.get(vtype, None)
         if not reader:
-            raise VFileError(file, "reader not registered", vtype)
+            raise VFileError(
+                "reader not registered", file.source, file.path, vtype=vtype
+            )
 
+        return reader
+
+    @classmethod
+    def open(cls, file: "File", location: list[dict]):
+        reader = cls._get_reader(file, location)
         return reader.open(file, location)
+
+    @classmethod
+    def parent(cls, file: "File", location: list[dict]) -> "File":
+        reader = cls._get_reader(file, location)
+        return reader.parent(file, location)
 
 
 class File(DataModel):
@@ -236,8 +275,8 @@ class File(DataModel):
 
     @field_validator("path", mode="before")
     @classmethod
-    def validate_path(cls, path):
-        return Path(path).as_posix()
+    def validate_path(cls, path: str) -> str:
+        return PurePath(path).as_posix() if path else ""
 
     def model_dump_custom(self):
         res = self.model_dump()
@@ -299,18 +338,18 @@ class File(DataModel):
         return cls(**{key: row[key] for key in cls._datachain_column_types})
 
     @property
-    def name(self):
+    def name(self) -> str:
         return PurePosixPath(self.path).name
 
     @property
-    def parent(self):
+    def parent(self) -> str:
         return str(PurePosixPath(self.path).parent)
 
     @contextmanager
     def open(self, mode: Literal["rb", "r"] = "rb") -> Iterator[Any]:
         """Open the file and return a file object."""
         if self.location:
-            with VFileRegistry.resolve(self, self.location) as f:  # type: ignore[arg-type]
+            with VFileRegistry.open(self, self.location) as f:  # type: ignore[arg-type]
                 yield f
 
         else:
@@ -329,6 +368,13 @@ class File(DataModel):
 
     def read_text(self):
         """Returns file contents as text."""
+        if self.location:
+            raise VFileError(
+                "Reading text from virtual file is not supported",
+                self.source,
+                self.path,
+            )
+
         with self.open(mode="r") as stream:
             return stream.read()
 
@@ -346,7 +392,7 @@ class File(DataModel):
 
         client.upload(self.read(), destination)
 
-    def _symlink_to(self, destination: str):
+    def _symlink_to(self, destination: str) -> None:
         if self.location:
             raise OSError(errno.ENOTSUP, "Symlinking virtual file is not supported")
 
@@ -355,7 +401,7 @@ class File(DataModel):
             source = self.get_local_path()
             assert source, "File was not cached"
         elif self.source.startswith("file://"):
-            source = self.get_path()
+            source = self.get_fs_path()
         else:
             raise OSError(errno.EXDEV, "can't link across filesystems")
 
@@ -407,9 +453,13 @@ class File(DataModel):
         if self._catalog is None:
             raise RuntimeError("cannot prefetch file because catalog is not setup")
 
+        file = self
+        if self.location:
+            file = VFileRegistry.parent(self, self.location)  # type: ignore[arg-type]
+
         client = self._catalog.get_client(self.source)
-        await client._download(self, callback=download_cb or self._download_cb)
-        self._set_stream(
+        await client._download(file, callback=download_cb or self._download_cb)
+        file._set_stream(
             self._catalog, caching_enabled=True, download_cb=DEFAULT_CALLBACK
         )
         return True
@@ -432,27 +482,62 @@ class File(DataModel):
 
     def get_file_ext(self):
         """Returns last part of file name without `.`."""
-        return PurePosixPath(self.path).suffix.strip(".")
+        return PurePosixPath(self.path).suffix.lstrip(".")
 
     def get_file_stem(self):
         """Returns file name without extension."""
         return PurePosixPath(self.path).stem
 
     def get_full_name(self):
-        """Returns name with parent directories."""
+        """
+        [DEPRECATED] Use `file.path` directly instead.
+
+        Returns name with parent directories.
+        """
+        warnings.warn(
+            "file.get_full_name() is deprecated and will be removed "
+            "in a future version. Use `file.path` directly.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self.path
 
-    def get_uri(self):
-        """Returns file URI."""
-        return f"{self.source}/{self.get_full_name()}"
+    def get_path_normalized(self) -> str:
+        if not self.path:
+            raise FileError("path must not be empty", self.source, self.path)
 
-    def get_path(self) -> str:
-        """Returns file path."""
+        if self.path.endswith("/"):
+            raise FileError("path must not be a directory", self.source, self.path)
+
+        normpath = os.path.normpath(self.path)
+        normpath = PurePath(normpath).as_posix()
+
+        if normpath == ".":
+            raise FileError("path must not be a directory", self.source, self.path)
+
+        if any(part == ".." for part in PurePath(normpath).parts):
+            raise FileError("path must not contain '..'", self.source, self.path)
+
+        return normpath
+
+    def get_uri(self) -> str:
+        """Returns file URI."""
+        return f"{self.source}/{self.get_path_normalized()}"
+
+    def get_fs_path(self) -> str:
+        """
+        Returns file path with respect to the filescheme.
+
+        If `normalize` is True, the path is normalized to remove any redundant
+        separators and up-level references.
+
+        If the file scheme is "file", the path is converted to a local file path
+        using `url2pathname`. Otherwise, the original path with scheme is returned.
+        """
         path = unquote(self.get_uri())
-        source = urlparse(self.source)
-        if source.scheme == "file":
-            path = urlparse(path).path
-            path = url2pathname(path)
+        path_parsed = urlparse(path)
+        if path_parsed.scheme == "file":
+            path = url2pathname(path_parsed.path)
         return path
 
     def get_destination_path(
@@ -467,7 +552,7 @@ class File(DataModel):
         elif placement == "etag":
             path = f"{self.etag}{self.get_file_suffix()}"
         elif placement == "fullpath":
-            path = unquote(self.get_full_name())
+            path = unquote(self.get_path_normalized())
             source = urlparse(self.source)
             if source.scheme and source.scheme != "file":
                 path = posixpath.join(source.netloc, path)
@@ -505,8 +590,9 @@ class File(DataModel):
             ) from e
 
         try:
-            info = client.fs.info(client.get_full_path(self.path))
-            converted_info = client.info_to_file(info, self.path)
+            normalized_path = self.get_path_normalized()
+            info = client.fs.info(client.get_full_path(normalized_path))
+            converted_info = client.info_to_file(info, normalized_path)
             return type(self)(
                 path=self.path,
                 source=self.source,
@@ -517,8 +603,17 @@ class File(DataModel):
                 last_modified=converted_info.last_modified,
                 location=self.location,
             )
+        except FileError as e:
+            logger.warning(
+                "File error when resolving %s/%s: %s", self.source, self.path, str(e)
+            )
         except (FileNotFoundError, PermissionError, OSError) as e:
-            logger.warning("File system error when resolving %s: %s", self.path, str(e))
+            logger.warning(
+                "File system error when resolving %s/%s: %s",
+                self.source,
+                self.path,
+                str(e),
+            )
 
         return type(self)(
             path=self.path,
@@ -534,6 +629,8 @@ class File(DataModel):
 
 def resolve(file: File) -> File:
     """
+    [DEPRECATED] Use `file.resolve()` directly instead.
+
     Resolve a File object by checking its existence and updating its metadata.
 
     This function is a wrapper around the File.resolve() method, designed to be
@@ -549,6 +646,12 @@ def resolve(file: File) -> File:
         RuntimeError: If the file's catalog is not set or if
         the file source protocol is unsupported.
     """
+    warnings.warn(
+        "resolve() is deprecated and will be removed "
+        "in a future version. Use file.resolve() directly.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return file.resolve()
 
 
@@ -896,7 +999,7 @@ class ArrowRow(DataModel):
             ds = dataset(path, **self.kwargs)
 
         else:
-            path = self.file.get_path()
+            path = self.file.get_fs_path()
             ds = dataset(path, filesystem=self.file.get_fs(), **self.kwargs)
 
         return ds.take([self.index]).to_reader()

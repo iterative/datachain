@@ -15,7 +15,7 @@ class AzureClient(Client):
     protocol = "az"
 
     def info_to_file(self, v: dict[str, Any], path: str) -> File:
-        version_id = v.get("version_id")
+        version_id = v.get("version_id") if self._is_version_aware() else None
         return File(
             source=self.uri,
             path=path,
@@ -65,7 +65,7 @@ class AzureClient(Client):
                         if entries:
                             await result_queue.put(entries)
                             pbar.update(len(entries))
-                    if not found:
+                    if not found and prefix:
                         raise FileNotFoundError(
                             f"Unable to resolve remote path: {prefix}"
                         )

@@ -16,7 +16,4 @@ def test_column_filter_by_regex(test_session):
         dc.C("file.path").regexp("dog\\.txt$")
     )
 
-    assert set(chain.collect("file.path")) == {
-        "dog.txt",
-        "1dog.txt",
-    }
+    assert set(chain.to_values("file.path")) == {"dog.txt", "1dog.txt"}

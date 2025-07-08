@@ -6,12 +6,11 @@ from datachain.lib.file import File, TarVFile
 
 
 def build_tar_member(parent: File, info: tarfile.TarInfo) -> File:
-    new_parent = parent.get_full_name()
     etag_string = "-".join([parent.etag, info.name, str(info.mtime)])
     etag = hashlib.md5(etag_string.encode(), usedforsecurity=False).hexdigest()
     return File(
         source=parent.source,
-        path=f"{new_parent}/{info.name}",
+        path=f"{parent.path}/{info.name}",
         version=parent.version,
         size=info.size,
         etag=etag,

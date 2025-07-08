@@ -51,6 +51,12 @@ def test_scandir_error(client):
         scandir(client, "bogus")
 
 
+@pytest.mark.parametrize("tree", [{}], indirect=True)
+def test_scandir_empty_bucket(client):
+    results = scandir(client, "")
+    match_entries(results, [])
+
+
 @pytest.mark.xfail
 def test_scandir_not_dir(client):
     with pytest.raises(FileNotFoundError):

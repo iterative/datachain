@@ -76,7 +76,7 @@ class ArrowGenerator(Generator):
             fs_path = file.path
             fs = ReferenceFileSystem({fs_path: [cache_path]})
         else:
-            fs, fs_path = file.get_fs(), file.get_path()
+            fs, fs_path = file.get_fs(), file.get_fs_path()
 
         kwargs = self.kwargs
         if format := kwargs.get("format"):
@@ -169,8 +169,8 @@ def infer_schema(chain: "DataChain", **kwargs) -> pa.Schema:
         kwargs["format"] = fix_pyarrow_format(format, parse_options)
 
     schemas = []
-    for file in chain.collect("file"):
-        ds = dataset(file.get_path(), filesystem=file.get_fs(), **kwargs)  # type: ignore[union-attr]
+    for (file,) in chain.to_iter("file"):
+        ds = dataset(file.get_fs_path(), filesystem=file.get_fs(), **kwargs)  # type: ignore[union-attr]
         schemas.append(ds.schema)
     if not schemas:
         raise ValueError(
@@ -250,6 +250,8 @@ def arrow_type_mapper(col_type: pa.DataType, column: str = "") -> type:  # noqa:
         return dict
     if isinstance(col_type, pa.lib.DictionaryType):
         return arrow_type_mapper(col_type.value_type)  # type: ignore[return-value]
+    if pa.types.is_null(col_type):
+        return str  # use strings for null columns
     raise TypeError(f"{col_type!r} datatypes not supported, column: {column}")
 
 

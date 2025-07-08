@@ -15,6 +15,34 @@ class classproperty:  # noqa: N801
         return self.fget(owner)
 
 
+def _wrap_class(sync_fs_class):
+    """
+    Analog of `AsyncFileSystemWrapper.wrap_class` from fsspec, but sets
+    asynchronous to False by default. This is similar to other Async FS
+    we initialize. E.g. it means we don't break things in Jupyter where code
+    run in async.
+
+    This also fixes write operations by ensuring they are properly forwarded
+    to the underlying filesystem without async buffering issues.
+    """
+    from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
+
+    class GeneratedAsyncFileSystemWrapper(AsyncFileSystemWrapper):
+        def __init__(self, *args, **kwargs):
+            sync_fs = sync_fs_class(*args, **kwargs)
+            super().__init__(sync_fs, asynchronous=False)
+
+        def open(self, path, mode="rb", **kwargs):
+            # Override open to ensure write operations work correctly.
+            # It seems to be a bug in the fsspec wrapper. It avoids
+            # wrapping open() explicitly but also doesn't redirect it to
+            # sync filesystem.
+            return self.sync_fs.open(path, mode, **kwargs)
+
+    GeneratedAsyncFileSystemWrapper.__name__ = f"Async{sync_fs_class.__name__}Wrapper"
+    return GeneratedAsyncFileSystemWrapper
+
+
 @functools.cache
 def get_hf_filesystem_cls():
     import fsspec
@@ -29,10 +57,9 @@ def get_hf_filesystem_cls():
             f"{fsspec_version} is installed."
         )
 
-    from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
     from huggingface_hub import HfFileSystem
 
-    fs_cls = AsyncFileSystemWrapper.wrap_class(HfFileSystem)
+    fs_cls = _wrap_class(HfFileSystem)
     # AsyncFileSystemWrapper does not set class properties, so we need to set them back.
     fs_cls.protocol = HfFileSystem.protocol
     return fs_cls

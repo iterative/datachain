@@ -11,6 +11,7 @@ from collections.abc import Generator, Iterable, Iterator, Sequence
 from copy import copy
 from functools import wraps
 from secrets import token_hex
+from types import GeneratorType
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -41,12 +42,13 @@ from datachain.data_storage.schema import (
     partition_col_names,
     partition_columns,
 )
-from datachain.dataset import DATASET_PREFIX, DatasetDependency, DatasetStatus, RowDict
+from datachain.dataset import DatasetDependency, DatasetStatus, RowDict
 from datachain.error import DatasetNotFoundError, QueryScriptCancelError
 from datachain.func.base import Function
 from datachain.lib.listing import is_listing_dataset, listing_dataset_expired
 from datachain.lib.udf import UDFAdapter, _get_cache
 from datachain.progress import CombinedDownloadCallback, TqdmCombinedDownloadCallback
+from datachain.project import Project
 from datachain.query.schema import C, UDFParamSpec, normalize_param
 from datachain.query.session import Session
 from datachain.query.udf import UdfInfo
@@ -80,10 +82,13 @@ if TYPE_CHECKING:
 INSERT_BATCH_SIZE = 10000
 
 PartitionByType = Union[
-    Function, ColumnElement, Sequence[Union[Function, ColumnElement]]
+    str,
+    Function,
+    ColumnElement,
+    Sequence[Union[str, Function, ColumnElement]],
 ]
 JoinPredicateType = Union[str, ColumnClause, ColumnElement]
-DatasetDependencyType = tuple[str, str]
+DatasetDependencyType = tuple["DatasetRecord", str]
 
 logger = logging.getLogger("datachain")
 
@@ -169,18 +174,17 @@ class QueryStep:
     """A query that returns all rows from specific dataset version"""
 
     catalog: "Catalog"
-    dataset_name: str
+    dataset: "DatasetRecord"
     dataset_version: str
 
     def apply(self) -> "StepResult":
         def q(*columns):
             return sqlalchemy.select(*columns)
 
-        dataset = self.catalog.get_dataset(self.dataset_name)
-        dr = self.catalog.warehouse.dataset_rows(dataset, self.dataset_version)
+        dr = self.catalog.warehouse.dataset_rows(self.dataset, self.dataset_version)
 
         return step_result(
-            q, dr.columns, dependencies=[(self.dataset_name, self.dataset_version)]
+            q, dr.columns, dependencies=[(self.dataset, self.dataset_version)]
         )
 
 
@@ -557,8 +561,8 @@ class UDFStep(Step, ABC):
         """
         assert self.partition_by is not None
 
-        if isinstance(self.partition_by, Sequence):
-            list_partition_by = self.partition_by
+        if isinstance(self.partition_by, (list, tuple, GeneratorType)):
+            list_partition_by = list(self.partition_by)
         else:
             list_partition_by = [self.partition_by]
 
@@ -575,7 +579,10 @@ class UDFStep(Step, ABC):
             f.dense_rank().over(order_by=partition_by).label(PARTITION_COLUMN_ID),
         ]
         self.catalog.warehouse.db.execute(
-            tbl.insert().from_select(cols, query.with_only_columns(*cols))
+            tbl.insert().from_select(
+                cols,
+                query.offset(None).limit(None).with_only_columns(*cols),
+            )
         )
 
         return tbl
@@ -601,13 +608,10 @@ class UDFStep(Step, ABC):
         if self.partition_by is not None:
             partition_tbl = self.create_partitions_table(query)
             temp_tables.append(partition_tbl.name)
-
-            subq = query.subquery()
-            query = (
-                sqlalchemy.select(*subq.c)
-                .outerjoin(partition_tbl, partition_tbl.c.sys__id == subq.c.sys__id)
-                .add_columns(*partition_columns())
-            )
+            query = query.outerjoin(
+                partition_tbl,
+                partition_tbl.c.sys__id == query.selected_columns.sys__id,
+            ).add_columns(*partition_columns())
 
         query, tables = self.process_input_query(query)
         temp_tables.extend(t.name for t in tables)
@@ -1095,15 +1099,13 @@ class DatasetQuery:
         self,
         name: str,
         version: Optional[str] = None,
+        project_name: Optional[str] = None,
+        namespace_name: Optional[str] = None,
         catalog: Optional["Catalog"] = None,
         session: Optional[Session] = None,
-        indexing_column_types: Optional[dict[str, Any]] = None,
         in_memory: bool = False,
-        fallback_to_studio: bool = True,
         update: bool = False,
     ) -> None:
-        from datachain.remote.studio import is_token_set
-
         self.session = Session.get(session, catalog=catalog, in_memory=in_memory)
         self.catalog = catalog or self.session.catalog
         self.steps: list[Step] = []
@@ -1128,54 +1130,43 @@ class DatasetQuery:
         if version:
             self.version = version
 
-        if is_listing_dataset(name):
-            if version:
-                # this listing dataset should already be listed as we specify
-                # exact version
-                self._set_starting_step(self.catalog.get_dataset(name))
-            else:
-                # not setting query step yet as listing dataset might not exist at
-                # this point
-                self.list_ds_name = name
-        elif fallback_to_studio and is_token_set():
-            self._set_starting_step(
-                self.catalog.get_dataset_with_remote_fallback(name, version)
-            )
+        namespace_name = namespace_name or self.catalog.metastore.default_namespace_name
+        project_name = project_name or self.catalog.metastore.default_project_name
+
+        if is_listing_dataset(name) and not version:
+            # not setting query step yet as listing dataset might not exist at
+            # this point
+            self.list_ds_name = name
         else:
-            self._set_starting_step(self.catalog.get_dataset(name))
+            self._set_starting_step(
+                self.catalog.get_dataset_with_remote_fallback(
+                    name,
+                    namespace_name=namespace_name,
+                    project_name=project_name,
+                    version=version,
+                    pull_dataset=True,
+                    update=update,
+                )
+            )
 
     def _set_starting_step(self, ds: "DatasetRecord") -> None:
         if not self.version:
             self.version = ds.latest_version
 
-        self.starting_step = QueryStep(self.catalog, ds.name, self.version)
+        self.starting_step = QueryStep(self.catalog, ds, self.version)
 
         # at this point we know our starting dataset so setting up schemas
         self.feature_schema = ds.get_version(self.version).feature_schema
         self.column_types = copy(ds.schema)
         if "sys__id" in self.column_types:
             self.column_types.pop("sys__id")
+        self.project = ds.project
 
     def __iter__(self):
         return iter(self.db_results())
 
     def __or__(self, other):
         return self.union(other)
-
-    def pull_dataset(self, name: str, version: Optional[str] = None) -> "DatasetRecord":
-        print("Dataset not found in local catalog, trying to get from studio")
-
-        remote_ds_uri = f"{DATASET_PREFIX}{name}"
-        if version:
-            remote_ds_uri += f"@v{version}"
-
-        self.catalog.pull_dataset(
-            remote_ds_uri=remote_ds_uri,
-            local_ds_name=name,
-            local_ds_version=version,
-        )
-
-        return self.catalog.get_dataset(name)
 
     @staticmethod
     def get_table() -> "TableClause":
@@ -1348,7 +1339,7 @@ class DatasetQuery:
 
             async def get_params(row: Sequence) -> tuple:
                 row_dict = RowDict(zip(query_fields, row))
-                return tuple(
+                return tuple(  # noqa: C409
                     [
                         await p.get_value_async(
                             self.catalog, row_dict, mapper, **kwargs
@@ -1657,6 +1648,8 @@ class DatasetQuery:
         workers: Union[bool, int] = False,
         min_task_size: Optional[int] = None,
         partition_by: Optional[PartitionByType] = None,
+        namespace: Optional[str] = None,
+        project: Optional[str] = None,
         cache: bool = False,
     ) -> "Self":
         query = self.clone()
@@ -1675,13 +1668,37 @@ class DatasetQuery:
         return query
 
     def _add_dependencies(self, dataset: "DatasetRecord", version: str):
-        for dependency in self.dependencies:
-            ds_dependency_name, ds_dependency_version = dependency
+        dependencies: set[DatasetDependencyType] = set()
+        for dep_dataset, dep_dataset_version in self.dependencies:
+            if Session.is_temp_dataset(dep_dataset.name):
+                # temp dataset are created for optimization and they will be removed
+                # afterwards. Therefore, we should not put them as dependencies, but
+                # their own direct dependencies
+                for dep in self.catalog.get_dataset_dependencies(
+                    dep_dataset.name,
+                    dep_dataset_version,
+                    dep_dataset.project,
+                    indirect=False,
+                ):
+                    if dep:
+                        dep_project = self.catalog.metastore.get_project(
+                            dep.project, dep.namespace
+                        )
+                        dependencies.add(
+                            (
+                                self.catalog.get_dataset(dep.name, dep_project),
+                                dep.version,
+                            )
+                        )
+            else:
+                dependencies.add((dep_dataset, dep_dataset_version))
+
+        for dep_dataset, dep_dataset_version in dependencies:
             self.catalog.metastore.add_dataset_dependency(
-                dataset.name,
+                dataset,
                 version,
-                ds_dependency_name,
-                ds_dependency_version,
+                dep_dataset,
+                dep_dataset_version,
             )
 
     def exec(self) -> "Self":
@@ -1697,6 +1714,7 @@ class DatasetQuery:
         self,
         name: Optional[str] = None,
         version: Optional[str] = None,
+        project: Optional[Project] = None,
         feature_schema: Optional[dict] = None,
         dependencies: Optional[list[DatasetDependency]] = None,
         description: Optional[str] = None,
@@ -1705,8 +1723,13 @@ class DatasetQuery:
         **kwargs,
     ) -> "Self":
         """Save the query as a dataset."""
+        project = project or self.catalog.metastore.default_project
         try:
-            if name and version and self.catalog.get_dataset(name).has_version(version):
+            if (
+                name
+                and version
+                and self.catalog.get_dataset(name, project).has_version(version)
+            ):
                 raise RuntimeError(f"Dataset {name} already has version {version}")
         except DatasetNotFoundError:
             pass
@@ -1731,6 +1754,7 @@ class DatasetQuery:
 
             dataset = self.catalog.create_dataset(
                 name,
+                project,
                 version=version,
                 feature_schema=feature_schema,
                 columns=columns,
@@ -1756,11 +1780,25 @@ class DatasetQuery:
 
             if dependencies:
                 # overriding dependencies
-                self.dependencies = {(dep.name, dep.version) for dep in dependencies}
+                self.dependencies = set()
+                for dep in dependencies:
+                    dep_project = self.catalog.metastore.get_project(
+                        dep.project, dep.namespace
+                    )
+                    self.dependencies.add(
+                        (self.catalog.get_dataset(dep.name, dep_project), dep.version)
+                    )
+
             self._add_dependencies(dataset, version)  # type: ignore [arg-type]
         finally:
             self.cleanup()
-        return self.__class__(name=name, version=version, catalog=self.catalog)
+        return self.__class__(
+            name=name,
+            namespace_name=project.namespace.name,
+            project_name=project.name,
+            version=version,
+            catalog=self.catalog,
+        )
 
     @property
     def is_ordered(self) -> bool:

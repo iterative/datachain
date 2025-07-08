@@ -1,8 +1,13 @@
+# Maximum version number for semver (major.minor.patch) is 999999.999999.999999
+# this number was chosen because value("999999.999999.999999") < 2**63 - 1
+MAX_VERSION_NUMBER = 999_999
+
+
 def parse(version: str) -> tuple[int, int, int]:
     """Parsing semver into 3 integers: major, minor, patch"""
     validate(version)
     parts = version.split(".")
-    return (int(parts[0]), int(parts[1]), int(parts[2]))
+    return int(parts[0]), int(parts[1]), int(parts[2])
 
 
 def validate(version: str) -> None:
@@ -20,14 +25,18 @@ def validate(version: str) -> None:
     for part in parts:
         try:
             val = int(part)
-            assert val >= 0
+            assert 0 <= val <= MAX_VERSION_NUMBER
         except (ValueError, AssertionError):
             raise ValueError(error_message) from None
 
 
 def create(major: int = 0, minor: int = 0, patch: int = 0) -> str:
     """Creates new semver from 3 integers: major, minor and patch"""
-    if major < 0 or minor < 0 or patch < 0:
+    if not (
+        0 <= major <= MAX_VERSION_NUMBER
+        and 0 <= minor <= MAX_VERSION_NUMBER
+        and 0 <= patch <= MAX_VERSION_NUMBER
+    ):
         raise ValueError("Major, minor and patch must be greater or equal to zero")
 
     return ".".join([str(major), str(minor), str(patch)])
@@ -35,10 +44,11 @@ def create(major: int = 0, minor: int = 0, patch: int = 0) -> str:
 
 def value(version: str) -> int:
     """
-    Calculate integer value of a version. This is useful when comparing two versions
+    Calculate integer value of a version. This is useful when comparing two versions.
     """
     major, minor, patch = parse(version)
-    return major * 100 + minor * 10 + patch
+    limit = MAX_VERSION_NUMBER + 1
+    return major * (limit**2) + minor * limit + patch
 
 
 def compare(v1: str, v2: str) -> int:

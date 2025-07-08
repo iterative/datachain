@@ -1,18 +1,13 @@
 import os
 import os.path
 import re
-from typing import (
-    TYPE_CHECKING,
-    Optional,
-    Union,
-)
+from typing import TYPE_CHECKING, Optional, Union
 
+import cloudpickle
+
+from datachain.lib import meta_formats
 from datachain.lib.data_model import DataType
-from datachain.lib.file import (
-    File,
-    FileType,
-)
-from datachain.lib.meta_formats import read_meta
+from datachain.lib.file import File, FileType
 
 if TYPE_CHECKING:
     from typing_extensions import ParamSpec
@@ -76,7 +71,7 @@ def read_json(
         column = format
     chain = read_storage(uri=path, type=type, **kwargs)
     signal_dict = {
-        column: read_meta(
+        column: meta_formats.read_meta(
             schema_from=schema_from,
             format=format,
             spec=spec,
@@ -88,4 +83,7 @@ def read_json(
     }
     # disable prefetch if nrows is set
     settings = {"prefetch": 0} if nrows else {}
+
+    cloudpickle.register_pickle_by_value(meta_formats)
+
     return chain.settings(**settings).gen(**signal_dict)  # type: ignore[misc, arg-type]

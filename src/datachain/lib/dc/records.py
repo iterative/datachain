@@ -68,6 +68,7 @@ def read_records(
 
     dsr = catalog.create_dataset(
         name,
+        catalog.metastore.default_project,
         columns=columns,
         feature_schema=(
             signal_schema.clone_without_sys_signals().serialize()
@@ -96,4 +97,4 @@ def read_records(
     for chunk in batched(records, INSERT_BATCH_SIZE):
         warehouse.insert_rows(table, chunk)
     warehouse.insert_rows_done(table)
-    return read_dataset(name=dsr.name, session=session, settings=settings)
+    return read_dataset(name=dsr.full_name, session=session, settings=settings)

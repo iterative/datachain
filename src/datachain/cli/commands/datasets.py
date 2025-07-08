@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 
 from datachain.cli.utils import determine_flavors
 from datachain.config import Config
-from datachain.error import DatasetNotFoundError
+from datachain.error import DataChainError, DatasetNotFoundError
 from datachain.studio import list_datasets as list_datasets_studio
 
 
@@ -101,11 +101,14 @@ def list_datasets_local(catalog: "Catalog", name: Optional[str] = None):
 
     for d in catalog.ls_datasets():
         for v in d.versions:
-            yield (d.name, v.version)
+            yield (d.full_name, v.version)
 
 
 def list_datasets_local_versions(catalog: "Catalog", name: str):
-    ds = catalog.get_dataset(name)
+    namespace_name, project_name, name = catalog.get_full_dataset_name(name)
+
+    project = catalog.metastore.get_project(project_name, namespace_name)
+    ds = catalog.get_dataset(name, project)
     for v in ds.versions:
         yield (name, v.version)
 
@@ -129,24 +132,26 @@ def rm_dataset(
     name: str,
     version: Optional[str] = None,
     force: Optional[bool] = False,
-    studio: bool = False,
-    local: bool = False,
-    all: bool = True,
+    studio: Optional[bool] = False,
     team: Optional[str] = None,
 ):
-    from datachain.studio import remove_studio_dataset
+    namespace_name, project_name, name = catalog.get_full_dataset_name(name)
 
-    token = Config().read().get("studio", {}).get("token")
-    all, local, studio = determine_flavors(studio, local, all, token)
+    if not catalog.metastore.is_local_dataset(namespace_name) and studio:
+        from datachain.studio import remove_studio_dataset
 
-    if all or local:
+        token = Config().read().get("studio", {}).get("token")
+        if not token:
+            raise DataChainError(
+                "Not logged in to Studio. Log in with 'datachain auth login'."
+            )
+        remove_studio_dataset(team, name, namespace_name, project_name, version, force)
+    else:
         try:
-            catalog.remove_dataset(name, version=version, force=force)
+            project = catalog.metastore.get_project(project_name, namespace_name)
+            catalog.remove_dataset(name, project, version=version, force=force)
         except DatasetNotFoundError:
             print("Dataset not found in local", file=sys.stderr)
-
-    if (all or studio) and token:
-        remove_studio_dataset(team, name, version, force)
 
 
 def edit_dataset(
@@ -155,21 +160,25 @@ def edit_dataset(
     new_name: Optional[str] = None,
     description: Optional[str] = None,
     attrs: Optional[list[str]] = None,
-    studio: bool = False,
-    local: bool = False,
-    all: bool = True,
     team: Optional[str] = None,
 ):
-    from datachain.studio import edit_studio_dataset
+    namespace_name, project_name, name = catalog.get_full_dataset_name(name)
 
-    token = Config().read().get("studio", {}).get("token")
-    all, local, studio = determine_flavors(studio, local, all, token)
-
-    if all or local:
+    if catalog.metastore.is_local_dataset(namespace_name):
         try:
-            catalog.edit_dataset(name, new_name, description, attrs)
+            catalog.edit_dataset(
+                name, catalog.metastore.default_project, new_name, description, attrs
+            )
         except DatasetNotFoundError:
             print("Dataset not found in local", file=sys.stderr)
+    else:
+        from datachain.studio import edit_studio_dataset
 
-    if (all or studio) and token:
-        edit_studio_dataset(team, name, new_name, description, attrs)
+        token = Config().read().get("studio", {}).get("token")
+        if not token:
+            raise DataChainError(
+                "Not logged in to Studio. Log in with 'datachain auth login'."
+            )
+        edit_studio_dataset(
+            team, name, namespace_name, project_name, new_name, description, attrs
+        )

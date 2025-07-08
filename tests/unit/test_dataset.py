@@ -7,7 +7,14 @@ from sqlalchemy.dialects.sqlite import dialect as sqlite_dialect
 from sqlalchemy.schema import CreateTable
 
 from datachain.data_storage.schema import DataTable
-from datachain.dataset import DatasetDependency, DatasetDependencyType, DatasetVersion
+from datachain.dataset import (
+    DatasetDependency,
+    DatasetDependencyType,
+    DatasetRecord,
+    DatasetVersion,
+    parse_dataset_name,
+)
+from datachain.error import InvalidDatasetNameError
 from datachain.sql.types import (
     JSON,
     Array,
@@ -103,6 +110,8 @@ def test_dataset_dependency_dataset_name(dep_name, dep_type, expected):
         version="1.0.0",
         type=dep_type,
         created_at=datetime.now(timezone.utc),
+        namespace="dev",
+        project="animals",
         dependencies=[],
     )
 
@@ -138,3 +147,36 @@ def test_dataset_version_from_dict(use_string):
 
     dataset_version = DatasetVersion.from_dict(data)
     assert dataset_version.preview == preview
+
+
+@pytest.mark.parametrize(
+    "name,ok",
+    [
+        ("dogs", True),
+        ("test.parquet", False),
+        ("simple.test.parquet", False),
+    ],
+)
+def test_validate_name(name, ok):
+    if ok:
+        DatasetRecord.validate_name(name)
+    else:
+        with pytest.raises(InvalidDatasetNameError):
+            DatasetRecord.validate_name(name)
+
+
+@pytest.mark.parametrize(
+    "full_name,namespace,project,name",
+    [
+        ("dogs", None, None, "dogs"),
+        ("animals.dogs", None, "animals", "dogs"),
+        ("dev.animals.dogs", "dev", "animals", "dogs"),
+    ],
+)
+def test_parse_dataset_name(full_name, namespace, project, name):
+    assert parse_dataset_name(full_name) == (namespace, project, name)
+
+
+def test_parse_dataset_name_empty_name():
+    with pytest.raises(InvalidDatasetNameError):
+        assert parse_dataset_name(None)

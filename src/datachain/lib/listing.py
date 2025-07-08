@@ -107,11 +107,10 @@ def ls(
     return dc.filter(pathfunc.parent(_file_c("path")) == path.lstrip("/").rstrip("/*"))
 
 
-def parse_listing_uri(uri: str, client_config) -> tuple[str, str, str]:
+def parse_listing_uri(uri: str) -> tuple[str, str, str]:
     """
     Parsing uri and returns listing dataset name, listing uri and listing path
     """
-    client_config = client_config or {}
     storage_uri, path = Client.parse_url(uri)
     if uses_glob(path):
         lst_uri_path = posixpath.dirname(path)
@@ -123,6 +122,9 @@ def parse_listing_uri(uri: str, client_config) -> tuple[str, str, str]:
     ds_name = (
         f"{LISTING_PREFIX}{storage_uri}/{posixpath.join(lst_uri_path, '').lstrip('/')}"
     )
+
+    # we should remove dots from the name
+    ds_name = ds_name.replace(".", "_")
 
     return ds_name, lst_uri, path
 
@@ -175,7 +177,7 @@ def get_listing(
         _, path = Client.parse_url(uri)
         return None, uri, path, False
 
-    ds_name, list_uri, list_path = parse_listing_uri(uri, client_config)
+    ds_name, list_uri, list_path = parse_listing_uri(uri)
     listing = None
     listings = [
         ls for ls in catalog.listings() if not ls.is_expired and ls.contains(ds_name)
@@ -196,5 +198,4 @@ def get_listing(
         list_path = f"{ds_name.strip('/').removeprefix(listing.name)}/{list_path}"
 
     ds_name = listing.name if listing else ds_name
-
     return ds_name, list_uri, list_path, bool(listing)

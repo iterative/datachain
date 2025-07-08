@@ -41,6 +41,7 @@ from datachain.dataset import (
     DatasetStatus,
     StorageURI,
     create_dataset_uri,
+    parse_dataset_name,
     parse_dataset_uri,
 )
 from datachain.error import (
@@ -48,12 +49,15 @@ from datachain.error import (
     DatasetInvalidVersionError,
     DatasetNotFoundError,
     DatasetVersionNotFoundError,
+    NamespaceNotFoundError,
+    ProjectNotFoundError,
     QueryScriptCancelError,
     QueryScriptRunError,
 )
 from datachain.lib.listing import get_listing
 from datachain.node import DirType, Node, NodeWithPath
 from datachain.nodes_thread_pool import NodesThreadPool
+from datachain.project import Project
 from datachain.sql.types import DateTime, SQLType
 from datachain.utils import DataChainDir
 
@@ -66,6 +70,7 @@ if TYPE_CHECKING:
     )
     from datachain.dataset import DatasetListVersion
     from datachain.job import Job
+    from datachain.lib.listing_info import ListingInfo
     from datachain.listing import Listing
 
 logger = logging.getLogger("datachain")
@@ -154,9 +159,9 @@ class DatasetRowsFetcher(NodesThreadPool):
         self,
         metastore: "AbstractMetastore",
         warehouse: "AbstractWarehouse",
-        remote_ds_name: str,
+        remote_ds: DatasetRecord,
         remote_ds_version: str,
-        local_ds_name: str,
+        local_ds: DatasetRecord,
         local_ds_version: str,
         schema: dict[str, Union[SQLType, type[SQLType]]],
         max_threads: int = PULL_DATASET_MAX_THREADS,
@@ -168,9 +173,9 @@ class DatasetRowsFetcher(NodesThreadPool):
         self._check_dependencies()
         self.metastore = metastore
         self.warehouse = warehouse
-        self.remote_ds_name = remote_ds_name
+        self.remote_ds = remote_ds
         self.remote_ds_version = remote_ds_version
-        self.local_ds_name = local_ds_name
+        self.local_ds = local_ds
         self.local_ds_version = local_ds_version
         self.schema = schema
         self.last_status_check: Optional[float] = None
@@ -206,7 +211,7 @@ class DatasetRowsFetcher(NodesThreadPool):
         Checks are done every PULL_DATASET_CHECK_STATUS_INTERVAL seconds
         """
         export_status_response = self.studio_client.dataset_export_status(
-            self.remote_ds_name, self.remote_ds_version
+            self.remote_ds, self.remote_ds_version
         )
         if not export_status_response.ok:
             raise DataChainError(export_status_response.message)
@@ -253,9 +258,7 @@ class DatasetRowsFetcher(NodesThreadPool):
         import pandas as pd
 
         # metastore and warehouse are not thread safe
-        with self.metastore.clone() as metastore, self.warehouse.clone() as warehouse:
-            local_ds = metastore.get_dataset(self.local_ds_name)
-
+        with self.warehouse.clone() as warehouse:
             urls = list(urls)
 
             for url in urls:
@@ -268,7 +271,7 @@ class DatasetRowsFetcher(NodesThreadPool):
                 df = self.fix_columns(df)
 
                 inserted = warehouse.insert_dataset_rows(
-                    df, local_ds, self.local_ds_version
+                    df, self.local_ds, self.local_ds_version
                 )
                 self.increase_counter(inserted)  # type: ignore [arg-type]
                 # sometimes progress bar doesn't get updated so manually updating it
@@ -674,7 +677,11 @@ class Catalog:
             listing: Optional[Listing]
             if src.startswith("ds://"):
                 ds_name, ds_version = parse_dataset_uri(src)
-                dataset = self.get_dataset(ds_name)
+                ds_namespace, ds_project, ds_name = parse_dataset_name(ds_name)
+                assert ds_namespace
+                assert ds_project
+                project = self.metastore.get_project(ds_project, ds_namespace)
+                dataset = self.get_dataset(ds_name, project)
                 if not ds_version:
                     ds_version = dataset.latest_version
                 dataset_sources = self.warehouse.get_dataset_sources(
@@ -694,7 +701,11 @@ class Catalog:
                         dataset_name=dataset_name,
                     )
                     rows = DatasetQuery(
-                        name=dataset.name, version=ds_version, catalog=self
+                        name=dataset.name,
+                        namespace_name=dataset.project.namespace.name,
+                        project_name=dataset.project.name,
+                        version=ds_version,
+                        catalog=self,
                     ).to_db_records()
                     indexed_sources.append(
                         (
@@ -768,6 +779,7 @@ class Catalog:
     def create_dataset(
         self,
         name: str,
+        project: Optional[Project] = None,
         version: Optional[str] = None,
         *,
         columns: Sequence[Column],
@@ -787,6 +799,7 @@ class Catalog:
         If version is None, then next unused version is created.
         If version is given, then it must be an unused version.
         """
+        DatasetRecord.validate_name(name)
         assert [c.name for c in columns if c.name != "sys__id"], f"got {columns=}"
         if not listing and Client.is_data_source_uri(name):
             raise RuntimeError(
@@ -794,7 +807,7 @@ class Catalog:
             )
         default_version = DEFAULT_DATASET_VERSION
         try:
-            dataset = self.get_dataset(name)
+            dataset = self.get_dataset(name, project)
             default_version = dataset.next_version_patch
             if update_version == "major":
                 default_version = dataset.next_version_major
@@ -819,6 +832,7 @@ class Catalog:
             }
             dataset = self.metastore.create_dataset(
                 name,
+                project.id if project else None,
                 feature_schema=feature_schema,
                 query_script=query_script,
                 schema=schema,
@@ -891,7 +905,7 @@ class Catalog:
         )
 
         if create_rows_table:
-            table_name = self.warehouse.dataset_table_name(dataset.name, version)
+            table_name = self.warehouse.dataset_table_name(dataset, version)
             self.warehouse.create_dataset_rows_table(table_name, columns=columns)
             self.update_dataset_version_with_warehouse_info(dataset, version)
 
@@ -910,11 +924,7 @@ class Catalog:
             values["num_objects"] = None
             values["size"] = None
             values["preview"] = None
-            self.metastore.update_dataset_version(
-                dataset,
-                version,
-                **values,
-            )
+            self.metastore.update_dataset_version(dataset, version, **values)
             return
 
         if not dataset_version.num_objects:
@@ -926,7 +936,13 @@ class Catalog:
 
         if not dataset_version.preview:
             values["preview"] = (
-                DatasetQuery(name=dataset.name, version=version, catalog=self)
+                DatasetQuery(
+                    name=dataset.name,
+                    namespace_name=dataset.project.namespace.name,
+                    project_name=dataset.project.name,
+                    version=version,
+                    catalog=self,
+                )
                 .limit(20)
                 .to_db_records()
             )
@@ -934,11 +950,7 @@ class Catalog:
         if not values:
             return
 
-        self.metastore.update_dataset_version(
-            dataset,
-            version,
-            **values,
-        )
+        self.metastore.update_dataset_version(dataset, version, **values)
 
     def update_dataset(
         self, dataset: DatasetRecord, conn=None, **kwargs
@@ -956,6 +968,7 @@ class Catalog:
             # updating name must result in updating dataset table names as well
             for version in [v.version for v in dataset.versions]:
                 self.warehouse.rename_dataset_table(
+                    dataset,
                     old_name,
                     new_name,
                     old_version=version,
@@ -993,6 +1006,7 @@ class Catalog:
         self,
         name: str,
         sources: list[str],
+        project: Optional[Project] = None,
         client_config=None,
         recursive=False,
     ) -> DatasetRecord:
@@ -1000,6 +1014,8 @@ class Catalog:
             raise ValueError("Sources needs to be non empty list")
 
         from datachain import read_dataset, read_storage
+
+        project = project or self.metastore.default_project
 
         chains = []
         for source in sources:
@@ -1013,10 +1029,11 @@ class Catalog:
         # create union of all dataset queries created from sources
         dc = reduce(lambda dc1, dc2: dc1.union(dc2), chains)
         try:
+            dc = dc.settings(project=project.name, namespace=project.namespace.name)
             dc.save(name)
         except Exception as e:  # noqa: BLE001
             try:
-                ds = self.get_dataset(name)
+                ds = self.get_dataset(name, project)
                 self.metastore.update_dataset_status(
                     ds,
                     DatasetStatus.FAILED,
@@ -1033,7 +1050,7 @@ class Catalog:
             except DatasetNotFoundError:
                 raise e from None
 
-        ds = self.get_dataset(name)
+        ds = self.get_dataset(name, project)
 
         self.update_dataset_version_with_warehouse_info(
             ds,
@@ -1041,50 +1058,129 @@ class Catalog:
             sources="\n".join(sources),
         )
 
-        return self.get_dataset(name)
+        return self.get_dataset(name, project)
 
-    def get_dataset(self, name: str) -> DatasetRecord:
-        return self.metastore.get_dataset(name)
+    def get_full_dataset_name(
+        self,
+        name: str,
+        project_name: Optional[str] = None,
+        namespace_name: Optional[str] = None,
+    ) -> tuple[str, str, str]:
+        """
+        Returns dataset name together with separated namespace and project name.
+        It takes into account all the ways namespace and project can be added.
+        """
+        parsed_namespace_name, parsed_project_name, name = parse_dataset_name(name)
+
+        namespace_env = os.environ.get("DATACHAIN_NAMESPACE")
+        project_env = os.environ.get("DATACHAIN_PROJECT")
+        if project_env and len(project_env.split(".")) == 2:
+            # we allow setting both namespace and project in DATACHAIN_PROJECT
+            namespace_env, project_env = project_env.split(".")
+
+        namespace_name = (
+            parsed_namespace_name
+            or namespace_name
+            or namespace_env
+            or self.metastore.default_namespace_name
+        )
+        project_name = (
+            parsed_project_name
+            or project_name
+            or project_env
+            or self.metastore.default_project_name
+        )
+
+        return namespace_name, project_name, name
+
+    def get_dataset(
+        self, name: str, project: Optional[Project] = None
+    ) -> DatasetRecord:
+        from datachain.lib.listing import is_listing_dataset
+
+        project = project or self.metastore.default_project
+
+        if is_listing_dataset(name):
+            project = self.metastore.listing_project
+
+        try:
+            return self.metastore.get_dataset(name, project.id if project else None)
+        except DatasetNotFoundError:
+            raise DatasetNotFoundError(
+                f"Dataset {name} not found in namespace {project.namespace.name}"
+                f" and project {project.name}"
+            ) from None
 
     def get_dataset_with_remote_fallback(
-        self, name: str, version: Optional[str] = None
+        self,
+        name: str,
+        namespace_name: str,
+        project_name: str,
+        version: Optional[str] = None,
+        pull_dataset: bool = False,
+        update: bool = False,
     ) -> DatasetRecord:
-        try:
-            ds = self.get_dataset(name)
-            if version and not ds.has_version(version):
-                raise DatasetVersionNotFoundError(
-                    f"Dataset {name} does not have version {version}"
-                )
-            return ds
+        # Intentionally ignore update flag is version is provided. Here only exact
+        # version can be provided and update then doesn't make sense.
+        # It corresponds to a query like this for example:
+        #
+        #    dc.read_dataset("some.remote.dataset", version="1.0.0", update=True)
+        if version:
+            update = False
 
-        except (DatasetNotFoundError, DatasetVersionNotFoundError):
+        if self.metastore.is_local_dataset(namespace_name) or not update:
+            try:
+                project = self.metastore.get_project(project_name, namespace_name)
+                ds = self.get_dataset(name, project)
+                if not version or ds.has_version(version):
+                    return ds
+            except (NamespaceNotFoundError, ProjectNotFoundError, DatasetNotFoundError):
+                pass
+
+        if self.metastore.is_local_dataset(namespace_name):
+            raise DatasetNotFoundError(
+                f"Dataset {name}"
+                + (f" version {version} " if version else " ")
+                + f"not found in namespace {namespace_name} and project {project_name}"
+            )
+
+        if pull_dataset:
             print("Dataset not found in local catalog, trying to get from studio")
-
-            remote_ds_uri = f"{DATASET_PREFIX}{name}"
-            if version:
-                remote_ds_uri += f"@v{version}"
+            remote_ds_uri = create_dataset_uri(
+                name, namespace_name, project_name, version
+            )
 
             self.pull_dataset(
                 remote_ds_uri=remote_ds_uri,
                 local_ds_name=name,
                 local_ds_version=version,
             )
-            return self.get_dataset(name)
+            return self.get_dataset(
+                name, self.metastore.get_project(project_name, namespace_name)
+            )
+
+        return self.get_remote_dataset(namespace_name, project_name, name)
 
     def get_dataset_with_version_uuid(self, uuid: str) -> DatasetRecord:
         """Returns dataset that contains version with specific uuid"""
         for dataset in self.ls_datasets():
             if dataset.has_version_with_uuid(uuid):
-                return self.get_dataset(dataset.name)
+                return self.get_dataset(dataset.name, dataset.project)
         raise DatasetNotFoundError(f"Dataset with version uuid {uuid} not found.")
 
-    def get_remote_dataset(self, name: str) -> DatasetRecord:
+    def get_remote_dataset(
+        self, namespace: str, project: str, name: str
+    ) -> DatasetRecord:
         from datachain.remote.studio import StudioClient
 
         studio_client = StudioClient()
 
-        info_response = studio_client.dataset_info(name)
+        info_response = studio_client.dataset_info(namespace, project, name)
         if not info_response.ok:
+            if info_response.status == 404:
+                raise DatasetNotFoundError(
+                    f"Dataset {namespace}.{project}.{name} not found"
+                )
             raise DataChainError(info_response.message)
 
         dataset_info = info_response.data
@@ -1092,9 +1188,9 @@ class Catalog:
         return DatasetRecord.from_dict(dataset_info)
 
     def get_dataset_dependencies(
-        self, name: str, version: str, indirect=False
+        self, name: str, version: str, project: Optional[Project] = None, indirect=False
     ) -> list[Optional[DatasetDependency]]:
-        dataset = self.get_dataset(name)
+        dataset = self.get_dataset(name, project)
 
         direct_dependencies = self.metastore.get_direct_dataset_dependencies(
             dataset, version
@@ -1108,21 +1204,28 @@ class Catalog:
                 # dependency has been removed
                 continue
             if d.is_dataset:
+                project = self.metastore.get_project(d.project, d.namespace)
                 # only datasets can have dependencies
                 d.dependencies = self.get_dataset_dependencies(
-                    d.name, d.version, indirect=indirect
+                    d.name, d.version, project, indirect=indirect
                 )
 
         return direct_dependencies
 
     def ls_datasets(
-        self, include_listing: bool = False, studio: bool = False
+        self,
+        prefix: Optional[str] = None,
+        include_listing: bool = False,
+        studio: bool = False,
+        project: Optional[Project] = None,
     ) -> Iterator[DatasetListRecord]:
         from datachain.remote.studio import StudioClient
 
+        project_id = project.id if project else None
+
         if studio:
             client = StudioClient()
-            response = client.ls_datasets()
+            response = client.ls_datasets(prefix=prefix)
             if not response.ok:
                 raise DataChainError(response.message)
             if not response.data:
@@ -1133,8 +1236,12 @@ class Catalog:
                 for d in response.data
                 if not d.get("name", "").startswith(QUERY_DATASET_PREFIX)
             )
+        elif prefix:
+            datasets = self.metastore.list_datasets_by_prefix(
+                prefix, project_id=project_id
+            )
         else:
-            datasets = self.metastore.list_datasets()
+            datasets = self.metastore.list_datasets(project_id=project_id)
 
         for d in datasets:
             if not d.is_bucket_listing or include_listing:
@@ -1142,50 +1249,79 @@ class Catalog:
 
     def list_datasets_versions(
         self,
+        prefix: Optional[str] = None,
         include_listing: bool = False,
+        with_job: bool = True,
         studio: bool = False,
+        project: Optional[Project] = None,
     ) -> Iterator[tuple[DatasetListRecord, "DatasetListVersion", Optional["Job"]]]:
         """Iterate over all dataset versions with related jobs."""
         datasets = list(
-            self.ls_datasets(include_listing=include_listing, studio=studio)
+            self.ls_datasets(
+                prefix=prefix,
+                include_listing=include_listing,
+                studio=studio,
+                project=project,
+            )
         )
 
         # preselect dataset versions jobs from db to avoid multiple queries
-        jobs_ids: set[str] = {
-            v.job_id for ds in datasets for v in ds.versions if v.job_id
-        }
         jobs: dict[str, Job] = {}
-        if jobs_ids:
-            jobs = {j.id: j for j in self.metastore.list_jobs_by_ids(list(jobs_ids))}
+        if with_job:
+            jobs_ids: set[str] = {
+                v.job_id for ds in datasets for v in ds.versions if v.job_id
+            }
+            if jobs_ids:
+                jobs = {
+                    j.id: j for j in self.metastore.list_jobs_by_ids(list(jobs_ids))
+                }
 
         for d in datasets:
             yield from (
-                (d, v, jobs.get(str(v.job_id)) if v.job_id else None)
+                (d, v, jobs.get(str(v.job_id)) if with_job and v.job_id else None)
                 for v in d.versions
             )
 
-    def listings(self):
+    def listings(self, prefix: Optional[str] = None) -> list["ListingInfo"]:
         """
         Returns list of ListingInfo objects which are representing specific
         storage listing datasets
         """
-        from datachain.lib.listing import is_listing_dataset
+        from datachain.lib.listing import LISTING_PREFIX, is_listing_dataset
         from datachain.lib.listing_info import ListingInfo
+
+        if prefix and not prefix.startswith(LISTING_PREFIX):
+            prefix = LISTING_PREFIX + prefix
+
+        listing_datasets_versions = self.list_datasets_versions(
+            prefix=prefix,
+            include_listing=True,
+            with_job=False,
+            project=self.metastore.listing_project,
+        )
 
         return [
             ListingInfo.from_models(d, v, j)
-            for d, v, j in self.list_datasets_versions(include_listing=True)
+            for d, v, j in listing_datasets_versions
             if is_listing_dataset(d.name)
         ]
 
     def ls_dataset_rows(
-        self, name: str, version: str, offset=None, limit=None
+        self,
+        dataset: DatasetRecord,
+        version: str,
+        offset=None,
+        limit=None,
     ) -> list[dict]:
         from datachain.query.dataset import DatasetQuery
 
-        dataset = self.get_dataset(name)
-
-        q = DatasetQuery(name=dataset.name, version=version, catalog=self)
+        q = DatasetQuery(
+            name=dataset.name,
+            namespace_name=dataset.project.namespace.name,
+            project_name=dataset.project.name,
+            version=version,
+            catalog=self,
+        )
         if limit:
             q = q.limit(limit)
         if offset:
@@ -1218,35 +1354,29 @@ class Catalog:
         bucket_uri: str,
         name: str,
         version: str,
+        project: Optional[Project] = None,
         client_config=None,
     ) -> list[str]:
-        dataset = self.get_dataset(name)
+        dataset = self.get_dataset(name, project)
 
         return self.warehouse.export_dataset_table(
             bucket_uri, dataset, version, client_config
         )
 
-    def dataset_table_export_file_names(self, name: str, version: str) -> list[str]:
-        dataset = self.get_dataset(name)
+    def dataset_table_export_file_names(
+        self, name: str, version: str, project: Optional[Project] = None
+    ) -> list[str]:
+        dataset = self.get_dataset(name, project)
         return self.warehouse.dataset_table_export_file_names(dataset, version)
 
     def remove_dataset(
         self,
         name: str,
+        project: Optional[Project] = None,
         version: Optional[str] = None,
         force: Optional[bool] = False,
-        studio: Optional[bool] = False,
     ):
-        from datachain.remote.studio import StudioClient
-
-        if studio:
-            client = StudioClient()
-            response = client.rm_dataset(name, version=version, force=force)
-            if not response.ok:
-                raise DataChainError(response.message)
-            return
-
-        dataset = self.get_dataset(name)
+        dataset = self.get_dataset(name, project)
         if not version and not force:
             raise ValueError(f"Missing dataset version from input for dataset {name}")
         if version and not dataset.has_version(version):
@@ -1268,19 +1398,21 @@ class Catalog:
     def edit_dataset(
         self,
         name: str,
+        project: Optional[Project] = None,
         new_name: Optional[str] = None,
         description: Optional[str] = None,
         attrs: Optional[list[str]] = None,
     ) -> DatasetRecord:
         update_data = {}
         if new_name:
+            DatasetRecord.validate_name(new_name)
             update_data["name"] = new_name
         if description is not None:
             update_data["description"] = description
         if attrs is not None:
             update_data["attrs"] = attrs  # type: ignore[assignment]
 
-        dataset = self.get_dataset(name)
+        dataset = self.get_dataset(name, project)
         return self.update_dataset(dataset, **update_data)
 
     def ls(
@@ -1337,7 +1469,29 @@ class Catalog:
         except Exception as e:
             raise DataChainError("Error when parsing dataset uri") from e
 
-        remote_ds = self.get_remote_dataset(remote_ds_name)
+        remote_namespace, remote_project, remote_ds_name = parse_dataset_name(
+            remote_ds_name
+        )
+        if not remote_namespace or not remote_project:
+            raise DataChainError(
+                f"Invalid fully qualified dataset name {remote_ds_name}, namespace"
+                f" or project missing"
+            )
+
+        if local_ds_name:
+            local_namespace, local_project, local_ds_name = parse_dataset_name(
+                local_ds_name
+            )
+            if local_namespace and local_namespace != remote_namespace:
+                raise DataChainError(
+                    "Local namespace must be the same to remote namespace"
+                )
+            if local_project and local_project != remote_project:
+                raise DataChainError("Local project must be the same to remote project")
+
+        remote_ds = self.get_remote_dataset(
+            remote_namespace, remote_project, remote_ds_name
+        )
 
         try:
             # if version is not specified in uri, take the latest one
@@ -1345,7 +1499,12 @@ class Catalog:
                 version = remote_ds.latest_version
                 print(f"Version not specified, pulling the latest one (v{version})")
                 # updating dataset uri with latest version
-                remote_ds_uri = create_dataset_uri(remote_ds_name, version)
+                remote_ds_uri = create_dataset_uri(
+                    remote_ds.name,
+                    remote_ds.project.namespace.name,
+                    remote_ds.project.name,
+                    version,
+                )
             remote_ds_version = remote_ds.get_version(version)
         except (DatasetVersionNotFoundError, StopIteration) as exc:
             raise DataChainError(
@@ -1354,7 +1513,13 @@ class Catalog:
 
         local_ds_name = local_ds_name or remote_ds.name
         local_ds_version = local_ds_version or remote_ds_version.version
-        local_ds_uri = create_dataset_uri(local_ds_name, local_ds_version)
+
+        local_ds_uri = create_dataset_uri(
+            local_ds_name,
+            remote_ds.project.namespace.name,
+            remote_ds.project.name,
+            local_ds_version,
+        )
 
         try:
             # try to find existing dataset with the same uuid to avoid pulling again
@@ -1363,7 +1528,10 @@ class Catalog:
                 remote_ds_version.uuid
             )
             existing_ds_uri = create_dataset_uri(
-                existing_ds.name, existing_ds_version.version
+                existing_ds.name,
+                existing_ds.project.namespace.name,
+                existing_ds.project.name,
+                existing_ds_version.version,
             )
             if existing_ds_uri == remote_ds_uri:
                 print(f"Local copy of dataset {remote_ds_uri} already present")
@@ -1377,8 +1545,26 @@ class Catalog:
         except DatasetNotFoundError:
             pass
 
+        # Create namespace and project if doesn't exist
+        print(
+            f"Creating namespace {remote_ds.project.namespace.name} and project"
+            f" {remote_ds.project.name}"
+        )
+
+        namespace = self.metastore.create_namespace(
+            remote_ds.project.namespace.name,
+            description=remote_ds.project.namespace.descr,
+            uuid=remote_ds.project.namespace.uuid,
+        )
+        project = self.metastore.create_project(
+            namespace.name,
+            remote_ds.project.name,
+            description=remote_ds.project.descr,
+            uuid=remote_ds.project.uuid,
+        )
+
         try:
-            local_dataset = self.get_dataset(local_ds_name)
+            local_dataset = self.get_dataset(local_ds_name, project=project)
             if local_dataset and local_dataset.has_version(local_ds_version):
                 raise DataChainError(
                     f"Local dataset {local_ds_uri} already exists with different uuid,"
@@ -1400,6 +1586,7 @@ class Catalog:
 
         local_ds = self.create_dataset(
             local_ds_name,
+            project,
             local_ds_version,
             query_script=remote_ds_version.query_script,
             create_rows=True,
@@ -1412,7 +1599,7 @@ class Catalog:
         # asking remote to export dataset rows table to s3 and to return signed
         # urls of exported parts, which are in parquet format
         export_response = studio_client.export_dataset_table(
-            remote_ds_name, remote_ds_version.version
+            remote_ds, remote_ds_version.version
         )
         if not export_response.ok:
             raise DataChainError(export_response.message)
@@ -1443,9 +1630,9 @@ class Catalog:
                 rows_fetcher = DatasetRowsFetcher(
                     metastore,
                     warehouse,
-                    remote_ds_name,
+                    remote_ds,
                     remote_ds_version.version,
-                    local_ds_name,
+                    local_ds,
                     local_ds_version,
                     schema,
                     progress_bar=dataset_save_progress_bar,
@@ -1455,7 +1642,7 @@ class Catalog:
                         iter(batch(signed_urls)), dataset_save_progress_bar
                     )
                 except:
-                    self.remove_dataset(local_ds_name, local_ds_version)
+                    self.remove_dataset(local_ds_name, project, local_ds_version)
                     raise
 
         local_ds = self.metastore.update_dataset_status(
@@ -1512,7 +1699,11 @@ class Catalog:
             )
 
         self.create_dataset_from_sources(
-            output, sources, client_config=client_config, recursive=recursive
+            output,
+            sources,
+            self.metastore.default_project,
+            client_config=client_config,
+            recursive=recursive,
         )
 
     def query(

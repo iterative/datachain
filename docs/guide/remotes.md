@@ -86,7 +86,7 @@ DataChain uses [s3fs](https://s3fs.readthedocs.io/en/latest/) to interact with A
     if no caching is desired. See fsspec's documentation for other available
     `cache_type` values. Default cache_type is `"readahead"`.
 
-- `version_aware`: `bool` (default: `False`)
+- `version_aware`: `bool` (default: `True`)
 
     Whether to support bucket versioning. If enable this will require the
     user to have the necessary IAM permissions for dealing with versioned
