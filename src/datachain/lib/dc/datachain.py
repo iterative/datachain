@@ -930,10 +930,10 @@ class DataChain:
 
     def _process_complex_signal_partition(self, signal_type: type) -> list[Column]:
         """Process complex signal types (DataModel subclasses) for partition_by.
-        
+
         Args:
             signal_type: The DataModel type to process (e.g., File, Image)
-            
+
         Returns:
             List of Column objects representing the unique identifier columns
             for the complex signal type.
@@ -942,25 +942,25 @@ class DataChain:
             raise ValueError(
                 f"Complex signal type {signal_type} must be a DataModel subclass"
             )
-        
+
         # Find the signal name in the schema that matches this type
         signal_name = None
         for name, schema_type in self.signals_schema.values.items():
             if schema_type == signal_type:
                 signal_name = name
                 break
-        
+
         if signal_name is None:
             raise ValueError(
                 f"Signal type {signal_type} not found in the current schema"
             )
-        
+
         # Get the unique ID keys for this DataModel type
-        unique_keys = getattr(signal_type, '_unique_id_keys', None)
+        unique_keys = getattr(signal_type, "_unique_id_keys", None)
         if unique_keys is None:
             # Fall back to using all columns of the signal if no unique keys defined
             unique_keys = list(signal_type._datachain_column_types.keys())
-        
+
         # Generate column objects for each unique key
         partition_columns = []
         for key in unique_keys:
@@ -973,12 +973,12 @@ class DataChain:
             except Exception:
                 # Skip columns that don't exist in the schema
                 continue
-        
+
         if not partition_columns:
             raise ValueError(
                 f"No valid partition columns found for signal type {signal_type}"
             )
-        
+
         return partition_columns
 
     @resolve_columns
