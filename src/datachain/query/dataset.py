@@ -85,7 +85,8 @@ PartitionByType = Union[
     str,
     Function,
     ColumnElement,
-    Sequence[Union[str, Function, ColumnElement]],
+    type,  # For complex signals like File, Image, etc.
+    Sequence[Union[str, Function, ColumnElement, type]],
 ]
 JoinPredicateType = Union[str, ColumnClause, ColumnElement]
 DatasetDependencyType = tuple["DatasetRecord", str]
