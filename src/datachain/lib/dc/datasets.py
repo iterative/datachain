@@ -364,19 +364,19 @@ def delete_dataset(
 
 
 def move_dataset(
-    name: str,
-    destination: str,
+    src: str,
+    dest: str,
     session: Optional[Session] = None,
     in_memory: bool = False,
 ) -> None:
     """Moves an entire dataset between namespaces and projects.
 
     Args:
-        name: The source dataset name. This can be a fully qualified name that includes
+        src: The source dataset name. This can be a fully qualified name that includes
             the namespace and project, or a regular name. If a regular name is used,
             default values will be applied. The source dataset will no longer exist
             after the move.
-        destination: The destination dataset name. This can also be a fully qualified
+        dst: The destination dataset name. This can also be a fully qualified
             name with a namespace and project, or just a regular name (default values
             will be used in that case). The original dataset will be moved here.
         session: An optional session instance. If not provided, the default session
@@ -400,8 +400,8 @@ def move_dataset(
     session = Session.get(session, in_memory=in_memory)
     catalog = session.catalog
 
-    namespace, project, name = catalog.get_full_dataset_name(name)
-    dest_namespace, dest_project, dest_name = catalog.get_full_dataset_name(destination)
+    namespace, project, name = catalog.get_full_dataset_name(src)
+    dest_namespace, dest_project, dest_name = catalog.get_full_dataset_name(dest)
 
     dataset = catalog.get_dataset(
         name, catalog.metastore.get_project(project, namespace)
