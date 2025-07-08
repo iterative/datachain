@@ -5,20 +5,21 @@ This PR implements support for complex signals (DataModel types like `File`, `Im
 
 ## Changes Made
 
-### 1. Updated Type Definitions
+### 1. Type Definitions (Unchanged)
 **File**: `src/datachain/query/dataset.py`
-- Extended `PartitionByType` to include `type` for complex signals
-- Added support for `type` in sequence parameters
+- `PartitionByType` remains unchanged - supports only column names and Column objects
+- No class type support added to maintain API consistency
 
 ```python
 PartitionByType = Union[
     str,
     Function,
     ColumnElement,
-    type,  # For complex signals like File, Image, etc.
-    Sequence[Union[str, Function, ColumnElement, type]],
+    Sequence[Union[str, Function, ColumnElement]],
 ]
 ```
+
+**This is the correct approach** - complex signals are accessed through their column names (e.g., `"file"`) rather than class types (e.g., `File`).
 
 ### 2. Enhanced DataChain.agg() Method
 **File**: `src/datachain/lib/dc/datachain.py`

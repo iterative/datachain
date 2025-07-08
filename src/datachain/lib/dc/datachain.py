@@ -772,8 +772,10 @@ class DataChain:
 
         This method bears similarity to `gen()` and `map()`, employing a comparable set
         of parameters, yet differs in two crucial aspects:
-        1. The `partition_by` parameter: This specifies the column name, complex signal type,
-           or a list of column names/types that determine the grouping criteria for aggregation.
+        1. The `partition_by` parameter: This specifies the column name or a list of
+           column names that determine the grouping criteria for aggregation. Complex
+           signal columns (like File objects) are automatically expanded to their unique
+           identifier columns.
         2. Group-based UDF function input: Instead of individual rows, the function
            receives a list all rows within each group defined by `partition_by`.
 
@@ -810,15 +812,16 @@ class DataChain:
             Using complex signals for partitioning:
 
             ```py
-            # Partition by File objects directly
+            # Partition by complex signal column name - automatically expands
+            # to File's unique identifier columns
             def my_agg(files: list[File]) -> Iterator[tuple[File, int]]:
                 yield files[0], sum(f.size for f in files)
 
             chain = chain.agg(
                 my_agg,
-                params={"file": File},
+                params=("file",),
                 output={"file": File, "total": int},
-                partition_by=File,  # Use File type directly
+                partition_by="file",  # Column name referring to File objects
             )
             chain.save("new_dataset")
             ```
@@ -826,7 +829,7 @@ class DataChain:
         # Convert string partition_by parameters to Column objects
         processed_partition_by = partition_by
         if partition_by is not None:
-            if isinstance(partition_by, (str, Function, ColumnElement, type)):
+            if isinstance(partition_by, (str, Function, ColumnElement)):
                 list_partition_by = [partition_by]
             else:
                 list_partition_by = list(partition_by)
@@ -834,17 +837,12 @@ class DataChain:
             processed_partition_columns: list[ColumnElement] = []
             for col in list_partition_by:
                 if isinstance(col, str):
-                    col_db_name = ColumnMeta.to_db_name(col)
-                    col_type = self.signals_schema.get_column_type(col_db_name)
-                    column = Column(col_db_name, python_to_sql(col_type))
-                    processed_partition_columns.append(column)
+                    # Process complex signal column names (e.g., "file" -> expand to unique keys)
+                    columns = self._process_complex_signal_column(col)
+                    processed_partition_columns.extend(columns)
                 elif isinstance(col, Function):
                     column = col.get_column(self.signals_schema)
                     processed_partition_columns.append(column)
-                elif isinstance(col, type) and issubclass(col, DataModel):
-                    # Handle complex signal types (like File, Image, etc.)
-                    complex_columns = self._process_complex_signal_partition(col)
-                    processed_partition_columns.extend(complex_columns)
                 else:
                     # Assume it's already a ColumnElement
                     processed_partition_columns.append(col)
@@ -928,58 +926,58 @@ class DataChain:
         columns = [C(col) for col in new_schema.db_signals()]
         return query_func(*columns, **kwargs)
 
-    def _process_complex_signal_partition(self, signal_type: type) -> list[Column]:
-        """Process complex signal types (DataModel subclasses) for partition_by.
 
+    def _process_complex_signal_column(self, column_name: str) -> list[Column]:
+        """Process complex signal column names for group_by.
+        
         Args:
-            signal_type: The DataModel type to process (e.g., File, Image)
-
+            column_name: The column name to process (e.g., "file")
+            
         Returns:
             List of Column objects representing the unique identifier columns
-            for the complex signal type.
+            for the complex signal, or a single Column if not a complex signal.
         """
-        if not (isinstance(signal_type, type) and issubclass(signal_type, DataModel)):
-            raise ValueError(
-                f"Complex signal type {signal_type} must be a DataModel subclass"
-            )
-
-        # Find the signal name in the schema that matches this type
-        signal_name = None
-        for name, schema_type in self.signals_schema.values.items():
-            if schema_type == signal_type:
-                signal_name = name
-                break
-
-        if signal_name is None:
-            raise ValueError(
-                f"Signal type {signal_type} not found in the current schema"
-            )
-
-        # Get the unique ID keys for this DataModel type
-        unique_keys = getattr(signal_type, "_unique_id_keys", None)
-        if unique_keys is None:
-            # Fall back to using all columns of the signal if no unique keys defined
-            unique_keys = list(signal_type._datachain_column_types.keys())
-
-        # Generate column objects for each unique key
-        partition_columns = []
-        for key in unique_keys:
-            col_name = f"{signal_name}.{key}"
-            col_db_name = ColumnMeta.to_db_name(col_name)
-            try:
-                col_type = self.signals_schema.get_column_type(col_db_name)
-                column = Column(col_db_name, python_to_sql(col_type))
-                partition_columns.append(column)
-            except Exception:
-                # Skip columns that don't exist in the schema
-                continue
-
-        if not partition_columns:
-            raise ValueError(
-                f"No valid partition columns found for signal type {signal_type}"
-            )
-
-        return partition_columns
+        try:
+            col_db_name = ColumnMeta.to_db_name(column_name)
+            col_type = self.signals_schema.get_column_type(col_db_name)
+            
+            # Check if this is a complex signal (DataModel type)
+            if (isinstance(col_type, type) and 
+                hasattr(col_type, '__bases__') and
+                any(base.__name__ == 'DataModel' for base in col_type.__bases__ if hasattr(base, '__name__'))):
+                
+                # Get the unique ID keys for this DataModel type
+                unique_keys = getattr(col_type, '_unique_id_keys', None)
+                if unique_keys is None:
+                    # Fall back to using all columns of the signal if no unique keys defined
+                    unique_keys = list(col_type._datachain_column_types.keys())
+                
+                # Generate column objects for each unique key
+                columns = []
+                for key in unique_keys:
+                    key_col_name = f"{column_name}.{key}"
+                    key_col_db_name = ColumnMeta.to_db_name(key_col_name)
+                    try:
+                        key_col_type = self.signals_schema.get_column_type(key_col_db_name)
+                        column = Column(key_col_db_name, python_to_sql(key_col_type))
+                        columns.append(column)
+                    except Exception:
+                        # Skip columns that don't exist in the schema
+                        continue
+                
+                if columns:
+                    return columns
+            
+            # Not a complex signal or no unique keys found - return single column
+            column = Column(col_db_name, python_to_sql(col_type))
+            return [column]
+            
+        except Exception:
+            # If anything fails, fall back to basic column creation
+            col_db_name = ColumnMeta.to_db_name(column_name)
+            col_type = self.signals_schema.get_column_type(col_db_name)
+            column = Column(col_db_name, python_to_sql(col_type))
+            return [column]
 
     @resolve_columns
     def order_by(self, *args, descending: bool = False) -> "Self":
@@ -1054,11 +1052,24 @@ class DataChain:
         The supported functions:
            count(), sum(), avg(), min(), max(), any_value(), collect(), concat()
 
+        Complex signal columns (like File objects) are automatically expanded to their
+        unique identifier columns when used in partition_by.
+
         Example:
             ```py
             chain = chain.group_by(
                 cnt=func.count(),
                 partition_by=("file_source", "file_ext"),
+            )
+            ```
+
+            Using complex signals:
+            ```py
+            # "file" column automatically expands to File's unique identifier columns
+            chain = chain.group_by(
+                total_size=func.sum("file.size"),
+                count=func.count(),
+                partition_by="file",  # Uses column name, expands to File's unique keys
             )
             ```
         """
@@ -1075,9 +1086,9 @@ class DataChain:
         # validate partition_by columns and add them to the schema
         for col in partition_by:
             if isinstance(col, str):
-                col_db_name = ColumnMeta.to_db_name(col)
-                col_type = self.signals_schema.get_column_type(col_db_name)
-                column = Column(col_db_name, python_to_sql(col_type))
+                # Process complex signal column names (e.g., "file" -> expand to unique keys)
+                columns = self._process_complex_signal_column(col)
+                partition_by_columns.extend(columns)
                 if col not in keep_columns:
                     keep_columns.append(col)
             elif isinstance(col, Function):
@@ -1085,6 +1096,7 @@ class DataChain:
                 col_db_name = column.name
                 col_type = column.type.python_type
                 schema_fields[col_db_name] = col_type
+                partition_by_columns.append(column)
             else:
                 raise DataChainColumnError(
                     col,
@@ -1093,7 +1105,6 @@ class DataChain:
                         " but expected str or Function"
                     ),
                 )
-            partition_by_columns.append(column)
 
         # validate signal columns and add them to the schema
         if not kwargs:
