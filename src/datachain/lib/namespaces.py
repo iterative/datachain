@@ -28,7 +28,7 @@ def create(
     """
     session = Session.get(session)
 
-    if not session.catalog.metastore.namespace_allowed_to_create:
+    if session.catalog.is_cli:
         raise NamespaceCreateNotAllowedError("Creating namespace is not allowed")
 
     Namespace.validate_name(name)

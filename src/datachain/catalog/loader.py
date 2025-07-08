@@ -137,10 +137,13 @@ def get_catalog(
     we can provide DATACHAIN_METASTORE_ARG_TEAM_ID=12345 env variable.
     """
     from datachain.catalog import Catalog
+    from datachain.data_storage.sqlite import SQLiteMetastore
 
+    metastore = get_metastore(in_memory=in_memory)
     return Catalog(
-        metastore=get_metastore(in_memory=in_memory),
+        metastore=metastore,
         warehouse=get_warehouse(in_memory=in_memory),
         client_config=client_config,
         in_memory=in_memory,
+        is_cli=isinstance(metastore, SQLiteMetastore),
     )

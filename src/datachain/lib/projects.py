@@ -32,7 +32,7 @@ def create(
     """
     session = Session.get(session)
 
-    if not session.catalog.metastore.project_allowed_to_create:
+    if session.catalog.is_cli:
         raise ProjectCreateNotAllowedError("Creating project is not allowed")
 
     Project.validate_name(name)

@@ -527,6 +527,7 @@ class Catalog:
             Callable[["AbstractWarehouse"], None]
         ] = None,
         in_memory: bool = False,
+        is_cli: Optional[bool] = True,
     ):
         datachain_dir = DataChainDir(cache=cache_dir, tmp=tmp_dir)
         datachain_dir.init()
@@ -540,6 +541,11 @@ class Catalog:
         }
         self._warehouse_ready_callback = warehouse_ready_callback
         self.in_memory = in_memory
+        self._is_cli = is_cli
+
+    @property
+    def is_cli(self) -> bool:
+        return self._is_cli  # type: ignore[return-value]
 
     @cached_property
     def warehouse(self) -> "AbstractWarehouse":
@@ -1128,7 +1134,12 @@ class Catalog:
         if version:
             update = False
 
-        if self.metastore.is_local_dataset(namespace_name) or not update:
+        # local dataset is the one that is in Studio or in CLI but has default namespace
+        is_local = (
+            not self.is_cli or namespace_name == self.metastore.default_namespace_name
+        )
+
+        if is_local or not update:
             try:
                 project = self.metastore.get_project(project_name, namespace_name)
                 ds = self.get_dataset(name, project)
@@ -1137,7 +1148,7 @@ class Catalog:
             except (NamespaceNotFoundError, ProjectNotFoundError, DatasetNotFoundError):
                 pass
 
-        if self.metastore.is_local_dataset(namespace_name):
+        if is_local:
             raise DatasetNotFoundError(
                 f"Dataset {name}"
                 + (f" version {version} " if version else " ")

@@ -16,7 +16,6 @@ from pydantic import BaseModel
 
 import datachain as dc
 from datachain import Column
-from datachain.data_storage import AbstractMetastore
 from datachain.error import (
     DatasetInvalidVersionError,
     DatasetNotFoundError,
@@ -3224,6 +3223,7 @@ def test_delete_dataset_versions_all(test_session):
 
 
 @pytest.mark.parametrize("force", (True, False))
+@pytest.mark.parametrize("is_cli", (True,))
 @skip_if_not_sqlite
 def test_delete_dataset_from_studio(test_session, studio_token, requests_mock, force):
     requests_mock.delete(f"{STUDIO_URL}/api/datachain/datasets", json={"ok": True})
@@ -3236,6 +3236,7 @@ def test_delete_dataset_from_studio(test_session, studio_token, requests_mock, f
     )
 
 
+@pytest.mark.parametrize("is_cli", (True,))
 @skip_if_not_sqlite
 def test_delete_dataset_from_studio_not_found(
     test_session, studio_token, requests_mock
@@ -3378,8 +3379,8 @@ def test_semver_preview_ok(test_session):
     assert sorted([p["num"] for p in dataset.get_version("1.0.1").preview]) == [3, 4]
 
 
-@pytest.mark.parametrize("allow_create_project", [True, False])
-def test_save_to_default_project(test_session, allow_create_project):
+@pytest.mark.parametrize("is_cli", [True, False])
+def test_save_to_default_project(test_session, is_cli):
     catalog = test_session.catalog
     ds_name = "fibonacci"
     dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save(ds_name)
@@ -3387,10 +3388,8 @@ def test_save_to_default_project(test_session, allow_create_project):
     assert ds.dataset.project == catalog.metastore.default_project
 
 
-@pytest.mark.parametrize("allow_create_project", [True, False])
-def test_save_to_default_project_with_read_storage(
-    tmp_dir, test_session, allow_create_project
-):
+@pytest.mark.parametrize("is_cli", [True, False])
+def test_save_to_default_project_with_read_storage(tmp_dir, test_session, is_cli):
     catalog = test_session.catalog
     ds_name = "parquet_ds"
 
@@ -3432,8 +3431,7 @@ def test_save_to_non_default_namespace_and_project(
 def test_dataset_not_found_in_default_project(test_session):
     metastore = test_session.catalog.metastore
     with pytest.raises(DatasetNotFoundError) as excinfo:
-        with patch.object(AbstractMetastore, "is_local_dataset", return_value=True):
-            dc.read_dataset("fibonacci")
+        dc.read_dataset("fibonacci")
     assert str(excinfo.value) == (
         f"Dataset fibonacci not found in namespace {metastore.default_namespace_name}"
         f" and project {metastore.default_project_name}"
@@ -3445,8 +3443,7 @@ def test_dataset_not_found_in_non_default_project(test_session, project_created)
     if project_created:
         dc.create_project("dev", "numbers")
     with pytest.raises(DatasetNotFoundError) as excinfo:
-        with patch.object(AbstractMetastore, "is_local_dataset", return_value=True):
-            dc.read_dataset("dev.numbers.fibonacci")
+        dc.read_dataset("dev.numbers.fibonacci")
     assert str(excinfo.value) == (
         "Dataset fibonacci not found in namespace dev and project numbers"
     )
@@ -3588,9 +3585,9 @@ def test_save_all_ways_to_set_project_invalid_name(
         )
 
 
-@pytest.mark.parametrize("allow_create_project", [False])
+@pytest.mark.parametrize("is_cli", [True])
 @skip_if_not_sqlite
-def test_save_create_project_not_allowed(test_session, allow_create_project):
+def test_save_create_project_not_allowed(test_session, is_cli):
     with pytest.raises(ProjectCreateNotAllowedError):
         dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save(
             "dev.numbers.fibonacci"
