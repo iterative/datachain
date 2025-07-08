@@ -20,13 +20,13 @@ If no namespace or project is specified, DataChain uses defaults depending on wh
 
 ### Studio
 
-- **Namespace:** `users`
-- **Project:** your username (e.g. `jondoe`)
+- **Namespace:** `@<username>` (e.g. `@jondoe`)
+- **Project:** `default`
 - Saving without namespace/project:
 
 ```python
 dc.read_values(scores=[1.2, 3.4, 2.5]).save("metrics")
-# Saved as users.jondoe.metrics
+# Saved as @jondoe.default.metrics
 ```
 
 ### CLI
