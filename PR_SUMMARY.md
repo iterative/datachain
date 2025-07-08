@@ -1,7 +1,7 @@
 # PR Summary: Allow Complex Signals in partition_by
 
 ## Overview
-This PR implements support for complex signals (DataModel types like `File`, `Image`, etc.) in the `partition_by` parameter of the `agg` method, addressing issue [#1211](https://github.com/iterative/datachain/issues/1211).
+This PR implements support for complex signals (Pydantic BaseModel types like `File`, `Image`, etc.) in the `partition_by` parameter of both `agg` and `group_by` methods, addressing issue [#1211](https://github.com/iterative/datachain/issues/1211). The implementation supports only column names and Column objects, automatically expanding complex signal columns to their unique identifier columns.
 
 ## Changes Made
 
@@ -25,20 +25,33 @@ PartitionByType = Union[
 **File**: `src/datachain/lib/dc/datachain.py`
 
 #### Added Complex Signal Processing Helper
-- New method `_process_complex_signal_partition()` that:
-  - Validates that the signal type is a DataModel subclass
-  - Finds the signal name in the schema
-  - Extracts unique identifier columns using `_unique_id_keys`
+- New method `_process_complex_signal_column()` that:
+  - Detects if a column name refers to a Pydantic BaseModel type
+  - Extracts unique identifier columns using `_unique_id_keys` or model fields
   - Generates appropriate Column objects for partitioning
+  - Supports both DataModel subclasses and regular Pydantic BaseModel types
 
 #### Updated Partition Processing Logic
-- Modified `agg()` method to handle `type` instances in `partition_by`
-- Added type checking for `isinstance(col, type) and issubclass(col, DataModel)`
-- Integrated complex signal processing into the existing logic
+- Modified `agg()` method to use `_process_complex_signal_column()` for string columns
+- Automatically expands complex signal columns to their unique identifier columns
+- Supports only column names and Column objects (NOT class types)
 
 #### Enhanced Documentation
-- Updated docstring with examples of complex signal usage
-- Added comprehensive usage examples showing File partitioning
+- Updated docstring with examples of complex signal column usage
+- Added comprehensive usage examples showing File column partitioning
+- Clarified that only column names are accepted, not class types
+
+### 3. Enhanced DataChain.group_by() Method
+**File**: `src/datachain/lib/dc/datachain.py`
+
+#### Updated Group By Processing Logic
+- Modified `group_by()` method to use `_process_complex_signal_column()` for string columns
+- Automatically expands complex signal columns to their unique identifier columns
+- Supports only column names and Column objects (NOT class types)
+
+#### Enhanced Documentation
+- Updated docstring with examples of complex signal column usage
+- Added examples showing automatic expansion of complex signals
 
 ## Usage Examples
 
@@ -55,40 +68,73 @@ chain = chain.agg(
     my_agg,
     params=("file",),
     output={"file": File, "total": int},
-    partition_by=File,  # Use File type directly
+    partition_by="file",  # Use column name (automatically expands to File's unique keys)
 )
 ```
 
-### Mixed Partitioning (String + Complex Signal)
+### Mixed Partitioning (Complex Signal Column + Simple Column)
 ```python
 result = chain.agg(
     my_agg,
     params=("file", "category"),
     output={"file": File, "category": str, "total": int},
-    partition_by=[File, "category"],  # Mixed types
+    partition_by=["file", "category"],  # Both column names
+)
+```
+
+### Group By with Complex Signals (Column Names Only)
+```python
+# group_by uses column names, not class types
+result = chain.group_by(
+    total_size=func.sum("file.size"),
+    count=func.count(),
+    partition_by="file",  # Uses column name, expands to File's unique keys
+)
+```
+
+### Deep Nesting Support (3+ Levels)
+```python
+# Supports deeply nested Pydantic BaseModels
+class NestedLevel3(BaseModel):
+    category: str
+    level2: NestedLevel2  # Which contains NestedLevel1
+    total: float
+
+result = chain.agg(
+    my_agg,
+    params=("nested",),
+    output={"nested": NestedLevel3, "total": int},
+    partition_by="nested",  # Column name - handles 3+ levels automatically
 )
 ```
 
 ## How It Works
 
-### 1. Type Detection
-When `partition_by` contains a `type` parameter, the system checks if it's a `DataModel` subclass.
+### 1. Column Name Detection
+When `partition_by` contains a string column name, the system checks if it refers to a Pydantic BaseModel type in the schema.
 
-### 2. Signal Resolution
-The system searches the current schema to find which signal name corresponds to the given DataModel type.
+### 2. BaseModel Type Detection
+The system uses `issubclass(col_type, BaseModel)` to detect if a column contains a complex signal (Pydantic BaseModel).
 
-### 3. Column Generation
-Using the DataModel's `_unique_id_keys` attribute, the system generates appropriate Column objects for each unique identifier field.
+### 3. Unique Key Resolution
+For BaseModel types, the system:
+- First checks for `_unique_id_keys` attribute (DataModel subclasses)
+- Falls back to `_datachain_column_types.keys()` (DataModel subclasses)
+- Falls back to `model_fields.keys()` (regular Pydantic BaseModel)
 
-### 4. Integration
+### 4. Column Generation
+Using the unique keys, the system generates appropriate Column objects for each unique identifier field (e.g., `file.source`, `file.path`).
+
+### 5. Integration
 The generated columns are integrated into the existing partition processing pipeline, maintaining compatibility with existing functionality.
 
 ## Benefits
 
-1. **Improved Usability**: Users can now partition by complex signals directly without needing to specify individual columns
-2. **Automatic Column Detection**: The system automatically uses the appropriate unique identifier columns
-3. **Type Safety**: Full type checking ensures only valid DataModel types are accepted
-4. **Backward Compatibility**: Existing code continues to work unchanged
+1. **Improved Usability**: Users can now partition by complex signals using column names (e.g., `"file"`) without needing to specify individual columns
+2. **Automatic Column Detection**: The system automatically uses the appropriate unique identifier columns for Pydantic BaseModel types
+3. **Broad Compatibility**: Supports both DataModel subclasses and regular Pydantic BaseModel types
+4. **Deep Nesting Support**: Handles complex nested structures with 3+ levels automatically
+5. **Backward Compatibility**: Existing code continues to work unchanged
 
 ## Testing
 
@@ -100,21 +146,23 @@ The generated columns are integrated into the existing partition processing pipe
 - Tests schema validation
 
 ### Test Coverage
-- ✅ Basic complex signal partitioning
-- ✅ Mixed type partitioning
-- ✅ Error handling for non-DataModel types
-- ✅ Error handling for signals not in schema
+- ✅ Basic complex signal partitioning using column names
+- ✅ Mixed column partitioning (complex + simple)
+- ✅ Deep nesting support (3+ levels of BaseModel nesting)
+- ✅ Both `agg` and `group_by` methods
+- ✅ Error handling for invalid column names
 - ✅ Multiple complex signals
 - ✅ Edge cases and validation
+- ✅ Support for both DataModel and regular Pydantic BaseModel types
 
 ## Error Handling
 
 The implementation includes comprehensive error handling:
 
-1. **Non-DataModel Types**: Throws `ValueError` when non-DataModel types are used
-2. **Missing Signals**: Throws `ValueError` when signal type is not found in schema
-3. **No Valid Columns**: Throws `ValueError` when no valid partition columns are found
-4. **Graceful Degradation**: Skips columns that don't exist in the schema
+1. **Invalid Column Names**: Throws `ValueError` when column names are not found in schema
+2. **Schema Lookup Failures**: Gracefully handles missing columns by falling back to basic column creation
+3. **Missing Unique Keys**: Falls back to using all model fields when `_unique_id_keys` is not defined
+4. **Graceful Degradation**: Skips columns that don't exist in the schema during complex signal expansion
 
 ## Backward Compatibility
 
@@ -133,16 +181,17 @@ This change is fully backward compatible:
 ## Future Enhancements
 
 This implementation provides a foundation for potential future enhancements:
-1. Support for custom unique key definitions
-2. Complex signal support in other methods (e.g., `group_by`)
+1. Support for custom unique key definitions per BaseModel type
+2. Complex signal support in other methods (e.g., `order_by`, `distinct`)
 3. Advanced partitioning strategies for complex signals
+4. Performance optimizations for deeply nested structures
 
 ## Files Modified
 
-1. `src/datachain/query/dataset.py` - Updated PartitionByType definition
-2. `src/datachain/lib/dc/datachain.py` - Enhanced agg method with complex signal support
-3. `tests/func/test_complex_partition_by.py` - Comprehensive test suite
+1. `src/datachain/query/dataset.py` - PartitionByType definition (no changes - supports column names only)
+2. `src/datachain/lib/dc/datachain.py` - Enhanced agg and group_by methods with complex signal support
+3. `tests/func/test_complex_partition_by.py` - Comprehensive test suite for both methods
 
 ## Conclusion
 
-This PR successfully implements the requested feature to allow complex signals in `partition_by`, providing a more intuitive and powerful API for users while maintaining full backward compatibility and robust error handling.
+This PR successfully implements the requested feature to allow complex signals in `partition_by` for both `agg` and `group_by` methods. The implementation uses column names only (not class types) and automatically expands Pydantic BaseModel types to their unique identifier columns, providing a more intuitive and powerful API for users while maintaining full backward compatibility and robust error handling.

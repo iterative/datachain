@@ -774,8 +774,8 @@ class DataChain:
         of parameters, yet differs in two crucial aspects:
         1. The `partition_by` parameter: This specifies the column name or a list of
            column names that determine the grouping criteria for aggregation. Complex
-           signal columns (like File objects) are automatically expanded to their unique
-           identifier columns.
+           signal columns (Pydantic BaseModel types like File objects) are automatically 
+           expanded to their unique identifier columns.
         2. Group-based UDF function input: Instead of individual rows, the function
            receives a list all rows within each group defined by `partition_by`.
 
@@ -813,7 +813,7 @@ class DataChain:
 
             ```py
             # Partition by complex signal column name - automatically expands
-            # to File's unique identifier columns
+            # to File's unique identifier columns (File is a Pydantic BaseModel)
             def my_agg(files: list[File]) -> Iterator[tuple[File, int]]:
                 yield files[0], sum(f.size for f in files)
 
@@ -928,29 +928,33 @@ class DataChain:
 
 
     def _process_complex_signal_column(self, column_name: str) -> list[Column]:
-        """Process complex signal column names for group_by.
+        """Process complex signal column names for partition_by.
         
         Args:
             column_name: The column name to process (e.g., "file")
             
         Returns:
             List of Column objects representing the unique identifier columns
-            for the complex signal, or a single Column if not a complex signal.
+            for the complex signal (Pydantic BaseModel), or a single Column if not a complex signal.
         """
         try:
             col_db_name = ColumnMeta.to_db_name(column_name)
-            col_type = self.signals_schema.get_column_type(col_db_name)
+            col_type = self.signals_schema.get_column_type(col_db_name, with_subtree=True)
             
-            # Check if this is a complex signal (DataModel type)
+            # Check if this is a complex signal (Pydantic BaseModel type)
             if (isinstance(col_type, type) and 
-                hasattr(col_type, '__bases__') and
-                any(base.__name__ == 'DataModel' for base in col_type.__bases__ if hasattr(base, '__name__'))):
+                issubclass(col_type, BaseModel)):
                 
-                # Get the unique ID keys for this DataModel type
+                # Get the unique ID keys for this BaseModel type
                 unique_keys = getattr(col_type, '_unique_id_keys', None)
                 if unique_keys is None:
-                    # Fall back to using all columns of the signal if no unique keys defined
-                    unique_keys = list(col_type._datachain_column_types.keys())
+                    # Fall back to using all model fields if no unique keys defined
+                    if hasattr(col_type, '_datachain_column_types'):
+                        # DataModel subclass
+                        unique_keys = list(col_type._datachain_column_types.keys())
+                    else:
+                        # Regular Pydantic BaseModel
+                        unique_keys = list(col_type.model_fields.keys())
                 
                 # Generate column objects for each unique key
                 columns = []
@@ -972,12 +976,16 @@ class DataChain:
             column = Column(col_db_name, python_to_sql(col_type))
             return [column]
             
-        except Exception:
-            # If anything fails, fall back to basic column creation
-            col_db_name = ColumnMeta.to_db_name(column_name)
-            col_type = self.signals_schema.get_column_type(col_db_name)
-            column = Column(col_db_name, python_to_sql(col_type))
-            return [column]
+        except Exception as e:
+            # If anything fails, fall back to basic column creation or raise appropriate error
+            try:
+                col_db_name = ColumnMeta.to_db_name(column_name)
+                col_type = self.signals_schema.get_column_type(col_db_name)
+                column = Column(col_db_name, python_to_sql(col_type))
+                return [column]
+            except Exception as original_error:
+                # Re-raise the original error to maintain backward compatibility
+                raise original_error
 
     @resolve_columns
     def order_by(self, *args, descending: bool = False) -> "Self":
@@ -1052,8 +1060,8 @@ class DataChain:
         The supported functions:
            count(), sum(), avg(), min(), max(), any_value(), collect(), concat()
 
-        Complex signal columns (like File objects) are automatically expanded to their
-        unique identifier columns when used in partition_by.
+        Complex signal columns (Pydantic BaseModel types like File objects) are automatically 
+        expanded to their unique identifier columns when used in partition_by.
 
         Example:
             ```py
@@ -1066,6 +1074,7 @@ class DataChain:
             Using complex signals:
             ```py
             # "file" column automatically expands to File's unique identifier columns
+            # (File is a Pydantic BaseModel)
             chain = chain.group_by(
                 total_size=func.sum("file.size"),
                 count=func.count(),
