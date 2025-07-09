@@ -43,7 +43,13 @@ from datachain.lib.udf_signature import UdfSignatureError
 from datachain.lib.utils import DataChainColumnError, DataChainParamsError
 from datachain.sql.types import Float, Int64, String
 from datachain.utils import STUDIO_URL
-from tests.utils import ANY_VALUE, df_equal, skip_if_not_sqlite, sort_df, sorted_dicts
+from tests.utils import (
+    ANY_VALUE,
+    df_equal,
+    skip_if_not_sqlite,
+    sort_df,
+    sorted_dicts,
+)
 
 DF_DATA = {
     "first_name": ["Alice", "Bob", "Charlie", "David", "Eva"],
