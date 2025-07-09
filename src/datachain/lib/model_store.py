@@ -85,7 +85,7 @@ class ModelStore:
     @staticmethod
     def is_partial(parent_type) -> bool:
         return (
-            parent_type and
-            ModelStore.is_pydantic(parent_type) and
-            "@" in ModelStore.get_name(parent_type)
+            parent_type
+            and ModelStore.is_pydantic(parent_type)
+            and "@" in ModelStore.get_name(parent_type)
         )

@@ -934,9 +934,9 @@ class DataChain:
         col_db_name = ColumnMeta.to_db_name(column_name)
         col_type = self.signals_schema.get_column_type(col_db_name, with_subtree=True)
 
-        if ModelStore.is_pydantic(col_type):
+        if type_ := ModelStore.to_pydantic(col_type):
             all_columns = []
-            keys = list(col_type.model_fields.keys())
+            keys = list(type_.model_fields.keys())
             for key in keys:
                 key_col_name = f"{column_name}.{key}"
                 key_columns = self._process_complex_signal_column(key_col_name)

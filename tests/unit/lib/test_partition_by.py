@@ -321,12 +321,13 @@ def test_complex_signal_deep_nesting(test_session):
     assert groups["item2"] == 20
 
     # ToDo:
-    # assert result.to_list("nested.id", "total_amount") == {("item1", 40), ("item2", 20)}
+    # assert result.to_list("nested.id", "total_amount") == {
+    #   ("item1", 40), ("item2", 20)
+    # }
 
 
 def test_nested_column_partition_by(test_session):
     """Test partition_by with nested column references like 'nested.level1.name'."""
-    from typing import ClassVar
 
     from pydantic import BaseModel
 
