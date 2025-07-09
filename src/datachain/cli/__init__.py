@@ -78,6 +78,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
 def handle_command(args, catalog, client_config) -> int:
     """Handle the different CLI commands."""
+    from datachain.cli.commands.storages import process_storage_command
     from datachain.studio import process_auth_cli_args, process_jobs_args
 
     command_handlers = {
@@ -96,6 +97,7 @@ def handle_command(args, catalog, client_config) -> int:
         "gc": lambda: garbage_collect(catalog),
         "auth": lambda: process_auth_cli_args(args),
         "job": lambda: process_jobs_args(args),
+        "storage": lambda: process_storage_command(args),
     }
 
     handler = command_handlers.get(args.command)
