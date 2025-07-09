@@ -1555,12 +1555,14 @@ class Catalog:
             remote_ds.project.namespace.name,
             description=remote_ds.project.namespace.descr,
             uuid=remote_ds.project.namespace.uuid,
+            validate=False,
         )
         project = self.metastore.create_project(
             namespace.name,
             remote_ds.project.name,
             description=remote_ds.project.descr,
             uuid=remote_ds.project.uuid,
+            validate=False,
         )
 
         try:
