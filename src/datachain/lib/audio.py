@@ -1,7 +1,5 @@
-from __future__ import annotations
-
 import posixpath
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional, Union
 
 from datachain.lib.file import FileError
 
@@ -20,17 +18,8 @@ except ImportError as exc:
     ) from exc
 
 
-def audio_info(file: File | AudioFile) -> Audio:
-    """
-    Returns audio file information.
-
-    Args:
-        file (AudioFile): Audio file object.
-
-    Returns:
-        Audio: Audio file information.
-    """
-    # Import here to avoid circular imports
+def audio_info(file: "Union[File, AudioFile]") -> "Audio":
+    """Extract metadata like sample rate, channels, duration, and format."""
     from datachain.lib.file import Audio
 
     file = file.as_audio_file()
@@ -66,26 +55,16 @@ def audio_info(file: File | AudioFile) -> Audio:
 
 
 def audio_segment_np(
-    audio: AudioFile, start: float = 0, duration: float | None = None
-) -> tuple[ndarray, int]:
-    """
-    Reads audio segment from a file and returns as numpy array.
-
-    Args:
-        audio (AudioFile): Audio file object.
-        start (float): Start time in seconds (default: 0).
-        duration (float, optional): Duration in seconds. If None, reads to end.
-
-    Returns:
-        tuple[ndarray, int]: Audio data and sample rate.
-    """
+    audio: "AudioFile", start: float = 0, duration: Optional[float] = None
+) -> "tuple[ndarray, int]":
+    """Load audio segment as numpy array.
+    Multi-channel audio is transposed to (samples, channels)."""
     if start < 0:
         raise ValueError("start must be a non-negative float")
 
     if duration is not None and duration <= 0:
         raise ValueError("duration must be a positive float")
 
-    # Ensure we have an AudioFile instance
     if hasattr(audio, "as_audio_file"):
         audio = audio.as_audio_file()
 
@@ -94,27 +73,22 @@ def audio_segment_np(
             info = torchaudio.info(f)
             sample_rate = info.sample_rate
 
-            # Calculate frame offset and number of frames
             frame_offset = int(start * sample_rate)
             num_frames = int(duration * sample_rate) if duration is not None else -1
 
-            # Reset position before loading (critical for FileWrapper)
+            # Reset file pointer to the beginning
+            # This is important to ensure we read from the correct position later
             f.seek(0)
 
-            # Load the audio segment
             waveform, sr = torchaudio.load(
                 f, frame_offset=frame_offset, num_frames=num_frames
             )
 
             audio_np = waveform.numpy()
 
-            # If stereo, take the mean across channels or return multi-channel
             if audio_np.shape[0] > 1:
-                # For compatibility, we can either return multi-channel or mono
-                # Here returning multi-channel as (samples, channels)
                 audio_np = audio_np.T
             else:
-                # Mono: shape (samples,)
                 audio_np = audio_np.squeeze()
 
             return audio_np, int(sr)
@@ -125,23 +99,12 @@ def audio_segment_np(
 
 
 def audio_segment_bytes(
-    audio: AudioFile,
+    audio: "AudioFile",
     start: float = 0,
-    duration: float | None = None,
+    duration: Optional[float] = None,
     format: str = "wav",
 ) -> bytes:
-    """
-    Reads audio segment from a file and returns as audio bytes.
-
-    Args:
-        audio (AudioFile): Audio file object.
-        start (float): Start time in seconds (default: 0).
-        duration (float, optional): Duration in seconds. If None, reads to end.
-        format (str): Audio format (default: 'wav').
-
-    Returns:
-        bytes: Audio segment as bytes.
-    """
+    """Convert audio segment to bytes using soundfile."""
     y, sr = audio_segment_np(audio, start, duration)
 
     import io
@@ -154,28 +117,14 @@ def audio_segment_bytes(
 
 
 def save_audio_fragment(
-    audio: AudioFile,
+    audio: "AudioFile",
     start: float,
     end: float,
     output: str,
-    format: str | None = None,
-) -> AudioFile:
-    """
-    Saves audio interval as a new audio file. If output is a remote path,
-    the audio file will be uploaded to the remote storage.
-
-    Args:
-        audio (AudioFile): Audio file object.
-        start (float): Start time in seconds.
-        end (float): End time in seconds.
-        output (str): Output path, can be a local path or a remote path.
-        format (str, optional): Output format (default: None). If not provided,
-                                the format will be inferred from the audio fragment
-                                file extension.
-
-    Returns:
-        AudioFile: Audio fragment model.
-    """
+    format: Optional[str] = None,
+) -> "AudioFile":
+    """Save audio fragment with timestamped filename.
+    Supports local and remote storage upload."""
     if start < 0 or end < 0 or start >= end:
         raise ValueError(f"Invalid time range: ({start:.3f}, {end:.3f})")
 
