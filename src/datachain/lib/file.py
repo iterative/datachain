@@ -41,7 +41,7 @@ sha256 = partial(hashlib.sha256, usedforsecurity=False)
 logger = logging.getLogger("datachain")
 
 # how to create file path when exporting
-ExportPlacement = Literal["filename", "etag", "fullpath", "checksum"]
+ExportPlacement = Literal["filename", "etag", "fullpath", "checksum", "normpath"]
 
 FileType = Literal["binary", "text", "image", "video", "audio"]
 EXPORT_FILES_MAX_THREADS = 5
@@ -58,6 +58,7 @@ class FileExporter(NodesThreadPool):
         link_type: Literal["copy", "symlink"],
         max_threads: int = EXPORT_FILES_MAX_THREADS,
         client_config: Optional[dict] = None,
+        relative_to: Optional[str] = None,
     ):
         super().__init__(max_threads)
         self.output = output
@@ -65,6 +66,7 @@ class FileExporter(NodesThreadPool):
         self.use_cache = use_cache
         self.link_type = link_type
         self.client_config = client_config
+        self.relative_to = relative_to
 
     def done_task(self, done):
         for task in done:
@@ -77,6 +79,7 @@ class FileExporter(NodesThreadPool):
             self.use_cache,
             link_type=self.link_type,
             client_config=self.client_config,
+            relative_to=self.relative_to,
         )
         self.increase_counter(1)
 
@@ -422,10 +425,11 @@ class File(DataModel):
         use_cache: bool = True,
         link_type: Literal["copy", "symlink"] = "copy",
         client_config: Optional[dict] = None,
+        relative_to: Optional[str] = None,
     ) -> None:
         """Export file to new location."""
         self._caching_enabled = use_cache
-        dst = self.get_destination_path(output, placement)
+        dst = self.get_destination_path(output, placement, relative_to)
         dst_dir = os.path.dirname(dst)
         client: Client = self._catalog.get_client(dst_dir, **(client_config or {}))
         client.fs.makedirs(dst_dir, exist_ok=True)
@@ -549,7 +553,10 @@ class File(DataModel):
         return path
 
     def get_destination_path(
-        self, output: Union[str, os.PathLike[str]], placement: ExportPlacement
+        self,
+        output: Union[str, os.PathLike[str]],
+        placement: ExportPlacement,
+        relative_to: Optional[str] = None,
     ) -> str:
         """
         Returns full destination path of a file for exporting to some output
@@ -566,6 +573,10 @@ class File(DataModel):
                 path = posixpath.join(source.netloc, path)
         elif placement == "checksum":
             raise NotImplementedError("Checksum placement not implemented yet")
+        elif placement == "normpath":
+            path = unquote(self.get_path_normalized())
+            if relative_to:
+                path = posixpath.relpath(path, relative_to)
         else:
             raise ValueError(f"Unsupported file export placement: {placement}")
         return posixpath.join(output, path)  # type: ignore[union-attr]
