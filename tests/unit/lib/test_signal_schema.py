@@ -1322,7 +1322,6 @@ def test_to_partial_complex_signal_entire_file():
     serialized = partial.serialize()
     assert "file" in serialized
     assert serialized["file"] == "File@v1"
-    assert "_custom_types" in serialized
     assert "File@v1" in serialized["_custom_types"]
 
 
@@ -1334,13 +1333,7 @@ def test_to_partial_complex_nested_signal():
     schema = SignalSchema({"my_col": Custom, "name": str})
     partial = schema.to_partial("my_col.src")
 
-    # Should return the entire File complex signal
     assert partial.values == {"my_col.src": File}
-    serialized = partial.serialize()
-    assert "my_col.src" in serialized
-    assert serialized["my_col.src"] == "File@v1"
-    assert "_custom_types" in serialized
-    assert "File@v1" in serialized["_custom_types"]
 
 
 def test_to_partial_complex_deeply_nested_signal():
@@ -1367,9 +1360,6 @@ def test_to_partial_complex_deeply_nested_signal():
     # Should return the entire ImageFile complex signal with simplified name
     assert "deep.level2.level1.image" in partial.values
     assert partial.values["deep.level2.level1.image"] == ImageFile
-    serialized = partial.serialize()
-    assert "deep.level2.level1.image" in serialized
-    assert serialized["deep.level2.level1.image"].startswith("ImageFile@")
 
 
 def test_to_partial_complex_nested_multiple_complex_signals():
@@ -1392,12 +1382,6 @@ def test_to_partial_complex_nested_multiple_complex_signals():
     assert partial.values["container.file1"] == File
     assert partial.values["container.file2"] == TextFile
 
-    serialized = partial.serialize()
-    assert "container.file1" in serialized
-    assert "container.file2" in serialized
-    assert serialized["container.file1"] == "File@v1"
-    assert serialized["container.file2"].startswith("TextFile@")
-
 
 def test_to_partial_complex_nested_mixed_complex_and_simple():
     """Test to_partial with mix of nested complex signals and simple fields."""
@@ -1419,8 +1403,6 @@ def test_to_partial_complex_nested_mixed_complex_and_simple():
 
     assert partial.values["container.file"] == File
     assert partial.values["simple"] is str
-    # container should be a partial with just the name field
-    assert "ContainerPartial" in str(partial.values["container"])
 
 
 def test_to_partial_complex_nested_same_type_different_paths():

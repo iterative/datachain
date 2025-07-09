@@ -81,3 +81,11 @@ class ModelStore:
         if val is None or not ModelStore.is_pydantic(val):
             return None
         return val
+
+    @staticmethod
+    def is_partial(parent_type) -> bool:
+        return (
+            parent_type and
+            ModelStore.is_pydantic(parent_type) and
+            "@" in ModelStore.get_name(parent_type)
+        )

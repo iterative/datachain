@@ -1081,15 +1081,7 @@ class DataChain:
                     parent_signal = parts[0]
                     parent_type = self.signals_schema.values.get(parent_signal)
 
-                    # Check if parent type supports partial creation
-                    if (
-                        parent_type
-                        and hasattr(parent_type, "__module__")
-                        and hasattr(parent_type, "__name__")
-                        and ModelStore.is_pydantic(parent_type)
-                        and "@" in ModelStore.get_name(parent_type)
-                    ):
-                        # DataModel with versioning - can create partials
+                    if ModelStore.is_partial(parent_type):
                         if parent_signal not in keep_columns:
                             keep_columns.append(parent_signal)
                         partial_fields.append(col)
@@ -1143,13 +1135,9 @@ class DataChain:
         signal_schema = SignalSchema(schema_fields)
         if keep_columns:
             if partial_fields:
-                # Use specific fields for partial creation
-                tmp = self.signals_schema.to_partial(*partial_fields)
-                signal_schema |= tmp
+                signal_schema |= self.signals_schema.to_partial(*partial_fields)
             else:
-                # Use entire signals
-                tmp = self.signals_schema.to_partial(*keep_columns)
-                signal_schema |= tmp
+                signal_schema |= self.signals_schema.to_partial(*keep_columns)
 
         return self._evolve(
             query=self._query.group_by(signal_columns, partition_by_columns),
