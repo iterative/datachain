@@ -39,6 +39,7 @@ from datachain.lib.file import (
     FileExporter,
 )
 from datachain.lib.file import ExportPlacement as FileExportPlacement
+from datachain.lib.model_store import ModelStore
 from datachain.lib.settings import Settings
 from datachain.lib.signal_schema import SignalSchema
 from datachain.lib.udf import Aggregator, BatchMapper, Generator, Mapper, UDFBase
@@ -1064,13 +1065,57 @@ class DataChain:
         signal_columns: list[Column] = []
         schema_fields: dict[str, DataType] = {}
         keep_columns: list[str] = []
+        partial_fields: list[str] = []  # Track specific fields for partial creation
 
         for col in partition_by:
             if isinstance(col, str):
                 columns = self._process_complex_signal_column(col)
                 partition_by_columns.extend(columns)
-                if col not in keep_columns:
-                    keep_columns.append(col)
+                # For nested field references (e.g., "nested.level1.name"), 
+                # we need to distinguish between:
+                # 1. References to fields within a complex signal (should create partials)
+                # 2. Deep nested references that should be flattened
+                if "." in col:
+                    # Split the column reference to analyze it
+                    parts = col.split(".")
+                    if len(parts) == 2:
+                        # This is a simple nested field reference like "f1.name"
+                        parent_signal = parts[0]
+                        parent_type = self.signals_schema.values.get(parent_signal)
+                        
+                        # Check if parent type supports partial creation (DataModel with versioning)
+                        if parent_type and hasattr(parent_type, '__module__') and \
+                           hasattr(parent_type, '__name__') and \
+                           ModelStore.is_pydantic(parent_type) and \
+                           '@' in ModelStore.get_name(parent_type):
+                            # DataModel with versioning - can create partials
+                            if parent_signal not in keep_columns:
+                                keep_columns.append(parent_signal)
+                            partial_fields.append(col)
+                        else:
+                            # BaseModel or other - add flattened columns directly
+                            for column in columns:
+                                col_type = self.signals_schema.get_column_type(column.name)
+                                schema_fields[column.name] = col_type
+                    else:
+                        # This is a deep nested reference like "nested.level1.name"
+                        # Should be flattened to individual columns
+                        for column in columns:
+                            col_type = self.signals_schema.get_column_type(column.name)
+                            schema_fields[column.name] = col_type
+                else:
+                    # This is a simple signal - but we need to check if it's a complex signal
+                    # If it's a complex signal, only include the columns used for partitioning
+                    col_type = self.signals_schema.get_column_type(col, with_subtree=True)
+                    if isinstance(col_type, type) and issubclass(col_type, BaseModel):
+                        # Complex signal - add only the partitioning columns
+                        for column in columns:
+                            col_type = self.signals_schema.get_column_type(column.name)
+                            schema_fields[column.name] = col_type
+                    else:
+                        # Simple signal - keep the entire signal
+                        if col not in keep_columns:
+                            keep_columns.append(col)
             elif isinstance(col, Function):
                 column = col.get_column(self.signals_schema)
                 col_db_name = column.name
@@ -1101,44 +1146,14 @@ class DataChain:
 
         signal_schema = SignalSchema(schema_fields)
         if keep_columns:
-            # For complex signals, we need to handle the schema differently
-            # since to_partial doesn't work with complex signals that get expanded
-            partial_schema_fields = {}
-            for col in keep_columns:
-                # Check if this is a complex signal by trying to expand it
-                expanded_columns = self._process_complex_signal_column(col)
-
-                if len(expanded_columns) > 1:
-                    # Complex signal with multiple columns - add the flattened columns
-                    for expanded_col in expanded_columns:
-                        col_name = expanded_col.name
-                        col_type = expanded_col.type.python_type
-                        partial_schema_fields[col_name] = col_type
-                elif len(expanded_columns) == 1:
-                    expanded_col = expanded_columns[0]
-                    col_db_name = ColumnMeta.to_db_name(col)
-
-                    if "." in col:
-                        # This is a nested field reference - use the flattened column
-                        partial_schema_fields[expanded_col.name] = (
-                            expanded_col.type.python_type
-                        )
-
-                        col_type = self.signals_schema.get_column_type(col_db_name)
-                        partial_schema_fields[col] = col_type
-                    elif expanded_col.name == col_db_name:
-                        # This is a simple signal (no expansion happened)
-                        partial_schema = self.signals_schema.to_partial(col)
-                        if partial_schema.values:  # Only use if it actually has values
-                            partial_schema_fields.update(partial_schema.values)
-                    else:
-                        # This is a complex signal that got expanded to a single column
-                        partial_schema_fields[expanded_col.name] = (
-                            expanded_col.type.python_type
-                        )
-
-            if partial_schema_fields:
-                signal_schema |= SignalSchema(partial_schema_fields)
+            if partial_fields:
+                # Use specific fields for partial creation
+                tmp = self.signals_schema.to_partial(*partial_fields)
+                signal_schema |= tmp
+            else:
+                # Use entire signals
+                tmp = self.signals_schema.to_partial(*keep_columns)
+                signal_schema |= tmp
 
         return self._evolve(
             query=self._query.group_by(signal_columns, partition_by_columns),

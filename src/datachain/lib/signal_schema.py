@@ -957,6 +957,14 @@ class SignalSchema:
                     parent_type_partial = _type_name_to_partial(signal, parent_type)
 
                     schema[signal] = parent_type_partial
+                    
+                    # If this is a complex signal without field specifier (just "file")
+                    # and it's a custom type, include the entire complex signal
+                    if len(column_parts) == 1 and parent_type in custom_types:
+                        # Include the entire complex signal - no need to create partial
+                        schema[signal] = parent_type
+                        continue
+                    
                     continue
 
                 if parent_type not in custom_types:
@@ -971,6 +979,24 @@ class SignalSchema:
                         f"Field {signal} not found in custom type {parent_type}"
                     )
 
+                # Check if this is the last part and if the signal type is a complex signal
+                is_last_part = i == len(column_parts) - 1
+                is_complex_signal = signal_type in custom_types
+                
+                if is_last_part and is_complex_signal:
+                    # This is a nested complex signal - include the entire complex signal
+                    # with a simplified name at the root level
+                    simplified_name = signal_type.split("@")[0].lower()  # e.g., "File@v1" -> "file"
+                    schema[simplified_name] = signal_type
+                    # Also need to remove the partial schema entry we created for the parent
+                    # since we're promoting the nested complex signal to root level
+                    parent_signal = column_parts[0]
+                    if parent_signal in schema:
+                        del schema[parent_signal]
+                    # Don't create partial types for this case
+                    break
+
+                # Create partial type for this field
                 partial_type = _type_name_to_partial(
                     ".".join(column_parts[: i + 1]),
                     signal_type,
