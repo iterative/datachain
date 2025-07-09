@@ -334,3 +334,181 @@ def test_complex_signal_deep_nesting(test_session):
     groups = {record["nested__id"]: record["total_amount"] for record in records}
     assert groups["item1"] == 40  # 10 + 30 (grouped by all nested fields)
     assert groups["item2"] == 20
+
+
+def test_nested_column_partition_by(test_session):
+    """Test partition_by with nested column references like 'nested.level1.name'."""
+    from typing import ClassVar
+
+    from pydantic import BaseModel
+
+    class Level1(BaseModel):
+        name: str
+        value: int
+
+        _unique_id_keys: ClassVar[list[str]] = ["name"]
+
+    class Level2(BaseModel):
+        category: str
+        level1: Level1
+
+        _unique_id_keys: ClassVar[list[str]] = ["category", "level1"]
+
+    # Create test data
+    nested_data = [
+        Level2(category="A", level1=Level1(name="test1", value=10)),
+        Level2(category="B", level1=Level1(name="test2", value=20)),
+        Level2(
+            category="A",
+            level1=Level1(name="test1", value=10),  # Same as first
+        ),
+        Level2(
+            category="A",
+            level1=Level1(name="test3", value=30),  # Different name
+        ),
+    ]
+
+    amounts = [10, 20, 30, 40]
+
+    chain = dc.read_values(
+        nested=nested_data,
+        amount=amounts,
+        session=test_session,
+    )
+
+    # Test partition_by with nested column reference
+    result = chain.group_by(
+        total=dc.func.sum("amount"),
+        count=dc.func.count(),
+        partition_by="nested.level1.name",  # This should work
+    )
+
+    records = result.to_records()
+    assert len(records) == 3  # Should have 3 unique names: test1, test2, test3
+
+    # Check the grouped results
+    name_to_total = {
+        record["nested__level1__name"]: record["total"] for record in records
+    }
+    assert name_to_total["test1"] == 40  # 10 + 30 (grouped by name)
+    assert name_to_total["test2"] == 20
+    assert name_to_total["test3"] == 40
+
+
+def test_nested_column_agg_partition_by(test_session):
+    """Test agg with nested column references in partition_by."""
+    from typing import ClassVar
+
+    from pydantic import BaseModel
+
+    class Person(BaseModel):
+        name: str
+        age: int
+
+        _unique_id_keys: ClassVar[list[str]] = ["name"]
+
+    class Team(BaseModel):
+        name: str
+        leader: Person
+
+        _unique_id_keys: ClassVar[list[str]] = ["name", "leader"]
+
+    # Create test data
+    teams = [
+        Team(name="Alpha", leader=Person(name="Alice", age=30)),
+        Team(name="Beta", leader=Person(name="Bob", age=25)),
+        Team(name="Alpha", leader=Person(name="Alice", age=30)),  # Same team/leader
+        Team(
+            name="Gamma", leader=Person(name="Alice", age=30)
+        ),  # Same leader, different team
+    ]
+
+    scores = [100, 200, 150, 300]
+
+    chain = dc.read_values(
+        team=teams,
+        score=scores,
+        session=test_session,
+    )
+
+    def my_agg(teams: list[Team], scores: list[int]) -> Iterator[tuple[Team, int]]:
+        yield teams[0], sum(scores)
+
+    # Test agg with nested column reference in partition_by
+    result = chain.agg(
+        my_agg,
+        params=("team", "score"),
+        output={"team": Team, "total": int},
+        partition_by="team.leader.name",  # Partition by leader name
+    )
+
+    records = result.to_records()
+    assert len(records) == 2  # Should have 2 unique leaders: Alice, Bob
+
+    # Check the results
+    leader_to_total = {
+        record["team__leader__name"]: record["total"] for record in records
+    }
+    assert leader_to_total["Alice"] == 550  # 100 + 150 + 300 (all Alice-led teams)
+    assert leader_to_total["Bob"] == 200
+
+
+def test_nested_column_edge_cases(test_session):
+    """Test edge cases with nested column references."""
+    from typing import ClassVar
+
+    from pydantic import BaseModel
+
+    from datachain.lib.signal_schema import SignalResolvingError
+
+    class Simple(BaseModel):
+        name: str
+        value: int
+
+        _unique_id_keys: ClassVar[list[str]] = ["name"]
+
+    # Create test data
+    simple_data = [
+        Simple(name="test1", value=10),
+        Simple(name="test2", value=20),
+        Simple(name="test1", value=30),
+    ]
+
+    amounts = [10, 20, 30]
+
+    chain = dc.read_values(
+        simple=simple_data,
+        amount=amounts,
+        session=test_session,
+    )
+
+    # Test with valid nested field
+    result = chain.group_by(
+        total=dc.func.sum("amount"),
+        count=dc.func.count(),
+        partition_by="simple.name",
+    )
+
+    records = result.to_records()
+    assert len(records) == 2  # Should have 2 unique names
+
+    # Check the results
+    name_to_total = {record["simple__name"]: record["total"] for record in records}
+    assert name_to_total["test1"] == 40  # 10 + 30
+    assert name_to_total["test2"] == 20
+
+    # Test with invalid nested field should raise error
+    with pytest.raises(SignalResolvingError):
+        chain.group_by(
+            total=dc.func.sum("amount"),
+            count=dc.func.count(),
+            partition_by="simple.nonexistent",
+        ).to_records()
+
+    # Test with non-existent parent should raise error
+    with pytest.raises(SignalResolvingError):
+        chain.group_by(
+            total=dc.func.sum("amount"),
+            count=dc.func.count(),
+            partition_by="nonexistent.field",
+        ).to_records()

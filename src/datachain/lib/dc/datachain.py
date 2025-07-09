@@ -929,7 +929,7 @@ class DataChain:
         """Process complex signal column names for partition_by.
 
         Args:
-            column_name: The column name to process (e.g., "file", "nested.file")
+            column_name: The column name to process (e.g., "file" or "nested.file")
 
         Returns:
             List of Column objects, complex signal will be expanded.
@@ -1108,19 +1108,34 @@ class DataChain:
                 # Check if this is a complex signal by trying to expand it
                 expanded_columns = self._process_complex_signal_column(col)
 
-                if len(expanded_columns) > 1 or (
-                    len(expanded_columns) == 1
-                    and expanded_columns[0].name != ColumnMeta.to_db_name(col)
-                ):
-                    # Complex signal - add the flattened columns
+                if len(expanded_columns) > 1:
+                    # Complex signal with multiple columns - add the flattened columns
                     for expanded_col in expanded_columns:
                         col_name = expanded_col.name
                         col_type = expanded_col.type.python_type
                         partial_schema_fields[col_name] = col_type
-                else:
-                    partial_schema = self.signals_schema.to_partial(col)
-                    if partial_schema.values:  # Only use if it actually has values
-                        partial_schema_fields.update(partial_schema.values)
+                elif len(expanded_columns) == 1:
+                    expanded_col = expanded_columns[0]
+                    col_db_name = ColumnMeta.to_db_name(col)
+
+                    if "." in col:
+                        # This is a nested field reference - use the flattened column
+                        partial_schema_fields[expanded_col.name] = (
+                            expanded_col.type.python_type
+                        )
+
+                        col_type = self.signals_schema.get_column_type(col_db_name)
+                        partial_schema_fields[col] = col_type
+                    elif expanded_col.name == col_db_name:
+                        # This is a simple signal (no expansion happened)
+                        partial_schema = self.signals_schema.to_partial(col)
+                        if partial_schema.values:  # Only use if it actually has values
+                            partial_schema_fields.update(partial_schema.values)
+                    else:
+                        # This is a complex signal that got expanded to a single column
+                        partial_schema_fields[expanded_col.name] = (
+                            expanded_col.type.python_type
+                        )
 
             if partial_schema_fields:
                 signal_schema |= SignalSchema(partial_schema_fields)
