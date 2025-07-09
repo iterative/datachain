@@ -120,7 +120,10 @@ def test_complex_signal_partition_by_error_handling(test_session):
         yield (sum(values),)
 
     # Test with non-existent column name
-    with pytest.raises(SignalResolvingError, match="cannot resolve signal name 'nonexistent_column': is not found"):
+    with pytest.raises(
+        SignalResolvingError,
+        match="cannot resolve signal name 'nonexistent_column': is not found",
+    ):
         chain.agg(
             my_agg,
             params=("value",),
@@ -142,7 +145,9 @@ def test_complex_signal_partition_by_not_in_schema(test_session):
         yield (sum(values),)
 
     # Test with column name not in schema
-    with pytest.raises(SignalResolvingError, match="cannot resolve signal name 'file': is not found"):
+    with pytest.raises(
+        SignalResolvingError, match="cannot resolve signal name 'file': is not found"
+    ):
         chain.agg(
             my_agg,
             params=("value",),
@@ -189,19 +194,19 @@ def test_complex_signal_group_by_file(test_session):
     assert len(counts) == 3
 
     # Check that files with same unique attributes are grouped together
-    file_paths = [record['file__path'] for record in records]
+    file_paths = [record["file__path"] for record in records]
     assert "file1.txt" in file_paths
     assert "file2.txt" in file_paths
     assert "file3.txt" in file_paths
 
     # Check total amounts
-    path_to_total = {record['file__path']: record['total'] for record in records}
+    path_to_total = {record["file__path"]: record["total"] for record in records}
     assert path_to_total["file1.txt"] == 40  # 10 + 30 (grouped)
     assert path_to_total["file2.txt"] == 20
     assert path_to_total["file3.txt"] == 40
 
     # Check counts
-    path_to_count = {record['file__path']: record['count'] for record in records}
+    path_to_count = {record["file__path"]: record["count"] for record in records}
     assert path_to_count["file1.txt"] == 2  # Two instances
     assert path_to_count["file2.txt"] == 1
     assert path_to_count["file3.txt"] == 1
@@ -244,7 +249,10 @@ def test_complex_signal_group_by_mixed(test_session):
     assert len(totals) == 2
 
     # Check grouping by both file and category
-    groups = {(record['file__path'], record['category']): record['total'] for record in records}
+    groups = {
+        (record["file__path"], record["category"]): record["total"]
+        for record in records
+    }
     assert groups[("file1.txt", "A")] == 40  # 10 + 30
     assert groups[("file2.txt", "B")] == 20
 
@@ -252,79 +260,77 @@ def test_complex_signal_group_by_mixed(test_session):
 def test_complex_signal_deep_nesting(test_session):
     """Test complex signals with deep nesting (3+ levels)."""
     from typing import ClassVar
+
     from pydantic import BaseModel
-    
+
     # Create nested models with 3+ levels
     class NestedLevel1(BaseModel):
         name: str
         value: int
-        
-        _unique_id_keys: ClassVar[list[str]] = ['name', 'value']
-    
+
+        _unique_id_keys: ClassVar[list[str]] = ["name", "value"]
+
     class NestedLevel2(BaseModel):
         category: str
         level1: NestedLevel1
-        
-        _unique_id_keys: ClassVar[list[str]] = ['category', 'level1']
-    
+
+        _unique_id_keys: ClassVar[list[str]] = ["category", "level1"]
+
     class NestedLevel3(BaseModel):
         id: str
         level2: NestedLevel2
         total: float
-        
-        _unique_id_keys: ClassVar[list[str]] = ['id', 'level2']
-    
+
+        _unique_id_keys: ClassVar[list[str]] = ["id", "level2"]
+
     # Create test data with deep nesting
     nested_data = [
         NestedLevel3(
             id="item1",
             level2=NestedLevel2(
-                category="A",
-                level1=NestedLevel1(name="test1", value=10)
+                category="A", level1=NestedLevel1(name="test1", value=10)
             ),
-            total=100.0
+            total=100.0,
         ),
         NestedLevel3(
-            id="item2", 
+            id="item2",
             level2=NestedLevel2(
-                category="B",
-                level1=NestedLevel1(name="test2", value=20)
+                category="B", level1=NestedLevel1(name="test2", value=20)
             ),
-            total=200.0
+            total=200.0,
         ),
         NestedLevel3(
             id="item1",  # Same as first item
             level2=NestedLevel2(
-                category="A",
-                level1=NestedLevel1(name="test1", value=10)
+                category="A", level1=NestedLevel1(name="test1", value=10)
             ),
-            total=150.0
+            total=150.0,
         ),
     ]
-    
+
     amounts = [10, 20, 30]
-    
+
     chain = dc.read_values(
         nested=nested_data,
         amount=amounts,
         session=test_session,
     )
-    
+
     # Test group_by with deeply nested complex signal
     result = chain.group_by(
         total_amount=dc.func.sum("amount"),
         count=dc.func.count(),
         partition_by="nested",
     )
-    
+
     records = result.to_records()
     total_amounts = result.to_values("total_amount")
-    
+
     # Should have 2 groups (item1 appears twice with same structure)
     assert len(records) == 2
     assert len(total_amounts) == 2
-    
+
     # Check grouping by nested structure
-    groups = {record['nested__id']: record['total_amount'] for record in records}
+    groups = {record["nested__id"]: record["total_amount"] for record in records}
     assert groups["item1"] == 40  # 10 + 30 (grouped by all nested fields)
     assert groups["item2"] == 20

@@ -774,7 +774,7 @@ class DataChain:
         of parameters, yet differs in two crucial aspects:
         1. The `partition_by` parameter: This specifies the column name or a list of
            column names that determine the grouping criteria for aggregation. Complex
-           signal columns (Pydantic BaseModel types like File objects) are automatically 
+           signal columns (Pydantic BaseModel types like File objects) are automatically
            expanded to their unique identifier columns.
         2. Group-based UDF function input: Instead of individual rows, the function
            receives a list all rows within each group defined by `partition_by`.
@@ -926,36 +926,35 @@ class DataChain:
         columns = [C(col) for col in new_schema.db_signals()]
         return query_func(*columns, **kwargs)
 
-
     def _process_complex_signal_column(self, column_name: str) -> list[Column]:
         """Process complex signal column names for partition_by.
-        
+
         Args:
             column_name: The column name to process (e.g., "file", "nested.file")
-            
+
         Returns:
             List of Column objects representing the unique identifier columns
             for the complex signal (Pydantic BaseModel), or a single Column if not a complex signal.
         """
         try:
             col_db_name = ColumnMeta.to_db_name(column_name)
-            col_type = self.signals_schema.get_column_type(col_db_name, with_subtree=True)
-            
+            col_type = self.signals_schema.get_column_type(
+                col_db_name, with_subtree=True
+            )
+
             # Check if this is a complex signal (Pydantic BaseModel type)
-            if (isinstance(col_type, type) and 
-                issubclass(col_type, BaseModel)):
-                
+            if isinstance(col_type, type) and issubclass(col_type, BaseModel):
                 # Get the unique ID keys for this BaseModel type
-                unique_keys = getattr(col_type, '_unique_id_keys', None)
+                unique_keys = getattr(col_type, "_unique_id_keys", None)
                 if unique_keys is None:
                     # Fall back to using all model fields if no unique keys defined
-                    if hasattr(col_type, '_datachain_column_types'):
+                    if hasattr(col_type, "_datachain_column_types"):
                         # DataModel subclass
                         unique_keys = list(col_type._datachain_column_types.keys())
                     else:
                         # Regular Pydantic BaseModel
                         unique_keys = list(col_type.model_fields.keys())
-                
+
                 # Recursively process each unique key to handle nested complex signals
                 all_columns = []
                 for key in unique_keys:
@@ -963,15 +962,15 @@ class DataChain:
                     # Recursively process this key in case it's also a complex signal
                     key_columns = self._process_complex_signal_column(key_col_name)
                     all_columns.extend(key_columns)
-                
+
                 if all_columns:
                     return all_columns
-            
+
             col_type = self.signals_schema.get_column_type(col_db_name)
             column = Column(col_db_name, python_to_sql(col_type))
             return [column]
-            
-        except Exception as e:
+
+        except Exception:
             col_db_name = ColumnMeta.to_db_name(column_name)
             col_type = self.signals_schema.get_column_type(col_db_name)
             column = Column(col_db_name, python_to_sql(col_type))
@@ -1050,7 +1049,7 @@ class DataChain:
         The supported functions:
            count(), sum(), avg(), min(), max(), any_value(), collect(), concat()
 
-        Complex signal columns (Pydantic BaseModel types like File objects) are automatically 
+        Complex signal columns (Pydantic BaseModel types like File objects) are automatically
         expanded to their unique identifier columns when used in partition_by. Supports unlimited
         nesting depth for deeply nested BaseModel structures.
 
@@ -1127,9 +1126,12 @@ class DataChain:
             for col in keep_columns:
                 # Check if this is a complex signal by trying to expand it
                 expanded_columns = self._process_complex_signal_column(col)
-                
+
                 # If we got multiple columns or the column name changed, it's a complex signal
-                if len(expanded_columns) > 1 or (len(expanded_columns) == 1 and expanded_columns[0].name != ColumnMeta.to_db_name(col)):
+                if len(expanded_columns) > 1 or (
+                    len(expanded_columns) == 1
+                    and expanded_columns[0].name != ColumnMeta.to_db_name(col)
+                ):
                     # Complex signal - add the flattened columns
                     for expanded_col in expanded_columns:
                         col_name = expanded_col.name
@@ -1144,7 +1146,7 @@ class DataChain:
                     except Exception:
                         # If to_partial fails, skip this column
                         pass
-            
+
             if partial_schema_fields:
                 signal_schema |= SignalSchema(partial_schema_fields)
 
