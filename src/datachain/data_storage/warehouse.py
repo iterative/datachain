@@ -356,24 +356,23 @@ class AbstractWarehouse(ABC, Serializable):
         self, dataset: DatasetRecord, version: str
     ) -> list[StorageURI]: ...
 
-    def rename_dataset_table(
-        self,
-        dataset: DatasetRecord,
-        old_name: str,
-        new_name: str,
-        old_version: str,
-        new_version: str,
+    def rename_dataset_tables(
+        self, dataset: DatasetRecord, dataset_updated: DatasetRecord
     ) -> None:
-        namespace = dataset.project.namespace.name
-        project = dataset.project.name
-        old_ds_table_name = self._construct_dataset_table_name(
-            namespace, project, old_name, old_version
-        )
-        new_ds_table_name = self._construct_dataset_table_name(
-            namespace, project, new_name, new_version
-        )
-
-        self.db.rename_table(old_ds_table_name, new_ds_table_name)
+        """
+        Renames all dataset version tables when parts of the dataset that
+        are used in constructing table name are updated.
+        If nothing important is changed, nothing will be renamed (no DB calls
+        will be made at all).
+        """
+        for version in [v.version for v in dataset_updated.versions]:
+            if not dataset.has_version(version):
+                continue
+            src = self.dataset_table_name(dataset, version)
+            dest = self.dataset_table_name(dataset_updated, version)
+            if src == dest:
+                continue
+            self.db.rename_table(src, dest)
 
     def dataset_rows_count(self, dataset: DatasetRecord, version=None) -> int:
         """Returns total number of rows in a dataset"""

@@ -962,26 +962,9 @@ class Catalog:
         self, dataset: DatasetRecord, conn=None, **kwargs
     ) -> DatasetRecord:
         """Updates dataset fields."""
-        old_name = None
-        new_name = None
-        if "name" in kwargs and kwargs["name"] != dataset.name:
-            old_name = dataset.name
-            new_name = kwargs["name"]
-
-        dataset = self.metastore.update_dataset(dataset, conn=conn, **kwargs)
-
-        if old_name and new_name:
-            # updating name must result in updating dataset table names as well
-            for version in [v.version for v in dataset.versions]:
-                self.warehouse.rename_dataset_table(
-                    dataset,
-                    old_name,
-                    new_name,
-                    old_version=version,
-                    new_version=version,
-                )
-
-        return dataset
+        dataset_updated = self.metastore.update_dataset(dataset, conn=conn, **kwargs)
+        self.warehouse.rename_dataset_tables(dataset, dataset_updated)
+        return dataset_updated
 
     def remove_dataset_version(
         self, dataset: DatasetRecord, version: str, drop_rows: Optional[bool] = True
@@ -1566,12 +1549,14 @@ class Catalog:
             remote_ds.project.namespace.name,
             description=remote_ds.project.namespace.descr,
             uuid=remote_ds.project.namespace.uuid,
+            validate=False,
         )
         project = self.metastore.create_project(
             namespace.name,
             remote_ds.project.name,
             description=remote_ds.project.descr,
             uuid=remote_ds.project.uuid,
+            validate=False,
         )
 
         try:

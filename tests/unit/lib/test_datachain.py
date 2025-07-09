@@ -42,7 +42,13 @@ from datachain.lib.udf_signature import UdfSignatureError
 from datachain.lib.utils import DataChainColumnError, DataChainParamsError
 from datachain.sql.types import Float, Int64, String
 from datachain.utils import STUDIO_URL
-from tests.utils import ANY_VALUE, df_equal, skip_if_not_sqlite, sort_df, sorted_dicts
+from tests.utils import (
+    ANY_VALUE,
+    df_equal,
+    skip_if_not_sqlite,
+    sort_df,
+    sorted_dicts,
+)
 
 DF_DATA = {
     "first_name": ["Alice", "Bob", "Charlie", "David", "Eva"],
@@ -1749,6 +1755,22 @@ def test_read_parquet(tmp_dir, test_session):
     df.to_parquet(path)
     chain = dc.read_parquet(path.as_uri(), session=test_session)
     df1 = chain.select("first_name", "age", "city").to_pandas()
+
+    assert df_equal(df1, df)
+
+
+def test_read_parquet_exported_with_source(test_session, tmp_dir):
+    path = tmp_dir / "df.parquet"
+    path2 = tmp_dir / "df2.parquet"
+    df = pd.DataFrame(DF_DATA)
+
+    df.to_parquet(path)
+    dc.read_parquet(path, source=True).to_parquet(path2)
+    df1 = (
+        dc.read_parquet(path2, source=True)
+        .select("first_name", "age", "city")
+        .to_pandas()
+    )
 
     assert df_equal(df1, df)
 

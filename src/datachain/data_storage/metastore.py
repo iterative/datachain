@@ -191,6 +191,10 @@ class AbstractMetastore(ABC, Serializable):
         """
 
     @abstractmethod
+    def get_project_by_id(self, project_id: int, conn=None) -> Project:
+        """Gets a single project by id"""
+
+    @abstractmethod
     def list_projects(self, namespace_id: Optional[int], conn=None) -> list[Project]:
         """Gets list of projects in some namespace or in general (in all namespaces)"""
 
@@ -830,6 +834,24 @@ class AbstractDBMetastore(AbstractMetastore):
             )
         return self.project_class.parse(*rows[0])
 
+    def get_project_by_id(self, project_id: int, conn=None) -> Project:
+        """Gets a single project by id"""
+        n = self._namespaces
+        p = self._projects
+
+        query = self._projects_select(
+            *(getattr(n.c, f) for f in self._namespaces_fields),
+            *(getattr(p.c, f) for f in self._projects_fields),
+        )
+        query = query.select_from(n.join(p, n.c.id == p.c.namespace_id)).where(
+            p.c.id == project_id
+        )
+
+        rows = list(self.db.execute(query, conn=conn))
+        if not rows:
+            raise ProjectNotFoundError(f"Project with id {project_id} not found.")
+        return self.project_class.parse(*rows[0])
+
     def list_projects(self, namespace_id: Optional[int], conn=None) -> list[Project]:
         """
         Gets a list of projects inside some namespace, or in all namespaces
@@ -987,6 +1009,11 @@ class AbstractDBMetastore(AbstractMetastore):
                 else:
                     values[field] = json.dumps(value)
                     dataset_values[field] = DatasetRecord.parse_schema(value)
+            elif field == "project_id":
+                if not value:
+                    raise ValueError("Cannot set empty project_id for dataset")
+                dataset_values["project"] = self.get_project_by_id(value)
+                values[field] = value
             else:
                 values[field] = value
                 dataset_values[field] = value
@@ -996,7 +1023,9 @@ class AbstractDBMetastore(AbstractMetastore):
 
         d = self._datasets
         self.db.execute(
-            self._datasets_update().where(d.c.name == dataset.name).values(values),
+            self._datasets_update()
+            .where(d.c.name == dataset.name, d.c.project_id == dataset.project.id)
+            .values(values),
             conn=conn,
         )  # type: ignore [attr-defined]
 

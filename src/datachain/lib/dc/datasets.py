@@ -361,3 +361,58 @@ def delete_dataset(
     else:
         version = None
     catalog.remove_dataset(name, ds_project, version=version, force=force)
+
+
+def move_dataset(
+    src: str,
+    dest: str,
+    session: Optional[Session] = None,
+    in_memory: bool = False,
+) -> None:
+    """Moves an entire dataset between namespaces and projects.
+
+    Args:
+        src: The source dataset name. This can be a fully qualified name that includes
+            the namespace and project, or a regular name. If a regular name is used,
+            default values will be applied. The source dataset will no longer exist
+            after the move.
+        dst: The destination dataset name. This can also be a fully qualified
+            name with a namespace and project, or just a regular name (default values
+            will be used in that case). The original dataset will be moved here.
+        session: An optional session instance. If not provided, the default session
+            will be used.
+        in_memory: If True, creates an in-memory session. Defaults to False.
+
+    Returns:
+        None
+
+    Examples:
+        ```python
+        import datachain as dc
+        dc.move_dataset("cats", "new_cats")
+        ```
+
+        ```python
+        import datachain as dc
+        dc.move_dataset("dev.animals.cats", "prod.animals.cats")
+        ```
+    """
+    session = Session.get(session, in_memory=in_memory)
+    catalog = session.catalog
+
+    namespace, project, name = catalog.get_full_dataset_name(src)
+    dest_namespace, dest_project, dest_name = catalog.get_full_dataset_name(dest)
+
+    dataset = catalog.get_dataset(
+        name, catalog.metastore.get_project(project, namespace)
+    )
+
+    catalog.update_dataset(
+        dataset,
+        name=dest_name,
+        project_id=catalog.metastore.get_project(
+            dest_project,
+            dest_namespace,
+            create=catalog.metastore.project_allowed_to_create,
+        ).id,
+    )
