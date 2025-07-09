@@ -81,9 +81,6 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
-      - name: Set up FFmpeg
-        uses: AnimMouse/setup-ffmpeg@v1
-
       - name: Set up Python ${{ matrix.pyv }}
         uses: actions/setup-python@v5
         with:
@@ -98,6 +95,11 @@ jobs:
           # revert after this is fixed
           # https://github.com/wntrblm/nox/issues/953
           version: ">=0.6,<0.7"
+
+      - name: Set up FFmpeg
+        uses: AnimMouse/setup-ffmpeg@v1
+        with:
+          version: 7.0
 
       - name: Install nox
         run: uv pip install nox --system
