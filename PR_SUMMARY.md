@@ -28,6 +28,7 @@ PartitionByType = Union[
 - New method `_process_complex_signal_column()` that:
   - Detects if a column name refers to a Pydantic BaseModel type
   - Extracts unique identifier columns using `_unique_id_keys` or model fields
+  - **Recursively processes nested complex signals** to support unlimited nesting depth
   - Generates appropriate Column objects for partitioning
   - Supports both DataModel subclasses and regular Pydantic BaseModel types
 
@@ -122,8 +123,11 @@ For BaseModel types, the system:
 - Falls back to `_datachain_column_types.keys()` (DataModel subclasses)
 - Falls back to `model_fields.keys()` (regular Pydantic BaseModel)
 
-### 4. Column Generation
-Using the unique keys, the system generates appropriate Column objects for each unique identifier field (e.g., `file.source`, `file.path`).
+### 4. Recursive Column Generation
+Using the unique keys, the system recursively processes each key to handle nested complex signals:
+- If a unique key is itself a Pydantic BaseModel, it recursively expands that key
+- This enables unlimited nesting depth (e.g., `outer.container.file` → `outer.id`, `outer.container.name`, `outer.container.file.path`, `outer.container.file.size`)
+- Base case: primitive types generate single Column objects
 
 ### 5. Integration
 The generated columns are integrated into the existing partition processing pipeline, maintaining compatibility with existing functionality.
