@@ -132,7 +132,7 @@ class ArrowGenerator(Generator):
                 # source inside of it already, so we should not duplicate it, instead
                 # we are re-creating it of the self.source flag
                 vals[0].source = arrow_file  # type: ignore[attr-defined]
-                
+
                 return vals
             return [arrow_file, *vals]
 
