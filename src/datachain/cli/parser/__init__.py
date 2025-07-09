@@ -6,7 +6,7 @@ import shtab
 from datachain.cli.utils import BooleanOptionalAction, KeyValueArgs
 
 from .job import add_jobs_parser
-from .studio import add_auth_parser
+from .studio import add_auth_parser, add_storage_parser
 from .utils import (
     FIND_COLUMNS,
     CustomHelpFormatter,
@@ -137,6 +137,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     add_update_arg(parse_clone)
 
     add_auth_parser(subp, parent_parser)
+    add_storage_parser(subp, parent_parser)
     add_jobs_parser(subp, parent_parser)
 
     datasets_parser = subp.add_parser(
