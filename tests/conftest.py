@@ -557,12 +557,6 @@ def mock_is_cli(is_cli):
 
 
 @pytest.fixture
-def mock_is_local_dataset():
-    with patch.object(AbstractMetastore, "is_local_dataset", return_value=True):
-        yield
-
-
-@pytest.fixture
 def project(test_session):
     return dc.create_project("dev", "animals", "Animals project")
 

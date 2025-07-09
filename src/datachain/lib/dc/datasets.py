@@ -413,6 +413,6 @@ def move_dataset(
         project_id=catalog.metastore.get_project(
             dest_project,
             dest_namespace,
-            create=catalog.metastore.project_allowed_to_create,
+            create=not catalog.is_cli,
         ).id,
     )

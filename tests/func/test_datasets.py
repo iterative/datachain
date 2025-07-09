@@ -407,7 +407,6 @@ def test_move_dataset(
     test_session,
     old_name,
     new_name,
-    mock_is_local_dataset,
 ):
     catalog = test_session.catalog
 
