@@ -837,7 +837,6 @@ class DataChain:
             processed_partition_columns: list[ColumnElement] = []
             for col in list_partition_by:
                 if isinstance(col, str):
-                    # Process complex signal column names (e.g., "file" -> expand to unique keys)
                     columns = self._process_complex_signal_column(col)
                     processed_partition_columns.extend(columns)
                 elif isinstance(col, Function):
@@ -933,48 +932,38 @@ class DataChain:
             column_name: The column name to process (e.g., "file", "nested.file")
 
         Returns:
-            List of Column objects representing the unique identifier columns
-            for the complex signal (Pydantic BaseModel), or a single Column if not a complex signal.
+            List of Column objects, complex signal will be expanded.
         """
-        try:
-            col_db_name = ColumnMeta.to_db_name(column_name)
-            col_type = self.signals_schema.get_column_type(
-                col_db_name, with_subtree=True
-            )
+        col_db_name = ColumnMeta.to_db_name(column_name)
+        col_type = self.signals_schema.get_column_type(col_db_name, with_subtree=True)
 
-            # Check if this is a complex signal (Pydantic BaseModel type)
-            if isinstance(col_type, type) and issubclass(col_type, BaseModel):
-                # Get the unique ID keys for this BaseModel type
-                unique_keys = getattr(col_type, "_unique_id_keys", None)
-                if unique_keys is None:
-                    # Fall back to using all model fields if no unique keys defined
-                    if hasattr(col_type, "_datachain_column_types"):
-                        # DataModel subclass
-                        unique_keys = list(col_type._datachain_column_types.keys())
-                    else:
-                        # Regular Pydantic BaseModel
-                        unique_keys = list(col_type.model_fields.keys())
+        # Check if this is a complex signal (Pydantic BaseModel type)
+        if isinstance(col_type, type) and issubclass(col_type, BaseModel):
+            # Get the unique ID keys for this BaseModel type
+            unique_keys = getattr(col_type, "_unique_id_keys", None)
+            if unique_keys is None:
+                # Fall back to using all model fields if no unique keys defined
+                if hasattr(col_type, "_datachain_column_types"):
+                    # DataModel subclass
+                    unique_keys = list(col_type._datachain_column_types.keys())
+                else:
+                    # Regular Pydantic BaseModel
+                    unique_keys = list(col_type.model_fields.keys())
 
-                # Recursively process each unique key to handle nested complex signals
-                all_columns = []
-                for key in unique_keys:
-                    key_col_name = f"{column_name}.{key}"
-                    # Recursively process this key in case it's also a complex signal
-                    key_columns = self._process_complex_signal_column(key_col_name)
-                    all_columns.extend(key_columns)
+            # Recursively process each unique key to handle nested complex signals
+            all_columns = []
+            for key in unique_keys:
+                key_col_name = f"{column_name}.{key}"
+                # Recursively process this key in case it's also a complex signal
+                key_columns = self._process_complex_signal_column(key_col_name)
+                all_columns.extend(key_columns)
 
-                if all_columns:
-                    return all_columns
+            if all_columns:
+                return all_columns
 
-            col_type = self.signals_schema.get_column_type(col_db_name)
-            column = Column(col_db_name, python_to_sql(col_type))
-            return [column]
-
-        except Exception:
-            col_db_name = ColumnMeta.to_db_name(column_name)
-            col_type = self.signals_schema.get_column_type(col_db_name)
-            column = Column(col_db_name, python_to_sql(col_type))
-            return [column]
+        col_type = self.signals_schema.get_column_type(col_db_name)
+        column = Column(col_db_name, python_to_sql(col_type))
+        return [column]
 
     @resolve_columns
     def order_by(self, *args, descending: bool = False) -> "Self":
@@ -1049,10 +1038,6 @@ class DataChain:
         The supported functions:
            count(), sum(), avg(), min(), max(), any_value(), collect(), concat()
 
-        Complex signal columns (Pydantic BaseModel types like File objects) are automatically
-        expanded to their unique identifier columns when used in partition_by. Supports unlimited
-        nesting depth for deeply nested BaseModel structures.
-
         Example:
             ```py
             chain = chain.group_by(
@@ -1063,8 +1048,6 @@ class DataChain:
 
             Using complex signals:
             ```py
-            # "file" column automatically expands to File's unique identifier columns
-            # (File is a Pydantic BaseModel)
             chain = chain.group_by(
                 total_size=func.sum("file.size"),
                 count=func.count(),
@@ -1082,10 +1065,8 @@ class DataChain:
         schema_fields: dict[str, DataType] = {}
         keep_columns: list[str] = []
 
-        # validate partition_by columns and add them to the schema
         for col in partition_by:
             if isinstance(col, str):
-                # Process complex signal column names (e.g., "file" -> expand to unique keys)
                 columns = self._process_complex_signal_column(col)
                 partition_by_columns.extend(columns)
                 if col not in keep_columns:
@@ -1127,7 +1108,6 @@ class DataChain:
                 # Check if this is a complex signal by trying to expand it
                 expanded_columns = self._process_complex_signal_column(col)
 
-                # If we got multiple columns or the column name changed, it's a complex signal
                 if len(expanded_columns) > 1 or (
                     len(expanded_columns) == 1
                     and expanded_columns[0].name != ColumnMeta.to_db_name(col)
@@ -1138,14 +1118,9 @@ class DataChain:
                         col_type = expanded_col.type.python_type
                         partial_schema_fields[col_name] = col_type
                 else:
-                    # Simple signal - use to_partial
-                    try:
-                        partial_schema = self.signals_schema.to_partial(col)
-                        if partial_schema.values:  # Only use if it actually has values
-                            partial_schema_fields.update(partial_schema.values)
-                    except Exception:
-                        # If to_partial fails, skip this column
-                        pass
+                    partial_schema = self.signals_schema.to_partial(col)
+                    if partial_schema.values:  # Only use if it actually has values
+                        partial_schema_fields.update(partial_schema.values)
 
             if partial_schema_fields:
                 signal_schema |= SignalSchema(partial_schema_fields)
