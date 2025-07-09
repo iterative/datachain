@@ -1071,7 +1071,7 @@ class DataChain:
             if isinstance(col, str):
                 columns = self._process_complex_signal_column(col)
                 partition_by_columns.extend(columns)
-                # For nested field references (e.g., "nested.level1.name"), 
+                # For nested field references (e.g., "nested.level1.name"),
                 # we need to distinguish between:
                 # 1. References to fields within a complex signal (should create partials)
                 # 2. Deep nested references that should be flattened
@@ -1082,12 +1082,15 @@ class DataChain:
                         # This is a simple nested field reference like "f1.name"
                         parent_signal = parts[0]
                         parent_type = self.signals_schema.values.get(parent_signal)
-                        
+
                         # Check if parent type supports partial creation (DataModel with versioning)
-                        if parent_type and hasattr(parent_type, '__module__') and \
-                           hasattr(parent_type, '__name__') and \
-                           ModelStore.is_pydantic(parent_type) and \
-                           '@' in ModelStore.get_name(parent_type):
+                        if (
+                            parent_type
+                            and hasattr(parent_type, "__module__")
+                            and hasattr(parent_type, "__name__")
+                            and ModelStore.is_pydantic(parent_type)
+                            and "@" in ModelStore.get_name(parent_type)
+                        ):
                             # DataModel with versioning - can create partials
                             if parent_signal not in keep_columns:
                                 keep_columns.append(parent_signal)
@@ -1095,7 +1098,9 @@ class DataChain:
                         else:
                             # BaseModel or other - add flattened columns directly
                             for column in columns:
-                                col_type = self.signals_schema.get_column_type(column.name)
+                                col_type = self.signals_schema.get_column_type(
+                                    column.name
+                                )
                                 schema_fields[column.name] = col_type
                     else:
                         # This is a deep nested reference like "nested.level1.name"
@@ -1106,16 +1111,17 @@ class DataChain:
                 else:
                     # This is a simple signal - but we need to check if it's a complex signal
                     # If it's a complex signal, only include the columns used for partitioning
-                    col_type = self.signals_schema.get_column_type(col, with_subtree=True)
+                    col_type = self.signals_schema.get_column_type(
+                        col, with_subtree=True
+                    )
                     if isinstance(col_type, type) and issubclass(col_type, BaseModel):
                         # Complex signal - add only the partitioning columns
                         for column in columns:
                             col_type = self.signals_schema.get_column_type(column.name)
                             schema_fields[column.name] = col_type
-                    else:
-                        # Simple signal - keep the entire signal
-                        if col not in keep_columns:
-                            keep_columns.append(col)
+                    # Simple signal - keep the entire signal
+                    elif col not in keep_columns:
+                        keep_columns.append(col)
             elif isinstance(col, Function):
                 column = col.get_column(self.signals_schema)
                 col_db_name = column.name
