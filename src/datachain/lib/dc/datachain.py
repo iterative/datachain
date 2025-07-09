@@ -1027,7 +1027,7 @@ class DataChain:
         )
 
     @delta_disabled  # type: ignore[arg-type]
-    def group_by(
+    def group_by(  # noqa: C901, PLR0912
         self,
         *,
         partition_by: Optional[Union[str, Func, Sequence[Union[str, Func]]]] = None,
