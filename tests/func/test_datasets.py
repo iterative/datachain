@@ -11,12 +11,13 @@ from datachain.dataset import DatasetDependencyType, DatasetStatus
 from datachain.error import (
     DatasetInvalidVersionError,
     DatasetNotFoundError,
+    ProjectNotFoundError,
 )
 from datachain.lib.file import File
 from datachain.lib.listing import parse_listing_uri
 from datachain.query.dataset import DatasetQuery
 from datachain.sql.types import Float32, Int, Int64
-from tests.utils import assert_row_names, dataset_dependency_asdict
+from tests.utils import assert_row_names, dataset_dependency_asdict, table_row_count
 
 FILE_SCHEMA = {
     f"file__{name}": _type if _type != Int else Int64
@@ -169,14 +170,6 @@ def test_get_dataset(cloud_test_catalog, dogs_dataset):
         catalog.get_dataset("wrong name", dogs_dataset.project)
 
 
-# Returns None if the table does not exist
-def get_table_row_count(db, table_name):
-    if not db.has_table(table_name):
-        return None
-    query = sa.select(sa.func.count()).select_from(sa.table(table_name))
-    return next(db.execute(query), (None,))[0]
-
-
 def test_create_dataset_from_sources(listed_bucket, cloud_test_catalog, project):
     dataset_name = uuid.uuid4().hex
     src_uri = cloud_test_catalog.src_uri
@@ -327,7 +320,7 @@ def test_remove_dataset(cloud_test_catalog, dogs_dataset):
         catalog.get_dataset(dogs_dataset.name, dogs_dataset.project)
 
     dataset_table_name = catalog.warehouse.dataset_table_name(dogs_dataset, "1.0.0")
-    assert get_table_row_count(catalog.warehouse.db, dataset_table_name) is None
+    assert table_row_count(catalog.warehouse.db, dataset_table_name) is None
 
     assert (
         catalog.metastore.get_direct_dataset_dependencies(dogs_dataset, "1.0.0") == []
@@ -391,12 +384,106 @@ def test_edit_dataset(cloud_test_catalog, dogs_dataset):
     old_dataset_table_name = catalog.warehouse.dataset_table_name(dogs_dataset, "1.0.0")
     new_dataset_table_name = catalog.warehouse.dataset_table_name(dataset, "1.0.0")
 
-    assert get_table_row_count(catalog.warehouse.db, old_dataset_table_name) is None
-    expected_table_row_count = get_table_row_count(
+    assert table_row_count(catalog.warehouse.db, old_dataset_table_name) is None
+    expected_table_row_count = table_row_count(
         catalog.warehouse.db, new_dataset_table_name
     )
     assert expected_table_row_count
     assert dataset.get_version("1.0.0").num_objects == expected_table_row_count
+
+
+@pytest.mark.parametrize(
+    "old_name,new_name",
+    [
+        ("old.old.numbers", "new.new.numbers"),
+        ("old.old.numbers", "new.new.numbers_new"),
+        ("old.old.numbers", "old.new.numbers"),
+        ("old.old.numbers", "old.old.numbers"),
+        ("numbers", "numbers2"),
+        ("numbers", "numbers"),
+    ],
+)
+def test_move_dataset(
+    test_session,
+    old_name,
+    new_name,
+    mock_is_local_dataset,
+):
+    catalog = test_session.catalog
+
+    # create 2 versions of dataset in old project
+    for _ in range(2):
+        (dc.read_values(num=[1, 2, 3], session=test_session).save(old_name))
+
+    dataset = dc.read_dataset(old_name).dataset
+
+    dc.move_dataset(old_name, new_name, session=test_session)
+
+    if old_name != new_name:
+        # check that old dataset doesn't exist any more
+        with pytest.raises(DatasetNotFoundError):
+            dc.read_dataset(old_name).save("wrong")
+
+    dataset_updated = dc.read_dataset(new_name).dataset
+
+    # check if dataset tables are renamed correctly as well
+    for version in [v.version for v in dataset.versions]:
+        old_table_name = catalog.warehouse.dataset_table_name(dataset, version)
+        new_table_name = catalog.warehouse.dataset_table_name(dataset_updated, version)
+        if old_name == new_name:
+            assert old_table_name == new_table_name
+        else:
+            assert table_row_count(catalog.warehouse.db, old_table_name) is None
+
+        assert table_row_count(catalog.warehouse.db, new_table_name) == 3
+
+
+def test_move_dataset_then_save_into(test_session):
+    old_name = "old.old.numbers"
+    new_name = "new.new.numbers"
+
+    # create 2 versions of dataset in old project
+    for _ in range(2):
+        dc.read_values(num=[1, 2, 3], session=test_session).save(old_name)
+
+    dc.move_dataset(old_name, new_name, session=test_session)
+    dc.read_values(num=[1, 2, 3], session=test_session).save(new_name)
+
+    ds = dc.datasets(column="dataset", session=test_session)
+    datasets = [
+        d
+        for d in ds.to_values("dataset")
+        if d.name == "numbers" and d.project == "new" and d.namespace == "new"
+    ]
+
+    assert len(datasets) == 3
+
+
+def test_move_dataset_wrong_old_project(test_session, project):
+    dc.read_values(num=[1, 2, 3], session=test_session).save("old.old.numbers")
+
+    with pytest.raises(ProjectNotFoundError):
+        dc.move_dataset("wrong.wrong.numbers", "new.new.numbers", session=test_session)
+
+
+def test_move_dataset_error_in_session_moved_dataset_removed(catalog):
+    from datachain.query.session import Session
+
+    old_name = "old.old.numbers"
+    new_name = "new.new.numbers"
+
+    with pytest.raises(DatasetNotFoundError):
+        with Session("new", catalog=catalog) as test_session:
+            dc.read_values(num=[1, 2, 3]).save("aa")
+            dc.read_values(num=[1, 2, 3], session=test_session).save(old_name)
+            dc.move_dataset(old_name, new_name, session=test_session)
+
+            # throws DatasetNotFoundError
+            dc.read_dataset("wrong", session=test_session)
+
+    ds = dc.datasets(column="dataset")
+    datasets = [d for d in ds.to_values("dataset")]  # noqa: C416
+    assert len(datasets) == 0
 
 
 def test_edit_dataset_same_name(cloud_test_catalog, dogs_dataset):
@@ -414,12 +501,12 @@ def test_edit_dataset_same_name(cloud_test_catalog, dogs_dataset):
     old_dataset_table_name = catalog.warehouse.dataset_table_name(dogs_dataset, "1.0.0")
     new_dataset_table_name = catalog.warehouse.dataset_table_name(dataset, "1.0.0")
 
-    expected_table_row_count = get_table_row_count(
+    expected_table_row_count = table_row_count(
         catalog.warehouse.db, old_dataset_table_name
     )
     assert expected_table_row_count
     assert dataset.get_version("1.0.0").num_objects == expected_table_row_count
-    assert expected_table_row_count == get_table_row_count(
+    assert expected_table_row_count == table_row_count(
         catalog.warehouse.db, new_dataset_table_name
     )
 
