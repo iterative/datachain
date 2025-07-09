@@ -1760,6 +1760,22 @@ def test_read_parquet(tmp_dir, test_session):
     assert df_equal(df1, df)
 
 
+def test_read_parquet_exported_with_source(test_session, tmp_dir):
+    path = tmp_dir / "df.parquet"
+    path2 = tmp_dir / "df2.parquet"
+    df = pd.DataFrame(DF_DATA)
+
+    df.to_parquet(path)
+    dc.read_parquet(path, source=True).to_parquet(path2)
+    df1 = (
+        dc.read_parquet(path2, source=True)
+        .select("first_name", "age", "city")
+        .to_pandas()
+    )
+
+    assert df_equal(df1, df)
+
+
 @skip_if_not_sqlite
 def test_read_parquet_in_memory(tmp_dir):
     df = pd.DataFrame(DF_DATA)
