@@ -240,17 +240,16 @@ class File(DataModel):
         "last_modified",
         "location",
     ]
+    _unique_key_fields: ClassVar[Optional[list[str]]] = ["source", "path"]
 
-    _unique_id_keys: ClassVar[list[str]] = [
-        "source",
-        "path",
-        "size",
-        "etag",
-        "version",
-        "is_latest",
-        "location",
-        "last_modified",
-    ]
+    @classmethod
+    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
+        """
+        Reset `_unique_key_fields` for every subclass
+        since additional fields can be added.
+        """
+        super().__pydantic_init_subclass__(**kwargs)
+        cls._unique_key_fields = None
 
     @staticmethod
     def _validate_dict(

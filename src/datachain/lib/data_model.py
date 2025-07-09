@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 from datetime import datetime
-from typing import ClassVar, Optional, Union, get_args, get_origin
+from typing import Any, ClassVar, Optional, Union, get_args, get_origin
 
 from pydantic import AliasChoices, BaseModel, Field, create_model
 
@@ -27,10 +27,12 @@ class DataModel(BaseModel):
 
     _version: ClassVar[int] = 1
     _hidden_fields: ClassVar[list[str]] = []
+    _unique_key_fields: ClassVar[Optional[list[str]]] = None
 
     @classmethod
-    def __pydantic_init_subclass__(cls):
+    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
         """It automatically registers every declared DataModel child class."""
+        super().__pydantic_init_subclass__(**kwargs)
         ModelStore.register(cls)
 
     @staticmethod

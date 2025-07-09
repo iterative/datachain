@@ -51,14 +51,13 @@ def read_records(
     catalog = session.catalog
 
     name = session.generate_temp_dataset_name()
-    signal_schema = None
-    columns: list[sqlalchemy.Column] = []
+    feature_schema: Optional[dict[str, DataType]] = None
 
     if schema:
         signal_schema = SignalSchema(schema)
+        feature_schema = signal_schema.clone_without_sys_signals().serialize()
         columns = [
-            sqlalchemy.Column(c.name, c.type)  # type: ignore[union-attr]
-            for c in signal_schema.db_signals(as_columns=True)
+            sqlalchemy.Column(c.name, c.type) for c in signal_schema.db_columns()
         ]
     else:
         columns = [
@@ -70,11 +69,7 @@ def read_records(
         name,
         catalog.metastore.default_project,
         columns=columns,
-        feature_schema=(
-            signal_schema.clone_without_sys_signals().serialize()
-            if signal_schema
-            else None
-        ),
+        feature_schema=feature_schema,
     )
 
     session.add_dataset_version(dsr, dsr.latest_version)

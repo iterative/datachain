@@ -962,9 +962,9 @@ def test_db_signals_filtering_by_name():
     assert list(schema.db_signals(name="missing")) == []
 
 
-def test_db_signals_as_columns():
+def test_db_columns():
     spec = {"name": str, "age": float, "fr": MyType2}
-    lst = list(SignalSchema(spec).db_signals(as_columns=True))
+    lst = SignalSchema(spec).db_columns()
 
     assert all(isinstance(s, Column) for s in lst)
 

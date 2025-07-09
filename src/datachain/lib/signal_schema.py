@@ -34,7 +34,7 @@ from datachain.lib.data_model import DataModel, DataType, DataValue
 from datachain.lib.file import File
 from datachain.lib.model_store import ModelStore
 from datachain.lib.utils import DataChainParamsError
-from datachain.query.schema import DEFAULT_DELIMITER, Column
+from datachain.query.schema import DEFAULT_DELIMITER, Column, ColumnMeta
 from datachain.sql.types import SQLType
 
 if TYPE_CHECKING:
@@ -554,7 +554,12 @@ class SignalSchema:
             if ModelStore.is_pydantic(finfo.annotation):
                 SignalSchema._set_file_stream(getattr(obj, field), catalog, cache)
 
-    def get_column_type(self, col_name: str, with_subtree: bool = False) -> DataType:
+    def get_column_type(
+        self,
+        col_name: str,
+        with_subtree: bool = False,
+        unique_only: bool = False,
+    ) -> DataType:
         """
         Returns column type by column name.
 
@@ -562,28 +567,33 @@ class SignalSchema:
         even if it has a subtree (e.g. model with nested fields), otherwise it will
         return the type of the column (standard type field, not the model).
 
+        If `unique_only` is True, then it will return only columns used as unique key.
+        Unique key columns defined by `_unique_key_fields` attribute in the type.
+
         If column is not found, raises `SignalResolvingError`.
         """
-        for path, _type, has_subtree, _ in self.get_flat_tree():
-            if (with_subtree or not has_subtree) and DEFAULT_DELIMITER.join(
-                path
-            ) == col_name:
+        for path, _type, has_subtree, _ in self.get_flat_tree(unique_only=unique_only):
+            if has_subtree and not with_subtree:
+                continue
+            if DEFAULT_DELIMITER.join(path) == col_name:
                 return _type
         raise SignalResolvingError([col_name], "is not found")
 
     def db_signals(
-        self, name: Optional[str] = None, as_columns=False, include_hidden: bool = True
-    ) -> Union[list[str], list[Column]]:
+        self,
+        name: Optional[str] = None,
+        include_hidden: bool = True,
+        unique_only: bool = False,
+    ) -> list[str]:
         """
-        Returns DB columns as strings or Column objects with proper types
-        Optionally, it can filter results by specific object, returning only his signals
+        Returns DB columns as strings (column names).
+        Optionally, it can filter results by specific object,
+        returning only his signals.
         """
         signals = [
             DEFAULT_DELIMITER.join(path)
-            if not as_columns
-            else Column(DEFAULT_DELIMITER.join(path), python_to_sql(_type))
             for path, _type, has_subtree, _ in self.get_flat_tree(
-                include_hidden=include_hidden
+                include_hidden=include_hidden, unique_only=unique_only
             )
             if not has_subtree
         ]
@@ -596,6 +606,35 @@ class SignalSchema:
             ]
 
         return signals  # type: ignore[return-value]
+
+    def db_columns(
+        self,
+        name: Optional[str] = None,
+        include_hidden: bool = True,
+        unique_only: bool = False,
+    ) -> list[Column]:
+        """
+        Returns DB columns as Column objects with proper types.
+        Optionally, it can filter results by specific object,
+        returning only his signals.
+        """
+        signals = [
+            Column(DEFAULT_DELIMITER.join(path), python_to_sql(_type))
+            for path, _type, has_subtree, _ in self.get_flat_tree(
+                include_hidden=include_hidden, unique_only=unique_only
+            )
+            if not has_subtree
+        ]
+
+        if name:
+            col = ColumnMeta.to_db_name(name)
+            signals = [
+                s
+                for s in signals
+                if s.name == col or s.name.startswith(f"{col}{DEFAULT_DELIMITER}")
+            ]
+
+        return signals
 
     def resolve(self, *names: str) -> "SignalSchema":
         schema = {}
@@ -743,29 +782,56 @@ class SignalSchema:
         }
 
     def get_flat_tree(
-        self, include_hidden: bool = True
+        self,
+        include_hidden: bool = True,
+        unique_only: bool = False,
     ) -> Iterator[tuple[list[str], DataType, bool, int]]:
-        yield from self._get_flat_tree(self.tree, [], 0, include_hidden)
+        yield from self._get_flat_tree(
+            self.tree,
+            [],
+            0,
+            include_hidden=include_hidden,
+            unique_only=unique_only,
+        )
 
     def _get_flat_tree(
-        self, tree: dict, prefix: list[str], depth: int, include_hidden: bool
+        self,
+        tree: dict,
+        prefix: list[str],
+        depth: int,
+        include_hidden: bool = True,
+        unique_only: bool = False,
+        with_only_fields: Optional[list[str]] = None,
     ) -> Iterator[tuple[list[str], DataType, bool, int]]:
-        for name, (type_, substree) in tree.items():
+        for name, (type_, subtree) in tree.items():
+            if with_only_fields is not None and name not in with_only_fields:
+                continue
+
             suffix = name.split(".")
             new_prefix = prefix + suffix
+
             hidden_fields = getattr(type_, "_hidden_fields", None)
-            if hidden_fields and substree and not include_hidden:
-                substree = {
+            if hidden_fields and subtree and not include_hidden:
+                subtree = {
                     field: info
-                    for field, info in substree.items()
+                    for field, info in subtree.items()
                     if field not in hidden_fields
                 }
 
-            has_subtree = substree is not None
+            unique_key_fields: Optional[list[str]] = None
+            if unique_only:
+                unique_key_fields = getattr(type_, "_unique_key_fields", None)
+
+            has_subtree = subtree is not None
             yield new_prefix, type_, has_subtree, depth
-            if substree is not None:
+            if subtree is not None:
                 yield from self._get_flat_tree(
-                    substree, new_prefix, depth + 1, include_hidden
+                    subtree,
+                    new_prefix,
+                    depth + 1,
+                    include_hidden=include_hidden,
+                    unique_only=unique_only,
+                    with_only_fields=unique_key_fields,
                 )
 
     def print_tree(self, indent: int = 2, start_at: int = 0, file: Optional[IO] = None):
