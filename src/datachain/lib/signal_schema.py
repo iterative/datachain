@@ -979,19 +979,19 @@ class SignalSchema:
                         f"Field {signal} not found in custom type {parent_type}"
                     )
 
-                # Check if this is the last part and if the signal type is a complex signal
+                # Check if this is the last part and if the column type is a complex
                 is_last_part = i == len(column_parts) - 1
                 is_complex_signal = signal_type in custom_types
 
                 if is_last_part and is_complex_signal:
-                    # This is a nested complex signal - include the entire complex signal
+                    # This is a nested complex column - include the entire column
                     # with a simplified name at the root level
                     simplified_name = signal_type.split("@")[
                         0
                     ].lower()  # e.g., "File@v1" -> "file"
                     schema[simplified_name] = signal_type
-                    # Also need to remove the partial schema entry we created for the parent
-                    # since we're promoting the nested complex signal to root level
+                    # Also need to remove the partial schema entry we created for the
+                    # parent since we're promoting the nested complex column to root
                     parent_signal = column_parts[0]
                     schema.pop(parent_signal, None)
                     # Don't create partial types for this case

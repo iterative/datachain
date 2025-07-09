@@ -1418,7 +1418,7 @@ def test_to_partial_complex_nested_mixed_complex_and_simple():
     assert "simple" in partial.values
 
     assert partial.values["file"] == File
-    assert partial.values["simple"] == str
+    assert partial.values["simple"] is str
     # container should be a partial with just the name field
     assert "ContainerPartial" in str(partial.values["container"])
 

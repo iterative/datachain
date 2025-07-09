@@ -1073,7 +1073,7 @@ class DataChain:
                 partition_by_columns.extend(columns)
                 # For nested field references (e.g., "nested.level1.name"),
                 # we need to distinguish between:
-                # 1. References to fields within a complex signal (should create partials)
+                # 1. References to fields within a complex signal (create partials)
                 # 2. Deep nested references that should be flattened
                 if "." in col:
                     # Split the column reference to analyze it
@@ -1083,7 +1083,7 @@ class DataChain:
                         parent_signal = parts[0]
                         parent_type = self.signals_schema.values.get(parent_signal)
 
-                        # Check if parent type supports partial creation (DataModel with versioning)
+                        # Check if parent type supports partial creation
                         if (
                             parent_type
                             and hasattr(parent_type, "__module__")
@@ -1109,8 +1109,8 @@ class DataChain:
                             col_type = self.signals_schema.get_column_type(column.name)
                             schema_fields[column.name] = col_type
                 else:
-                    # This is a simple signal - but we need to check if it's a complex signal
-                    # If it's a complex signal, only include the columns used for partitioning
+                    # simple signal - but we need to check if it's a complex signal
+                    # complex signal - only include the columns used for partitioning
                     col_type = self.signals_schema.get_column_type(
                         col, with_subtree=True
                     )
