@@ -1335,10 +1335,10 @@ def test_to_partial_complex_nested_signal():
     partial = schema.to_partial("my_col.src")
 
     # Should return the entire File complex signal
-    assert partial.values == {"file": File}
+    assert partial.values == {"my_col.src": File}
     serialized = partial.serialize()
-    assert "file" in serialized
-    assert serialized["file"] == "File@v1"
+    assert "my_col.src" in serialized
+    assert serialized["my_col.src"] == "File@v1"
     assert "_custom_types" in serialized
     assert "File@v1" in serialized["_custom_types"]
 
@@ -1365,11 +1365,11 @@ def test_to_partial_complex_deeply_nested_signal():
     partial = schema.to_partial("deep.level2.level1.image")
 
     # Should return the entire ImageFile complex signal with simplified name
-    assert "imagefile" in partial.values
-    assert partial.values["imagefile"] == ImageFile
+    assert "deep.level2.level1.image" in partial.values
+    assert partial.values["deep.level2.level1.image"] == ImageFile
     serialized = partial.serialize()
-    assert "imagefile" in serialized
-    assert serialized["imagefile"].startswith("ImageFile@")
+    assert "deep.level2.level1.image" in serialized
+    assert serialized["deep.level2.level1.image"].startswith("ImageFile@")
 
 
 def test_to_partial_complex_nested_multiple_complex_signals():
@@ -1387,16 +1387,16 @@ def test_to_partial_complex_nested_multiple_complex_signals():
     partial = schema.to_partial("container.file1", "container.file2")
 
     # Should return both complex signals at root level
-    assert "file" in partial.values
-    assert "textfile" in partial.values
-    assert partial.values["file"] == File
-    assert partial.values["textfile"] == TextFile
+    assert "container.file1" in partial.values
+    assert "container.file2" in partial.values
+    assert partial.values["container.file1"] == File
+    assert partial.values["container.file2"] == TextFile
 
     serialized = partial.serialize()
-    assert "file" in serialized
-    assert "textfile" in serialized
-    assert serialized["file"] == "File@v1"
-    assert serialized["textfile"].startswith("TextFile@")
+    assert "container.file1" in serialized
+    assert "container.file2" in serialized
+    assert serialized["container.file1"] == "File@v1"
+    assert serialized["container.file2"].startswith("TextFile@")
 
 
 def test_to_partial_complex_nested_mixed_complex_and_simple():
@@ -1413,11 +1413,11 @@ def test_to_partial_complex_nested_mixed_complex_and_simple():
     partial = schema.to_partial("container.file", "container.name", "simple")
 
     # Should have complex signal at root, partial for simple field, and simple type
-    assert "file" in partial.values
+    assert "container.file" in partial.values
     assert "container" in partial.values
     assert "simple" in partial.values
 
-    assert partial.values["file"] == File
+    assert partial.values["container.file"] == File
     assert partial.values["simple"] is str
     # container should be a partial with just the name field
     assert "ContainerPartial" in str(partial.values["container"])
@@ -1440,9 +1440,11 @@ def test_to_partial_complex_nested_same_type_different_paths():
     partial = schema.to_partial("cont1.file", "cont2.file")
 
     # Should return single File type at root level (deduplicated)
-    assert "file" in partial.values
-    assert partial.values["file"] == File
-    assert len(partial.values) == 1  # Only one entry since both resolve to same type
+    assert "cont1.file" in partial.values
+    assert "cont2.file" in partial.values
+    assert partial.values["cont1.file"] == File
+    assert partial.values["cont2.file"] == File
+    assert len(partial.values) == 2
 
 
 def test_to_partial_complex_signal_file_single_field():

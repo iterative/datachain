@@ -984,12 +984,7 @@ class SignalSchema:
                 is_complex_signal = signal_type in custom_types
 
                 if is_last_part and is_complex_signal:
-                    # This is a nested complex column - include the entire column
-                    # with a simplified name at the root level
-                    simplified_name = signal_type.split("@")[
-                        0
-                    ].lower()  # e.g., "File@v1" -> "file"
-                    schema[simplified_name] = signal_type
+                    schema[column] = signal_type
                     # Also need to remove the partial schema entry we created for the
                     # parent since we're promoting the nested complex column to root
                     parent_signal = column_parts[0]
