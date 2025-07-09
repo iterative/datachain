@@ -967,26 +967,15 @@ class DataChain:
                 if all_columns:
                     return all_columns
             
-            # Not a complex signal or no unique keys found - return single column
-            # This handles the base case for recursion (primitive types)
-            try:
-                col_type = self.signals_schema.get_column_type(col_db_name)
-                column = Column(col_db_name, python_to_sql(col_type))
-                return [column]
-            except Exception:
-                # If we can't find the column type, skip it
-                return []
+            col_type = self.signals_schema.get_column_type(col_db_name)
+            column = Column(col_db_name, python_to_sql(col_type))
+            return [column]
             
         except Exception as e:
-            # If anything fails, fall back to basic column creation or raise appropriate error
-            try:
-                col_db_name = ColumnMeta.to_db_name(column_name)
-                col_type = self.signals_schema.get_column_type(col_db_name)
-                column = Column(col_db_name, python_to_sql(col_type))
-                return [column]
-            except Exception as original_error:
-                # Re-raise the original error (including SignalResolvingError) to maintain API consistency
-                raise original_error
+            col_db_name = ColumnMeta.to_db_name(column_name)
+            col_type = self.signals_schema.get_column_type(col_db_name)
+            column = Column(col_db_name, python_to_sql(col_type))
+            return [column]
 
     @resolve_columns
     def order_by(self, *args, descending: bool = False) -> "Self":
