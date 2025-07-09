@@ -1,6 +1,7 @@
 from collections.abc import Iterator
 
 import pytest
+from pydantic import BaseModel
 
 import datachain as dc
 from datachain.lib.file import File
@@ -258,32 +259,19 @@ def test_complex_signal_group_by_mixed(test_session):
 
 
 def test_complex_signal_deep_nesting(test_session):
-    """Test complex signals with deep nesting (3+ levels)."""
-    from typing import ClassVar
-
-    from pydantic import BaseModel
-
-    # Create nested models with 3+ levels
     class NestedLevel1(BaseModel):
         name: str
         value: int
 
-        _unique_id_keys: ClassVar[list[str]] = ["name", "value"]
-
     class NestedLevel2(BaseModel):
         category: str
         level1: NestedLevel1
-
-        _unique_id_keys: ClassVar[list[str]] = ["category", "level1"]
 
     class NestedLevel3(BaseModel):
         id: str
         level2: NestedLevel2
         total: float
 
-        _unique_id_keys: ClassVar[list[str]] = ["id", "level2"]
-
-    # Create test data with deep nesting
     nested_data = [
         NestedLevel3(
             id="item1",
@@ -304,7 +292,7 @@ def test_complex_signal_deep_nesting(test_session):
             level2=NestedLevel2(
                 category="A", level1=NestedLevel1(name="test1", value=10)
             ),
-            total=150.0,
+            total=100.0,
         ),
     ]
 
@@ -316,7 +304,6 @@ def test_complex_signal_deep_nesting(test_session):
         session=test_session,
     )
 
-    # Test group_by with deeply nested complex signal
     result = chain.group_by(
         total_amount=dc.func.sum("amount"),
         count=dc.func.count(),
@@ -326,14 +313,15 @@ def test_complex_signal_deep_nesting(test_session):
     records = result.to_records()
     total_amounts = result.to_values("total_amount")
 
-    # Should have 2 groups (item1 appears twice with same structure)
     assert len(records) == 2
     assert len(total_amounts) == 2
 
-    # Check grouping by nested structure
     groups = {record["nested__id"]: record["total_amount"] for record in records}
     assert groups["item1"] == 40  # 10 + 30 (grouped by all nested fields)
     assert groups["item2"] == 20
+
+    # ToDo:
+    # assert result.to_list("nested.id", "total_amount") == {("item1", 40), ("item2", 20)}
 
 
 def test_nested_column_partition_by(test_session):
@@ -346,13 +334,9 @@ def test_nested_column_partition_by(test_session):
         name: str
         value: int
 
-        _unique_id_keys: ClassVar[list[str]] = ["name"]
-
     class Level2(BaseModel):
         category: str
         level1: Level1
-
-        _unique_id_keys: ClassVar[list[str]] = ["category", "level1"]
 
     # Create test data
     nested_data = [
@@ -396,24 +380,14 @@ def test_nested_column_partition_by(test_session):
 
 
 def test_nested_column_agg_partition_by(test_session):
-    """Test agg with nested column references in partition_by."""
-    from typing import ClassVar
-
-    from pydantic import BaseModel
-
     class Person(BaseModel):
         name: str
         age: int
-
-        _unique_id_keys: ClassVar[list[str]] = ["name"]
 
     class Team(BaseModel):
         name: str
         leader: Person
 
-        _unique_id_keys: ClassVar[list[str]] = ["name", "leader"]
-
-    # Create test data
     teams = [
         Team(name="Alpha", leader=Person(name="Alice", age=30)),
         Team(name="Beta", leader=Person(name="Bob", age=25)),
@@ -434,7 +408,6 @@ def test_nested_column_agg_partition_by(test_session):
     def my_agg(teams: list[Team], scores: list[int]) -> Iterator[tuple[Team, int]]:
         yield teams[0], sum(scores)
 
-    # Test agg with nested column reference in partition_by
     result = chain.agg(
         my_agg,
         params=("team", "score"),
@@ -445,7 +418,6 @@ def test_nested_column_agg_partition_by(test_session):
     records = result.to_records()
     assert len(records) == 2  # Should have 2 unique leaders: Alice, Bob
 
-    # Check the results
     leader_to_total = {
         record["team__leader__name"]: record["total"] for record in records
     }
@@ -454,20 +426,12 @@ def test_nested_column_agg_partition_by(test_session):
 
 
 def test_nested_column_edge_cases(test_session):
-    """Test edge cases with nested column references."""
-    from typing import ClassVar
-
-    from pydantic import BaseModel
-
     from datachain.lib.signal_schema import SignalResolvingError
 
     class Simple(BaseModel):
         name: str
         value: int
 
-        _unique_id_keys: ClassVar[list[str]] = ["name"]
-
-    # Create test data
     simple_data = [
         Simple(name="test1", value=10),
         Simple(name="test2", value=20),
@@ -482,7 +446,6 @@ def test_nested_column_edge_cases(test_session):
         session=test_session,
     )
 
-    # Test with valid nested field
     result = chain.group_by(
         total=dc.func.sum("amount"),
         count=dc.func.count(),
@@ -492,12 +455,10 @@ def test_nested_column_edge_cases(test_session):
     records = result.to_records()
     assert len(records) == 2  # Should have 2 unique names
 
-    # Check the results
     name_to_total = {record["simple__name"]: record["total"] for record in records}
     assert name_to_total["test1"] == 40  # 10 + 30
     assert name_to_total["test2"] == 20
 
-    # Test with invalid nested field should raise error
     with pytest.raises(SignalResolvingError):
         chain.group_by(
             total=dc.func.sum("amount"),
@@ -505,7 +466,6 @@ def test_nested_column_edge_cases(test_session):
             partition_by="simple.nonexistent",
         ).to_records()
 
-    # Test with non-existent parent should raise error
     with pytest.raises(SignalResolvingError):
         chain.group_by(
             total=dc.func.sum("amount"),

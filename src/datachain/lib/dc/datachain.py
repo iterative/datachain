@@ -774,9 +774,7 @@ class DataChain:
         This method bears similarity to `gen()` and `map()`, employing a comparable set
         of parameters, yet differs in two crucial aspects:
         1. The `partition_by` parameter: This specifies the column name or a list of
-           column names that determine the grouping criteria for aggregation. Complex
-           signal columns (Pydantic BaseModel types like File objects) are automatically
-           expanded to their unique identifier columns.
+           column names that determine the grouping criteria for aggregation.
         2. Group-based UDF function input: Instead of individual rows, the function
            receives a list all rows within each group defined by `partition_by`.
 
@@ -810,11 +808,9 @@ class DataChain:
             chain.save("new_dataset")
             ```
 
-            Using complex signals for partitioning:
+            Using complex signals for partitioning (File or any Pydentic BaseModel):
 
             ```py
-            # Partition by complex signal column name - automatically expands
-            # to File's unique identifier columns (File is a Pydantic BaseModel)
             def my_agg(files: list[File]) -> Iterator[tuple[File, int]]:
                 yield files[0], sum(f.size for f in files)
 
@@ -822,7 +818,7 @@ class DataChain:
                 my_agg,
                 params=("file",),
                 output={"file": File, "total": int},
-                partition_by="file",  # Column name referring to File objects
+                partition_by="file",  # Column referring to all sub-columns of File
             )
             chain.save("new_dataset")
             ```
@@ -927,35 +923,22 @@ class DataChain:
         return query_func(*columns, **kwargs)
 
     def _process_complex_signal_column(self, column_name: str) -> list[Column]:
-        """Process complex signal column names for partition_by.
+        """Process complex column names for partition_by.
 
         Args:
             column_name: The column name to process (e.g., "file" or "nested.file")
 
         Returns:
-            List of Column objects, complex signal will be expanded.
+            List of Column objects, complex column will be expanded.
         """
         col_db_name = ColumnMeta.to_db_name(column_name)
         col_type = self.signals_schema.get_column_type(col_db_name, with_subtree=True)
 
-        # Check if this is a complex signal (Pydantic BaseModel type)
-        if isinstance(col_type, type) and issubclass(col_type, BaseModel):
-            # Get the unique ID keys for this BaseModel type
-            unique_keys = getattr(col_type, "_unique_id_keys", None)
-            if unique_keys is None:
-                # Fall back to using all model fields if no unique keys defined
-                if hasattr(col_type, "_datachain_column_types"):
-                    # DataModel subclass
-                    unique_keys = list(col_type._datachain_column_types.keys())
-                else:
-                    # Regular Pydantic BaseModel
-                    unique_keys = list(col_type.model_fields.keys())
-
-            # Recursively process each unique key to handle nested complex signals
+        if ModelStore.is_pydantic(col_type):
             all_columns = []
-            for key in unique_keys:
+            keys = list(col_type.model_fields.keys())
+            for key in keys:
                 key_col_name = f"{column_name}.{key}"
-                # Recursively process this key in case it's also a complex signal
                 key_columns = self._process_complex_signal_column(key_col_name)
                 all_columns.extend(key_columns)
 
