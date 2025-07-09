@@ -1078,33 +1078,23 @@ class DataChain:
                 if "." in col:
                     # Split the column reference to analyze it
                     parts = col.split(".")
-                    if len(parts) == 2:
-                        # This is a simple nested field reference like "f1.name"
-                        parent_signal = parts[0]
-                        parent_type = self.signals_schema.values.get(parent_signal)
+                    parent_signal = parts[0]
+                    parent_type = self.signals_schema.values.get(parent_signal)
 
-                        # Check if parent type supports partial creation
-                        if (
-                            parent_type
-                            and hasattr(parent_type, "__module__")
-                            and hasattr(parent_type, "__name__")
-                            and ModelStore.is_pydantic(parent_type)
-                            and "@" in ModelStore.get_name(parent_type)
-                        ):
-                            # DataModel with versioning - can create partials
-                            if parent_signal not in keep_columns:
-                                keep_columns.append(parent_signal)
-                            partial_fields.append(col)
-                        else:
-                            # BaseModel or other - add flattened columns directly
-                            for column in columns:
-                                col_type = self.signals_schema.get_column_type(
-                                    column.name
-                                )
-                                schema_fields[column.name] = col_type
+                    # Check if parent type supports partial creation
+                    if (
+                        parent_type
+                        and hasattr(parent_type, "__module__")
+                        and hasattr(parent_type, "__name__")
+                        and ModelStore.is_pydantic(parent_type)
+                        and "@" in ModelStore.get_name(parent_type)
+                    ):
+                        # DataModel with versioning - can create partials
+                        if parent_signal not in keep_columns:
+                            keep_columns.append(parent_signal)
+                        partial_fields.append(col)
                     else:
-                        # This is a deep nested reference like "nested.level1.name"
-                        # Should be flattened to individual columns
+                        # BaseModel or other - add flattened columns directly
                         for column in columns:
                             col_type = self.signals_schema.get_column_type(column.name)
                             schema_fields[column.name] = col_type
