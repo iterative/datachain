@@ -140,7 +140,7 @@ def _upload_file_s3(
     """Upload file using S3 multipart form data."""
     form_data = dict(url_data["fields"])
     content_type = mimetypes.guess_type(source_path)[0]
-    form_data["Content-Type"] = content_type
+    form_data["Content-Type"] = str(content_type)
 
     file_content = local_fs.open(source_path, "rb").read()
     form_data["file"] = (
