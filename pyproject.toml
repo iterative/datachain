@@ -73,7 +73,8 @@ torch = [
   "transformers>=4.36.0"
 ]
 audio = [
-  "torchaudio"
+  "torchaudio",
+  "soundfile"
 ]
 remote = [
   "lz4",
