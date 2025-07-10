@@ -81,7 +81,9 @@ vector = [
 ]
 hf = [
   "numba>=0.60.0",
-  "datasets[audio,vision]>=2.21.0",
+  "datasets[vision]>=4.0.0",
+  # https://github.com/pytorch/torchcodec/issues/640
+  "datasets[audio]>=4.0.0 ; (sys_platform == 'linux' or sys_platform == 'darwin')",
   "fsspec>=2024.12.0"
 ]
 video = [
