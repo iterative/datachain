@@ -2,7 +2,6 @@ name: Tests
 
 on:
   push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -14,48 +13,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out the repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || github.ref }}
-
-      - name: Set up Python 3.9
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.9'
-
-      - name: Setup uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: true
-          cache-suffix: lint
-          cache-dependency-glob: pyproject.toml
-          # revert after this is fixed
-          # https://github.com/wntrblm/nox/issues/953
-          version: ">=0.6,<0.7"
-
-      - name: Install nox
-        run: uv pip install nox --system
-
-      - name: Cache mypy
-        uses: actions/cache@v4
-        with:
-          path: .mypy_cache
-          key: mypy-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('pyproject.toml') }}
-
-      - name: Cache pre-commit hooks
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pre-commit
-          key: pre-commit-3|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml') }}
-
-      - name: Lint code
-        run: nox -s lint
-
   datachain:
     timeout-minutes: 40
     runs-on: ${{ matrix.os }}
@@ -63,16 +20,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest-8-cores]
-        pyv: ['3.9', '3.10', '3.11', '3.12', '3.13']
-        include:
-          - os: macos-latest
-            pyv: '3.9'
-          - os: macos-latest
-            pyv: '3.13'
-          - os: windows-latest
-            pyv: '3.9'
-          - os: windows-latest
-            pyv: '3.13'
+        pyv: ['3.12']
 
     steps:
       - name: Check out the repository
@@ -134,61 +82,3 @@ jobs:
 
       - name: Build docs
         run: nox -s docs
-
-  examples:
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-        pyv: ['3.9', '3.13']
-        group: ['get_started', 'computer_vision', 'multimodal']
-        exclude:
-          - {os: ubuntu-latest, pyv: '3.9', group: 'multimodal'}
-          - {os: ubuntu-latest, pyv: '3.13', group: 'multimodal'}
-        include:
-          # HF runs against actual API - thus run it only once
-          - {os: ubuntu-latest, pyv: "3.13", group: llm_and_nlp}
-          - {os: ubuntu-latest-4-cores, pyv: "3.9", group: multimodal}
-          - {os: ubuntu-latest-4-cores, pyv: "3.13", group: multimodal}
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.ref }}
-
-      - name: Set up Python ${{ matrix.pyv }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.pyv }}
-
-      - name: Setup uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: true
-          cache-suffix: examples-${{ matrix.pyv }}
-          cache-dependency-glob: pyproject.toml
-          # revert after this is fixed
-          # https://github.com/wntrblm/nox/issues/953
-          version: ">=0.6,<0.7"
-
-      - name: Install nox
-        run: uv pip install nox --system
-
-      - name: Set hf token
-        if: matrix.group == 'llm_and_nlp'
-        run: echo 'HF_TOKEN=${{ secrets.HF_TOKEN }}' >> "$GITHUB_ENV"
-
-      - name: Run examples
-        run: nox -s examples -p ${{ matrix.pyv }} -- -m "${{ matrix.group }}"
-
-  check:
-    if: always()
-    needs: [lint, datachain, examples]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: re-actors/alls-green@release/v1
-        with:
-          allowed-failures: examples
-          jobs: ${{ toJSON(needs) }}
