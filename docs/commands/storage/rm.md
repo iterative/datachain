@@ -1,6 +1,6 @@
 # storage rm
 
-Delete files and directories in Storages using Studio.
+Delete files and directories in storage using Studio.
 
 ## Synopsis
 
