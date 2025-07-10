@@ -942,10 +942,7 @@ class DataChain:
                 key_columns = self._process_complex_signal_column(key_col_name)
                 all_columns.extend(key_columns)
 
-            if all_columns:
-                return all_columns
-
-        col_type = self.signals_schema.get_column_type(col_db_name)
+            return all_columns
         column = Column(col_db_name, python_to_sql(col_type))
         return [column]
 
@@ -1053,6 +1050,7 @@ class DataChain:
         for col in partition_by:
             if isinstance(col, str):
                 columns = self._process_complex_signal_column(col)
+                # columns = self.signals_schema.db_signals(col, as_columns=True)
                 partition_by_columns.extend(columns)
                 # For nested field references (e.g., "nested.level1.name"),
                 # we need to distinguish between:
@@ -1102,7 +1100,6 @@ class DataChain:
                     ),
                 )
 
-        # validate signal columns and add them to the schema
         if not kwargs:
             raise ValueError("At least one column should be provided for group_by")
         for col_name, func in kwargs.items():
@@ -1115,16 +1112,11 @@ class DataChain:
             signal_columns.append(column)
             schema_fields[col_name] = func.get_result_type(self.signals_schema)
 
-        signal_schema = SignalSchema(schema_fields)
-        if keep_columns:
-            if partial_fields:
-                signal_schema |= self.signals_schema.to_partial(*partial_fields)
-            else:
-                signal_schema |= self.signals_schema.to_partial(*keep_columns)
+        new_schema = self.signals_schema.group_by(partition_by, signal_columns)
 
         return self._evolve(
             query=self._query.group_by(signal_columns, partition_by_columns),
-            signal_schema=signal_schema,
+            signal_schema=new_schema,
         )
 
     def mutate(self, **kwargs) -> "Self":
@@ -1249,6 +1241,8 @@ class DataChain:
         db_signals = self._effective_signals_schema.db_signals(
             include_hidden=include_hidden
         )
+
+        # db_signals = [s.replace("__", ".") for s in db_signals]
         with self._query.ordered_select(*db_signals).as_iterable() as rows:
             if row_factory:
                 rows = (row_factory(db_signals, r) for r in rows)  # type: ignore[assignment]

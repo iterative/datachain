@@ -589,6 +589,9 @@ class SignalSchema:
         ]
 
         if name:
+            if "." in name:
+                name = name.replace(".", "__")
+
             signals = [
                 s
                 for s in signals
@@ -624,6 +627,15 @@ class SignalSchema:
             raise SignalResolvingError(path, "is not found")
 
         return curr_type
+
+    def group_by(
+        self, partition_by: Sequence[str], new_column: Sequence[Column]
+    ) -> "SignalSchema":
+        schema = SignalSchema(copy.deepcopy(self.values))
+        schema = schema.to_partial(*partition_by)
+
+        vals = {c.name: sql_to_python(c) for c in new_column}
+        return SignalSchema(schema.values | vals)
 
     def select_except_signals(self, *args: str) -> "SignalSchema":
         def has_signal(signal: str):

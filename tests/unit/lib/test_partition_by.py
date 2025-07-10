@@ -310,27 +310,18 @@ def test_complex_signal_deep_nesting(test_session):
         partition_by="nested",
     )
 
-    records = result.to_records()
-    total_amounts = result.to_values("total_amount")
+    assert dict(result.to_list("nested.id", "total_amount")) == {
+        "item1": 40,
+        "item2": 20,
+    }
 
-    assert len(records) == 2
-    assert len(total_amounts) == 2
-
-    groups = {record["nested__id"]: record["total_amount"] for record in records}
-    assert groups["item1"] == 40  # 10 + 30 (grouped by all nested fields)
-    assert groups["item2"] == 20
-
-    # ToDo:
-    # assert result.to_list("nested.id", "total_amount") == {
-    #   ("item1", 40), ("item2", 20)
-    # }
+    assert dict(result.to_list("nested.id", "count")) == {
+        "item1": 2,
+        "item2": 1,
+    }
 
 
 def test_nested_column_partition_by(test_session):
-    """Test partition_by with nested column references like 'nested.level1.name'."""
-
-    from pydantic import BaseModel
-
     class Level1(BaseModel):
         name: str
         value: int
