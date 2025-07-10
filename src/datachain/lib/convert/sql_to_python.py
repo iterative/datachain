@@ -9,6 +9,8 @@ def sql_to_python(sql_exp: ColumnElement) -> Any:
         type_ = sql_exp.type.python_type
         if type_ == Decimal:
             type_ = float
+        elif type_ == list:
+            type_ = list[sql_exp.type.item_type.python_type]
     except NotImplementedError:
         type_ = str
     return type_

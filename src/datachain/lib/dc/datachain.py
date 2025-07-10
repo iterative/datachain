@@ -943,6 +943,8 @@ class DataChain:
                 all_columns.extend(key_columns)
 
             return all_columns
+
+        # col_type = self.signals_schema.get_column_type(col_db_name)
         column = Column(col_db_name, python_to_sql(col_type))
         return [column]
 
@@ -1112,11 +1114,17 @@ class DataChain:
             signal_columns.append(column)
             schema_fields[col_name] = func.get_result_type(self.signals_schema)
 
-        new_schema = self.signals_schema.group_by(partition_by, signal_columns)
+        # signal_schema = self.signals_schema.group_by(partition_by, signal_columns)
+        signal_schema = SignalSchema(schema_fields)
+        if keep_columns:
+            if partial_fields:
+                signal_schema |= self.signals_schema.to_partial(*partial_fields)
+            else:
+                signal_schema |= self.signals_schema.to_partial(*keep_columns)
 
         return self._evolve(
             query=self._query.group_by(signal_columns, partition_by_columns),
-            signal_schema=new_schema,
+            signal_schema=signal_schema,
         )
 
     def mutate(self, **kwargs) -> "Self":
