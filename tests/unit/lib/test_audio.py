@@ -67,7 +67,6 @@ def test_audio_info(audio_file):
     """Test audio metadata extraction."""
     result = audio_info(audio_file)
 
-    # Verify the returned Audio object has expected metadata
     assert isinstance(result, Audio)
     assert result.sample_rate == 16000
     assert result.channels == 1
@@ -185,10 +184,8 @@ def test_save_audio_fragment_validation(audio_file, tmp_path):
 
 def test_save_audio_fragment_auto_format(tmp_path, catalog):
     """Test saving audio fragment with auto-detected format."""
-    # Create a FLAC audio file for this test
     audio_data = generate_test_wav(duration=1.0, sample_rate=16000)
     audio_path = tmp_path / "test_audio.flac"
-    # Convert to FLAC format
     buffer = io.BytesIO(audio_data)
     temp_data, sr = sf.read(buffer)
     sf.write(audio_path, temp_data, sr, format="flac")
@@ -210,7 +207,6 @@ def test_save_audio_fragment_auto_format(tmp_path, catalog):
 
 def test_audio_info_file_error(audio_file):
     """Test audio_info handles file errors properly."""
-    # Mock torchaudio.info to raise an exception
     with patch(
         "datachain.lib.audio.torchaudio.info", side_effect=Exception("Test error")
     ):
