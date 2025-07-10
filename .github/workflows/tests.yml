@@ -98,8 +98,6 @@ jobs:
 
       - name: Set up FFmpeg
         uses: AnimMouse/setup-ffmpeg@v1
-        with:
-          version: 7.0
 
       - name: Install nox
         run: uv pip install nox --system
@@ -111,6 +109,10 @@ jobs:
       - name: Skip all remotes on Windows
         if: runner.os == 'Windows'
         run: echo 'DISABLE_REMOTES_ARG=--disable-remotes=azure,gs' >> $env:GITHUB_ENV
+
+      - uses: mxschmitt/action-tmate@v3
+        with:
+          limit-access-to-actor: true
 
       - name: Run tests
         run: nox -s tests-${{ matrix.pyv }} -- -m "not e2e and not examples" $DISABLE_REMOTES_ARG
