@@ -225,23 +225,23 @@ def add_storage_parser(subparsers, parent_parser) -> None:
     storage_cp_parser.add_argument(
         "source_path",
         action="store",
-        help="Path to the source file or directory to upload",
+        help="Path to the source file or directory to copy",
     )
 
     storage_cp_parser.add_argument(
         "destination_path",
         action="store",
-        help="Path to the destination file or directory to upload",
+        help="Path to the destination file or directory to copy",
     )
 
     storage_cp_parser.add_argument(
         "--recursive",
         action="store_true",
-        help="Upload recursively",
+        help="Copy recursively",
     )
 
     storage_cp_parser.add_argument(
         "--team",
         action="store",
-        help="Team name to upload storage contents to",
+        help="Team name to copy storage contents to",
     )

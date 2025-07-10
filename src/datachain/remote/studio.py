@@ -480,13 +480,12 @@ class StudioClient:
         self, path: str, recursive: bool = False
     ) -> Response[FileUploadData]:
         client = Client.get_implementation(path)
-        remote = client.protocol
         bucket, subpath = client.split_url(path)
 
         data = {
             "bucket": bucket,
             "recursive": recursive,
-            "remote": remote,
+            "remote": client.protocol,
             "team": self.team,
             "paths": subpath,
         }

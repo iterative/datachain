@@ -1,6 +1,6 @@
 # storage mv
 
-Move files and directories in Storages using Studio.
+Move files and directories in storage using Studio.
 
 ## Synopsis
 
