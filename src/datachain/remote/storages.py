@@ -142,14 +142,13 @@ def _upload_file_s3(
     content_type = mimetypes.guess_type(source_path)[0]
     form_data["Content-Type"] = str(content_type)
 
-    file_content = local_fs.open(source_path, "rb").read()
-    form_data["file"] = (
-        os.path.basename(source_path),
-        file_content,
-        content_type,
-    )
-
-    return requests.post(upload_url, files=form_data, timeout=3600)
+    with local_fs.open(source_path, "rb") as f:
+        form_data["file"] = (
+            os.path.basename(source_path),
+            f,
+            content_type,
+        )
+        return requests.post(upload_url, files=form_data, timeout=3600)
 
 
 def _upload_file_direct(
@@ -161,18 +160,16 @@ def _upload_file_direct(
 ):
     """Upload file using direct HTTP request."""
     with local_fs.open(source_path, "rb") as f:
-        file_content = f.read()
-
-    return requests.request(
-        method,
-        upload_url,
-        data=file_content,
-        headers={
-            **headers,
-            "Content-Type": mimetypes.guess_type(source_path)[0],
-        },
-        timeout=3600,
-    )
+        return requests.request(
+            method,
+            upload_url,
+            data=f,
+            headers={
+                **headers,
+                "Content-Type": mimetypes.guess_type(source_path)[0],
+            },
+            timeout=3600,
+        )
 
 
 def _upload_single_file(

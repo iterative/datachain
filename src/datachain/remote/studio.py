@@ -537,7 +537,6 @@ class StudioClient:
     def batch_presigned_urls(
         self, destination_path: str, paths: dict[str, str]
     ) -> Response[PresignedUrlData]:
-        remote = urlparse(os.fspath(destination_path)).scheme
         client = Client.get_implementation(destination_path)
         remote = client.protocol
         bucket, _ = client.split_url(destination_path)
@@ -553,7 +552,6 @@ class StudioClient:
         )
 
     def download_url(self, path: str) -> Response[FileUploadData]:
-        remote = urlparse(os.fspath(path)).scheme
         client = Client.get_implementation(path)
         remote = client.protocol
         bucket, subpath = client.split_url(path)
@@ -571,7 +569,6 @@ class StudioClient:
     def save_upload_log(
         self, path: str, logs: list[dict[str, Any]]
     ) -> Response[FileUploadData]:
-        remote = urlparse(os.fspath(path)).scheme
         client = Client.get_implementation(path)
         remote = client.protocol
         bucket, _ = client.split_url(path)
