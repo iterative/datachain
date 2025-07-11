@@ -10,8 +10,10 @@ def sql_to_python(sql_exp: ColumnElement) -> Any:
         if type_ == Decimal:
             type_ = float
         elif type_ is list:
-            if hasattr(sql_exp.type, "item_type"):
-                type_ = sql_to_python(sql_exp.type.item_type)
+            if hasattr(sql_exp.type, "item_type") and hasattr(
+                sql_exp.type.item_type, "python_type"
+            ):
+                type_ = list[sql_exp.type.item_type.python_type]
             else:
                 type_ = list
     except NotImplementedError:
