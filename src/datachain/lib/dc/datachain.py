@@ -1114,13 +1114,7 @@ class DataChain:
             signal_columns.append(column)
             schema_fields[col_name] = func.get_result_type(self.signals_schema)
 
-        # signal_schema = self.signals_schema.group_by(partition_by, signal_columns)
-        signal_schema = SignalSchema(schema_fields)
-        if keep_columns:
-            if partial_fields:
-                signal_schema |= self.signals_schema.to_partial(*partial_fields)
-            else:
-                signal_schema |= self.signals_schema.to_partial(*keep_columns)
+        signal_schema = self.signals_schema.group_by(partition_by, signal_columns)
 
         return self._evolve(
             query=self._query.group_by(signal_columns, partition_by_columns),
@@ -1250,7 +1244,6 @@ class DataChain:
             include_hidden=include_hidden
         )
 
-        # db_signals = [s.replace("__", ".") for s in db_signals]
         with self._query.ordered_select(*db_signals).as_iterable() as rows:
             if row_factory:
                 rows = (row_factory(db_signals, r) for r in rows)  # type: ignore[assignment]
