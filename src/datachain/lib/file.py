@@ -901,6 +901,7 @@ class AudioFile(File):
         duration: float,
         start: float = 0,
         end: Optional[float] = None,
+        audio_duration: Optional[float] = None,
     ) -> "Iterator[AudioFragment]":
         """
         Splits the audio into multiple fragments of a specified duration.
@@ -910,6 +911,8 @@ class AudioFile(File):
             start (float): The starting time in seconds (default: 0).
             end (float, optional): The ending time in seconds. If None, the entire
                                    remaining audio is processed (default: None).
+            audio_duration (float, optional): Pre-computed audio duration to avoid
+                                            calling get_info() multiple times.
 
         Returns:
             Iterator[AudioFragment]: An iterator yielding audio fragments.
@@ -924,7 +927,10 @@ class AudioFile(File):
             raise ValueError("start must be a non-negative float")
 
         if end is None:
-            end = self.get_info().duration
+            if audio_duration is not None:
+                end = audio_duration
+            else:
+                end = self.get_info().duration
 
         if end < 0:
             raise ValueError("end must be a non-negative float")
@@ -978,10 +984,11 @@ class AudioFragment(DataModel):
         Returns:
             bytes: The encoded audio fragment as bytes.
         """
-        from .audio import audio_segment_bytes
+        from .audio import audio_segment_bytes, validate_audio_format
 
+        validated_format = validate_audio_format(format)
         duration = self.end - self.start
-        return audio_segment_bytes(self.audio, self.start, duration, format)
+        return audio_segment_bytes(self.audio, self.start, duration, validated_format)
 
     def save(self, output: str, format: Optional[str] = None) -> "AudioFile":
         """
