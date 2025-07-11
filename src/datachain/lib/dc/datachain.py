@@ -1061,6 +1061,7 @@ class DataChain:
         schema_fields: dict[str, DataType] = {}
         keep_columns: list[str] = []
         partial_fields: list[str] = []  # Track specific fields for partial creation
+        schema_partition_by: list[str] = []
 
         for col in partition_by:
             if isinstance(col, str):
@@ -1081,11 +1082,13 @@ class DataChain:
                         if parent_signal not in keep_columns:
                             keep_columns.append(parent_signal)
                         partial_fields.append(col)
+                        schema_partition_by.append(col)
                     else:
                         # BaseModel or other - add flattened columns directly
                         for column in columns:
                             col_type = self.signals_schema.get_column_type(column.name)
                             schema_fields[column.name] = col_type
+                        schema_partition_by.append(col)
                 else:
                     # simple signal - but we need to check if it's a complex signal
                     # complex signal - only include the columns used for partitioning
@@ -1097,15 +1100,19 @@ class DataChain:
                         for column in columns:
                             col_type = self.signals_schema.get_column_type(column.name)
                             schema_fields[column.name] = col_type
+                        schema_partition_by.append(col)
                     # Simple signal - keep the entire signal
-                    elif col not in keep_columns:
-                        keep_columns.append(col)
+                    else:
+                        if col not in keep_columns:
+                            keep_columns.append(col)
+                        schema_partition_by.append(col)
             elif isinstance(col, Function):
                 column = col.get_column(self.signals_schema)
                 col_db_name = column.name
                 col_type = column.type.python_type
                 schema_fields[col_db_name] = col_type
                 partition_by_columns.append(column)
+                signal_columns.append(column)
             else:
                 raise DataChainColumnError(
                     col,
@@ -1127,7 +1134,9 @@ class DataChain:
             signal_columns.append(column)
             schema_fields[col_name] = func.get_result_type(self.signals_schema)
 
-        signal_schema = self.signals_schema.group_by(partition_by, signal_columns)  # type: ignore[arg-type]
+        signal_schema = self.signals_schema.group_by(
+            schema_partition_by, signal_columns
+        )
 
         return self._evolve(
             query=self._query.group_by(signal_columns, partition_by_columns),

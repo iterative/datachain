@@ -4,6 +4,8 @@ import pytest
 from pydantic import BaseModel
 
 import datachain as dc
+from datachain import func
+from datachain.lib.data_model import DataModel
 from datachain.lib.file import File
 
 
@@ -464,3 +466,33 @@ def test_nested_column_edge_cases(test_session):
             count=dc.func.count(),
             partition_by="nonexistent.field",
         ).to_records()
+
+
+def test_group_by_with_functions_in_partition_by(test_session):
+    class CustomFile(DataModel):
+        path: str
+        size: int
+
+    custom_data = [
+        CustomFile(path="docs/readme.txt", size=100),
+        CustomFile(path="docs/guide.txt", size=200),
+        CustomFile(path="src/main.py", size=300),
+        CustomFile(path="src/utils.py", size=150),
+        CustomFile(path="tests/test_main.py", size=250),
+        CustomFile(path="config.yaml", size=50),
+    ]
+
+    ds = dc.read_values(
+        custom_file=custom_data,
+        session=test_session,
+    ).group_by(
+        cnt=func.count(),
+        sum=func.sum("custom_file.size"),
+        partition_by=func.path.parent("custom_file.path").label("file_dir"),
+    )
+
+    assert len(ds.to_list("file_dir")) == 4
+    assert ds.filter(dc.C("file_dir") == "docs").to_list("cnt", "sum")[0] == (2, 300)
+    assert ds.filter(dc.C("file_dir") == "src").to_list("cnt", "sum")[0] == (2, 450)
+    assert ds.filter(dc.C("file_dir") == "tests").to_list("cnt", "sum")[0] == (1, 250)
+    assert ds.filter(dc.C("file_dir") == "").to_list("cnt", "sum")[0] == (1, 50)
