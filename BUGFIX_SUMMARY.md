@@ -29,7 +29,7 @@ The issue was in the `read_hf()` function in `src/datachain/lib/dc/hf.py`. When 
    - Also fixed the nested dictionary case in `_feature_to_chain_type()` function
 
 2. **Updated test files**:
-   - Added comprehensive tests in `tests/unit/lib/test_hf.py` 
+   - Added comprehensive tests in `tests/unit/lib/test_hf.py`
    - Created functional tests in `tests/func/test_hf_invalid_column_names.py`
 
 ### Key Changes
@@ -66,7 +66,7 @@ The `dict_to_data_model()` function in `src/datachain/lib/data_model.py` has bui
 
 The `normalize_col_names()` function handles various invalid characters:
 - `factual?` → `factual_`
-- `user-name` → `user_name`  
+- `user-name` → `user_name`
 - `123column` → `c0_123column`
 - `has spaces` → `has_spaces`
 - `with.dots` → `with_dots`

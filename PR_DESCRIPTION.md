@@ -56,7 +56,7 @@ The fix leverages the existing `normalize_col_names()` function and `dict_to_dat
 
 The fix automatically transforms invalid column names to valid Python identifiers:
 - `factual?` → `factual_`
-- `user-name` → `user_name`  
+- `user-name` → `user_name`
 - `123column` → `c0_123column`
 - `has spaces` → `has_spaces`
 - `with.dots` → `with_dots`
@@ -79,7 +79,7 @@ The `dict_to_data_model()` function has built-in support for handling invalid Py
 ## 📁 Files Modified
 
 - `src/datachain/lib/dc/hf.py` - Main fix implementation
-- `src/datachain/lib/hf.py` - Nested dictionary fix  
+- `src/datachain/lib/hf.py` - Nested dictionary fix
 - `tests/unit/lib/test_hf.py` - Unit tests
 - `tests/func/test_hf_invalid_column_names.py` - Functional tests
 - `BUGFIX_SUMMARY.md` - Detailed documentation
