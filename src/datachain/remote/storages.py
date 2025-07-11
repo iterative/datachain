@@ -12,6 +12,8 @@ if TYPE_CHECKING:
 
     from fsspec import AbstractFileSystem
 
+    from datachain.remote.studio import StudioClient
+
 
 def get_studio_client(args: "Namespace"):
     from datachain.config import Config
@@ -122,11 +124,13 @@ def _build_file_paths(args: "Namespace", local_fs: "AbstractFileSystem", is_dir:
     return {destination_path: args.source_path}
 
 
-def _get_presigned_urls(studio_client, destination_path: str, file_paths: dict):
+def _get_presigned_urls(
+    studio_client: "StudioClient", destination_path: str, file_paths: dict
+):
     """Get presigned URLs for file uploads."""
     response = studio_client.batch_presigned_urls(
         destination_path,
-        {dest: mimetypes.guess_type(src)[0] for dest, src in file_paths.items()},
+        {dest: str(mimetypes.guess_type(src)[0]) for dest, src in file_paths.items()},
     )
     if not response.ok:
         raise DataChainError(response.message)
@@ -208,7 +212,7 @@ def _upload_single_file(
 
 
 def _save_upload_log(
-    studio_client,
+    studio_client: "StudioClient",
     destination_path: str,
     file_paths: dict,
     local_fs: "AbstractFileSystem",
