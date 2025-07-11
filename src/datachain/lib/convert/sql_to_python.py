@@ -13,7 +13,8 @@ def sql_to_python(sql_exp: ColumnElement) -> Any:
             if hasattr(sql_exp.type, "item_type") and hasattr(
                 sql_exp.type.item_type, "python_type"
             ):
-                type_ = list[sql_exp.type.item_type.python_type]
+                item_type = getattr(sql_exp.type.item_type, "python_type", Any)
+                type_ = list[item_type]  # type: ignore[valid-type]
             else:
                 type_ = list
     except NotImplementedError:
