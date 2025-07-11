@@ -166,7 +166,7 @@ def _upload_file_direct(
             data=f,
             headers={
                 **headers,
-                "Content-Type": mimetypes.guess_type(source_path)[0],
+                "Content-Type": str(mimetypes.guess_type(source_path)[0]),
             },
             timeout=3600,
         )
