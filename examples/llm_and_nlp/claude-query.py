@@ -57,7 +57,7 @@ def rate(client: anthropic.Anthropic, file: File) -> Rating:
 (
     dc.read_storage(DATA, type="text", anon=True)
     .filter(C("file.path").glob("*.txt"))
-    .limit(3)
+    .limit(4)
     .settings(parallel=2, cache=True)
     .setup(client=lambda: anthropic.Anthropic(api_key=API_KEY))
     .map(rating=rate)

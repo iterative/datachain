@@ -3,6 +3,10 @@ To install the required dependencies:
 
   uv pip install "datachain[examples]"
 
+
+Example demonstrates using DataChain Pytorch data loader to stream image
+and text object from cloud storage. We pass extracted data to Open CLIP
+to compute similarity score between image and its caption.
 """
 
 import open_clip
@@ -11,21 +15,22 @@ from torch.nn.functional import cosine_similarity
 from torch.utils.data import DataLoader
 
 import datachain as dc
+from datachain import C, func
 
 source = "gs://datachain-demo/50k-laion-files/000000/00000000*"
 
 
 def create_dataset():
     imgs = dc.read_storage(source, type="image", anon=True).filter(
-        dc.C("file.path").glob("*.jpg")
+        C("file.path").glob("*.jpg")
     )
     captions = dc.read_storage(source, type="text", anon=True).filter(
-        dc.C("file.path").glob("*.txt")
+        C("file.path").glob("*.txt")
     )
     return imgs.merge(
         captions,
-        on=dc.func.path.file_stem(imgs.c("file.path")),
-        right_on=dc.func.path.file_stem(captions.c("file.path")),
+        on=func.path.file_stem(imgs.c("file.path")),
+        right_on=func.path.file_stem(captions.c("file.path")),
     )
 
 

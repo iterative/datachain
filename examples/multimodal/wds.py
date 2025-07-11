@@ -18,7 +18,7 @@ NPZ_METADATA = os.getenv(
 wds_images = (
     dc.read_storage(IMAGE_TARS, type="image", anon=True)
     .settings(cache=True)
-    .gen(laion=process_webdataset(spec=WDSLaion), params="file")
+    .gen(laion=process_webdataset(spec=WDSLaion))
     .persist()
 )
 

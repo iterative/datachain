@@ -3,6 +3,8 @@ To install the required dependencies:
 
   uv pip install "datachain[examples]"
 
+HuggingFace pipeline helper model zoo demo.
+Runs various HuggingFace pipelines on images, audio, and text data.
 """
 
 # NOTE: also need to install ffmpeg binary
@@ -10,12 +12,13 @@ import json
 import os
 import subprocess
 
-os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
-
 import torch
-from transformers import pipeline
+from transformers import Pipeline, pipeline
 
 import datachain as dc
+from datachain import C, File
+
+os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 
 
 class Helper(dc.Mapper):
@@ -36,6 +39,11 @@ class Helper(dc.Mapper):
         return (json.dumps(result), "")
 
 
+def process(file: File, pipeline: Pipeline, args: dict) -> str:
+    result = pipeline(file.read(), **args)
+    return json.dumps(result)
+
+
 image_source = "gs://datachain-demo/dogs-and-cats/"
 audio_source = "gs://datachain-demo/speech-emotion-recognition-dataset/"
 text_source = "gs://datachain-demo/nlp-cnn-stories"
@@ -50,44 +58,29 @@ if __name__ == "__main__":
     print("** HuggingFace pipeline helper model zoo demo **")
     print("\nZero-shot object detection and classification:")
     (
-        dc.read_storage(
-            image_source,
-            anon=True,
-            type="image",
-        )
-        .filter(dc.C("file.path").glob("*.jpg"))
+        dc.read_storage(image_source, anon=True, type="image")
+        .filter(C("file.path").glob("*.jpg"))
         .limit(1)
-        .map(
-            Helper(
-                model="google/owlv2-base-patch16",
-                device=device,
-                candidate_labels=["cat", "dog", "squirrel", "unknown"],
-            ),
-            params=["file"],
-            output={"model_output": dict, "error": str},
+        .setup(
+            pipeline=lambda: pipeline(model="google/owlv2-base-patch16", device=device),
+            args=lambda: {"candidate_labels": ["cat", "dog", "squirrel", "unknown"]},
         )
-        .select("file.source", "file.path", "model_output", "error")
+        .map(result=process)
         .show()
     )
 
     print("\nNot-safe-for-work image detection:")
     (
-        dc.read_storage(
-            image_source,
-            anon=True,
-            type="image",
-        )
-        .filter(dc.C("file.path").glob("*.jpg"))
+        dc.read_storage(image_source, anon=True, type="image")
+        .filter(C("file.path").glob("*.jpg"))
         .limit(1)
-        .map(
-            Helper(
-                model="Falconsai/nsfw_image_detection",
-                device=device,
+        .setup(
+            pipeline=lambda: pipeline(
+                model="Falconsai/nsfw_image_detection", device=device
             ),
-            params=["file"],
-            output={"model_output": dict, "error": str},
+            args=dict,
         )
-        .select("file.source", "file.path", "model_output", "error")
+        .map(result=process)
         .show()
     )
 
@@ -95,22 +88,16 @@ if __name__ == "__main__":
     try:
         subprocess.run(["ffmpeg", "-L"], check=True)  # noqa: S607
         (
-            dc.read_storage(
-                audio_source,
-                anon=True,
-                type="binary",
-            )
+            dc.read_storage(audio_source, anon=True, type="audio")
             .filter(dc.C("file.path").glob("*.wav"))
             .limit(1)
-            .map(
-                Helper(
-                    model="Krithika-p/my_awesome_emotions_model",
-                    device=device,
+            .setup(
+                pipeline=lambda: pipeline(
+                    model="Krithika-p/my_awesome_emotions_model", device=device
                 ),
-                params=["file"],
-                output={"model_output": dict, "error": str},
+                args=dict,
             )
-            .select("file.source", "file.path", "model_output", "error")
+            .map(result=process)
             .show()
         )
     except FileNotFoundError:
@@ -118,22 +105,15 @@ if __name__ == "__main__":
 
     print("\nLong text summarization:")
     (
-        dc.read_storage(
-            text_source,
-            anon=True,
-            type="text",
-        )
-        .filter(dc.C("file.path").glob("*.story"))
+        dc.read_storage(text_source, anon=True, type="text")
+        .filter(C("file.path").glob("*.story"))
         .limit(1)
-        .map(
-            Helper(
-                model="pszemraj/led-large-book-summary",
-                device=device,
-                max_length=150,
+        .setup(
+            pipeline=lambda: pipeline(
+                model="pszemraj/led-large-book-summary", device=device
             ),
-            params=["file"],
-            output={"model_output": dict, "error": str},
+            args=lambda: {"max_length": 150},
         )
-        .select("file.source", "file.path", "model_output", "error")
+        .map(result=process)
         .show()
     )
