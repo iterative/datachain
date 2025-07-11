@@ -13,7 +13,6 @@ from datachain.asyn import AsyncMapper
 from datachain.cache import temporary_cache
 from datachain.dataset import RowDict
 from datachain.lib.convert.flatten import flatten
-from datachain.lib.data_model import DataValue
 from datachain.lib.file import File
 from datachain.lib.utils import AbstractUDF, DataChainError, DataChainParamsError
 from datachain.query.batch import (
@@ -266,7 +265,7 @@ class UDFBase(AbstractUDF):
 
     def _parse_row(
         self, row_dict: RowDict, catalog: "Catalog", cache: bool, download_cb: Callback
-    ) -> list[DataValue]:
+    ) -> list[Any]:
         assert self.params
         row = [row_dict[p] for p in self.params.to_udf_spec()]
         obj_row = self.params.row_to_objs(row)
