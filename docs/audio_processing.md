@@ -40,11 +40,11 @@ from datachain.lib.audio import audio_segment_np, estimate_memory_usage
 def process_large_audio(file: AudioFile, meta: Audio):
     # Estimate memory usage before processing
     memory_mb = estimate_memory_usage(
-        duration=10.0, 
-        sample_rate=meta.sample_rate, 
+        duration=10.0,
+        sample_rate=meta.sample_rate,
         channels=meta.channels
     )
-    
+
     if memory_mb > 100:  # More than 100MB
         # Process in smaller chunks
         for fragment in file.get_fragments(duration=5.0, audio_duration=meta.duration):
@@ -105,7 +105,7 @@ from datachain.lib.audio import audio_segment_np
 
 # Set memory limit for audio processing
 audio_np, sr = audio_segment_np(
-    audio_file, 
+    audio_file,
     duration=30.0,
     max_memory_mb=512  # Limit to 512MB
 )
@@ -119,11 +119,11 @@ For very large audio files, process in chunks:
 def process_audio_chunks(file: AudioFile, meta: Audio):
     """Process audio in manageable chunks."""
     chunk_duration = 30.0  # 30-second chunks
-    
+
     for fragment in file.get_fragments(duration=chunk_duration, audio_duration=meta.duration):
         # Process each chunk
         audio_np, sr = fragment.get_np()
-        
+
         # Your processing logic here
         yield process_audio_chunk(audio_np, sr)
 ```
@@ -167,11 +167,11 @@ def generate_fragments(file: AudioFile, meta: Audio) -> Iterator[AudioFragment]:
 def process_fragment(fragment: AudioFragment) -> dict:
     """Process audio fragment and return statistics."""
     audio_np, sr = fragment.get_np()
-    
+
     # Convert to mono if stereo
     if len(audio_np.shape) > 1 and audio_np.shape[1] > 1:
         audio_np = audio_np.mean(axis=1)
-    
+
     return {
         "duration": fragment.end - fragment.start,
         "rms": float(np.sqrt(np.mean(audio_np**2))),
@@ -205,17 +205,17 @@ def setup_speech_pipeline():
 def audio_to_text(fragment: AudioFragment, pipeline) -> str:
     """Convert audio fragment to text."""
     audio_np, sr = fragment.get_np()
-    
+
     # Convert to mono if needed
     if len(audio_np.shape) > 1 and audio_np.shape[1] > 1:
         audio_np = audio_np.mean(axis=1)
-    
+
     # Process with speech recognition
     result = pipeline({
         "raw": audio_np,
         "sampling_rate": sr
     })
-    
+
     return result.get("text", "")
 
 # Speech recognition workflow

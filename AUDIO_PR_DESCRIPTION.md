@@ -8,7 +8,7 @@ This PR adds comprehensive audio file support to DataChain with streaming capabi
 
 ### 🎵 Core Audio Support
 - **AudioFile**: Data model for handling audio files with metadata extraction
-- **AudioFragment**: Data model for specific time segments within audio files  
+- **AudioFragment**: Data model for specific time segments within audio files
 - **Audio**: Metadata model containing sample rate, channels, duration, format, codec, and bit rate
 - **Streaming Support**: Process audio segments without downloading entire files
 
@@ -56,11 +56,11 @@ def generate_fragments(file: AudioFile, meta: Audio) -> Iterator[AudioFragment]:
 
 def process_fragment(fragment: AudioFragment, pipeline: Pipeline) -> str:
     audio_array, sample_rate = fragment.get_np()
-    
+
     # Convert to mono if stereo
     if len(audio_array.shape) > 1 and audio_array.shape[1] > 1:
         audio_array = audio_array.mean(axis=1)
-    
+
     # Process with speech recognition
     result = pipeline({
         "raw": audio_array,
@@ -136,7 +136,7 @@ fragments: Iterator[AudioFragment] = file.get_fragments(duration=10.0)
 
 # Performance optimized fragments
 fragments: Iterator[AudioFragment] = file.get_fragments(
-    duration=10.0, 
+    duration=10.0,
     audio_duration=audio_info.duration  # Pre-computed
 )
 ```

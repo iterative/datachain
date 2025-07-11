@@ -2,19 +2,20 @@
 
 import io
 from unittest.mock import patch
-import pytest
+
 import numpy as np
+import pytest
 import soundfile as sf
 
 from datachain.lib.audio import (
+    DEFAULT_MAX_MEMORY_MB,
+    SUPPORTED_FORMATS,
     audio_info,
     audio_segment_bytes,
     audio_segment_np,
-    save_audio_fragment,
     estimate_memory_usage,
+    save_audio_fragment,
     validate_audio_format,
-    SUPPORTED_FORMATS,
-    DEFAULT_MAX_MEMORY_MB,
 )
 from datachain.lib.file import Audio, AudioFile, FileError
 
@@ -107,10 +108,10 @@ class TestAudioInfo:
         """Test audio_info with File interface conversion."""
         # Test that it works with File objects that get converted to AudioFile
         from datachain.lib.file import File
-        
+
         regular_file = File(path=audio_file.path, source=audio_file.source)
         regular_file._set_stream(audio_file._catalog, caching_enabled=False)
-        
+
         result = audio_info(regular_file)
         assert isinstance(result, Audio)
         assert result.sample_rate == 16000
@@ -215,7 +216,9 @@ class TestAudioSegmentBytes:
         with patch(
             "datachain.lib.audio.audio_segment_np", side_effect=Exception("Test error")
         ):
-            with pytest.raises(FileError, match="unable to convert audio segment to bytes"):
+            with pytest.raises(
+                FileError, match="unable to convert audio segment to bytes"
+            ):
                 audio_segment_bytes(audio_file, format="wav")
 
 
@@ -266,7 +269,11 @@ class TestSaveAudioFragment:
         """Test format validation in save_audio_fragment."""
         with pytest.raises(ValueError, match="Unsupported format"):
             save_audio_fragment(
-                audio_file, start=0.0, end=1.0, output=str(tmp_path), format="unsupported"
+                audio_file,
+                start=0.0,
+                end=1.0,
+                output=str(tmp_path),
+                format="unsupported",
             )
 
     def test_save_audio_fragment_auto_format(self, tmp_path, catalog):
@@ -281,7 +288,9 @@ class TestSaveAudioFragment:
         audio_file._set_stream(catalog, caching_enabled=False)
 
         with patch("datachain.lib.file.AudioFile.upload") as mock_upload:
-            mock_upload.return_value = AudioFile(path="test_output.flac", source="file://")
+            mock_upload.return_value = AudioFile(
+                path="test_output.flac", source="file://"
+            )
 
             save_audio_fragment(audio_file, start=0.0, end=1.0, output=str(tmp_path))
 
@@ -293,10 +302,13 @@ class TestSaveAudioFragment:
     def test_save_audio_fragment_error_handling(self, audio_file, tmp_path):
         """Test error handling in save_audio_fragment."""
         with patch(
-            "datachain.lib.audio.audio_segment_bytes", side_effect=Exception("Test error")
+            "datachain.lib.audio.audio_segment_bytes",
+            side_effect=Exception("Test error"),
         ):
             with pytest.raises(FileError, match="unable to save audio fragment"):
-                save_audio_fragment(audio_file, start=0.0, end=1.0, output=str(tmp_path))
+                save_audio_fragment(
+                    audio_file, start=0.0, end=1.0, output=str(tmp_path)
+                )
 
 
 class TestUtilityFunctions:
@@ -305,10 +317,8 @@ class TestUtilityFunctions:
     def test_estimate_memory_usage(self):
         """Test memory usage estimation."""
         # Test typical audio parameters
-        memory_mb = estimate_memory_usage(
-            duration=10.0, sample_rate=44100, channels=2
-        )
-        
+        memory_mb = estimate_memory_usage(duration=10.0, sample_rate=44100, channels=2)
+
         # Should be approximately 10 * 44100 * 2 * 4 bytes = ~3.37 MB
         assert 3.0 < memory_mb < 4.0
 
@@ -317,7 +327,7 @@ class TestUtilityFunctions:
         for fmt in SUPPORTED_FORMATS:
             result = validate_audio_format(fmt)
             assert result == fmt
-            
+
             # Test uppercase
             result = validate_audio_format(fmt.upper())
             assert result == fmt
@@ -330,7 +340,7 @@ class TestUtilityFunctions:
     def test_supported_formats_constant(self):
         """Test that SUPPORTED_FORMATS contains expected formats."""
         expected_formats = {"wav", "flac", "ogg", "mp3", "aac", "m4a", "wma"}
-        assert SUPPORTED_FORMATS == expected_formats
+        assert expected_formats == SUPPORTED_FORMATS
 
     def test_default_memory_limit(self):
         """Test default memory limit constant."""
@@ -344,7 +354,7 @@ class TestPerformanceConsiderations:
         """Test that memory limits are properly enforced."""
         # This should not raise an error with default limit
         audio_segment_np(audio_file, duration=0.1)
-        
+
         # This should raise an error with very small limit
         with pytest.raises(MemoryError):
             audio_segment_np(audio_file, duration=2.0, max_memory_mb=0.001)
@@ -368,7 +378,7 @@ class TestPerformanceConsiderations:
         """Test that format conversion works efficiently."""
         # Test multiple format conversions
         formats = ["wav", "flac", "ogg"]
-        
+
         for fmt in formats:
             audio_bytes = audio_segment_bytes(audio_file, duration=0.1, format=fmt)
             assert isinstance(audio_bytes, bytes)

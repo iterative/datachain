@@ -32,7 +32,9 @@ def extract_audio_info(file: AudioFile) -> Audio:
 def generate_fragments(file: AudioFile, meta: Audio) -> Iterator[AudioFragment]:
     """Generate audio fragments from file."""
     fragment_duration = 0.5
-    yield from file.get_fragments(duration=fragment_duration, audio_duration=meta.duration)
+    yield from file.get_fragments(
+        duration=fragment_duration, audio_duration=meta.duration
+    )
 
 
 def generate_middle_fragment(file: AudioFile, meta: Audio) -> Iterator[AudioFragment]:
@@ -45,11 +47,11 @@ def generate_middle_fragment(file: AudioFile, meta: Audio) -> Iterator[AudioFrag
 def process_fragment_to_stats(fragment: AudioFragment) -> dict:
     """Process audio fragment and return statistics."""
     audio_array, sample_rate = fragment.get_np()
-    
+
     # Convert to mono if stereo (average the channels)
     if len(audio_array.shape) > 1 and audio_array.shape[1] > 1:
         audio_array = audio_array.mean(axis=1)
-    
+
     return {
         "duration": fragment.end - fragment.start,
         "sample_rate": sample_rate,
@@ -272,17 +274,21 @@ def test_audio_error_handling(test_session, tmp_path):
 
     # This should handle the error gracefully
     try:
-        results = list(chain.map(
-            info=extract_audio_info,
-            params=["file"],
-            output={"info": Audio},
-        ).to_values("info"))
+        results = list(
+            chain.map(
+                info=extract_audio_info,
+                params=["file"],
+                output={"info": Audio},
+            ).to_values("info")
+        )
         # If we get here, the error was handled and we should have gotten an exception
         # in the processing, not here
         assert len(results) == 0 or any(isinstance(r, Exception) for r in results)
     except Exception as e:
         # This is expected for invalid audio files
-        assert "unable to extract metadata" in str(e).lower() or "error" in str(e).lower()
+        assert (
+            "unable to extract metadata" in str(e).lower() or "error" in str(e).lower()
+        )
 
 
 def test_audio_performance_optimization(test_session, tmp_path):

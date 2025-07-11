@@ -275,17 +275,21 @@ class UDFBase(AbstractUDF):
         return obj_row
 
     def _set_stream_recursive(
-        self, obj: Any, catalog: "Catalog", cache: bool, download_cb: Callback,
-        visited: Optional[set] = None
+        self,
+        obj: Any,
+        catalog: "Catalog",
+        cache: bool,
+        download_cb: Callback,
+        visited: Optional[set] = None,
     ) -> None:
         """Recursively set the catalog stream on all File objects within an object."""
         if visited is None:
             visited = set()
-        
+
         if id(obj) in visited:
             return
         visited.add(id(obj))
-        
+
         if isinstance(obj, File):
             obj._set_stream(catalog, caching_enabled=cache, download_cb=download_cb)
 
@@ -294,7 +298,9 @@ class UDFBase(AbstractUDF):
             for field_name in obj.model_fields:
                 field_value = getattr(obj, field_name, None)
                 if isinstance(field_value, DataModel):
-                    self._set_stream_recursive(field_value, catalog, cache, download_cb, visited)
+                    self._set_stream_recursive(
+                        field_value, catalog, cache, download_cb, visited
+                    )
 
     def _prepare_row(self, row, udf_fields, catalog, cache, download_cb):
         row_dict = RowDict(zip(udf_fields, row))
