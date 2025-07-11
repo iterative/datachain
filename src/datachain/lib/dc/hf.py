@@ -65,7 +65,8 @@ def read_hf(
     model_name = model_name or column or ""
     hf_features = next(iter(ds_dict.values())).features
     output = output | get_output_schema(hf_features)
-    model = dict_to_data_model(model_name, output)
+    original_names = list(hf_features.keys())
+    model = dict_to_data_model(model_name, output, original_names)
     if column:
         output = {column: model}
 

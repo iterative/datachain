@@ -153,7 +153,8 @@ def _feature_to_chain_type(name: str, val: Any) -> DataType:  # noqa: PLR0911
         for sname, sval in val.items():
             dtype = _feature_to_chain_type(sname, sval)
             sequence_dict[sname] = dtype  # type: ignore[valid-type]
-        return dict_to_data_model(name, sequence_dict)  # type: ignore[arg-type]
+        original_names = list(val.keys())
+        return dict_to_data_model(name, sequence_dict, original_names)  # type: ignore[arg-type]
     if isinstance(val, List):
         return list[_feature_to_chain_type(name, val.feature)]  # type: ignore[arg-type,misc,return-value]
     if isinstance(val, Array2D):
