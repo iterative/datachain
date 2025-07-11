@@ -100,9 +100,9 @@ def test_hf_sequence_dict_with_invalid_names():
     ds = ds.cast(new_features)
     schema = get_output_schema(ds.features)
 
-    # The nested field should be accessible with normalized name
+    # The nested field should keep the original name
     nested_model = schema["pokemon"]
-    assert "name_" in nested_model.model_fields or "name?" in nested_model.model_fields
+    assert "name?" in nested_model.model_fields
 
     gen = HFGenerator(
         ds, dict_to_data_model("", schema, original_names=list(ds.features.keys()))
@@ -110,10 +110,10 @@ def test_hf_sequence_dict_with_invalid_names():
     gen.setup()
     row = next(iter(gen.process()))
 
-    # Should be able to access the nested field regardless of normalization
+    # Should be able to access the nested field with original name
     nested_obj = row.pokemon
     nested_dict = nested_obj.model_dump()
-    assert "bulbasaur" in str(nested_dict)  # The value should be present
+    assert nested_dict["name?"] == ["bulbasaur"]
 
 
 def test_hf_array():
@@ -153,17 +153,16 @@ def test_hf_invalid_column_names():
     gen.setup()
     row = next(iter(gen.process()))
 
-    # Check that we can access the data using the normalized field names
-    # The exact field names will depend on how normalize_col_names transforms them
-    assert hasattr(row, "factual_")  # ? replaced with _
-    assert hasattr(row, "user_name")  # - replaced with _
-    assert hasattr(row, "c0_123column")  # starts with number, gets prefix
-    assert hasattr(row, "valid_name")  # already valid, unchanged
+    # The field names should remain as the original names
+    assert hasattr(row, 'factual?')
+    assert hasattr(row, 'user-name')
+    assert hasattr(row, '123column')
+    assert hasattr(row, 'valid_name')
 
     # Verify the data is correct
-    assert row.factual_ == "yes"
-    assert row.user_name == "alice"
-    assert row.c0_123column == "value1"
+    assert getattr(row, 'factual?') == "yes"
+    assert getattr(row, 'user-name') == "alice"
+    assert getattr(row, '123column') == "value1"
     assert row.valid_name == "data1"
 
 
@@ -185,7 +184,7 @@ def test_hf_invalid_column_names_with_read_hf():
 
     from datachain.lib.dc.hf import read_hf
 
-    with unittest.mock.patch("datachain.lib.dc.hf.read_values") as mock_read_values:
+    with unittest.mock.patch("datachain.lib.dc.values.read_values") as mock_read_values:
         mock_chain = unittest.mock.Mock()
         mock_read_values.return_value = mock_chain
 
@@ -200,16 +199,11 @@ def test_hf_invalid_column_names_with_read_hf():
 
         # Get the HFGenerator and output schema that were passed to gen
         gen_call = mock_chain.gen.call_args
-        hf_generator, output_schema = gen_call[0]
+        hf_generator = gen_call[0][0]  # First positional argument
+        output_schema = gen_call[1]['output']  # output keyword argument
 
         # The output schema should contain the original column names
-        assert (
-            "factual?" in output_schema or "factual_" in output_schema
-        )  # May be normalized
-        assert (
-            "user-name" in output_schema or "user_name" in output_schema
-        )  # May be normalized
-        assert (
-            "123column" in output_schema or "c0_123column" in output_schema
-        )  # May be normalized
-        assert "valid_name" in output_schema
+        assert 'factual?' in output_schema
+        assert 'user-name' in output_schema
+        assert '123column' in output_schema
+        assert 'valid_name' in output_schema

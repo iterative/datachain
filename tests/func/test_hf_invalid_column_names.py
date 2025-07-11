@@ -27,7 +27,7 @@ def test_hf_invalid_column_names_functional():
     # Mock the read_values function to avoid needing a full session
     import unittest.mock
 
-    with unittest.mock.patch("datachain.lib.dc.hf.read_values") as mock_read_values:
+    with unittest.mock.patch("datachain.lib.dc.values.read_values") as mock_read_values:
         mock_chain = unittest.mock.Mock()
         mock_read_values.return_value = mock_chain
 
@@ -56,8 +56,7 @@ def test_hf_invalid_column_names_functional():
         hf_generator.setup()
         row = next(iter(hf_generator.process()))
 
-        # We should be able to access the data, regardless of the field names
-        # The exact field names will depend on how normalize_col_names transforms them
+        # The field names should remain as the original names
         field_names = list(output_schema.model_fields.keys())
         assert len(field_names) == 7
 
@@ -66,17 +65,14 @@ def test_hf_invalid_column_names_functional():
         assert len(row_dict) == 7  # All values should be accessible
 
         # Verify that the values are correct (first row)
-        values = list(row_dict.values())
-        expected_values = [
-            "yes",
-            "alice",
-            "value1",
-            "data1",
-            "space1",
-            "dot1",
-            "slash1",
-        ]
-        assert values == expected_values
+        # The field names should be the original names
+        assert row_dict["factual?"] == "yes"
+        assert row_dict["user-name"] == "alice"
+        assert row_dict["123column"] == "value1"
+        assert row_dict["valid_name"] == "data1"
+        assert row_dict["has spaces"] == "space1"
+        assert row_dict["with.dots"] == "dot1"
+        assert row_dict["with/slashes"] == "slash1"
 
 
 def test_toxigen_dataset_simulation():
@@ -94,7 +90,7 @@ def test_toxigen_dataset_simulation():
     # Mock the read_values function to avoid needing a full session
     import unittest.mock
 
-    with unittest.mock.patch("datachain.lib.dc.hf.read_values") as mock_read_values:
+    with unittest.mock.patch("datachain.lib.dc.values.read_values") as mock_read_values:
         mock_chain = unittest.mock.Mock()
         mock_read_values.return_value = mock_chain
 
@@ -116,9 +112,8 @@ def test_toxigen_dataset_simulation():
         row_dict = row.model_dump()
         assert len(row_dict) == 4
 
-        # The 'factual?' column should be accessible through its normalized name
-        # The exact normalized name depends on normalize_col_names implementation
-        assert "yes" in row_dict.values()  # The value should be present
-        assert "sample text 1" in row_dict.values()
-        assert "group1" in row_dict.values()
-        assert 1 in row_dict.values()
+        # The 'factual?' column should be accessible with its original name
+        assert row_dict["factual?"] == "yes"
+        assert row_dict["text"] == "sample text 1"
+        assert row_dict["target_group"] == "group1"
+        assert row_dict["annotator_id"] == 1
