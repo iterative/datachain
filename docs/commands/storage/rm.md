@@ -90,7 +90,7 @@ The command supports the following storage protocols:
 ## Notes
 
 * The delete operation is performed through Studio using the configured credentials
-* Moving large directories may take time depending on the number of files and network conditions
+* Deleting large directories may take time depending on the number of files and network conditions
 * Use the `--verbose` flag to get detailed information about the delete operation
 * The `--quiet` flag suppresses output except for errors
 * This command operates through Studio, so you must be authenticated with `datachain auth login` before using it
