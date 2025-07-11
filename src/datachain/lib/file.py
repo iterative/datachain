@@ -880,29 +880,6 @@ class AudioFile(File):
 
         return audio_info(self)
 
-    def get_segment(
-        self, start: float = 0, duration: Optional[float] = None
-    ) -> "AudioSegment":
-        """
-        Returns an audio segment from the specified time range.
-
-        Args:
-            start (float): The start time in seconds (default: 0).
-            duration (float, optional): The duration in seconds. If None,
-                                       reads to the end of the audio.
-
-        Returns:
-            AudioSegment: A Model representing the audio segment.
-        """
-        if start < 0:
-            raise ValueError("start must be a non-negative float")
-
-        if duration is not None and duration <= 0:
-            raise ValueError("duration must be a positive float")
-
-        end = start + duration if duration is not None else None
-        return AudioSegment(audio=self, start=start, end=end)
-
     def get_fragment(self, start: float, end: float) -> "AudioFragment":
         """
         Returns an audio fragment from the specified time range.
@@ -957,55 +934,6 @@ class AudioFile(File):
         while start < end:
             yield self.get_fragment(start, min(start + duration, end))
             start += duration
-
-
-class AudioSegment(DataModel):
-    """
-    A data model for representing an audio segment.
-
-    This model represents a segment of audio with a start time and optional duration.
-    It allows access to audio segments and provides functionality for reading
-    audio data as numpy arrays or bytes.
-
-    Attributes:
-        audio (AudioFile): The audio file containing the audio segment.
-        start (float): The starting time of the audio segment in seconds.
-        end (float, optional): The ending time of the audio segment in seconds.
-                              If None, reads to the end of the audio.
-    """
-
-    audio: AudioFile
-    start: float
-    end: Optional[float]
-
-    def get_np(self) -> tuple["ndarray", int]:
-        """
-        Returns the audio segment as a NumPy array with sample rate.
-
-        Returns:
-            tuple[ndarray, int]: A tuple containing the audio data as a NumPy array
-                               and the sample rate.
-        """
-        from .audio import audio_segment_np
-
-        duration = None if self.end is None else self.end - self.start
-        return audio_segment_np(self.audio, self.start, duration)
-
-    def read_bytes(self, format: str = "wav") -> bytes:
-        """
-        Returns the audio segment as audio bytes.
-
-        Args:
-            format (str): The desired audio format (e.g., 'wav', 'mp3').
-                         Defaults to 'wav'.
-
-        Returns:
-            bytes: The encoded audio segment as bytes.
-        """
-        from .audio import audio_segment_bytes
-
-        duration = None if self.end is None else self.end - self.start
-        return audio_segment_bytes(self.audio, self.start, duration, format)
 
 
 class AudioFragment(DataModel):
