@@ -631,8 +631,8 @@ class SignalSchema:
     def group_by(
         self, partition_by: Sequence[str], new_column: Sequence[Column]
     ) -> "SignalSchema":
-        schema = SignalSchema(copy.deepcopy(self.values))
-        schema = schema.to_partial(*partition_by)
+        orig_schema = SignalSchema(copy.deepcopy(self.values))
+        schema = orig_schema.to_partial(*partition_by)
 
         vals = {c.name: sql_to_python(c) for c in new_column}
         return SignalSchema(schema.values | vals)
@@ -900,7 +900,7 @@ class SignalSchema:
 
         return res
 
-    def to_partial(self, *columns: str) -> "SignalSchema":
+    def to_partial(self, *columns: str) -> "SignalSchema":  # noqa: C901
         """
         Convert the schema to a partial schema with only the specified columns.
 
@@ -943,9 +943,15 @@ class SignalSchema:
         partial_versions: dict[str, int] = {}
 
         def _type_name_to_partial(signal_name: str, type_name: str) -> str:
-            if "@" not in type_name:
+            # Check if we need to create a partial for this type
+            # Only create partials for custom types that are in the custom_types dict
+            if type_name not in custom_types:
                 return type_name
-            model_name, _ = ModelStore.parse_name_version(type_name)
+
+            if "@" in type_name:
+                model_name, _ = ModelStore.parse_name_version(type_name)
+            else:
+                model_name = type_name
 
             if signal_name not in signal_partials:
                 partial_versions.setdefault(model_name, 0)

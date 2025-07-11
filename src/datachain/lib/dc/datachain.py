@@ -41,7 +41,7 @@ from datachain.lib.file import (
 from datachain.lib.file import ExportPlacement as FileExportPlacement
 from datachain.lib.model_store import ModelStore
 from datachain.lib.settings import Settings
-from datachain.lib.signal_schema import SignalSchema
+from datachain.lib.signal_schema import SignalResolvingError, SignalSchema
 from datachain.lib.udf import Aggregator, BatchMapper, Generator, Mapper, UDFBase
 from datachain.lib.udf_signature import UdfSignature
 from datachain.lib.utils import DataChainColumnError, DataChainParamsError
@@ -931,6 +931,19 @@ class DataChain:
         Returns:
             List of Column objects, complex column will be expanded.
         """
+        # Check if this is a nested path (e.g., "nested.level1.name")
+        if "." in column_name:
+            # For nested paths, try to resolve the exact path first
+            try:
+                col_db_name = ColumnMeta.to_db_name(column_name)
+                col_type = self.signals_schema.get_column_type(col_db_name)
+                # If we can resolve the exact path, return it as a single column
+                column = Column(col_db_name, python_to_sql(col_type))
+                return [column]
+            except SignalResolvingError:
+                # If exact path resolution fails, fall back to the complex expansion
+                pass
+
         col_db_name = ColumnMeta.to_db_name(column_name)
         col_type = self.signals_schema.get_column_type(col_db_name, with_subtree=True)
 
@@ -1114,7 +1127,7 @@ class DataChain:
             signal_columns.append(column)
             schema_fields[col_name] = func.get_result_type(self.signals_schema)
 
-        signal_schema = self.signals_schema.group_by(partition_by, signal_columns)
+        signal_schema = self.signals_schema.group_by(partition_by, signal_columns)  # type: ignore[arg-type]
 
         return self._evolve(
             query=self._query.group_by(signal_columns, partition_by_columns),
