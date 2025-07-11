@@ -496,3 +496,6 @@ def test_group_by_with_functions_in_partition_by(test_session):
     assert ds.filter(dc.C("file_dir") == "src").to_list("cnt", "sum")[0] == (2, 450)
     assert ds.filter(dc.C("file_dir") == "tests").to_list("cnt", "sum")[0] == (1, 250)
     assert ds.filter(dc.C("file_dir") == "").to_list("cnt", "sum")[0] == (1, 50)
+
+    persist = ds.save("tmp_ds")
+    assert len(persist.to_list("file_dir")) == 4
