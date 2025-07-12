@@ -11,7 +11,7 @@ try:
         Image,
         IterableDataset,
         IterableDatasetDict,
-        Sequence,
+        List,
         Value,
         load_dataset,
     )
@@ -59,7 +59,6 @@ class HFImage(DataModel):
 
 
 class HFAudio(DataModel):
-    path: str
     array: list[float]
     sampling_rate: int
 
@@ -116,26 +115,24 @@ def stream_splits(ds: Union[str, HFDatasetType], *args, **kwargs):
     return {"": ds}
 
 
-def convert_feature(val: Any, feat: Any, anno: Any) -> Any:  # noqa: PLR0911
-    if isinstance(feat, (Value, Array2D, Array3D, Array4D, Array5D)):
+def convert_feature(val: Any, feat: Any, anno: Any) -> Any:
+    if isinstance(feat, (Value, Array2D, Array3D, Array4D, Array5D, List)):
         return val
     if isinstance(feat, ClassLabel):
         return HFClassLabel(string=feat.names[val], integer=val)
-    if isinstance(feat, Sequence):
-        if isinstance(feat.feature, dict):
-            sdict = {}
-            for sname in val:
-                sfeat = feat.feature[sname]
-                sanno = anno.model_fields[sname].annotation
-                sdict[sname] = [convert_feature(v, sfeat, sanno) for v in val[sname]]
-            return anno(**sdict)
-        return val
+    if isinstance(feat, dict):
+        sdict = {}
+        for sname in val:
+            sfeat = feat[sname]
+            sanno = anno.model_fields[sname].annotation
+            sdict[sname] = [convert_feature(v, sfeat, sanno) for v in val[sname]]
+        return anno(**sdict)
     if isinstance(feat, Image):
         if isinstance(val, dict):
             return HFImage(img=val["bytes"])
         return HFImage(img=image_to_bytes(val))
     if isinstance(feat, Audio):
-        return HFAudio(**val)
+        return HFAudio(array=val["array"], sampling_rate=val["sampling_rate"])
 
 
 def get_output_schema(features: Features) -> dict[str, DataType]:
@@ -151,13 +148,13 @@ def _feature_to_chain_type(name: str, val: Any) -> DataType:  # noqa: PLR0911
         return arrow_type_mapper(val.pa_type)
     if isinstance(val, ClassLabel):
         return HFClassLabel
-    if isinstance(val, Sequence):
-        if isinstance(val.feature, dict):
-            sequence_dict = {}
-            for sname, sval in val.feature.items():
-                dtype = _feature_to_chain_type(sname, sval)
-                sequence_dict[sname] = list[dtype]  # type: ignore[valid-type]
-            return dict_to_data_model(name, sequence_dict)  # type: ignore[arg-type]
+    if isinstance(val, dict):
+        sequence_dict = {}
+        for sname, sval in val.items():
+            dtype = _feature_to_chain_type(sname, sval)
+            sequence_dict[sname] = dtype  # type: ignore[valid-type]
+        return dict_to_data_model(name, sequence_dict)  # type: ignore[arg-type]
+    if isinstance(val, List):
         return list[_feature_to_chain_type(name, val.feature)]  # type: ignore[arg-type,misc,return-value]
     if isinstance(val, Array2D):
         dtype = arrow_type_mapper(string_to_arrow(val.dtype))
