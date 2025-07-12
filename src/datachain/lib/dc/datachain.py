@@ -15,6 +15,7 @@ from typing import (
     Optional,
     TypeVar,
     Union,
+    cast,
     overload,
 )
 
@@ -47,7 +48,7 @@ from datachain.lib.udf_signature import UdfSignature
 from datachain.lib.utils import DataChainColumnError, DataChainParamsError
 from datachain.query import Session
 from datachain.query.dataset import DatasetQuery, PartitionByType
-from datachain.query.schema import DEFAULT_DELIMITER, Column, ColumnMeta
+from datachain.query.schema import DEFAULT_DELIMITER, Column
 from datachain.sql.functions import path as pathfunc
 from datachain.utils import batched_it, inside_notebook, row_to_nested_dict
 
@@ -834,8 +835,10 @@ class DataChain:
             processed_partition_columns: list[ColumnElement] = []
             for col in list_partition_by:
                 if isinstance(col, str):
-                    columns = self._process_complex_signal_column(col)
-                    processed_partition_columns.extend(columns)
+                    columns = self.signals_schema.db_signals(name=col, as_columns=True)
+                    if not columns:
+                        raise SignalResolvingError([col], "is not found")
+                    processed_partition_columns.extend(cast("list[Column]", columns))
                 elif isinstance(col, Function):
                     column = col.get_column(self.signals_schema)
                     processed_partition_columns.append(column)
@@ -921,40 +924,6 @@ class DataChain:
         new_schema = self.signals_schema.resolve(*args)
         columns = [C(col) for col in new_schema.db_signals()]
         return query_func(*columns, **kwargs)
-
-    def _process_complex_signal_column(self, column_name: str) -> list[Column]:
-        """Process complex column names for partition_by.
-
-        Args:
-            column_name: The column name to process (e.g., "file" or "nested.file")
-
-        Returns:
-            List of Column objects, complex column will be expanded.
-        """
-        col_db_name = ColumnMeta.to_db_name(column_name)
-
-        try:
-            # If this is a db field (including nested path, e.g., "nested.level1.name"),
-            # we can resolve it directly
-            col_type = self.signals_schema.get_column_type(col_db_name)
-            # If we can resolve the exact path, return it as a single column
-            return [Column(col_db_name, python_to_sql(col_type))]
-        except SignalResolvingError:
-            # If exact path resolution fails, fall back to the complex expansion
-            pass
-
-        col_type = self.signals_schema.get_column_type(col_db_name, with_subtree=True)
-
-        if type_ := ModelStore.to_pydantic(col_type):
-            all_columns = []
-            keys = list(type_.model_fields.keys())
-            for key in keys:
-                key_col_name = f"{column_name}.{key}"
-                key_columns = self._process_complex_signal_column(key_col_name)
-                all_columns.extend(key_columns)
-            return all_columns
-
-        return [Column(col_db_name, python_to_sql(col_type))]
 
     @resolve_columns
     def order_by(self, *args, descending: bool = False) -> "Self":
@@ -1060,9 +1029,11 @@ class DataChain:
 
         for col in partition_by:
             if isinstance(col, str):
-                columns = self._process_complex_signal_column(col)
-                # columns = self.signals_schema.db_signals(col, as_columns=True)
-                partition_by_columns.extend(columns)
+                columns = self.signals_schema.db_signals(name=col, as_columns=True)
+                if not columns:
+                    raise SignalResolvingError([col], "is not found")
+                partition_by_columns.extend(cast("list[Column]", columns))
+
                 # For nested field references (e.g., "nested.level1.name"),
                 # we need to distinguish between:
                 # 1. References to fields within a complex signal (create partials)
@@ -1080,7 +1051,7 @@ class DataChain:
                         schema_partition_by.append(col)
                     else:
                         # BaseModel or other - add flattened columns directly
-                        for column in columns:
+                        for column in cast("list[Column]", columns):
                             col_type = self.signals_schema.get_column_type(column.name)
                             schema_fields[column.name] = col_type
                         schema_partition_by.append(col)
@@ -1092,7 +1063,7 @@ class DataChain:
                     )
                     if isinstance(col_type, type) and issubclass(col_type, BaseModel):
                         # Complex signal - add only the partitioning columns
-                        for column in columns:
+                        for column in cast("list[Column]", columns):
                             col_type = self.signals_schema.get_column_type(column.name)
                             schema_fields[column.name] = col_type
                         schema_partition_by.append(col)
