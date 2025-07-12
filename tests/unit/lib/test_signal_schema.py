@@ -958,6 +958,9 @@ def test_db_signals_filtering_by_name():
         "fr__deep__aa",
         "fr__deep__bb",
     ]
+    assert list(schema.db_signals(name="fr.name")) == ["fr__name"]
+    assert list(schema.db_signals(name="fr.deep")) == ["fr__deep__aa", "fr__deep__bb"]
+    assert list(schema.db_signals(name="fr.deep.aa")) == ["fr__deep__aa"]
     assert list(schema.db_signals(name="name")) == ["name"]
     assert list(schema.db_signals(name="missing")) == []
 
@@ -1312,7 +1315,243 @@ def test_get_file_signal():
     assert SignalSchema({"name": str}).get_file_signal() is None
 
 
-def test_append():
-    s1 = SignalSchema({"name": str, "f": File})
-    s2 = SignalSchema({"name": str, "f": File, "age": int})
-    assert s1.append(s2).values == {"name": str, "f": File, "age": int}
+def test_to_partial_complex_signal_entire_file():
+    """Test to_partial with entire complex signal requested."""
+    schema = SignalSchema({"file": File, "name": str})
+    partial = schema.to_partial("file")
+
+    # Should return the entire File complex signal
+    assert partial.values == {"file": File}
+    serialized = partial.serialize()
+    assert "file" in serialized
+    assert serialized["file"] == "File@v1"
+    assert "File@v1" in serialized["_custom_types"]
+
+
+def test_to_partial_complex_nested_signal():
+    class Custom(DataModel):
+        src: File
+        type: str
+
+    schema = SignalSchema({"my_col": Custom, "name": str})
+    partial = schema.to_partial("my_col.src")
+
+    assert partial.values == {"my_col.src": File}
+
+
+def test_to_partial_complex_deeply_nested_signal():
+    """Test to_partial with deeply nested complex signals (3+ levels)."""
+    from datachain.lib.file import ImageFile
+
+    class Level1(DataModel):
+        image: ImageFile
+        name: str
+
+    class Level2(DataModel):
+        level1: Level1
+        category: str
+
+    class Level3(DataModel):
+        level2: Level2
+        id: str
+
+    schema = SignalSchema({"deep": Level3, "simple": str})
+
+    # Test deeply nested complex signal
+    partial = schema.to_partial("deep.level2.level1.image")
+
+    # Should return the entire ImageFile complex signal with simplified name
+    assert "deep.level2.level1.image" in partial.values
+    assert partial.values["deep.level2.level1.image"] == ImageFile
+
+
+def test_to_partial_complex_nested_multiple_complex_signals():
+    """Test to_partial with multiple nested complex signals."""
+    from datachain.lib.file import TextFile
+
+    class Container(DataModel):
+        file1: File
+        file2: TextFile
+        name: str
+
+    schema = SignalSchema({"container": Container, "simple": str})
+
+    # Request multiple nested complex signals
+    partial = schema.to_partial("container.file1", "container.file2")
+
+    # Should return both complex signals at root level
+    assert "container.file1" in partial.values
+    assert "container.file2" in partial.values
+    assert partial.values["container.file1"] == File
+    assert partial.values["container.file2"] == TextFile
+
+
+def test_to_partial_complex_nested_mixed_complex_and_simple():
+    """Test to_partial with mix of nested complex signals and simple fields."""
+
+    class Container(DataModel):
+        file: File
+        name: str
+        count: int
+
+    schema = SignalSchema({"container": Container, "simple": str})
+
+    # Request mix of nested complex signal and simple field
+    partial = schema.to_partial("container.file", "container.name", "simple")
+
+    # Should have complex signal at root, partial for simple field, and simple type
+    assert "container.file" in partial.values
+    assert "container" in partial.values
+    assert "simple" in partial.values
+
+    assert partial.values["container.file"] == File
+    assert partial.values["simple"] is str
+
+
+def test_to_partial_complex_nested_same_type_different_paths():
+    """Test to_partial with same complex type accessed via different nested paths."""
+
+    class Container1(DataModel):
+        file: File
+        name: str
+
+    class Container2(DataModel):
+        file: File
+        category: str
+
+    schema = SignalSchema({"cont1": Container1, "cont2": Container2})
+
+    # Request same complex type from different nested paths
+    partial = schema.to_partial("cont1.file", "cont2.file")
+
+    # Should return single File type at root level (deduplicated)
+    assert "cont1.file" in partial.values
+    assert "cont2.file" in partial.values
+    assert partial.values["cont1.file"] == File
+    assert partial.values["cont2.file"] == File
+    assert len(partial.values) == 2
+
+
+def test_to_partial_complex_signal_file_single_field():
+    """Test to_partial with File complex signal - single field."""
+    schema = SignalSchema({"name": str, "file": File})
+    partial = schema.to_partial("file.path")
+
+    serialized = partial.serialize()
+    assert "name" not in serialized  # Only file should be included
+    assert "file" in serialized
+    assert serialized["file"] == "FilePartial1@v1"
+
+    # Check the partial type contains only path field
+    custom_types = serialized["_custom_types"]
+    file_partial = custom_types["FilePartial1@v1"]
+    assert file_partial["fields"] == {"path": "str"}
+
+
+def test_to_partial_complex_signal_mixed_entire_and_fields():
+    """Test to_partial with mix of entire complex signal and specific fields."""
+    schema = SignalSchema({"file1": File, "file2": File, "name": str})
+    partial = schema.to_partial("file1", "file2.path", "name")
+
+    serialized = partial.serialize()
+    assert "file1" in serialized
+    assert "file2" in serialized
+    assert "name" in serialized
+
+    # file1 should be the entire File type
+    assert serialized["file1"] == "File@v1"
+    # file2 should be a partial with only path field
+    assert serialized["file2"].startswith("FilePartial") and serialized[
+        "file2"
+    ].endswith("@v1")
+    # name should be simple type
+    assert serialized["name"] == "str"
+
+    # Check custom types
+    custom_types = serialized["_custom_types"]
+    assert "File@v1" in custom_types
+    file2_partial_key = serialized["file2"]
+    assert file2_partial_key in custom_types
+
+    # Check partial has only path field
+    file2_partial = custom_types[file2_partial_key]
+    assert file2_partial["fields"] == {"path": "str"}
+
+
+def test_to_partial_complex_signal_multiple_entire_files():
+    """Test to_partial with multiple entire complex signals."""
+    schema = SignalSchema({"file1": File, "file2": File, "name": str})
+    partial = schema.to_partial("file1", "file2")
+
+    serialized = partial.serialize()
+    assert "file1" in serialized
+    assert "file2" in serialized
+    assert "name" not in serialized  # name was not requested
+
+    # Both should be the entire File type
+    assert serialized["file1"] == "File@v1"
+    assert serialized["file2"] == "File@v1"
+
+    # Should have the full File custom type
+    custom_types = serialized["_custom_types"]
+    assert "File@v1" in custom_types
+    assert len(custom_types) == 1  # Only one File type needed
+
+
+def test_to_partial_complex_signal_nested_entire():
+    """Test to_partial with nested complex signal - entire parent."""
+    from datachain.lib.data_model import DataModel
+
+    class Container(DataModel):
+        name: str
+        file: File
+
+    schema = SignalSchema({"container": Container, "simple": str})
+    partial = schema.to_partial("container")
+
+    serialized = partial.serialize()
+    assert "container" in serialized
+    assert "simple" not in serialized
+
+    # Should be the entire Container type
+    assert serialized["container"].startswith("Container@")
+
+    # Should have the full Container custom type with nested File
+    custom_types = serialized["_custom_types"]
+    container_key = serialized["container"]
+    assert container_key in custom_types
+    assert "File@v1" in custom_types
+
+    container_type = custom_types[container_key]
+    assert container_type["fields"] == {"name": "str", "file": "File@v1"}
+
+
+def test_to_partial_complex_signal_empty_request():
+    """Test to_partial with no columns requested."""
+    schema = SignalSchema({"file": File, "name": str})
+    partial = schema.to_partial()
+
+    # Should return empty schema
+    assert partial.values == {}
+    serialized = partial.serialize()
+    assert "_custom_types" not in serialized or not serialized.get("_custom_types")
+
+
+def test_to_partial_complex_signal_error_invalid_signal():
+    """Test to_partial with invalid signal name."""
+    schema = SignalSchema({"file": File})
+
+    with pytest.raises(
+        SignalSchemaError, match="Column nonexistent not found in the schema"
+    ):
+        schema.to_partial("nonexistent")
+
+
+def test_to_partial_complex_signal_error_invalid_field():
+    """Test to_partial with invalid field in complex signal."""
+    schema = SignalSchema({"file": File})
+
+    with pytest.raises(
+        SignalSchemaError, match="Field nonexistent not found in custom type"
+    ):
+        schema.to_partial("file.nonexistent")

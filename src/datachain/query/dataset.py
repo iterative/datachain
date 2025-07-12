@@ -1031,16 +1031,22 @@ class SQLGroupBy(SQLClause):
             c.get_column() if isinstance(c, Function) else c for c in self.group_by
         ]
 
-        cols = [
-            c.get_column()
-            if isinstance(c, Function)
-            else subquery.c[str(c)]
-            if isinstance(c, (str, C))
-            else c
-            for c in (*group_by, *self.cols)
-        ]
+        cols_dict: dict[str, Any] = {}
+        for c in (*group_by, *self.cols):
+            if isinstance(c, Function):
+                key = c.name
+                value = c.get_column()
+            elif isinstance(c, (str, C)):
+                key = str(c)
+                value = subquery.c[str(c)]
+            else:
+                key = c.name
+                value = c  # type: ignore[assignment]
+            cols_dict[key] = value
 
-        return sqlalchemy.select(*cols).select_from(subquery).group_by(*group_by)
+        unique_cols = cols_dict.values()
+
+        return sqlalchemy.select(*unique_cols).select_from(subquery).group_by(*group_by)
 
 
 def _validate_columns(
