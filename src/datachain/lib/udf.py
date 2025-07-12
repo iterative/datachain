@@ -13,7 +13,7 @@ from datachain.asyn import AsyncMapper
 from datachain.cache import temporary_cache
 from datachain.dataset import RowDict
 from datachain.lib.convert.flatten import flatten
-from datachain.lib.file import File
+from datachain.lib.file import DataModel, File
 from datachain.lib.utils import AbstractUDF, DataChainError, DataChainParamsError
 from datachain.query.batch import (
     Batch,
@@ -270,9 +270,22 @@ class UDFBase(AbstractUDF):
         row = [row_dict[p] for p in self.params.to_udf_spec()]
         obj_row = self.params.row_to_objs(row)
         for obj in obj_row:
-            if isinstance(obj, File):
-                obj._set_stream(catalog, caching_enabled=cache, download_cb=download_cb)
+            self._set_stream_recursive(obj, catalog, cache, download_cb)
         return obj_row
+
+    def _set_stream_recursive(
+        self, obj: Any, catalog: "Catalog", cache: bool, download_cb: Callback
+    ) -> None:
+        """Recursively set the catalog stream on all File objects within an object."""
+        if isinstance(obj, File):
+            obj._set_stream(catalog, caching_enabled=cache, download_cb=download_cb)
+
+        # Check all fields for nested File objects, but only for DataModel objects
+        if isinstance(obj, DataModel):
+            for field_name in obj.model_fields:
+                field_value = getattr(obj, field_name, None)
+                if isinstance(field_value, DataModel):
+                    self._set_stream_recursive(field_value, catalog, cache, download_cb)
 
     def _prepare_row(self, row, udf_fields, catalog, cache, download_cb):
         row_dict = RowDict(zip(udf_fields, row))
