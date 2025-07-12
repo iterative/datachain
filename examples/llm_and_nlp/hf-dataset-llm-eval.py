@@ -38,7 +38,6 @@ def eval_dialog(
             },
         )
     except HTTPError as e:
-        print(str(e))
         return DialogEval(result="Error", reason=str(e))
 
     message = completion.choices[0].message
