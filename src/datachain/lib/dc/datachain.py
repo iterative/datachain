@@ -39,8 +39,9 @@ from datachain.lib.file import (
     FileExporter,
 )
 from datachain.lib.file import ExportPlacement as FileExportPlacement
+from datachain.lib.model_store import ModelStore
 from datachain.lib.settings import Settings
-from datachain.lib.signal_schema import SignalSchema
+from datachain.lib.signal_schema import SignalResolvingError, SignalSchema
 from datachain.lib.udf import Aggregator, BatchMapper, Generator, Mapper, UDFBase
 from datachain.lib.udf_signature import UdfSignature
 from datachain.lib.utils import DataChainColumnError, DataChainParamsError
@@ -758,11 +759,12 @@ class DataChain:
     @delta_disabled
     def agg(
         self,
+        /,
         func: Optional[Callable] = None,
         partition_by: Optional[PartitionByType] = None,
         params: Union[None, str, Sequence[str]] = None,
         output: OutputType = None,
-        **signal_map,
+        **signal_map: Callable,
     ) -> "Self":
         """Aggregate rows using `partition_by` statement and apply a function to the
         groups of aggregated rows. The function needs to return new objects for each
@@ -772,12 +774,28 @@ class DataChain:
 
         This method bears similarity to `gen()` and `map()`, employing a comparable set
         of parameters, yet differs in two crucial aspects:
+
         1. The `partition_by` parameter: This specifies the column name or a list of
            column names that determine the grouping criteria for aggregation.
         2. Group-based UDF function input: Instead of individual rows, the function
-           receives a list all rows within each group defined by `partition_by`.
+           receives a list of all rows within each group defined by `partition_by`.
+
+        If `partition_by` is not set or is an empty list, all rows will be placed
+        into a single group.
+
+        Parameters:
+            func: Function applied to each group of rows.
+            partition_by: Column name(s) to group by. If None, all rows go
+                into one group.
+            params: List of column names used as input for the function. Default is
+                taken from function signature.
+            output: Dictionary defining new signals and their corresponding types.
+                Default type is taken from function signature.
+            **signal_map: kwargs can be used to define `func` together with its return
+                signal name in format of `agg(result_column=my_func)`.
 
         Examples:
+            Basic aggregation with lambda function:
             ```py
             chain = chain.agg(
                 total=lambda category, amount: [sum(amount)],
@@ -788,7 +806,6 @@ class DataChain:
             ```
 
             An alternative syntax, when you need to specify a more complex function:
-
             ```py
             # It automatically resolves which columns to pass to the function
             # by looking at the function signature.
@@ -806,10 +823,43 @@ class DataChain:
             )
             chain.save("new_dataset")
             ```
+
+            Using complex signals for partitioning (`File` or any Pydantic `BaseModel`):
+            ```py
+            def my_agg(files: list[File]) -> Iterator[tuple[File, int]]:
+                yield files[0], sum(f.size for f in files)
+
+            chain = chain.agg(
+                my_agg,
+                params=("file",),
+                output={"file": File, "total": int},
+                partition_by="file",  # Column referring to all sub-columns of File
+            )
+            chain.save("new_dataset")
+            ```
+
+            Aggregating all rows into a single group (when `partition_by` is not set):
+            ```py
+            chain = chain.agg(
+                total_size=lambda file, size: [sum(size)],
+                output=int,
+                # No partition_by specified - all rows go into one group
+            )
+            chain.save("new_dataset")
+            ```
+
+            Multiple partition columns:
+            ```py
+            chain = chain.agg(
+                total=lambda category, subcategory, amount: [sum(amount)],
+                output=float,
+                partition_by=["category", "subcategory"],
+            )
+            chain.save("new_dataset")
+            ```
         """
-        # Convert string partition_by parameters to Column objects
-        processed_partition_by = partition_by
         if partition_by is not None:
+            # Convert string partition_by parameters to Column objects
             if isinstance(partition_by, (str, Function, ColumnElement)):
                 list_partition_by = [partition_by]
             else:
@@ -818,10 +868,8 @@ class DataChain:
             processed_partition_columns: list[ColumnElement] = []
             for col in list_partition_by:
                 if isinstance(col, str):
-                    col_db_name = ColumnMeta.to_db_name(col)
-                    col_type = self.signals_schema.get_column_type(col_db_name)
-                    column = Column(col_db_name, python_to_sql(col_type))
-                    processed_partition_columns.append(column)
+                    columns = self._process_complex_signal_column(col)
+                    processed_partition_columns.extend(columns)
                 elif isinstance(col, Function):
                     column = col.get_column(self.signals_schema)
                     processed_partition_columns.append(column)
@@ -830,6 +878,8 @@ class DataChain:
                     processed_partition_columns.append(col)
 
             processed_partition_by = processed_partition_columns
+        else:
+            processed_partition_by = []
 
         udf_obj = self._udf_to_obj(Aggregator, func, params, output, signal_map)
         return self._evolve(
@@ -908,6 +958,40 @@ class DataChain:
         columns = [C(col) for col in new_schema.db_signals()]
         return query_func(*columns, **kwargs)
 
+    def _process_complex_signal_column(self, column_name: str) -> list[Column]:
+        """Process complex column names for partition_by.
+
+        Args:
+            column_name: The column name to process (e.g., "file" or "nested.file")
+
+        Returns:
+            List of Column objects, complex column will be expanded.
+        """
+        col_db_name = ColumnMeta.to_db_name(column_name)
+
+        try:
+            # If this is a db field (including nested path, e.g., "nested.level1.name"),
+            # we can resolve it directly
+            col_type = self.signals_schema.get_column_type(col_db_name)
+            # If we can resolve the exact path, return it as a single column
+            return [Column(col_db_name, python_to_sql(col_type))]
+        except SignalResolvingError:
+            # If exact path resolution fails, fall back to the complex expansion
+            pass
+
+        col_type = self.signals_schema.get_column_type(col_db_name, with_subtree=True)
+
+        if type_ := ModelStore.to_pydantic(col_type):
+            all_columns = []
+            keys = list(type_.model_fields.keys())
+            for key in keys:
+                key_col_name = f"{column_name}.{key}"
+                key_columns = self._process_complex_signal_column(key_col_name)
+                all_columns.extend(key_columns)
+            return all_columns
+
+        return [Column(col_db_name, python_to_sql(col_type))]
+
     @resolve_columns
     def order_by(self, *args, descending: bool = False) -> "Self":
         """Orders by specified set of columns.
@@ -969,7 +1053,7 @@ class DataChain:
         )
 
     @delta_disabled  # type: ignore[arg-type]
-    def group_by(
+    def group_by(  # noqa: C901, PLR0912
         self,
         *,
         partition_by: Optional[Union[str, Func, Sequence[Union[str, Func]]]] = None,
@@ -988,6 +1072,15 @@ class DataChain:
                 partition_by=("file_source", "file_ext"),
             )
             ```
+
+            Using complex signals:
+            ```py
+            chain = chain.group_by(
+                total_size=func.sum("file.size"),
+                count=func.count(),
+                partition_by="file",  # Uses column name, expands to File's unique keys
+            )
+            ```
         """
         if partition_by is None:
             partition_by = []
@@ -998,20 +1091,59 @@ class DataChain:
         signal_columns: list[Column] = []
         schema_fields: dict[str, DataType] = {}
         keep_columns: list[str] = []
+        partial_fields: list[str] = []  # Track specific fields for partial creation
+        schema_partition_by: list[str] = []
 
-        # validate partition_by columns and add them to the schema
         for col in partition_by:
             if isinstance(col, str):
-                col_db_name = ColumnMeta.to_db_name(col)
-                col_type = self.signals_schema.get_column_type(col_db_name)
-                column = Column(col_db_name, python_to_sql(col_type))
-                if col not in keep_columns:
-                    keep_columns.append(col)
+                columns = self._process_complex_signal_column(col)
+                # columns = self.signals_schema.db_signals(col, as_columns=True)
+                partition_by_columns.extend(columns)
+                # For nested field references (e.g., "nested.level1.name"),
+                # we need to distinguish between:
+                # 1. References to fields within a complex signal (create partials)
+                # 2. Deep nested references that should be flattened
+                if "." in col:
+                    # Split the column reference to analyze it
+                    parts = col.split(".")
+                    parent_signal = parts[0]
+                    parent_type = self.signals_schema.values.get(parent_signal)
+
+                    if ModelStore.is_partial(parent_type):
+                        if parent_signal not in keep_columns:
+                            keep_columns.append(parent_signal)
+                        partial_fields.append(col)
+                        schema_partition_by.append(col)
+                    else:
+                        # BaseModel or other - add flattened columns directly
+                        for column in columns:
+                            col_type = self.signals_schema.get_column_type(column.name)
+                            schema_fields[column.name] = col_type
+                        schema_partition_by.append(col)
+                else:
+                    # simple signal - but we need to check if it's a complex signal
+                    # complex signal - only include the columns used for partitioning
+                    col_type = self.signals_schema.get_column_type(
+                        col, with_subtree=True
+                    )
+                    if isinstance(col_type, type) and issubclass(col_type, BaseModel):
+                        # Complex signal - add only the partitioning columns
+                        for column in columns:
+                            col_type = self.signals_schema.get_column_type(column.name)
+                            schema_fields[column.name] = col_type
+                        schema_partition_by.append(col)
+                    # Simple signal - keep the entire signal
+                    else:
+                        if col not in keep_columns:
+                            keep_columns.append(col)
+                        schema_partition_by.append(col)
             elif isinstance(col, Function):
                 column = col.get_column(self.signals_schema)
                 col_db_name = column.name
                 col_type = column.type.python_type
                 schema_fields[col_db_name] = col_type
+                partition_by_columns.append(column)
+                signal_columns.append(column)
             else:
                 raise DataChainColumnError(
                     col,
@@ -1020,9 +1152,7 @@ class DataChain:
                         " but expected str or Function"
                     ),
                 )
-            partition_by_columns.append(column)
 
-        # validate signal columns and add them to the schema
         if not kwargs:
             raise ValueError("At least one column should be provided for group_by")
         for col_name, func in kwargs.items():
@@ -1035,9 +1165,9 @@ class DataChain:
             signal_columns.append(column)
             schema_fields[col_name] = func.get_result_type(self.signals_schema)
 
-        signal_schema = SignalSchema(schema_fields)
-        if keep_columns:
-            signal_schema |= self.signals_schema.to_partial(*keep_columns)
+        signal_schema = self.signals_schema.group_by(
+            schema_partition_by, signal_columns
+        )
 
         return self._evolve(
             query=self._query.group_by(signal_columns, partition_by_columns),
@@ -1166,6 +1296,7 @@ class DataChain:
         db_signals = self._effective_signals_schema.db_signals(
             include_hidden=include_hidden
         )
+
         with self._query.ordered_select(*db_signals).as_iterable() as rows:
             if row_factory:
                 rows = (row_factory(db_signals, r) for r in rows)  # type: ignore[assignment]

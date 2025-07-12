@@ -21,19 +21,19 @@ def fibonacci(n):
 
 
 # Define the UDF:
-def path_len_benchmark(path):
+def path_len_benchmark(path: str) -> int:
     # Run the fibonacci benchmark as an example of a single-threaded CPU-bound UDF
     fibonacci(35)
     if path.endswith(".json"):
-        return (-1,)
+        return -1
     return len(path)
 
 
 # Run in chain
-dc.read_storage(
-    "gs://datachain-demo/dogs-and-cats/",
-).settings(parallel=-1).map(
-    path_len_benchmark,
-    params=["file.path"],
-    output={"path_len": int},
-).show()
+(
+    dc.read_storage("gs://datachain-demo/dogs-and-cats/", anon=True)
+    # Try to disable to see the difference in performance
+    .settings(parallel=-1)
+    .map(path_len=path_len_benchmark, params=["file.path"])
+    .show()
+)

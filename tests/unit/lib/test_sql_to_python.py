@@ -3,7 +3,7 @@ from sqlalchemy.sql.sqltypes import NullType
 
 from datachain import Column
 from datachain.lib.convert.sql_to_python import sql_to_python
-from datachain.sql.types import Float, Int64, String
+from datachain.sql.types import Array, Float, Int64, String
 
 
 @pytest.mark.parametrize(
@@ -16,6 +16,8 @@ from datachain.sql.types import Float, Int64, String
         (Column("age", Int64) - 2, int),
         # Default type
         (Column("null", NullType), str),
+        # List type
+        (Column("tags", Array(Int64)), list[int]),
     ],
 )
 def test_sql_columns_to_python_types(sql_column, expected):

@@ -25,20 +25,20 @@ def eval_dialog(
 ) -> DialogEval:
     try:
         completion = client.chat_completion(
-            model="meta-llama/Llama-3.3-70B-Instruct",
+            model="HuggingFaceTB/SmolLM3-3B",
             messages=[
                 {
                     "role": "user",
                     "content": f"{PROMPT}\n\nUser: {user_input}\nBot: {bot_response}",
                 },
             ],
-            response_format={"type": "json", "value": DialogEval.model_json_schema()},
+            response_format={
+                "type": "json_schema",
+                "json_schema": {"schema": DialogEval.model_json_schema()},
+            },
         )
     except HTTPError as e:
-        return DialogEval(
-            result="Error",
-            reason=f"Error while interacting with the Hugging Face API. {e}",
-        )
+        return DialogEval(result="Error", reason=str(e))
 
     message = completion.choices[0].message
     try:

@@ -376,7 +376,7 @@ def move_dataset(
             the namespace and project, or a regular name. If a regular name is used,
             default values will be applied. The source dataset will no longer exist
             after the move.
-        dst: The destination dataset name. This can also be a fully qualified
+        dest: The destination dataset name. This can also be a fully qualified
             name with a namespace and project, or just a regular name (default values
             will be used in that case). The original dataset will be moved here.
         session: An optional session instance. If not provided, the default session
