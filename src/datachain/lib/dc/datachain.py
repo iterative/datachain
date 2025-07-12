@@ -759,11 +759,12 @@ class DataChain:
     @delta_disabled
     def agg(
         self,
+        /,
         func: Optional[Callable] = None,
         partition_by: Optional[PartitionByType] = None,
         params: Union[None, str, Sequence[str]] = None,
         output: OutputType = None,
-        **signal_map,
+        **signal_map: Callable,
     ) -> "Self":
         """Aggregate rows using `partition_by` statement and apply a function to the
         groups of aggregated rows. The function needs to return new objects for each
@@ -773,12 +774,28 @@ class DataChain:
 
         This method bears similarity to `gen()` and `map()`, employing a comparable set
         of parameters, yet differs in two crucial aspects:
+
         1. The `partition_by` parameter: This specifies the column name or a list of
            column names that determine the grouping criteria for aggregation.
         2. Group-based UDF function input: Instead of individual rows, the function
-           receives a list all rows within each group defined by `partition_by`.
+           receives a list of all rows within each group defined by `partition_by`.
+
+        If `partition_by` is not set or is an empty list, all rows will be placed
+        into a single group.
+
+        Parameters:
+            func: Function applied to each group of rows.
+            partition_by: Column name(s) to group by. If None, all rows go
+                into one group.
+            params: List of column names used as input for the function. Default is
+                taken from function signature.
+            output: Dictionary defining new signals and their corresponding types.
+                Default type is taken from function signature.
+            **signal_map: kwargs can be used to define `func` together with its return
+                signal name in format of `agg(result_column=my_func)`.
 
         Examples:
+            Basic aggregation with lambda function:
             ```py
             chain = chain.agg(
                 total=lambda category, amount: [sum(amount)],
@@ -789,7 +806,6 @@ class DataChain:
             ```
 
             An alternative syntax, when you need to specify a more complex function:
-
             ```py
             # It automatically resolves which columns to pass to the function
             # by looking at the function signature.
@@ -808,8 +824,7 @@ class DataChain:
             chain.save("new_dataset")
             ```
 
-            Using complex signals for partitioning (File or any Pydentic BaseModel):
-
+            Using complex signals for partitioning (`File` or any Pydantic `BaseModel`):
             ```py
             def my_agg(files: list[File]) -> Iterator[tuple[File, int]]:
                 yield files[0], sum(f.size for f in files)
@@ -819,6 +834,26 @@ class DataChain:
                 params=("file",),
                 output={"file": File, "total": int},
                 partition_by="file",  # Column referring to all sub-columns of File
+            )
+            chain.save("new_dataset")
+            ```
+
+            Aggregating all rows into a single group (when `partition_by` is not set):
+            ```py
+            chain = chain.agg(
+                total_size=lambda file, size: [sum(size)],
+                output=int,
+                # No partition_by specified - all rows go into one group
+            )
+            chain.save("new_dataset")
+            ```
+
+            Multiple partition columns:
+            ```py
+            chain = chain.agg(
+                total=lambda category, subcategory, amount: [sum(amount)],
+                output=float,
+                partition_by=["category", "subcategory"],
             )
             chain.save("new_dataset")
             ```
