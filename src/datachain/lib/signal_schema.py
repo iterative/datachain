@@ -446,14 +446,14 @@ class SignalSchema:
                 res[db_name] = python_to_sql(type_)
         return res
 
-    def row_to_objs(self, row: Sequence[Any]) -> list[DataValue]:
+    def row_to_objs(self, row: Sequence[Any]) -> list[Any]:
         self._init_setup_values()
 
-        objs: list[DataValue] = []
+        objs: list[Any] = []
         pos = 0
         for name, fr_type in self.values.items():
-            if self.setup_values and (val := self.setup_values.get(name, None)):
-                objs.append(val)
+            if self.setup_values and name in self.setup_values:
+                objs.append(self.setup_values.get(name))
             elif (fr := ModelStore.to_pydantic(fr_type)) is not None:
                 j, pos = unflatten_to_json_pos(fr, row, pos)
                 objs.append(fr(**j))

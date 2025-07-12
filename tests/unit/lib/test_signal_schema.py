@@ -993,9 +993,9 @@ def test_row_to_objs():
 
 
 def test_row_to_objs_setup():
-    spec = {"name": str, "age": float, "init_val": int, "fr": MyType2}
+    spec = {"name": str, "age": float, "init_val": int, "fr": MyType2, "empty": dict}
     setup_value = 84635
-    setup = {"init_val": lambda: setup_value}
+    setup = {"init_val": lambda: setup_value, "empty": dict}
     schema = SignalSchema(spec, setup)
 
     val = MyType2(name="Fred", deep=MyType1(aa=129, bb="qwe"))
@@ -1008,7 +1008,7 @@ def test_row_to_objs_setup():
     res = schema.row_to_objs(row)
     assert schema.setup_values is not None
 
-    assert res == ["myname", 12.5, setup_value, val]
+    assert res == ["myname", 12.5, setup_value, val, {}]
 
 
 def test_setup_not_callable():
