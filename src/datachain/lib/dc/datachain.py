@@ -823,9 +823,8 @@ class DataChain:
             chain.save("new_dataset")
             ```
         """
-        # Convert string partition_by parameters to Column objects
-        processed_partition_by = partition_by
         if partition_by is not None:
+            # Convert string partition_by parameters to Column objects
             if isinstance(partition_by, (str, Function, ColumnElement)):
                 list_partition_by = [partition_by]
             else:
@@ -844,6 +843,8 @@ class DataChain:
                     processed_partition_columns.append(col)
 
             processed_partition_by = processed_partition_columns
+        else:
+            processed_partition_by = []
 
         udf_obj = self._udf_to_obj(Aggregator, func, params, output, signal_map)
         return self._evolve(
