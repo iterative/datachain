@@ -931,20 +931,18 @@ class DataChain:
         Returns:
             List of Column objects, complex column will be expanded.
         """
-        # Check if this is a nested path (e.g., "nested.level1.name")
-        if "." in column_name:
-            # For nested paths, try to resolve the exact path first
-            try:
-                col_db_name = ColumnMeta.to_db_name(column_name)
-                col_type = self.signals_schema.get_column_type(col_db_name)
-                # If we can resolve the exact path, return it as a single column
-                column = Column(col_db_name, python_to_sql(col_type))
-                return [column]
-            except SignalResolvingError:
-                # If exact path resolution fails, fall back to the complex expansion
-                pass
-
         col_db_name = ColumnMeta.to_db_name(column_name)
+
+        try:
+            # If this is a db field (including nested path, e.g., "nested.level1.name"),
+            # we can resolve it directly
+            col_type = self.signals_schema.get_column_type(col_db_name)
+            # If we can resolve the exact path, return it as a single column
+            return [Column(col_db_name, python_to_sql(col_type))]
+        except SignalResolvingError:
+            # If exact path resolution fails, fall back to the complex expansion
+            pass
+
         col_type = self.signals_schema.get_column_type(col_db_name, with_subtree=True)
 
         if type_ := ModelStore.to_pydantic(col_type):
@@ -954,12 +952,9 @@ class DataChain:
                 key_col_name = f"{column_name}.{key}"
                 key_columns = self._process_complex_signal_column(key_col_name)
                 all_columns.extend(key_columns)
-
             return all_columns
 
-        # col_type = self.signals_schema.get_column_type(col_db_name)
-        column = Column(col_db_name, python_to_sql(col_type))
-        return [column]
+        return [Column(col_db_name, python_to_sql(col_type))]
 
     @resolve_columns
     def order_by(self, *args, descending: bool = False) -> "Self":

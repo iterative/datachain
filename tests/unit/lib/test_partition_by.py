@@ -79,7 +79,7 @@ def test_complex_signal_partition_by_mixed(test_session):
         my_agg,
         params=("file", "category", "amount"),
         output={"file": File, "category": str, "total": int},
-        partition_by=["file", "category"],
+        partition_by=("file", "category"),
     ).to_list("file", "category", "total")
 
     # We should have 2 groups: (file1.txt, A), (file2.txt, B)
@@ -433,3 +433,88 @@ def test_group_by_with_functions_in_partition_by(test_session):
 
     persist = ds.save("tmp_ds")
     assert len(persist.to_list("file_dir")) == 4
+
+
+def test_partition_by_nested_file(test_session):
+    class Signal(DataModel):
+        file: File
+        amount: int
+
+    signals = [
+        Signal(file=File(source="s3://bucket", path="f1.txt"), amount=10),
+        Signal(file=File(source="s3://bucket", path="f2.txt"), amount=20),
+        Signal(file=File(source="s3://bucket", path="f1.txt"), amount=30),  # duplicate
+        Signal(file=File(source="s3://bucket", path="f3.txt"), amount=40),
+    ]
+    chain = dc.read_values(
+        signal=signals,
+        session=test_session,
+    )
+
+    def test_agg(files: list[File], amounts: list[int]) -> Iterator[tuple[File, int]]:
+        yield files[0], sum(amounts)
+
+    # Test partitioning by File type directly
+    result = chain.agg(
+        test_agg,
+        params=("signal.file", "signal.amount"),
+        output={"file": File, "total": int},
+        partition_by="signal.file",
+    ).to_list("file", "total")
+
+    # We should have 3 groups (file1.txt appears twice, so should be grouped)
+    assert len(result) == 3
+
+    # Check that files with same unique attributes are grouped together
+    file_paths = {f.path for f, _ in result}
+    assert file_paths == {"f1.txt", "f2.txt", "f3.txt"}
+
+    # Check total amounts
+    totals = {f.path: total for f, total in result}
+    assert totals == {
+        "f1.txt": 40,  # 10 + 30 (grouped)
+        "f2.txt": 20,
+        "f3.txt": 40,
+    }
+
+
+def test_partition_by_inherited_file(test_session):
+    class MyFile(File):
+        amount: int
+
+    my_files = [
+        MyFile(source="s3://bucket", path="f1.txt", amount=10),
+        MyFile(source="s3://bucket", path="f1.txt", amount=20),  # not a duplicate
+        MyFile(source="s3://bucket", path="f1.txt", amount=10),  # duplicate
+        MyFile(source="s3://bucket", path="f3.txt", amount=40),
+    ]
+    chain = dc.read_values(
+        file=my_files,
+        session=test_session,
+    )
+
+    def test_agg(files: list[MyFile]) -> Iterator[tuple[MyFile, int, int]]:
+        yield files[0], sum(f.amount for f in files), len(files)
+
+    # Test partitioning by File type directly
+    result = chain.agg(
+        test_agg,
+        params=("file",),
+        output={"file": MyFile, "total": int, "cnt": int},
+        partition_by="file",
+    ).to_list("file", "total", "cnt")
+
+    # We should have 3 groups (file1.txt appears twice, so should be grouped)
+    assert len(result) == 3
+
+    # Check that files with same unique attributes are grouped together
+    file_paths = [f.path for f, _, _ in result]
+    assert sorted(file_paths) == sorted(["f1.txt", "f1.txt", "f3.txt"])
+
+    # Check total amounts
+    totals = {(f.path, f.amount): (total, cnt) for f, total, cnt in result}
+    assert totals == {
+        ("f1.txt", 10): (20, 2),  # 10 + 10 (grouped)
+        ("f1.txt", 20): (20, 1),
+        ("f3.txt", 40): (40, 1),
+    }
