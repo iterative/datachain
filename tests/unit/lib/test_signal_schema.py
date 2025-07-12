@@ -958,6 +958,9 @@ def test_db_signals_filtering_by_name():
         "fr__deep__aa",
         "fr__deep__bb",
     ]
+    assert list(schema.db_signals(name="fr.name")) == ["fr__name"]
+    assert list(schema.db_signals(name="fr.deep")) == ["fr__deep__aa", "fr__deep__bb"]
+    assert list(schema.db_signals(name="fr.deep.aa")) == ["fr__deep__aa"]
     assert list(schema.db_signals(name="name")) == ["name"]
     assert list(schema.db_signals(name="missing")) == []
 
