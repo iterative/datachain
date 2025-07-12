@@ -5,7 +5,7 @@ import numpy as np
 import soundfile as sf
 
 import datachain as dc
-from datachain.lib.audio import audio_segment_np
+from datachain.lib.audio import audio_fragment_np
 from datachain.lib.file import Audio, AudioFile, AudioFragment
 
 
@@ -107,7 +107,7 @@ def test_audio_datachain_workflow(test_session, tmp_path):
 
     # Verify the audio content matches by comparing numpy arrays
     original_np, original_sr = first_fragment.get_np()
-    saved_np, saved_sr = audio_segment_np(saved_file)
+    saved_np, saved_sr = audio_fragment_np(saved_file)
 
     assert original_sr == saved_sr == 16000
     assert len(original_np) == len(saved_np)

@@ -864,13 +864,16 @@ class AudioFile(File):
     A data model for handling audio files.
 
     This model inherits from the `File` model and provides additional functionality
-    for reading audio files, extracting audio segments, and splitting audio into
+    for reading audio files, extracting audio fragments, and splitting audio into
     fragments.
     """
 
     def get_info(self) -> "Audio":
         """
-        Retrieves metadata and information about the audio file.
+        Retrieves metadata and information about the audio file. It does not
+        download the file if possible, only reads its header. It is thus might be
+        a good idea to disable caching and prefetching for UDF if you only need
+        audio metadata.
 
         Returns:
             Audio: A Model containing audio metadata such as duration,
@@ -882,7 +885,10 @@ class AudioFile(File):
 
     def get_fragment(self, start: float, end: float) -> "AudioFragment":
         """
-        Returns an audio fragment from the specified time range.
+        Returns an audio fragment from the specified time range. It does not
+        download the file, neither it actually extracts the fragment. It returns
+        a Model representing the audio fragment, which can be used to read or save
+        it later.
 
         Args:
             start (float): The start time of the fragment in seconds.
@@ -962,10 +968,10 @@ class AudioFragment(DataModel):
             tuple[ndarray, int]: A tuple containing the audio data as a NumPy array
                                and the sample rate.
         """
-        from .audio import audio_segment_np
+        from .audio import audio_fragment_np
 
         duration = self.end - self.start
-        return audio_segment_np(self.audio, self.start, duration)
+        return audio_fragment_np(self.audio, self.start, duration)
 
     def read_bytes(self, format: str = "wav") -> bytes:
         """
@@ -978,10 +984,10 @@ class AudioFragment(DataModel):
         Returns:
             bytes: The encoded audio fragment as bytes.
         """
-        from .audio import audio_segment_bytes
+        from .audio import audio_fragment_bytes
 
         duration = self.end - self.start
-        return audio_segment_bytes(self.audio, self.start, duration, format)
+        return audio_fragment_bytes(self.audio, self.start, duration, format)
 
     def save(self, output: str, format: Optional[str] = None) -> "AudioFile":
         """

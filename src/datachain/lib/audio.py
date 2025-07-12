@@ -54,10 +54,10 @@ def audio_info(file: "Union[File, AudioFile]") -> "Audio":
     )
 
 
-def audio_segment_np(
+def audio_fragment_np(
     audio: "AudioFile", start: float = 0, duration: Optional[float] = None
 ) -> "tuple[ndarray, int]":
-    """Load audio segment as numpy array.
+    """Load audio fragment as numpy array.
     Multi-channel audio is transposed to (samples, channels)."""
     if start < 0:
         raise ValueError("start must be a non-negative float")
@@ -94,18 +94,18 @@ def audio_segment_np(
             return audio_np, int(sr)
     except Exception as exc:
         raise FileError(
-            "unable to read audio segment", audio.source, audio.path
+            "unable to read audio fragment", audio.source, audio.path
         ) from exc
 
 
-def audio_segment_bytes(
+def audio_fragment_bytes(
     audio: "AudioFile",
     start: float = 0,
     duration: Optional[float] = None,
     format: str = "wav",
 ) -> bytes:
-    """Convert audio segment to bytes using soundfile."""
-    y, sr = audio_segment_np(audio, start, duration)
+    """Convert audio fragment to bytes using soundfile."""
+    y, sr = audio_fragment_np(audio, start, duration)
 
     import io
 
@@ -139,7 +139,7 @@ def save_audio_fragment(
     )
 
     try:
-        audio_bytes = audio_segment_bytes(audio, start, duration, format)
+        audio_bytes = audio_fragment_bytes(audio, start, duration, format)
 
         from datachain.lib.file import AudioFile
 

@@ -6,9 +6,9 @@ import pytest
 import soundfile as sf
 
 from datachain.lib.audio import (
+    audio_fragment_bytes,
+    audio_fragment_np,
     audio_info,
-    audio_segment_bytes,
-    audio_segment_np,
     save_audio_fragment,
 )
 from datachain.lib.file import Audio, AudioFile, FileError
@@ -74,9 +74,9 @@ def test_audio_info(audio_file):
     assert result.samples == 32000
 
 
-def test_audio_segment_np_full(audio_file):
-    """Test loading full audio segment as numpy array."""
-    audio_np, sr = audio_segment_np(audio_file)
+def test_audio_fragment_np_full(audio_file):
+    """Test loading full audio fragment as numpy array."""
+    audio_np, sr = audio_fragment_np(audio_file)
 
     assert isinstance(audio_np, np.ndarray)
     assert sr == 16000
@@ -84,46 +84,46 @@ def test_audio_segment_np_full(audio_file):
     assert len(audio_np) == 32000  # 2 seconds at 16kHz
 
 
-def test_audio_segment_np_partial(audio_file):
-    """Test loading partial audio segment."""
+def test_audio_fragment_np_partial(audio_file):
+    """Test loading partial audio fragment."""
     # Load 0.5 seconds starting from 0.5 seconds
-    audio_np, sr = audio_segment_np(audio_file, start=0.5, duration=0.5)
+    audio_np, sr = audio_fragment_np(audio_file, start=0.5, duration=0.5)
 
     assert isinstance(audio_np, np.ndarray)
     assert sr == 16000
     assert len(audio_np) == 8000  # 0.5 seconds at 16kHz
 
 
-def test_audio_segment_np_validation(audio_file):
-    """Test input validation for audio_segment_np."""
+def test_audio_fragment_np_validation(audio_file):
+    """Test input validation for audio_fragment_np."""
     with pytest.raises(ValueError, match="start must be a non-negative float"):
-        audio_segment_np(audio_file, start=-1.0)
+        audio_fragment_np(audio_file, start=-1.0)
 
     with pytest.raises(ValueError, match="duration must be a positive float"):
-        audio_segment_np(audio_file, duration=0.0)
+        audio_fragment_np(audio_file, duration=0.0)
 
 
-def test_audio_segment_np_with_file_interface(audio_file):
-    """Test audio_segment_np with File interface."""
+def test_audio_fragment_np_with_file_interface(audio_file):
+    """Test audio_fragment_np with File interface."""
     # Test that the audio_file fixture (which is already an AudioFile) works
-    audio_np, sr = audio_segment_np(audio_file)
+    audio_np, sr = audio_fragment_np(audio_file)
 
     assert isinstance(audio_np, np.ndarray)
     assert sr == 16000
 
 
-def test_audio_segment_np_multichannel(stereo_audio_file):
+def test_audio_fragment_np_multichannel(stereo_audio_file):
     """Test multichannel audio handling."""
-    audio_np, sr = audio_segment_np(stereo_audio_file)
+    audio_np, sr = audio_fragment_np(stereo_audio_file)
 
     # Should be transposed to (samples, channels)
     assert audio_np.shape == (16000, 2)  # 1 second at 16kHz, 2 channels
     assert sr == 16000
 
 
-def test_audio_segment_bytes(audio_file):
-    """Test converting audio segment to bytes."""
-    audio_bytes = audio_segment_bytes(audio_file, start=0.0, duration=1.0)
+def test_audio_fragment_bytes(audio_file):
+    """Test converting audio fragment to bytes."""
+    audio_bytes = audio_fragment_bytes(audio_file, start=0.0, duration=1.0)
 
     assert isinstance(audio_bytes, bytes)
     assert len(audio_bytes) > 0
@@ -135,9 +135,9 @@ def test_audio_segment_bytes(audio_file):
     assert len(data) == 16000  # 1 second at 16kHz
 
 
-def test_audio_segment_bytes_custom_format(audio_file):
-    """Test converting audio segment to different format."""
-    audio_bytes = audio_segment_bytes(audio_file, format="flac")
+def test_audio_fragment_bytes_custom_format(audio_file):
+    """Test converting audio fragment to different format."""
+    audio_bytes = audio_fragment_bytes(audio_file, format="flac")
 
     assert isinstance(audio_bytes, bytes)
     assert len(audio_bytes) > 0
@@ -216,28 +216,28 @@ def test_audio_info_file_error(audio_file):
             audio_info(audio_file)
 
 
-def test_audio_segment_np_file_error(audio_file):
-    """Test audio_segment_np handles file errors properly."""
+def test_audio_fragment_np_file_error(audio_file):
+    """Test audio_fragment_np handles file errors properly."""
     with patch(
         "datachain.lib.audio.torchaudio.info", side_effect=Exception("Test error")
     ):
-        with pytest.raises(FileError, match="unable to read audio segment"):
-            audio_segment_np(audio_file)
+        with pytest.raises(FileError, match="unable to read audio fragment"):
+            audio_fragment_np(audio_file)
 
 
 def test_save_audio_fragment_file_error(audio_file, tmp_path):
     """Test save_audio_fragment handles errors properly."""
     with patch(
-        "datachain.lib.audio.audio_segment_bytes", side_effect=Exception("Test error")
+        "datachain.lib.audio.audio_fragment_bytes", side_effect=Exception("Test error")
     ):
         with pytest.raises(FileError, match="unable to save audio fragment"):
             save_audio_fragment(audio_file, start=0.0, end=1.0, output=str(tmp_path))
 
 
 @pytest.mark.parametrize("start,duration", [(0.0, 1.0), (0.5, 0.5), (1.0, 1.0)])
-def test_audio_segment_np_different_durations(audio_file, start, duration):
+def test_audio_fragment_np_different_durations(audio_file, start, duration):
     """Test audio loading with different start times and durations."""
-    audio_np, sr = audio_segment_np(audio_file, start=start, duration=duration)
+    audio_np, sr = audio_fragment_np(audio_file, start=start, duration=duration)
 
     assert isinstance(audio_np, np.ndarray)
     assert sr == 16000
@@ -246,9 +246,9 @@ def test_audio_segment_np_different_durations(audio_file, start, duration):
 
 
 @pytest.mark.parametrize("format_type", ["wav", "flac", "ogg"])
-def test_audio_segment_bytes_formats(audio_file, format_type):
+def test_audio_fragment_bytes_formats(audio_file, format_type):
     """Test audio conversion to different formats."""
-    audio_bytes = audio_segment_bytes(audio_file, format=format_type)
+    audio_bytes = audio_fragment_bytes(audio_file, format=format_type)
 
     assert isinstance(audio_bytes, bytes)
     assert len(audio_bytes) > 0
