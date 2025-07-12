@@ -518,3 +518,35 @@ def test_partition_by_inherited_file(test_session):
         ("f1.txt", 20): (20, 1),
         ("f3.txt", 40): (40, 1),
     }
+
+
+def test_no_partition_by(test_session):
+    files = [
+        File(source="s3://bucket", path="f1.txt", size=100),
+        File(source="s3://bucket", path="f2.txt", size=200),
+        File(source="s3://bucket", path="f1.txt", size=100),  # duplicate
+        File(source="s3://bucket", path="f3.txt", size=300),
+    ]
+    amounts = [10, 20, 30, 40]
+
+    # Create a chain with File objects
+    chain = dc.read_values(
+        file=files,
+        amount=amounts,
+        session=test_session,
+    )
+
+    def my_agg(files: list[File], amounts: list[int]) -> Iterator[tuple[str, int, int]]:
+        file_names = sorted([f.path for f in files])
+        total_size = sum(f.size for f in files)
+        yield ",".join(file_names), total_size, sum(amounts)
+
+    # Test aggregate with empty partitioning by (all rows in one group)
+    result = chain.agg(
+        my_agg,
+        params=("file", "amount"),
+        output={"file_names": str, "total_size": int, "total_amount": int},
+    ).to_list("file_names", "total_size", "total_amount")
+
+    assert len(result) == 1
+    assert result[0] == ("f1.txt,f1.txt,f2.txt,f3.txt", 700, 100)
