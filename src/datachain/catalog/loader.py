@@ -18,6 +18,7 @@ WAREHOUSE_IMPORT_PATH = "DATACHAIN_WAREHOUSE"
 WAREHOUSE_ARG_PREFIX = "DATACHAIN_WAREHOUSE_ARG_"
 DISTRIBUTED_IMPORT_PYTHONPATH = "DATACHAIN_DISTRIBUTED_PYTHONPATH"
 DISTRIBUTED_IMPORT_PATH = "DATACHAIN_DISTRIBUTED"
+DISTRIBUTED_DISABLED = "DATACHAIN_DISTRIBUTED_DISABLED"
 
 IN_MEMORY_ERROR_MESSAGE = "In-memory is only supported on SQLite"
 
@@ -103,6 +104,9 @@ def get_warehouse(in_memory: bool = False) -> "AbstractWarehouse":
 
 
 def get_udf_distributor_class() -> Optional[type["AbstractUDFDistributor"]]:
+    if os.environ.get(DISTRIBUTED_DISABLED) == "True":
+        return None
+
     if not (distributed_import_path := os.environ.get(DISTRIBUTED_IMPORT_PATH)):
         return None
 
