@@ -2300,6 +2300,12 @@ class DataChain:
 
         Returns:
             The sum of the column values.
+
+        Example:
+            ```py
+            total_size = chain.sum("file.size")
+            print(f"Total size: {total_size}")
+            ```
         """
         return self._extend_to_data_model("sum", col)
 
@@ -2311,6 +2317,12 @@ class DataChain:
 
         Returns:
             The average of the column values.
+
+        Example:
+            ```py
+            average_size = chain.avg("file.size")
+            print(f"Average size: {average_size}")
+            ```
         """
         return self._extend_to_data_model("avg", col)
 
@@ -2322,6 +2334,12 @@ class DataChain:
 
         Returns:
             The minimum value in the column.
+
+        Example:
+            ```py
+            min_size = chain.min("file.size")
+            print(f"Minimum size: {min_size}")
+            ```
         """
         return self._extend_to_data_model("min", col)
 
@@ -2333,6 +2351,12 @@ class DataChain:
 
         Returns:
             The maximum value in the column.
+
+        Example:
+            ```py
+            max_size = chain.max("file.size")
+            print(f"Maximum size: {max_size}")
+            ```
         """
         return self._extend_to_data_model("max", col)
 
