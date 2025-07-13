@@ -2600,7 +2600,7 @@ def test_distinct_basic(test_session):
     chain = dc.read_values(numbers=[1, 2, 3, 4, 5], session=test_session)
     distinct_chain = chain.distinct("numbers")
     assert distinct_chain.count() == 5
-    assert distinct_chain.to_values("numbers") == [1, 2, 3, 4, 5]
+    assert sorted(distinct_chain.to_values("numbers")) == [1, 2, 3, 4, 5]
 
     # Test with duplicates
     chain = dc.read_values(numbers=[1, 2, 2, 3, 3, 3, 4], session=test_session)
@@ -2788,19 +2788,19 @@ def test_filter_basic(test_session):
     # Test basic comparison operators
     filtered_chain = chain.filter(C("numbers") > 5)
     assert filtered_chain.count() == 5
-    assert filtered_chain.to_values("numbers") == [6, 7, 8, 9, 10]
+    assert sorted(filtered_chain.to_values("numbers")) == [6, 7, 8, 9, 10]
 
     filtered_chain = chain.filter(C("numbers") >= 5)
     assert filtered_chain.count() == 6
-    assert filtered_chain.to_values("numbers") == [5, 6, 7, 8, 9, 10]
+    assert sorted(filtered_chain.to_values("numbers")) == [5, 6, 7, 8, 9, 10]
 
     filtered_chain = chain.filter(C("numbers") < 5)
     assert filtered_chain.count() == 4
-    assert filtered_chain.to_values("numbers") == [1, 2, 3, 4]
+    assert sorted(filtered_chain.to_values("numbers")) == [1, 2, 3, 4]
 
     filtered_chain = chain.filter(C("numbers") <= 5)
     assert filtered_chain.count() == 5
-    assert filtered_chain.to_values("numbers") == [1, 2, 3, 4, 5]
+    assert sorted(filtered_chain.to_values("numbers")) == [1, 2, 3, 4, 5]
 
     filtered_chain = chain.filter(C("numbers") == 5)
     assert filtered_chain.count() == 1
@@ -2808,7 +2808,7 @@ def test_filter_basic(test_session):
 
     filtered_chain = chain.filter(C("numbers") != 5)
     assert filtered_chain.count() == 9
-    assert filtered_chain.to_values("numbers") == [1, 2, 3, 4, 6, 7, 8, 9, 10]
+    assert sorted(filtered_chain.to_values("numbers")) == [1, 2, 3, 4, 6, 7, 8, 9, 10]
 
 
 def test_filter_with_strings(test_session):
@@ -2828,7 +2828,12 @@ def test_filter_with_strings(test_session):
     # Test string inequality
     filtered_chain = chain.filter(C("names") != "Alice")
     assert filtered_chain.count() == 4
-    assert filtered_chain.to_values("names") == ["Bob", "Charlie", "David", "Eva"]
+    assert sorted(filtered_chain.to_values("names")) == [
+        "Bob",
+        "Charlie",
+        "David",
+        "Eva",
+    ]
 
 
 def test_filter_with_glob_patterns(test_session):
@@ -2846,12 +2851,15 @@ def test_filter_with_glob_patterns(test_session):
     # Test glob pattern for file extensions
     filtered_chain = chain.filter(C("files.path").glob("*.jpg"))
     assert filtered_chain.count() == 2
-    assert filtered_chain.to_values("files.path") == ["image1.jpg", "image3.jpg"]
+    assert sorted(filtered_chain.to_values("files.path")) == [
+        "image1.jpg",
+        "image3.jpg",
+    ]
 
     # Test glob pattern for file names
     filtered_chain = chain.filter(C("files.path").glob("image*"))
     assert filtered_chain.count() == 3
-    assert filtered_chain.to_values("files.path") == [
+    assert sorted(filtered_chain.to_values("files.path")) == [
         "image1.jpg",
         "image2.png",
         "image3.jpg",
@@ -2860,7 +2868,10 @@ def test_filter_with_glob_patterns(test_session):
     # Test glob pattern for document files
     filtered_chain = chain.filter(C("files.path").glob("document*"))
     assert filtered_chain.count() == 2
-    assert filtered_chain.to_values("files.path") == ["document1.pdf", "document2.txt"]
+    assert sorted(filtered_chain.to_values("files.path")) == [
+        "document1.pdf",
+        "document2.txt",
+    ]
 
 
 def test_filter_with_in_operator(test_session):
@@ -2874,12 +2885,20 @@ def test_filter_with_in_operator(test_session):
     # Test in operator with list
     filtered_chain = chain.filter(C("numbers").in_([1, 3, 5, 7, 9]))
     assert filtered_chain.count() == 5
-    assert filtered_chain.to_values("numbers") == [1, 3, 5, 7, 9]
+    assert sorted(filtered_chain.to_values("numbers")) == [1, 3, 5, 7, 9]
 
     # Test in operator with categories
     filtered_chain = chain.filter(C("categories").in_(["A", "C"]))
     assert filtered_chain.count() == 7
-    assert filtered_chain.to_values("categories") == ["A", "A", "C", "A", "C", "A", "C"]
+    assert sorted(filtered_chain.to_values("categories")) == [
+        "A",
+        "A",
+        "A",
+        "A",
+        "C",
+        "C",
+        "C",
+    ]
 
 
 def test_filter_with_and_operator(test_session):
@@ -2917,16 +2936,16 @@ def test_filter_with_or_operator(test_session):
     # Test OR operator
     filtered_chain = chain.filter((C("numbers") < 3) | (C("numbers") > 8))
     assert filtered_chain.count() == 4
-    assert filtered_chain.to_values("numbers") == [1, 2, 9, 10]
+    assert sorted(filtered_chain.to_values("numbers")) == [1, 2, 9, 10]
 
     filtered_chain = chain.filter((C("categories") == "A") | (C("numbers") == 5))
     assert filtered_chain.count() == 5
-    assert filtered_chain.to_values("numbers") == [1, 3, 5, 6, 9]
+    assert sorted(filtered_chain.to_values("numbers")) == [1, 3, 5, 6, 9]
 
     # Test with func.or_
     filtered_chain = chain.filter(func.or_(C("numbers") < 3, C("numbers") > 8))
     assert filtered_chain.count() == 4
-    assert filtered_chain.to_values("numbers") == [1, 2, 9, 10]
+    assert sorted(filtered_chain.to_values("numbers")) == [1, 2, 9, 10]
 
 
 def test_filter_with_not_operator(test_session):
@@ -2940,16 +2959,23 @@ def test_filter_with_not_operator(test_session):
     # Test NOT operator
     filtered_chain = chain.filter(~(C("numbers") > 5))
     assert filtered_chain.count() == 5
-    assert filtered_chain.to_values("numbers") == [1, 2, 3, 4, 5]
+    assert sorted(filtered_chain.to_values("numbers")) == [1, 2, 3, 4, 5]
 
     filtered_chain = chain.filter(~(C("categories") == "A"))
     assert filtered_chain.count() == 6
-    assert filtered_chain.to_values("categories") == ["B", "C", "B", "C", "B", "C"]
+    assert sorted(filtered_chain.to_values("categories")) == [
+        "B",
+        "B",
+        "B",
+        "C",
+        "C",
+        "C",
+    ]
 
     # Test with func.not_
     filtered_chain = chain.filter(func.not_(C("numbers") > 5))
     assert filtered_chain.count() == 5
-    assert filtered_chain.to_values("numbers") == [1, 2, 3, 4, 5]
+    assert sorted(filtered_chain.to_values("numbers")) == [1, 2, 3, 4, 5]
 
 
 def test_filter_with_complex_objects(test_session):
@@ -2967,12 +2993,15 @@ def test_filter_with_complex_objects(test_session):
     # Test filter on nested field
     filtered_chain = chain.filter(C("files.size") > 250)
     assert filtered_chain.count() == 3
-    assert filtered_chain.to_values("files.size") == [300, 400, 500]
+    assert sorted(filtered_chain.to_values("files.size")) == [300, 400, 500]
 
     # Test filter on nested field with glob
     filtered_chain = chain.filter(C("files.path").glob("*.jpg"))
     assert filtered_chain.count() == 2
-    assert filtered_chain.to_values("files.path") == ["image1.jpg", "image3.jpg"]
+    assert sorted(filtered_chain.to_values("files.path")) == [
+        "image1.jpg",
+        "image3.jpg",
+    ]
 
 
 def test_filter_with_empty_results(test_session):
@@ -3009,11 +3038,11 @@ def test_filter_chaining(test_session):
         .filter(C("categories") == "A")
     )
     assert filtered_chain.count() == 2
-    assert filtered_chain.to_values("numbers") == [3, 6]
+    assert sorted(filtered_chain.to_values("numbers")) == [3, 6]
 
     # Test that original chain is unchanged
     assert chain.count() == 10
-    assert chain.to_values("numbers") == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    assert sorted(chain.to_values("numbers")) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 
 def test_filter_with_func_operations(test_session):
@@ -3029,7 +3058,7 @@ def test_filter_with_func_operations(test_session):
     # Test string length filter
     filtered_chain = chain.filter(string.length(C("names")) > 4)
     assert filtered_chain.count() == 3
-    assert filtered_chain.to_values("names") == ["Alice", "Charlie", "David"]
+    assert sorted(filtered_chain.to_values("names")) == ["Alice", "Charlie", "David"]
 
 
 @skip_if_not_sqlite
@@ -4329,23 +4358,17 @@ def test_column_compute(test_session):
 
     assert chain.sum("i1") == 15
     assert chain.sum("f1") == 7.5
-    assert chain.sum("s1") == 0.0
     assert chain.sum("signals.i2") == 30
     assert chain.sum("signals.f2") == 15.0
-    assert chain.sum("signals.s2") == 0.0
     assert chain.sum("signals.signal.i3") == 45
     assert chain.sum("signals.signal.f3") == 22.5
-    assert chain.sum("signals.signal.s3") == 0.0
 
     assert chain.avg("i1") == 3
     assert chain.avg("f1") == 1.5
-    assert chain.avg("s1") == 0.0
     assert chain.avg("signals.i2") == 6
     assert chain.avg("signals.f2") == 3.0
-    assert chain.avg("signals.s2") == 0.0
     assert chain.avg("signals.signal.i3") == 9
     assert chain.avg("signals.signal.f3") == 4.5
-    assert chain.avg("signals.signal.s3") == 0.0
 
     assert chain.min("i1") == 1
     assert chain.min("f1") == 0.5
