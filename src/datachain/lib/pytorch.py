@@ -125,7 +125,10 @@ class PytorchDataset(IterableDataset):
         ds = read_dataset(
             name=self.name, version=self.version, session=session
         ).settings(cache=self.cache, prefetch=self.prefetch)
-        ds = ds.remove_file_signals()
+
+        # remove file signals from dataset
+        schema = ds.signals_schema.clone_without_file_signals()
+        ds = ds.select(*schema.values.keys())
 
         if self.num_samples > 0:
             ds = ds.sample(self.num_samples)

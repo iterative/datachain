@@ -366,24 +366,6 @@ class DataChain:
         self._settings = settings if settings else Settings()
         return self
 
-    def reset_schema(self, signals_schema: SignalSchema) -> "Self":
-        """Reset the schema of the chain to the provided schema.
-
-        Parameters:
-            signals_schema: The new schema to set for the chain.
-        """
-        self.signals_schema = signals_schema
-        return self
-
-    def add_schema(self, signals_schema: SignalSchema) -> "Self":
-        """Extend existing chain schema with the provided one.
-
-        Parameters:
-            signals_schema: The schema to add to the existing schema.
-        """
-        self.signals_schema |= signals_schema
-        return self
-
     @classmethod
     def from_storage(
         cls,
@@ -1460,11 +1442,6 @@ class DataChain:
             dc_settings=chain._settings,
             remove_prefetched=remove_prefetched,
         )
-
-    def remove_file_signals(self) -> "Self":
-        """Remove file signals from the chain schema."""
-        schema = self.signals_schema.clone_without_file_signals()
-        return self.select(*schema.values.keys())
 
     @delta_disabled
     def merge(
