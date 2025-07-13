@@ -3674,3 +3674,83 @@ def test_agg_partition_by_string_sequence(test_session):
     # Should have 3 partitions: (a,x), (a,y), (b,x)
     assert len(result_names) == 3
     assert len(result_sizes) == 3
+
+
+def test_column_compute(test_session):
+    """Test that sum, avg, min and max chain functions works correctly."""
+
+    class Signal1(DataModel):
+        i3: int
+        f3: float
+        s3: str
+
+    class Signal2(DataModel):
+        i2: int
+        f2: float
+        s2: str
+        signal: Signal1
+
+    i1 = [1, 2, 3, 4, 5]
+    f1 = [0.5, 1.0, 1.5, 2.0, 2.5]
+    s1 = ["a", "b", "c", "d", "e"]
+    signals = [
+        Signal2(
+            i2=i * 2,
+            f2=f * 2,
+            s2=s * 2,
+            signal=Signal1(
+                i3=i * 3,
+                f3=f * 3.0,
+                s3=s * 3,
+            ),
+        )
+        for i, f, s in zip(i1, f1, s1)
+    ]
+
+    chain = dc.read_values(
+        i1=i1,
+        f1=f1,
+        s1=s1,
+        signals=signals,
+        session=test_session,
+    )
+
+    assert chain.sum("i1") == 15
+    assert chain.sum("f1") == 7.5
+    assert chain.sum("s1") == 0.0
+    assert chain.sum("signals.i2") == 30
+    assert chain.sum("signals.f2") == 15.0
+    assert chain.sum("signals.s2") == 0.0
+    assert chain.sum("signals.signal.i3") == 45
+    assert chain.sum("signals.signal.f3") == 22.5
+    assert chain.sum("signals.signal.s3") == 0.0
+
+    assert chain.avg("i1") == 3
+    assert chain.avg("f1") == 1.5
+    assert chain.avg("s1") == 0.0
+    assert chain.avg("signals.i2") == 6
+    assert chain.avg("signals.f2") == 3.0
+    assert chain.avg("signals.s2") == 0.0
+    assert chain.avg("signals.signal.i3") == 9
+    assert chain.avg("signals.signal.f3") == 4.5
+    assert chain.avg("signals.signal.s3") == 0.0
+
+    assert chain.min("i1") == 1
+    assert chain.min("f1") == 0.5
+    assert chain.min("s1") == "a"
+    assert chain.min("signals.i2") == 2
+    assert chain.min("signals.f2") == 1.0
+    assert chain.min("signals.s2") == "aa"
+    assert chain.min("signals.signal.i3") == 3
+    assert chain.min("signals.signal.f3") == 1.5
+    assert chain.min("signals.signal.s3") == "aaa"
+
+    assert chain.max("i1") == 5
+    assert chain.max("f1") == 2.5
+    assert chain.max("s1") == "e"
+    assert chain.max("signals.i2") == 10
+    assert chain.max("signals.f2") == 5.0
+    assert chain.max("signals.s2") == "ee"
+    assert chain.max("signals.signal.i3") == 15
+    assert chain.max("signals.signal.f3") == 7.5
+    assert chain.max("signals.signal.s3") == "eee"

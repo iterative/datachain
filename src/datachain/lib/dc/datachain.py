@@ -33,7 +33,13 @@ from datachain.func import literal
 from datachain.func.base import Function
 from datachain.func.func import Func
 from datachain.lib.convert.python_to_sql import python_to_sql
-from datachain.lib.data_model import DataModel, DataType, DataValue, dict_to_data_model
+from datachain.lib.data_model import (
+    DataModel,
+    DataType,
+    DataValue,
+    StandardType,
+    dict_to_data_model,
+)
 from datachain.lib.file import (
     EXPORT_FILES_MAX_THREADS,
     ArrowRow,
@@ -361,10 +367,20 @@ class DataChain:
         return self
 
     def reset_schema(self, signals_schema: SignalSchema) -> "Self":
+        """Reset the schema of the chain to the provided schema.
+
+        Parameters:
+            signals_schema: The new schema to set for the chain.
+        """
         self.signals_schema = signals_schema
         return self
 
     def add_schema(self, signals_schema: SignalSchema) -> "Self":
+        """Extend existing chain schema with the provided one.
+
+        Parameters:
+            signals_schema: The schema to add to the existing schema.
+        """
         self.signals_schema |= signals_schema
         return self
 
@@ -1446,6 +1462,7 @@ class DataChain:
         )
 
     def remove_file_signals(self) -> "Self":
+        """Remove file signals from the chain schema."""
         schema = self.signals_schema.clone_without_file_signals()
         return self.select(*schema.values.keys())
 
@@ -1807,8 +1824,11 @@ class DataChain:
         """Return a pandas DataFrame from the chain.
 
         Parameters:
-            flatten : Whether to use a multiindex or flatten column names.
-            include_hidden : Whether to include hidden columns.
+            flatten: Whether to use a multiindex or flatten column names.
+            include_hidden: Whether to include hidden columns.
+
+        Returns:
+            pd.DataFrame: A pandas DataFrame representation of the chain.
         """
         import pandas as pd
 
@@ -1834,11 +1854,11 @@ class DataChain:
         """Show a preview of the chain results.
 
         Parameters:
-            limit : How many rows to show.
-            flatten : Whether to use a multiindex or flatten column names.
-            transpose : Whether to transpose rows and columns.
-            truncate : Whether or not to truncate the contents of columns.
-            include_hidden : Whether to include hidden columns.
+            limit: How many rows to show.
+            flatten: Whether to use a multiindex or flatten column names.
+            transpose: Whether to transpose rows and columns.
+            truncate: Whether or not to truncate the contents of columns.
+            include_hidden: Whether to include hidden columns.
         """
         import pandas as pd
 
@@ -2268,21 +2288,49 @@ class DataChain:
         )
         return read_records(*args, **kwargs)
 
-    def sum(self, fr: DataType):  # type: ignore[override]
-        """Compute the sum of a column."""
-        return self._extend_to_data_model("sum", fr)
+    def sum(self, col: str) -> StandardType:  # type: ignore[override]
+        """Compute the sum of a column.
 
-    def avg(self, fr: DataType):  # type: ignore[override]
-        """Compute the average of a column."""
-        return self._extend_to_data_model("avg", fr)
+        Parameters:
+            col: The column to compute the sum for.
 
-    def min(self, fr: DataType):  # type: ignore[override]
-        """Compute the minimum of a column."""
-        return self._extend_to_data_model("min", fr)
+        Returns:
+            The sum of the column values.
+        """
+        return self._extend_to_data_model("sum", col)
 
-    def max(self, fr: DataType):  # type: ignore[override]
-        """Compute the maximum of a column."""
-        return self._extend_to_data_model("max", fr)
+    def avg(self, col: str) -> StandardType:  # type: ignore[override]
+        """Compute the average of a column.
+
+        Parameters:
+            col: The column to compute the average for.
+
+        Returns:
+            The average of the column values.
+        """
+        return self._extend_to_data_model("avg", col)
+
+    def min(self, col: str) -> StandardType:  # type: ignore[override]
+        """Compute the minimum of a column.
+
+        Parameters:
+            col: The column to compute the minimum for.
+
+        Returns:
+            The minimum value in the column.
+        """
+        return self._extend_to_data_model("min", col)
+
+    def max(self, col: str) -> StandardType:  # type: ignore[override]
+        """Compute the maximum of a column.
+
+        Parameters:
+            col: The column to compute the maximum for.
+
+        Returns:
+            The maximum value in the column.
+        """
+        return self._extend_to_data_model("max", col)
 
     def setup(self, **kwargs) -> "Self":
         """Setup variables to pass to UDF functions.
@@ -2397,10 +2445,11 @@ class DataChain:
         """Return a random sample from the chain.
 
         Parameters:
-            n (int): Number of samples to draw.
+            n: Number of samples to draw.
 
-        NOTE: Samples are not deterministic, and streamed/paginated queries or
-        multiple workers will draw samples with replacement.
+        Note:
+            Samples are not deterministic, and streamed/paginated queries or
+            multiple workers will draw samples with replacement.
         """
         return self._evolve(query=self._query.sample(n))
 
@@ -2507,6 +2556,10 @@ class DataChain:
     def chunk(self, index: int, total: int) -> "Self":
         """Split a chain into smaller chunks for e.g. parallelization.
 
+        Parameters:
+            index: The index of the chunk (0-indexed).
+            total: The total number of chunks.
+
         Example:
             ```py
             import datachain as dc
@@ -2526,7 +2579,7 @@ class DataChain:
         """Returns a list of rows of values, optionally limited to the specified
         columns.
 
-        Args:
+        Parameters:
             *cols: Limit to the specified columns. By default, all columns are selected.
 
         Returns:
@@ -2556,7 +2609,7 @@ class DataChain:
     def to_values(self, col: str) -> list[DataValue]:
         """Returns a flat list of values from a single column.
 
-        Args:
+        Parameters:
             col: The name of the column to extract values from.
 
         Returns:
