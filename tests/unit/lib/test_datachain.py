@@ -15,7 +15,7 @@ from datasets import Dataset
 from pydantic import BaseModel
 
 import datachain as dc
-from datachain import Column
+from datachain import Column, func
 from datachain.data_storage import AbstractMetastore
 from datachain.error import (
     DatasetInvalidVersionError,
@@ -2775,6 +2775,275 @@ def test_distinct_error_handling(test_session):
     # Test with invalid nested field
     with pytest.raises(SignalResolvingError):
         chain.distinct("numbers.invalid_field")
+
+
+def test_filter_basic(test_session):
+    """Test basic filter functionality with simple conditions."""
+    chain = dc.read_values(
+        numbers=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        categories=["A", "B", "A", "C", "B", "A", "C", "B", "A", "C"],
+        session=test_session,
+    )
+
+    # Test basic comparison operators
+    filtered_chain = chain.filter(C("numbers") > 5)
+    assert filtered_chain.count() == 5
+    assert filtered_chain.to_values("numbers") == [6, 7, 8, 9, 10]
+
+    filtered_chain = chain.filter(C("numbers") >= 5)
+    assert filtered_chain.count() == 6
+    assert filtered_chain.to_values("numbers") == [5, 6, 7, 8, 9, 10]
+
+    filtered_chain = chain.filter(C("numbers") < 5)
+    assert filtered_chain.count() == 4
+    assert filtered_chain.to_values("numbers") == [1, 2, 3, 4]
+
+    filtered_chain = chain.filter(C("numbers") <= 5)
+    assert filtered_chain.count() == 5
+    assert filtered_chain.to_values("numbers") == [1, 2, 3, 4, 5]
+
+    filtered_chain = chain.filter(C("numbers") == 5)
+    assert filtered_chain.count() == 1
+    assert filtered_chain.to_values("numbers") == [5]
+
+    filtered_chain = chain.filter(C("numbers") != 5)
+    assert filtered_chain.count() == 9
+    assert filtered_chain.to_values("numbers") == [1, 2, 3, 4, 6, 7, 8, 9, 10]
+
+
+def test_filter_with_strings(test_session):
+    """Test filter with string conditions."""
+    chain = dc.read_values(
+        names=["Alice", "Bob", "Charlie", "David", "Eva", "Alice"],
+        ages=[25, 30, 35, 40, 45, 50],
+        cities=["New York", "Los Angeles", "Chicago", "Houston", "Phoenix", "Denver"],
+        session=test_session,
+    )
+
+    # Test string equality
+    filtered_chain = chain.filter(C("names") == "Alice")
+    assert filtered_chain.count() == 2
+    assert filtered_chain.to_values("names") == ["Alice", "Alice"]
+
+    # Test string inequality
+    filtered_chain = chain.filter(C("names") != "Alice")
+    assert filtered_chain.count() == 4
+    assert filtered_chain.to_values("names") == ["Bob", "Charlie", "David", "Eva"]
+
+
+def test_filter_with_glob_patterns(test_session):
+    """Test filter with glob patterns."""
+    files = [
+        File(path="image1.jpg", size=100),
+        File(path="image2.png", size=200),
+        File(path="document1.pdf", size=300),
+        File(path="image3.jpg", size=400),
+        File(path="document2.txt", size=500),
+    ]
+
+    chain = dc.read_values(files=files, session=test_session)
+
+    # Test glob pattern for file extensions
+    filtered_chain = chain.filter(C("files.path").glob("*.jpg"))
+    assert filtered_chain.count() == 2
+    assert filtered_chain.to_values("files.path") == ["image1.jpg", "image3.jpg"]
+
+    # Test glob pattern for file names
+    filtered_chain = chain.filter(C("files.path").glob("image*"))
+    assert filtered_chain.count() == 3
+    assert filtered_chain.to_values("files.path") == [
+        "image1.jpg",
+        "image2.png",
+        "image3.jpg",
+    ]
+
+    # Test glob pattern for document files
+    filtered_chain = chain.filter(C("files.path").glob("document*"))
+    assert filtered_chain.count() == 2
+    assert filtered_chain.to_values("files.path") == ["document1.pdf", "document2.txt"]
+
+
+def test_filter_with_in_operator(test_session):
+    """Test filter with 'in' operator."""
+    chain = dc.read_values(
+        numbers=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        categories=["A", "B", "A", "C", "B", "A", "C", "B", "A", "C"],
+        session=test_session,
+    )
+
+    # Test in operator with list
+    filtered_chain = chain.filter(C("numbers").in_([1, 3, 5, 7, 9]))
+    assert filtered_chain.count() == 5
+    assert filtered_chain.to_values("numbers") == [1, 3, 5, 7, 9]
+
+    # Test in operator with categories
+    filtered_chain = chain.filter(C("categories").in_(["A", "C"]))
+    assert filtered_chain.count() == 7
+    assert filtered_chain.to_values("categories") == ["A", "A", "C", "A", "C", "A", "C"]
+
+
+def test_filter_with_and_operator(test_session):
+    """Test filter with multiple conditions using AND."""
+    chain = dc.read_values(
+        numbers=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        categories=["A", "B", "A", "C", "B", "A", "C", "B", "A", "C"],
+        session=test_session,
+    )
+
+    # Test multiple conditions (implicit AND)
+    filtered_chain = chain.filter(C("numbers") > 5, C("categories") == "A")
+    assert filtered_chain.count() == 2
+    assert filtered_chain.to_values("numbers") == [6, 9]
+
+    # Test with explicit AND operator
+    filtered_chain = chain.filter((C("numbers") > 5) & (C("categories") == "A"))
+    assert filtered_chain.count() == 2
+    assert filtered_chain.to_values("numbers") == [6, 9]
+
+    # Test with func.and_
+    filtered_chain = chain.filter(func.and_(C("numbers") > 5, C("categories") == "A"))
+    assert filtered_chain.count() == 2
+    assert filtered_chain.to_values("numbers") == [6, 9]
+
+
+def test_filter_with_or_operator(test_session):
+    """Test filter with OR operator."""
+    chain = dc.read_values(
+        numbers=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        categories=["A", "B", "A", "C", "B", "A", "C", "B", "A", "C"],
+        session=test_session,
+    )
+
+    # Test OR operator
+    filtered_chain = chain.filter((C("numbers") < 3) | (C("numbers") > 8))
+    assert filtered_chain.count() == 4
+    assert filtered_chain.to_values("numbers") == [1, 2, 9, 10]
+
+    filtered_chain = chain.filter((C("categories") == "A") | (C("numbers") == 5))
+    assert filtered_chain.count() == 5
+    assert filtered_chain.to_values("numbers") == [1, 3, 5, 6, 9]
+
+    # Test with func.or_
+    filtered_chain = chain.filter(func.or_(C("numbers") < 3, C("numbers") > 8))
+    assert filtered_chain.count() == 4
+    assert filtered_chain.to_values("numbers") == [1, 2, 9, 10]
+
+
+def test_filter_with_not_operator(test_session):
+    """Test filter with NOT operator."""
+    chain = dc.read_values(
+        numbers=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        categories=["A", "B", "A", "C", "B", "A", "C", "B", "A", "C"],
+        session=test_session,
+    )
+
+    # Test NOT operator
+    filtered_chain = chain.filter(~(C("numbers") > 5))
+    assert filtered_chain.count() == 5
+    assert filtered_chain.to_values("numbers") == [1, 2, 3, 4, 5]
+
+    filtered_chain = chain.filter(~(C("categories") == "A"))
+    assert filtered_chain.count() == 6
+    assert filtered_chain.to_values("categories") == ["B", "C", "B", "C", "B", "C"]
+
+    # Test with func.not_
+    filtered_chain = chain.filter(func.not_(C("numbers") > 5))
+    assert filtered_chain.count() == 5
+    assert filtered_chain.to_values("numbers") == [1, 2, 3, 4, 5]
+
+
+def test_filter_with_complex_objects(test_session):
+    """Test filter with complex objects."""
+    files = [
+        File(path="image1.jpg", size=100),
+        File(path="image2.png", size=200),
+        File(path="document1.pdf", size=300),
+        File(path="image3.jpg", size=400),
+        File(path="document2.txt", size=500),
+    ]
+
+    chain = dc.read_values(files=files, session=test_session)
+
+    # Test filter on nested field
+    filtered_chain = chain.filter(C("files.size") > 250)
+    assert filtered_chain.count() == 3
+    assert filtered_chain.to_values("files.size") == [300, 400, 500]
+
+    # Test filter on nested field with glob
+    filtered_chain = chain.filter(C("files.path").glob("*.jpg"))
+    assert filtered_chain.count() == 2
+    assert filtered_chain.to_values("files.path") == ["image1.jpg", "image3.jpg"]
+
+
+def test_filter_with_empty_results(test_session):
+    """Test filter that results in empty chain."""
+    chain = dc.read_values(
+        numbers=[1, 2, 3, 4, 5],
+        categories=["A", "B", "A", "C", "B"],
+        session=test_session,
+    )
+
+    # Test filter that returns no results
+    filtered_chain = chain.filter(C("numbers") > 10)
+    assert filtered_chain.count() == 0
+    assert filtered_chain.to_values("numbers") == []
+
+    # Test filter with impossible condition
+    filtered_chain = chain.filter(C("numbers") == 10)
+    assert filtered_chain.count() == 0
+    assert filtered_chain.to_values("numbers") == []
+
+
+def test_filter_chaining(test_session):
+    """Test chaining multiple filter operations."""
+    chain = dc.read_values(
+        numbers=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        categories=["A", "B", "A", "C", "B", "A", "C", "B", "A", "C"],
+        session=test_session,
+    )
+
+    # Chain multiple filters
+    filtered_chain = (
+        chain.filter(C("numbers") >= 3)
+        .filter(C("numbers") < 8)
+        .filter(C("categories") == "A")
+    )
+    assert filtered_chain.count() == 2
+    assert filtered_chain.to_values("numbers") == [3, 6]
+
+    # Test that original chain is unchanged
+    assert chain.count() == 10
+    assert chain.to_values("numbers") == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+
+def test_filter_with_func_operations(test_session):
+    """Test filter with datachain.func operations."""
+    from datachain.func import string
+
+    chain = dc.read_values(
+        names=["Alice", "Bob", "Charlie", "David", "Eva"],
+        ages=[25, 30, 35, 40, 45],
+        session=test_session,
+    )
+
+    # Test string length filter
+    filtered_chain = chain.filter(string.length(C("names")) > 4)
+    assert filtered_chain.count() == 3
+    assert filtered_chain.to_values("names") == ["Alice", "Charlie", "David"]
+
+
+@skip_if_not_sqlite
+def test_filter_in_memory(test_session):
+    """Test filter functionality with in-memory database."""
+    chain = dc.read_values(numbers=[1, 2, 3, 4, 5], in_memory=True)
+
+    filtered_chain = chain.filter(C("numbers") > 3)
+    assert filtered_chain.count() == 2
+    assert filtered_chain.to_values("numbers") == [4, 5]
+
+    # Test that original chain is unchanged
+    assert chain.count() == 5
+    assert chain.to_values("numbers") == [1, 2, 3, 4, 5]
 
 
 def test_rename_column_with_mutate(test_session):
