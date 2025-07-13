@@ -2434,6 +2434,152 @@ def test_rename_object_column_name_with_mutate(test_session):
     assert ds.order_by("fname").to_values("fname") == ["a", "b", "c"]
 
 
+def test_count_basic(test_session):
+    """Test basic count functionality with different data types."""
+    # Test with simple values
+    chain = dc.read_values(numbers=[1, 2, 3, 4, 5], session=test_session)
+    assert chain.count() == 5
+
+    # Test with strings
+    chain = dc.read_values(names=["Alice", "Bob", "Charlie"], session=test_session)
+    assert chain.count() == 3
+
+    # Test with empty chain
+    chain = dc.read_values(numbers=[], session=test_session)
+    assert chain.count() == 0
+
+    # Test with single item
+    chain = dc.read_values(numbers=[42], session=test_session)
+    assert chain.count() == 1
+
+
+def test_count_with_complex_objects(test_session):
+    """Test count with complex objects like File and custom models."""
+    files = [File(path=f"file_{i}.txt", size=i * 100) for i in range(3)]
+    chain = dc.read_values(files=files, session=test_session)
+    assert chain.count() == 3
+
+    # Test with nested objects
+    chain = dc.read_values(features=features_nested, session=test_session)
+    assert chain.count() == 3
+
+
+def test_count_after_operations(test_session):
+    """Test count after various chain operations."""
+    chain = dc.read_values(numbers=[1, 2, 3, 4, 5], session=test_session)
+    assert chain.count() == 5
+
+    # Test after limit
+    limited_chain = chain.limit(3)
+    assert limited_chain.count() == 3
+    assert chain.count() == 5  # Original chain unchanged
+
+    # Test after filter
+    filtered_chain = chain.filter(C("numbers") > 3)
+    assert filtered_chain.count() == 2
+
+    # Test after select
+    selected_chain = chain.select("numbers")
+    assert selected_chain.count() == 5
+
+    # Test after map
+    mapped_chain = chain.map(doubled=lambda numbers: numbers * 2, output=int)
+    assert mapped_chain.count() == 5
+
+
+def test_count_with_generation(test_session):
+    """Test count with generation operations."""
+
+    def generate_items(keys, counts) -> Iterator[tuple[File, str]]:
+        for i in range(counts):
+            yield File(path=f"{keys}_{i}.txt"), f"item_{i}"
+
+    chain = dc.read_values(keys=["a", "b"], counts=[2, 3], session=test_session)
+    assert chain.count() == 2
+
+    # Test after gen operation
+    generated_chain = chain.gen(generate_items, output={"file": File, "item": str})
+    assert generated_chain.count() == 5  # 2 + 3 = 5 total generated items
+
+
+def test_count_with_aggregation(test_session):
+    """Test count with aggregation operations."""
+    chain = dc.read_values(
+        category=["A", "A", "B", "B", "C"], value=[1, 2, 3, 4, 5], session=test_session
+    )
+    assert chain.count() == 5
+
+    # Test after group_by
+    grouped_chain = chain.group_by(total=dc.func.sum("value"), partition_by="category")
+    assert grouped_chain.count() == 3  # 3 categories: A, B, C
+
+
+def test_count_with_union(test_session):
+    """Test count with union operations."""
+    chain1 = dc.read_values(numbers=[1, 2, 3], session=test_session)
+    chain2 = dc.read_values(numbers=[4, 5, 6], session=test_session)
+
+    assert chain1.count() == 3
+    assert chain2.count() == 3
+
+    union_chain = chain1.union(chain2)
+    assert union_chain.count() == 6
+
+
+def test_count_with_subtract(test_session):
+    """Test count with subtract operations."""
+    chain1 = dc.read_values(numbers=[1, 2, 3, 4, 5], session=test_session)
+    chain2 = dc.read_values(numbers=[2, 4], session=test_session)
+
+    assert chain1.count() == 5
+    assert chain2.count() == 2
+
+    subtracted_chain = chain1.subtract(chain2, on="numbers")
+    assert subtracted_chain.count() == 3  # 1, 3, 5 remain
+
+
+def test_count_persistence(test_session):
+    """Test that count persists correctly after operations."""
+    chain = dc.read_values(numbers=[1, 2, 3, 4, 5], session=test_session)
+    original_count = chain.count()
+    assert original_count == 5
+
+    # Apply various operations
+    chain = chain.limit(3).map(doubled=lambda numbers: numbers * 2, output=int)
+    assert chain.count() == 3
+
+    # Test that count is consistent
+    assert chain.count() == 3
+    assert chain.count() == 3  # Should be idempotent
+
+
+def test_count_with_empty_results(test_session):
+    """Test count with operations that result in empty chains."""
+    chain = dc.read_values(numbers=[1, 2, 3, 4, 5], session=test_session)
+
+    # Filter to empty result
+    empty_chain = chain.filter(C("numbers") > 10)
+    assert empty_chain.count() == 0
+
+    # Limit to 0
+    zero_chain = chain.limit(0)
+    assert zero_chain.count() == 0
+
+
+@skip_if_not_sqlite
+def test_count_in_memory(test_session):
+    """Test count functionality with in-memory database."""
+    chain = dc.read_values(numbers=[1, 2, 3, 4, 5], in_memory=True)
+    assert chain.count() == 5
+
+    # Test with operations
+    limited_chain = chain.limit(3)
+    assert limited_chain.count() == 3
+
+    filtered_chain = chain.filter(C("numbers") > 3)
+    assert filtered_chain.count() == 2
+
+
 def test_rename_column_with_mutate(test_session):
     names = ["a", "b", "c"]
     sizes = [1, 2, 3]
