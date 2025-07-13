@@ -2477,14 +2477,17 @@ def test_count_after_operations(test_session):
     # Test after filter
     filtered_chain = chain.filter(C("numbers") > 3)
     assert filtered_chain.count() == 2
+    assert chain.count() == 5  # Original chain unchanged
 
     # Test after select
     selected_chain = chain.select("numbers")
     assert selected_chain.count() == 5
+    assert chain.count() == 5  # Original chain unchanged
 
     # Test after map
     mapped_chain = chain.map(doubled=lambda numbers: numbers * 2, output=int)
     assert mapped_chain.count() == 5
+    assert chain.count() == 5  # Original chain unchanged
 
 
 def test_count_with_generation(test_session):
@@ -2500,6 +2503,7 @@ def test_count_with_generation(test_session):
     # Test after gen operation
     generated_chain = chain.gen(generate_items, output={"file": File, "item": str})
     assert generated_chain.count() == 5  # 2 + 3 = 5 total generated items
+    assert chain.count() == 2  # Original chain unchanged
 
 
 def test_count_with_aggregation(test_session):
@@ -2512,18 +2516,22 @@ def test_count_with_aggregation(test_session):
     # Test after group_by
     grouped_chain = chain.group_by(total=dc.func.sum("value"), partition_by="category")
     assert grouped_chain.count() == 3  # 3 categories: A, B, C
+    assert chain.count() == 5  # Original chain unchanged
 
 
 def test_count_with_union(test_session):
     """Test count with union operations."""
     chain1 = dc.read_values(numbers=[1, 2, 3], session=test_session)
-    chain2 = dc.read_values(numbers=[4, 5, 6], session=test_session)
+    chain2 = dc.read_values(numbers=[4, 5], session=test_session)
 
     assert chain1.count() == 3
-    assert chain2.count() == 3
+    assert chain2.count() == 2
 
     union_chain = chain1.union(chain2)
-    assert union_chain.count() == 6
+    assert union_chain.count() == 5
+    # Original chains should remain unchanged
+    assert chain1.count() == 3
+    assert chain2.count() == 2
 
 
 def test_count_with_subtract(test_session):
@@ -2536,21 +2544,24 @@ def test_count_with_subtract(test_session):
 
     subtracted_chain = chain1.subtract(chain2, on="numbers")
     assert subtracted_chain.count() == 3  # 1, 3, 5 remain
+    # Original chains should remain unchanged
+    assert chain1.count() == 5
+    assert chain2.count() == 2
 
 
 def test_count_persistence(test_session):
     """Test that count persists correctly after operations."""
     chain = dc.read_values(numbers=[1, 2, 3, 4, 5], session=test_session)
-    original_count = chain.count()
-    assert original_count == 5
+    assert chain.count() == 5
 
     # Apply various operations
-    chain = chain.limit(3).map(doubled=lambda numbers: numbers * 2, output=int)
-    assert chain.count() == 3
+    chain1 = chain.limit(3).map(doubled=lambda numbers: numbers * 2, output=int)
+    assert chain1.count() == 3
 
     # Test that count is consistent
-    assert chain.count() == 3
-    assert chain.count() == 3  # Should be idempotent
+    assert chain1.count() == 3
+    assert chain1.count() == 3  # Should be idempotent
+    assert chain.count() == 5  # Original chain unchanged
 
 
 def test_count_with_empty_results(test_session):
@@ -2562,8 +2573,9 @@ def test_count_with_empty_results(test_session):
     assert empty_chain.count() == 0
 
     # Limit to 0
-    zero_chain = chain.limit(0)
-    assert zero_chain.count() == 0
+    assert chain.limit(0).count() == 0
+    assert empty_chain.limit(0).count() == 0
+    assert chain.count() == 5
 
 
 @skip_if_not_sqlite
@@ -2575,9 +2587,194 @@ def test_count_in_memory(test_session):
     # Test with operations
     limited_chain = chain.limit(3)
     assert limited_chain.count() == 3
+    assert chain.count() == 5  # Original chain unchanged
 
     filtered_chain = chain.filter(C("numbers") > 3)
     assert filtered_chain.count() == 2
+    assert chain.count() == 5  # Original chain unchanged
+
+
+def test_distinct_basic(test_session):
+    """Test basic distinct functionality with simple data types."""
+    # Test with simple values - no duplicates
+    chain = dc.read_values(numbers=[1, 2, 3, 4, 5], session=test_session)
+    distinct_chain = chain.distinct("numbers")
+    assert distinct_chain.count() == 5
+    assert distinct_chain.to_values("numbers") == [1, 2, 3, 4, 5]
+
+    # Test with duplicates
+    chain = dc.read_values(numbers=[1, 2, 2, 3, 3, 3, 4], session=test_session)
+    distinct_chain = chain.distinct("numbers")
+    assert distinct_chain.count() == 4
+    assert sorted(distinct_chain.to_values("numbers")) == [1, 2, 3, 4]
+
+    # Test with strings
+    chain = dc.read_values(
+        names=["Alice", "Bob", "Alice", "Charlie", "Bob"], session=test_session
+    )
+    distinct_chain = chain.distinct("names")
+    assert distinct_chain.count() == 3
+    assert sorted(distinct_chain.to_values("names")) == ["Alice", "Bob", "Charlie"]
+
+
+def test_distinct_multiple_columns(test_session):
+    """Test distinct with multiple columns."""
+    chain = dc.read_values(
+        category=["A", "A", "B", "B", "C"], value=[1, 2, 1, 2, 2], session=test_session
+    )
+
+    # Test distinct on single column
+    distinct_category = chain.distinct("category")
+    assert distinct_category.count() == 3
+    assert sorted(distinct_category.to_values("category")) == ["A", "B", "C"]
+    distinct_value = chain.distinct("value")
+    assert distinct_value.count() == 2
+    assert sorted(distinct_value.to_values("value")) == [1, 2]
+
+    # Test distinct on multiple columns
+    distinct_both = chain.distinct("category", "value")
+    assert distinct_both.count() == 5  # All combinations are unique
+    assert sorted(distinct_both.to_list("category", "value")) == [
+        ("A", 1),
+        ("A", 2),
+        ("B", 1),
+        ("B", 2),
+        ("C", 2),
+    ]
+
+
+def test_distinct_with_complex_objects(test_session):
+    """Test distinct with complex objects like File and custom models."""
+    files = [
+        File(path="file1.txt", size=100),
+        File(path="file2.txt", size=200),
+        File(path="file1.txt", size=100),  # Duplicate
+        File(path="file3.txt", size=300),
+    ]
+
+    chain = dc.read_values(files=files, session=test_session)
+    distinct_chain = chain.distinct("files")
+    assert distinct_chain.count() == 3  # Removes duplicate file1.txt
+
+    # Test with nested objects
+    chain = dc.read_values(features=features_nested, session=test_session)
+    distinct_chain = chain.distinct("features")
+    assert distinct_chain.count() == 3  # All features are unique
+
+
+def test_distinct_with_nested_fields(test_session):
+    """Test distinct with nested field references."""
+    files = [
+        File(path="dir1/file1.txt", size=100),
+        File(path="dir1/file2.txt", size=200),
+        File(path="dir2/file1.txt", size=100),
+        File(path="dir1/file1.txt", size=150),  # Different size, same path
+    ]
+
+    chain = dc.read_values(files=files, session=test_session)
+
+    # Test distinct on nested field
+    distinct_path = chain.distinct("files.path")
+    assert distinct_path.count() == 3  # 3 unique paths
+    assert sorted(distinct_path.to_values("files.path")) == [
+        "dir1/file1.txt",
+        "dir1/file2.txt",
+        "dir2/file1.txt",
+    ]
+
+    # Test distinct on multiple nested fields
+    distinct_path_size = chain.distinct("files.path", "files.size")
+    assert distinct_path_size.count() == 4  # All combinations are unique
+
+
+def test_distinct_after_operations(test_session):
+    """Test distinct after various chain operations."""
+    chain = dc.read_values(
+        numbers=[1, 2, 2, 3, 3, 3, 4],
+        categories=["A", "A", "B", "B", "C", "C", "D"],
+        session=test_session,
+    )
+
+    # Test distinct after filter
+    filtered_chain = chain.filter(C("numbers") > 2)
+    distinct_filtered = filtered_chain.distinct("numbers")
+    assert distinct_filtered.count() == 2  # Only 3 and 4
+    assert sorted(distinct_filtered.to_values("numbers")) == [3, 4]
+
+    # Test distinct after map
+    mapped_chain = chain.map(doubled=lambda numbers: numbers * 2, output=int)
+    distinct_mapped = mapped_chain.distinct("doubled")
+    assert distinct_mapped.count() == 4  # 2, 4, 6, 8
+    assert sorted(distinct_mapped.to_values("doubled")) == [2, 4, 6, 8]
+
+    # Test distinct after select
+    selected_chain = chain.select("numbers")
+    distinct_selected = selected_chain.distinct("numbers")
+    assert distinct_selected.count() == 4
+    assert sorted(distinct_selected.to_values("numbers")) == [1, 2, 3, 4]
+
+
+def test_distinct_with_empty_chain(test_session):
+    """Test distinct with empty chain."""
+    chain = dc.read_values(numbers=[], session=test_session)
+    distinct_chain = chain.distinct("numbers")
+    assert distinct_chain.count() == 0
+
+
+def test_distinct_with_single_item(test_session):
+    """Test distinct with single item."""
+    chain = dc.read_values(numbers=[42], session=test_session)
+    distinct_chain = chain.distinct("numbers")
+    assert distinct_chain.count() == 1
+    assert distinct_chain.to_values("numbers") == [42]
+
+
+def test_distinct_with_all_duplicates(test_session):
+    """Test distinct when all values are duplicates."""
+    chain = dc.read_values(
+        numbers=[1, 1, 1, 1, 1],
+        categories=["A", "A", "A", "A", "A"],
+        session=test_session,
+    )
+
+    distinct_chain = chain.distinct("numbers")
+    assert distinct_chain.count() == 1
+    assert distinct_chain.to_values("numbers") == [1]
+
+    distinct_both = chain.distinct("numbers", "categories")
+    assert distinct_both.count() == 1
+    assert distinct_both.to_values("numbers") == [1]
+    assert distinct_both.to_values("categories") == ["A"]
+
+
+@skip_if_not_sqlite
+def test_distinct_in_memory(test_session):
+    """Test distinct functionality with in-memory database."""
+    chain = dc.read_values(numbers=[1, 2, 2, 3, 3, 3], in_memory=True)
+    distinct_chain = chain.distinct("numbers")
+    assert distinct_chain.count() == 3
+    assert sorted(distinct_chain.to_values("numbers")) == [1, 2, 3]
+
+
+def test_distinct_error_handling(test_session):
+    """Test distinct with invalid column names."""
+    chain = dc.read_values(numbers=[1, 2, 3], session=test_session)
+
+    # Test with non-existent column
+    with pytest.raises(SignalResolvingError):
+        chain.distinct("non_existent_column")
+
+    # Test with empty string
+    with pytest.raises(SignalResolvingError):
+        chain.distinct("")
+
+    # Test with invalid type
+    with pytest.raises(SignalResolvingTypeError):
+        chain.distinct(42)
+
+    # Test with invalid nested field
+    with pytest.raises(SignalResolvingError):
+        chain.distinct("numbers.invalid_field")
 
 
 def test_rename_column_with_mutate(test_session):
