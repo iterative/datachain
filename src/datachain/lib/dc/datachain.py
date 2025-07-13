@@ -1820,7 +1820,11 @@ class DataChain:
         )
         return read_pandas(*args, **kwargs)
 
-    def to_pandas(self, flatten=False, include_hidden=True) -> "pd.DataFrame":
+    def to_pandas(
+        self,
+        flatten: bool = False,
+        include_hidden: bool = True,
+    ) -> "pd.DataFrame":
         """Return a pandas DataFrame from the chain.
 
         Parameters:
@@ -1846,10 +1850,10 @@ class DataChain:
     def show(
         self,
         limit: int = 20,
-        flatten=False,
-        transpose=False,
-        truncate=True,
-        include_hidden=False,
+        flatten: bool = False,
+        transpose: bool = False,
+        truncate: bool = True,
+        include_hidden: bool = False,
     ) -> None:
         """Show a preview of the chain results.
 
@@ -2441,7 +2445,7 @@ class DataChain:
         """Shuffle the rows of the chain deterministically."""
         return self.order_by("sys.rand")
 
-    def sample(self, n) -> "Self":
+    def sample(self, n: int) -> "Self":
         """Return a random sample from the chain.
 
         Parameters:
