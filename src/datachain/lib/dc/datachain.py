@@ -974,7 +974,7 @@ class DataChain:
         query_func = getattr(self._query, method_name)
 
         new_schema = self.signals_schema.resolve(*args)
-        columns = [C(col) for col in new_schema.db_signals()]
+        columns = new_schema.db_signals(as_columns=True)
         return query_func(*columns, **kwargs)
 
     @resolve_columns

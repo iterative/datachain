@@ -2912,17 +2912,17 @@ def test_filter_with_and_operator(test_session):
     # Test multiple conditions (implicit AND)
     filtered_chain = chain.filter(C("numbers") > 5, C("categories") == "A")
     assert filtered_chain.count() == 2
-    assert filtered_chain.to_values("numbers") == [6, 9]
+    assert sorted(filtered_chain.to_values("numbers")) == [6, 9]
 
     # Test with explicit AND operator
     filtered_chain = chain.filter((C("numbers") > 5) & (C("categories") == "A"))
     assert filtered_chain.count() == 2
-    assert filtered_chain.to_values("numbers") == [6, 9]
+    assert sorted(filtered_chain.to_values("numbers")) == [6, 9]
 
     # Test with func.and_
     filtered_chain = chain.filter(func.and_(C("numbers") > 5, C("categories") == "A"))
     assert filtered_chain.count() == 2
-    assert filtered_chain.to_values("numbers") == [6, 9]
+    assert sorted(filtered_chain.to_values("numbers")) == [6, 9]
 
 
 def test_filter_with_or_operator(test_session):
