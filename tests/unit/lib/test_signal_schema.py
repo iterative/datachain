@@ -471,14 +471,20 @@ def test_resolve():
     assert signals["f.bb"] is str
 
 
-def test_resolve_error():
+@pytest.mark.parametrize(
+    "names",
+    [
+        ["bar"],
+        ["bar.age"],
+        ["age.foo"],
+        ["age", "f.aa", "f.bb", "f.cc"],
+        ["age", "f.aa", "f.bb", 37],
+    ],
+)
+def test_resolve_error(names):
     schema = SignalSchema({"age": float, "address": str, "f": MyType1})
-
     with pytest.raises(SignalResolvingError):
-        schema.resolve("age", "f.aa", "f.bb", "f.cc")
-
-    with pytest.raises(SignalResolvingError):
-        schema.resolve("age", "f.aa", "f.bb", 37)
+        schema.resolve(*names)
 
 
 def test_clone_without_file_signals():

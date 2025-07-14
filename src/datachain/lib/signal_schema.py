@@ -610,20 +610,25 @@ class SignalSchema:
         return SignalSchema(schema)
 
     def _find_in_tree(self, path: list[str]) -> DataType:
+        if val := self.tree.get(".".join(path)):
+            # If the path is a single string, we can directly access it
+            # without traversing the tree.
+            return val[0]
+
         curr_tree = self.tree
         curr_type = None
         i = 0
         while curr_tree is not None and i < len(path):
             if val := curr_tree.get(path[i]):
                 curr_type, curr_tree = val
-            elif i == 0 and len(path) > 1 and (val := curr_tree.get(".".join(path))):
-                curr_type, curr_tree = val
-                break
             else:
                 curr_type = None
+                break
             i += 1
 
-        if curr_type is None:
+        if curr_type is None or i < len(path):
+            # If we reached the end of the path and didn't find a type,
+            # or if we didn't traverse the entire path, raise an error.
             raise SignalResolvingError(path, "is not found")
 
         return curr_type
