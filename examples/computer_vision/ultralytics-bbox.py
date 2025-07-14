@@ -10,7 +10,7 @@ def process_bboxes(yolo: YOLO, file: dc.File) -> YoloBBoxes:
 
 
 (
-    dc.read_storage("gs://datachain-demo/openimages-v6-test-jsonpairs/")
+    dc.read_storage("gs://datachain-demo/openimages-v6-test-jsonpairs/", anon=True)
     .filter(dc.C("file.path").glob("*.jpg"))
     .limit(20)
     .setup(yolo=lambda: YOLO("yolo11n.pt"))

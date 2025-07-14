@@ -34,9 +34,6 @@ jobs:
           enable-cache: true
           cache-suffix: lint
           cache-dependency-glob: pyproject.toml
-          # revert after this is fixed
-          # https://github.com/wntrblm/nox/issues/953
-          version: ">=0.6,<0.7"
 
       - name: Install nox
         run: uv pip install nox --system
@@ -81,9 +78,6 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
-      - name: Set up FFmpeg
-        uses: AnimMouse/setup-ffmpeg@v1
-
       - name: Set up Python ${{ matrix.pyv }}
         uses: actions/setup-python@v5
         with:
@@ -95,9 +89,22 @@ jobs:
           enable-cache: true
           cache-suffix: tests-${{ matrix.pyv }}
           cache-dependency-glob: pyproject.toml
-          # revert after this is fixed
-          # https://github.com/wntrblm/nox/issues/953
-          version: ">=0.6,<0.7"
+
+      - name: Install FFmpeg on Windows
+        if: runner.os == 'Windows'
+        run: choco install ffmpeg
+
+      - name: Install FFmpeg on macOS
+        if: runner.os == 'macOS'
+        run: |
+          brew install ffmpeg
+          echo 'DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib' >> "$GITHUB_ENV"
+
+      - name: Install FFmpeg on Ubuntu
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt update
+          sudo apt install -y ffmpeg
 
       - name: Install nox
         run: uv pip install nox --system
@@ -165,9 +172,6 @@ jobs:
           enable-cache: true
           cache-suffix: examples-${{ matrix.pyv }}
           cache-dependency-glob: pyproject.toml
-          # revert after this is fixed
-          # https://github.com/wntrblm/nox/issues/953
-          version: ">=0.6,<0.7"
 
       - name: Install nox
         run: uv pip install nox --system

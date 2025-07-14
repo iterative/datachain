@@ -446,14 +446,14 @@ class SignalSchema:
                 res[db_name] = python_to_sql(type_)
         return res
 
-    def row_to_objs(self, row: Sequence[Any]) -> list[DataValue]:
+    def row_to_objs(self, row: Sequence[Any]) -> list[Any]:
         self._init_setup_values()
 
-        objs: list[DataValue] = []
+        objs: list[Any] = []
         pos = 0
         for name, fr_type in self.values.items():
-            if self.setup_values and (val := self.setup_values.get(name, None)):
-                objs.append(val)
+            if self.setup_values and name in self.setup_values:
+                objs.append(self.setup_values.get(name))
             elif (fr := ModelStore.to_pydantic(fr_type)) is not None:
                 j, pos = unflatten_to_json_pos(fr, row, pos)
                 objs.append(fr(**j))
@@ -589,6 +589,9 @@ class SignalSchema:
         ]
 
         if name:
+            if "." in name:
+                name = name.replace(".", "__")
+
             signals = [
                 s
                 for s in signals
@@ -607,23 +610,37 @@ class SignalSchema:
         return SignalSchema(schema)
 
     def _find_in_tree(self, path: list[str]) -> DataType:
+        if val := self.tree.get(".".join(path)):
+            # If the path is a single string, we can directly access it
+            # without traversing the tree.
+            return val[0]
+
         curr_tree = self.tree
         curr_type = None
         i = 0
         while curr_tree is not None and i < len(path):
             if val := curr_tree.get(path[i]):
                 curr_type, curr_tree = val
-            elif i == 0 and len(path) > 1 and (val := curr_tree.get(".".join(path))):
-                curr_type, curr_tree = val
-                break
             else:
                 curr_type = None
+                break
             i += 1
 
-        if curr_type is None:
+        if curr_type is None or i < len(path):
+            # If we reached the end of the path and didn't find a type,
+            # or if we didn't traverse the entire path, raise an error.
             raise SignalResolvingError(path, "is not found")
 
         return curr_type
+
+    def group_by(
+        self, partition_by: Sequence[str], new_column: Sequence[Column]
+    ) -> "SignalSchema":
+        orig_schema = SignalSchema(copy.deepcopy(self.values))
+        schema = orig_schema.to_partial(*partition_by)
+
+        vals = {c.name: sql_to_python(c) for c in new_column}
+        return SignalSchema(schema.values | vals)
 
     def select_except_signals(self, *args: str) -> "SignalSchema":
         def has_signal(signal: str):
@@ -888,7 +905,7 @@ class SignalSchema:
 
         return res
 
-    def to_partial(self, *columns: str) -> "SignalSchema":
+    def to_partial(self, *columns: str) -> "SignalSchema":  # noqa: C901
         """
         Convert the schema to a partial schema with only the specified columns.
 
@@ -931,9 +948,15 @@ class SignalSchema:
         partial_versions: dict[str, int] = {}
 
         def _type_name_to_partial(signal_name: str, type_name: str) -> str:
-            if "@" not in type_name:
+            # Check if we need to create a partial for this type
+            # Only create partials for custom types that are in the custom_types dict
+            if type_name not in custom_types:
                 return type_name
-            model_name, _ = ModelStore.parse_name_version(type_name)
+
+            if "@" in type_name:
+                model_name, _ = ModelStore.parse_name_version(type_name)
+            else:
+                model_name = type_name
 
             if signal_name not in signal_partials:
                 partial_versions.setdefault(model_name, 0)
@@ -957,6 +980,14 @@ class SignalSchema:
                     parent_type_partial = _type_name_to_partial(signal, parent_type)
 
                     schema[signal] = parent_type_partial
+
+                    # If this is a complex signal without field specifier (just "file")
+                    # and it's a custom type, include the entire complex signal
+                    if len(column_parts) == 1 and parent_type in custom_types:
+                        # Include the entire complex signal - no need to create partial
+                        schema[signal] = parent_type
+                        continue
+
                     continue
 
                 if parent_type not in custom_types:
@@ -971,6 +1002,20 @@ class SignalSchema:
                         f"Field {signal} not found in custom type {parent_type}"
                     )
 
+                # Check if this is the last part and if the column type is a complex
+                is_last_part = i == len(column_parts) - 1
+                is_complex_signal = signal_type in custom_types
+
+                if is_last_part and is_complex_signal:
+                    schema[column] = signal_type
+                    # Also need to remove the partial schema entry we created for the
+                    # parent since we're promoting the nested complex column to root
+                    parent_signal = column_parts[0]
+                    schema.pop(parent_signal, None)
+                    # Don't create partial types for this case
+                    break
+
+                # Create partial type for this field
                 partial_type = _type_name_to_partial(
                     ".".join(column_parts[: i + 1]),
                     signal_type,

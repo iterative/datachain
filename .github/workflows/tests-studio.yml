@@ -75,8 +75,21 @@ jobs:
           path: './backend/datachain'
           fetch-depth: 0
 
-      - name: Set up FFmpeg
-        uses: AnimMouse/setup-ffmpeg@v1
+      - name: Install FFmpeg on Windows
+        if: runner.os == 'Windows'
+        run: choco install ffmpeg
+
+      - name: Install FFmpeg on macOS
+        if: runner.os == 'macOS'
+        run: |
+          brew install ffmpeg
+          echo 'DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib' >> "$GITHUB_ENV"
+
+      - name: Install FFmpeg on Ubuntu
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt update
+          sudo apt install -y ffmpeg
 
       - name: Set up Python ${{ matrix.pyv }}
         uses: actions/setup-python@v5

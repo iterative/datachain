@@ -5,7 +5,7 @@ from datachain import func
 from tests.utils import skip_if_not_sqlite
 
 
-def test_conditional_and_or(test_session):
+def test_conditional_and_or_not(test_session):
     class Data(dc.DataModel):
         i: int
         f: float
@@ -25,11 +25,12 @@ def test_conditional_and_or(test_session):
             t2=func.and_(dc.C("data.i") > 15, dc.C("data.f") > 2.5),
             t3=func.or_(dc.C("data.i") > 15, dc.C("data.f") > 1.5),
             t4=func.or_(dc.C("data.i") > 15, dc.C("data.f") > 2.5),
+            t5=func.not_(dc.C("data.i") > 15),
         )
         .order_by("id")
-    ).to_list("t1", "t2", "t3", "t4")
+    ).to_list("t1", "t2", "t3", "t4", "t5")
 
-    assert ds == [(0, 0, 0, 0), (1, 0, 1, 1), (1, 1, 1, 1)]
+    assert ds == [(0, 0, 0, 0, 1), (1, 0, 1, 1, 0), (1, 1, 1, 1, 0)]
 
 
 def test_conditional_case(test_session):

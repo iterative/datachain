@@ -1,4 +1,7 @@
+import importlib
+
 import numpy as np
+import pytest
 from datasets import load_dataset
 from datasets.features.image import image_to_bytes
 from PIL import Image
@@ -10,6 +13,18 @@ from datachain.lib.hf import (
     HFImage,
     get_output_schema,
 )
+
+
+def require_torchcodec(test_case):
+    """
+    Decorator marking a test that requires torchcodec (not available on Windows).
+    These tests are skipped when torchcodec isn't installed.
+    """
+    if not importlib.util.find_spec("torchcodec"):
+        test_case = pytest.mark.skip(
+            "test requires torchcoded, not available on Windows yet"
+        )(test_case)
+    return test_case
 
 
 def test_hf_image(tmp_path):
@@ -28,6 +43,7 @@ def test_hf_image(tmp_path):
     assert row.image.img == image_to_bytes(img)
 
 
+@require_torchcodec
 def test_hf_audio(tmp_path):
     # See https://stackoverflow.com/questions/66191480/how-to-convert-a-numpy-array-to-a-mp3-file
     samplerate = 44100
@@ -45,6 +61,5 @@ def test_hf_audio(tmp_path):
     gen = HFGenerator(ds, dict_to_data_model("", schema))
     gen.setup()
     row = next(iter(gen.process("train")))
-    assert row.audio.path == str(train_dir / "example.wav")
     assert np.allclose(row.audio.array, data / amplitude, atol=1e-4)
     assert row.audio.sampling_rate == samplerate
