@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import ClassVar, Optional, Union, get_args, get_origin
 
 from pydantic import AliasChoices, BaseModel, Field, create_model
+from pydantic.fields import FieldInfo
 
 from datachain.lib.model_store import ModelStore
 from datachain.lib.utils import normalize_col_names
@@ -89,7 +90,16 @@ def dict_to_data_model(
     }
 
     class _DataModelStrict(BaseModel, extra="forbid"):
-        pass
+        @classmethod
+        def _model_fields_by_aliases(cls) -> dict[str, tuple[str, FieldInfo]]:
+            """Returns a map of aliases to original field names and info."""
+            field_info = {}
+            for _name, field in cls.model_fields.items():
+                assert isinstance(field.validation_alias, AliasChoices)
+                # Add mapping for all aliases (both normalized and original names)
+                for alias in field.validation_alias.choices:
+                    field_info[str(alias)] = (_name, field)
+            return field_info
 
     return create_model(
         name,

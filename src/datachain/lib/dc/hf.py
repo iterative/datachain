@@ -32,6 +32,7 @@ def read_hf(
     Parameters:
         dataset : Path or name of the dataset to read from Hugging Face Hub,
             or an instance of `datasets.Dataset`-like object.
+        args : Additional positional arguments to pass to datasets.load_dataset.
         session : Session to use for the chain.
         settings : Settings to use for the chain.
         column : Generated object column name.
@@ -64,8 +65,9 @@ def read_hf(
 
     model_name = model_name or column or ""
     hf_features = next(iter(ds_dict.values())).features
-    output = output | get_output_schema(hf_features)
-    model = dict_to_data_model(model_name, output)
+    hf_output, normalized_names = get_output_schema(hf_features, list(output.keys()))
+    output = output | hf_output
+    model = dict_to_data_model(model_name, output, list(normalized_names.values()))
     if column:
         output = {column: model}
 
