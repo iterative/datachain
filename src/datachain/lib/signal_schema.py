@@ -550,7 +550,7 @@ class SignalSchema:
     ) -> None:
         if isinstance(obj, File):
             obj._set_stream(catalog, caching_enabled=cache)
-        for field, finfo in obj.model_fields.items():
+        for field, finfo in type(obj).model_fields.items():
             if ModelStore.is_pydantic(finfo.annotation):
                 SignalSchema._set_file_stream(getattr(obj, field), catalog, cache)
 
