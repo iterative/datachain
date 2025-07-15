@@ -282,7 +282,7 @@ class UDFBase(AbstractUDF):
 
         # Check all fields for nested File objects, but only for DataModel objects
         if isinstance(obj, DataModel):
-            for field_name in obj.model_fields:
+            for field_name in type(obj).model_fields:
                 field_value = getattr(obj, field_name, None)
                 if isinstance(field_value, DataModel):
                     self._set_stream_recursive(field_value, catalog, cache, download_cb)
