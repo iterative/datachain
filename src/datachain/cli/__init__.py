@@ -120,11 +120,7 @@ def handle_cp_command(args, catalog: "Catalog"):
 
     config = Config().read().get("studio", {})
     token = config.get("token")
-    if not token:
-        local = True
-    else:
-        local = args.local
-
+    local = True if not token else args.local
     if local:
         return catalog.cp(
             [args.source_path],
