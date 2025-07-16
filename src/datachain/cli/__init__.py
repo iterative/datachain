@@ -3,8 +3,9 @@ import os
 import sys
 import traceback
 from multiprocessing import freeze_support
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
+from datachain.cli.commands.storages import cp_storage
 from datachain.cli.utils import get_logging_level
 
 from .commands import (
@@ -23,6 +24,9 @@ from .commands import (
 from .parser import get_parser
 
 logger = logging.getLogger("datachain")
+
+if TYPE_CHECKING:
+    from datachain.catalog import Catalog
 
 
 def main(argv: Optional[list[str]] = None) -> int:
@@ -78,7 +82,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
 def handle_command(args, catalog, client_config) -> int:
     """Handle the different CLI commands."""
-    from datachain.cli.commands.storages import process_storage_command
+    from datachain.cli.commands.storages import mv_storage, rm_storage
     from datachain.studio import process_auth_cli_args, process_jobs_args
 
     command_handlers = {
@@ -97,7 +101,8 @@ def handle_command(args, catalog, client_config) -> int:
         "gc": lambda: garbage_collect(catalog),
         "auth": lambda: process_auth_cli_args(args),
         "job": lambda: process_jobs_args(args),
-        "storage": lambda: process_storage_command(args),
+        "mv": lambda: mv_storage(args),
+        "rm": lambda: rm_storage(args),
     }
 
     handler = command_handlers.get(args.command)
@@ -110,15 +115,27 @@ def handle_command(args, catalog, client_config) -> int:
     return 1
 
 
-def handle_cp_command(args, catalog):
-    catalog.cp(
-        args.sources,
-        args.output,
-        force=bool(args.force),
-        update=bool(args.update),
-        recursive=bool(args.recursive),
-        no_glob=args.no_glob,
-    )
+def handle_cp_command(args, catalog: "Catalog"):
+    from datachain.config import Config
+
+    config = Config().read().get("studio", {})
+    token = config.get("token")
+    if not token:
+        local = True
+    else:
+        local = args.local
+
+    if local:
+        return catalog.cp(
+            [args.source_path],
+            args.destination_path,
+            force=bool(args.force),
+            update=bool(args.update),
+            recursive=bool(args.recursive),
+            no_glob=args.no_glob,
+        )
+
+    return cp_storage(args)
 
 
 def handle_clone_command(args, catalog):

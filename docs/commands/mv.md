@@ -1,16 +1,16 @@
-# storage mv
+# mv
 
-Move files and directories in storage using Studio.
+Move storage files and directories through Studio.
 
 ## Synopsis
 
 ```usage
-usage: datachain storage mv [-h] [-v] [-q] [--recursive] [--team TEAM] path new_path
+usage: datachain mv [-h] [-v] [-q] [--recursive] [--team TEAM] path new_path
 ```
 
 ## Description
 
-This command moves files and directories within storage using the credentials configured in Studio.. The move operation is performed within the same bucket - you cannot move files between different buckets. The command supports both individual files and directories, with the `--recursive` flag required for moving directories.
+This command moves files and directories within storage using the credentials configured in Studio. The move operation is performed within the same bucket - you cannot move files between different buckets. The command supports both individual files and directories, with the `--recursive` flag required for moving directories.
 
 ## Arguments
 
@@ -29,27 +29,27 @@ This command moves files and directories within storage using the credentials co
 
 1. Move a single file:
 ```bash
-datachain storage mv s3://my-bucket/data/file.txt s3://my-bucket/archive/file.txt
+datachain mv s3://my-bucket/data/file.txt s3://my-bucket/archive/file.txt
 ```
 
 2. Move a directory recursively:
 ```bash
-datachain storage mv --recursive s3://my-bucket/data/images s3://my-bucket/archive/images
+datachain mv --recursive s3://my-bucket/data/images s3://my-bucket/archive/images
 ```
 
 3. Move a file to a different team's storage:
 ```bash
-datachain storage mv --team other-team s3://my-bucket/data/file.txt s3://my-bucket/backup/file.txt
+datachain mv --team other-team s3://my-bucket/data/file.txt s3://my-bucket/backup/file.txt
 ```
 
 4. Move a file with verbose output:
 ```bash
-datachain storage mv -v s3://my-bucket/data/file.txt s3://my-bucket/processed/file.txt
+datachain mv -v s3://my-bucket/data/file.txt s3://my-bucket/processed/file.txt
 ```
 
 5. Move a directory to a subdirectory:
 ```bash
-datachain storage mv --recursive s3://my-bucket/datasets/raw s3://my-bucket/datasets/processed/raw
+datachain mv --recursive s3://my-bucket/datasets/raw s3://my-bucket/datasets/processed/raw
 ```
 
 ## Supported Storage Protocols
@@ -58,7 +58,6 @@ The command supports the following storage protocols:
 - **AWS S3**: `s3://bucket-name/path`
 - **Google Cloud Storage**: `gs://bucket-name/path`
 - **Azure Blob Storage**: `az://container-name/path`
-- **Local file system**: `file:///path/to/directory`
 
 ## Limitations and Edge Cases
 
@@ -69,8 +68,6 @@ The command supports the following storage protocols:
 - **Recursive flag required**: Moving directories requires the `--recursive` flag. Without it, the operation will fail
 - **Directory structure preservation**: When moving directories, the internal structure is preserved
 
-### Path Handling
-- **Relative vs absolute paths**: Both relative and absolute paths within the bucket are supported
 
 ### Error Handling
 - **File not found**: If the source file or directory doesn't exist, the operation will fail
