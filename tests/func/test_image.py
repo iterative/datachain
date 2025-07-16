@@ -42,6 +42,34 @@ def test_image_save(tmp_path, image_file, format):
     assert img.size == (256, 256)
 
 
+def test_image_save_no_extension(tmp_path, image_file):
+    image_file = image_file.as_image_file()
+    filename = f"{tmp_path}/test"
+    with pytest.raises(FileError):
+        image_file.save(filename)
+
+
+@pytest.mark.parametrize("format", [None, "JPEG", "PNG"])
+def test_image_save_cloud(cloud_test_catalog_upload, image_file, format):
+    """Test saving ImageFile to different cloud filesystems (S3, GCS, Azure)."""
+    ctc = cloud_test_catalog_upload
+    image_file = image_file.as_image_file()
+    image_file._set_stream(ctc.catalog)
+
+    # Save to cloud storage with the specified format
+    cloud_filename = f"{ctc.src_uri}/test_image.jpg"
+    image_file.save(cloud_filename, format=format, client_config=ctc.client_config)
+
+    # Verify the saved file by reading it back
+    saved_image_file = ImageFile(path="test_image.jpg", source=ctc.src_uri)
+    saved_image_file._set_stream(ctc.catalog)
+
+    # Read the saved image and verify it
+    saved_img = saved_image_file.read()
+    assert saved_img.format == (format or "JPEG")
+    assert saved_img.size == (256, 256)
+
+
 def test_get_info(image_file):
     info = image_file.as_image_file().get_info()
     assert info.model_dump() == {"width": 256, "height": 256, "format": "JPEG"}
