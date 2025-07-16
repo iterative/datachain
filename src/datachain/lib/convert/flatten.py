@@ -6,12 +6,14 @@ from datachain.lib.model_store import ModelStore
 
 
 def flatten(obj: BaseModel) -> tuple:
-    return tuple(_flatten_fields_values(obj.model_fields, obj))
+    return tuple(_flatten_fields_values(type(obj).model_fields, obj))
 
 
 def flatten_list(obj_list: list[BaseModel]) -> tuple:
     return tuple(
-        val for obj in obj_list for val in _flatten_fields_values(obj.model_fields, obj)
+        val
+        for obj in obj_list
+        for val in _flatten_fields_values(type(obj).model_fields, obj)
     )
 
 
@@ -43,4 +45,4 @@ def _flatten_fields_values(fields: dict, obj: BaseModel) -> Generator:
 
 
 def _flatten(obj: BaseModel) -> tuple:
-    return tuple(_flatten_fields_values(obj.model_fields, obj))
+    return tuple(_flatten_fields_values(type(obj).model_fields, obj))

@@ -3,6 +3,7 @@ from typing import Optional, Union
 from sqlalchemy import ColumnElement
 from sqlalchemy import and_ as sql_and
 from sqlalchemy import case as sql_case
+from sqlalchemy import not_ as sql_not
 from sqlalchemy import or_ as sql_or
 
 from datachain.lib.utils import DataChainParamsError
@@ -288,3 +289,36 @@ def and_(*args: Union[ColumnElement, Func]) -> Func:
             func_args.append(arg)
 
     return Func("and", inner=sql_and, cols=cols, args=func_args, result_type=bool)
+
+
+def not_(arg: Union[ColumnElement, Func]) -> Func:
+    """
+    Returns the function that produces NOT of the given expressions.
+
+    Args:
+        arg (ColumnElement | Func): The expression for NOT statement.
+            If a string is provided, it is assumed to be the name of the column.
+            If a Column is provided, it is assumed to be a column in the dataset.
+            If a Func is provided, it is assumed to be a function returning a value.
+
+    Returns:
+        Func: A `Func` object that represents the NOT function.
+
+    Example:
+        ```py
+        dc.mutate(
+            test=not_(C("value") == 5)
+        )
+        ```
+
+    Notes:
+        - The result column will always be of type bool.
+    """
+    cols, func_args = [], []
+
+    if isinstance(arg, (str, Func)):
+        cols.append(arg)
+    else:
+        func_args.append(arg)
+
+    return Func("not", inner=sql_not, cols=cols, args=func_args, result_type=bool)

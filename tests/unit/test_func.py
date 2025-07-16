@@ -11,6 +11,7 @@ from datachain.func import (
     int_hash_64,
     isnone,
     literal,
+    not_,
     or_,
 )
 from datachain.func.array import contains
@@ -361,6 +362,18 @@ def test_and_func_mutate(chain):
     )
     assert list(res.order_by("num").to_values("test")) == [
         "Not Match",
+        "Match",
+        "Match",
+        "Not Match",
+        "Not Match",
+    ]
+
+
+@skip_if_not_sqlite
+def test_not_func_mutate(chain):
+    res = chain.mutate(test=ifelse(not_(dc.C("num") > 3), "Match", "Not Match"))
+    assert list(res.order_by("num").to_values("test")) == [
+        "Match",
         "Match",
         "Match",
         "Not Match",

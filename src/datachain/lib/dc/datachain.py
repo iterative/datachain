@@ -15,6 +15,7 @@ from typing import (
     Optional,
     TypeVar,
     Union,
+    cast,
     overload,
 )
 
@@ -32,7 +33,13 @@ from datachain.func import literal
 from datachain.func.base import Function
 from datachain.func.func import Func
 from datachain.lib.convert.python_to_sql import python_to_sql
-from datachain.lib.data_model import DataModel, DataType, DataValue, dict_to_data_model
+from datachain.lib.data_model import (
+    DataModel,
+    DataType,
+    DataValue,
+    StandardType,
+    dict_to_data_model,
+)
 from datachain.lib.file import (
     EXPORT_FILES_MAX_THREADS,
     ArrowRow,
@@ -47,7 +54,7 @@ from datachain.lib.udf_signature import UdfSignature
 from datachain.lib.utils import DataChainColumnError, DataChainParamsError
 from datachain.query import Session
 from datachain.query.dataset import DatasetQuery, PartitionByType
-from datachain.query.schema import DEFAULT_DELIMITER, Column, ColumnMeta
+from datachain.query.schema import DEFAULT_DELIMITER, Column
 from datachain.sql.functions import path as pathfunc
 from datachain.utils import batched_it, inside_notebook, row_to_nested_dict
 
@@ -357,14 +364,6 @@ class DataChain:
     def reset_settings(self, settings: Optional[Settings] = None) -> "Self":
         """Reset all settings to default values."""
         self._settings = settings if settings else Settings()
-        return self
-
-    def reset_schema(self, signals_schema: SignalSchema) -> "Self":
-        self.signals_schema = signals_schema
-        return self
-
-    def add_schema(self, signals_schema: SignalSchema) -> "Self":
-        self.signals_schema |= signals_schema
         return self
 
     @classmethod
@@ -868,8 +867,10 @@ class DataChain:
             processed_partition_columns: list[ColumnElement] = []
             for col in list_partition_by:
                 if isinstance(col, str):
-                    columns = self._process_complex_signal_column(col)
-                    processed_partition_columns.extend(columns)
+                    columns = self.signals_schema.db_signals(name=col, as_columns=True)
+                    if not columns:
+                        raise SignalResolvingError([col], "is not found")
+                    processed_partition_columns.extend(cast("list[Column]", columns))
                 elif isinstance(col, Function):
                     column = col.get_column(self.signals_schema)
                     processed_partition_columns.append(column)
@@ -955,42 +956,8 @@ class DataChain:
         query_func = getattr(self._query, method_name)
 
         new_schema = self.signals_schema.resolve(*args)
-        columns = [C(col) for col in new_schema.db_signals()]
+        columns = new_schema.db_signals(as_columns=True)
         return query_func(*columns, **kwargs)
-
-    def _process_complex_signal_column(self, column_name: str) -> list[Column]:
-        """Process complex column names for partition_by.
-
-        Args:
-            column_name: The column name to process (e.g., "file" or "nested.file")
-
-        Returns:
-            List of Column objects, complex column will be expanded.
-        """
-        col_db_name = ColumnMeta.to_db_name(column_name)
-
-        try:
-            # If this is a db field (including nested path, e.g., "nested.level1.name"),
-            # we can resolve it directly
-            col_type = self.signals_schema.get_column_type(col_db_name)
-            # If we can resolve the exact path, return it as a single column
-            return [Column(col_db_name, python_to_sql(col_type))]
-        except SignalResolvingError:
-            # If exact path resolution fails, fall back to the complex expansion
-            pass
-
-        col_type = self.signals_schema.get_column_type(col_db_name, with_subtree=True)
-
-        if type_ := ModelStore.to_pydantic(col_type):
-            all_columns = []
-            keys = list(type_.model_fields.keys())
-            for key in keys:
-                key_col_name = f"{column_name}.{key}"
-                key_columns = self._process_complex_signal_column(key_col_name)
-                all_columns.extend(key_columns)
-            return all_columns
-
-        return [Column(col_db_name, python_to_sql(col_type))]
 
     @resolve_columns
     def order_by(self, *args, descending: bool = False) -> "Self":
@@ -1096,9 +1063,11 @@ class DataChain:
 
         for col in partition_by:
             if isinstance(col, str):
-                columns = self._process_complex_signal_column(col)
-                # columns = self.signals_schema.db_signals(col, as_columns=True)
-                partition_by_columns.extend(columns)
+                columns = self.signals_schema.db_signals(name=col, as_columns=True)
+                if not columns:
+                    raise SignalResolvingError([col], "is not found")
+                partition_by_columns.extend(cast("list[Column]", columns))
+
                 # For nested field references (e.g., "nested.level1.name"),
                 # we need to distinguish between:
                 # 1. References to fields within a complex signal (create partials)
@@ -1116,7 +1085,7 @@ class DataChain:
                         schema_partition_by.append(col)
                     else:
                         # BaseModel or other - add flattened columns directly
-                        for column in columns:
+                        for column in cast("list[Column]", columns):
                             col_type = self.signals_schema.get_column_type(column.name)
                             schema_fields[column.name] = col_type
                         schema_partition_by.append(col)
@@ -1128,7 +1097,7 @@ class DataChain:
                     )
                     if isinstance(col_type, type) and issubclass(col_type, BaseModel):
                         # Complex signal - add only the partitioning columns
-                        for column in columns:
+                        for column in cast("list[Column]", columns):
                             col_type = self.signals_schema.get_column_type(column.name)
                             schema_fields[column.name] = col_type
                         schema_partition_by.append(col)
@@ -1473,10 +1442,6 @@ class DataChain:
             dc_settings=chain._settings,
             remove_prefetched=remove_prefetched,
         )
-
-    def remove_file_signals(self) -> "Self":
-        schema = self.signals_schema.clone_without_file_signals()
-        return self.select(*schema.values.keys())
 
     @delta_disabled
     def merge(
@@ -1832,12 +1797,19 @@ class DataChain:
         )
         return read_pandas(*args, **kwargs)
 
-    def to_pandas(self, flatten=False, include_hidden=True) -> "pd.DataFrame":
+    def to_pandas(
+        self,
+        flatten: bool = False,
+        include_hidden: bool = True,
+    ) -> "pd.DataFrame":
         """Return a pandas DataFrame from the chain.
 
         Parameters:
-            flatten : Whether to use a multiindex or flatten column names.
-            include_hidden : Whether to include hidden columns.
+            flatten: Whether to use a multiindex or flatten column names.
+            include_hidden: Whether to include hidden columns.
+
+        Returns:
+            pd.DataFrame: A pandas DataFrame representation of the chain.
         """
         import pandas as pd
 
@@ -1855,19 +1827,19 @@ class DataChain:
     def show(
         self,
         limit: int = 20,
-        flatten=False,
-        transpose=False,
-        truncate=True,
-        include_hidden=False,
+        flatten: bool = False,
+        transpose: bool = False,
+        truncate: bool = True,
+        include_hidden: bool = False,
     ) -> None:
         """Show a preview of the chain results.
 
         Parameters:
-            limit : How many rows to show.
-            flatten : Whether to use a multiindex or flatten column names.
-            transpose : Whether to transpose rows and columns.
-            truncate : Whether or not to truncate the contents of columns.
-            include_hidden : Whether to include hidden columns.
+            limit: How many rows to show.
+            flatten: Whether to use a multiindex or flatten column names.
+            transpose: Whether to transpose rows and columns.
+            truncate: Whether or not to truncate the contents of columns.
+            include_hidden: Whether to include hidden columns.
         """
         import pandas as pd
 
@@ -2297,21 +2269,73 @@ class DataChain:
         )
         return read_records(*args, **kwargs)
 
-    def sum(self, fr: DataType):  # type: ignore[override]
-        """Compute the sum of a column."""
-        return self._extend_to_data_model("sum", fr)
+    def sum(self, col: str) -> StandardType:  # type: ignore[override]
+        """Compute the sum of a column.
 
-    def avg(self, fr: DataType):  # type: ignore[override]
-        """Compute the average of a column."""
-        return self._extend_to_data_model("avg", fr)
+        Parameters:
+            col: The column to compute the sum for.
 
-    def min(self, fr: DataType):  # type: ignore[override]
-        """Compute the minimum of a column."""
-        return self._extend_to_data_model("min", fr)
+        Returns:
+            The sum of the column values.
 
-    def max(self, fr: DataType):  # type: ignore[override]
-        """Compute the maximum of a column."""
-        return self._extend_to_data_model("max", fr)
+        Example:
+            ```py
+            total_size = chain.sum("file.size")
+            print(f"Total size: {total_size}")
+            ```
+        """
+        return self._extend_to_data_model("sum", col)
+
+    def avg(self, col: str) -> StandardType:  # type: ignore[override]
+        """Compute the average of a column.
+
+        Parameters:
+            col: The column to compute the average for.
+
+        Returns:
+            The average of the column values.
+
+        Example:
+            ```py
+            average_size = chain.avg("file.size")
+            print(f"Average size: {average_size}")
+            ```
+        """
+        return self._extend_to_data_model("avg", col)
+
+    def min(self, col: str) -> StandardType:  # type: ignore[override]
+        """Compute the minimum of a column.
+
+        Parameters:
+            col: The column to compute the minimum for.
+
+        Returns:
+            The minimum value in the column.
+
+        Example:
+            ```py
+            min_size = chain.min("file.size")
+            print(f"Minimum size: {min_size}")
+            ```
+        """
+        return self._extend_to_data_model("min", col)
+
+    def max(self, col: str) -> StandardType:  # type: ignore[override]
+        """Compute the maximum of a column.
+
+        Parameters:
+            col: The column to compute the maximum for.
+
+        Returns:
+            The maximum value in the column.
+
+        Example:
+            ```py
+            max_size = chain.max("file.size")
+            print(f"Maximum size: {max_size}")
+            ```
+        """
+        return self._extend_to_data_model("max", col)
 
     def setup(self, **kwargs) -> "Self":
         """Setup variables to pass to UDF functions.
@@ -2422,14 +2446,15 @@ class DataChain:
         """Shuffle the rows of the chain deterministically."""
         return self.order_by("sys.rand")
 
-    def sample(self, n) -> "Self":
+    def sample(self, n: int) -> "Self":
         """Return a random sample from the chain.
 
         Parameters:
-            n (int): Number of samples to draw.
+            n: Number of samples to draw.
 
-        NOTE: Samples are not deterministic, and streamed/paginated queries or
-        multiple workers will draw samples with replacement.
+        Note:
+            Samples are not deterministic, and streamed/paginated queries or
+            multiple workers will draw samples with replacement.
         """
         return self._evolve(query=self._query.sample(n))
 
@@ -2536,6 +2561,10 @@ class DataChain:
     def chunk(self, index: int, total: int) -> "Self":
         """Split a chain into smaller chunks for e.g. parallelization.
 
+        Parameters:
+            index: The index of the chunk (0-indexed).
+            total: The total number of chunks.
+
         Example:
             ```py
             import datachain as dc
@@ -2555,7 +2584,7 @@ class DataChain:
         """Returns a list of rows of values, optionally limited to the specified
         columns.
 
-        Args:
+        Parameters:
             *cols: Limit to the specified columns. By default, all columns are selected.
 
         Returns:
@@ -2585,7 +2614,7 @@ class DataChain:
     def to_values(self, col: str) -> list[DataValue]:
         """Returns a flat list of values from a single column.
 
-        Args:
+        Parameters:
             col: The name of the column to extract values from.
 
         Returns:
