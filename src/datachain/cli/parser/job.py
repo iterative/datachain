@@ -17,7 +17,12 @@ def add_jobs_parser(subparsers, parent_parser) -> None:
     )
 
     studio_run_help = "Run a job in Studio"
-    studio_run_description = "Run a job in Studio."
+    studio_run_description = "Run a job in Studio. \n"
+    studio_run_description += (
+        "When using --start-time or --cron,"
+        " the job is scheduled as a task and will not show logs immediately."
+        " The job will be executed according to the schedule."
+    )
 
     studio_run_parser = jobs_subparser.add_parser(
         "run",
@@ -99,19 +104,10 @@ def add_jobs_parser(subparsers, parent_parser) -> None:
     studio_run_parser.add_argument(
         "--start-time",
         action="store",
-        help="Start time for the cron task. \n"
-        "Supports various formats including natural language: "
-        "'2024-01-15 14:30:00', 'tomorrow 3pm', 'next monday 9am', "
-        "'2024-01-15T14:30:00Z', 'in 2 hours', 'Jan 15, 2024 2:30 PM', etc. "
-        "If cron expression is provided, the cron job will activate after this time. "
-        "Otherwise, the job will run once at this time.",
+        help="Start time in ISO format or natural language for the cron task.",
     )
     studio_run_parser.add_argument(
-        "--cron",
-        action="store",
-        help="Cron expression for the cron task. \n"
-        "Format: <minute> <hour> <day-of-month> <month> <day-of-week>. "
-        "Having either --start-time or --cron will mark this job as a cron task.",
+        "--cron", action="store", help="Cron expression for the cron task."
     )
 
     studio_ls_help = "List jobs in Studio"
