@@ -1,4 +1,3 @@
-import sys
 from typing import TYPE_CHECKING
 
 from datachain.error import DataChainError
@@ -11,23 +10,6 @@ from datachain.remote.storages import (
 
 if TYPE_CHECKING:
     from argparse import Namespace
-
-
-def process_storage_command(args: "Namespace"):
-    if args.cmd is None:
-        print(
-            f"Use 'datachain {args.command} --help' to see available options",
-            file=sys.stderr,
-        )
-        return 1
-
-    if args.cmd == "rm":
-        return rm_storage(args)
-    if args.cmd == "mv":
-        return mv_storage(args)
-    if args.cmd == "cp":
-        return cp_storage(args)
-    raise DataChainError(f"Unknown command '{args.cmd}'.")
 
 
 def rm_storage(args: "Namespace"):
@@ -66,9 +48,10 @@ def cp_storage(args: "Namespace"):
     # Determine operation based on source and destination protocols
     if source_cls.protocol == "file" and destination_cls.protocol == "file":
         source_fs = source_cls.create_fs()
-        source_fs.cp_file(
+        source_fs.copy(
             args.source_path,
             args.destination_path,
+            recursive=args.recursive,
         )
     elif source_cls.protocol == "file":
         source_fs = source_cls.create_fs()
