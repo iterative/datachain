@@ -262,7 +262,7 @@ def _get_hf_schema(
         from datachain.lib.hf import get_output_schema, schema_from_arrow
 
         features = schema_from_arrow(schema)
-        return features, get_output_schema(features)
+        return features, get_output_schema(features)[0]
     return None
 
 

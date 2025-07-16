@@ -550,3 +550,41 @@ def test_no_partition_by(test_session):
 
     assert len(result) == 1
     assert result[0] == ("f1.txt,f1.txt,f2.txt,f3.txt", 700, 100)
+
+
+def test_aggregate_after_group_by(test_session):
+    files = [
+        File(source="s3://bucket", path="f1.txt", size=100),
+        File(source="s3://bucket", path="f2.txt", size=200),
+        File(source="s3://bucket", path="f1.txt", size=100),  # duplicate
+        File(source="s3://bucket", path="f3.txt", size=300),
+    ]
+    amounts = [10, 20, 30, 40]
+
+    # Create a chain with File objects
+    chain = dc.read_values(
+        file=files,
+        amount=amounts,
+        session=test_session,
+    )
+
+    # Group by file and aggregate
+    grouped = chain.group_by(
+        total_size=dc.func.sum("file.size"),
+        total_amount=dc.func.sum("amount"),
+        partition_by="file",
+    )
+
+    assert sorted(grouped.to_list("file.path", "total_size", "total_amount")) == [
+        ("f1.txt", 200, 40),
+        ("f2.txt", 200, 20),
+        ("f3.txt", 300, 40),
+    ]
+
+    # Now aggregate over the grouped results
+    result = grouped.agg(
+        lambda file, total_amount: [(len(file), sum(total_amount))],
+        output={"files": int, "total": int},
+    ).to_list("files", "total")
+
+    assert result == [(3, 100)]

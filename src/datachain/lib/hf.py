@@ -26,7 +26,7 @@ except ImportError as exc:
     ) from exc
 
 from io import BytesIO
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import PIL
 from tqdm.auto import tqdm
@@ -34,6 +34,7 @@ from tqdm.auto import tqdm
 from datachain.lib.arrow import arrow_type_mapper
 from datachain.lib.data_model import DataModel, DataType, dict_to_data_model
 from datachain.lib.udf import Generator
+from datachain.lib.utils import normalize_col_names
 
 if TYPE_CHECKING:
     import pyarrow as pa
@@ -94,14 +95,18 @@ class HFGenerator(Generator):
         ds = self.ds_dict[split]
         if split:
             desc += f" split '{split}'"
+        model_fields = self.output_schema._model_fields_by_aliases()  # type: ignore[attr-defined]
         with tqdm(desc=desc, unit=" rows", leave=False) as pbar:
             for row in ds:
                 output_dict = {}
                 if split and "split" in self.output_schema.model_fields:
                     output_dict["split"] = split
                 for name, feat in ds.features.items():
-                    anno = self.output_schema.model_fields[name].annotation
-                    output_dict[name] = convert_feature(row[name], feat, anno)
+                    normalized_name, info = model_fields[name]
+                    anno = info.annotation
+                    output_dict[normalized_name] = convert_feature(
+                        row[name], feat, anno
+                    )
                 yield self.output_schema(**output_dict)
                 pbar.update(1)
 
@@ -122,10 +127,12 @@ def convert_feature(val: Any, feat: Any, anno: Any) -> Any:
         return HFClassLabel(string=feat.names[val], integer=val)
     if isinstance(feat, dict):
         sdict = {}
+        model_fields = anno._model_fields_by_aliases()  # type: ignore[attr-defined]
         for sname in val:
             sfeat = feat[sname]
-            sanno = anno.model_fields[sname].annotation
-            sdict[sname] = [convert_feature(v, sfeat, sanno) for v in val[sname]]
+            norm_name, info = model_fields[sname]
+            sanno = info.annotation
+            sdict[norm_name] = [convert_feature(v, sfeat, sanno) for v in val[sname]]
         return anno(**sdict)
     if isinstance(feat, Image):
         if isinstance(val, dict):
@@ -135,12 +142,26 @@ def convert_feature(val: Any, feat: Any, anno: Any) -> Any:
         return HFAudio(array=val["array"], sampling_rate=val["sampling_rate"])
 
 
-def get_output_schema(features: Features) -> dict[str, DataType]:
-    """Generate UDF output schema from huggingface datasets features."""
+def get_output_schema(
+    features: Features, existing_column_names: Optional[list[str]] = None
+) -> tuple[dict[str, DataType], dict[str, str]]:
+    """
+    Generate UDF output schema from Hugging Face datasets features. It normalizes the
+    column names and returns a mapping of normalized names to original names along with
+    the data types. `existing_column_names` is the list of column names that already
+    exist in the dataset (to avoid name collisions due to normalization).
+    """
+    existing_column_names = existing_column_names or []
     fields_dict = {}
-    for name, val in features.items():
-        fields_dict[name] = _feature_to_chain_type(name, val)
-    return fields_dict
+    normalized_names = normalize_col_names(
+        existing_column_names + list(features.keys())
+    )
+    # List of tuple(str, str) for HF dataset feature names, (normalized, original)
+    new_feature_names = list(normalized_names.items())[len(existing_column_names) :]
+    for idx, feat in enumerate(features.items()):
+        name, val = feat
+        fields_dict[new_feature_names[idx][0]] = _feature_to_chain_type(name, val)
+    return fields_dict, normalized_names
 
 
 def _feature_to_chain_type(name: str, val: Any) -> DataType:  # noqa: PLR0911
