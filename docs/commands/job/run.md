@@ -6,8 +6,10 @@ Run a job in Studio.
 
 ```usage
 usage: datachain job run [-h] [-v] [-q] [--team TEAM] [--env-file ENV_FILE] [--env ENV [ENV ...]]
-                         [--workers WORKERS] [--files FILES [FILES ...]] [--python-version PYTHON_VERSION]
-                         [--req-file REQ_FILE] [--req REQ [REQ ...]]
+                         [--cluster CLUSTER] [--workers WORKERS] [--files FILES [FILES ...]]
+                         [--python-version PYTHON_VERSION] [--repository REPOSITORY]
+                         [--req-file REQ_FILE] [--req REQ [REQ ...]] [--priority PRIORITY]
+                         [--start-time START_TIME] [--cron CRON]
                          file
 ```
 
@@ -28,10 +30,12 @@ This command runs a job in Studio using the specified query file. You can config
 * `--workers WORKERS` - Number of workers for the job
 * `--files FILES` - Additional files to include in the job
 * `--python-version PYTHON_VERSION` - Python version for the job (e.g., 3.9, 3.10, 3.11)
+* `--repository REPOSITORY` - Repository URL to clone before running the job
 * `--req-file REQ_FILE` - Python requirements file
 * `--req REQ` - Python package requirements
 * `--priority PRIORITY` - Priority for the job in range 0-5. Lower value is higher priority (default: 5)
-* `--repository URL` - Repository URL to clone before running the job.
+* `--start-time START_TIME` - Start time for the cron task. Supports various formats including natural language: '2024-01-15 14:30:00', 'tomorrow 3pm', 'next monday 9am', '2024-01-15T14:30:00Z', 'in 2 hours', 'Jan 15, 2024 2:30 PM', etc. If cron expression is provided, the cron job will activate after this time. Otherwise, the job will run once at this time.
+* `--cron CRON` - Cron expression for the cron task. Format: <minute> <hour> <day-of-month> <month> <day-of-week>. Having either --start-time or --cron will mark this job as a cron task.
 * `-h`, `--help` - Show the help message and exit.
 * `-v`, `--verbose` - Be verbose.
 * `-q`, `--quiet` - Be quiet.
@@ -93,9 +97,45 @@ datachain job clusters
 datachain job run --cluster-id 1 query.py
 ```
 
+9. Schedule a job to run once at a specific time
+```bash
+# Run job tomorrow at 3pm
+datachain job run --start-time "tomorrow 3pm" query.py
+
+# Run job in 2 hours
+datachain job run --start-time "in 2 hours" query.py
+
+# Run job on Monday at 9am
+datachain job run --start-time "monday 9am" query.py
+
+# Run job at a specific date and time
+datachain job run --start-time "2024-01-15 14:30:00" query.py
+```
+
+10. Schedule a recurring job using cron expression
+```bash
+# Run job daily at midnight
+datachain job run --cron "0 0 * * *" query.py
+
+# Run job every Monday at 9am
+datachain job run --cron "0 9 * * 1" query.py
+
+# Run job every hour
+datachain job run --cron "0 * * * *" query.py
+```
+
+11. Schedule a recurring job with a start time
+```bash
+# Start the cron job after tomorrow 3pm
+datachain job run --start-time "tomorrow 3pm" --cron "0 0 * * *" query.py
+```
+
 ## Notes
 
 * Closing the logs command (e.g., with Ctrl+C) will only stop displaying the logs but will not cancel the job execution
 * To cancel a running job, use the `datachain job cancel` command
 * The job will continue running in Studio even after you stop viewing the logs
 * You can get the list of compute clusters using `datachain job clusters` command.
+* When using `--start-time` or `--cron` options, the job is scheduled as a task and will not show logs immediately. The job will be executed according to the schedule.
+* The `--start-time` option supports natural language parsing using the dateparser library, allowing flexible time expressions like "tomorrow 3pm", "in 2 hours", "monday 9am", etc.
+* Cron expressions follow the standard format: minute hour day-of-month month day-of-week (e.g., "0 0 * * *" for daily at midnight)

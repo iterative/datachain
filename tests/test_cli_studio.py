@@ -440,7 +440,54 @@ def test_studio_run(capsys, mocker, tmp_dir):
         "repository": "https://github.com/iterative/datachain",
         "priority": 5,
         "compute_cluster_name": "default",
+        "start_after": None,
+        "cron_expression": None,
     }
+
+
+def test_studio_run_task(capsys, mocker, tmp_dir, studio_token):
+    mocker.patch(
+        "datachain.remote.studio.websockets.connect", side_effect=mocked_connect
+    )
+
+    with requests_mock.mock() as m:
+        m.post(
+            f"{STUDIO_URL}/api/datachain/job",
+            json={"job": {"id": 1, "url": "https://example.com"}},
+        )
+        m.get(
+            f"{STUDIO_URL}/api/datachain/datasets/dataset_job_versions?job_id=1&team_name=team_name",
+            json={
+                "dataset_versions": [
+                    {"dataset_name": "dataset_name", "version": "1.0.0"}
+                ]
+            },
+        )
+        (tmp_dir / "example_query.py").write_text("print(1)")
+
+        assert (
+            main(
+                [
+                    "job",
+                    "run",
+                    "example_query.py",
+                    "--start-time",
+                    "tomorrow 3pm",
+                    "--cron",
+                    "0 0 * * *",
+                ]
+            )
+            == 0
+        )
+    first_request = m.request_history[0]
+    assert first_request.method == "POST"
+    assert first_request.url == f"{STUDIO_URL}/api/datachain/job"
+    request_json = first_request.json()
+    assert request_json["start_after"] is not None
+    assert request_json["cron_expression"] is not None
+
+    assert request_json["start_after"] is not None
+    assert request_json["cron_expression"] == "0 0 * * *"
 
 
 @pytest.mark.parametrize(
