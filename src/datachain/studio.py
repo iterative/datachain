@@ -1,8 +1,10 @@
 import asyncio
 import os
 import sys
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Optional
 
+import dateparser
 import tabulate
 
 from datachain.config import Config, ConfigLevel
@@ -42,6 +44,8 @@ def process_jobs_args(args: "Namespace"):
             args.req_file,
             args.priority,
             args.cluster,
+            args.start_time,
+            args.cron,
         )
 
     if args.cmd == "cancel":
@@ -262,6 +266,31 @@ def save_config(hostname, token, level=ConfigLevel.GLOBAL):
     return config.config_file()
 
 
+def parse_start_time(start_time_str: Optional[str]) -> Optional[str]:
+    if not start_time_str:
+        return None
+
+    try:
+        # Parse the datetime string using dateparser
+        parsed_datetime = dateparser.parse(start_time_str)
+
+        if parsed_datetime is None:
+            raise DataChainError(
+                f"Could not parse datetime string: '{start_time_str}'. "
+                f"Supported formats include: '2024-01-15 14:30:00', 'tomorrow 3pm', "
+                f"'monday 9am', '2024-01-15T14:30:00Z', 'in 2 hours', etc."
+            )
+
+        # Convert to ISO format string
+        return parsed_datetime.isoformat()
+    except Exception as e:
+        raise DataChainError(
+            f"Invalid datetime format for start_time: '{start_time_str}'. "
+            f"Supported formats include: '2024-01-15 14:30:00', 'tomorrow 3pm', "
+            f"'monday 9am', '2024-01-15T14:30:00Z', 'in 2 hours', etc. Error: {e}"
+        ) from e
+
+
 def show_logs_from_client(client, job_id):
     # Sync usage
     async def _run():
@@ -310,6 +339,8 @@ def create_job(
     req_file: Optional[str] = None,
     priority: Optional[int] = None,
     cluster: Optional[str] = None,
+    start_time: Optional[str] = None,
+    cron: Optional[str] = None,
 ):
     query_type = "PYTHON" if query_file.endswith(".py") else "SHELL"
     with open(query_file) as f:
@@ -328,6 +359,11 @@ def create_job(
     client = StudioClient(team=team_name)
     file_ids = upload_files(client, files) if files else []
 
+    # Parse start_time if provided
+    parsed_start_time = parse_start_time(start_time)
+    if cron and parsed_start_time is None:
+        parsed_start_time = datetime.now(timezone.utc).isoformat()
+
     response = client.create_job(
         query=query,
         query_type=query_type,
@@ -340,6 +376,8 @@ def create_job(
         requirements=requirements,
         priority=priority,
         cluster=cluster,
+        start_time=parsed_start_time,
+        cron=cron,
     )
     if not response.ok:
         raise DataChainError(response.message)
@@ -348,6 +386,11 @@ def create_job(
         raise DataChainError("Failed to create job")
 
     job_id = response.data.get("job", {}).get("id")
+
+    if parsed_start_time or cron:
+        print(f"Job {job_id} is scheduled as a task in Studio.")
+        return 0
+
     print(f"Job {job_id} created")
     print("Open the job in Studio at", response.data.get("job", {}).get("url"))
     print("=" * 40)
