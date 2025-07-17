@@ -104,7 +104,7 @@ def add_jobs_parser(subparsers, parent_parser) -> None:
     studio_run_parser.add_argument(
         "--start-time",
         action="store",
-        help="Start time in ISO format or natural language for the cron task.",
+        help="Time to schedule a task in YYYY-MM-DDTHH:mm format or natural language.",
     )
     studio_run_parser.add_argument(
         "--cron", action="store", help="Cron expression for the cron task."

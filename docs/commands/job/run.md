@@ -38,7 +38,7 @@ This command runs a job in Studio using the specified query file. You can config
 * `--req-file REQ_FILE` - Python requirements file
 * `--req REQ` - Python package requirements
 * `--priority PRIORITY` - Priority for the job in range 0-5. Lower value is higher priority (default: 5)
-* `--start-time START_TIME` - Start time in ISO format or natural language for the cron task.
+* `--start-time START_TIME` - Time to schedule the task in YYYY-MM-DDTHH:mm format or natural language.
 * `--cron CRON` - Cron expression for the cron task.
 * `-h`, `--help` - Show the help message and exit.
 * `-v`, `--verbose` - Be verbose.
@@ -138,7 +138,7 @@ datachain job run --start-time "tomorrow 3pm" --cron "0 0 * * *" query.py
 * The job will continue running in Studio even after you stop viewing the logs
 * You can get the list of compute clusters using `datachain job clusters` command.
 * When using `--start-time` or `--cron` options, the job is scheduled as a task and will not show logs immediately. The job will be executed according to the schedule.
-* The `--start-time` option supports natural language parsing using the dateparser library, allowing flexible time expressions like "tomorrow 3pm", "in 2 hours", "monday 9am", etc.
+* The `--start-time` option supports natural language parsing using the [dateparser](https://dateparser.readthedocs.io/en/latest/) library, allowing flexible time expressions like "tomorrow 3pm", "in 2 hours", "monday 9am", etc.
 * Cron expressions follow the standard format: minute hour day-of-month month day-of-week (e.g., "0 0 * * *" for daily at midnight) or Vixie cron-style “@” keyword expressions.
 * Following options for Vixie cron-style expressions are supported:
     * @midnight
