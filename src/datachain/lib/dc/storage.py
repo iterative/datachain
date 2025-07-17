@@ -33,7 +33,7 @@ def read_storage(
     recursive: Optional[bool] = True,
     column: str = "file",
     update: bool = False,
-    anon: bool = False,
+    anon: Optional[bool] = None,
     delta: Optional[bool] = False,
     delta_on: Optional[Union[str, Sequence[str]]] = (
         "file.path",
@@ -124,8 +124,8 @@ def read_storage(
 
     file_type = get_file_type(type)
 
-    if anon:
-        client_config = (client_config or {}) | {"anon": True}
+    if anon is not None:
+        client_config = (client_config or {}) | {"anon": anon}
     session = Session.get(session, client_config=client_config, in_memory=in_memory)
     catalog = session.catalog
     cache = catalog.cache
