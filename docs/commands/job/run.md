@@ -19,7 +19,7 @@ usage: datachain job run [-h] [-v] [-q] [--team TEAM] [--env-file ENV_FILE]
 
 ## Description
 
-This command runs a job in Studio using the specified query file. You can configure various aspects of the job including environment variables, Python version, dependencies, and more. When using --start-time or --cron, the job is scheduled as a task and will not show logs immediately. The job will be executed according to the schedule.
+This command runs a job in Studio using the specified query file. You can configure various aspects of the job including environment variables, Python version, dependencies, and more. When using --start-time or --cron, the job is scheduled to run but won't start immediately (can be seen in the Tasks tab in UI)
 
 ## Arguments
 
