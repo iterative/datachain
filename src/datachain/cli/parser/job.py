@@ -20,8 +20,8 @@ def add_jobs_parser(subparsers, parent_parser) -> None:
     studio_run_description = "Run a job in Studio. \n"
     studio_run_description += (
         "When using --start-time or --cron,"
-        " the job is scheduled as a task and will not show logs immediately."
-        " The job will be executed according to the schedule."
+        " job is scheduled to run but won't start immediately"
+        " (can be seen in the Tasks tab in UI)"
     )
 
     studio_run_parser = jobs_subparser.add_parser(
