@@ -270,25 +270,18 @@ def parse_start_time(start_time_str: Optional[str]) -> Optional[str]:
     if not start_time_str:
         return None
 
-    try:
-        # Parse the datetime string using dateparser
-        parsed_datetime = dateparser.parse(start_time_str)
+    # Parse the datetime string using dateparser
+    parsed_datetime = dateparser.parse(start_time_str)
 
-        if parsed_datetime is None:
-            raise DataChainError(
-                f"Could not parse datetime string: '{start_time_str}'. "
-                f"Supported formats include: '2024-01-15 14:30:00', 'tomorrow 3pm', "
-                f"'monday 9am', '2024-01-15T14:30:00Z', 'in 2 hours', etc."
-            )
-
-        # Convert to ISO format string
-        return parsed_datetime.isoformat()
-    except Exception as e:
+    if parsed_datetime is None:
         raise DataChainError(
-            f"Invalid datetime format for start_time: '{start_time_str}'. "
+            f"Could not parse datetime string: '{start_time_str}'. "
             f"Supported formats include: '2024-01-15 14:30:00', 'tomorrow 3pm', "
-            f"'monday 9am', '2024-01-15T14:30:00Z', 'in 2 hours', etc. Error: {e}"
-        ) from e
+            f"'monday 9am', '2024-01-15T14:30:00Z', 'in 2 hours', etc."
+        )
+
+    # Convert to ISO format string
+    return parsed_datetime.isoformat()
 
 
 def show_logs_from_client(client, job_id):
