@@ -1117,12 +1117,14 @@ class Catalog:
         if version:
             update = False
 
-        # local dataset is the one that is in Studio or in CLI but has default namespace
-        is_local = (
+        # we don't do Studio fallback is script is already ran in Studio, or if we try
+        # to fetch dataset with local.local namespace & project as that one cannot
+        # exist in Studio in the first place
+        no_fallback = (
             not self.is_cli or namespace_name == self.metastore.default_namespace_name
         )
 
-        if is_local or not update:
+        if no_fallback or not update:
             try:
                 project = self.metastore.get_project(project_name, namespace_name)
                 ds = self.get_dataset(name, project)
@@ -1131,7 +1133,7 @@ class Catalog:
             except (NamespaceNotFoundError, ProjectNotFoundError, DatasetNotFoundError):
                 pass
 
-        if is_local:
+        if no_fallback:
             raise DatasetNotFoundError(
                 f"Dataset {name}"
                 + (f" version {version} " if version else " ")

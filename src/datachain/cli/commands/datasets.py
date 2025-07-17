@@ -137,7 +137,7 @@ def rm_dataset(
 ):
     namespace_name, project_name, name = catalog.get_full_dataset_name(name)
 
-    if catalog.is_cli and studio:
+    if studio:
         # removing Studio dataset from CLI
         from datachain.studio import remove_studio_dataset
 
@@ -167,7 +167,7 @@ def edit_dataset(
 ):
     namespace_name, project_name, name = catalog.get_full_dataset_name(name)
 
-    if catalog.is_cli and namespace_name != catalog.metastore.default_namespace_name:
+    if namespace_name != catalog.metastore.default_namespace_name:
         from datachain.studio import edit_studio_dataset
 
         if Config().read().get("studio", {}).get("token"):

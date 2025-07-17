@@ -127,7 +127,9 @@ def get_udf_distributor_class() -> Optional[type["AbstractUDFDistributor"]]:
 
 
 def get_catalog(
-    client_config: Optional[dict[str, Any]] = None, in_memory: bool = False
+    client_config: Optional[dict[str, Any]] = None,
+    in_memory: bool = False,
+    is_cli: bool = True,
 ) -> "Catalog":
     """
     Function that creates Catalog instance with appropriate metastore
@@ -141,7 +143,6 @@ def get_catalog(
     we can provide DATACHAIN_METASTORE_ARG_TEAM_ID=12345 env variable.
     """
     from datachain.catalog import Catalog
-    from datachain.data_storage.sqlite import SQLiteMetastore
 
     metastore = get_metastore(in_memory=in_memory)
     return Catalog(
@@ -149,5 +150,5 @@ def get_catalog(
         warehouse=get_warehouse(in_memory=in_memory),
         client_config=client_config,
         in_memory=in_memory,
-        is_cli=isinstance(metastore, SQLiteMetastore),
+        is_cli=is_cli,
     )
