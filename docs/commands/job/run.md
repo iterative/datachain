@@ -5,9 +5,15 @@ Run a job in Studio.
 ## Synopsis
 
 ```usage
-usage: datachain job run [-h] [-v] [-q] [--team TEAM] [--env-file ENV_FILE] [--env ENV [ENV ...]] [--cluster CLUSTER] [--workers WORKERS]
-                         [--files FILES [FILES ...]] [--python-version PYTHON_VERSION] [--repository REPOSITORY] [--req-file REQ_FILE] [--req REQ [REQ ...]]
-                         [--priority PRIORITY] [--start-time START_TIME] [--cron CRON]
+usage: datachain job run [-h] [-v] [-q] [--team TEAM] [--env-file ENV_FILE]
+                         [--env ENV [ENV ...]]
+                         [--cluster CLUSTER] [--workers WORKERS]
+                         [--files FILES [FILES ...]]
+                         [--python-version PYTHON_VERSION]
+                         [--repository REPOSITORY]
+                         [--req-file REQ_FILE] [--req REQ [REQ ...]]
+                         [--priority PRIORITY]
+                         [--start-time START_TIME] [--cron CRON]
                          file
 ```
 
