@@ -717,6 +717,23 @@ class ImageFile(File):
         destination = stringify_path(destination)
 
         client: Client = self._catalog.get_client(destination, **(client_config or {}))
+
+        # If format is not provided, determine it from the file extension
+        if format is None:
+            from pathlib import PurePosixPath
+
+            from PIL import Image as PilImage
+
+            ext = PurePosixPath(destination).suffix.lower()
+            format = PilImage.registered_extensions().get(ext)
+
+        if not format:
+            raise FileError(
+                f"Can't determine format for destination '{destination}'",
+                self.source,
+                self.path,
+            )
+
         with client.fs.open(destination, mode="wb") as f:
             self.read().save(f, format=format)
 
