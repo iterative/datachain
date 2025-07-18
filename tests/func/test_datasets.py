@@ -11,7 +11,6 @@ from datachain.dataset import DatasetDependencyType, DatasetStatus
 from datachain.error import (
     DatasetInvalidVersionError,
     DatasetNotFoundError,
-    ProjectNotFoundError,
 )
 from datachain.lib.file import File
 from datachain.lib.listing import parse_listing_uri
@@ -163,11 +162,11 @@ def test_create_dataset_already_exist_wrong_version(
 def test_get_dataset(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
 
-    dataset = catalog.get_dataset(dogs_dataset.name, dogs_dataset.project)
+    dataset = catalog.get_dataset(dogs_dataset.name)
     assert dataset.name == dogs_dataset.name
 
     with pytest.raises(DatasetNotFoundError):
-        catalog.get_dataset("wrong name", dogs_dataset.project)
+        catalog.get_dataset("wrong name")
 
 
 def test_create_dataset_from_sources(listed_bucket, cloud_test_catalog, project):
@@ -317,7 +316,7 @@ def test_remove_dataset(cloud_test_catalog, dogs_dataset):
 
     catalog.remove_dataset(dogs_dataset.name, dogs_dataset.project, force=True)
     with pytest.raises(DatasetNotFoundError):
-        catalog.get_dataset(dogs_dataset.name, dogs_dataset.project)
+        catalog.get_dataset(dogs_dataset.name)
 
     dataset_table_name = catalog.warehouse.dataset_table_name(dogs_dataset, "1.0.0")
     assert table_row_count(catalog.warehouse.db, dataset_table_name) is None
@@ -339,7 +338,7 @@ def test_remove_dataset_with_multiple_versions(cloud_test_catalog, dogs_dataset)
 
     catalog.remove_dataset(updated_dogs_dataset.name, dogs_dataset.project, force=True)
     with pytest.raises(DatasetNotFoundError):
-        catalog.get_dataset(updated_dogs_dataset.name, dogs_dataset.project)
+        catalog.get_dataset(updated_dogs_dataset.name)
 
     assert (
         catalog.metastore.get_direct_dataset_dependencies(updated_dogs_dataset, "1.0.0")
@@ -375,7 +374,7 @@ def test_edit_dataset(cloud_test_catalog, dogs_dataset):
         attrs=["cats", "birds"],
     )
 
-    dataset = catalog.get_dataset(dataset_new_name, dogs_dataset.project)
+    dataset = catalog.get_dataset(dataset_new_name)
     assert dataset.name == dataset_new_name
     assert dataset.description == "new description"
     assert dataset.attrs == ["cats", "birds"]
@@ -462,7 +461,7 @@ def test_move_dataset_then_save_into(test_session):
 def test_move_dataset_wrong_old_project(test_session, project):
     dc.read_values(num=[1, 2, 3], session=test_session).save("old.old.numbers")
 
-    with pytest.raises(ProjectNotFoundError):
+    with pytest.raises(DatasetNotFoundError):
         dc.move_dataset("wrong.wrong.numbers", "new.new.numbers", session=test_session)
 
 
@@ -494,7 +493,7 @@ def test_edit_dataset_same_name(cloud_test_catalog, dogs_dataset):
         dogs_dataset.name, dogs_dataset.project, new_name=dataset_new_name
     )
 
-    dataset = catalog.get_dataset(dataset_new_name, dogs_dataset.project)
+    dataset = catalog.get_dataset(dataset_new_name)
     assert dataset.name == dataset_new_name
 
     # check if dataset tables are renamed correctly
@@ -523,7 +522,7 @@ def test_edit_dataset_remove_attrs_and_description(cloud_test_catalog, dogs_data
         attrs=[],
     )
 
-    dataset = catalog.get_dataset(dataset_new_name, dogs_dataset.project)
+    dataset = catalog.get_dataset(dataset_new_name)
     assert [v.version for v in dataset.versions] == ["1.0.0"]
     assert dataset.name == dataset_new_name
     assert dataset.description == ""
@@ -730,9 +729,7 @@ def test_dataset_preview_last_modified(cloud_test_catalog, dogs_dataset):
         catalog=catalog,
     ).save("dogs_custom_columns", project=project)
 
-    for r in (
-        catalog.get_dataset("dogs_custom_columns", project).get_version("1.0.0").preview
-    ):
+    for r in catalog.get_dataset("dogs_custom_columns").get_version("1.0.0").preview:
         assert isinstance(r.get("file__last_modified"), str)
 
 
@@ -766,9 +763,7 @@ def test_row_random(cloud_test_catalog):
 
 def test_dataset_stats_registered_ds(cloud_test_catalog, dogs_dataset):
     catalog = cloud_test_catalog.catalog
-    dataset = catalog.get_dataset(dogs_dataset.name, dogs_dataset.project).get_version(
-        "1.0.0"
-    )
+    dataset = catalog.get_dataset(dogs_dataset.name).get_version("1.0.0")
     assert dataset.num_objects == 4
     assert dataset.size == 15
     rows_count = catalog.warehouse.dataset_rows_count(dogs_dataset, "1.0.0")
@@ -787,9 +782,7 @@ def test_dataset_storage_dependencies(cloud_test_catalog, cloud_type, indirect):
     dc.read_storage(uri, session=ctc.session).save(ds_name)
 
     lst_ds_name, _, _ = parse_listing_uri(uri)
-    lst_dataset = catalog.metastore.get_dataset(
-        lst_ds_name, catalog.metastore.listing_project.id
-    )
+    lst_dataset = catalog.get_dataset(lst_ds_name)
 
     assert [
         dataset_dependency_asdict(d)
