@@ -7,11 +7,11 @@ from datachain.utils import STUDIO_URL
 @pytest.mark.parametrize(
     "command, recursive, team",
     [
-        ("storage rm s3://my-bucket/data/content", False, None),
-        ("storage rm s3://my-bucket/data/content --recursive", True, None),
-        ("storage rm s3://my-bucket/data/content --team new_team", False, "new_team"),
+        ("rm s3://my-bucket/data/content", False, None),
+        ("rm s3://my-bucket/data/content --recursive", True, None),
+        ("rm s3://my-bucket/data/content --team new_team", False, "new_team"),
         (
-            "storage rm s3://my-bucket/data/content --team new_team --recursive",
+            "rm s3://my-bucket/data/content --team new_team --recursive",
             True,
             "new_team",
         ),
@@ -68,7 +68,7 @@ def test_mv_storage(requests_mock, capsys, studio_token, command, recursive, tea
         status_code=200,
     )
 
-    result = main(["storage", "mv", "s3://my-bucket/data/content", *command.split()])
+    result = main(["mv", "s3://my-bucket/data/content", *command.split()])
     assert result == 0
     out, _ = capsys.readouterr()
     assert "Moved s3://my-bucket/data/content to s3://my-bucket/data/content2" in out
@@ -92,7 +92,6 @@ def test_cp_storage_local_to_local(studio_token, tmp_dir):
 
     result = main(
         [
-            "storage",
             "cp",
             str(tmp_dir / "path1" / "file1.txt"),
             str(tmp_dir / "path2" / "file1.txt"),
@@ -128,7 +127,6 @@ def test_cp_storage_local_to_s3(requests_mock, capsys, studio_token, tmp_dir):
 
     result = main(
         [
-            "storage",
             "cp",
             str(tmp_dir / "path1" / "file1.txt"),
             "s3://my-bucket/data/content",
@@ -163,9 +161,7 @@ def test_cp_remote_to_local(requests_mock, capsys, studio_token, tmp_dir):
         content=b"file1",
     )
 
-    result = main(
-        ["storage", "cp", "s3://my-bucket/data/content", str(tmp_dir / "file1.txt")]
-    )
+    result = main(["cp", "s3://my-bucket/data/content", str(tmp_dir / "file1.txt")])
     assert result == 0
     assert (tmp_dir / "file1.txt").read_text() == "file1"
 
