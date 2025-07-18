@@ -62,6 +62,7 @@ def test_audio_datachain_workflow(test_session, tmp_path):
         assert info.channels == 1
         assert info.duration > 0
         assert info.samples > 0
+        assert info.format == "wav"
 
     # Generate audio fragments
     fragments_chain = chain.gen(

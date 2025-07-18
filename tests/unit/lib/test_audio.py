@@ -258,6 +258,58 @@ def test_audio_fragment_bytes_formats(audio_file, format_type):
     assert len(audio_bytes) > 0
 
 
+@pytest.mark.parametrize(
+    "encoding,file_ext,expected_format",
+    [
+        # Test direct encoding mappings
+        ("FLAC", "flac", "flac"),
+        ("MP3", "mp3", "mp3"),
+        ("VORBIS", "ogg", "ogg"),
+        ("OPUS", "opus", "opus"),
+        ("AMR_WB", "amr", "amr"),
+        ("AMR_NB", "amr", "amr"),
+        ("GSM", "gsm", "gsm"),
+        # Test PCM variants with different extensions
+        ("PCM_S16LE", "wav", "wav"),
+        ("PCM_S24LE", "aiff", "aiff"),
+        ("PCM_F32LE", "au", "au"),
+        ("PCM_U8", "raw", "raw"),
+        ("PCM_S16BE", "unknown_ext", "wav"),  # Default for PCM
+        # Test unknown encoding falls back to file extension
+        ("UNKNOWN_CODEC", "mp3", "mp3"),
+        ("UNKNOWN_CODEC", "flac", "flac"),
+        # Test files without extension
+        ("UNKNOWN_CODEC", "", "unknown"),
+        ("", "", "unknown"),
+    ],
+)
+def test_audio_info_format_detection(
+    tmp_path, catalog, encoding, file_ext, expected_format
+):
+    """Test audio format detection for different file extensions and encodings."""
+    # Create a test audio file with the specified extension
+    filename = f"test_audio.{file_ext}" if file_ext else "test_audio"
+    audio_data = generate_test_wav(duration=0.1, sample_rate=16000)
+    audio_path = tmp_path / filename
+    audio_path.write_bytes(audio_data)
+
+    audio_file = AudioFile(path=str(audio_path), source="file://")
+    audio_file._set_stream(catalog, caching_enabled=False)
+
+    # Mock torchaudio.info to return controlled encoding
+    with patch("datachain.lib.audio.torchaudio.info") as mock_info:
+        mock_info.return_value.sample_rate = 16000
+        mock_info.return_value.num_channels = 1
+        mock_info.return_value.num_frames = 1600  # 0.1 seconds
+        mock_info.return_value.encoding = encoding
+        mock_info.return_value.bits_per_sample = 16
+
+        result = audio_info(audio_file)
+
+        assert result.format == expected_format
+        assert result.codec == encoding
+
+
 def test_audio_info_stereo(stereo_audio_file):
     """Test audio info extraction for stereo files."""
     result = audio_info(stereo_audio_file)
