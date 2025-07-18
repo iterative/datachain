@@ -205,7 +205,10 @@ def save_video_fragment(
         VideoFile: Video fragment model.
     """
     if start < 0 or end < 0 or start >= end:
-        raise ValueError(f"Invalid time range: ({start:.3f}, {end:.3f})")
+        raise ValueError(
+            f"Can't save video fragment for '{video.path}', "
+            f"invalid time range: ({start:.3f}, {end:.3f})"
+        )
 
     if format is None:
         format = video.get_file_ext()

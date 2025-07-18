@@ -832,7 +832,10 @@ class VideoFile(File):
             VideoFragment: A Model representing the video fragment.
         """
         if start < 0 or end < 0 or start >= end:
-            raise ValueError(f"Invalid time range: ({start:.3f}, {end:.3f})")
+            raise ValueError(
+                f"Can't get video fragment for '{self.path}', "
+                f"invalid time range: ({start:.3f}, {end:.3f})"
+            )
 
         return VideoFragment(video=self, start=start, end=end)
 
@@ -915,7 +918,10 @@ class AudioFile(File):
             AudioFragment: A Model representing the audio fragment.
         """
         if start < 0 or end < 0 or start >= end:
-            raise ValueError(f"Invalid time range: ({start:.3f}, {end:.3f})")
+            raise ValueError(
+                f"Can't get audio fragment for '{self.path}', "
+                f"invalid time range: ({start:.3f}, {end:.3f})"
+            )
 
         return AudioFragment(audio=self, start=start, end=end)
 
