@@ -126,7 +126,10 @@ def save_audio_fragment(
     """Save audio fragment with timestamped filename.
     Supports local and remote storage upload."""
     if start < 0 or end < 0 or start >= end:
-        raise ValueError(f"Invalid time range: ({start:.3f}, {end:.3f})")
+        raise ValueError(
+            f"Can't save audio fragment for '{audio.path}', "
+            f"invalid time range: ({start:.3f}, {end:.3f})"
+        )
 
     if format is None:
         format = audio.get_file_ext()

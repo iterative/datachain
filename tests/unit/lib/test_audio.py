@@ -175,10 +175,14 @@ def test_save_audio_fragment(audio_file, tmp_path):
 
 def test_save_audio_fragment_validation(audio_file, tmp_path):
     """Test input validation for save_audio_fragment."""
-    with pytest.raises(ValueError, match="Invalid time range"):
+    with pytest.raises(
+        ValueError, match="Can't save audio fragment.*invalid time range"
+    ):
         save_audio_fragment(audio_file, start=-1.0, end=1.0, output=str(tmp_path))
 
-    with pytest.raises(ValueError, match="Invalid time range"):
+    with pytest.raises(
+        ValueError, match="Can't save audio fragment.*invalid time range"
+    ):
         save_audio_fragment(audio_file, start=2.0, end=1.0, output=str(tmp_path))
 
 
