@@ -92,7 +92,7 @@ def test_parse_start_time_invalid_format():
         with pytest.raises(DataChainError) as exc_info:
             parse_start_time(invalid_format)
 
-        assert "Invalid datetime format" in str(exc_info.value)
+        assert "Could not parse datetime string" in str(exc_info.value)
         assert invalid_format in str(exc_info.value)
 
 
