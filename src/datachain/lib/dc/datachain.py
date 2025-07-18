@@ -271,7 +271,11 @@ class DataChain:
         """Underlying dataset, if there is one."""
         if not self.name:
             return None
-        return self.session.catalog.get_dataset(self.name, self._query.project)
+        return self.session.catalog.get_dataset(
+            self.name,
+            namespace_name=self._query.project.namespace.name,
+            project_name=self._query.project.name,
+        )
 
     def __or__(self, other: "Self") -> "Self":
         """Return `self.union(other)`."""
