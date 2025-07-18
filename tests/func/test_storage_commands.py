@@ -177,9 +177,7 @@ def test_cp_s3_to_s3(requests_mock, capsys, studio_token, tmp_dir):
         status_code=200,
     )
 
-    result = main(
-        ["storage", "cp", "s3://my-bucket/data/content", "s3://my-bucket/data/content2"]
-    )
+    result = main(["cp", "s3://my-bucket/data/content", "s3://my-bucket/data/content2"])
     assert result == 0
 
     history = requests_mock.request_history
