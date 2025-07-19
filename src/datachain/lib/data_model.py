@@ -1,3 +1,4 @@
+import uuid
 from collections.abc import Sequence
 from datetime import datetime
 from typing import ClassVar, Optional, Union, get_args, get_origin
@@ -80,7 +81,7 @@ def dict_to_data_model(
 
     fields = {
         name: (
-            Optional[anno] if not isinstance(anno, type(BaseModel)) else anno,
+            anno if isinstance(anno, type(BaseModel)) else Optional[anno],
             Field(
                 validation_alias=AliasChoices(name, original_names[idx] or name),
                 default=None,
@@ -100,6 +101,10 @@ def dict_to_data_model(
                 for alias in field.validation_alias.choices:
                     field_info[str(alias)] = (_name, field)
             return field_info
+
+    # Generate random unique name if not provided
+    if not name:
+        name = f"DataModel_{uuid.uuid4().hex[:8]}"
 
     return create_model(
         name,
