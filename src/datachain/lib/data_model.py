@@ -1,3 +1,4 @@
+import inspect
 import uuid
 from collections.abc import Sequence
 from datetime import datetime
@@ -81,7 +82,9 @@ def dict_to_data_model(
 
     fields = {
         name: (
-            anno if isinstance(anno, type(BaseModel)) else Optional[anno],
+            anno
+            if inspect.isclass(anno) and issubclass(anno, BaseModel)
+            else Optional[anno],
             Field(
                 validation_alias=AliasChoices(name, original_names[idx] or name),
                 default=None,

@@ -97,7 +97,7 @@ class HFGenerator(Generator):
     def process(self, split: str = ""):
         desc = "Parsed Hugging Face dataset"
         ds = self.ds_dict[split]
-        if self.limit:
+        if self.limit > 0:
             ds = ds.take(self.limit)
         if split:
             desc += f" split '{split}'"
