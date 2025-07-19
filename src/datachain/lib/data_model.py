@@ -80,7 +80,7 @@ def dict_to_data_model(
 
     fields = {
         name: (
-            anno,
+            Optional[anno] if not isinstance(anno, type(BaseModel)) else anno,
             Field(
                 validation_alias=AliasChoices(name, original_names[idx] or name),
                 default=None,
