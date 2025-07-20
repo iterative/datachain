@@ -33,10 +33,14 @@ def audio_info(file: "Union[File, AudioFile]") -> "Audio":
             frames = int(info.num_frames)
             duration = float(frames / sample_rate) if sample_rate > 0 else 0.0
 
-            # Get format information
-            format_name = getattr(info, "format", "")
             codec_name = getattr(info, "encoding", "")
-            bit_rate = getattr(info, "bits_per_sample", 0) * sample_rate * channels
+            file_ext = file.get_file_ext().lower()
+            format_name = _encoding_to_format(codec_name, file_ext)
+
+            bits_per_sample = getattr(info, "bits_per_sample", 0)
+            bit_rate = (
+                bits_per_sample * sample_rate * channels if bits_per_sample > 0 else -1
+            )
 
     except Exception as exc:
         raise FileError(
@@ -52,6 +56,46 @@ def audio_info(file: "Union[File, AudioFile]") -> "Audio":
         codec=codec_name,
         bit_rate=bit_rate,
     )
+
+
+def _encoding_to_format(encoding: str, file_ext: str) -> str:
+    """
+    Map torchaudio encoding to a format name.
+
+    Args:
+        encoding: The encoding string from torchaudio.info()
+        file_ext: The file extension as a fallback
+
+    Returns:
+        Format name as a string
+    """
+    # Direct mapping for formats that match exactly
+    encoding_map = {
+        "FLAC": "flac",
+        "MP3": "mp3",
+        "VORBIS": "ogg",
+        "AMR_WB": "amr",
+        "AMR_NB": "amr",
+        "OPUS": "opus",
+        "GSM": "gsm",
+    }
+
+    if encoding in encoding_map:
+        return encoding_map[encoding]
+
+    # For PCM variants, use file extension to determine format
+    if encoding.startswith("PCM_"):
+        # Common PCM formats by extension
+        pcm_formats = {
+            "wav": "wav",
+            "aiff": "aiff",
+            "au": "au",
+            "raw": "raw",
+        }
+        return pcm_formats.get(file_ext, "wav")  # Default to wav for PCM
+
+    # Fallback to file extension if encoding is unknown
+    return file_ext if file_ext else "unknown"
 
 
 def audio_fragment_np(
