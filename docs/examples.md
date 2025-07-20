@@ -10,55 +10,45 @@ title: Examples
 
     Datachain is built by composing wrangling operations.
 
-    For example, let us consider the New Yorker Cartoon caption contest dataset, where cartoons are matched against the potential titles. Let us imagine we want to augment this dataset with synthetic scene descriptions coming from an AI model. The below code takes images from the cloud, and applies PaliGemma model to caption the first five of them and put the results in the column “scene”:
+    For example, let us consider the New Yorker Cartoon caption contest dataset, where cartoons are matched against the potential titles. Let us imagine we want to augment this dataset with synthetic scene descriptions coming from an AI model. The below code takes images from the cloud, and applies BLIP Large model to caption the first five of them and put the results in the column "scene":
 
     ```python
     import datachain as dc # (1)!
-    from transformers import AutoProcessor, PaliGemmaForConditionalGeneration # (2)!
+    from transformers import Pipeline, pipeline
+    from datachain import File
 
-    images = dc.read_storage("gs://datachain-demo/newyorker_caption_contest/images", type="image")
-
-    model = PaliGemmaForConditionalGeneration.from_pretrained("google/paligemma-3b-mix-224")
-    processor = AutoProcessor.from_pretrained("google/paligemma-3b-mix-224")
-
-    def process(file: File) -> str:
-      image=file.read().convert("RGB")
-      inputs = processor(text="caption", images=image, return_tensors="pt")
-      generate_ids = model.generate(**inputs, max_new_tokens=100)
-      return processor.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
+    def process(file: File, pipeline: Pipeline) -> str:
+        image = file.read().convert("RGB")
+        return pipeline(image)[0]["generated_text"]
 
     chain = (
-          images.limit(5)
-          .settings(cache=True)
-          .map(scene=lambda file: process(file), output = str)
-          .save()
+        dc.read_storage("gs://datachain-demo/newyorker_caption_contest/images", type="image", anon=True)
+        .limit(5)
+        .settings(cache=True)
+        .setup(pipeline=lambda: pipeline("image-to-text", model="Salesforce/blip-image-captioning-large"))
+        .map(scene=process)
+        .persist()
     )
     ```
 
-    1. `pip install datachain`
-    2. `pip install transformers`
+    1. `pip install datachain[hf]`
 
     Here is how we can view the results in a plot:
 
     ```python
     import matplotlib.pyplot as plt
-    import re
     from textwrap import wrap
 
-    def trim_text(text):
-        match = re.search(r'[A-Z][^.]*\.', text)
-        return match.group(0) if match else ''
+    count = chain.count()
+    _, axes = plt.subplots(1, count, figsize=(15, 5))
 
-    images = chain.collect("file")
-    captions = chain.collect("scene")
-    _ , axes = plt.subplots(1, len(captions), figsize=(15, 5))
+    for ax, (img_file, caption) in zip(axes, chain.to_iter("file", "scene")):
+        ax.imshow(img_file.read(), cmap="gray")
+        ax.axis("off")
+        wrapped_caption = "\n".join(wrap(caption.strip(), 40))
+        ax.set_title(wrapped_caption, fontsize=10, pad=20)
 
-    for ax, img, caption in zip(axes, images, captions):
-        ax.imshow(img.read(),cmap='gray')
-        ax.axis('off')
-        wrapped_caption = "\n".join(wrap(trim_text(caption), 30))
-        ax.set_title(wrapped_caption, fontsize=6)
-
+    plt.tight_layout()
     plt.show()
     ```
 
