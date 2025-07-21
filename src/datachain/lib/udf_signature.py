@@ -82,8 +82,7 @@ class UdfSignature:  # noqa: PLW1641
             for name, type_ in udf_output_map.keys():
                 if not name:
                     raise UdfSignatureError(
-                        chain,
-                        f"undefined column name in signature (type `{type_}`)"
+                        chain, f"undefined column name in signature (type `{type_}`)"
                     )
         else:
             if not func_outs_sign:
