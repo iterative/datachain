@@ -156,7 +156,7 @@ def add_storage_parser(subparsers, parent_parser) -> None:
         "destination_path",
         action="store",
         help="Path to the destination file or directory to copy",
-    )
+    ).complete = shtab.DIR  # type: ignore[attr-defined]
 
     storage_cp_parser.add_argument(
         "-r",

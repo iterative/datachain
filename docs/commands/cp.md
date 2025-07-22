@@ -5,7 +5,10 @@ Copy storage files and directories between cloud and local storage.
 ## Synopsis
 
 ```usage
-usage: datachain cp [-h] [-v] [-q] [-r] [--team TEAM] [--local] [--anon] [--update] [--no-glob] [--force] source_path destination_path
+usage: datachain cp [-h] [-v] [-q] [-r] [--team TEAM]
+             [--local] [--anon] [--update]
+             [--no-glob] [--force]
+             source_path destination_path
 ```
 
 ## Description
@@ -143,33 +146,9 @@ datachain cp --local --force s3://my-bucket/data /path/to/local/
 datachain cp --local --update --no-glob s3://my-bucket/data/*.txt /path/to/local/
 ```
 
-## Limitations and Edge Cases
-
-### Bucket Restrictions
+## Limitations
 - **Cannot copy between different buckets**: Remote-to-remote copies must be within the same bucket
-- **Cross-bucket operations**: Use local as intermediate step for cross-bucket copies
-
-### Directory Operations
-- **Recursive flag required**: Copying directories requires the `--recursive` flag
-- **Directory structure preservation**: Directory structure is preserved during copy operations
-- **Empty directories**: Empty directories may not be copied in some scenarios
-
-
-### Error Handling
-- **File not found**: Missing source files result in operation failure
-- **Permission errors**: Insufficient permissions cause operation failure
-- **Network issues**: Network problems are reported with appropriate error messages
-
-### Team Configuration
-- **Default team**: If no team is specified, uses the team from your configuration
-- **Team-specific storage**: Each team has its own storage namespace
 
 ## Notes
-
-* Use the `--verbose` flag to get detailed information about the copy operation
-* The `--quiet` flag suppresses output except for errors
 * When using Studio mode, you must be authenticated with `datachain auth login` before using it
 * The `--local` mode bypasses Studio and operates directly with storage providers
-* Use `--recursive` flag when copying directories
-* The `--force` flag is only available in local mode and will overwrite existing files
-* For cross-bucket copies, consider using local storage as an intermediate step
