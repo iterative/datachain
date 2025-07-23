@@ -173,10 +173,10 @@ def add_storage_parser(subparsers, parent_parser) -> None:
     )
 
     storage_cp_parser.add_argument(
-        "--local",
+        "--studio-cloud-auth",
         default=False,
         action="store_true",
-        help="Copy data files from the cloud locally without Studio (Default: False)",
+        help="Use credentials from Studio for cloud operations (Default: False)",
     )
 
     storage_cp_parser.add_argument(
@@ -232,6 +232,13 @@ def add_storage_parser(subparsers, parent_parser) -> None:
         help="Team name to move storage contents from",
     )
 
+    mv_parser.add_argument(
+        "--studio-cloud-auth",
+        default=False,
+        action="store_true",
+        help="Use credentials from Studio for cloud operations (Default: False)",
+    )
+
     rm_parser = subparsers.add_parser(
         "rm",
         parents=[parent_parser],
@@ -253,4 +260,10 @@ def add_storage_parser(subparsers, parent_parser) -> None:
         "--team",
         action="store",
         help="Team name to delete storage contents from",
+    )
+    rm_parser.add_argument(
+        "--studio-cloud-auth",
+        default=False,
+        action="store_true",
+        help="Use credentials from Studio for cloud operations (Default: False)",
     )

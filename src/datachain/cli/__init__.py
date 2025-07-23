@@ -5,7 +5,6 @@ import traceback
 from multiprocessing import freeze_support
 from typing import TYPE_CHECKING, Optional
 
-from datachain.cli.commands.storages import cp_storage
 from datachain.cli.utils import get_logging_level
 
 from .commands import (
@@ -26,6 +25,8 @@ from .parser import get_parser
 logger = logging.getLogger("datachain")
 
 if TYPE_CHECKING:
+    from argparse import Namespace
+
     from datachain.catalog import Catalog
 
 
@@ -82,7 +83,6 @@ def main(argv: Optional[list[str]] = None) -> int:
 
 def handle_command(args, catalog, client_config) -> int:
     """Handle the different CLI commands."""
-    from datachain.cli.commands.storages import mv_storage, rm_storage
     from datachain.studio import process_auth_cli_args, process_jobs_args
 
     command_handlers = {
@@ -101,8 +101,8 @@ def handle_command(args, catalog, client_config) -> int:
         "gc": lambda: garbage_collect(catalog),
         "auth": lambda: process_auth_cli_args(args),
         "job": lambda: process_jobs_args(args),
-        "mv": lambda: mv_storage(args),
-        "rm": lambda: rm_storage(args),
+        "mv": lambda: handle_mv_command(args, catalog),
+        "rm": lambda: handle_rm_command(args, catalog),
     }
 
     handler = command_handlers.get(args.command)
@@ -115,23 +115,36 @@ def handle_command(args, catalog, client_config) -> int:
     return 1
 
 
-def handle_cp_command(args, catalog: "Catalog"):
+def _get_storage_implementation(args: "Namespace", catalog: "Catalog"):
+    from datachain.cli.commands.storage import (
+        LocalStorageImplementation,
+        StudioStorageImplementation,
+    )
     from datachain.config import Config
 
     config = Config().read().get("studio", {})
     token = config.get("token")
-    local = True if not token else args.local
-    if local:
-        return catalog.cp(
-            [args.source_path],
-            args.destination_path,
-            force=bool(args.force),
-            update=bool(args.update),
-            recursive=bool(args.recursive),
-            no_glob=args.no_glob,
-        )
+    studio = False if not token else args.studio_cloud_auth
+    return (
+        StudioStorageImplementation(args, catalog)
+        if studio
+        else LocalStorageImplementation(args, catalog)
+    )
 
-    return cp_storage(args)
+
+def handle_cp_command(args, catalog):
+    storage_implementation = _get_storage_implementation(args, catalog)
+    return storage_implementation.cp()
+
+
+def handle_mv_command(args, catalog):
+    storage_implementation = _get_storage_implementation(args, catalog)
+    return storage_implementation.mv()
+
+
+def handle_rm_command(args, catalog):
+    storage_implementation = _get_storage_implementation(args, catalog)
+    return storage_implementation.rm()
 
 
 def handle_clone_command(args, catalog):
