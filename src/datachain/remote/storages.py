@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 
 import requests
 
+from datachain.cli.commands.storage.utils import build_file_paths, validate_upload_args
 from datachain.error import DataChainError
 
 if TYPE_CHECKING:
@@ -28,8 +29,8 @@ def get_studio_client(args: "Namespace"):
 def upload_to_storage(args: "Namespace", local_fs: "AbstractFileSystem"):
     studio_client = get_studio_client(args)
 
-    is_dir = _validate_upload_args(args, local_fs)
-    file_paths = _build_file_paths(args, local_fs, is_dir)
+    is_dir = validate_upload_args(args, local_fs)
+    file_paths = build_file_paths(args, local_fs, is_dir)
     response = _get_presigned_urls(studio_client, args.destination_path, file_paths)
 
     for dest_path, source_path in file_paths.items():
@@ -40,8 +41,8 @@ def upload_to_storage(args: "Namespace", local_fs: "AbstractFileSystem"):
             local_fs,
         )
 
-    _save_upload_log(studio_client, args.destination_path, file_paths, local_fs)
     print(f"Successfully uploaded {len(file_paths)} file(s)")
+    return file_paths
 
 
 def download_from_storage(args: "Namespace", local_fs: "AbstractFileSystem"):
@@ -93,35 +94,6 @@ def copy_inside_storage(args: "Namespace"):
         raise DataChainError(response.message)
 
     print(f"Copied {args.source_path} to {args.destination_path}")
-
-
-def _validate_upload_args(args: "Namespace", local_fs: "AbstractFileSystem"):
-    """Validate upload arguments and raise appropriate errors."""
-    is_dir = local_fs.isdir(args.source_path)
-    if is_dir and not args.recursive:
-        raise DataChainError("Cannot copy directory without --recursive")
-    return is_dir
-
-
-def _build_file_paths(args: "Namespace", local_fs: "AbstractFileSystem", is_dir: bool):
-    """Build mapping of destination paths to source paths."""
-    from datachain.client.fsspec import Client
-
-    client = Client.get_implementation(args.destination_path)
-    _, subpath = client.split_url(args.destination_path)
-
-    if is_dir:
-        return {
-            os.path.join(subpath, os.path.relpath(path, args.source_path)): path
-            for path in local_fs.find(args.source_path)
-        }
-
-    destination_path = (
-        os.path.join(subpath, os.path.basename(args.source_path))
-        if args.destination_path.endswith(("/", "\\")) or not subpath
-        else subpath
-    )
-    return {destination_path: args.source_path}
 
 
 def _get_presigned_urls(
@@ -209,20 +181,3 @@ def _upload_single_file(
         )
 
     print(f"Uploaded {source_path} to {dest_path}")
-
-
-def _save_upload_log(
-    studio_client: "StudioClient",
-    destination_path: str,
-    file_paths: dict,
-    local_fs: "AbstractFileSystem",
-):
-    """Save upload log to studio."""
-    uploads = [
-        {
-            "path": dst,
-            "size": local_fs.info(src).get("size", 0),
-        }
-        for dst, src in file_paths.items()
-    ]
-    studio_client.save_upload_log(destination_path, uploads)
