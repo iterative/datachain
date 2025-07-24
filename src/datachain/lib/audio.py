@@ -98,7 +98,7 @@ def _encoding_to_format(encoding: str, file_ext: str) -> str:
     return file_ext if file_ext else "unknown"
 
 
-def audio_fragment_np(
+def audio_to_np(
     audio: "AudioFile", start: float = 0, duration: Optional[float] = None
 ) -> "tuple[ndarray, int]":
     """Load audio fragment as numpy array.
@@ -142,14 +142,17 @@ def audio_fragment_np(
         ) from exc
 
 
-def audio_fragment_bytes(
+def audio_to_bytes(
     audio: "AudioFile",
+    format: str = "wav",
     start: float = 0,
     duration: Optional[float] = None,
-    format: str = "wav",
 ) -> bytes:
-    """Convert audio fragment to bytes using soundfile."""
-    y, sr = audio_fragment_np(audio, start, duration)
+    """Convert audio to bytes using soundfile.
+
+    If duration is None, converts from start to end of file.
+    If start is 0 and duration is None, converts entire file."""
+    y, sr = audio_to_np(audio, start, duration)
 
     import io
 
@@ -160,39 +163,82 @@ def audio_fragment_bytes(
     return buffer.getvalue()
 
 
-def save_audio_fragment(
+def save_audio(
     audio: "AudioFile",
-    start: float,
-    end: float,
     output: str,
     format: Optional[str] = None,
+    start: float = 0,
+    end: Optional[float] = None,
 ) -> "AudioFile":
-    """Save audio fragment with timestamped filename.
-    Supports local and remote storage upload."""
-    if start < 0 or end < 0 or start >= end:
-        raise ValueError(
-            f"Can't save audio fragment for '{audio.path}', "
-            f"invalid time range: ({start:.3f}, {end:.3f})"
-        )
+    """Save audio file or extract fragment to specified format.
 
+    Args:
+        audio: Source AudioFile object
+        output: Output directory path
+        format: Output format ('wav', 'mp3', etc). Defaults to source format
+        start: Start time in seconds (>= 0). Defaults to 0
+        end: End time in seconds. If None, extracts to end of file
+
+    Returns:
+        AudioFile: New audio file with format conversion/extraction applied
+
+    Examples:
+        save_audio(audio, "/path", "mp3")                       # Entire file to MP3
+        save_audio(audio, "s3://bucket/path", "wav", start=2.5) # From 2.5s to end
+        save_audio(audio, "/path", "flac", start=1, end=3)      # Extract 1-3s fragment
+    """
     if format is None:
         format = audio.get_file_ext()
 
-    duration = end - start
-    start_ms = int(start * 1000)
-    end_ms = int(end * 1000)
-    output_file = posixpath.join(
-        output, f"{audio.get_file_stem()}_{start_ms:06d}_{end_ms:06d}.{format}"
-    )
+    # Validate start time
+    if start < 0:
+        raise ValueError(
+            f"Can't save audio for '{audio.path}', "
+            f"start time must be non-negative: {start:.3f}"
+        )
 
-    try:
-        audio_bytes = audio_fragment_bytes(audio, start, duration, format)
+    # Handle full file conversion when end is None and start is 0
+    if end is None and start == 0:
+        output_file = posixpath.join(output, f"{audio.get_file_stem()}.{format}")
+        try:
+            audio_bytes = audio_to_bytes(audio, format, start=0, duration=None)
+        except Exception as exc:
+            raise FileError(
+                "unable to convert audio file", audio.source, audio.path
+            ) from exc
+    elif end is None:
+        # Extract from start to end of file
+        output_file = posixpath.join(
+            output, f"{audio.get_file_stem()}_{int(start * 1000):06d}_end.{format}"
+        )
+        try:
+            audio_bytes = audio_to_bytes(audio, format, start=start, duration=None)
+        except Exception as exc:
+            raise FileError(
+                "unable to save audio fragment", audio.source, audio.path
+            ) from exc
+    else:
+        # Fragment extraction mode with specific end time
+        if end < 0 or start >= end:
+            raise ValueError(
+                f"Can't save audio for '{audio.path}', "
+                f"invalid time range: ({start:.3f}, {end:.3f})"
+            )
 
-        from datachain.lib.file import AudioFile
+        duration = end - start
+        start_ms = int(start * 1000)
+        end_ms = int(end * 1000)
+        output_file = posixpath.join(
+            output, f"{audio.get_file_stem()}_{start_ms:06d}_{end_ms:06d}.{format}"
+        )
 
-        return AudioFile.upload(audio_bytes, output_file, catalog=audio._catalog)
+        try:
+            audio_bytes = audio_to_bytes(audio, format, start, duration)
+        except Exception as exc:
+            raise FileError(
+                "unable to save audio fragment", audio.source, audio.path
+            ) from exc
 
-    except Exception as exc:
-        raise FileError(
-            "unable to save audio fragment", audio.source, audio.path
-        ) from exc
+    from datachain.lib.file import AudioFile
+
+    return AudioFile.upload(audio_bytes, output_file, catalog=audio._catalog)
