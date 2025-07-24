@@ -6,9 +6,9 @@ import pytest
 import soundfile as sf
 
 from datachain.lib.audio import (
-    audio_to_bytes,
     audio_fragment_np,
     audio_info,
+    audio_to_bytes,
     save_audio,
 )
 from datachain.lib.file import Audio, AudioFile, FileError
@@ -175,9 +175,7 @@ def test_save_audio(audio_file, tmp_path):
 
 def test_save_audio_validation(audio_file, tmp_path):
     """Test input validation for save_audio."""
-    with pytest.raises(
-        ValueError, match="start time must be non-negative"
-    ):
+    with pytest.raises(ValueError, match="start time must be non-negative"):
         save_audio(audio_file, output=str(tmp_path), start=-1.0, end=1.0)
 
     with pytest.raises(ValueError, match="Can't save audio.*invalid time range"):
@@ -209,7 +207,9 @@ def test_save_audio_full_file_conversion(audio_file, tmp_path):
 def test_save_audio_start_to_end(audio_file, tmp_path):
     """Test saving audio from start time to end of file (end=None, start>0)."""
     with patch("datachain.lib.file.AudioFile.upload") as mock_upload:
-        mock_uploaded_file = AudioFile(path="test_audio_000500_end.wav", source="file://")
+        mock_uploaded_file = AudioFile(
+            path="test_audio_000500_end.wav", source="file://"
+        )
         mock_upload.return_value = mock_uploaded_file
 
         result = save_audio(audio_file, output=str(tmp_path), format="wav", start=0.5)

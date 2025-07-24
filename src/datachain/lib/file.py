@@ -964,11 +964,11 @@ class AudioFile(File):
             yield self.get_fragment(start, min(start + duration, end))
             start += duration
 
-    def save( # type: ignore[override]
+    def save(  # type: ignore[override]
         self,
         output: str,
         format: Optional[str] = None,
-        client_config: Optional[dict] = None
+        client_config: Optional[dict] = None,
     ) -> "AudioFile":
         """
         Saves the audio as a new file of a specified format.

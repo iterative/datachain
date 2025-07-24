@@ -149,7 +149,7 @@ def audio_to_bytes(
     duration: Optional[float] = None,
 ) -> bytes:
     """Convert audio to bytes using soundfile.
-    
+
     If duration is None, converts from start to end of file.
     If start is 0 and duration is None, converts entire file."""
     y, sr = audio_fragment_np(audio, start, duration)
@@ -204,7 +204,7 @@ def save_audio(
             f"Can't save audio for '{audio.path}', "
             f"start time must be non-negative: {start:.3f}"
         )
-    
+
     # Handle full file conversion when end is None and start is 0
     if end is None and start == 0:
         output_file = posixpath.join(output, f"{audio.get_file_stem()}.{format}")
@@ -216,7 +216,9 @@ def save_audio(
             ) from exc
     elif end is None:
         # Extract from start to end of file
-        output_file = posixpath.join(output, f"{audio.get_file_stem()}_{int(start * 1000):06d}_end.{format}")
+        output_file = posixpath.join(
+            output, f"{audio.get_file_stem()}_{int(start * 1000):06d}_end.{format}"
+        )
         try:
             audio_bytes = audio_to_bytes(audio, format, start=start, duration=None)
         except Exception as exc:
