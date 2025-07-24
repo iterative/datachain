@@ -142,13 +142,16 @@ def audio_fragment_np(
         ) from exc
 
 
-def audio_fragment_bytes(
+def audio_to_bytes(
     audio: "AudioFile",
+    format: str = "wav",
     start: float = 0,
     duration: Optional[float] = None,
-    format: str = "wav",
 ) -> bytes:
-    """Convert audio fragment to bytes using soundfile."""
+    """Convert audio to bytes using soundfile.
+    
+    If duration is None, converts from start to end of file.
+    If start is 0 and duration is None, converts entire file."""
     y, sr = audio_fragment_np(audio, start, duration)
 
     import io
@@ -160,60 +163,68 @@ def audio_fragment_bytes(
     return buffer.getvalue()
 
 
-def audio_to_bytes(audio: "AudioFile", format: str = "wav") -> bytes:
-    """Convert entire audio file to bytes in specified format."""
-    return audio_fragment_bytes(audio, start=0, duration=None, format=format)
-
-
 def save_audio(
     audio: "AudioFile",
     output: str,
     format: Optional[str] = None,
-    start: float = -1,
-    end: float = -1,
+    start: float = 0,
+    end: Optional[float] = None,
 ) -> "AudioFile":
     """Save audio fragment or convert entire audio file.
 
-    Supports two modes:
-    1. Fragment extraction (start >= 0): Extracts audio between start and end times,
-       saves with timestamped filename: {stem}_{start_ms}_{end_ms}.{format}
-    2. Full file conversion (start < 0): Converts entire audio to specified format,
+    Supports three modes:
+    1. Full file conversion (start=0, end=None): Converts entire audio to specified format,
        saves as: {stem}.{format}
+    2. Extract from start to end of file (start>0, end=None): Extracts audio from start time to end,
+       saves as: {stem}_{start_ms}_end.{format}
+    3. Fragment extraction (start>=0, end is not None): Extracts audio between start and end times,
+       saves as: {stem}_{start_ms}_{end_ms}.{format}
 
     Args:
         audio: Source AudioFile object
-        start: Start time in seconds. If negative, triggers full file conversion
-        end: End time in seconds (ignored when start < 0)
         output: Output directory path
         format: Output format (e.g., 'wav', 'mp3'). Defaults to source format
+        start: Start time in seconds. Must be non-negative. Defaults to 0
+        end: End time in seconds. If None, extracts to end of file
 
     Returns:
         AudioFile: Uploaded audio file object
 
     Raises:
-        ValueError: Invalid time range for fragment extraction
+        ValueError: Invalid time range (negative start or end < start)
         FileError: Unable to process audio file
 
     Supports local and remote storage upload."""
     if format is None:
         format = audio.get_file_ext()
 
+    # Validate start time
     if start < 0:
-        if end > 0:
-            raise ValueError(
-                f"Can't save audio for '{audio.path}', "
-                f"invalid time range: ({start:.3f}, {end:.3f})"
-            )
-
-        # Handle full file conversion when start < 0 and end < 0
+        raise ValueError(
+            f"Can't save audio for '{audio.path}', "
+            f"start time must be non-negative: {start:.3f}"
+        )
+    
+    # Handle full file conversion when end is None and start is 0
+    if end is None and start == 0:
         output_file = posixpath.join(output, f"{audio.get_file_stem()}.{format}")
         try:
-            audio_bytes = audio_to_bytes(audio, format)
+            audio_bytes = audio_to_bytes(audio, format, start=0, duration=None)
         except Exception as exc:
             raise FileError(
                 "unable to convert audio file", audio.source, audio.path
             ) from exc
+    elif end is None:
+        # Extract from start to end of file
+        output_file = posixpath.join(output, f"{audio.get_file_stem()}_{int(start * 1000):06d}_end.{format}")
+        try:
+            audio_bytes = audio_to_bytes(audio, format, start=start, duration=None)
+        except Exception as exc:
+            raise FileError(
+                "unable to save audio fragment", audio.source, audio.path
+            ) from exc
     else:
+        # Fragment extraction mode with specific end time
         if end < 0 or start >= end:
             raise ValueError(
                 f"Can't save audio for '{audio.path}', "
@@ -228,7 +239,7 @@ def save_audio(
         )
 
         try:
-            audio_bytes = audio_fragment_bytes(audio, start, duration, format)
+            audio_bytes = audio_to_bytes(audio, format, start, duration)
         except Exception as exc:
             raise FileError(
                 "unable to save audio fragment", audio.source, audio.path

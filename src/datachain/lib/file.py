@@ -964,7 +964,12 @@ class AudioFile(File):
             yield self.get_fragment(start, min(start + duration, end))
             start += duration
 
-    def save(self, output: str, format: Optional[str] = None) -> "AudioFile":
+    def save( # type: ignore[override]
+        self,
+        output: str,
+        format: Optional[str] = None,
+        client_config: Optional[dict] = None
+    ) -> "AudioFile":
         """
         Saves the audio as a new file of a specified format.
 
@@ -982,7 +987,7 @@ class AudioFile(File):
         """
         from .audio import save_audio
 
-        return save_audio(self.audio, output, format)
+        return save_audio(self, output, format)
 
 
 class AudioFragment(DataModel):
@@ -1027,10 +1032,10 @@ class AudioFragment(DataModel):
         Returns:
             bytes: The encoded audio fragment as bytes.
         """
-        from .audio import audio_fragment_bytes
+        from .audio import audio_to_bytes
 
         duration = self.end - self.start
-        return audio_fragment_bytes(self.audio, self.start, duration, format)
+        return audio_to_bytes(self.audio, format, self.start, duration)
 
     def save(self, output: str, format: Optional[str] = None) -> "AudioFile":
         """
