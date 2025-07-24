@@ -396,7 +396,7 @@ def test_to_storage(
         with open(tmp_dir / "output" / file_path) as f:
             assert f.read() == expected[file.name]
 
-    assert mapper.call_count == 7
+    assert mapper.call_count == len(expected)
 
 
 @pytest.mark.parametrize("use_cache", [True, False])
