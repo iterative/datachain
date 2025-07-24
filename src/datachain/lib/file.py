@@ -964,6 +964,26 @@ class AudioFile(File):
             yield self.get_fragment(start, min(start + duration, end))
             start += duration
 
+    def save(self, output: str, format: Optional[str] = None) -> "AudioFile":
+        """
+        Saves the audio as a new file of a specified format.
+
+        If `output` is a remote path, the file will be uploaded to remote storage.
+
+        Args:
+            output (str): The destination path, which can be a local file path
+                          or a remote URL.
+            format (str, optional): The output audio format (e.g., 'wav', 'mp3').
+                                    If None, the format is inferred from the
+                                    file extension.
+
+        Returns:
+            AudioFile: A Model representing the saved audio file.
+        """
+        from .audio import save_audio
+
+        return save_audio(self.audio, output, format)
+
 
 class AudioFragment(DataModel):
     """
@@ -1028,9 +1048,9 @@ class AudioFragment(DataModel):
         Returns:
             AudioFile: A Model representing the saved audio file.
         """
-        from .audio import save_audio_fragment
+        from .audio import save_audio
 
-        return save_audio_fragment(self.audio, self.start, self.end, output, format)
+        return save_audio(self.audio, output, format, self.start, self.end)
 
 
 class VideoFrame(DataModel):

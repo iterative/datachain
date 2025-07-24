@@ -9,7 +9,7 @@ from datachain.lib.audio import (
     audio_fragment_bytes,
     audio_fragment_np,
     audio_info,
-    save_audio_fragment,
+    save_audio,
 )
 from datachain.lib.file import Audio, AudioFile, FileError
 
@@ -143,8 +143,8 @@ def test_audio_fragment_bytes_custom_format(audio_file):
     assert len(audio_bytes) > 0
 
 
-def test_save_audio_fragment(audio_file, tmp_path):
-    """Test saving audio fragment."""
+def test_save_audio(audio_file, tmp_path):
+    """Test saving audio (fragment extraction mode)."""
     with patch("datachain.lib.file.AudioFile.upload") as mock_upload:
         # Mock the upload to return a new AudioFile
         mock_uploaded_file = AudioFile(
@@ -152,8 +152,8 @@ def test_save_audio_fragment(audio_file, tmp_path):
         )
         mock_upload.return_value = mock_uploaded_file
 
-        result = save_audio_fragment(
-            audio_file, start=0.5, end=1.5, output=str(tmp_path), format="wav"
+        result = save_audio(
+            audio_file, output=str(tmp_path), format="wav", start=0.5, end=1.5
         )
 
         # Verify AudioFile.upload was called
@@ -173,21 +173,21 @@ def test_save_audio_fragment(audio_file, tmp_path):
         assert result == mock_uploaded_file
 
 
-def test_save_audio_fragment_validation(audio_file, tmp_path):
-    """Test input validation for save_audio_fragment."""
+def test_save_audio_validation(audio_file, tmp_path):
+    """Test input validation for save_audio."""
     with pytest.raises(
-        ValueError, match="Can't save audio fragment.*invalid time range"
+        ValueError, match="Can't save audio.*invalid time range"
     ):
-        save_audio_fragment(audio_file, start=-1.0, end=1.0, output=str(tmp_path))
+        save_audio(audio_file, output=str(tmp_path), start=-1.0, end=1.0)
 
     with pytest.raises(
-        ValueError, match="Can't save audio fragment.*invalid time range"
+        ValueError, match="Can't save audio.*invalid time range"
     ):
-        save_audio_fragment(audio_file, start=2.0, end=1.0, output=str(tmp_path))
+        save_audio(audio_file, output=str(tmp_path), start=2.0, end=1.0)
 
 
-def test_save_audio_fragment_auto_format(tmp_path, catalog):
-    """Test saving audio fragment with auto-detected format."""
+def test_save_audio_auto_format(tmp_path, catalog):
+    """Test saving audio with auto-detected format."""
     audio_data = generate_test_wav(duration=1.0, sample_rate=16000)
     audio_path = tmp_path / "test_audio.flac"
     buffer = io.BytesIO(audio_data)
@@ -201,7 +201,7 @@ def test_save_audio_fragment_auto_format(tmp_path, catalog):
     with patch("datachain.lib.file.AudioFile.upload") as mock_upload:
         mock_upload.return_value = AudioFile(path="test_output.flac", source="file://")
 
-        save_audio_fragment(audio_file, start=0.0, end=1.0, output=str(tmp_path))
+        save_audio(audio_file, output=str(tmp_path), start=0.0, end=1.0)
 
         # Should use format from file extension
         call_args = mock_upload.call_args
@@ -229,13 +229,13 @@ def test_audio_fragment_np_file_error(audio_file):
             audio_fragment_np(audio_file)
 
 
-def test_save_audio_fragment_file_error(audio_file, tmp_path):
-    """Test save_audio_fragment handles errors properly."""
+def test_save_audio_file_error(audio_file, tmp_path):
+    """Test save_audio handles errors properly."""
     with patch(
         "datachain.lib.audio.audio_fragment_bytes", side_effect=Exception("Test error")
     ):
         with pytest.raises(FileError, match="unable to save audio fragment"):
-            save_audio_fragment(audio_file, start=0.0, end=1.0, output=str(tmp_path))
+            save_audio(audio_file, output=str(tmp_path), start=0.0, end=1.0)
 
 
 @pytest.mark.parametrize("start,duration", [(0.0, 1.0), (0.5, 0.5), (1.0, 1.0)])

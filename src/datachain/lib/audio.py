@@ -165,25 +165,43 @@ def audio_to_bytes(audio: "AudioFile", format: str = "wav") -> bytes:
     return audio_fragment_bytes(audio, start=0, duration=None, format=format)
 
 
-def save_audio_fragment(
+def save_audio(
     audio: "AudioFile",
-    start: float,
-    end: float,
     output: str,
     format: Optional[str] = None,
+    start: float = -1,
+    end: float = -1,
 ) -> "AudioFile":
-    """Save audio fragment with timestamped filename.
-    Supports local and remote storage upload.
-
-    If start is negative, converts the entire audio file to the specified format
-    without clipping."""
+    """Save audio fragment or convert entire audio file.
+    
+    Supports two modes:
+    1. Fragment extraction (start >= 0): Extracts audio between start and end times,
+       saves with timestamped filename: {stem}_{start_ms}_{end_ms}.{format}
+    2. Full file conversion (start < 0): Converts entire audio to specified format,
+       saves as: {stem}.{format}
+    
+    Args:
+        audio: Source AudioFile object
+        start: Start time in seconds. If negative, triggers full file conversion
+        end: End time in seconds (ignored when start < 0)
+        output: Output directory path
+        format: Output format (e.g., 'wav', 'mp3'). Defaults to source format
+    
+    Returns:
+        AudioFile: Uploaded audio file object
+    
+    Raises:
+        ValueError: Invalid time range for fragment extraction
+        FileError: Unable to process audio file
+    
+    Supports local and remote storage upload."""
     if format is None:
         format = audio.get_file_ext()
 
     if start < 0:
         if end > 0:
             raise ValueError(
-                f"Can't save audio fragment for '{audio.path}', "
+                f"Can't save audio for '{audio.path}', "
                 f"invalid time range: ({start:.3f}, {end:.3f})"
             )
 
@@ -196,10 +214,9 @@ def save_audio_fragment(
                 "unable to convert audio file", audio.source, audio.path
             ) from exc
     else:
-        # Original fragment logic
         if end < 0 or start >= end:
             raise ValueError(
-                f"Can't save audio fragment for '{audio.path}', "
+                f"Can't save audio for '{audio.path}', "
                 f"invalid time range: ({start:.3f}, {end:.3f})"
             )
 
