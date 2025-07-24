@@ -173,27 +173,27 @@ def save_audio(
     end: float = -1,
 ) -> "AudioFile":
     """Save audio fragment or convert entire audio file.
-    
+
     Supports two modes:
     1. Fragment extraction (start >= 0): Extracts audio between start and end times,
        saves with timestamped filename: {stem}_{start_ms}_{end_ms}.{format}
     2. Full file conversion (start < 0): Converts entire audio to specified format,
        saves as: {stem}.{format}
-    
+
     Args:
         audio: Source AudioFile object
         start: Start time in seconds. If negative, triggers full file conversion
         end: End time in seconds (ignored when start < 0)
         output: Output directory path
         format: Output format (e.g., 'wav', 'mp3'). Defaults to source format
-    
+
     Returns:
         AudioFile: Uploaded audio file object
-    
+
     Raises:
         ValueError: Invalid time range for fragment extraction
         FileError: Unable to process audio file
-    
+
     Supports local and remote storage upload."""
     if format is None:
         format = audio.get_file_ext()
