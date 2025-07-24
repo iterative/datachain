@@ -9,7 +9,7 @@ import uuid
 from collections.abc import Iterator
 from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import numpy as np
 import pandas as pd
@@ -358,15 +358,24 @@ def test_to_storage(
     file_type,
     num_threads,
 ):
+    mapper = Mock(side_effect=lambda file_path: len(file_path))
+
     ctc = cloud_test_catalog
     df = dc.read_storage(ctc.src_uri, type=file_type, session=test_session)
     if use_map:
-        df.settings(cache=use_cache).map(
-            res=lambda file: file.export(tmp_dir / "output", placement=placement)
-        ).exec()
+        (
+            df.settings(cache=use_cache)
+            .map(mapper, params=["file.path"], output={"path_len": int})
+            .map(res=lambda file: file.export(tmp_dir / "output", placement=placement))
+            .exec()
+        )
     else:
-        df.settings(cache=use_cache).to_storage(
-            tmp_dir / "output", placement=placement, num_threads=num_threads
+        (
+            df.settings(cache=use_cache)
+            .map(mapper, params=["file.path"], output={"path_len": int})
+            .to_storage(
+                tmp_dir / "output", placement=placement, num_threads=num_threads
+            )
         )
 
     expected = {
@@ -386,6 +395,8 @@ def test_to_storage(
             file_path = file.get_full_name()
         with open(tmp_dir / "output" / file_path) as f:
             assert f.read() == expected[file.name]
+
+    assert mapper.call_count == 7
 
 
 @pytest.mark.parametrize("use_cache", [True, False])
