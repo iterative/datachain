@@ -1016,10 +1016,10 @@ class AudioFragment(DataModel):
             tuple[ndarray, int]: A tuple containing the audio data as a NumPy array
                                and the sample rate.
         """
-        from .audio import audio_fragment_np
+        from .audio import audio_to_np
 
         duration = self.end - self.start
-        return audio_fragment_np(self.audio, self.start, duration)
+        return audio_to_np(self.audio, self.start, duration)
 
     def read_bytes(self, format: str = "wav") -> bytes:
         """

@@ -98,7 +98,7 @@ def _encoding_to_format(encoding: str, file_ext: str) -> str:
     return file_ext if file_ext else "unknown"
 
 
-def audio_fragment_np(
+def audio_to_np(
     audio: "AudioFile", start: float = 0, duration: Optional[float] = None
 ) -> "tuple[ndarray, int]":
     """Load audio fragment as numpy array.
@@ -152,7 +152,7 @@ def audio_to_bytes(
 
     If duration is None, converts from start to end of file.
     If start is 0 and duration is None, converts entire file."""
-    y, sr = audio_fragment_np(audio, start, duration)
+    y, sr = audio_to_np(audio, start, duration)
 
     import io
 

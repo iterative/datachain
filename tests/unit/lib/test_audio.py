@@ -6,9 +6,9 @@ import pytest
 import soundfile as sf
 
 from datachain.lib.audio import (
-    audio_fragment_np,
     audio_info,
     audio_to_bytes,
+    audio_to_np,
     save_audio,
 )
 from datachain.lib.file import Audio, AudioFile, FileError
@@ -76,7 +76,7 @@ def test_audio_info(audio_file):
 
 def test_audio_fragment_np_full(audio_file):
     """Test loading full audio fragment as numpy array."""
-    audio_np, sr = audio_fragment_np(audio_file)
+    audio_np, sr = audio_to_np(audio_file)
 
     assert isinstance(audio_np, np.ndarray)
     assert sr == 16000
@@ -87,7 +87,7 @@ def test_audio_fragment_np_full(audio_file):
 def test_audio_fragment_np_partial(audio_file):
     """Test loading partial audio fragment."""
     # Load 0.5 seconds starting from 0.5 seconds
-    audio_np, sr = audio_fragment_np(audio_file, start=0.5, duration=0.5)
+    audio_np, sr = audio_to_np(audio_file, start=0.5, duration=0.5)
 
     assert isinstance(audio_np, np.ndarray)
     assert sr == 16000
@@ -97,16 +97,16 @@ def test_audio_fragment_np_partial(audio_file):
 def test_audio_fragment_np_validation(audio_file):
     """Test input validation for audio_fragment_np."""
     with pytest.raises(ValueError, match="start must be a non-negative float"):
-        audio_fragment_np(audio_file, start=-1.0)
+        audio_to_np(audio_file, start=-1.0)
 
     with pytest.raises(ValueError, match="duration must be a positive float"):
-        audio_fragment_np(audio_file, duration=0.0)
+        audio_to_np(audio_file, duration=0.0)
 
 
 def test_audio_fragment_np_with_file_interface(audio_file):
     """Test audio_fragment_np with File interface."""
     # Test that the audio_file fixture (which is already an AudioFile) works
-    audio_np, sr = audio_fragment_np(audio_file)
+    audio_np, sr = audio_to_np(audio_file)
 
     assert isinstance(audio_np, np.ndarray)
     assert sr == 16000
@@ -114,7 +114,7 @@ def test_audio_fragment_np_with_file_interface(audio_file):
 
 def test_audio_fragment_np_multichannel(stereo_audio_file):
     """Test multichannel audio handling."""
-    audio_np, sr = audio_fragment_np(stereo_audio_file)
+    audio_np, sr = audio_to_np(stereo_audio_file)
 
     # Should be transposed to (samples, channels)
     assert audio_np.shape == (16000, 2)  # 1 second at 16kHz, 2 channels
@@ -268,7 +268,7 @@ def test_audio_fragment_np_file_error(audio_file):
         "datachain.lib.audio.torchaudio.info", side_effect=Exception("Test error")
     ):
         with pytest.raises(FileError, match="unable to read audio fragment"):
-            audio_fragment_np(audio_file)
+            audio_to_np(audio_file)
 
 
 def test_save_audio_file_error(audio_file, tmp_path):
@@ -283,7 +283,7 @@ def test_save_audio_file_error(audio_file, tmp_path):
 @pytest.mark.parametrize("start,duration", [(0.0, 1.0), (0.5, 0.5), (1.0, 1.0)])
 def test_audio_fragment_np_different_durations(audio_file, start, duration):
     """Test audio loading with different start times and durations."""
-    audio_np, sr = audio_fragment_np(audio_file, start=start, duration=duration)
+    audio_np, sr = audio_to_np(audio_file, start=start, duration=duration)
 
     assert isinstance(audio_np, np.ndarray)
     assert sr == 16000
