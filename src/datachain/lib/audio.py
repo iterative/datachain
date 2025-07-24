@@ -174,7 +174,7 @@ def save_audio_fragment(
 ) -> "AudioFile":
     """Save audio fragment with timestamped filename.
     Supports local and remote storage upload.
-    
+
     If start is negative, converts the entire audio file to the specified format
     without clipping."""
     if format is None:
@@ -188,9 +188,7 @@ def save_audio_fragment(
             )
 
         # Handle full file conversion when start < 0 and end < 0
-        output_file = posixpath.join(
-            output, f"{audio.get_file_stem()}.{format}"
-        )
+        output_file = posixpath.join(output, f"{audio.get_file_stem()}.{format}")
         try:
             audio_bytes = audio_to_bytes(audio, format)
         except Exception as exc:
@@ -204,14 +202,14 @@ def save_audio_fragment(
                 f"Can't save audio fragment for '{audio.path}', "
                 f"invalid time range: ({start:.3f}, {end:.3f})"
             )
-        
+
         duration = end - start
         start_ms = int(start * 1000)
         end_ms = int(end * 1000)
         output_file = posixpath.join(
             output, f"{audio.get_file_stem()}_{start_ms:06d}_{end_ms:06d}.{format}"
         )
-        
+
         try:
             audio_bytes = audio_fragment_bytes(audio, start, duration, format)
         except Exception as exc:
