@@ -160,6 +160,11 @@ def audio_fragment_bytes(
     return buffer.getvalue()
 
 
+def audio_to_bytes(audio: "AudioFile", format: str = "wav") -> bytes:
+    """Convert entire audio file to bytes in specified format."""
+    return audio_fragment_bytes(audio, start=0, duration=None, format=format)
+
+
 def save_audio_fragment(
     audio: "AudioFile",
     start: float,
@@ -168,31 +173,52 @@ def save_audio_fragment(
     format: Optional[str] = None,
 ) -> "AudioFile":
     """Save audio fragment with timestamped filename.
-    Supports local and remote storage upload."""
-    if start < 0 or end < 0 or start >= end:
-        raise ValueError(
-            f"Can't save audio fragment for '{audio.path}', "
-            f"invalid time range: ({start:.3f}, {end:.3f})"
-        )
-
+    Supports local and remote storage upload.
+    
+    If start is negative, converts the entire audio file to the specified format
+    without clipping."""
     if format is None:
         format = audio.get_file_ext()
 
-    duration = end - start
-    start_ms = int(start * 1000)
-    end_ms = int(end * 1000)
-    output_file = posixpath.join(
-        output, f"{audio.get_file_stem()}_{start_ms:06d}_{end_ms:06d}.{format}"
-    )
+    if start < 0:
+        if end > 0:
+            raise ValueError(
+                f"Can't save audio fragment for '{audio.path}', "
+                f"invalid time range: ({start:.3f}, {end:.3f})"
+            )
 
-    try:
-        audio_bytes = audio_fragment_bytes(audio, start, duration, format)
+        # Handle full file conversion when start < 0 and end < 0
+        output_file = posixpath.join(
+            output, f"{audio.get_file_stem()}.{format}"
+        )
+        try:
+            audio_bytes = audio_to_bytes(audio, format)
+        except Exception as exc:
+            raise FileError(
+                "unable to convert audio file", audio.source, audio.path
+            ) from exc
+    else:
+        # Original fragment logic
+        if end < 0 or start >= end:
+            raise ValueError(
+                f"Can't save audio fragment for '{audio.path}', "
+                f"invalid time range: ({start:.3f}, {end:.3f})"
+            )
+        
+        duration = end - start
+        start_ms = int(start * 1000)
+        end_ms = int(end * 1000)
+        output_file = posixpath.join(
+            output, f"{audio.get_file_stem()}_{start_ms:06d}_{end_ms:06d}.{format}"
+        )
+        
+        try:
+            audio_bytes = audio_fragment_bytes(audio, start, duration, format)
+        except Exception as exc:
+            raise FileError(
+                "unable to save audio fragment", audio.source, audio.path
+            ) from exc
 
-        from datachain.lib.file import AudioFile
+    from datachain.lib.file import AudioFile
 
-        return AudioFile.upload(audio_bytes, output_file, catalog=audio._catalog)
-
-    except Exception as exc:
-        raise FileError(
-            "unable to save audio fragment", audio.source, audio.path
-        ) from exc
+    return AudioFile.upload(audio_bytes, output_file, catalog=audio._catalog)
