@@ -170,31 +170,23 @@ def save_audio(
     start: float = 0,
     end: Optional[float] = None,
 ) -> "AudioFile":
-    """Save audio fragment or convert entire audio file.
-
-    Supports three modes:
-    1. Full file conversion (start=0, end=None): Converts entire audio to specified format,
-       saves as: {stem}.{format}
-    2. Extract from start to end of file (start>0, end=None): Extracts audio from start time to end,
-       saves as: {stem}_{start_ms}_end.{format}
-    3. Fragment extraction (start>=0, end is not None): Extracts audio between start and end times,
-       saves as: {stem}_{start_ms}_{end_ms}.{format}
+    """Save audio file or extract fragment to specified format.
 
     Args:
         audio: Source AudioFile object
         output: Output directory path
-        format: Output format (e.g., 'wav', 'mp3'). Defaults to source format
-        start: Start time in seconds. Must be non-negative. Defaults to 0
+        format: Output format ('wav', 'mp3', etc). Defaults to source format
+        start: Start time in seconds (>= 0). Defaults to 0
         end: End time in seconds. If None, extracts to end of file
 
     Returns:
-        AudioFile: Uploaded audio file object
+        AudioFile: New audio file with format conversion/extraction applied
 
-    Raises:
-        ValueError: Invalid time range (negative start or end < start)
-        FileError: Unable to process audio file
-
-    Supports local and remote storage upload."""
+    Examples:
+        save_audio(audio, "/path", "mp3")                       # Entire file to MP3
+        save_audio(audio, "s3://bucket/path", "wav", start=2.5) # From 2.5s to end
+        save_audio(audio, "/path", "flac", start=1, end=3)      # Extract 1-3s fragment
+    """
     if format is None:
         format = audio.get_file_ext()
 

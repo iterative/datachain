@@ -968,26 +968,30 @@ class AudioFile(File):
         self,
         output: str,
         format: Optional[str] = None,
+        start: float = 0,
+        end: Optional[float] = None,
         client_config: Optional[dict] = None,
     ) -> "AudioFile":
-        """
-        Saves the audio as a new file of a specified format.
-
-        If `output` is a remote path, the file will be uploaded to remote storage.
+        """Save audio file or extract fragment to specified format.
 
         Args:
-            output (str): The destination path, which can be a local file path
-                          or a remote URL.
-            format (str, optional): The output audio format (e.g., 'wav', 'mp3').
-                                    If None, the format is inferred from the
-                                    file extension.
+            output: Output directory path
+            format: Output format ('wav', 'mp3', etc). Defaults to source format
+            start: Start time in seconds (>= 0). Defaults to 0
+            end: End time in seconds. If None, extracts to end of file
+            client_config: Optional client configuration
 
         Returns:
-            AudioFile: A Model representing the saved audio file.
+            AudioFile: New audio file with format conversion/extraction applied
+
+        Examples:
+            audio.save("/path", "mp3")                        # Entire file to MP3
+            audio.save("s3://bucket/path", "wav", start=2.5)  # From 2.5s to end as WAV
+            audio.save("/path", "flac", start=1, end=3)       # 1-3s fragment as FLAC
         """
         from .audio import save_audio
 
-        return save_audio(self, output, format)
+        return save_audio(self, output, format, start, end)
 
 
 class AudioFragment(DataModel):

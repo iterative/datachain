@@ -228,6 +228,27 @@ def test_save_audio_start_to_end(audio_file, tmp_path):
         assert result == mock_uploaded_file
 
 
+def test_audiofile_save(audio_file, tmp_path):
+    with patch("datachain.lib.file.AudioFile.upload") as mock_upload:
+        mock_uploaded_file = AudioFile(path="test_audio.mp3", source="file://")
+        mock_upload.return_value = mock_uploaded_file
+
+        result = audio_file.save(output=str(tmp_path), format="mp3", start=1.0, end=2.0)
+
+        # Verify AudioFile.upload was called
+        mock_upload.assert_called_once()
+        call_args = mock_upload.call_args
+
+        # Check that the audio bytes were generated
+        assert isinstance(call_args[0][0], bytes)
+
+        # Check that the output file has correct format and timestamps
+        output_file = call_args[0][1]
+        assert output_file == str(tmp_path) + "/test_audio_001000_002000.mp3"
+
+        assert result == mock_uploaded_file
+
+
 def test_save_audio_auto_format(tmp_path, catalog):
     """Test saving audio with auto-detected format."""
     audio_data = generate_test_wav(duration=1.0, sample_rate=16000)
