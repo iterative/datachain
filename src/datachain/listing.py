@@ -65,17 +65,13 @@ class Listing:
 
     @cached_property
     def dataset(self) -> "DatasetRecord":
-        from datachain.error import DatasetNotFoundError
-
         assert self.dataset_name
         project = self.metastore.listing_project
-        try:
-            return self.metastore.get_dataset(self.dataset_name, project.id)
-        except DatasetNotFoundError:
-            raise DatasetNotFoundError(
-                f"Dataset {self.dataset_name} not found in namespace"
-                f" {project.namespace.name} and project {project.name}"
-            ) from None
+        return self.metastore.get_dataset(
+            self.dataset_name,
+            namespace_name=project.namespace.name,
+            project_name=project.name,
+        )
 
     @cached_property
     def dataset_rows(self):

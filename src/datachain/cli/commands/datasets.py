@@ -107,8 +107,9 @@ def list_datasets_local(catalog: "Catalog", name: Optional[str] = None):
 def list_datasets_local_versions(catalog: "Catalog", name: str):
     namespace_name, project_name, name = catalog.get_full_dataset_name(name)
 
-    project = catalog.metastore.get_project(project_name, namespace_name)
-    ds = catalog.get_dataset(name, project)
+    ds = catalog.get_dataset(
+        name, namespace_name=namespace_name, project_name=project_name
+    )
     for v in ds.versions:
         yield (name, v.version)
 
