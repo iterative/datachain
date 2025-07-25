@@ -571,7 +571,7 @@ class StudioClient:
         path: str,
         uploaded_logs: Optional[list[dict[str, Any]]] = None,
         moved_paths: Optional[
-            list[tuple[str, str, int | None]]
+            list[tuple[str, str, int]]
         ] = None,  # (old_path, new_path, size)
         deleted_paths: Optional[list[str]] = None,  # paths
     ) -> Response[FileUploadData]:
