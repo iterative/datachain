@@ -8,6 +8,7 @@ import dateparser
 import tabulate
 
 from datachain.config import Config, ConfigLevel
+from datachain.data_storage.job import JobStatus
 from datachain.dataset import QUERY_DATASET_PREFIX, parse_dataset_name
 from datachain.error import DataChainError
 from datachain.remote.studio import StudioClient
@@ -46,6 +47,7 @@ def process_jobs_args(args: "Namespace"):
             args.cluster,
             args.start_time,
             args.cron,
+            args.no_wait,
         )
 
     if args.cmd == "cancel":
@@ -288,14 +290,17 @@ def show_logs_from_client(client, job_id):
     # Sync usage
     async def _run():
         latest_status = None
-        async for message in client.tail_job_logs(job_id):
-            if "logs" in message:
-                for log in message["logs"]:
-                    print(log["message"], end="")
-            elif "job" in message:
-                latest_status = message["job"]["status"]
-                print(f"\n>>>> Job is now in {latest_status} status.")
-        return latest_status
+        while True:
+            async for message in client.tail_job_logs(job_id):
+                if "logs" in message:
+                    for log in message["logs"]:
+                        print(log["message"], end="")
+                elif "job" in message:
+                    latest_status = message["job"]["status"]
+                    print(f"\n>>>> Job is now in {latest_status} status.")
+
+            if latest_status and JobStatus[latest_status].finished():
+                break
 
     latest_status = asyncio.run(_run())
 
@@ -334,6 +339,7 @@ def create_job(
     cluster: Optional[str] = None,
     start_time: Optional[str] = None,
     cron: Optional[str] = None,
+    no_wait: Optional[bool] = False,
 ):
     query_type = "PYTHON" if query_file.endswith(".py") else "SHELL"
     with open(query_file) as f:
@@ -387,6 +393,9 @@ def create_job(
     print(f"Job {job_id} created")
     print("Open the job in Studio at", response.data.get("job", {}).get("url"))
     print("=" * 40)
+
+    if no_wait:
+        return 0
 
     return show_logs_from_client(client, job_id)
 
