@@ -6,14 +6,13 @@ Copy storage files and directories between cloud and local storage.
 
 ```usage
 usage: datachain cp [-h] [-v] [-q] [-r] [--team TEAM]
-             [--local] [--anon] [--update]
-             [--no-glob] [--force]
-             source_path destination_path
+    [-s] [--anon] [--update] [--no-glob]
+    [--force] source_path destination_path
 ```
 
 ## Description
 
-This command copies files and directories between local and/or remote storage. The command can operate through Studio (default) or directly with local storage access.
+This command copies files and directories between local and/or remote storage. This uses the credentials in your system by default or can use the cloud authentication from Studio.
 
 ## Arguments
 
@@ -24,11 +23,11 @@ This command copies files and directories between local and/or remote storage. T
 
 * `-r`, `-R`, `--recursive` - Copy directories recursively
 * `--team TEAM` - Team name to copy storage contents to
-* `--local` - Copy data files from the cloud locally without Studio (Default: False)
-* `--anon` - Use anonymous access to storage (available only with --local)
-* `--update` - Update cached list of files for the sources (available only with --local)
-* `--no-glob` - Do not expand globs (such as * or ?) (available only with --local)
-* `--force` - Force creating files even if they already exist (available only with --local)
+* `-s`, `--studio-cloud-auth` - Use credentials from Studio for cloud operations (Default: False)
+* `--anon` - Use anonymous access to storage
+* `--update` - Update cached list of files for the source for local approach
+* `--no-glob` - Do not expand globs (such as * or ?) for local approach
+* `--force` - Force creating files even if they already exist
 * `-h`, `--help` - Show the help message and exit
 * `-v`, `--verbose` - Be verbose
 * `-q`, `--quiet` - Be quiet
@@ -37,11 +36,11 @@ This command copies files and directories between local and/or remote storage. T
 
 The command supports two main modes of operation:
 
-### Studio Mode (Default)
-When using Studio mode (default), the command copies files and directories through Studio using the configured credentials. This mode automatically determines the operation type based on the source and destination protocols, supporting four different copy scenarios.
+### Default Mode
+By default, the command operates directly with local storage access, supporting various copy scenarios between local and remote storage.
 
-### Local Mode
-When using `--local` flag, the command operates directly with local storage access, bypassing Studio. This mode supports additional options like `--anon`, `--update`, `--no-glob`, and `--force`.
+### Studio Cloud Auth Mode
+When using `-s` or `--studio-cloud-auth` flag, the command uses credentials from Studio for cloud operations. This mode provides enhanced authentication and access control for cloud storage operations.
 
 ## Supported Storage Protocols
 
@@ -53,70 +52,79 @@ The command supports the following storage protocols:
 
 ## Examples
 
-### Studio Mode Examples
-
 The command automatically determines the operation type based on the source and destination protocols:
 
-#### 1. Local to Local (local path → local path)
+### Local to Local
+
 **Operation**: Direct local file system copy
 - Uses the local filesystem's native copy operation
 - Fastest operation as no network transfer is involved
 - Supports both files and directories
 
 ```bash
-datachain cp /path/to/local/file.txt /path/to/destination/file.txt
+datachain cp /path/to/source/file.py /path/to/destination/file.py
+datachain cp -r /path/to/source/directory /path/to/destination/directory
 ```
 
-#### 2. Local to Remote (local path → `s3://`, `gs://`, `az://`)
+### Local to Remote
+
 **Operation**: Upload to cloud storage
 - Uploads local files/directories to remote storage
-- Uses presigned URLs for secure uploads
-- Supports S3 multipart form data for large files
+- Supports both default mode and Studio cloud auth mode
 - Requires `--recursive` flag for directories
 
 ```bash
 # Upload single file
-datachain cp /path/to/file.txt s3://my-bucket/data/file.txt
+datachain cp /path/to/local/file.py gs://my-bucket/data/file.py
+
+# Upload single file with Studio cloud auth
+datachain cp /path/to/local/file.py gs://my-bucket/data/file.py --studio-cloud-auth
 
 # Upload directory recursively
-datachain cp -r /path/to/directory s3://my-bucket/data/
+datachain cp --recursive /path/to/local/directory gs://my-bucket/data/
+
+# Upload directory recursively with Studio cloud auth
+datachain cp --recursive /path/to/local/directory gs://my-bucket/data/ --studio-cloud-auth
 ```
 
-#### 3. Remote to Local (`s3://`, `gs://`, `az://` → local path)
+### Remote to Local
+
 **Operation**: Download from cloud storage
 - Downloads remote files/directories to local storage
-- Uses presigned download URLs
 - Automatically extracts filename if destination is a directory
 - Creates destination directory if it doesn't exist
 
 ```bash
 # Download single file
-datachain cp s3://my-bucket/data/file.txt /path/to/local/file.txt
+datachain cp gs://my-bucket/data/file.py /path/to/local/directory/
 
-# Download to directory (filename preserved)
-datachain cp s3://my-bucket/data/file.txt /path/to/directory/
+# Download single file with Studio cloud auth
+datachain cp gs://my-bucket/data/file.py /path/to/local/directory/ --studio-cloud-auth
+
+# Download directory recursively
+datachain cp -r gs://my-bucket/data/directory /path/to/local/directory/
 ```
 
-#### 4. Remote to Remote (`s3://` → `s3://`, `gs://` → `gs://`, etc.)
+### Remote to Remote
+
 **Operation**: Copy within cloud storage
 - Copies files between locations in the same bucket
 - Cannot copy between different buckets (same limitation as `mv`)
-- Uses Studio's internal copy operation
 - Requires `--recursive` flag for directories
 
 ```bash
 # Copy within same bucket
-datachain cp s3://my-bucket/data/file.txt s3://my-bucket/archive/file.txt
+datachain cp gs://my-bucket/data/file.py gs://my-bucket/archive/file.py
 
-# Copy directory recursively
-datachain cp -r s3://my-bucket/data/images s3://my-bucket/backup/images
+# Copy within same bucket with Studio cloud auth
+datachain cp gs://my-bucket/data/file.py gs://my-bucket/archive/file.py --studio-cloud-auth
 ```
 
-### Additional Studio Mode Examples
+### Additional Examples
 
 1. Copy with specific team:
 ```bash
-datachain cp --team other-team /path/to/file.txt s3://my-bucket/data/file.txt
+datachain cp -s --team other-team /path/to/file.txt s3://my-bucket/data/file.txt
 ```
 
 2. Copy with verbose output:
@@ -124,31 +132,24 @@ datachain cp --team other-team /path/to/file.txt s3://my-bucket/data/file.txt
 datachain cp -v -r s3://my-bucket/datasets/raw s3://my-bucket/datasets/processed
 ```
 
-### Local Mode Examples
-
-3. Copy files locally without Studio:
+3. Copy with anonymous access:
 ```bash
-datachain cp --local /path/to/source /path/to/destination
+datachain cp --anon s3://public-bucket/data /path/to/local/
 ```
 
-4. Copy with anonymous access:
+4. Copy with force overwrite:
 ```bash
-datachain cp --local --anon s3://public-bucket/data /path/to/local/
+datachain cp --force s3://my-bucket/data /path/to/local/
 ```
 
-5. Copy with force overwrite:
+5. Copy with update and no glob expansion:
 ```bash
-datachain cp --local --force s3://my-bucket/data /path/to/local/
-```
-
-6. Copy with update and no glob expansion:
-```bash
-datachain cp --local --update --no-glob s3://my-bucket/data/*.txt /path/to/local/
+datachain cp --update --no-glob s3://my-bucket/data/*.txt /path/to/local/
 ```
 
 ## Limitations
 - **Cannot copy between different buckets**: Remote-to-remote copies must be within the same bucket
 
 ## Notes
-* When using Studio mode, you must be authenticated with `datachain auth login` before using it
-* The `--local` mode bypasses Studio and operates directly with storage providers
+* When using Studio cloud auth mode, you must be authenticated with `datachain auth login` before using it
+* The default mode operates directly with storage providers

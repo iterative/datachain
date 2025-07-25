@@ -173,6 +173,7 @@ def add_storage_parser(subparsers, parent_parser) -> None:
     )
 
     storage_cp_parser.add_argument(
+        "-s",
         "--studio-cloud-auth",
         default=False,
         action="store_true",
@@ -233,6 +234,7 @@ def add_storage_parser(subparsers, parent_parser) -> None:
     )
 
     mv_parser.add_argument(
+        "-s",
         "--studio-cloud-auth",
         default=False,
         action="store_true",
@@ -262,6 +264,7 @@ def add_storage_parser(subparsers, parent_parser) -> None:
         help="Team name to delete storage contents from",
     )
     rm_parser.add_argument(
+        "-s",
         "--studio-cloud-auth",
         default=False,
         action="store_true",

@@ -5,12 +5,13 @@ Move storage files and directories through Studio.
 ## Synopsis
 
 ```usage
-usage: datachain mv [-h] [-v] [-q] [--recursive] [--team TEAM] path new_path
+usage: datachain mv [-h] [-v] [-q] [--recursive]
+     [--team TEAM] [-s] path new_path
 ```
 
 ## Description
 
-This command moves files and directories within storage using the credentials configured in Studio. The move operation is performed within the same bucket - you cannot move files between different buckets. The command supports both individual files and directories, with the `--recursive` flag required for moving directories.
+This command moves files and directories within storage. The move operation is performed within the same bucket - you cannot move files between different buckets. The command supports both individual files and directories, with the `--recursive` flag required for moving directories.
 
 ## Arguments
 
@@ -19,37 +20,52 @@ This command moves files and directories within storage using the credentials co
 
 ## Options
 
-* `--recursive` - Move directories recursively (required for moving directories)
-* `--team TEAM` - Team name to move storage contents from (default: from config)
+* `--recursive` - Move recursively
+* `--team TEAM` - Team name to move storage contents from
+* `-s`, `--studio-cloud-auth` - Use credentials from Studio for cloud operations (Default: False)
 * `-h`, `--help` - Show the help message and exit
 * `-v`, `--verbose` - Be verbose
 * `-q`, `--quiet` - Be quiet
 
 ## Examples
 
-1. Move a single file:
+The command supports moving files and directories within the same bucket:
+
+### Move Single File
+
 ```bash
-datachain mv s3://my-bucket/data/file.txt s3://my-bucket/archive/file.txt
+# Move file
+datachain mv gs://my-bucket/data/file.py gs://my-bucket/archive/file.py
+
+# Move file with Studio cloud auth
+datachain mv gs://my-bucket/data/file.py gs://my-bucket/archive/file.py --studio-cloud-auth
 ```
 
-2. Move a directory recursively:
+### Move Directory Recursively
+
 ```bash
-datachain mv --recursive s3://my-bucket/data/images s3://my-bucket/archive/images
+# Move directory
+datachain mv gs://my-bucket/data/directory gs://my-bucket/archive/directory --recursive
+
+# Move directory with Studio cloud auth
+datachain mv gs://my-bucket/data/directory gs://my-bucket/archive/directory --recursive --studio-cloud-auth
 ```
 
-3. Move a file to a different team's storage:
+### Additional Examples
+
+1. Move a file to a different team's storage:
 ```bash
-datachain mv --team other-team s3://my-bucket/data/file.txt s3://my-bucket/backup/file.txt
+datachain mv -s --team other-team gs://my-bucket/data/file.py gs://my-bucket/backup/file.py
 ```
 
-4. Move a file with verbose output:
+2. Move a file with verbose output:
 ```bash
-datachain mv -v s3://my-bucket/data/file.txt s3://my-bucket/processed/file.txt
+datachain mv -v gs://my-bucket/data/file.py gs://my-bucket/processed/file.py
 ```
 
-5. Move a directory to a subdirectory:
+3. Move a directory to a subdirectory:
 ```bash
-datachain mv --recursive s3://my-bucket/datasets/raw s3://my-bucket/datasets/processed/raw
+datachain mv --recursive gs://my-bucket/datasets/raw gs://my-bucket/datasets/processed/raw
 ```
 
 ## Supported Storage Protocols
@@ -60,27 +76,8 @@ The command supports the following storage protocols:
 - **Azure Blob Storage**: `az://container-name/path`
 
 ## Limitations and Edge Cases
-
-### Bucket Restrictions
 - **Cannot move between different buckets**: The source and destination must be in the same bucket. Attempting to move between different buckets will result in an error: "Cannot move between different buckets"
 
-### Directory Operations
-- **Recursive flag required**: Moving directories requires the `--recursive` flag. Without it, the operation will fail
-- **Directory structure preservation**: When moving directories, the internal structure is preserved
-
-
-### Error Handling
-- **File not found**: If the source file or directory doesn't exist, the operation will fail
-- **Permission errors**: Insufficient permissions will result in operation failure
-- **Storage service errors**: Network issues or storage service problems will be reported with appropriate error messages
-
-### Team Configuration
-- **Default team**: If no team is specified, the command uses the team from your configuration
-- **Team-specific storage**: Each team has its own storage namespace, so moving between teams is not supported
-
 ## Notes
-
-* Moving large directories may take time depending on the number of files and network conditions
-* Use the `--verbose` flag to get detailed information about the move operation
-* The `--quiet` flag suppresses output except for errors
-* This command operates through Studio, so you must be authenticated with `datachain auth login` before using it
+* When using Studio cloud auth mode, you must be authenticated with `datachain auth login` before using it
+* The default mode operates directly with storage providers
