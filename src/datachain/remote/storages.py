@@ -1,6 +1,6 @@
 import mimetypes
 import os.path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 from urllib.parse import urlparse
 
 import requests
@@ -9,34 +9,38 @@ from datachain.cli.commands.storage.utils import build_file_paths, validate_uplo
 from datachain.error import DataChainError
 
 if TYPE_CHECKING:
-    from argparse import Namespace
-
     from fsspec import AbstractFileSystem
 
     from datachain.remote.studio import StudioClient
 
 
-def get_studio_client(args: "Namespace"):
+def get_studio_client(team: Optional[str] = None):
     from datachain.config import Config
     from datachain.remote.studio import StudioClient
 
     if Config().read().get("studio", {}).get("token"):
-        return StudioClient(team=args.team)
+        return StudioClient(team=team)
 
     raise DataChainError("Not logged in to Studio. Log in with 'datachain auth login'.")
 
 
-def upload_to_storage(args: "Namespace", local_fs: "AbstractFileSystem"):
-    studio_client = get_studio_client(args)
+def upload_to_storage(
+    source_path: str,
+    destination_path: str,
+    team: Optional[str] = None,
+    recursive: bool = False,
+    local_fs: "AbstractFileSystem" = None,
+):
+    studio_client = get_studio_client(team)
 
-    is_dir = validate_upload_args(args, local_fs)
-    file_paths = build_file_paths(args, local_fs, is_dir)
-    response = _get_presigned_urls(studio_client, args.destination_path, file_paths)
+    is_dir = validate_upload_args(source_path, recursive, local_fs)
+    file_paths = build_file_paths(source_path, destination_path, local_fs, is_dir)
+    response = _get_presigned_urls(studio_client, destination_path, file_paths)
 
-    for dest_path, source_path in file_paths.items():
+    for dest_path, src_path in file_paths.items():
         _upload_single_file(
             dest_path,
-            source_path,
+            src_path,
             response,
             local_fs,
         )
@@ -45,9 +49,14 @@ def upload_to_storage(args: "Namespace", local_fs: "AbstractFileSystem"):
     return file_paths
 
 
-def download_from_storage(args: "Namespace", local_fs: "AbstractFileSystem"):
-    studio_client = get_studio_client(args)
-    response = studio_client.download_url(args.source_path)
+def download_from_storage(
+    source_path: str,
+    destination_path: str,
+    team: Optional[str] = None,
+    local_fs: "AbstractFileSystem" = None,
+):
+    studio_client = get_studio_client(team)
+    response = studio_client.download_url(source_path)
     if not response.ok:
         raise DataChainError(response.message)
 
@@ -56,17 +65,13 @@ def download_from_storage(args: "Namespace", local_fs: "AbstractFileSystem"):
         raise DataChainError("No download URL found")
 
     # Extract filename from URL if destination is a directory
-    if local_fs.isdir(args.destination_path) or args.destination_path.endswith(
-        ("/", "\\")
-    ):
+    if local_fs.isdir(destination_path) or destination_path.endswith(("/", "\\")):
         # Parse the URL to get the filename
         parsed_url = urlparse(url)
         filename = os.path.basename(parsed_url.path)
 
-        local_fs.makedirs(args.destination_path, exist_ok=True)
-        destination_path = os.path.join(args.destination_path, filename)
-    else:
-        destination_path = args.destination_path
+        local_fs.makedirs(destination_path, exist_ok=True)
+        destination_path = os.path.join(destination_path, filename)
 
     # Stream download to avoid loading entire file into memory
     with requests.get(url, timeout=3600, stream=True) as download_response:
@@ -82,18 +87,23 @@ def download_from_storage(args: "Namespace", local_fs: "AbstractFileSystem"):
     print(f"Downloaded to {destination_path}")
 
 
-def copy_inside_storage(args: "Namespace"):
-    client = get_studio_client(args)
+def copy_inside_storage(
+    source_path: str,
+    destination_path: str,
+    team: Optional[str] = None,
+    recursive: bool = False,
+):
+    client = get_studio_client(team)
 
     response = client.copy_storage_file(
-        args.source_path,
-        args.destination_path,
-        recursive=args.recursive,
+        source_path,
+        destination_path,
+        recursive=recursive,
     )
     if not response.ok:
         raise DataChainError(response.message)
 
-    print(f"Copied {args.source_path} to {args.destination_path}")
+    print(f"Copied {source_path} to {destination_path}")
 
 
 def _get_presigned_urls(

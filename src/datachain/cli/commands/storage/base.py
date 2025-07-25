@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from datachain.error import DataChainError
 
@@ -9,7 +9,6 @@ if TYPE_CHECKING:
 
     from datachain.catalog import Catalog
     from datachain.client.fsspec import Client
-    from datachain.remote.studio import StudioClient
 
 
 class StorageImplementation:
@@ -35,8 +34,10 @@ class StorageImplementation:
             self.upload_to_remote(source_cls, destination_cls)
         elif destination_cls.protocol == "file":
             self.download_from_remote(destination_cls)
-        else:
+        elif source_cls.protocol == destination_cls.protocol:
             self.copy_remote_to_remote(source_cls)
+        else:
+            raise DataChainError("Cannot copy between different protocols yet")
 
     def copy_local_to_local(self, source_cls: "Client"):
         source_fs = source_cls.create_fs()
@@ -56,26 +57,24 @@ class StorageImplementation:
     def copy_remote_to_remote(self, source_cls: "Client"):
         raise NotImplementedError("Copy remote to remote is not implemented")
 
-    def save_upload_log(
+    def save_upload_logs(
         self,
-        studio_client: Optional["StudioClient"],
         destination_path: str,
-        file_paths: dict,
-        local_fs: "AbstractFileSystem",
+        file_paths: dict,  # {destination_path: source}
+        source_fs: "AbstractFileSystem",
     ):
         from datachain.remote.storages import get_studio_client
 
         try:
-            if studio_client is None:
-                studio_client = get_studio_client(self.args)
+            studio_client = get_studio_client(self.args.team)
         except DataChainError:
             return
 
         uploads = [
             {
                 "path": dst,
-                "size": local_fs.info(src).get("size", 0),
+                "size": source_fs.info(src).get("size", 0),
             }
             for dst, src in file_paths.items()
         ]
-        studio_client.save_upload_log(destination_path, uploads)
+        studio_client.save_activity_logs(destination_path, uploads)

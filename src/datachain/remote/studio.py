@@ -484,7 +484,7 @@ class StudioClient:
 
         data = {
             "bucket": bucket,
-            "recursive": recursive,
+            "recursive": "true" if recursive else "false",
             "remote": client.protocol,
             "team": self.team,
             "paths": subpath,
@@ -570,8 +570,14 @@ class StudioClient:
             "datachain/storages/files/download", data, method="GET"
         )
 
-    def save_upload_log(
-        self, path: str, logs: list[dict[str, Any]]
+    def save_activity_logs(
+        self,
+        path: str,
+        uploaded_logs: Optional[list[dict[str, Any]]] = None,
+        moved_paths: Optional[
+            list[tuple[str, str, int | None]]
+        ] = None,  # (old_path, new_path, size)
+        deleted_paths: Optional[list[str]] = None,  # paths
     ) -> Response[FileUploadData]:
         client = Client.get_implementation(path)
         remote = client.protocol
@@ -581,10 +587,12 @@ class StudioClient:
             "remote": remote,
             "team": self.team,
             "bucket": bucket,
-            "uploaded_paths": logs,
+            "uploaded_paths": uploaded_logs or [],
             "failed_paths": {},
             "modified_paths": [],
             "failed_modified_paths": {},
+            "moved_paths": moved_paths or [],
+            "deleted_paths": deleted_paths or [],
         }
 
         return self._send_request(
