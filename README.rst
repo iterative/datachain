@@ -2,7 +2,7 @@
 |logo| DataChain
 ================
 
-|PyPI| |Python Version| |Codecov| |Tests|
+|PyPI| |Python Version| |Codecov| |Tests| |DeepWiki|
 
 .. |logo| image:: docs/assets/datachain.svg
    :height: 24
@@ -18,6 +18,9 @@
 .. |Tests| image:: https://github.com/iterative/datachain/actions/workflows/tests.yml/badge.svg
    :target: https://github.com/iterative/datachain/actions/workflows/tests.yml
    :alt: Tests
+.. |DeepWiki| image:: https://deepwiki.com/badge.svg
+   :target: https://deepwiki.com/iterative/datachain
+   :alt: DeepWiki
 
 DataChain is a Python-based AI-data warehouse for transforming and analyzing unstructured
 data like images, audio, videos, text and PDFs. It integrates with external storage

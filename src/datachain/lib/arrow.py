@@ -245,7 +245,7 @@ def arrow_type_mapper(col_type: pa.DataType, column: str = "") -> type:  # noqa:
             if field.nullable and not ModelStore.is_pydantic(dtype):
                 dtype = Optional[dtype]  # type: ignore[assignment]
             type_dict[field.name] = dtype
-        return dict_to_data_model(column, type_dict)
+        return dict_to_data_model(f"ArrowDataModel_{column}", type_dict)
     if pa.types.is_map(col_type):
         return dict
     if isinstance(col_type, pa.lib.DictionaryType):

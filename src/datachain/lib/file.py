@@ -717,6 +717,23 @@ class ImageFile(File):
         destination = stringify_path(destination)
 
         client: Client = self._catalog.get_client(destination, **(client_config or {}))
+
+        # If format is not provided, determine it from the file extension
+        if format is None:
+            from pathlib import PurePosixPath
+
+            from PIL import Image as PilImage
+
+            ext = PurePosixPath(destination).suffix.lower()
+            format = PilImage.registered_extensions().get(ext)
+
+        if not format:
+            raise FileError(
+                f"Can't determine format for destination '{destination}'",
+                self.source,
+                self.path,
+            )
+
         with client.fs.open(destination, mode="wb") as f:
             self.read().save(f, format=format)
 
@@ -815,7 +832,10 @@ class VideoFile(File):
             VideoFragment: A Model representing the video fragment.
         """
         if start < 0 or end < 0 or start >= end:
-            raise ValueError(f"Invalid time range: ({start:.3f}, {end:.3f})")
+            raise ValueError(
+                f"Can't get video fragment for '{self.path}', "
+                f"invalid time range: ({start:.3f}, {end:.3f})"
+            )
 
         return VideoFragment(video=self, start=start, end=end)
 
@@ -898,7 +918,10 @@ class AudioFile(File):
             AudioFragment: A Model representing the audio fragment.
         """
         if start < 0 or end < 0 or start >= end:
-            raise ValueError(f"Invalid time range: ({start:.3f}, {end:.3f})")
+            raise ValueError(
+                f"Can't get audio fragment for '{self.path}', "
+                f"invalid time range: ({start:.3f}, {end:.3f})"
+            )
 
         return AudioFragment(audio=self, start=start, end=end)
 
@@ -941,6 +964,35 @@ class AudioFile(File):
             yield self.get_fragment(start, min(start + duration, end))
             start += duration
 
+    def save(  # type: ignore[override]
+        self,
+        output: str,
+        format: Optional[str] = None,
+        start: float = 0,
+        end: Optional[float] = None,
+        client_config: Optional[dict] = None,
+    ) -> "AudioFile":
+        """Save audio file or extract fragment to specified format.
+
+        Args:
+            output: Output directory path
+            format: Output format ('wav', 'mp3', etc). Defaults to source format
+            start: Start time in seconds (>= 0). Defaults to 0
+            end: End time in seconds. If None, extracts to end of file
+            client_config: Optional client configuration
+
+        Returns:
+            AudioFile: New audio file with format conversion/extraction applied
+
+        Examples:
+            audio.save("/path", "mp3")                        # Entire file to MP3
+            audio.save("s3://bucket/path", "wav", start=2.5)  # From 2.5s to end as WAV
+            audio.save("/path", "flac", start=1, end=3)       # 1-3s fragment as FLAC
+        """
+        from .audio import save_audio
+
+        return save_audio(self, output, format, start, end)
+
 
 class AudioFragment(DataModel):
     """
@@ -968,10 +1020,10 @@ class AudioFragment(DataModel):
             tuple[ndarray, int]: A tuple containing the audio data as a NumPy array
                                and the sample rate.
         """
-        from .audio import audio_fragment_np
+        from .audio import audio_to_np
 
         duration = self.end - self.start
-        return audio_fragment_np(self.audio, self.start, duration)
+        return audio_to_np(self.audio, self.start, duration)
 
     def read_bytes(self, format: str = "wav") -> bytes:
         """
@@ -984,10 +1036,10 @@ class AudioFragment(DataModel):
         Returns:
             bytes: The encoded audio fragment as bytes.
         """
-        from .audio import audio_fragment_bytes
+        from .audio import audio_to_bytes
 
         duration = self.end - self.start
-        return audio_fragment_bytes(self.audio, self.start, duration, format)
+        return audio_to_bytes(self.audio, format, self.start, duration)
 
     def save(self, output: str, format: Optional[str] = None) -> "AudioFile":
         """
@@ -1005,9 +1057,9 @@ class AudioFragment(DataModel):
         Returns:
             AudioFile: A Model representing the saved audio file.
         """
-        from .audio import save_audio_fragment
+        from .audio import save_audio
 
-        return save_audio_fragment(self.audio, self.start, self.end, output, format)
+        return save_audio(self.audio, output, format, self.start, self.end)
 
 
 class VideoFrame(DataModel):

@@ -17,7 +17,12 @@ def add_jobs_parser(subparsers, parent_parser) -> None:
     )
 
     studio_run_help = "Run a job in Studio"
-    studio_run_description = "Run a job in Studio."
+    studio_run_description = "Run a job in Studio. \n"
+    studio_run_description += (
+        "When using --start-time or --cron,"
+        " the job is scheduled to run but won't start immediately"
+        " (can be seen in the Tasks tab in UI)"
+    )
 
     studio_run_parser = jobs_subparser.add_parser(
         "run",
@@ -95,6 +100,14 @@ def add_jobs_parser(subparsers, parent_parser) -> None:
         default=5,
         help="Priority for the job in range 0-5. "
         "Lower value is higher priority (default: 5)",
+    )
+    studio_run_parser.add_argument(
+        "--start-time",
+        action="store",
+        help="Time to schedule a task in YYYY-MM-DDTHH:mm format or natural language.",
+    )
+    studio_run_parser.add_argument(
+        "--cron", action="store", help="Cron expression for the cron task."
     )
 
     studio_ls_help = "List jobs in Studio"
