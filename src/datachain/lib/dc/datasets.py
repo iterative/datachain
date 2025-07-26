@@ -343,7 +343,7 @@ def delete_dataset(
         namespace_name=namespace,
     )
 
-    if not catalog.metastore.is_local_dataset(namespace_name) and studio:
+    if catalog.is_cli and studio:
         return remove_studio_dataset(
             None, name, namespace_name, project_name, version=version, force=force
         )
@@ -413,6 +413,6 @@ def move_dataset(
         project_id=catalog.metastore.get_project(
             dest_project,
             dest_namespace,
-            create=catalog.metastore.project_allowed_to_create,
+            create=not catalog.is_cli,
         ).id,
     )

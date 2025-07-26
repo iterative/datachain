@@ -145,23 +145,6 @@ class AbstractMetastore(ABC, Serializable):
     def list_namespaces(self, conn=None) -> list[Namespace]:
         """Gets a list of all namespaces"""
 
-    @property
-    @abstractmethod
-    def is_studio(self) -> bool:
-        """Returns True if this code is ran in Studio"""
-
-    def is_local_dataset(self, dataset_namespace: str) -> bool:
-        """
-        Returns True if this is local dataset i.e. not pulled from Studio but
-        created locally. This is False if we ran code in CLI mode but using dataset
-        names that are present in Studio.
-        """
-        return self.is_studio or dataset_namespace == Namespace.default()
-
-    @property
-    def namespace_allowed_to_create(self):
-        return self.is_studio
-
     #
     # Projects
     #
@@ -214,10 +197,6 @@ class AbstractMetastore(ABC, Serializable):
     @abstractmethod
     def list_projects(self, namespace_id: Optional[int], conn=None) -> list[Project]:
         """Gets list of projects in some namespace or in general (in all namespaces)"""
-
-    @property
-    def project_allowed_to_create(self):
-        return self.is_studio
 
     #
     # Datasets
