@@ -655,6 +655,16 @@ class File(DataModel):
 
         Raises:
             ValueError: If old_base is not found in the file's URI
+
+        Examples:
+            >>> file = File(source="s3://bucket", path="data/2025-05-27/file.wav")
+            >>> file.rebase("s3://bucket/data", "s3://output-bucket/processed", \
+                    extension="mp3")
+            's3://output-bucket/processed/2025-05-27/file.mp3'
+
+            >>> file.rebase("data/audio", "/local/output", suffix="_ch1",
+                    extension="npy")
+            '/local/output/file_ch1.npy'
         """
         return rebase_path(self.get_uri(), old_base, new_base, suffix, extension)
 
