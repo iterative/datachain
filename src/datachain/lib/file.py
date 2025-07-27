@@ -23,7 +23,7 @@ from pydantic import Field, field_validator
 
 from datachain.client.fileslice import FileSlice
 from datachain.lib.data_model import DataModel
-from datachain.lib.utils import DataChainError
+from datachain.lib.utils import DataChainError, rebase_path
 from datachain.nodes_thread_pool import NodesThreadPool
 from datachain.sql.types import JSON, Boolean, DateTime, Int, String
 from datachain.utils import TIME_ZERO
@@ -633,6 +633,30 @@ class File(DataModel):
             last_modified=TIME_ZERO,
             location=self.location,
         )
+
+    def rebase(
+        self,
+        old_base: str,
+        new_base: str,
+        suffix: str = "",
+        extension: str = "",
+    ) -> str:
+        """
+        Rebase the file's URI from one base directory to another.
+
+        Args:
+            old_base: Base directory to remove from the file's URI
+            new_base: New base directory to prepend
+            suffix: Optional suffix to add before file extension
+            extension: Optional new file extension (without dot)
+
+        Returns:
+            str: Rebased URI with new base directory
+
+        Raises:
+            ValueError: If old_base is not found in the file's URI
+        """
+        return rebase_path(self.get_uri(), old_base, new_base, suffix, extension)
 
 
 def resolve(file: File) -> File:
