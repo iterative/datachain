@@ -1243,6 +1243,23 @@ class Audio(DataModel):
     codec: str = Field(default="")
     bit_rate: int = Field(default=-1)
 
+    @staticmethod
+    def get_channel_name(num_channels: int, channel_idx: int) -> str:
+        """Map channel index to meaningful name based on common audio formats"""
+        if num_channels == 1:
+            return "Mono"
+        if num_channels == 2:
+            return ["Left", "Right"][channel_idx]
+        if num_channels == 4:
+            return ["W", "X", "Y", "Z"][channel_idx]  # First-order Ambisonics
+        if num_channels == 6:
+            return ["FL", "FR", "FC", "LFE", "BL", "BR"][channel_idx]  # 5.1 surround
+        if num_channels == 8:
+            return ["FL", "FR", "FC", "LFE", "BL", "BR", "SL", "SR"][
+                channel_idx
+            ]  # 7.1 surround
+        return f"Ch{channel_idx + 1}"
+
 
 class ArrowRow(DataModel):
     """`DataModel` for reading row from Arrow-supported file."""
