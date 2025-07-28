@@ -48,6 +48,8 @@ def tests(session: nox.Session) -> None:
         "--cov",
         "--cov-config=pyproject.toml",
         "--cov-report=xml",
+        "--durations=10",
+        "--numprocesses=logical",
         "--dist=loadgroup",
         "-v",
         *session.posargs,
