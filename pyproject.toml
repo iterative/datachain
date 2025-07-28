@@ -49,7 +49,7 @@ dependencies = [
   "Pillow>=10.0.0,<12",
   "msgpack>=1.0.4,<2",
   "psutil",
-  "huggingface_hub==0.34.0",
+  "huggingface_hub<0.34.0",
   "iterative-telemetry>=0.0.10",
   "platformdirs",
   "dvc-studio-client>=0.21,<1",
