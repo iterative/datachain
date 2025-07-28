@@ -14,6 +14,7 @@ usage: datachain job run [-h] [-v] [-q] [--team TEAM] [--env-file ENV_FILE]
                          [--req-file REQ_FILE] [--req REQ [REQ ...]]
                          [--priority PRIORITY]
                          [--start-time START_TIME] [--cron CRON]
+                         [--no-wait]
                          file
 ```
 
@@ -40,6 +41,7 @@ This command runs a job in Studio using the specified query file. You can config
 * `--priority PRIORITY` - Priority for the job in range 0-5. Lower value is higher priority (default: 5)
 * `--start-time START_TIME` - Time to schedule the task in YYYY-MM-DDTHH:mm format or natural language.
 * `--cron CRON` - Cron expression for the cron task.
+* `--no-wait` - Do not wait for the job to finish.
 * `-h`, `--help` - Show the help message and exit.
 * `-v`, `--verbose` - Be verbose.
 * `-q`, `--quiet` - Be quiet.
@@ -129,6 +131,12 @@ datachain job run --cron "@monthly" query.py
 ```bash
 # Start the cron job after tomorrow 3pm
 datachain job run --start-time "tomorrow 3pm" --cron "0 0 * * *" query.py
+```
+
+12. Start the job and do not wait for the job to complete
+```bash
+# Do not follow or tail the logs from Studio.
+datachain job run query.py --no-wait
 ```
 
 ## Notes

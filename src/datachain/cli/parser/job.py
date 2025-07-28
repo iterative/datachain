@@ -109,6 +109,11 @@ def add_jobs_parser(subparsers, parent_parser) -> None:
     studio_run_parser.add_argument(
         "--cron", action="store", help="Cron expression for the cron task."
     )
+    studio_run_parser.add_argument(
+        "--no-wait",
+        action="store_true",
+        help="Do not wait for the job to finish",
+    )
 
     studio_ls_help = "List jobs in Studio"
     studio_ls_description = "List jobs in Studio."
