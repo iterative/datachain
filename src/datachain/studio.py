@@ -293,6 +293,7 @@ def show_logs_from_client(client, job_id):
     async def _run():
         retry_count = 0
         latest_status = None
+        processed_statuses = set()
         while True:
             async for message in client.tail_job_logs(job_id):
                 if "logs" in message:
@@ -300,6 +301,9 @@ def show_logs_from_client(client, job_id):
                         print(log["message"], end="")
                 elif "job" in message:
                     latest_status = message["job"]["status"]
+                    if latest_status in processed_statuses:
+                        continue
+                    processed_statuses.add(latest_status)
                     print(f"\n>>>> Job is now in {latest_status} status.")
 
             try:
