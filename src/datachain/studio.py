@@ -299,10 +299,15 @@ def show_logs_from_client(client, job_id):
                     latest_status = message["job"]["status"]
                     print(f"\n>>>> Job is now in {latest_status} status.")
 
-            if latest_status and JobStatus[latest_status].finished():
-                break
+            try:
+                if latest_status and JobStatus[latest_status].finished():
+                    break
+            except KeyError:
+                pass
 
-    latest_status = asyncio.run(_run())
+        return latest_status
+
+    final_status = asyncio.run(_run())
 
     response = client.dataset_job_versions(job_id)
     if not response.ok:
@@ -319,9 +324,9 @@ def show_logs_from_client(client, job_id):
 
     exit_code_by_status = {
         "FAILED": 1,
-        "CANCELLED": 2,
+        "CANCELED": 2,
     }
-    return exit_code_by_status.get(latest_status.upper(), 0) if latest_status else 0
+    return exit_code_by_status.get(final_status.upper(), 0) if final_status else 0
 
 
 def create_job(
