@@ -45,7 +45,7 @@ dependencies = [
   "orjson>=3.10.5",
   "pydantic",
   "jmespath>=1.0",
-  "datamodel-code-generator==0.31.2",
+  "datamodel-code-generator>=0.25",
   "Pillow>=10.0.0,<12",
   "msgpack>=1.0.4,<2",
   "psutil",
