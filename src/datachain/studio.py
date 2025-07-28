@@ -21,6 +21,8 @@ POST_LOGIN_MESSAGE = (
     "Once you've logged in, return here "
     "and you'll be ready to start using DataChain with Studio."
 )
+RETRY_MAX_TIMES = 10
+RETRY_SLEEP_SEC = 1
 
 
 def process_jobs_args(args: "Namespace"):
@@ -289,6 +291,7 @@ def parse_start_time(start_time_str: Optional[str]) -> Optional[str]:
 def show_logs_from_client(client, job_id):
     # Sync usage
     async def _run():
+        retry_count = 0
         latest_status = None
         processed_statuses = set()
         while True:
@@ -303,10 +306,19 @@ def show_logs_from_client(client, job_id):
                     processed_statuses.add(latest_status)
                     print(f"\n>>>> Job is now in {latest_status} status.")
 
-            if latest_status and JobStatus[latest_status].finished():
-                break
+            try:
+                if retry_count > RETRY_MAX_TIMES or (
+                    latest_status and JobStatus[latest_status].finished()
+                ):
+                    break
+                await asyncio.sleep(RETRY_SLEEP_SEC)
+                retry_count += 1
+            except KeyError:
+                pass
 
-    latest_status = asyncio.run(_run())
+        return latest_status
+
+    final_status = asyncio.run(_run())
 
     response = client.dataset_job_versions(job_id)
     if not response.ok:
@@ -323,9 +335,9 @@ def show_logs_from_client(client, job_id):
 
     exit_code_by_status = {
         "FAILED": 1,
-        "CANCELLED": 2,
+        "CANCELED": 2,
     }
-    return exit_code_by_status.get(latest_status.upper(), 0) if latest_status else 0
+    return exit_code_by_status.get(final_status.upper(), 0) if final_status else 0
 
 
 def create_job(
