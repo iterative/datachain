@@ -7,7 +7,7 @@ from fsspec.implementations.local import LocalFileSystem
 from PIL import Image
 
 from datachain.catalog import Catalog
-from datachain.lib.file import File, FileError, ImageFile, TextFile, resolve
+from datachain.lib.file import Audio, File, FileError, ImageFile, TextFile, resolve
 
 
 def create_file(source: str):
@@ -435,3 +435,23 @@ def test_file_rebase_local_path():
 
     result = file.rebase("file:///data/audio", "/output/processed")
     assert result == "/output/processed/folder/file.mp3"
+
+
+def test_audio_get_channel_name():
+    # Test known channel configurations
+    assert Audio.get_channel_name(1, 0) == "Mono"
+    assert Audio.get_channel_name(2, 0) == "Left"
+    assert Audio.get_channel_name(2, 1) == "Right"
+    assert Audio.get_channel_name(4, 2) == "Y"  # Ambisonics
+    assert Audio.get_channel_name(6, 3) == "LFE"  # 5.1 surround
+    assert Audio.get_channel_name(8, 7) == "SR"  # 7.1 surround
+
+    # Test fallback for unknown configurations
+    assert Audio.get_channel_name(-1, 0) == "Ch1"
+    assert Audio.get_channel_name(3, 0) == "Ch1"
+    assert Audio.get_channel_name(5, 4) == "Ch5"
+    assert Audio.get_channel_name(10, 9) == "Ch10"
+
+    # Test out of range indices
+    assert Audio.get_channel_name(2, 5) == "Ch6"
+    assert Audio.get_channel_name(1, 1) == "Ch2"

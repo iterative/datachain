@@ -1256,18 +1256,19 @@ class Audio(DataModel):
     @staticmethod
     def get_channel_name(num_channels: int, channel_idx: int) -> str:
         """Map channel index to meaningful name based on common audio formats"""
-        if num_channels == 1:
-            return "Mono"
-        if num_channels == 2:
-            return ["Left", "Right"][channel_idx]
-        if num_channels == 4:
-            return ["W", "X", "Y", "Z"][channel_idx]  # First-order Ambisonics
-        if num_channels == 6:
-            return ["FL", "FR", "FC", "LFE", "BL", "BR"][channel_idx]  # 5.1 surround
-        if num_channels == 8:
-            return ["FL", "FR", "FC", "LFE", "BL", "BR", "SL", "SR"][
-                channel_idx
-            ]  # 7.1 surround
+        channel_mappings = {
+            1: ["Mono"],
+            2: ["Left", "Right"],
+            4: ["W", "X", "Y", "Z"],  # First-order Ambisonics
+            6: ["FL", "FR", "FC", "LFE", "BL", "BR"],  # 5.1 surround
+            8: ["FL", "FR", "FC", "LFE", "BL", "BR", "SL", "SR"],  # 7.1 surround
+        }
+
+        if num_channels in channel_mappings:
+            channels = channel_mappings[num_channels]
+            if 0 <= channel_idx < len(channels):
+                return channels[channel_idx]
+
         return f"Ch{channel_idx + 1}"
 
 
