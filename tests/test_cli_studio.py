@@ -491,7 +491,7 @@ def test_studio_run_task(capsys, mocker, tmp_dir, studio_token):
 
 
 @pytest.mark.parametrize(
-    "status,expected_exit_code", [("FAILED", 1), ("CANCELLED", 2), ("COMPLETED", 0)]
+    "status,expected_exit_code", [("FAILED", 1), ("CANCELED", 2), ("COMPLETE", 0)]
 )
 def test_studio_run_non_zero_exit_code(
     capsys, mocker, tmp_dir, status, expected_exit_code

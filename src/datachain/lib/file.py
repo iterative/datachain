@@ -23,7 +23,7 @@ from pydantic import Field, field_validator
 
 from datachain.client.fileslice import FileSlice
 from datachain.lib.data_model import DataModel
-from datachain.lib.utils import DataChainError
+from datachain.lib.utils import DataChainError, rebase_path
 from datachain.nodes_thread_pool import NodesThreadPool
 from datachain.sql.types import JSON, Boolean, DateTime, Int, String
 from datachain.utils import TIME_ZERO
@@ -634,6 +634,40 @@ class File(DataModel):
             location=self.location,
         )
 
+    def rebase(
+        self,
+        old_base: str,
+        new_base: str,
+        suffix: str = "",
+        extension: str = "",
+    ) -> str:
+        """
+        Rebase the file's URI from one base directory to another.
+
+        Args:
+            old_base: Base directory to remove from the file's URI
+            new_base: New base directory to prepend
+            suffix: Optional suffix to add before file extension
+            extension: Optional new file extension (without dot)
+
+        Returns:
+            str: Rebased URI with new base directory
+
+        Raises:
+            ValueError: If old_base is not found in the file's URI
+
+        Examples:
+            >>> file = File(source="s3://bucket", path="data/2025-05-27/file.wav")
+            >>> file.rebase("s3://bucket/data", "s3://output-bucket/processed", \
+                    extension="mp3")
+            's3://output-bucket/processed/2025-05-27/file.mp3'
+
+            >>> file.rebase("data/audio", "/local/output", suffix="_ch1",
+                    extension="npy")
+            '/local/output/file_ch1.npy'
+        """
+        return rebase_path(self.get_uri(), old_base, new_base, suffix, extension)
+
 
 def resolve(file: File) -> File:
     """
@@ -1218,6 +1252,24 @@ class Audio(DataModel):
     format: str = Field(default="")
     codec: str = Field(default="")
     bit_rate: int = Field(default=-1)
+
+    @staticmethod
+    def get_channel_name(num_channels: int, channel_idx: int) -> str:
+        """Map channel index to meaningful name based on common audio formats"""
+        channel_mappings = {
+            1: ["Mono"],
+            2: ["Left", "Right"],
+            4: ["W", "X", "Y", "Z"],  # First-order Ambisonics
+            6: ["FL", "FR", "FC", "LFE", "BL", "BR"],  # 5.1 surround
+            8: ["FL", "FR", "FC", "LFE", "BL", "BR", "SL", "SR"],  # 7.1 surround
+        }
+
+        if num_channels in channel_mappings:
+            channels = channel_mappings[num_channels]
+            if 0 <= channel_idx < len(channels):
+                return channels[channel_idx]
+
+        return f"Ch{channel_idx + 1}"
 
 
 class ArrowRow(DataModel):

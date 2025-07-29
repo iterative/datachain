@@ -12,10 +12,11 @@ class JobStatus(int, Enum):
     CANCELING = 7
     CANCELED = 8
     CANCELING_SCHEDULED = 9
+    TASK = 11
 
     @classmethod
     def finished(cls) -> tuple[int, ...]:
-        return cls.COMPLETE, cls.FAILED, cls.CANCELED
+        return cls.COMPLETE, cls.FAILED, cls.CANCELED, cls.TASK
 
 
 class JobQueryType(int, Enum):
