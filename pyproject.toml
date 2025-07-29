@@ -131,7 +131,7 @@ examples = [
   "datachain[tests]",
   "defusedxml",
   "accelerate",
-  "huggingface_hub[hf_transfer]<0.34",
+  "huggingface_hub[hf_transfer,hf_xet]",
   "ultralytics",
   "open_clip_torch",
   "openai"
