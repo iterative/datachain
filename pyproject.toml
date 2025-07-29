@@ -135,7 +135,7 @@ examples = [
   "ultralytics",
   "open_clip_torch",
   "openai",
-  "transformers<4.54.0"
+  "torchcodec"
 ]
 
 [project.urls]
