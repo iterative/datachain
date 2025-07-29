@@ -89,6 +89,7 @@ hf = [
   "datasets[vision]>=4.0.0",
   # https://github.com/pytorch/torchcodec/issues/640
   "datasets[audio]>=4.0.0 ; (sys_platform == 'linux' or sys_platform == 'darwin')",
+  "torchcodec ; (sys_platform == 'linux' or sys_platform == 'darwin')",
   "fsspec>=2024.12.0"
 ]
 video = [
@@ -134,8 +135,7 @@ examples = [
   "huggingface_hub[hf_transfer]",
   "ultralytics",
   "open_clip_torch",
-  "openai",
-  "torchcodec"
+  "openai"
 ]
 
 [project.urls]
