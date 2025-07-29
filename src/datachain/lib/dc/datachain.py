@@ -2419,9 +2419,11 @@ class DataChain:
             ds.to_storage("gs://mybucket", placement="filename")
             ```
         """
+        chain = self.persist()
+        count = chain.count()
+
         if placement == "filename" and (
-            self._query.distinct(pathfunc.name(C(f"{signal}__path"))).count()
-            != self._query.count()
+            chain._query.distinct(pathfunc.name(C(f"{signal}__path"))).count() != count
         ):
             raise ValueError("Files with the same name found")
 
@@ -2433,7 +2435,7 @@ class DataChain:
             unit=" files",
             unit_scale=True,
             unit_divisor=10,
-            total=self.count(),
+            total=count,
             leave=False,
         )
         file_exporter = FileExporter(
@@ -2444,7 +2446,10 @@ class DataChain:
             max_threads=num_threads or 1,
             client_config=client_config,
         )
-        file_exporter.run(self.to_values(signal), progress_bar)
+        file_exporter.run(
+            (rows[0] for rows in chain.to_iter(signal)),
+            progress_bar,
+        )
 
     def shuffle(self) -> "Self":
         """Shuffle the rows of the chain deterministically."""
