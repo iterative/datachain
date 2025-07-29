@@ -135,7 +135,7 @@ examples = [
   "ultralytics",
   "open_clip_torch",
   "openai",
-  "torchcodec ; (sys_platform == 'linux' or sys_platform == 'darwin')"
+  "transformers<4.54.0"
 ]
 
 [project.urls]
