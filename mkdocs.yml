@@ -98,6 +98,9 @@ nav:
                   - cancel: commands/job/cancel.md
                   - ls: commands/job/ls.md
                   - clusters: commands/job/clusters.md
+              - rm: commands/rm.md
+              - mv: commands/mv.md
+              - cp: commands/cp.md
       - 📚 User Guide:
           - Overview: guide/index.md
           - 📡 Interacting with remote storage: guide/remotes.md
