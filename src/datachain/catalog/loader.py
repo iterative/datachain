@@ -127,7 +127,9 @@ def get_udf_distributor_class() -> Optional[type["AbstractUDFDistributor"]]:
 
 
 def get_catalog(
-    client_config: Optional[dict[str, Any]] = None, in_memory: bool = False
+    client_config: Optional[dict[str, Any]] = None,
+    in_memory: bool = False,
+    is_cli: bool = True,
 ) -> "Catalog":
     """
     Function that creates Catalog instance with appropriate metastore
@@ -142,9 +144,11 @@ def get_catalog(
     """
     from datachain.catalog import Catalog
 
+    metastore = get_metastore(in_memory=in_memory)
     return Catalog(
-        metastore=get_metastore(in_memory=in_memory),
+        metastore=metastore,
         warehouse=get_warehouse(in_memory=in_memory),
         client_config=client_config,
         in_memory=in_memory,
+        is_cli=is_cli,
     )
