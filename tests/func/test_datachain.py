@@ -2420,3 +2420,98 @@ def test_agg_sample(catalog_tmpfile, parallel, sample):
     records = list(ds.to_records())
     assert len(records) == sample
     assert all(row["count"] == 1 for row in records)
+
+
+def test_batch_strategy_verification(test_session):
+    class Result(DataModel):
+        result: int
+        batch_size: int
+
+    # Create a chain with batch settings
+    chain = dc.read_values(x=list(range(100)), session=test_session)
+    chain_with_settings = chain.settings(batch_rows=15, batch_mem=1000)
+
+    def add_one_with_batch_size(x):
+        batch_size = len(x)
+        for val in x:
+            yield Result(result=val + 1, batch_size=batch_size)
+
+    result = chain_with_settings.batch_map(
+        add_one_with_batch_size, output={"result": Result}
+    )
+
+    results = [
+        r[0] for r in result.to_iter("result")
+    ]  # Access the first element of each tuple
+
+    batch_sizes = [r.batch_size for r in results]
+    unique_batch_sizes = set(batch_sizes)
+
+    assert all(size <= 15 for size in batch_sizes), (
+        f"Batch sizes exceeded limit: {unique_batch_sizes}"
+    )
+    assert len(results) == 100
+
+    expected_values = list(range(1, 101))
+    actual_values = [r.result for r in results]
+    assert actual_values == expected_values
+
+    assert len(results) == 100
+    assert len(expected_values) == 100
+
+
+def test_verify_explicit_batch_parameter_override(test_session):
+    class Result(DataModel):
+        result: int
+        batch_size: int
+
+    def add_one_with_batch_size(x):
+        batch_size = len(x)
+        for val in x:
+            yield Result(result=val + 1, batch_size=batch_size)
+
+    chain = dc.read_values(x=list(range(100)), session=test_session)
+    chain_with_settings = chain.settings(batch_rows=50, batch_mem=1000)
+
+    result = chain_with_settings.batch_map(
+        add_one_with_batch_size, output={"result": Result}, batch=15
+    )
+
+    results = [r[0] for r in result.to_iter("result")]
+
+    batch_sizes = [r.batch_size for r in results]
+    unique_batch_sizes = set(batch_sizes)
+
+    assert all(size <= 15 for size in batch_sizes), (
+        f"Batch sizes exceeded explicit limit: {unique_batch_sizes}"
+    )
+
+    assert len(results) == 100
+
+    expected_values = list(range(1, 101))
+    actual_values = [r.result for r in results]
+    assert actual_values == expected_values
+
+
+def test_batch_for_map(test_session):
+    # Create a chain with batch settings
+    chain = dc.read_values(x=list(range(100)), session=test_session)
+    chain_with_settings = chain.settings(batch_rows=15, batch_mem=1000)
+
+    def add_one(x):
+        return x + 1
+
+    result = chain_with_settings.map(add_one, output={"result": int})
+
+    results = [
+        r[0] for r in result.to_iter("result")
+    ]  # Access the first element of each tuple
+
+    assert len(results) == 100
+
+    expected_values = list(range(1, 101))
+    actual_values = list(results)
+    assert actual_values == expected_values
+
+    assert len(results) == 100
+    assert len(expected_values) == 100

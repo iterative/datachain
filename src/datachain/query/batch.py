@@ -1,9 +1,11 @@
 import contextlib
 import math
+import sys
 from abc import ABC, abstractmethod
 from collections.abc import Generator, Sequence
 from typing import Callable, Optional, Union
 
+import psutil
 import sqlalchemy as sa
 
 from datachain.data_storage.schema import PARTITION_COLUMN_ID
@@ -90,6 +92,107 @@ class Batch(BatchingStrategy):
 
             if len(results) > 0:
                 yield [r[0] for r in results] if ids_only else results
+
+
+class DynamicBatch(BatchingStrategy):
+    """
+    DynamicBatch implements UDF call batching with dynamic batch sizes based on
+    both row count and memory usage limits.
+    """
+
+    is_batching = True
+
+    def __init__(
+        self,
+        max_rows: Optional[int] = None,
+        max_memory_mb: Optional[float] = None,
+        is_input_batched: bool = True,
+    ):
+        self.max_rows = max_rows or 2000
+        self.max_memory_mb = max_memory_mb or 1000
+        self.max_memory_bytes = self.max_memory_mb * 1024 * 1024
+        self.is_input_batched = is_input_batched
+        # If we yield individual rows, set is_batching to False
+        self.is_batching = is_input_batched
+
+    def _estimate_row_memory(self, row) -> int:
+        """Estimate memory usage of a row in bytes."""
+        if not row:
+            return 0
+
+        total_size = 0
+        for item in row:
+            if isinstance(item, (str, bytes, int, float, bool)):
+                total_size += sys.getsizeof(item)
+            elif isinstance(item, (list, tuple)):
+                total_size += sys.getsizeof(item)
+                for subitem in item:
+                    total_size += sys.getsizeof(subitem)
+            else:
+                # For complex objects, use a conservative estimate
+                total_size += (
+                    sys.getsizeof(item) + 100
+                )  # Add buffer for object overhead
+
+        return total_size
+
+    def __call__(
+        self,
+        execute: Callable,
+        query: sa.Select,
+        id_col: Optional[sa.ColumnElement] = None,
+    ) -> Generator[RowsOutput, None, None]:
+        from datachain.data_storage.warehouse import SELECT_BATCH_SIZE
+
+        ids_only = False
+        if id_col is not None:
+            query = query.with_only_columns(id_col)
+            ids_only = True
+
+        # Use a larger page size for efficiency, but we'll batch dynamically
+        page_size = max(SELECT_BATCH_SIZE, self.max_rows * 2)
+
+        # select rows in batches
+        results: list[Sequence] = []
+        current_memory = 0
+        row_count = 0
+
+        with contextlib.closing(execute(query, page_size=page_size)) as batch_rows:
+            for row in batch_rows:
+                row_memory = self._estimate_row_memory(row)
+                row_count += 1
+
+                # Check if adding this row would exceed limits
+                # Also check system memory usage every 10 rows
+                # (same as in process_udf_outputs)
+                should_yield = (
+                    len(results) >= self.max_rows
+                    or current_memory + row_memory > self.max_memory_bytes
+                    or (row_count % 10 == 0 and psutil.virtual_memory().percent > 80)
+                )
+
+                if should_yield and results:  # Yield current batch if we have one
+                    if self.is_input_batched:
+                        # Yield the entire batch
+                        yield [r[0] for r in results] if ids_only else results
+                    else:
+                        # Yield individual rows
+                        for result in results:
+                            yield [result[0]] if ids_only else result
+                    results = []
+                    current_memory = 0
+
+                results.append(row)
+                current_memory += row_memory
+
+            if len(results) > 0:
+                if self.is_input_batched:
+                    # Yield the entire batch
+                    yield [r[0] for r in results] if ids_only else results
+                else:
+                    # Yield individual rows
+                    for result in results:
+                        yield [result[0]] if ids_only else result
 
 
 class Partition(BatchingStrategy):

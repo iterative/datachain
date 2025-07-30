@@ -16,6 +16,8 @@ class Settings:
         prefetch=None,
         namespace=None,
         project=None,
+        batch_rows=None,
+        batch_mem=None,
     ):
         self._cache = cache
         self.parallel = parallel
@@ -24,6 +26,8 @@ class Settings:
         self.prefetch = prefetch
         self.namespace = namespace
         self.project = project
+        self._batch_rows = batch_rows
+        self._batch_mem = batch_mem
 
         if not isinstance(cache, bool) and cache is not None:
             raise SettingsError(
@@ -53,6 +57,18 @@ class Settings:
                 f", {min_task_size.__class__.__name__} was given"
             )
 
+        if batch_rows is not None and not isinstance(batch_rows, int):
+            raise SettingsError(
+                "'batch_rows' argument must be int or None"
+                f", {batch_rows.__class__.__name__} was given"
+            )
+
+        if batch_mem is not None and not isinstance(batch_mem, (int, float)):
+            raise SettingsError(
+                "'batch_mem' argument must be int/float or None"
+                f", {batch_mem.__class__.__name__} was given"
+            )
+
     @property
     def cache(self):
         return self._cache if self._cache is not None else False
@@ -60,6 +76,14 @@ class Settings:
     @property
     def workers(self):
         return self._workers if self._workers is not None else False
+
+    @property
+    def batch_rows(self):
+        return self._batch_rows if self._batch_rows is not None else 2000
+
+    @property
+    def batch_mem(self):
+        return self._batch_mem if self._batch_mem is not None else 1000
 
     def to_dict(self):
         res = {}
@@ -75,6 +99,10 @@ class Settings:
             res["namespace"] = self.namespace
         if self.project is not None:
             res["project"] = self.project
+        if self._batch_rows is not None:
+            res["batch_rows"] = self.batch_rows
+        if self._batch_mem is not None:
+            res["batch_mem"] = self.batch_mem
         return res
 
     def add(self, settings: "Settings"):
@@ -86,3 +114,7 @@ class Settings:
         self.project = settings.project or self.project
         if settings.prefetch is not None:
             self.prefetch = settings.prefetch
+        if settings._batch_rows is not None:
+            self._batch_rows = settings.batch_rows
+        if settings._batch_mem is not None:
+            self._batch_mem = settings.batch_mem

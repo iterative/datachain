@@ -324,6 +324,8 @@ class DataChain:
         sys: Optional[bool] = None,
         namespace: Optional[str] = None,
         project: Optional[str] = None,
+        batch_rows: Optional[int] = None,
+        batch_mem: Optional[Union[int, float]] = None,
     ) -> "Self":
         """Change settings for chain.
 
@@ -341,12 +343,14 @@ class DataChain:
                       To disable prefetching, set it to 0.
             namespace: namespace name.
             project: project name.
+            batch_rows: number of rows per batch (default=2000)
+            batch_mem: memory limit in MB per batch (default=1000)
 
         Example:
             ```py
             chain = (
                 chain
-                .settings(cache=True, parallel=8)
+                .settings(cache=True, parallel=8, batch_rows=300, batch_mem=500)
                 .map(laion=process_webdataset(spec=WDSLaion), params="file")
             )
             ```
@@ -356,7 +360,15 @@ class DataChain:
         settings = copy.copy(self._settings)
         settings.add(
             Settings(
-                cache, parallel, workers, min_task_size, prefetch, namespace, project
+                cache,
+                parallel,
+                workers,
+                min_task_size,
+                prefetch,
+                namespace,
+                project,
+                batch_rows,
+                batch_mem,
             )
         )
         return self._evolve(settings=settings, _sys=sys)
@@ -897,7 +909,9 @@ class DataChain:
         func: Optional[Callable] = None,
         params: Union[None, str, Sequence[str]] = None,
         output: OutputType = None,
-        batch: int = 1000,
+        batch: Optional[int] = None,
+        batch_rows: Optional[int] = None,
+        batch_mem: Optional[Union[int, float]] = None,
         **signal_map,
     ) -> "Self":
         """This is a batch version of `map()`.
@@ -907,7 +921,7 @@ class DataChain:
         It accepts the same parameters plus an
         additional parameter:
 
-            batch : Size of each batch passed to `func`. Defaults to 1000.
+            batch : Size of each batch passed to `func`. Defaults to 2000.
 
         Example:
             ```py
@@ -919,9 +933,20 @@ class DataChain:
             ```
         """
         udf_obj = self._udf_to_obj(BatchMapper, func, params, output, signal_map)
+        if batch is not None:
+            warnings.warn(
+                "batch parameter is deprecated. Use batch_rows and batch_mem instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            batch_rows = batch
+
+        batch_rows = batch_rows or self._settings.batch_rows
+        batch_mem = batch_mem or self._settings.batch_mem
+
         return self._evolve(
             query=self._query.add_signals(
-                udf_obj.to_udf_wrapper(batch),
+                udf_obj.to_udf_wrapper(batch_rows, batch_mem),
                 **self._settings.to_dict(),
             ),
             signal_schema=self.signals_schema | udf_obj.output,

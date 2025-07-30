@@ -3,7 +3,7 @@ import traceback
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import closing, nullcontext
 from functools import partial
-from typing import TYPE_CHECKING, Any, Optional, TypeVar
+from typing import TYPE_CHECKING, Any, Optional, TypeVar, Union
 
 import attrs
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
@@ -16,8 +16,8 @@ from datachain.lib.convert.flatten import flatten
 from datachain.lib.file import DataModel, File
 from datachain.lib.utils import AbstractUDF, DataChainError, DataChainParamsError
 from datachain.query.batch import (
-    Batch,
     BatchingStrategy,
+    DynamicBatch,
     NoBatching,
     Partition,
     RowsOutputBatch,
@@ -58,28 +58,53 @@ UDFResult = dict[str, Any]
 class UDFProperties:
     udf: "UDFAdapter"
 
-    def get_batching(self, use_partitioning: bool = False) -> BatchingStrategy:
-        return self.udf.get_batching(use_partitioning)
+    def get_batching(
+        self, use_partitioning: bool = False, settings=None
+    ) -> BatchingStrategy:
+        return self.udf.get_batching(use_partitioning, settings)
 
     @property
-    def batch(self):
-        return self.udf.batch
+    def batch_rows(self):
+        return self.udf.batch_rows
+
+    @property
+    def batch_mem(self):
+        return self.udf.batch_mem
 
 
 @attrs.define(slots=False)
 class UDFAdapter:
     inner: "UDFBase"
     output: UDFOutputSpec
-    batch: int = 1
+    batch_rows: Optional[int] = None
+    batch_mem: Optional[Union[int, float]] = None
 
-    def get_batching(self, use_partitioning: bool = False) -> BatchingStrategy:
+    def get_batching(
+        self, use_partitioning: bool = False, settings=None
+    ) -> BatchingStrategy:
         if use_partitioning:
             return Partition()
-        if self.batch == 1:
-            return NoBatching()
-        if self.batch > 1:
-            return Batch(self.batch)
-        raise ValueError(f"invalid batch size {self.batch}")
+
+        is_input_batched = self.inner.is_input_batched
+
+        # If we have explicit batch_rows/batch_mem set on this adapter, use them
+        if self.batch_rows is not None or self.batch_mem is not None:
+            return DynamicBatch(self.batch_rows, self.batch_mem, is_input_batched)
+
+        # If settings are provided and have batch configuration, use appropriate
+        # batching
+        if settings:
+            max_rows: Optional[int] = getattr(settings, "_batch_rows", None)
+            max_mem: Optional[Union[int, float]] = getattr(settings, "_batch_mem", None)
+            if max_rows is not None or max_mem is not None:
+                return DynamicBatch(max_rows, max_mem, is_input_batched)
+
+        return NoBatching()
+
+    @property
+    def batch(self):
+        """Backward compatibility property for batch size."""
+        return self.batch_rows if self.batch_rows is not None else 1
 
     @property
     def properties(self):
@@ -233,11 +258,16 @@ class UDFBase(AbstractUDF):
     def signal_names(self) -> Iterable[str]:
         return self.output.to_udf_spec().keys()
 
-    def to_udf_wrapper(self, batch: int = 1) -> UDFAdapter:
+    def to_udf_wrapper(
+        self,
+        batch_rows: Optional[int] = None,
+        batch_mem: Optional[Union[int, float]] = None,
+    ) -> UDFAdapter:
         return UDFAdapter(
             self,
             self.output.to_udf_spec(),
-            batch,
+            batch_rows,
+            batch_mem,
         )
 
     def run(

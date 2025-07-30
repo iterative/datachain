@@ -401,6 +401,8 @@ class UDFStep(Step, ABC):
     min_task_size: Optional[int] = None
     is_generator = False
     cache: bool = False
+    batch_rows: Optional[int] = None
+    batch_mem: Optional[Union[int, float]] = None
 
     @abstractmethod
     def create_udf_table(self, query: Select) -> "Table":
@@ -428,12 +430,18 @@ class UDFStep(Step, ABC):
             DISTRIBUTED_IMPORT_PATH,
             get_udf_distributor_class,
         )
+        from datachain.lib.settings import Settings
 
         workers = determine_workers(self.workers, rows_total=rows_total)
         processes = determine_processes(self.parallel, rows_total=rows_total)
 
         use_partitioning = self.partition_by is not None
-        batching = self.udf.get_batching(use_partitioning)
+        # Create a settings object from the UDFStep attributes for batching
+        step_settings = Settings(
+            batch_rows=getattr(self, "batch_rows", None),
+            batch_mem=getattr(self, "batch_mem", None),
+        )
+        batching = self.udf.get_batching(use_partitioning, step_settings)
         udf_fields = [str(c.name) for c in query.selected_columns]
         udf_distributor_class = get_udf_distributor_class()
 
@@ -602,6 +610,8 @@ class UDFStep(Step, ABC):
                 parallel=self.parallel,
                 workers=self.workers,
                 min_task_size=self.min_task_size,
+                batch_rows=self.batch_rows,
+                batch_mem=self.batch_mem,
             )
         return self.__class__(self.udf, self.catalog)
 
@@ -1633,6 +1643,8 @@ class DatasetQuery:
         min_task_size: Optional[int] = None,
         partition_by: Optional[PartitionByType] = None,
         cache: bool = False,
+        batch_rows: Optional[int] = None,
+        batch_mem: Optional[Union[int, float]] = None,
     ) -> "Self":
         """
         Adds one or more signals based on the results from the provided UDF.
@@ -1658,6 +1670,8 @@ class DatasetQuery:
                 workers=workers,
                 min_task_size=min_task_size,
                 cache=cache,
+                batch_rows=batch_rows,
+                batch_mem=batch_mem,
             )
         )
         return query
@@ -1679,6 +1693,8 @@ class DatasetQuery:
         namespace: Optional[str] = None,
         project: Optional[str] = None,
         cache: bool = False,
+        batch_rows: Optional[int] = None,
+        batch_mem: Optional[Union[int, float]] = None,
     ) -> "Self":
         query = self.clone()
         steps = query.steps
@@ -1691,6 +1707,8 @@ class DatasetQuery:
                 workers=workers,
                 min_task_size=min_task_size,
                 cache=cache,
+                batch_rows=batch_rows,
+                batch_mem=batch_mem,
             )
         )
         return query
