@@ -324,7 +324,7 @@ class DataChain:
         sys: Optional[bool] = None,
         namespace: Optional[str] = None,
         project: Optional[str] = None,
-        batch_rows: Optional[int] = None,
+        chunk_rows: Optional[int] = None,
         batch_mem: Optional[Union[int, float]] = None,
     ) -> "Self":
         """Change settings for chain.
@@ -333,24 +333,24 @@ class DataChain:
         It returns chain, so, it can be chained later with next operation.
 
         Parameters:
-            cache : data caching (default=False)
+            cache : data caching. (default=False)
             parallel : number of thread for processors. True is a special value to
-                enable all available CPUs (default=1)
+                enable all available CPUs. (default=1)
             workers : number of distributed workers. Only for Studio mode. (default=1)
-            min_task_size : minimum number of tasks (default=1)
-            prefetch: number of workers to use for downloading files in advance.
+            min_task_size : minimum number of tasks. (default=1)
+            prefetch : number of workers to use for downloading files in advance.
                       This is enabled by default and uses 2 workers.
                       To disable prefetching, set it to 0.
-            namespace: namespace name.
-            project: project name.
-            batch_rows: number of rows per batch (default=2000)
-            batch_mem: memory limit in MB per batch (default=1000)
+            namespace : namespace name.
+            project : project name.
+            chunk_rows : number of rows per batch. (default=2000)
+            batch_mem : memory limit in MB per batch. (default=1000)
 
         Example:
             ```py
             chain = (
                 chain
-                .settings(cache=True, parallel=8, batch_rows=300, batch_mem=500)
+                .settings(cache=True, parallel=8, chunk_rows=300, batch_mem=500)
                 .map(laion=process_webdataset(spec=WDSLaion), params="file")
             )
             ```
@@ -367,7 +367,7 @@ class DataChain:
                 prefetch,
                 namespace,
                 project,
-                batch_rows,
+                chunk_rows,
                 batch_mem,
             )
         )
@@ -910,8 +910,6 @@ class DataChain:
         params: Union[None, str, Sequence[str]] = None,
         output: OutputType = None,
         batch: Optional[int] = None,
-        batch_rows: Optional[int] = None,
-        batch_mem: Optional[Union[int, float]] = None,
         **signal_map,
     ) -> "Self":
         """This is a batch version of `map()`.
@@ -933,20 +931,20 @@ class DataChain:
             ```
         """
         udf_obj = self._udf_to_obj(BatchMapper, func, params, output, signal_map)
+        chunk_rows = self._settings.chunk_rows
+        batch_mem = self._settings.batch_mem
+
         if batch is not None:
             warnings.warn(
-                "batch parameter is deprecated. Use batch_rows and batch_mem instead.",
+                "batch parameter is deprecated. Use chunk_rows and batch_mem instead.",
                 DeprecationWarning,
                 stacklevel=2,
             )
-            batch_rows = batch
-
-        batch_rows = batch_rows or self._settings.batch_rows
-        batch_mem = batch_mem or self._settings.batch_mem
+            chunk_rows = batch
 
         return self._evolve(
             query=self._query.add_signals(
-                udf_obj.to_udf_wrapper(batch_rows, batch_mem),
+                udf_obj.to_udf_wrapper(chunk_rows, batch_mem),
                 **self._settings.to_dict(),
             ),
             signal_schema=self.signals_schema | udf_obj.output,

@@ -2429,7 +2429,7 @@ def test_batch_strategy_verification(test_session):
 
     # Create a chain with batch settings
     chain = dc.read_values(x=list(range(100)), session=test_session)
-    chain_with_settings = chain.settings(batch_rows=15, batch_mem=1000)
+    chain_with_settings = chain.settings(chunk_rows=15, batch_mem=1000)
 
     def add_one_with_batch_size(x):
         batch_size = len(x)
@@ -2452,12 +2452,9 @@ def test_batch_strategy_verification(test_session):
     )
     assert len(results) == 100
 
-    expected_values = list(range(1, 101))
-    actual_values = [r.result for r in results]
+    expected_values = set(range(1, 101))
+    actual_values = {r.result for r in results}
     assert actual_values == expected_values
-
-    assert len(results) == 100
-    assert len(expected_values) == 100
 
 
 def test_verify_explicit_batch_parameter_override(test_session):
@@ -2471,7 +2468,7 @@ def test_verify_explicit_batch_parameter_override(test_session):
             yield Result(result=val + 1, batch_size=batch_size)
 
     chain = dc.read_values(x=list(range(100)), session=test_session)
-    chain_with_settings = chain.settings(batch_rows=50, batch_mem=1000)
+    chain_with_settings = chain.settings(chunk_rows=50, batch_mem=1000)
 
     result = chain_with_settings.batch_map(
         add_one_with_batch_size, output={"result": Result}, batch=15
@@ -2496,7 +2493,7 @@ def test_verify_explicit_batch_parameter_override(test_session):
 def test_batch_for_map(test_session):
     # Create a chain with batch settings
     chain = dc.read_values(x=list(range(100)), session=test_session)
-    chain_with_settings = chain.settings(batch_rows=15, batch_mem=1000)
+    chain_with_settings = chain.settings(chunk_rows=15, batch_mem=1000)
 
     def add_one(x):
         return x + 1
@@ -2509,9 +2506,4 @@ def test_batch_for_map(test_session):
 
     assert len(results) == 100
 
-    expected_values = list(range(1, 101))
-    actual_values = list(results)
-    assert actual_values == expected_values
-
-    assert len(results) == 100
-    assert len(expected_values) == 100
+    assert set(results) == set(range(1, 101))

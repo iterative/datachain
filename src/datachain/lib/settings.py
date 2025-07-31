@@ -16,7 +16,7 @@ class Settings:
         prefetch=None,
         namespace=None,
         project=None,
-        batch_rows=None,
+        chunk_rows=None,
         batch_mem=None,
     ):
         self._cache = cache
@@ -26,7 +26,7 @@ class Settings:
         self.prefetch = prefetch
         self.namespace = namespace
         self.project = project
-        self._batch_rows = batch_rows
+        self._chunk_rows = chunk_rows
         self._batch_mem = batch_mem
 
         if not isinstance(cache, bool) and cache is not None:
@@ -57,10 +57,10 @@ class Settings:
                 f", {min_task_size.__class__.__name__} was given"
             )
 
-        if batch_rows is not None and not isinstance(batch_rows, int):
+        if chunk_rows is not None and not isinstance(chunk_rows, int):
             raise SettingsError(
-                "'batch_rows' argument must be int or None"
-                f", {batch_rows.__class__.__name__} was given"
+                "'chunk_rows' argument must be int or None"
+                f", {chunk_rows.__class__.__name__} was given"
             )
 
         if batch_mem is not None and not isinstance(batch_mem, (int, float)):
@@ -78,8 +78,8 @@ class Settings:
         return self._workers if self._workers is not None else False
 
     @property
-    def batch_rows(self):
-        return self._batch_rows if self._batch_rows is not None else 2000
+    def chunk_rows(self):
+        return self._chunk_rows if self._chunk_rows is not None else 2000
 
     @property
     def batch_mem(self):
@@ -99,8 +99,8 @@ class Settings:
             res["namespace"] = self.namespace
         if self.project is not None:
             res["project"] = self.project
-        if self._batch_rows is not None:
-            res["batch_rows"] = self.batch_rows
+        if self._chunk_rows is not None:
+            res["chunk_rows"] = self.chunk_rows
         if self._batch_mem is not None:
             res["batch_mem"] = self.batch_mem
         return res
@@ -114,7 +114,7 @@ class Settings:
         self.project = settings.project or self.project
         if settings.prefetch is not None:
             self.prefetch = settings.prefetch
-        if settings._batch_rows is not None:
-            self._batch_rows = settings.batch_rows
+        if settings._chunk_rows is not None:
+            self._chunk_rows = settings.chunk_rows
         if settings._batch_mem is not None:
-            self._batch_mem = settings.batch_mem
+            self._batch_mem = settings._batch_mem

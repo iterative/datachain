@@ -5,7 +5,6 @@ from abc import ABC, abstractmethod
 from collections.abc import Generator, Sequence
 from typing import Callable, Optional, Union
 
-import psutil
 import sqlalchemy as sa
 
 from datachain.data_storage.schema import PARTITION_COLUMN_ID
@@ -13,6 +12,8 @@ from datachain.query.utils import get_query_column
 
 RowsOutputBatch = Sequence[Sequence]
 RowsOutput = Union[Sequence, RowsOutputBatch]
+
+OBJECT_OVERHEAD_BYTES = 100
 
 
 class BatchingStrategy(ABC):
@@ -131,7 +132,7 @@ class DynamicBatch(BatchingStrategy):
             else:
                 # For complex objects, use a conservative estimate
                 total_size += (
-                    sys.getsizeof(item) + 100
+                    sys.getsizeof(item) + OBJECT_OVERHEAD_BYTES
                 )  # Add buffer for object overhead
 
         return total_size
@@ -142,6 +143,8 @@ class DynamicBatch(BatchingStrategy):
         query: sa.Select,
         id_col: Optional[sa.ColumnElement] = None,
     ) -> Generator[RowsOutput, None, None]:
+        import psutil
+
         from datachain.data_storage.warehouse import SELECT_BATCH_SIZE
 
         ids_only = False
@@ -157,8 +160,8 @@ class DynamicBatch(BatchingStrategy):
         current_memory = 0
         row_count = 0
 
-        with contextlib.closing(execute(query, page_size=page_size)) as batch_rows:
-            for row in batch_rows:
+        with contextlib.closing(execute(query, page_size=page_size)) as chunk_rows:
+            for row in chunk_rows:
                 row_memory = self._estimate_row_memory(row)
                 row_count += 1
 
@@ -168,7 +171,7 @@ class DynamicBatch(BatchingStrategy):
                 should_yield = (
                     len(results) >= self.max_rows
                     or current_memory + row_memory > self.max_memory_bytes
-                    or (row_count % 10 == 0 and psutil.virtual_memory().percent > 80)
+                    or (row_count % 100 == 0 and psutil.virtual_memory().percent > 80)
                 )
 
                 if should_yield and results:  # Yield current batch if we have one

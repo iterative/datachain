@@ -64,8 +64,8 @@ class UDFProperties:
         return self.udf.get_batching(use_partitioning, settings)
 
     @property
-    def batch_rows(self):
-        return self.udf.batch_rows
+    def chunk_rows(self):
+        return self.udf.chunk_rows
 
     @property
     def batch_mem(self):
@@ -76,7 +76,7 @@ class UDFProperties:
 class UDFAdapter:
     inner: "UDFBase"
     output: UDFOutputSpec
-    batch_rows: Optional[int] = None
+    chunk_rows: Optional[int] = None
     batch_mem: Optional[Union[int, float]] = None
 
     def get_batching(
@@ -87,14 +87,14 @@ class UDFAdapter:
 
         is_input_batched = self.inner.is_input_batched
 
-        # If we have explicit batch_rows/batch_mem set on this adapter, use them
-        if self.batch_rows is not None or self.batch_mem is not None:
-            return DynamicBatch(self.batch_rows, self.batch_mem, is_input_batched)
+        # If we have explicit chunk_rows/batch_mem set on this adapter, use them
+        if self.chunk_rows is not None or self.batch_mem is not None:
+            return DynamicBatch(self.chunk_rows, self.batch_mem, is_input_batched)
 
         # If settings are provided and have batch configuration, use appropriate
         # batching
         if settings:
-            max_rows: Optional[int] = getattr(settings, "_batch_rows", None)
+            max_rows: Optional[int] = getattr(settings, "_chunk_rows", None)
             max_mem: Optional[Union[int, float]] = getattr(settings, "_batch_mem", None)
             if max_rows is not None or max_mem is not None:
                 return DynamicBatch(max_rows, max_mem, is_input_batched)
@@ -104,7 +104,7 @@ class UDFAdapter:
     @property
     def batch(self):
         """Backward compatibility property for batch size."""
-        return self.batch_rows if self.batch_rows is not None else 1
+        return self.chunk_rows if self.chunk_rows is not None else 1
 
     @property
     def properties(self):
@@ -260,13 +260,13 @@ class UDFBase(AbstractUDF):
 
     def to_udf_wrapper(
         self,
-        batch_rows: Optional[int] = None,
+        chunk_rows: Optional[int] = None,
         batch_mem: Optional[Union[int, float]] = None,
     ) -> UDFAdapter:
         return UDFAdapter(
             self,
             self.output.to_udf_spec(),
-            batch_rows,
+            chunk_rows,
             batch_mem,
         )
 

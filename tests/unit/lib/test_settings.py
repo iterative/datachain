@@ -8,35 +8,35 @@ def test_settings_defaults_and_custom():
     """Test Settings class with default and custom batch parameters."""
     # Default values
     settings = Settings()
-    assert settings.batch_rows == 2000
+    assert settings.chunk_rows == 2000
     assert settings.batch_mem == 1000
 
     # Custom values
-    settings = Settings(batch_rows=500, batch_mem=750.5)
-    assert settings.batch_rows == 500
+    settings = Settings(chunk_rows=500, batch_mem=750.5)
+    assert settings.chunk_rows == 500
     assert settings.batch_mem == 750.5
 
     # to_dict method
     d = settings.to_dict()
-    assert d["batch_rows"] == 500
+    assert d["chunk_rows"] == 500
     assert d["batch_mem"] == 750.5
 
     # Chaining
     s2 = settings
     s3 = s2
-    assert s3.batch_rows == 500
+    assert s3.chunk_rows == 500
     assert s3.batch_mem == 750.5
 
 
 def test_settings_validation():
     # Valid
-    settings = Settings(batch_rows=100, batch_mem=50.5)
-    assert settings.batch_rows == 100
+    settings = Settings(chunk_rows=100, batch_mem=50.5)
+    assert settings.chunk_rows == 100
     assert settings.batch_mem == 50.5
 
-    # Invalid batch_rows
+    # Invalid chunk_rows
     with pytest.raises(SettingsError):
-        Settings(batch_rows="invalid")
+        Settings(chunk_rows="invalid")
 
     # Invalid batch_mem
     with pytest.raises(SettingsError):

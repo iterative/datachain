@@ -401,7 +401,7 @@ class UDFStep(Step, ABC):
     min_task_size: Optional[int] = None
     is_generator = False
     cache: bool = False
-    batch_rows: Optional[int] = None
+    chunk_rows: Optional[int] = None
     batch_mem: Optional[Union[int, float]] = None
 
     @abstractmethod
@@ -438,7 +438,7 @@ class UDFStep(Step, ABC):
         use_partitioning = self.partition_by is not None
         # Create a settings object from the UDFStep attributes for batching
         step_settings = Settings(
-            batch_rows=getattr(self, "batch_rows", None),
+            chunk_rows=getattr(self, "chunk_rows", None),
             batch_mem=getattr(self, "batch_mem", None),
         )
         batching = self.udf.get_batching(use_partitioning, step_settings)
@@ -610,7 +610,7 @@ class UDFStep(Step, ABC):
                 parallel=self.parallel,
                 workers=self.workers,
                 min_task_size=self.min_task_size,
-                batch_rows=self.batch_rows,
+                chunk_rows=self.chunk_rows,
                 batch_mem=self.batch_mem,
             )
         return self.__class__(self.udf, self.catalog)
@@ -1643,7 +1643,7 @@ class DatasetQuery:
         min_task_size: Optional[int] = None,
         partition_by: Optional[PartitionByType] = None,
         cache: bool = False,
-        batch_rows: Optional[int] = None,
+        chunk_rows: Optional[int] = None,
         batch_mem: Optional[Union[int, float]] = None,
     ) -> "Self":
         """
@@ -1670,7 +1670,7 @@ class DatasetQuery:
                 workers=workers,
                 min_task_size=min_task_size,
                 cache=cache,
-                batch_rows=batch_rows,
+                chunk_rows=chunk_rows,
                 batch_mem=batch_mem,
             )
         )
@@ -1693,7 +1693,7 @@ class DatasetQuery:
         namespace: Optional[str] = None,
         project: Optional[str] = None,
         cache: bool = False,
-        batch_rows: Optional[int] = None,
+        chunk_rows: Optional[int] = None,
         batch_mem: Optional[Union[int, float]] = None,
     ) -> "Self":
         query = self.clone()
@@ -1707,7 +1707,7 @@ class DatasetQuery:
                 workers=workers,
                 min_task_size=min_task_size,
                 cache=cache,
-                batch_rows=batch_rows,
+                chunk_rows=chunk_rows,
                 batch_mem=batch_mem,
             )
         )
