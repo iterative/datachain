@@ -1,5 +1,6 @@
 import pytest
 
+from datachain.lib.memory_utils import estimate_row_memory
 from datachain.lib.settings import Settings, SettingsError
 from datachain.query.batch import DynamicBatch
 
@@ -64,11 +65,11 @@ def test_dynamic_chunk_memory_monitoring():
 
     # Test memory estimation
     test_row = [1, "test", [1, 2, 3]]
-    estimated_memory = dynamic_batch._estimate_row_memory(test_row)
+    estimated_memory = estimate_row_memory(test_row)
     assert estimated_memory > 0
 
     # Test with empty row
-    empty_memory = dynamic_batch._estimate_row_memory([])
+    empty_memory = estimate_row_memory([])
     assert empty_memory == 0
 
 

@@ -33,14 +33,7 @@ def estimate_memory_recursive(item: Any) -> int:
 
 
 def estimate_row_memory(row: Union[list, tuple]) -> int:
-    if not row:
-        return 0
-
-    total_size = 0
-    for item in row:
-        total_size += estimate_memory_recursive(item)
-
-    return total_size
+    return sum(estimate_memory_recursive(item) for item in row) if row else 0
 
 
 def get_system_memory_percent() -> float:

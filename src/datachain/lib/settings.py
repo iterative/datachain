@@ -112,9 +112,9 @@ class Settings:
         if self.project is not None:
             res["project"] = self.project
         if self._chunk_rows is not None:
-            res["chunk_rows"] = self.chunk_rows
+            res["chunk_rows"] = self._chunk_rows
         if self._chunk_mb is not None:
-            res["chunk_mb"] = self.chunk_mb
+            res["chunk_mb"] = self._chunk_mb
         return res
 
     def add(self, settings: "Settings"):
