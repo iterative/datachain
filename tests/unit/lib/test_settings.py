@@ -42,8 +42,16 @@ def test_settings_validation():
     with pytest.raises(SettingsError):
         Settings(chunk_mb="invalid")
 
+    # Zero chunk_rows
+    with pytest.raises(SettingsError):
+        Settings(chunk_rows=0)
 
-def test_dynamic_chunk_mbory_monitoring():
+    # Zero chunk_mb
+    with pytest.raises(SettingsError):
+        Settings(chunk_mb=0)
+
+
+def test_dynamic_chunk_memory_monitoring():
     """Test that DynamicBatch integrates memory monitoring correctly."""
     # Create a DynamicBatch instance
     dynamic_batch = DynamicBatch(max_rows=100, max_memory_mb=50)
@@ -62,3 +70,29 @@ def test_dynamic_chunk_mbory_monitoring():
     # Test with empty row
     empty_memory = dynamic_batch._estimate_row_memory([])
     assert empty_memory == 0
+
+
+def test_settings_add():
+    """Test Settings.add() method with chunk_rows and chunk_mb."""
+    # Create base settings
+    base_settings = Settings(chunk_rows=1000, chunk_mb=500)
+
+    # Create settings to add
+    add_settings = Settings(chunk_rows=2000, chunk_mb=750)
+
+    # Add settings
+    base_settings.add(add_settings)
+
+    # Verify that values from add_settings override base_settings
+    assert base_settings.chunk_rows == 2000
+    assert base_settings.chunk_mb == 750
+
+    # Test with None values (should not override)
+    base_settings = Settings(chunk_rows=1000, chunk_mb=500)
+    none_settings = Settings(chunk_rows=None, chunk_mb=None)
+
+    base_settings.add(none_settings)
+
+    # Verify that None values don't override existing values
+    assert base_settings.chunk_rows == 1000
+    assert base_settings.chunk_mb == 500

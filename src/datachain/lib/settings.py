@@ -1,3 +1,4 @@
+from datachain.lib.memory_utils import DEFAULT_CHUNK_MB, DEFAULT_CHUNK_ROWS
 from datachain.lib.utils import DataChainParamsError
 
 
@@ -63,10 +64,21 @@ class Settings:
                 f", {chunk_rows.__class__.__name__} was given"
             )
 
+        if chunk_rows is not None and chunk_rows <= 0:
+            raise SettingsError(
+                "'chunk_rows' argument must be positive integer"
+                f", {chunk_rows} was given"
+            )
+
         if chunk_mb is not None and not isinstance(chunk_mb, (int, float)):
             raise SettingsError(
                 "'chunk_mb' argument must be int/float or None"
                 f", {chunk_mb.__class__.__name__} was given"
+            )
+
+        if chunk_mb is not None and chunk_mb <= 0:
+            raise SettingsError(
+                f"'chunk_mb' argument must be positive number, {chunk_mb} was given"
             )
 
     @property
@@ -79,11 +91,11 @@ class Settings:
 
     @property
     def chunk_rows(self):
-        return self._chunk_rows if self._chunk_rows is not None else 2000
+        return self._chunk_rows if self._chunk_rows is not None else DEFAULT_CHUNK_ROWS
 
     @property
     def chunk_mb(self):
-        return self._chunk_mb if self._chunk_mb is not None else 1000
+        return self._chunk_mb if self._chunk_mb is not None else DEFAULT_CHUNK_MB
 
     def to_dict(self):
         res = {}
@@ -115,6 +127,6 @@ class Settings:
         if settings.prefetch is not None:
             self.prefetch = settings.prefetch
         if settings._chunk_rows is not None:
-            self._chunk_rows = settings.chunk_rows
+            self._chunk_rows = settings._chunk_rows
         if settings._chunk_mb is not None:
             self._chunk_mb = settings._chunk_mb

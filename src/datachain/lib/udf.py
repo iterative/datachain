@@ -14,6 +14,7 @@ from datachain.cache import temporary_cache
 from datachain.dataset import RowDict
 from datachain.lib.convert.flatten import flatten
 from datachain.lib.file import DataModel, File
+from datachain.lib.memory_utils import DEFAULT_CHUNK_MB, DEFAULT_CHUNK_ROWS
 from datachain.lib.utils import AbstractUDF, DataChainError, DataChainParamsError
 from datachain.query.batch import (
     BatchingStrategy,
@@ -89,7 +90,11 @@ class UDFAdapter:
 
         # If we have explicit chunk_rows/chunk_mb set on this adapter, use them
         if self.chunk_rows is not None or self.chunk_mb is not None:
-            return DynamicBatch(self.chunk_rows, self.chunk_mb, is_input_batched)
+            return DynamicBatch(
+                self.chunk_rows if self.chunk_rows is not None else DEFAULT_CHUNK_ROWS,
+                self.chunk_mb if self.chunk_mb is not None else DEFAULT_CHUNK_MB,
+                is_input_batched,
+            )
 
         # If settings are provided and have batch configuration, use appropriate
         # batching
@@ -97,6 +102,9 @@ class UDFAdapter:
             max_rows: Optional[int] = getattr(settings, "_chunk_rows", None)
             max_mem: Optional[Union[int, float]] = getattr(settings, "_chunk_mb", None)
             if max_rows is not None or max_mem is not None:
+                # Use settings values, falling back to defaults if None
+                max_rows = max_rows if max_rows is not None else DEFAULT_CHUNK_ROWS
+                max_mem = max_mem if max_mem is not None else DEFAULT_CHUNK_MB
                 return DynamicBatch(max_rows, max_mem, is_input_batched)
 
         return NoBatching()

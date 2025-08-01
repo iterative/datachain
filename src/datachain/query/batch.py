@@ -1,6 +1,5 @@
 import contextlib
 import math
-import sys
 from abc import ABC, abstractmethod
 from collections.abc import Generator, Sequence
 from typing import Callable, Optional, Union
@@ -8,12 +7,11 @@ from typing import Callable, Optional, Union
 import sqlalchemy as sa
 
 from datachain.data_storage.schema import PARTITION_COLUMN_ID
+from datachain.lib.memory_utils import estimate_row_memory, is_memory_usage_high
 from datachain.query.utils import get_query_column
 
 RowsOutputBatch = Sequence[Sequence]
 RowsOutput = Union[Sequence, RowsOutputBatch]
-
-OBJECT_OVERHEAD_BYTES = 100
 
 
 class BatchingStrategy(ABC):
@@ -116,35 +114,12 @@ class DynamicBatch(BatchingStrategy):
         # If we yield individual rows, set is_batching to False
         self.is_batching = is_input_batched
 
-    def _estimate_row_memory(self, row) -> int:
-        """Estimate memory usage of a row in bytes."""
-        if not row:
-            return 0
-
-        total_size = 0
-        for item in row:
-            if isinstance(item, (str, bytes, int, float, bool)):
-                total_size += sys.getsizeof(item)
-            elif isinstance(item, (list, tuple)):
-                total_size += sys.getsizeof(item)
-                for subitem in item:
-                    total_size += sys.getsizeof(subitem)
-            else:
-                # For complex objects, use a conservative estimate
-                total_size += (
-                    sys.getsizeof(item) + OBJECT_OVERHEAD_BYTES
-                )  # Add buffer for object overhead
-
-        return total_size
-
     def __call__(
         self,
         execute: Callable,
         query: sa.Select,
         id_col: Optional[sa.ColumnElement] = None,
     ) -> Generator[RowsOutput, None, None]:
-        import psutil
-
         from datachain.data_storage.warehouse import SELECT_BATCH_SIZE
 
         ids_only = False
@@ -162,7 +137,7 @@ class DynamicBatch(BatchingStrategy):
 
         with contextlib.closing(execute(query, page_size=page_size)) as chunk_rows:
             for row in chunk_rows:
-                row_memory = self._estimate_row_memory(row)
+                row_memory = estimate_row_memory(row)
                 row_count += 1
 
                 # Check if adding this row would exceed limits
@@ -171,7 +146,7 @@ class DynamicBatch(BatchingStrategy):
                 should_yield = (
                     len(results) >= self.max_rows
                     or current_memory + row_memory > self.max_memory_bytes
-                    or (row_count % 100 == 0 and psutil.virtual_memory().percent > 80)
+                    or (row_count % 100 == 0 and is_memory_usage_high())
                 )
 
                 if should_yield and results:  # Yield current batch if we have one

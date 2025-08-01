@@ -31,9 +31,13 @@ try:
 except ImportError:
     psutil = None
 
-# Constants for memory estimation
-OBJECT_OVERHEAD_BYTES = 100
-
+# Import shared memory utilities
+from datachain.lib.memory_utils import (
+    DEFAULT_CHUNK_MB,
+    DEFAULT_CHUNK_ROWS,
+    estimate_memory_recursive,
+    is_memory_usage_high,
+)
 
 logger = logging.getLogger("datachain")
 
@@ -246,16 +250,14 @@ def _dynamic_batched_core(
     current_memory = 0
 
     for row_count, item in enumerate(iterable):
-        item_memory = _estimate_item_memory(item)
+        item_memory = estimate_memory_recursive(item)
 
         # Check if adding this item would exceed limits
         # Also check system memory usage every 100 items
         should_yield = (
             len(batch) >= chunk_rows
             or current_memory + item_memory > max_memory_bytes
-            or (
-                row_count % 100 == 0 and psutil and psutil.virtual_memory().percent > 80
-            )
+            or (row_count % 100 == 0 and is_memory_usage_high())
         )
 
         if should_yield and batch:  # Yield current batch if we have one
@@ -284,7 +286,9 @@ def batched(
 
 
 def batched_it(
-    iterable: Iterable[_T_co], chunk_rows: int = 2000, chunk_mb: float = 1000
+    iterable: Iterable[_T_co],
+    chunk_rows: int = DEFAULT_CHUNK_ROWS,
+    chunk_mb: float = DEFAULT_CHUNK_MB,
 ) -> Iterator[Iterator[_T_co]]:
     """
     Batch data into iterators with dynamic sizing
@@ -293,25 +297,6 @@ def batched_it(
     yield from (
         iter(batch) for batch in _dynamic_batched_core(iterable, chunk_rows, chunk_mb)
     )
-
-
-def _estimate_item_memory(item) -> int:
-    """Estimate memory usage of an item in bytes."""
-    if item is None:
-        return 0
-
-    total_size = 0
-    if isinstance(item, (str, bytes, int, float, bool)):
-        total_size += sys.getsizeof(item)
-    elif isinstance(item, (list, tuple)):
-        total_size += sys.getsizeof(item)
-        for subitem in item:
-            total_size += sys.getsizeof(subitem)
-    else:
-        # For complex objects, use a conservative estimate
-        total_size += sys.getsizeof(item) + OBJECT_OVERHEAD_BYTES
-
-    return total_size
 
 
 def flatten(items):
