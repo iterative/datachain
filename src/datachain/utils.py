@@ -11,7 +11,6 @@ import time
 from collections.abc import Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from datetime import date, datetime, timezone
-from itertools import chain, islice
 from typing import TYPE_CHECKING, Any, Optional, TypeVar, Union
 from uuid import UUID
 
@@ -24,6 +23,16 @@ from pydantic import BaseModel
 if TYPE_CHECKING:
     import pandas as pd
     from typing_extensions import Self
+
+
+# Import for dynamic batching
+try:
+    import psutil
+except ImportError:
+    psutil = None
+
+# Constants for memory estimation
+OBJECT_OVERHEAD_BYTES = 100
 
 
 logger = logging.getLogger("datachain")
@@ -225,30 +234,84 @@ def get_envs_by_prefix(prefix: str) -> dict[str, str]:
 _T_co = TypeVar("_T_co", covariant=True)
 
 
-def batched(iterable: Iterable[_T_co], n: int) -> Iterator[tuple[_T_co, ...]]:
-    """Batch data into tuples of length n. The last batch may be shorter."""
-    # Based on: https://docs.python.org/3/library/itertools.html#itertools-recipes
-    # batched('ABCDEFG', 3) --> ABC DEF G
-    if n < 1:
-        raise ValueError("Batch size must be at least one")
-    it = iter(iterable)
-    while batch := tuple(islice(it, n)):
+def _dynamic_batched_core(
+    iterable: Iterable[_T_co],
+    chunk_rows: int,
+    chunk_mb: float,
+) -> Iterator[list[_T_co]]:
+    """Core batching logic that yields lists."""
+    max_memory_bytes = chunk_mb * 1024 * 1024
+
+    batch: list[_T_co] = []
+    current_memory = 0
+
+    for row_count, item in enumerate(iterable):
+        item_memory = _estimate_item_memory(item)
+
+        # Check if adding this item would exceed limits
+        # Also check system memory usage every 100 items
+        should_yield = (
+            len(batch) >= chunk_rows
+            or current_memory + item_memory > max_memory_bytes
+            or (
+                row_count % 100 == 0 and psutil and psutil.virtual_memory().percent > 80
+            )
+        )
+
+        if should_yield and batch:  # Yield current batch if we have one
+            yield batch
+            batch = []
+            current_memory = 0
+
+        batch.append(item)
+        current_memory += item_memory
+
+    # Yield any remaining items
+    if batch:
         yield batch
 
 
-def batched_it(iterable: Iterable[_T_co], n: int) -> Iterator[Iterator[_T_co]]:
-    """Batch data into iterators of length n. The last batch may be shorter."""
-    # batched('ABCDEFG', 3) --> ABC DEF G
-    if n < 1:
-        raise ValueError("Batch size must be at least one")
-    it = iter(iterable)
-    while True:
-        chunk_it = islice(it, n)
-        try:
-            first_el = next(chunk_it)
-        except StopIteration:
-            return
-        yield chain((first_el,), chunk_it)
+def batched(
+    iterable: Iterable[_T_co], chunk_rows: int, chunk_mb: float = 1000
+) -> Iterator[tuple[_T_co, ...]]:
+    """
+    Batch data into tuples of length chunk_rows and memory chunk_mb.
+    The last batch may be shorter.
+    """
+    yield from (
+        tuple(batch) for batch in _dynamic_batched_core(iterable, chunk_rows, chunk_mb)
+    )
+
+
+def batched_it(
+    iterable: Iterable[_T_co], chunk_rows: int = 2000, chunk_mb: float = 1000
+) -> Iterator[Iterator[_T_co]]:
+    """
+    Batch data into iterators with dynamic sizing
+    based on row count and memory usage.
+    """
+    yield from (
+        iter(batch) for batch in _dynamic_batched_core(iterable, chunk_rows, chunk_mb)
+    )
+
+
+def _estimate_item_memory(item) -> int:
+    """Estimate memory usage of an item in bytes."""
+    if item is None:
+        return 0
+
+    total_size = 0
+    if isinstance(item, (str, bytes, int, float, bool)):
+        total_size += sys.getsizeof(item)
+    elif isinstance(item, (list, tuple)):
+        total_size += sys.getsizeof(item)
+        for subitem in item:
+            total_size += sys.getsizeof(subitem)
+    else:
+        # For complex objects, use a conservative estimate
+        total_size += sys.getsizeof(item) + OBJECT_OVERHEAD_BYTES
+
+    return total_size
 
 
 def flatten(items):

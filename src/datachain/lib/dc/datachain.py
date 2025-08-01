@@ -325,7 +325,7 @@ class DataChain:
         namespace: Optional[str] = None,
         project: Optional[str] = None,
         chunk_rows: Optional[int] = None,
-        batch_mem: Optional[Union[int, float]] = None,
+        chunk_mb: Optional[Union[int, float]] = None,
     ) -> "Self":
         """Change settings for chain.
 
@@ -344,13 +344,13 @@ class DataChain:
             namespace : namespace name.
             project : project name.
             chunk_rows : number of rows per batch. (default=2000)
-            batch_mem : memory limit in MB per batch. (default=1000)
+            chunk_mb : memory limit in MB per batch. (default=1000)
 
         Example:
             ```py
             chain = (
                 chain
-                .settings(cache=True, parallel=8, chunk_rows=300, batch_mem=500)
+                .settings(cache=True, parallel=8, chunk_rows=300, chunk_mb=500)
                 .map(laion=process_webdataset(spec=WDSLaion), params="file")
             )
             ```
@@ -368,7 +368,7 @@ class DataChain:
                 namespace,
                 project,
                 chunk_rows,
-                batch_mem,
+                chunk_mb,
             )
         )
         return self._evolve(settings=settings, _sys=sys)
@@ -723,7 +723,9 @@ class DataChain:
 
         return self._evolve(
             query=self._query.add_signals(
-                udf_obj.to_udf_wrapper(),
+                udf_obj.to_udf_wrapper(
+                    self._settings.chunk_rows, self._settings.chunk_mb
+                ),
                 **self._settings.to_dict(),
             ),
             signal_schema=self.signals_schema | udf_obj.output,
@@ -761,7 +763,9 @@ class DataChain:
             udf_obj.prefetch = prefetch
         return self._evolve(
             query=self._query.generate(
-                udf_obj.to_udf_wrapper(),
+                udf_obj.to_udf_wrapper(
+                    self._settings.chunk_rows, self._settings.chunk_mb
+                ),
                 **self._settings.to_dict(),
             ),
             signal_schema=udf_obj.output,
@@ -897,7 +901,9 @@ class DataChain:
         udf_obj = self._udf_to_obj(Aggregator, func, params, output, signal_map)
         return self._evolve(
             query=self._query.generate(
-                udf_obj.to_udf_wrapper(),
+                udf_obj.to_udf_wrapper(
+                    self._settings.chunk_rows, self._settings.chunk_mb
+                ),
                 partition_by=processed_partition_by,
                 **self._settings.to_dict(),
             ),
@@ -932,11 +938,11 @@ class DataChain:
         """
         udf_obj = self._udf_to_obj(BatchMapper, func, params, output, signal_map)
         chunk_rows = self._settings.chunk_rows
-        batch_mem = self._settings.batch_mem
+        chunk_mb = self._settings.chunk_mb
 
         if batch is not None:
             warnings.warn(
-                "batch parameter is deprecated. Use chunk_rows and batch_mem instead.",
+                "batch parameter is deprecated. Use chunk_rows and chunk_mb instead.",
                 DeprecationWarning,
                 stacklevel=2,
             )
@@ -944,7 +950,7 @@ class DataChain:
 
         return self._evolve(
             query=self._query.add_signals(
-                udf_obj.to_udf_wrapper(chunk_rows, batch_mem),
+                udf_obj.to_udf_wrapper(chunk_rows, chunk_mb),
                 **self._settings.to_dict(),
             ),
             signal_schema=self.signals_schema | udf_obj.output,
@@ -1295,7 +1301,7 @@ class DataChain:
             yield from rows
 
     def to_columnar_data_with_names(
-        self, chunk_size: int = DEFAULT_PARQUET_CHUNK_SIZE
+        self, chunk_size: Optional[int] = None
     ) -> tuple[list[str], Iterator[list[list[Any]]]]:
         """Returns column names and the results as an iterator that provides chunks,
         with each chunk containing a list of columns, where each column contains a
@@ -1307,8 +1313,11 @@ class DataChain:
 
         results_iter = self._leaf_values()
 
+        chunk_rows = chunk_size or self._settings.chunk_rows
+        chunk_mb = self._settings.chunk_mb
+
         def column_chunks() -> Iterator[list[list[Any]]]:
-            for chunk_iter in batched_it(results_iter, chunk_size):
+            for chunk_iter in batched_it(results_iter, chunk_rows, chunk_mb):
                 columns: list[list[Any]] = [[] for _ in column_names]
                 for row in chunk_iter:
                     for i, col in enumerate(columns):
@@ -2062,7 +2071,7 @@ class DataChain:
         self,
         path: Union[str, os.PathLike[str], BinaryIO],
         partition_cols: Optional[Sequence[str]] = None,
-        chunk_size: int = DEFAULT_PARQUET_CHUNK_SIZE,
+        chunk_size: Optional[int] = None,
         fs_kwargs: Optional[dict[str, Any]] = None,
         **kwargs,
     ) -> None:

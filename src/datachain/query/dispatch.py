@@ -196,14 +196,17 @@ class UDFDispatcher:
         generated_cb: Callback = DEFAULT_CALLBACK,
     ) -> None:
         udf: UDFAdapter = loads(self.udf_data)
-
         if ids_only and not self.is_batching:
             input_rows = flatten(input_rows)
 
         def get_inputs() -> Iterable["RowsOutput"]:
             warehouse = self.catalog.warehouse.clone()
             if ids_only:
-                for ids in batched(input_rows, DEFAULT_BATCH_SIZE):
+                for ids in batched(
+                    input_rows,
+                    udf.chunk_rows or DEFAULT_BATCH_SIZE,
+                    udf.chunk_mb or 1000,
+                ):
                     yield from warehouse.dataset_rows_select_from_ids(
                         self.query, ids, self.is_batching
                     )
@@ -229,12 +232,13 @@ class UDFDispatcher:
                     cb=generated_cb,
                 )
 
-    def input_batch_size(self, n_workers: int) -> int:
+    def input_batch_size(self, n_workers: int, chunk_rows: int) -> int:
         input_batch_size = self.rows_total // n_workers
+
         if input_batch_size == 0:
             input_batch_size = 1
-        elif input_batch_size > DEFAULT_BATCH_SIZE:
-            input_batch_size = DEFAULT_BATCH_SIZE
+        elif input_batch_size > chunk_rows:
+            input_batch_size = chunk_rows
         return input_batch_size
 
     def run_udf_parallel(  # noqa: C901, PLR0912
@@ -246,8 +250,14 @@ class UDFDispatcher:
         processed_cb: Callback = DEFAULT_CALLBACK,
         generated_cb: Callback = DEFAULT_CALLBACK,
     ) -> None:
+        udf: UDFAdapter = loads(self.udf_data)
         self.task_queue = self.ctx.Queue()
         self.done_queue = self.ctx.Queue()
+
+        chunk_rows = self.input_batch_size(
+            n_workers, udf.chunk_rows or DEFAULT_BATCH_SIZE
+        )
+        chunk_mb = udf.chunk_mb or 1000
 
         pool = [
             self.ctx.Process(
@@ -266,7 +276,8 @@ class UDFDispatcher:
 
             input_rows = batched(
                 input_rows if self.is_batching else flatten(input_rows),
-                self.input_batch_size(n_workers),
+                chunk_rows,
+                chunk_mb,
             )
 
             # Stop all workers after the input rows have finished processing
@@ -427,7 +438,9 @@ class UDFWorker:
         warehouse = self.catalog.warehouse.clone()
         while (batch := get_from_queue(self.task_queue)) != STOP_SIGNAL:
             if ids_only:
-                for ids in batched(batch, DEFAULT_BATCH_SIZE):
+                chunk_rows = self.udf.chunk_rows or DEFAULT_BATCH_SIZE
+                chunk_mb = self.udf.chunk_mb or 1000
+                for ids in batched(batch, chunk_rows, chunk_mb):
                     yield from warehouse.dataset_rows_select_from_ids(
                         self.query, ids, self.is_batching
                     )

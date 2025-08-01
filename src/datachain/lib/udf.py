@@ -68,8 +68,8 @@ class UDFProperties:
         return self.udf.chunk_rows
 
     @property
-    def batch_mem(self):
-        return self.udf.batch_mem
+    def chunk_mb(self):
+        return self.udf.chunk_mb
 
 
 @attrs.define(slots=False)
@@ -77,7 +77,7 @@ class UDFAdapter:
     inner: "UDFBase"
     output: UDFOutputSpec
     chunk_rows: Optional[int] = None
-    batch_mem: Optional[Union[int, float]] = None
+    chunk_mb: Optional[Union[int, float]] = None
 
     def get_batching(
         self, use_partitioning: bool = False, settings=None
@@ -87,15 +87,15 @@ class UDFAdapter:
 
         is_input_batched = self.inner.is_input_batched
 
-        # If we have explicit chunk_rows/batch_mem set on this adapter, use them
-        if self.chunk_rows is not None or self.batch_mem is not None:
-            return DynamicBatch(self.chunk_rows, self.batch_mem, is_input_batched)
+        # If we have explicit chunk_rows/chunk_mb set on this adapter, use them
+        if self.chunk_rows is not None or self.chunk_mb is not None:
+            return DynamicBatch(self.chunk_rows, self.chunk_mb, is_input_batched)
 
         # If settings are provided and have batch configuration, use appropriate
         # batching
         if settings:
             max_rows: Optional[int] = getattr(settings, "_chunk_rows", None)
-            max_mem: Optional[Union[int, float]] = getattr(settings, "_batch_mem", None)
+            max_mem: Optional[Union[int, float]] = getattr(settings, "_chunk_mb", None)
             if max_rows is not None or max_mem is not None:
                 return DynamicBatch(max_rows, max_mem, is_input_batched)
 
@@ -261,13 +261,13 @@ class UDFBase(AbstractUDF):
     def to_udf_wrapper(
         self,
         chunk_rows: Optional[int] = None,
-        batch_mem: Optional[Union[int, float]] = None,
+        chunk_mb: Optional[Union[int, float]] = None,
     ) -> UDFAdapter:
         return UDFAdapter(
             self,
             self.output.to_udf_spec(),
             chunk_rows,
-            batch_mem,
+            chunk_mb,
         )
 
     def run(

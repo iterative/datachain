@@ -94,7 +94,11 @@ def read_records(
         {c.name: c.type for c in columns if isinstance(c.type, SQLType)},
     )
     records = (adjust_outputs(warehouse, record, col_types) for record in to_insert)
-    for chunk in batched(records, INSERT_BATCH_SIZE):
+    chunk_rows = (
+        settings.get("chunk_rows", INSERT_BATCH_SIZE) if settings else INSERT_BATCH_SIZE
+    )
+    chunk_mb = settings.get("chunk_mb", 1000) if settings else 1000
+    for chunk in batched(records, chunk_rows, chunk_mb):
         warehouse.insert_rows(table, chunk)
     warehouse.insert_rows_done(table)
     return read_dataset(name=dsr.full_name, session=session, settings=settings)

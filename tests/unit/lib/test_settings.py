@@ -9,41 +9,41 @@ def test_settings_defaults_and_custom():
     # Default values
     settings = Settings()
     assert settings.chunk_rows == 2000
-    assert settings.batch_mem == 1000
+    assert settings.chunk_mb == 1000
 
     # Custom values
-    settings = Settings(chunk_rows=500, batch_mem=750.5)
+    settings = Settings(chunk_rows=500, chunk_mb=750.5)
     assert settings.chunk_rows == 500
-    assert settings.batch_mem == 750.5
+    assert settings.chunk_mb == 750.5
 
     # to_dict method
     d = settings.to_dict()
     assert d["chunk_rows"] == 500
-    assert d["batch_mem"] == 750.5
+    assert d["chunk_mb"] == 750.5
 
     # Chaining
     s2 = settings
     s3 = s2
     assert s3.chunk_rows == 500
-    assert s3.batch_mem == 750.5
+    assert s3.chunk_mb == 750.5
 
 
 def test_settings_validation():
     # Valid
-    settings = Settings(chunk_rows=100, batch_mem=50.5)
+    settings = Settings(chunk_rows=100, chunk_mb=50.5)
     assert settings.chunk_rows == 100
-    assert settings.batch_mem == 50.5
+    assert settings.chunk_mb == 50.5
 
     # Invalid chunk_rows
     with pytest.raises(SettingsError):
         Settings(chunk_rows="invalid")
 
-    # Invalid batch_mem
+    # Invalid chunk_mb
     with pytest.raises(SettingsError):
-        Settings(batch_mem="invalid")
+        Settings(chunk_mb="invalid")
 
 
-def test_dynamic_batch_memory_monitoring():
+def test_dynamic_chunk_mbory_monitoring():
     """Test that DynamicBatch integrates memory monitoring correctly."""
     # Create a DynamicBatch instance
     dynamic_batch = DynamicBatch(max_rows=100, max_memory_mb=50)

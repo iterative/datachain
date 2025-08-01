@@ -333,32 +333,25 @@ def process_udf_outputs(
     udf_table: "Table",
     udf_results: Iterator[Iterable["UDFResult"]],
     udf: "UDFAdapter",
-    batch_size: int = INSERT_BATCH_SIZE,
     cb: Callback = DEFAULT_CALLBACK,
 ) -> None:
-    import psutil
-
-    rows: list[UDFResult] = []
     # Optimization: Compute row types once, rather than for every row.
     udf_col_types = get_col_types(warehouse, udf.output)
+    chunk_rows = udf.chunk_rows or INSERT_BATCH_SIZE
+    chunk_mb = udf.chunk_mb or 1000
 
-    for udf_output in udf_results:
-        if not udf_output:
-            continue
-        with safe_closing(udf_output):
-            for row in udf_output:
-                cb.relative_update()
-                rows.append(adjust_outputs(warehouse, row, udf_col_types))
-                if len(rows) >= batch_size or (
-                    len(rows) % 10 == 0 and psutil.virtual_memory().percent > 80
-                ):
-                    for row_chunk in batched(rows, batch_size):
-                        warehouse.insert_rows(udf_table, row_chunk)
-                    rows.clear()
+    def _insert_rows():
+        for udf_output in udf_results:
+            if not udf_output:
+                continue
 
-    if rows:
-        for row_chunk in batched(rows, batch_size):
-            warehouse.insert_rows(udf_table, row_chunk)
+            with safe_closing(udf_output):
+                for row in udf_output:
+                    cb.relative_update()
+                    yield adjust_outputs(warehouse, row, udf_col_types)
+
+    for row_chunk in batched(_insert_rows(), chunk_rows, chunk_mb):
+        warehouse.insert_rows(udf_table, row_chunk)
 
     warehouse.insert_rows_done(udf_table)
 
@@ -402,7 +395,7 @@ class UDFStep(Step, ABC):
     is_generator = False
     cache: bool = False
     chunk_rows: Optional[int] = None
-    batch_mem: Optional[Union[int, float]] = None
+    chunk_mb: Optional[Union[int, float]] = None
 
     @abstractmethod
     def create_udf_table(self, query: Select) -> "Table":
@@ -439,7 +432,7 @@ class UDFStep(Step, ABC):
         # Create a settings object from the UDFStep attributes for batching
         step_settings = Settings(
             chunk_rows=getattr(self, "chunk_rows", None),
-            batch_mem=getattr(self, "batch_mem", None),
+            chunk_mb=getattr(self, "chunk_mb", None),
         )
         batching = self.udf.get_batching(use_partitioning, step_settings)
         udf_fields = [str(c.name) for c in query.selected_columns]
@@ -611,7 +604,7 @@ class UDFStep(Step, ABC):
                 workers=self.workers,
                 min_task_size=self.min_task_size,
                 chunk_rows=self.chunk_rows,
-                batch_mem=self.batch_mem,
+                chunk_mb=self.chunk_mb,
             )
         return self.__class__(self.udf, self.catalog)
 
@@ -1644,7 +1637,7 @@ class DatasetQuery:
         partition_by: Optional[PartitionByType] = None,
         cache: bool = False,
         chunk_rows: Optional[int] = None,
-        batch_mem: Optional[Union[int, float]] = None,
+        chunk_mb: Optional[Union[int, float]] = None,
     ) -> "Self":
         """
         Adds one or more signals based on the results from the provided UDF.
@@ -1671,7 +1664,7 @@ class DatasetQuery:
                 min_task_size=min_task_size,
                 cache=cache,
                 chunk_rows=chunk_rows,
-                batch_mem=batch_mem,
+                chunk_mb=chunk_mb,
             )
         )
         return query
@@ -1694,7 +1687,7 @@ class DatasetQuery:
         project: Optional[str] = None,
         cache: bool = False,
         chunk_rows: Optional[int] = None,
-        batch_mem: Optional[Union[int, float]] = None,
+        chunk_mb: Optional[Union[int, float]] = None,
     ) -> "Self":
         query = self.clone()
         steps = query.steps
@@ -1708,7 +1701,7 @@ class DatasetQuery:
                 min_task_size=min_task_size,
                 cache=cache,
                 chunk_rows=chunk_rows,
-                batch_mem=batch_mem,
+                chunk_mb=chunk_mb,
             )
         )
         return query
