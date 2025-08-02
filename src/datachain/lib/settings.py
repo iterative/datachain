@@ -1,3 +1,4 @@
+from datachain.lib.memory_utils import DEFAULT_CHUNK_ROWS
 from datachain.lib.utils import DataChainParamsError
 
 
@@ -16,6 +17,7 @@ class Settings:
         prefetch=None,
         namespace=None,
         project=None,
+        chunk_rows=None,
     ):
         self._cache = cache
         self.parallel = parallel
@@ -24,6 +26,7 @@ class Settings:
         self.prefetch = prefetch
         self.namespace = namespace
         self.project = project
+        self._chunk_rows = chunk_rows
 
         if not isinstance(cache, bool) and cache is not None:
             raise SettingsError(
@@ -53,6 +56,18 @@ class Settings:
                 f", {min_task_size.__class__.__name__} was given"
             )
 
+        if chunk_rows is not None and not isinstance(chunk_rows, int):
+            raise SettingsError(
+                "'chunk_rows' argument must be int or None"
+                f", {chunk_rows.__class__.__name__} was given"
+            )
+
+        if chunk_rows is not None and chunk_rows <= 0:
+            raise SettingsError(
+                "'chunk_rows' argument must be positive integer"
+                f", {chunk_rows} was given"
+            )
+
     @property
     def cache(self):
         return self._cache if self._cache is not None else False
@@ -60,6 +75,10 @@ class Settings:
     @property
     def workers(self):
         return self._workers if self._workers is not None else False
+
+    @property
+    def chunk_rows(self):
+        return self._chunk_rows if self._chunk_rows is not None else DEFAULT_CHUNK_ROWS
 
     def to_dict(self):
         res = {}
@@ -75,6 +94,8 @@ class Settings:
             res["namespace"] = self.namespace
         if self.project is not None:
             res["project"] = self.project
+        if self._chunk_rows is not None:
+            res["chunk_rows"] = self._chunk_rows
         return res
 
     def add(self, settings: "Settings"):
@@ -86,3 +107,5 @@ class Settings:
         self.project = settings.project or self.project
         if settings.prefetch is not None:
             self.prefetch = settings.prefetch
+        if settings._chunk_rows is not None:
+            self._chunk_rows = settings._chunk_rows

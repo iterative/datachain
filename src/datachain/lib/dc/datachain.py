@@ -324,6 +324,7 @@ class DataChain:
         sys: Optional[bool] = None,
         namespace: Optional[str] = None,
         project: Optional[str] = None,
+        chunk_rows: Optional[int] = None,
     ) -> "Self":
         """Change settings for chain.
 
@@ -331,22 +332,23 @@ class DataChain:
         It returns chain, so, it can be chained later with next operation.
 
         Parameters:
-            cache : data caching (default=False)
+            cache : data caching. (default=False)
             parallel : number of thread for processors. True is a special value to
-                enable all available CPUs (default=1)
+                enable all available CPUs. (default=1)
             workers : number of distributed workers. Only for Studio mode. (default=1)
-            min_task_size : minimum number of tasks (default=1)
-            prefetch: number of workers to use for downloading files in advance.
+            min_task_size : minimum number of tasks. (default=1)
+            prefetch : number of workers to use for downloading files in advance.
                       This is enabled by default and uses 2 workers.
                       To disable prefetching, set it to 0.
-            namespace: namespace name.
-            project: project name.
+            namespace : namespace name.
+            project : project name.
+            chunk_rows : number of rows per batch. (default=2000)
 
         Example:
             ```py
             chain = (
                 chain
-                .settings(cache=True, parallel=8)
+                .settings(cache=True, parallel=8, chunk_rows=300)
                 .map(laion=process_webdataset(spec=WDSLaion), params="file")
             )
             ```
@@ -356,7 +358,14 @@ class DataChain:
         settings = copy.copy(self._settings)
         settings.add(
             Settings(
-                cache, parallel, workers, min_task_size, prefetch, namespace, project
+                cache,
+                parallel,
+                workers,
+                min_task_size,
+                prefetch,
+                namespace,
+                project,
+                chunk_rows,
             )
         )
         return self._evolve(settings=settings, _sys=sys)
@@ -711,7 +720,7 @@ class DataChain:
 
         return self._evolve(
             query=self._query.add_signals(
-                udf_obj.to_udf_wrapper(),
+                udf_obj.to_udf_wrapper(self._settings.chunk_rows),
                 **self._settings.to_dict(),
             ),
             signal_schema=self.signals_schema | udf_obj.output,
@@ -749,7 +758,7 @@ class DataChain:
             udf_obj.prefetch = prefetch
         return self._evolve(
             query=self._query.generate(
-                udf_obj.to_udf_wrapper(),
+                udf_obj.to_udf_wrapper(self._settings.chunk_rows),
                 **self._settings.to_dict(),
             ),
             signal_schema=udf_obj.output,
@@ -885,7 +894,7 @@ class DataChain:
         udf_obj = self._udf_to_obj(Aggregator, func, params, output, signal_map)
         return self._evolve(
             query=self._query.generate(
-                udf_obj.to_udf_wrapper(),
+                udf_obj.to_udf_wrapper(self._settings.chunk_rows),
                 partition_by=processed_partition_by,
                 **self._settings.to_dict(),
             ),
@@ -919,9 +928,10 @@ class DataChain:
             ```
         """
         udf_obj = self._udf_to_obj(BatchMapper, func, params, output, signal_map)
+
         return self._evolve(
             query=self._query.add_signals(
-                udf_obj.to_udf_wrapper(batch),
+                udf_obj.to_udf_wrapper(self._settings.chunk_rows, batch=batch),
                 **self._settings.to_dict(),
             ),
             signal_schema=self.signals_schema | udf_obj.output,
