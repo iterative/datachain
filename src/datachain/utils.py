@@ -33,9 +33,7 @@ except ImportError:
 
 # Import shared memory utilities
 from datachain.lib.memory_utils import (
-    DEFAULT_CHUNK_MB,
     DEFAULT_CHUNK_ROWS,
-    estimate_memory_recursive,
     is_memory_usage_high,
 )
 
@@ -241,62 +239,46 @@ _T_co = TypeVar("_T_co", covariant=True)
 def _dynamic_batched_core(
     iterable: Iterable[_T_co],
     chunk_rows: int,
-    chunk_mb: float,
 ) -> Iterator[list[_T_co]]:
     """Core batching logic that yields lists."""
-    max_memory_bytes = chunk_mb * 1024 * 1024
 
     batch: list[_T_co] = []
-    current_memory = 0
 
     for row_count, item in enumerate(iterable):
-        item_memory = estimate_memory_recursive(item)
-
         # Check if adding this item would exceed limits
         # Also check system memory usage every 100 items
-        should_yield = (
-            len(batch) >= chunk_rows
-            or current_memory + item_memory > max_memory_bytes
-            or (row_count % 100 == 0 and is_memory_usage_high())
+        should_yield = len(batch) >= chunk_rows or (
+            row_count % 100 == 0 and is_memory_usage_high()
         )
 
         if should_yield and batch:  # Yield current batch if we have one
             yield batch
             batch = []
-            current_memory = 0
 
         batch.append(item)
-        current_memory += item_memory
 
     # Yield any remaining items
     if batch:
         yield batch
 
 
-def batched(
-    iterable: Iterable[_T_co], chunk_rows: int, chunk_mb: float = 1000
-) -> Iterator[tuple[_T_co, ...]]:
+def batched(iterable: Iterable[_T_co], chunk_rows: int) -> Iterator[tuple[_T_co, ...]]:
     """
     Batch data into tuples of length chunk_rows and memory chunk_mb.
     The last batch may be shorter.
     """
-    yield from (
-        tuple(batch) for batch in _dynamic_batched_core(iterable, chunk_rows, chunk_mb)
-    )
+    yield from (tuple(batch) for batch in _dynamic_batched_core(iterable, chunk_rows))
 
 
 def batched_it(
     iterable: Iterable[_T_co],
     chunk_rows: int = DEFAULT_CHUNK_ROWS,
-    chunk_mb: float = DEFAULT_CHUNK_MB,
 ) -> Iterator[Iterator[_T_co]]:
     """
     Batch data into iterators with dynamic sizing
     based on row count and memory usage.
     """
-    yield from (
-        iter(batch) for batch in _dynamic_batched_core(iterable, chunk_rows, chunk_mb)
-    )
+    yield from (iter(batch) for batch in _dynamic_batched_core(iterable, chunk_rows))
 
 
 def flatten(items):

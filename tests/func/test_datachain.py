@@ -2422,79 +2422,10 @@ def test_agg_sample(catalog_tmpfile, parallel, sample):
     assert all(row["count"] == 1 for row in records)
 
 
-def test_batch_strategy_verification(test_session):
-    class Result(DataModel):
-        result: int
-        batch_size: int
-
-    # Create a chain with batch settings
-    chain = dc.read_values(x=list(range(100)), session=test_session)
-    chain_with_settings = chain.settings(chunk_rows=15, chunk_mb=1000)
-
-    def add_one_with_batch_size(x):
-        batch_size = len(x)
-        for val in x:
-            yield Result(result=val + 1, batch_size=batch_size)
-
-    result = chain_with_settings.batch_map(
-        add_one_with_batch_size, output={"result": Result}
-    )
-
-    results = [
-        r[0] for r in result.to_iter("result")
-    ]  # Access the first element of each tuple
-
-    batch_sizes = [r.batch_size for r in results]
-    unique_batch_sizes = set(batch_sizes)
-
-    assert all(size <= 15 for size in batch_sizes), (
-        f"Batch sizes exceeded limit: {unique_batch_sizes}"
-    )
-    assert len(results) == 100
-
-    expected_values = set(range(1, 101))
-    actual_values = {r.result for r in results}
-    assert actual_values == expected_values
-
-
-def test_verify_explicit_batch_parameter_override(test_session):
-    class Result(DataModel):
-        result: int
-        batch_size: int
-
-    def add_one_with_batch_size(x):
-        batch_size = len(x)
-        for val in x:
-            yield Result(result=val + 1, batch_size=batch_size)
-
-    chain = dc.read_values(x=list(range(100)), session=test_session)
-    chain_with_settings = chain.settings(chunk_rows=50, chunk_mb=1000)
-
-    with pytest.warns(DeprecationWarning):
-        result = chain_with_settings.batch_map(
-            add_one_with_batch_size, output={"result": Result}, batch=15
-        )
-
-    results = [r[0] for r in result.to_iter("result")]
-
-    batch_sizes = [r.batch_size for r in results]
-    unique_batch_sizes = set(batch_sizes)
-
-    assert all(size <= 15 for size in batch_sizes), (
-        f"Batch sizes exceeded explicit limit: {unique_batch_sizes}"
-    )
-
-    assert len(results) == 100
-
-    expected_values = set(range(1, 101))
-    actual_values = {r.result for r in results}
-    assert actual_values == expected_values
-
-
 def test_batch_for_map(test_session):
     # Create a chain with batch settings
     chain = dc.read_values(x=list(range(100)), session=test_session)
-    chain_with_settings = chain.settings(chunk_rows=15, chunk_mb=1000)
+    chain_with_settings = chain.settings(chunk_rows=15)
 
     def add_one(x):
         return x + 1

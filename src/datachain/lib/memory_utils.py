@@ -1,39 +1,10 @@
 """Memory estimation utilities for DataChain."""
 
-import sys
-from typing import Any, Union
-
 # Default batch processing values
 DEFAULT_CHUNK_ROWS = 2000
-DEFAULT_CHUNK_MB = 1000
 
 # Memory monitoring threshold (percentage)
 MEMORY_USAGE_THRESHOLD = 80
-
-# System memory check frequency (every N rows)
-MEMORY_CHECK_FREQUENCY = 100
-
-# Shared constant for object overhead estimation
-OBJECT_OVERHEAD_BYTES = 100
-
-
-def estimate_memory_recursive(item: Any) -> int:
-    if item is None:
-        return 0
-
-    if isinstance(item, (str, bytes, int, float, bool)):
-        return sys.getsizeof(item)
-    if isinstance(item, (list, tuple)):
-        total_size = sys.getsizeof(item)
-        for subitem in item:
-            total_size += sys.getsizeof(subitem)
-        return total_size
-    # For complex objects, use a conservative estimate
-    return sys.getsizeof(item) + OBJECT_OVERHEAD_BYTES
-
-
-def estimate_row_memory(row: Union[list, tuple]) -> int:
-    return sum(estimate_memory_recursive(item) for item in row) if row else 0
 
 
 def get_system_memory_percent() -> float:

@@ -338,7 +338,6 @@ def process_udf_outputs(
     # Optimization: Compute row types once, rather than for every row.
     udf_col_types = get_col_types(warehouse, udf.output)
     chunk_rows = udf.chunk_rows or INSERT_BATCH_SIZE
-    chunk_mb = udf.chunk_mb or 1000
 
     def _insert_rows():
         for udf_output in udf_results:
@@ -350,7 +349,7 @@ def process_udf_outputs(
                     cb.relative_update()
                     yield adjust_outputs(warehouse, row, udf_col_types)
 
-    for row_chunk in batched(_insert_rows(), chunk_rows, chunk_mb):
+    for row_chunk in batched(_insert_rows(), chunk_rows):
         warehouse.insert_rows(udf_table, row_chunk)
 
     warehouse.insert_rows_done(udf_table)
@@ -423,18 +422,12 @@ class UDFStep(Step, ABC):
             DISTRIBUTED_IMPORT_PATH,
             get_udf_distributor_class,
         )
-        from datachain.lib.settings import Settings
 
         workers = determine_workers(self.workers, rows_total=rows_total)
         processes = determine_processes(self.parallel, rows_total=rows_total)
 
         use_partitioning = self.partition_by is not None
-        # Create a settings object from the UDFStep attributes for batching
-        step_settings = Settings(
-            chunk_rows=getattr(self, "chunk_rows", None),
-            chunk_mb=getattr(self, "chunk_mb", None),
-        )
-        batching = self.udf.get_batching(use_partitioning, step_settings)
+        batching = self.udf.get_batching(use_partitioning)
         udf_fields = [str(c.name) for c in query.selected_columns]
         udf_distributor_class = get_udf_distributor_class()
 
@@ -1637,7 +1630,6 @@ class DatasetQuery:
         partition_by: Optional[PartitionByType] = None,
         cache: bool = False,
         chunk_rows: Optional[int] = None,
-        chunk_mb: Optional[Union[int, float]] = None,
     ) -> "Self":
         """
         Adds one or more signals based on the results from the provided UDF.
@@ -1664,7 +1656,6 @@ class DatasetQuery:
                 min_task_size=min_task_size,
                 cache=cache,
                 chunk_rows=chunk_rows,
-                chunk_mb=chunk_mb,
             )
         )
         return query

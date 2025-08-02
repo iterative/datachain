@@ -801,7 +801,7 @@ class SQLiteWarehouse(AbstractWarehouse):
             .limit(None)
         )
 
-        for batch in batched_it(ids, 10_000, 1000):
+        for batch in batched_it(ids, 10_000):
             batch_ids = [row[0] for row in batch]
             select_q._where_criteria = (col_id.in_(batch_ids),)
             q = table.insert().from_select(list(select_q.selected_columns), select_q)

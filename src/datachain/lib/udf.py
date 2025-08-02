@@ -3,7 +3,7 @@ import traceback
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import closing, nullcontext
 from functools import partial
-from typing import TYPE_CHECKING, Any, Optional, TypeVar, Union
+from typing import TYPE_CHECKING, Any, Optional, TypeVar
 
 import attrs
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
@@ -14,11 +14,10 @@ from datachain.cache import temporary_cache
 from datachain.dataset import RowDict
 from datachain.lib.convert.flatten import flatten
 from datachain.lib.file import DataModel, File
-from datachain.lib.memory_utils import DEFAULT_CHUNK_MB, DEFAULT_CHUNK_ROWS
 from datachain.lib.utils import AbstractUDF, DataChainError, DataChainParamsError
 from datachain.query.batch import (
+    Batch,
     BatchingStrategy,
-    DynamicBatch,
     NoBatching,
     Partition,
     RowsOutputBatch,
@@ -59,10 +58,8 @@ UDFResult = dict[str, Any]
 class UDFProperties:
     udf: "UDFAdapter"
 
-    def get_batching(
-        self, use_partitioning: bool = False, settings=None
-    ) -> BatchingStrategy:
-        return self.udf.get_batching(use_partitioning, settings)
+    def get_batching(self, use_partitioning: bool = False) -> BatchingStrategy:
+        return self.udf.get_batching(use_partitioning)
 
     @property
     def chunk_rows(self):
@@ -78,41 +75,17 @@ class UDFAdapter:
     inner: "UDFBase"
     output: UDFOutputSpec
     chunk_rows: Optional[int] = None
-    chunk_mb: Optional[Union[int, float]] = None
+    batch: int = 1
 
-    def get_batching(
-        self, use_partitioning: bool = False, settings=None
-    ) -> BatchingStrategy:
+    def get_batching(self, use_partitioning: bool = False) -> BatchingStrategy:
         if use_partitioning:
             return Partition()
 
-        is_input_batched = self.inner.is_input_batched
-
-        # If we have explicit chunk_rows/chunk_mb set on this adapter, use them
-        if self.chunk_rows is not None or self.chunk_mb is not None:
-            return DynamicBatch(
-                self.chunk_rows if self.chunk_rows is not None else DEFAULT_CHUNK_ROWS,
-                self.chunk_mb if self.chunk_mb is not None else DEFAULT_CHUNK_MB,
-                is_input_batched,
-            )
-
-        # If settings are provided and have batch configuration, use appropriate
-        # batching
-        if settings:
-            max_rows: Optional[int] = getattr(settings, "_chunk_rows", None)
-            max_mem: Optional[Union[int, float]] = getattr(settings, "_chunk_mb", None)
-            if max_rows is not None or max_mem is not None:
-                # Use settings values, falling back to defaults if None
-                max_rows = max_rows if max_rows is not None else DEFAULT_CHUNK_ROWS
-                max_mem = max_mem if max_mem is not None else DEFAULT_CHUNK_MB
-                return DynamicBatch(max_rows, max_mem, is_input_batched)
-
-        return NoBatching()
-
-    @property
-    def batch(self):
-        """Backward compatibility property for batch size."""
-        return self.chunk_rows if self.chunk_rows is not None else 1
+        if self.batch == 1:
+            return NoBatching()
+        if self.batch > 1:
+            return Batch(self.batch)
+        raise ValueError(f"invalid batch size {self.batch}")
 
     @property
     def properties(self):
@@ -269,13 +242,13 @@ class UDFBase(AbstractUDF):
     def to_udf_wrapper(
         self,
         chunk_rows: Optional[int] = None,
-        chunk_mb: Optional[Union[int, float]] = None,
+        batch: int = 1,
     ) -> UDFAdapter:
         return UDFAdapter(
             self,
             self.output.to_udf_spec(),
             chunk_rows,
-            chunk_mb,
+            batch,
         )
 
     def run(

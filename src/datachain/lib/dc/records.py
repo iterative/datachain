@@ -15,6 +15,8 @@ if TYPE_CHECKING:
 
     P = ParamSpec("P")
 
+READ_RECORDS_BATCH_SIZE = 10000
+
 
 def read_records(
     to_insert: Optional[Union[dict, Iterable[dict]]],
@@ -41,7 +43,7 @@ def read_records(
     Notes:
         This call blocks until all records are inserted.
     """
-    from datachain.query.dataset import INSERT_BATCH_SIZE, adjust_outputs, get_col_types
+    from datachain.query.dataset import adjust_outputs, get_col_types
     from datachain.sql.types import SQLType
     from datachain.utils import batched
 
@@ -94,11 +96,7 @@ def read_records(
         {c.name: c.type for c in columns if isinstance(c.type, SQLType)},
     )
     records = (adjust_outputs(warehouse, record, col_types) for record in to_insert)
-    chunk_rows = (
-        settings.get("chunk_rows", INSERT_BATCH_SIZE) if settings else INSERT_BATCH_SIZE
-    )
-    chunk_mb = settings.get("chunk_mb", 1000) if settings else 1000
-    for chunk in batched(records, chunk_rows, chunk_mb):
+    for chunk in batched(records, READ_RECORDS_BATCH_SIZE):
         warehouse.insert_rows(table, chunk)
     warehouse.insert_rows_done(table)
     return read_dataset(name=dsr.full_name, session=session, settings=settings)

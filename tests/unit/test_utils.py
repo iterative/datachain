@@ -1,5 +1,4 @@
 import os
-import sys
 
 import pytest
 
@@ -267,25 +266,9 @@ def test_batched_basic():
 def test_batched_row_limit():
     """Test dynamic batching with row count limit."""
     data = list(range(15))
-    batches = list(batched(data, chunk_rows=4, chunk_mb=1000))
+    batches = list(batched(data, chunk_rows=4))
     assert len(batches) == 4  # 15 items / 4 max = 4 batches
     assert batches[0] == (0, 1, 2, 3)
     assert batches[1] == (4, 5, 6, 7)
     assert batches[2] == (8, 9, 10, 11)
     assert batches[3] == (12, 13, 14)
-
-
-def test_batched_memory_limit():
-    """Test dynamic batching with Settings object."""
-    test_int = 1
-    memory_of_test_int = sys.getsizeof(test_int)
-    chunk_mb = memory_of_test_int * 2 / 1024 / 1024
-
-    data = list(range(10))
-    batches = list(batched(data, chunk_rows=3, chunk_mb=chunk_mb))
-    assert len(batches) == 5  # 10 items / 2 max = 5 batches (2 because of memory limit)
-    assert batches[0] == (0, 1)
-    assert batches[1] == (2, 3)
-    assert batches[2] == (4, 5)
-    assert batches[3] == (6, 7)
-    assert batches[4] == (8, 9)
