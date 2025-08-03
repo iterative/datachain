@@ -25,12 +25,6 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
 
-# Import for dynamic batching
-try:
-    import psutil
-except ImportError:
-    psutil = None
-
 DEFAULT_CHUNK_ROWS = 2000
 
 logger = logging.getLogger("datachain")
