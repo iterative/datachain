@@ -394,7 +394,6 @@ class UDFStep(Step, ABC):
     is_generator = False
     cache: bool = False
     chunk_rows: Optional[int] = None
-    chunk_mb: Optional[Union[int, float]] = None
 
     @abstractmethod
     def create_udf_table(self, query: Select) -> "Table":
@@ -597,7 +596,6 @@ class UDFStep(Step, ABC):
                 workers=self.workers,
                 min_task_size=self.min_task_size,
                 chunk_rows=self.chunk_rows,
-                chunk_mb=self.chunk_mb,
             )
         return self.__class__(self.udf, self.catalog)
 
@@ -1678,7 +1676,6 @@ class DatasetQuery:
         project: Optional[str] = None,
         cache: bool = False,
         chunk_rows: Optional[int] = None,
-        chunk_mb: Optional[Union[int, float]] = None,
     ) -> "Self":
         query = self.clone()
         steps = query.steps
@@ -1692,7 +1689,6 @@ class DatasetQuery:
                 min_task_size=min_task_size,
                 cache=cache,
                 chunk_rows=chunk_rows,
-                chunk_mb=chunk_mb,
             )
         )
         return query

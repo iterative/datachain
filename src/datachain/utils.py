@@ -255,7 +255,7 @@ def _dynamic_batched_core(
 
 def batched(iterable: Iterable[_T_co], chunk_rows: int) -> Iterator[tuple[_T_co, ...]]:
     """
-    Batch data into tuples of length chunk_rows and memory chunk_mb.
+    Batch data into tuples of length chunk_rows .
     The last batch may be shorter.
     """
     yield from (tuple(batch) for batch in _dynamic_batched_core(iterable, chunk_rows))

@@ -38,7 +38,7 @@ def test_settings_validation():
 
 
 def test_settings_add():
-    """Test Settings.add() method with chunk_rows and chunk_mb."""
+    """Test Settings.add() method with chunk_rows."""
     # Create base settings
     base_settings = Settings(chunk_rows=1000)
 

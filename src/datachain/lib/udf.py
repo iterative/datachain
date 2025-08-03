@@ -65,10 +65,6 @@ class UDFProperties:
     def chunk_rows(self):
         return self.udf.chunk_rows
 
-    @property
-    def chunk_mb(self):
-        return self.udf.chunk_mb
-
 
 @attrs.define(slots=False)
 class UDFAdapter:
