@@ -342,7 +342,8 @@ class DataChain:
                       To disable prefetching, set it to 0.
             namespace : namespace name.
             project : project name.
-            chunk_rows : number of rows per batch. (default=2000)
+            chunk_rows : row limit per insert to balance speed and memory usage.
+                      (default=2000)
 
         Example:
             ```py

@@ -1,5 +1,5 @@
-from datachain.lib.memory_utils import DEFAULT_CHUNK_ROWS
 from datachain.lib.utils import DataChainParamsError
+from datachain.utils import DEFAULT_CHUNK_ROWS
 
 
 class SettingsError(DataChainParamsError):

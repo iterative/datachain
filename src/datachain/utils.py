@@ -31,11 +31,7 @@ try:
 except ImportError:
     psutil = None
 
-# Import shared memory utilities
-from datachain.lib.memory_utils import (
-    DEFAULT_CHUNK_ROWS,
-    is_memory_usage_high,
-)
+DEFAULT_CHUNK_ROWS = 2000
 
 logger = logging.getLogger("datachain")
 
@@ -244,14 +240,9 @@ def _dynamic_batched_core(
 
     batch: list[_T_co] = []
 
-    for row_count, item in enumerate(iterable):
+    for item in iterable:
         # Check if adding this item would exceed limits
-        # Also check system memory usage every 100 items
-        should_yield = len(batch) >= chunk_rows or (
-            row_count % 100 == 0 and is_memory_usage_high()
-        )
-
-        if should_yield and batch:  # Yield current batch if we have one
+        if len(batch) >= chunk_rows and batch:  # Yield current batch if we have one
             yield batch
             batch = []
 
