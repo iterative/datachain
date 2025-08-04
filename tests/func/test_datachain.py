@@ -2420,3 +2420,22 @@ def test_agg_sample(catalog_tmpfile, parallel, sample):
     records = list(ds.to_records())
     assert len(records) == sample
     assert all(row["count"] == 1 for row in records)
+
+
+def test_batch_for_map(test_session):
+    # Create a chain with batch settings
+    chain = dc.read_values(x=list(range(100)), session=test_session)
+    chain_with_settings = chain.settings(batch_rows=15)
+
+    def add_one(x):
+        return x + 1
+
+    result = chain_with_settings.map(add_one, output={"result": int})
+
+    results = [
+        r[0] for r in result.to_iter("result")
+    ]  # Access the first element of each tuple
+
+    assert len(results) == 100
+
+    assert set(results) == set(range(1, 101))

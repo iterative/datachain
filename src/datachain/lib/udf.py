@@ -62,19 +62,21 @@ class UDFProperties:
         return self.udf.get_batching(use_partitioning)
 
     @property
-    def batch(self):
-        return self.udf.batch
+    def batch_rows(self):
+        return self.udf.batch_rows
 
 
 @attrs.define(slots=False)
 class UDFAdapter:
     inner: "UDFBase"
     output: UDFOutputSpec
+    batch_rows: Optional[int] = None
     batch: int = 1
 
     def get_batching(self, use_partitioning: bool = False) -> BatchingStrategy:
         if use_partitioning:
             return Partition()
+
         if self.batch == 1:
             return NoBatching()
         if self.batch > 1:
@@ -233,10 +235,15 @@ class UDFBase(AbstractUDF):
     def signal_names(self) -> Iterable[str]:
         return self.output.to_udf_spec().keys()
 
-    def to_udf_wrapper(self, batch: int = 1) -> UDFAdapter:
+    def to_udf_wrapper(
+        self,
+        batch_rows: Optional[int] = None,
+        batch: int = 1,
+    ) -> UDFAdapter:
         return UDFAdapter(
             self,
             self.output.to_udf_spec(),
+            batch_rows,
             batch,
         )
 

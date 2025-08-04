@@ -3,6 +3,7 @@ import os
 import pytest
 
 from datachain.utils import (
+    batched,
     datachain_paths_join,
     determine_processes,
     determine_workers,
@@ -253,3 +254,21 @@ def test_nested_dict_path_set(data, path, value, expected):
 )
 def test_row_to_nested_dict(headers, row, expected):
     assert row_to_nested_dict(headers, row) == expected
+
+
+def test_batched_basic():
+    """Test basic batching functionality."""
+    data = list(range(10))
+    batches = list(batched(data, 3))
+    assert batches == [(0, 1, 2), (3, 4, 5), (6, 7, 8), (9,)]
+
+
+def test_batched_row_limit():
+    """Test dynamic batching with row count limit."""
+    data = list(range(15))
+    batches = list(batched(data, batch_rows=4))
+    assert len(batches) == 4  # 15 items / 4 max = 4 batches
+    assert batches[0] == (0, 1, 2, 3)
+    assert batches[1] == (4, 5, 6, 7)
+    assert batches[2] == (8, 9, 10, 11)
+    assert batches[3] == (12, 13, 14)
