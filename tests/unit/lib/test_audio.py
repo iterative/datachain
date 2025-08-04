@@ -6,10 +6,10 @@ import pytest
 import soundfile as sf
 
 from datachain.lib.audio import (
-    audio_fragment_bytes,
-    audio_fragment_np,
     audio_info,
-    save_audio_fragment,
+    audio_to_bytes,
+    audio_to_np,
+    save_audio,
 )
 from datachain.lib.file import Audio, AudioFile, FileError
 
@@ -76,7 +76,7 @@ def test_audio_info(audio_file):
 
 def test_audio_fragment_np_full(audio_file):
     """Test loading full audio fragment as numpy array."""
-    audio_np, sr = audio_fragment_np(audio_file)
+    audio_np, sr = audio_to_np(audio_file)
 
     assert isinstance(audio_np, np.ndarray)
     assert sr == 16000
@@ -87,7 +87,7 @@ def test_audio_fragment_np_full(audio_file):
 def test_audio_fragment_np_partial(audio_file):
     """Test loading partial audio fragment."""
     # Load 0.5 seconds starting from 0.5 seconds
-    audio_np, sr = audio_fragment_np(audio_file, start=0.5, duration=0.5)
+    audio_np, sr = audio_to_np(audio_file, start=0.5, duration=0.5)
 
     assert isinstance(audio_np, np.ndarray)
     assert sr == 16000
@@ -97,16 +97,16 @@ def test_audio_fragment_np_partial(audio_file):
 def test_audio_fragment_np_validation(audio_file):
     """Test input validation for audio_fragment_np."""
     with pytest.raises(ValueError, match="start must be a non-negative float"):
-        audio_fragment_np(audio_file, start=-1.0)
+        audio_to_np(audio_file, start=-1.0)
 
     with pytest.raises(ValueError, match="duration must be a positive float"):
-        audio_fragment_np(audio_file, duration=0.0)
+        audio_to_np(audio_file, duration=0.0)
 
 
 def test_audio_fragment_np_with_file_interface(audio_file):
     """Test audio_fragment_np with File interface."""
     # Test that the audio_file fixture (which is already an AudioFile) works
-    audio_np, sr = audio_fragment_np(audio_file)
+    audio_np, sr = audio_to_np(audio_file)
 
     assert isinstance(audio_np, np.ndarray)
     assert sr == 16000
@@ -114,16 +114,16 @@ def test_audio_fragment_np_with_file_interface(audio_file):
 
 def test_audio_fragment_np_multichannel(stereo_audio_file):
     """Test multichannel audio handling."""
-    audio_np, sr = audio_fragment_np(stereo_audio_file)
+    audio_np, sr = audio_to_np(stereo_audio_file)
 
     # Should be transposed to (samples, channels)
     assert audio_np.shape == (16000, 2)  # 1 second at 16kHz, 2 channels
     assert sr == 16000
 
 
-def test_audio_fragment_bytes(audio_file):
+def test_audio_to_bytes(audio_file):
     """Test converting audio fragment to bytes."""
-    audio_bytes = audio_fragment_bytes(audio_file, start=0.0, duration=1.0)
+    audio_bytes = audio_to_bytes(audio_file, "wav", 0.0, 1.0)
 
     assert isinstance(audio_bytes, bytes)
     assert len(audio_bytes) > 0
@@ -135,16 +135,16 @@ def test_audio_fragment_bytes(audio_file):
     assert len(data) == 16000  # 1 second at 16kHz
 
 
-def test_audio_fragment_bytes_custom_format(audio_file):
+def test_audio_to_bytes_custom_format(audio_file):
     """Test converting audio fragment to different format."""
-    audio_bytes = audio_fragment_bytes(audio_file, format="flac")
+    audio_bytes = audio_to_bytes(audio_file, "flac")
 
     assert isinstance(audio_bytes, bytes)
     assert len(audio_bytes) > 0
 
 
-def test_save_audio_fragment(audio_file, tmp_path):
-    """Test saving audio fragment."""
+def test_save_audio(audio_file, tmp_path):
+    """Test saving audio (fragment extraction mode)."""
     with patch("datachain.lib.file.AudioFile.upload") as mock_upload:
         # Mock the upload to return a new AudioFile
         mock_uploaded_file = AudioFile(
@@ -152,8 +152,8 @@ def test_save_audio_fragment(audio_file, tmp_path):
         )
         mock_upload.return_value = mock_uploaded_file
 
-        result = save_audio_fragment(
-            audio_file, start=0.5, end=1.5, output=str(tmp_path), format="wav"
+        result = save_audio(
+            audio_file, output=str(tmp_path), format="wav", start=0.5, end=1.5
         )
 
         # Verify AudioFile.upload was called
@@ -173,17 +173,84 @@ def test_save_audio_fragment(audio_file, tmp_path):
         assert result == mock_uploaded_file
 
 
-def test_save_audio_fragment_validation(audio_file, tmp_path):
-    """Test input validation for save_audio_fragment."""
-    with pytest.raises(ValueError, match="Invalid time range"):
-        save_audio_fragment(audio_file, start=-1.0, end=1.0, output=str(tmp_path))
+def test_save_audio_validation(audio_file, tmp_path):
+    """Test input validation for save_audio."""
+    with pytest.raises(ValueError, match="start time must be non-negative"):
+        save_audio(audio_file, output=str(tmp_path), start=-1.0, end=1.0)
 
-    with pytest.raises(ValueError, match="Invalid time range"):
-        save_audio_fragment(audio_file, start=2.0, end=1.0, output=str(tmp_path))
+    with pytest.raises(ValueError, match="Can't save audio.*invalid time range"):
+        save_audio(audio_file, output=str(tmp_path), start=2.0, end=1.0)
 
 
-def test_save_audio_fragment_auto_format(tmp_path, catalog):
-    """Test saving audio fragment with auto-detected format."""
+def test_save_audio_full_file_conversion(audio_file, tmp_path):
+    """Test saving audio with full file conversion (end=None)."""
+    with patch("datachain.lib.file.AudioFile.upload") as mock_upload:
+        mock_uploaded_file = AudioFile(path="test_audio.wav", source="file://")
+        mock_upload.return_value = mock_uploaded_file
+
+        result = save_audio(audio_file, output=str(tmp_path), format="wav")
+
+        # Verify AudioFile.upload was called
+        mock_upload.assert_called_once()
+        call_args = mock_upload.call_args
+
+        # Check that the audio bytes were generated
+        assert isinstance(call_args[0][0], bytes)
+
+        # Check that the output file has no timestamps (full file conversion)
+        output_file = call_args[0][1]
+        assert output_file == str(tmp_path) + "/test_audio.wav"
+
+        assert result == mock_uploaded_file
+
+
+def test_save_audio_start_to_end(audio_file, tmp_path):
+    """Test saving audio from start time to end of file (end=None, start>0)."""
+    with patch("datachain.lib.file.AudioFile.upload") as mock_upload:
+        mock_uploaded_file = AudioFile(
+            path="test_audio_000500_end.wav", source="file://"
+        )
+        mock_upload.return_value = mock_uploaded_file
+
+        result = save_audio(audio_file, output=str(tmp_path), format="wav", start=0.5)
+
+        # Verify AudioFile.upload was called
+        mock_upload.assert_called_once()
+        call_args = mock_upload.call_args
+
+        # Check that the audio bytes were generated
+        assert isinstance(call_args[0][0], bytes)
+
+        # Check that the output file has timestamp and "_end" suffix
+        output_file = call_args[0][1]
+        assert output_file == str(tmp_path) + "/test_audio_000500_end.wav"
+
+        assert result == mock_uploaded_file
+
+
+def test_audiofile_save(audio_file, tmp_path):
+    with patch("datachain.lib.file.AudioFile.upload") as mock_upload:
+        mock_uploaded_file = AudioFile(path="test_audio.mp3", source="file://")
+        mock_upload.return_value = mock_uploaded_file
+
+        result = audio_file.save(output=str(tmp_path), format="mp3", start=1.0, end=2.0)
+
+        # Verify AudioFile.upload was called
+        mock_upload.assert_called_once()
+        call_args = mock_upload.call_args
+
+        # Check that the audio bytes were generated
+        assert isinstance(call_args[0][0], bytes)
+
+        # Check that the output file has correct format and timestamps
+        output_file = call_args[0][1]
+        assert output_file == str(tmp_path) + "/test_audio_001000_002000.mp3"
+
+        assert result == mock_uploaded_file
+
+
+def test_save_audio_auto_format(tmp_path, catalog):
+    """Test saving audio with auto-detected format."""
     audio_data = generate_test_wav(duration=1.0, sample_rate=16000)
     audio_path = tmp_path / "test_audio.flac"
     buffer = io.BytesIO(audio_data)
@@ -197,7 +264,7 @@ def test_save_audio_fragment_auto_format(tmp_path, catalog):
     with patch("datachain.lib.file.AudioFile.upload") as mock_upload:
         mock_upload.return_value = AudioFile(path="test_output.flac", source="file://")
 
-        save_audio_fragment(audio_file, start=0.0, end=1.0, output=str(tmp_path))
+        save_audio(audio_file, output=str(tmp_path), start=0.0, end=1.0)
 
         # Should use format from file extension
         call_args = mock_upload.call_args
@@ -222,22 +289,22 @@ def test_audio_fragment_np_file_error(audio_file):
         "datachain.lib.audio.torchaudio.info", side_effect=Exception("Test error")
     ):
         with pytest.raises(FileError, match="unable to read audio fragment"):
-            audio_fragment_np(audio_file)
+            audio_to_np(audio_file)
 
 
-def test_save_audio_fragment_file_error(audio_file, tmp_path):
-    """Test save_audio_fragment handles errors properly."""
+def test_save_audio_file_error(audio_file, tmp_path):
+    """Test save_audio handles errors properly."""
     with patch(
-        "datachain.lib.audio.audio_fragment_bytes", side_effect=Exception("Test error")
+        "datachain.lib.audio.audio_to_bytes", side_effect=Exception("Test error")
     ):
         with pytest.raises(FileError, match="unable to save audio fragment"):
-            save_audio_fragment(audio_file, start=0.0, end=1.0, output=str(tmp_path))
+            save_audio(audio_file, output=str(tmp_path), start=0.0, end=1.0)
 
 
 @pytest.mark.parametrize("start,duration", [(0.0, 1.0), (0.5, 0.5), (1.0, 1.0)])
 def test_audio_fragment_np_different_durations(audio_file, start, duration):
     """Test audio loading with different start times and durations."""
-    audio_np, sr = audio_fragment_np(audio_file, start=start, duration=duration)
+    audio_np, sr = audio_to_np(audio_file, start=start, duration=duration)
 
     assert isinstance(audio_np, np.ndarray)
     assert sr == 16000
@@ -246,12 +313,64 @@ def test_audio_fragment_np_different_durations(audio_file, start, duration):
 
 
 @pytest.mark.parametrize("format_type", ["wav", "flac", "ogg"])
-def test_audio_fragment_bytes_formats(audio_file, format_type):
+def test_audio_to_bytes_formats(audio_file, format_type):
     """Test audio conversion to different formats."""
-    audio_bytes = audio_fragment_bytes(audio_file, format=format_type)
+    audio_bytes = audio_to_bytes(audio_file, format_type)
 
     assert isinstance(audio_bytes, bytes)
     assert len(audio_bytes) > 0
+
+
+@pytest.mark.parametrize(
+    "encoding,file_ext,expected_format",
+    [
+        # Test direct encoding mappings
+        ("FLAC", "flac", "flac"),
+        ("MP3", "mp3", "mp3"),
+        ("VORBIS", "ogg", "ogg"),
+        ("OPUS", "opus", "opus"),
+        ("AMR_WB", "amr", "amr"),
+        ("AMR_NB", "amr", "amr"),
+        ("GSM", "gsm", "gsm"),
+        # Test PCM variants with different extensions
+        ("PCM_S16LE", "wav", "wav"),
+        ("PCM_S24LE", "aiff", "aiff"),
+        ("PCM_F32LE", "au", "au"),
+        ("PCM_U8", "raw", "raw"),
+        ("PCM_S16BE", "unknown_ext", "wav"),  # Default for PCM
+        # Test unknown encoding falls back to file extension
+        ("UNKNOWN_CODEC", "mp3", "mp3"),
+        ("UNKNOWN_CODEC", "flac", "flac"),
+        # Test files without extension
+        ("UNKNOWN_CODEC", "", "unknown"),
+        ("", "", "unknown"),
+    ],
+)
+def test_audio_info_format_detection(
+    tmp_path, catalog, encoding, file_ext, expected_format
+):
+    """Test audio format detection for different file extensions and encodings."""
+    # Create a test audio file with the specified extension
+    filename = f"test_audio.{file_ext}" if file_ext else "test_audio"
+    audio_data = generate_test_wav(duration=0.1, sample_rate=16000)
+    audio_path = tmp_path / filename
+    audio_path.write_bytes(audio_data)
+
+    audio_file = AudioFile(path=str(audio_path), source="file://")
+    audio_file._set_stream(catalog, caching_enabled=False)
+
+    # Mock torchaudio.info to return controlled encoding
+    with patch("datachain.lib.audio.torchaudio.info") as mock_info:
+        mock_info.return_value.sample_rate = 16000
+        mock_info.return_value.num_channels = 1
+        mock_info.return_value.num_frames = 1600  # 0.1 seconds
+        mock_info.return_value.encoding = encoding
+        mock_info.return_value.bits_per_sample = 16
+
+        result = audio_info(audio_file)
+
+        assert result.format == expected_format
+        assert result.codec == encoding
 
 
 def test_audio_info_stereo(stereo_audio_file):

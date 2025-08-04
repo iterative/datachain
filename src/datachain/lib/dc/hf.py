@@ -25,19 +25,23 @@ def read_hf(
     settings: Optional[dict] = None,
     column: str = "",
     model_name: str = "",
+    limit: int = 0,
     **kwargs,
 ) -> "DataChain":
-    """Generate chain from huggingface hub dataset.
+    """Generate chain from Hugging Face Hub dataset.
 
     Parameters:
         dataset : Path or name of the dataset to read from Hugging Face Hub,
             or an instance of `datasets.Dataset`-like object.
-        args : Additional positional arguments to pass to datasets.load_dataset.
+        args : Additional positional arguments to pass to `datasets.load_dataset`.
         session : Session to use for the chain.
         settings : Settings to use for the chain.
         column : Generated object column name.
         model_name : Generated model name.
-        kwargs : Parameters to pass to datasets.load_dataset.
+        limit : Limit the number of items to read from the HF dataset.
+                Adds `take(limit)` to the `datasets.load_dataset`.
+                Defaults to 0 (no limit).
+        kwargs : Parameters to pass to `datasets.load_dataset`.
 
     Example:
         Load from Hugging Face Hub:
@@ -52,6 +56,18 @@ def read_hf(
         ds = load_dataset("beans", split="train")
         import datachain as dc
         chain = dc.read_hf(ds)
+        ```
+
+        Streaming with limit, for large datasets:
+        ```py
+        import datachain as dc
+        ds = dc.read_hf("beans", split="train", streaming=True, limit=10)
+        ```
+
+        or use HF split syntax (not supported if streaming is enabled):
+        ```py
+        import datachain as dc
+        ds = dc.read_hf("beans", split="train[%10]")
         ```
     """
     from datachain.lib.hf import HFGenerator, get_output_schema, stream_splits
@@ -72,4 +88,4 @@ def read_hf(
         output = {column: model}
 
     chain = read_values(split=list(ds_dict.keys()), session=session, settings=settings)
-    return chain.gen(HFGenerator(dataset, model, *args, **kwargs), output=output)
+    return chain.gen(HFGenerator(dataset, model, limit, *args, **kwargs), output=output)

@@ -8,6 +8,7 @@ import dateparser
 import tabulate
 
 from datachain.config import Config, ConfigLevel
+from datachain.data_storage.job import JobStatus
 from datachain.dataset import QUERY_DATASET_PREFIX, parse_dataset_name
 from datachain.error import DataChainError
 from datachain.remote.studio import StudioClient
@@ -20,6 +21,8 @@ POST_LOGIN_MESSAGE = (
     "Once you've logged in, return here "
     "and you'll be ready to start using DataChain with Studio."
 )
+RETRY_MAX_TIMES = 10
+RETRY_SLEEP_SEC = 1
 
 
 def process_jobs_args(args: "Namespace"):
@@ -46,6 +49,7 @@ def process_jobs_args(args: "Namespace"):
             args.cluster,
             args.start_time,
             args.cron,
+            args.no_wait,
         )
 
     if args.cmd == "cancel":
@@ -270,41 +274,51 @@ def parse_start_time(start_time_str: Optional[str]) -> Optional[str]:
     if not start_time_str:
         return None
 
-    try:
-        # Parse the datetime string using dateparser
-        parsed_datetime = dateparser.parse(start_time_str)
+    # Parse the datetime string using dateparser
+    parsed_datetime = dateparser.parse(start_time_str)
 
-        if parsed_datetime is None:
-            raise DataChainError(
-                f"Could not parse datetime string: '{start_time_str}'. "
-                f"Supported formats include: '2024-01-15 14:30:00', 'tomorrow 3pm', "
-                f"'monday 9am', '2024-01-15T14:30:00Z', 'in 2 hours', etc."
-            )
-
-        # Convert to ISO format string
-        return parsed_datetime.isoformat()
-    except Exception as e:
+    if parsed_datetime is None:
         raise DataChainError(
-            f"Invalid datetime format for start_time: '{start_time_str}'. "
+            f"Could not parse datetime string: '{start_time_str}'. "
             f"Supported formats include: '2024-01-15 14:30:00', 'tomorrow 3pm', "
-            f"'monday 9am', '2024-01-15T14:30:00Z', 'in 2 hours', etc. Error: {e}"
-        ) from e
+            f"'monday 9am', '2024-01-15T14:30:00Z', 'in 2 hours', etc."
+        )
+
+    # Convert to ISO format string
+    return parsed_datetime.isoformat()
 
 
 def show_logs_from_client(client, job_id):
     # Sync usage
     async def _run():
+        retry_count = 0
         latest_status = None
-        async for message in client.tail_job_logs(job_id):
-            if "logs" in message:
-                for log in message["logs"]:
-                    print(log["message"], end="")
-            elif "job" in message:
-                latest_status = message["job"]["status"]
-                print(f"\n>>>> Job is now in {latest_status} status.")
+        processed_statuses = set()
+        while True:
+            async for message in client.tail_job_logs(job_id):
+                if "logs" in message:
+                    for log in message["logs"]:
+                        print(log["message"], end="")
+                elif "job" in message:
+                    latest_status = message["job"]["status"]
+                    if latest_status in processed_statuses:
+                        continue
+                    processed_statuses.add(latest_status)
+                    print(f"\n>>>> Job is now in {latest_status} status.")
+
+            try:
+                if retry_count > RETRY_MAX_TIMES or (
+                    latest_status and JobStatus[latest_status].finished()
+                ):
+                    break
+                await asyncio.sleep(RETRY_SLEEP_SEC)
+                retry_count += 1
+            except KeyError:
+                pass
+
         return latest_status
 
-    latest_status = asyncio.run(_run())
+    final_status = asyncio.run(_run())
 
     response = client.dataset_job_versions(job_id)
     if not response.ok:
@@ -321,9 +335,9 @@ def show_logs_from_client(client, job_id):
 
     exit_code_by_status = {
         "FAILED": 1,
-        "CANCELLED": 2,
+        "CANCELED": 2,
     }
-    return exit_code_by_status.get(latest_status.upper(), 0) if latest_status else 0
+    return exit_code_by_status.get(final_status.upper(), 0) if final_status else 0
 
 
 def create_job(
@@ -341,6 +355,7 @@ def create_job(
     cluster: Optional[str] = None,
     start_time: Optional[str] = None,
     cron: Optional[str] = None,
+    no_wait: Optional[bool] = False,
 ):
     query_type = "PYTHON" if query_file.endswith(".py") else "SHELL"
     with open(query_file) as f:
@@ -395,7 +410,7 @@ def create_job(
     print("Open the job in Studio at", response.data.get("job", {}).get("url"))
     print("=" * 40)
 
-    return show_logs_from_client(client, job_id)
+    return 0 if no_wait else show_logs_from_client(client, job_id)
 
 
 def upload_files(client: StudioClient, files: list[str]) -> list[str]:

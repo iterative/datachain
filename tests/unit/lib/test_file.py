@@ -7,7 +7,7 @@ from fsspec.implementations.local import LocalFileSystem
 from PIL import Image
 
 from datachain.catalog import Catalog
-from datachain.lib.file import File, FileError, ImageFile, TextFile, resolve
+from datachain.lib.file import Audio, File, FileError, ImageFile, TextFile, resolve
 
 
 def create_file(source: str):
@@ -409,3 +409,49 @@ def test_path_normalized(path, expected, raises):
             file.get_path_normalized()
     else:
         assert file.get_path_normalized() == expected
+
+
+def test_file_rebase_method():
+    """Test File.rebase() method"""
+    file = File(source="s3://bucket", path="data/audio/file.wav")
+
+    # Basic rebase
+    result = file.rebase("s3://bucket/data/audio", "s3://output-bucket/waveforms")
+    assert result == "s3://output-bucket/waveforms/file.wav"
+
+    # With suffix and extension
+    result = file.rebase(
+        "s3://bucket/data/audio",
+        "s3://output-bucket/processed",
+        suffix="_ch1",
+        extension="npy",
+    )
+    assert result == "s3://output-bucket/processed/file_ch1.npy"
+
+
+def test_file_rebase_local_path():
+    """Test File.rebase() with local file paths"""
+    file = File(source="file://", path="/data/audio/folder/file.mp3")
+
+    result = file.rebase("file:///data/audio", "/output/processed")
+    assert result == "/output/processed/folder/file.mp3"
+
+
+def test_audio_get_channel_name():
+    # Test known channel configurations
+    assert Audio.get_channel_name(1, 0) == "Mono"
+    assert Audio.get_channel_name(2, 0) == "Left"
+    assert Audio.get_channel_name(2, 1) == "Right"
+    assert Audio.get_channel_name(4, 2) == "Y"  # Ambisonics
+    assert Audio.get_channel_name(6, 3) == "LFE"  # 5.1 surround
+    assert Audio.get_channel_name(8, 7) == "SR"  # 7.1 surround
+
+    # Test fallback for unknown configurations
+    assert Audio.get_channel_name(-1, 0) == "Ch1"
+    assert Audio.get_channel_name(3, 0) == "Ch1"
+    assert Audio.get_channel_name(5, 4) == "Ch5"
+    assert Audio.get_channel_name(10, 9) == "Ch10"
+
+    # Test out of range indices
+    assert Audio.get_channel_name(2, 5) == "Ch6"
+    assert Audio.get_channel_name(1, 1) == "Ch2"

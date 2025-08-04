@@ -69,21 +69,25 @@ class HFGenerator(Generator):
         self,
         ds: Union[str, HFDatasetType],
         output_schema: type["BaseModel"],
+        limit: int = 0,
         *args,
         **kwargs,
     ):
         """
-        Generator for chain from huggingface datasets.
+        Generator for chain from Hugging Face datasets.
 
         Parameters:
 
-        ds : Path or name of the dataset to read from Hugging Face Hub,
-            or an instance of `datasets.Dataset`-like object.
-        output_schema : Pydantic model for validation.
+            ds : Path or name of the dataset to read from Hugging Face Hub,
+                or an instance of `datasets.Dataset`-like object.
+            limit : Limit the number of items to read from the HF dataset.
+                    Defaults to 0 (no limit).
+            output_schema : Pydantic model for validation.
         """
         super().__init__()
         self.ds = ds
         self.output_schema = output_schema
+        self.limit = limit
         self.args = args
         self.kwargs = kwargs
 
@@ -93,6 +97,8 @@ class HFGenerator(Generator):
     def process(self, split: str = ""):
         desc = "Parsed Hugging Face dataset"
         ds = self.ds_dict[split]
+        if self.limit > 0:
+            ds = ds.take(self.limit)
         if split:
             desc += f" split '{split}'"
         model_fields = self.output_schema._model_fields_by_aliases()  # type: ignore[attr-defined]
@@ -113,7 +119,6 @@ class HFGenerator(Generator):
 
 def stream_splits(ds: Union[str, HFDatasetType], *args, **kwargs):
     if isinstance(ds, str):
-        kwargs["streaming"] = True
         ds = load_dataset(ds, *args, **kwargs)
     if isinstance(ds, (DatasetDict, IterableDatasetDict)):
         return ds
@@ -132,7 +137,12 @@ def convert_feature(val: Any, feat: Any, anno: Any) -> Any:
             sfeat = feat[sname]
             norm_name, info = model_fields[sname]
             sanno = info.annotation
-            sdict[norm_name] = [convert_feature(v, sfeat, sanno) for v in val[sname]]
+            if isinstance(val[sname], list):
+                sdict[norm_name] = [
+                    convert_feature(v, sfeat, sanno) for v in val[sname]
+                ]
+            else:
+                sdict[norm_name] = convert_feature(val[sname], sfeat, sanno)
         return anno(**sdict)
     if isinstance(feat, Image):
         if isinstance(val, dict):
@@ -174,7 +184,7 @@ def _feature_to_chain_type(name: str, val: Any) -> DataType:  # noqa: PLR0911
         for sname, sval in val.items():
             dtype = _feature_to_chain_type(sname, sval)
             sequence_dict[sname] = dtype  # type: ignore[valid-type]
-        return dict_to_data_model(name, sequence_dict)  # type: ignore[arg-type]
+        return dict_to_data_model(f"HFDataModel_{name}", sequence_dict)  # type: ignore[arg-type]
     if isinstance(val, List):
         return list[_feature_to_chain_type(name, val.feature)]  # type: ignore[arg-type,misc,return-value]
     if isinstance(val, Array2D):
