@@ -917,7 +917,19 @@ class DataChain:
             )
             chain.save("new_dataset")
             ```
+
+        .. deprecated:: 0.29.0
+            This method is deprecated and will be removed in a future version.
+            Use `agg()` instead, which provides the similar functionality.
         """
+        import warnings
+
+        warnings.warn(
+            "batch_map() is deprecated and will be removed in a future version. "
+            "Use agg() instead, which provides the similar functionality.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         udf_obj = self._udf_to_obj(BatchMapper, func, params, output, signal_map)
         return self._evolve(
             query=self._query.add_signals(
@@ -2340,7 +2352,7 @@ class DataChain:
     def setup(self, **kwargs) -> "Self":
         """Setup variables to pass to UDF functions.
 
-        Use before running map/gen/agg/batch_map to save an object and pass it as an
+        Use before running map/gen/agg to save an object and pass it as an
         argument to the UDF.
 
         The value must be a callable (a `lambda: <value>` syntax can be used to quickly

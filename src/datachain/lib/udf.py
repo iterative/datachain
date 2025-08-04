@@ -418,10 +418,26 @@ class Mapper(UDFBase):
 
 
 class BatchMapper(UDFBase):
-    """Inherit from this class to pass to `DataChain.batch_map()`."""
+    """Inherit from this class to pass to `DataChain.batch_map()`.
+
+    .. deprecated:: 0.29.0
+        This class is deprecated and will be removed in a future version.
+        Use `Aggregator` instead, which provides the similar functionality.
+    """
 
     is_input_batched = True
     is_output_batched = True
+
+    def __init__(self):
+        import warnings
+
+        warnings.warn(
+            "BatchMapper is deprecated and will be removed in a future version. "
+            "Use Aggregator instead, which provides the similar functionality.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        super().__init__()
 
     def run(
         self,
