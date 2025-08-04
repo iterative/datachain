@@ -17,7 +17,7 @@ class Settings:
         prefetch=None,
         namespace=None,
         project=None,
-        chunk_rows=None,
+        batch_rows=None,
     ):
         self._cache = cache
         self.parallel = parallel
@@ -26,7 +26,7 @@ class Settings:
         self.prefetch = prefetch
         self.namespace = namespace
         self.project = project
-        self._chunk_rows = chunk_rows
+        self._chunk_rows = batch_rows
 
         if not isinstance(cache, bool) and cache is not None:
             raise SettingsError(
@@ -56,16 +56,16 @@ class Settings:
                 f", {min_task_size.__class__.__name__} was given"
             )
 
-        if chunk_rows is not None and not isinstance(chunk_rows, int):
+        if batch_rows is not None and not isinstance(batch_rows, int):
             raise SettingsError(
-                "'chunk_rows' argument must be int or None"
-                f", {chunk_rows.__class__.__name__} was given"
+                "'batch_rows' argument must be int or None"
+                f", {batch_rows.__class__.__name__} was given"
             )
 
-        if chunk_rows is not None and chunk_rows <= 0:
+        if batch_rows is not None and batch_rows <= 0:
             raise SettingsError(
-                "'chunk_rows' argument must be positive integer"
-                f", {chunk_rows} was given"
+                "'batch_rows' argument must be positive integer"
+                f", {batch_rows} was given"
             )
 
     @property
@@ -77,7 +77,7 @@ class Settings:
         return self._workers if self._workers is not None else False
 
     @property
-    def chunk_rows(self):
+    def batch_rows(self):
         return self._chunk_rows if self._chunk_rows is not None else DEFAULT_CHUNK_ROWS
 
     def to_dict(self):
@@ -95,7 +95,7 @@ class Settings:
         if self.project is not None:
             res["project"] = self.project
         if self._chunk_rows is not None:
-            res["chunk_rows"] = self._chunk_rows
+            res["batch_rows"] = self._chunk_rows
         return res
 
     def add(self, settings: "Settings"):

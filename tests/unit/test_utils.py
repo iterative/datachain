@@ -266,7 +266,7 @@ def test_batched_basic():
 def test_batched_row_limit():
     """Test dynamic batching with row count limit."""
     data = list(range(15))
-    batches = list(batched(data, chunk_rows=4))
+    batches = list(batched(data, batch_rows=4))
     assert len(batches) == 4  # 15 items / 4 max = 4 batches
     assert batches[0] == (0, 1, 2, 3)
     assert batches[1] == (4, 5, 6, 7)

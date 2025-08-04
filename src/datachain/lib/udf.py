@@ -62,15 +62,15 @@ class UDFProperties:
         return self.udf.get_batching(use_partitioning)
 
     @property
-    def chunk_rows(self):
-        return self.udf.chunk_rows
+    def batch_rows(self):
+        return self.udf.batch_rows
 
 
 @attrs.define(slots=False)
 class UDFAdapter:
     inner: "UDFBase"
     output: UDFOutputSpec
-    chunk_rows: Optional[int] = None
+    batch_rows: Optional[int] = None
     batch: int = 1
 
     def get_batching(self, use_partitioning: bool = False) -> BatchingStrategy:
@@ -237,13 +237,13 @@ class UDFBase(AbstractUDF):
 
     def to_udf_wrapper(
         self,
-        chunk_rows: Optional[int] = None,
+        batch_rows: Optional[int] = None,
         batch: int = 1,
     ) -> UDFAdapter:
         return UDFAdapter(
             self,
             self.output.to_udf_spec(),
-            chunk_rows,
+            batch_rows,
             batch,
         )
 

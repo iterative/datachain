@@ -228,7 +228,7 @@ _T_co = TypeVar("_T_co", covariant=True)
 
 def _dynamic_batched_core(
     iterable: Iterable[_T_co],
-    chunk_rows: int,
+    batch_rows: int,
 ) -> Iterator[list[_T_co]]:
     """Core batching logic that yields lists."""
 
@@ -236,7 +236,7 @@ def _dynamic_batched_core(
 
     for item in iterable:
         # Check if adding this item would exceed limits
-        if len(batch) >= chunk_rows and batch:  # Yield current batch if we have one
+        if len(batch) >= batch_rows and batch:  # Yield current batch if we have one
             yield batch
             batch = []
 
@@ -247,23 +247,23 @@ def _dynamic_batched_core(
         yield batch
 
 
-def batched(iterable: Iterable[_T_co], chunk_rows: int) -> Iterator[tuple[_T_co, ...]]:
+def batched(iterable: Iterable[_T_co], batch_rows: int) -> Iterator[tuple[_T_co, ...]]:
     """
-    Batch data into tuples of length chunk_rows .
+    Batch data into tuples of length batch_rows .
     The last batch may be shorter.
     """
-    yield from (tuple(batch) for batch in _dynamic_batched_core(iterable, chunk_rows))
+    yield from (tuple(batch) for batch in _dynamic_batched_core(iterable, batch_rows))
 
 
 def batched_it(
     iterable: Iterable[_T_co],
-    chunk_rows: int = DEFAULT_CHUNK_ROWS,
+    batch_rows: int = DEFAULT_CHUNK_ROWS,
 ) -> Iterator[Iterator[_T_co]]:
     """
     Batch data into iterators with dynamic sizing
     based on row count and memory usage.
     """
-    yield from (iter(batch) for batch in _dynamic_batched_core(iterable, chunk_rows))
+    yield from (iter(batch) for batch in _dynamic_batched_core(iterable, batch_rows))
 
 
 def flatten(items):

@@ -337,7 +337,7 @@ def process_udf_outputs(
 ) -> None:
     # Optimization: Compute row types once, rather than for every row.
     udf_col_types = get_col_types(warehouse, udf.output)
-    chunk_rows = udf.chunk_rows or INSERT_BATCH_SIZE
+    batch_rows = udf.batch_rows or INSERT_BATCH_SIZE
 
     def _insert_rows():
         for udf_output in udf_results:
@@ -349,7 +349,7 @@ def process_udf_outputs(
                     cb.relative_update()
                     yield adjust_outputs(warehouse, row, udf_col_types)
 
-    for row_chunk in batched(_insert_rows(), chunk_rows):
+    for row_chunk in batched(_insert_rows(), batch_rows):
         warehouse.insert_rows(udf_table, row_chunk)
 
     warehouse.insert_rows_done(udf_table)
@@ -393,7 +393,7 @@ class UDFStep(Step, ABC):
     min_task_size: Optional[int] = None
     is_generator = False
     cache: bool = False
-    chunk_rows: Optional[int] = None
+    batch_rows: Optional[int] = None
 
     @abstractmethod
     def create_udf_table(self, query: Select) -> "Table":
@@ -595,7 +595,7 @@ class UDFStep(Step, ABC):
                 parallel=self.parallel,
                 workers=self.workers,
                 min_task_size=self.min_task_size,
-                chunk_rows=self.chunk_rows,
+                batch_rows=self.batch_rows,
             )
         return self.__class__(self.udf, self.catalog)
 
@@ -1627,7 +1627,7 @@ class DatasetQuery:
         min_task_size: Optional[int] = None,
         partition_by: Optional[PartitionByType] = None,
         cache: bool = False,
-        chunk_rows: Optional[int] = None,
+        batch_rows: Optional[int] = None,
     ) -> "Self":
         """
         Adds one or more signals based on the results from the provided UDF.
@@ -1653,7 +1653,7 @@ class DatasetQuery:
                 workers=workers,
                 min_task_size=min_task_size,
                 cache=cache,
-                chunk_rows=chunk_rows,
+                batch_rows=batch_rows,
             )
         )
         return query
@@ -1675,7 +1675,7 @@ class DatasetQuery:
         namespace: Optional[str] = None,
         project: Optional[str] = None,
         cache: bool = False,
-        chunk_rows: Optional[int] = None,
+        batch_rows: Optional[int] = None,
     ) -> "Self":
         query = self.clone()
         steps = query.steps
@@ -1688,7 +1688,7 @@ class DatasetQuery:
                 workers=workers,
                 min_task_size=min_task_size,
                 cache=cache,
-                chunk_rows=chunk_rows,
+                batch_rows=batch_rows,
             )
         )
         return query

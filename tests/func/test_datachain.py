@@ -2425,7 +2425,7 @@ def test_agg_sample(catalog_tmpfile, parallel, sample):
 def test_batch_for_map(test_session):
     # Create a chain with batch settings
     chain = dc.read_values(x=list(range(100)), session=test_session)
-    chain_with_settings = chain.settings(chunk_rows=15)
+    chain_with_settings = chain.settings(batch_rows=15)
 
     def add_one(x):
         return x + 1
