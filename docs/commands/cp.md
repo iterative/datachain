@@ -6,8 +6,8 @@ Copy storage files and directories between cloud and local storage.
 
 ```usage
 usage: datachain cp [-h] [-v] [-q] [-r] [--team TEAM]
-    [-s] [--anon] [--update] [--no-glob]
-    [--force] source_path destination_path
+    [-s] [--update]
+    source_path destination_path
 ```
 
 ## Description
@@ -24,10 +24,7 @@ This command copies files and directories between local and/or remote storage. T
 * `-r`, `-R`, `--recursive` - Copy directories recursively
 * `--team TEAM` - Team name to use the credentials from.
 * `-s`, `--studio-cloud-auth` - Use credentials from Studio for cloud operations (Default: False)
-* `--anon` - Use anonymous access to storage
 * `--update` - Update cached list of files for the source when downloading from cloud using local credentials.
-* `--no-glob` - Do not expand globs (such as * or ?) when downloading from cloud using local credentials.
-* `--force` - Force creating files even if they already exist
 * `-h`, `--help` - Show the help message and exit
 * `-v`, `--verbose` - Be verbose
 * `-q`, `--quiet` - Be quiet
@@ -108,8 +105,7 @@ datachain cp -r gs://my-bucket/data/directory /path/to/local/directory/
 ### Remote to Remote
 
 **Operation**: Copy within cloud storage
-- Copies files between locations in the same bucket
-- Cannot copy between different buckets (same limitation as `mv`)
+- Copies files between locations between cloud storages
 - Requires `--recursive` flag for directories
 
 ```bash
@@ -127,9 +123,6 @@ datachain cp gs://my-bucket/data/file.py gs://my-bucket/archive/file.py --studio
 datachain cp -s --team other-team /path/to/file.txt s3://my-bucket/data/file.txt
 ```
 
-
-## Limitations
-- **Cannot copy between different buckets**: Remote-to-remote copies must be within the same bucket
 
 ## Notes
 * When using Studio cloud auth mode, you must be authenticated with `datachain auth login` before using it

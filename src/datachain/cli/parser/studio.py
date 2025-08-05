@@ -181,28 +181,9 @@ def add_storage_parser(subparsers, parent_parser) -> None:
     )
 
     storage_cp_parser.add_argument(
-        "--anon",
-        action="store_true",
-        help="Use anonymous access to storage",
-    )
-
-    storage_cp_parser.add_argument(
         "--update",
         action="store_true",
-        help="Update cached list of files for the source for local approach",
-    )
-
-    storage_cp_parser.add_argument(
-        "--no-glob",
-        default=False,
-        action="store_true",
-        help="Do not expand globs (such as * or ?) for local approach",
-    )
-
-    storage_cp_parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Force creating files even if they already exist",
+        help="Update cached list of files for the source in datachain cache",
     )
 
     mv_parser = subparsers.add_parser(

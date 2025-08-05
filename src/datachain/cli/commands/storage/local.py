@@ -1,68 +1,52 @@
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 from datachain.cli.commands.storage.base import CredentialBasedFileHandler
-from datachain.cli.commands.storage.utils import build_file_paths, validate_upload_args
 from datachain.error import DataChainError
-
-if TYPE_CHECKING:
-    from datachain.client.fsspec import Client
+from datachain.lib.dc.storage import read_storage
 
 
 class LocalCredentialsBasedFileHandler(CredentialBasedFileHandler):
-    def upload_to_cloud(self, source_cls: "Client", destination_cls: "Client"):
-        from tqdm import tqdm
+    def cp(self):
+        from datachain.client.fsspec import Client
 
+        source_path = self.args.source_path
+        destination_path = self.args.destination_path
+        destination_cls = Client.get_implementation(destination_path)
+        source_cls = Client.get_implementation(source_path)
         source_fs = source_cls.create_fs()
-        destination_fs = destination_cls.create_fs()
-        is_dir = validate_upload_args(
-            self.args.source_path, self.args.recursive, source_fs
-        )
-        file_paths = build_file_paths(
-            self.args.source_path, self.args.destination_path, source_fs, is_dir
-        )
-        destination_bucket, _ = destination_cls.parse_url(self.args.destination_path)
 
-        for dest_path, source_path in file_paths.items():
-            file_size = source_fs.info(source_path)["size"]
-            print(f"Uploading {source_path} to {dest_path}")
+        update = self.args.update
+        if source_cls.protocol == "file":
+            update = True
 
-            with tqdm(total=file_size, unit="B", unit_scale=True) as pbar:
-                with source_fs.open(source_path, "rb") as source_file:
-                    with destination_fs.open(
-                        f"{destination_bucket}/{dest_path}", "wb"
-                    ) as dest_file:
-                        while True:
-                            chunk = source_file.read(8192)
-                            if not chunk:
-                                break
-                            dest_file.write(chunk)
-                            pbar.update(len(chunk))
+        info = source_fs.info(source_path)
+        is_file = info["type"] == "file"
 
-        self.save_upload_logs(self.args.destination_path, file_paths, source_fs)
+        if info["type"] == "directory" and not self.args.recursive:
+            raise ValueError("Source is a directory, but recursive is not specified")
 
-    def download_from_cloud(self, destination_cls: "Client"):
-        self.catalog.cp(
-            [self.args.source_path],
-            self.args.destination_path,
-            force=bool(self.args.force),
-            update=bool(self.args.update),
-            recursive=bool(self.args.recursive),
-            no_glob=self.args.no_glob,
-        )
-        print(f"Downloaded {self.args.source_path} to {self.args.destination_path}")
+        chain = read_storage(source_path, update=update)
+        file_paths = {}
 
-    def copy_cloud_to_cloud(self, source_cls: "Client"):
-        source_fs = source_cls.create_fs()
-        source_fs.copy(
-            self.args.source_path,
-            self.args.destination_path,
-            recursive=self.args.recursive,
-        )
+        if not is_file:
+            chain.to_storage(destination_path, placement="normpath")
 
-        _, dest = source_cls.split_url(self.args.destination_path)
-        file_paths = {dest: self.args.source_path}
-        print(f"Copied {self.args.source_path} to {self.args.destination_path}")
-        self.save_upload_logs(self.args.destination_path, file_paths, source_fs)
+        for (file,) in chain.to_iter("file"):
+            if is_file:
+                dst = (
+                    Path(destination_path) / file.name
+                    if destination_path.endswith("/")
+                    else destination_path
+                )
+                file.save(dst)
+            else:
+                dst = file.get_destination_path(destination_path, "normpath")
+            _, dst_path = destination_cls.split_url(str(dst))
+            file_paths[dst_path] = file.size
+
+        if destination_cls.protocol != "file":
+            self.save_upload_logs(destination_path, file_paths)
+        print(f"Copied {source_path} to {destination_path}")
 
     def rm(self):
         from datachain.client.fsspec import Client

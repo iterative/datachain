@@ -5,8 +5,6 @@ from datachain.error import DataChainError
 if TYPE_CHECKING:
     from argparse import Namespace
 
-    from fsspec import AbstractFileSystem
-
     from datachain.catalog import Catalog
     from datachain.client.fsspec import Client
 
@@ -23,30 +21,7 @@ class CredentialBasedFileHandler:
         raise NotImplementedError("Move is not implemented")
 
     def cp(self):
-        from datachain.client.fsspec import Client
-
-        source_cls = Client.get_implementation(self.args.source_path)
-        destination_cls = Client.get_implementation(self.args.destination_path)
-
-        if source_cls.protocol == "file" and destination_cls.protocol == "file":
-            self.copy_local_to_local(source_cls)
-        elif source_cls.protocol == "file":
-            self.upload_to_cloud(source_cls, destination_cls)
-        elif destination_cls.protocol == "file":
-            self.download_from_cloud(destination_cls)
-        elif source_cls.protocol == destination_cls.protocol:
-            self.copy_cloud_to_cloud(source_cls)
-        else:
-            raise DataChainError("Cannot copy between different protocols yet")
-
-    def copy_local_to_local(self, source_cls: "Client"):
-        source_fs = source_cls.create_fs()
-        source_fs.copy(
-            self.args.source_path,
-            self.args.destination_path,
-            recursive=self.args.recursive,
-        )
-        print(f"Copied {self.args.source_path} to {self.args.destination_path}")
+        raise NotImplementedError("Copy is not implemented")
 
     def upload_to_cloud(self, source_cls: "Client", destination_cls: "Client"):
         raise NotImplementedError("Upload to remote is not implemented")
@@ -60,8 +35,7 @@ class CredentialBasedFileHandler:
     def save_upload_logs(
         self,
         destination_path: str,
-        file_paths: dict,  # {destination_path: source}
-        source_fs: "AbstractFileSystem",
+        file_paths: dict,  # {destination_path: size}
     ):
         from datachain.remote.storages import get_studio_client
 
@@ -73,8 +47,8 @@ class CredentialBasedFileHandler:
         uploads = [
             {
                 "path": dst,
-                "size": source_fs.info(src).get("size", 0),
+                "size": size,
             }
-            for dst, src in file_paths.items()
+            for dst, size in file_paths.items()
         ]
         studio_client.save_activity_logs(destination_path, uploads)
