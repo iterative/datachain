@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from datachain.client.fsspec import Client
 
 
-class StorageImplementation:
+class CredentialBasedFileHandler:
     def __init__(self, args: "Namespace", catalog: "Catalog"):
         self.args = args
         self.catalog = catalog
@@ -31,11 +31,11 @@ class StorageImplementation:
         if source_cls.protocol == "file" and destination_cls.protocol == "file":
             self.copy_local_to_local(source_cls)
         elif source_cls.protocol == "file":
-            self.upload_to_remote(source_cls, destination_cls)
+            self.upload_to_cloud(source_cls, destination_cls)
         elif destination_cls.protocol == "file":
-            self.download_from_remote(destination_cls)
+            self.download_from_cloud(destination_cls)
         elif source_cls.protocol == destination_cls.protocol:
-            self.copy_remote_to_remote(source_cls)
+            self.copy_cloud_to_cloud(source_cls)
         else:
             raise DataChainError("Cannot copy between different protocols yet")
 
@@ -48,13 +48,13 @@ class StorageImplementation:
         )
         print(f"Copied {self.args.source_path} to {self.args.destination_path}")
 
-    def upload_to_remote(self, source_cls: "Client", destination_cls: "Client"):
+    def upload_to_cloud(self, source_cls: "Client", destination_cls: "Client"):
         raise NotImplementedError("Upload to remote is not implemented")
 
-    def download_from_remote(self, destination_cls: "Client"):
+    def download_from_cloud(self, destination_cls: "Client"):
         raise NotImplementedError("Download from remote is not implemented")
 
-    def copy_remote_to_remote(self, source_cls: "Client"):
+    def copy_cloud_to_cloud(self, source_cls: "Client"):
         raise NotImplementedError("Copy remote to remote is not implemented")
 
     def save_upload_logs(

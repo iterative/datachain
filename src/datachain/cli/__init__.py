@@ -117,8 +117,8 @@ def handle_command(args, catalog, client_config) -> int:
 
 def _get_storage_implementation(args: "Namespace", catalog: "Catalog"):
     from datachain.cli.commands.storage import (
-        LocalStorageImplementation,
-        StudioStorageImplementation,
+        LocalCredentialsBasedFileHandler,
+        StorageCredentialFileHandler,
     )
     from datachain.config import Config
 
@@ -126,9 +126,9 @@ def _get_storage_implementation(args: "Namespace", catalog: "Catalog"):
     token = config.get("token")
     studio = False if not token else args.studio_cloud_auth
     return (
-        StudioStorageImplementation(args, catalog)
+        StorageCredentialFileHandler(args, catalog)
         if studio
-        else LocalStorageImplementation(args, catalog)
+        else LocalCredentialsBasedFileHandler(args, catalog)
     )
 
 

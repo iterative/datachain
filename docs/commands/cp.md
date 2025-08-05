@@ -22,11 +22,11 @@ This command copies files and directories between local and/or remote storage. T
 ## Options
 
 * `-r`, `-R`, `--recursive` - Copy directories recursively
-* `--team TEAM` - Team name to copy storage contents to
+* `--team TEAM` - Team name to use the credentials from.
 * `-s`, `--studio-cloud-auth` - Use credentials from Studio for cloud operations (Default: False)
 * `--anon` - Use anonymous access to storage
-* `--update` - Update cached list of files for the source for local approach
-* `--no-glob` - Do not expand globs (such as * or ?) for local approach
+* `--update` - Update cached list of files for the source when downloading from cloud using local credentials.
+* `--no-glob` - Do not expand globs (such as * or ?) when downloading from cloud using local credentials.
 * `--force` - Force creating files even if they already exist
 * `-h`, `--help` - Show the help message and exit
 * `-v`, `--verbose` - Be verbose
@@ -37,7 +37,7 @@ This command copies files and directories between local and/or remote storage. T
 The command supports two main modes of operation:
 
 ### Default Mode
-By default, the command operates directly with local storage access, supporting various copy scenarios between local and remote storage.
+By default, the command operates directly with clouds using credentials in ypur system, supporting various copy scenarios between local and remote storage.
 
 ### Studio Cloud Auth Mode
 When using `-s` or `--studio-cloud-auth` flag, the command uses credentials from Studio for cloud operations. This mode provides enhanced authentication and access control for cloud storage operations.
@@ -122,30 +122,11 @@ datachain cp gs://my-bucket/data/file.py gs://my-bucket/archive/file.py --studio
 
 ### Additional Examples
 
-1. Copy with specific team:
 ```bash
+# Copy with specific team:
 datachain cp -s --team other-team /path/to/file.txt s3://my-bucket/data/file.txt
 ```
 
-2. Copy with verbose output:
-```bash
-datachain cp -v -r s3://my-bucket/datasets/raw s3://my-bucket/datasets/processed
-```
-
-3. Copy with anonymous access:
-```bash
-datachain cp --anon s3://public-bucket/data /path/to/local/
-```
-
-4. Copy with force overwrite:
-```bash
-datachain cp --force s3://my-bucket/data /path/to/local/
-```
-
-5. Copy with update and no glob expansion:
-```bash
-datachain cp --update --no-glob s3://my-bucket/data/*.txt /path/to/local/
-```
 
 ## Limitations
 - **Cannot copy between different buckets**: Remote-to-remote copies must be within the same bucket

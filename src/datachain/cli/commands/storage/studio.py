@@ -1,14 +1,14 @@
 from typing import TYPE_CHECKING
 
-from datachain.cli.commands.storage.base import StorageImplementation
+from datachain.cli.commands.storage.base import CredentialBasedFileHandler
 from datachain.error import DataChainError
 
 if TYPE_CHECKING:
     from datachain.client.fsspec import Client
 
 
-class StudioStorageImplementation(StorageImplementation):
-    def upload_to_remote(self, source_cls: "Client", destination_cls: "Client"):
+class StorageCredentialFileHandler(CredentialBasedFileHandler):
+    def upload_to_cloud(self, source_cls: "Client", destination_cls: "Client"):
         from datachain.remote.storages import upload_to_storage
 
         source_fs = source_cls.create_fs()
@@ -21,7 +21,7 @@ class StudioStorageImplementation(StorageImplementation):
         )
         self.save_upload_logs(self.args.destination_path, file_paths, source_fs)
 
-    def download_from_remote(self, destination_cls: "Client"):
+    def download_from_cloud(self, destination_cls: "Client"):
         from datachain.remote.storages import download_from_storage
 
         destination_fs = destination_cls.create_fs()
@@ -32,7 +32,7 @@ class StudioStorageImplementation(StorageImplementation):
             destination_fs,
         )
 
-    def copy_remote_to_remote(self, source_cls: "Client"):
+    def copy_cloud_to_cloud(self, source_cls: "Client"):
         from datachain.remote.storages import copy_inside_storage
 
         copy_inside_storage(

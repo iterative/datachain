@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from datachain.cli.commands.storage.base import StorageImplementation
+from datachain.cli.commands.storage.base import CredentialBasedFileHandler
 from datachain.cli.commands.storage.utils import build_file_paths, validate_upload_args
 from datachain.error import DataChainError
 
@@ -8,8 +8,8 @@ if TYPE_CHECKING:
     from datachain.client.fsspec import Client
 
 
-class LocalStorageImplementation(StorageImplementation):
-    def upload_to_remote(self, source_cls: "Client", destination_cls: "Client"):
+class LocalCredentialsBasedFileHandler(CredentialBasedFileHandler):
+    def upload_to_cloud(self, source_cls: "Client", destination_cls: "Client"):
         from tqdm import tqdm
 
         source_fs = source_cls.create_fs()
@@ -40,7 +40,7 @@ class LocalStorageImplementation(StorageImplementation):
 
         self.save_upload_logs(self.args.destination_path, file_paths, source_fs)
 
-    def download_from_remote(self, destination_cls: "Client"):
+    def download_from_cloud(self, destination_cls: "Client"):
         self.catalog.cp(
             [self.args.source_path],
             self.args.destination_path,
@@ -51,7 +51,7 @@ class LocalStorageImplementation(StorageImplementation):
         )
         print(f"Downloaded {self.args.source_path} to {self.args.destination_path}")
 
-    def copy_remote_to_remote(self, source_cls: "Client"):
+    def copy_cloud_to_cloud(self, source_cls: "Client"):
         source_fs = source_cls.create_fs()
         source_fs.copy(
             self.args.source_path,
