@@ -53,20 +53,11 @@ datachain mv gs://my-bucket/data/directory gs://my-bucket/archive/directory --re
 
 ### Additional Examples
 
-1. Move a file to a different team's storage:
 ```bash
+# Move a file to a different team's storage:
 datachain mv -s --team other-team gs://my-bucket/data/file.py gs://my-bucket/backup/file.py
 ```
 
-2. Move a file with verbose output:
-```bash
-datachain mv -v gs://my-bucket/data/file.py gs://my-bucket/processed/file.py
-```
-
-3. Move a directory to a subdirectory:
-```bash
-datachain mv --recursive gs://my-bucket/datasets/raw gs://my-bucket/datasets/processed/raw
-```
 
 ## Supported Storage Protocols
 

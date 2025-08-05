@@ -49,17 +49,6 @@ datachain rm gs://my-bucket/data/directory --recursive
 datachain rm gs://my-bucket/data/directory --recursive --studio-cloud-auth
 ```
 
-### Additional Examples
-
-1. Delete a file from a different team's storage:
-```bash
-datachain rm -s --team other-team gs://my-bucket/data/file.py
-```
-
-3. Delete a specific subdirectory:
-```bash
-datachain rm --recursive gs://my-bucket/datasets/raw/old-version
-```
 
 ## Notes
 * When using Studio cloud auth mode, you must be authenticated with `datachain auth login` before using it
