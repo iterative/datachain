@@ -1,7 +1,5 @@
 from typing import TYPE_CHECKING
 
-from datachain.error import DataChainError
-
 if TYPE_CHECKING:
     from argparse import Namespace
 
@@ -37,12 +35,12 @@ class CredentialBasedFileHandler:
         destination_path: str,
         file_paths: dict,  # {destination_path: size}
     ):
-        from datachain.remote.storages import get_studio_client
+        from datachain.remote.studio import StudioClient, is_token_set
 
-        try:
-            studio_client = get_studio_client(self.args.team)
-        except DataChainError:
+        if not is_token_set():
             return
+
+        studio_client = StudioClient(team=self.args.team)
 
         uploads = [
             {

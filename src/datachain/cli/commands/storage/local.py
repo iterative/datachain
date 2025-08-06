@@ -1,7 +1,6 @@
 from pathlib import Path
 
 from datachain.cli.commands.storage.base import CredentialBasedFileHandler
-from datachain.error import DataChainError
 from datachain.lib.dc.storage import read_storage
 
 
@@ -86,12 +85,12 @@ class LocalCredentialsBasedFileHandler(CredentialBasedFileHandler):
         destination_path: str,
         file_paths: list[str],  # {destination_path: source}
     ):
-        from datachain.remote.storages import get_studio_client
+        from datachain.remote.studio import StudioClient, is_token_set
 
-        try:
-            studio_client = get_studio_client(self.args.team)
-        except DataChainError:
+        if not is_token_set():
             return
+
+        studio_client = StudioClient(team=self.args.team)
 
         studio_client.save_activity_logs(
             destination_path,
@@ -103,12 +102,11 @@ class LocalCredentialsBasedFileHandler(CredentialBasedFileHandler):
         destination_path: str,
         file_paths: dict[str, tuple[str, int]],  # {old_path: (new_path, size)},
     ):
-        from datachain.remote.storages import get_studio_client
+        from datachain.remote.studio import StudioClient, is_token_set
 
-        try:
-            studio_client = get_studio_client(self.args.team)
-        except DataChainError:
+        if not is_token_set():
             return
+        studio_client = StudioClient(team=self.args.team)
 
         moved_paths = [(dst, src, size) for dst, (src, size) in file_paths.items()]
 

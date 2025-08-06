@@ -7,21 +7,10 @@ import requests
 
 from datachain.cli.commands.storage.utils import build_file_paths, validate_upload_args
 from datachain.error import DataChainError
+from datachain.remote.studio import StudioClient
 
 if TYPE_CHECKING:
     from fsspec import AbstractFileSystem
-
-    from datachain.remote.studio import StudioClient
-
-
-def get_studio_client(team: Optional[str] = None):
-    from datachain.config import Config
-    from datachain.remote.studio import StudioClient
-
-    if Config().read().get("studio", {}).get("token"):
-        return StudioClient(team=team)
-
-    raise DataChainError("Not logged in to Studio. Log in with 'datachain auth login'.")
 
 
 def upload_to_storage(
@@ -31,7 +20,7 @@ def upload_to_storage(
     recursive: bool = False,
     local_fs: "AbstractFileSystem" = None,
 ):
-    studio_client = get_studio_client(team)
+    studio_client = StudioClient(team=team)
 
     is_dir = validate_upload_args(source_path, recursive, local_fs)
     file_paths = build_file_paths(source_path, destination_path, local_fs, is_dir)
@@ -55,9 +44,9 @@ def download_from_storage(
     team: Optional[str] = None,
     local_fs: "AbstractFileSystem" = None,
 ):
-    studio_client = get_studio_client(team)
+    studio_client = StudioClient(team=team)
     response = studio_client.download_url(source_path)
-    if not response.ok:
+    if not response.ok or not response.data:
         raise DataChainError(response.message)
 
     url = response.data.get("url")
@@ -93,7 +82,7 @@ def copy_inside_storage(
     team: Optional[str] = None,
     recursive: bool = False,
 ):
-    client = get_studio_client(team)
+    client = StudioClient(team=team)
 
     response = client.copy_storage_file(
         source_path,

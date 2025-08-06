@@ -73,9 +73,9 @@ class StudioAuthenticatedFileHandler(CredentialBasedFileHandler):
         )
 
     def rm(self):
-        from datachain.remote.storages import get_studio_client
+        from datachain.remote.studio import StudioClient
 
-        client = get_studio_client(self.args.team)
+        client = StudioClient(team=self.args.team)
         response = client.delete_storage_file(
             self.args.path,
             recursive=self.args.recursive,
@@ -89,9 +89,9 @@ class StudioAuthenticatedFileHandler(CredentialBasedFileHandler):
         print(f"Deleted {self.args.path}")
 
     def mv(self):
-        from datachain.remote.storages import get_studio_client
+        from datachain.remote.studio import StudioClient
 
-        client = get_studio_client(self.args.team)
+        client = StudioClient(team=self.args.team)
         response = client.move_storage_file(
             self.args.path,
             self.args.new_path,
