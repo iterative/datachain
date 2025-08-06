@@ -1707,12 +1707,13 @@ class DatasetQuery:
                     indirect=False,
                 ):
                     if dep:
-                        dep_project = self.catalog.metastore.get_project(
-                            dep.project, dep.namespace
-                        )
                         dependencies.add(
                             (
-                                self.catalog.get_dataset(dep.name, dep_project),
+                                self.catalog.get_dataset(
+                                    dep.name,
+                                    namespace_name=dep.namespace,
+                                    project_name=dep.project,
+                                ),
                                 dep.version,
                             )
                         )
@@ -1754,7 +1755,11 @@ class DatasetQuery:
             if (
                 name
                 and version
-                and self.catalog.get_dataset(name, project).has_version(version)
+                and self.catalog.get_dataset(
+                    name,
+                    namespace_name=project.namespace.name,
+                    project_name=project.name,
+                ).has_version(version)
             ):
                 raise RuntimeError(f"Dataset {name} already has version {version}")
         except DatasetNotFoundError:
@@ -1808,11 +1813,15 @@ class DatasetQuery:
                 # overriding dependencies
                 self.dependencies = set()
                 for dep in dependencies:
-                    dep_project = self.catalog.metastore.get_project(
-                        dep.project, dep.namespace
-                    )
                     self.dependencies.add(
-                        (self.catalog.get_dataset(dep.name, dep_project), dep.version)
+                        (
+                            self.catalog.get_dataset(
+                                dep.name,
+                                namespace_name=dep.namespace,
+                                project_name=dep.project,
+                            ),
+                            dep.version,
+                        )
                     )
 
             self._add_dependencies(dataset, version)  # type: ignore [arg-type]
