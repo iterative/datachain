@@ -12,12 +12,15 @@ class LocalCredentialsBasedFileHandler(CredentialBasedFileHandler):
         source_path = self.args.source_path
         destination_path = self.args.destination_path
         destination_cls = Client.get_implementation(destination_path)
+
         source_cls = Client.get_implementation(source_path)
         source_fs = source_cls.create_fs()
+        _, relative_to = source_cls.split_url(source_path)
 
         update = self.args.update
         if source_cls.protocol == "file":
             update = True
+            relative_to = None
 
         info = source_fs.info(source_path)
         is_file = info["type"] == "file"
@@ -29,7 +32,9 @@ class LocalCredentialsBasedFileHandler(CredentialBasedFileHandler):
         file_paths = {}
 
         if not is_file:
-            chain.to_storage(destination_path, placement="normpath")
+            chain.to_storage(
+                destination_path, placement="normpath", relative_to=relative_to
+            )
 
         for (file,) in chain.to_iter("file"):
             if is_file:
@@ -40,7 +45,9 @@ class LocalCredentialsBasedFileHandler(CredentialBasedFileHandler):
                 )
                 file.save(dst)
             else:
-                dst = file.get_destination_path(destination_path, "normpath")
+                dst = file.get_destination_path(
+                    destination_path, "normpath", relative_to=relative_to
+                )
             _, dst_path = destination_cls.split_url(str(dst))
             file_paths[dst_path] = file.size
 

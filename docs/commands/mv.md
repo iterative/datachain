@@ -1,6 +1,6 @@
 # mv
 
-Move storage files and directories through Studio.
+Move storage files and directories in clouds or local filesystem.
 
 ## Synopsis
 
@@ -11,7 +11,7 @@ usage: datachain mv [-h] [-v] [-q] [--recursive]
 
 ## Description
 
-This command moves files and directories within storage. The move operation is performed within the same bucket - you cannot move files between different buckets. The command supports both individual files and directories, with the `--recursive` flag required for moving directories.
+This command moves files and directories within storage. The command supports both individual files and directories, with the `--recursive` flag required for moving directories.
 
 ## Arguments
 
@@ -21,7 +21,7 @@ This command moves files and directories within storage. The move operation is p
 ## Options
 
 * `--recursive` - Move recursively
-* `--team TEAM` - Team name to move storage contents from
+* `--team TEAM` - Team name to use the credentials from. (Default: from config)
 * `-s`, `--studio-cloud-auth` - Use credentials from Studio for cloud operations (Default: False)
 * `-h`, `--help` - Show the help message and exit
 * `-v`, `--verbose` - Be verbose
@@ -30,6 +30,11 @@ This command moves files and directories within storage. The move operation is p
 ## Examples
 
 The command supports moving files and directories within the same bucket:
+
+## Notes
+* When using Studio cloud auth mode, you must be authenticated with `datachain auth login` before using it
+* The default mode operates directly with storage providers
+* **Warning**: This is a destructive operation. Always double-check the path before executing the command
 
 ### Move Single File
 

@@ -169,7 +169,7 @@ def add_storage_parser(subparsers, parent_parser) -> None:
     storage_cp_parser.add_argument(
         "--team",
         action="store",
-        help="Team name to copy storage contents to",
+        help="Team name to use the credentials from.",
     )
 
     storage_cp_parser.add_argument(
@@ -211,7 +211,7 @@ def add_storage_parser(subparsers, parent_parser) -> None:
     mv_parser.add_argument(
         "--team",
         action="store",
-        help="Team name to move storage contents from",
+        help="Team name to use the credentials from.",
     )
 
     mv_parser.add_argument(
@@ -242,7 +242,7 @@ def add_storage_parser(subparsers, parent_parser) -> None:
     rm_parser.add_argument(
         "--team",
         action="store",
-        help="Team name to delete storage contents from",
+        help="Team name to use the credentials from.",
     )
     rm_parser.add_argument(
         "-s",

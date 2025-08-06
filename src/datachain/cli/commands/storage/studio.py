@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from datachain.client.fsspec import Client
 
 
-class StorageCredentialFileHandler(CredentialBasedFileHandler):
+class StudioAuthenticatedFileHandler(CredentialBasedFileHandler):
     def cp(self):
         from datachain.client.fsspec import Client
 

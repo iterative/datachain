@@ -14,6 +14,12 @@ usage: datachain cp [-h] [-v] [-q] [-r] [--team TEAM]
 
 This command copies files and directories between local and/or remote storage. This uses the credentials in your system by default or can use the cloud authentication from Studio.
 
+The command supports two main modes of operation:
+
+- By default, the command operates directly with clouds using credentials in your system, supporting various copy scenarios between local and remote storage.
+- When using `-s` or `--studio-cloud-auth` flag, the command uses credentials from Studio for cloud operations. This mode provides enhanced authentication and access control for cloud storage operations.
+
+
 ## Arguments
 
 * `source_path` - Path to the source file or directory to copy
@@ -22,35 +28,20 @@ This command copies files and directories between local and/or remote storage. T
 ## Options
 
 * `-r`, `-R`, `--recursive` - Copy directories recursively
-* `--team TEAM` - Team name to use the credentials from.
+* `--team TEAM` - Team name to use the credentials from. (Default: from config)
 * `-s`, `--studio-cloud-auth` - Use credentials from Studio for cloud operations (Default: False)
 * `--update` - Update cached list of files for the source when downloading from cloud using local credentials.
 * `-h`, `--help` - Show the help message and exit
 * `-v`, `--verbose` - Be verbose
 * `-q`, `--quiet` - Be quiet
 
-## Copy Operations
 
-The command supports two main modes of operation:
+## Notes
+* When using Studio cloud auth mode, you must be authenticated with `datachain auth login` before using it
+* The default mode operates directly with storage providers
 
-### Default Mode
-By default, the command operates directly with clouds using credentials in ypur system, supporting various copy scenarios between local and remote storage.
-
-### Studio Cloud Auth Mode
-When using `-s` or `--studio-cloud-auth` flag, the command uses credentials from Studio for cloud operations. This mode provides enhanced authentication and access control for cloud storage operations.
-
-## Supported Storage Protocols
-
-The command supports the following storage protocols:
-- **Local file system**: Direct paths (e.g., `/path/to/directory` or `./relative/path`)
-- **AWS S3**: `s3://bucket-name/path`
-- **Google Cloud Storage**: `gs://bucket-name/path`
-- **Azure Blob Storage**: `az://container-name/path`
 
 ## Examples
-
-The command automatically determines the operation type based on the source and destination protocols:
-
 ### Local to Local
 
 **Operation**: Direct local file system copy
@@ -115,15 +106,3 @@ datachain cp gs://my-bucket/data/file.py gs://my-bucket/archive/file.py
 # Copy within same bucket with Studio cloud auth
 datachain cp gs://my-bucket/data/file.py gs://my-bucket/archive/file.py --studio-cloud-auth
 ```
-
-### Additional Examples
-
-```bash
-# Copy with specific team:
-datachain cp -s --team other-team /path/to/file.txt s3://my-bucket/data/file.txt
-```
-
-
-## Notes
-* When using Studio cloud auth mode, you must be authenticated with `datachain auth login` before using it
-* The default mode operates directly with storage providers

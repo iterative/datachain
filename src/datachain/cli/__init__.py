@@ -115,10 +115,10 @@ def handle_command(args, catalog, client_config) -> int:
     return 1
 
 
-def _get_storage_implementation(args: "Namespace", catalog: "Catalog"):
+def _get_file_handler(args: "Namespace", catalog: "Catalog"):
     from datachain.cli.commands.storage import (
         LocalCredentialsBasedFileHandler,
-        StorageCredentialFileHandler,
+        StudioAuthenticatedFileHandler,
     )
     from datachain.config import Config
 
@@ -126,25 +126,25 @@ def _get_storage_implementation(args: "Namespace", catalog: "Catalog"):
     token = config.get("token")
     studio = False if not token else args.studio_cloud_auth
     return (
-        StorageCredentialFileHandler(args, catalog)
+        StudioAuthenticatedFileHandler(args, catalog)
         if studio
         else LocalCredentialsBasedFileHandler(args, catalog)
     )
 
 
 def handle_cp_command(args, catalog):
-    storage_implementation = _get_storage_implementation(args, catalog)
-    return storage_implementation.cp()
+    file_handler = _get_file_handler(args, catalog)
+    return file_handler.cp()
 
 
 def handle_mv_command(args, catalog):
-    storage_implementation = _get_storage_implementation(args, catalog)
-    return storage_implementation.mv()
+    file_handler = _get_file_handler(args, catalog)
+    return file_handler.mv()
 
 
 def handle_rm_command(args, catalog):
-    storage_implementation = _get_storage_implementation(args, catalog)
-    return storage_implementation.rm()
+    file_handler = _get_file_handler(args, catalog)
+    return file_handler.rm()
 
 
 def handle_clone_command(args, catalog):
