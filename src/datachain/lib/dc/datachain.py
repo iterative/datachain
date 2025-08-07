@@ -183,6 +183,7 @@ class DataChain:
         self._delta_result_on: Optional[Union[str, Sequence[str]]] = None
         self._delta_compare: Optional[Union[str, Sequence[str]]] = None
         self._delta_retry: Optional[Union[bool, str]] = None
+        self._delta_unsafe = False
 
     def __repr__(self) -> str:
         """Return a string representation of the chain."""
@@ -223,6 +224,11 @@ class DataChain:
     def delta(self) -> bool:
         """Returns True if this chain is ran in "delta" update mode"""
         return self._delta
+
+    def delta_unsafe(self) -> "Self":
+        cloned = self.clone()
+        cloned._delta_unsafe = True
+        return cloned
 
     @property
     def schema(self) -> dict[str, DataType]:
