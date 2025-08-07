@@ -325,6 +325,7 @@ class DataChain:
         namespace: Optional[str] = None,
         project: Optional[str] = None,
         batch_rows: Optional[int] = None,
+        batch_mb: Optional[float] = None,
     ) -> "Self":
         """Change settings for chain.
 
@@ -344,7 +345,8 @@ class DataChain:
             project : project name.
             batch_rows : row limit per insert to balance speed and memory usage.
                       (default=2000)
-
+            batch_mb : memory limit per insert to balance speed and memory usage.
+                      (default=1000)
         Example:
             ```py
             chain = (
@@ -367,6 +369,7 @@ class DataChain:
                 namespace,
                 project,
                 batch_rows,
+                batch_mb,
             )
         )
         return self._evolve(settings=settings, _sys=sys)
@@ -721,7 +724,9 @@ class DataChain:
 
         return self._evolve(
             query=self._query.add_signals(
-                udf_obj.to_udf_wrapper(self._settings.batch_rows),
+                udf_obj.to_udf_wrapper(
+                    self._settings.batch_rows, self._settings.batch_mb
+                ),
                 **self._settings.to_dict(),
             ),
             signal_schema=self.signals_schema | udf_obj.output,
@@ -759,7 +764,9 @@ class DataChain:
             udf_obj.prefetch = prefetch
         return self._evolve(
             query=self._query.generate(
-                udf_obj.to_udf_wrapper(self._settings.batch_rows),
+                udf_obj.to_udf_wrapper(
+                    self._settings.batch_rows, self._settings.batch_mb
+                ),
                 **self._settings.to_dict(),
             ),
             signal_schema=udf_obj.output,
@@ -895,7 +902,9 @@ class DataChain:
         udf_obj = self._udf_to_obj(Aggregator, func, params, output, signal_map)
         return self._evolve(
             query=self._query.generate(
-                udf_obj.to_udf_wrapper(self._settings.batch_rows),
+                udf_obj.to_udf_wrapper(
+                    self._settings.batch_rows, self._settings.batch_mb
+                ),
                 partition_by=processed_partition_by,
                 **self._settings.to_dict(),
             ),
@@ -944,7 +953,9 @@ class DataChain:
 
         return self._evolve(
             query=self._query.add_signals(
-                udf_obj.to_udf_wrapper(self._settings.batch_rows, batch=batch),
+                udf_obj.to_udf_wrapper(
+                    self._settings.batch_rows, self._settings.batch_mb, batch=batch
+                ),
                 **self._settings.to_dict(),
             ),
             signal_schema=self.signals_schema | udf_obj.output,

@@ -18,6 +18,7 @@ class Settings:
         namespace=None,
         project=None,
         batch_rows=None,
+        batch_mb=None,
     ):
         self._cache = cache
         self.parallel = parallel
@@ -26,7 +27,19 @@ class Settings:
         self.prefetch = prefetch
         self.namespace = namespace
         self.project = project
-        self._chunk_rows = batch_rows
+        self._batch_rows = batch_rows
+        self._batch_mb = batch_mb
+
+        if batch_mb is not None and not isinstance(batch_mb, (float, int)):
+            raise SettingsError(
+                "'batch_mb' argument must be float or None"
+                f", {batch_mb.__class__.__name__} was given"
+            )
+
+        if batch_mb is not None and batch_mb <= 0:
+            raise SettingsError(
+                f"'batch_mb' argument must be positive float, {batch_mb} was given"
+            )
 
         if not isinstance(cache, bool) and cache is not None:
             raise SettingsError(
@@ -78,7 +91,11 @@ class Settings:
 
     @property
     def batch_rows(self):
-        return self._chunk_rows if self._chunk_rows is not None else DEFAULT_CHUNK_ROWS
+        return self._batch_rows if self._batch_rows is not None else DEFAULT_CHUNK_ROWS
+
+    @property
+    def batch_mb(self):
+        return self._batch_mb
 
     def to_dict(self):
         res = {}
@@ -94,8 +111,10 @@ class Settings:
             res["namespace"] = self.namespace
         if self.project is not None:
             res["project"] = self.project
-        if self._chunk_rows is not None:
-            res["batch_rows"] = self._chunk_rows
+        if self._batch_rows is not None:
+            res["batch_rows"] = self._batch_rows
+        if self._batch_mb is not None:
+            res["batch_mb"] = self._batch_mb
         return res
 
     def add(self, settings: "Settings"):
@@ -107,5 +126,7 @@ class Settings:
         self.project = settings.project or self.project
         if settings.prefetch is not None:
             self.prefetch = settings.prefetch
-        if settings._chunk_rows is not None:
-            self._chunk_rows = settings._chunk_rows
+        if settings._batch_rows is not None:
+            self._batch_rows = settings._batch_rows
+        if settings._batch_mb is not None:
+            self._batch_mb = settings._batch_mb
