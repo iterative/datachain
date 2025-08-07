@@ -5,6 +5,7 @@ import os
 import pickle
 import posixpath
 import re
+import sys
 import uuid
 from collections.abc import Iterator
 from datetime import datetime, timedelta, timezone
@@ -2424,8 +2425,9 @@ def test_agg_sample(catalog_tmpfile, parallel, sample):
 
 def test_batch_for_map(test_session):
     # Create a chain with batch settings
+    batch_mb = sys.getsizeof(1) / 1024 * 10
     chain = dc.read_values(x=list(range(100)), session=test_session)
-    chain_with_settings = chain.settings(batch_rows=15)
+    chain_with_settings = chain.settings(batch_rows=15, batch_mb=batch_mb)
 
     def add_one(x):
         return x + 1

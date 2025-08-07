@@ -8,6 +8,7 @@ import random
 import re
 import sys
 import time
+import weakref
 from collections.abc import Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from datetime import date, datetime, timezone
@@ -19,6 +20,7 @@ import platformdirs
 from dateutil import tz
 from dateutil.parser import isoparse
 from pydantic import BaseModel
+from pympler import asizeof
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -26,6 +28,7 @@ if TYPE_CHECKING:
 
 
 DEFAULT_CHUNK_ROWS = 2000
+MEMORY_USAGE_THRESHOLD = 80
 
 logger = logging.getLogger("datachain")
 
@@ -229,16 +232,27 @@ _T_co = TypeVar("_T_co", covariant=True)
 def _dynamic_batched_core(
     iterable: Iterable[_T_co],
     batch_rows: int,
+    batch_mb: Optional[float] = None,
 ) -> Iterator[list[_T_co]]:
     """Core batching logic that yields lists."""
 
     batch: list[_T_co] = []
+    memory_tracker = MemoryTracker() if batch_mb else None
+    total_size = 0
 
-    for item in iterable:
-        # Check if adding this item would exceed limits
+    for i, item in enumerate(iterable):
+        if memory_tracker and batch_mb:
+            item_size = memory_tracker.get_size(item)
+            total_size += item_size
+            if total_size > batch_mb or memory_tracker.crosses_threshold(i):
+                yield batch
+                batch = []
+                total_size = 0
+
         if len(batch) >= batch_rows and batch:  # Yield current batch if we have one
             yield batch
             batch = []
+            total_size = 0
 
         batch.append(item)
 
@@ -247,23 +261,30 @@ def _dynamic_batched_core(
         yield batch
 
 
-def batched(iterable: Iterable[_T_co], batch_rows: int) -> Iterator[tuple[_T_co, ...]]:
+def batched(
+    iterable: Iterable[_T_co], batch_rows: int, batch_mb: Optional[float] = None
+) -> Iterator[tuple[_T_co, ...]]:
     """
     Batch data into tuples of length batch_rows .
     The last batch may be shorter.
     """
-    yield from (tuple(batch) for batch in _dynamic_batched_core(iterable, batch_rows))
+    yield from (
+        tuple(batch) for batch in _dynamic_batched_core(iterable, batch_rows, batch_mb)
+    )
 
 
 def batched_it(
     iterable: Iterable[_T_co],
     batch_rows: int = DEFAULT_CHUNK_ROWS,
+    batch_mb: Optional[float] = None,
 ) -> Iterator[Iterator[_T_co]]:
     """
     Batch data into iterators with dynamic sizing
     based on row count and memory usage.
     """
-    yield from (iter(batch) for batch in _dynamic_batched_core(iterable, batch_rows))
+    yield from (
+        iter(batch) for batch in _dynamic_batched_core(iterable, batch_rows, batch_mb)
+    )
 
 
 def flatten(items):
@@ -531,3 +552,41 @@ def safe_closing(thing: T) -> Iterator[T]:
     finally:
         if hasattr(thing, "close"):
             thing.close()
+
+
+class MemoryTracker:
+    def __init__(self):
+        self._type_cache: dict[type, int] = {}
+        self._object_cache = weakref.WeakValueDictionary()
+        self._cache_size = 1024
+
+    def get_size(self, obj: Any) -> int:
+        if obj is None:
+            return 0
+
+        obj_id = id(obj)
+        if obj_id in self._object_cache:
+            return self._object_cache[obj_id]
+
+        obj_type = type(obj)
+        if obj_type in self._type_cache:
+            return self._type_cache[obj_type]
+
+        size = asizeof.asizeof(obj)
+        self._cache_result(obj, obj_id, size)
+        return size
+
+    def crosses_threshold(self, i: int) -> bool:
+        import psutil
+
+        return i % 100 == 0 and psutil.virtual_memory().percent > MEMORY_USAGE_THRESHOLD
+
+    def _cache_result(self, obj: Any, obj_id: int, size: int) -> None:
+        if len(self._object_cache) >= self._cache_size:
+            self._object_cache.clear()
+
+        try:
+            self._object_cache[obj_id] = size
+        except TypeError:
+            pass  # Exclude objects whose weak ref is not available.
+        self._type_cache[type(obj)] = size
