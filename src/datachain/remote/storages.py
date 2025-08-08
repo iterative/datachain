@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 
 import requests
 
+from datachain.asyn import AsyncMapper
 from datachain.cli.commands.storage.utils import build_file_paths, validate_upload_args
 from datachain.error import DataChainError
 from datachain.remote.studio import StudioClient
@@ -26,13 +27,18 @@ def upload_to_storage(
     file_paths = build_file_paths(source_path, destination_path, local_fs, is_dir)
     response = _get_presigned_urls(studio_client, destination_path, file_paths)
 
-    for dest_path, src_path in file_paths.items():
-        _upload_single_file(
-            dest_path,
-            src_path,
-            response,
-            local_fs,
+    upload_tasks = [(dest_path, src_path) for dest_path, src_path in file_paths.items()]
+
+    async def upload_file_async(file_info):
+        dest_path, src_path = file_info
+        return await mapper.to_thread(
+            _upload_single_file, dest_path, src_path, response, local_fs
         )
+
+    mapper = AsyncMapper(upload_file_async, upload_tasks, workers=10)
+
+    for _ in mapper:
+        pass  # Just iterate to trigger all uploads
 
     print(f"Successfully uploaded {len(file_paths)} file(s)")
     return file_paths
@@ -153,7 +159,6 @@ def _upload_single_file(
     response: dict,
     local_fs: "AbstractFileSystem",
 ):
-    """Upload a single file using the appropriate method."""
     urls = response.get("urls", {})
     headers = response.get("headers", {})
     method = response.get("method", "PUT")
