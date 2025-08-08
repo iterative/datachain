@@ -77,10 +77,22 @@ UDFObjT = TypeVar("UDFObjT", bound=UDFBase)
 DEFAULT_PARQUET_CHUNK_SIZE = 100_000
 
 if TYPE_CHECKING:
+    import sqlite3
+
     import pandas as pd
     from typing_extensions import ParamSpec, Self
 
     P = ParamSpec("P")
+
+    ConnectionType = Union[
+        str,
+        sqlalchemy.engine.URL,
+        sqlalchemy.engine.interfaces.Connectable,
+        sqlalchemy.engine.Engine,
+        sqlalchemy.engine.Connection,
+        "sqlalchemy.orm.Session",
+        sqlite3.Connection,
+    ]
 
 
 T = TypeVar("T", bound="DataChain")
@@ -2275,6 +2287,101 @@ class DataChain:
                 provided as the destination path.
         """
         self.to_json(path, fs_kwargs, include_outer_list=False)
+
+    def to_database(
+        self,
+        table_name: str,
+        connection: "ConnectionType",
+        *,
+        batch_size: int = 10000,
+        on_conflict: Optional[str] = None,
+    ) -> None:
+        """Save chain to a database table using a given database connection.
+
+        This method exports all DataChain records to a database table, creating the
+        table if it doesn't exist and appending data if it does. The table schema
+        is automatically inferred from the DataChain's signal schema.
+
+        Parameters:
+            table_name: Name of the database table to create/write to.
+            connection: Database connection. Supports:
+                - SQLAlchemy Engine, Connection, or Session objects
+                - Connection strings (e.g., "postgresql://user:pass@host/db")
+                - sqlite3.Connection objects
+                Note: For SQLAlchemy objects, you're responsible for engine disposal
+                and connection closure. String connections are managed automatically.
+            batch_size: Number of rows to insert per batch for optimal performance.
+                Larger batches are faster but use more memory. Default: 10,000.
+            on_conflict: Strategy for handling duplicate rows (requires table
+                constraints):
+                - None: Raise error on conflict (default)
+                - "ignore": Skip duplicate rows silently
+                - "update": Update existing rows with new values
+
+        Examples:
+            Basic usage with PostgreSQL:
+            ```py
+            import sqlalchemy as sa
+            import datachain as dc
+
+            chain = dc.read_storage("s3://my-bucket/")
+            engine = sa.create_engine("postgresql://user:pass@localhost/mydb")
+            chain.to_database("files_table", engine)
+            ```
+
+            Using SQLite with connection string:
+            ```py
+            chain.to_database("my_table", "sqlite:///data.db")
+            ```
+
+            Handling conflicts (requires PRIMARY KEY or UNIQUE constraints):
+            ```py
+            # Skip duplicates
+            chain.to_database("my_table", engine, on_conflict="ignore")
+
+            # Update existing records
+            chain.to_database("my_table", engine, on_conflict="update")
+            ```
+
+            Large dataset with custom batch size:
+            ```py
+            chain.to_database("big_table", engine, batch_size=50000)
+            ```
+
+            Working with different databases:
+            ```py
+            # MySQL
+            mysql_engine = sa.create_engine("mysql+pymysql://user:pass@host/db")
+            chain.to_database("mysql_table", mysql_engine)
+
+            # SQLite in-memory
+            chain.to_database("temp_table", "sqlite:///:memory:")
+            ```
+
+        Notes:
+            - Table creation and all inserts are wrapped in a single transaction
+            - If any error occurs, the entire operation is rolled back
+            - Data is streamed from DataChain and inserted in batches for memory
+              efficiency
+            - Column names and types are derived from the DataChain signal schema
+            - Conflict resolution requires existing PRIMARY KEY or UNIQUE constraints
+            - Supported databases: PostgreSQL, MySQL, SQLite, and others via SQLAlchemy
+            - For large datasets, consider adjusting batch_size based on available
+              memory
+
+        Raises:
+            ValueError: If on_conflict is not None, "ignore", or "update"
+            SQLAlchemy exceptions: For database connection or constraint violations
+        """
+        from .database import to_database
+
+        to_database(
+            self,
+            table_name,
+            connection,
+            batch_size=batch_size,
+            on_conflict=on_conflict,
+        )
 
     @classmethod
     def from_records(
