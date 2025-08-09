@@ -55,9 +55,14 @@ def _connect(
             # do not close the connection, as it is managed by the caller
             yield connection
         elif isinstance(connection, sqlalchemy.orm.Session):
-            # For Session objects, we need to use the underlying connection
+            # For Session objects, get the underlying bind (Engine or Connection)
             # Sessions don't support DDL operations directly
-            yield connection.connection()
+            bind = connection.get_bind()
+            if isinstance(bind, sqlalchemy.Engine):
+                yield stack.enter_context(bind.connect())
+            else:
+                # bind is already a Connection
+                yield bind
         else:
             raise TypeError(f"Unsupported connection type: {type(connection).__name__}")
 

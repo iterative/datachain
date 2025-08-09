@@ -124,7 +124,6 @@ def test_to_database_with_complex_types(connection, test_session):
 
     assert len(rows) == 3
 
-    # Verify the table schema: DataModel fields are flattened with double underscores
     engine = _get_engine_from_connection(connection)
     with engine.connect() as conn:
         result = conn.execute(sqlalchemy.text("PRAGMA table_info(user_profiles)"))
@@ -133,13 +132,11 @@ def test_to_database_with_complex_types(connection, test_session):
     expected_columns = ["id", "profile__name", "profile__settings", "profile__tags"]
     assert columns == expected_columns
 
-    # Verify a sample row to confirm data structure and JSON serialization
-    # Complex types (dict, list) are serialized as JSON strings
     first_row = rows[0]
     assert first_row[0] == 1
     assert first_row[1] == "Alice"
     assert first_row[2] == '{"theme": "dark", "notifications": true}'
-    assert first_row[3] == '["admin","vip"]'  # JSON array (no spaces after commas)
+    assert first_row[3] == '["admin","vip"]'
 
 
 def test_to_database_large_dataset(connection, test_session):
