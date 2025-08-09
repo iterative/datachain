@@ -2306,17 +2306,17 @@ class DataChain:
 
         Parameters:
             table_name: Name of the database table to create/write to.
-            connection: Database connection. Supports:
-                - SQLAlchemy Engine, Connection, or Session objects
-                - Connection strings (e.g., "postgresql://user:pass@host/db")
-                - sqlite3.Connection objects
-                Note: For SQLAlchemy objects, you're responsible for engine disposal
-                and connection closure. String connections are managed automatically.
+            connection: SQLAlchemy connectable, str, or a sqlite3 connection
+                Using SQLAlchemy makes it possible to use any DB supported by that
+                library. If a DBAPI2 object, only sqlite3 is supported. The user is
+                responsible for engine disposal and connection closure for the
+                SQLAlchemy connectable; str connections are closed automatically.
             batch_size: Number of rows to insert per batch for optimal performance.
                 Larger batches are faster but use more memory. Default: 10,000.
             on_conflict: Strategy for handling duplicate rows (requires table
                 constraints):
-                - None: Raise error on conflict (default)
+                - None: Raise error (`sqlalchemy.exc.IntegrityError`) on conflict
+                  (default)
                 - "ignore": Skip duplicate rows silently
                 - "update": Update existing rows with new values
             column_mapping: Optional mapping to rename or skip columns:

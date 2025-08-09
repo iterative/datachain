@@ -124,7 +124,6 @@ def test_to_database_with_complex_types(connection, test_session):
 
     assert len(rows) == 3
 
-    engine = _get_engine_from_connection(connection)
     with engine.connect() as conn:
         result = conn.execute(sqlalchemy.text("PRAGMA table_info(user_profiles)"))
         columns = [row[1] for row in result.fetchall()]
@@ -704,6 +703,25 @@ def test_to_database_with_null_values(connection, test_session, warehouse):
     assert rows[1] == (2, default_str_value, 30)
     assert rows[2] == (3, "Charlie", default_int_value)
     assert rows[3] == (4, "Diana", 28)
+
+
+def test_to_database_column_mapping_collision(connection, test_session):
+    """Test that providing mapping keys which normalize to the same DB name raises."""
+
+    class Nested(dc.DataModel):
+        data: int
+
+    chain = dc.read_values(
+        id=[1, 2],
+        nested=[Nested(data=10), Nested(data=20)],
+        session=test_session,
+    )
+
+    # Both keys normalize to 'nested__data'
+    column_mapping = {"nested.data": "col1", "nested__data": "col2"}
+
+    with pytest.raises(ValueError, match="Column mapping collision"):
+        chain.to_database("collision_table", connection, column_mapping=column_mapping)
 
 
 def test_to_database_table_cleanup_on_map_exception(db_engine, test_session):

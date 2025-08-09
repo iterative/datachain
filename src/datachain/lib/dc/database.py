@@ -107,7 +107,7 @@ def to_database(
 
         # Check if table already exists to determine if we should clean up on error.
         inspector = sqlalchemy.inspect(conn)
-        assert inspector
+        assert inspector  # to satisfy mypy
         table_existed_before = table_name in inspector.get_table_names()
 
         try:
@@ -128,7 +128,9 @@ def to_database(
             raise
 
 
-def _normalize_column_mapping(column_mapping):
+def _normalize_column_mapping(
+    column_mapping: dict[str, Optional[str]],
+) -> dict[str, Optional[str]]:
     """
     Convert column mapping keys from DataChain format (dots) to database format
     (double underscores).
@@ -140,17 +142,25 @@ def _normalize_column_mapping(column_mapping):
     if not column_mapping:
         return {}
 
-    normalized_mapping = {}
+    normalized_mapping: dict[str, Optional[str]] = {}
+    original_keys: dict[str, str] = {}
     for key, value in column_mapping.items():
         db_key = ColumnMeta.to_db_name(key)
+        if db_key in normalized_mapping:
+            prev = original_keys[db_key]
+            raise ValueError(
+                "Column mapping collision: multiple keys map to the same "
+                f"database column name '{db_key}': '{prev}' and '{key}'. "
+            )
         normalized_mapping[db_key] = value
+        original_keys[db_key] = key
 
     # If it's a defaultdict, preserve the default factory
     if hasattr(column_mapping, "default_factory"):
         from collections import defaultdict
 
         default_factory = column_mapping.default_factory
-        result = defaultdict(default_factory)
+        result: dict[str, Optional[str]] = defaultdict(default_factory)
         result.update(normalized_mapping)
         return result
 
