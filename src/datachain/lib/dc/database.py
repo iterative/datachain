@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, Any, Optional, Union
 
 import sqlalchemy
 
+DEFAULT_DATABASE_BATCH_SIZE = 10_000
+
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping, Sequence
 
@@ -63,7 +65,7 @@ def to_database(
     table_name: str,
     connection: "ConnectionType",
     *,
-    batch_size: int = 10000,
+    batch_size: int = DEFAULT_DATABASE_BATCH_SIZE,
     on_conflict: Optional[str] = None,
     column_mapping: Optional[dict[str, Optional[str]]] = None,
 ) -> None:

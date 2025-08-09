@@ -58,6 +58,7 @@ from datachain.query.schema import DEFAULT_DELIMITER, Column
 from datachain.sql.functions import path as pathfunc
 from datachain.utils import batched_it, inside_notebook, row_to_nested_dict
 
+from .database import DEFAULT_DATABASE_BATCH_SIZE
 from .utils import (
     DatasetMergeError,
     DatasetPrepareError,
@@ -2293,8 +2294,9 @@ class DataChain:
         table_name: str,
         connection: "ConnectionType",
         *,
-        batch_size: int = 10000,
+        batch_size: int = DEFAULT_DATABASE_BATCH_SIZE,
         on_conflict: Optional[str] = None,
+        column_mapping: Optional[dict[str, Optional[str]]] = None,
     ) -> None:
         """Save chain to a database table using a given database connection.
 
@@ -2317,6 +2319,10 @@ class DataChain:
                 - None: Raise error on conflict (default)
                 - "ignore": Skip duplicate rows silently
                 - "update": Update existing rows with new values
+            column_mapping: Optional mapping to rename or skip columns:
+                - Dict mapping DataChain column names to database column names
+                - Set values to None to skip columns entirely, or use `defaultdict` to
+                  skip all columns except those specified.
 
         Examples:
             Basic usage with PostgreSQL:
@@ -2334,6 +2340,16 @@ class DataChain:
             chain.to_database("my_table", "sqlite:///data.db")
             ```
 
+            Column mapping and renaming:
+            ```py
+            mapping = {
+                "user.id": "id",
+                "user.name": "name",
+                "user.password": None  # Skip this column
+            }
+            chain.to_database("users", engine, column_mapping=mapping)
+            ```
+
             Handling conflicts (requires PRIMARY KEY or UNIQUE constraints):
             ```py
             # Skip duplicates
@@ -2341,11 +2357,6 @@ class DataChain:
 
             # Update existing records
             chain.to_database("my_table", engine, on_conflict="update")
-            ```
-
-            Large dataset with custom batch size:
-            ```py
-            chain.to_database("big_table", engine, batch_size=50000)
             ```
 
             Working with different databases:
@@ -2357,21 +2368,6 @@ class DataChain:
             # SQLite in-memory
             chain.to_database("temp_table", "sqlite:///:memory:")
             ```
-
-        Notes:
-            - Table creation and all inserts are wrapped in a single transaction
-            - If any error occurs, the entire operation is rolled back
-            - Data is streamed from DataChain and inserted in batches for memory
-              efficiency
-            - Column names and types are derived from the DataChain signal schema
-            - Conflict resolution requires existing PRIMARY KEY or UNIQUE constraints
-            - Supported databases: PostgreSQL, MySQL, SQLite, and others via SQLAlchemy
-            - For large datasets, consider adjusting batch_size based on available
-              memory
-
-        Raises:
-            ValueError: If on_conflict is not None, "ignore", or "update"
-            SQLAlchemy exceptions: For database connection or constraint violations
         """
         from .database import to_database
 
@@ -2381,6 +2377,7 @@ class DataChain:
             connection,
             batch_size=batch_size,
             on_conflict=on_conflict,
+            column_mapping=column_mapping,
         )
 
     @classmethod

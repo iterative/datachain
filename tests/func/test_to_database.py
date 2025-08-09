@@ -8,7 +8,6 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 import datachain as dc
-from datachain.lib.dc.database import to_database
 
 
 @pytest.fixture
@@ -57,15 +56,12 @@ def connection(request):
 
 def test_basic_to_database(tmp_dir, connection):
     """Test basic functionality with actual DataChain data."""
-    # Create DataChain with sample data
     chain = dc.read_values(
         id=[1, 2, 3], name=["Alice", "Bob", "Charlie"], age=[25, 30, 35]
     )
 
-    # Export to database
-    to_database(chain, "users", connection)
+    chain.to_database("users", connection)
 
-    # Verify data was written
     engine = _get_engine_from_connection(connection)
     with engine.connect() as conn:
         result = conn.execute(text("SELECT * FROM users ORDER BY id")).fetchall()
@@ -77,13 +73,11 @@ def test_basic_to_database(tmp_dir, connection):
 
 def test_to_database_with_uri(db_uri):
     """Test basic functionality with URI connection string."""
-    # Create DataChain with sample data
     chain = dc.read_values(
         id=[1, 2, 3], name=["Alice", "Bob", "Charlie"], age=[25, 30, 35]
     )
 
-    # Export to database - this should complete without errors
-    to_database(chain, "users", db_uri)
+    chain.to_database("users", db_uri)
 
     # URI connections create isolated databases, so we can't verify externally
     # The absence of exceptions indicates success
@@ -119,7 +113,7 @@ def test_to_database_with_complex_types(connection, test_session):
         session=test_session,
     )
 
-    to_database(chain, "user_profiles", connection)
+    chain.to_database("user_profiles", connection)
 
     engine = _get_engine_from_connection(connection)
     with engine.connect() as conn:
@@ -129,7 +123,23 @@ def test_to_database_with_complex_types(connection, test_session):
         rows = result.fetchall()
 
     assert len(rows) == 3
-    # The exact format will depend on how DataModels are serialized to database
+
+    # Verify the table schema: DataModel fields are flattened with double underscores
+    engine = _get_engine_from_connection(connection)
+    with engine.connect() as conn:
+        result = conn.execute(sqlalchemy.text("PRAGMA table_info(user_profiles)"))
+        columns = [row[1] for row in result.fetchall()]
+
+    expected_columns = ["id", "profile__name", "profile__settings", "profile__tags"]
+    assert columns == expected_columns
+
+    # Verify a sample row to confirm data structure and JSON serialization
+    # Complex types (dict, list) are serialized as JSON strings
+    first_row = rows[0]
+    assert first_row[0] == 1
+    assert first_row[1] == "Alice"
+    assert first_row[2] == '{"theme": "dark", "notifications": true}'
+    assert first_row[3] == '["admin","vip"]'  # JSON array (no spaces after commas)
 
 
 def test_to_database_large_dataset(connection, test_session):
@@ -142,7 +152,7 @@ def test_to_database_large_dataset(connection, test_session):
         session=test_session,
     )
 
-    to_database(chain, "large_table", connection, batch_size=1000)
+    chain.to_database("large_table", connection, batch_size=1000)
 
     engine = _get_engine_from_connection(connection)
     with engine.connect() as conn:
@@ -168,7 +178,6 @@ def test_to_database_large_dataset(connection, test_session):
 
 def test_to_database_on_conflict_ignore(db_engine, test_session):
     """Test to_database with on_conflict='ignore' for duplicate handling."""
-    # Create table with primary key for conflict testing
     with db_engine.connect() as conn:
         with conn.begin():
             conn.execute(
@@ -187,7 +196,6 @@ def test_to_database_on_conflict_ignore(db_engine, test_session):
                 )
             )
 
-    # Create overlapping data
     conflict_chain = dc.read_values(
         id=[2, 3, 4, 5],  # 2 and 3 will conflict
         name=["Bob_Updated", "Charlie_Updated", "Diana", "Eve"],
@@ -195,10 +203,8 @@ def test_to_database_on_conflict_ignore(db_engine, test_session):
         session=test_session,
     )
 
-    # Insert with conflict resolution
-    to_database(conflict_chain, "conflict_test", db_engine, on_conflict="ignore")
+    conflict_chain.to_database("conflict_test", db_engine, on_conflict="ignore")
 
-    # Verify original data is preserved and new data added
     with db_engine.connect() as conn:
         result = conn.execute(
             sqlalchemy.text("SELECT * FROM conflict_test ORDER BY id")
@@ -215,7 +221,6 @@ def test_to_database_on_conflict_ignore(db_engine, test_session):
 
 def test_to_database_on_conflict_update(db_engine, test_session):
     """Test to_database with on_conflict='update' for duplicate handling."""
-    # First insert with primary key table
     with db_engine.connect() as conn:
         with conn.begin():
             conn.execute(
@@ -234,7 +239,6 @@ def test_to_database_on_conflict_update(db_engine, test_session):
                 )
             )
 
-    # Create overlapping data with updates
     update_chain = dc.read_values(
         id=[2, 3, 4, 5],  # 2 and 3 will update existing records
         name=["Bob_Updated", "Charlie_Updated", "Diana", "Eve"],
@@ -242,10 +246,8 @@ def test_to_database_on_conflict_update(db_engine, test_session):
         session=test_session,
     )
 
-    # Insert with conflict resolution
-    to_database(update_chain, "update_test", db_engine, on_conflict="update")
+    update_chain.to_database("update_test", db_engine, on_conflict="update")
 
-    # Verify data was updated and new data added
     with db_engine.connect() as conn:
         result = conn.execute(sqlalchemy.text("SELECT * FROM update_test ORDER BY id"))
         rows = result.fetchall()
@@ -260,7 +262,6 @@ def test_to_database_on_conflict_update(db_engine, test_session):
 
 def test_to_database_table_exists_different_schema(db_engine, test_session):
     """Test to_database when table exists but has different schema."""
-    # Create table with different schema
     with db_engine.connect() as conn:
         with conn.begin():
             conn.execute(
@@ -278,21 +279,18 @@ def test_to_database_table_exists_different_schema(db_engine, test_session):
                 )
             )
 
-    # Create DataChain with different schema
     chain = dc.read_values(
         id=[2, 3],
         name=["Alice", "Bob"],  # Different column name
         session=test_session,
     )
 
-    # This should raise an error due to schema mismatch
     with pytest.raises(sqlalchemy.exc.OperationalError):
-        to_database(chain, "schema_mismatch", db_engine)
+        chain.to_database("schema_mismatch", db_engine)
 
 
 def test_to_database_transaction_rollback_on_error(db_engine, test_session):
     """Test that transaction is rolled back when an exception occurs."""
-    # Create a table with strict constraints
     with db_engine.connect() as conn:
         with conn.begin():
             conn.execute(
@@ -304,14 +302,12 @@ def test_to_database_transaction_rollback_on_error(db_engine, test_session):
                 )
             """)
             )
-            # Insert some initial data
             conn.execute(
                 sqlalchemy.text(
                     "INSERT INTO strict_table VALUES (1, 'Initial', 'initial@test.com')"
                 )
             )
 
-    # Count initial records
     with db_engine.connect() as conn:
         initial_count = conn.execute(
             sqlalchemy.text("SELECT COUNT(*) FROM strict_table")
@@ -319,7 +315,6 @@ def test_to_database_transaction_rollback_on_error(db_engine, test_session):
 
     assert initial_count == 1
 
-    # Create DataChain with data that will cause constraint violation
     chain = dc.read_values(
         id=[2, 3, 4],
         name=["Alice", "Bob", "Charlie"],
@@ -328,9 +323,8 @@ def test_to_database_transaction_rollback_on_error(db_engine, test_session):
         session=test_session,
     )
 
-    # This should fail due to unique constraint violation
     with pytest.raises(sqlalchemy.exc.IntegrityError):
-        to_database(chain, "strict_table", db_engine)
+        chain.to_database("strict_table", db_engine)
 
     # Verify transaction was rolled back - no new records should be inserted
     with db_engine.connect() as conn:
@@ -349,7 +343,7 @@ def test_to_database_empty_chain(connection, test_session):
         session=test_session,
     )
 
-    to_database(chain, "empty_table", connection)
+    chain.to_database("empty_table", connection)
 
     engine = _get_engine_from_connection(connection)
     with engine.connect() as conn:
@@ -367,15 +361,12 @@ def test_to_database_column_mapping(connection, test_session):
         session=test_session,
     )
 
-    # Export with column mapping
     column_mapping = {"internal_id": "id", "full_name": "name"}
 
-    to_database(chain, "mapped_table", connection, column_mapping=column_mapping)
+    chain.to_database("mapped_table", connection, column_mapping=column_mapping)
 
-    # Verify the columns were mapped correctly
     engine = _get_engine_from_connection(connection)
     with engine.connect() as conn:
-        # Check that the new column names exist
         result = conn.execute(
             sqlalchemy.text("SELECT id, name FROM mapped_table ORDER BY id")
         )
@@ -397,7 +388,6 @@ def test_to_database_column_mapping_skip_columns(connection, test_session):
         session=test_session,
     )
 
-    # Export with column mapping, skipping age and internal_notes columns
     column_mapping = {
         "id": "user_id",
         "name": "full_name",
@@ -405,25 +395,22 @@ def test_to_database_column_mapping_skip_columns(connection, test_session):
         "internal_notes": None,  # Skip this column too
     }
 
-    to_database(
-        chain, "skipped_columns_table", connection, column_mapping=column_mapping
+    chain.to_database(
+        "skipped_columns_table", connection, column_mapping=column_mapping
     )
 
-    # Verify only mapped columns were exported
     engine = _get_engine_from_connection(connection)
     with engine.connect() as conn:
-        # Check column names in the table
         result = conn.execute(
             sqlalchemy.text("PRAGMA table_info(skipped_columns_table)")
         )
-        columns = [row[1] for row in result.fetchall()]  # Column names are in index 1
+        columns = [row[1] for row in result.fetchall()]
 
         assert "user_id" in columns
         assert "full_name" in columns
         assert "age" not in columns
         assert "internal_notes" not in columns
 
-        # Verify data
         result = conn.execute(
             sqlalchemy.text(
                 "SELECT user_id, full_name FROM skipped_columns_table ORDER BY user_id"
@@ -450,7 +437,6 @@ def test_to_database_column_mapping_defaultdict(connection, test_session):
         session=test_session,
     )
 
-    # Use defaultdict to skip all columns by default except explicitly mapped ones
     column_mapping = defaultdict(lambda: None)
     column_mapping.update(
         {
@@ -459,9 +445,8 @@ def test_to_database_column_mapping_defaultdict(connection, test_session):
         }
     )
 
-    to_database(chain, "defaultdict_table", connection, column_mapping=column_mapping)
+    chain.to_database("defaultdict_table", connection, column_mapping=column_mapping)
 
-    # Verify only explicitly mapped columns were exported
     engine = _get_engine_from_connection(connection)
     with engine.connect() as conn:
         result = conn.execute(sqlalchemy.text("PRAGMA table_info(defaultdict_table)"))
@@ -473,7 +458,6 @@ def test_to_database_column_mapping_defaultdict(connection, test_session):
         assert "internal_id" not in columns
         assert "secret_key" not in columns
 
-        # Verify data
         result = conn.execute(
             sqlalchemy.text(
                 "SELECT user_id, user_name FROM defaultdict_table ORDER BY user_id"
@@ -509,7 +493,6 @@ def test_to_database_column_mapping_defaultdict_with_datachain_format(
         session=test_session,
     )
 
-    # Use defaultdict with DataChain format (dots) for nested fields
     column_mapping = defaultdict(lambda: None)
     column_mapping.update(
         {
@@ -520,11 +503,10 @@ def test_to_database_column_mapping_defaultdict_with_datachain_format(
         }
     )
 
-    to_database(
-        chain, "defaultdict_datachain_table", connection, column_mapping=column_mapping
+    chain.to_database(
+        "defaultdict_datachain_table", connection, column_mapping=column_mapping
     )
 
-    # Verify only explicitly mapped columns were exported
     engine = _get_engine_from_connection(connection)
     with engine.connect() as conn:
         result = conn.execute(
@@ -540,7 +522,6 @@ def test_to_database_column_mapping_defaultdict_with_datachain_format(
         assert "nested_info__priority" not in columns
         assert "secret_field" not in columns
 
-        # Verify data
         result = conn.execute(
             sqlalchemy.text(
                 "SELECT user_id, user_name, info_value "
@@ -573,7 +554,6 @@ def test_to_database_column_mapping_complex_nested_names(connection, test_sessio
         session=test_session,
     )
 
-    # Map complex column names to simpler ones using DataChain format (dots)
     column_mapping = {
         "id": "id",
         "user_profile_name": "name",
@@ -582,11 +562,10 @@ def test_to_database_column_mapping_complex_nested_names(connection, test_sessio
         "nested_data.metadata": "data_meta",  # Use DataChain format with dots
     }
 
-    to_database(
-        chain, "complex_mapping_table", connection, column_mapping=column_mapping
+    chain.to_database(
+        "complex_mapping_table", connection, column_mapping=column_mapping
     )
 
-    # Verify the complex mappings worked
     engine = _get_engine_from_connection(connection)
     with engine.connect() as conn:
         result = conn.execute(
@@ -603,7 +582,6 @@ def test_to_database_column_mapping_complex_nested_names(connection, test_sessio
         assert "user_profile_name" not in columns
         assert "system_config_theme" not in columns
 
-        # Verify data was mapped correctly
         result = conn.execute(
             sqlalchemy.text(
                 "SELECT id, name, theme, data_value "
@@ -646,8 +624,8 @@ def test_to_database_column_mapping_datachain_format_backward_compatibility(
         "nested_data.config": "nested_cfg",
     }
 
-    to_database(
-        chain, "dots_format_table", connection, column_mapping=column_mapping_dots
+    chain.to_database(
+        "dots_format_table", connection, column_mapping=column_mapping_dots
     )
 
     # Test database format (double underscores) - this should also work
@@ -658,17 +636,14 @@ def test_to_database_column_mapping_datachain_format_backward_compatibility(
         "nested_data__config": "nested_cfg",
     }
 
-    to_database(
-        chain,
+    chain.to_database(
         "underscores_format_table",
         connection,
         column_mapping=column_mapping_underscores,
     )
 
-    # Verify both tables have the same structure and data
     engine = _get_engine_from_connection(connection)
     with engine.connect() as conn:
-        # Check dots format table
         result_dots = conn.execute(
             sqlalchemy.text(
                 "SELECT record_id, simple, nested_val FROM dots_format_table "
@@ -677,7 +652,6 @@ def test_to_database_column_mapping_datachain_format_backward_compatibility(
         )
         rows_dots = result_dots.fetchall()
 
-        # Check underscores format table
         result_underscores = conn.execute(
             sqlalchemy.text(
                 "SELECT record_id, simple, nested_val FROM underscores_format_table "
@@ -703,26 +677,7 @@ def test_to_database_invalid_on_conflict_value(connection, test_session):
     )
 
     with pytest.raises(ValueError, match="on_conflict must be 'ignore' or 'update'"):
-        to_database(chain, "test_table", connection, on_conflict="invalid")
-
-
-def test_to_database_unsupported_conflict_resolution_warning(test_session):
-    """Test warning is issued when conflict resolution is not supported."""
-    # This test would need a database that doesn't support conflict resolution
-    # For now, we'll document this behavior since SQLite supports it
-    # In a real test, you would use a database engine that doesn't support
-    # conflict resolution and check for warnings
-
-    # Create a simple chain for potential future use
-    chain = dc.read_values(
-        id=[1, 2, 3],
-        name=["Alice", "Bob", "Charlie"],
-        session=test_session,
-    )
-
-    # This test would be implemented with a non-supporting database
-    # For now we just verify the chain was created successfully
-    assert len(list(chain.to_iter())) == 3
+        chain.to_database("test_table", connection, on_conflict="invalid")
 
 
 def test_to_database_with_null_values(connection, test_session):
@@ -734,7 +689,7 @@ def test_to_database_with_null_values(connection, test_session):
         session=test_session,
     )
 
-    to_database(chain, "null_table", connection)
+    chain.to_database("null_table", connection)
 
     engine = _get_engine_from_connection(connection)
     with engine.connect() as conn:
@@ -753,11 +708,9 @@ def test_to_database_table_cleanup_on_map_exception(db_engine, test_session):
     during DataChain iteration using map function."""
     table_name = "cleanup_map_test_table"
 
-    # Verify table doesn't exist initially
     inspector = sqlalchemy.inspect(db_engine)
     assert table_name not in inspector.get_table_names()
 
-    # Create a function that will fail during processing
     def process_item(id_val):
         # Process first few rows normally, then fail on the third item
         # This ensures table creation happens first, but exception occurs during
@@ -766,7 +719,6 @@ def test_to_database_table_cleanup_on_map_exception(db_engine, test_session):
             raise ValueError("Processing failed on third item")
         return f"item_{id_val}"
 
-    # Create chain with enough data to trigger the failure after table creation
     chain = dc.read_values(
         id=[1, 2, 3, 4, 5],
         session=test_session,
@@ -774,7 +726,7 @@ def test_to_database_table_cleanup_on_map_exception(db_engine, test_session):
 
     # The export should fail during processing, after table creation
     with pytest.raises(dc.DataChainError, match="Processing failed on third item"):
-        to_database(chain, table_name, db_engine)
+        chain.to_database(table_name, db_engine)
 
     # Verify the table was cleaned up (removed) due to the exception
     inspector = sqlalchemy.inspect(db_engine)
@@ -801,6 +753,5 @@ def _get_engine_from_connection(connection: Any) -> sqlalchemy.Engine:
             return connection.bind.engine
         raise TypeError(f"Unexpected bind type: {type(connection.bind)}")
     if hasattr(connection, "execute"):  # sqlite3.Connection
-        # Create a temporary engine for verification
         return sqlalchemy.create_engine("sqlite://", creator=lambda: connection)
     raise TypeError(f"Unsupported connection type: {type(connection)}")
