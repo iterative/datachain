@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, Any, Optional, Union
 
 import sqlalchemy
 
+from datachain.query.schema import ColumnMeta
+
 DEFAULT_DATABASE_BATCH_SIZE = 10_000
 
 if TYPE_CHECKING:
@@ -82,7 +84,6 @@ def to_database(
             f"on_conflict must be 'ignore' or 'update', got: {on_conflict}"
         )
 
-    # Get the schema from the chain
     signals_schema = chain.signals_schema.clone_without_sys_signals()
     all_columns = [
         sqlalchemy.Column(c.name, c.type)  # type: ignore[union-attr]
@@ -90,7 +91,6 @@ def to_database(
     ]
 
     column_mapping = column_mapping or {}
-    # Normalize column mapping to handle DataChain format (dots) in keys
     normalized_column_mapping = _normalize_column_mapping(column_mapping)
     column_indices_and_names, columns = _prepare_columns(
         all_columns, normalized_column_mapping
@@ -143,8 +143,7 @@ def _normalize_column_mapping(column_mapping):
 
     normalized_mapping = {}
     for key, value in column_mapping.items():
-        # Convert dots to double underscores for database column format
-        db_key = key.replace(".", "__")
+        db_key = ColumnMeta.to_db_name(key)
         normalized_mapping[db_key] = value
 
     # If it's a defaultdict, preserve the default factory
