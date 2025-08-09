@@ -105,31 +105,25 @@ def to_database(
         metadata = sqlalchemy.MetaData()
         table = sqlalchemy.Table(table_name, metadata, *columns)
 
-        # Check if table already exists to determine if we should clean up on error
+        # Check if table already exists to determine if we should clean up on error.
         inspector = sqlalchemy.inspect(conn)
-        if inspector is None:
-            raise RuntimeError("Failed to create database inspector")
+        assert inspector
         table_existed_before = table_name in inspector.get_table_names()
 
         try:
             table.create(conn, checkfirst=True)
             rows_iter = chain._leaf_values()
-
             for batch in batched(rows_iter, batch_size):
                 _process_batch(
                     conn, table, batch, on_conflict, column_indices_and_names
                 )
-
             conn.commit()
         except Exception:
-            # If table didn't exist before and we created it, clean it up on error
             if not table_existed_before:
                 try:
                     table.drop(conn, checkfirst=True)
                     conn.commit()
                 except sqlalchemy.exc.SQLAlchemyError:
-                    # Ignore cleanup errors - the table may already be dropped
-                    # or there may be permission issues
                     pass
             raise
 
