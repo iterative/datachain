@@ -22,7 +22,7 @@ from .datachain import C, DataChain
 
 
 def _apply_pattern_filtering(
-    chain: DataChain, pattern: Union[str, list[str]], column: str
+    chain: DataChain, pattern: Optional[Union[str, list[str]]], column: str
 ) -> DataChain:
     """Apply pattern filtering to a storage chain.
 
