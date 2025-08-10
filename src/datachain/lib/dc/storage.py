@@ -6,7 +6,7 @@ from typing import (
     Optional,
     Union,
 )
-from .datachain import C, DataChain
+
 from datachain.lib.file import (
     FileType,
     get_file_type,
@@ -19,18 +19,22 @@ from datachain.lib.listing import (
 )
 from datachain.query import Session
 
+from .datachain import C, DataChain
+
 if TYPE_CHECKING:
     from .datachain import DataChain
 
 
-def _apply_pattern_filtering(chain: DataChain, pattern: Union[str, list[str]], column: str) -> DataChain:
+def _apply_pattern_filtering(
+    chain: DataChain, pattern: Union[str, list[str]], column: str
+) -> DataChain:
     """Apply pattern filtering to a storage chain.
-    
+
     Args:
         chain: The DataChain to filter
         pattern: Pattern(s) to filter by. Can be a single pattern string or a list of patterns
         column: The column name to apply filtering to (e.g., "file")
-        
+
     Returns:
         Filtered DataChain
     """
@@ -174,8 +178,6 @@ def read_storage(
 
     if not uris:
         raise ValueError("No URIs provided")
-    
-
 
     chains = []
     listed_ds_name = set()
