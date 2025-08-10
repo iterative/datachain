@@ -2,7 +2,6 @@ import os.path
 from collections.abc import Sequence
 from functools import reduce
 from typing import (
-    TYPE_CHECKING,
     Optional,
     Union,
 )
@@ -21,9 +20,6 @@ from datachain.query import Session
 
 from .datachain import C, DataChain
 
-if TYPE_CHECKING:
-    from .datachain import DataChain
-
 
 def _apply_pattern_filtering(
     chain: DataChain, pattern: Union[str, list[str]], column: str
@@ -32,7 +28,7 @@ def _apply_pattern_filtering(
 
     Args:
         chain: The DataChain to filter
-        pattern: Pattern(s) to filter by. Can be a single pattern string or a list of patterns
+        pattern: Pattern(s) to filter by
         column: The column name to apply filtering to (e.g., "file")
 
     Returns:
