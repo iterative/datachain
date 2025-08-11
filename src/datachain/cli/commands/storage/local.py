@@ -27,28 +27,34 @@ class LocalCredentialsBasedFileHandler(CredentialBasedFileHandler):
         if info["type"] == "directory" and not self.args.recursive:
             raise ValueError("Source is a directory, but recursive is not specified")
 
-        chain = read_storage(source_path, update=update)
+        chain = read_storage(source_path, update=update).settings(
+            cache=True, parallel=10
+        )
         file_paths = {}
 
-        if not is_file:
+        def _calculate_full_dst(file) -> str:
+            if is_file:
+                return (
+                    str(Path(destination_path) / file.name)
+                    if destination_path.endswith("/")
+                    else destination_path
+                )
+            return file.get_destination_path(
+                destination_path, "normpath", relative_to=relative_to
+            )
+
+        chain = chain.map(full_dst=_calculate_full_dst)
+        if is_file:
+            chain = chain.map(save_file=lambda file, full_dst: str(file.save(full_dst)))
+        else:
             chain.to_storage(
                 destination_path, placement="normpath", relative_to=relative_to
             )
 
-        for (file,) in chain.to_iter("file"):
-            if is_file:
-                dst = (
-                    Path(destination_path) / file.name
-                    if destination_path.endswith("/")
-                    else destination_path
-                )
-                file.save(dst)
-            else:
-                dst = file.get_destination_path(
-                    destination_path, "normpath", relative_to=relative_to
-                )
-            _, dst_path = destination_cls.split_url(str(dst))
-            file_paths[dst_path] = file.size
+        chain = chain.map(
+            dst_path=lambda full_dst: destination_cls.split_url(full_dst)[1]
+        )
+        file_paths = dict(chain.to_list("dst_path", "file.size"))
 
         if destination_cls.protocol != "file":
             self.save_upload_logs(destination_path, file_paths)
