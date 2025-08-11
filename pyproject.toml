@@ -134,8 +134,7 @@ examples = [
   "huggingface_hub[hf_transfer]",
   "ultralytics",
   "open_clip_torch",
-  "openai",
-  "transformers<4.54.0"
+  "openai"
 ]
 
 [project.urls]
