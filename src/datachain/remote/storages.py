@@ -1,17 +1,28 @@
 import mimetypes
 import os.path
 from typing import TYPE_CHECKING, Optional
-from urllib.parse import urlparse
 
 import requests
 
-from datachain.asyn import AsyncMapper
 from datachain.cli.commands.storage.utils import build_file_paths, validate_upload_args
+from datachain.client.fsspec import Client
 from datachain.error import DataChainError
+from datachain.lib.data_model import DataModel
+from datachain.lib.dc.values import read_values
 from datachain.remote.studio import StudioClient
 
 if TYPE_CHECKING:
     from fsspec import AbstractFileSystem
+
+
+class UploadFileInfo(DataModel):
+    dest_path: str
+    src_path: str
+
+
+class DownloadFileInfo(DataModel):
+    filename: str
+    url: str
 
 
 def upload_to_storage(
@@ -27,18 +38,20 @@ def upload_to_storage(
     file_paths = build_file_paths(source_path, destination_path, local_fs, is_dir)
     response = _get_presigned_urls(studio_client, destination_path, file_paths)
 
-    upload_tasks = [(dest_path, src_path) for dest_path, src_path in file_paths.items()]
+    download_chain = read_values(
+        info=[
+            UploadFileInfo(dest_path=dest_path, src_path=src_path)
+            for dest_path, src_path in file_paths.items()
+        ],
+    )
 
-    async def upload_file_async(file_info):
-        dest_path, src_path = file_info
-        return await mapper.to_thread(
-            _upload_single_file, dest_path, src_path, response, local_fs
+    download_chain = (
+        download_chain.settings(cache=True, parallel=10).map(
+            download_result=lambda info: _upload_single_file(
+                info.dest_path, info.src_path, response, local_fs
+            )
         )
-
-    mapper = AsyncMapper(upload_file_async, upload_tasks, workers=10)
-
-    for _ in mapper:
-        pass  # Just iterate to trigger all uploads
+    ).exec()
 
     print(f"Successfully uploaded {len(file_paths)} file(s)")
     return file_paths
@@ -51,35 +64,67 @@ def download_from_storage(
     local_fs: "AbstractFileSystem" = None,
 ):
     studio_client = StudioClient(team=team)
+    source_client = Client.get_implementation(source_path)
+    _, src_subpath = source_client.split_url(source_path)
+
     response = studio_client.download_url(source_path)
     if not response.ok or not response.data:
         raise DataChainError(response.message)
 
-    url = response.data.get("url")
-    if not url:
+    urls = response.data.get("urls")
+    if not urls:
         raise DataChainError("No download URL found")
 
-    # Extract filename from URL if destination is a directory
-    if local_fs.isdir(destination_path) or destination_path.endswith(("/", "\\")):
-        # Parse the URL to get the filename
-        parsed_url = urlparse(url)
-        filename = os.path.basename(parsed_url.path)
+    is_dest_dir = local_fs.isdir(destination_path) or destination_path.endswith(
+        ("/", "\\")
+    )
 
-        local_fs.makedirs(destination_path, exist_ok=True)
-        destination_path = os.path.join(destination_path, filename)
+    def _calculate_out_path(info: DownloadFileInfo) -> str:
+        filename = info.filename.removeprefix(src_subpath).removeprefix("/")
+        if not filename:
+            filename = os.path.basename(src_subpath)
+            out_path = (
+                os.path.join(destination_path, filename)
+                if is_dest_dir
+                else destination_path
+            )
+        else:
+            out_path = os.path.join(destination_path, filename)
+        return out_path
 
-    # Stream download to avoid loading entire file into memory
+    download_chain = read_values(
+        info=[
+            DownloadFileInfo(filename=filename, url=url)
+            for filename, url in urls.items()
+        ],
+    )
+    download_chain = (
+        download_chain.settings(cache=True, parallel=10)
+        .map(
+            out_path=_calculate_out_path,
+        )
+        .map(
+            upload_result=lambda info, out_path: _download_single_file(
+                info.url, out_path, local_fs
+            )
+        )
+    ).exec()
+
+    print(f"Successfully downloaded {len(urls)} file(s)")
+
+
+def _download_single_file(
+    url: str, out_path: str, local_fs: "AbstractFileSystem"
+) -> str:
+    local_fs.makedirs(os.path.dirname(out_path), exist_ok=True)
     with requests.get(url, timeout=3600, stream=True) as download_response:
         download_response.raise_for_status()
-        print("Downloading file", end="")
-        with local_fs.open(destination_path, "wb") as f:
+        with local_fs.open(out_path, "wb") as f:
             for chunk in download_response.iter_content(chunk_size=8192):
                 if chunk:  # Filter out keep-alive chunks
                     f.write(chunk)
-                print(".", end="")
-        print()
 
-    print(f"Downloaded to {destination_path}")
+    return out_path
 
 
 def copy_inside_storage(
@@ -183,5 +228,3 @@ def _upload_single_file(
             f"Status: {upload_response.status_code}, "
             f"Response: {upload_response.text}"
         )
-
-    print(f"Uploaded {source_path} to {dest_path}")
