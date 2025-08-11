@@ -2294,7 +2294,7 @@ class DataChain:
         table_name: str,
         connection: "ConnectionType",
         *,
-        batch_size: int = DEFAULT_DATABASE_BATCH_SIZE,
+        batch_rows: int = DEFAULT_DATABASE_BATCH_SIZE,
         on_conflict: Optional[str] = None,
         column_mapping: Optional[dict[str, Optional[str]]] = None,
     ) -> None:
@@ -2311,7 +2311,7 @@ class DataChain:
                 library. If a DBAPI2 object, only sqlite3 is supported. The user is
                 responsible for engine disposal and connection closure for the
                 SQLAlchemy connectable; str connections are closed automatically.
-            batch_size: Number of rows to insert per batch for optimal performance.
+            batch_rows: Number of rows to insert per batch for optimal performance.
                 Larger batches are faster but use more memory. Default: 10,000.
             on_conflict: Strategy for handling duplicate rows (requires table
                 constraints):
@@ -2375,7 +2375,7 @@ class DataChain:
             self,
             table_name,
             connection,
-            batch_size=batch_size,
+            batch_rows=batch_rows,
             on_conflict=on_conflict,
             column_mapping=column_mapping,
         )

@@ -148,7 +148,7 @@ def test_to_database_large_dataset(connection, test_session):
         session=test_session,
     )
 
-    chain.to_database("large_table", connection, batch_size=1000)
+    chain.to_database("large_table", connection, batch_rows=1000)
 
     engine = _get_engine_from_connection(connection)
     with engine.connect() as conn:
