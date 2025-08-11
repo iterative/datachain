@@ -155,7 +155,7 @@ def test_cp_remote_to_local(requests_mock, capsys, studio_token, tmp_dir):
     requests_mock.get(
         f"{STUDIO_URL}/api/datachain/storages/files/download?bucket=my-bucket&remote=s3&filepath=data%2Fcontent&team=team_name&team_name=team_name",
         json={
-            "url": "https://example.com/download",
+            "urls": {"data/content": "https://example.com/download"},
         },
     )
     requests_mock.get(
