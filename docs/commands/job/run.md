@@ -32,6 +32,7 @@ This command runs a job in Studio using the specified query file. You can config
 * `--env-file ENV_FILE` - File with environment variables for the job
 * `--env ENV` - Environment variables in KEY=VALUE format
 * `--cluster CLUSTER` - Compute cluster to run the job on
+* `--credentials-name CREDENTIALS_NAME` - Name of the credentials to use for the job
 * `--workers WORKERS` - Number of workers for the job
 * `--files FILES` - Additional files to include in the job
 * `--python-version PYTHON_VERSION` - Python version for the job (e.g., 3.9, 3.10, 3.11)
@@ -97,7 +98,12 @@ datachain job clusters
 datachain job run --cluster 1 query.py
 ```
 
-9. Schedule a job to run once at a specific time
+9. Run a job with specific credentials
+```bash
+datachain job run --credentials-name my-aws-credentials query.py
+```
+
+10. Schedule a job to run once at a specific time
 ```bash
 # Run job tomorrow at 3pm
 datachain job run --start-time "tomorrow 3pm" query.py
@@ -112,7 +118,7 @@ datachain job run --start-time "monday 9am" query.py
 datachain job run --start-time "2024-01-15 14:30:00" query.py
 ```
 
-10. Schedule a recurring job using cron expression
+11. Schedule a recurring job using cron expression
 ```bash
 # Run job daily at midnight
 datachain job run --cron "0 0 * * *" query.py
@@ -127,13 +133,13 @@ datachain job run --cron "0 * * * *" query.py
 datachain job run --cron "@monthly" query.py
 ```
 
-11. Schedule a recurring job with a start time
+12. Schedule a recurring job with a start time
 ```bash
 # Start the cron job after tomorrow 3pm
 datachain job run --start-time "tomorrow 3pm" --cron "0 0 * * *" query.py
 ```
 
-12. Start the job and do not wait for the job to complete
+13. Start the job and do not wait for the job to complete
 ```bash
 # Do not follow or tail the logs from Studio.
 datachain job run query.py --no-wait
