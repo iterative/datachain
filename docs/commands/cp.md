@@ -6,7 +6,7 @@ Copy storage files and directories between cloud and local storage.
 
 ```usage
 usage: datachain cp [-h] [-v] [-q] [-r] [--team TEAM]
-    [-s] [--update]
+    [-s] [--anon] [--update]
     source_path destination_path
 ```
 
@@ -30,6 +30,7 @@ The command supports two main modes of operation:
 * `-r`, `-R`, `--recursive` - Copy directories recursively
 * `--team TEAM` - Team name to use the credentials from. (Default: from config)
 * `-s`, `--studio-cloud-auth` - Use credentials from Studio for cloud operations (Default: False)
+* `--anon` -  Use anonymous access for cloud operations (Default: False)
 * `--update` - Update cached list of files for the source when downloading from cloud using local credentials.
 * `-h`, `--help` - Show the help message and exit
 * `-v`, `--verbose` - Be verbose

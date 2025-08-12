@@ -186,6 +186,12 @@ def add_storage_parser(subparsers, parent_parser) -> None:
         help="Update cached list of files for the source in datachain cache",
     )
 
+    storage_cp_parser.add_argument(
+        "--anon",
+        action="store_true",
+        help="Use anonymous access for cloud operations (Default: False)",
+    )
+
     mv_parser = subparsers.add_parser(
         "mv",
         parents=[parent_parser],

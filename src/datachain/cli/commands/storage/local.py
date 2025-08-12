@@ -21,13 +21,11 @@ class LocalCredentialsBasedFileHandler(CredentialBasedFileHandler):
             update = True
             relative_to = None
 
-        info = source_fs.info(source_path)
-        is_file = info["type"] == "file"
-
-        if info["type"] == "directory" and not self.args.recursive:
+        is_file = source_fs.isfile(source_path)
+        if not self.args.recursive and source_fs.isdir(source_path):
             raise ValueError("Source is a directory, but recursive is not specified")
 
-        chain = read_storage(source_path, update=update).settings(
+        chain = read_storage(source_path, update=update, anon=self.args.anon).settings(
             cache=True, parallel=10
         )
         file_paths = {}

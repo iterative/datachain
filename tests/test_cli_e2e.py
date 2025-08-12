@@ -121,6 +121,7 @@ E2E_STEPS = (
             "datachain",
             "cp",
             "-r",
+            "--anon",
             "s3://ldb-public/remote/datasets/mnist-tiny/",
             "mnt-cp",
         ),
