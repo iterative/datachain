@@ -203,7 +203,7 @@ jobs:
         run: |
           brew install ffmpeg
           echo 'DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib' >> "$GITHUB_ENV"
-      
+
       - name: Install FFmpeg on Ubuntu
         if: runner.os == 'Linux'
         run: |
