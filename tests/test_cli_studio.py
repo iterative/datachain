@@ -401,6 +401,8 @@ def test_studio_run(capsys, mocker, tmp_dir):
                     "https://github.com/iterative/datachain",
                     "--cluster",
                     "default",
+                    "--credentials-name",
+                    "my-credentials",
                 ]
             )
             == 0
@@ -442,6 +444,7 @@ def test_studio_run(capsys, mocker, tmp_dir):
         "compute_cluster_name": "default",
         "start_after": None,
         "cron_expression": None,
+        "credentials_name": "my-credentials",
     }
 
 
