@@ -64,6 +64,13 @@ def add_jobs_parser(subparsers, parent_parser) -> None:
     )
 
     studio_run_parser.add_argument(
+        "-c",
+        "--credentials-name",
+        action="store",
+        help="Name of the credentials to use for the job",
+    )
+
+    studio_run_parser.add_argument(
         "--workers",
         type=int,
         help="Number of workers for the job",
