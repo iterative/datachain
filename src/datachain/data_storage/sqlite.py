@@ -542,10 +542,6 @@ class SQLiteMetastore(AbstractDBMetastore):
     def _jobs_insert(self) -> "Insert":
         return sqlite.insert(self._jobs)
 
-    @property
-    def is_studio(self) -> bool:
-        return False
-
     #
     # Namespaces
     #
