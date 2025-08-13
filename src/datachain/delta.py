@@ -157,7 +157,9 @@ def _get_source_info(
     source_ds_name = dep.name
     source_ds_version = dep.version
     source_ds_latest_version = catalog.get_dataset(
-        source_ds_name, project=source_ds_project
+        source_ds_name,
+        namespace_name=source_ds_project.namespace.name,
+        project_name=source_ds_project.name,
     ).latest_version
 
     return (
@@ -216,7 +218,9 @@ def delta_retry_update(
 
     # Check if dataset exists
     try:
-        dataset = catalog.get_dataset(name, project=project)
+        dataset = catalog.get_dataset(
+            name, namespace_name=namespace_name, project_name=project_name
+        )
         latest_version = dataset.latest_version
     except DatasetNotFoundError:
         # First creation of result dataset

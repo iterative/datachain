@@ -168,7 +168,11 @@ def test_pull_dataset_success(
             )
 
     project = catalog.metastore.get_project(REMOTE_PROJECT_NAME, REMOTE_NAMESPACE_NAME)
-    dataset = catalog.get_dataset(local_ds_name or "dogs", project=project)
+    dataset = catalog.get_dataset(
+        local_ds_name or "dogs",
+        namespace_name=project.namespace.name,
+        project_name=project.name,
+    )
     assert dataset.project.namespace.uuid == REMOTE_NAMESPACE_UUID
     assert dataset.project.uuid == REMOTE_PROJECT_UUID
 
@@ -248,7 +252,9 @@ def test_datachain_read_dataset_pull(
 
     # Check that dataset is available locally after pulling
     project = catalog.metastore.get_project(REMOTE_PROJECT_NAME, REMOTE_NAMESPACE_NAME)
-    dataset = catalog.get_dataset("dogs", project)
+    dataset = catalog.get_dataset(
+        "dogs", namespace_name=project.namespace.name, project_name=project.name
+    )
     assert dataset.name == "dogs"
 
 
@@ -373,7 +379,9 @@ def test_pull_dataset_already_exists_locally(
     )
 
     project = catalog.metastore.get_project(REMOTE_PROJECT_NAME, REMOTE_NAMESPACE_NAME)
-    other = catalog.get_dataset("other", project)
+    other = catalog.get_dataset(
+        "other", namespace_name=project.namespace.name, project_name=project.name
+    )
     other_version = other.get_version("1.0.0")
     assert other_version.uuid == REMOTE_DATASET_UUID
     assert other_version.num_objects == 4
@@ -381,7 +389,9 @@ def test_pull_dataset_already_exists_locally(
 
     # dataset with same uuid created only once, on first pull with local name "other"
     with pytest.raises(DatasetNotFoundError):
-        catalog.get_dataset("dogs", project)
+        catalog.get_dataset(
+            "dogs", namespace_name=project.namespace.name, project_name=project.name
+        )
 
 
 @pytest.mark.parametrize("cloud_type, version_aware", [("s3", False)], indirect=True)
