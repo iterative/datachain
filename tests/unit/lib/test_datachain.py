@@ -4371,5 +4371,3 @@ def test_column_compute(test_session):
     assert chain.max("signals.signal.i3") == 15
     assert chain.max("signals.signal.f3") == 7.5
     assert chain.max("signals.signal.s3") == "eee"
-
-
