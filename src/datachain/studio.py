@@ -50,6 +50,7 @@ def process_jobs_args(args: "Namespace"):
             args.start_time,
             args.cron,
             args.no_wait,
+            args.credentials_name,
         )
 
     if args.cmd == "cancel":
@@ -356,6 +357,7 @@ def create_job(
     start_time: Optional[str] = None,
     cron: Optional[str] = None,
     no_wait: Optional[bool] = False,
+    credentials_name: Optional[str] = None,
 ):
     query_type = "PYTHON" if query_file.endswith(".py") else "SHELL"
     with open(query_file) as f:
@@ -393,6 +395,7 @@ def create_job(
         cluster=cluster,
         start_time=parsed_start_time,
         cron=cron,
+        credentials_name=credentials_name,
     )
     if not response.ok:
         raise DataChainError(response.message)

@@ -58,6 +58,7 @@ from datachain.query.schema import DEFAULT_DELIMITER, Column
 from datachain.sql.functions import path as pathfunc
 from datachain.utils import batched_it, inside_notebook, row_to_nested_dict
 
+from .database import DEFAULT_DATABASE_BATCH_SIZE
 from .utils import (
     DatasetMergeError,
     DatasetPrepareError,
@@ -77,10 +78,22 @@ UDFObjT = TypeVar("UDFObjT", bound=UDFBase)
 DEFAULT_PARQUET_CHUNK_SIZE = 100_000
 
 if TYPE_CHECKING:
+    import sqlite3
+
     import pandas as pd
     from typing_extensions import ParamSpec, Self
 
     P = ParamSpec("P")
+
+    ConnectionType = Union[
+        str,
+        sqlalchemy.engine.URL,
+        sqlalchemy.engine.interfaces.Connectable,
+        sqlalchemy.engine.Engine,
+        sqlalchemy.engine.Connection,
+        "sqlalchemy.orm.Session",
+        sqlite3.Connection,
+    ]
 
 
 T = TypeVar("T", bound="DataChain")
@@ -2281,6 +2294,97 @@ class DataChain:
                 provided as the destination path.
         """
         self.to_json(path, fs_kwargs, include_outer_list=False)
+
+    def to_database(
+        self,
+        table_name: str,
+        connection: "ConnectionType",
+        *,
+        batch_rows: int = DEFAULT_DATABASE_BATCH_SIZE,
+        on_conflict: Optional[str] = None,
+        column_mapping: Optional[dict[str, Optional[str]]] = None,
+    ) -> None:
+        """Save chain to a database table using a given database connection.
+
+        This method exports all DataChain records to a database table, creating the
+        table if it doesn't exist and appending data if it does. The table schema
+        is automatically inferred from the DataChain's signal schema.
+
+        Parameters:
+            table_name: Name of the database table to create/write to.
+            connection: SQLAlchemy connectable, str, or a sqlite3 connection
+                Using SQLAlchemy makes it possible to use any DB supported by that
+                library. If a DBAPI2 object, only sqlite3 is supported. The user is
+                responsible for engine disposal and connection closure for the
+                SQLAlchemy connectable; str connections are closed automatically.
+            batch_rows: Number of rows to insert per batch for optimal performance.
+                Larger batches are faster but use more memory. Default: 10,000.
+            on_conflict: Strategy for handling duplicate rows (requires table
+                constraints):
+                - None: Raise error (`sqlalchemy.exc.IntegrityError`) on conflict
+                  (default)
+                - "ignore": Skip duplicate rows silently
+                - "update": Update existing rows with new values
+            column_mapping: Optional mapping to rename or skip columns:
+                - Dict mapping DataChain column names to database column names
+                - Set values to None to skip columns entirely, or use `defaultdict` to
+                  skip all columns except those specified.
+
+        Examples:
+            Basic usage with PostgreSQL:
+            ```py
+            import sqlalchemy as sa
+            import datachain as dc
+
+            chain = dc.read_storage("s3://my-bucket/")
+            engine = sa.create_engine("postgresql://user:pass@localhost/mydb")
+            chain.to_database("files_table", engine)
+            ```
+
+            Using SQLite with connection string:
+            ```py
+            chain.to_database("my_table", "sqlite:///data.db")
+            ```
+
+            Column mapping and renaming:
+            ```py
+            mapping = {
+                "user.id": "id",
+                "user.name": "name",
+                "user.password": None  # Skip this column
+            }
+            chain.to_database("users", engine, column_mapping=mapping)
+            ```
+
+            Handling conflicts (requires PRIMARY KEY or UNIQUE constraints):
+            ```py
+            # Skip duplicates
+            chain.to_database("my_table", engine, on_conflict="ignore")
+
+            # Update existing records
+            chain.to_database("my_table", engine, on_conflict="update")
+            ```
+
+            Working with different databases:
+            ```py
+            # MySQL
+            mysql_engine = sa.create_engine("mysql+pymysql://user:pass@host/db")
+            chain.to_database("mysql_table", mysql_engine)
+
+            # SQLite in-memory
+            chain.to_database("temp_table", "sqlite:///:memory:")
+            ```
+        """
+        from .database import to_database
+
+        to_database(
+            self,
+            table_name,
+            connection,
+            batch_rows=batch_rows,
+            on_conflict=on_conflict,
+            column_mapping=column_mapping,
+        )
 
     @classmethod
     def from_records(
