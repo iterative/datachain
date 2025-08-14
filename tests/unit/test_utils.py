@@ -206,6 +206,13 @@ def test_determine_processes(parallel, rows_total, settings, expected):
         ("/home/user/bucket/animals/*", True),
         ("", False),
         ("*", True),
+        # Globstar patterns
+        ("**/*.jpg", True),
+        ("/data/**/*.csv", True),
+        ("s3://bucket/**/*.mp3", True),
+        ("/path/**/file.txt", True),
+        ("**/", True),
+        ("/**", True),
     ),
 )
 def test_uses_glob(path, expected):

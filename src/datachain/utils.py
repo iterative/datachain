@@ -486,7 +486,11 @@ def get_datachain_executable() -> list[str]:
 
 
 def uses_glob(path: str) -> bool:
-    """Checks if some URI path has glob syntax in it"""
+    """Checks if some URI path has glob syntax in it, including globstar patterns"""
+    # Check for globstar pattern
+    if "**" in path:
+        return True
+    # Check for other glob patterns in the basename
     return glob.has_magic(os.path.basename(os.path.normpath(path)))
 
 
