@@ -18,35 +18,7 @@ from datachain.lib.listing import (
 )
 from datachain.query import Session
 
-from .datachain import C, DataChain
-
-
-def _apply_pattern_filtering(
-    chain: DataChain, pattern: Optional[Union[str, list[str]]], column: str
-) -> DataChain:
-    """Apply pattern filtering to a storage chain.
-
-    Args:
-        chain: The DataChain to filter
-        pattern: Pattern(s) to filter by
-        column: The column name to apply filtering to (e.g., "file")
-
-    Returns:
-        Filtered DataChain
-    """
-    if not pattern:
-        return chain
-
-    pattern_list = pattern if isinstance(pattern, list) else [pattern]
-    filters = []
-
-    for pattern_item in pattern_list:
-        filters.append(C(f"{column}.path").glob(f"*{pattern_item}"))
-
-    combined_filter = filters[0]
-    for filter_expr in filters[1:]:
-        combined_filter = combined_filter | filter_expr
-    return chain.filter(combined_filter)
+from .datachain import DataChain
 
 
 def read_storage(
@@ -60,7 +32,6 @@ def read_storage(
     column: str = "file",
     update: bool = False,
     anon: Optional[bool] = None,
-    pattern: Optional[Union[str, list[str]]] = None,
     delta: Optional[bool] = False,
     delta_on: Optional[Union[str, Sequence[str]]] = (
         "file.path",
@@ -84,7 +55,6 @@ def read_storage(
         column : Created column name.
         update : force storage reindexing. Default is False.
         anon : If True, we will treat cloud bucket as public one
-        pattern : Optional pattern(s) to filter by file names like "*.jpg".
         client_config : Optional client configuration for the storage client.
         delta: If True, only process new or changed files instead of reprocessing
             everything. This saves time by skipping files that were already processed in
@@ -141,13 +111,16 @@ def read_storage(
         ], session=session, recursive=True)
         ```
 
-        Filter by file patterns:
+        Filter by file patterns using globstar notation in the URI:
         ```python
-        # Single pattern
-        chain = dc.read_storage("s3://my-bucket/my-dir", pattern="*.mp3")
+        # Using globstar patterns in the path
+        chain = dc.read_storage("s3://my-bucket/my-dir/**/*.mp3")
 
         # Multiple patterns
-        chain = dc.read_storage("s3://my-bucket/my-dir", pattern=["*.mp3", "*.wav"])
+        chain = dc.read_storage([
+            "s3://my-bucket/my-dir/**/*.mp3",
+            "s3://my-bucket/my-dir/**/*.wav"
+        ])
         ```
 
     Note:
@@ -257,4 +230,4 @@ def read_storage(
             delta_retry=delta_retry,
         )
 
-    return _apply_pattern_filtering(storage_chain, pattern, column)
+    return storage_chain
