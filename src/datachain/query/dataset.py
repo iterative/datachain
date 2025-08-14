@@ -665,7 +665,7 @@ class UDFSignal(UDFStep):
         original_cols = [c for c in subq.c if c.name not in partition_col_names]
 
         # new signal columns that are added to udf_table
-        signal_cols = [c for c in udf_table.c if c.name != "sys__id"]
+        signal_cols = [c for c in udf_table.c if not c.name.startswith("sys__")]
         signal_name_cols = {c.name: c for c in signal_cols}
         cols = signal_cols
 

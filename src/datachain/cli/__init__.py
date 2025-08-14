@@ -67,7 +67,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     except BrokenPipeError as exc:
         error, return_code = handle_broken_pipe_error(exc)
         return return_code
-    except (KeyboardInterrupt, Exception) as exc:
+    except (KeyboardInterrupt, Exception) as exc:  # noqa: BLE001
         error, return_code = handle_general_exception(exc, args, logging_level)
         return return_code
     finally:

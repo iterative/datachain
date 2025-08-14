@@ -431,6 +431,7 @@ class StudioClient:
         cluster: Optional[str] = None,
         start_time: Optional[str] = None,
         cron: Optional[str] = None,
+        credentials_name: Optional[str] = None,
     ) -> Response[JobData]:
         data = {
             "query": query,
@@ -446,6 +447,7 @@ class StudioClient:
             "compute_cluster_name": cluster,
             "start_after": start_time,
             "cron_expression": cron,
+            "credentials_name": credentials_name,
         }
         return self._send_request("datachain/job", data)
 
