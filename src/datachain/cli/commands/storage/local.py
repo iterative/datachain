@@ -8,24 +8,24 @@ class LocalCredentialsBasedFileHandler(CredentialBasedFileHandler):
     def cp(self):
         from datachain.client.fsspec import Client
 
-        source_path = self.args.source_path
-        destination_path = self.args.destination_path
+        source_path = self.source_path
+        destination_path = self.destination_path
         destination_cls = Client.get_implementation(destination_path)
 
         source_cls = Client.get_implementation(source_path)
         source_fs = source_cls.create_fs()
         _, relative_to = source_cls.split_url(source_path)
 
-        update = self.args.update
+        update = self.update
         if source_cls.protocol == "file":
             update = True
             relative_to = None
 
         is_file = source_fs.isfile(source_path)
-        if not self.args.recursive and source_fs.isdir(source_path):
+        if not self.recursive and source_fs.isdir(source_path):
             raise ValueError("Source is a directory, but recursive is not specified")
 
-        chain = read_storage(source_path, update=update, anon=self.args.anon).settings(
+        chain = read_storage(source_path, update=update, anon=self.anon).settings(
             cache=True, parallel=10
         )
         file_paths = {}
@@ -61,28 +61,28 @@ class LocalCredentialsBasedFileHandler(CredentialBasedFileHandler):
     def rm(self):
         from datachain.client.fsspec import Client
 
-        client_cls = Client.get_implementation(self.args.path)
+        client_cls = Client.get_implementation(self.path)
         fs = client_cls.create_fs()
-        fs.rm(self.args.path, recursive=self.args.recursive)
+        fs.rm(self.path, recursive=self.recursive)
         if client_cls.protocol != "file":
-            _, path = client_cls.split_url(self.args.path)
-            self.save_deleted_logs(self.args.path, [path])
+            _, path = client_cls.split_url(self.path)
+            self.save_deleted_logs(self.path, [path])
 
-        print(f"Deleted {self.args.path}")
+        print(f"Deleted {self.path}")
 
     def mv(self):
         from datachain.client.fsspec import Client
 
-        client_cls = Client.get_implementation(self.args.path)
+        client_cls = Client.get_implementation(self.path)
         fs = client_cls.create_fs()
-        size = fs.info(self.args.path).get("size", 0)
-        fs.mv(self.args.path, self.args.new_path, recursive=self.args.recursive)
+        size = fs.info(self.path).get("size", 0)
+        fs.mv(self.path, self.new_path, recursive=self.recursive)
 
         if client_cls.protocol != "file":
-            _, src = client_cls.split_url(self.args.path)
-            _, dst = client_cls.split_url(self.args.new_path)
-            self.save_moved_logs(self.args.new_path, {src: (dst, size)})
-        print(f"Moved {self.args.path} to {self.args.new_path}")
+            _, src = client_cls.split_url(self.path)
+            _, dst = client_cls.split_url(self.new_path)
+            self.save_moved_logs(self.new_path, {src: (dst, size)})
+        print(f"Moved {self.path} to {self.new_path}")
 
     def save_deleted_logs(
         self,
@@ -94,7 +94,7 @@ class LocalCredentialsBasedFileHandler(CredentialBasedFileHandler):
         if not is_token_set():
             return
 
-        studio_client = StudioClient(team=self.args.team)
+        studio_client = StudioClient(team=self.team)
 
         studio_client.save_activity_logs(
             destination_path,
@@ -110,7 +110,7 @@ class LocalCredentialsBasedFileHandler(CredentialBasedFileHandler):
 
         if not is_token_set():
             return
-        studio_client = StudioClient(team=self.args.team)
+        studio_client = StudioClient(team=self.team)
 
         moved_paths = [(dst, src, size) for dst, (src, size) in file_paths.items()]
 

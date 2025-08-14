@@ -27,7 +27,7 @@ logger = logging.getLogger("datachain")
 if TYPE_CHECKING:
     from argparse import Namespace
 
-    from datachain.catalog import Catalog
+    from datachain.catalog import Catalog as Catalog
 
 
 def main(argv: Optional[list[str]] = None) -> int:
@@ -115,7 +115,7 @@ def handle_command(args, catalog, client_config) -> int:
     return 1
 
 
-def _get_file_handler(args: "Namespace", catalog: "Catalog"):
+def _get_file_handler(args: "Namespace"):
     from datachain.cli.commands.storage import (
         LocalCredentialsBasedFileHandler,
         StudioAuthenticatedFileHandler,
@@ -126,25 +126,42 @@ def _get_file_handler(args: "Namespace", catalog: "Catalog"):
     token = config.get("token")
     studio = False if not token else args.studio_cloud_auth
     return (
-        StudioAuthenticatedFileHandler(args, catalog)
-        if studio
-        else LocalCredentialsBasedFileHandler(args, catalog)
+        StudioAuthenticatedFileHandler if studio else LocalCredentialsBasedFileHandler
     )
 
 
 def handle_cp_command(args, catalog):
-    file_handler = _get_file_handler(args, catalog)
-    return file_handler.cp()
+    file_handler = _get_file_handler(args)
+    return file_handler(
+        catalog=catalog,
+        team=args.team,
+        source_path=args.source_path,
+        destination_path=args.destination_path,
+        update=args.update,
+        recursive=args.recursive,
+        anon=args.anon,
+    ).cp()
 
 
 def handle_mv_command(args, catalog):
-    file_handler = _get_file_handler(args, catalog)
-    return file_handler.mv()
+    file_handler = _get_file_handler(args)
+    return file_handler(
+        catalog=catalog,
+        team=args.team,
+        path=args.path,
+        new_path=args.new_path,
+        recursive=args.recursive,
+    ).mv()
 
 
 def handle_rm_command(args, catalog):
-    file_handler = _get_file_handler(args, catalog)
-    return file_handler.rm()
+    file_handler = _get_file_handler(args)
+    return file_handler(
+        catalog=catalog,
+        team=args.team,
+        path=args.path,
+        recursive=args.recursive,
+    ).rm()
 
 
 def handle_clone_command(args, catalog):
