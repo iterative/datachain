@@ -4,7 +4,7 @@ import sqlite3
 import time
 import uuid
 from contextlib import closing
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 import sqlalchemy
@@ -116,14 +116,20 @@ def _parse_json_if_needed(connection, value):
     return value
 
 
-def _parse_datetime_if_needed(connection, value):
+def _parse_datetime_if_needed(connection, value, expected_timezone=None):
     """Parse datetime string if needed based on database type."""
     if value is None:
         return None
     engine = _get_engine_from_connection(connection)
+
     if engine.name == "sqlite" and isinstance(value, str):
-        # Parse ISO format timestamp
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        # SQLite stores naive datetime strings that represent UTC time
+        parsed = datetime.fromisoformat(value)
+        parsed_utc = parsed.replace(tzinfo=timezone.utc)
+        if expected_timezone is not None:
+            return parsed_utc.astimezone(expected_timezone)
+        return parsed_utc
+
     return value
 
 
@@ -324,6 +330,48 @@ def test_to_database_on_conflict_update(connection, test_session):
     assert rows[2] == (3, "Charlie_Updated", 888)  # Updated
     assert rows[3] == (4, "Diana", 400)  # New
     assert rows[4] == (5, "Eve", 500)  # New
+
+
+def test_to_database_on_conflict_update_postgres_missing_conflict_columns(
+    postgres_connection, test_session
+):
+    table_name = "conflict_missing_columns_table"
+    engine = _get_engine_from_connection(postgres_connection)
+    _create_conflict_test_table(engine, table_name)
+
+    update_chain = dc.read_values(
+        id=[2, 3, 4],
+        name=["Bob_Updated", "Charlie_Updated", "Diana"],
+        value=[999, 888, 400],
+        session=test_session,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "conflict_columns parameter is required when "
+            "on_conflict='update' with PostgreSQL"
+        ),
+    ):
+        update_chain.to_database(
+            table_name, postgres_connection, on_conflict="update", conflict_columns=None
+        )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "conflict_columns parameter is required when "
+            "on_conflict='update' with PostgreSQL"
+        ),
+    ):
+        update_chain.to_database(table_name, postgres_connection, on_conflict="update")
+
+    # Verify the table remains unchanged after failed operations
+    rows = _fetch_all_rows(postgres_connection, table_name)
+    assert len(rows) == 3
+    assert rows[0] == (1, "Alice", 100)
+    assert rows[1] == (2, "Bob", 200)
+    assert rows[2] == (3, "Charlie", 300)
 
 
 def test_to_database_table_exists_different_schema(connection, test_session):
@@ -786,6 +834,9 @@ def test_to_database_table_cleanup_on_map_exception(connection, test_session):
 def test_to_database_comprehensive_data_types(connection, test_session):
     table_name = "comprehensive_data_types_table"
 
+    # Use Eastern Time (UTC-5) for testing timezone handling
+    eastern_tz = timezone(timedelta(hours=-5))
+
     class UserProfile(dc.DataModel):
         name: str
         settings: dict
@@ -817,9 +868,9 @@ def test_to_database_comprehensive_data_types(connection, test_session):
             [0.76, 0.89, 0.93, 0.85],
         ],
         created_at=[
-            datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone.utc),  # Test timestamps
-            datetime(2024, 2, 20, 14, 45, 30, tzinfo=timezone.utc),
-            datetime(2024, 3, 10, 9, 15, 45, tzinfo=timezone.utc),
+            datetime(2024, 1, 15, 5, 30, 0, tzinfo=eastern_tz),  # Eastern Time
+            datetime(2024, 2, 20, 9, 45, 30, tzinfo=eastern_tz),  # Eastern Time
+            datetime(2024, 3, 10, 4, 15, 45, tzinfo=eastern_tz),  # Eastern Time
         ],
         metadata=[
             {"preferences": {"theme": "dark", "lang": "en"}},  # Test nested JSON
@@ -858,23 +909,22 @@ def test_to_database_comprehensive_data_types(connection, test_session):
     profile_name = first_row[2]  # profile.name
     assert profile_name == "Alice"
 
-    # profile.settings
+    # JSONs and dicts
     profile_settings = _parse_json_if_needed(connection, first_row[3])
     assert profile_settings == {"theme": "dark", "notifications": True, "score": 95.5}
 
     profile_tags = _parse_json_if_needed(connection, first_row[4])  # profile.tags
     assert profile_tags == ["admin", "vip"]
 
-    # Verify scores array
+    # Verify arrays
     scores = _parse_json_if_needed(connection, first_row[5])
     assert scores == [0.95, 0.87, 0.92]
 
-    created_at = _parse_datetime_if_needed(connection, first_row[6])  # created_at
-    expected_dt = datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
-    assert (
-        created_at == expected_dt
-        or created_at.replace(tzinfo=timezone.utc) == expected_dt
-    )
+    # Verify datetime
+    created_at = _parse_datetime_if_needed(connection, first_row[6], eastern_tz)
+    original_dt = datetime(2024, 1, 15, 5, 30, 0, tzinfo=eastern_tz)
+    assert created_at == original_dt
+    assert created_at.tzinfo is not None
 
     metadata = _parse_json_if_needed(connection, first_row[7])  # metadata
     assert metadata == {"preferences": {"theme": "dark", "lang": "en"}}

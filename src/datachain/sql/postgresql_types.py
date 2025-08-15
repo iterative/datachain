@@ -13,8 +13,8 @@ class PostgreSQLTypeConverter(TypeConverter):
     """PostgreSQL-specific type converter."""
 
     def datetime(self):
-        """PostgreSQL uses TIMESTAMP instead of DATETIME."""
-        return postgresql.TIMESTAMP()
+        """PostgreSQL uses TIMESTAMP WITH TIME ZONE to preserve timezone information."""
+        return postgresql.TIMESTAMP(timezone=True)
 
     def json(self):
         """PostgreSQL uses JSONB for better performance and query capabilities."""
