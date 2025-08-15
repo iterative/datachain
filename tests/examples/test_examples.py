@@ -93,6 +93,7 @@ def test_multimodal(example):
 
 
 @pytest.mark.examples
+@pytest.mark.incremental_processing
 @pytest.mark.parametrize("example", incremental_processing_examples)
 def test_incremental_processing_examples(example):
     smoke_test(example)
