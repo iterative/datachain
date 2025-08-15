@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Optional, Union
 import sqlalchemy
 
 from datachain.query.schema import ColumnMeta
+from datachain.utils import batched
 
 DEFAULT_DATABASE_BATCH_SIZE = 10_000
 
@@ -74,6 +75,7 @@ def to_database(
     *,
     batch_rows: int = DEFAULT_DATABASE_BATCH_SIZE,
     on_conflict: Optional[str] = None,
+    conflict_columns: Optional[list[str]] = None,
     column_mapping: Optional[dict[str, Optional[str]]] = None,
 ) -> None:
     """
@@ -82,8 +84,6 @@ def to_database(
     This is the core implementation that handles the actual database operations.
     For user-facing documentation, see DataChain.to_database() method.
     """
-    from datachain.utils import batched
-
     if on_conflict and on_conflict not in ("ignore", "update"):
         raise ValueError(
             f"on_conflict must be 'ignore' or 'update', got: {on_conflict}"
@@ -105,19 +105,26 @@ def to_database(
         metadata = sqlalchemy.MetaData()
         table = sqlalchemy.Table(table_name, metadata, *columns)
 
-        # Check if table already exists to determine if we should clean up on error.
-        inspector = sqlalchemy.inspect(conn)
-        assert inspector  # to satisfy mypy
-        table_existed_before = table_name in inspector.get_table_names()
-
+        table_existed_before = False
         try:
-            table.create(conn, checkfirst=True)
-            rows_iter = chain._leaf_values()
-            for batch in batched(rows_iter, batch_rows):
-                _process_batch(
-                    conn, table, batch, on_conflict, column_indices_and_names
-                )
-            conn.commit()
+            with conn.begin():
+                # Check if table exists to determine if we should clean up on error.
+                inspector = sqlalchemy.inspect(conn)
+                assert inspector  # to satisfy mypy
+                table_existed_before = table_name in inspector.get_table_names()
+
+                table.create(conn, checkfirst=True)
+
+                rows_iter = chain._leaf_values()
+                for batch in batched(rows_iter, batch_rows):
+                    _process_batch(
+                        conn,
+                        table,
+                        batch,
+                        on_conflict,
+                        conflict_columns,
+                        column_indices_and_names,
+                    )
         except Exception:
             if not table_existed_before:
                 try:
@@ -183,7 +190,9 @@ def _prepare_columns(all_columns, column_mapping):
     return column_indices_and_names, columns
 
 
-def _process_batch(conn, table, batch, on_conflict, column_indices_and_names):
+def _process_batch(
+    conn, table, batch, on_conflict, conflict_columns, column_indices_and_names
+):
     """Process a batch of rows with conflict resolution."""
 
     def prepare_row(row_values):
@@ -217,7 +226,20 @@ def _process_batch(conn, table, batch, on_conflict, column_indices_and_names):
             update_values = {
                 col.name: insert_stmt.excluded[col.name] for col in table.columns
             }
-            insert_stmt = insert_stmt.on_conflict_do_update(set_=update_values)
+            if conn.engine.name == "postgresql":
+                # Validate conflict_columns parameter for PostgreSQL update conflicts
+                if on_conflict == "update" and conflict_columns is None:
+                    raise ValueError(
+                        "conflict_columns parameter is required when "
+                        "on_conflict='update' with PostgreSQL. Specify the column "
+                        "names that form a unique constraint."
+                    )
+
+                insert_stmt = insert_stmt.on_conflict_do_update(
+                    index_elements=conflict_columns, set_=update_values
+                )
+            else:
+                insert_stmt = insert_stmt.on_conflict_do_update(set_=update_values)
     elif on_conflict:
         import warnings
 

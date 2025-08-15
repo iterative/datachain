@@ -71,6 +71,21 @@ jobs:
           - os: windows-latest
             pyv: '3.13'
 
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_USER: test
+          POSTGRES_DB: test_datachain
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
@@ -120,10 +135,14 @@ jobs:
       - name: Run tests
         run: nox -s tests-${{ matrix.pyv }} -- -m "not e2e and not examples" $DISABLE_REMOTES_ARG
         shell: bash
+        env:
+          TEST_POSTGRES_URI: postgresql://test:test@localhost:5432/test_datachain
 
       - name: Run E2E tests
         run: nox -s e2e-${{ matrix.pyv }}
         shell: bash
+        env:
+          TEST_POSTGRES_URI: postgresql://test:test@localhost:5432/test_datachain
 
       - name: Upload coverage report
         uses: codecov/codecov-action@v5

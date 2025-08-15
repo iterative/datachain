@@ -2296,6 +2296,7 @@ class DataChain:
         *,
         batch_rows: int = DEFAULT_DATABASE_BATCH_SIZE,
         on_conflict: Optional[str] = None,
+        conflict_columns: Optional[list[str]] = None,
         column_mapping: Optional[dict[str, Optional[str]]] = None,
     ) -> None:
         """Save chain to a database table using a given database connection.
@@ -2319,6 +2320,9 @@ class DataChain:
                   (default)
                 - "ignore": Skip duplicate rows silently
                 - "update": Update existing rows with new values
+            conflict_columns: List of column names that form a unique constraint
+                for conflict resolution. Required when on_conflict='update' and
+                using PostgreSQL.
             column_mapping: Optional mapping to rename or skip columns:
                 - Dict mapping DataChain column names to database column names
                 - Set values to None to skip columns entirely, or use `defaultdict` to
@@ -2377,6 +2381,7 @@ class DataChain:
             connection,
             batch_rows=batch_rows,
             on_conflict=on_conflict,
+            conflict_columns=conflict_columns,
             column_mapping=column_mapping,
         )
 
