@@ -192,11 +192,11 @@ class DataChain:
         self._setup: dict = setup or {}
         self._sys = _sys
         self._delta = False
+        self._delta_unsafe = False
         self._delta_on: Optional[Union[str, Sequence[str]]] = None
         self._delta_result_on: Optional[Union[str, Sequence[str]]] = None
         self._delta_compare: Optional[Union[str, Sequence[str]]] = None
         self._delta_retry: Optional[Union[bool, str]] = None
-        self._delta_unsafe = False
 
     def __repr__(self) -> str:
         """Return a string representation of the chain."""
@@ -216,6 +216,7 @@ class DataChain:
         right_on: Optional[Union[str, Sequence[str]]] = None,
         compare: Optional[Union[str, Sequence[str]]] = None,
         delta_retry: Optional[Union[bool, str]] = None,
+        delta_unsafe: bool = False,
     ) -> "Self":
         """Marks this chain as delta, which means special delta process will be
         called on saving dataset for optimization"""
@@ -226,6 +227,7 @@ class DataChain:
         self._delta_result_on = right_on
         self._delta_compare = compare
         self._delta_retry = delta_retry
+        self._delta_unsafe = delta_unsafe
         return self
 
     @property
@@ -238,10 +240,9 @@ class DataChain:
         """Returns True if this chain is ran in "delta" update mode"""
         return self._delta
 
-    def delta_unsafe(self) -> "Self":
-        cloned = self.clone()
-        cloned._delta_unsafe = True
-        return cloned
+    @property
+    def delta_unsafe(self) -> bool:
+        return self._delta_unsafe
 
     @property
     def schema(self) -> dict[str, DataType]:
@@ -329,6 +330,7 @@ class DataChain:
                 right_on=self._delta_result_on,
                 compare=self._delta_compare,
                 delta_retry=self._delta_retry,
+                delta_unsafe=self._delta_unsafe,
             )
 
         return chain

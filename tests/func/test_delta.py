@@ -153,7 +153,8 @@ def test_delta_update_unsafe(test_session, tmp_dir, tmp_path):
             delta_on=["file.source", "file.path"],
             delta_result_on=["file.source", "file.path"],
             delta_compare=["file.version", "file.etag"],
-        ).delta_unsafe().merge(merge_ds, on="file.path", inner=True).save(ds_name)
+            delta_unsafe=True,
+        ).merge(merge_ds, on="file.path", inner=True).save(ds_name)
 
     # first version of starting dataset
     create_image_dataset(starting_ds_name, images[:2])
@@ -167,14 +168,9 @@ def test_delta_update_unsafe(test_session, tmp_dir, tmp_path):
     # second version of delta dataset
     create_delta_dataset(ds_name)
 
-    """
-    assert _get_dependencies(catalog, ds_name, "1.0.1") == [
-        (dependency_ds_name, "1.0.1")
-    ]
-    assert sorted(_get_dependencies(catalog, ds_name, "1.0.1")) == sorted([
-        (dependency_ds_name, "1.0.1"), (dependency_ds_merge_name, "1.0.0")
-    ])
-    """
+    assert sorted(_get_dependencies(catalog, ds_name, "1.0.1")) == sorted(
+        [(dependency_ds_name, "1.0.1"), (dependency_ds_merge_name, "1.0.0")]
+    )
 
     assert (dc.read_dataset(ds_name, version="1.0.0").order_by("file.path")).to_list(
         "file.path", "value"
