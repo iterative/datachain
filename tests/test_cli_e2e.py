@@ -125,9 +125,9 @@ E2E_STEPS = (
             "s3://ldb-public/remote/datasets/mnist-tiny/",
             "mnt-cp",
         ),
-        "expected": "",
-        "downloading": True,
-        "instantiating": True,
+        "expected": "Copied s3://ldb-public/remote/datasets/mnist-tiny/ to mnt-cp",
+        "downloading": False,
+        "instantiating": False,
         "files": {
             "mnt-cp": MNT_FILE_TREE,
         },

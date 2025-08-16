@@ -11,11 +11,12 @@ from typing import (
     Optional,
     TypeVar,
 )
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urlencode, urlparse, urlunparse
 
 import websockets
 from requests.exceptions import HTTPError, Timeout
 
+from datachain.client.fsspec import Client
 from datachain.config import Config
 from datachain.dataset import DatasetRecord
 from datachain.error import DataChainError
@@ -29,9 +30,13 @@ DatasetJobVersionsData = Optional[dict[str, Any]]
 DatasetExportStatus = Optional[dict[str, Any]]
 DatasetExportSignedUrls = Optional[list[str]]
 FileUploadData = Optional[dict[str, Any]]
+
 JobData = Optional[dict[str, Any]]
 JobListData = dict[str, Any]
 ClusterListData = dict[str, Any]
+
+PresignedUrlData = Optional[dict[str, Any]]
+
 logger = logging.getLogger("datachain")
 
 DATASET_ROWS_CHUNK_SIZE = 8192
@@ -471,3 +476,127 @@ class StudioClient:
 
     def get_clusters(self) -> Response[ClusterListData]:
         return self._send_request("datachain/clusters", {}, method="GET")
+
+    # Storage commands
+    def delete_storage_file(
+        self, path: str, recursive: bool = False
+    ) -> Response[FileUploadData]:
+        client = Client.get_implementation(path)
+        bucket, subpath = client.split_url(path)
+
+        data = {
+            "bucket": bucket,
+            "recursive": "true" if recursive else "false",
+            "remote": client.protocol,
+            "team": self.team,
+            "paths": subpath,
+        }
+
+        url = f"datachain/storages/files?{urlencode(data)}"
+
+        return self._send_request(url, data, method="DELETE")
+
+    def move_storage_file(
+        self, path: str, new_path: str, recursive: bool = False
+    ) -> Response[FileUploadData]:
+        client = Client.get_implementation(path)
+        remote = client.protocol
+
+        bucket, subpath = client.split_url(path)
+        new_bucket, new_subpath = client.split_url(new_path)
+        if bucket != new_bucket:
+            raise DataChainError("Cannot move between different buckets")
+
+        data = {
+            "bucket": bucket,
+            "newPath": new_subpath,
+            "oldPath": subpath,
+            "recursive": recursive,
+            "remote": remote,
+            "team": self.team,
+        }
+
+        return self._send_request("datachain/storages/files/mv", data, method="POST")
+
+    def copy_storage_file(
+        self, path: str, new_path: str, recursive: bool = False
+    ) -> Response[FileUploadData]:
+        client = Client.get_implementation(path)
+        remote = client.protocol
+
+        bucket, subpath = client.split_url(path)
+        new_bucket, new_subpath = client.split_url(new_path)
+        if bucket != new_bucket:
+            raise DataChainError("Cannot copy between different buckets")
+
+        data = {
+            "bucket": bucket,
+            "newPath": new_subpath,
+            "oldPath": subpath,
+            "recursive": recursive,
+            "remote": remote,
+            "team": self.team,
+        }
+
+        return self._send_request("datachain/storages/files/cp", data, method="POST")
+
+    def batch_presigned_urls(
+        self, destination_path: str, paths: dict[str, str]
+    ) -> Response[PresignedUrlData]:
+        client = Client.get_implementation(destination_path)
+        remote = client.protocol
+        bucket, _ = client.split_url(destination_path)
+
+        data = {
+            "bucket": bucket,
+            "paths": paths,
+            "remote": remote,
+            "team": self.team,
+        }
+        return self._send_request(
+            "datachain/storages/batch-presigned-urls", data, method="POST"
+        )
+
+    def download_url(self, path: str) -> Response[FileUploadData]:
+        client = Client.get_implementation(path)
+        remote = client.protocol
+        bucket, subpath = client.split_url(path)
+
+        data = {
+            "bucket": bucket,
+            "remote": remote,
+            "filepath": subpath,
+            "team": self.team,
+        }
+        return self._send_request(
+            "datachain/storages/files/download", data, method="GET"
+        )
+
+    def save_activity_logs(
+        self,
+        path: str,
+        uploaded_logs: Optional[list[dict[str, Any]]] = None,
+        moved_paths: Optional[
+            list[tuple[str, str, int]]
+        ] = None,  # (old_path, new_path, size)
+        deleted_paths: Optional[list[str]] = None,  # paths
+    ) -> Response[FileUploadData]:
+        client = Client.get_implementation(path)
+        remote = client.protocol
+        bucket, _ = client.split_url(path)
+
+        data = {
+            "remote": remote,
+            "team": self.team,
+            "bucket": bucket,
+            "uploaded_paths": uploaded_logs or [],
+            "failed_paths": {},
+            "modified_paths": [],
+            "failed_modified_paths": {},
+            "moved_paths": moved_paths or [],
+            "deleted_paths": deleted_paths or [],
+        }
+
+        return self._send_request(
+            "datachain/storages/activity-logs", data, method="POST"
+        )
