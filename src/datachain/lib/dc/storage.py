@@ -43,6 +43,7 @@ def read_storage(
     delta_result_on: Optional[Union[str, Sequence[str]]] = None,
     delta_compare: Optional[Union[str, Sequence[str]]] = None,
     delta_retry: Optional[Union[bool, str]] = None,
+    delta_unsafe: bool = False,
     client_config: Optional[dict] = None,
 ) -> "DataChain":
     """Get data from storage(s) as a list of file with all file attributes.
@@ -77,6 +78,9 @@ def read_storage(
               (error mode)
             - True: Reprocess records missing from the result dataset (missing mode)
             - None: No retry processing (default)
+        delta_unsafe: If True, allows the use of methods that are normally unsafe
+            and forbidden during a delta update. The following methods will be
+            permitted: `merge`, `agg`, `union`, `group_by`, and `distinct`.
 
     Returns:
         DataChain: A DataChain object containing the file information.
@@ -218,6 +222,7 @@ def read_storage(
             right_on=delta_result_on,
             compare=delta_compare,
             delta_retry=delta_retry,
+            delta_unsafe=delta_unsafe,
         )
 
     return storage_chain

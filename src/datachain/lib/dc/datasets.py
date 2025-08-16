@@ -40,6 +40,7 @@ def read_dataset(
     delta_result_on: Optional[Union[str, Sequence[str]]] = None,
     delta_compare: Optional[Union[str, Sequence[str]]] = None,
     delta_retry: Optional[Union[bool, str]] = None,
+    delta_unsafe: bool = False,
     update: bool = False,
 ) -> "DataChain":
     """Get data from a saved Dataset. It returns the chain itself.
@@ -80,6 +81,9 @@ def read_dataset(
         update: If True always checks for newer versions available on Studio, even if
             some version of the dataset exists locally already. If False (default), it
             will only fetch the dataset from Studio if it is not found locally.
+        delta_unsafe: If True, allows the use of methods that are normally unsafe
+            and forbidden during a delta update. The following methods will be
+            permitted: `merge`, `agg`, `union`, `group_by`, and `distinct`.
 
 
     Example:
@@ -205,6 +209,7 @@ def read_dataset(
             right_on=delta_result_on,
             compare=delta_compare,
             delta_retry=delta_retry,
+            delta_unsafe=delta_unsafe,
         )
 
     return chain
