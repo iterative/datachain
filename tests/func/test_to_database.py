@@ -133,12 +133,23 @@ def _parse_datetime_if_needed(connection, value, expected_timezone=None):
     return value
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def ensure_sqlite_adapter():
-    """Ensure SQLite adapters are setup."""
-    import datachain.sql.sqlite
+    """
+    Ensure SQLite adapters are setup for DataChain.
 
-    datachain.sql.sqlite.setup()
+    This fixture forcefully registers DataChain's SQLite adapters to handle
+    potential conflicts with other libraries, particularly pandas.io.sql.
+
+    pandas.io.sql registers its own datetime adapter when performing to_sql()
+    operations, which can overwrite DataChain's custom datetime adapter that
+    handles timezone-aware datetime serialization. This fixture ensures
+    DataChain's adapters are active for all SQLite-based tests.
+    """
+    from datachain.sql.sqlite.base import adapt_datetime
+
+    sqlite3.register_adapter(datetime, adapt_datetime)
+
     yield
 
 
@@ -148,7 +159,7 @@ def sqlite_uri():
 
 
 @pytest.fixture
-def sqlite_engine(sqlite_uri):
+def sqlite_engine(sqlite_uri, ensure_sqlite_adapter):
     engine = sqlalchemy.create_engine(sqlite_uri)
     try:
         yield engine
@@ -157,19 +168,19 @@ def sqlite_engine(sqlite_uri):
 
 
 @pytest.fixture
-def sqlite_connection(sqlite_engine):
+def sqlite_connection(sqlite_engine, ensure_sqlite_adapter):
     with closing(sqlite_engine.connect()) as conn:
         yield conn
 
 
 @pytest.fixture
-def sqlite_session(sqlite_engine):
+def sqlite_session(sqlite_engine, ensure_sqlite_adapter):
     with Session(bind=sqlite_engine) as session:
         yield session
 
 
 @pytest.fixture
-def sqlite3_connection():
+def sqlite3_connection(ensure_sqlite_adapter):
     with sqlite3.connect(":memory:") as conn:
         yield conn
 
@@ -252,7 +263,7 @@ def test_basic_to_database(tmp_dir, connection):
     assert result[2] == (3, "Charlie", 35)
 
 
-def test_to_database_with_uri(sqlite_uri):
+def test_to_database_with_uri(sqlite_uri, ensure_sqlite_adapter):
     """Test basic functionality with URI connection string."""
     chain = dc.read_values(
         id=[1, 2, 3], name=["Alice", "Bob", "Charlie"], age=[25, 30, 35]
