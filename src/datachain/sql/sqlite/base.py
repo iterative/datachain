@@ -60,12 +60,9 @@ MAX_INT64 = 2**64 - 1
 
 def setup():
     global setup_is_complete  # noqa: PLW0603
-    print(f"[SETUP-DEBUG] setup() called, setup_is_complete={setup_is_complete}")
     if setup_is_complete:
-        print("[SETUP-DEBUG] setup already complete, returning early")
         return
 
-    print("[SETUP-DEBUG] Running full setup...")
     # sqlite 3.31.1 is the earliest version tested in CI
     if sqlite3.sqlite_version_info < (3, 31, 1):
         logger.warning(
@@ -76,10 +73,8 @@ def setup():
 
     # We want to show tracebacks for user-defined functions
     sqlite3.enable_callback_tracebacks(True)
-    print(f"[SETUP-DEBUG] Registering datetime adapter: {adapt_datetime}")
     sqlite3.register_adapter(datetime, adapt_datetime)
     sqlite3.register_converter("datetime", convert_datetime)
-    print("[SETUP-DEBUG] Adapters registered")
 
     register_type_converters()
     register_backend_types("sqlite", SQLiteTypeConverter())
@@ -309,23 +304,13 @@ def register_user_defined_sql_functions() -> None:
 
 
 def adapt_datetime(val: datetime) -> str:
-    print(f"[CI-DEBUG] adapt_datetime called with: {val} (tzinfo={val.tzinfo})")
-    print(f"[CI-DEBUG] tzname(): {val.tzname()}")
-    print(f"[CI-DEBUG] utcoffset(): {val.utcoffset()}")
-
     is_utc_check = val.tzinfo is timezone.utc
     tzname_check = val.tzname() == "UTC"
     combined_check = is_utc_check or tzname_check
 
-    print(f"[CI-DEBUG] val.tzinfo is timezone.utc: {is_utc_check}")
-    print(f"[CI-DEBUG] val.tzname() == 'UTC': {tzname_check}")
-    print(f"[CI-DEBUG] Combined condition (should convert?): {not combined_check}")
-
     if not combined_check:
-        print(f"[CI-DEBUG] Converting {val} to UTC...")
         try:
             val = val.astimezone(timezone.utc)
-            print(f"[CI-DEBUG] After conversion: {val}")
         except (OverflowError, ValueError, OSError):
             if val.year == MAXYEAR:
                 val = datetime.max.replace(tzinfo=timezone.utc)
@@ -333,12 +318,8 @@ def adapt_datetime(val: datetime) -> str:
                 val = datetime.min.replace(tzinfo=timezone.utc)
             else:
                 raise
-    else:
-        print("[CI-DEBUG] Already UTC, skipping conversion")
 
-    result = val.replace(tzinfo=None).isoformat(" ")
-    print(f"[CI-DEBUG] Final result: '{result}'")
-    return result
+    return val.replace(tzinfo=None).isoformat(" ")
 
 
 def convert_datetime(val: bytes) -> datetime:

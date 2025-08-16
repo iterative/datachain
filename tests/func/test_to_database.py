@@ -133,23 +133,22 @@ def _parse_datetime_if_needed(connection, value, expected_timezone=None):
     return value
 
 
-@pytest.fixture
-def sqlite_uri():
-    # Ensure SQLite adapters are registered before any connections are made
+@pytest.fixture(autouse=True)
+def ensure_sqlite_adapter():
+    """Ensure SQLite adapters are setup."""
     import datachain.sql.sqlite
 
     datachain.sql.sqlite.setup()
-    print("[FIXTURE-DEBUG] SQLite setup called from sqlite_uri fixture")
+    yield
+
+
+@pytest.fixture
+def sqlite_uri():
     return "sqlite:///:memory:"
 
 
 @pytest.fixture
 def sqlite_engine(sqlite_uri):
-    # Ensure SQLite adapters are registered before engine creation
-    import datachain.sql.sqlite
-
-    datachain.sql.sqlite.setup()
-    print("[FIXTURE-DEBUG] SQLite setup called from sqlite_engine fixture")
     engine = sqlalchemy.create_engine(sqlite_uri)
     try:
         yield engine
@@ -159,51 +158,19 @@ def sqlite_engine(sqlite_uri):
 
 @pytest.fixture
 def sqlite_connection(sqlite_engine):
-    # Ensure SQLite adapters are registered before connection creation
-    import datachain.sql.sqlite
-
-    datachain.sql.sqlite.setup()
-    print("[FIXTURE-DEBUG] SQLite setup called from sqlite_connection fixture")
     with closing(sqlite_engine.connect()) as conn:
         yield conn
 
 
 @pytest.fixture
 def sqlite_session(sqlite_engine):
-    # Ensure SQLite adapters are registered before session creation
-    import datachain.sql.sqlite
-
-    datachain.sql.sqlite.setup()
-    print("[FIXTURE-DEBUG] SQLite setup called from sqlite_session fixture")
     with Session(bind=sqlite_engine) as session:
         yield session
 
 
 @pytest.fixture
 def sqlite3_connection():
-    # Force fresh SQLite adapter registration, bypassing setup_is_complete check
-    from datetime import datetime
-
-    from datachain.sql.sqlite.base import adapt_datetime
-
-    print("[FIXTURE-DEBUG] Forcing fresh adapter registration...")
-    sqlite3.register_adapter(datetime, adapt_datetime)
-    print("[FIXTURE-DEBUG] Adapter registered directly")
-
-    # Test if adapter is actually working
-    eastern_tz = timezone(timedelta(hours=-5))
-    test_dt = datetime(2024, 1, 15, 5, 30, 0, tzinfo=eastern_tz)
-
     with sqlite3.connect(":memory:") as conn:
-        # Test direct adapter usage
-        try:
-            conn.execute("CREATE TABLE test_adapter (dt TEXT)")
-            conn.execute("INSERT INTO test_adapter VALUES (?)", (test_dt,))
-            result = conn.execute("SELECT dt FROM test_adapter").fetchone()[0]
-            print(f"[FIXTURE-DEBUG] Direct adapter test: {test_dt} -> '{result}'")
-        except (sqlite3.Error, TypeError) as e:
-            print(f"[FIXTURE-DEBUG] Adapter test failed: {e}")
-
         yield conn
 
 
