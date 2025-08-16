@@ -304,7 +304,11 @@ def register_user_defined_sql_functions() -> None:
 
 
 def adapt_datetime(val: datetime) -> str:
-    if not (val.tzinfo is timezone.utc or val.tzname() == "UTC"):
+    is_utc_check = val.tzinfo is timezone.utc
+    tzname_check = val.tzname() == "UTC"
+    combined_check = is_utc_check or tzname_check
+
+    if not combined_check:
         try:
             val = val.astimezone(timezone.utc)
         except (OverflowError, ValueError, OSError):
@@ -314,6 +318,7 @@ def adapt_datetime(val: datetime) -> str:
                 val = datetime.min.replace(tzinfo=timezone.utc)
             else:
                 raise
+
     return val.replace(tzinfo=None).isoformat(" ")
 
 

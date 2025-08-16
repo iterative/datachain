@@ -96,8 +96,11 @@ video = [
   "imageio[ffmpeg,pyav]>=2.37.0",
   "opencv-python"
 ]
+postgres = [
+  "psycopg2-binary>=2.9.0"
+]
 tests = [
-  "datachain[torch,audio,remote,vector,hf,video]",
+  "datachain[torch,audio,remote,vector,hf,video,postgres]",
   "pytest>=8,<9",
   "pytest-sugar>=0.9.6",
   "pytest-cov>=4.1.0",
