@@ -227,8 +227,7 @@ def _process_batch(
                 col.name: insert_stmt.excluded[col.name] for col in table.columns
             }
             if conn.engine.name == "postgresql":
-                # Validate conflict_columns parameter for PostgreSQL update conflicts
-                if on_conflict == "update" and conflict_columns is None:
+                if not conflict_columns:
                     raise ValueError(
                         "conflict_columns parameter is required when "
                         "on_conflict='update' with PostgreSQL. Specify the column "

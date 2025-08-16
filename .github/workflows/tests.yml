@@ -80,7 +80,7 @@ jobs:
 
       - name: Setup PostgreSQL
         if: runner.os != 'Windows'
-        uses: ikalnytskyi/action-setup-postgres@v7
+        uses: ikalnytskyi/action-setup-postgres@10ab8a56cc77b4823c2bfa57b1d4dd5605ef0481 # v7
         with:
           username: test
           password: test
