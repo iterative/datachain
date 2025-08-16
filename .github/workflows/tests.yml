@@ -78,6 +78,24 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
+      - name: Setup PostgreSQL
+        if: runner.os != 'Windows'
+        uses: ikalnytskyi/action-setup-postgres@10ab8a56cc77b4823c2bfa57b1d4dd5605ef0481 # v7
+        with:
+          username: test
+          password: test
+          database: test_datachain
+          port: 5432
+          postgres-version: "17"
+        id: postgres
+
+      - name: Set PostgreSQL URI
+        if: runner.os != 'Windows'
+        run: |
+          FULL_URI="${{ steps.postgres.outputs.connection-uri }}"
+          echo "TEST_POSTGRES_URI=${FULL_URI%/*}" >> "$GITHUB_ENV"
+        shell: bash
+
       - name: Set up Python ${{ matrix.pyv }}
         uses: actions/setup-python@v5
         with:
