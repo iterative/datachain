@@ -77,12 +77,15 @@ def to_database(
     on_conflict: Optional[str] = None,
     conflict_columns: Optional[list[str]] = None,
     column_mapping: Optional[dict[str, Optional[str]]] = None,
-) -> None:
+) -> int:
     """
     Implementation function for exporting DataChain to database tables.
 
     This is the core implementation that handles the actual database operations.
     For user-facing documentation, see DataChain.to_database() method.
+
+    Returns:
+        int: Number of rows affected (inserted/updated).
     """
     if on_conflict and on_conflict not in ("ignore", "update"):
         raise ValueError(
@@ -101,11 +104,16 @@ def to_database(
         all_columns, normalized_column_mapping
     )
 
+    normalized_conflict_columns = _normalize_conflict_columns(
+        conflict_columns, normalized_column_mapping
+    )
+
     with _connect(connection) as conn:
         metadata = sqlalchemy.MetaData()
         table = sqlalchemy.Table(table_name, metadata, *columns)
 
         table_existed_before = False
+        total_rows_affected = 0
         try:
             with conn.begin():
                 # Check if table exists to determine if we should clean up on error.
@@ -117,14 +125,15 @@ def to_database(
 
                 rows_iter = chain._leaf_values()
                 for batch in batched(rows_iter, batch_rows):
-                    _process_batch(
+                    rows_affected = _process_batch(
                         conn,
                         table,
                         batch,
                         on_conflict,
-                        conflict_columns,
+                        normalized_conflict_columns,
                         column_indices_and_names,
                     )
+                    total_rows_affected += rows_affected
         except Exception:
             if not table_existed_before:
                 try:
@@ -133,6 +142,8 @@ def to_database(
                 except sqlalchemy.exc.SQLAlchemyError:
                     pass
             raise
+
+    return total_rows_affected
 
 
 def _normalize_column_mapping(
@@ -174,6 +185,30 @@ def _normalize_column_mapping(
     return normalized_mapping
 
 
+def _normalize_conflict_columns(
+    conflict_columns: Optional[list[str]], column_mapping: dict[str, Optional[str]]
+) -> Optional[list[str]]:
+    """
+    Normalize conflict_columns by converting DataChain format to database format
+    and applying column mapping.
+    """
+    if not conflict_columns:
+        return None
+
+    normalized_columns = []
+    for col in conflict_columns:
+        db_col = ColumnMeta.to_db_name(col)
+
+        if db_col in column_mapping or hasattr(column_mapping, "default_factory"):
+            mapped_name = column_mapping[db_col]
+            if mapped_name:
+                normalized_columns.append(mapped_name)
+        else:
+            normalized_columns.append(db_col)
+
+    return normalized_columns
+
+
 def _prepare_columns(all_columns, column_mapping):
     """Prepare column mapping and column definitions."""
     column_indices_and_names = []  # List of (index, target_name) tuples
@@ -192,8 +227,12 @@ def _prepare_columns(all_columns, column_mapping):
 
 def _process_batch(
     conn, table, batch, on_conflict, conflict_columns, column_indices_and_names
-):
-    """Process a batch of rows with conflict resolution."""
+) -> int:
+    """Process a batch of rows with conflict resolution.
+
+    Returns:
+        int: Number of rows affected by the insert operation.
+    """
 
     def prepare_row(row_values):
         """Convert a row tuple to a dictionary with proper DB column names."""
@@ -206,6 +245,7 @@ def _process_batch(
 
     supports_conflict = on_conflict and conn.engine.name in ("postgresql", "sqlite")
 
+    insert_stmt: Any  # Can be PostgreSQL, SQLite, or regular insert statement
     if supports_conflict:
         # Use dialect-specific insert for conflict resolution
         if conn.engine.name == "postgresql":
@@ -249,7 +289,8 @@ def _process_batch(
             stacklevel=2,
         )
 
-    conn.execute(insert_stmt, rows_to_insert)
+    result = conn.execute(insert_stmt, rows_to_insert)
+    return result.rowcount
 
 
 def read_database(
