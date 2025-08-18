@@ -373,7 +373,7 @@ curl -X POST "https://studio.datachain.ai/api/datachain/upload-file" \
 - `team_name` (body, required): Team identifier (automatically added by client)
 
 Note that compute_cluster_name and compute_cluster_id are mutually exclusive.
-Check documentations from [`datachain job run`] on more information about parameters above.
+Check documentation from [`datachain job run`] for more information about the parameters above.
 You can get the file id from above (Upload file) endpoint.
 
 **Example Request**:
