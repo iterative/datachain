@@ -103,5 +103,6 @@ DataChain is available as an open source project and Studio as a proprietary sol
     - **UI for Multimodal Data** like images, videos, and PDFs.
     - **Scalable Compute** to handle large datasets (100M+ files) and in-house AI model inference.
     - **Access control** including SSO and team based collaboration.
+    - **[Studio API Reference](references/studio.md)** - Complete REST API documentation for programmatic access.
 - [DataChain Open Source](https://github.com/iterative/datachain):
     - Python-based AI-data warehouse for transforming and analyzing unstructured data like images, audio, videos, text and PDFs.

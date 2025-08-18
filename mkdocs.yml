@@ -93,6 +93,7 @@ nav:
               - String: references/functions/string.md
               - Window: references/functions/window.md
           - Toolkit: references/toolkit.md
+          - Studio: references/studio.md
       - 📖 CLI Reference:
           - Overview: commands/index.md
           - Commands:
