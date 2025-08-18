@@ -490,7 +490,7 @@ response = client.get_jobs(status="running", limit=10)
 
 if response.ok:
     for job in response.data['jobs']:
-        print(f"Job {job['id']}: {job['status']} - {job['name']}%")
+        print(f"Job {job['id']}: {job['status']} - {job['name']}")
 ```
 
 ---
