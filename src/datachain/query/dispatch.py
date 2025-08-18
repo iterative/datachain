@@ -1,4 +1,5 @@
 import contextlib
+import multiprocessing as mp
 from collections.abc import Iterable, Sequence
 from itertools import chain
 from multiprocessing import cpu_count
@@ -8,7 +9,6 @@ from typing import TYPE_CHECKING, Literal, Optional
 import multiprocess
 from cloudpickle import load, loads
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
-from multiprocess import get_context
 
 from datachain.catalog import Catalog
 from datachain.catalog.catalog import clone_catalog_with_cache
@@ -116,7 +116,7 @@ class UDFDispatcher:
         self.buffer_size = buffer_size
         self.task_queue = None
         self.done_queue = None
-        self.ctx = get_context("spawn")
+        self.ctx = mp.get_context("spawn")
 
     @property
     def catalog(self) -> "Catalog":

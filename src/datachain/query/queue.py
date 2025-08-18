@@ -1,6 +1,7 @@
 import datetime
 from collections.abc import Iterable, Iterator
-from queue import Empty, Full, Queue
+from multiprocessing.queue import Queue
+from queue import Empty, Full
 from struct import pack, unpack
 from time import sleep
 from typing import Any
