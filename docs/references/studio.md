@@ -29,6 +29,7 @@ Content-Type: application/json
 **Authentication**: Requires `DATASETS` scope from [`datachain auth login`](../commands/auth/login.md)
 
 **Parameters**:
+
 - `prefix` (query, optional): Filter datasets by name prefix
 - `team_name` (query, required): Team identifier (automatically added by client)
 
@@ -117,6 +118,7 @@ if response.ok:
 **Authentication**: Requires `DATASETS` scope from [`datachain auth login`](../commands/auth/login.md)
 
 **Parameters**:
+
 - `source` (body, required): Path to list contents for
 - `team_name` (body, required): Team identifier (automatically added by client)
 
@@ -187,6 +189,7 @@ for path, response in client.ls(["s3://my-bucket/dataset/images"]):
 **Authentication**: Requires `DATASETS` scope from [`datachain auth login`](../commands/auth/login.md)
 
 **Parameters**:
+
 - `namespace` (query, required): Dataset namespace
 - `project` (query, required): Project name
 - `name` (query, required): Dataset name
@@ -318,6 +321,7 @@ if response.ok:
 **Authentication**: Requires `JOB` scope from [`datachain auth login`](../commands/auth/login.md)
 
 **Parameters**:
+
 - `file_content`: (body, required): base64 encoded value of file content encoded with utf-8
 - `file_name`: (body, required): Name of the file
 - `team_name` (body, required): Team identifier (automatically added by client)
@@ -351,6 +355,7 @@ curl -X POST "https://studio.datachain.ai/api/datachain/upload-file" \
 **Authentication**: Requires `EXPERIMENTS` scope from [`datachain auth login`](../commands/auth/login.md)
 
 **Parameters**:
+
 - `query` (body, required): Query string or script content
 - `query_type` (body, required): Type of query (e.g., "PYTHON", "SHELL")
 - `environment` (body, optional): Environment configuration eg. ENVIRONMENT_NAME=1
@@ -436,6 +441,7 @@ if response.ok:
 **Authentication**: Requires `EXPERIMENTS` scope from [`datachain auth login`](../commands/auth/login.md)
 
 **Parameters**:
+
 - `status` (query, optional): Filter by job status
 - `limit` (query, optional): Maximum number of jobs to return (default: 20)
 - `team_name` (query, required): Team identifier (automatically added by client)
@@ -500,6 +506,7 @@ if response.ok:
 **Authentication**: Requires `EXPERIMENTS` scope from [`datachain auth login`](../commands/auth/login.md)
 
 **Parameters**:
+
 - `job_id` (path, required): Job identifier
 - `team_name` (body, required): Team identifier (automatically added by client)
 
@@ -542,6 +549,7 @@ if response.ok:
 **Authentication**: Requires `EXPERIMENTS` scope from [`datachain auth login`](../commands/auth/login.md)
 
 **Parameters**:
+
 - `team_name` (query, required): Team identifier (automatically added by client)
 
 **Example Request**:
@@ -594,6 +602,7 @@ if response.ok:
 **Authentication**: Requires `EXPERIMENTS` scope from [`datachain auth login`](../commands/auth/login.md)
 
 **Parameters**:
+
 - `job_id` (query, required): Job identifier
 - `team_name` (query, required): Team identifier
 
@@ -647,6 +656,7 @@ asyncio.run(monitor_logs())
 ## Dependencies
 
 The Studio client requires the following optional dependencies:
+
 - `msgpack`: For efficient data serialization
 - `requests`: For HTTP communication
 - `websockets`: For real-time log streaming
