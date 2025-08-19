@@ -21,4 +21,3 @@ DataChain's API is organized into several modules:
 - [Functions](./func.md) - Built-in functions for data manipulation and analysis
 - [Torch](./torch.md) - PyTorch data loading utilities
 - [Toolkit](./toolkit.md) - Functions for common DS/ML operations
-- [Studio](./studio.md) - Cloud platform REST API for jobs and dataset management

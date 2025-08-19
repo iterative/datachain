@@ -93,6 +93,22 @@ class Response(Generic[T]):
 
 class StudioClient:
     def __init__(self, timeout: float = 3600.0, team: Optional[str] = None) -> None:
+        """
+        Initialize a StudioClient instance.
+
+        Args:
+            timeout: Timeout for the requests to Studio API
+            team: Team name to use for the requests. If not provided, it will be
+                retrieved from the environment variable `DATACHAIN_STUDIO_TEAM` or
+                the config file.
+
+        Example:
+        ```python
+        from datachain.remote.studio import StudioClient
+
+        client = StudioClient(team="my-team")
+        ```
+        """
         self._check_dependencies()
         self.timeout = timeout
         self._config = None
@@ -298,6 +314,23 @@ class StudioClient:
                     break
 
     def ls(self, paths: Iterable[str]) -> Iterator[tuple[str, Response[LsData]]]:
+        """
+        List contents of a specific dataset path.
+
+        Args:
+            paths: List of paths to list contents for
+
+        Returns:
+            Iterator of tuples containing the path and the response
+
+        Example:
+        ```python
+        for path, response in client.ls(["s3://my-bucket/dataset/images"]):
+            if response.ok:
+                for item in response.data:
+                    print(f"Item: {item['path']}, Size: {item['size']}")
+        ```
+        """
         # TODO: change LsData (response.data value) to be list of lists
         # to handle cases where a path will be expanded (i.e. globs)
         response: Response[LsData]
@@ -306,6 +339,24 @@ class StudioClient:
             yield path, response
 
     def ls_datasets(self, prefix: Optional[str] = None) -> Response[LsData]:
+        """
+        Retrieve a list of datasets with optional prefix filtering.
+
+        Args:
+            prefix: Prefix to filter datasets by
+
+        Returns:
+            Response object containing the list of datasets
+
+        Example:
+        ```python
+        response = client.ls_datasets(prefix="training")
+
+        if response.ok:
+            for dataset in response.data:
+                print(f"Dataset: {dataset['name']}")
+        ```
+        """
         return self._send_request(
             "datachain/datasets", {"prefix": prefix}, method="GET"
         )
@@ -356,6 +407,32 @@ class StudioClient:
     def dataset_info(
         self, namespace: str, project: str, name: str
     ) -> Response[DatasetInfoData]:
+        """
+        Get information about a specific dataset.
+
+        Args:
+            namespace: Namespace of the dataset
+            project: Project of the dataset
+            name: Name of the dataset
+
+        Returns:
+            Response object containing the dataset information
+
+        Example:
+        ```python
+        response = client.dataset_info(
+            namespace="default",
+            project="computer_vision",
+            name="training_images",
+        )
+
+        if response.ok:
+            dataset = response.data
+            print(f"Dataset: {dataset['name']}")
+            print(f"Versions: {len(dataset['versions'])}")
+        ```
+        """
+
         def _parse_dataset_info(dataset_info):
             _parse_dates(dataset_info, ["created_at", "finished_at"])
             for version in dataset_info.get("versions"):
@@ -410,6 +487,23 @@ class StudioClient:
         )
 
     def upload_file(self, content: bytes, file_name: str) -> Response[FileUploadData]:
+        """Upload a file to Studio to use in Studio Job.
+
+        Args:
+            content: file content
+            file_name: Name of the file
+
+        Returns:
+            Response object containing the file information
+
+        Example:
+        ```python
+        with open("file_name.txt", "rb") as f:
+            content = f.read()
+            response = client.upload_file(content, "file_name.txt")
+            file_id = response.data.get("blob", {}).get("id")
+        ```
+        """
         data = {
             "file_content": base64.b64encode(content).decode("utf-8"),
             "file_name": file_name,
@@ -433,6 +527,44 @@ class StudioClient:
         cron: Optional[str] = None,
         credentials_name: Optional[str] = None,
     ) -> Response[JobData]:
+        """
+        Submit a new job for execution in Studio.
+
+        Args:
+            query: Query string or script content
+            query_type: Type of query (e.g., "PYTHON", "SHELL")
+            environment: Environment configuration eg. ENVIRONMENT_NAME=1
+            workers: Number of worker processes
+            query_name: Name for the job
+            files: List of file paths to include.
+            python_version: Python version to use
+            requirements: Python requirements file content
+            repository: Git repository URL
+            priority: Job priority level (0-5, lower is higher priority)
+            cluster: Target compute cluster
+            start_time: Start time for delayed execution
+            cron: Cron expression for recurring jobs
+            credentials_name: Credentials identifier
+
+        Check documentation from [`datachain job run`] for more information.
+        You can get the file id from above (Upload file) endpoint.
+
+        Example:
+
+        ```python
+        response = client.create_job(
+            query="print(1)",
+            query_type="PYTHON",
+            workers=2,
+            query_name="Data Analysis Job",
+            priority=3
+        )
+
+        if response.ok:
+            job_id = response.data['id']
+            print(f"Job created with ID: {job_id}")
+        ```
+        """
         data = {
             "query": query,
             "query_type": query_type,
