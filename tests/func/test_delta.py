@@ -424,7 +424,10 @@ def test_delta_update_union(test_session, file_dataset):
             ).union(dc.read_dataset("numbers"), session=test_session)
         )
 
-    assert str(excinfo.value) == "Delta update cannot be used with union"
+    assert str(excinfo.value) == (
+        "Cannot use union with delta datasets - may cause inconsistency."
+        " Use delta_unsafe flag to disable delta tracking."
+    )
 
 
 def test_delta_update_merge(test_session, file_dataset):
@@ -440,7 +443,10 @@ def test_delta_update_merge(test_session, file_dataset):
             ).merge(dc.read_dataset("numbers"), on="id", session=test_session)
         )
 
-    assert str(excinfo.value) == "Delta update cannot be used with merge"
+    assert str(excinfo.value) == (
+        "Cannot use merge with delta datasets - may cause inconsistency."
+        " Use delta_unsafe flag to disable delta tracking."
+    )
 
 
 def test_delta_update_distinct(test_session, file_dataset):
@@ -454,7 +460,10 @@ def test_delta_update_distinct(test_session, file_dataset):
             ).distinct("file.path")
         )
 
-    assert str(excinfo.value) == "Delta update cannot be used with distinct"
+    assert str(excinfo.value) == (
+        "Cannot use distinct with delta datasets - may cause inconsistency."
+        " Use delta_unsafe flag to disable delta tracking."
+    )
 
 
 def test_delta_update_group_by(test_session, file_dataset):
@@ -468,7 +477,10 @@ def test_delta_update_group_by(test_session, file_dataset):
             ).group_by(cnt=func.count(), partition_by="file.path")
         )
 
-    assert str(excinfo.value) == "Delta update cannot be used with group_by"
+    assert str(excinfo.value) == (
+        "Cannot use group_by with delta datasets - may cause inconsistency."
+        " Use delta_unsafe flag to disable delta tracking."
+    )
 
 
 def test_delta_update_agg(test_session, file_dataset):
@@ -482,4 +494,7 @@ def test_delta_update_agg(test_session, file_dataset):
             ).agg(cnt=func.count(), partition_by="file.path")
         )
 
-    assert str(excinfo.value) == "Delta update cannot be used with agg"
+    assert str(excinfo.value) == (
+        "Cannot use agg with delta datasets - may cause inconsistency."
+        " Use delta_unsafe flag to disable delta tracking."
+    )
