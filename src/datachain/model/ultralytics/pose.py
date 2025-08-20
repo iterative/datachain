@@ -56,16 +56,16 @@ class YoloPose(DataModel):
         if not summary:
             return YoloPose(box=BBox(), pose=Pose3D())
         name = summary[0].get("name", "")
-        box = (
-            BBox.from_dict(summary[0]["box"], title=name)
-            if summary[0].get("box")
-            else BBox()
-        )
-        pose = (
-            Pose3D.from_dict(summary[0]["keypoints"])
-            if summary[0].get("keypoints")
-            else Pose3D()
-        )
+        if summary[0].get("box"):
+            assert isinstance(summary[0]["box"], dict)
+            box = BBox.from_dict(summary[0]["box"], title=name)
+        else:
+            box = BBox()
+        if summary[0].get("keypoints"):
+            assert isinstance(summary[0]["keypoints"], dict)
+            pose = Pose3D.from_dict(summary[0]["keypoints"])
+        else:
+            pose = Pose3D()
         return YoloPose(
             cls=summary[0]["class"],
             name=name,
@@ -103,9 +103,11 @@ class YoloPoses(DataModel):
                 names.append(name)
                 confidence.append(s["confidence"])
                 if s.get("box"):
-                    box.append(BBox.from_dict(s.get("box"), title=name))
+                    assert isinstance(s["box"], dict)
+                    box.append(BBox.from_dict(s["box"], title=name))
                 if s.get("keypoints"):
-                    pose.append(Pose3D.from_dict(s.get("keypoints")))
+                    assert isinstance(s["keypoints"], dict)
+                    pose.append(Pose3D.from_dict(s["keypoints"]))
         return YoloPoses(
             cls=cls,
             name=names,

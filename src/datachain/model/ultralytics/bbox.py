@@ -31,11 +31,11 @@ class YoloBBox(DataModel):
         if not summary:
             return YoloBBox(box=BBox())
         name = summary[0].get("name", "")
-        box = (
-            BBox.from_dict(summary[0]["box"], title=name)
-            if summary[0].get("box")
-            else BBox()
-        )
+        if summary[0].get("box"):
+            assert isinstance(summary[0]["box"], dict)
+            box = BBox.from_dict(summary[0]["box"], title=name)
+        else:
+            box = BBox()
         return YoloBBox(
             cls=summary[0]["class"],
             name=name,
@@ -70,7 +70,8 @@ class YoloBBoxes(DataModel):
                 names.append(name)
                 confidence.append(s["confidence"])
                 if s.get("box"):
-                    box.append(BBox.from_dict(s.get("box"), title=name))
+                    assert isinstance(s["box"], dict)
+                    box.append(BBox.from_dict(s["box"], title=name))
         return YoloBBoxes(
             cls=cls,
             name=names,
@@ -101,11 +102,11 @@ class YoloOBBox(DataModel):
         if not summary:
             return YoloOBBox(box=OBBox())
         name = summary[0].get("name", "")
-        box = (
-            OBBox.from_dict(summary[0]["box"], title=name)
-            if summary[0].get("box")
-            else OBBox()
-        )
+        if summary[0].get("box"):
+            assert isinstance(summary[0]["box"], dict)
+            box = OBBox.from_dict(summary[0]["box"], title=name)
+        else:
+            box = OBBox()
         return YoloOBBox(
             cls=summary[0]["class"],
             name=name,
@@ -140,7 +141,8 @@ class YoloOBBoxes(DataModel):
                 names.append(name)
                 confidence.append(s["confidence"])
                 if s.get("box"):
-                    box.append(OBBox.from_dict(s.get("box"), title=name))
+                    assert isinstance(s["box"], dict)
+                    box.append(OBBox.from_dict(s["box"], title=name))
         return YoloOBBoxes(
             cls=cls,
             name=names,

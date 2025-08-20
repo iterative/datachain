@@ -35,7 +35,10 @@ def process(fragment: AudioFragment, pipeline: Pipeline) -> str:
         audio_array = audio_array.mean(axis=1)
 
     # Pass the numpy array with exact sampling rate from fragment
-    result = pipeline({"raw": audio_array, "sampling_rate": sample_rate})
+    result = pipeline(
+        {"raw": audio_array, "sampling_rate": sample_rate},
+        generate_kwargs={"language": "en"},
+    )
     return str(result["text"])
 
 
