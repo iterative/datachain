@@ -78,9 +78,9 @@ def read_storage(
               (error mode)
             - True: Reprocess records missing from the result dataset (missing mode)
             - None: No retry processing (default)
-        delta_unsafe: If True, allows the use of methods that are normally unsafe
-            and forbidden during a delta update. The following methods will be
-            permitted: `merge`, `agg`, `union`, `group_by`, and `distinct`.
+        delta_unsafe: Allow restricted ops in delta: merge, agg, union, group_by,
+            distinct. Caller must ensure datasets are consistent and not partially
+            updated.
 
     Returns:
         DataChain: A DataChain object containing the file information.

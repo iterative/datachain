@@ -81,9 +81,9 @@ def read_dataset(
         update: If True always checks for newer versions available on Studio, even if
             some version of the dataset exists locally already. If False (default), it
             will only fetch the dataset from Studio if it is not found locally.
-        delta_unsafe: If True, allows the use of methods that are normally unsafe
-            and forbidden during a delta update. The following methods will be
-            permitted: `merge`, `agg`, `union`, `group_by`, and `distinct`.
+        delta_unsafe: Allow restricted ops in delta: merge, agg, union, group_by,
+            distinct. Caller must ensure datasets are consistent and not partially
+            updated.
 
 
     Example:
